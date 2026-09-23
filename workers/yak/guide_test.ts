@@ -3,7 +3,7 @@
 // or on the page it points to has to be true.
 // What can rot is anything the pages print that the code also decides: the
 // reserved words a manifest is refused against (the code's list, never the
-// page's — C-32624 item 1), the components an app has, whose columns and
+// page's — C-32624 item 1), the components an app has, whose properties and
 // types are what a refusal now spells and what the seventh user test had to
 // guess five times over (C-32675 items 2 and 3), and the doors and limits an
 // app's own worker.js runs under (T-32780).
@@ -145,7 +145,7 @@ Deno.test('the guide imports the client relatively, every time it shows one', ()
 })
 
 // One entry of the components page's vocabulary: the name it heads with, the
-// `col` (type) pairs it prints before the first sentence ends, and the ones it
+// `prop` (type) pairs it prints before the first sentence ends, and the ones it
 // says the store sets.
 let pairs = (s: string) =>
   [...s.matchAll(/`(\w+)` \(([^)]+)\)/g)].map((m) => [m[1], m[2]])
@@ -157,23 +157,23 @@ let entries = () => {
     let rest = said.join(' — ')
     return {
       name: head.match(/^(\w+)/)![1],
-      cols: pairs(rest.split(/[.;] /)[0]),
+      props: pairs(rest.split(/[.;] /)[0]),
       set: pairs(rest.split('the store sets ')[1]?.split('. ')[0] ?? ''),
     }
   })
 }
 
-// What an app's store loads (vocab.ts `appVocab`): every column of every core
+// What an app's store loads (vocab.ts `appVocab`): every property of every core
 // component, spelled the way the page spells it, and whether the store owns it.
 let stored = () => {
   let all: Record<string, [string, string, boolean][]> = {}
   for (let doc of coreDocs) {
     for (let [name, s] of Object.entries(doc.$defs ?? {})) {
       if (!s.component) continue
-      let cols = all[name] ??= []
-      for (let [col, p] of Object.entries(s.properties ?? {})) {
-        if (p.computed === true || cols.some(([c]) => c == col)) continue
-        cols.push([col, p.ref ? 'eid' : wordOf(p), !!p.stamped])
+      let props = all[name] ??= []
+      for (let [prop, p] of Object.entries(s.properties ?? {})) {
+        if (p.computed === true || props.some(([c]) => c == prop)) continue
+        props.push([prop, p.ref ? 'eid' : wordOf(p), !!p.stamped])
       }
     }
   }
@@ -299,17 +299,17 @@ Deno.test('the sharing page teaches every tool that shares an app', () => {
   assert(/pinned/.test(section), 'the sharing page never says what pinning is')
 })
 
-Deno.test('the components page prints every column of every component it lists', () => {
+Deno.test('the components page prints every property of every component it lists', () => {
   let listed = entries()
   let named = listed.map((e) => e.name)
   // A parse that found nothing would pass every assertion below.
   assert(named.includes('doc') && named.includes('attachment'), named.join(' '))
   let all = stored()
-  for (let { name, cols, set } of listed) {
+  for (let { name, props, set } of listed) {
     let has = all[name]
     assert(has, `the page lists ${name}, which is no component of a store`)
     assertEquals(
-      cols,
+      props,
       has.filter(([, , own]) => !own).map(([c, w]) => [c, w]),
       name,
     )

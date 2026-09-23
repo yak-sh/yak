@@ -55,10 +55,10 @@ let named = (dir: string, comp: string) =>
 let pages = named('./public/docs/', 'guide')
 let prompts = named('./prompts/', 'prompt')
 
-Deno.test('no content file names an entity — the identity column does', () => {
+Deno.test('no content file names an entity — the identity property does', () => {
   assert(pages.length > 1 && prompts.length > 1)
   for (
-    let [dir, comp, col, names] of [
+    let [dir, comp, prop, names] of [
       ['./public/docs/', 'guide', 'slug', pages],
       ['./prompts/', 'prompt', 'name', prompts],
     ] as const
@@ -70,11 +70,15 @@ Deno.test('no content file names an entity — the identity column does', () => 
       assertEquals(
         meta.entity,
         undefined,
-        `${dir}${name} names an entity — its ${comp}.${col} is what does that`,
+        `${dir}${name} names an entity — its ${comp}.${prop} is what does that`,
       )
       // The file's name and its identity are one fact, which is also what
       // gen.ts refuses on (a page's row is keyed by slug).
-      assertEquals(row[col], name.slice(0, -3), `${dir}${name} ${comp}.${col}`)
+      assertEquals(
+        row[prop],
+        name.slice(0, -3),
+        `${dir}${name} ${comp}.${prop}`,
+      )
     }
   }
 })
