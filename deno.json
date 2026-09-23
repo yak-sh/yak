@@ -221,7 +221,8 @@
     "./packages/builders",
     "./packages/dreaming",
     "./packages/project",
-    "./packages/tmux"
+    "./packages/tmux",
+    "./packages/secrets"
   ],
   "exclude": [
     "src/vendor",

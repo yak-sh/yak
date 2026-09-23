@@ -1,0 +1,56 @@
+/**
+ * @yaks/secrets — secrets that flow through the graph and are kept somewhere
+ * else.
+ *
+ * A secret is an entity wearing `secret{name, value}`. It is written with its
+ * value like anything else; the plugin takes the value out in the first phase
+ * of the write, puts a sentinel — a salted hash of it — where it was, and
+ * seals the value into a vault as the transaction commits. The graph, its
+ * journal, its sync and its backups only ever hold the sentinel, which is safe
+ * to show anyone.
+ *
+ * ```ts
+ * import { loadVocab } from '@yaks/vocab'
+ * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
+ * import { ramVault, reveal, sealed, secrets, secretsDoc } from '@yaks/secrets'
+ *
+ * let vocab = loadVocab([secretsDoc])
+ * let vault = ramVault()
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault)] })
+ * await g.apply([sealed('MAIL_TOKEN', 'cf-token')])
+ * // g.read('.secret') → value: 'yak_secret_…'
+ * // await reveal(vault, 'MAIL_TOKEN') → 'cf-token'
+ * ```
+ *
+ * Trusted code asks for a value by name ({@link reveal}); a config names one
+ * as `{"secret": "NAME"}` (@yaks/cli). A value may also be an `op://`
+ * reference, read from 1Password each time it is used, and a name nothing was
+ * written for falls back to the environment variable of that name.
+ *
+ * @module
+ */
+
+export { secretsDoc } from './vocab.ts'
+export { secrets } from './plugin.ts'
+export { isSentinel, PREFIX, sentinel } from './sentinel.ts'
+export {
+  type Local,
+  queue,
+  ramVault,
+  type Sealed,
+  type Vault,
+} from './vault.ts'
+export { fileVault } from './file.ts'
+export { vaultOf } from './home.ts'
+export { isOpRef, type OpRead, opRead } from './op.ts'
+export {
+  peek,
+  reveal,
+  sealed,
+  secretEid,
+  type Sources,
+  unsealed,
+  warm,
+} from './reveal.ts'
+export { type Records, records } from './records.ts'
