@@ -49,7 +49,8 @@ export type Message = {
 
 /** What a transport reports about a message it accepted. */
 export type Receipt = {
-  /** the id the transport returned, if any — stored as `delivered.via` */
+  /** the Message-ID the transport gave the letter, unbracketed, if any —
+   * stored as `mail.message_id`, which is what a reply to it threads on */
   id?: string
 }
 
@@ -112,12 +113,10 @@ export let addressOf = (
 ): string | Promise<string> =>
   then(tx.get([eid]), (found) => str(comp(found[0], EMAIL), 'address'))
 
-// The Message-ID a reply threads on: the one the answered letter arrived with,
-// else the id our own transport returned when it was sent.
+// The Message-ID a reply threads on: the answered letter's own, whether it
+// arrived with it or our transport gave it one when it left.
 let threadOf = (tx: Tx, eid: string): string | Promise<string> =>
-  then(tx.get([eid]), (found) =>
-    str(comp(found[0], MAIL), 'message_id') ||
-    str(comp(found[0], DELIVERED), 'via'))
+  then(tx.get([eid]), (found) => str(comp(found[0], MAIL), 'message_id'))
 
 /**
  * The letter as a message: the subject and both body renderings, with the
@@ -174,8 +173,8 @@ export let message = (
  *
  * `local` names a domain whose addresses belong to this graph — an agent, a
  * project, anything reachable here and nowhere else. A letter to one is
- * already where it is going, so it is stamped `delivered{via: 'local'}` and
- * never handed to the transport; sending it out would bring it back as a
+ * already where it is going, so it is stamped `delivered` and never handed to
+ * the transport; sending it out would bring it back as a
  * second letter about the same words. Leave it out where somebody reads that
  * domain's mail in a mail client: then the mailbox is the destination, and the
  * graph is only the record.
@@ -203,7 +202,7 @@ export let sending =
           return write([{
             entity: event.entity,
             [MAIL]: { to },
-            [DELIVERED]: { at: now(), via: 'local' },
+            [DELIVERED]: { at: now() },
           }])
         }
         let answered = mail.reply_to == null ? '' : String(mail.reply_to)
@@ -221,9 +220,13 @@ export let sending =
                   entity: event.entity,
                   // The envelope, denormalized onto the letter as data: an
                   // address book edited later never rewrites where this one
-                  // went.
-                  [MAIL]: { to },
-                  [DELIVERED]: { at: now(), via: receipt.id ?? to },
+                  // went. The Message-ID the transport gave it goes where an
+                  // arrival's does, so a reply to it threads the same way.
+                  [MAIL]: {
+                    to,
+                    ...(receipt.id ? { message_id: receipt.id } : {}),
+                  },
+                  [DELIVERED]: { at: now() },
                 }]),
               (err) =>
                 fail(String((err as Error)?.message ?? err).slice(0, 240)),

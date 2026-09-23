@@ -36,7 +36,7 @@
  * `created(mail)` handler on {@link https://jsr.io/@yaks/effects | @yaks/effects}:
  * it runs after the transaction commits, hands the letter to the
  * {@link Sender} the caller supplied, and writes back what happened —
- * `delivered{at, via}` or `bounced{at, reason}`. So the write cannot fail
+ * `delivered{at}` or `bounced{at, reason}`. So the write cannot fail
  * because a mail server is down, and "what became of that letter?" is a query.
  *
  * Two senders ship: {@link cloudflare} (Cloudflare Email Sending, credentials

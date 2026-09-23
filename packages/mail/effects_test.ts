@@ -125,7 +125,8 @@ Deno.test('a letter written with no sender goes with the first process that has 
   await sweep(g, box)
   assertEquals(box.sent.map((m) => m.subject), ['Potluck Friday'])
   let sent = await read(g, 'e-one')
-  assertEquals(sent.delivered, { at: noon(), via: 'stash-1' })
+  assertEquals(sent.delivered, { at: noon() })
+  assertEquals((sent.mail as Comp).message_id, 'stash-1')
   assertEquals((sent.deliver as Comp).tried, noon())
   await sweep(g, box)
   assertEquals(box.sent.length, 1)
@@ -140,7 +141,7 @@ Deno.test('a letter handed over and never settled is not handed over again', asy
   })], { trusted: true })
   await g.apply([letter('e-sent'), {
     entity: { eid: 'e-sent' },
-    delivered: { at: noon(), via: 'x' },
+    delivered: { at: noon() },
   }], { trusted: true })
   let box = stash()
   await sweep(g, box)

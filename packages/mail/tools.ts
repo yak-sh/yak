@@ -283,11 +283,13 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
   // The reply goes to the far side — an arrival's author, or our own sent
   // letter's recipient — and never to a fallback between the two: the wrong
   // choice here is this graph's own address, so a reply that quietly went
-  // there would look sent without being sent.
+  // there would look sent without being sent. An arrival is a letter with a
+  // Message-ID that never asked to be sent: one of ours carries `deliver`, and
+  // has a Message-ID too once the transport gave it one.
   mail_reply: async (_bundles, ctx): Promise<Bundle[]> => {
     let letter = await letterIn(ctx, ctx.args.letter)
     let mail = comp(letter, MAIL)!
-    let arrived = !!prop(mail, 'message_id')
+    let arrived = !!prop(mail, 'message_id') && !comp(letter, DELIVER)
     let far = arrived
       ? await recipientOf(ctx, prop(mail, 'from'), options.domain)
       : { to: prop(comp(letter, DELIVER), 'to'), made: [] as Bundle[] }
@@ -351,11 +353,14 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
   },
 
   mail_check: async (_bundles, ctx) => {
-    // The Message-ID is what other mail systems know a letter by, written from
-    // what arrived — so it marks a letter this graph received, and this pair
-    // of predicates is the whole question.
+    // An arrival is a letter with a Message-ID that never asked to be sent
+    // (see mail_reply), and one with no sender has nobody to answer.
     let orphans = await ctx.read(
-      and(present(`${MAIL}.message_id`), absent(`${MAIL}.from`)),
+      and(
+        present(`${MAIL}.message_id`),
+        absent(DELIVER),
+        absent(`${MAIL}.from`),
+      ),
     )
     let id = human(ctx.graph.vocab)
     let found = orphans.map((b): Finding => ({

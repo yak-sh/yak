@@ -42,7 +42,7 @@
         },
         "message_id": {
           "type": "string",
-          "description": "the Message-ID other mail systems know this letter by — written from what arrived, and what a reply threads on"
+          "description": "the Message-ID other mail systems know this letter by — read from a letter that arrived, or returned by the sender for one that left — and what a reply threads on"
         },
         "verified": {
           "type": "boolean",
@@ -51,11 +51,6 @@
         "in_reply_to": {
           "type": "string",
           "description": "the Message-ID this letter answers, exactly as the header wrote it — what arrives before `reply_to` can name an entity, and all a reply to a letter nobody kept ever has"
-        },
-        "sent_id": {
-          "type": "string",
-          "stamped": true,
-          "description": "the id the sending service returned when it accepted this letter — written by whoever sent it, and what a delivery report is looked up by"
         }
       }
     },
@@ -101,11 +96,6 @@
           "format": "date-time",
           "stamped": true,
           "description": "when it went"
-        },
-        "via": {
-          "type": "string",
-          "stamped": true,
-          "description": "how it went — the id the sender returned, or the address it went to"
         }
       }
     },

@@ -312,11 +312,11 @@ Deno.test("a member's letter leaves from the app's own address", async () => {
   assert(String(sent.html).includes('<p>Bring a dish.</p>'))
   // And what became of it is a row, not a log line.
   let row = await read(store, NOTE)
-  assertEquals((row.delivered as { via?: string }).via, 'm1@yaks.app')
-  assertEquals(
-    (row.mail as { from?: string; to?: string }).to,
-    'ana@example.com',
-  )
+  assert(row.delivered)
+  let envelope = row.mail as { to?: string; message_id?: string }
+  assertEquals(envelope.to, 'ana@example.com')
+  // The Message-ID it left with, which is what a reply to it threads on.
+  assertEquals(envelope.message_id, 'm1@yaks.app')
   assertEquals(row.bounced, undefined)
 })
 
@@ -351,7 +351,7 @@ Deno.test('a page watching the letter is told it left', async () => {
   assertEquals([...new Set(cast.map((f) => f.id))].sort(), ['all', 'note'])
   let raw = bundles(cast.find((f) => f.id == 'all')!)
   assertEquals(
-    (raw.find((b) => b.delivered)!.delivered as { via?: string }).via,
+    (raw.find((b) => b.delivered)!.mail as { message_id?: string }).message_id,
     'm1@yaks.app',
   )
 })

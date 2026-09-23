@@ -557,7 +557,13 @@ let MOVES: Record<string, Move | null> = {
   deliver: refs('deliver', ['to']),
   delivered: {
     says: 'delivered',
-    make: (row) => ({ at: text(row.at), via: text(row.via) }),
+    // `via` said how it went: for a letter, the Message-ID it left with, which
+    // its own `sent_id` carries into `mail.message_id`; for anything else, the
+    // channel it rode, which nothing reads any more.
+    make: (row, ctx) => {
+      if (row.via != null) ctx.lost('delivered.via')
+      return { at: text(row.at) }
+    },
   },
   failed: {
     says: 'bounced',
@@ -603,13 +609,14 @@ let MOVES: Record<string, Move | null> = {
         at: text(row.received_at),
         target: ctx.ref(row.target),
         reply_to: ctx.ref(row.reply_to),
-        // The fleet stored its edge's key (`msg:<ms>:<id>`); the letter's own
-        // Message-ID is what @yaks/mail threads and deduplicates on.
+        // The fleet stored its edge's key (`msg:<ms>:<id>`) for a letter that
+        // arrived, and the service's id in `sent_id` for one it sent; the
+        // letter's own Message-ID, either way, is what @yaks/mail threads and
+        // deduplicates on.
         message_id: row.message_id == null
-          ? undefined
+          ? text(row.sent_id)
           : messageIdOf(String(row.message_id)),
         in_reply_to: text(row.in_reply_to),
-        sent_id: text(row.sent_id),
         verified: bool(row.verified),
       }
     },

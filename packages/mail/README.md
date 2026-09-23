@@ -35,14 +35,14 @@ await g.apply([{
 }])
 ```
 
-| Component   | Stored information                                                                                                                    |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `mail`      | Sender and recipient addresses, time, related entity (`target`), threading fields, Message-ID, verification result, and transport id. |
-| `email`     | An entity's email address (`address`).                                                                                                |
-| `deliver`   | The recipient entity id (`to`) and when the message was handed to the sender (`tried`); requests outgoing delivery.                   |
-| `delivered` | Delivery time and transport receipt (`at`, `via`).                                                                                    |
-| `bounced`   | Failed delivery time and reason (`at`, `reason`).                                                                                     |
-| `notified`  | When a recipient was notified, by whom, and through which entity (`at`, `by`, `via`).                                                 |
+| Component   | Stored information                                                                                                                                                |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mail`      | Sender and recipient addresses, time, related entity (`target`), threading fields, Message-ID (arrived with, or given by the transport), and verification result. |
+| `email`     | An entity's email address (`address`).                                                                                                                            |
+| `deliver`   | The recipient entity id (`to`) and when the message was handed to the sender (`tried`); requests outgoing delivery.                                               |
+| `delivered` | Delivery time (`at`).                                                                                                                                             |
+| `bounced`   | Failed delivery time and reason (`at`, `reason`).                                                                                                                 |
+| `notified`  | When a recipient was notified, by whom, and through which entity (`at`, `by`, `via`).                                                                             |
 
 The subject and body use `doc{title, body}` from [@yaks/doc](../doc/README.md).
 Load that package alongside this one. `mail.target` can refer to any entity, so
@@ -119,9 +119,10 @@ separately; `mailbox()` declares only the six mail components and normalizes
 addresses. Pass both `effects` and `sender` to `mailbox()` to enable automatic
 sending.
 
-Success writes `delivered{at, via}`, with the receipt id or, when absent, the
-recipient address as `via`. A rejected send writes `bounced{at, reason}`.
-Missing recipient addresses and missing sender addresses also produce `bounced`.
+Success writes `delivered{at}`, and the Message-ID the receipt carries as
+`mail.message_id`, which is what a reply to the letter threads on. A rejected
+send writes `bounced{at, reason}`. Missing recipient addresses and missing
+sender addresses also produce `bounced`.
 
 ### The transport is supplied by the caller
 
@@ -150,10 +151,10 @@ mailbox({
 })
 ```
 
-Recipients at that domain get `delivered{via: 'local'}` and `mail.to` without a
-transport call. Omit `local` when mail for that domain must reach an external
-mailbox. The configuration-file form uses `local: true` with `domain`; the
-direct `mailbox()` API takes the domain string as `local`.
+Recipients at that domain get `delivered` and `mail.to` without a transport
+call. Omit `local` when mail for that domain must reach an external mailbox. The
+configuration-file form uses `local: true` with `domain`; the direct `mailbox()`
+API takes the domain string as `local`.
 
 ## Incoming messages
 
@@ -201,11 +202,11 @@ entity S-31 without a separate email record. `routed()` tries the address record
 first, then the id. Unmatched recipients use `triage`, or have no target if it
 is omitted.
 
-`known()` finds a stored message by Message-ID. `arrived()` returns `[]` if that
-id is already stored, and resolves `In-Reply-To` to `mail.reply_to` when
-possible. This duplicate check is a read before the caller writes, not a
-uniqueness constraint covering concurrent arrivals. Messages without a
-Message-ID cannot be deduplicated this way.
+`known()` finds a stored message by Message-ID, whether it arrived or this graph
+sent it. `arrived()` returns `[]` if that id is already stored, and resolves
+`In-Reply-To` to `mail.reply_to` when possible. This duplicate check is a read
+before the caller writes, not a uniqueness constraint covering concurrent
+arrivals. Messages without a Message-ID cannot be deduplicated this way.
 
 Only a recognized author's address supplies `$actor.by`; unknown senders remain
 unattributed. `arrived()` also reads the DKIM result from

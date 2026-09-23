@@ -31,8 +31,8 @@ export type Kept = {
  * post.last()?.subject // 'You are invited'
  * ```
  *
- * Receipts are `stash-1`, `stash-2`, … so a test can assert on the `via` the
- * letter was stamped with.
+ * Receipts are `stash-1`, `stash-2`, … so a test can assert on the
+ * `mail.message_id` the letter was given.
  */
 export let stash = ({ refuse }: Kept = {}): Stash => {
   let sent: Message[] = []

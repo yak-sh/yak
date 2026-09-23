@@ -5,7 +5,7 @@
 //                                                      one letter's envelope
 //   email{address}                                     an address, as an entity
 //   deliver{to}                                        who it is for, as an entity
-//   delivered{at, via}                                 it left
+//   delivered{at}                                      it left
 //   bounced{at, reason}                                it did not
 //   notified{at, by, via}                              they were told
 //

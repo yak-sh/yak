@@ -50,7 +50,7 @@ Deno.test('a new seat writes an invitation, and the invitation goes', async () =
   // The letter is an entity like any other: about the seat, and settled.
   let [invite] = (await g.read('.eid=e-invite')) as Bundle[]
   assertEquals((invite.mail as Comp).target, 'm-first')
-  assertEquals((invite.delivered as Comp).via, 'stash-1')
+  assertEquals((invite.mail as Comp).message_id, 'stash-1')
 })
 
 Deno.test("the role is the letter's business, not the handler's", async () => {

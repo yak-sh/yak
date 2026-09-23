@@ -121,8 +121,8 @@ let searched = (comp: string, prop: string, s: PropSchema): string[] =>
 // `archived`, `created` — and the server writes a mark, never a client: the
 // graph fills all three from the batch's clock and actor (@yaks/graph
 // stamp.ts), so a client-writable one is a property anyone may forge and
-// nothing will correct. Two of the three is somebody's own vocabulary — a
-// letter's `at` and the address it went `via` — and means nothing here.
+// nothing will correct. Two of the three is somebody's own vocabulary and
+// means nothing here.
 let PROVENANCE = ['at', 'by', 'via']
 let signed = (comp: string, s: PropSchema): string[] => {
   let props = s.properties ?? {}

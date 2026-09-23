@@ -115,7 +115,7 @@ let listing = (ctx: Ctx): Tool => ({
   description:
     `List an app's email records as bundles: JSON objects with entity ids, ` +
     `message text, mail headers and delivery fields when present. Sent mail ` +
-    `may later carry delivered{at, via} or bounced{at, reason}; an absent ` +
+    `may later carry delivered{at} or bounced{at, reason}; an absent ` +
     `outcome is not confirmation of delivery. ${scope(ctx.env)} ` +
     `direction selects received, sent, or all (the default, including ` +
     `drafts). Returns up to limit records (20 by default), with the returned ` +

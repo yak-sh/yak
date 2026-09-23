@@ -2,6 +2,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { clubhouse, noon } from './harness.ts'
 import { message } from './send.ts'
+import { arrived } from './arrive.ts'
 
 let ana = 'p-ana'
 let letter = 'e-potluck'
@@ -43,12 +44,11 @@ Deno.test('a letter that asks to go, goes — and says so', async () => {
   )
   assert(post.last()?.html.includes('<a href="https://books.example/p">'))
   let sent = await read(g, letter)
-  assertEquals(comp(sent, 'delivered'), {
-    at: '2026-09-05T12:00:00.000Z',
-    via: 'stash-1',
-  })
-  // the envelope, denormalized onto the letter
+  assertEquals(comp(sent, 'delivered'), { at: '2026-09-05T12:00:00.000Z' })
+  // the envelope, denormalized onto the letter, with the Message-ID it left
+  // with: what a reply to it threads on
   assertEquals(comp(sent, 'mail')?.to, 'ana@books.example')
+  assertEquals(comp(sent, 'mail')?.message_id, 'stash-1')
   assertEquals(comp(sent, 'bounced'), undefined)
 })
 
@@ -125,6 +125,26 @@ Deno.test('a reply threads on what the answered letter went out as', async () =>
   assertEquals(post.last()?.replyTo, 'stash-1')
 })
 
+Deno.test('an answer to a letter we sent threads onto it', async () => {
+  let { g } = await seeded()
+  await g.apply([{
+    entity: { eid: letter },
+    doc: { title: 'hi', body: 'hi' },
+    mail: { from: 'hello@books.example' },
+    deliver: { to: ana },
+  }])
+  let head: Record<string, string> = {
+    'message-id': '<a2@x.example>',
+    'in-reply-to': '<stash-1>',
+  }
+  let [answer] = await arrived({ graph: g })({
+    from: 'ana@books.example',
+    to: 'hello@books.example',
+    headers: { get: (n) => head[n.toLowerCase()] ?? null },
+  })
+  assertEquals(comp(answer, 'mail')?.reply_to, letter)
+})
+
 Deno.test('the address is canonical however it was written', async () => {
   let { g } = await seeded()
   await g.apply([{
@@ -187,7 +207,7 @@ Deno.test('a letter to an address the graph owns never reaches the transport', a
   }])
   assertEquals(post.sent.length, 0)
   let sent = await read(g, letter)
-  assertEquals(comp(sent, 'delivered'), { at: noon(), via: 'local' })
+  assertEquals(comp(sent, 'delivered'), { at: noon() })
   // The envelope is still denormalized: where it went is data, not a lookup.
   assertEquals(comp(sent, 'mail')?.to, 'ana@books.example')
 })
@@ -201,5 +221,5 @@ Deno.test('a letter out of the house still rides the transport', async () => {
     deliver: { to: 'p-bo' },
   }])
   assertEquals(post.last()?.to, 'bo@elsewhere.com')
-  assertEquals(comp(await read(g, letter), 'delivered')?.via, 'stash-1')
+  assertEquals(comp(await read(g, letter), 'mail')?.message_id, 'stash-1')
 })

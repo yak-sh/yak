@@ -120,8 +120,8 @@ The letter is written first and sent after, so a mail server that is down cannot
 refuse the write. What became of it is patched back onto the same entity, as one
 of two components:
 
-- `delivered{at, via}` — it left. `via` is the id the transport gave it, which
-  is also the thread other letters answer on.
+- `delivered{at}` — it left. The letter's `mail.message_id` is then the
+  Message-ID it went out with, which is the thread other letters answer on.
 - `bounced{at, reason}` — it did not. `reason` is what refused it, in its own
   words: a provider's `550 mailbox unavailable`, `no address on file for <eid>`
   when the recipient has no `email.address`, `this deploy has no mail binding`.

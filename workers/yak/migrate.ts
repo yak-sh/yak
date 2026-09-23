@@ -238,6 +238,12 @@ export let TOOLED = 'yak/store/tool/7'
  * object has an install. */
 export let SANDBOXED = 'yak/store/sandboxed/8'
 
+/** The ninth pass: a sent letter's Message-ID moves out of `delivered.via`,
+ * where the transport's receipt was kept, onto `mail.message_id`, where an
+ * arrival's is — so a reply to either threads the same way. Any store that
+ * sends mail. */
+export let SENT = 'yak/store/sent/9'
+
 /** Every marker in order, so "is this object caught up" is one comparison and
  * a new pass is one line here. */
 export let MARKS = [
@@ -249,12 +255,13 @@ export let MARKS = [
   FILED,
   TOOLED,
   SANDBOXED,
+  SENT,
 ]
 
 /** Passes that change stored shape, read per commit by `yak deploys`.
  * A refused pass leaves stored data and its marker unchanged, so adds no
  * boundary. Nor does an expanding pass the build before it reads correctly:
- * SANDBOXED writes only the property that build already reads. */
+ * SANDBOXED and SENT write only properties that build already reads. */
 export let BOUNDARIES = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED, TOOLED]
 
 /** The two tables the two layouts spell identically, and so never move. */
@@ -733,6 +740,60 @@ export let trusting = (
       to,
       note: 'copies stamped trusted, so the build before this serves them ' +
         'unsandboxed too',
+    }],
+    dropped: [],
+  }
+}
+
+// ---- a sent letter's Message-ID → `mail.message_id` ------------------------
+//
+// Expand, not contract: the build before this one kept the Message-ID the
+// transport gave a letter in `delivered.via`, beside `local` for a letter
+// delivered by writing it and the address it went to when the transport gave
+// none. Only the Message-ID moves, onto `mail.message_id`, where an arrival's
+// already is. The build before reads `mail.message_id` first when it threads a
+// reply, so it serves the moved letters the same; the column stays until no
+// build writes it.
+
+// The letters whose Message-ID is still only in `delivered.via`.
+let UNSENT = `select m.entity from mail m join delivered d on d.entity = ` +
+  `m.entity where m.message_id is null and d.via is not null and ` +
+  `d.via != 'local' and d.via is not m."to"`
+
+/** Whether a sent letter's Message-ID is still only in `delivered.via`. */
+export let unsent = (storage: DurableStorage): boolean => {
+  let d = driver(storage)
+  return stands(d, 'mail') && stands(d, 'delivered') &&
+    columns(d, 'delivered').includes('via') &&
+    d.query(`${UNSENT} limit 1`, []).length > 0
+}
+
+/** Each such Message-ID copied onto its letter, inside `transactionSync` like
+ * every numbered pass. */
+export let sent = (
+  storage: DurableStorage,
+  o: { store: string; app: string | null },
+): Report => {
+  let d = driver(storage)
+  let left = () =>
+    Number(d.query(`select count(*) as n from (${UNSENT})`, [])[0]?.n ?? 0)
+  let from = left()
+  d.query(
+    `update mail set message_id = (select via from delivered where ` +
+      `delivered.entity = mail.entity) where entity in (${UNSENT})`,
+    [],
+  )
+  let to = from - left()
+  return {
+    ...o,
+    at: new Date().toISOString(),
+    ok: to == from,
+    mark: SENT,
+    moved: [{
+      table: 'mail',
+      from,
+      to,
+      note: 'sent letters given the Message-ID delivered.via held',
     }],
     dropped: [],
   }

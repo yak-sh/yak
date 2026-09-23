@@ -3,14 +3,16 @@
 // plugins; this asserts the fleet could load them in place of what it authors
 // today and get the same tables and the same routing out.
 //
-// Four components are shipped in the fleet's own shape and are asserted COLUMN
+// Three components are shipped in the fleet's own shape and are asserted COLUMN
 // FOR COLUMN, including the DDL @yaks/sqlite emits for them:
 //
-//   doc{title,body}  email{address}  delivered{at,via}  notified{at,by,via}
+//   doc{title,body}  email{address}  notified{at,by,via}
 //
 // `deliver` is asserted where the two overlap (`to`): the package also stamps
 // `deliver.tried` before a letter reaches its transport, which the fleet does
-// not declare.
+// not declare. So is `delivered` (`at`): the fleet's `via` held a sent letter's
+// Message-ID, which the package keeps in `mail.message_id`, beside an
+// arrival's.
 //
 // `doc` is the one that moved. A letter's subject and body were columns on the
 // package's `mail`; they are now @yaks/doc's `doc{title, body}`, the way the
@@ -54,7 +56,7 @@ let pkg = loadVocab([docDoc, mailDoc], fleetKeywords)
 
 // The comps the two packages ship in the fleet's own shape, and where each
 // comes from — `doc` is @yaks/doc's, the rest are @yaks/mail's.
-let SAME = ['doc', 'email', 'delivered', 'notified']
+let SAME = ['doc', 'email', 'notified']
 let shipped: Record<string, PropSchema> = {
   ...(docDoc.$defs ?? {}),
   ...(mailDoc.$defs ?? {}),
@@ -132,6 +134,11 @@ Deno.test('parity: deliver, where the two overlap', () => {
     shape(fleet.prop('deliver', 'to')!),
   )
   assertEquals(pkg.comp('deliver')!.writable, fleet.comp('deliver')!.writable)
+})
+
+Deno.test('parity: delivered, where the two overlap', () => {
+  agree(fleet, pkg, 'delivered', 'at')
+  assertEquals(pkg.props('delivered'), ['at'])
 })
 
 Deno.test('parity: mail, where the two overlap', () => {
