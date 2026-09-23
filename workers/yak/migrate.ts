@@ -69,6 +69,7 @@
 import { fields, schema as ftsSchema } from '@yaks/fts'
 import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
 import { edgeEid } from '@yaks/edge'
+import { entryEid, TREE_ENTRY } from '@yaks/git'
 import { identityEid, sha256 } from '@yaks/graph'
 import {
   backfill,
@@ -253,6 +254,11 @@ export let SANDBOXED = 'yak/store/sandboxed/8'
  * sends mail. */
 export let SENT = 'yak/store/sent/9'
 
+/** The tenth pass: a tree's link to a child is a `tree_entry`, at the id that
+ * tag derives. The git object store's alone; no other object has a `gitobj`
+ * table. */
+export let ENTERED = 'yak/store/entered/10'
+
 /** Every marker in order, so "is this object caught up" is one comparison and
  * a new pass is one line here. */
 export let MARKS = [
@@ -265,12 +271,14 @@ export let MARKS = [
   TOOLED,
   SANDBOXED,
   SENT,
+  ENTERED,
 ]
 
 /** Passes that change stored shape, read per commit by `yak admin deploys`.
  * A refused pass leaves stored data and its marker unchanged, so adds no
  * boundary. Nor does an expanding pass the build before it reads correctly:
- * SANDBOXED and SENT write only properties that build already reads. */
+ * SANDBOXED and SENT write only properties that build already reads, and
+ * ENTERED moves rows it never read into the table it does. */
 export let BOUNDARIES = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED, TOOLED]
 
 /** The two tables the two layouts spell identically, and so never move. */
@@ -805,6 +813,84 @@ export let sent = (
       note: 'sent letters given the Message-ID delivered.via held',
     }],
     dropped: [],
+  }
+}
+
+// ---- a tree's link to a child → `tree_entry` -------------------------------
+//
+// @yaks/git tagged a tree's link `entry` until it took git's own two words
+// (76058ad2), and a link's id is derived from its tag, its tree and its name
+// (`entryEid`). The trees minted before that stayed under the old tag, where
+// the walk that builds a pack never looks, so a clone of any history reaching
+// one arrived without that tree's files. Each link takes the tag and the id it
+// has now; a link the same tree was minted again under since is the same
+// link, and the old row folds into it. Then the old table goes.
+
+/** The tag a tree's link wore before, and the table its rows are still in. */
+let ENTRY = 'entry'
+
+// Each link still under the old tag, with the id its tree and name derive now.
+let entries = (d: Drive) =>
+  d.query(
+    `select n.entity as id, n.name, n.mode, t.eid as tree from ${q(ENTRY)} n` +
+      ' join edge e on e.entity = n.entity join entity t on t.id = e."from"',
+    [],
+  ).map((r) => ({
+    id: Number(r.id),
+    name: String(r.name),
+    mode: String(r.mode),
+    eid: entryEid(String(r.tree), String(r.name)),
+  }))
+
+/** Whether the git object store still has the old tag's table. */
+export let misentered = (storage: DurableStorage): boolean => {
+  let d = driver(storage)
+  return stands(d, 'gitobj') && stands(d, ENTRY)
+}
+
+/** Each old link onto `tree_entry` at its derived id, inside `transactionSync`
+ * like every numbered pass, and the old table dropped. A row with no edge
+ * beside it names no tree, so it has nowhere to go and goes with the table. */
+export let entered = (
+  storage: DurableStorage,
+  o: { store: string; app: string | null; vocab: Vocab },
+): Report => {
+  let d = driver(storage)
+  let from = count(d, ENTRY)
+  let had = count(d, TREE_ENTRY)
+  let into = fold(d, pointers(d, o.vocab))
+  let moved = 0
+  let merged = 0
+  for (let r of entries(d)) {
+    let [same] = d.query('select id from entity where eid = ?', [r.eid])
+    if (same) {
+      into(r.id, Number(same.id))
+      merged++
+      continue
+    }
+    d.query(
+      `insert into ${q(TREE_ENTRY)} (entity, name, mode) values (?, ?, ?)`,
+      [r.id, r.name, r.mode],
+    )
+    d.query('update entity set eid = ? where id = ?', [r.eid, r.id])
+    moved++
+  }
+  d.exec(`drop table ${q(ENTRY)}`)
+  return {
+    store: o.store,
+    app: o.app,
+    at: new Date().toISOString(),
+    ok: count(d, TREE_ENTRY) == had + moved,
+    mark: ENTERED,
+    moved: [{
+      table: TREE_ENTRY,
+      from,
+      to: moved,
+      note: `${moved} tree links retagged from "${ENTRY}", ` +
+        `${merged} folded into the same link minted since, ` +
+        `${from - moved - merged} with no edge dropped`,
+    }],
+    dropped: [{ table: ENTRY, rows: from }],
   }
 }
 

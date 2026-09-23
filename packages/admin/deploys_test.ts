@@ -158,7 +158,12 @@ Deno.test('every current data pass but an expanding one is a deploy boundary', a
   ])
   assertEquals(
     marksIn(source.replace(/^export let BOUNDARIES = .*$/m, '')),
-    [...declared!, 'yak/store/sandboxed/8', 'yak/store/sent/9'],
+    [
+      ...declared!,
+      'yak/store/sandboxed/8',
+      'yak/store/sent/9',
+      'yak/store/entered/10',
+    ],
   )
 })
 

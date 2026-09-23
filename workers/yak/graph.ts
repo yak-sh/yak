@@ -171,6 +171,8 @@ import {
   aimedOld,
   carry,
   documented,
+  ENTERED,
+  entered,
   FILED,
   filed,
   FORMER,
@@ -182,6 +184,7 @@ import {
   install,
   MARK,
   MARKS,
+  misentered,
   mistooled,
   rebuild,
   recut,
@@ -560,11 +563,12 @@ export class Store {
     // that stopped at an older marker because it had nothing to move for it
     // still has to be asked about the ones added since.
     this.#behind = this.#pending ||
-      (this.#get('migrated') != SENT &&
+      (this.#get('migrated') != ENTERED &&
         (housed(ctx.storage) || slugged(ctx.storage) ||
           aimedOld(ctx.storage) || unhandled(ctx.storage) ||
           unfiled(ctx.storage) || mistooled(ctx.storage) ||
-          untrusted(ctx.storage) || unsent(ctx.storage)))
+          untrusted(ctx.storage) || unsent(ctx.storage) ||
+          misentered(ctx.storage)))
   }
 
   // What an object keeps is in the one shape a deploy takes now. A store that
@@ -1421,6 +1425,16 @@ export class Store {
     // The ninth: a sent letter's Message-ID moves onto `mail.message_id`.
     if (!this.#refused) {
       this.#after(request, SENT, unsent, sent)
+    }
+    // The tenth: a tree's link to a child takes the `tree_entry` tag, at the
+    // id that tag derives. Only the git object store has a tree.
+    if (!this.#refused) {
+      this.#after(
+        request,
+        ENTERED,
+        misentered,
+        (storage, o) => entered(storage, { ...o, vocab: this.#graph.vocab }),
+      )
     }
     this.#behind = false
   }
