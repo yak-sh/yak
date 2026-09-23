@@ -44,7 +44,7 @@ Two more, and both are load-bearing:
 
 Both hold whatever the app's `access`. On an `open` app a visitor adds rows of
 their own, but a `product` is written only by the owner and editors, and an
-`order`'s columns only by the platform.
+`order`'s properties only by the platform.
 
 ## The seller connects an account
 
@@ -155,7 +155,7 @@ store:
     order { session, account, items, total_cents, fee_cents, email, status }
 
 `order` is one of the platform's own components, so every app already has it and
-no `vocab.json` declares it. Its columns are the platform's alone: no page,
+no `vocab.json` declares it. Its properties are the platform's alone: no page,
 member or visitor writes one, and the owner may delete an order row. `status` is
 `paid`, and follows the charge after that: `partially_refunded` or `refunded`
 when the seller gives money back, `disputed` while a buyer's dispute is open,

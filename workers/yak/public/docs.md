@@ -54,7 +54,7 @@ and a gallery that never shows one twice.
 
 ## Components
 
-A component is a named set of columns an entity carries. The platform's own,
+A component is a named set of properties an entity carries. The platform's own,
 `doc`, `task`, `completed`, `comment`, `person`, `attachment`, `image` and the
 rest, are shared by every app. An app declares components of its own in a
 `vocab.json` at its root, and `app_deploy` installs them in that app's store:
@@ -63,11 +63,11 @@ rest, are shared by every app. An app declares components of its own in a
         "serves":  { "type": "number" },
         "minutes": { "type": "number" } } } } }
 
-A later deploy may add a column; one that already has rows is never dropped or
+A later deploy may add a property; one that already has rows is never dropped or
 retyped. A new capability is a new component, not a new tool.
 
 Deeper: <https://yaks.app/docs/components.md> — every component with its
-columns, and vocab.json for components of your own.
+properties, and vocab.json for components of your own.
 
 ## Coming back later
 
@@ -76,7 +76,7 @@ component naming a time and a recurrence, and the store comes back to it then,
 stamping it `fired`. What a firing does is a rule declared in `vocab.json`, and
 an app's own commands can be scheduled the same way.
 
-Deeper: <https://yaks.app/docs/wakes.md> — every column, recurrence and time
+Deeper: <https://yaks.app/docs/wakes.md> — every property, recurrence and time
 zones, pausing and resuming, what a rule may match, scheduling a command, and
 why there is no cron trigger to configure.
 
@@ -204,7 +204,7 @@ state means.
 ## The filter grammar
 
 One grammar everywhere: `.doc!` selects rows that have a component, `.doc?` asks
-for one beside the rows selected, `.recipe.minutes<=30` filters a column, `&`
+for one beside the rows selected, `.recipe.minutes<=30` filters a property, `&`
 joins, `id=<eid>` fetches one entity whole, `limit=` windows the answer, and a
 bare word is a full-text search. A row comes back with the components the filter
 names, so ask for what you will draw.

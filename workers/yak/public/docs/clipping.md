@@ -151,7 +151,7 @@ its own, in the app's `vocab.json`:
           "url": { "type": "string", "format": "uri" },
           "at":  { "type": "string", "format": "date-time" } } } } }
 
-Two columns, because they are two facts: the address the text came from, and
+Two properties, because they are two facts: the address the text came from, and
 when this app made its copy. `source.url` is what tells a page where to send
 somebody who wants the original, and `.source!` is the filter for everything
 clipped rather than typed.
@@ -251,11 +251,11 @@ and `image`. The app declares what it will filter on:
           "at":  { "type": "string", "format": "date-time" } } } } }
 
 The ingredients and the method go in `doc.body`, as markdown. That is the
-guide's own rule — a column for what you filter, sort or draw as a field; the
+guide's own rule — a property for what you filter, sort or draw as a field; the
 body for the words a person reads — and here it buys something concrete:
 `search()` reads `doc` and nothing else, so ingredients in the body are what
-makes "what can I do with a lemon" answerable, and the same list in a column of
-its own would be invisible to it.
+makes "what can I do with a lemon" answerable, and the same list in a property
+of its own would be invisible to it.
 
     let minutes = (iso) => {
       let m = /^P(?:.*?T)?(?:(\d+)H)?(?:(\d+)M)?/.exec(String(iso ?? ''))
@@ -317,7 +317,7 @@ them from a worker exactly as it accepts them from a page:
     }
 
 It returns the bytes' own eid, which is what `recipe.image` holds — the same
-`text` column a photo an app uploaded would use, drawn back with
+`text` property a photo an app uploaded would use, drawn back with
 `./api/blob/<eid>`. Every one of these is a subrequest, and the budget is 50 per
 request: the page, the picture, the upload and the write is four.
 

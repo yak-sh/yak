@@ -31,14 +31,14 @@ beside the platform's own components — `doc`, `task`, `comment`, `archived`,
 
 ## The shape of a filter
 
-A filter is predicates joined by `&`. Each one is a dot, a component, a column,
-an operator, a value:
+A filter is predicates joined by `&`. Each one is a dot, a component, a
+property, an operator, a value:
 
     .recipe.minutes<=30
      ^      ^       ^ ^
      |      |       | value
      |      |       operator
-     |      column of that component
+     |      property of that component
      component
 
     await query('.recipe.minutes<=30&.doc?')
@@ -56,8 +56,8 @@ you so:
 
 Your own components must be written _qualified_ — `.recipe.serves`, never
 `.serves` — so a component you invent can never change what `.title` means in
-somebody else's store. The platform's columns do work bare (`.title~=lemon` is
-`.doc.title~=lemon`), but write the component anyway: it reads better, and it
+somebody else's store. The platform's properties do work bare (`.title~=lemon`
+is `.doc.title~=lemon`), but write the component anyway: it reads better, and it
 never becomes ambiguous.
 
 An empty filter selects nothing. There is no "everything" — `query('')` and a
@@ -66,7 +66,7 @@ component those rows have: `.doc!`, `.recipe!`.
 
 ## Asking for a component
 
-Four ways to name a component rather than one of its columns:
+Four ways to name a component rather than one of its properties:
 
     .recipe!      has a recipe
     .recipe=      has no recipe
@@ -126,9 +126,9 @@ the `*` form, which asks for all of them, and a bare word, which searches the
 docs without naming anything to leave out — so a filter that is only words
 returns whole entities, like `id=`.
 
-A column of yours that nothing has written is on the row with the value `null`,
-not missing from it, so test the value and not `in`. The platform's own columns
-read back the same way, `doc.title` included.
+A property of yours that nothing has written is on the row with the value
+`null`, not missing from it, so test the value and not `in`. The platform's own
+properties read back the same way, `doc.title` included.
 
 `entity` and `kind` are on every row: `entity.eid` is the address to write back
 to — the only name an entity has here — and `kind` is what the entity is, the
@@ -154,17 +154,17 @@ one for the other and nothing else changes.
     .recipe.cuisine=thai,british  any of
     .recipe.minutes=20..35        a range, both ends included
     .recipe.minutes=20...35       a range, the end excluded
-    .recipe.cuisine=              the column is empty or absent
-    .recipe.cuisine~=             the column is there at all
+    .recipe.cuisine=              the property is empty or absent
+    .recipe.cuisine~=             the property is there at all
 
-A number column compares numerically and every other column as text, which is
-why an ISO stamp compares correctly as text. A comparison a column's type cannot
-make — `.recipe.serves>many` — is refused rather than guessed at.
+A number property compares numerically and every other property as text, which
+is why an ISO stamp compares correctly as text. A comparison a property's type
+cannot make — `.recipe.serves>many` — is refused rather than guessed at.
 
 A list and a range are values, not extra syntax: `.recipe.cuisine!=thai,indian`
 is "neither", and `.recipe.minutes!=20..35` is "outside that band".
 
-**`!=` also matches a row that lacks the column entirely** — nothing there is
+**`!=` also matches a row that lacks the property entirely** — nothing there is
 not `thai`. When you mean "has a cuisine, and it is not thai", write both:
 
     await query('.recipe!&.recipe.cuisine!=thai&.doc?')
@@ -175,8 +175,8 @@ across a word boundary. Bare words do that (below).
 
 ## Values, by type
 
-The platform's own columns are typed, and a value that cannot be one is refused
-loudly rather than quietly matching nothing:
+The platform's own properties are typed, and a value that cannot be one is
+refused loudly rather than quietly matching nothing:
 
     .task.status=finished
     → task.status is one of open, wip, done, cancelled — got 'finished'
@@ -198,7 +198,7 @@ loudly rather than quietly matching nothing:
 - **eid** — a reference to another entity, by its eid: `.comment.target=940d…`,
   `.filed.assignee=dc5e…`, `.created.by=<who.person>`.
 
-Your _own_ columns work differently: they are stored as given and compared as
+Your _own_ properties work differently: they are stored as given and compared as
 text, with no parsing on either side. Two consequences worth knowing before you
 design a component:
 
@@ -291,18 +291,18 @@ added to the filter. Quoting always works, so quote.
 
 ## Walking a reference
 
-A dotted path walks a reference column and tests a column on the far side. Every
-hop but the last must be a reference:
+A dotted path walks a reference property and tests a property on the far side.
+Every hop but the last must be a reference:
 
     .comment.target.doc.title~=Pancakes    comments on the pancake recipe
     .filed.project.doc.title~=Kitchen       tasks in the project called Kitchen
     .assignee.title~=maya                  bare: filed.assignee → doc.title
 
-Only the platform's columns can be references — a `vocab.json` column is `text`,
-`number`, `bool`, `time` or `url` — so paths walk `comment.target`,
+Only the platform's properties can be references — a `vocab.json` property is
+`text`, `number`, `bool`, `time` or `url` — so paths walk `comment.target`,
 `filed.project`, `filed.assignee`, `attachment.blob`, and the `by` of each
 stamp. Point at another entity from your own component by keeping its eid in a
-`text` column; it holds the address, but a path will not walk it.
+`text` property; it holds the address, but a path will not walk it.
 
 The plural form walks the other way — the entities pointing back at this one:
 
@@ -314,8 +314,8 @@ The plural form walks the other way — the entities pointing back at this one:
     .comments!.doc.body!=butter   every comment mentions it (De Morgan)
 
 The name is the component's plural — `.comments` are the entities whose
-`comment.target` names this row. When a component has two reference columns the
-name picks which one: `.tasks_project` are the projects that have tasks,
+`comment.target` names this row. When a component has two reference properties
+the name picks which one: `.tasks_project` are the projects that have tasks,
 `.tasks_assignee` the people who do; `.attachments` are the blobs a file row
 points at.
 
@@ -326,7 +326,7 @@ points at.
     await query('.tasks_assignee!&.doc?')
 
 And `.refs` is the union of all of them — everything pointing at one entity, by
-whichever column:
+whichever property:
 
     await query(`.refs=${eid}&.doc?`)   // what mentions this
     await query('.refs=&.doc?')         // what mentions nothing
@@ -347,9 +347,9 @@ number asks for the number, never for the rows to count.
     → {distinct: ['american', 'british', 'thai']}
 
 `.count!` counts what the rest of the filter selects. `.tally=` counts each
-value of one column; `.distinct=` returns those values themselves, sorted. Both
-name one column, never a path, and your own columns must be written with their
-component — `.tally=recipe.cuisine`, not `.tally=cuisine`.
+value of one property; `.distinct=` returns those values themselves, sorted.
+Both name one property, never a path, and your own properties must be written
+with their component — `.tally=recipe.cuisine`, not `.tally=cuisine`.
 
 The answer is an object, not an array, so a page has to branch on which it asked
 for. Ask for one aggregate at a time: with two in one filter, only the first is

@@ -64,7 +64,7 @@ to `./api/apply` as `{entities: [...]}`. It returns:
 
 `aliases` maps each `$alias` you sent to the eid it minted. `bundles` is what
 landed, one bundle per entity written, each carrying the `$alias` you named it
-by, with the columns the store stamped on it. The whole array is one batch —
+by, with the properties the store stamped on it. The whole array is one batch —
 every bundle in one `apply` call, applied in one transaction — so if any bundle
 is refused, nothing in that call is written.
 
@@ -135,7 +135,7 @@ visitor at a `private` app included, which is the point. Below.
 ## The bundle you save
 
 An entity is a bundle: `{entity: {eid}, ...components}`. A component is a named
-set of columns; the entity is whatever its components make it.
+set of properties; the entity is whatever its components make it.
 
     let saved = await apply({
       entity: { eid: '$cake' },
@@ -155,9 +155,9 @@ set of columns; the entity is whatever its components make it.
   batch: the same eid twice is refused, so merge them into one bundle.
 
 A `$alias` — or a whole nested bundle — stands in wherever an eid goes: in
-`entity.eid`, in a column that references an entity, in an edge's child. An edge
-is a link between two entities rather than a column, so edges are written under
-`edges`:
+`entity.eid`, in a property that references an entity, in an edge's child. An
+edge is a link between two entities rather than a property, so edges are written
+under `edges`:
 
     await apply({
       entity: { eid: '$note' },
@@ -174,10 +174,10 @@ never `references` — the latter is refused as `unknown edge type: references`.
 
 Four different things, four different ways to write them:
 
-    // patch — send only what changes; every other column is left alone
+    // patch — send only what changes; every other property is left alone
     await apply({ entity: { eid: cake }, recipe: { minutes: 45 } })
 
-    // clear one column — null on the column
+    // clear one property — null on the property
     await apply({ entity: { eid: cake }, recipe: { minutes: null } })
 
     // drop the whole component — null instead of the object
@@ -205,9 +205,9 @@ That is the duplicate reward, and it is a read-modify-write with nothing holding
 the read.
 
 So state what you based the write on. `$was` names, per component and per
-column, the SHA-256 of the value you read, and the store refuses the whole batch
-if that column has moved since. `was()` computes that hash, and is exported
-beside `apply`:
+property, the SHA-256 of the value you read, and the store refuses the whole
+batch if that property has moved since. `was()` computes that hash, and is
+exported beside `apply`:
 
     import { apply, query, was } from './api/client.js'
 
@@ -225,7 +225,7 @@ beside `apply`:
       return 'claimed'
     }
 
-The refusal arrives as an ordinary throw, and its message names which column
+The refusal arrives as an ordinary throw, and its message names which property
 moved and what it holds now — so the page re-reads and decides again rather than
 clobbering a writer it never saw:
 
@@ -235,13 +235,14 @@ clobbering a writer it never saw:
     }
 
 Three things worth knowing. `null` is a guard too — "I read no value" — and it
-is how a column that must still be empty is guarded, which is the shape of "mint
-this once". Every column you name must be one the vocabulary declares, because a
-guard on a column that does not exist would compare absent to absent and protect
-nothing. And the whole batch is refused, never the part that moved: a title from
-one writer and a body from another is the state this exists to make impossible.
+is how a property that must still be empty is guarded, which is the shape of
+"mint this once". Every property you name must be one the vocabulary declares,
+because a guard on a property that does not exist would compare absent to absent
+and protect nothing. And the whole batch is refused, never the part that moved:
+a title from one writer and a body from another is the state this exists to make
+impossible.
 
-Agents guard the same way, on the same column: `graph_apply` accepts `$was`
+Agents guard the same way, on the same property: `graph_apply` accepts `$was`
 beside the components, and refuses with the same message.
 
 ## What a row carries back
@@ -257,9 +258,9 @@ of its own (`.recipe.minutes<=30`). A component asserted _absent_ (`.archived=`)
 filters without asking for anything back. `*` asks for every component, which is
 what you want when you are looking rather than drawing.
 
-A column of yours that nothing has ever written is on the row with the value
+A property of yours that nothing has ever written is on the row with the value
 `null`, not missing from it — so `row.entry.mood` is the test for "was this
-written", never `'mood' in row.entry`. The platform's own columns are no
+written", never `'mood' in row.entry`. The platform's own properties are no
 exception: `doc.title` comes back null too, and `doc.body` — a content-addressed
 blob — comes back null when there is none.
 
@@ -341,7 +342,7 @@ Both halves matter, and they are different people. On a `public` app a guest who
 types first is bounced to sign in and comes back to an empty form. On an `open`
 app the guest writes fine — but they are nobody the platform knows, so their
 rows have no `created.by` at all. If that page wants a byline, it has to ask for
-a name and save it in a column of its own.
+a name and save it in a property of its own.
 
 What `me()` returns:
 
@@ -364,9 +365,9 @@ any other: it comes back when the filter names it.
 person, it returns `{eid, name}` rather than a bare eid, so _one_ query draws a
 list with its writers instead of painting "someone" and asking again.
 
-This is a rule about references, not about that one stamp: any column that
+This is a rule about references, not about that one stamp: any property that
 points at an entity comes back with the name when the store knows that entity as
-a person, a column of your own included.
+a person, a property of your own included.
 
 The name is the one they chose at sign-in, or the front of their address if they
 skipped the question. An address is never in the answer: an app's store learns
@@ -417,7 +418,7 @@ Four things to know:
   is how a published app arrives furnished in somebody else's space.
 - A bundle the store refuses refuses the whole deploy, and nothing is written.
   The refusal names the file and the entry, then explains what was wrong:
-  `seed/02-menu.json[7] was refused: unknown column: recipe.serving`. A file
+  `seed/02-menu.json[7] was refused: unknown property: recipe.serving`. A file
   that is not JSON names itself the same way.
 - The seed files are part of the app's inside, like `vocab.json` and
   `tools.json`: they are never served to the web. `app_files` reads them back.
@@ -429,7 +430,7 @@ Give a row a name and loading it twice is safe:
 
 A row carrying `alias{name}` lands on the entity that already holds that name
 instead of writing a second one — so the same seed loaded again is a patch, not
-a duplicate. The name works wherever an eid does, too: in a column that
+a duplicate. The name works wherever an eid does, too: in a property that
 references an entity, in `id=`, and in `graph_show`. Where a value could be read
 as either, the eid wins.
 
@@ -455,7 +456,7 @@ entities it wrote.
 Most data a person already has is a spreadsheet, and a `.csv` is the same call
 with one more argument: a spreadsheet does not state what a row is, so `as`
 does. Each row becomes one entity with that component, and the header row names
-its columns.
+its properties.
 
     id,name,serves
     lentil,Lentil soup,4
@@ -463,16 +464,16 @@ its columns.
 
 `store_load(app, path: 'data/menu.csv', as: 'recipe')` writes those two as
 `recipe{name, serves}`, each value coerced to the type `vocab.json` declares for
-the column — `serves` is a number, a `bool` accepts true/yes/1 either way round,
-and an empty cell is left unwritten rather than written null. A `title` or
-`body` header lands in the row's `doc`; an `id` (or `alias`) column is the row's
-name — `alias{name}`, which lands on the entity already holding it, so loading
-the file again patches the same rows instead of minting a second set of them,
-and the name works wherever an eid does. Leave it out and every load mints new
-rows. A header the component has no column for is refused by name: rename it
-with `map {"Serves how many": "serves"}`, or declare the column in `vocab.json`.
-A cell that will not coerce is refused naming the row and the header, and the
-whole file is one batch, exactly as a JSON load is.
+the property — `serves` is a number, a `bool` accepts true/yes/1 either way
+round, and an empty cell is left unwritten rather than written null. A `title`
+or `body` header lands in the row's `doc`; an `id` (or `alias`) column is the
+row's name — `alias{name}`, which lands on the entity already holding it, so
+loading the file again patches the same rows instead of minting a second set of
+them, and the name works wherever an eid does. Leave it out and every load mints
+new rows. A header the component has no property for is refused by name: rename
+it with `map {"Serves how many": "serves"}`, or declare the property in
+`vocab.json`. A cell that will not coerce is refused naming the row and the
+header, and the whole file is one batch, exactly as a JSON load is.
 
 ## The HTTP endpoints underneath
 
@@ -530,7 +531,7 @@ file:
 The answer is NDJSON too — one saved row per line, as each fifty commit — and it
 is a 200 whatever happens, because the first rows are sent long before a later
 line can be refused. So a refusal is the last line instead:
-`{"error": "Refused", "message": "unknown column: recipe.serving", "line": 137,
+`{"error": "Refused", "message": "unknown property: recipe.serving", "line": 137,
 "committed": 100}`
 — the line the bad bundle was on, and how many landed before it. Nothing after
 that line is read, and the fifty it was in rolled back whole. One thing to
@@ -560,15 +561,15 @@ this page as its return address. The codes from these endpoints: `not_a_reader`,
 `not_a_writer` (401 to a stranger, 403 to a member who may not), `too_large`,
 `no_bytes`, `space_full`, `no_such_file`, `method_not_allowed`, `not_found`.
 
-A refusal from the store — an unknown component, a column that does not exist, a
-bundle that does not parse — is plain text with a 400, so the message the client
-throws is prefixed with the status and cut to 120 characters:
+A refusal from the store — an unknown component, a property that does not exist,
+a bundle that does not parse — is plain text with a 400, so the message the
+client throws is prefixed with the status and cut to 120 characters:
 
-    400 unknown column: doc.name — doc {title: text, body: text}
+    400 unknown property: doc.name — doc {title: text, body: text}
     400 unknown component: recipy — a component of your own is declared…
 
-Both messages are written to be read: a bad column names the columns that do
-exist, and an undeclared component explains where one of your own comes from.
+Both messages are written to be read: a bad property names the properties that
+do exist, and an undeclared component explains where one of your own comes from.
 
 You need not wire any of this up to be told about it. The platform puts an error
 reporter in every page it serves, so a throw, an unhandled rejection, or a
@@ -581,9 +582,9 @@ Catch what you want to show.
 filter named. `query('.recipe!')` returns recipes with no titles, and a page
 drawing `row.doc.title` prints `undefined` for every one of them. Ask for the
 title beside it: `query('.recipe!&.doc?')`. `&.doc?` is the way to ask for a
-_second_ component — `.recipe.doc` addresses a _column_ of `recipe`, a different
-question and one `recipe` has no answer to. `subscribe` returns the same
-components a query does, so it is the same mistake there.
+_second_ component — `.recipe.doc` addresses a _property_ of `recipe`, a
+different question and one `recipe` has no answer to. `subscribe` returns the
+same components a query does, so it is the same mistake there.
 
 **Reaching for localStorage.** State a page keeps in the browser is invisible to
 the person's other device, to anyone else looking at the same page, and to the

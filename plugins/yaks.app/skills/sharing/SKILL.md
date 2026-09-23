@@ -36,8 +36,8 @@ person or, signed out, per address. Past that the answer is 413
 `visit_too_large` or 429 `too_many_writes` (<https://yaks.app/docs/errors.md>).
 
 Three of the platform's own words stay out of a visitor's reach whatever the
-access: `product` is written by the owner and editors, an `order`'s columns only
-by the platform (<https://yaks.app/docs/selling.md>), and the ask to send a
+access: `product` is written by the owner and editors, an `order`'s properties
+only by the platform (<https://yaks.app/docs/selling.md>), and the ask to send a
 letter, `deliver`, by the owner and editors (<https://yaks.app/docs/mail.md>).
 
 The cost of letting anyone in is a byline: a guest who never signed in is nobody
@@ -335,7 +335,7 @@ the version it is at.
 
 **Before a byte moves**, the publisher's `vocab.json` is checked against the
 copy's store. A vocabulary that only grew is applied additively. One that would
-retype a column the copy's rows were written under is refused with the same
+retype a property the copy's rows were written under is refused with the same
 message a deploy gives — `vote.count is already number` — and nothing moves at
 all: not the files, not the pin. The copy is exactly as it was.
 

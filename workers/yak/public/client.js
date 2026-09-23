@@ -32,7 +32,7 @@
 // to put in an `<img src>` and the eid for a row to point at.
 //
 // `was(value)` is the precondition half of a write: hash what you read, name
-// it under `$was`, and the store refuses the whole batch if that column has
+// it under `$was`, and the store refuses the whole batch if that property has
 // moved since — the read-modify-write two tabs cannot both win.
 //
 // `store(base)` is those doors at an address you name, and what the bound
@@ -99,12 +99,12 @@ let based = (base) => {
 }
 
 // The precondition a read-modify-write carries: the SHA-256 of a value as the
-// page read it, which a bundle names under `$was` — per component, per column.
-// The store refuses the whole batch if that column has moved since, so two
-// tabs, two phones or an agent and a page cannot both spend one balance or
-// claim one reward. `null` is "it held none", which guards a column that must
-// still be empty. The hash is the store's own (@yaks/graph `token`), so a page
-// and a tool guard the same value alike.
+// page read it, which a bundle names under `$was` — per component, per
+// property. The store refuses the whole batch if that property has moved since,
+// so two tabs, two phones or an agent and a page cannot both spend one balance
+// or claim one reward. `null` is "it held none", which guards a property that
+// must still be empty. The hash is the store's own (@yaks/graph `token`), so a
+// page and a tool guard the same value alike.
 //
 //     let [me] = await query(`id=${eid}&.player!`)
 //     await apply({
@@ -142,7 +142,7 @@ export let store = (base) => {
   // page will draw: '.recipe!' answers recipes with no titles, and
   // '.recipe!&.doc?' answers both — '&' joins filters and '?' asks for a
   // component without filtering on it. A dotted word addresses that
-  // component's own column ('.recipe.minutes<=30'), never a second
+  // component's own property ('.recipe.minutes<=30'), never a second
   // component; '&.doc?' is the way to ask for one of those.
   let query = (filter = '') => ask(`query?${filter}`)
   // Full-text over the docs, ranked. A word names no component to leave out,

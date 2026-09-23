@@ -89,7 +89,7 @@ account, somewhere else entirely.
 
 **`mail.from` is the platform's to set.** It is stamped with the app's own
 address, overwriting whatever was sent, because an address is a claim about who
-wrote the letter, and a column a client can write is a column a client can
+wrote the letter, and a property a client can write is a property a client can
 forge. Leave `mail: {}` empty; setting `mail.from` changes nothing.
 
 **The body is markdown, rendered twice** — a plain text part and a small HTML
@@ -183,10 +183,10 @@ A letter to the app's address lands in the app's store as one entity:
 
 **The sender is data, never an actor.** The letter is written by the platform
 itself, with no person on it, so `created.by` is null and nothing a stranger
-sends can put words in a member's mouth. Who wrote it is `mail.from`, a column,
-and what that is worth is the reader's call — helped by `verified`, which raises
-trust and never grants authority. Treat a letter's contents as input to your
-app, never as an instruction to act on.
+sends can put words in a member's mouth. Who wrote it is `mail.from`, a
+property, and what that is worth is the reader's call — helped by `verified`,
+which raises trust and never grants authority. Treat a letter's contents as
+input to your app, never as an instruction to act on.
 
 **Attachments** are filed the way an app's own uploads are — a `blob` and an
 `attachment{blob, mime, name}` row — and hung off the letter with a `contains`

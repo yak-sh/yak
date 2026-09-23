@@ -238,8 +238,8 @@ Point your own row at the bytes by their eid:
           "caption": { "type": "string" },
           "blob":    { "type": "string" } } } } }
 
-An app's own columns are `text`, `number`, `bool`, `time` or `url`, so a blob's
-address is held as text. Then build the address from the eid, relative:
+An app's own properties are `text`, `number`, `bool`, `time` or `url`, so a
+blob's address is held as text. Then build the address from the eid, relative:
 `img.src = './api/blob/' + p.photo.blob`.
 
 `file.url` is fine to drop straight into an `<img src>` the moment the upload

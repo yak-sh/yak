@@ -1,24 +1,24 @@
 ---
 name: components
-description: "Components: the platform's, and your own (yaks.app). Every component an app already has, column by column, and vocab.json for components of your own: the column types, what a later deploy may change, the names already taken, and when a column beats doc.body."
+description: "Components: the platform's, and your own (yaks.app). Every component an app already has, property by property, and vocab.json for components of your own: the property types, what a later deploy may change, the names already taken, and when a property beats doc.body."
 ---
 
 # Components: the platform's, and your own
 
 Every app's store shares the same small vocabulary, and every app can add
-components of its own. This page is that vocabulary column by column — what each
-holds and when to reach for it — then `vocab.json`, what a later deploy may and
-may not change, the names already taken, and how to choose between a column of
-your own and text in `doc.body`.
+components of its own. This page is that vocabulary property by property — what
+each holds and when to reach for it — then `vocab.json`, what a later deploy may
+and may not change, the names already taken, and how to choose between a
+property of your own and text in `doc.body`.
 
 ## What a component is
 
 A component is one named set of fields describing _one_ aspect of an entity. An
-entity is nothing but the components it has: there is no `kind` column, no table
-of types, no class to pick at creation. A row with `doc` has words a person
-reads; give the same row `task` as well and it has a state; give it `recipe` too
-and it is a recipe. Take `task` off and it stops being work without stopping
-being anything else.
+entity is nothing but the components it has: there is no `kind` property, no
+table of types, no class to pick at creation. A row with `doc` has words a
+person reads; give the same row `task` as well and it has a state; give it
+`recipe` too and it is a recipe. Take `task` off and it stops being work without
+stopping being anything else.
 
     await apply({
       entity: { eid: '$cake' },
@@ -29,22 +29,22 @@ being anything else.
 That is one entity, two components, one call. `kind` on the row you read back is
 derived from the components it has — your own component wins, being the most
 specific thing on the row — and nothing in the store branches on it. Every
-component is a _patch_: send the columns you are changing and the rest are left
-alone; `column: null` clears one; `recipe: null` takes the whole component off;
-`{entity: {eid}, tombstone: {}}` kills the entity.
+component is a _patch_: send the properties you are changing and the rest are
+left alone; `prop: null` clears one; `recipe: null` takes the whole component
+off; `{entity: {eid}, tombstone: {}}` kills the entity.
 
-    await apply({ entity: { eid }, recipe: { minutes: 45 } })   // one column
+    await apply({ entity: { eid }, recipe: { minutes: 45 } })   // one property
     await apply({ entity: { eid }, recipe: { source: null } })  // cleared
     await apply({ entity: { eid }, recipe: null })              // not a recipe
 
 ## The platform's vocabulary
 
 These components mean the same thing in every store on the platform. Each
-heading gives the columns you may write; a few carry server-set columns you can
-read but never write, and those are named beneath.
+heading gives the properties you may write; a few carry server-set properties
+you can read but never write, and those are named beneath.
 
 **`doc`** — `title` (text), `body` (text). The words a person reads, and what
-`search` searches unless a column of your own is marked searchable (below).
+`search` searches unless a property of your own is marked searchable (below).
 Nearly every entity your app saves should have one: a row with no `doc` has
 nothing to draw.
 
@@ -59,9 +59,9 @@ your docs and a body reads back as the text you wrote.
 (text). Optional portfolio filing, separate from task presence. A microtask
 needs no filing; add it when work belongs on a project board.
 
-**`task`** — no stored columns. Anything with a state: a chore, a to-do, a
+**`task`** — no stored properties. Anything with a state: a chore, a to-do, a
 suggestion waiting on someone. Reach for it rather than inventing a `status`
-column of your own, and the platform's own status grammar works on your rows.
+property of your own, and the platform's own status grammar works on your rows.
 
 `status` is _read_, never written — `open`, `wip`, `done` or `cancelled`,
 derived from the components the entity has: `cancelled` if it has `cancelled`,
@@ -73,7 +73,7 @@ else `done` if it has `completed`, else `wip` if it has a live `claim`, else
 
     let todo = await query('.task.status=open&.doc?')
 
-**`completed`** — no writable columns; the store sets `at` (time), `by` (eid)
+**`completed`** — no writable properties; the store sets `at` (time), `by` (eid)
 and `via` (eid). The mark that makes a task `done`. The store fills all three —
 the clock from the write, the writer from whoever is asking — so `completed: {}`
 is the whole write, and taking it off again is `completed: null`.
@@ -107,11 +107,11 @@ with its target, so a deleted recipe takes its thread with it.
 
     let thread = await query(`.comment.target=${recipe}&.doc?`)
 
-**`alias`** — no columns of its own; `alias: { name }` is the shorthand. A name
-of your own for an entity, worth as much as its eid. Write it beside a `$` eid
-and the write becomes idempotent: the same name written again patches the entity
-that already holds it, so a seed, an import, or a page that saves itself every
-time it opens writes one row rather than a pile.
+**`alias`** — no properties of its own; `alias: { name }` is the shorthand. A
+name of your own for an entity, worth as much as its eid. Write it beside a `$`
+eid and the write becomes idempotent: the same name written again patches the
+entity that already holds it, so a seed, an import, or a page that saves itself
+every time it opens writes one row rather than a pile.
 
     await apply({ entity: { eid: '$r' },
       alias: { name: 'recipe:lemon-cakes' },
@@ -121,30 +121,30 @@ time it opens writes one row rather than a pile.
     await apply({ entity: { eid: '$n' }, doc: { body: 'Halve the sugar.' },
       comment: { target: 'recipe:lemon-cakes' } })
 
-A name stands wherever an eid does — in a reference column, as a bundle's own
+A name stands wherever an eid does — in a reference property, as a bundle's own
 `entity.eid`, in `id=`, in `graph_show` — and an eid always wins over a name for
 the same entity. One name, one entity: a second entity claiming a name somebody
 holds is refused, naming the holder. Delete the entity and the name is free
 again. An entity may answer to as many names as you give it; each is a row of
 its own (`key{of, value}` with `alias`), which is what `.alias!` lists.
 
-**`person`** — no columns. Whoever wrote a row. The store mints one for each
+**`person`** — no properties. Whoever wrote a row. The store mints one for each
 writer it meets, titled with what to call them, so `person` rows have a `doc`
 too. You read them for a byline. They are screened out of an ordinary listing,
 so ask for them by name: `query('.person!&.doc?')` lists everyone this store has
 met.
 
-**`archived`** — no writable columns; the store sets `at` (time), `by` (eid) and
-`via` (eid). The stamp that takes something out of the open list. Reach for it
-rather than a `hidden` column of your own — every part of the platform knows it,
-and `.archived=` is "everything not archived".
+**`archived`** — no writable properties; the store sets `at` (time), `by` (eid)
+and `via` (eid). The stamp that takes something out of the open list. Reach for
+it rather than a `hidden` property of your own — every part of the platform
+knows it, and `.archived=` is "everything not archived".
 
     await apply({ entity: { eid }, archived: {} })
     let open = await query('.recipe!&.archived=')
 
-**`favorite`** — no writable columns; the store sets `at` (time). A plain star,
-one stamp per entity rather than one per person: it means "this app has starred
-this", not "you have".
+**`favorite`** — no writable properties; the store sets `at` (time). A plain
+star, one stamp per entity rather than one per person: it means "this app has
+starred this", not "you have".
 
 **`web`** — `url` (url). An address out on the web: a bookmark, a source, the
 page a recipe was copied from. Also carries a server-set `frozen_at`.
@@ -164,8 +164,8 @@ itself, not on the row that points at it. `upload` reads it off the file's own
 header (png, jpeg, gif, webp), so a wall can hold a photo's space open before
 its bytes arrive.
 
-**`created`** — no writable columns; the store sets `at` (time), `by` (eid) and
-`via` (eid). **`updated`** — the same three. The byline and the clock. You
+**`created`** — no writable properties; the store sets `at` (time), `by` (eid)
+and `via` (eid). **`updated`** — the same three. The byline and the clock. You
 rarely write either: the store stamps the writer and the moment on its own, and
 a listing leaves them out unless the filter asks for them.
 
@@ -173,7 +173,7 @@ a listing leaves them out unless the filter asks for them.
 
 `created.at` is **when this store first saw the row**, and it cannot be given a
 past moment — not by a page, not by `graph_apply`. So a row with a date of its
-own carries that date in a `time` column of its own: when the diary entry was
+own carries that date in a `time` property of its own: when the diary entry was
 written, when the message was left, when the seedling went in. That is not a
 second copy of the stamp; they are two different facts, and they disagree
 exactly when it matters — an import.
@@ -198,9 +198,9 @@ They stay out of every listing unless the filter names one (`.exception!`), and
 Not listed: `edge`, which is a relation between two entities rather than a
 component on either one — last section.
 
-## The column types
+## The property types
 
-A column is one of these, and a `vocab.json` declares it with the JSON Schema
+A property is one of these, and a `vocab.json` declares it with the JSON Schema
 shown beside it:
 
 - `text` — `{"type": "string"}`. One line, or many. The catch-all.
@@ -220,21 +220,21 @@ shown beside it:
 - a closed set of values — the platform's alone; a refusal lists the set,
   `open|wip|done|cancelled`.
 
-**Noon for a date.** When a `time` column really holds a _day_ — the plants went
-in, the meeting is on the 4th — write noon UTC, `2026-04-11T12:00:00Z`. Midnight
-is the day before for everyone west of Greenwich, so a diary written at
+**Noon for a date.** When a `time` property really holds a _day_ — the plants
+went in, the meeting is on the 4th — write noon UTC, `2026-04-11T12:00:00Z`.
+Midnight is the day before for everyone west of Greenwich, so a diary written at
 `T00:00:00Z` renders a day early in California, and the page has to correct for
 a zone it should never have had to think about.
 
-Every column says its `type`; `app_deploy` refuses one that does not. A string
-column keeps what it is sent as a string: a number written to a `text` column
-comes back as `"5"`.
+Every property says its `type`; `app_deploy` refuses one that does not. A string
+property keeps what it is sent as a string: a number written to a `text`
+property comes back as `"5"`.
 
 The first five are the ones a `vocab.json` may declare. References, closed sets
 and content-addressed bodies each need machinery a store cannot plant from a
 name alone — a foreign key, a set to enforce, a hash.
 
-**No eid column of your own**, then: a component of yours cannot point at
+**No eid property of your own**, then: a component of yours cannot point at
 another entity by declaring one. Where a row of yours needs to be about another
 row, the platform already has a component for it — `comment.target` is an eid
 aimed at any entity, and an edge is the other way to record it. A history
@@ -244,17 +244,17 @@ its own entity carrying the parent's eid in `comment.target`.
 
 ## What a refusal tells you
 
-`graph_schema` reports the vocabulary: every component, its columns and their
+`graph_schema` reports the vocabulary: every component, its properties and their
 types, for the app or the space you name. `graph_apply`'s input schema is that
-vocabulary too, and it is deliberately open: a column your cached copy of the
-schema has never heard of still reaches the store, and a column nobody declared
-is refused there. The schema describes; the server decides.
+vocabulary too, and it is deliberately open: a property your cached copy of the
+schema has never heard of still reaches the store, and a property nobody
+declared is refused there. The schema describes; the server decides.
 
-Name a column that is not there and the refusal lists the whole component — from
-a page's `./api/` endpoints and from an agent's tools alike — so one look ends
-the guessing:
+Name a property that is not there and the refusal lists the whole component —
+from a page's `./api/` endpoints and from an agent's tools alike — so one look
+ends the guessing:
 
-    unknown column: recipe.calories — recipe has title (text),
+    unknown property: recipe.calories — recipe has title (text),
       serves (number), minutes (number)
 
     no such prop: .recipe.mins — recipe has title (text), serves (number),
@@ -268,15 +268,15 @@ comes from, never what some other store has:
       {"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}
       · https://yaks.app/docs.md
 
-A column that exists but is the server's (`created.at`, `completed.via`) is
+A property that exists but is the server's (`created.at`, `completed.via`) is
 neither refused nor written. It is dropped in silence, so a row you read and
 patch straight back is never punished for carrying its own stamps.
 
-## What an unwritten column reads back as
+## What an unwritten property reads back as
 
-**Null, and present.** A column of yours that nothing has ever written is on the
-row with the value `null` — not missing from it. So `'mood' in row.jotting` is
-true either way and is the wrong test; the value is the right one.
+**Null, and present.** A property of yours that nothing has ever written is on
+the row with the value `null` — not missing from it. So `'mood' in row.jotting`
+is true either way and is the wrong test; the value is the right one.
 
     { "jotting": { "written": "2026-04-11T12:00:00Z",
                    "mood": null, "pages": null, "aloud": null } }
@@ -284,7 +284,7 @@ true either way and is the wrong test; the value is the right one.
     if (row.jotting.mood) …          // right
     if ('mood' in row.jotting) …     // always true
 
-That holds for the platform's own columns too, `doc.title` included: a doc
+That holds for the platform's own properties too, `doc.title` included: a doc
 nobody titled reads back as null, not `''`. `doc.body` is kept content-addressed
 and reads back as null when there is none.
 
@@ -293,7 +293,7 @@ and reads back as null when there is none.
 An app names its own components in a `vocab.json` at its root, and `app_deploy`
 plants them in that app's store. It is a JSON Schema document, which is the
 format the platform uses underneath: one `$defs` entry per component, one
-`properties` entry per column — nothing around it:
+`properties` entry per property — nothing around it:
 
     { "$defs": {
         "recipe": { "properties": {
@@ -328,10 +328,11 @@ the `.yml`:
           again: { type: boolean }
 
 A component name is `a-z`, then `a-z0-9_`, up to 40 characters, and may not be
-one of the platform's own component names. A column name follows the same rules
-and is checked against nothing else — only `entity` and `eid` are refused, since
-those name the row itself. So `recipe.doc` is a legal column; it just reads like
-a component, and `.recipe.doc` addresses it rather than the doc beside it.
+one of the platform's own component names. A property name follows the same
+rules and is checked against nothing else — only `entity` and `eid` are refused,
+since those name the row itself. So `recipe.doc` is a legal property; it just
+reads like a component, and `.recipe.doc` addresses it rather than the doc
+beside it.
 
 **A chore board.** The state is the platform's, so declare only what the
 platform has no component for:
@@ -387,10 +388,10 @@ platform's:
 reference. It costs nothing: it holds the eid `upload` answered with, and
 `./api/blob/<eid>` serves the bytes.
 
-**A searched column.** A column can declare more than its type. `"search": true`
-is the one to know: it puts that column's text in the search index, so `search`
-finds a row by what is written there, the way it already finds one by its title
-or its body.
+**A searched property.** A property can declare more than its type.
+`"search": true` is the one to know: it puts that property's text in the search
+index, so `search` finds a row by what is written there, the way it already
+finds one by its title or its body.
 
     { "$defs": {
         "recipe": { "properties": {
@@ -399,8 +400,8 @@ or its body.
 
 Only prose can be searched — a number, a date and a URL are matched by their
 value, not read — so `"search": true` anywhere else is refused at deploy, in a
-message naming the column. A column that declares nothing extra is stored and
-readable and simply never searched.
+message naming the property. A property that declares nothing extra is stored
+and readable and simply never searched.
 
 Your components are yours. No other app's store has heard of them, and no other
 app's rows can collide with them — unless a sibling app of the same person
@@ -408,14 +409,14 @@ declares the same name, which is the next page.
 
 ## How a vocabulary evolves
 
-The rule is short: **columns only ever arrive.**
+The rule is short: **properties only ever arrive.**
 
-- **Adding a column** is a deploy. It reports `added: recipe.source`.
-- **A column that already exists is never retyped.** Declare `pages` as `text`
+- **Adding a property** is a deploy. It reports `added: recipe.source`.
+- **A property that already exists is never retyped.** Declare `pages` as `text`
   where it was `number` and the deploy is refused:
   `vocab.json: book.pages is
-  already number — a column keeps the type its rows were written under`.
-- **A column the new manifest stops naming does not go away.** Its rows are
+  already number — a property keeps the type its rows were written under`.
+- **A property the new manifest stops naming does not go away.** Its rows are
   still there, and the deploy reports it:
 
       kept, not in vocab.json (the rows are there): note.text — name it in
@@ -424,7 +425,7 @@ The rule is short: **columns only ever arrive.**
       migrated behind you.
 
   That line is what makes a rename visible. Change `minutes` to `mins` and you
-  have two columns: the new one arrives empty, the old one keeps every row
+  have two properties: the new one arrives empty, the old one keeps every row
   already written, and rows read back as `"minutes": 46, "mins": null` until you
   move them yourself.
 
@@ -476,38 +477,38 @@ the taken name is the general one, yours is the specific one. Not `card` but
 `standings`. A prefix works too — `book_note` — but a name of its own reads
 better in a filter, and the filter is where you meet it most.
 
-## A column, or `doc.body`?
+## A property, or `doc.body`?
 
 `doc.body` is text. Anything can live there, and one thing should: **the words a
 person reads and search should find.** A recipe's method, a note's prose, a
 book's blurb.
 
-Reach for a column when the value is one the app will filter, sort, count or
+Reach for a property when the value is one the app will filter, sort, count or
 draw as a field — `serves`, `minutes`, `rating`, `started`. Those are the things
 `.recipe.minutes<=30` can ask about; the same number written into `body` is
 invisible to every query.
 
 Reach for `body` when the value is prose, when it is long, or when it varies
-from row to row in a way a column cannot describe. JSON keeps in `body` too,
+from row to row in a way a property cannot describe. JSON keeps in `body` too,
 which is the right answer for a shape you have not settled — but the moment you
-want to filter on a key inside it, that key wants to be a column.
+want to filter on a key inside it, that key wants to be a property.
 
-Do not put in a column what the graph already holds. Who wrote it is
+Do not put in a property what the graph already holds. Who wrote it is
 `created.by`; whether it is done is `completed`; whether it is hidden is
 `archived`; what it belongs to is `filed.project` or a `contains` edge. A second
-copy in a column of your own only drifts.
+copy in a property of your own only drifts.
 
 The exception is a date the row itself has. `created.at` is when the store saw
 the row, which is the right answer for a page someone is typing into and the
 wrong one for anything imported or seeded, where it reads today for something
 that happened in April. When the date is part of what the row IS, it is a `time`
-column of yours.
+property of yours.
 
 ## One component, or a wider one?
 
 Cohesion is the test: **a component describes a single aspect of an entity.** If
-half the columns are always written together and the other half are written by a
-different act, at a different time, that is two components.
+half the properties are always written together and the other half are written
+by a different act, at a different time, that is two components.
 
 The reading list above is the case. `book` is what the book IS — it never
 changes, and two people would agree on it. `reading` is what happened between
@@ -516,11 +517,11 @@ them buys `.book!&.reading=` for the unread, spares an unstarted book a row of
 nulls, and leaves room for a lending app to add a third component.
 
 Split when either half can be true without the other. Keep one component when
-the columns are born together and die together — `image` is `w` and `h`.
+the properties are born together and die together — `image` is `w` and `h`.
 
-## Edges are relations, not columns
+## Edges are relations, not properties
 
-A relation between two entities is not a column on either. It is an edge — a
+A relation between two entities is not a property on either. It is an edge — a
 record of its own, naming the relation and the entity at the far end:
 
     await apply({ entity: { eid: menu },
@@ -551,7 +552,7 @@ is silent, and you notice only when nothing comes back.
 
 A listing does not carry edges — a filter returns components — so an app that
 draws a relation keeps the far end where it can read it back: the child's own
-row, or an eid in a `text` column of your own. Delete an entity and every edge
+row, or an eid in a `text` property of your own. Delete an entity and every edge
 touching it goes with it.
 
 The whole guide is at <https://yaks.app/docs.md>; two apps writing about one

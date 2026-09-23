@@ -149,8 +149,8 @@ by meaning. A trailing `*` prefix-matches the last word.
 Two small things make that work, and both are ordinary:
 
 - **A component of its own.** `note: {}` — declared in the app's `vocab.json`
-  with no columns at all — is what separates your documents from the app's own
-  data, which has `doc` on it too. Then `.note!` is the whole reading list.
+  with no properties at all — is what separates your documents from the app's
+  own data, which has `doc` on it too. Then `.note!` is the whole reading list.
 - **A name.** `alias: {name: 'combat'}` makes the write idempotent: writing
   "combat" again patches the document that already holds that name instead of
   leaving two, and a name can be used wherever an eid can, so `graph_show` reads

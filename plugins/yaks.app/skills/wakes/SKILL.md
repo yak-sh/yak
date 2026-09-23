@@ -21,7 +21,7 @@ anything in its store can carry a `wake`, and the store comes back for it.
       wake: { at: '2026-09-20T09:00:00Z', note: 'water me' },
     })
 
-That is the whole request. `wake` has four columns and every one is optional
+That is the whole request. `wake` has four properties and every one is optional
 except the moment:
 
 - **`at`** — when to come back, as an instant. Absent means nothing is owed: a
@@ -119,7 +119,7 @@ that never fires.
     entity: { …, tombstone: {} }           so is everything else about it
 
 A paused wake is a row that is still there and simply owes nothing — which is
-why pausing is a column and not a delete. `fired` stays where it was: it is
+why pausing is a property and not a delete. `fired` stays where it was: it is
 history, not state.
 
 ## A command, later

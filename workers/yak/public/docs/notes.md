@@ -88,8 +88,8 @@ standing preference, read as input like anything else in a store.
 
 The ceiling is there because this text is paid for by everyone in the space who
 asks for it. A page of rules is plenty; a document is a sign the rules want to
-be a `vocab.json` instead — a column an app declares is a rule the store itself
-enforces, and no agent can forget it.
+be a `vocab.json` instead — a property an app declares is a rule the store
+itself enforces, and no agent can forget it.
 
 ## Where an agent is given it
 

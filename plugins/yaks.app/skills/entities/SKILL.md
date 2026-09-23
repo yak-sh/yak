@@ -82,7 +82,7 @@ refusal, and the rows are all in one place:
     graph_query { app: 'reading-list', filter: '.book!' }
     → both books, however they were written
 
-A column the borrower adds grows the home's table, additively, and is then
+A property the borrower adds grows the home's table, additively, and is then
 writable from either app:
 
     lending/vocab.json: { "$defs": {
@@ -104,14 +104,14 @@ home app by its address instead — `store('/reading-list/api/')`, below.
 ## The one refusal: a shape conflict
 
 Declaring a component another app homes is refused for exactly one reason — the
-same column with two types. The rows already written under the home's type are
-the record of what that column is, and no manifest may rewrite them.
+same property with two types. The rows already written under the home's type are
+the record of what that property is, and no manifest may rewrite them.
 
     vocab.json: book.pages is text in this app and number in reading-list,
-      where book lives — a column keeps the type its rows were written under
+      where book lives — a property keeps the type its rows were written under
 
 The whole manifest is read before anything is planted, so that deploy moves
-nothing at all: not the home's column, not this app's own components, not its
+nothing at all: not the home's property, not this app's own components, not its
 files.
 
 ## Across spaces, a component means what its space declares
@@ -121,8 +121,8 @@ share, so the same name may describe two different shapes — and the answer tel
 you which.
 
 **Where the shapes agree**, the name means one component and the bundle is one.
-A column only one side declares agrees by construction, since a vocabulary only
-ever grows.
+A property only one side declares agrees by construction, since a vocabulary
+only ever grows.
 
 **Where they disagree** — `note.body` is `text` in one space and `number` in
 another — the rows stay apart. The same eid comes back as two bundles, each

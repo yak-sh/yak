@@ -53,11 +53,11 @@ command for adding one and a command for finding one again:
 
 `add` creates an entity with that component on it, a `doc` for the title and
 body, and an `alias` — a name the row answers to, so a later call reaches it
-without having kept the eid. Only the `title` is required; a column nobody names
-is a column nobody writes. `find` builds a query string over the same columns:
-`words` is a full-text search over the title and body, each column is an
-equality test, and every clause whose argument you leave out is left out of the
-query — so `find` with no arguments returns everything of that kind.
+without having kept the eid. Only the `title` is required; a property nobody
+names is a property nobody writes. `find` builds a query string over the same
+properties: `words` is a full-text search over the title and body, each property
+is an equality test, and every clause whose argument you leave out is left out
+of the query — so `find` with no arguments returns everything of that kind.
 
 **This is how an app is found again.** The person who asked for a recipe box in
 one conversation says "add this recipe" in the next one, to an agent that has
@@ -78,7 +78,7 @@ Three ways to change that:
   describes what it stores.
 
 A deploy regenerates them from `vocab.json` as it reads at that moment, so a
-column added to a kind is an argument added to its two commands.
+property added to a kind is an argument added to its two commands.
 
 ## The file
 
@@ -186,7 +186,7 @@ appended for you; do not write them in yourself.
 ### input
 
 An object of argument names to types. Five types, the same ones a component's
-columns use: `text`, `number`, `bool`, `time`, `url`. An argument name is
+properties use: `text`, `number`, `bool`, `time`, `url`. An argument name is
 `[a-z][a-z0-9_]{0,39}`, like a command's, and `"input": {}` is a command with no
 arguments. They become the JSON Schema `commands` prints and `command` fills
 `args` from: `number` is a number, `bool` a boolean, and `text`, `time` and
@@ -228,7 +228,7 @@ that argument's value.
 
 **A string that is nothing but a bound variable keeps the argument's own type.**
 So `"miles": "$miles"` writes the number `5`, not the string `"5"`, and
-`"ready": "$ready"` writes a boolean. This is the form to use for every column
+`"ready": "$ready"` writes a boolean. This is the form to use for every property
 that is not text.
 
 **A variable inside a longer string is spliced in as text**, so a `title` of

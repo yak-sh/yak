@@ -210,9 +210,9 @@ app_deploy:
     fields. A component name the platform already uses is refused, and the
     whole manifest is refused with it before anything is created; a
     component this manifest no longer names, and that holds no rows, is
-    dropped. It reports the columns it added and the columns the store still
-    has that this manifest did not name: a column is never renamed or
-    retyped, so a new name is added beside the old one, which keeps every
+    dropped. It reports the properties it added and the properties the store
+    still has that this manifest did not name: a property is never renamed
+    or retyped, so a new name is added beside the old one, which keeps every
     row already written under it. A seed.json beside index.html (a list of
     bundles, each a JSON object holding an entity id and its components, or
     a seed/ folder of *.json files when there are many) is written into the
@@ -243,14 +243,14 @@ store_load:
     {"eid": "$a"}, "doc": {"title": "…"}}]. A CSV is a spreadsheet, and `as`
     names the component one row becomes: as: "city" with headers
     name,country writes city{name, country} per row, values converted to the
-    column types the app's vocab.json schema declares. `title` and `body`
+    property types the app's vocab.json schema declares. `title` and `body`
     columns go into the row's doc component; an `id` (or `alias`) column is
     the row's name, stored as alias{name}, which resolves to the entity
     already holding that name, so loading the file again patches those rows
     instead of duplicating them, and the name can be used anywhere an entity
     id (eid) can. map {"Serves how many": "serves"} renames a header that
-    does not match a column. A header that matches no column is refused, as
-    is a cell that will not convert, and the error names the row and the
+    does not match a property. A header that matches no property is refused,
+    as is a cell that will not convert, and the error names the row and the
     header. All the files are loaded in one transaction, read in filename
     order, so an alias created in one file resolves in the next; if the
     store refuses a bundle nothing is written and the refusal names the file
@@ -551,11 +551,11 @@ app_update:
     Move an installed app to whatever version its publisher offers now. The
     person's data stays: every row they saved is theirs and is not touched.
     Only the code is replaced, so anything you wrote into the copy yourself
-    is replaced too. A vocab.json schema that only added columns is applied
-    to their store; one that would retype a column their rows were written
-    under is refused, and nothing moves. It reports what changed. To undo:
-    app_rollback, since the update goes out as a version like any other and
-    app_versions lists the one before it. Documentation:
+    is replaced too. A vocab.json schema that only added properties is
+    applied to their store; one that would retype a property their rows
+    were written under is refused, and nothing moves. It reports what
+    changed. To undo: app_rollback, since the update goes out as a version
+    like any other and app_versions lists the one before it. Documentation:
     https://yaks.app/docs/sharing.
 member_add:
   title: Invite someone

@@ -105,9 +105,9 @@ everywhere else on yaks.app.
 no other pattern syntax: `/recipes/*` is everything under `/recipes/`,
 `/*/print` is `/print` under anything.
 
-The globs are stored in a column of the same `home` component that marks the
-front page, `home{first}` — a JSON list in one text column, since a column holds
-a single value:
+The globs are stored in a property of the same `home` component that marks the
+front page, `home{first}` — a JSON list in one text property, since a property
+holds a single value:
 
     { "entity": { "eid": "<the app>" },
       "home": { "first": "[\"/recipes/*\", \"/*/print\"]" } }
