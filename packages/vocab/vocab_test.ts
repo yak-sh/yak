@@ -102,8 +102,31 @@ Deno.test('dotted paths aim to hops', () => {
   assertThrows(
     () => v.aim('doc.nope'),
     Unknown,
-    'doc has title (text), body (text)',
+    'unknown property: doc.nope — doc has title (string), body (string)',
   )
+})
+
+Deno.test('a write naming an undeclared property is told the declared types', () => {
+  let v = loadVocab([{
+    $defs: {
+      meal: {
+        component: true,
+        properties: {
+          at: { type: 'string', format: 'date-time' },
+          cook: { type: 'string', ref: 'entity' },
+          kind: { type: 'string', enum: ['lunch', 'dinner'] },
+          serves: { type: 'integer' },
+          tags: { type: ['string', 'array'] },
+          vegan: { type: 'boolean' },
+        },
+      },
+    },
+  }])
+  assertEquals(v.check('meal', { mins: 1 }), [
+    'unknown property: meal.mins — meal has at (date-time string), ' +
+    'cook (ref entity), kind (lunch|dinner), serves (integer), ' +
+    'tags (string|array), vegan (boolean)',
+  ])
 })
 
 Deno.test('a bare bang aims at the component a property shadows', () => {

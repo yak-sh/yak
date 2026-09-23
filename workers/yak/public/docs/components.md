@@ -257,15 +257,13 @@ vocabulary too, and it is deliberately open: a property your cached copy of the
 schema has never heard of still reaches the store, and a property nobody
 declared is refused there. The schema describes; the server decides.
 
-Name a property that is not there and the refusal lists the whole component —
+Name a property that is not there, in a write or in a query, and the refusal
+lists the whole component, with each property's type as its schema declared it —
 from a page's `./api/` endpoints and from an agent's tools alike — so one look
 ends the guessing:
 
-    unknown property: recipe.calories — recipe has title (text),
+    unknown property: recipe.calories — recipe has title (string),
       serves (number), minutes (number)
-
-    no such prop: .recipe.mins — recipe has title (text), serves (number),
-      minutes (number)
 
 Name a component nobody declared and the refusal tells you where a new component
 comes from, never what some other store has:

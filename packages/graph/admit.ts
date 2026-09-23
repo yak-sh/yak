@@ -26,7 +26,7 @@
 // depends on no validator, and a graph that wants full JSON Schema validation
 // registers one as an `admit` hook.
 
-import { cast, type Vocab } from '@yaks/vocab'
+import { cast, unknownProps, type Vocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import { comps, dead, RESERVED } from './bundle.ts'
 
@@ -59,19 +59,12 @@ let admitComp = (
   patch: Comp,
   trusted: boolean,
 ): Comp | undefined => {
-  let props = v.props(name)
-  let declared = new Set(props)
+  let declared = new Set(v.props(name))
   let alien = Object.keys(patch).filter((c) => !declared.has(c))
-  if (alien.length) {
-    // The refusal lists the vocabulary, not just the mistake: a caller writing
-    // a property that does not exist has the wrong idea of this component, and
-    // the properties it actually has are the shortest way to correct that.
-    throw new Refused(
-      `unknown ${alien.length > 1 ? 'properties' : 'property'}: ${
-        alien.map((c) => `${name}.${c}`).join(', ')
-      } — ${name} declares ${props.join(', ')}`,
-    )
-  }
+  // The refusal lists the vocabulary, not just the mistake: a caller writing a
+  // property that does not exist has the wrong idea of this component, and the
+  // properties it actually has are the shortest way to correct that.
+  if (alien.length) throw new Refused(unknownProps(v, name, alien))
   let keep = allowed(v, name, trusted)
   let kept = cast(
     v,

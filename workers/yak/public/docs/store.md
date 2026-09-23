@@ -565,7 +565,7 @@ A refusal from the store — an unknown component, a property that does not exis
 a bundle that does not parse — is plain text with a 400, so the message the
 client throws is prefixed with the status and cut to 120 characters:
 
-    400 unknown property: doc.name — doc {title: text, body: text}
+    400 unknown property: doc.name — doc has title (string), body (string)
     400 unknown component: recipy — a component of your own is declared…
 
 Both messages are written to be read: a bad property names the properties that

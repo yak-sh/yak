@@ -154,7 +154,11 @@ Deno.test('a malformed query is a 400 to the caller, not a failure', async () =>
     let [q, error, said] of [
       ['.recipe!"&.doc?"', 'SyntaxError', 'presence filters end at !'],
       ['.recipe!"&.doc?"&.count!', 'SyntaxError', 'presence filters end at !'],
-      ['.recipe.nope=1', 'Unknown', 'no such prop: .recipe.nope — recipe has'],
+      [
+        '.recipe.nope=1',
+        'Unknown',
+        'unknown property: recipe.nope — recipe has',
+      ],
     ]
   ) {
     let response = await get(store, `/query?q=${encodeURIComponent(q)}`, owner)

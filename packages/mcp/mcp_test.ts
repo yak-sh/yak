@@ -378,7 +378,12 @@ Deno.test('a refusal is the tool error the agent reads, not a broken call', asyn
   // them (T-34277).
   let colour = await said([{ entity: { eid: 'b1' }, book: { colour: 'red' } }])
   assert(colour.includes('unknown property: book.colour'), colour)
-  assert(colour.includes('book declares price, status, author'), colour)
+  assert(
+    colour.includes(
+      'book has price (number), status (draft|shelved|sold), author (ref entity)',
+    ),
+    colour,
+  )
   assert(colour.includes('graph_schema'), colour)
   let two = await said([
     { entity: { eid: 'b1' }, book: { colour: 'red', size: 'big' } },

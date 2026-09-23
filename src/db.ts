@@ -2667,7 +2667,7 @@ let fleetRefusal = (db: Sql, err: unknown) => {
     'unknown property:',
   )
   let match = err.message.match(
-    /^(unknown propert(?:y|ies): .*?) — (\w+) declares /,
+    /^(unknown propert(?:y|ies): .*?) — (\w+) has /,
   )
   if (match) {
     let [, prefix, name] = match

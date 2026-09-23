@@ -375,25 +375,45 @@ let indexesOf = (
 let SPINE = 'entity'
 let EID = 'eid'
 
-// A component's whole shape in one line, for an error message that teaches:
-// `doc has title (text), body (body)`. An error naming only what it failed to
-// parse teaches nothing.
-let shapeOf = (v: Vocab, comp: string): string => {
+// A property's type in the words its schema declared it: the JSON Schema
+// `type`, with the `format` or `ref` that refines it (`date-time string`,
+// `ref task`), a union's members (`string|array`), or an enum's values.
+let FORMAT: Partial<Record<Scalar, string>> = {
+  time: 'date-time',
+  url: 'uri',
+  query: 'query',
+  json: 'json',
+  priority: 'priority',
+}
+let declared = (c: Prop): string => {
+  if (c.category == 'enum') return c.values!.join('|')
+  if (c.category == 'ref') return `ref ${c.ref}`
+  if (c.scalar == 'jsonb') return c.types!.join('|')
+  let type = c.scalar == 'bool'
+    ? 'boolean'
+    : c.scalar == 'number' || c.scalar == 'priority'
+    ? (c.affinity == 'integer' ? 'integer' : 'number')
+    : 'string'
+  let format = FORMAT[c.scalar!]
+  return format ? `${format} ${type}` : type
+}
+
+/** A component's whole shape in one line, for an error message that teaches:
+ * `doc has title (string), body (string)`. An error naming only what it failed
+ * to parse teaches nothing. */
+export let shapeOf = (v: Vocab, comp: string): string => {
   let props = v.props(comp)
   if (!props.length) return `${comp} has no properties`
-  let said = props.map((p) => {
-    let c = v.prop(comp, p)!
-    let t = c.category == 'enum'
-      ? c.values!.join('|')
-      : c.category == 'ref'
-      ? 'eid'
-      : c.scalar == 'jsonb'
-      ? c.types!.join('|')
-      : c.scalar
-    return `${p} (${t})`
-  })
+  let said = props.map((p) => `${p} (${declared(v.prop(comp, p)!)})`)
   return `${comp} has ${said.join(', ')}`
 }
+
+/** The refusal for properties a component does not declare: one wording,
+ * whether a query or a write named them. */
+export let unknownProps = (v: Vocab, comp: string, props: string[]): string =>
+  `unknown ${props.length > 1 ? 'properties' : 'property'}: ${
+    props.map((p) => `${comp}.${p}`).join(', ')
+  } — ${shapeOf(v, comp)}`
 
 /**
  * Who is told about a write to a component — `server` for a component this
@@ -646,10 +666,7 @@ export let loadVocab = (
         if (own && i + 1 < segs.length) {
           let [a, b] = [segs[i], segs[i + 1]]
           if (!own.includes(b) && !(a == SPINE && b == EID)) {
-            throw new Unknown(
-              `${a}.${b}`,
-              `no such prop: .${a}.${b} — ${shapeOf(v, a)}`,
-            )
+            throw new Unknown(`${a}.${b}`, unknownProps(v, a, [b]))
           }
           out.push({ comp: a, prop: b })
           i += 2
@@ -703,7 +720,7 @@ export let loadVocab = (
       let allowed = new Set(opts?.stamped ? v.props(comp) : info.writable)
       for (let [k, val] of Object.entries(value)) {
         if (!allowed.has(k)) {
-          errs.push(`no such property ${comp}.${k} — ${shapeOf(v, comp)}`)
+          errs.push(unknownProps(v, comp, [k]))
           continue
         }
         if (val == null) continue // a null clears the property
