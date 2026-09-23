@@ -1,8 +1,16 @@
 // The platform's own schedules: the rows the directory is born holding. There
 // is no heartbeat over any of it — every store arms its Durable Object alarm
 // for the earliest wake it owes and fires them itself (graph.ts `tick`), so
-// what is left here is the seeding, the job tag those rows wear, and where a
-// failed job is written down.
+// what is left here is the seeding, the job tag those rows wear, where a
+// failed job is written down, and what becomes of a job its object died under.
+//
+// A job runs in the object that fired it, and a deploy resets that object
+// wherever the job is: no catch runs and no report leaves an object that no
+// longer exists, and the occurrence is spent (@yaks/wake runs an effect at
+// most once). So a run is marked on its own row while it lasts
+// (`sweep.began`), and the next incarnation reads a mark older than itself as
+// a run that died: it says so and fires the job again (`resumed`). Every job
+// here is a sweep that can run twice.
 //
 // Seeds are insert-once: a restart must not rewind `at`, erase `fired`, or
 // undo a schedule someone deliberately paused. A new recurring seed starts
@@ -11,6 +19,7 @@ import { type Graph, Stale } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import { next, span } from '@yaks/wake'
 import type { Env } from './env.ts'
+import { KERNEL, meta } from './meta.ts'
 import type { Wake } from './plugin.ts'
 
 /** The job a directory wake asks its plugin to do when `fired` is written. */
@@ -21,6 +30,12 @@ export let sweepDoc: VocabDoc = {
       type: 'object',
       properties: {
         kind: { type: 'string', enum: ['git', 'meter', 'trash'] },
+        began: {
+          type: 'string',
+          format: 'date-time',
+          stamped: true,
+          description: 'when the run under way began; null once it ends',
+        },
       },
     },
   },
@@ -60,16 +75,54 @@ let reported = async (env: Env, job: string, error: unknown): Promise<void> => {
   await fault(env, `wake ${job}`, error)
 }
 
-/** Keep a failed platform job in the directory's exception log. */
+/** The wake row a job fired from, as its rule is handed it. */
+export type Fired = { entity: { eid: string }; sweep?: unknown }
+
+let jobOf = (row: Fired) =>
+  (row.sweep as { kind?: string } | undefined)?.kind ?? row.entity.eid
+
+/** Run a platform job with its row marked begun until it ends, and keep a
+ * failure in the directory's exception log. */
 export let reporting = async (
   env: Env,
-  job: string,
+  row: Fired,
   run: () => Promise<unknown>,
 ): Promise<undefined> => {
+  let mark = (began: string | null) =>
+    meta(env).apply([{ entity: row.entity, sweep: { began } }], KERNEL)
+  await mark(new Date().toISOString())
   try {
     await run()
   } catch (error) {
-    await reported(env, job, error)
+    await reported(env, jobOf(row), error)
     throw error
+  } finally {
+    await mark(null).catch((e) => reported(env, jobOf(row), e))
+  }
+}
+
+/** The jobs an object died in the middle of: a run marked begun before this
+ * incarnation was `born`, which only a dead one could have left. Each is
+ * reported and fired again, unless its wake was paused; a run this
+ * incarnation began is still going and is left alone. */
+export let resumed = async (
+  graph: Pick<Graph, 'read' | 'apply'>,
+  born: number,
+  report: (job: string, error: Error) => Promise<unknown>,
+): Promise<void> => {
+  for (let row of await graph.read('.sweep&.wake?')) {
+    let began = (row.sweep as { began?: string | null }).began
+    if (!began || Date.parse(began) >= born) continue
+    let job = jobOf(row as Fired)
+    await report(
+      job,
+      new Error(`wake ${job}: the run begun ${began} died unfinished`),
+    )
+    let paused = (row.wake as { at?: string | null } | undefined)?.at == null
+    await graph.apply([{
+      entity: row.entity,
+      sweep: { began: null },
+      ...(paused ? {} : { wake: { at: new Date().toISOString() } }),
+    }])
   }
 }

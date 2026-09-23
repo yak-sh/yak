@@ -52,9 +52,10 @@ export let trashPlugin: Plugin = {
     name: 'trash',
     phase: 'effect',
     match: '.wake, *fired, .sweep, sweep.kind=trash, #Env, #Now',
-    run: async ({ Env: env, Now }) => {
+    run: async (row) => {
+      let { Env: env, Now } = row
       if (!env) return
-      return await reporting(env as unknown as Env, 'trash', async () => {
+      return await reporting(env as unknown as Env, row, async () => {
         let { collected } = await import('./erase.ts')
         await collected(env as unknown as Env, new Date(Now.at))
       })

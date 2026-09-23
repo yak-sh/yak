@@ -141,7 +141,7 @@ import { named, type Row } from './listing.ts'
 import { effected, rulesOf, wakesOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import type { Env } from './env.ts'
-import { seeded } from './wake.ts'
+import { resumed, seeded } from './wake.ts'
 import type { Binding } from './post.ts'
 import { ledger } from './ledger.ts'
 import { doorOf, GIT_STORE, type Namespace, PLATFORM_STORE } from './door.ts'
@@ -516,6 +516,9 @@ export class Store {
   #alarm: Alarm | null = null
   // The schedules this object was born with, planted once (`#sowing`).
   #sowing: Promise<void> | null = null
+  // When this incarnation began: a job marked begun before it was begun by
+  // one that is gone (wake.ts `resumed`).
+  #born = Date.now()
   // The app's own commands, as a runner over this store (T-37605), beside the
   // manifest they were built from. A deploy is the only thing that moves that
   // manifest, and a new one is a new runner.
@@ -1283,6 +1286,17 @@ export class Store {
       if (rows.length && this.#get('wakes') != stamp) {
         await seeded(this.#graph, rows, Date.now())
         this.#put('wakes', stamp)
+      }
+      // And any of them the last incarnation died in the middle of.
+      if (rows.length) {
+        await resumed(
+          {
+            read: (q, o) => this.#graph.read(q, o),
+            apply: (b, o) => this.#trust(b as Bundle[], null, o),
+          },
+          this.#born,
+          (job, e) => this.#broke(`wake ${job}`, e),
+        )
       }
       if (this.#alarm && !(await this.#alarm.getAlarm())) {
         await this.#owed(Date.now())

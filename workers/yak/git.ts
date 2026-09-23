@@ -107,10 +107,11 @@ export let gitPlugin: Plugin = {
     name: 'git',
     phase: 'effect',
     match: '.wake, *fired, .sweep, sweep.kind=git, #Env',
-    run: async ({ Env: env }) => {
+    run: async (row) => {
+      let env = row.Env
       if (!env) return
       let bound = env as unknown as Env
-      return await reporting(bound, 'git', async () => {
+      return await reporting(bound, row, async () => {
         let { backfilled, held } = await import('./gitobj.ts')
         let made = await backfilled(bound, held(meta(bound)))
         if (made) console.log(`yak-git: ${made} deploys committed`)

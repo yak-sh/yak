@@ -15,6 +15,8 @@ import { PLUGINS } from './plugins.ts'
 import { GRAPHQL } from './usage.ts'
 import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
+import type { Env } from './env.ts'
+import { reporting } from './wake.ts'
 
 let at = (time: string) => Date.parse(`2026-09-07T${time}:00Z`)
 let iso = (time: string) => new Date(at(time)).toISOString()
@@ -113,6 +115,53 @@ Deno.test('seeded wake rows survive a directory restart without rewinding or res
   assertEquals(
     (await meta(p.env).query('.wake')).length,
     wakesOf(PLUGINS).length,
+  )
+})
+
+Deno.test('a job is marked begun on its row while it runs, and cleared after', async () => {
+  let marks: unknown[] = []
+  let META = {
+    apply: (b: Bundle[], headers?: Record<string, string>) => {
+      assertEquals(headers, KERNEL)
+      marks.push(b[0].sweep)
+      return Promise.resolve(b)
+    },
+  }
+  let row = { entity: { eid: 'yak-trash' }, sweep: { kind: 'trash' } }
+  await reporting({ META } as unknown as Env, row, () => {
+    assertEquals(marks.length, 1)
+    return Promise.resolve()
+  })
+  assert((marks[0] as { began: string }).began)
+  assertEquals(marks[1], { began: null })
+})
+
+// A deploy resets the object under whatever job it is running: the job's own
+// catch never runs, so the incarnation after it is what can tell.
+Deno.test('a job its object died under is reported and fired by the next one', async () => {
+  let p = platform('wake resumed')
+  await directory(p)
+  let began = new Date(Date.now() - 60_000).toISOString()
+  await meta(p.env).apply([{
+    entity: { eid: 'yak-trash' },
+    sweep: { began },
+  }], KERNEL)
+  let store = new Store(p.states.get(PLATFORM_STORE)!, p.env)
+  p.env.STORE = {
+    idFromName: (n) => n,
+    get: () => ({ fetch: (req: Request) => store.fetch(req) }),
+  } as typeof p.env.STORE
+  let row = await wake(p.env, 'yak-trash')
+  assertEquals((row.sweep as { began: unknown }).began, null)
+  assert(Date.parse(row.wake.at!) <= Date.now(), 'the job is due again')
+  let [broke] = await meta(p.env).query('.exception')
+  assertEquals(
+    broke.exception,
+    {
+      ...broke.exception as object,
+      request: 'wake trash',
+      message: `wake trash: the run begun ${began} died unfinished`,
+    },
   )
 })
 

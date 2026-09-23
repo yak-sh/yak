@@ -43,11 +43,12 @@ export let meterPlugin: Plugin = {
     name: 'meter',
     phase: 'effect',
     match: '.wake, *fired, .sweep, sweep.kind=meter, #Env, #Now',
-    run: async ({ Env: env, Now }) => {
+    run: async (row) => {
+      let { Env: env, Now } = row
       // Every store composes the rules; only the directory gets the bindings
       // that authorize a platform job, even if an app declares the same tags.
       if (!env) return
-      return await reporting(env as unknown as Env, 'meter', async () => {
+      return await reporting(env as unknown as Env, row, async () => {
         let { metered } = await import('./usage.ts')
         await metered(env as unknown as Env, new Date(Now.at))
       })
