@@ -202,6 +202,8 @@ Deno.test('compose takes each facet from its own subpath, and mounts the doors',
   )
   try {
     assertEquals(host.vocab.comp('book')?.name, 'book')
+    // Each component is known by the plugin that declared it.
+    assertEquals(host.vocab.comp('book')?.package, 'shop')
     // The generic tier is this graph's own, ahead of the plugins': one list,
     // which the command line runs and `/mcp` restates for itself.
     assertEquals(host.tools.map((t) => t.name), [

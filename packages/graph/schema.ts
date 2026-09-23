@@ -36,13 +36,16 @@ export type SchemaDoc = {
 let DEATH: Record<string, string> = {
   cascade: 'this entity is deleted with it',
   detach: 'this property is cleared',
-  release: 'this component is removed and the entity lives',
-  keep: 'the reference stands as history',
+  release: 'this component is removed and the entity stays',
+  keep: 'the reference stays as history',
 }
 
-// A value of the right shape for an example: enough to see what goes there,
-// never a value anybody should keep.
+// A value of the right shape for an example: the property's own first example
+// where it declares one, otherwise something its type and format would hold,
+// and `…` for text that nothing says more about. Never a value anybody should
+// keep.
 let sample = (s: PropSchema): unknown => {
+  if (s.examples?.length) return s.examples[0]
   if (s.enum?.length) return s.enum[0]
   if (s.ref) return '$other'
   let t = typesOf(s)[0]
@@ -55,12 +58,16 @@ let sample = (s: PropSchema): unknown => {
     : t == 'array'
     ? []
     : s.format == 'date-time'
-    ? '2026-09-05T12:00:00Z'
+    ? '2026-09-23T12:00:00Z'
+    : s.format == 'date'
+    ? '2026-09-23'
     : s.format == 'uri'
     ? 'https://example.com'
+    : s.format == 'email'
+    ? 'ann@example.com'
     : s.format == 'json'
     ? '{}'
-    : 'text'
+    : '…'
 }
 
 // A component's example value: every property a client writes, filled in.
@@ -124,50 +131,89 @@ export let schemaOf = (vocab: Vocab, about: About = {}): SchemaDoc => {
   }
 }
 
-let code = (s: unknown): string => '`' + String(s) + '`'
-let listed = (xs: readonly unknown[]): string => xs.map(code).join(', ')
+let listed = (xs: readonly unknown[]): string => xs.map(String).join(', ')
+
+// The vocabulary's descriptions read as sentences here: a capital first letter
+// and a full stop, however each was written.
+let sentence = (s: string): string => {
+  let t = s.trim()
+  return t[0].toUpperCase() + t.slice(1) + (/[.!?]$/.test(t) ? '' : '.')
+}
+
+// One JSON value on one line, spaced the way a person writes it.
+let inline = (v: unknown): string =>
+  Array.isArray(v)
+    ? `[${v.map(inline).join(', ')}]`
+    : v && typeof v == 'object'
+    ? `{${
+      Object.entries(v).map(([k, x]) => `${JSON.stringify(k)}: ${inline(x)}`)
+        .join(', ')
+    }}`
+    : JSON.stringify(v)
 
 // A property's type in words: its closed set of values, the component it
-// references, or its JSON type and format.
+// references, its format, or its JSON type.
 let typed = (s: PropSchema): string =>
   s.enum?.length
     ? `one of ${listed(s.enum)}`
     : s.ref
-    ? `reference to ${code(s.ref)}`
-    : typesOf(s).join(' or ') + (s.format ? ` (${s.format})` : '')
+    ? `reference to ${s.ref}`
+    : s.format ?? typesOf(s).join(' or ')
 
-// What is true of a property beyond its type: who writes it, whether it is
-// stored, whether its value is unique, and what deleting the entity it
-// references does to it.
+// What is true of a property beyond its type, a word or two each: who writes
+// it, whether it is stored, whether its value is unique.
 let notes = (vocab: Vocab, comp: string, prop: string, s: PropSchema) => [
-  ...(s.stamped ? ['server-owned, never written by a client'] : []),
-  ...(s.computed ? ['computed when read, never stored'] : []),
+  ...(s.stamped ? ['server-owned'] : []),
+  ...(s.computed ? ['computed'] : []),
   ...(vocab.indexes(comp).some((i) =>
       i.unique && i.props.length == 1 && i.props[0] == prop
     )
-    ? ['unique: no two entities share a value']
+    ? ['unique']
     : []),
-  ...(s.store == 'blob'
-    ? ['kept as content-addressed bytes, read back as its text']
-    : []),
-  ...(s.ref && s.death
-    ? [`when the entity it names is deleted, ${DEATH[s.death]}`]
-    : []),
+  ...(s.store == 'blob' ? ['kept as bytes'] : []),
 ]
 
-let property = (vocab: Vocab, comp: string, prop: string, s: PropSchema) => {
-  let said = [s.description, ...notes(vocab, comp, prop, s)].filter(Boolean)
-  return `- ${code(prop)} (${typed(s)})` +
-    (said.length ? ` — ${said.join('; ')}` : '')
-}
+// A property as a list item: its name, type and notes on the first line, and
+// beneath it what it means and what deleting what it references does.
+let property = (vocab: Vocab, comp: string, prop: string, s: PropSchema) =>
+  [
+    `- ${[`${prop}: ${typed(s)}`, ...notes(vocab, comp, prop, s)].join(', ')}`,
+    ...(s.description ? [sentence(s.description)] : []),
+    ...(s.ref && s.death
+      ? [`If that ${s.ref} is deleted, ${DEATH[s.death]}.`]
+      : []),
+  ].join('\n  ')
 
-// One line of the index: the name, its properties, what it is.
-let line = (vocab: Vocab, name: string): string => {
+// One component as the index shows it, under a heading: what it is, then the
+// names of its properties.
+let block = (vocab: Vocab, name: string, heading: string): string => {
   let def = vocab.def(name)!
   let props = Object.keys(def.properties ?? {})
-  return `- **${name}**${def.kind ? ' (kind)' : ''}` +
-    (props.length ? `: ${listed(props)}` : '') +
-    (def.description ? ` — ${def.description}` : '')
+  return [
+    `${heading} ${name}${def.kind ? ' (kind)' : ''}`,
+    def.description && sentence(def.description),
+    props.length && listed(props),
+  ].filter(Boolean).join('\n\n')
+}
+
+// The index body: a heading for each package that declares components, in
+// name order, and the components under it. A vocabulary loaded without
+// packages has no such level, and its components sit one heading higher.
+let grouped = (vocab: Vocab): string => {
+  let from = (n: string) => vocab.comp(n)?.package
+  if (!vocab.all.some(from)) {
+    return vocab.all.map((n) => block(vocab, n, '##')).join('\n\n')
+  }
+  let packages = [...new Set(vocab.all.map(from))]
+    .sort((a, b) => a == null ? 1 : b == null ? -1 : a < b ? -1 : 1)
+  return packages.map((p) =>
+    [
+      `## ${p ?? 'no package'}`,
+      ...vocab.all.filter((n) => from(n) == p).map((n) =>
+        block(vocab, n, '###')
+      ),
+    ].join('\n\n')
+  ).join('\n\n')
 }
 
 // One component in full, as a page.
@@ -176,37 +222,41 @@ let page = (vocab: Vocab, name: string, guide?: Guide): string => {
   let info = vocab.comp(name)!
   let before = info.before.filter((n) => vocab.comp(n))
   let id = vocab.identity(name)
+  let props = Object.entries(def.properties ?? {})
   let into = vocab.refProps()
     .filter(([c, p]) => vocab.prop(c, p)?.ref == name)
-    .map(([c, p]) => `${c}.${p}`)
+    .map(([c, p]) => `- ${c}.${p}`)
   let url = guide?.(name)
+  let bundle = {
+    entity: { eid: '$1' },
+    [name]: def.examples?.[0] ?? example(vocab, name),
+  }
   return [
     `# ${name}`,
-    def.description,
-    info.kind &&
-    `A kind: an entity carrying it is shown as a ${name}` +
-      (before.length ? `, even beside ${listed(before)}.` : '.'),
-    id.length &&
-    `Identified by ${listed(id)}: the same values always name the same entity.`,
-    Object.entries(def.properties ?? {})
-      .map(([p, s]) => property(vocab, name, p, s)).join('\n'),
-    into.length && `Referenced by ${listed(into)}.`,
-    'As a bundle:\n\n```json\n' +
-    JSON.stringify(
-      {
-        entity: { eid: '$1' },
-        [name]: def.examples?.[0] ?? example(vocab, name),
-      },
-      null,
-      2,
-    ) + '\n```',
+    [
+      def.description && sentence(def.description),
+      info.kind &&
+      `A kind: an entity with it is shown as a ${name}` +
+        (before.length ? `, even beside ${listed(before)}.` : '.'),
+      id.length &&
+      `Identified by ${listed(id)}: the same values always name the same ` +
+        'entity.',
+      info.package && `Declared by ${info.package}.`,
+    ].filter(Boolean).join('\n'),
+    props.length &&
+    '## Properties\n\n' +
+      props.map(([p, s]) => property(vocab, name, p, s)).join('\n'),
+    into.length && '## Referenced by\n\n' + into.join('\n'),
+    '## Example\n\n    ' + inline(bundle),
     url && `Documentation: ${url}`,
   ].filter(Boolean).join('\n\n')
 }
 
-/** The same answer as {@link schemaOf}, as markdown for a person: the index
- * as one line a component, a component asked for as a page, and a kind as its
- * page beside the lines of the components it is displayed with. */
+/** The same answer as {@link schemaOf}, as markdown for a person to read
+ * unrendered: headings for structure and nothing bold. The index is a heading
+ * for each package and one for each component it declares; a component asked
+ * for is a page of its own, its properties nested beneath it; and a kind is
+ * its page beside the components it is displayed with. */
 export let proseOf = (
   vocab: Vocab,
   about: About = {},
@@ -219,7 +269,7 @@ export let proseOf = (
     return [
       page(vocab, about.kind, guide),
       ...(shown.length
-        ? [`## Shown with\n\n${shown.map((n) => line(vocab, n)).join('\n')}`]
+        ? ['## Shown with', ...shown.map((n) => block(vocab, n, '###'))]
         : []),
     ].join('\n\n')
   }
@@ -228,10 +278,14 @@ export let proseOf = (
   }
   return [
     '# Components',
-    vocab.all.map((n) => line(vocab, n)).join('\n'),
-    vocab.kinds.length &&
-    `An entity is shown as the first kind it carries: ${listed(vocab.kinds)}.`,
-    'Name a component for its properties in full, or a kind for what it is ' +
-    'shown with.',
-  ].filter(Boolean).join('\n\n')
+    [
+      vocab.kinds.length &&
+      `An entity is shown as the first kind it carries: ${
+        listed(vocab.kinds)
+      }.`,
+      'Name a component for its properties in full, or a kind for what it is ' +
+      'shown with.',
+    ].filter(Boolean).join('\n'),
+    grouped(vocab),
+  ].join('\n\n')
 }

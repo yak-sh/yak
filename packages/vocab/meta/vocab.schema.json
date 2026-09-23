@@ -29,6 +29,10 @@
     "title": {
       "type": "string"
     },
+    "package": {
+      "type": "string",
+      "description": "the package that declares these components, written by the host that loads the document"
+    },
     "description": {
       "type": "string"
     },

@@ -372,7 +372,7 @@ let said = (docs: VocabDoc[]): VocabDoc[] => {
     Object.entries(toolsDoc.$defs ?? {}).filter(([name]) => !taken.has(name)),
   )
   return Object.keys($defs).length
-    ? [{ title: 'invocation', $defs }, ...docs]
+    ? [{ title: 'invocation', package: '@yaks/tools', $defs }, ...docs]
     : docs
 }
 
@@ -533,7 +533,13 @@ export let compose = async (
   // its own record. A plugin that already declares them — a harness, whose
   // transcripts are calls — keeps its own definitions, so only the components
   // nobody supplied are added.
-  let docs = said(vocabs.flatMap(([v]) => v.docs ?? []))
+  // Each document is written with the package that brought it, so a reader
+  // of the vocabulary can say where a component comes from.
+  let docs = said(
+    vocabs.flatMap(([v, , plugin]) =>
+      (v.docs ?? []).map((d) => ({ ...d, package: plugin }))
+    ),
+  )
   let vocab = loadVocab(
     docs,
     understood(vocabs.flatMap(([v]) => v.keywords ?? [])),

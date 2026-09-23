@@ -134,7 +134,7 @@
             "open"
           ],
           "computed": true,
-          "description": "where the task stands — computed from the completed and cancelled marks, never written"
+          "description": "where the task stands, read from its completed and cancelled marks"
         }
       }
     },

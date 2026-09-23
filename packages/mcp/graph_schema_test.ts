@@ -5,7 +5,7 @@
 
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { loadVocab, type PropSchema } from '@yaks/vocab'
-import { schemaOf } from '@yaks/graph'
+import { proseOf, schemaOf } from '@yaks/graph'
 import { connect, shop, text } from './harness.ts'
 
 type Answer = { $defs: Record<string, PropSchema> }
@@ -43,11 +43,31 @@ Deno.test('bare, it is the index: every component, what it is, its types', async
       author: { type: 'string' },
     },
   })
+  // Loaded without packages, each component is a heading of its own.
   assertStringIncludes(
     said,
-    '- **book** (kind): `price`, `status`, `author` — a book on sale here',
+    '## book (kind)\n\nA book on sale here.\n\nprice, status, author',
   )
-  assertStringIncludes(said, 'first kind it carries: `book`, `doc`, `review`')
+  assertStringIncludes(said, 'first kind it carries: book, doc, review')
+  assert(!said.includes('**'), said)
+})
+
+Deno.test('the index nests each component under the package declaring it', () => {
+  let vocab = loadVocab([
+    { package: '@shop/books', $defs: { book: shop.def('book')! } },
+    { package: '@shop/words', $defs: { doc: shop.def('doc')! } },
+  ])
+  assertEquals(vocab.comp('book')?.package, '@shop/books')
+  let said = proseOf(vocab)
+  assertStringIncludes(
+    said,
+    '## @shop/books\n\n### book (kind)\n\nA book on sale here.',
+  )
+  assert(said.indexOf('## @shop/books') < said.indexOf('## @shop/words'))
+  assertStringIncludes(
+    proseOf(vocab, { comps: ['book'] }),
+    'Declared by @shop/books.',
+  )
 })
 
 Deno.test('named, it is the component as declared, with an example', async () => {
@@ -65,13 +85,15 @@ Deno.test('named, it is the component as declared, with an example', async () =>
   for (
     let line of [
       '# book',
-      'A kind: an entity carrying it is shown as a book, even beside `doc`.',
-      '- `price` (number) — what it costs, in pounds',
-      '- `status` (one of `draft`, `shelved`, `sold`)',
-      '- `author` (reference to `entity`) — when the entity it names is ' +
-      'deleted, this property is cleared',
-      'Referenced by `review.book`.',
-      '"author": "$other"',
+      'A kind: an entity with it is shown as a book, even beside doc.',
+      '## Properties',
+      '- price: number\n  What it costs, in pounds.',
+      '- status: one of draft, shelved, sold',
+      '- author: reference to entity\n  If that entity is deleted, this ' +
+      'property is cleared.',
+      '## Referenced by\n\n- review.book',
+      '## Example\n\n    {"entity": {"eid": "$1"}, "book": {"price": 1, ' +
+      '"status": "draft", "author": "$other"}}',
       'Documentation: https://shop/guide/books.md',
     ]
   ) assertStringIncludes(said, line)
@@ -89,10 +111,8 @@ Deno.test('a kind is that component whole, beside what it is shown with', async 
     title: { type: 'string' },
     body: { type: 'string' },
   })
-  assertStringIncludes(
-    said,
-    '## Shown with\n\n- **doc** (kind): `title`, `body`',
-  )
+  assertStringIncludes(said, '## Shown with\n\n### doc (kind)')
+  assertStringIncludes(said, 'title, body')
 })
 
 Deno.test('a JSON text property is exampled as valid JSON text', () => {

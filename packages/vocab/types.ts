@@ -97,6 +97,7 @@ export type CompInfo = {
   description?: string // what the component means, as its schema describes it
   wire: boolean // false = a component clients read but cannot write
   kind: boolean // this comp names a display kind
+  package?: string // the package whose document declared it, where one says
   before: string[] // kinds this kind sorts before (feeds kindOrder)
   writable: string[] // property names a client may write
   stamped: string[] // property names only the server writes
@@ -148,6 +149,10 @@ export type VocabDoc = {
   $id?: string
   $vocabulary?: Record<string, boolean>
   title?: string
+  /** the package that declares these components — written by the host that
+   * loads the document (@yaks/cli `compose`), so a reader can say where each
+   * component comes from */
+  package?: string
   $defs?: Record<string, PropSchema>
   [k: string]: unknown
 }

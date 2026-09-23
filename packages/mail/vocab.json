@@ -13,12 +13,14 @@
       "properties": {
         "from": {
           "type": "string",
-          "description": "the address it came from"
+          "description": "the address it came from",
+          "examples": ["ann@example.com"]
         },
         "to": {
           "type": "string",
           "bare": false,
-          "description": "the address it is written to — absent when `deliver.to` names the recipient as an entity instead"
+          "description": "the address it is written to — absent when `deliver.to` names the recipient as an entity instead",
+          "examples": ["bob@example.com"]
         },
         "at": {
           "type": "string",

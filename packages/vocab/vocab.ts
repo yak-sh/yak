@@ -486,6 +486,7 @@ export let loadVocab = (
   // after every document is read, so the order the documents were loaded in
   // decides nothing.
   let defs: Record<string, PropSchema> = {}
+  let from: Record<string, string> = {} // a component → the package declaring it
   let adding: [string, PropSchema][] = []
   for (let doc of docs) {
     for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
@@ -505,6 +506,7 @@ export let loadVocab = (
       }
       if (name in defs) throw new Error(`component '${name}' is declared twice`)
       defs[name] = schema
+      if (doc.package) from[name] = doc.package
     }
   }
   for (let [name, schema] of adding) {
@@ -538,6 +540,7 @@ export let loadVocab = (
       description: d.description,
       wire: d.wire !== false,
       kind: !!d.kind,
+      ...(from[name] ? { package: from[name] } : {}),
       before: d.before ?? [],
       // A computed property is readable, never writable — like a stamped one,
       // but with no storage either.
