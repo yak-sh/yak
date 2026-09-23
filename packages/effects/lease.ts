@@ -1,4 +1,4 @@
-// A background job, and the one process running it.
+// A job, and the one process running it.
 //
 // Some work is not about a batch at all: picking back up the agents a restart
 // left running, freeing the locks a dead session held, firing the wakes that
@@ -207,7 +207,7 @@ export type HoldingOpts = HoldOpts & {
 }
 
 /**
- * Run a background job for as long as this process is up: take the lease,
+ * Run a job for as long as this process is up: take the lease,
  * renew it while the work runs, and release it at the end.
  *
  * The same call serves a process of either shape, which is the point — nothing

@@ -40,8 +40,8 @@ export type Ctx = {
   /** The config file naming the graph this command opens, in this process.
    * Absent where the command named an MCP server instead ({@link aimed}). */
   config?: string
-  /** Whether the graph this command opens runs its background jobs — false
-   * under `--no-background-jobs`, which takes no lease and runs none of them. */
+  /** Whether the graph this command opens runs its jobs — false
+   * under `--no-jobs`, which takes no lease and runs none of them. */
   jobs: boolean
   json: boolean
   help: boolean
@@ -272,7 +272,7 @@ export let globals = (
   for (let i = 0; i < argv.length; i++) {
     let a = argv[i]
     if (a == '--json') json = true
-    else if (a == '--no-background-jobs') jobs = false
+    else if (a == '--no-jobs') jobs = false
     else if (a == '--help' || a == '-h') help = true
     else if (a == '--timing') timing = true
     else if (a == '--host') host = argv[++i] ?? host

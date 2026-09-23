@@ -675,7 +675,7 @@ Deno.test('an effect that said what pending looks like is re-driven at boot', as
     assertEquals(ran, ['Spring', 'Winter'])
     ran.length = 0
     // What `serve` does after boot: only the row still pending comes back.
-    await host.duties(AbortSignal.abort())
+    await host.jobs(AbortSignal.abort())
     assertEquals(ran, ['Winter'])
   } finally {
     host.close()
@@ -738,7 +738,7 @@ Deno.test('the sweep a one-shot line makes runs the retries that are due', async
     ran.length = 0
     // One pass and out: a line passing through does what nobody is doing,
     // and what is owed is part of it.
-    await host.duties(AbortSignal.abort())
+    await host.jobs(AbortSignal.abort())
     assertEquals(ran, ['b1'])
     assertEquals(
       ((await detached(host.storage).get(['r1']))[0].effect as Comp).state,
@@ -763,7 +763,7 @@ Deno.test('a host reads the letter an id wears, which no plugin registers', asyn
   }
 })
 
-Deno.test('a duty runs while the host is up and stops when it closes', async () => {
+Deno.test('a job runs while the host is up and stops when it closes', async () => {
   let beats = 0
   let stopped = false
   let host = await compose(
@@ -784,16 +784,16 @@ Deno.test('a duty runs while the host is up and stops when it closes', async () 
       },
     }),
   )
-  // Composing is not holding: nothing is doing a duty until somebody asks to.
+  // Composing is not holding: nothing is doing a job until somebody asks to.
   assertEquals(beats, 0)
-  void host.duties()
+  void host.jobs()
   let deadline = Date.now() + 5000
   while (!beats && Date.now() < deadline) {
     await new Promise((go) => setTimeout(go, 5))
   }
-  assert(beats > 0, 'the duty never ran')
+  assert(beats > 0, 'the job never ran')
   await host.close()
-  assert(stopped, 'closing the host did not let its duty go')
+  assert(stopped, 'closing the host did not let its job go')
 })
 
 Deno.test('a signal that has already aborted is one pass and out', async () => {
@@ -818,14 +818,14 @@ Deno.test('a signal that has already aborted is one pass and out', async () => {
   try {
     // A one-shot line on its way in: it drains what is overdue and returns,
     // rather than holding a clock nobody asked it to hold.
-    await host.duties(AbortSignal.abort())
+    await host.jobs(AbortSignal.abort())
     assertEquals(passes, 1)
   } finally {
     await host.close()
   }
 })
 
-Deno.test('a duty that throws is reported, and the host still serves', async () => {
+Deno.test('a job that throws is reported, and the host still serves', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop', 'broken', ...HTTP] },
     only({
@@ -840,7 +840,7 @@ Deno.test('a duty that throws is reported, and the host still serves', async () 
     }),
   )
   try {
-    await host.duties(AbortSignal.abort())
+    await host.jobs(AbortSignal.abort())
     assertEquals(
       await (await serving(host)(new Request('http://x/shop/a'))).text(),
       '/shop/a',
@@ -850,7 +850,7 @@ Deno.test('a duty that throws is reported, and the host still serves', async () 
   }
 })
 
-Deno.test('a host that runs no background jobs holds no lease and does no pass', async () => {
+Deno.test('a host that runs no jobs holds no lease and does no pass', async () => {
   let passes = 0
   // What is held once a line has passed through: the start-up passes keep
   // theirs, and a job that finished its one pass has let its own go.
@@ -872,9 +872,9 @@ Deno.test('a host that runs no background jobs holds no lease and does no pass',
       }),
     )
     try {
-      await host.duties(AbortSignal.abort())
+      await host.jobs(AbortSignal.abort())
       // With nothing to hold, the long-running form has nothing to wait for.
-      if (!jobs) await host.duties()
+      if (!jobs) await host.jobs()
       let rows = await host.graph.read('.lease')
       return rows.map((b) => b.lease as Comp).filter((l) => l.holder)
         .map((l) => l.name).sort()

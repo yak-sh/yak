@@ -14,7 +14,7 @@ completion operation; query its `satisfies` relationships to see progress.
 
 The root import exports `goalDoc`, a JSON Schema document. `@yaks/goal/vocab`
 also exports `docs: [goalDoc]` for plugin loaders. This package has no storage
-implementation, tools, or background jobs.
+implementation, tools, or jobs.
 
 ## Example
 

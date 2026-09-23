@@ -39,7 +39,7 @@ export let PORT = 8787
 
 /** What this tool needs from the host that composed it: the request handler to
  * answer with, the runner whose interrupted calls a process that stays up
- * finishes, the background jobs it takes over while it is up, and the config
+ * finishes, the jobs it takes over while it is up, and the config
  * that said where to listen. */
 export type Serving = {
   config: { db?: string; port?: number; hostname?: string }
@@ -48,7 +48,7 @@ export type Serving = {
    * together by hand may carry none. */
   handler?: Handler
   runner: Runner
-  duties: (signal?: AbortSignal) => Promise<void>
+  jobs: (signal?: AbortSignal) => Promise<void>
   stopping: AbortSignal
 }
 
@@ -69,12 +69,12 @@ export let runs = (host: Serving): Runs => ({
     // process is running; a process that is about to stay up is the one that
     // can afford to.
     await reconcile(host.runner)
-    // And the background jobs in their long-lived form: the effect sweep and
+    // And the jobs in their long-lived form: the effect sweep and
     // the plugins' timers, each under its own lease, held for as long as this
     // process is up. A one-shot command runs the same jobs for one pass on its
     // way in — an HTTP server is not a special kind of process, it is the one
     // that stays. Not awaited: it returns when the host closes.
-    void host.duties()
+    void host.jobs()
     let at = ''
     let began = Date.now()
     let server = denoListen({

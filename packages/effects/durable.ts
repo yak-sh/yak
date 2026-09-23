@@ -62,7 +62,7 @@ import type { Kind } from './trace.ts'
  * This package's components, to load beside your own when you want durable
  * effects: `loadVocab([effectDoc, ...mine])`. Two components, one document —
  * `effect`, whose every property is server-owned because a client never writes
- * a run's bookkeeping, and `lease` (./lease.ts), which marks a background job
+ * a run's bookkeeping, and `lease` (./lease.ts), which marks a job
  * as held by one process at a time.
  */
 export let effectDoc: VocabDoc = doc
@@ -186,7 +186,7 @@ export let ledger = (opts: LedgerOpts): Ledger => {
   // anything awaits — so nothing else can run between them.
   let resuming: { eid: Eid; attempts: number } | undefined
 
-  let around: Around = (job, tx, next) => {
+  let around: Around = (r, tx, next) => {
     let held = resuming
     resuming = undefined
     let eid = held?.eid ?? mint()
@@ -195,7 +195,7 @@ export let ledger = (opts: LedgerOpts): Ledger => {
       // The handler's own failure still belongs to the caller — the registry
       // isolates it — so the row is marked and the throw goes on.
       let raise = (err: unknown) =>
-        then(fell(tx, eid, attempts, job.slot, err), (): never => {
+        then(fell(tx, eid, attempts, r.slot, err), (): never => {
           throw err
         })
       try {
@@ -209,10 +209,10 @@ export let ledger = (opts: LedgerOpts): Ledger => {
     }
     return held ? go() : then(
       write(tx, eid, {
-        handler: job.handler,
-        target: job.event.entity.eid,
-        comp: job.event.name,
-        kind: job.event.kind,
+        handler: r.handler,
+        target: r.event.entity.eid,
+        comp: r.event.name,
+        kind: r.event.kind,
         state: 'pending',
         attempts,
         at: stamp(clock()),

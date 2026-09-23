@@ -7,7 +7,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Tx } from '@yaks/graph'
 import { isPromise } from '@yaks/graph'
-import { effects, type Job } from './registry.ts'
+import { effects, type Run } from './registry.ts'
 import type { Event } from './trace.ts'
 import { blog, blogGraph } from './harness.ts'
 
@@ -19,8 +19,8 @@ let sync = <T>(out: T | Promise<T>): T => {
 // A registry, a graph with it registered, and the log the handlers write to.
 let fixture = () => {
   let seen: string[] = []
-  let oops: Job[] = []
-  let fx = effects(blog, { report: (_e, job) => oops.push(job) })
+  let oops: Run[] = []
+  let fx = effects(blog, { report: (_e, run) => oops.push(run) })
   let g = blogGraph([fx])
   let apply = (change: Bundle[]) => sync(g.apply(change))
   return { fx, g, seen, oops, apply }

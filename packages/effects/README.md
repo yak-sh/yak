@@ -10,8 +10,8 @@ of changes applied in one transaction, such as the array passed to
 write phases.
 
 The default registry is in memory and stores no graph data. Optional `effect`
-and `lease` components support retry records and coordination of background
-jobs. Applications supply the handlers and their domain components.
+and `lease` components support retry records and coordination of jobs.
+Applications supply the handlers and their domain components.
 
 ## Install
 
@@ -222,7 +222,7 @@ claims belonging to other owners. Retry records do not preserve the original
 property patch: reconciliation rebuilds the event using current target state.
 Handlers needing historical values must store or obtain those values separately.
 
-## Background jobs, and the one process running each
+## Jobs, and the one process running each
 
 The optional `lease` component records `{ name, holder, until }`. Its ID is
 derived from the job name, so contenders address the same entity. `take()` uses
