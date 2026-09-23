@@ -1,16 +1,16 @@
-// The `relation` keyword, interpreted: which components name a relation, and
+// The `edge` keyword, interpreted: which components name a relation, and
 // what each of them is called.
 //
 // The set of relations is not a fixed list this package ships. An application
 // declares as many as it has — a blog's `links`, a bookstore's `cites`, a task
-// board's `requires` — and each is an ordinary component declaring `relation`
+// board's `requires` — and each is an ordinary component declaring `edge`
 // about itself. Everything here reads that declaration off a loaded vocabulary;
 // nothing is hardcoded, so adding a relation means adding one component, not
 // editing this file.
 //
 // A relation has two names, and they may differ. The component name is the
 // component stored on the link entity (`references`); the query name is what a
-// query uses (`referenced`). Declaring `relation: true` makes them identical,
+// query uses (`referenced`). Declaring `edge: true` makes them identical,
 // which is the common case; declaring a string gives the query name. The link's
 // id is derived from the component name, so the two maps below are not
 // interchangeable.
@@ -22,19 +22,16 @@ export let EDGE = 'edge'
 
 /**
  * Every relation the vocabulary declares, as query name → component name:
- * `{ cites: 'cites', referenced: 'references' }`. Reads the `relation` keyword,
+ * `{ cites: 'cites', referenced: 'references' }`. Reads the `edge` keyword,
  * so the vocabulary must have been loaded with `edgeKeywords` registered — an
  * unregistered keyword is invisible to the loader.
  */
 export let relations = (v: Vocab): Record<string, string> => {
   let out: Record<string, string> = {}
   for (let tag of v.all) {
-    // `edge` is the keyword's current name: a component declares the name of
-    // the component it is stored beside, so one rule covers them all
-    // (@yaks/key's components declare `key`). `relation` is the older name for
-    // the same keyword and still works.
-    let kw = v.comp(tag)?.keywords
-    let said = kw?.edge ?? kw?.relation
+    // The keyword is named after the component it is stored beside, so one
+    // rule covers them all (@yaks/key's components declare `key`).
+    let said = v.comp(tag)?.keywords?.edge
     if (said === true) out[tag] = tag
     else if (typeof said == 'string' && said) out[said] = tag
   }

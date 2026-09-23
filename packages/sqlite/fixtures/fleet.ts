@@ -63,12 +63,12 @@ export const vocab = loadVocab([edgeDoc, {
     requires: {
       component: true,
       type: 'object',
-      relation: true,
+      edge: true,
     },
     contains: {
       component: true,
       type: 'object',
-      relation: true,
+      edge: true,
     },
   },
 }], [edgeKeywords])

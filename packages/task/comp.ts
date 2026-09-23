@@ -72,7 +72,7 @@ export let CONTAINS = 'contains'
  * carry.
  *
  * `requires` and `contains` are declared through
- * {@link https://jsr.io/@yaks/edge | @yaks/edge}'s `relation` keyword, so an
+ * {@link https://jsr.io/@yaks/edge | @yaks/edge}'s `edge` keyword, so an
  * edge entity carrying one of them states that link. Register `edgeKeywords`
  * when you load, or the loader will carry the declaration with nobody reading
  * it.

@@ -55,7 +55,7 @@
     "recalled": {
       "component": true,
       "type": "object",
-      "relation": "recalled",
+      "edge": "recalled",
       "bare": false,
       "properties": {
         "source": {

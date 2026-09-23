@@ -16,7 +16,7 @@
  *   $defs: {
  *     post: { type: 'object', kind: true, properties: { title: { type: 'string' } } },
  *     // one component, declared as a relation
- *     cites: { type: 'object', relation: true },
+ *     cites: { type: 'object', edge: true },
  *   },
  * }
  * let vocab = loadVocab([edgeDoc, blog], [edgeKeywords])

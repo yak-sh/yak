@@ -103,14 +103,14 @@
     "contains": {
       "component": true,
       "type": "object",
-      "relation": "contains",
+      "edge": "contains",
       "description": "that task is part of this one",
       "properties": {}
     },
     "requires": {
       "component": true,
       "type": "object",
-      "relation": "requires",
+      "edge": "requires",
       "description": "this task waits for that one",
       "properties": {}
     },

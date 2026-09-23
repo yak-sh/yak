@@ -125,7 +125,7 @@ let shy = new Set([
 // The relation tags, gathered the way enums are. A manifest names the edge
 // TYPES a query says (`referenced`); the comp an edge entity WEARS is its
 // nature (`references`), which edge.ts maps. @yaks/edge reads the pair off the
-// `relation` keyword, so the fleet's edge vocabulary reaches the package as a
+// `edge` keyword, so the fleet's edge vocabulary reaches the package as a
 // declaration rather than as a second copy of the list.
 let relationOf: Record<string, string> = {}
 for (let m of manifests) {
@@ -140,7 +140,7 @@ for (let m of manifests) {
 let compOf = (name: string, spec: ManifestComp): PropSchema => ({
   component: true,
   type: 'object',
-  ...(relationOf[name] ? { relation: relationOf[name] } : {}),
+  ...(relationOf[name] ? { edge: relationOf[name] } : {}),
   ...(spec.kind ? { kind: true } : {}),
   ...(spec.before ? { before: spec.before } : {}),
   ...(spec.wire === false ? { wire: false } : {}),
@@ -168,7 +168,7 @@ let compOf = (name: string, spec: ManifestComp): PropSchema => ({
 
 // The keyword vocabularies the fleet's own components use beyond the core
 // meta-model. Each is owned by the package that interprets it (@yaks/id reads
-// `prefix`, @yaks/names reads `by_name`, @yaks/edge reads `relation`,
+// `prefix`, @yaks/names reads `by_name`, @yaks/edge reads `edge`,
 // @yaks/blob reads `store`), and registered here so the loader carries it.
 export let fleetKeywords: Keywords[] = [
   idKeywords,

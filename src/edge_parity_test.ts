@@ -7,7 +7,7 @@
 //   1. edgeEid agrees, byte for byte, for the sentences the fleet says.
 //   2. a STORED edge — written through the app's own link() and apply() — is
 //      found at the eid the package derives for it.
-//   3. the fleet vocabulary's relation declarations (the `relation` keyword,
+//   3. the fleet vocabulary's relation declarations (the `edge` keyword,
 //      emitted by fleet_vocab from the manifests' edge list) name the same
 //      type↔nature pairs edge.ts holds.
 
@@ -52,7 +52,7 @@ Deno.test('a stored edge is found at the eid the package derives', () => {
 })
 
 Deno.test('the fleet vocabulary declares the fleet relations', () => {
-  // relations() reads the `relation` keyword off the loaded vocabulary; the app
+  // relations() reads the `edge` keyword off the loaded vocabulary; the app
   // reads its own natureOf/typeOf tables. One list, said two ways.
   let said = relations(fleetVocab())
   assertEquals(

@@ -27,7 +27,7 @@
     "satisfies": {
       "component": true,
       "type": "object",
-      "relation": "satisfies",
+      "edge": "satisfies",
       "properties": {},
       "description": "the relation on a link: doing this served that purpose"
     }

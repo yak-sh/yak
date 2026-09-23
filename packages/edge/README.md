@@ -34,7 +34,7 @@ The package uses the graph's existing storage adapter. With SQLite, `edge` and
 The `edge.ord` number can record a position, but the traversal helpers do not
 sort by it.
 
-## The `relation` keyword
+## The `edge` keyword
 
 Declare each relation in your application's vocabulary and register
 `edgeKeywords` when loading it:
@@ -53,13 +53,13 @@ let blog = {
       kind: true,
       properties: { title: { type: 'string' } },
     },
-    cites: { component: true, type: 'object', relation: true },
-    links: { component: true, type: 'object', relation: 'linked' },
+    cites: { component: true, type: 'object', edge: true },
+    links: { component: true, type: 'object', edge: 'linked' },
   },
 }
 ```
 
-`relation: true` uses the component name in queries. A string gives it a
+`edge: true` uses the component name in queries. A string gives it a
 different query name: `links` is stored as a component but queried as `linked`.
 `link()` and `unlink()` take the **component name**; `walk()` takes the **query
 name**. The package declares no application relations of its own.
@@ -157,7 +157,7 @@ clauses on its reads.
 
 | Export                             | Purpose                                                       |
 | ---------------------------------- | ------------------------------------------------------------- |
-| `edgeKeywords`, `EDGE_URI`         | Register the `relation` keyword                               |
+| `edgeKeywords`, `EDGE_URI`         | Register the `edge` keyword                                   |
 | `edgeDoc`, `EDGE`                  | Component declaration and component name                      |
 | `relations(vocab)`, `names(vocab)` | Relation-to-component and component-to-relation maps          |
 | `link`, `unlink`, `edgeEid`        | Create/remove link bundles and compute their IDs              |

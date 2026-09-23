@@ -8,7 +8,7 @@
     "about": {
       "component": true,
       "type": "object",
-      "relation": "about",
+      "edge": "about",
       "properties": {},
       "description": "edge tag: this entity is about that one"
     },
@@ -110,7 +110,7 @@
     "delegates": {
       "component": true,
       "type": "object",
-      "relation": "delegates",
+      "edge": "delegates",
       "properties": {},
       "description": "edge tag: this entity handed work off to that one"
     },
@@ -229,7 +229,7 @@
     "reads": {
       "component": true,
       "type": "object",
-      "relation": "reads",
+      "edge": "reads",
       "properties": {},
       "description": "edge tag: this entity reads that one"
     },
@@ -264,21 +264,21 @@
     "references": {
       "component": true,
       "type": "object",
-      "relation": "referenced",
+      "edge": "referenced",
       "properties": {},
       "description": "edge tag: this entity refers to that one"
     },
     "supersedes": {
       "component": true,
       "type": "object",
-      "relation": "supersedes",
+      "edge": "supersedes",
       "properties": {},
       "description": "edge tag: this entity replaces that one"
     },
     "supervises": {
       "component": true,
       "type": "object",
-      "relation": "supervises",
+      "edge": "supervises",
       "properties": {},
       "description": "edge tag: this entity oversees that one"
     },
@@ -333,14 +333,14 @@
     "wants": {
       "component": true,
       "type": "object",
-      "relation": "wants",
+      "edge": "wants",
       "properties": {},
       "description": "edge tag: this entity wants that one"
     },
     "worked": {
       "component": true,
       "type": "object",
-      "relation": "worked",
+      "edge": "worked",
       "properties": {},
       "description": "edge tag: this entity worked on that one"
     },

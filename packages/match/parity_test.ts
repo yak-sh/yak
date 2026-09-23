@@ -253,12 +253,12 @@ let blog: Vocab = loadVocab([edgeDoc, {
     cites: {
       component: true,
       type: 'object',
-      relation: true,
+      edge: true,
     },
     links: {
       component: true,
       type: 'object',
-      relation: 'linked',
+      edge: 'linked',
     },
   },
 }], [edgeKeywords])

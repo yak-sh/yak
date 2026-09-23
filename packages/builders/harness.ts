@@ -45,8 +45,8 @@ let doc: VocabDoc = {
       kind: true,
       properties: { name: { type: 'string' } },
     },
-    references: { component: true, type: 'object', relation: 'referenced' },
-    reads: { component: true, type: 'object', relation: 'reads' },
+    references: { component: true, type: 'object', edge: 'referenced' },
+    reads: { component: true, type: 'object', edge: 'reads' },
     created: {
       component: true,
       type: 'object',

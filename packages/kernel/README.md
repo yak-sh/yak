@@ -50,7 +50,7 @@ ordinary JSON. The package also implements a comment-creation tool.
 - eight relation tags: `about`, `delegates`, `reads`, `references`,
   `supersedes`, `supervises`, `wants` and `worked`. A link between two entities
   is itself an entity, carrying `edge{from, to}` plus one of these tags to say
-  what the link means; see [@yaks/edge](../edge), which reads the `relation`
+  what the link means; see [@yaks/edge](../edge), which reads the `edge`
   keyword each of them declares. Other packages declare their own — `contains`
   and `requires` are [@yaks/task](../task)'s, `satisfies` is
   [@yaks/goal](../goal)'s.

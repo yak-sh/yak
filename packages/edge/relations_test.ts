@@ -25,7 +25,7 @@ Deno.test('an unregistered keyword is invisible, so nothing is a relation', () =
       cites: {
         component: true,
         type: 'object',
-        relation: true,
+        edge: true,
       },
     },
   }])
@@ -38,17 +38,17 @@ Deno.test('the open set is as long as an application makes it', () => {
       cites: {
         component: true,
         type: 'object',
-        relation: true,
+        edge: true,
       },
       answers: {
         component: true,
         type: 'object',
-        relation: true,
+        edge: true,
       },
       translates: {
         component: true,
         type: 'object',
-        relation: 'translated',
+        edge: 'translated',
       },
     },
   }], [edgeKeywords])

@@ -29,7 +29,7 @@ import { refuse } from './tool.ts'
 //   relationDoc the twelve verbs an edge may wear. @yaks/edge ships the link
 //               and not one relation, because which relations exist is the
 //               application's word — so the platform says its twelve here,
-//               through that package's `relation` keyword. They are core and
+//               through that package's `edge` keyword. They are core and
 //               not an app's own: the guide teaches this list to every app,
 //               every store already holds rows under these names, and a word
 //               means the same thing in every store — so they are reserved
@@ -156,7 +156,7 @@ export let RELATIONS: string[] = [
 ]
 
 /** Those verbs as one vocabulary document: a bare tag component each, saying
- * `relation` about itself so @yaks/edge reads it off the loaded vocabulary. */
+ * `edge` about itself so @yaks/edge reads it off the loaded vocabulary. */
 export let relationDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true, [EDGE_URI]: true },
   title: 'relations',
@@ -164,7 +164,7 @@ export let relationDoc: VocabDoc = {
     RELATIONS.map((name) => [name, {
       component: true,
       type: 'object',
-      relation: true,
+      edge: true,
       properties: {},
     }]),
   ),
@@ -1080,7 +1080,7 @@ export let PLATFORM_APART: string[] = (() => {
 
 /** The keyword vocabularies those documents and an app's own may use. Each is
  * owned by the package that reads it — @yaks/blob `store`, @yaks/edge
- * `relation` — and registered so the loader carries it. @yaks/id's `prefix` is
+ * `edge` — and registered so the loader carries it. @yaks/id's `prefix` is
  * not among them: it says which letter an entity's NUMBER wears, and an app's
  * entities have no number, so a `prefix` declared in an app's vocab.json is
  * dropped on load like any word nothing here reads. */

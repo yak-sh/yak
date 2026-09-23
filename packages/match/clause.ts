@@ -234,8 +234,7 @@ let refs = (ctx: Ctx, r: Refs): Test => {
 // when a cycle leads back to it.
 let relation = (v: Vocab, name: string): string | undefined =>
   v.comp('edge') && v.all.find((tag) => {
-    let kw = v.comp(tag)?.keywords
-    let said = kw?.edge ?? kw?.relation
+    let said = v.comp(tag)?.keywords?.edge
     return said === true ? tag == name : said === name
   })
 

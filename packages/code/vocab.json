@@ -82,7 +82,7 @@
     "imports": {
       "component": true,
       "type": "object",
-      "relation": true,
+      "edge": true,
       "description": "edge tag: this module imports or re-exports that one",
       "properties": {}
     },

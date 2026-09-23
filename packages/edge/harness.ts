@@ -47,13 +47,13 @@ let doc: VocabDoc = {
     cites: {
       component: true,
       type: 'object',
-      relation: true,
+      edge: true,
     },
     // A post linking to another — written `links`, read `linked`.
     links: {
       component: true,
       type: 'object',
-      relation: 'linked',
+      edge: 'linked',
     },
     // Something that is NOT a relation, so the tests can prove an ordinary
     // component stored beside an edge is never mistaken for one.

@@ -29,8 +29,8 @@ let doc: VocabDoc = {
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
-    contains: { component: true, type: 'object', relation: true },
-    reads: { component: true, type: 'object', relation: true },
+    contains: { component: true, type: 'object', edge: true },
+    reads: { component: true, type: 'object', edge: true },
     memory: { component: true, type: 'object', kind: true, prefix: 'M' },
   },
 }
