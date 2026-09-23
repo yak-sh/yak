@@ -1,0 +1,85 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "builders",
+  "$defs": {
+    "builder": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "properties": {
+        "floor": {
+          "type": "string",
+          "format": "date-time",
+          "description": "the earliest a schedule may build it again"
+        }
+      },
+      "description": "builds one output from its instruction (its doc body) and its inputs (its `reads` links)"
+    },
+    "built": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": ["doc"],
+      "identity": ["builder", "key"],
+      "properties": {
+        "builder": {
+          "type": "string",
+          "ref": "builder",
+          "death": "keep",
+          "bare": false,
+          "description": "the builder it came from"
+        },
+        "key": {
+          "type": "string",
+          "bare": false,
+          "description": "the hash of the instruction, the model and each input's content hash it was built from"
+        },
+        "model": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the model that built it"
+        },
+        "session": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the session that built it"
+        }
+      },
+      "description": "an output: what one builder built under one key. Its id is derived from the two, so an unchanged key names the output already built"
+    },
+    "builder_build": {
+      "tool": true,
+      "noun": "builder",
+      "verb": "build",
+      "title": "Build now",
+      "description": "Build a builder now, whatever its schedule says: hash its instruction, the model and each input's content into a key, and open one session on it unless an output under that key exists already. Passing a model other than the configured one builds a sibling output, which is how two models are compared on one builder. Returns one line: the output and the session building it, or the output that is already current.",
+      "input": {
+        "builder": {
+          "type": "string",
+          "ref": "builder",
+          "description": "id of the builder to build"
+        },
+        "provider": {
+          "type": "string",
+          "ref": "provider",
+          "description": "the provider to ask instead of the configured one"
+        },
+        "model": {
+          "type": "string",
+          "ref": "model",
+          "description": "the model to build with instead of the configured one"
+        }
+      },
+      "required": ["builder"],
+      "options": {
+        "positional": ["builder"],
+        "short": { "m": "model", "p": "provider" }
+      },
+      "idempotent": true
+    }
+  }
+}

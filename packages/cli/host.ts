@@ -723,8 +723,9 @@ export let compose = async (
           // The sweep's query is written in the graph's own query grammar, so
           // the rows are read the way everything else here reads them — and a
           // handler that declared a sweep promised to be idempotent, since
-          // this re-runs work that may well have run already.
-          await fx.relay(unfinished(host.graph))
+          // this re-runs work that may well have run already. Each handler is
+          // handed the graph to read, as it is on a commit.
+          await fx.relay(unfinished(host.graph), detached(host.storage))
           if (!log) return await until(signal)
           // Then the ledger: what a crash left between a commit and its
           // handler, and every failure whose retry backoff has elapsed. One

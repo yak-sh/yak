@@ -36,6 +36,7 @@
         }
       }
     },
+    "@yaks/builders",
     "@yaks/dreaming",
     "@yaks/context",
     "@yaks/mail",

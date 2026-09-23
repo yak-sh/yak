@@ -501,7 +501,18 @@ let MOVES: Record<string, Move | null> = {
 
   // ── roles: what is left of a job is what a job is ──
   bug: null,
-  dream: refs('dream', ['scope'], ['floor']),
+  // A dream runs as a @yaks/builders builder, and when it may run again is
+  // the builder's floor.
+  dream: {
+    says: 'dream',
+    make: (row, ctx) => {
+      ctx.also({
+        entity: { eid: ctx.ref(row.entity)! },
+        builder: row.floor == null ? {} : { floor: String(row.floor) },
+      })
+      return row.scope == null ? {} : { scope: ctx.ref(row.scope) }
+    },
+  },
   finding: null,
   fixer: null,
   nofix: null,

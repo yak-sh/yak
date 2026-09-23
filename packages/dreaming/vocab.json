@@ -10,6 +10,7 @@
       "component": true,
       "type": "object",
       "kind": true,
+      "before": ["builder", "doc"],
       "prefix": "Z",
       "properties": {
         "scope": {
@@ -17,14 +18,9 @@
           "ref": "project",
           "death": "cascade",
           "description": "the project it is filed under"
-        },
-        "floor": {
-          "type": "string",
-          "format": "date-time",
-          "description": "the earliest it may run again"
         }
       },
-      "description": "a standing intention, with the earliest time it may run again"
+      "description": "a standing intention filed under a project; it wears @yaks/builders' `builder`, which says when it runs"
     },
     "meta": {
       "component": true,

@@ -217,6 +217,7 @@
     "./packages/page",
     "./packages/notify",
     "./packages/persona",
+    "./packages/builders",
     "./packages/dreaming",
     "./packages/project",
     "./packages/tmux"

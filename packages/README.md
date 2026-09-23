@@ -297,10 +297,15 @@ grouped approximately by function, **not** by dependency order.
   create and decide proposals; an approved review does not automatically add
   `architecture`.
 
+- **[@yaks/builders](./builders)** — an instruction plus its inputs builds one
+  output: a `builder` whose `doc` body is the instruction and whose `reads`
+  links are its inputs, and a `built` output keyed by a hash of the instruction,
+  the model and each input's content, reused while that key holds. Builds open
+  an agent session on a schedule (`./effects`) or on demand (`builder build`);
+  the config names the session.
 - **[@yaks/dreaming](./dreaming)** — what an agent works on when nothing else is
-  asking for its attention: a `dream` with an earliest-start time, the `recall`
-  it consolidates, and the effect that starts a session on a dream whose start
-  time has passed (`./effects`; the config names what gets started).
+  asking for its attention: a `dream`, which runs as a @yaks/builders builder,
+  and the `recall` it consolidates.
 - **[@yaks/notify](./notify)** — Declare notification records, subscriptions
   (`watch` or `mute`) and chats. It stores intent and relationships, not a
   delivery service.

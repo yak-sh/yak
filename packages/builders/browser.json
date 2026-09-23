@@ -1,0 +1,13 @@
+{
+  "_": "The browser gate: @yaks/builders' browser-facing exports must type-check with only the web platform in scope — no Deno namespace, no Node types. `deno task check:browser` is the check.",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/vocab": "../vocab/mod.ts"
+  }
+}

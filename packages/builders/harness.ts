@@ -1,12 +1,12 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
-// small graph, called a notebook, with dreams in it.
+// small graph, called a workshop, with builders in it.
 //
-// It holds one project and one persona, and loads the components a desk is
-// written with — @yaks/session's session and claim, @yaks/doc's body text,
-// @yaks/edge's links, @yaks/wake's schedules — alongside dreaming's own. The
-// storage is @yaks/ram: a Map holding the bundles, with the same `apply()` and
-// the same rules as a database. No process is started: a desk here is just the
-// rows a server would hand to whatever runs sessions.
+// It holds one persona, a provider serving one model, and loads the components
+// a build is written with — @yaks/session's session and entries, @yaks/doc's
+// body text, @yaks/edge's links, @yaks/wake's schedules — alongside the
+// builders' own. The storage is @yaks/ram: a Map holding the bundles, with the
+// same `apply()` and the same rules as a database. No process is started: a
+// build here is just the rows a server would hand to whatever runs sessions.
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph, identityEid } from '@yaks/graph'
@@ -18,8 +18,9 @@ import { modelDoc } from '@yaks/model'
 import { wakeDoc } from '@yaks/wake'
 import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
-import { dreamingDoc } from './vocab.ts'
-import { type Open, watches } from './desk.ts'
+import { builderDoc } from './vocab.ts'
+import type { Open } from './build.ts'
+import { watches } from './effects.ts'
 
 let doc: VocabDoc = {
   $defs: {
@@ -35,8 +36,9 @@ let doc: VocabDoc = {
       kind: true,
       properties: { name: { type: 'string' } },
     },
-    // The persona a desk uses is @yaks/persona's; declared here, along with
-    // `references`, so these tests need no dependency on that package.
+    // The persona a build uses is @yaks/persona's, and `references` and
+    // `reads` are @yaks/kernel's; declared here so these tests need no
+    // dependency on either package.
     persona: {
       component: true,
       type: 'object',
@@ -44,6 +46,7 @@ let doc: VocabDoc = {
       properties: { name: { type: 'string' } },
     },
     references: { component: true, type: 'object', relation: 'referenced' },
+    reads: { component: true, type: 'object', relation: 'reads' },
     created: {
       component: true,
       type: 'object',
@@ -61,35 +64,40 @@ let doc: VocabDoc = {
   },
 }
 
-/** The notebook's vocabulary: dreaming's components, plus the ones a desk is
- * written with. */
-export let notebook: Vocab = loadVocab([
-  docDoc,
-  edgeDoc,
-  modelDoc,
-  wakeDoc,
-  sessionDoc,
-  toolsDoc,
-  dreamingDoc,
-  doc,
-], [edgeKeywords])
+/** The workshop's vocabulary: the builders' components, the ones a build is
+ * written with, and any `more` a caller composes beside them. */
+export let workshop = (more: VocabDoc[] = []): Vocab =>
+  loadVocab([
+    docDoc,
+    edgeDoc,
+    modelDoc,
+    wakeDoc,
+    sessionDoc,
+    toolsDoc,
+    builderDoc,
+    doc,
+    ...more,
+  ], [edgeKeywords])
 
 /** A clock that does not move, so a test can assert on what it stamped. */
 export let noon = (): string => '2026-09-19T12:00:00.000Z'
 
 /** The ids the tests share. */
 export let ids = {
-  work: 'p-work', // the project a dream is filed under
-  voice: 'n-scribe', // the persona a desk runs with
-  dream: 'z-writeup', // the standing intention
+  work: 'p-work', // a project
+  voice: 'n-scribe', // the persona a build runs with
+  builder: 'z-writeup', // the builder
   house: identityEid('provider', ['house']), // the provider this machine has
   mind: identityEid('model', ['mind']), // the model it serves
+  other: identityEid('model', ['other']), // a second model it serves
 }
 
 /** The whole rig: a graph over a fresh Map, and the effects watching it. */
-export type Notebook = {
-  /** the notebook's graph */
+export type Workshop = {
+  /** the workshop's graph */
   g: Graph
+  /** its vocabulary */
+  vocab: Vocab
   /** its effect registry, for a test that registers another handler */
   fx: Effects
   /** what a failing handler reported — recorded, never a failed
@@ -97,31 +105,37 @@ export type Notebook = {
   failed: unknown[]
 }
 
-/** A notebook with a project and a persona in it, watching for dreams the way
- * the `effects` export registers them. */
-export let notes = async (o: Open): Promise<Notebook> => {
+/** A workshop with a persona and a provider in it, watching for builders the
+ * way the `effects` export registers them. */
+export let shop = async (
+  o: Omit<Open, 'vocab'>,
+  more: VocabDoc[] = [],
+): Promise<Workshop> => {
+  let vocab = workshop(more)
   let failed: unknown[] = []
-  let fx = effects(notebook, {
+  let fx = effects(vocab, {
     write: (b) => g.apply(b, { trusted: true }),
     report: (err) => void failed.push(err),
   })
   let g = graph({
-    storage: ram(notebook),
-    vocab: notebook,
-    plugins: [fx, docs(), edges(notebook), sessions()],
+    storage: ram(vocab),
+    vocab,
+    plugins: [fx, docs(), edges(vocab), sessions()],
   })
-  for (let { comp, ...watch } of watches(o)) fx.on(comp, watch)
+  for (let { comp, ...watch } of watches({ ...o, vocab })) fx.on(comp, watch)
   await g.apply([
     { entity: { eid: ids.work }, project: { name: 'Work' } },
     { entity: { eid: ids.voice }, persona: { name: 'Scribe' } },
     { entity: { eid: ids.house }, provider: { name: 'house' } },
     { entity: { eid: ids.mind }, model: { name: 'mind' } },
+    { entity: { eid: ids.other }, model: { name: 'other' } },
     { ...link(ids.house, 'serves', ids.mind), serves: { name: 'mind' } },
+    { ...link(ids.house, 'serves', ids.other), serves: { name: 'other' } },
   ])
-  return { g, fx, failed }
+  return { g, vocab, fx, failed }
 }
 
-/** Eids in order, so a test can name the entities a desk created. */
+/** Eids in order, so a test can name the entities a build created. */
 export let counter = (): () => string => {
   let n = 0
   return () => `new-${++n}`

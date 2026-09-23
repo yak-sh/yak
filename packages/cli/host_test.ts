@@ -16,7 +16,6 @@ import {
   type Facets,
   given,
   read,
-  unfinished,
   writer,
 } from './host.ts'
 
@@ -655,8 +654,10 @@ Deno.test('an effect that said what pending looks like is re-driven at boot', as
         // Declaring a sweep promises an idempotent handler: what it re-drives
         // may well have run already.
         sweep: { pending: '.book.price=' },
-        created: (event) => {
-          ran.push(String(event.entity.eid))
+        // It reads the row it is handed, as a handler on a commit does.
+        created: async (event, tx) => {
+          let [book] = await tx.get([event.entity.eid])
+          ran.push(String((book.book as Comp).title))
         },
       }],
     },
@@ -671,11 +672,11 @@ Deno.test('an effect that said what pending looks like is re-driven at boot', as
       { entity: { eid: 'b1' }, book: { title: 'Spring', price: 12 } },
       { entity: { eid: 'b2' }, book: { title: 'Winter' } },
     ])
-    assertEquals(ran, ['b1', 'b2'])
+    assertEquals(ran, ['Spring', 'Winter'])
     ran.length = 0
     // What `serve` does after boot: only the row still pending comes back.
-    await host.fx.relay(unfinished(host.graph))
-    assertEquals(ran, ['b2'])
+    await host.duties(AbortSignal.abort())
+    assertEquals(ran, ['Winter'])
   } finally {
     host.close()
   }
