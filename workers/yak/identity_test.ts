@@ -16,7 +16,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { slow, until } from '../../src/testing.ts'
+import { slow, until } from '../../bin/testing.ts'
 import {
   allowed,
   connector,
@@ -28,7 +28,7 @@ import {
   meta,
   signIn,
 } from './probe.ts'
-import { COOKIE, sign } from '../../src/token.ts'
+import { COOKIE, sign } from './lib/token.ts'
 import { SENDS } from './signin.ts'
 import { MANAGE, managePath } from './route.ts'
 import type { Connection } from './connections.ts'

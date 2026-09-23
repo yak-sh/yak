@@ -15,8 +15,8 @@
 // bound to this named entrypoint. The routes in wrangler.toml address the
 // default entrypoint, so no request from the internet arrives here — a caller
 // has to be this Worker.
-import { r2Blobs } from '../../src/blobs_r2.ts'
-import type { Blobs } from '../../src/store/blobs.ts'
+import { r2Blobs } from './lib/blobs_r2.ts'
+import type { Blobs } from './lib/blobs.ts'
 import { keepable, purge, tagsOf } from './cache.ts'
 import type { App } from './directory.ts'
 import { bound, type Env } from './env.ts'

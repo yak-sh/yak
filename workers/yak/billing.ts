@@ -41,7 +41,7 @@ import { directory, type Plan, type Space, stamp } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { apex, type Host, spaceHost } from './host.ts'
 
-import { cookieValue, verify } from '../../src/token.ts'
+import { cookieValue, verify } from './lib/token.ts'
 import { fault } from './unseen.ts'
 
 let API = 'https://api.stripe.com'
@@ -148,7 +148,7 @@ let pairs = (header: string) =>
 // body, the exact string that arrived, which is why the door below reads the
 // body as text once and verifies that string rather than parsing and
 // re-serializing it. The compare runs through WebCrypto's `verify`, so it is
-// constant-time without a compare of our own (src/token.ts holds the same
+// constant-time without a compare of our own (lib/token.ts holds the same
 // rule).
 export let verified = async (
   raw: string,

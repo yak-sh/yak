@@ -8,9 +8,9 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parse } from '@std/toml'
 import { next } from '@yaks/wake'
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import { r2Blobs } from './lib/blobs_r2.ts'
 import type { Wire } from '@yaks/durable-object'
-import { slow, until } from '../../src/testing.ts'
+import { slow, until } from '../../bin/testing.ts'
 import type { Held } from './build.ts'
 import {
   collected,

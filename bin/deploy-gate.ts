@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-read --allow-env
 // The box records deploys; Actions only reads the committed measurements.
-// Like bench-gate, the minimum ratchets down and a 25% margin absorbs noise.
+// The minimum ratchets down and a 25% margin absorbs noise.
 export type Deploy = {
   sha: string
   pushed: string

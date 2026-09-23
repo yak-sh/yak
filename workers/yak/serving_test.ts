@@ -29,8 +29,8 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
-import { slow, until } from '../../src/testing.ts'
-import { sign } from '../../src/token.ts'
+import { slow, until } from '../../bin/testing.ts'
+import { sign } from './lib/token.ts'
 import * as apps from './apps.ts'
 import { directory, stamp, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'

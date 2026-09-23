@@ -18,7 +18,7 @@
 // stranger must not learn that a private app exists by reading its name, so
 // anonymous, member and owner are each asked separately.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { parseHTML } from 'linkedom'
 import { spaceIndex } from './pages.ts'
 import { managePath } from './route.ts'

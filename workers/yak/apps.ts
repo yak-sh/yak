@@ -26,7 +26,7 @@
 // door refused on purpose never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
 import { apex, type Host } from './host.ts'
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import { r2Blobs } from './lib/blobs_r2.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
 import { at as cachedAt } from './cache.ts'
 import * as files from './files.ts'
@@ -705,7 +705,7 @@ let nameSent = (req: Request) => {
  * has named yet are invisible until the next arrival of the same file names
  * them. The caller applies the bundles, as whoever it decided is writing.
  *
- * Two rows, the way the fleet shapes a file (src/blob.ts): the content,
+ * Two rows: the content,
  * addressed by its sha and carrying what is true of the bytes — how many they
  * are, and what they measure (@yaks/blob `sizeOf`, off the file's own header) —
  * and the use of it, carrying what it is called and what it is. They stay

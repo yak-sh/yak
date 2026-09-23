@@ -53,9 +53,10 @@ Deno.test('the workerd tier is path-scoped, self-hosted, and reports without blo
   let workerd = steps.find((s) => s.run == 'deno task test:workerd')!
   assertEquals(workerd.if, "steps.paths.outputs.workers == 'true'")
   // Tests exercise and report; they never hold a deploy back.
-  for (let name of ['workerd tests', 'bench gate']) {
-    assertEquals(steps.find((s) => s.name == name)!['continue-on-error'], true)
-  }
+  assertEquals(
+    steps.find((s) => s.name == 'workerd tests')!['continue-on-error'],
+    true,
+  )
   // Nothing here publishes: Workers Builds watches main itself.
   assertEquals(steps.some((s) => (s.run ?? '').includes('promote')), false)
   let tasks = JSON.parse(

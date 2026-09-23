@@ -3,7 +3,7 @@
 // address put the inviter's space in the stranger's listing, their agent's
 // instructions, and behind a bare app name their agent would say.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { SUBJECT } from './invite.ts'
 import {
   accepted,

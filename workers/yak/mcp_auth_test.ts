@@ -6,8 +6,8 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { slow } from '../../src/testing.ts'
-import { COOKIE, sign } from '../../src/token.ts'
+import { slow } from '../../bin/testing.ts'
+import { COOKIE, sign } from './lib/token.ts'
 import {
   allowed,
   client,

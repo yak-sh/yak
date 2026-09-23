@@ -17,7 +17,7 @@
 //   the app hears it     a page subscribed to its own store sees the letter
 //                        arrive without asking
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { slow, until } from '../../src/testing.ts'
+import { slow, until } from '../../bin/testing.ts'
 import { monthOf } from './meter.ts'
 import {
   arrives,

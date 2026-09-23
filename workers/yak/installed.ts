@@ -28,7 +28,7 @@
 // as long as the cookie that loaded the page, and sign-out cannot end it
 // early. The role it carries is never a claim — it is read live, on every
 // call, like the cookie's.
-import { opened, seal } from '../../src/token.ts'
+import { opened, seal } from './lib/token.ts'
 import type { App } from './directory.ts'
 import { SESSION } from './session.ts'
 

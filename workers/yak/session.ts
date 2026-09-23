@@ -1,5 +1,5 @@
 // Who is asking (D-32318 §Auth): the platform session cookie, verified with
-// the shared secret (src/token.ts), joined to the person's membership in the
+// the shared secret (lib/token.ts), joined to the person's membership in the
 // space the request is for. The kernel is the one reader of the cookie —
 // what serves an app gets the vouch instead, and never the cookie — and the
 // only writer of it, so a client cannot send one: every request to a store is
@@ -19,7 +19,7 @@
 // is minted as, and the renewal that makes a session slide. The doors that
 // mint one (identity.ts) and the router the renewal hangs off (index.ts) are
 // elsewhere; what a session is belongs beside who is asking.
-import { COOKIE, cookie, cookieValue, sign, verify } from '../../src/token.ts'
+import { COOKIE, cookie, cookieValue, sign, verify } from './lib/token.ts'
 import type { Role } from './directory.ts'
 import type { Env } from './env.ts'
 import { apex, type Host } from './host.ts'
@@ -173,7 +173,7 @@ export let slid = async (
   if (!token) return res
   let claims = await verify(token, env.SESSION_SECRET)
   // A cookie sealed before 2c05d0f6 is re-minted on sight, whatever its age,
-  // so the old ones leave as their people come back (src/token_legacy.ts).
+  // so the old ones leave as their people come back (lib/token_legacy.ts).
   if (
     !claims ||
     !claims.legacy && claims.exp - Date.now() / 1000 > SESSION / 2

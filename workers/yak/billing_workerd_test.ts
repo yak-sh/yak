@@ -12,7 +12,7 @@
 // the shape a deploy has before the owner sets one. Stripe cannot reach a
 // loopback workerd, so the test signs each delivery with that secret.
 import { assert, assertEquals } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import {
   charged,
   connector,

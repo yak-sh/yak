@@ -7,7 +7,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { answerSchema } from '@yaks/mcp'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 
 import {
   connector,

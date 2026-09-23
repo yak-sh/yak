@@ -20,7 +20,7 @@
 import { stateDir } from '@yaks/cli'
 import type { Local } from '@yaks/secrets'
 import { CallError } from '@yaks/tools'
-import { ADMIN, BOT, isTestAddress } from '../../src/bots.ts'
+import { ADMIN, BOT, isTestAddress } from '../../workers/yak/lib/bots.ts'
 
 export type Account = {
   // The address it signed in as.
@@ -31,7 +31,7 @@ export type Account = {
   name: string
 }
 
-// A test account is provably a throwaway (src/bots.ts).
+// A test account is provably a throwaway (workers/yak/lib/bots.ts).
 export let isTest = (a: Account) => isTestAddress(a.address)
 export let isAdmin = (a: Account) => a.address == ADMIN
 

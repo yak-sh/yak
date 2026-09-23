@@ -43,18 +43,6 @@
     "query/file/walk-16": 671513,
     "query/file/walk-unbounded": 1147041,
     "query/file/apply-100": 6970566,
-    "fleet/memory/point": 886127,
-    "fleet/memory/status-open": 14583780,
-    "fleet/memory/fts": 1092890,
-    "fleet/memory/walk-16": 680962,
-    "fleet/memory/walk-unbounded": 1205272,
-    "fleet/memory/apply-100": 16238208,
-    "fleet/file/point": 969230,
-    "fleet/file/status-open": 17599270,
-    "fleet/file/fts": 1269476,
-    "fleet/file/walk-16": 762704,
-    "fleet/file/walk-unbounded": 1379322,
-    "fleet/file/apply-100": 21203272,
     "archetype/memory/backfill": 319894420,
     "archetype/memory/move-100": 6588588,
     "archetype/file/backfill": 223351867,
@@ -240,66 +228,6 @@
       6557677,
       6970566,
       10906660
-    ],
-    "fleet/memory/point": [
-      886127,
-      861727,
-      1635159
-    ],
-    "fleet/memory/status-open": [
-      14533710,
-      14583780,
-      23259631
-    ],
-    "fleet/memory/fts": [
-      1043008,
-      1092890,
-      1481877
-    ],
-    "fleet/memory/walk-16": [
-      651037,
-      680962,
-      861878
-    ],
-    "fleet/memory/walk-unbounded": [
-      1174362,
-      1205272,
-      1388420
-    ],
-    "fleet/memory/apply-100": [
-      15071669,
-      16238208,
-      22297222
-    ],
-    "fleet/file/point": [
-      836173,
-      1925121,
-      969230
-    ],
-    "fleet/file/status-open": [
-      14095410,
-      21366686,
-      17599270
-    ],
-    "fleet/file/fts": [
-      1099066,
-      1277415,
-      1269476
-    ],
-    "fleet/file/walk-16": [
-      660243,
-      812456,
-      762704
-    ],
-    "fleet/file/walk-unbounded": [
-      1180453,
-      1533031,
-      1379322
-    ],
-    "fleet/file/apply-100": [
-      16176199,
-      27334642,
-      21203272
     ],
     "archetype/memory/backfill": [
       310586113,

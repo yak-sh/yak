@@ -35,12 +35,12 @@ import {
 } from '@sentry/core'
 import { type Bundle, type Comp, status } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
-import { isTestAddress } from '../../src/bots.ts'
+import { isTestAddress } from './lib/bots.ts'
 import { Pending } from './writes.ts'
 import type { Ctx } from './tools.ts'
 
 /** Who hit a defect: the person's eid, and whether that account is a person
- * or a test account (src/bots.ts), so Sentry can filter to people. */
+ * or a test account (lib/bots.ts), so Sentry can filter to people. */
 export type Hit = { id: string; account: 'person' | 'test' }
 
 /** What an event keeps: the error, its tags and user, and where it happened
@@ -118,7 +118,7 @@ let aimedAt = (args: unknown): { space?: string; app?: string } => {
   return { space: slug(said.space), app: slug(said.app) }
 }
 
-// Whether the caller is a person or a test account (src/bots.ts), so Sentry
+// Whether the caller is a person or a test account (lib/bots.ts), so Sentry
 // can be filtered to what people hit. An address that cannot be read is a
 // person's: the safe direction to be wrong in.
 let accountOf = async (ctx: Ctx): Promise<Hit | undefined> => {

@@ -24,26 +24,21 @@
 // a plugin's tools, which is how one server lists these beside the generic
 // tier.
 //
-// src/mcp.ts's registry is the shape mirrored, not imported. Its `IO` seam
-// wants fifteen methods — the whole eager graph, work lanes, the provider
-// table, verification, the frozen-page upload — and its tools are this
-// fleet's own: sessions, claims, memory, spawn. None of that exists in a
-// hosted space. The rule for every write is session.ts's:
+// The rule for every write is session.ts's:
 // an owner or editor of the space writes, a member reads, nobody else is
 // answered at all. A deploy in v1 is a version bump, since an
 // app's files serve live from its blob store — and the version it bumps to is
 // kept, files and all, so app_rollback can put it back.
 import { deployWorker } from './deploy_worker.ts'
 import { bindingLines, bindings } from './bindings.ts'
-import type { Blobs } from '../../src/store/blobs.ts'
-import { r2Blobs } from '../../src/blobs_r2.ts'
-import { isTestAddress } from '../../src/bots.ts'
+import type { Blobs } from './lib/blobs.ts'
+import { r2Blobs } from './lib/blobs_r2.ts'
+import type { Bundle } from '@yaks/graph'
+import { isTestAddress } from './lib/bots.ts'
 import { fullFiles } from './usage.ts'
-import { parseTools, TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
-import { borrowed, type Vocab } from '../../src/store/vocab.ts'
-import type { EntityLiteral } from '../../src/mutation.ts'
-import { appAccess } from '../../src/types.ts'
-import { VERSION } from '../../src/version.ts'
+import { parseTools, TOOLS_EXAMPLE, viewsOf } from './lib/tools.ts'
+import { borrowed, type Vocab } from './lib/vocab.ts'
+import { VERSION } from './lib/version.ts'
 import {
   appDoc,
   coreDocs,
@@ -70,6 +65,7 @@ import {
   homing,
   mailbox,
   META,
+  MODES,
   type Role,
   type Space,
   stamp,
@@ -333,7 +329,7 @@ let apexHelp = (env: Env) =>
 // ask and not the mechanism.
 let ACCESS = {
   type: 'string',
-  enum: [...appAccess],
+  enum: [...MODES],
   description:
     "who may read and write the app's data: public (the default), anyone " +
     'with the link reads it, members with write permission change it; ' +
@@ -423,8 +419,8 @@ let files = (
 
 let access = (v: unknown): Access => {
   let s = text(v, 'access')
-  if (!(appAccess as readonly string[]).includes(s)) {
-    throw refuse('arguments', `access: one of ${appAccess.join(', ')}`)
+  if (!(MODES as readonly string[]).includes(s)) {
+    throw refuse('arguments', `access: one of ${MODES.join(', ')}`)
   }
   return s as Access
 }
@@ -1253,7 +1249,7 @@ let born = (
   space: Space,
   slug: string,
   o: { title: string; access: Access },
-): EntityLiteral => {
+): Bundle => {
   let eid = crypto.randomUUID()
   return {
     entity: { eid },
@@ -2164,7 +2160,7 @@ let OURS: Row[] = [
             'points there — pick another slug',
         )
       }
-      let entities: EntityLiteral[] = [born(space, s, {
+      let entities: Bundle[] = [born(space, s, {
         title: titled(args.title),
         access: args.access == null ? 'public' : access(args.access),
       })]
@@ -3017,7 +3013,7 @@ let OURS: Row[] = [
       let from = fileKey(space, app, '')
       let onto = moving ? `${space.slug}/${to}/` : from
       let keys = moving ? await laid(blobs, from, onto) : []
-      let entities: EntityLiteral[] = []
+      let entities: Bundle[] = []
       if (
         title != null || moving || open || had || themeColor != null ||
         background != null || wall != null
@@ -4099,7 +4095,7 @@ let OURS: Row[] = [
       // from and which version it took. Its access is the published app's: an
       // app written to be voted on has to stay votable, and the person can
       // app_set it after.
-      let entities: EntityLiteral[] = [{
+      let entities: Bundle[] = [{
         ...born(space, s, {
           title: clamped(offer.app.title),
           access: offer.app.access ?? 'public',
@@ -4642,7 +4638,7 @@ let OURS: Row[] = [
       let where = app && space
         ? `${space.slug}/${app.slug}${app.version ? ` v${app.version}` : ''}`
         : space?.slug ?? ''
-      // A test account's words are kept and go nowhere (src/bots.ts): a
+      // A test account's words are kept and go nowhere (lib/bots.ts): a
       // letter in a person's mailbox is a thing a person has to read.
       let test = isTestAddress(email ?? '')
       let sent = !test && await mail(ctx.env)({

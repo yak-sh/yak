@@ -10,7 +10,7 @@
 // registration, the cross-store write and the vocabulary all have to be right
 // for this file to pass.
 import { assert, assertEquals, assertObjectMatch } from '@std/assert'
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import { r2Blobs } from './lib/blobs_r2.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { App, Space } from './directory.ts'

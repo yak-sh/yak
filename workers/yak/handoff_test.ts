@@ -6,7 +6,7 @@
 // These functions carry no Cloudflare import, so this suite runs in plain Deno.
 import { assertEquals, assertMatch } from '@std/assert'
 import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
-import { opened, seal } from '../../src/token.ts'
+import { opened, seal } from './lib/token.ts'
 
 let SECRET = 'handoff-test-secret'
 let sec = () => Math.floor(Date.now() / 1000)

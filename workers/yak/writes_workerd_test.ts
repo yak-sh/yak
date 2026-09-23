@@ -5,7 +5,7 @@
 // (probe-entry.mjs), and every write lands in order, once.
 import { assertEquals } from '@std/assert'
 import { sha256 } from '@yaks/graph'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { handle } from './directory.ts'
 import { client, type Kernel, kernel, seed } from './probe.ts'
 

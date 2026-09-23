@@ -141,7 +141,7 @@ let pause = () => new Promise((ok) => setTimeout(ok, 1000))
 // In the gate the recorder measures the commit under test, and the row lives
 // only in that run's checkout: no workflow here pushes, and a bench-row commit
 // on main would start another Workers Build and another gate. So the row rides
-// the job summary the way bench-gate's baseline rides its log — copy it into
+// the job summary, where its log carries it — copy it into
 // bench/deploys.jsonl with the next change and the floor keeps ratcheting.
 export let summary = (rows: Deploy[]) =>
   `### deploy timing\n\nAppend to \`bench/deploys.jsonl\`:\n\n\`\`\`\n${

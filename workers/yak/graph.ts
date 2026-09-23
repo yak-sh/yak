@@ -134,7 +134,7 @@ import {
 import { parse } from '@yaks/query'
 import { jsonb, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { reconcile, type Runner, runner } from '@yaks/tools'
-import { commands, modern, type Tools } from '../../src/store/tools.ts'
+import { commands, modern, type Tools } from './lib/tools.ts'
 import { soonest, tick, type Ticked, wakes } from '@yaks/wake'
 import { type Alarm, arm } from '@yaks/wake/cloudflare'
 import { named, type Row } from './listing.ts'

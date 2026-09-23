@@ -17,8 +17,8 @@ import type { Frame } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
-import { canon, fleetAddress } from '../../src/mailaddr.ts'
-import { slow, until } from '../../src/testing.ts'
+import { canon } from '@yaks/mail'
+import { slow, until } from '../../bin/testing.ts'
 import { type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import {
@@ -126,22 +126,11 @@ Deno.test('mail: the Worker account carries the send when MAIL_ACCOUNT is unset'
   assertEquals(urls, ['https://api.test/accounts/acct/email/sending/send'])
 })
 
-// The graph inbox is an address in the fleet's mail namespace, not one
-// of its own: src/mailaddr.ts is what the tasks server's sweep routes by, and
-// the two must name the same mailbox or the report lands nowhere.
-//
-// TASKS_MAIL_DOMAIN is process-global and belongs to whichever file claims it
-// — src/mail_test.ts sets it to bot.test to be hermetic about its own
-// namespace — so the fleet's namespace is read here the way life reads it,
-// with no override in the environment, whatever else shares this process.
-Deno.test('the graph inbox is the fleet address the sweep routes', () => {
-  let had = Deno.env.get('TASKS_MAIL_DOMAIN')
-  Deno.env.delete('TASKS_MAIL_DOMAIN')
-  try {
-    assertEquals(GRAPH, canon(fleetAddress('task')))
-  } finally {
-    if (had != null) Deno.env.set('TASKS_MAIL_DOMAIN', had)
-  }
+// The graph inbox is the box's mailbox for what the platform writes: the
+// box's @yaks/mail pulls bot.yak.sh and routes by the canonical address, so
+// the platform must name the same mailbox or the report lands nowhere.
+Deno.test('the graph inbox is the fleet address the pull routes', () => {
+  assertEquals(GRAPH, canon('bot.yak.sh')('task@bot.yak.sh'))
 })
 
 // The binding, faked: what it was handed, and a refusal on demand — the

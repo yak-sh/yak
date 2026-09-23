@@ -4,7 +4,7 @@
 // refused by the runtime, and every such call was answered as a refusal.
 import { assertEquals } from '@std/assert'
 import { toolEid } from '@yaks/tools'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { client, connector, kernel, seed, txt, vocabFile } from './probe.ts'
 
 slow('a command that takes an argument runs in its store', async () => {

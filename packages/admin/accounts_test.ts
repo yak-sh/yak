@@ -4,7 +4,7 @@
 // default beside the bearer.
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import { ramVault, secretEid } from '@yaks/secrets'
-import { ADMIN } from '../../src/bots.ts'
+import { ADMIN } from '../../workers/yak/lib/bots.ts'
 import {
   type Account,
   accountsIn,

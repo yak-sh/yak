@@ -8,7 +8,7 @@
 // The hard part is identity. The app's script is code its owner's agent
 // wrote, so nothing it says can be believed — and it still has to reach its
 // own store and its own files as the person looking at the page. So the
-// kernel seals a GRANT (src/token.ts `seal`) naming the store, the visitor
+// kernel seals a GRANT (lib/token.ts `seal`) naming the store, the visitor
 // and their role, good for a minute, and sends it in with the request; the
 // script's uploaded entry module (`SHIM`) takes that header off before the
 // app's own code ever sees it and holds it in a closure, handing the app
@@ -42,7 +42,7 @@
 // that throws `needs to be run remotely`, which `nowhere` reads as the same
 // fact. `remote = true` in wrangler.toml would point local dev at the deployed
 // namespace; we do not set it, because a test must not need the account.
-import { COOKIE, opened, seal } from '../../src/token.ts'
+import { COOKIE, opened, seal } from './lib/token.ts'
 import type { App, Role, Space } from './directory.ts'
 import { storeName } from './directory.ts'
 import type { Env } from './env.ts'

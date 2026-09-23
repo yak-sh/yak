@@ -34,7 +34,7 @@
 //       TASKS_SLOW=1 deno test -A --unstable-net workers/yak/roster_workerd_test.ts
 //
 //   The bearer is an ordinary OAuth token for a test account, an address on
-//   the bot domain (src/bots.ts), got the way a host gets one (probe.ts
+//   the bot domain (lib/bots.ts), got the way a host gets one (probe.ts
 //   `bearerFor`, or `yak admin throwaway` and then /oauth/allow). That run makes its own
 //   scratch spaces, works only inside them, and erases them at the end; it
 //   never touches a space it did not create. Nothing it did is left for a
@@ -45,7 +45,7 @@
 //   purchase, so `space_sell` and `domain_attach` are called there for the
 //   refusal a free space gets, which is their other answer and worth holding.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import {
   bearerFor,
   charged,
@@ -64,7 +64,7 @@ import {
   vocabFile,
 } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
-import { BOT } from '../../src/bots.ts'
+import { BOT } from './lib/bots.ts'
 import { GRAPH } from './mail-config.ts'
 import { managePath } from './route.ts'
 

@@ -47,7 +47,7 @@
 // With one key space the sweep is one pass for the whole bucket rather than one
 // per app: an object another app still names is not the first app's to free.
 import type { Blobs as Pins } from '@yaks/blob'
-import type { Blobs } from '../../src/store/blobs.ts'
+import type { Blobs } from './lib/blobs.ts'
 import type { App, Directory } from './directory.ts'
 import { pinsOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
@@ -100,8 +100,8 @@ let kept = (path: string) => KEPT.some((k) => path.startsWith(k))
 // serves.
 export let own = (paths: string[]) => paths.filter((p) => !kept(p))
 
-// The bytes' own name: their SHA-256 in hex, the content address the fleet's
-// attachments already use (src/blob.ts). apps.ts names an upload with this
+// The bytes' own name: their SHA-256 in hex, the content address @yaks/blob
+// uses. apps.ts names an upload with this
 // same function, so one file sent two ways is one name.
 export let sha256 = async (bytes: Uint8Array<ArrayBuffer>) =>
   [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]

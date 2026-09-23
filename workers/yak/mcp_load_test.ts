@@ -6,7 +6,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import {
   charged,
   connector,

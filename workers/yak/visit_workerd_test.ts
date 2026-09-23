@@ -3,7 +3,7 @@
 // an order was paid, and send at a visitor's size and pace. The owner is not
 // held to any of it.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { client, connector, kernel, seed, signedIn } from './probe.ts'
 
 slow(

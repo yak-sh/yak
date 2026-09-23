@@ -1,7 +1,7 @@
 import { pkt } from '@yaks/git'
 import type { Bundle } from '@yaks/graph'
 import { assert, assertEquals } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import {
   client,
   connector,

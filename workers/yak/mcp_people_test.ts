@@ -5,7 +5,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 
 import {
   accepted,
@@ -21,7 +21,7 @@ import {
   vocabFile,
   when,
 } from './probe.ts'
-import { VERSION } from '../../src/version.ts'
+import { VERSION } from './lib/version.ts'
 import { HELLO, minted } from './mcp-probe.ts'
 
 // The other direction (T-32950): an app's breaks reach the person's agent,
@@ -156,7 +156,7 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
     assertStringIncludes(sent.body, 'https://kitchen.yaks.app/recipes/')
     assertStringIncludes(sent.body, `yaks.app ${VERSION}`)
     // The same letter is addressed to the fleet's graph inbox as well, so it
-    // lands in `task inbox` instead of waiting on a person to relay it. One
+    // reaches an agent's inbox instead of waiting on a person to relay it. One
     // send, two readers: the graph copy is the letter, not a summary of it.
     assertEquals(sent.to, ['hello@yaks.app', 'task@bot.yak.sh'])
     assertEquals(await letter(k, 'task@bot.yak.sh', 'app_rename'), sent)

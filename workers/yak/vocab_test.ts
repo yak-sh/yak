@@ -9,7 +9,7 @@ import {
 } from '@std/assert'
 import { schema } from '@yaks/sqlite'
 import { fields } from '@yaks/fts'
-import ops from '../../src/store/schema.json' with { type: 'json' }
+import { FLEET_COMPS, FLEET_STAMPED } from './lib/fleet.ts'
 import { PAGES } from './guide.ts'
 import {
   appDoc,
@@ -325,11 +325,9 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
 })
 
 Deno.test('none of the fleet vocabulary comes with it', () => {
-  let fleet = tablesOf(
-    (ops as { sql?: string }[]).map((o) => o.sql ?? ''),
-  )
+  let fleet = [...FLEET_COMPS, ...FLEET_STAMPED]
   let mine = new Set(tablesOf(schema(appVocab())))
-  assert(fleet.length > 50, `the fleet plants ${fleet.length} tables`)
+  assert(fleet.length > 50, `the fleet said ${fleet.length} words`)
   // Fewer than the fleet's, by a wide margin, and the margin is the point:
   // every word here is one an app can use. The last eight are the schedule
   // and the invocation (D-37562, T-37605) — asking for something, and asking
@@ -341,7 +339,7 @@ Deno.test('none of the fleet vocabulary comes with it', () => {
   for (
     let word of ['session', 'canvas', 'persona', 'memory', 'claim']
   ) {
-    assert(fleet.includes(word), `the fleet no longer plants ${word}`)
+    assert(fleet.includes(word), `the fleet never said ${word}`)
     assert(!mine.has(word), `an app's store still plants ${word}`)
   }
 })

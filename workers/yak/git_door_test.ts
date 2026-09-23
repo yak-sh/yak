@@ -5,7 +5,7 @@
 // app a URL names, who may clone it and how they say so, and that a path which
 // is no repository is left for the apps.
 import { assert, assertEquals } from '@std/assert'
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import { r2Blobs } from './lib/blobs_r2.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { App, Space } from './directory.ts'

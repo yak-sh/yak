@@ -4,7 +4,7 @@
 // discovers there is somewhere to put a recipe the way it discovers anything
 // else here: by asking `commands` what the apps in reach can do.
 //
-// Nothing new answers them. They are ordinary declared tools (src/store/tools.ts
+// Nothing new answers them. They are ordinary declared tools (lib/tools.ts
 // ToolDef), planted in the app's store beside whatever its tools.json said and
 // listed, called, titled and described through the one seam (declared.ts) — so
 // `readOnly` on the find and the app's title and address on the description
@@ -18,8 +18,8 @@
 // A redeploy regenerates them from the manifest as it then reads, so a property
 // added to a kind is an argument added to its two tools.
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
-import type { PropType } from '../../src/types.ts'
-import type { ToolDef, Tools } from '../../src/store/tools.ts'
+import type { PropType } from './lib/vocab.ts'
+import type { ToolDef, Tools } from './lib/tools.ts'
 import { wordOf } from './vocab.ts'
 
 // The properties a caller may write: a server-owned property is nobody's to

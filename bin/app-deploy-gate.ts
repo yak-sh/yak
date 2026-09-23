@@ -3,7 +3,7 @@
 // (bin/app-deploy-time.ts → bench/app-deploys.jsonl), Actions reads the
 // committed rows. Three numbers may only fall — a small app's files answering
 // live, the deploy mark, and a one-file update answering live — each against
-// its own floor with the 25% band bench-gate and deploy-gate use. Rows from
+// its own floor with the 25% band deploy-gate uses. Rows from
 // different hosts (production, staging) are never compared with each other.
 export type Stat = { median: number; p95: number; n: number }
 export type Row = {

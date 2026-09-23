@@ -66,7 +66,7 @@ import { memberDoc } from '@yaks/member'
 import { toolsDoc } from '@yaks/tools'
 import { wakeDoc } from '@yaks/wake'
 import { read } from '@yaks/yaml'
-import { RESERVED as FLEET } from '../../src/store/vocab.ts'
+import { RESERVED as FLEET } from './lib/vocab.ts'
 import { vocabOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { sweepDoc } from './wake.ts'
@@ -174,8 +174,8 @@ export let relationDoc: VocabDoc = {
  * A break the platform noted: in an app's store about the app's own code
  * (index.ts), and in any store about the store itself (graph.ts `#broke`).
  * Every property is server-owned, and the kernel's door (`x-yak-kernel`,
- * graph.ts) is its only writer. The properties are the fleet's own
- * (src/vocab/manifests/kernel.json), so a row written through the old store
+ * graph.ts) is its only writer. The properties are the fleet's own, so a row
+ * written through the old store
  * means exactly what a row written through this one means.
  */
 export let exceptionDoc: VocabDoc = {
@@ -209,8 +209,7 @@ export let exceptionDoc: VocabDoc = {
  * The marks are server-owned and written bare — `notified: {}` says the thing
  * without saying a property.
  *
- * Their properties are the fleet's own (src/vocab/manifests/kernel.json,
- * comms.json), so a row written through the old store means exactly what a row
+ * Their properties are the fleet's own, so a row written through the old store means exactly what a row
  * written through this one means.
  */
 export let kernelDoc: VocabDoc = {
@@ -295,9 +294,7 @@ export let EXAMPLE =
 
 /** Where the whole of it is written, and what an app's store says when it is
  * asked for a word nobody declared — the same sentence at the write door and
- * the read door, because it is the same missing act. The fleet's own store
- * says it too (src/store/vocab.ts `TEACH`); it is written again here because
- * the Store carries the packages' vocabulary and never the fleet's. */
+ * the read door, because it is the same missing act. */
 export let GUIDE = url({}, '/docs.md')
 export let teach = (env: Host = {}) =>
   ' — a component of your own is declared in vocab.json ' +
@@ -315,7 +312,7 @@ export let TEACH = teach()
  * each app's own — a `task` in one app is the same word as a `task` in the
  * next, so one filter reads both.
  *
- * Their properties are the fleet contract's own (src/types.ts), so a row
+ * Their properties are the fleet contract's own, so a row
  * written through the old store means what a row written through this one
  * means.
  */
@@ -576,7 +573,7 @@ export let coreDocs: VocabDoc[] = storeDocs([
 
 /**
  * The platform's own components — what the directory IS, as one JSON Schema
- * document. Every word here is the fleet contract's own (src/types.ts) read
+ * document. Every word here is the fleet contract's own, read
  * back in the format @yaks/vocab loads: the same properties, the same closed
  * sets, the same death behaviour, so a row written through the old store means
  * exactly what a row written through this one means.
@@ -932,7 +929,7 @@ export let platformDoc: VocabDoc = {
     },
     // What the hourly sweep read off Cloudflare (usage.ts). Written by the
     // sweep, through the kernel's door — and not stamped, because the fleet
-    // contract does not stamp it (src/types.ts `comps`) and the meta space's
+    // contract does not stamp it and the meta space's
     // own graph tier is how a reading is planted or corrected by hand. Nobody
     // but an owner of `yak` reaches that door at all (directory.ts), which is
     // what keeps a customer from writing their own bill.

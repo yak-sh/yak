@@ -43,7 +43,7 @@
 // reader over the other store.
 import { advertise, objects, type Refs, uploadPack } from '@yaks/git'
 import { mode, reads } from '@yaks/member'
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import { r2Blobs } from './lib/blobs_r2.ts'
 import { type Directory, directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'

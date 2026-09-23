@@ -21,7 +21,7 @@ import { timed } from '@yaks/cli'
 import { type And, and, eq, ge, limit } from '@yaks/query'
 import { LINK } from '../../workers/yak/link.ts'
 import { PLATFORM } from '../../workers/yak/route.ts'
-import { COOKIE } from '../../src/token.ts'
+import { COOKIE } from '../../workers/yak/lib/token.ts'
 
 // The zone this client points at, so a probe can aim somewhere else.
 export let zone = () => Deno.env.get('YAKS_ZONE') ?? PLATFORM
@@ -40,7 +40,7 @@ export let storeUrl = (at: string, path: string, host = zone()) => {
 let head = (session: string) => ({ cookie: `${COOKIE}=${session}` })
 
 // The claims a session carries, read WITHOUT the secret: the body half is
-// plain base64url JSON (src/token.ts), so a client can say whose session it
+// plain base64url JSON (workers/yak/lib/token.ts), so a client can say whose session it
 // holds and when it dies without asking the platform. Unverifiable here by
 // design — the platform is the only one that can say a token is good.
 export type Claims = { person: string; space: string | null; exp: number }

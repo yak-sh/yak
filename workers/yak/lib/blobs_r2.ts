@@ -1,0 +1,53 @@
+// The blob seam's hosted adapter (D-32318 §Storage): an R2 bucket behind
+// store/blobs.ts's Blobs, key for key, so the kernel worker serves an app's
+// files through the seam's verbs. The bucket is
+// typed structurally — the slice this adapter touches, mirroring
+// @cloudflare/workers-types — so src/ carries no Cloudflare dependency. Under
+// `wrangler dev` the same binding is a local simulation, which is the dev
+// store; nothing chooses between them here.
+//
+// The slice itself is r2.ts, which imports nothing: a Worker that only
+// DECLARES a bucket binding must be able to name the shape without loading
+// this adapter. `store/blobs.ts` keeps the byte-store contract portable too.
+import { type Blobs, counted } from './blobs.ts'
+import type { R2 } from './r2.ts'
+
+export type { R2 }
+
+// One walk of the prefix, every page of it, as key to when the object landed.
+// `list` is this with the times dropped, so the two answers can never disagree
+// about what is in the bucket.
+let walk = async (bucket: R2, prefix: string) => {
+  let at: Record<string, number> = {}
+  let cursor: string | undefined
+  do {
+    let page = await bucket.list({ prefix, cursor })
+    for (let o of page.objects) at[o.key] = o.uploaded.getTime()
+    cursor = page.truncated ? page.cursor : undefined
+  } while (cursor)
+  return at
+}
+
+// Counted (store/blobs.ts `counted`): every trip to the bucket lands on the
+// request's tally, and the request reports the total as `r2;dur=<n>`.
+export let r2Blobs = (bucket: R2): Blobs =>
+  counted({
+    has: async (key) => (await bucket.head(key)) != null,
+    put: async (key, bytes) => {
+      await bucket.put(key, bytes)
+    },
+    read: async (key) => {
+      let object = await bucket.get(key)
+      return object ? new Uint8Array(await object.arrayBuffer()) : null
+    },
+    get: async (key) => {
+      let object = await bucket.get(key)
+      if (!object) throw new Error(`no blob at ${key}`)
+      return new Uint8Array(await object.arrayBuffer())
+    },
+    delete: async (key) => {
+      await bucket.delete(key)
+    },
+    list: async (prefix) => Object.keys(await walk(bucket, prefix)).sort(),
+    uploaded: (prefix) => walk(bucket, prefix),
+  })

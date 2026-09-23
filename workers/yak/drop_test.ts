@@ -8,7 +8,7 @@
 // three refusals are sentences on a page rather than a stack trace — a path
 // out of the app, more than the ceiling, and nobody signed in.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { kernel, type Packed, seed, signIn, zipped } from './probe.ts'
 import { MAX } from './unzip.ts'
 import { managePath } from './route.ts'

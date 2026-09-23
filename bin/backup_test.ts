@@ -2,8 +2,8 @@
 // replace a database another reader or restore verifier still has open.
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
-import { DatabaseSync } from '../src/store/sqlite.ts'
-import { slow } from '../src/testing.ts'
+import { Database } from '@yaks/sqlite/db'
+import { slow } from './testing.ts'
 
 let script = fileURLToPath(new URL('./backup', import.meta.url))
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
@@ -18,9 +18,9 @@ let fixture = async () => {
   await run('git', ['init', '-q'], dir)
   await Deno.writeTextFile(`${dir}/.gitignore`, '*.db\n*.db-*\n')
   await Deno.mkdir(`${dir}/snap`)
-  let opened: DatabaseSync[] = []
+  let opened: Database[] = []
   let database = (path: string) => {
-    let db = new DatabaseSync(`${dir}/${path}`)
+    let db = new Database(`${dir}/${path}`)
     opened.push(db)
     db.exec(
       'pragma journal_mode=wal; create table entity (id integer primary key)',

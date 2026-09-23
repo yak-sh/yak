@@ -7,10 +7,8 @@
 // but its bindings — it is checked against the runtime's own types with no Deno
 // anywhere in its graph (conform.ts) — and it too has one question to ask the
 // directory: what the space that just sent a letter has spent this month
-// (meter.ts `metering`). This is why the door was lifted out of the store that
-// graph.ts replaced: living beside that class dragged src/db.ts into the
-// object's graph and failed that check. That class is gone (T-33807).
-import { hop } from '../../src/hops.ts'
+// (meter.ts `metering`).
+import { hop } from './lib/hops.ts'
 
 /** Anything a request can be handed to: a service binding, or a part of this
  * Worker called in-process (env.ts `bound`). */

@@ -10,7 +10,6 @@
 // never SQL; the apps of a space come from the directory part. The same
 // rows are the `app_errors` answer, one line each.
 import type { Bundle } from '@yaks/graph'
-import { idOf } from '../../src/types.ts'
 import * as dirPart from './directory.ts'
 import {
   type App,
@@ -212,6 +211,16 @@ type Hit = {
   exception?: Broke
   error?: Broke
 }
+
+// The handle a person reads a break by: `E-12` where the directory numbered
+// it, `E#` and the eid's first ten hex digits where an app's store did not.
+// The letter is the facet's own first one (exception, error).
+let idOf = (h: Hit) => {
+  let letter = h.kind.slice(0, 1).toUpperCase()
+  return h.entity.num
+    ? `${letter}-${h.entity.num}`
+    : `${letter}#${h.entity.eid.replaceAll('-', '').slice(0, 10).toLowerCase()}`
+}
 // One open item and the app it broke in — what serve() hands back, so a
 // caller can write the line or archive by id from the one read.
 export type Seen = { app: App; hit: Hit }
@@ -227,7 +236,7 @@ let broke = (h: Hit) => h.exception ?? h.error ?? {}
 // an answer is bundles and nothing carries a second structured copy.
 export let line = ({ app, hit }: Seen) => {
   let e = broke(hit)
-  let id = idOf({ eid: hit.entity.eid, kind: hit.kind, num: hit.entity.num })
+  let id = idOf(hit)
   let facet = hit.exception ? 'exception' : 'error'
   let where = spot(e.stack) || e.request || hit.doc?.title || ''
   return `- ${id} ${e.at ?? ''} ${facet} ${app.slug}${
@@ -401,7 +410,7 @@ export let named = (word: string, h: Hit) => {
     return !Number.isFinite(at) || at <= moment(word)
   }
   return word == h.entity.eid ||
-    word == idOf({ eid: h.entity.eid, kind: h.kind, num: h.entity.num })
+    word == idOf(h)
 }
 
 // Behind us, so it stops showing — whether the caller fixed it or is only

@@ -2169,16 +2169,11 @@
           "jsr:@std/assert@1"
         ]
       },
-      "packages/telemetry": {
-        "dependencies": [
-          "jsr:@db/sqlite@0.13.0",
-          "jsr:@std/assert@1"
-        ]
-      },
       "packages/text": {
         "dependencies": [
           "jsr:@std/assert@1",
           "npm:linkedom@~0.18.12",
+          "npm:marked@18.0.6",
           "npm:preact@^10.29.1"
         ]
       },
@@ -2242,6 +2237,7 @@
             "npm:@sentry/core@10.75.0",
             "npm:croner@10.0.1",
             "npm:lucide@1.31.0",
+            "npm:marked@18.0.6",
             "npm:postal-mime@3.0.0",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7",

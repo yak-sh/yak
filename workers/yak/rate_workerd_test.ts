@@ -5,7 +5,7 @@
 // that is still let in. The window is a fixed minute counted from the epoch,
 // so the whole run starts where half a minute is left in it.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow, until } from '../../src/testing.ts'
+import { slow, until } from '../../bin/testing.ts'
 import { connector, kernel, seed } from './probe.ts'
 
 let from = (ip: string) => ({ 'cf-connecting-ip': ip })

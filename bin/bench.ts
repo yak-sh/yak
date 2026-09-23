@@ -1,5 +1,5 @@
 #!/usr/bin/env -S deno run -A
-// Absolute throughput ratchet, separate from bench-gate.ts's hot-path ratios.
+// Absolute throughput ratchet over the storage layers.
 import {
   benchmarkNames,
   MODES,
@@ -16,7 +16,6 @@ const FILES = [
   'packages/sqlite/archetype_bench.ts',
   'packages/sql/throughput_bench.ts',
   'packages/query/throughput_bench.ts',
-  'src/throughput_bench.ts',
 ]
 export type Measurement = {
   version: number

@@ -9,7 +9,7 @@
 // (unlike identity.ts), so this contract is unit-testable on its own; the
 // handler there adds only the cookie and the redirect.
 import type { Host } from './host.ts'
-import { opened, seal } from '../../src/token.ts'
+import { opened, seal } from './lib/token.ts'
 import { foreign } from './route.ts'
 
 // The path a customer's own hostname answers the handoff at. Namespaced so an
