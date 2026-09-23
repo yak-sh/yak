@@ -12,7 +12,12 @@
 // upgrade — `WebSocketPair` and a 101 `Response` are the runtime's, not the
 // web's — so a socket is driven the way the runtime drives a hibernated one,
 // through `webSocketMessage`.
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import { stub } from '@std/testing/mock'
 import type { Frame } from '@yaks/api'
 import { type Bundle, type Rule, sha256 } from '@yaks/graph'
@@ -20,6 +25,7 @@ import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { grantEid, Store } from './graph.ts'
+import { metaOf } from './meta.ts'
 import type { Plugin } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { RELATIONS } from './vocab.ts'
@@ -156,6 +162,16 @@ Deno.test('a malformed query is a 400 to the caller, not a failure', async () =>
     let body = await response.json()
     assertEquals(body.error, error)
     assertStringIncludes(body.message, said)
+    // And a door reading the store (apps.ts `/api/query`) hands the caller
+    // that sentence as it came, not the envelope it travelled in.
+    let e = await assertRejects(
+      () => metaOf((path) => get(store, path, owner)).query(q),
+      Error,
+    )
+    assertEquals(
+      [e.message, e.name, Reflect.get(e, 'status')],
+      [body.message, error, 400],
+    )
   }
   assertEquals(logged.calls.length, 0)
 })

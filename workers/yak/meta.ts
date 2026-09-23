@@ -36,12 +36,27 @@ export type Meta = {
 export let KERNEL: Record<string, string> = { 'x-yak-kernel': '1' }
 
 // A door's no, carrying the status it was answered with: a 4xx is the
-// caller's (sentry.ts `refused`), anything else is the store falling over.
-export let answered = async (r: Response, said = '') =>
-  Object.assign(
-    new Error(`${said ? `${said}: ` : ''}${await r.text()}`),
-    { status: r.status },
-  )
+// caller's (sentry.ts `refused`), anything else is the store falling over. A
+// store says no as `{error, message}` (@yaks/api), and its message is the
+// sentence a caller is owed — a door hands it on as it came, never wrapped in
+// the envelope it travelled in. A body that is not one is the message whole.
+export let answered = async (r: Response) => {
+  let text = await r.text()
+  let said = refusal(text)
+  return Object.assign(new Error(said?.message ?? text), {
+    status: r.status,
+    ...(said?.error ? { name: said.error } : {}),
+  })
+}
+
+let refusal = (text: string): { error?: string; message: string } | null => {
+  try {
+    let said = JSON.parse(text)
+    return typeof said?.message == 'string' ? said : null
+  } catch {
+    return null
+  }
+}
 
 /**
  * The graph's own doors over a store: `POST /apply` takes the bundles as they
@@ -53,7 +68,7 @@ export let answered = async (r: Response, said = '') =>
 export let metaOf = (store: Door): Meta => ({
   query: async (line) => {
     let r = await store(`/query?q=${encodeURIComponent(line)}`)
-    if (!r.ok) throw await answered(r, 'meta store')
+    if (!r.ok) throw await answered(r)
     return await r.json() as Bundle[]
   },
   apply: async (bundles, headers = {}) => {
@@ -71,7 +86,7 @@ export let metaOf = (store: Door): Meta => ({
     // Kept by the store's write log and applied later (writes.ts): the
     // batch as applied does not exist yet, so there is nothing to return.
     if (r.status == 202) throw new Pending(await said(r))
-    if (!r.ok) throw await answered(r, 'meta store refused')
+    if (!r.ok) throw await answered(r)
     return await r.json() as Bundle[]
   },
 })

@@ -854,7 +854,7 @@ export let directory = (via: Fetcher, now = false) => {
         fresh ? { headers: { [FRESH]: '1' } } : {},
       ),
     )
-    if (!r.ok) throw await answered(r, 'directory')
+    if (!r.ok) throw await answered(r)
     return r.json()
   }
   let one = async (q: string, fresh = now) => (await query(q, fresh))[0]
