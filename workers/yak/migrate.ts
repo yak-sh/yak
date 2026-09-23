@@ -112,7 +112,7 @@ let record = (v: unknown): v is Record<string, unknown> =>
  *
  * The build before this one still accepts a property with no type, so a
  * manifest it planted during a rollback arrives here too, which is why this
- * runs at every wake and every read rather than once.
+ * runs at every wake rather than once.
  */
 let typed = (doc: Record<string, unknown>): string | null => {
   if (!record(doc.$defs)) return null
@@ -140,22 +140,18 @@ let typed = (doc: Record<string, unknown>): string | null => {
  * gone: a manifest is a JSON Schema document and nothing converts one at the
  * door any more (vocab.ts `appDoc`).
  *
- * Two places kept the old form and both are rewritten by this pass. A
- * store that last accepted one remembers it in its vocabulary slot, and is
- * rewritten at its next open (graph.ts `#documenting`). The file the app
- * deployed keeps it too — which T-37546 left behind, so every release
- * published before it refused to install (T-37809) — and is rewritten the
- * next time anything reads it (tools.ts `declaring`).
+ * A store that last accepted one remembers it in its vocabulary slot, and is
+ * rewritten at its next open (graph.ts `#reshaping`).
  *
  * `null` where there is nothing to do — nothing held, a document whose
  * properties all say their type, or something no reader could parse — which is
- * every store after one wake and every file after one read.
+ * every store after one wake.
  *
  * `"tools": false` is the manifest's one word about itself, so it rides across
  * as the document's own; every other key is a component.
  *
  * A document is rewritten too when one of its properties says no type
- * ({@link typed}), through the same two doors and for the same reason.
+ * ({@link typed}), at the same open and for the same reason.
  */
 export let documented = (held: string): string | null => {
   let said: unknown
@@ -193,6 +189,19 @@ export let documented = (held: string): string | null => {
   return JSON.stringify(
     tools === undefined ? { $defs: defs } : { $defs: defs, tools },
   )
+}
+
+/**
+ * A tools manifest with each `{{arg}}` hole written as the `$arg` variable it
+ * became (c0ca24d4). A deploy refuses the hole (lib/tools.ts `parseTools`),
+ * but a store that last accepted a manifest before then remembers it in its
+ * tools slot, and is rewritten at its next open (graph.ts `#reshaping`).
+ * `null` where there is nothing to do. The names a hole can hold never need
+ * escaping in JSON, so the text is rewritten as it is held.
+ */
+export let unholed = (held: string): string | null => {
+  let now = held.replace(/\{\{([a-z][a-z0-9_]*)\}\}/g, '$$$1')
+  return now == held ? null : now
 }
 
 /** The marker written when a pass reconciles, so it never runs twice. The

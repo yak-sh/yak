@@ -45,6 +45,7 @@ import {
   SENT,
   SERVES,
   TOOLED,
+  unholed,
 } from './migrate.ts'
 import legacy from './fixtures/legacy_store.json' with { type: 'json' }
 import { PLATFORM_STORE } from './door.ts'
@@ -292,14 +293,15 @@ slow("the runtime's own table is not the object's to move", async () => {
   assertEquals(Number(held[0].n), 1)
 })
 
-// ---- the vocabulary slot (T-37546) -----------------------------------------
+// ---- the slots (T-37546) ---------------------------------------------------
 
 // A store that last accepted the short type map remembers it that way. The
 // short form is gone from every door, so the slot itself is rewritten as the
 // document at the object's next open — and `seedApp` writes one the old way,
-// which is what `older().vocab()` still does.
+// which is what `older().vocab()` still does. The tools slot the same way: a
+// manifest accepted while `{{arg}}` was the hole is rewritten with `$arg`.
 slow(
-  'a store holding the short type map is rewritten as the document',
+  'a store holding an old shape is rewritten at its next open',
   async () => {
     let ctx = state()
     await seedApp(ctx)
@@ -323,8 +325,32 @@ slow(
     )
     assertEquals(Object.keys(held), ['$defs'])
     assertEquals(held.$defs.recipe.kind, true)
+
+    ctx.storage.sql.exec(
+      "insert into yak_kv (k, v) values ('tools', ?)",
+      JSON.stringify({
+        serving: {
+          description: 'Recipes that serve so many',
+          input: { n: 'number' },
+          query: '.recipe.serves={{n}}',
+        },
+      }),
+    )
+    let woke = newer(ctx, 'ada/cookbook')
+    let tools = await (await woke.door('/tools')).json()
+    assertEquals(tools.serving.query, '.recipe.serves=$n')
   },
 )
+
+Deno.test('the {{arg}} hole, as the variable it became', () => {
+  assertEquals(
+    unholed('{"a":{"query":".r.t={{t}}&.r.n={{n_2}}","apply":"{{x}}!"}}'),
+    '{"a":{"query":".r.t=$t&.r.n=$n_2","apply":"$x!"}}',
+  )
+  // Nothing to do: the variable already, `$$`, or braces that hold no name.
+  assertEquals(unholed('{"a":{"query":".r.t=$t"}}'), null)
+  assertEquals(unholed('{"a":{"query":".r.t=$$5 {{ }} {{T}}"}}'), null)
+})
 
 Deno.test('the short type map, as the document it means', () => {
   assertEquals(

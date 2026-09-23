@@ -61,7 +61,6 @@
 import { r2Objects } from './lib/objects.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { opened, seal } from './lib/token.ts'
-import { modern } from './lib/tools.ts'
 import { wiped } from './build.ts'
 import { reachChanged, toolsOf, viewsMoved } from './declared.ts'
 import {
@@ -85,18 +84,8 @@ import { apex, type Host as HostEnv } from './host.ts'
 import { destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
-import { BODY } from './gitobj.ts'
-import { documented } from './migrate.ts'
 import { NOTES } from './standing.ts'
-import {
-  moved,
-  own,
-  type Pinner,
-  pruned,
-  renamed,
-  type Rewrite,
-  rewritten,
-} from './versions.ts'
+import { moved, own, type Pinner, pruned, renamed } from './versions.ts'
 import { refuse } from './tool.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
@@ -597,20 +586,6 @@ let retitled = async (
   if (entities.length) await dir.apply({ entities })
 }
 
-// Each file a deploy plants, in the one shape its reader takes: a vocabulary
-// as a `$defs` document (69968475, migrate.ts `documented`) and a tool's
-// argument as `$arg` (c0ca24d4, lib/tools.ts `modern`). A deploy refuses
-// `{{arg}}`, so a version still holding one could not be put back.
-let changed = (f: (text: string) => string): Rewrite => (text) => {
-  let next = f(text)
-  return next == text ? null : next
-}
-let SHAPES: Record<string, Rewrite> = {
-  'vocab.json': documented,
-  'tools.json': changed(modern),
-  'tools.yml': changed(modern),
-}
-
 export let collected = async (env: Env, now = new Date()) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let gone = 0
@@ -670,16 +645,6 @@ export let collected = async (env: Env, now = new Date()) => {
   let notes = 0
   for (let one of standing) {
     if (await renamed(blobs, dir, one, 'AGENTS.md', NOTES)) notes++
-  }
-  // And every file in the shape a deploy takes now, in every version too, so
-  // a rollback deploys (versions.ts `rewritten`).
-  for (let one of standing) {
-    let said = await rewritten(blobs, dir, one, SHAPES, BODY)
-    for (let [path, where] of Object.entries(said)) {
-      console.log(
-        `yak-trash: rewrote ${one.prefix}${path}: ${where.join(', ')}`,
-      )
-    }
   }
   let unpinned = await pruned(dir, blobs, standing, now.getTime())
   if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)

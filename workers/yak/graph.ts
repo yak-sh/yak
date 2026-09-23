@@ -134,7 +134,7 @@ import {
 import { parse } from '@yaks/query'
 import { jsonb, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { reconcile, type Runner, runner } from '@yaks/tools'
-import { commands, modern, type Tools } from './lib/tools.ts'
+import { commands, type Tools } from './lib/tools.ts'
 import { soonest, tick, type Ticked, wakes } from '@yaks/wake'
 import { type Alarm, arm } from '@yaks/wake/cloudflare'
 import { named, type Row } from './listing.ts'
@@ -200,6 +200,7 @@ import {
   trusting,
   unfiled,
   unhandled,
+  unholed,
   unsent,
   untrusted,
 } from './migrate.ts'
@@ -549,7 +550,7 @@ export class Store {
     // The write log, before anything that can refuse the object: a store
     // whose graph cannot boot still keeps what it is sent (writes.ts).
     ctx.storage.sql.exec(WRITES)
-    this.#documenting()
+    this.#reshaping()
     this.#pending = !this.#get('migrated') && stale(ctx.storage)
     if (!this.#pending) this.#boot()
     if (this.#refused) return
@@ -566,15 +567,18 @@ export class Store {
           untrusted(ctx.storage) || unsent(ctx.storage)))
   }
 
-  // The vocabulary an object keeps is the document (T-37546). A store that
-  // last accepted the short type map an app's vocab.json could be written as
-  // remembers it that way, and nothing converts one at the door any more — so
-  // it is rewritten here, once, before anything above the storage reads it
-  // (migrate.ts `documented`). After one wake no short map is left anywhere.
-  #documenting() {
-    let held = this.#get('vocab')
-    let doc = held && documented(held)
-    if (doc) this.#put('vocab', doc)
+  // What an object keeps is in the one shape a deploy takes now. A store that
+  // last accepted an older one remembers it that way, and nothing converts one
+  // at the door any more — so it is rewritten here, before anything above the
+  // storage reads it: the vocabulary as the document (T-37546, migrate.ts
+  // `documented`) and the tools with `$arg` for `{{arg}}` (migrate.ts
+  // `unholed`). After one wake neither old shape is left in the object.
+  #reshaping() {
+    for (let [w, to] of [['vocab', documented], ['tools', unholed]] as const) {
+      let held = this.#get(w)
+      let now = held && to(held)
+      if (now) this.#put(w, now)
+    }
   }
 
   // Waking on whatever this object holds. Everything above the storage is
@@ -1162,9 +1166,7 @@ export class Store {
   #runner = (g: Graph = this.#graph): Runner => {
     let said = this.#get('tools') ?? '{}'
     if (this.#runs?.said != said || g != this.#graph) {
-      let declared: Tools = modern(
-        JSON.parse(said || '{}') as Tools,
-      )
+      let declared: Tools = JSON.parse(said || '{}')
       this.#runs = {
         said,
         run: runner(
@@ -1490,7 +1492,7 @@ export class Store {
     // The vocabulary those slots carry is the old object's, which may be the
     // short type map (migrate.ts `documented`): the carry raises the new schema
     // out of it, so it is the document before anything reads it.
-    this.#documenting()
+    this.#reshaping()
     this.#after(
       request,
       MARK,

@@ -95,25 +95,10 @@ let ONLY = /^\$([a-z][a-z0-9_]*)$/
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
-// The spelling before this one: `{{arg}}` was a hole where `$arg` is now a
-// variable. An app deployed then still has that manifest in its store, so
-// every read of a stored one comes through here (declared.ts `toolsOf`) and
-// says it the way it is said now. A DEPLOY today is refused instead, below:
-// upgrading what is already there is a kindness, accepting two spellings
-// forever is the duplication this removed.
-let OLD = /\{\{([a-z][a-z0-9_]*)\}\}/g
-let ANY_OLD = /\{\{[a-z][a-z0-9_]*\}\}/
-
-export let modern = <T>(v: T): T =>
-  typeof v == 'string'
-    ? v.replace(OLD, '$$$1') as T
-    : Array.isArray(v)
-    ? v.map(modern) as T
-    : object(v)
-    ? Object.fromEntries(
-      Object.entries(v).map(([k, one]) => [k, modern(one)]),
-    ) as T
-    : v
+// The form before this one: `{{arg}}` was a hole where `$arg` is now a
+// variable. A deploy that still writes one is refused, below, in the sentence
+// that says what to write instead.
+let HOLE = /\{\{[a-z][a-z0-9_]*\}\}/
 
 // The wire's own keys beside the components: what an entity bundle may say
 // that is not a component name (@yaks/graph `Bundle`).
@@ -216,7 +201,7 @@ export let parseTools = (
         }
       }
     }
-    if (ANY_OLD.test(JSON.stringify(entry.apply ?? entry.query ?? ''))) {
+    if (HOLE.test(JSON.stringify(entry.apply ?? entry.query ?? ''))) {
       wrong.push(
         `${name}: {{arg}} is not a hole any more — write $arg, the same ` +
           'variable the wire and the query grammar already speak',

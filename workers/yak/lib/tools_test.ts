@@ -3,7 +3,7 @@
 // to a template. The workerd half — the same file through app_deploy and a
 // call at the MCP door — is in workers/yak/mcp_test.ts.
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
-import { filled, modern, parseTools, schemaOf, viewsOf } from './tools.ts'
+import { filled, parseTools, schemaOf, viewsOf } from './tools.ts'
 
 // The components the app's store knows, which a template may write.
 let runs = ['jog']
@@ -192,14 +192,8 @@ Deno.test('a variable nobody bound is the alias it looks like', () => {
   })
 })
 
-Deno.test('a manifest written when {{arg}} was the hole still reads, and no longer deploys', () => {
-  // What is already in a store is upgraded on the way out (declared.ts
-  // `toolsOf`); what a deploy hands in is refused, in the sentence that says
-  // what to write instead.
-  assertEquals(
-    modern({ apply: { doc: { title: 'hi {{name}}', body: '{{body}}' } } }),
-    { apply: { doc: { title: 'hi $name', body: '$body' } } },
-  )
+Deno.test('a manifest written with the {{arg}} hole no longer deploys', () => {
+  // Refused in the sentence that says what to write instead.
   assertStringIncludes(
     assertThrows(() =>
       parseTools({

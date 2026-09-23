@@ -32,13 +32,7 @@ import { type App, type Directory, type Space, storeName } from './directory.ts'
 import type { Env } from './env.ts'
 import { type Host, spaceHost } from './host.ts'
 import { acting, based } from './apps.ts'
-import {
-  filled,
-  modern,
-  schemaOf,
-  type ToolDef,
-  type Tools,
-} from './lib/tools.ts'
+import { filled, schemaOf, type ToolDef, type Tools } from './lib/tools.ts'
 import { type Ctx, type Out, uiMeta, VIEW_MIME } from './tools.ts'
 import { once, refuse } from './tool.ts'
 import type { Who } from './session.ts'
@@ -61,10 +55,7 @@ export let toolsOf = async (
     await r.body?.cancel()
     return {}
   }
-  // What is stored may have been written when `{{arg}}` was the syntax
-  // (lib/tools.ts `modern`): an app deployed then goes on working, and its
-  // next deploy writes the manifest in the one syntax there is.
-  return modern(await r.json() as Tools)
+  return r.json()
 }
 
 // Every app this caller can reach, with the space it is in — the walk both

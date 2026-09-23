@@ -225,9 +225,6 @@ import {
   whatChanged,
   when,
 } from './versions.ts'
-// The pass that moves a short type map to the document it means, over the
-// bytes an app deployed (`declaring`).
-import { documented } from './migrate.ts'
 import { within } from './rate.ts'
 // The one ceiling on bytes going into an app's store, wherever they arrive
 // from: an upload, a drop, or `app_files` fetch.
@@ -1291,30 +1288,9 @@ let spelled = async (
 }
 
 /**
- * The manifest an app declares, as the bytes it is stored in — and the file
- * left in the one shape a manifest is written in.
- *
- * `vocab.json` could once be a short type map, `{"recipe": {"serves":
- * "number"}}`. T-37546 made a manifest a JSON Schema document and only that,
- * and moved every store's remembered vocabulary over (migrate.ts
- * `documented`), but not the files apps had deployed — so a release published
- * before that change still held the old format, and `app_install` refused
- * every one of them on it (T-37809). The same pass runs here, over the bytes,
- * the first time anything reads them; after that read the file says what it
- * always meant and `appDoc` has one input.
- *
- * An install reads the source app's file through this door, so the app being
- * copied from is migrated too. Rewriting somebody else's file is the point: it
- * is the platform moving its own format, the way a store's slot moves when
- * the store wakes, and the document says exactly what the short map said.
- *
- * Only a file that parses as JSON is rewritten. A short map written as YAML
- * would have to be rewritten in another language to migrate it, which is the
- * author's file and not the platform's to restyle; the door refuses that one
- * with the sentence that teaches (vocab.ts `appDoc`).
- *
- * `file` is what a refusal calls it, since the app may have written either
- * format (`spelled`), and `source` is null where the app declares no words.
+ * The manifest an app declares, as the bytes it is stored in. `file` is what a
+ * refusal calls it, since the app may have written either format (`spelled`),
+ * and `source` is null where the app declares no words.
  */
 let declaring = async (
   blobs: Objects,
@@ -1324,13 +1300,7 @@ let declaring = async (
   let key = await spelled(blobs, space, app, 'vocab')
   let file = key?.split('/').pop() ?? 'vocab.json'
   if (!key) return { file, source: null }
-  let source = new TextDecoder().decode(await blobs.get(key))
-  let doc = documented(source)
-  if (doc) {
-    await blobs.put(key, new TextEncoder().encode(doc))
-    source = doc
-  }
-  return { file, source }
+  return { file, source: new TextDecoder().decode(await blobs.get(key)) }
 }
 
 /**
