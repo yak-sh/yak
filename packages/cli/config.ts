@@ -55,6 +55,12 @@ export type Config = {
    * that expires, which is how a second long-running process takes over
    * without anybody having to reap the first. */
   lease?: number
+  /** whether this process runs the background jobs: the effect sweep, each
+   * plugin's `./service`, and the start-up passes a plugin holds a lease for
+   * (default true). `false` takes no lease and runs none of them, so the
+   * process answers what it is asked and nothing else — what
+   * `yak --no-background-jobs` sets. */
+  jobs?: boolean
 }
 
 /** Where a machine keeps the config for its own graph. */

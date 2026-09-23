@@ -107,6 +107,7 @@ config file.
 | `adopt`    | Preserves incoming entity numbers instead of minting new ones. Intended for store imports.       |
 | `name`     | MCP server name; defaults to `yak`.                                                              |
 | `lease`    | Background-job lease duration in milliseconds; defaults to `30000`.                              |
+| `jobs`     | Whether this process runs the background jobs; defaults to `true`.                               |
 
 There is no default database path. `compose` throws unless `db` or `$DB_PATH` is
 present.
@@ -274,6 +275,12 @@ second form before executing its tool, allowing overdue effects and scheduled
 work to progress when no server is running. A live process renews its lease;
 another process can take over after the lease expires or is released.
 
+`yak --no-background-jobs` (config `jobs: false`) turns them off for one
+process: it takes no lease, and runs neither the sweep, the services, nor the
+start-up passes `@yaks/session` and `@yaks/spawn` hold a lease for. A one-shot
+command then only runs its tool, and `yak --no-background-jobs serve` answers
+requests while another process, or none, does the background work.
+
 `close()` first aborts `host.stopping`, then releases leases, records the
 process exit, and closes SQLite. Plugin timers and loops should listen to
 `host.stopping` or the signal passed to `service`.
@@ -299,13 +306,14 @@ written in either order, such as `yak task list` or `yak list task`. The usage
 page groups verbs under their noun. `yak graph`, `yak graph --help`, and
 `yak help graph` print the commands in the `graph` group.
 
-| Global flag       | Meaning                                                                |
-| ----------------- | ---------------------------------------------------------------------- |
-| `--config <path>` | Open the graph described by a local config.                            |
-| `--host <host>`   | Call a remote MCP server.                                              |
-| `--json`          | Print structured results as JSON.                                      |
-| `--timing`        | Print response timing to stderr. `$YAKS_TIMING=1` enables it globally. |
-| `--help`, `-h`    | Print general or command-specific help.                                |
+| Global flag            | Meaning                                                                |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `--config <path>`      | Open the graph described by a local config.                            |
+| `--host <host>`        | Call a remote MCP server.                                              |
+| `--json`               | Print structured results as JSON.                                      |
+| `--timing`             | Print response timing to stderr. `$YAKS_TIMING=1` enables it globally. |
+| `--no-background-jobs` | Take no lease and run no background jobs (config `jobs: false`).       |
+| `--help`, `-h`         | Print general or command-specific help.                                |
 
 An argument value written as `@path` is read from that file; `-` reads from
 stdin. `yak apply` accepts a JSON array or newline-delimited JSON. For streamed

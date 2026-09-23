@@ -42,12 +42,19 @@ let drained = async (composing: Promise<Served>): Promise<Served> => {
   return host
 }
 
-/** The graph a config names, open — and whatever was overdue on it, done.
- * Assembled once per config path; {@link close} closes it when the command is
- * done. */
-export let opened = (path: string): Promise<Served> => {
+/** The graph a config names, open — and whatever was overdue on it, done,
+ * unless `jobs` is false (`--no-background-jobs`), which leaves every
+ * background job to another process. Assembled once per config path;
+ * {@link close} closes it when the command is done. */
+export let opened = (path: string, jobs = true): Promise<Served> => {
   let host = held.get(path)
-  if (!host) held.set(path, host = drained(compose(read(path))))
+  if (!host) {
+    let config = read(path)
+    held.set(
+      path,
+      host = drained(compose(jobs ? config : { ...config, jobs: false })),
+    )
+  }
   return host
 }
 
@@ -63,7 +70,7 @@ export let close = async (code?: number): Promise<void> => {
 /** The tools of the graph a config names, as subcommands a person types — the
  * list `cli` gathers when the command named a config (run.ts `more`). */
 export let commands = async (c: Ctx): Promise<Command[]> => {
-  let host = await opened(c.config!)
+  let host = await opened(c.config!, c.jobs)
   return host.tools.map((declared) => ({
     ...declared,
     // A tool arrives declaring its arguments as JSON Schema — the same

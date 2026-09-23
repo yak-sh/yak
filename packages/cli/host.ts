@@ -753,8 +753,10 @@ export let compose = async (
     // down is one fact, and a background job that outlived the database it
     // reads would be a crash nobody asked for. One that throws is reported
     // and that plugin's job stops — the others keep going, the way a failing
-    // effect is telemetry rather than a broken host.
-    jobs = (signal) =>
+    // effect is telemetry rather than a broken host. A config that turned
+    // them off (`jobs: false`, `yak --no-background-jobs`) takes no lease and
+    // runs none of them, in either form.
+    jobs = config.jobs == false ? async () => {} : (signal) =>
       Promise.all(
         duties.map((d) =>
           holding(

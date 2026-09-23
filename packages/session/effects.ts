@@ -31,9 +31,10 @@ export let PROCESS = 'process'
  * gone — one process does it at a time. */
 export let REAP = '@yaks/session'
 
-/** What these handlers are given: the graph, and the eid of this process's own
- * `process` row (@yaks/cli `Host.me`). */
-export type Host = { graph: Graph; me: Eid }
+/** What these handlers are given: the graph, the eid of this process's own
+ * `process` row (@yaks/cli `Host.me`), and whether it runs background jobs
+ * (@yaks/cli `Config.jobs`). */
+export type Host = { graph: Graph; me: Eid; config?: { jobs?: boolean } }
 
 /** The effect handlers this module exports: when this process's own `process`
  * row is created, free every lock whose holder is not a session in this graph.
@@ -43,7 +44,7 @@ export let effects = (host: Host): Watch[] => [{
   comp: PROCESS,
   doc: 'free the locks whose holder is gone, once per process start',
   created: async (e) => {
-    if (e.entity.eid != host.me) return
+    if (e.entity.eid != host.me || host.config?.jobs == false) return
     if (!await take(host.graph, REAP, { holder: host.me })) return
     await reapLeases(host.graph.storage)
   },

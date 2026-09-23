@@ -40,6 +40,9 @@ export type Ctx = {
   /** The config file naming the graph this command opens, in this process.
    * Absent where the command named an MCP server instead ({@link aimed}). */
   config?: string
+  /** Whether the graph this command opens runs its background jobs — false
+   * under `--no-background-jobs`, which takes no lease and runs none of them. */
+  jobs: boolean
   json: boolean
   help: boolean
   ask: Rpc
@@ -251,6 +254,7 @@ export let globals = (
 ): {
   host?: string
   config?: string
+  jobs: boolean
   json: boolean
   help: boolean
   timing: boolean
@@ -258,6 +262,7 @@ export let globals = (
 } => {
   let host: string | undefined
   let json = false
+  let jobs = true
   let help = false
   let config: string | undefined
   // A whole shell asks for the timing line with YAKS_TIMING=1; one command
@@ -267,6 +272,7 @@ export let globals = (
   for (let i = 0; i < argv.length; i++) {
     let a = argv[i]
     if (a == '--json') json = true
+    else if (a == '--no-background-jobs') jobs = false
     else if (a == '--help' || a == '-h') help = true
     else if (a == '--timing') timing = true
     else if (a == '--host') host = argv[++i] ?? host
@@ -275,7 +281,7 @@ export let globals = (
     else if (a.startsWith('--config=')) config = a.slice(9)
     else rest.push(a)
   }
-  return { host, config, json, help, timing, rest }
+  return { host, config, jobs, json, help, timing, rest }
 }
 
 /**
@@ -344,7 +350,7 @@ export let cli = async (
   let out = opts.out ?? ((line: string) => console.log(safe(line)))
   let note = opts.note ?? ((line: string) => console.error(safe(line)))
   let said = globals(opts.argv ?? Deno.args)
-  let { json, help, timing, rest } = said
+  let { jobs, json, help, timing, rest } = said
   try {
     // Where this command runs: a file it opens, or an MCP server it calls. A
     // command line naming both is refused here, like any other that means two
@@ -368,6 +374,7 @@ export let cli = async (
     let c: Ctx = {
       host,
       config,
+      jobs,
       json,
       help,
       ask: opts.ask ?? rpc({

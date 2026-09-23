@@ -39,11 +39,12 @@ import { down, type Opts, resume, start } from './run.ts'
  * log. */
 export let ADOPT = '@yaks/spawn'
 
-/** What these handlers are given: the open graph, and the eid of the server's
- * own process (@yaks/cli `Host.me`). A new `process` row is either the server
- * recording itself or a child it just launched, and only the first means the
- * server is starting up. */
-export type Host = { graph: Graph; me: Eid }
+/** What these handlers are given: the open graph, the eid of the server's own
+ * process (@yaks/cli `Host.me`), and whether it runs background jobs (@yaks/cli
+ * `Config.jobs`). A new `process` row is either the server recording itself or
+ * a child it just launched, and only the first means the server is starting
+ * up. */
+export type Host = { graph: Graph; me: Eid; config?: { jobs?: boolean } }
 
 /** What config can set — the JSON-expressible half of {@link Opts}. */
 export type Options = {
@@ -121,7 +122,7 @@ export let spawning =
       // It is taken and never released: whoever got it is following those runs
       // now, and a second tail over one log would import every line twice.
       created: async (e) => {
-        if (e.entity.eid != host.me) return
+        if (e.entity.eid != host.me || host.config?.jobs == false) return
         if (!await take(host.graph, ADOPT, { holder: host.me })) return
         await resume(host.graph, opts).catch(report)
       },

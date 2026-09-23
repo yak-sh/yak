@@ -850,6 +850,44 @@ Deno.test('a duty that throws is reported, and the host still serves', async () 
   }
 })
 
+Deno.test('a host that runs no background jobs holds no lease and does no pass', async () => {
+  let passes = 0
+  // What is held once a line has passed through: the start-up passes keep
+  // theirs, and a job that finished its one pass has let its own go.
+  let held = async (jobs: boolean) => {
+    let host = await compose(
+      {
+        db: ':memory:',
+        plugins: [
+          '@yaks/effects',
+          '@yaks/process',
+          '@yaks/session',
+          '@yaks/spawn',
+          'once',
+        ],
+        jobs,
+      },
+      only({
+        once: { service: { service: () => Promise.resolve(void passes++) } },
+      }),
+    )
+    try {
+      await host.duties(AbortSignal.abort())
+      // With nothing to hold, the long-running form has nothing to wait for.
+      if (!jobs) await host.duties()
+      let rows = await host.graph.read('.lease')
+      return rows.map((b) => b.lease as Comp).filter((l) => l.holder)
+        .map((l) => l.name).sort()
+    } finally {
+      await host.close()
+    }
+  }
+  assertEquals(await held(true), ['@yaks/session', '@yaks/spawn'])
+  assertEquals(passes, 1)
+  assertEquals(await held(false), [])
+  assertEquals(passes, 1)
+})
+
 Deno.test('a property that declares its words searched is indexed, and ranked', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop', ...HTTP] },
