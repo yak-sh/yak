@@ -1897,7 +1897,7 @@ let comment = async (got: Got) => {
   // Name the author. A CLI run from an agent's shell is attributed to that
   // agent's session by process ancestry (me()), so a comment meant as "someone
   // else" is the session's own — and a session's own write never echoes back
-  // through the channel (channel.ts, T-20163). Saying `as S-…` makes that
+  // to it (channel.ts, T-20163). Saying `as S-…` makes that
   // visible at the moment it is written instead of three tool rounds later.
   print(
     `${mintedIn(applied, mine)} — ${said} on ${idOf(row)}${
@@ -3112,14 +3112,10 @@ let backup = async () => {
   if (code) Deno.exit(code)
 }
 
-// An interactive session, fleet-wired: permissions skipped and the tasks
-// channel active, so comments on its claimed work and knocks at its door drop
-// straight into the running transcript. Direct session comments stay as
-// compatibility. Identity is Claude's own session id
-// (CLAUDE_CODE_SESSION_ID — /clear rotates it, and the rotation IS the point:
-// one S-* per life). The SessionStart hook reifies the entity under it and
-// stamps the claude process pid; the channel plugin binds by that pid, so
-// service follows each rotation.
+// An interactive session, fleet-wired: permissions skipped. Identity is
+// Claude's own session id (CLAUDE_CODE_SESSION_ID — /clear rotates it, and the
+// rotation IS the point: one S-* per life). The SessionStart hook reifies the
+// entity under it and stamps the claude process pid.
 let terminal = async (
   command: string,
   args: string[],
@@ -3137,8 +3133,6 @@ let terminal = async (
   }).output()
   Deno.exit(code)
 }
-
-let CHANNEL = 'plugin:tasks@tasks-fleet'
 
 type Provider = 'claude' | 'codex'
 type Hook = {
@@ -3419,7 +3413,6 @@ let operatorAgentArgs = (cwd: string): string[] => {
 
 let claudeLaunchGot = (
   got: Got,
-  listed: boolean,
   pid = Deno.pid,
   cwd = Deno.cwd(),
   global?: Record<string, unknown>,
@@ -3430,9 +3423,6 @@ let claudeLaunchGot = (
       '--dangerously-skip-permissions',
       '--settings',
       claudeHookSettings(cwd, global),
-      '--channels',
-      CHANNEL,
-      ...(listed ? [] : ['--dangerously-load-development-channels', CHANNEL]),
       ...(scope.env.TASKS_OPERATOR && !hasAgentFlag(scope.args)
         ? operatorAgentArgs(cwd)
         : []),
@@ -3446,29 +3436,19 @@ let claudeLaunchGot = (
 
 export let claudeLaunch = (
   args: string[],
-  listed: boolean,
   pid = Deno.pid,
   cwd = Deno.cwd(),
   global?: Record<string, unknown>,
 ) =>
   claudeLaunchGot(
     parse('claude', manuals.claude, args),
-    listed,
     pid,
     cwd,
     global,
   )
 
 let claude = async (got: Got) => {
-  // Allowlisted in root's managed settings → clean launch; otherwise the
-  // dev-load flag activates the channel behind a press-Enter dialog —
-  // fine at a keyboard, which is the only place this verb runs.
-  let listed = false
-  try {
-    listed = Deno.readTextFileSync('/etc/claude-code/managed-settings.json')
-      .includes('"tasks-fleet"')
-  } catch { /* no managed settings — dev-load below */ }
-  let launch = claudeLaunchGot(got, listed)
+  let launch = claudeLaunchGot(got)
   await terminal('claude', launch.args, launch.env)
 }
 

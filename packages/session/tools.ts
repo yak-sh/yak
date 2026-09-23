@@ -61,6 +61,7 @@ import { sessionFor } from './who.ts'
 import { ENTRY } from './native.ts'
 import { ordered, statusOf } from './status.ts'
 import { install, settingsPath } from './hooks.ts'
+import { listen } from './listen.ts'
 
 /** What configuration this package's checks accept. */
 export type Options = {
@@ -133,29 +134,56 @@ let transcript = (ctx: Pick<ToolCtx, 'read'>, session: string) =>
 // than passing silently.
 let writtenAt = (b: Bundle): number => Date.parse(str(comp(b, 'created').at))
 
+// The session a call speaks for: the one `--session` names, else whoever is
+// asking — the actor the caller was authenticated as records which run the
+// call came through.
+let asking = async (ctx: ToolCtx): Promise<string> => {
+  let said = str(ctx.args.session)
+  let session = said
+    ? (await sessionOf(ctx, said))?.entity.eid
+    : str(ctx.actor?.via || ctx.actor?.by)
+  if (!session) {
+    throw new Error(
+      said
+        ? `no session answers to ${said}`
+        : 'nobody is asking — say --session',
+    )
+  }
+  return session
+}
+
 /** The implementations behind the tools ./vocab.json declares. The calling
  * application's vocabulary is what the checks name an entity with, and its
  * options are what they judge a stall by. */
 export let runs = (
-  host: { vocab: Vocab },
+  host: { vocab: Vocab; stopping?: AbortSignal },
   options: Options = {},
 ): Runs => ({
   claim_take: async (_bundles, ctx): Promise<Bundle[]> => {
     let [on] = await addressed(ctx.graph, [str(ctx.args.target)])
-    let said = str(ctx.args.session)
-    // Whoever is asking, where the command line named nobody: the actor the
-    // caller was authenticated as records which run this call came through.
-    let holder = said
-      ? (await sessionOf(ctx, said))?.entity.eid
-      : str(ctx.actor?.via || ctx.actor?.by)
-    if (!holder) {
+    return [{ entity: { eid: on }, [CLAIM]: { session: await asking(ctx) } }]
+  },
+
+  // Stays up until its process stops, so the call is `running` for as long as
+  // somebody is listening — the way `serve` is while it answers.
+  session_listen: async (_bundles, ctx): Promise<Bundle[]> => {
+    // A command run in-process writes as its process, not as the transcript
+    // that ran it, so "whoever is asking" may be no session at all — and a
+    // listener for nobody is silent, which reads as nothing to hear.
+    let session = await asking(ctx)
+    let [row] = await detached(ctx.graph.storage).get([session])
+    if (!row?.[SESSION]) {
       throw new Error(
-        said
-          ? `no session answers to ${said}`
-          : 'nobody is asking — say --session',
+        'no session is asking — say --session, for example ' +
+          '--session "$CLAUDE_CODE_SESSION_ID"',
       )
     }
-    return [{ entity: { eid: on }, [CLAIM]: { session: holder } }]
+    await listen(ctx, session, {
+      out: (line) => console.log(line),
+      every: 1000 * (Number(ctx.args.every) || 2),
+      stop: host.stopping,
+    })
+    return []
   },
 
   claim_release: async (_bundles, ctx): Promise<Bundle[]> => {

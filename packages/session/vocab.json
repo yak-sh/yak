@@ -456,6 +456,24 @@
       },
       "idempotent": true
     },
+    "session_listen": {
+      "tool": true,
+      "noun": "session",
+      "verb": "listen",
+      "title": "Listen for a session’s work",
+      "description": "Print one line for each thing addressed to an agent work session as it arrives: a comment on a stored record (entity) the session has claimed, a knock at the session or at that record, a letter delivered to it. Each item is marked notified once printed, so it is printed once, including anything that arrived while nothing was listening; the session’s own writes are never printed. Meant for a command line under a monitor that reads each printed line as an event, such as Claude Code’s Monitor tool: `yak session listen --session \"$CLAUDE_CODE_SESSION_ID\"`. Does not return while the process is up.",
+      "input": {
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "description": "the session to listen for (default: the caller’s session); pass its id or registered name"
+        },
+        "every": {
+          "type": "number",
+          "description": "seconds between reads (default 2)"
+        }
+      }
+    },
     "session_brief": {
       "tool": true,
       "noun": "session",

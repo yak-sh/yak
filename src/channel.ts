@@ -1,11 +1,11 @@
-// The pure event selector shared by the tasks channel and every provider's
-// graph inbox. It owns the stream index, recipient rules, and rendering;
-// transports only supply context and deliver the resulting events.
+// The pure event selector behind every provider's graph inbox. It owns the
+// stream index, recipient rules, and rendering; transports only supply context
+// and deliver the resulting events.
 //
 // A `Change` is the wire unit `{eid, name, comp}` — a component PATCH. The /ws
-// endpoint rebroadcasts every applied batch to every client, so this channel is
-// just another client that reads, never writes: it watches the stream for
-// events about work ITS session owns and turns each into one channel event.
+// endpoint rebroadcasts every applied batch to every client, so a reader of it
+// watches the stream for events about work ITS session owns and turns each
+// into one event.
 
 import { type Change, idOf, kindOf } from './types.ts'
 import { moves } from './edge.ts'

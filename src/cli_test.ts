@@ -722,7 +722,6 @@ Deno.test('task claude scopes operator capability and strips its local flag', ()
   try {
     let launch = claudeLaunch(
       ['--model', 'claude-opus-4-8', '--operator', '--continue'],
-      true,
       42,
       cwd,
     )
@@ -731,8 +730,6 @@ Deno.test('task claude scopes operator capability and strips its local flag', ()
         '--dangerously-skip-permissions',
         '--settings',
         claudeHookSettings(cwd),
-        '--channels',
-        'plugin:tasks@tasks-fleet',
         '--model',
         'claude-opus-4-8',
         '--continue',
@@ -744,14 +741,14 @@ Deno.test('task claude scopes operator capability and strips its local flag', ()
       },
     })
 
-    let ordinary = claudeLaunch(['--continue'], true, 42, cwd)
+    let ordinary = claudeLaunch(['--continue'], 42, cwd)
     assertEquals(ordinary.env, {
       TASKS_OPERATOR: '',
       TASKS_TASK: '',
       CLAUDE_CODE_CHILD_SESSION: '',
     })
     assertEquals(
-      claudeLaunch(['--', '--operator'], true, 42, cwd).args.slice(-2),
+      claudeLaunch(['--', '--operator'], 42, cwd).args.slice(-2),
       ['--', '--operator'],
     )
   } finally {
@@ -782,22 +779,22 @@ Deno.test('task claude --operator wears the operator persona via --agent', () =>
 
     // operator → --agent taskmaster (the resolved basename), ahead of passthrough
     assertEquals(
-      claudeLaunch(['--operator', '--continue'], true, 42, cwd).args.slice(-3),
+      claudeLaunch(['--operator', '--continue'], 42, cwd).args.slice(-3),
       ['--agent', 'taskmaster', '--continue'],
     )
     // no --operator → no persona, even with the file present
-    let ordinary = claudeLaunch(['--continue'], true, 42, cwd).args
+    let ordinary = claudeLaunch(['--continue'], 42, cwd).args
     assert(!ordinary.includes('--agent'))
     // caller's own --agent stands; we never wear a second over it
     assertEquals(
-      claudeLaunch(['--operator', '--agent', 'mine'], true, 42, cwd).args
+      claudeLaunch(['--operator', '--agent', 'mine'], 42, cwd).args
         .filter((a) => a == '--agent' || a == 'mine' || a == 'taskmaster'),
       ['--agent', 'mine'],
     )
     // a pre-frontmatter projection is skipped, never handed to --agent
     Deno.writeTextFileSync(target, '<!-- GENERATED -->\n\nno frontmatter here')
     assert(
-      !claudeLaunch(['--operator'], true, 42, cwd).args.includes('--agent'),
+      !claudeLaunch(['--operator'], 42, cwd).args.includes('--agent'),
     )
   } finally {
     Deno.removeSync(cwd, { recursive: true })
@@ -1492,7 +1489,7 @@ Deno.test('task claude appends project settings only for its invocation', () => 
       'echo rearm',
     )
     assertEquals(
-      JSON.parse(claudeLaunch([], true, 42, dir, {}).args[2]),
+      JSON.parse(claudeLaunch([], 42, dir, {}).args[2]),
       settings,
     )
   } finally {

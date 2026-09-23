@@ -149,14 +149,11 @@ carry a result-only `rank` component; `/` in the web UI, `task search`, and MCP
 - **Mail** — a mail is an entity whose `doc` carries subject and body; creating
   it requests delivery. Local-first: a fleet recipient is delivered in-graph
   instantly, and only external mailboxes ride the Cloudflare edge. `task inbox`
-  includes mail; unread verified mail flows into live sessions through the
-  channel plugin.
-- **Channel plugin** (`channels/`) — a Claude Code channel that pushes comments
-  on a run's claimed work INTO its running transcript, fed by the same `/ws`
-  broadcast every browser hears. Steering targets the task. Project mail and
-  project-actor knocks require project-attention capability (`--operator` for an
-  ad-hoc session, or a role binding). `channels/README.md` has the mechanism and
-  enablement.
+  includes mail.
+- **Listening** — `yak session listen --session "$CLAUDE_CODE_SESSION_ID"`
+  prints one line for each comment on a session's claimed work, knock at it, or
+  letter delivered to it, as it arrives, for a harness to run under a monitor
+  (Claude Code's Monitor tool).
 - **Native Codex delivery** — a task-launched Codex session binds its tmux pane.
   When directly addressed activity is pending, the daemon waits for a stable
   empty composer and types only a constant request to call `task_context`;
@@ -216,7 +213,6 @@ to live on a private tailnet.
   frame context, stateless provider reduction, and result-only joins.
 - `docs/ADAPTERS.md` — native TUIs, managed sessions, persistent roles, and the
   compatibility contract for future harnesses.
-- `channels/README.md` — the channel plugin: mechanism, identity, enablement.
 
 ## License
 

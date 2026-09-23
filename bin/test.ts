@@ -74,7 +74,7 @@ export async function inventory() {
       }
     }
   }
-  for (let dir of ['src', 'bin', 'channels', 'workers']) await collect(dir)
+  for (let dir of ['src', 'bin', 'workers']) await collect(dir)
   tests.sort()
 
   // A server import is itself process-global state: server.ts binds once, owns

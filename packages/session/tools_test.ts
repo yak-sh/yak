@@ -61,6 +61,7 @@ Deno.test('every session tool is declared and implemented', () => {
     'session_brief',
     'session_check',
     'session_context',
+    'session_listen',
     'session_wrap',
   ])
 })
