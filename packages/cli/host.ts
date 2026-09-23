@@ -111,7 +111,7 @@ export {
 /** What every plugin factory is handed: the graph being assembled, the
  * vocabulary of components and tools it holds, the store under it, the
  * database connection beneath that, and the config that named them. `storage`,
- * `graph`, `handler`, `runner` and `jobs` are live from the moment each is
+ * `graph`, `handler`, `runner` and `duties` are live from the moment each is
  * built — a factory may keep a reference and must not call it before it
  * returns, since an `extend` factory runs before there is a store to read and
  * a `runs` factory is asked for its tools before there is a runner to run
@@ -147,7 +147,7 @@ export type Host = {
    * function and writes the result back, for a command line and an HTTP
    * request alike. */
   runner: Runner
-  /** Every job this process may run: the effect sweep, and each
+  /** Every background job this process may run: the effect sweep, and each
    * plugin's `./service`. Each is taken under a lease named for the package
    * that owns it (@yaks/effects `holding`), so of all the processes over one
    * graph exactly one is running each — a second long-running process waits,
@@ -157,7 +157,7 @@ export type Host = {
    * it stops with {@link Served.close}. Pass an already-aborted signal for one
    * pass each and no waiting, which is what a one-shot command does on its way
    * in, and the live form is what a process that stays up calls. */
-  jobs: (signal?: AbortSignal) => Promise<void>
+  duties: (signal?: AbortSignal) => Promise<void>
 
   /** This process, as an entity (@yaks/process `started`): the row it wrote on
    * the way in, what everything it writes is attributed to, and what a
@@ -173,7 +173,7 @@ export type Host = {
    * before the last transaction and before the database is closed. A plugin
    * that arms a timer — a settle, a retry, a poll — hangs it off this signal,
    * or its callback fires into a closed store and the process is held open by
-   * a timer nobody owns. The jobs run under it too, so one abort
+   * a timer nobody owns. The background jobs run under it too, so one abort
    * stops everything this process was doing on its own. */
   stopping: AbortSignal
 }
@@ -254,7 +254,7 @@ export type RoutesFacet = {
   handler?: (host: Host, options: Options) => Handler
 }
 
-/** The name of the one job this host owns rather than any plugin:
+/** The name of the one background job this host owns rather than any plugin:
  * the effect sweep, which finishes what a crash left between a commit and its
  * handler, and retries what a handler could not do the first time. */
 export let SWEEP = '@yaks/effects'
@@ -264,11 +264,11 @@ export let SWEEP = '@yaks/effects'
  * by another process is picked up without waiting for a write here. */
 let CAP = 60_000
 
-/** One job that exactly one process at a time runs: the lease name
+/** One background job that exactly one process at a time runs: the lease name
  * to hold it under, and the work. `run` does at least one pass and then keeps
  * going until the signal aborts — a loop on a timer, or a single pass followed
  * by a wait — so the lease stays this process's for as long as it is up. */
-export type Job = {
+export type Duty = {
   /** the lease name it is held under: the package that owns the work */
   name: string
   run: (signal: AbortSignal) => void | Promise<void>
@@ -284,7 +284,7 @@ export type Job = {
  * one function serves a process of either shape: an HTTP server holds it open
  * for as long as it is up, and a one-shot command hands it a signal that has
  * already aborted and gets the single pass. Which process is doing it is
- * settled by a lease ({@link Served.jobs}), never by which program was
+ * settled by a lease ({@link Served.duties}), never by which program was
  * started. */
 export type ServiceFacet = {
   service?: (
@@ -465,7 +465,7 @@ export let compose = async (
   }
   // A module and the options it was named with travel together: what a host
   // runs is one plugin's module handed one plugin's config. The package
-  // specifier comes third, because a job's lease is named after the
+  // specifier comes third, because a background job's lease is named after the
   // package that owns the work: the lease `@yaks/wake` holds is the one every
   // process reaching for that timer reaches for.
   let taken = <F extends FacetName>(name: F): [Facets[F], Options, string][] =>
@@ -535,7 +535,7 @@ export let compose = async (
     let made: NamedTool[] | undefined
     let ranked: Search | undefined
     let calls: Runner | undefined
-    let working: ((signal?: AbortSignal) => Promise<void>) | undefined
+    let jobs: ((signal?: AbortSignal) => Promise<void>) | undefined
     let stopping = new AbortController()
     // Who is calling is settled before anything is built: a plugin's route
     // needs the same answer @yaks/api's own endpoints get, or what it writes
@@ -578,9 +578,9 @@ export let compose = async (
         if (!calls) throw new Error('the tool runner is not built yet')
         return calls
       },
-      jobs: (signal) => {
-        if (!working) throw new Error('the jobs are not built yet')
-        return working(signal)
+      duties: (signal) => {
+        if (!jobs) throw new Error('the background jobs are not built yet')
+        return jobs(signal)
       },
     }
     authenticate = doorman(served, host, self)
@@ -707,7 +707,7 @@ export let compose = async (
       paths = served.flatMap(([r, o]) => r.routes?.(host, o) ?? [])
       answering = mod.handler(host, options ?? {})
     }
-    // The jobs: work that is nobody's request and everybody's to
+    // The background jobs: work that is nobody's request and everybody's to
     // do, each leased under the name of the package that owns it. The SWEEP is
     // this host's own — a crash between the commit and the handler, and a
     // handler that threw, are exactly what the ledger and a registration's
@@ -716,7 +716,7 @@ export let compose = async (
     // until this process ends, so no second process runs it at the same
     // time.
     let hold = config.lease ?? HOLD
-    let jobs: Job[] = [
+    let duties: Duty[] = [
       {
         name: SWEEP,
         run: async (signal) => {
@@ -744,27 +744,27 @@ export let compose = async (
           }
         },
       },
-      ...running.map(([mod, options, plugin]): Job => ({
+      ...running.map(([mod, options, plugin]): Duty => ({
         name: plugin,
         run: (signal) => mod.service!(host, options, signal),
       })),
     ]
     // Started together and stopped together, by one signal: a host shutting
-    // down is one fact, and a job that outlived the database it
+    // down is one fact, and a background job that outlived the database it
     // reads would be a crash nobody asked for. One that throws is reported
     // and that plugin's job stops — the others keep going, the way a failing
     // effect is telemetry rather than a broken host. A config that turned
-    // them off (`jobs: false`, `yak --no-jobs`) takes no lease and
+    // them off (`jobs: false`, `yak --no-background-jobs`) takes no lease and
     // runs none of them, in either form.
-    working = config.jobs == false ? async () => {} : (signal) =>
+    jobs = config.jobs == false ? async () => {} : (signal) =>
       Promise.all(
-        jobs.map((j) =>
+        duties.map((d) =>
           holding(
             g!,
-            j.name,
+            d.name,
             { holder: selfEid(), hold, signal: signal ?? stopping.signal },
-            j.run,
-          ).catch((e) => console.error(`job failed — ${j.name}`, e))
+            d.run,
+          ).catch((e) => console.error(`duty failed — ${d.name}`, e))
         ),
       ).then(() => {})
     // This process, written in. Last in this function, because the creation of
@@ -786,7 +786,7 @@ export let compose = async (
       // Last, because an absent `exit` is what running means, so a process
       // that closed without stamping one reads as still running forever.
       //
-      // First of all, the abort: the jobs stop and every timer a
+      // First of all, the abort: the background jobs stop and every timer a
       // plugin hung off {@link Host.stopping} is cancelled, so nothing is
       // still pending over a database that is about to be closed.
       close: (code?: number) => {

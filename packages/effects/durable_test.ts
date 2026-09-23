@@ -28,7 +28,7 @@ let fixture = (owner = 'worker-1', now = clock()) => {
   let log = ledger({ owner, now, lease: 60_000 })
   let fx = effects(durableBlog, {
     around: log.around,
-    report: (_e, run) => oops.push(run.handler),
+    report: (_e, job) => oops.push(job.handler),
   })
   let g = blogGraph([fx], durableBlog)
   let tx: Tx = detached(g.storage)

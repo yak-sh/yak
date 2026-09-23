@@ -55,8 +55,9 @@ let TAIL =
   --json          print the structured result instead of the text
   --timing        one line on stderr per response, with its Server-Timing
                   (or YAKS_TIMING=1)
-  --no-jobs       take no lease and run no job — the effect sweep, the
-                  plugins' services — in the graph this opens
+  --no-background-jobs
+                  take no lease and run no background job — the effect
+                  sweep, the plugins' services — in the graph this opens
   --help         this page, or one subcommand's own
 
 An argument value written @path is read from that file, and - is read from

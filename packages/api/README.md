@@ -270,9 +270,9 @@ runner from starting a second server in its place. Because nothing is printed
 until the call returns, the tool writes the address to standard error as soon as
 the port is bound.
 
-While it listens, the tool also takes over the host's jobs — the effect sweep
-and each plugin's `./service` — in their long-running form, and first finishes
-any tool calls a previous process was killed in the middle of.
+While it listens, the tool also takes over the host's background jobs — the
+effect sweep and each plugin's `./service` — in their long-running form, and
+first finishes any tool calls a previous process was killed in the middle of.
 
 ## Serving it yourself
 

@@ -1,4 +1,4 @@
-// The job, and the contest for it.
+// The duty, and the contest for it.
 
 import { assert, assertEquals } from '@std/assert'
 import type { Comp } from '@yaks/graph'
@@ -10,7 +10,7 @@ let g = () => blogGraph([], durableBlog)
 // A clock the test moves by hand, so nothing waits.
 let at = (ms: number) => () => ms
 
-Deno.test('a job is one row, whoever asks for it', () => {
+Deno.test('a duty is one row, whoever asks for it', () => {
   assertEquals(leaseEid('@yaks/wake'), leaseEid('@yaks/wake'))
   assert(leaseEid('@yaks/wake') != leaseEid('@yaks/spawn'))
 })
@@ -53,7 +53,7 @@ Deno.test('letting go hands it over without waiting, and only the holder may', a
   assertEquals((await held(graph, 'sweep'))?.holder, 'p1')
   await drop(graph, 'sweep', { holder: 'p1' })
   assertEquals((await held(graph, 'sweep'))?.holder, null)
-  // The row stays — what the job is outlives who was doing it.
+  // The row stays — what the duty is outlives who was doing it.
   assertEquals((await held(graph, 'sweep'))?.name, 'sweep')
   assertEquals(
     await take(graph, 'sweep', { holder: 'p2', now: at(1) }),
@@ -69,10 +69,10 @@ Deno.test('a graph with no lease word has nobody to contend with', async () => {
   assertEquals(await held(graph, 'sweep'), undefined)
 })
 
-// Doing a job: the same call for a process that stays and one passing
+// Doing a duty: the same call for a process that stays and one passing
 // through, and the only difference is what its signal already says.
 
-Deno.test('a signal already aborted is one pass, and the job is handed back', async () => {
+Deno.test('a signal already aborted is one pass, and the duty is handed back', async () => {
   let graph = g()
   let passes = 0
   await holding(graph, 'sweep', { holder: 'p1' }, () => void passes++)
@@ -80,7 +80,7 @@ Deno.test('a signal already aborted is one pass, and the job is handed back', as
   assertEquals((await held(graph, 'sweep'))?.holder, null)
 })
 
-Deno.test('a line passing through leaves a job somebody is already doing', async () => {
+Deno.test('a line passing through leaves a duty somebody is already doing', async () => {
   let graph = g()
   await take(graph, 'sweep', { holder: 'p1', hold: 10_000 })
   let passes = 0
@@ -89,7 +89,7 @@ Deno.test('a line passing through leaves a job somebody is already doing', async
   assertEquals((await held(graph, 'sweep'))?.holder, 'p1')
 })
 
-Deno.test('a process that stays holds the job until it goes', async () => {
+Deno.test('a process that stays holds the duty until it goes', async () => {
   let graph = g()
   let stop = new AbortController()
   let holder: string | null = null

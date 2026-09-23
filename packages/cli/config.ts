@@ -49,17 +49,17 @@ export type Config = {
   adopt?: boolean
   /** what the MCP server calls itself (default `yak`) */
   name?: string
-  /** how long this process's lease on a job stands before another
+  /** how long this process's lease on a background job stands before another
    * process may take it over, in milliseconds (default 30_000). A holder still
    * doing the work renews it on a timer; one that was killed leaves a lease
    * that expires, which is how a second long-running process takes over
    * without anybody having to reap the first. */
   lease?: number
-  /** whether this process runs the jobs: the effect sweep, each
+  /** whether this process runs the background jobs: the effect sweep, each
    * plugin's `./service`, and the start-up passes a plugin holds a lease for
    * (default true). `false` takes no lease and runs none of them, so the
    * process answers what it is asked and nothing else — what
-   * `yak --no-jobs` sets. */
+   * `yak --no-background-jobs` sets. */
   jobs?: boolean
 }
 

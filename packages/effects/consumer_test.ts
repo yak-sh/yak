@@ -43,8 +43,8 @@ Deno.test('pending sweeps fire once, isolate fetch/row failures, and skip settle
   let pending = new Set(['sync-bad', 'async-bad', 'good', 'other'])
   let ran: string[] = [], failed: string[] = []
   let fx = effects(blog, {
-    report: (_e, run) => {
-      failed.push(run.handler)
+    report: (_e, job) => {
+      failed.push(job.handler)
     },
   })
   fx.on('broken', { created: () => {}, sweep: { pending: 'broken' } })

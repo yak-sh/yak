@@ -234,7 +234,7 @@ export let rulesOf = (plugins: Plugin[]): Rule[] =>
 /**
  * Every sha any plugin still names for one app, as one set (versions.ts
  * `pruned`). Asked in plugin order and awaited one at a time: a sweep is a
- * job, and a plugin reading its own store is a read the sweep can
+ * background job, and a plugin reading its own store is a read the sweep can
  * wait for.
  */
 export let pinsOf = async (

@@ -191,10 +191,10 @@ grouped approximately by function, **not** by dependency order.
   component changes or newly matching query patterns, isolating handler failures
   from the original transaction. An optional durable attempt log supports
   retries; it does not guarantee exactly-once external effects.
-  `lease{name, holder, until}` records named job ownership using deterministic
-  ids and transactional preconditions. Coordination requires suitable storage
-  isolation and lease configuration. This package provides mechanisms, not
-  domain-specific actions.
+  `lease{name, holder, until}` records named background-job ownership using
+  deterministic ids and transactional preconditions. Coordination requires
+  suitable storage isolation and lease configuration. This package provides
+  mechanisms, not domain-specific actions.
 
 - **[@yaks/journal](./journal)** — Record committed transactions as after-images
   in three append-oriented tables on the same database transaction/connection.
@@ -498,8 +498,8 @@ in about.
 It is given an `AbortSignal`, is expected to make an initial pass when it
 acquires the lease, and then keeps going until that signal aborts — which is
 what lets the same function work in both a long-running process and a one-shot
-command. A service, and the sweep that retries failed effects, are jobs
-(`@yaks/cli` `Served.jobs`). Each is held under a `lease` named after the
+command. A service, and the sweep that retries failed effects, are background
+jobs (`@yaks/cli` `Served.duties`). Each is held under a `lease` named after the
 package that owns it (`@yaks/effects` `holding`): a server or a TUI claims the
 job and holds it for as long as it is running, renewing periodically. A one-shot
 `yak` command passes its jobs a signal that has already aborted, so a service

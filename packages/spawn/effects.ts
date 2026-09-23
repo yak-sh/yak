@@ -40,7 +40,7 @@ import { down, type Opts, resume, start } from './run.ts'
 export let ADOPT = '@yaks/spawn'
 
 /** What these handlers are given: the open graph, the eid of the server's own
- * process (@yaks/cli `Host.me`), and whether it runs jobs (@yaks/cli
+ * process (@yaks/cli `Host.me`), and whether it runs background jobs (@yaks/cli
  * `Config.jobs`). A new `process` row is either the server recording itself or
  * a child it just launched, and only the first means the server is starting
  * up. */

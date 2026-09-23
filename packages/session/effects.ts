@@ -27,12 +27,12 @@ import { reapLeases } from './reap.ts'
  * direction. */
 export let PROCESS = 'process'
 
-/** The lease name for the job of freeing the locks whose holder is
+/** The lease name for the background job of freeing the locks whose holder is
  * gone — one process does it at a time. */
 export let REAP = '@yaks/session'
 
 /** What these handlers are given: the graph, the eid of this process's own
- * `process` row (@yaks/cli `Host.me`), and whether it runs jobs
+ * `process` row (@yaks/cli `Host.me`), and whether it runs background jobs
  * (@yaks/cli `Config.jobs`). */
 export type Host = { graph: Graph; me: Eid; config?: { jobs?: boolean } }
 

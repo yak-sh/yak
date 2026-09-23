@@ -106,7 +106,7 @@ export type Slot = Policy & {
 }
 
 /** One handler about to run, for a {@link Report} or an {@link Around}. */
-export type Run = {
+export type Job = {
   /** the slot's id */
   handler: string
   /** the committed change it is running for */
@@ -120,7 +120,7 @@ export type Run = {
 
 /** Where a failing handler goes. A report is telemetry: it is called instead
  * of the error being thrown, and must not throw itself. */
-export type Report = (err: unknown, ctx: Run) => void
+export type Report = (err: unknown, ctx: Job) => void
 
 /**
  * A wrapper around every handler run: `next()` runs the handler, and whatever
@@ -128,7 +128,7 @@ export type Report = (err: unknown, ctx: Run) => void
  * these ({@link https://jsr.io/@yaks/effects/doc/~/ledger | ledger}); so is a
  * timer, a log line, or a queue.
  */
-export type Around = (run: Run, tx: Tx, next: () => unknown) => unknown
+export type Around = (job: Job, tx: Tx, next: () => unknown) => unknown
 
 /** How a registry is built. */
 export type Opts = {
@@ -286,9 +286,9 @@ let solo = (plan: Match): string | undefined => {
  */
 export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   let slots: Slot[] = []
-  let report: Report = (err, run) => {
+  let report: Report = (err, job) => {
     try {
-      ;(opts.report ?? warn)(err, run)
+      ;(opts.report ?? warn)(err, job)
     } catch (e) {
       console.warn('effect reporting failed —', e)
     }
@@ -296,9 +296,9 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   let selected = (s: Slot, pass?: Dispatch) =>
     (pass?.want ?? opts.want ?? (() => true))(s.where ?? 'do')
   let reportTo = (pass?: Dispatch): Report =>
-    !pass?.report ? report : (err, run) => {
+    !pass?.report ? report : (err, job) => {
       try {
-        pass.report!(err, run)
+        pass.report!(err, job)
       } catch (e) {
         console.warn('effect reporting failed —', e)
       }
@@ -456,14 +456,14 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     write: Write,
     reportFailure: Report = report,
   ): boolean | Promise<boolean> => {
-    let run: Run = { handler: s.id, event, slot: s }
+    let job: Job = { handler: s.id, event, slot: s }
     let failed = (err: unknown) => {
-      reportFailure(err, run)
+      reportFailure(err, job)
       return false
     }
     try {
       let go = () => s.run(event, tx, write)
-      let out = around ? around(run, tx, go) : go()
+      let out = around ? around(job, tx, go) : go()
       return isPromise(out) ? out.then(() => true, failed) : true
     } catch (err) {
       return failed(err)
@@ -505,7 +505,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
               (found) => over(found, (e) => fire(s, e, tx, write)),
             )
           } catch (err) {
-            // Running the query is the registry's work, not the handler's: a
+            // Running the query is the registry's job, not the handler's: a
             // pattern this storage cannot answer is telemetry, never a failed
             // batch (it committed).
             report(err, {

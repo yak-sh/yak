@@ -15,7 +15,7 @@ let free = (): number => {
   return port
 }
 
-// The tool reconciles and takes the jobs before it binds, so the
+// The tool reconciles and takes the background jobs before it binds, so the
 // port is not up on the first tick. Retry rather than count the ticks.
 let said = async (url: string, ms = 2000): Promise<string> => {
   let end = Date.now() + ms
@@ -45,7 +45,7 @@ let fake = (port?: number) => {
         return Promise.resolve([])
       },
     } as unknown as Runner,
-    jobs: (signal?: AbortSignal) => {
+    duties: (signal?: AbortSignal) => {
       told.jobs += signal ? 0 : 1
       return Promise.resolve()
     },
@@ -60,7 +60,7 @@ Deno.test('serve answers with the host handler until the host stops', async () =
   let call = runs(host).serve([], ctx()) as Promise<Bundle[]>
   assertEquals(await said(`http://localhost:${port}`), 'ok')
   // A process that is about to stay up finishes what a crash left claimed,
-  // and takes the jobs in their long-running form.
+  // and takes the background jobs in their long-running form.
   assertEquals(told.driven, 1)
   assertEquals(told.jobs, 1)
   stopping.abort()
