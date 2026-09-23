@@ -190,7 +190,7 @@ Deno.test('$edit refuses: non-unique, unchanged, and non-text', () => {
         comp: { phase: { $edit: { old: 'idea', new: 'building' } } },
       }]),
     Error,
-    'not a wire-writable text column',
+    'not a wire-writable text property',
   )
 })
 

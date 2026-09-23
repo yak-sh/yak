@@ -2663,10 +2663,12 @@ let columnsOf = (db: Sql, table: string): Set<string> => {
 let fleetRefusal = (db: Sql, err: unknown) => {
   if (!(err instanceof Error)) return err
   err.message = err.message.replace(
-    'unknown column in $was:',
-    'unknown column:',
+    'unknown property in $was:',
+    'unknown property:',
   )
-  let match = err.message.match(/^(unknown columns?: .*?) — (\w+) declares /)
+  let match = err.message.match(
+    /^(unknown propert(?:y|ies): .*?) — (\w+) declares /,
+  )
   if (match) {
     let [, prefix, name] = match
     err.message = `${prefix} — ${

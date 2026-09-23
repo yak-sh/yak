@@ -128,7 +128,7 @@ Deno.test('a store speaks its own word: write it, filter it, lose it', async () 
       () => mutate(db, [{ eid, name: 'recipe', comp: { minutes: 20 } }]),
       Error,
     ).message,
-    'unknown column: recipe.minutes — recipe has title (text), ' +
+    'unknown property: recipe.minutes — recipe has title (text), ' +
       'serves (number)',
   )
   assertEquals(

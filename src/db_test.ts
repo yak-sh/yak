@@ -1106,7 +1106,7 @@ Deno.test('a column naming nothing is refused, not silently defaulted', () => {
   assertThrows(
     () => apply(db, [{ eid: t, name: 'task', comp: { statuss: 'done' } }]),
     Error,
-    'unknown column: task.statuss',
+    'unknown property: task.statuss',
   )
   assertEquals(comp(t, 'task'), undefined) // nothing landed at the default
   // the batch is refused WHOLE — a good change beside a typo does not slip
@@ -1118,7 +1118,7 @@ Deno.test('a column naming nothing is refused, not silently defaulted', () => {
         { eid: t, name: 'filed', comp: { priority: 1 } },
       ]),
     Error,
-    'unknown column: task.statuss',
+    'unknown property: task.statuss',
   )
   assertEquals(comp(t, 'doc'), undefined)
 })
@@ -1138,13 +1138,13 @@ Deno.test('an unknown column is answered with the component it named', () => {
   }
   assertEquals(
     why({ data: 'x' }),
-    'unknown column: attachment.data — attachment has artifact (eid), ' +
+    'unknown property: attachment.data — attachment has artifact (eid), ' +
       'media_type (text), name (text)',
   )
   // Every unknown word at once, and the shape once.
   assertEquals(
     why({ data: 'x', type: 'png' }),
-    'unknown columns: attachment.data, attachment.type — attachment has ' +
+    'unknown properties: attachment.data, attachment.type — attachment has ' +
       'artifact (eid), media_type (text), name (text)',
   )
   // A closed set spells its values; a component with nothing says so.
@@ -1156,7 +1156,7 @@ Deno.test('an unknown column is answered with the component it named', () => {
   assertThrows(
     () => apply(db, [{ eid: t, name: 'person', comp: { name: 'Marisol' } }]),
     Error,
-    'unknown column: person.name — person has no columns',
+    'unknown property: person.name — person has no columns',
   )
 })
 
@@ -1319,7 +1319,7 @@ Deno.test('session lifecycle columns are server-owned', () => {
         comp: { provider: 'fake', status: 'completed', exit_code: 0 },
       }]),
     Error,
-    'unknown columns: spawn.status, spawn.exit_code',
+    'unknown properties: spawn.status, spawn.exit_code',
   )
   // refused whole: the facet the session minted is still blank
   assertEquals(comp(s, 'spawn')?.provider, null)
@@ -3403,7 +3403,7 @@ Deno.test('memory: scope rides in, provenance and confirmation are stamped', () 
   assertThrows(
     () => apply(db, [{ eid: m, name: 'memory', comp: { source_eid: s } }]),
     Error,
-    'unknown column: memory.source_eid',
+    'unknown property: memory.source_eid',
   )
   assertEquals(
     snapshot(db).changes.find((c) => c.eid == m && c.name == 'created')
@@ -4337,7 +4337,7 @@ Deno.test('precondition: a guard on an unknown column is refused', () => {
         { eid: m, name: 'doc', comp: { body: 'x' }, was: { bodyy: null } },
       ]),
     Error,
-    'unknown column: doc.bodyy',
+    'unknown property: doc.bodyy',
   )
   assertEquals(comp(m, 'doc')?.body, 'ONE')
 })

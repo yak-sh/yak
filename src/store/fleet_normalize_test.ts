@@ -160,7 +160,7 @@ Deno.test('fleet edits reject numeric, enum, reference and boolean columns befor
     assertThrows(
       () => apply(db, [{ eid, name, comp }]),
       Error,
-      `.${name}.${col} is not a wire-writable text column`,
+      `.${name}.${col} is not a wire-writable text property`,
     )
   }
   assertEquals(db.prepare('select count(*) as n from entity').get()?.n, 0)
