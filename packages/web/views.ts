@@ -37,7 +37,7 @@ export type Shown<Node> = {
   id: (b: Bundle) => string
   /** the kind it displays as: `task` */
   kind: (b: Bundle) => string
-  /** what to call an entity a column names, by eid */
+  /** what to call an entity a property names, by eid */
   name: (eid: string) => string
   /** where a link to an entity goes, by eid; absent where nothing links */
   link?: (eid: string) => string | undefined
@@ -62,7 +62,7 @@ let SHOWN = new Set(['entity', 'doc', 'comment', 'edge'])
 let EID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 let AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/
 
-// One stated value: an entity named by a column is a link to it, a moment
+// One stated value: an entity named by a property is a link to it, a moment
 // reads as the caller says, and anything structured is its JSON.
 let value = <Node>(h: H<Node>, s: Ctx<Node>, v: unknown): Child<Node> => {
   if (typeof v == 'string' && EID.test(v)) {
@@ -100,7 +100,8 @@ let tile = <Node>(b: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
 }
 
 // Each component the page does not state elsewhere, one row each: its name,
-// then its columns with a value. A component with no columns is a mark, and
+// then its properties with a value. A component with no properties is a mark,
+// and
 // its row says only that it is there.
 let facts = <Node>(b: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
   let s = shown(ctx)
@@ -110,17 +111,17 @@ let facts = <Node>(b: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
       typeof comp == 'object'
     )
     .map(([name, comp]) => {
-      let cols = Object.entries(comp as Record<string, unknown>)
+      let props = Object.entries(comp as Record<string, unknown>)
         .filter(([, v]) => v != null && v !== '')
       return [
         h('dt', null, name),
         h(
           'dd',
           null,
-          cols.length
-            ? cols.map(([col, v], i) => [
+          props.length
+            ? props.map(([prop, v], i) => [
               i ? ' · ' : '',
-              h('span', { class: 'Facts_Col' }, col),
+              h('span', { class: 'Facts_Prop' }, prop),
               ' ',
               value(h, s, v),
             ])

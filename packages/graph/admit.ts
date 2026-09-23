@@ -78,9 +78,9 @@ let admitComp = (
     name,
     Object.fromEntries(Object.entries(patch).filter(([c]) => keep.has(c))),
   )
-  // A computed column is never a write, so a patch of nothing else names the
+  // A computed property is never a write, so a patch of nothing else names the
   // component alone: a server's `task: { status: 'open' }` is still a task.
-  let asked = Object.keys(patch).filter((c) => !v.column(name, c)?.computed)
+  let asked = Object.keys(patch).filter((c) => !v.prop(name, c)?.computed)
   if (asked.length && !Object.keys(kept).length) return undefined
   let errs = v.check(name, kept, { stamped: trusted })
   if (errs.length) throw new Refused(errs.join('; '))

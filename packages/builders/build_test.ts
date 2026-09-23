@@ -336,7 +336,7 @@ Deno.test("content is what was written, not the server's stamps", () => {
   }
   assertEquals(hash(said), hash(stamped))
   assertNotEquals(hash(said), hash({ ...said, doc: { title: 'A', body: 'C' } }))
-  // a tag with no columns is a fact, so it counts
+  // a tag with no properties is a fact, so it counts
   assertNotEquals(hash(said), hash({ ...said, reads: {} }))
 })
 

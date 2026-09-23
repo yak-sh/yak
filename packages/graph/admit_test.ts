@@ -42,7 +42,7 @@ Deno.test('a bundle of nothing but server-owned properties leaves the batch', ()
   assertEquals(one({ entity: { eid: 'b1' }, created: { at: 'now' } }), [])
 })
 
-Deno.test('a component sent with only computed columns is still there', () => {
+Deno.test('a component sent with only computed properties is still there', () => {
   let tasks = loadVocab({
     $defs: {
       task: {

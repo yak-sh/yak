@@ -12,8 +12,8 @@ import { parse } from '@yaks/query'
 import { define, type Registry } from '@yaks/render'
 import { BODY, DOC, TITLE } from './comp.ts'
 
-let text = (b: Record<string, unknown>, col: string): string => {
-  let v = (b[DOC] as Record<string, unknown> | undefined)?.[col]
+let text = (b: Record<string, unknown>, prop: string): string => {
+  let v = (b[DOC] as Record<string, unknown> | undefined)?.[prop]
   return typeof v == 'string' ? v : ''
 }
 

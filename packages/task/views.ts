@@ -4,7 +4,7 @@
 //
 // The status is computed, never stored (./status.ts), so the view computes it
 // too, from the marks the bundle carries: a bundle a browser holds has no
-// status column to read, and a matcher that has only the bundle cannot test
+// status property to read, and a matcher that has only the bundle cannot test
 // one, which is why this matches the component rather than a status.
 
 import { parse } from '@yaks/query'

@@ -6,26 +6,26 @@
 // in, so an unchanged key means the output already built still answers, and a
 // changed one means it no longer does.
 //
-// An input's content is what someone wrote on it: every column a client may
-// write, on every component it wears. Server-owned bookkeeping is left out —
+// An input's content is what someone wrote on it: every property a client
+// may write, on every component it wears. Server-owned bookkeeping is left out —
 // `created` and `updated` stamps, counters like `recall` — because it moves
 // without anything being said differently, and a key that moved with it would
-// rebuild for nothing. A component with no columns at all is a tag whose
+// rebuild for nothing. A component with no properties at all is a tag whose
 // presence is the fact, so it counts. The vocabulary says which is which, so
 // this file names no component.
 
 import { type Bundle, type Comp, comps, type Eid, sha256 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 
-// A component's writable columns, in a fixed order, holding a value.
-let written = (c: Comp, cols: string[]): Comp => {
+// A component's writable properties, in a fixed order, holding a value.
+let written = (c: Comp, props: string[]): Comp => {
   let out: Comp = {}
-  for (let col of cols.toSorted()) if (c[col] != null) out[col] = c[col]
+  for (let p of props.toSorted()) if (c[p] != null) out[p] = c[p]
   return out
 }
 
 /**
- * The content hash of an entity: SHA-256 over its client-written columns, in a
+ * The content hash of an entity: SHA-256 over its client-written properties, in a
  * fixed order.
  *
  * ```ts

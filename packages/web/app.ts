@@ -87,8 +87,8 @@ let useWatch = (box: Client, q: string | undefined, o?: ClientWatchOpts) => {
 
 // What a person calls an entity, from the components that name one.
 let label = (b: Bundle, id: string): string => {
-  let said = (comp: string, col: string) => {
-    let v = (b[comp] as Record<string, unknown> | undefined)?.[col]
+  let said = (comp: string, prop: string) => {
+    let v = (b[comp] as Record<string, unknown> | undefined)?.[prop]
     return typeof v == 'string' && v ? v : undefined
   }
   return said('doc', 'title') ?? said('person', 'name') ??
@@ -200,10 +200,10 @@ let Home = ({ app, q }: { app: App; q: string }) => {
 }
 
 // Every entity a page names but does not hold: the far end of each edge, the
-// entities its columns reference, and whoever wrote its comments.
+// entities its properties reference, and whoever wrote its comments.
 let named = (vocab: Vocab, bundles: Bundle[]): string[] =>
   bundles.flatMap((b) =>
-    vocab.refCols().flatMap(([comp, prop]) => {
+    vocab.refProps().flatMap(([comp, prop]) => {
       let v = (b[comp] as Record<string, unknown> | undefined)?.[prop]
       return typeof v == 'string' && EID.test(v) ? [v] : []
     })

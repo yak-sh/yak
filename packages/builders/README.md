@@ -19,7 +19,7 @@ deno add jsr:@yaks/builders
 ## The key
 
 Every build is keyed by a SHA-256 of the instruction, the model and each input's
-content hash. An input's content is every column a client may write on every
+content hash. An input's content is every property a client may write on every
 component it wears; server-owned stamps (`created`, `updated`, counters) are
 left out, since they move without anything being said differently.
 
