@@ -101,6 +101,18 @@ export let rel = (from: string, over: Partial<Rel> = {}): Rel => ({
   ...over,
 })
 
+// Conditions joined by `and` or `or`, parenthesised. SQLite parses `a or b or
+// c …` into a tree as deep as the list is long and refuses one deeper than
+// 1000, so a long list nests in halves, which keeps the depth logarithmic:
+// the reverse read behind a well-referenced entity's delete asks thousands.
+export let nest = (sqls: string[], joiner: string): string => {
+  if (sqls.length <= 64) return `(${sqls.join(joiner)})`
+  let half = sqls.length >> 1
+  return `(${nest(sqls.slice(0, half), joiner)}${joiner}${
+    nest(sqls.slice(half), joiner)
+  })`
+}
+
 // The condition tree rendered. Standard SQL boolean operators and `?`
 // placeholders (SQLite's; a Postgres dialect renumbers them on the way out). A
 // `raw` leaf passes its fragment straight through; the combinators parenthesise
@@ -115,7 +127,7 @@ export let renderCond = (c: Cond): Frag => {
   let joiner = c.t == 'and' ? ' and ' : ' or '
   let parts = c.parts.map(renderCond)
   return {
-    sql: `(${parts.map((p) => p.sql).join(joiner)})`,
+    sql: nest(parts.map((p) => p.sql), joiner),
     params: parts.flatMap((p) => p.params),
   }
 }

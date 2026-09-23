@@ -20,7 +20,7 @@
 
 import type { Prop, Scalar, Vocab } from '@yaks/vocab'
 import { type Span as QSpan, timeSpan } from '@yaks/query'
-import type { Frag } from './ir.ts'
+import { type Frag, nest } from './ir.ts'
 
 // The type a value is coerced to before comparison — the vocabulary's property
 // category flattened to the one name the lowerings switch on.
@@ -103,11 +103,10 @@ let col = (comp: string, prop: string, v: Vocab): string | null => {
  * committed yet.
  */
 export let refEqAt = (from: string): Dialect['refEq'] => (c, eids, negate) => {
-  let hit = `(${
-    eids.map(() => `${c} = (select id from ${from} where eid = ?)`).join(
-      ' or ',
-    )
-  })`
+  let hit = nest(
+    eids.map(() => `${c} = (select id from ${from} where eid = ?)`),
+    ' or ',
+  )
   return negate
     ? { sql: `(${c} is null or not ${hit})`, params: eids }
     : { sql: hit, params: eids }
@@ -172,7 +171,7 @@ let eq = (c: string, value: string, tag: Tag): Frag | null => {
     let parts = value.split(',').map((p) => eq(c, p, tag))
     if (parts.some((p) => !p)) return null
     return {
-      sql: `(${parts.map((p) => p!.sql).join(' or ')})`,
+      sql: nest(parts.map((p) => p!.sql), ' or '),
       params: parts.flatMap((p) => p!.params),
     }
   }
@@ -231,7 +230,7 @@ let both = (a: Frag, b: Frag): Frag => ({
 })
 let anyOf = (parts: Frag[]): Frag =>
   parts.length == 1 ? parts[0] : {
-    sql: `(${parts.map((p) => p.sql).join(' or ')})`,
+    sql: nest(parts.map((p) => p.sql), ' or '),
     params: parts.flatMap((p) => p.params),
   }
 let edge = (c: string, op: string, s: Span): Frag => {

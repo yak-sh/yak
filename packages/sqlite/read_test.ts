@@ -3,6 +3,7 @@
 // and an aggregate comes back as raw rows.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
+import { and, eq, or } from '@yaks/query'
 import { ARMS, Unsupported } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
@@ -289,4 +290,17 @@ Deno.test("a driver that declares no compound width is probed within workerd's",
     let terms = sql.split(/\bunion\b/i).length
     assert(terms <= ARMS, `${terms} terms in a compound SELECT:\n${sql}`)
   }
+})
+
+Deno.test('a disjunction longer than SQLite nests expressions reads', () => {
+  let s = store()
+  seed(s, [
+    { entity: { eid: 'm1' }, doc: { title: 'Acme' } },
+    { entity: { eid: 'p1' }, product: { price: 5, maker: 'm1' } },
+  ])
+  // SQLite refuses an expression tree deeper than 1000.
+  let makers = Array.from({ length: 1001 }, (_, i) => `m${i}`)
+  assertEquals(eids(s.read(`.maker=${makers}`)), ['p1'])
+  let any = or(...makers.map((m) => eq('product.maker', m)))
+  assertEquals(eids(s.read(and(any))), ['p1'])
 })
