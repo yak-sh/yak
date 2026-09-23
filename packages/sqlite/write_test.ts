@@ -78,9 +78,14 @@ Deno.test('a null component drops the row, the entity survives', () => {
 
 Deno.test('a boolean round-trips through integer storage', () => {
   let s = store()
-  write(s, [{ entity: { eid: 'p1' }, product: { available: true } }])
-  let [p] = s.read('.kind=product') as Bundle[]
-  assertEquals(c(p, 'product').available, 1)
+  write(s, [
+    { entity: { eid: 'p1' }, product: { available: true } },
+    { entity: { eid: 'p2' }, product: { available: false } },
+  ])
+  let read = (q: string) =>
+    (s.read(q) as Bundle[]).map((b) => c(b, 'product').available)
+  assertEquals(read('.available=1'), [true])
+  assertEquals(read('.available=0'), [false])
 })
 
 Deno.test('a reference may name a target minted later in the same batch', () => {

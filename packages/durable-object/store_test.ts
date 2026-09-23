@@ -25,8 +25,9 @@ Deno.test('install is idempotent, and a bundle survives the round trip', () => {
   let [p] = s.read('.kind=product') as Bundle[]
   assertEquals(p.entity.eid, 'p1')
   assertEquals(comp(p, 'doc').title, 'Kettle')
-  // A boolean would bind as the text 'true'; it lands as the 1 the column holds.
-  assertEquals(comp(p, 'product').available, 1)
+  // A boolean would bind as the text 'true'; it lands as the 1 the column holds
+  // and reads back as the boolean written.
+  assertEquals(comp(p, 'product').available, true)
 })
 
 Deno.test('an object and an array come back as the values written', () => {

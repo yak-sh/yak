@@ -121,8 +121,9 @@ export let shop: Vocab = loadVocab(doc)
 
 // A recipe whose properties hold JSON values beside a plain one: an object, an
 // array, and a union that may be a string — the case a driver parsing JSON
-// itself would get wrong (./jsonb.ts). Every SQLite-shaped adapter's tests
-// write the same {@link RECIPE} through it.
+// itself would get wrong (./jsonb.ts) — and booleans, which SQLite holds as
+// 0/1. Every SQLite-shaped adapter's tests write the same {@link RECIPE}
+// through it.
 export let kitchen: Vocab = loadVocab({
   $defs: {
     recipe: {
@@ -133,6 +134,8 @@ export let kitchen: Vocab = loadVocab({
         meta: { type: 'object', properties: { oven: { type: 'number' } } },
         tags: { type: 'array', items: { type: 'string' } },
         any: { type: ['string', 'number', 'object'] },
+        baked: { type: 'boolean' },
+        vegan: { type: 'boolean' },
       },
     },
   },
@@ -143,6 +146,8 @@ export let RECIPE = {
   meta: { oven: 180, steps: [{ mix: true }] },
   tags: ['sweet', 'baked'],
   any: '"quoted"',
+  baked: true,
+  vegan: false,
 }
 
 // A ready store over a fresh in-memory database with the schema installed.

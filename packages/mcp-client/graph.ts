@@ -12,7 +12,7 @@ export type GraphServer = { id: string; label: string; server: Server }
 /** Validate one definition before connecting. Invalid rows need not block other servers. */
 export const serverOf = (row: Bundle): GraphServer | undefined => {
   const c = row.mcp_server as Comp | undefined
-  if (!c || (c.enabled === false || c.enabled === 0)) return undefined
+  if (!c || c.enabled === false) return undefined
   if (
     typeof c.url !== 'string' || typeof c.name !== 'string' || !c.name.trim()
   ) {

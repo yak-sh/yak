@@ -12,6 +12,10 @@
 // parses the value itself, so a JSON string would come back as the text it
 // holds and be parsed a second time here. Concatenation drops the subtype, and
 // every engine then returns the same text.
+//
+// `decoded` is also where a boolean comes back. SQLite has no boolean type, so
+// a boolean property stores as the 0/1 of an integer column (./write.ts), and
+// reads back as `false`/`true`, the type its vocabulary declares.
 
 import type { Vocab } from '@yaks/vocab'
 import type { Param } from './driver.ts'
@@ -27,15 +31,19 @@ export let jsonIn = (value: unknown): Param =>
 /** The SQL reading a stored JSON value back as its JSON text. */
 export let jsonOut = (expr: string): string => `(json(${expr}) || '')`
 
-/** A component row as read, each JSON column parsed back into its value. */
+/** A component row as read, each JSON column parsed back into its value and
+ * each boolean column read as `true`/`false`. */
 export let decoded = <R extends Record<string, unknown>>(
   v: Vocab,
   comp: string,
   row: R,
 ): R => {
   for (let [k, raw] of Object.entries(row)) {
-    if (typeof raw == 'string' && isJsonb(v, comp, k)) {
+    let scalar = v.prop(comp, k)?.scalar
+    if (typeof raw == 'string' && scalar == 'jsonb') {
       ;(row as Record<string, unknown>)[k] = JSON.parse(raw)
+    } else if (raw != null && scalar == 'bool') {
+      ;(row as Record<string, unknown>)[k] = !!Number(raw)
     }
   }
   return row

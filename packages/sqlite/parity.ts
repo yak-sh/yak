@@ -12,10 +12,9 @@
 // its bytes are.
 //
 // Adapters differ in one place, smoothed by `plain()`: a database reads back
-// every declared property, `null` for the ones never written, and holds a
-// boolean as 0/1; a map holds what it was given. A null property and an absent
-// one mean the same thing in this model, so both sides are compared with the
-// nulls dropped and booleans as the number a column stores.
+// every declared property, `null` for the ones never written; a map holds what
+// it was given. A null property and an absent one mean the same thing in this
+// model, so both sides are compared with the nulls dropped.
 
 import { assertEquals } from '@std/assert'
 import type { Bundle, Graph, Plugin, Storage } from '@yaks/graph'
@@ -189,7 +188,7 @@ let NAMED = [
 ]
 
 // A bundle as every adapter agrees on it: nulls dropped (an absent property and
-// a cleared one are the same fact) and booleans as the 0/1 a column stores.
+// a cleared one are the same fact).
 let plain = (b: Bundle): Bundle => {
   let out: Bundle = { entity: b.entity }
   for (let [name, value] of Object.entries(b)) {
@@ -200,8 +199,7 @@ let plain = (b: Bundle): Bundle => {
     }
     out[name] = Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
-        .filter(([, v]) => v != null)
-        .map(([p, v]) => [p, typeof v == 'boolean' ? Number(v) : v]),
+        .filter(([, v]) => v != null),
     )
   }
   return out

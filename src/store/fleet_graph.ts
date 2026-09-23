@@ -82,20 +82,6 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
   // The driver owns transactions (including Durable Object transactionSync).
   // Storage never numbers implicitly. The numbers plugin handles explicit
   // per-entity requests under this same write transaction.
-  let booleans = (rows: Bundle[]) =>
-    rows.map((b) => {
-      for (let [name, comp] of comps(b)) {
-        for (let [prop, value] of Object.entries(comp ?? {})) {
-          if (
-            value != null &&
-            vocab.prop(name, prop)?.scalar == 'bool'
-          ) {
-            comp![prop] = !!value
-          }
-        }
-      }
-      return b
-    })
   let bound: typeof store = {
     ...store,
     tx: (body) =>
@@ -113,10 +99,6 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
         try {
           let out = body({
             ...tx,
-            // The fleet wire reads bools, whereas SQLite's shared adapter
-            // exposes integers. $was must hash the public read shape.
-            get: (eids) => booleans(tx.get(eids)),
-            pick: (eids, names) => booleans(tx.pick(eids, names)),
             remove: (entities) => {
               for (let e of entities) {
                 if (
