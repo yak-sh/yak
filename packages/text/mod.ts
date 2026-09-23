@@ -47,6 +47,28 @@ export let markdown = (child: Child<Node>): string => format(child, 'markdown')
 /** Render a tree without Markdown emphasis or code markers; links keep their URL. */
 export let plain = (child: Child<Node>): string => format(child, 'plain')
 
+/** Resolve a portable renderer to the element tree it draws, unserialized, so
+ * a view that draws other entities can hold theirs as children of its own. */
+export let tree = (
+  registry: Registry,
+  bundle: Bundle,
+  view: string | undefined,
+  vocab: Vocab,
+  ctx: Context = {},
+): Node | null => {
+  let context: RenderContext<Node> = {
+    ...ctx,
+    readOnly: true,
+    render: (view, overrides) =>
+      tree(registry, bundle, view, vocab, { ...ctx, ...overrides }),
+  }
+  return resolve(registry, bundle, view, vocab, context)?.render(
+    bundle,
+    h,
+    context,
+  ) ?? null
+}
+
 /** Resolve and serialize a portable renderer; a missing view yields empty text. */
 export let render = (
   registry: Registry,
@@ -55,18 +77,4 @@ export let render = (
   vocab: Vocab,
   ctx: Context = {},
   mode: Mode = 'markdown',
-): string => {
-  let tree = (view: string | undefined, ctx: Context): Node | null => {
-    let context: RenderContext<Node> = {
-      ...ctx,
-      readOnly: true,
-      render: (view, overrides) => tree(view, { ...ctx, ...overrides }),
-    }
-    return resolve(registry, bundle, view, vocab, context)?.render(
-      bundle,
-      h,
-      context,
-    ) ?? null
-  }
-  return format(tree(view, ctx), mode)
-}
+): string => format(tree(registry, bundle, view, vocab, ctx), mode)

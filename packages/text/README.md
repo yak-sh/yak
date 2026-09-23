@@ -27,7 +27,9 @@ The first five arguments are the same as the Preact renderer's. Mode defaults to
 `{comp, col}` for column selection and `ctx.render(view, overrides?)` for
 composing nested views through the same registry. This renderer always passes
 `readOnly: true`, including to nested views, so that portable editors display
-their values. An unmatched view produces an empty string.
+their values. An unmatched view produces an empty string. `tree` takes the same
+first five arguments and returns the element tree unserialized, for a view that
+holds other entities' views as its children.
 
 | Elements                                                              | Markdown                                 | Plain text            |
 | --------------------------------------------------------------------- | ---------------------------------------- | --------------------- |
