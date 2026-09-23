@@ -17,16 +17,15 @@
  * // link.subscribe('.dinner&.serves>4')
  * ```
  *
- * ## Writes are optimistic
- * A write commits locally first — the page renders it before anything crosses
- * the network — and is then sent as `POST /apply`. The list of bundles the
- * server responds with is applied back through the same local graph, which is
- * how the numbers it assigned, the columns it stamped and the entities it
- * deleted reach the client. If the server refuses the write, the optimistic
- * change is undone from the copy {@link sync} took of those entities
- * beforehand, and the refusal is reported. If the server is merely
- * unreachable, nothing is undone: the write may have been applied there and
- * only the response lost.
+ * ## Writes are optimistic A write commits locally first — the page renders it
+ * before anything crosses the network — and is then sent as `POST /apply`. The
+ * list of bundles the server responds with is applied back through the same
+ * local graph, which is how the numbers it assigned, the properties it stamped
+ * and the entities it deleted reach the client. If the server refuses the
+ * write, the optimistic change is undone from the copy {@link sync} took of
+ * those entities beforehand, and the refusal is reported. If the server is
+ * merely unreachable, nothing is undone: the write may have been applied there
+ * and only the response lost.
  *
  * ## Two keywords, one apply()
  * A client holds state the server owns, state this browser owns, and state

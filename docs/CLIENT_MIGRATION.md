@@ -42,7 +42,7 @@ Inactive rows have the package default **20,000-row** limit. Active/pending rows
 are not truncated by that limit. Exact-key answer metadata has a separate
 **1,000,000-byte** budget; oversized answers are not retained, not truncated.
 
-Tasks opts into `retainUnownedColumns`: a one-shot body can remain in the **same
+Tasks opts into `retainUnownedProps`: a one-shot body can remain in the **same
 RAM row** after that read closes while a bodyless list still holds the entity.
 Without this policy the body's successful response was immediately unloaded and
 cards reverted to placeholders. The package default remains strict column

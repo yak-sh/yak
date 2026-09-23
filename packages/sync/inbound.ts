@@ -1,7 +1,7 @@
 // What the server pushes, applied to the local graph. An incoming frame goes
 // through the same `apply()` a local write goes through — trusted, because the
-// server is where the stamped columns and the numbers were written — and marked
-// as an echo so the outbound hook does not send it straight back.
+// server is where the stamped properties and the numbers were written — and
+// marked as an echo so the outbound hook does not send it straight back.
 //
 // `gone` is the part no client could work out for itself: an entity that left a
 // subscription's set, whether it was deleted or merely stopped matching. The
@@ -75,7 +75,7 @@ export let land = (
 }
 
 /** Replace the server-owned components with a query's whole rows, including
- * the columns it reports as absent. A raw feed carries patches instead, and
+ * the properties it reports as absent. A raw feed carries patches instead, and
  * must use land(). `sync: none` components never come from the server, and a
  * query snapshot never removes them. */
 export let snapshot = (
@@ -83,7 +83,7 @@ export let snapshot = (
   bundles: Bundle[],
   opts: {
     coverage?: Record<Eid, Coverage>
-    /** Lets another owner of a column keep it when this snapshot omits it. */
+    /** Lets another owner of a property keep it when this snapshot omits it. */
     preserve?: (eid: Eid, name: string, prop?: string) => boolean
   } = {},
 ): Bundle[] | Promise<Bundle[]> =>

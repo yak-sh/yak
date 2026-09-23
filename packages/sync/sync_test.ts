@@ -120,7 +120,7 @@ Deno.test('a server refusal reverts the client and is reported', async () => {
   assertEquals(comp(at(c.graph, 'r1'), 'recipe').serves, 40) // optimistic
   await c.idle()
 
-  // Put back exactly as it stood: the column restored, the one this batch
+  // Put back exactly as it stood: the property restored, the one this batch
   // introduced cleared.
   assertEquals(comp(at(c.graph, 'r1'), 'recipe').serves, 4)
   assertEquals(comp(at(c.graph, 'r1'), 'doc').body, null)

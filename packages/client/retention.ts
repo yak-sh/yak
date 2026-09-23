@@ -1,9 +1,9 @@
-// The working set: which entities this client keeps, and which columns of
+// The working set: which entities this client keeps, and which properties of
 // them it can be said to have loaded.
 //
 // Entity data lives only in the in-memory @yaks/ram store. What this file
 // keeps beside it is bookkeeping — ids, the order the server delivered them
-// in, and which subscription covers which columns — never a second copy of
+// in, and which subscription covers which properties — never a second copy of
 // the data. Closing a subscription releases its rows to be evicted later;
 // only the server saying an entity is absent forgets it outright.
 //
@@ -37,9 +37,9 @@ export const RETENTION_ROWS = 20_000
 /** The client's working set: what is kept, what is loaded, and what can be
  * shown from the previous page load under the same server epoch. */
 export type Retained = Replica & {
-  /** Whether an open subscription covers this column. False means not
+  /** Whether an open subscription covers this property. False means not
    * loaded, not deleted. A subscription restored from disk that the server
-   * has not answered yet covers only the columns actually present in
+   * has not answered yet covers only the properties actually present in
    * memory. */
   loaded: (eid: Eid, component: string, property?: string) => boolean
   /** how many bytes the retained subscription results take once encoded —
@@ -83,7 +83,7 @@ export let retention = (
   watches: Watches,
   opts: {
     limit?: number
-    retainUnownedColumns?: boolean
+    retainUnownedProps?: boolean
     answerBytes?: number
     vault?: WireVault
     localOnly?: boolean
@@ -206,9 +206,9 @@ export let retention = (
     }
   }
   // Memberships restored from disk are there so the page has something to
-  // show, not evidence that any column is current. They are intersected with
+  // show, not evidence that any property is current. They are intersected with
   // what is in memory; the server's query is never re-run locally, and an
-  // evicted column is never reported as loaded.
+  // evicted property is never reported as loaded.
   let floor = (entries: SavedAnswer['members']) =>
     new Map(entries.flatMap(([eid, scope]) => {
       let row = held(eid)
@@ -295,17 +295,17 @@ export let retention = (
     set?.delete(id)
     if (!set?.size) owners.delete(eid)
   }
-  // Giving up membership of one subscription can unload columns while
+  // Giving up membership of one subscription can unload properties while
   // another subscription still holds the row. This is memory maintenance,
   // never a deletion from the graph and never a write to the server.
   let trim = (eids: Eid[]) => {
     // Some applications render a one-off field beside a standing query that
-    // projects only a few columns. Keep that value in the same row rather
+    // projects only a few properties. Keep that value in the same row rather
     // than in a second cache or under a permanent owner. loaded() still
-    // consults open subscriptions only; snapshot() still clears a column a
+    // consults open subscriptions only; snapshot() still clears a property a
     // covering subscription omitted; and ordinary row eviction bounds this
     // too.
-    if (opts.retainUnownedColumns) return
+    if (opts.retainUnownedProps) return
     let changed: Eid[] = []
     for (let eid of eids) {
       if (!protectedByOwner(eid) || pins.has(eid)) continue

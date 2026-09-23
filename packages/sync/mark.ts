@@ -1,7 +1,7 @@
 // Two marks this package puts on bundles while they pass through `apply()`.
 // Neither is ever stored: they exist only to carry a decision from one phase of
 // the write to a later one. Both names begin with `$`, which is what keeps them
-// out of admission's column checks and out of every storage adapter's write
+// out of admission's property checks and out of every storage adapter's write
 // path.
 //
 //   $sent   added to each bundle the caller passed in, before the patches went

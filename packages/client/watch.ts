@@ -105,7 +105,7 @@ type Live = {
 
 let plain: Make = <T>(value: T) => ({ value })
 
-// Whether a clause can be decided against one entity on its own: a column of
+// Whether a clause can be decided against one entity on its own: a property of
 // its own, a term in its own text, nothing at all. A path that hops through a
 // reference, an ordering, a limit or an aggregate is a question about the
 // set, and answering it means running the query again.

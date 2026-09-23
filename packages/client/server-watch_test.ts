@@ -316,8 +316,8 @@ Deno.test('omission cannot erase another projected owner, explicit null is autho
   c.close()
 })
 
-Deno.test('opt-in one-shot columns retain paint, not coverage, within the row budget', () => {
-  let { c, frame } = fixture({ retention: 1, retainUnownedColumns: true })
+Deno.test('opt-in one-shot properties retain paint, not coverage, within the row budget', () => {
+  let { c, frame } = fixture({ retention: 1, retainUnownedProps: true })
   let list = c.watch('list', server)
   frame({ id: 's1', bundles: [row('a')], coverage: { a: { doc: ['title'] } } })
   let body = c.watch('body', server)
@@ -590,7 +590,7 @@ for (let disk of ['memory', 'indexedDB']) {
   )
 }
 
-Deno.test('identity-only projections restore as members without invented loaded columns', async () => {
+Deno.test('identity-only projections restore as members without invented loaded properties', async () => {
   let disk = wireStash()
   let { c, frame } = fixture({ wireVault: disk, epoch: 'boot' })
   await c.ready

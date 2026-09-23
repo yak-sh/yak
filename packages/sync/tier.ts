@@ -17,8 +17,8 @@
 // because the common case is data the server owns.
 //
 // What is sent outward is narrower than what was written locally: only
-// components that leave this node, only the columns a client is allowed to
-// write (a stamped column is the server's to write), and only the bundles the
+// components that leave this node, only the properties a client is allowed to
+// write (a stamped property is the server's to write), and only the bundles the
 // caller actually passed in — the entities a cascade deleted and the
 // provenance the stamping phase wrote are the local graph's own conclusions,
 // and the server will reach the same ones from the same patch.
@@ -49,9 +49,9 @@ export let local = (vocab: Vocab, comp: string): 'vault' | 'memory' | null =>
     ? 'vault'
     : 'memory'
 
-// The columns of one patch a client is allowed to write. A stamped column is
-// the server's to write (it writes its own `created`), and a computed one has
-// no value to send — `writable` is exactly those two excluded.
+// The properties of one patch a client is allowed to write. A stamped property
+// is the server's to write (it writes its own `created`), and a computed one
+// has no value to send — `writable` is exactly those two excluded.
 let writable = (vocab: Vocab, name: string, patch: Comp): Comp => {
   let allowed = new Set(vocab.comp(name)?.writable ?? [])
   return Object.fromEntries(
@@ -60,8 +60,8 @@ let writable = (vocab: Vocab, name: string, patch: Comp): Comp => {
 }
 
 // One committed list of bundles, reduced to the components with one given
-// `sync` value: the bundles the caller passed in, carrying the columns a client
-// is allowed to write. A bundle with nothing left in it is dropped.
+// `sync` value: the bundles the caller passed in, carrying the properties a
+// client is allowed to write. A bundle with nothing left in it is dropped.
 let leaving = (
   bundles: Bundle[],
   vocab: Vocab,
@@ -76,11 +76,11 @@ let leaving = (
     for (let [name, patch] of comps(b)) {
       if (syncOf(vocab, name) != sync) continue
       if (patch == null) {
-        out[name] = null // dropping a component needs no columns
+        out[name] = null // dropping a component needs no properties
         continue
       }
       let keep = writable(vocab, name, patch)
-      // A patch of nothing but stamped columns has nothing to send.
+      // A patch of nothing but stamped properties has nothing to send.
       if (Object.keys(patch).length && !Object.keys(keep).length) continue
       out[name] = keep
     }
@@ -117,7 +117,7 @@ export let relayed = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
 /**
  * The inverse of one committed list of bundles: what to patch back when the
  * server refuses it. Each bundle is restored from the copy {@link before} took
- * of it — a column it did not hold is cleared, a component it did not have is
+ * of it — a property it did not hold is cleared, a component it did not have is
  * dropped — so the local graph returns to where it stood before the optimistic
  * write.
  *
@@ -136,7 +136,7 @@ export let inverse = (bundles: Bundle[]): Bundle[] =>
       if (!held) out[name] = null
       // Dropped by this write: put back what it dropped, whole.
       else if (patch == null) out[name] = held
-      // Patched by this write: every column it named, as it was (or cleared).
+      // Patched by this write: every property it named, as it was (or cleared).
       else {
         out[name] = Object.fromEntries(
           Object.keys(patch).map((c) => [c, held[c] ?? null]),

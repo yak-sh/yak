@@ -99,7 +99,7 @@ export let fakeDb = (): IDBFactory => new IDBFactory()
 export let fakeIdb = (indexedDB: IDBFactory): Vault =>
   idb({ name: 'box', indexedDB })
 
-/** One component off a bundle, for a test that wants a column out of it. */
+/** One component off a bundle, for a test that wants a property out of it. */
 export let comp = (
   b: Bundle | undefined,
   name: string,

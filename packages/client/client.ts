@@ -72,12 +72,12 @@ export type ClientOpts = {
   /** how many inactive server-synchronized entities to keep (default:
    * 20,000) */
   retention?: number
-  /** Keep columns no subscription covers in the same in-memory row, so a
+  /** Keep properties no subscription covers in the same in-memory row, so a
    * render still has something to show. They do not count as loaded; a
    * covering subscription omitting them, a delete, and an epoch change all
    * still reconcile them. Useful for one-off field reads made alongside live
    * queries. */
-  retainUnownedColumns?: boolean
+  retainUnownedProps?: boolean
   /** the byte budget for the retained server membership and coverage
    * metadata, once encoded */
   answerBytes?: number
@@ -219,7 +219,7 @@ export let client = (
   let kept = vault ? keep(g, vault) : null
 
   cache = retention(g, store, seen, {
-    retainUnownedColumns: opts.retainUnownedColumns,
+    retainUnownedProps: opts.retainUnownedProps,
     limit: opts.retention,
     answerBytes: opts.answerBytes,
     localOnly: !opts.url,

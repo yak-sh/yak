@@ -7,7 +7,7 @@
 // rather than permitting it. Three responses are possible:
 //
 //   applied    the bundles come back as the server applied them — assigned
-//              numbers, stamped columns, cascade deletions — and they are
+//              numbers, stamped properties, cascade deletions — and they are
 //              applied locally in turn, marked as an echo so they are not sent
 //              back again.
 //   refused    the server would not take it. The optimistic change is undone
@@ -23,7 +23,7 @@ import { echo } from './mark.ts'
 import { inverse, outward } from './tier.ts'
 
 /** The body of a server's refusal: the error's own name, its message, and
- * whatever fields it carried — a `Stale` names the column and the value the
+ * whatever fields it carried — a `Stale` names the property and the value the
  * graph holds. */
 export type Refusal = { error: string; message: string; [k: string]: unknown }
 

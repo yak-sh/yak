@@ -62,7 +62,7 @@ Deno.test('a delete and a $was ride out with the batch', () => {
   ])
 })
 
-Deno.test('the inverse restores a column, clears one that was absent, drops a new component', () => {
+Deno.test('the inverse restores a property, clears one that was absent, drops a new component', () => {
   let before: Bundle = { entity: { eid: 'r1' }, recipe: { serves: 4 } }
   let batch = [sent({
     entity: { eid: 'r1' },

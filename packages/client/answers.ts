@@ -1,5 +1,5 @@
 // The saved results of server subscriptions: a query key, its members in
-// order, and which columns the server covered for each. Only ids and that
+// order, and which properties the server covered for each. Only ids and that
 // coverage are saved here — the entities themselves stay in memory only.
 import type { Eid } from '@yaks/graph'
 import type { Coverage } from '@yaks/sync'

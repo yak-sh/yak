@@ -60,7 +60,7 @@ export type Frame = {
    * deltas, including exclusions for deliberately omitted bodies. */
   coverage?: Record<Eid, Coverage>
   /** Rider coverage, independent even when an eid has both roles in a frame.
-   * Omitted entries cover only delivered columns. */
+   * Omitted entries cover only delivered properties. */
   peerCoverage?: Record<Eid, Coverage>
   /** Payload riders, pinned by this subscription but never query members. */
   peers?: Bundle[]

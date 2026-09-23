@@ -73,7 +73,7 @@ export type Kept = {
 
 // The marker on the bundles loaded at start-up, so the write-through hook
 // does not save back what it just read. It is named with a leading `$`, which
-// is what keeps it out of admission's column checks and out of every
+// is what keeps it out of admission's property checks and out of every
 // storage adapter's write path.
 let KEPT = '$kept'
 

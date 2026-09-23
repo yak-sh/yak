@@ -235,23 +235,23 @@ and `clear`. The vault only persists records; queries run against the RAM store.
 
 ## Options
 
-| Option                 | Default                    | Purpose                                                                                  |
-| ---------------------- | -------------------------- | ---------------------------------------------------------------------------------------- |
-| `url`                  | none                       | Server base URL; omitted for a local-only graph.                                         |
-| `fetch`, `connect`     | global fetch and WebSocket | HTTP requests and socket creation.                                                       |
-| `timer`                | `setTimeout`               | Reconnect and deferred cache-write scheduling.                                           |
-| `headers`              | none                       | Headers added to `POST /apply`.                                                          |
-| `wait`, `most`         | 250, 30,000 ms             | Initial and maximum reconnect delay.                                                     |
-| `report`               | console warning            | Receive synchronization and server-cache failures.                                       |
-| `vault`                | `idb()` when available     | Persistence for local components, or `false`.                                            |
-| `wireVault`            | `wireIdb()` when available | Persistence for server data, or `false`.                                                 |
-| `epoch`                | none                       | Validated server epoch for restoring server data.                                        |
-| `retention`            | 20,000                     | Maximum inactive server rows retained.                                                   |
-| `answerBytes`          | 1,000,000                  | Encoded byte budget for retained server query metadata.                                  |
-| `retainUnownedColumns` | false                      | Keep previously read fields for display after their subscription ends.                   |
-| `signal`               | plain object               | Factory for watch `value` and `ready` containers.                                        |
-| `mint`                 | random UUID                | Id generator for entities created through aliases.                                       |
-| `provenance`           | graph default              | Policy for `created` and `updated` attribution; return `null` to leave it to the server. |
+| Option               | Default                    | Purpose                                                                                  |
+| -------------------- | -------------------------- | ---------------------------------------------------------------------------------------- |
+| `url`                | none                       | Server base URL; omitted for a local-only graph.                                         |
+| `fetch`, `connect`   | global fetch and WebSocket | HTTP requests and socket creation.                                                       |
+| `timer`              | `setTimeout`               | Reconnect and deferred cache-write scheduling.                                           |
+| `headers`            | none                       | Headers added to `POST /apply`.                                                          |
+| `wait`, `most`       | 250, 30,000 ms             | Initial and maximum reconnect delay.                                                     |
+| `report`             | console warning            | Receive synchronization and server-cache failures.                                       |
+| `vault`              | `idb()` when available     | Persistence for local components, or `false`.                                            |
+| `wireVault`          | `wireIdb()` when available | Persistence for server data, or `false`.                                                 |
+| `epoch`              | none                       | Validated server epoch for restoring server data.                                        |
+| `retention`          | 20,000                     | Maximum inactive server rows retained.                                                   |
+| `answerBytes`        | 1,000,000                  | Encoded byte budget for retained server query metadata.                                  |
+| `retainUnownedProps` | false                      | Keep previously read fields for display after their subscription ends.                   |
+| `signal`             | plain object               | Factory for watch `value` and `ready` containers.                                        |
+| `mint`               | random UUID                | Id generator for entities created through aliases.                                       |
+| `provenance`         | graph default              | Policy for `created` and `updated` attribution; return `null` to leave it to the server. |
 
 ## Compatibility
 
@@ -276,8 +276,8 @@ cascade, and preserves local drafts and identity reservations. The row limit
 does not bound active rows, pending writes, local components, or identity
 reservations.
 
-Subscriptions can share rows and cover different columns. A query reporting an
-entity as `gone` removes its own membership without removing another
+Subscriptions can share rows and cover different properties. A query reporting
+an entity as `gone` removes its own membership without removing another
 subscription's data. Query snapshots replace fields within their declared
 coverage; raw change feeds apply patches. Other subscriptions' covered fields,
 local components, and unacknowledged writes are preserved. A transport failure
@@ -350,7 +350,7 @@ Server evaluation requires a remote watch: it rejects `remote: false` and
 clients without a URL. Sharing, independent handle cleanup, readiness,
 reconnects, and refusals work as for other remote watches.
 
-The client retains ordered membership and column coverage for server-evaluated
+The client retains ordered membership and property coverage for server-evaluated
 queries under the exact watch key. A reopened watch can restore these results
 from memory or, under the same validated epoch, from its `WireVault`. It uses
 only retained rows and fields; it never infers matches from unrelated cached
@@ -362,7 +362,7 @@ Query metadata has a separate `answerBytes` budget, including query text, ids,
 and coverage. Older entries are discarded when needed. A result larger than the
 whole budget is not retained; its active watch is not truncated.
 
-### Column coverage and cache notifications
+### Property coverage and cache notifications
 
 `cache.loaded(eid, component, property?)` reports whether an open subscription
 covers that field. A false result means the client has no coverage for it, not
@@ -370,7 +370,7 @@ that it was deleted. A covered field may be absent because the server confirmed
 its absence. Additional referenced entities supplied with a result remain
 available through `ent()` without becoming query members.
 
-`retainUnownedColumns: true` keeps previously read fields available for display
+`retainUnownedProps: true` keeps previously read fields available for display
 after their covering subscription ends, within the row budget. They are not
 reported as loaded. A new covering result, deletion, or epoch change still
 reconciles them. Restored coverage is restricted to fields present in memory.

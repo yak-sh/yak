@@ -185,7 +185,7 @@ export type Server = {
 }
 
 /** The cook the server's handler treats every request as coming from — so a
- * stamped column the client could not have written itself shows up in a
+ * stamped property the client could not have written itself shows up in a
  * read. */
 export let COOK = 'c1'
 
@@ -270,7 +270,7 @@ export let client = (srv: Server): Client => {
 export let at = (g: Graph, eid: string): Bundle | undefined =>
   (g.storage.tx((tx) => tx.get([eid])) as Bundle[])[0]
 
-/** One component off a bundle, for a test that wants a column out of it. */
+/** One component off a bundle, for a test that wants a property out of it. */
 export let comp = (
   b: Bundle | undefined,
   name: string,

@@ -18,7 +18,7 @@
 //
 // Requests are serialized. Two writes posted at once could reach the server in
 // either order, and the second one's response could then reconcile the first
-// one's columns backwards. One promise chain, in the order the writes
+// one's properties backwards. One promise chain, in the order the writes
 // committed.
 
 import type { Bundle, Eid, Graph, Plugin } from '@yaks/graph'

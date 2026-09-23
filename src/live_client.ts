@@ -80,7 +80,7 @@ export let liveClient = (opts: {
     url: 'http://tasks-adapter.invalid',
     connect: () => socket,
     vault: false,
-    retainUnownedColumns: true,
+    retainUnownedProps: true,
     provenance: () => null,
     wireVault: opts.disk && globalThis.indexedDB
       ? wireIdb({ name: 'tasks-client-wire' })
