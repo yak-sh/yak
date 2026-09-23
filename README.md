@@ -33,9 +33,8 @@ marked).
 A write is a batch of bundles, applied atomically. A bundle is one entity,
 `{entity: {eid}, <comp>: {<cols>}}`, and each component in it is a patch:
 omitted columns are untouched, `prop: null` clears a column, `comp: null`
-removes the component, and `tombstone: {}` deletes the entity. Browser tabs
-sync over `/ws`; headless clients POST `/apply`; both broadcast to everyone
-else.
+removes the component, and `tombstone: {}` deletes the entity. Browser tabs sync
+over `/ws`; headless clients POST `/apply`; both broadcast to everyone else.
 
 Structured entity JSON (`task ... --json`, `GET /query`, MCP `graph_query` and
 `task_show`) is the components themselves, with derived `kind` kept beside them:
