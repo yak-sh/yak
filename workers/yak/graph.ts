@@ -1913,7 +1913,7 @@ export class Store {
   async #taught(answer: Response): Promise<Response> {
     if (answer.ok || this.#get('name') == PLATFORM_STORE) return answer
     let said = await answer.json() as { error?: string; message?: string }
-    return /^unknown (prop|component)/.test(said.message ?? '') &&
+    return /^unknown (prop:|component)/.test(said.message ?? '') &&
         !said.message!.includes(url(this.#bind, '/docs.md'))
       ? Response.json({ ...said, message: said.message + teach(this.#bind) }, {
         status: answer.status,

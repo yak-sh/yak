@@ -166,6 +166,9 @@ Deno.test('a malformed query is a 400 to the caller, not a failure', async () =>
     let body = await response.json()
     assertEquals(body.error, error)
     assertStringIncludes(body.message, said)
+    // A property its component lacks is answered with that component's shape,
+    // never with where a component of your own comes from.
+    assertEquals(body.message.includes('vocab.json'), false, q)
     // And a door reading the store (apps.ts `/api/query`) hands the caller
     // that sentence as it came, not the envelope it travelled in.
     let e = await assertRejects(
