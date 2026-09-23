@@ -4,7 +4,7 @@
 // discovers there is somewhere to put a recipe the way it discovers anything
 // else here: by asking `commands` what the apps in reach can do.
 //
-// Nothing new answers them. They are ordinary declared tools (src/store/tools.ts
+// Nothing new answers them. They are ordinary declared tools (lib/tools.ts
 // ToolDef), planted in the app's store beside whatever its tools.json said and
 // listed, called, titled and described through the one seam (declared.ts) — so
 // `readOnly` on the find and the app's title and address on the description
@@ -18,17 +18,16 @@
 // A redeploy regenerates them from the manifest as it then reads, so a property
 // added to a kind is an argument added to its two tools.
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
-import type { PropType } from '../../src/types.ts'
-import type { ToolDef, Tools } from '../../src/store/tools.ts'
-import { wordOf } from './vocab.ts'
+import type { ToolDef, Tools } from './lib/tools.ts'
+import { type Word, wordOf } from './vocab.ts'
 
 // The properties a caller may write: a server-owned property is nobody's to
 // send, and a computed one has no column at all.
-let propsOf = (schema: PropSchema): Record<string, PropType> =>
+let propsOf = (schema: PropSchema): Record<string, Word> =>
   Object.fromEntries(
     Object.entries(schema.properties ?? {})
       .filter(([, s]) => !s.stamped && s.computed !== true)
-      .map(([prop, s]) => [prop, wordOf(s) as PropType]),
+      .map(([prop, s]) => [prop, wordOf(s) as Word]),
   )
 
 // Enough English for a sentence a model reads: a `recipe` finds recipes, a
@@ -48,14 +47,14 @@ let plural = (word: string) =>
 let means = (schema: PropSchema) =>
   schema.description ? `: ${schema.description.replace(/\.$/, '')}` : ''
 
-let bound = (props: Record<string, PropType>) =>
+let bound = (props: Record<string, Word>) =>
   Object.fromEntries(Object.keys(props).map((prop) => [prop, `$${prop}`]))
 
 // Writing one: a title, a body, a name to find it by later, and the kind's own
 // properties. Only the title is required — an agent writes what it was told and
 // leaves the rest of the row empty, the way the app's own form does, and a
 // property nobody named is dropped from the bundle rather than written as the
-// word `undefined` (store/tools.ts `filled`).
+// word `undefined` (lib/tools.ts `filled`).
 //
 // A kind declaring a property `title` or `body` of its own shares the variable
 // with `doc`: one argument, written both places, which is what a person asking

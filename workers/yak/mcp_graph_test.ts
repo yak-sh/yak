@@ -6,7 +6,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import {
   client,
   connector,
@@ -727,7 +727,7 @@ slow('a word the space already has is used where it lives', async () => {
 
     // The syntax before this one is refused at the door, in the sentence
     // that says what to write instead. What is already in a store is upgraded
-    // on the way out (store/tools.ts `modern`), so an app deployed then goes
+    // on the way out (lib/tools.ts `modern`), so an app deployed then goes
     // on working; nothing new arrives in two forms.
     await agent.tool('app_files', {
       app: 'lending',

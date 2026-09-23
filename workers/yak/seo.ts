@@ -26,6 +26,11 @@ export let SITE_URL = url({})
 
 let at = (path: string, env: Host = {}) => url(env, path)
 
+// The platform's release, as a person reads it: what a connector says it runs
+// (`serverInfo.version`), what a feedback letter names, and the stand-in for
+// Cloudflare's per-deploy id wherever the runtime gives none.
+export let VERSION = '0.1.0'
+
 // The connector's face, in one place (T-34415). Owner, 2026-09-05: the
 // connector "provides no icon or description". Three things every connector
 // form asks for — a name, a line, a square picture — said once and read by
@@ -49,6 +54,7 @@ let at = (path: string, env: Host = {}) => url(env, path)
 export let connector = (env: Host = {}) => ({
   name: PLATFORM,
   title: PLATFORM,
+  version: VERSION,
   description: 'Build a yaks app by asking Claude or ChatGPT.',
   websiteUrl: url(env),
   icons: [

@@ -68,7 +68,7 @@ export type Backend =
     via: 'object'
     /** the binding object itself, so this store is configured by a server
      * composing in code rather than from a JSON file */
-    bucket: Bucket
+    bucket: Pick<Bucket, 'head' | 'get' | 'put'>
     /** what to namespace the keys with */
     prefix?: string
   }

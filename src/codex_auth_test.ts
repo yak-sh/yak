@@ -1,7 +1,7 @@
 // Codex account storage tests hold the opaque-file, isolation, and locking
 // boundary. They never need a provider credential or a network call.
 import { assertEquals, assertRejects } from '@std/assert'
-import { tick } from './testing.ts'
+import { tick } from '../bin/testing.ts'
 import {
   bootstrapCodexAuth,
   codexAuthFile,

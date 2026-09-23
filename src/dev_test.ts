@@ -3,7 +3,7 @@
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { handoff, launch, retire } from './dev.ts'
 import { FakeTime } from '@std/testing/time'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 // Route the supervisor's durable stderr log to a throwaway dir so a launch
 // never writes to the live ~/.tasks/dev/dev.log during the suite.

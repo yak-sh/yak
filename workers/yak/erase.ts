@@ -26,7 +26,7 @@
 // A space whose people are all test accounts is the one exception: nobody's
 // work is in it, so there is nobody to write to (`nobodys`).
 //
-// The ticket the letter carries is a `seal` (src/token.ts): the space, the
+// The ticket the letter carries is a `seal` (lib/token.ts): the space, the
 // person, and the hour it dies, signed under the session secret, kept nowhere.
 // Single-use is what it authorizes rather than a row somewhere: the one act
 // it opens can happen once, and a second visit finds a space that is gone. It
@@ -58,9 +58,9 @@
 // leaves a space still named but emptied, which asking again finishes; the
 // other order would leave a billable custom hostname and a bucket full of
 // bytes with nothing left pointing at them.
-import { r2Blobs } from '../../src/blobs_r2.ts'
-import { isTestAddress } from '../../src/bots.ts'
-import { opened, seal } from '../../src/token.ts'
+import { r2Objects } from './lib/objects.ts'
+import { isTestAddress } from './lib/bots.ts'
+import { opened, seal } from './lib/token.ts'
 import { wiped } from './build.ts'
 import { reachChanged, toolsOf, viewsMoved } from './declared.ts'
 import {
@@ -169,7 +169,7 @@ export let doomed = async (
 }
 
 // A space that is nobody's work: everyone with a way in is a test account
-// (src/bots.ts). The letter exists so an assistant cannot delete a person's
+// (lib/bots.ts). The letter exists so an assistant cannot delete a person's
 // work on its own; with no person in the space there is nobody to ask, so the
 // act asked for happens at once (tools.ts `space_delete`).
 export let nobodys = async (dir: Directory, d: Doomed) => {
@@ -280,7 +280,7 @@ If you did not ask for this, ignore this letter and nothing happens at all.`,
 
 // The bytes under a prefix, gone. Answers the keys it removed.
 let swept = async (env: Env, prefix: string) => {
-  let blobs = r2Blobs(env.BLOBS)
+  let blobs = r2Objects(env.BLOBS)
   let keys = await blobs.list(prefix)
   for (let key of keys) await blobs.delete(key)
   return keys
@@ -633,7 +633,7 @@ export let collected = async (env: Env, now = new Date()) => {
   // It rides here rather than on every write because the rule needs to see the
   // whole bucket at once, and rather than only on a deploy because an app that
   // stopped deploying would then keep its pins forever.
-  let blobs = r2Blobs(env.BLOBS)
+  let blobs = r2Objects(env.BLOBS)
   // First the pins the old per-app key still holds, carried into that one key
   // space (versions.ts `moved`) — before the mark, so nothing is marked out of
   // a key space the sweep does not read.

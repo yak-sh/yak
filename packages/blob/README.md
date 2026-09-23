@@ -140,6 +140,13 @@ path.
 satisfy that interface; other object storage clients may need a wrapper. The
 package imports no cloud SDK.
 
+`bucketObjects(bucket)` is the same bucket keyed by name rather than by content:
+an `Objects` store whose caller chooses each key, as a host does for an app's
+files. Besides `has`, `put` and `get` (which throws on a miss) it has `read`
+(null on a miss), `delete`, `list(prefix)` and `uploaded(prefix)`, which maps
+each key to the moment it landed so a sweep can spare what was written a moment
+ago. `list` and `uploaded` read every page of the listing.
+
 ## Reading it back
 
 `blobRead(vocab, layout?)` produces `@yaks/sql` derived read overrides. Pass
@@ -299,6 +306,7 @@ format remains accessible to application code.
 | `Blobs`, `address`, `encode`, `decode`              | Store interface and text addressing                      |
 | `Driver`, `sqliteBlobs`, `blobSchema`, `Layout`     | SQLite text storage                                      |
 | `fileBlobs`, `objectBlobs`, `Bucket`                | Filesystem and object storage                            |
+| `Objects`, `bucketObjects`                          | A bucket keyed by name: read, delete, list               |
 | `blobRead`, `blobText`, `hydrate`                   | SQL and post-read text resolution                        |
 | `addressOf`, `keep`, `artifactStore`, `artifactDoc` | Artifact storage and declarations                        |
 | `sizeOf`, `served`                                  | Image dimensions and HTTP responses                      |

@@ -6,7 +6,7 @@
 // deterministic, so nothing pads for a settle that a loaded box would stretch
 // past the pad. A fixed sleep lives only behind `slow()`, where the real
 // process it waits on is the point. The migrated-db clone (freshDb) lives in
-// testdb.ts, not here, so importing these primitives never pulls in db.ts —
+// src/testdb.ts, not here, so importing these primitives never pulls in db.ts —
 // this module stays free of the DB_PATH import-order discipline db.ts carries.
 //
 // The speed bar (bin/test-budget.ts) is ADVISORY, not a wall (T-17785): it lists
@@ -19,8 +19,6 @@
 // snapshots in ~0.09ms — and read back the rows the test writes itself;
 // freshDb()'s ~1.5ms is the 180-row demo seed, so spend it only when the test
 // actually asserts on that seed (its tasks, boards, or people).
-
-import { denoCache } from './agent_env.ts'
 
 // A heavy test: skipped unless TASKS_SLOW opts in. Takes the same two shapes
 // Deno.test does — (name, fn) and (name, opts, fn) — and folds in the ignore.
@@ -66,11 +64,22 @@ export let until = async <T>(
   )
 }
 
-// The pinned module cache (agent_env.ts `denoCache`), with the runner's own
-// TEST_DENO_DIR ahead of it so a suite can be pointed at a scratch cache. A
-// test that redirects HOME wants the harness paths moved, never the cache —
-// hand the child this one. Both are captured at import, so the value survives
-// a test module that changes HOME before importing this helper.
+// The module cache this process runs on: DENO_DIR where the environment pins
+// it, and Deno's own default for the platform otherwise.
+let denoCache = (() => {
+  let configured = Deno.env.get('DENO_DIR')
+  if (configured) return configured
+  let home = Deno.env.get('HOME')
+  if (Deno.build.os == 'darwin') return `${home}/Library/Caches/deno`
+  if (Deno.build.os == 'windows') return `${Deno.env.get('LOCALAPPDATA')}\\deno`
+  return `${Deno.env.get('XDG_CACHE_HOME') ?? `${home}/.cache`}/deno`
+})()
+
+// That cache, with the runner's own TEST_DENO_DIR ahead of it so a suite can
+// be pointed at a scratch cache. A test that redirects HOME wants the harness
+// paths moved, never the cache — hand the child this one. Both are captured at
+// import, so the value survives a test module that changes HOME before
+// importing this helper.
 let invokingDenoDir = Deno.env.get('TEST_DENO_DIR') || denoCache
 
 export let denoDir = () => invokingDenoDir

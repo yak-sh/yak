@@ -19,7 +19,7 @@ let { recallEntry, recallFrom } = await import('./recall.ts')
 let { applyNumbered, vectorDb } = await import('./testdb.ts')
 let { refreshVector } = await import('./vector.ts')
 let { axes } = await import('./testvec.ts')
-let { slow } = await import('./testing.ts')
+let { slow } = await import('../bin/testing.ts')
 let { assertEquals } = await import('@std/assert')
 import type { Sql } from './store/sql.ts'
 import { sentences } from './edge.ts'

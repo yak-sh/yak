@@ -43,7 +43,7 @@
 // reader over the other store.
 import { advertise, objects, type Refs, uploadPack } from '@yaks/git'
 import { mode, reads } from '@yaks/member'
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import { r2Objects } from './lib/objects.ts'
 import { type Directory, directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -190,7 +190,7 @@ export let answer = async (at: Arrived): Promise<Response | null> => {
       // pack breaks mid-stream — which is a clone that fails after the
       // commits are already minted. gitobj.ts `placed` mints with this same
       // prefix, so the door reads what the commit was written from.
-      bodies(r2Blobs(env.BLOBS), `${prefixOf(space, app)}/`),
+      bodies(r2Objects(env.BLOBS), `${prefixOf(space, app)}/`),
     ),
   )
 }

@@ -22,7 +22,7 @@ import { responses } from './responses.ts'
 import { attentionPrompt } from './runner.ts'
 import { sessionRow, writeSession } from './session_store.ts'
 import { statusOf, uuid } from './types.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import { freshDb } from './testdb.ts'
 import { open } from './store/sqlite.ts'
 

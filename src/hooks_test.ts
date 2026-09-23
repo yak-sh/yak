@@ -3,7 +3,7 @@
 // screened for a wip marker. Nothing here changes this repository or its
 // remote.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 let dec = new TextDecoder()
 let run = async (cwd: string, ...args: string[]) => {

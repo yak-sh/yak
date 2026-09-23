@@ -28,7 +28,7 @@
 // Nothing here may fail A deploy. It runs as an effect — post-commit, isolated
 // by @yaks/effects — so a bucket that will not answer costs the release its
 // commit and nothing else, and the daily sweep mints whatever was missed.
-import type { Blobs as Bytes } from '@yaks/blob'
+import type { Blobs as Bytes, Objects } from '@yaks/blob'
 import {
   commitOnto,
   MAIN,
@@ -40,8 +40,7 @@ import {
   type Writes,
 } from '@yaks/git'
 import type { Bundle, Eid } from '@yaks/graph'
-import { r2Blobs } from '../../src/blobs_r2.ts'
-import type { Blobs } from '../../src/store/blobs.ts'
+import { r2Objects } from './lib/objects.ts'
 import { GIT_STORE, type Namespace, storeOf } from './door.ts'
 import { spaceHost } from './host.ts'
 import { KERNEL, type Meta, metaOf } from './meta.ts'
@@ -74,7 +73,7 @@ export let PSEUDONYM = 'users.yaks.app'
 /** The bindings minting needs: the bucket the bytes are in, the namespace the
  * object store answers on, and the apex its clone URLs are written at. */
 export type Bound = {
-  BLOBS?: Parameters<typeof r2Blobs>[0]
+  BLOBS?: Parameters<typeof r2Objects>[0]
   STORE?: Namespace
   APEX?: string
 }
@@ -119,7 +118,7 @@ export let graphOf = (ns: Namespace): Writes =>
  * {@link BODY} and read from there first. Serving a pack reads through this
  * same door (@yaks/git `objects`), which is why it is exported.
  */
-export let bodies = (blobs: Blobs, prefix: string): Bytes => {
+export let bodies = (blobs: Objects, prefix: string): Bytes => {
   let app = pins(blobs, prefix)
   return {
     has: async (sha) => await blobs.has(BODY + sha) || await app.has(sha),
@@ -225,7 +224,7 @@ let landing = async (
   let repo: Repo = {
     refs: writes(dir),
     objects: graphOf(env.STORE),
-    bytes: bodies(r2Blobs(env.BLOBS), at.prefix),
+    bytes: bodies(r2Objects(env.BLOBS), at.prefix),
   }
   return {
     repo,

@@ -16,7 +16,7 @@
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { normalizeChanges } from './props.ts'
 import { derefChanges, mutate as clientMutate } from './client.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { sha } = await import('./db.ts')

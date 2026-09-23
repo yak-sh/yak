@@ -6,7 +6,7 @@
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import type { Frame } from '@yaks/api'
 import { edgeEid, link } from '@yaks/edge'
-import { slow, until } from '../testing.ts'
+import { slow, until } from '../../bin/testing.ts'
 import { client, kernel, relay, seed } from '../../workers/yak/probe.ts'
 
 slow('the store on Durable Object SQLite serves the wire', async () => {

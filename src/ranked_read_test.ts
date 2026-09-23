@@ -183,7 +183,7 @@ Deno.test('ranked FTS: doc wins over content; comments carry target title and sn
   assert(rowsOf(db, hits.map((h) => h.eid)).every((r) => !r.comps.rank))
 })
 
-let { slow } = await import('./testing.ts')
+let { slow } = await import('../bin/testing.ts')
 slow(
   'ranked native: indexed KNN screens ineligible hits through the package door',
   async () => {

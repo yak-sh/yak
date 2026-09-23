@@ -833,7 +833,7 @@ Deno.test('boot runs background jobs without operator lifecycle hooks', async ()
 
   let { bootDoing, wireDoing } = await import('./doing.ts')
   let { configureEffects, docs } = await import('./effects.ts')
-  let { tick: nextTick } = await import('./testing.ts')
+  let { tick: nextTick } = await import('../bin/testing.ts')
   let { stop } = await import('./timers.ts')
   let restore = configureEffects({
     split: true,

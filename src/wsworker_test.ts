@@ -6,7 +6,7 @@
 // moved in the split). All slow(): a server boot and worker spawns have no
 // place in the 1ms tier.
 import { assert, assertEquals } from '@std/assert'
-import { slow, until } from './testing.ts'
+import { slow, until } from '../bin/testing.ts'
 
 let dir = await Deno.makeTempDir({ prefix: 'wsworker-test-' })
 Deno.env.set('DB_PATH', `${dir}/graph.db`)

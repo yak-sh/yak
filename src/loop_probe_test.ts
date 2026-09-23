@@ -21,7 +21,7 @@ let { unblocking } = await import('./unblock.ts')
 let { backlog, parkable } = await import('./dispatch.ts')
 let { run: runCommand } = await import('./commands.ts')
 let { rowed } = await import('./graph_query.ts')
-let { slow } = await import('./testing.ts')
+let { slow } = await import('../bin/testing.ts')
 let { assertEquals } = await import('@std/assert')
 
 open()

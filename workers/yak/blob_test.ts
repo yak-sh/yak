@@ -7,7 +7,7 @@
 // words a guest can act on, and a stranger on a `public` app is sent to sign
 // in.
 import { assert, assertEquals, assertMatch } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { browser, connector, kernel, seed } from './probe.ts'
 
 // The client module the kernel serves, loaded the way a page loads it.

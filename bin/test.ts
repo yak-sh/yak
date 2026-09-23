@@ -9,7 +9,7 @@
 // preserve module isolation but not scheduler isolation: debounce and process
 // fixtures would again be tested under artificial saturation.
 
-import { denoDir } from '../src/testing.ts'
+import { denoDir } from './testing.ts'
 
 let isolated = new Set([
   'src/sessions_contention_test.ts',

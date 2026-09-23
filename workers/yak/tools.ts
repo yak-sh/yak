@@ -35,17 +35,16 @@
 // kept, files and all, so app_rollback can put it back.
 import { deployWorker } from './deploy_worker.ts'
 import { bindingLines, bindings } from './bindings.ts'
-import type { Blobs } from '../../src/store/blobs.ts'
-import { r2Blobs } from '../../src/blobs_r2.ts'
-import { isTestAddress } from '../../src/bots.ts'
+import type { Objects } from '@yaks/blob'
+import { r2Objects } from './lib/objects.ts'
+import { isTestAddress } from './lib/bots.ts'
 import { fullFiles } from './usage.ts'
-import { parseTools, TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
-import { borrowed, type Vocab } from '../../src/store/vocab.ts'
-import type { EntityLiteral } from '../../src/mutation.ts'
-import { appAccess } from '../../src/types.ts'
-import { VERSION } from '../../src/version.ts'
+import { parseTools, TOOLS_EXAMPLE, viewsOf } from './lib/tools.ts'
+import type { Bundle } from '@yaks/graph'
+import { VERSION } from './seo.ts'
 import {
   appDoc,
+  componentsOf,
   coreDocs,
   EXAMPLE,
   grew,
@@ -54,6 +53,7 @@ import {
   livesIn,
   meant,
   teach,
+  unsaid,
   wordsOf,
 } from './vocab.ts'
 import { withKinds } from './kinds.ts'
@@ -70,6 +70,7 @@ import {
   homing,
   mailbox,
   META,
+  MODES,
   type Role,
   type Space,
   stamp,
@@ -333,7 +334,7 @@ let apexHelp = (env: Env) =>
 // ask and not the mechanism.
 let ACCESS = {
   type: 'string',
-  enum: [...appAccess],
+  enum: [...MODES],
   description:
     "who may read and write the app's data: public (the default), anyone " +
     'with the link reads it, members with write permission change it; ' +
@@ -423,8 +424,8 @@ let files = (
 
 let access = (v: unknown): Access => {
   let s = text(v, 'access')
-  if (!(appAccess as readonly string[]).includes(s)) {
-    throw refuse('arguments', `access: one of ${appAccess.join(', ')}`)
+  if (!(MODES as readonly string[]).includes(s)) {
+    throw refuse('arguments', `access: one of ${MODES.join(', ')}`)
   }
   return s as Access
 }
@@ -696,7 +697,7 @@ let homesIn = async (ctx: Ctx, space: Space, app: App) => {
 // bytes are its pictures as well as its pages, and neither caller has any
 // business decoding those.
 let texts = async (
-  blobs: Blobs,
+  blobs: Objects,
   space: Space,
   app: App,
   pick: (path: string) => boolean,
@@ -795,9 +796,10 @@ let fits = async (
   source: string,
   file: string,
 ) => {
+  let { said, homes } = await homesIn(ctx, space, app)
   let split = homed(
-    appDoc(source, file),
-    (await homesIn(ctx, space, app)).homes,
+    unsaid(appDoc(source, file), said.get(app.slug), file),
+    homes,
   )
   let r = await store('/vocab')
   let mine = r.ok ? meant(await r.json()) : {}
@@ -833,7 +835,7 @@ let released = async (
   // The app's own components, if it declares any. A manifest the store
   // refuses fails the release: the words and the tables must agree, and a
   // half-planted vocabulary is what `unknown component` is made of.
-  let blobs = r2Blobs(ctx.env.BLOBS)
+  let blobs = r2Objects(ctx.env.BLOBS)
   // The file the app declares its words in — and its name, for every sentence
   // below that tells somebody to go and edit it.
   let { file: vocabFile, source } = await declaring(blobs, space, app)
@@ -854,11 +856,15 @@ let released = async (
     // The manifest as one document (vocab.ts `appDoc`, @yaks/yaml — the file
     // may be .json or .yml): a property's keywords ride all the way to the
     // store that plants it.
-    manifest = appDoc(source, vocabFile)
     // One word, one home: a word another app in the space already declares is
     // that app's, so this release records a use of it instead of planting a
     // second table, and any property it adds grows the HOME's.
     let { said, homes } = await homesIn(ctx, space, app)
+    manifest = unsaid(
+      appDoc(source, vocabFile),
+      said.get(app.slug),
+      vocabFile,
+    )
     let split = homed(manifest, homes)
     uses = split.uses
     // The home's table grows first: a use whose property the home does not have
@@ -965,22 +971,19 @@ let released = async (
   // (graph.ts `/tools`) — a store that parsed its own tools would be a second
   // vocabulary inside the object, and the one that plants the words is the one
   // that can say which they are.
-  // A tool is checked against the names, so the names are all this reads.
-  let words = Object.fromEntries(
-    Object.keys(
-      appDoc(JSON.parse(await answer(await store('/vocab')))).$defs ?? {},
-    ).map((name) => [name, {}]),
-  ) as Vocab
-  let borrows = JSON.parse(await answer(await store('/uses'))) as Record<
-    string,
-    string
-  >
+  // A tool is checked against the names, so the names are all this reads: the
+  // core every app's store plants, the app's own, and the ones it borrows.
+  let words = [
+    ...componentsOf(coreDocs),
+    ...componentsOf([appDoc(JSON.parse(await answer(await store('/vocab'))))]),
+    ...Object.keys(JSON.parse(await answer(await store('/uses')))),
+  ]
   // And the two tools every kind this app declares is worth (kinds.ts,
   // T-34513), beside whatever the manifest said: an app that declared a recipe
   // and no tools.json still has a verb for putting one in and one for finding
   // it again, which is how the next agent discovers the app at all.
   let checked = withKinds(
-    parseTools(sent, { ...words, ...borrowed(borrows) }, toolsFile),
+    parseTools(sent, words, toolsFile),
     manifest,
     `${space.slug}/${app.slug}`,
   )
@@ -1101,7 +1104,7 @@ let copied = async (
   from: { space: Space; app: App },
   onto: { space: Space; app: App },
 ) => {
-  let blobs = r2Blobs(ctx.env.BLOBS)
+  let blobs = r2Objects(ctx.env.BLOBS)
   let there = fileKey(from.space, from.app, '')
   let here = fileKey(onto.space, onto.app, '')
   let paths = (keys: string[], prefix: string) =>
@@ -1180,7 +1183,7 @@ let fileKey = (space: Space, app: App, path: string) =>
  * Keying them by the app's handle instead would move none, and is the follow-up
  * this helper exists to make obvious.
  */
-let laid = async (blobs: Blobs, from: string, onto: string) => {
+let laid = async (blobs: Objects, from: string, onto: string) => {
   let keys = await blobs.list(from)
   for (let key of keys) {
     await blobs.put(onto + key.slice(from.length), await blobs.get(key))
@@ -1253,7 +1256,7 @@ let born = (
   space: Space,
   slug: string,
   o: { title: string; access: Access },
-): EntityLiteral => {
+): Bundle => {
   let eid = crypto.randomUUID()
   return {
     entity: { eid },
@@ -1275,7 +1278,7 @@ let born = (
 // which every app that already has one keeps. Null where the app declares
 // nothing, which is most apps.
 let spelled = async (
-  blobs: Blobs,
+  blobs: Objects,
   space: Space,
   app: App,
   name: string,
@@ -1314,7 +1317,7 @@ let spelled = async (
  * format (`spelled`), and `source` is null where the app declares no words.
  */
 let declaring = async (
-  blobs: Blobs,
+  blobs: Objects,
   space: Space,
   app: App,
 ): Promise<{ file: string; source: string | null }> => {
@@ -1347,7 +1350,7 @@ export let wrote = async (
   files: { path: string; bytes: Uint8Array }[],
   c: Clock = clock(),
 ) => {
-  let blobs = r2Blobs(env.BLOBS)
+  let blobs = r2Objects(env.BLOBS)
   let prefix = fileKey(space, app, '')
   let stopped = await fullFiles(
     env,
@@ -1703,7 +1706,7 @@ export let uiMeta = (domain: string, csp: Csp = {}) => ({
 // an agent chooses one (guide.ts `brief`).
 // One command's arguments, as a signature a model reads: the required ones,
 // then the optional ones marked `?`. It is the same JSON Schema `command`
-// takes in `args` (store/tools.ts `schemaOf`), said the short way — which is
+// takes in `args` (lib/tools.ts `schemaOf`), said the short way — which is
 // the only way it is said, since an answer is bundles and carries no schema.
 let argsOf = (input: unknown) => {
   let s = (input ?? {}) as {
@@ -1874,7 +1877,7 @@ let OURS: Row[] = [
       // memberships, grants, gallery standing and analytics never held the
       // slug at all.
       let apps = moving ? await ctx.dir.apps(space) : []
-      let blobs = r2Blobs(ctx.env.BLOBS)
+      let blobs = r2Objects(ctx.env.BLOBS)
       let keys: string[] = []
       for (let app of apps) {
         keys.push(
@@ -2164,7 +2167,7 @@ let OURS: Row[] = [
             'points there — pick another slug',
         )
       }
-      let entities: EntityLiteral[] = [born(space, s, {
+      let entities: Bundle[] = [born(space, s, {
         title: titled(args.title),
         access: args.access == null ? 'public' : access(args.access),
       })]
@@ -2263,7 +2266,7 @@ let OURS: Row[] = [
         'inApp',
         () => inApp(ctx, args, WRITES.includes(op)),
       )
-      let blobs = r2Blobs(ctx.env.BLOBS)
+      let blobs = r2Objects(ctx.env.BLOBS)
       let prefix = fileKey(space, app, '')
       if (op == 'list') {
         let keys = await blobs.list(prefix)
@@ -2671,7 +2674,7 @@ let OURS: Row[] = [
       let { space, app, who, store } = await inApp(ctx, args, true)
       let path = text(args.path, 'path')
       let files = await texts(
-        r2Blobs(ctx.env.BLOBS),
+        r2Objects(ctx.env.BLOBS),
         space,
         app,
         (p) => asked(path, p),
@@ -2797,7 +2800,7 @@ let OURS: Row[] = [
           )
         }
       }
-      let blobs = r2Blobs(ctx.env.BLOBS)
+      let blobs = r2Objects(ctx.env.BLOBS)
       let prefix = fileKey(space, app, '')
       let now = await manifest(blobs, prefix)
       await restore(blobs, prefix, want.files)
@@ -3013,11 +3016,11 @@ let OURS: Row[] = [
       // address is the app's at any moment has the whole app behind it. Its
       // store is untouched: it is named by the app's own handle, not by where
       // it lives (directory.ts storeName).
-      let blobs = r2Blobs(ctx.env.BLOBS)
+      let blobs = r2Objects(ctx.env.BLOBS)
       let from = fileKey(space, app, '')
       let onto = moving ? `${space.slug}/${to}/` : from
       let keys = moving ? await laid(blobs, from, onto) : []
-      let entities: EntityLiteral[] = []
+      let entities: Bundle[] = []
       if (
         title != null || moving || open || had || themeColor != null ||
         background != null || wall != null
@@ -4089,17 +4092,19 @@ let OURS: Row[] = [
       // for in the space, counted against its ceiling (T-37809). Nothing has
       // happened yet here, so a refusal costs the installer nothing.
       let said = await declaring(
-        r2Blobs(ctx.env.BLOBS),
+        r2Objects(ctx.env.BLOBS),
         offer.space,
         offer.app,
       )
-      if (said.source != null) appDoc(said.source, said.file)
+      if (said.source != null) {
+        unsaid(appDoc(said.source, said.file), {}, said.file)
+      }
       // The app row, born the way app_new writes one — its own eid, so its own
       // handle and its own store — plus the pin that says where the code came
       // from and which version it took. Its access is the published app's: an
       // app written to be voted on has to stay votable, and the person can
       // app_set it after.
-      let entities: EntityLiteral[] = [{
+      let entities: Bundle[] = [{
         ...born(space, s, {
           title: clamped(offer.app.title),
           access: offer.app.access ?? 'public',
@@ -4176,7 +4181,7 @@ let OURS: Row[] = [
       // additive graft, and one that conflicts is refused here with the
       // sentence a deploy gives (T-32728), leaving the copy as it was.
       let said = await declaring(
-        r2Blobs(ctx.env.BLOBS),
+        r2Objects(ctx.env.BLOBS),
         from.space,
         from.app,
       )
@@ -4642,7 +4647,7 @@ let OURS: Row[] = [
       let where = app && space
         ? `${space.slug}/${app.slug}${app.version ? ` v${app.version}` : ''}`
         : space?.slug ?? ''
-      // A test account's words are kept and go nowhere (src/bots.ts): a
+      // A test account's words are kept and go nowhere (lib/bots.ts): a
       // letter in a person's mailbox is a thing a person has to read.
       let test = isTestAddress(email ?? '')
       let sent = !test && await mail(ctx.env)({

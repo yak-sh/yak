@@ -3,7 +3,7 @@
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
 import { DatabaseSync } from '../src/store/sqlite.ts'
-import { slow } from '../src/testing.ts'
+import { slow } from './testing.ts'
 
 let script = fileURLToPath(new URL('./backup', import.meta.url))
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)

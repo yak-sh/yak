@@ -1,5 +1,6 @@
-// The round-trip count, at both ends of it: the ambient tally itself (hops.ts),
-// and the number a `/query` reports as `Server-Timing: hops;dur=<n>`.
+// The round-trip count as the fleet server spends it: the number a `/query`
+// reports as `Server-Timing: hops;dur=<n>`. The tally itself is tested beside
+// it (workers/yak/lib/hops_test.ts).
 //
 // What is being defended is the reason the count exists. A duration says a
 // request got slower; only a count says it got slower because something began
@@ -7,44 +8,13 @@
 // assertions here are EXACT: reading one entity costs the statements it costs,
 // and a change to that is a change somebody meant to make.
 import { assertEquals, assertMatch } from '@std/assert'
-import { counts, hop, type Tally, tallying } from './hops.ts'
+import { counts, type Tally, tallying } from '../workers/yak/lib/hops.ts'
 import { apply, human } from './db.ts'
 import { freshDb } from './testdb.ts'
 import { askOf, askRows, layered } from './graph_query.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-
-Deno.test('a hop counts on the tally that is running, and nowhere else', () => {
-  let tally: Tally = new Map()
-  // Outside every `tallying`, a hop is a no-op — a seam called by a script,
-  // a boot, or a test is not a request and has nobody to report to.
-  hop('hops')
-  assertEquals(tally.size, 0)
-  tallying(tally, () => {
-    hop('hops')
-    hop('hops')
-    hop('r2.get')
-    hop('r2.put', 3)
-  })
-  // The header's two numbers: store hops as they were named, and every `r2.*`
-  // verb summed, since what a caller spent is how many times the bucket was
-  // asked and not which verb asked it.
-  assertEquals(counts(tally), { hops: 2, r2: 4 })
-  hop('hops')
-  assertEquals(counts(tally).hops, 2)
-})
-
-Deno.test('a nested tally is the inner one, and the outer resumes', () => {
-  let outer: Tally = new Map()
-  let inner: Tally = new Map()
-  tallying(outer, () => {
-    hop('hops')
-    tallying(inner, () => hop('hops'))
-    hop('hops')
-  })
-  assertEquals([counts(outer).hops, counts(inner).hops], [2, 1])
-})
 
 Deno.test('human reads the spine and worn names, not one table per kind', () => {
   let db = freshDb()

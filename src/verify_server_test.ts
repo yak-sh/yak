@@ -3,7 +3,7 @@
 // the completion → verifier → independent-review lifecycle through /apply.
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import type { Sql } from './store/sql.ts'
-import { slow, until } from './testing.ts'
+import { slow, until } from '../bin/testing.ts'
 import { statusOf } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')

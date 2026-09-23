@@ -43,7 +43,7 @@ import type { Effects as Registry } from '@yaks/effects'
 import type { Bundle, Rule } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Wake as Schedule } from '@yaks/wake'
-import type { Blobs } from '../../src/store/blobs.ts'
+import type { Objects } from '@yaks/blob'
 import { PAGES } from './content.ts'
 import type { App, Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -156,7 +156,7 @@ export type Effect = (on: Registry, at: Stored) => void
  */
 export type Swept = {
   dir: Directory
-  blobs: Blobs
+  blobs: Objects
   /** the app's own prefix in the blob store */
   prefix: string
   app: App

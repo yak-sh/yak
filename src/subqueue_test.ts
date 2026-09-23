@@ -3,7 +3,7 @@
 import { assertEquals } from '@std/assert'
 import { db } from './live_db.ts'
 import { cost, subqueue } from './subqueue.ts'
-import { until } from './testing.ts'
+import { until } from '../bin/testing.ts'
 
 // A queue over a recording serve: the list IS the order the socket saw.
 let record = () => {

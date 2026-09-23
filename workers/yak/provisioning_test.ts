@@ -7,7 +7,7 @@
 // router. domain_test.ts covers the fully wired customer domain; this is the
 // one state that never used to have an answer of its own.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { client, kernel, meta, seed } from './probe.ts'
 
 slow(

@@ -9,7 +9,6 @@ import {
 } from '@std/assert'
 import { schema } from '@yaks/sqlite'
 import { fields } from '@yaks/fts'
-import ops from '../../src/store/schema.json' with { type: 'json' }
 import { PAGES } from './guide.ts'
 import {
   appDoc,
@@ -24,6 +23,7 @@ import {
   platformVocab,
   RELATIONS,
   RESERVED,
+  unsaid,
 } from './vocab.ts'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 
@@ -170,19 +170,28 @@ Deno.test('a manifest is refused in the words that fix it', () => {
   assertThrows(() => appDoc('{'), Error, 'vocab.json is not JSON')
   assertThrows(() => appDoc('[]'), Error, 'vocab.json is an object')
   assertThrows(
-    () => appDoc(says({ doc: { headline: txt } })),
+    () => unsaid(appDoc(says({ doc: { headline: txt } }))),
     Error,
     'doc is a word the platform already says',
   )
   // Every collision at once, so probing for a free name is one deploy and not
   // one a name (C-32624 item 1).
   assertThrows(
-    () => appDoc(says({ card: {}, entry: { at: txt }, jotting: {} })),
+    () =>
+      unsaid(appDoc(says({ comment: {}, email: { at: txt }, jotting: {} }))),
     Error,
-    'card, entry are words the platform already says',
+    'comment, email are words the platform already says',
   )
-  assertEquals(RESERVED.includes('member'), true)
-  assertEquals(RESERVED.includes('edge'), true)
+  // A word the store already declares stays the app's, and a stored manifest
+  // is read whatever the list has become since.
+  let held = appDoc(says({ gallery: {} }))
+  assertEquals(Object.keys(unsaid(held, held).$defs ?? {}), ['gallery'])
+  assertThrows(() => unsaid(held), Error, 'gallery is a word')
+  // The list is every platform vocabulary's: an app's store, the directory,
+  // and the git object store.
+  for (let word of ['member', 'edge', 'space', 'commit']) {
+    assertEquals(RESERVED.includes(word), true, word)
+  }
 })
 
 let tablesOf = (sql: string[]) =>
@@ -325,23 +334,17 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
 })
 
 Deno.test('none of the fleet vocabulary comes with it', () => {
-  let fleet = tablesOf(
-    (ops as { sql?: string }[]).map((o) => o.sql ?? ''),
-  )
   let mine = new Set(tablesOf(schema(appVocab())))
-  assert(fleet.length > 50, `the fleet plants ${fleet.length} tables`)
-  // Fewer than the fleet's, by a wide margin, and the margin is the point:
+  // Fewer than the fleet's 83, by a wide margin, and the margin is the point:
   // every word here is one an app can use. The last eight are the schedule
   // and the invocation (D-37562, T-37605) — asking for something, and asking
   // for it later.
   assert(mine.size < 65, `an app plants ${mine.size}`)
-  // The words an app shares with the fleet are the ones the guide gives it to
-  // reach for — `task` and its marks among them. What must not come with it is
-  // the fleet's own working life: its sessions, its canvas, its memories.
+  // What must not come with it is the fleet's own working life: its
+  // sessions, its canvas, its memories.
   for (
     let word of ['session', 'canvas', 'persona', 'memory', 'claim']
   ) {
-    assert(fleet.includes(word), `the fleet no longer plants ${word}`)
     assert(!mine.has(word), `an app's store still plants ${word}`)
   }
 })
@@ -463,7 +466,12 @@ Deno.test('a store answers the document it means', () => {
   // failed request: a deploy is where a manifest is refused.
   assertEquals(meant('{'), {})
   assertEquals(meant({ recipe: { serves: 'number' } }), {})
-  assertEquals(meant(says({ doc: { headline: txt } })), {})
+  // A word the platform said after the store declared it is still the store's:
+  // what it holds is read as it is (vocab.ts `unsaid`).
+  assertEquals(
+    Object.keys(meant(says({ gallery: {} })).$defs ?? {}),
+    ['gallery'],
+  )
 })
 
 // An app's manifest never says `component: true`: its $defs entries are its

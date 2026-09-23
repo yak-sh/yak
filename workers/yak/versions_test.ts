@@ -7,9 +7,9 @@
 // last hop is proved here against the same stubbed account API dispatch_test.ts
 // uses.
 import { assert, assertEquals } from '@std/assert'
-import type { Blobs } from '../../src/store/blobs.ts'
-import { counted } from '../../src/store/blobs.ts'
-import type { Tally } from '../../src/hops.ts'
+import type { Objects } from '@yaks/blob'
+import { counted } from './lib/objects.ts'
+import type { Tally } from './lib/hops.ts'
 import type { App, Directory } from './directory.ts'
 import { carried, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -50,7 +50,7 @@ let ONE: Pinner[] = [{ prefix: PREFIX, app: APP }]
 // each object landed, which the sweep's grace period reads — `clock` moves it,
 // so a test can put bytes that look a day old.
 //
-// It is counted by the platform's own counter (store/blobs.ts `counted`), told this
+// It is counted by the platform's own counter (lib/objects.ts `counted`), told this
 // test's tally rather than a request's, so what the numbers below assert is
 // what a deploy reports as `r2;dur=<n>` on its Server-Timing — one truth, and
 // not a second tally that can drift from it. `trips()` is a snapshot, so a
@@ -87,7 +87,7 @@ let memory = () => {
         Promise.resolve(
           Object.fromEntries(keys(prefix).map((k) => [k, at.get(k) ?? 0])),
         ),
-    } satisfies Blobs,
+    } satisfies Objects,
     tally,
   )
   let n = (verb: string) => tally.get(`r2.${verb}`) ?? 0
@@ -103,7 +103,7 @@ let memory = () => {
 }
 
 let bytes = (s: string) => new TextEncoder().encode(s)
-let read = async (blobs: Blobs, path: string) =>
+let read = async (blobs: Objects, path: string) =>
   new TextDecoder().decode(await blobs.get(PREFIX + path))
 
 // The deploy rows, in memory: the two questions `record` asks of the

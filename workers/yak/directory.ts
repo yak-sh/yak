@@ -25,8 +25,6 @@
 // its own store.
 import { type Host as HostEnv, spaceHost } from './host.ts'
 import type { Bundle } from '@yaks/graph'
-import type { EntityLiteral, LiteralMutation } from '../../src/mutation.ts'
-import { slugsOf } from '../../src/types.ts'
 import {
   type Door,
   type Fetcher,
@@ -34,7 +32,7 @@ import {
   PLATFORM_STORE,
   storeOf,
 } from './door.ts'
-import { ADMIN } from '../../src/bots.ts'
+import { ADMIN } from './lib/bots.ts'
 import { answered, KERNEL, type Meta, meta as metaStore } from './meta.ts'
 import { caught } from './sentry.ts'
 import { mailFrom } from './post.ts'
@@ -174,7 +172,7 @@ export type App = {
   store: string | null
   // Every address this app has answered at within its space — the slug it was
   // born at first, then each one a rename left behind, oldest first. They
-  // resolve like ids (types.ts slugsOf), which is how an old link still finds
+  // resolve like ids ({@link slugsOf}), which is how an old link still finds
   // the app it was made for.
   slugs: string[]
   // Whether this app is the space's front page — the app wearing `home`
@@ -214,7 +212,14 @@ export type App = {
   theme: { themeColor: string | null; backgroundColor: string | null } | null
 }
 export type Role = 'owner' | 'editor' | 'viewer'
-export type Access = 'public' | 'open' | 'private'
+/** The modes an app's `access.mode` takes, from everyone to its own people. */
+export let MODES = ['public', 'open', 'private'] as const
+export type Access = typeof MODES[number]
+
+/** Every address an app answered at: the slug it wears now, then the ones a
+ * rename left behind (`former.slugs`, space-separated). */
+export let slugsOf = (a?: { slug?: string | null; slugs?: string | null }) =>
+  a?.slug ? [a.slug, ...(a.slugs?.split(/\s+/).filter(Boolean) ?? [])] : []
 
 // The offer an app stands as while it is published (T-32888): the
 // platform-wide name another space installs it by, the deploy on offer, when
@@ -802,7 +807,7 @@ export let homing = (
   was: App | null,
   onto: App | null,
   first?: string[] | null,
-): EntityLiteral[] => [
+): Bundle[] => [
   // `home: null` drops the whole component, globs and all: an app that is not
   // the front page routes nothing first, so there is no property left to keep.
   ...(was && was.eid != onto?.eid
@@ -864,7 +869,7 @@ export let directory = (via: Fetcher, now = false) => {
     // A write that changes the directory: a batch of bundles, each minting at
     // an eid its author chose (T-32455), answered as applied.
     apply: async (
-      mutation: LiteralMutation,
+      mutation: { entities: Bundle[] },
       headers: Record<string, string> = {},
     ): Promise<Bundle[]> => {
       let r = await via.fetch(

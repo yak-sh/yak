@@ -157,7 +157,7 @@ export let ai = (script: Turn[]) => {
 }
 
 /**
- * The bucket, as the slice `r2Blobs` asks for.
+ * The bucket, as the slice `r2Objects` asks for.
  *
  * `at` is when each object landed, which the retention sweep reads
  * (versions.ts `pruned`); a test that wants an object to look old sets it,

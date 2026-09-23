@@ -5,9 +5,9 @@
 // yaks.app is not on the Public Suffix List, so every `<space>.yaks.app` app is
 // same-site with the apex, and anybody can serve code from a free space.
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../src/testing.ts'
-import { COOKIE, sealedOld, verify } from '../../src/token.ts'
-import { CUT } from '../../src/token_legacy.ts'
+import { slow } from '../../bin/testing.ts'
+import { COOKIE, sealedOld, verify } from './lib/token.ts'
+import { CUT } from './lib/token_legacy.ts'
 import { allowed, type Kernel, kernel, mailed, signIn } from './probe.ts'
 import { granting } from './dispatch.ts'
 import { SESSION } from './session.ts'
@@ -99,7 +99,7 @@ slow(
 )
 
 // The same attack with tokens sealed before 2c05d0f6, which still open for
-// their own use (src/token_legacy.ts): an old visitor's token and an old grant
+// their own use (lib/token_legacy.ts): an old visitor's token and an old grant
 // with its prefix taken off are no cookie, and an old session cookie still
 // signs its person in and comes back re-minted (T-37924).
 slow(

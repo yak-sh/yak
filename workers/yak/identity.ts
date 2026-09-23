@@ -8,7 +8,7 @@
 // so the ceiling says nothing about the address (T-33020) — and hands it to
 // the mail seam (mail.ts);
 // `POST /login/code` spends it, finds or mints the person, and sets the
-// platform session cookie (src/token.ts). No password exists to lose. Those
+// platform session cookie (lib/token.ts). No password exists to lose. Those
 // two steps are the whole of signing up (T-34236): give the address, prove it,
 // and land on your own space. The card asks nothing else — what a person is
 // called (T-32654) and the address their apps live at (T-32967) are set on the
@@ -81,7 +81,7 @@ import {
   OAuthProvider,
   type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
-import { cookieValue, opened, seal, verify } from '../../src/token.ts'
+import { cookieValue, opened, seal, verify } from './lib/token.ts'
 import { connectionsOf } from './connections.ts'
 import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
@@ -676,7 +676,7 @@ let allow = async (
 }
 
 // The consent form's own token: this person, this authorize request, the next
-// hour, sealed for nothing but this (src/token.ts). The Allow button is the
+// hour, sealed for nothing but this (lib/token.ts). The Allow button is the
 // one form here that grants a stranger a year of access, so it does not rest
 // on the origin check alone: a POST that did not come from the page drawn for
 // this person and this request is refused (T-37874).

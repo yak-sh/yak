@@ -5,7 +5,7 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { gitSync } from './repo.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import {
   browser,
   judge,

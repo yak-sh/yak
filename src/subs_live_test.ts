@@ -20,7 +20,7 @@
 
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { link } from './edge.ts'
-import { slow, until } from './testing.ts'
+import { slow, until } from '../bin/testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { db } = await import('./live_db.ts')

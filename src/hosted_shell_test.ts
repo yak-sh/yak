@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { type HostedShell, hostedShell } from './hosted_shell.ts'
-import { slow, until } from './testing.ts'
+import { slow, until } from '../bin/testing.ts'
 
 let setup = (): HostedShell => ({
   entry: crypto.randomUUID(),

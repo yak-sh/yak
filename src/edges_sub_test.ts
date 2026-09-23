@@ -15,7 +15,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { link, typeOf, unlink } from './edge.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import type { Change, Dep } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')

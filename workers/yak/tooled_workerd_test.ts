@@ -7,7 +7,7 @@
 import { assertEquals } from '@std/assert'
 import { derivedEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { handle } from './directory.ts'
 import { MARKS } from './migrate.ts'
 import { client, type Kernel, kernel, seed } from './probe.ts'

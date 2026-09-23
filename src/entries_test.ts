@@ -19,7 +19,7 @@ import {
 } from './entries.ts'
 import { uuid } from './types.ts'
 import { graphLog, standingOf } from './entry_log.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, cursorOf, delta, readComp, snapshot } = await import(

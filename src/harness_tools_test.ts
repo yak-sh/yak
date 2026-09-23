@@ -17,7 +17,7 @@ import {
 import { type IO } from './mcp.ts'
 import { type Change, type Snapshot } from './types.ts'
 import type { Mutation } from './mutation.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 let scratch = async () => await Deno.makeTempDir({ prefix: 'tasks-tools-' })
 

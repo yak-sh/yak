@@ -1,7 +1,7 @@
 // The suite owns the shared Node host, not an individual Deno test module.
 // Its stdin is a lifetime lease: runner death closes it and reaps workerd too.
 import { ready } from './wrangler.ts'
-import { until } from '../../src/testing.ts'
+import { until } from '../../bin/testing.ts'
 import { fileURLToPath } from 'node:url'
 
 export let probeSuite = async () => {

@@ -9,7 +9,7 @@ import { catchup } from './catchup.ts'
 import { dispatch, fed, on, trace } from './effects.ts'
 import type { Change } from './types.ts'
 import { bareDb } from './testdb.ts'
-import { slow, until } from './testing.ts'
+import { slow, until } from '../bin/testing.ts'
 import { connect, open } from './store/sqlite.ts'
 
 let doc = (title: string): Change => ({

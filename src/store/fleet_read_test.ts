@@ -2,7 +2,7 @@
 // wire, not another invocation of the package reader. eager() deliberately
 // remains the independent, keyed projection used by write-side helpers.
 import { assert, assertEquals, assertStrictEquals } from '@std/assert'
-import { slow } from '../testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { link } from '../edge.ts'
 import type { Change } from '../types.ts'
 

@@ -96,7 +96,7 @@ import {
   assertStrictEquals,
   assertThrows,
 } from '@std/assert'
-import { slow, until } from './testing.ts'
+import { slow, until } from '../bin/testing.ts'
 
 // Status is DERIVED (D-24102): to make a cache Ent read as done/wip/cancelled,
 // give it the mark/claim comp statusOf keys off, not a stored status column.

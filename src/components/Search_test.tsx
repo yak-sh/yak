@@ -5,7 +5,7 @@ import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { group, hitSlots, Search, searchOpen } from './Search.tsx'
 import { config } from '../live.ts'
-import { slow, until } from '../testing.ts'
+import { slow, until } from '../../bin/testing.ts'
 
 let hit = (num: number, kind: string, title: string) => ({
   eid: `${num}`,

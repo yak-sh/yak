@@ -25,7 +25,7 @@ import { schema as embeddingSchema, state as indexState } from '@yaks/embedding'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { sha } from './sha.ts'
-import { hop } from './hops.ts'
+import { hop } from '../workers/yak/lib/hops.ts'
 import {
   capabilities,
   type Change,

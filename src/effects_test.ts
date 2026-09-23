@@ -5,7 +5,7 @@
 // the env points it at :memory:.
 import { assert, assertEquals } from '@std/assert'
 import { edgeEid, link, unlink } from './edge.ts'
-import { tick } from './testing.ts'
+import { tick } from '../bin/testing.ts'
 import { type Change } from './types.ts'
 import { commitEffects, dispatch, docs, on, relay, trace } from './effects.ts'
 

@@ -9,7 +9,7 @@
 // Response. Passing env {} exercises the VERSION fallback the workerd probes
 // take, since they have no version-metadata binding either.
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { VERSION } from '../../src/version.ts'
+import { VERSION } from './seo.ts'
 import { Wire } from './stream.ts'
 
 let kv = () => {

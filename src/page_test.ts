@@ -7,7 +7,7 @@
 // two halves meet.
 import { assertEquals, assertMatch } from '@std/assert'
 import { idOf } from './types.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 // A temp HOME before the import: freeze.ts fixes ~/.tasks/frozen at load,
 // and a test must never write an archive into the owner's.

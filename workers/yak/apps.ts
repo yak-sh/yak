@@ -26,7 +26,7 @@
 // door refused on purpose never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
 import { apex, type Host } from './host.ts'
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import { r2Objects } from './lib/objects.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
 import { at as cachedAt } from './cache.ts'
 import * as files from './files.ts'
@@ -726,7 +726,7 @@ export let filed = async (
   { sha: string; use: string; size: Size | undefined; bundles: Bundle[] }
 > => {
   let sha = await sha256(bytes)
-  let blobs = r2Blobs(env.BLOBS)
+  let blobs = r2Objects(env.BLOBS)
   let key = blobKey(space, app, sha)
   if (!(await blobs.has(key))) await blobs.put(key, bytes)
   let size = sizeOf(bytes)
@@ -804,7 +804,7 @@ let gave = async (
   if (!/^[0-9a-f]{64}$/.test(sha)) return json(404, 'no_such_file')
   let bytes
   try {
-    bytes = await r2Blobs(env.BLOBS).get(blobKey(space, app, sha))
+    bytes = await r2Objects(env.BLOBS).get(blobKey(space, app, sha))
   } catch (e) {
     caught(e, { request: 'GET /api/blob', space: space.slug, app: app.slug })
     return json(404, 'no_such_file')
@@ -890,7 +890,7 @@ let homeOf = async (
 
 // The app's two acts, as one person: what a page does through the doors
 // below, without a page. An app's own MCP tools are templates over exactly
-// these (store/tools.ts, T-32685), so a tool call goes the page's way — the
+// these (lib/tools.ts, T-32685), so a tool call goes the page's way — the
 // app's `access` decides it, the vouched headers name the writer, the listing
 // rule shapes the answer — and a refusal is the sentence a page would read.
 // Anything a tool can do here, the person calling it could do on the page.
@@ -1217,7 +1217,7 @@ let api = async (
       bytes: bytes.byteLength,
     }])
     if (stopped) return json(413, 'space_full', stopped)
-    await r2Blobs(env.BLOBS).put(key, bytes)
+    await r2Objects(env.BLOBS).put(key, bytes)
     await purged(env, app)
     return Response.json({ ok: true, key })
   }

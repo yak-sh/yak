@@ -32,7 +32,7 @@ import {
 import { writeSession } from './session_store.ts'
 import { type ToolHost } from './harness_tools.ts'
 import { type Change, uuid } from './types.ts'
-import { slow, until } from './testing.ts'
+import { slow, until } from '../bin/testing.ts'
 import { bareDb, freshDb, rejectJournal } from './testdb.ts'
 import { open } from './store/sqlite.ts'
 

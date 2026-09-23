@@ -6,7 +6,7 @@
 import { assertEquals } from '@std/assert'
 import { copyGraph, ours, stop } from './probe_tool.ts'
 import { DatabaseSync } from './store/sqlite.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 Deno.test('ours: a pid is a probe only while it is a live deno', () => {
   assertEquals(ours(42, () => 'deno'), true)

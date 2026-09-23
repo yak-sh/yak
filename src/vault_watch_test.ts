@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import { slow, until } from './testing.ts'
+import { slow, until } from '../bin/testing.ts'
 import { drain, report } from './turn.ts'
 import { watchVault } from './vault_watch.ts'
 

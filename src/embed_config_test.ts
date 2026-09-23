@@ -14,7 +14,7 @@ import {
 import { resolve } from './config.ts'
 import { envConfig } from './ollama.ts'
 import { open } from './store/sqlite.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import { DIM, initVector, ownVector, vectorReady } from './vector.ts'
 
 slow(

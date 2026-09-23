@@ -8,7 +8,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { claim, deliver, enqueue, fail, iso } from './effect_claim.ts'
 import { bareDb } from './testdb.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import { DatabaseSync, open } from './store/sqlite.ts'
 
 // A frozen clock, and the same clock plus a shift in ms — expiry without a wait.

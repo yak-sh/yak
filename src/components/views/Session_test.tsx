@@ -698,7 +698,7 @@ Deno.test('sessionMentions == resolveMentions(threadMentions)', () => {
 Deno.test('SessionRow loads its actor face when no peer delivered it', async () => {
   let { SessionRow } = await import('./Session.tsx')
   let { routeName, unsubscribe } = await import('../../live.ts')
-  let { tick } = await import('../../testing.ts')
+  let { tick } = await import('../../../bin/testing.ts')
   let prior = useRoute(() => {})
   cache.value = {
     'actor-row-session': {

@@ -6,7 +6,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { Ajv } from 'ajv'
-import { slow, until } from '../../src/testing.ts'
+import { slow, until } from '../../bin/testing.ts'
 import {
   accepted,
   commandsIn,

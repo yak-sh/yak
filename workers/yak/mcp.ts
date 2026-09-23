@@ -82,7 +82,6 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { SetLevelRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import { mcp, roster, rosterVersion } from '@yaks/mcp'
-import { VERSION } from '../../src/version.ts'
 import { reaching, searching } from './agent.ts'
 import { anonymous, asked, opened, READS, scope } from './anon.ts'
 import * as dirPart from './directory.ts'
@@ -97,13 +96,13 @@ import { answer, asset, docs, SIGNIN } from './preauth.ts'
 import type { Reach } from './reach.ts'
 import { PROMPTS } from './prompts.ts'
 import { says } from './route.ts'
-import { connector } from './seo.ts'
+import { connector, VERSION } from './seo.ts'
 import { type Entry, prompted, standing } from './standing.ts'
 import { type Ctx, inReach, VIEW_MIME } from './tools.ts'
 import { listen, rostered } from './stream.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { caught, reporter } from './sentry.ts'
-import { isTestAddress } from '../../src/bots.ts'
+import { isTestAddress } from './lib/bots.ts'
 import { refuse } from './tool.ts'
 import { url as hostUrl } from './host.ts'
 import { source, within } from './rate.ts'
@@ -390,7 +389,6 @@ let door = async (ctx: Ctx, session: string) => {
     // `serverInfo` shows this connector with a face, and nobody has to type
     // any of it into a form.
     ...connector(ctx.env),
-    version: VERSION,
     instructions: apps.text
       ? `${instructions(ctx.env)}\n\n---\n\n${apps.text}`
       : instructions(ctx.env),
@@ -515,7 +513,6 @@ let stranger = async (
     scope: scope(env),
     report: reporter(ctx, clientOf(req.headers.get('mcp-session-id') ?? '')),
     ...connector(env),
-    version: VERSION,
   }
   // No tool-list line and no session: both are a person's own — the roster
   // version names what a client cached at connect, and a stranger's list

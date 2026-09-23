@@ -2,7 +2,7 @@
 // telemetry without becoming a Session exception or self-healing bug. This is
 // a real-server probe because the classification belongs to the /usage route.
 import { assertEquals } from '@std/assert'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let url = ''

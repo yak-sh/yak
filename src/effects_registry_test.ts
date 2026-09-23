@@ -16,7 +16,7 @@
 import { assert } from '@std/assert'
 import { comps, stamped } from './types.ts'
 import { docs } from './effects.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 // The audit needs server.ts's top-level `on()` registrations, and server.ts
 // serves on import — so this is slow(): the fast run skips it rather than boot a

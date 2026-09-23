@@ -66,7 +66,6 @@ import { memberDoc } from '@yaks/member'
 import { toolsDoc } from '@yaks/tools'
 import { wakeDoc } from '@yaks/wake'
 import { read } from '@yaks/yaml'
-import { RESERVED as FLEET } from '../../src/store/vocab.ts'
 import { vocabOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { sweepDoc } from './wake.ts'
@@ -1102,31 +1101,30 @@ export let appKeywords: Keywords[] = [
  * letter its ids wear. */
 export let metaKeywords: Keywords[] = [idKeywords, ...appKeywords]
 
+/** The components a set of documents declares. A document carries its
+ * components and its tools in one `$defs` map; a `tool: true` entry is a verb
+ * somebody calls, not a word a row wears. */
+export let componentsOf = (docs: VocabDoc[]): string[] =>
+  docs.flatMap((d) =>
+    Object.entries(d.$defs ?? {}).filter(([, e]) => e?.tool !== true)
+      .map(([name]) => name)
+  )
+
 /**
  * Every word the platform already says, sorted. A `vocab.json` naming one is
  * refused: a word means the same thing everywhere.
  *
- * Two lists, because the platform is two things. An app's store plants the
- * core documents, so those names are taken there. And the FLEET's whole
- * vocabulary is taken too (store/vocab.ts `RESERVED`) — that is the list the
- * guide publishes under "Components of your own", and a word it lists is a
- * word this platform means something by, whether or not an app's store raises
- * a table for it.
+ * All three of the platform's vocabularies count, not only the one an app's
+ * store plants: a word the directory or the git store means something by is a
+ * word an app reusing it would mean something else by. This is the list the
+ * guide publishes under "Components of your own".
  *
- * A `tool: true` entry is NOT one of them. A document carries its components
- * and its tools in one `$defs` map, and only the components are words an app
- * may not reuse — a tool is a verb somebody calls, and `mail_send` never
- * collides with a property called `mail_send`. Reserving them made every tool a
+ * A tool is not one of them ({@link componentsOf}): `mail_send` never collides
+ * with a property called `mail_send`, and reserving tools made every tool a
  * package declares cost an app a word it was never going to want.
  */
 export let RESERVED: string[] = [
-  ...new Set([
-    ...coreDocs.flatMap((d) =>
-      Object.entries(d.$defs ?? {}).filter(([, e]) => e?.tool !== true)
-        .map(([name]) => name)
-    ),
-    ...FLEET,
-  ]),
+  ...new Set(componentsOf([...coreDocs, ...platformDocs, ...gitDocs])),
 ].sort()
 
 // The five words that name a property's type, and the JSON Schema each
@@ -1134,7 +1132,8 @@ export let RESERVED: string[] = [
 // sentence — a refusal saying what a property already is, the arguments a
 // kind's tools take (kinds.ts), the types a CSV's cells are coerced to
 // (csv.ts).
-let WORDS: Record<string, PropSchema> = {
+export type Word = 'text' | 'number' | 'bool' | 'time' | 'url'
+export let WORDS: Record<Word, PropSchema> = {
   text: { type: 'string' },
   number: { type: 'number' },
   bool: { type: 'boolean' },
@@ -1321,8 +1320,10 @@ let mine = (schema: PropSchema): PropSchema => ({
  * bare component names declares no `$` keyword, and is refused in a sentence
  * naming the shape.
  *
- * It is checked here rather than at the load: a name the platform already owns
- * is refused, and so is anything a property cannot hold.
+ * It is checked here rather than at the load: anything a property cannot hold
+ * is refused. A name the platform already says is {@link unsaid}'s to refuse,
+ * at the doors a new manifest comes through, because this one also reads what
+ * a store already holds.
  *
  * `file` is what a refusal calls it — the app may have written it as `.json` or
  * `.yml` (tools.ts `spelled`), and the sentence has to name the file they are
@@ -1370,13 +1371,33 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
     }
   }
   if (off !== undefined) doc = { ...doc, tools: off }
-  // The platform's words, all of them, before anything is planted: a manifest
-  // refused one name at a time is probed one deploy at a time, and every probe
-  // that got through left a component behind for good (C-32624 item 1). The
-  // sentence is the one the guide prints under "The words already taken", and
-  // it says where the whole list is, because the agent reading it has no other
-  // source.
-  let taken = Object.keys(doc.$defs ?? {}).filter((n) => RESERVED.includes(n))
+  let errs = storable(doc)
+  if (errs.length) throw refuse('arguments', `${file}: ${errs.join('; ')}`)
+  return doc
+}
+
+/**
+ * A new manifest, refused if it declares a word the platform already says
+ * ({@link RESERVED}) — all of them at once, before anything is planted: a
+ * manifest refused one name at a time is probed one deploy at a time, and every
+ * probe that got through left a component behind for good (C-32624 item 1).
+ * The sentence is the one the guide prints under "The names already taken",
+ * and it says where the whole list is, because the agent reading it has no
+ * other source.
+ *
+ * `held` is what the app's store declares already, and a word it holds stays
+ * the app's: the list moves whenever the platform's vocabularies do, and an app
+ * that declared a word before the platform said it keeps deploying it. A
+ * stored manifest is never held to this, so a store wakes whatever the list
+ * has become since.
+ */
+export let unsaid = (
+  doc: VocabDoc,
+  held: VocabDoc = {},
+  file = 'vocab.json',
+): VocabDoc => {
+  let taken = Object.keys(doc.$defs ?? {})
+    .filter((n) => RESERVED.includes(n) && !(n in (held.$defs ?? {})))
   if (taken.length) {
     throw refuse(
       'arguments',
@@ -1386,8 +1407,6 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
         `the guide under "Components of your own" (${GUIDE})`,
     )
   }
-  let errs = storable(doc)
-  if (errs.length) throw refuse('arguments', `${file}: ${errs.join('; ')}`)
   return doc
 }
 

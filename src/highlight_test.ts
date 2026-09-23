@@ -2,7 +2,7 @@
 // explicit and inferred languages add only the library's semantic classes.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { highlight } from './highlight.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 // Both invoke hljs's grammar work — compiling a language on first use, and, with
 // no language given, auto-detecting across every registered grammar. That cost

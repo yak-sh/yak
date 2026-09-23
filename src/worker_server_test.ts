@@ -3,7 +3,7 @@
 // through the same stateless JSON-RPC door a Desktop host uses.
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { idOf } from './types.ts'
-import { slow, until } from './testing.ts'
+import { slow, until } from '../bin/testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 

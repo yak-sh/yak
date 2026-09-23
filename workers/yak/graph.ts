@@ -134,7 +134,7 @@ import {
 import { parse } from '@yaks/query'
 import { jsonb, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { reconcile, type Runner, runner } from '@yaks/tools'
-import { commands, modern, type Tools } from '../../src/store/tools.ts'
+import { commands, modern, type Tools } from './lib/tools.ts'
 import { soonest, tick, type Ticked, wakes } from '@yaks/wake'
 import { type Alarm, arm } from '@yaks/wake/cloudflare'
 import { named, type Row } from './listing.ts'
@@ -213,6 +213,7 @@ import {
   numbered,
   platformVocab,
   teach,
+  unsaid,
 } from './vocab.ts'
 
 /**
@@ -2242,11 +2243,12 @@ export class Store {
     }
     return request.text().then((body) => {
       try {
-        let next = appDoc(body)
+        let was = appDoc(this.#get('vocab') ?? '{}')
+        let next = unsaid(appDoc(body), was)
         let held = unplantable(next)
         if (held.length) throw new Error(held.join('; '))
         let { doc, dropped, added, kept } = grew(
-          appDoc(this.#get('vocab') ?? '{}'),
+          was,
           next,
           (name) => this.#rows(name),
         )

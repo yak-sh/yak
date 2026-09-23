@@ -33,7 +33,7 @@ import {
   verdicts,
 } from './types.ts'
 import { type Mutation, mutationResult } from './mutation.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import { backfillChanges } from './backfill.ts'
 import { DatabaseSync } from './store/sqlite.ts'
 import { workCandidates } from './work.ts'

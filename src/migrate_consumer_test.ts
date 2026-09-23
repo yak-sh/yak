@@ -24,7 +24,7 @@
 // slow() + a server boot on an ephemeral port — the precondition_test.ts
 // pattern. Writes enter through /apply; assertions read through the local query
 // library, so neither side can mistake its own return value for stored state.
-import { slow, until } from './testing.ts'
+import { slow, until } from '../bin/testing.ts'
 import { assertEquals } from '@std/assert'
 import { localQuery } from './graph_query.ts'
 import type { Querier } from './client.ts'

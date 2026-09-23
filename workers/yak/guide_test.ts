@@ -102,7 +102,7 @@ Deno.test('the pages print every word vocab.json may not use', () => {
   let printed = 0
   for (let p of PAGES) {
     let block = pageText(p.slug).split('\n\n')
-      .find((b) => b.startsWith('    ') && b.includes('stop_request'))
+      .find((b) => b.startsWith('    ') && b.includes('call_woken'))
     if (!block) continue
     printed++
     assertEquals(block.trim().split(/\s+/), RESERVED, p.slug)

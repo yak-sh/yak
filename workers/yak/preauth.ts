@@ -37,7 +37,6 @@
 // that declaration; here, before anyone has even signed in, is the last place
 // it would belong.
 import type { Security } from '@yaks/mcp'
-import { VERSION } from '../../src/version.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, whole } from './guide.ts'
 import { apex, type Host, hosted, spaceHost, url } from './host.ts'
@@ -241,7 +240,7 @@ export let answer = async (
       // The face, before signing in — the same one the signed-in door answers
       // (seo.ts connector, mcp.ts). It is what a directory reviewer and a
       // connector form both read first, so it must not wait on a grant.
-      serverInfo: { ...connector(site), version: VERSION },
+      serverInfo: connector(site),
       // What a signed-in caller gets here is the whole recipe for building
       // (guide.ts instructions). Before signing in, that would be instructions
       // for tools this caller has not got, so the orientation is the one

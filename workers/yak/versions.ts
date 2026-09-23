@@ -46,8 +46,7 @@
 // a domain holding its own pinned bytes is the one thing this file cannot see.
 // With one key space the sweep is one pass for the whole bucket rather than one
 // per app: an object another app still names is not the first app's to free.
-import type { Blobs as Pins } from '@yaks/blob'
-import type { Blobs } from '../../src/store/blobs.ts'
+import type { Blobs as Pins, Objects } from '@yaks/blob'
 import type { App, Directory } from './directory.ts'
 import { pinsOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
@@ -136,7 +135,7 @@ export let pinned = (prefix: string, sha: string) => `${prefix}versions/${sha}`
  * the global key costs exactly what the old key cost, so nothing pays for the
  * fallback but a miss.
  */
-export let pins = (blobs: Blobs, prefix: string): Pins => ({
+export let pins = (blobs: Objects, prefix: string): Pins => ({
   has: async (sha) =>
     await blobs.has(addressed(sha)) || await blobs.has(pinned(prefix, sha)),
   get: async (sha) =>
@@ -169,7 +168,7 @@ let must = async (store: Pins, sha: string) => {
 // bucket, and one file's chain has nothing to wait on in another's, so a
 // deploy's snapshot costs one file's time rather than every file's added up
 // (T-34986: pinning three files took three times one).
-let walk = async (blobs: Blobs, prefix: string, pin: boolean) => {
+let walk = async (blobs: Objects, prefix: string, pin: boolean) => {
   let store = pins(blobs, prefix)
   let files: Files = {}
   let paths = (await blobs.list(prefix))
@@ -187,11 +186,11 @@ let walk = async (blobs: Blobs, prefix: string, pin: boolean) => {
 // What the app serves right now, named but not kept: a rollback reads this
 // only to say what it changed, and pinning bytes no version will ever name
 // would leave them behind forever.
-export let manifest = (blobs: Blobs, prefix: string) =>
+export let manifest = (blobs: Objects, prefix: string) =>
   walk(blobs, prefix, false)
 
 // The version a deploy is making: the same manifest, with its bytes pinned.
-export let snapshot = (blobs: Blobs, prefix: string) =>
+export let snapshot = (blobs: Objects, prefix: string) =>
   walk(blobs, prefix, true)
 
 // A version's files back where the app serves them — and only its files: a
@@ -204,7 +203,7 @@ export let snapshot = (blobs: Blobs, prefix: string) =>
 // already kept, so a rollback is undone by another — and noting each file it
 // moved would be the same fact written down twice, in two grains, free to
 // disagree.
-export let restore = async (blobs: Blobs, prefix: string, files: Files) => {
+export let restore = async (blobs: Objects, prefix: string, files: Files) => {
   let store = pins(blobs, prefix)
   for (let [path, sha] of Object.entries(files)) {
     await blobs.put(prefix + path, await must(store, sha))
@@ -360,7 +359,7 @@ let entries = (bytes: Uint8Array | null): Wrote[] => {
 }
 
 /** What this path has held, newest first — every write that replaced it. */
-export let history = async (blobs: Blobs, prefix: string, path: string) =>
+export let history = async (blobs: Objects, prefix: string, path: string) =>
   entries(await blobs.read(logKey(prefix, path)))
 
 /**
@@ -373,7 +372,7 @@ export let history = async (blobs: Blobs, prefix: string, path: string) =>
  * empty rather than thrown: the write is the thing that must not fail.
  */
 export let replaced = async (
-  blobs: Blobs,
+  blobs: Objects,
   prefix: string,
   path: string,
   by: string,
@@ -481,7 +480,7 @@ export let held = (all: Wrote[], at: number): Wrote | null => {
  */
 export let pruned = async (
   dir: Directory,
-  blobs: Blobs,
+  blobs: Objects,
   apps: Pinner[],
   now = Date.now(),
   plugins = PLUGINS,
@@ -540,7 +539,7 @@ export let pruned = async (
  *
  * `dry` counts what a run would carry and writes nothing.
  */
-export let moved = async (blobs: Blobs, prefix: string, dry = false) => {
+export let moved = async (blobs: Objects, prefix: string, dry = false) => {
   let at = `${prefix}versions/`
   let carried = 0
   for (let key of await blobs.list(at)) {
@@ -575,7 +574,7 @@ export let moved = async (blobs: Blobs, prefix: string, dry = false) => {
  * nothing is lost. Answers whether anything moved.
  */
 export let renamed = async (
-  blobs: Blobs,
+  blobs: Objects,
   dir: Directory,
   { prefix, app }: Pinner,
   from: string,
@@ -615,7 +614,7 @@ export let renamed = async (
 // The bytes about to be dropped from `from`, pinned and said as an entry, so
 // the newer file winning never loses the older one.
 let pinnedAs = async (
-  blobs: Blobs,
+  blobs: Objects,
   prefix: string,
   path: string,
   bytes: Uint8Array<ArrayBuffer>,

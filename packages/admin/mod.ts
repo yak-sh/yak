@@ -3,7 +3,7 @@
  *
  * Unpublished: it is this box's plugin, named in `~/.yak/yak.json` beside the
  * published ones, and it reaches into this checkout for the platform's own
- * rules (`src/bots.ts`, `src/token.ts`, `workers/yak`).
+ * rules (`workers/yak/lib/bots.ts`, `workers/yak/lib/token.ts`, `workers/yak`).
  *
  * @module
  */

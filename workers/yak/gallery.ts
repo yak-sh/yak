@@ -37,8 +37,8 @@
 // every reader here screens a trashed app and a trashed space out. So a
 // trashed app leaves the gallery the moment it is thrown away, and a restored
 // one is back where it was without asking anybody twice.
-import { r2Blobs } from '../../src/blobs_r2.ts'
-import { opened, seal } from '../../src/token.ts'
+import { r2Objects } from './lib/objects.ts'
+import { opened, seal } from './lib/token.ts'
 import {
   type App,
   type Directory,
@@ -273,7 +273,7 @@ export let pictured = (html: string, at: string) => {
 }
 
 let shot = async (env: Env, a: Shown) => {
-  let bytes = await r2Blobs(env.BLOBS).read(
+  let bytes = await r2Objects(env.BLOBS).read(
     keyed(prefixOf(a.space, a.app), '/'),
   )
   return bytes ? pictured(new TextDecoder().decode(bytes), a.at) : ''

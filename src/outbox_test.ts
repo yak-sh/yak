@@ -10,7 +10,7 @@
 // (the sanitizers fail this file if it leaks).
 
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import { type Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')

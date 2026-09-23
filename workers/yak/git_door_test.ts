@@ -5,7 +5,7 @@
 // app a URL names, who may clone it and how they say so, and that a path which
 // is no repository is left for the apps.
 import { assert, assertEquals } from '@std/assert'
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import { r2Objects } from './lib/objects.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { App, Space } from './directory.ts'
@@ -75,7 +75,7 @@ let deploy = async (
   for (let [path, body] of Object.entries(files)) {
     let bytes = utf8.encode(body)
     manifest[path] = await sha256(bytes)
-    await pins(r2Blobs(env.BLOBS), 'ada/recipes/').put(manifest[path], bytes)
+    await pins(r2Objects(env.BLOBS), 'ada/recipes/').put(manifest[path], bytes)
   }
   await record(dir, WHO, app, version, manifest, '')
 }
@@ -228,7 +228,7 @@ let pkt = (line: string) =>
 Deno.test('an app whose bytes are pinned per-app still serves a pack', async () => {
   let { env } = platform(SECRET)
   let { app } = await standing(env, 'public')
-  let blobs = r2Blobs(env.BLOBS)
+  let blobs = r2Objects(env.BLOBS)
   let files = { 'index.html': '<h1>hi</h1>\n' }
   let manifest: Record<string, string> = {}
   for (let [path, body] of Object.entries(files)) {

@@ -453,34 +453,28 @@ The platform's own vocabulary is refused in a `vocab.json`, so that `doc` means
 `doc` in every store on the platform. A manifest reaching for one is refused
 whole:
 
-    vocab.json: card, entry are words the platform already says — pick
+    vocab.json: comment, email are words the platform already says — pick
       another name
 
 These are the names, all of them:
 
-    about accept access alias anchor app apply archetype architecture archived
-    artifact attachment attention bash blob blocked board bounced brief bug
-    call call_ready call_woken camera cancel cancelled canvas card chat
-    checkpoint claim client comment commit completed conflict contains content
-    created cursor decided delegates deliver delivered deploy design doc dream
-    edge effect email entity entry error exception execution exit failed
-    favorite feedback fetch filed finding fired fixer fold fork generation
-    goal grant graph_query headers hook hostname image imported installed key
-    knock layout lease mail member memory message meta meter model
-    nofix notified noverify opaque opened order output pane patch person
-    persona pin plan process product project prompt proposed provider
-    published quarantined reads reasoning recall recalled redaction referenced
-    references repo report requires response result resume retired review role
-    run runner runtime satisfies service session setting settled shelf signal
-    signin space spawn stderr stop stop_request subscription supersedes
-    supervises task task_context timeout tool tool_use updated usage venture
-    verifier wake wants web worked worktree yield
+    about access alias app archetype archived attachment binding blob bounced
+    call call_ready call_woken cancelled checkout cites comment commit compat
+    completed contains content created delegates deliver delivered deploy doc
+    edge email entity error exception execution favorite fee feedback file filed
+    fired former gallery gitobj grant home hostname image installed invite
+    inviting key lines mail member memory meter notified opened order output
+    parent person plan product project published quarantined quote reads
+    recalled ref referenced report repository requires restored result retired
+    revision satisfies seeded signed_in signin space stripe supersedes
+    supervises sweep task theme tool trashed tree_entry updated wake wants web
+    worked worktree
 
 When your first choice is taken, ask what the component is _for_ and name that:
-the taken name is the general one, yours is the specific one. Not `card` but
-`flashcard`, not `entry` but `weigh_in`, not `plan` but `menu`, not `board` but
-`standings`. A prefix works too — `book_note` — but a name of its own reads
-better in a filter, and the filter is where you meet it most.
+the taken name is the general one, yours is the specific one. Not `comment` but
+`review`, not `plan` but `menu`, not `gallery` but `album`, not `home` but
+`listing`. A prefix works too — `book_note` — but a name of its own reads better
+in a filter, and the filter is where you meet it most.
 
 ## A property, or `doc.body`?
 

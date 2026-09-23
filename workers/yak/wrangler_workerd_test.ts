@@ -1,5 +1,5 @@
 import { assertEquals } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { script } from './probe.ts'

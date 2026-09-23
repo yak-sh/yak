@@ -7,9 +7,12 @@
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "linkedom": "npm:linkedom@^0.18.12",
-    "preact": "npm:preact@^10.29.1"
+    "preact": "npm:preact@^10.29.1",
+    "marked": "npm:marked@18.0.6"
   },
   "publish": {
-    "exclude": ["**/*_test.ts"]
+    "exclude": [
+      "**/*_test.ts"
+    ]
   }
 }

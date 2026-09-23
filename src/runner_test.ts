@@ -2,7 +2,7 @@
 // ordered log. Tests pin projection, provider boundaries, concurrency, errors,
 // unknown evidence, instructions, and graph-native correlation.
 import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
-import { slow, tick } from './testing.ts'
+import { slow, tick } from '../bin/testing.ts'
 import { type EntrySpec, type UsageValue } from './entries.ts'
 import { type ToolHost } from './harness_tools.ts'
 import {

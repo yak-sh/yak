@@ -13,7 +13,7 @@ import {
 import { type Dep, type Edge, kindOf } from './types.ts'
 import { projectionSnapshot, type Row, rows } from './client.ts'
 import { fakeGraph } from './graph_fake.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import { memo, sync } from '@yaks/mirror'
 import {
   adopted,

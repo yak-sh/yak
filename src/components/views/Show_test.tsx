@@ -482,7 +482,7 @@ Deno.test('comment dependencies lead with the entity commented on', () => {
 
 Deno.test('claim chip loads its referenced session instead of painting a blank', async () => {
   let { landSub, routeName, unsubscribe } = await import('../../live.ts')
-  let { tick } = await import('../../testing.ts')
+  let { tick } = await import('../../../bin/testing.ts')
   cache.value = {
     claimed: {
       entity: { eid: 'claimed', num: 900 },

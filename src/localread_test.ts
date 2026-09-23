@@ -8,7 +8,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { armLocal, armPath, disarm, guarded } from './localread.ts'
 import { DEFAULT_HOST } from './client.ts'
 import { arm, type WorkProjection } from './client.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 Deno.test('armPath: explicit DB_PATH names the file — local, host or not', () => {
   let live = '/live'

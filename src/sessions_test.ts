@@ -25,7 +25,7 @@ import { dispatch, fed, on, relay, trace } from './effects.ts'
 import { PENDING } from './deliver.ts'
 import { fakeClaude, fakeCodex } from './door_fake.ts'
 import { sessionRow, writeSession } from './session_store.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let tmp = Deno.makeTempDirSync({ prefix: 'tasks-sessions-' })

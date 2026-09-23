@@ -10,7 +10,7 @@
 // registration, the cross-store write and the vocabulary all have to be right
 // for this file to pass.
 import { assert, assertEquals, assertObjectMatch } from '@std/assert'
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import { r2Objects } from './lib/objects.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { App, Space } from './directory.ts'
@@ -75,7 +75,7 @@ let deploy = async (
   files: Record<string, string>,
 ) => {
   let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
-  let blobs = r2Blobs(env.BLOBS)
+  let blobs = r2Objects(env.BLOBS)
   let manifest: Record<string, string> = {}
   for (let [path, body] of Object.entries(files)) {
     let bytes = utf8.encode(body)
@@ -92,7 +92,7 @@ let bodyOf = async (env: Env, git: ReturnType<typeof metaOf>, oid: string) => {
   let [row] = await git.query(`.eid=${oid}`)
   assert(row, `no object ${oid}`)
   let sha = (row.blob as { sha: string }).sha
-  let bytes = await r2Blobs(env.BLOBS).read(BODY + sha)
+  let bytes = await r2Objects(env.BLOBS).read(BODY + sha)
   assert(bytes, `no bytes for ${oid}`)
   return { row, body: text.decode(bytes) }
 }

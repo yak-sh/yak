@@ -22,7 +22,7 @@ import {
   storeNames,
 } from './idb.ts'
 import { assert, assertEquals } from '@std/assert'
-import { slow } from '../testing.ts'
+import { slow } from '../../bin/testing.ts'
 
 type Row = Record<string, Record<string, unknown> | undefined>
 type Graph = Record<string, Row>

@@ -5,7 +5,7 @@ import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { backlinks, boardsOver, cache, chatFor, useRoute } from '../live.ts'
-import { slow } from '../testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { useBacklinks, useBoardsOver, useChatFor } from './useQuery.ts'
 
 let A = 'dddd3703-0000-4000-8000-000000000001'

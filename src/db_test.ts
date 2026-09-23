@@ -67,7 +67,7 @@ let {
 let { bareDb } = await import('./testdb.ts')
 let { edgeEid } = await import('./edge.ts')
 let { DatabaseSync } = await import('./store/sqlite.ts')
-let { slow } = await import('./testing.ts')
+let { slow } = await import('../bin/testing.ts')
 
 // The apply/snapshot suite just needs a working migrated graph, not a DDL
 // replay — and not the demo seed either: `fresh()` hands out an UNSEEDED clone

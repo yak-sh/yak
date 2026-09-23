@@ -27,7 +27,7 @@ let { ownVector, refreshVector } = await import('./vector.ts')
 // way the embed sweep's process does (T-22622).
 ownVector()
 let { axes } = await import('./testvec.ts')
-let { slow } = await import('./testing.ts')
+let { slow } = await import('../bin/testing.ts')
 let { assertEquals } = await import('@std/assert')
 
 let uid = () => crypto.randomUUID()

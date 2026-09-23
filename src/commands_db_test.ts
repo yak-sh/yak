@@ -10,7 +10,7 @@
 import { assertEquals } from '@std/assert'
 import { uuid } from './types.ts'
 import { commandOut } from './commands.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, snapshot } = await import('./db.ts')

@@ -4,7 +4,7 @@
 // and no connector — the person says "give me a token", pastes one line into a
 // terminal, and the CLI speaks to the same door with the same tools.
 //
-// It is a sealed value (src/token.ts `seal`), like the platform session cookie
+// It is a sealed value (lib/token.ts `seal`), like the platform session cookie
 // and the custom-domain handoff beside it, and deliberately not an OAuth
 // access token: the provider mints those only at the end of a browser redirect
 // flow it owns, and their life is one number for the whole provider
@@ -26,7 +26,7 @@
 // sweep it. KV is eventually consistent, so a revocation lands everywhere
 // within about a minute rather than instantly — which is why the life is short
 // and the ceiling is a day.
-import { opened, seal } from '../../src/token.ts'
+import { opened, seal } from './lib/token.ts'
 import type { Directory } from './directory.ts'
 import { refuse } from './tool.ts'
 

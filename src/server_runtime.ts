@@ -15,7 +15,7 @@ import retiredDataDoorList from './retired_data_doors.json' with {
   type: 'json',
 }
 import { guard, type Serving } from './bind.ts'
-import { counts, type Tally, tallying } from './hops.ts'
+import { counts, type Tally, tallying } from '../workers/yak/lib/hops.ts'
 import { type Handler, upgradable } from './host.ts'
 import { host } from './host_deno.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'

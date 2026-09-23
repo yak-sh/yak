@@ -6,7 +6,7 @@
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { land, reverts } from './land.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 let command = async (cwd: string, ...args: string[]) => {
   let r = await new Deno.Command('git', {

@@ -38,7 +38,7 @@ import { takeEffectsLease } from './effects_lease.ts'
 import { wireNative } from './doing.ts'
 import { db as live } from './live_db.ts'
 import { bareDb } from './testdb.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import type { Change } from './types.ts'
 import { open } from './store/sqlite.ts'
 

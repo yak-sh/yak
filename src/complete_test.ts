@@ -3,7 +3,7 @@
 // end to end, not mocked. Those rides are `slow` (a subprocess is the heavy
 // tier); the unknown-model rejection never spawns, so it stays fast.
 import { assertEquals } from '@std/assert'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import { complete } from './complete.ts'
 
 // The graceful-absence floor that costs no process: a model no adapter admits

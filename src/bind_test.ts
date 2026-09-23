@@ -4,7 +4,7 @@
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { alone, guard, peer, same } from './bind.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 let answers = (body: unknown, status = 200) => {
   let http = Deno.serve({

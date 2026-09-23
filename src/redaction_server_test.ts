@@ -3,7 +3,7 @@
 // server returns only its hash-backed audit, never the bytes it forgot.
 import { fileURLToPath } from 'node:url'
 import { assertEquals, assertMatch } from '@std/assert'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let port = 0

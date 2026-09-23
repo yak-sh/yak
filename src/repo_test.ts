@@ -4,7 +4,7 @@
 // run carrying git's words, never a throw. Nothing here touches a live repo.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { git, gitRepo, gitSync } from './repo.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 let write = (path: string, body: string) => (
   Deno.writeTextFileSync(path, body), path

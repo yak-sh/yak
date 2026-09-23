@@ -31,7 +31,7 @@ import type { Bundle, ToolCtx } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { type Local, sealed, unsealed, vaultOf } from '@yaks/secrets'
 import { CallError } from '@yaks/tools'
-import { ADMIN, BOT, isTestAddress } from '../../src/bots.ts'
+import { ADMIN, BOT, isTestAddress } from '../../workers/yak/lib/bots.ts'
 import {
   type Account,
   accountsIn,

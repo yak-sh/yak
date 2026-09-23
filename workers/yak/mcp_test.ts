@@ -7,7 +7,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { answerSchema } from '@yaks/mcp'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 
 import {
   connector,
@@ -936,15 +936,15 @@ slow(
       await manifest(vocabFile({
         recipe: { title: txt, serves: num },
         dayline: { on: when },
-        card: {},
-        entry: { at: when },
+        comment: {},
+        email: { at: when },
       }))
       let taken = (await assertRejects(() =>
         agent.tool('app_deploy', app), Error))
         .message
       assertStringIncludes(
         taken,
-        'card, entry are words the platform already says',
+        'comment, email are words the platform already says',
       )
       assertStringIncludes(taken, GUIDE)
       await assertRejects(

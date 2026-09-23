@@ -37,7 +37,7 @@
 // Bounded, because the notes are read on every call at the door: the file is
 // refused over CAP at the write rather than truncated at the read — half of
 // what somebody wrote is worse than a pointer to all of it.
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import { r2Objects } from './lib/objects.ts'
 import { type App, type Space, url } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Host } from './host.ts'
@@ -95,7 +95,7 @@ export let notesOf = async (
   // `read` rather than has-then-get: this runs per app on every call at the
   // door, and most apps have no notes, so a second round trip would land on
   // the common case.
-  let bytes = await r2Blobs(env.BLOBS).read(
+  let bytes = await r2Objects(env.BLOBS).read(
     `${space.slug}/${app.slug}/${NOTES}`,
   )
   if (!bytes) return ''

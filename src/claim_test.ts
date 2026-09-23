@@ -10,7 +10,7 @@ import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import { query } from './client.ts'
 import { idOf } from './types.ts'
 import type { Sql } from './store/sql.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import type { Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')

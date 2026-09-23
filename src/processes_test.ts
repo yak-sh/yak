@@ -7,7 +7,7 @@
 // no child is spawned here.
 import { assert, assertEquals } from '@std/assert'
 import { type Change } from './types.ts'
-import { until } from './testing.ts'
+import { until } from '../bin/testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let tmp = Deno.makeTempDirSync({ prefix: 'tasks-processes-' })

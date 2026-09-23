@@ -8,7 +8,7 @@
 // same wire is proven in live_test.ts over landSub().
 
 import { assertEquals } from '@std/assert'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 

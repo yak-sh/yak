@@ -14,7 +14,7 @@
 
 import { assertEquals } from '@std/assert'
 import { bus, inboxItem, inboxRows, query } from './client.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import type { Change } from './types.ts'
 
 // This case drives a REAL server over HTTP, so it is slow(): the fast run skips

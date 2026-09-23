@@ -1,4 +1,4 @@
-import { tick, until } from '../src/testing.ts'
+import { tick, until } from './testing.ts'
 import { runTestCommands, type TestCommand } from './test.ts'
 
 let [mode, phase, dir, codeText] = Deno.args

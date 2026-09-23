@@ -6,7 +6,7 @@
 // compiled with `@cloudflare/workers-types` in scope, so the bucket here is the
 // R2 binding wrangler declares.
 //
-// Nothing runs. The line below is an assignment the type-checker either accepts
+// Nothing runs. The lines below are assignments the type-checker either accepts
 // or rejects, which is the whole assertion.
 //
 // It is checked on its own (`deno task check:workers`) and excluded from the
@@ -14,8 +14,11 @@
 // `Response.json()` returns `unknown`, and every other file in the repo would
 // be checked against a Worker it does not run in.
 
-import { objectBlobs } from './object.ts'
+import { bucketObjects, objectBlobs, type Objects } from './object.ts'
 import type { Blobs } from './store.ts'
 
 /** An R2 bucket is a byte store, with no adapter in between. */
 export let r2Blobs = (bucket: R2Bucket): Blobs => objectBlobs(bucket)
+
+/** And a store keyed by name, the same way. */
+export let r2Objects = (bucket: R2Bucket): Objects => bucketObjects(bucket)

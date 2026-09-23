@@ -6,7 +6,7 @@
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
 import { DatabaseSync } from './store/sqlite.ts'
-import { slow, until } from './testing.ts'
+import { slow, until } from '../bin/testing.ts'
 
 let root = fileURLToPath(new URL('../', import.meta.url))
 let text = new TextDecoder()

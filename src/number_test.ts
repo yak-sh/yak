@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { apply, delta, fleetGraphOf, human, readComp } from './db.ts'
 import { connect } from './store/sqlite.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import { served } from './served.ts'
 import { bareDb } from './testdb.ts'
 import { idOf, uuid } from './types.ts'

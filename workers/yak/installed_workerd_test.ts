@@ -5,7 +5,7 @@
 // hears its page token and never the cookie, one app's token opens no other,
 // it keeps its words to itself, and it keeps a page's storage.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { connector, kernel, signIn, txt, vocabFile } from './probe.ts'
 
 slow('an installed copy runs like its space, or sandboxed', async () => {

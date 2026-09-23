@@ -13,8 +13,8 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
-import { COOKIE, sealedOld, sign, verify } from '../../src/token.ts'
-import { CUT } from '../../src/token_legacy.ts'
+import { COOKIE, sealedOld, sign, verify } from './lib/token.ts'
+import { CUT } from './lib/token_legacy.ts'
 import { granting } from './dispatch.ts'
 import { GRANT, tokenOf } from './grants.ts'
 import { SESSION, slid, whoIs } from './session.ts'

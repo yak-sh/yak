@@ -7,7 +7,7 @@ import { type Reach, WALK_LIMIT } from './query.ts'
 import { reachRows } from './sql.ts'
 import { type Bundle, matcher } from '@yaks/match'
 import { loadVocab } from '@yaks/vocab'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 let fixture = (
   size: number,

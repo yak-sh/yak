@@ -38,8 +38,7 @@
 // (workers/yak/declared.ts). So a tool can do exactly what the person
 // calling it could do on the page, and never more.
 import type { Bundle, Tool, ToolCtx } from '@yaks/graph'
-import { comps, type PropType } from '../types.ts'
-import { TYPES, type Vocab } from './vocab.ts'
+import { type Word, WORDS } from '../vocab.ts'
 
 // One declared tool, as written. `apply` and `query` are the two acts; an
 // entry names exactly one.
@@ -55,7 +54,7 @@ import { TYPES, type Vocab } from './vocab.ts'
 // a sentence, while an empty `recipe` is still what makes the row a recipe.
 export type ToolDef = {
   description: string
-  input: Record<string, PropType>
+  input: Record<string, Word>
   optional?: string[]
   drop?: string[]
   apply?: unknown
@@ -117,7 +116,7 @@ export let modern = <T>(v: T): T =>
     : v
 
 // The wire's own keys beside the components: what an entity bundle may say
-// that is not a component name (src/mutation.ts EntityLiteral).
+// that is not a component name (@yaks/graph `Bundle`).
 let WIRE = ['entity', 'edges', 'tombstone', 'was']
 
 // Every variable in a template, wherever the strings are.
@@ -156,10 +155,11 @@ let named = (v: unknown, found: Set<string> = new Set()): Set<string> => {
 
 // The manifest as written, checked whole: every problem in one sentence, the
 // way vocab.json refuses (T-32628), because an agent that fixes one problem
-// per deploy stops after the second.
+// per deploy stops after the second. `words` are the components the app's
+// store knows, which are the only ones a template may write.
 export let parseTools = (
   source: unknown,
-  vocab: Vocab = {},
+  words: string[] = [],
   file = 'tools.json',
 ): Tools => {
   if (typeof source == 'string') {
@@ -175,7 +175,6 @@ export let parseTools = (
   if (!object(source)) {
     throw new Error(`${file} is an object — ${TOOLS_EXAMPLE}`)
   }
-  let words = [...Object.keys(comps), ...Object.keys(vocab)]
   let wrong: string[] = []
   let out: Tools = {}
   for (let [name, entry] of Object.entries(source)) {
@@ -196,7 +195,7 @@ export let parseTools = (
     if (typeof entry.description != 'string' || !entry.description) {
       wrong.push(`${name}.description says what the tool does, in a sentence`)
     }
-    let input: Record<string, PropType> = {}
+    let input: Record<string, Word> = {}
     if (entry.input != null) {
       if (!object(entry.input)) {
         wrong.push(`${name}.input is an object of arguments — ${TOOLS_EXAMPLE}`)
@@ -207,13 +206,13 @@ export let parseTools = (
               `${name}.input: ${JSON.stringify(arg)} is not an ` +
                 'argument name (a-z, 0-9, _)',
             )
-          } else if (typeof type != 'string' || !(type in TYPES)) {
+          } else if (typeof type != 'string' || !(type in WORDS)) {
             wrong.push(
               `${name}.input.${arg} is ${JSON.stringify(type)} — one of ${
-                Object.keys(TYPES).join(', ')
+                Object.keys(WORDS).join(', ')
               }`,
             )
-          } else input[arg] = type as PropType
+          } else input[arg] = type as Word
         }
       }
     }
@@ -327,7 +326,7 @@ export let schemaOf = (tool: ToolDef) => ({
 // sends — a number as a string, `"true"` for a flag — so the type it was
 // declared under is what it becomes, and a value that cannot become that is
 // refused by name.
-let typed = (arg: string, type: PropType, v: unknown) => {
+let typed = (arg: string, type: Word, v: unknown) => {
   if (v == null) throw new Error(`${arg} is required`)
   if (type == 'number') {
     let n = typeof v == 'number' ? v : Number(String(v))

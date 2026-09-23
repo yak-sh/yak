@@ -13,7 +13,7 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
-import { slow, tick } from '../../src/testing.ts'
+import { slow, tick } from '../../bin/testing.ts'
 import { client, connector, kernel, meta, seed } from './probe.ts'
 
 slow('a page reports its own breaks, and the agent hears', async () => {

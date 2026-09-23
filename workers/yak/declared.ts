@@ -1,5 +1,5 @@
 // The commands an app declares (T-32685, T-34541): the `tools.json` a deploy
-// handed its store (store/tools.ts) and the two tools each word it holds is
+// handed its store (lib/tools.ts) and the two tools each word it holds is
 // worth (kinds.ts), read back here and run through the platform's `command`
 // tool. tools.ts owns the tools the platform has; this owns the verbs a
 // person's own app grew.
@@ -38,11 +38,11 @@ import {
   schemaOf,
   type ToolDef,
   type Tools,
-} from '../../src/store/tools.ts'
+} from './lib/tools.ts'
 import { type Ctx, type Out, uiMeta, VIEW_MIME } from './tools.ts'
 import { once, refuse } from './tool.ts'
 import type { Who } from './session.ts'
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import { r2Objects } from './lib/objects.ts'
 import { storeOf } from './door.ts'
 import { told } from './stream.ts'
 
@@ -62,7 +62,7 @@ export let toolsOf = async (
     return {}
   }
   // What is stored may have been written when `{{arg}}` was the syntax
-  // (store/tools.ts `modern`): an app deployed then goes on working, and its
+  // (lib/tools.ts `modern`): an app deployed then goes on working, and its
   // next deploy writes the manifest in the one syntax there is.
   return modern(await r.json() as Tools)
 }
@@ -436,7 +436,7 @@ export let readView = async (ctx: Ctx, uri: string) => {
   let declared = Object.values(await toolsOf(ctx.env, space, app))
     .some((t) => t.view == file)
   if (!declared) return null
-  let blobs = r2Blobs(ctx.env.BLOBS)
+  let blobs = r2Objects(ctx.env.BLOBS)
   let key = `${space.slug}/${app.slug}/${file}`
   if (!(await blobs.has(key))) return null
   let page = new TextDecoder().decode(await blobs.get(key))

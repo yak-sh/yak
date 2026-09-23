@@ -3,7 +3,7 @@
 // lets this test model a fresh server/effectsd pair without changing DB_PATH or
 // registering handlers in neighbouring test modules in the full-suite worker.
 import { assert, assertStringIncludes } from '@std/assert'
-import { denoDir, slow } from './testing.ts'
+import { denoDir, slow } from '../bin/testing.ts'
 
 slow(
   'split dispatcher launches graph-native Session without restart',

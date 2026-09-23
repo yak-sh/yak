@@ -3,7 +3,7 @@
 // lifecycle suite cannot.
 import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { type Change } from './types.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 let tmp = Deno.makeTempDirSync({ prefix: 'tasks-session-lock-' })
 Deno.env.set('DB_PATH', `${tmp}/tasks.db`)

@@ -1,4 +1,4 @@
-import { until } from '../src/testing.ts'
+import { until } from './testing.ts'
 import { fileURLToPath } from 'node:url'
 import { assertEquals, assertThrows } from '@std/assert'
 import { shards } from './test.ts'
@@ -22,7 +22,7 @@ for (let failure of [false, true]) {
   Deno.test(`bulk processes run every shard${failure ? ' past a failing one' : ''}`, async () => {
     let dir = await Deno.makeTempDir({ prefix: 'test-shards-' })
     try {
-      let testing = new URL('../src/testing.ts', import.meta.url).href
+      let testing = new URL('./testing.ts', import.meta.url).href
       await Deno.writeTextFile(
         `${dir}/a_test.ts`,
         `

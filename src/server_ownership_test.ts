@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { DatabaseSync, open } from './store/sqlite.ts'
-import { slow, until } from './testing.ts'
+import { slow, until } from '../bin/testing.ts'
 import {
   acquireServerOwnership,
   OWNER_BUSY_EXIT,

@@ -4,7 +4,7 @@
 // from schemaDdl() serves the wire like a migrated one.
 Deno.env.set('DB_PATH', ':memory:')
 import { assertEquals, assertStrictEquals, assertThrows } from '@std/assert'
-import { slow } from '../testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { type Can, present, type Sql, textPresent, WHITESPACE } from './sql.ts'
 let { DatabaseSync } = await import('./sqlite.ts')
 let { apply, migrate, plant, regraft, schemaDdl, search, snapshot } =

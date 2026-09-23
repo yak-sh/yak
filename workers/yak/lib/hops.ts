@@ -6,7 +6,7 @@
 //
 // The counter is AMBIENT rather than threaded because a round trip is made
 // three or four layers below whoever holds the request: door.ts builds every
-// request to a store, blobs_r2.ts every call to a bucket, db.ts every statement,
+// request to a store, objects.ts every call to a bucket, db.ts every statement,
 // and none of the three is handed the request they belong to. AsyncLocalStorage
 // is exactly the thing that carries a request's own context down through its
 // awaits without a parameter on forty call sites; workerd offers it under

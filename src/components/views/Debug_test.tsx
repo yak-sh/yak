@@ -7,7 +7,7 @@ import { parseHTML } from 'linkedom'
 import { compTone } from '../comp.ts'
 import { cache, ent, useRoute } from '../../live.ts'
 import { applicable } from '../registry.ts'
-import { slow } from '../../testing.ts'
+import { slow } from '../../../bin/testing.ts'
 
 // Each case imports Entity.tsx — the whole component registry — and mounts a
 // Debug view through preact; the first pays that registry import (and hljs to

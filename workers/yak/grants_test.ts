@@ -5,7 +5,7 @@
 // so the whole contract holds in plain Deno; the door it hangs on is held in
 // workerd (mcp_test.ts).
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { seal } from '../../src/token.ts'
+import { seal } from './lib/token.ts'
 import type { Directory } from './directory.ts'
 import {
   GRANT,

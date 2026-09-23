@@ -31,7 +31,7 @@ let { record } = await import('./telemetry.ts')
 ownVector()
 initVector(db)
 let { axes } = await import('./testvec.ts')
-let { slow } = await import('./testing.ts')
+let { slow } = await import('../bin/testing.ts')
 let { assertEquals, assertStringIncludes } = await import('@std/assert')
 
 let uid = () => crypto.randomUUID()

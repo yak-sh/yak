@@ -5,7 +5,8 @@
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import { filled, modern, parseTools, schemaOf, viewsOf } from './tools.ts'
 
-let runs = { jog: { who: 'text', miles: 'number' } } as const
+// The components the app's store knows, which a template may write.
+let runs = ['jog']
 
 let club = {
   log_run: {
@@ -37,8 +38,8 @@ Deno.test('tools.json: a sentence, an input, and one act', () => {
 })
 
 Deno.test('tools.json: one refusal names every problem', () => {
-  let why = (source: unknown, vocab = {}) =>
-    assertThrows(() => parseTools(source, vocab), Error).message
+  let why = (source: unknown, words: string[] = []) =>
+    assertThrows(() => parseTools(source, words), Error).message
   assertStringIncludes(why('not json'), 'tools.json is not JSON')
   assertStringIncludes(why([1]), 'tools.json is an object')
   assertStringIncludes(why({ Log: { description: 'x' } }), 'not a tool name')
@@ -56,7 +57,7 @@ Deno.test('tools.json: one refusal names every problem', () => {
   assertStringIncludes(all, 'log_run: $who names no input')
   assertStringIncludes(all, 'log_run.apply: jog is not a component')
   assertStringIncludes(all, 'nothing does one thing')
-  // A word the app declared in its vocab.json is a word its tools may write.
+  // A component the store knows is one its tools may write.
   assertEquals(
     Object.keys(parseTools({ log_run: club.log_run }, runs)),
     ['log_run'],
@@ -131,7 +132,7 @@ Deno.test('the call fills the template, typed by the input', () => {
       input: { name: 'text' },
       apply: { doc: { title: 'hi $name' } },
     },
-  })
+  }, ['doc'])
   assertEquals(filled(hello.hi, { name: 'Ada' }), {
     apply: { doc: { title: 'hi Ada' } },
   })
@@ -161,7 +162,7 @@ Deno.test('a variable nobody bound is the alias it looks like', () => {
         { entity: { eid: '$note' }, comment: { about: '$run' } },
       ],
     },
-  }, { jog: { miles: 'number' }, comment: { about: 'text' } })
+  }, ['jog', 'comment'])
   assertEquals(filled(tools.log_run, { miles: 3 }).apply, [
     { entity: { eid: '$run' }, jog: { miles: 3 } },
     { entity: { eid: '$note' }, comment: { about: '$run' } },
@@ -175,7 +176,7 @@ Deno.test('a variable nobody bound is the alias it looks like', () => {
           input: { miles: 'number' },
           apply: { entity: { eid: '$run' }, jog: { miles: '$mile' } },
         },
-      }, { jog: { miles: 'number' } }), Error).message,
+      }, runs), Error).message,
     'x: $mile names no input and no entity here',
   )
   // `$$` is a dollar sign, not a variable.
@@ -185,7 +186,7 @@ Deno.test('a variable nobody bound is the alias it looks like', () => {
       input: { n: 'number' },
       apply: { doc: { title: '$$$n' } },
     },
-  })
+  }, ['doc'])
   assertEquals(filled(money.price, { n: 5 }).apply, {
     doc: { title: '$5' },
   })

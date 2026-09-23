@@ -2,7 +2,7 @@
 // re-vendored marked or a config change breaks one, this says so.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { md, mdAbs, mdInline, mdMentions } from './md.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import { prefix } from './types.ts'
 
 Deno.test('mdInline: title markup has no block wrapper or nested links', () => {

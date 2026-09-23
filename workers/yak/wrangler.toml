@@ -390,7 +390,7 @@ binding = "OAUTH_KV"
 id = "64fa009267934abe8bc0c9d23ae01b17"
 
 # Secrets never live in this file. SESSION_SECRET signs the platform session
-# cookie (src/token.ts) and keys the sign-in code digests (signin.ts);
+# cookie (lib/token.ts) and keys the sign-in code digests (signin.ts);
 # MAIL_TOKEN and MAIL_ACCOUNT are the Cloudflare Email Sending credentials the
 # code letters go out on (mail.ts). Each is `wrangler secret put <NAME>` for
 # the deploy; locally a .dev.vars line, or `wrangler dev --var NAME:…` the way
@@ -444,9 +444,7 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # here, out of this directory's own install (package.json).
 "@std/yaml" = "./node_modules/@std/yaml/mod.js"
 "croner" = "./node_modules/croner/dist/croner.js"
-# @yaks/markdown parses with marked, and the repo vendors it as plain ESM
-# (deno.json), so the documentation pages cost this bundle no npm install.
-"marked" = "../../src/vendor/marked.esm.js"
+"marked" = "./node_modules/marked/lib/marked.esm.js"
 "preact" = "./node_modules/preact/dist/preact.module.js"
 "preact/hooks" = "./node_modules/preact/hooks/dist/hooks.module.js"
 "preact-render-to-string" = "./node_modules/preact-render-to-string/dist/index.mjs"

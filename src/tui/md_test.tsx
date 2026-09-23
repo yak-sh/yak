@@ -6,7 +6,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { TElement } from './dom.ts'
 import { Md } from './md.tsx'
 import { ansi, pane } from './paint.ts'
-import { slow } from '../testing.ts'
+import { slow } from '../../bin/testing.ts'
 
 let painted = (text: string) => {
   let root = new TElement('root')

@@ -5,7 +5,7 @@
 // invitation used to be the seat itself, which let anybody put their space
 // into a stranger's agent by naming the stranger's address.
 //
-// The letter carries a link sealed under the session secret (src/token.ts)
+// The letter carries a link sealed under the session secret (lib/token.ts)
 // naming the invitation, and the click is accepted only from a browser signed
 // in as the person it names. Both halves matter: the seal keeps the link out of
 // the inviter's hands, since only the letter ever holds it, so a page of theirs
@@ -14,7 +14,7 @@
 // with the invited address, and the code letter brings them back here.
 //
 // Owner, 2026-09-22: "oh yes, one-click to accept invite is good".
-import { opened, seal } from '../../src/token.ts'
+import { opened, seal } from './lib/token.ts'
 import {
   type App,
   type Directory,

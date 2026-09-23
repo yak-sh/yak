@@ -4,7 +4,7 @@
 // and shipped tens of MB. A route sub keeps its name-scoped answer.
 
 import { assertEquals } from '@std/assert'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 

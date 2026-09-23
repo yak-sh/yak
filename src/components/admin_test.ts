@@ -9,7 +9,7 @@ import { Admin } from './Admin.tsx'
 import { route } from './nav.tsx'
 import { cache, landSub, useRoute } from '../live.ts'
 import { assertEquals } from '@std/assert'
-import { until } from '../testing.ts'
+import { until } from '../../bin/testing.ts'
 
 // A mounted view holds subscriptions. In a test there is no server to hold
 // them against, so control frames go nowhere through live.ts's transport

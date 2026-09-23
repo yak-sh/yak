@@ -25,7 +25,7 @@ import {
   type Row,
   rows,
 } from './client.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import type { Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')

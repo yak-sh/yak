@@ -22,7 +22,7 @@ let { cache, ent, landSub, resetSignals, useRoute } = await import(
   '../../live.ts'
 )
 let { mount } = await import('../mount.ts')
-let { tick, until } = await import('../../testing.ts')
+let { tick, until } = await import('../../../bin/testing.ts')
 let { drop } = await import('../drafts.ts')
 
 Deno.test('board columns request a projected, priority-ordered screenful', () => {

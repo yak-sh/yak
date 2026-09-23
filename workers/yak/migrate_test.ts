@@ -1,19 +1,19 @@
 /// <reference lib="deno.ns" />
 // The one pass, end to end (T-33809): an object is seeded the way the store
-// this replaces seeded one — its DDL out of src/store/schema.json, its own
-// apply() (src/db.ts), its own key-value slots — and then woken as the Store on
-// the packages, which finds the old rows and moves them.
+// this replaces seeded one — its DDL, its own apply(), its own key-value
+// slots — and then woken as the Store on the packages, which finds the old
+// rows and moves them.
 //
-// The old Durable Object class went with T-33807, and what it wrapped did not:
-// {@link older} is the three calls that class made on a write (`plant`,
-// `plantVocab`, `mutate`), so the fixtures are still written by the code that
-// wrote the rows a deployed object is holding right now — only the HTTP
-// envelope around them is gone, and this pass never reads one. The assertions
-// read the new store through its own `/query` door.
+// The old store's writer went with the fleet server (T-37584), and what it
+// wrote did not: {@link older} replays the SQL that writer executed for each
+// fixture below, recorded while it still existed
+// (./fixtures/legacy_store.json, keyed by the calls that produced it). A
+// fixture with no recording is refused by name. The assertions read the new
+// store through its own `/query` door.
 //
-// Slow tier: every one of these plants the fleet's whole 328-op schema to have
-// something to migrate, which is a third of a second an object — the cost of
-// the thing under test, not of the setup around it.
+// Slow tier: every one of these plants the fleet's whole schema to have
+// something to migrate — the cost of the thing under test, not of the setup
+// around it.
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import {
   createTransport,
@@ -21,7 +21,7 @@ import {
   ServerRuntimeClient,
   setCurrentClient,
 } from '@sentry/core'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { blobSchema } from '@yaks/blob'
 import { type Bundle, derivedEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
@@ -46,21 +46,10 @@ import {
   SERVES,
   TOOLED,
 } from './migrate.ts'
-import {
-  mutate,
-  plant,
-  plantVocab,
-  type SchemaOp,
-  schemaStamp,
-} from '../../src/db.ts'
-import { fed } from '../../src/effects.ts'
-import type { EntityLiteral } from '../../src/mutation.ts'
-import { DoSql, type DoStorage } from '../../src/store/do.ts'
-import { parseVocab } from '../../src/store/vocab.ts'
-import ops from '../../src/store/schema.json' with { type: 'json' }
+import legacy from './fixtures/legacy_store.json' with { type: 'json' }
 import { PLATFORM_STORE } from './door.ts'
 import { appVocab } from './vocab.ts'
-import { slugsOf } from '../../src/types.ts'
+import { slugsOf } from './directory.ts'
 
 // One object's whole state, kept across incarnations: its storage, the key-value
 // slots the old store remembered everything in, and the socket list the runtime
@@ -95,28 +84,52 @@ let THREE = '33000000-0000-4000-8000-000000000033'
 let FOUR = '44000000-0000-4000-8000-000000000044'
 let GONE = '30000000-0000-4000-8000-000000000003'
 
-// The old store's birth and its writes, over one object's storage: the fleet's
-// whole schema planted from src/store/schema.json, the slots the object
+// The old store's birth and its writes, over one object's storage, as the
+// recording says they went: the fleet's whole schema, the slots the object
 // remembered its name and its schema stamp in, and apply() in server-writer
 // mode — which is what every request the kernel made carried (`x-yak-kernel`).
+// A write is the calls so far, and the recording under them is exactly the
+// statements the old writer ran for them.
+type Tape = Record<string, { sql: [string, unknown[]][]; vocab?: string }>
+let tape = legacy as unknown as Tape
+
+let bytes = (v: unknown) => {
+  let o = v as { $bytes?: string; $bigint?: string } | null
+  return o?.$bytes != null
+    ? Uint8Array.from(atob(o.$bytes), (c) => c.charCodeAt(0))
+    : o?.$bigint != null
+    ? BigInt(o.$bigint)
+    : v
+}
+
 let older = (ctx: State, name: string) => {
-  let db = new DoSql(ctx.storage as unknown as DoStorage)
-  plant(db, ops as SchemaOp[])
+  let calls: unknown[] = [name]
+  let play = (call: unknown) => {
+    calls.push(call)
+    let key = JSON.stringify(calls)
+    let got = tape[key]
+    if (!got) {
+      throw new Error(
+        `no recording of the old writer for ${key.slice(0, 160)} — record ` +
+          'it from a commit that still has src/db.ts',
+      )
+    }
+    for (let [q, args] of got.sql) {
+      ctx.storage.sql.exec(q, ...(args.map(bytes) as never[]))
+    }
+    return got
+  }
+  play('open')
   ctx.slots.set('name', name)
-  ctx.slots.set('schema', schemaStamp(ops as SchemaOp[]))
+  ctx.slots.set('schema', tape.schema.vocab)
   return {
-    db,
-    apply: (entities: EntityLiteral[]) =>
-      mutate(db, { entities }, fed(), null, true),
+    apply: (entities: Record<string, unknown>[]) =>
+      void play(['apply', entities]),
     // The app's own vocab.json, as the `/vocab` door planted it: the tables and
     // columns it names, then the manifest itself in the slot the object woke
     // with. A fresh store has nothing to grow from, so this is the whole of it.
-    vocab: (manifest: unknown) => {
-      let vocab = parseVocab(manifest)
-      plantVocab(db, vocab)
-      ctx.slots.set('vocab', JSON.stringify(vocab))
-      return vocab
-    },
+    vocab: (manifest: unknown) =>
+      void ctx.slots.set('vocab', play(['vocab', manifest]).vocab),
   }
 }
 

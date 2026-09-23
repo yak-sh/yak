@@ -18,8 +18,8 @@
 //   - the script carries every module the app's worker imports, each typed by
 //     what the runtime must do with it — a wasm compiled, a `.js` linked
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { COOKIE, seal, sign } from '../../src/token.ts'
-import { slow } from '../../src/testing.ts'
+import { COOKIE, seal, sign } from './lib/token.ts'
+import { slow } from '../../bin/testing.ts'
 import type { App, Space } from './directory.ts'
 import {
   carried,

@@ -4,7 +4,7 @@
 // throw. Every case builds its own repo, so nothing here touches a live one.
 import { assert, assertEquals } from '@std/assert'
 import { commit, standing } from './git.ts'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 
 let dec = new TextDecoder()
 // stderr is held, not inherited: git narrates harmlessly (an upstream not

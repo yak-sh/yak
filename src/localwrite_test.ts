@@ -15,7 +15,7 @@ import { armLocal, disarm } from './localread.ts'
 import { DatabaseSync, open } from './store/sqlite.ts'
 import { writeSession } from './session_store.ts'
 import { sha } from './sha.ts'
-import { slow, until } from './testing.ts'
+import { slow, until } from '../bin/testing.ts'
 import type { Change } from './types.ts'
 
 let root = fileURLToPath(new URL('../', import.meta.url))

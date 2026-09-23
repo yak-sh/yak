@@ -3,7 +3,7 @@
 import { fileURLToPath } from 'node:url'
 import { assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import { slow } from './testing.ts'
+import { slow } from '../bin/testing.ts'
 import { drain, report, turnOf } from './turn.ts'
 
 Deno.test('turnOf recognizes only turn boundaries', () => {

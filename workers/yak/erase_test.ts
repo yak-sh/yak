@@ -8,9 +8,9 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parse } from '@std/toml'
 import { next } from '@yaks/wake'
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import { r2Objects } from './lib/objects.ts'
 import type { Wire } from '@yaks/durable-object'
-import { slow, until } from '../../src/testing.ts'
+import { slow, until } from '../../bin/testing.ts'
 import type { Held } from './build.ts'
 import {
   collected,
@@ -475,7 +475,7 @@ slow(
       }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
       let app = (await dir.app(space, slug))!
       // A file of its own, so what the erase takes is visible in the bucket.
-      await r2Blobs(env.BLOBS).put(
+      await r2Objects(env.BLOBS).put(
         `ada/${slug}/index.html`,
         new TextEncoder().encode(`<h1>${slug}</h1>`),
       )
@@ -496,7 +496,7 @@ slow(
       }],
     }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
     // Notes under the name they had before T-34632 (T-37888).
-    await r2Blobs(env.BLOBS).put(
+    await r2Objects(env.BLOBS).put(
       'ada/live/AGENTS.md',
       new TextEncoder().encode('grams'),
     )
@@ -509,14 +509,14 @@ slow(
     // The notes are under the one name read now, and the old one is gone.
     assertEquals(
       new TextDecoder().decode(
-        (await r2Blobs(env.BLOBS).read('ada/live/NOTES.md'))!,
+        (await r2Objects(env.BLOBS).read('ada/live/NOTES.md'))!,
       ),
       'grams',
     )
-    assertEquals(await r2Blobs(env.BLOBS).has('ada/live/AGENTS.md'), false)
+    assertEquals(await r2Objects(env.BLOBS).has('ada/live/AGENTS.md'), false)
     assertEquals((await dir.apps(space)).map((a) => a.slug), ['live', 'fresh'])
     // The bytes went with the row, and only that app's.
-    let keys = await r2Blobs(env.BLOBS).list('ada/')
+    let keys = await r2Objects(env.BLOBS).list('ada/')
     assertEquals(keys.some((k) => k.startsWith('ada/old/')), false)
     assertEquals(keys.some((k) => k.startsWith('ada/fresh/')), true)
     // A second run has nothing to do, and the app still in its days is still
@@ -555,7 +555,7 @@ slow(
           former: { slug },
         }],
       }, by)
-      await r2Blobs(env.BLOBS).put(
+      await r2Objects(env.BLOBS).put(
         `${space.slug}/${slug}/index.html`,
         new TextEncoder().encode(`<h1>${slug}</h1>`),
       )
@@ -569,7 +569,7 @@ slow(
     assert(await dir.space('ada'))
     // The app in it went with it, and so did its bytes — one erase, the same
     // one a person confirming `forever` runs.
-    let keys = await r2Blobs(env.BLOBS).list('')
+    let keys = await r2Objects(env.BLOBS).list('')
     assertEquals(keys.some((k) => k.startsWith('old/')), false)
     assertEquals(keys.some((k) => k.startsWith('fresh/')), true)
     // A second run has nothing to do, and the space still in its days waits

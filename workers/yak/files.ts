@@ -15,8 +15,8 @@
 // bound to this named entrypoint. The routes in wrangler.toml address the
 // default entrypoint, so no request from the internet arrives here — a caller
 // has to be this Worker.
-import { r2Blobs } from '../../src/blobs_r2.ts'
-import type { Blobs } from '../../src/store/blobs.ts'
+import { r2Objects } from './lib/objects.ts'
+import type { Objects } from '@yaks/blob'
 import { keepable, purge, tagsOf } from './cache.ts'
 import type { App } from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -94,7 +94,7 @@ let missing = (keep: Record<string, string>) =>
 // file, `worker.js` where it names none. Both files are asked for at
 // once — an app carries at most one, so the miss is unavoidable and paying for
 // it twice over is not.
-let mainOf = async (blobs: Blobs, prefix: string) => {
+let mainOf = async (blobs: Objects, prefix: string) => {
   let [jsonc, json] = await Promise.all([
     blobs.read(`${prefix}/wrangler.jsonc`),
     blobs.read(`${prefix}/wrangler.json`),
@@ -149,7 +149,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let keep = keepable(tagsOf(eid))
   let prefix = req.headers.get(PREFIX)
   if (!prefix || !eid) return missing(keep)
-  let blobs = r2Blobs(env.BLOBS)
+  let blobs = r2Objects(env.BLOBS)
   // One read, not a stat and then a read (T-33176): the bucket is a round trip
   // away, and asking whether the file is there before asking for it paid that
   // trip twice for every file the app serves.
