@@ -47,11 +47,12 @@ query grammar or SQL lowering lives here.
 ## Writes and startup
 
 The graph's transaction-local `track` callback sees every write, including
-stamped columns, entities created only to be referenced, cascading deletes and
-journal writes. It starts from the entity's state before the transaction, loads
-an uncached archetype record once per process, and updates its table set without
-rereading component tables. This preserves tables the writer's vocabulary does
-not know. Value-only patches and net-zero changes do not move the pointer.
+stamped properties, entities created only to be referenced, cascading deletes
+and journal writes. It starts from the entity's state before the transaction,
+loads an uncached archetype record once per process, and updates its table set
+without rereading component tables. This preserves tables the writer's
+vocabulary does not know. Value-only patches and net-zero changes do not move
+the pointer.
 
 Pending archetype assignments are written before the journal; new archetype
 records are included in the journal's batch (a list of changes applied in one

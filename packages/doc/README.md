@@ -29,16 +29,16 @@ Compose `docDoc` (the exported JSON Schema document) with your domain vocabulary
 to add shared text fields without repeating their definitions. The package
 provides no storage: the graph's adapter persists the title and body.
 
-## Two columns
+## Two properties
 
-| column  | what it is                          |
-| ------- | ----------------------------------- |
-| `title` | the one line the entity is known by |
-| `body`  | the prose, as markdown              |
+| property | what it is                          |
+| -------- | ----------------------------------- |
+| `title`  | the one line the entity is known by |
+| `body`   | the prose, as markdown              |
 
 And deliberately nothing else. A slug can be stored by an addressing package, an
 excerpt can be computed from the body, a renderer chooses its output format, and
-graph provenance components record timestamps. None is a column of `doc`.
+graph provenance components record timestamps. None is a property of `doc`.
 
 ## Use
 
@@ -69,7 +69,7 @@ shipping a second copy of the component.
 import. On its own it does nothing:
 
 - Load without [@yaks/blob](https://jsr.io/@yaks/blob)'s `blobKeywords` and
-  `body` is an ordinary text column.
+  `body` is an ordinary text property.
 - Load with them and compose `blobs(vocab, store)` to replace incoming text with
   its content address. Also configure read resolution (for example, the SQLite
   read override described in @yaks/blob) to return text instead of hashes.

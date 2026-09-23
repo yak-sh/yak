@@ -42,7 +42,7 @@ Memberships and grants are separate entities. The `access` component is stored
 on the app entity. References from `member` and `grant` use `death: cascade`, so
 deleting a referenced person, space or app removes the dependent entities. Use
 qualified query names such as `.grant.person=dana` and `.grant.access=editor`
-for columns whose short names are disabled.
+for properties whose short names are disabled.
 
 The modes determine access:
 
@@ -165,7 +165,7 @@ A principal that an `open` app admits and no level does (an anonymous caller, a
 viewer, a stranger signed in) may create entities, and may change or delete an
 existing entity only when its `created.by` names that principal, or when the
 entity is the principal itself. An anonymous caller owns nothing, so it only
-adds. A change that leaves every column it names as it was is admitted on any
+adds. A change that leaves every property it names as it was is admitted on any
 row, so a retried write of the same values is not refused. Owners and editors
 are not affected.
 

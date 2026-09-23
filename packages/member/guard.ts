@@ -25,7 +25,7 @@
 //
 // A row is the principal's own when its `created.by` names them, or when it is
 // them. An anonymous principal owns nothing, so it only adds. A change that
-// changes nothing — every column it names already holds that value — is
+// changes nothing — every property it names already holds that value — is
 // nobody's business, which is what lets the same bytes be uploaded twice.
 //
 // The principal is whatever `$actor` the changes carry. An HTTP layer replaces
@@ -93,7 +93,7 @@ let idle = (b: Bundle, row: Bundle) =>
   !dead(b) && comps(b).every(([name, comp]) => {
     let held = row[name] as Comp | null | undefined
     if (!comp) return held == null
-    return !!held && Object.entries(comp).every(([col, v]) => held[col] == v)
+    return !!held && Object.entries(comp).every(([prop, v]) => held[prop] == v)
   })
 
 // A principal the mode admits and no level does: new rows, and its own.

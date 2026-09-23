@@ -12,7 +12,7 @@
 // follow: the type and size a packfile entry header needs, the `blob{sha}`
 // the bytes are stored under, `tree_entry` edges (tree → child, with the name
 // on the link) and `parent` edges (commit → commit). Author, message, entry
-// order and mode are all in the body already; a column for them would be a
+// order and mode are all in the body already; a property for them would be a
 // second copy free to drift.
 //
 // A git blob is the blob you already have. The bytes an app deployed are

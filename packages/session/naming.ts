@@ -23,18 +23,18 @@ import { ENTRY, FORK, USING } from './native.ts'
 /** A reference in one of this package's components named an entity of the
  * wrong kind. */
 export class Unnamed extends Error {
-  constructor(public comp: string, public column: string, public eid: string) {
-    super(`${comp}.${column} names ${eid}, which is not a ${column}`)
+  constructor(public comp: string, public prop: string, public eid: string) {
+    super(`${comp}.${prop} names ${eid}, which is not a ${prop}`)
     this.name = 'Unnamed'
   }
 }
 
-let ref = (b: Bundle, comp: string, col: string) => {
-  let v = (b[comp] as Comp | null | undefined)?.[col]
+let ref = (b: Bundle, comp: string, prop: string) => {
+  let v = (b[comp] as Comp | null | undefined)?.[prop]
   return v == null ? undefined : String(v)
 }
 
-// [comp, column, eid, the component the target must have]
+// [comp, prop, eid, the component the target must have]
 type Check = [string, string, string, string]
 
 let checks = (b: Bundle): Check[] => {
@@ -62,9 +62,9 @@ const names: Hook = (bundles, tx) => {
   let asked = all.filter(([, , eid, comp]) => !inBatch(eid, comp))
   if (!asked.length) return bundles
   return then(tx.get(asked.map(([, , eid]) => eid)), (found) => {
-    for (let [comp, col, eid, must] of asked) {
+    for (let [comp, prop, eid, must] of asked) {
       let hit = found.find((b) => b.entity.eid == eid)
-      if (!hit || !(must in hit)) throw new Unnamed(comp, col, eid)
+      if (!hit || !(must in hit)) throw new Unnamed(comp, prop, eid)
     }
     return bundles
   })

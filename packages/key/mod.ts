@@ -1,13 +1,13 @@
 /**
  * @yaks/key — the values that identify an entity, stored as entities.
  *
- * A value that identifies something is not a column on the thing it identifies;
- * it is an entity of its own, carrying the `key{of, value}` component and a
- * kind tag component naming what sort of value it is. A store identifies its
- * recipes by a short name (`alias`), a directory its people by address
- * (`email`), a library its books by `isbn`; the structure is the same, and the
- * kinds are yours to declare — this package ships the carrier and the mechanism
- * and not one kind.
+ * A value that identifies something is not a property on the thing it
+ * identifies; it is an entity of its own, carrying the `key{of, value}`
+ * component and a kind tag component naming what sort of value it is. A store
+ * identifies its recipes by a short name (`alias`), a directory its people by
+ * address (`email`), a library its books by `isbn`; the structure is the same,
+ * and the kinds are yours to declare — this package ships the carrier and the
+ * mechanism and not one kind.
  *
  * It is to a has-many value exactly what
  * {@link https://jsr.io/@yaks/edge | @yaks/edge} is to a link: one generic

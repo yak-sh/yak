@@ -64,7 +64,7 @@
       "component": true,
       "type": "object",
       "edge": true,
-      "description": "this commit's parent; the edge's `ord` column keeps the parent order",
+      "description": "this commit's parent; the edge's `ord` property keeps the parent order",
       "properties": {}
     },
     "compat": {

@@ -28,7 +28,7 @@
  * A duration (`30m`, `every 3 days`) keeps its original cadence. Five cron
  * fields (`0 9 * * 1-5`) or `@hourly`, `@daily`, `@weekly`, `@monthly` name
  * calendar positions. An optional trailing IANA time zone is stored in the same
- * column; with none, UTC is used. Croner uses Intl, with no build step.
+ * property; with none, UTC is used. Croner uses Intl, with no build step.
  *
  * This module starts no timer and imports no platform API. The program running
  * it calls `tick` when its own clock fires.

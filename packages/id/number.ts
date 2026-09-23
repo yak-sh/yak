@@ -6,7 +6,7 @@
 //
 // The plugin declares `$num` as its own request, so a graph that never
 // registered it refuses the key instead of quietly dropping it, and it brings
-// the `entity{num}` column with it — the request and the place the answer is
+// the `entity{num}` property with it — the request and the place the answer is
 // kept arrive together.
 //
 // A storage adapter may answer synchronously or not, and registering this

@@ -17,9 +17,9 @@
 // no orphans.
 //
 // `person` and `access` opt out of the short form (`bare: false`): two
-// components have a `person` column, and `access` is both a component here and
-// a column on `grant`, so a query names both in full — `.grant.person=<id>`,
-// `.grant.access=editor`.
+// components have a `person` property, and `access` is both a component here
+// and a property on `grant`, so a query names both in full —
+// `.grant.person=<id>`, `.grant.access=editor`.
 //
 // The document itself is `./vocab.json` — plain JSON Schema, readable by
 // anything that reads JSON. This file re-exports it under the name callers

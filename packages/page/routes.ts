@@ -94,9 +94,9 @@ export let routes = (
         ...(title && !comp(page, DOC) ? { [DOC]: { [TITLE]: title } } : {}),
       }
       try {
-        // `frozen_at` and `bytes` are server-owned columns: this handler is the
-        // server, and a client could otherwise claim an archive that does not
-        // exist.
+        // `frozen_at` and `bytes` are server-owned properties: this handler is
+        // the server, and a client could otherwise claim an archive that does
+        // not exist.
         return Response.json(
           await host.graph.apply([bundle], {
             trusted: true,

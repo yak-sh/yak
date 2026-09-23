@@ -1,12 +1,12 @@
 // How a citation stands right now, derived and never stored.
 //
-// A citation is an edge — `A cites B` — carrying the commit it was last
-// checked against (`revision{commit}`), the place in B it names (`lines`, or
-// the whole file), and the `verified` mark somebody wrote when they checked
-// it. A definition is cited by pointing at it: B is then a @yaks/code
-// `symbol` entity, and the file is its module's. Whether it is still true is not a column: it is
-// re-derived here, so a document can never claim a freshness the repository
-// contradicts.
+// A citation is an edge — `A cites B` — carrying the commit it was last checked
+// against (`revision{commit}`), the place in B it names (`lines`, or the whole
+// file), and the `verified` mark somebody wrote when they checked it. A
+// definition is cited by pointing at it: B is then a @yaks/code `symbol`
+// entity, and the file is its module's. Whether it is still true is not a
+// property: it is re-derived here, so a document can never claim a freshness
+// the repository contradicts.
 //
 // For a file, the question is Git's: which commits after `revision.commit`
 // touched the place the citation names. `git log <commit>..HEAD` answers it,

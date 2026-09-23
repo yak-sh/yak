@@ -61,7 +61,7 @@ adapter stores the key entities. The example above uses memory only.
 ## How a name is stored and looked up
 
 `alias: { name }` on an incoming entity is input syntax, consumed during the
-`normalize` phase. `name` is not a stored column of the `alias` component.
+`normalize` phase. `name` is not a stored property of the `alias` component.
 Instead the plugin creates a separate key entity holding `key{of, value}` with
 an `alias` component beside it. That key entity's id is derived from its value,
 which is what makes a name unique; one entity can have several names. Deleting

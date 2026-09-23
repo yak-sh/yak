@@ -43,8 +43,8 @@ from completion and cancellation records remain as history when the referenced
 entity is deleted. `accept.body` is declared for blob storage; composing
 [@yaks/blob](../blob) supplies that behavior.
 
-Project, priority, domain and assignee are columns on `filed`, which belongs to
-[@yaks/project](../project). That package also owns `board{query}`, a saved
+Project, priority, domain and assignee are properties on `filed`, which belongs
+to [@yaks/project](../project). That package also owns `board{query}`, a saved
 query whose results determine board membership. Neither filing nor a board is
 required to create a task.
 
@@ -216,8 +216,8 @@ that computed status, as described above.
 
 The tools can write `doc` and `filed` without importing their packages because
 bundles are plain data. Load `@yaks/doc` and `@yaks/project` to retain those
-components: graph admission drops undeclared components. An unknown column on a
-declared component is refused instead.
+components: graph admission drops undeclared components. An unknown property on
+a declared component is refused instead.
 
 Showing a complete entity uses the generic `graph_show` tool. Ranked search uses
 `search` when the server supplies a search implementation. Applying a plan uses
@@ -227,10 +227,10 @@ separate show, search or tree tool.
 ## The board guard
 
 [@yaks/project](../project) validates saved board queries in a `precondition`
-hook. It rejects unknown columns such as `.staus=open` and unsupported status
+hook. It rejects unknown properties such as `.staus=open` and unsupported status
 values such as `.status=complete`. A refusal rolls back the whole batch. Writing
-`task.status` itself does not set status: graph admission drops computed columns
-before that hook runs.
+`task.status` itself does not set status: graph admission drops computed
+properties before that hook runs.
 
 ## Integration
 

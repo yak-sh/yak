@@ -19,7 +19,7 @@ export type Eid = string
 export type Entity = { eid: Eid; num?: number | null }
 
 /** A bundle: the identity under `entity`, every component under its own name,
- * columns inside, plus the `$`-prefixed requests that ride beside them. */
+ * properties inside, plus the `$`-prefixed requests that ride beside them. */
 export type Bundle = {
   entity: Entity
   [comp: string]:

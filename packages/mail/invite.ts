@@ -28,9 +28,10 @@ export type Seat = {
   person: Eid
   /** what they joined */
   space: Eid
-  /** what they joined as — whatever your roster's role column holds */
+  /** what they joined as — whatever your roster's role property holds */
   role: string
-  /** the whole `member` component, for a roster with more columns than these */
+  /** the whole `member` component, for a roster with more properties than
+   * these */
   member: Comp
 }
 

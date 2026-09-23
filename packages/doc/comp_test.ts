@@ -23,7 +23,7 @@ Deno.test('doc is a kind, ordered against nothing it does not ship', () => {
   assertEquals(plain.comp(DOC)!.before, [])
 })
 
-Deno.test('both columns are text, and both route bare', () => {
+Deno.test('both properties are text, and both route bare', () => {
   for (let prop of [TITLE, BODY]) {
     assertEquals(plain.prop(DOC, prop)!.category, 'scalar')
     assertEquals(plain.route(prop), { comp: DOC, prop })
@@ -33,7 +33,7 @@ Deno.test('both columns are text, and both route bare', () => {
 Deno.test('store is carried only by whoever registered the keyword', () => {
   assertEquals(plain.prop(DOC, BODY)!.keywords.store, undefined)
   assertEquals(addressed.prop(DOC, BODY)!.keywords.store, 'blob')
-  // and it is an ordinary text column either way — where the value lives is
+  // and it is an ordinary text property either way — where the value lives is
   // @yaks/blob's business, never the meta-model's
   for (let v of [plain, addressed]) {
     assertEquals(v.prop(DOC, BODY)!.scalar, 'text')

@@ -11,7 +11,7 @@ The public API uses entities and components. SQL adapters store them in tables
 and rows internally. Three terms are used below:
 
 - an **entity** is a thing the graph knows about, identified by an `eid` (a
-  string, commonly a UUID). It has no type column: an entity is whatever its
+  string, commonly a UUID). It has no type property: an entity is whatever its
   components make it.
 - a **component** is a named object stored on an entity — `doc: {title, body}`,
   `comment: {target}`. One entity can have many.
@@ -33,8 +33,8 @@ ordinary JSON. The package also implements a comment-creation tool.
   [@yaks/id](../id), whose document adds `num` to this same row.
 - the marks recording what happened to something and who did it — `created`,
   `updated`, `opened`, `archived`, `verified` — each with `at`, `by` and `via`
-  columns that @yaks/graph stamps rather than a caller. `by` is the entity that
-  wrote it and `via` is what it was written through (a session, a client).
+  properties that @yaks/graph stamps rather than a caller. `by` is the entity
+  that wrote it and `via` is what it was written through (a session, a client).
   `verified` says somebody checked the entity against what it claims and found
   it holds; it is generic, so anything checkable carries it — a citation
   ([@yaks/git](../git)) is one thing that does — and only the act of checking
@@ -42,7 +42,7 @@ ordinary JSON. The package also implements a comment-creation tool.
 - the marks recording what was decided about something — `proposed`, `decided`
   (with a verdict of `approved` or `declined`), `quarantined` (an annotation for
   applications to exclude a readable record from guidance), and `redaction`,
-  which records that one column of one entity was replaced, keeping a hash of
+  which records that one property of one entity was replaced, keeping a hash of
   what was there so a claim about it can still be checked.
 - the things that attach to an entity — `comment{target}`, which points a remark
   at any entity at all (the text itself is the `doc{body}` on the same entity),
@@ -81,11 +81,11 @@ A vocabulary can be extended with custom JSON Schema keywords. This package adds
 three that the core meta-model does not cover, registered by passing
 `kernelKeywords` to `loadVocab(docs, [kernelKeywords])`:
 
-| keyword    | declared on | meaning                                                                                                  |
-| ---------- | ----------- | -------------------------------------------------------------------------------------------------------- |
-| `governed` | a component | a project answers for entities carrying it — what a project's reach is computed over                     |
-| `lazy`     | a component | its rows are not included in the snapshot a client loads at startup; a reader asks for them by partition |
-| `well`     | a column    | the name of a list of suggested values, offered for completion beside the values already in the column   |
+| keyword    | declared on | meaning                                                                                                     |
+| ---------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
+| `governed` | a component | a project answers for entities carrying it — what a project's reach is computed over                        |
+| `lazy`     | a component | its rows are not included in the snapshot a client loads at startup; a reader asks for them by partition    |
+| `well`     | a property  | the name of a list of suggested values, offered for completion beside the values the property already holds |
 
 A transcript line needs no keyword of its own. Being reached only by its
 qualified filter name (`.entry.session=`, never a bare `.session=`) is what

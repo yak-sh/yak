@@ -98,9 +98,9 @@ let g = graph({
 })
 ```
 
-- **`idDoc`** adds `num` to the `entity` row — the one column a number needs. It
-  is an `extends` document ([@yaks/vocab](../vocab)): the spine is declared
-  once, by whichever package declares it, and this adds a column to it rather
+- **`idDoc`** adds `num` to the `entity` row — the one property a number needs.
+  It is an `extends` document ([@yaks/vocab](../vocab)): the spine is declared
+  once, by whichever package declares it, and this adds a property to it rather
   than declaring a second `entity`.
 - **`numbers(allocate)`** answers `$num: true` on a bundle. Code that creates an
   entity asks for a number per entity, by writing
@@ -135,7 +135,7 @@ among the plugins loads `idDoc` and installs `ids`.
 | `parse(id)`                    | `'B-7'` → `{ prefix: 'B', num: 7 }`; `undefined` if it is no id    |
 | `idOf(v)`                      | an entity → its display ID                                         |
 | `human(v)`                     | a bundle (`{entity: {eid, num?}, ...components}`) → its display ID |
-| `idDoc`                        | `entity{num}`, the column a number is kept in                      |
+| `idDoc`                        | `entity{num}`, the property a number is kept in                    |
 | `numbers(allocate)`            | the `$num` allocator, from `@yaks/id/rules`                        |
 | `ids(v)`                       | human id → eid, from `@yaks/id/rules`                              |
 

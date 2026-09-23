@@ -1,10 +1,10 @@
 // What a transcript is doing, computed from its entries — never stored. The
 // rule is written twice on purpose, once over bundles (for the daemon,
 // @yaks/ram, and any code holding entries) and once as SQL (the
-// `session.status` derived column @yaks/sqlite reads and filters through), and
-// a test holds the two together. There is no third copy: a stored `status`
-// column that had to be kept in sync is exactly what the old session component
-// was, and why its views disagreed.
+// `session.status` derived property @yaks/sqlite reads and filters through),
+// and a test holds the two together. There is no third copy: a stored `status`
+// property that had to be kept in sync is exactly what the old session
+// component was, and why its views disagreed.
 //
 // Settled means nothing is outstanding. The newest entry covers most of it, but
 // not all: a model that returns prose before it calls a tool leaves an `output`
@@ -180,7 +180,7 @@ export let usingBefore = (
 }
 
 /**
- * The same rule as SQL, for @yaks/sqlite's derived-column registry
+ * The same rule as SQL, for @yaks/sqlite's derived-property registry
  * (`storage(driver, vocab, { derived: sessionDerived })`), so
  * `.session.status=running` compiles through the index. `owner` is the SQL
  * naming the session's integer id; a reference column stores the referent's
@@ -265,5 +265,6 @@ export let sessionStatus = {
   },
 }
 
-/** The derived-column registry a SQLite store loads to read `session.status`. */
+/** The derived-property registry a SQLite store loads to read
+ * `session.status`. */
 export let sessionDerived = { 'session.status': sessionStatus }

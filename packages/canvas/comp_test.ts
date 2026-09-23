@@ -8,7 +8,7 @@ import { canvas } from './plugin.ts'
 
 let v = loadVocab([canvasDoc], [idKeywords, nameKeywords])
 
-Deno.test('the document is storable — every column lowers to one', () => {
+Deno.test('the document is storable — every property lowers to a column', () => {
   assertEquals(storable(canvasDoc), [])
 })
 

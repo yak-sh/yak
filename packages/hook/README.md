@@ -11,7 +11,7 @@ It does not expose an HTTP endpoint or verify signatures itself.
 - `source` and `event`: the sender and its event name.
 - `payload` and `headers`: the original body and headers as strings, not parsed
   objects. Both declare `store: "blob"`; load [@yaks/blob](../blob) to store
-  their text by content hash, or leave it unloaded for ordinary text columns.
+  their text by content hash, or leave it unloaded for ordinary text properties.
 - `method` and `path`: the HTTP method and request path.
 - `verified`: whether the receiving application verified the sender's signature.
 

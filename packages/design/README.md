@@ -41,7 +41,7 @@ yak design decide <proposal-id> approved
   `approved`; the other decision value is `declined`. This is distinct from the
   three review verdicts above. It does not automatically add `architecture`.
 
-Neither tool writes who decided or when: those columns are stamped from the
+Neither tool writes who decided or when: those properties are stamped from the
 caller, so a decision an agent made is recorded as the agent's, and as an
 owner's only when the owner is the one calling.
 

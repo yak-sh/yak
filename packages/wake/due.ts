@@ -6,7 +6,7 @@
 //
 // The rule is one predicate: a wake is due when its `at` has passed. That is
 // all, and it holds no matter how long the process was down, because `at` is a
-// stored column and not a running process's memory of when to come back.
+// stored property and not a running process's memory of when to come back.
 //
 // Firing one moves that row forward, and how it moves is what separates a
 // cadence from a one-shot:

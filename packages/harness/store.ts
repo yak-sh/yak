@@ -8,8 +8,8 @@ import { home } from './paths.ts'
 // same rows can move into the fleet's graph later.
 //
 // What the harness is made of is declared once, in ./vocab.ts, ./rules.ts and
-// ./runs.ts: the vocabulary documents it loads, the columns it computes rather
-// than stores, and the plugins that decide what a write means. This file
+// ./runs.ts: the vocabulary documents it loads, the properties it computes
+// rather than stores, and the plugins that decide what a write means. This file
 // imports those same three for the harness's own SQLite file, and a server
 // composing the harness (@yaks/cli `compose`) imports them for a served
 // database. What is here and not there is startup: the migrations an older file
@@ -70,7 +70,7 @@ export type Harness = {
  * h.close()
  * ```
  */
-/** Move every body column this vocabulary marks `store: blob` into the blob
+/** Move every body property this vocabulary marks `store: blob` into the blob
  * table, once. A marker row decides whether it has run, never the shape of the
  * text: a body that happens to look like a hash is prose like any other, and
  * re-running the migration over already-moved rows would store the hashes
@@ -196,7 +196,7 @@ export let open = (path: string = dbPath()): Harness => {
     db.close()
     throw error
   }
-  // A lease's timestamp is `claim.at` now, the same column name every other
+  // A lease's timestamp is `claim.at` now, the same property name every other
   // mark uses. `install` above has already added the new column; this copies
   // the values across and drops the old column, which is its own guard.
   sql.exec('begin immediate')

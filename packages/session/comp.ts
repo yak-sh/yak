@@ -27,12 +27,12 @@
 //     + error{code}          expected and recorded: normal
 //     + exception            unexpected: a defect report, not a stop
 //
-// An ask and a call share no columns on purpose: one is the daemon reaching a
-// model, the other the model reaching a tool. What a provider keeps about an
+// An ask and a call share no properties on purpose: one is the daemon reaching
+// a model, the other the model reaching a tool. What a provider keeps about an
 // ask — OpenAI's response id, for instance — is that provider's own component
 // on the same entry (`@yaks/openai` declares `openai{response_id}`), never a
-// column here. There is no `input` component: prose with no `output` beside it
-// is one, so the invalid state "input and output at once" cannot be written.
+// property here. There is no `input` component: prose with no `output` beside
+// it is one, so the invalid state "input and output at once" cannot be written.
 //
 // Half the entry components above are declared by other packages, and this
 // document declares only its own: `content`, `output`, `call`, `result`,
@@ -53,7 +53,7 @@
 // `claim.session` is declared `death: 'release'`: when a session's entity is
 // deleted its lock row goes and the document it was on survives — declared
 // here, carried out by @yaks/graph's cascade, with no code in this package at
-// all. Every `conflict` column is server-owned: the audit row is written by
+// all. Every `conflict` property is server-owned: the audit row is written by
 // the graph after a refusal, never sent by a client.
 
 import type { VocabDoc } from '@yaks/vocab'

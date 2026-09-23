@@ -35,7 +35,7 @@ Deno.test('status is readable and routable, and nobody can write it', () => {
   assertEquals(team.route('status'), { comp: 'task', prop: 'status' })
 })
 
-Deno.test('a board is a query — there is no membership column anywhere', () => {
+Deno.test('a board is a query — there is no membership property anywhere', () => {
   assertEquals(team.comp('board')!.writable, ['query'])
   assertEquals(team.prop('board', 'query')!.scalar, 'query')
   // nothing in the vocabulary points a task at a board, in either direction
@@ -67,7 +67,7 @@ Deno.test('blocked carries a reason and is not a status', () => {
   assert(!team.prop('task', 'status')!.values!.includes('blocked'))
 })
 
-Deno.test('a bare task has no writable columns; filing is optional and routes alone', () => {
+Deno.test('a bare task has no writable properties; filing is optional and routes alone', () => {
   assertEquals(team.comp('task')!.writable, [])
   assertEquals(team.comp('filed')!.writable.sort(), [
     'assignee',

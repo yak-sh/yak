@@ -28,7 +28,8 @@ export type Mailbox = {
   effects?: Effects
 } & Partial<Post>
 
-// The columns that hold an address, and are therefore canonicalized on write.
+// The properties that hold an address, and are therefore canonicalized on
+// write.
 let ADDRESSES: [string, string][] = [
   [EMAIL, 'address'],
   [MAIL, 'from'],
@@ -37,10 +38,10 @@ let ADDRESSES: [string, string][] = [
 
 let clean = (fix: (a: string) => string) => (b: Bundle): Bundle => {
   let out = b
-  for (let [name, col] of ADDRESSES) {
+  for (let [name, prop] of ADDRESSES) {
     let comp = out[name] as Comp | null | undefined
-    if (!comp || comp[col] == null) continue
-    out = { ...out, [name]: { ...comp, [col]: fix(String(comp[col])) } }
+    if (!comp || comp[prop] == null) continue
+    out = { ...out, [name]: { ...comp, [prop]: fix(String(comp[prop])) } }
   }
   return out
 }

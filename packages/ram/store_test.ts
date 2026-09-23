@@ -32,7 +32,7 @@ Deno.test('a patch mints identity in first-touch order and says what it minted',
   assertEquals(at(s, 'p1').entity, { eid: 'p1', num: 1 })
 })
 
-Deno.test('a patch touches only the columns it names; null clears one', () => {
+Deno.test('a patch touches only the properties it names; null clears one', () => {
   let s = shopRam()
   put(s, { entity: { eid: 'p1' }, product: { price: 12, status: 'live' } })
   put(s, { entity: { eid: 'p1' }, product: { price: 9 } })

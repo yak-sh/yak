@@ -8,8 +8,8 @@
 // holds. That is the whole read side; this file only has to pass the candidate
 // set to the matcher.
 //
-// Writes follow the patch rules every adapter implements — omitted columns
-// untouched, a null column cleared, a null component dropped, a tombstoned
+// Writes follow the patch rules every adapter implements — omitted properties
+// untouched, a null property cleared, a null component dropped, a tombstoned
 // entity taking no patch — and identity belongs to storage: `patch` creates a
 // record for every eid the write touches or points at, numbers each new one in
 // the order it was first touched, and returns what it created.
@@ -119,7 +119,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let isRef = (comp: string, prop: string) =>
     vocab.prop(comp, prop)?.category == 'ref'
 
-  // The columns of a patch this vocabulary stores. A component whose patch
+  // The properties of a patch this vocabulary stores. A component whose patch
   // names none is still a component: its presence is the fact.
   let stored = (comp: string, patch: Comp): Comp =>
     Object.fromEntries(
@@ -231,7 +231,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       let held: Record<string, Comp> = { ...rec.comps }
       for (let [name, comp] of patches) {
         // A null component drops the row; anything else merges in, so an
-        // omitted column keeps what it held and a null one clears it.
+        // omitted property keeps what it held and a null one clears it.
         if (comp == null) delete held[name]
         else held[name] = { ...(held[name] ?? {}), ...stored(name, comp) }
       }

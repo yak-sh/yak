@@ -1,5 +1,6 @@
-// The one column this package stores, exported as `@yaks/id/vocab`. It imports
-// no storage, no SQL and no runtime API, so a browser tab can load it alone.
+// The one property this package stores, exported as `@yaks/id/vocab`. It
+// imports no storage, no SQL and no runtime API, so a browser tab can load it
+// alone.
 //
 // `num` is added to `entity` rather than declared as a component of its own:
 // the number sits in the identity row beside the eid, which is the one row

@@ -6,8 +6,9 @@ import { define, type Renderer } from '@yaks/render'
 import { render } from '@yaks/preact'
 import { loadVocab } from '@yaks/vocab'
 
-// These are already evaluated read-model columns, not storage declarations.
-// The match host reads the supplied status rather than recomputing a transcript.
+// These are already evaluated read-model properties, not storage declarations.
+// The match host reads the supplied status rather than recomputing a
+// transcript.
 export let statusVocab = loadVocab([{
   title: 'sidebar status projection',
   '$defs': {

@@ -96,7 +96,7 @@
           "type": "string",
           "ref": "entity",
           "death": "detach",
-          "description": "who is at the window — the column is cleared, not the row deleted, when they are gone"
+          "description": "who is at the window — the property is cleared, not the row deleted, when they are gone"
         },
         "ip": {
           "type": "string",

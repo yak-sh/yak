@@ -34,7 +34,7 @@ Deno.test('the sugar becomes a key entity of its own', () => {
     (g.read(`.eid=${aliasEid(CAKE)}`) as Bundle[])[0].key,
     { of: r, value: CAKE },
   )
-  // and the name is not a column on the recipe
+  // and the name is not a property on the recipe
   assertEquals((g.read(`.eid=${r}`) as Bundle[])[0].alias, undefined)
 })
 

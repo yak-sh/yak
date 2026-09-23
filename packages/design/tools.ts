@@ -9,10 +9,10 @@
 // `decided` for its lifecycle — anything can be proposed, so those two belong
 // to the kernel. A tool returns bundles, which are plain data, so naming
 // another package's component costs no import, and a server that composes
-// neither package simply has those columns dropped on the way in.
+// neither package simply has those properties dropped on the way in.
 //
 // The decider is the caller. Neither implementation writes `by` or `at`: those
-// are stamped columns, filled in from the actor of the write (@yaks/graph's
+// are stamped properties, filled in from the actor of the write (@yaks/graph's
 // `marks`), which the tool runner sets to whoever made the call. So a decision
 // records the agent that made it rather than the person it believed it was
 // acting for, and an owner's approval is recorded as the owner's only when the

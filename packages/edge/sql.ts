@@ -12,7 +12,7 @@
 // the component a relation name refers to. Only the vocabulary knows that, so
 // this extension supplies the step when the walk's path names a relation and
 // returns null when it does not, leaving the binder to try the path as a
-// reference column instead.
+// reference property instead.
 //
 // `.edges` is not a filter: it does not change which entities the query
 // selects, it asks for their links to be returned alongside them. So it
@@ -40,11 +40,11 @@ let linked = (tag: string): string =>
   ` join ${q(tag)} t on t.entity = l.entity`
 
 /**
- * The @yaks/sql extension that compiles the traversal clauses:
- * `compile(ast, vocab, { extend: [traverse(vocab)] })`. Both return null when
- * the vocabulary has no `edge` component, or when they name a relation it does
- * not declare — the walk then falls through to @yaks/sql's own reference-column
- * walk, and `.edges` to its rejection.
+ * The @yaks/sql extension that compiles the traversal clauses: `compile(ast,
+ * vocab, { extend: [traverse(vocab)] })`. Both return null when the vocabulary
+ * has no `edge` component, or when they name a relation it does not declare —
+ * the walk then falls through to @yaks/sql's own reference-property walk, and
+ * `.edges` to its rejection.
  */
 export let traverse = (vocab: Vocab): Extension => {
   let rels = relations(vocab)

@@ -63,7 +63,7 @@ an object is stored once no matter how many versions, apps or runs mention it.
 
 ## Four consequences
 
-- **An object's entity id is its Git object id.** There is no `sha` column, no
+- **An object's entity id is its Git object id.** There is no `sha` property, no
   uniqueness constraint and nothing to reconcile: a `want` line in a fetch
   request is a lookup by primary key.
 - **Every object also has a SHA-256 object id, from the first write.** `oid256`
@@ -109,7 +109,7 @@ file{path, repository}                 a file in a repository, identified by bot
 
 A `commit` stores the whole commit message, not just its first line, and its
 entity id is the commit sha — so recording the same commit twice produces one
-entity, and it carries no `sha` column that could disagree with its own id.
+entity, and it carries no `sha` property that could disagree with its own id.
 
 ## Citations
 

@@ -1,6 +1,6 @@
 // Receiving, with a graph: the questions ./inbound.ts deliberately does not
 // ask. That file is pure — a message in, bundles out — and stays that way,
-// because a letter's other two columns are lookups: whom it is about
+// because a letter's other two properties are lookups: whom it is about
 // (`mail.target`), and which earlier letter it answers (`mail.reply_to`).
 // Both are questions for the address book and the letters already stored, so
 // they live in this file instead.

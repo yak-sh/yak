@@ -200,7 +200,7 @@
       "noun": "task",
       "verb": "list",
       "title": "List tasks",
-      "description": "List the tasks a query selects, as bundles: JSON objects with entity ids and component fields. `.task` is always part of the query and yours is joined onto it; with no query, `.task.status=open` is used. Use filters of the form .component.column=value joined with &: `.task.status=done`, `.filed.project=P-19`, `.priority<3`, or a bare word to match text.",
+      "description": "List the tasks a query selects, as bundles: JSON objects with entity ids and component fields. `.task` is always part of the query and yours is joined onto it; with no query, `.task.status=open` is used. Use filters of the form .component.property=value joined with &: `.task.status=done`, `.filed.project=P-19`, `.priority<3`, or a bare word to match text.",
       "input": {
         "query": {
           "type": "string",

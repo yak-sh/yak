@@ -90,7 +90,7 @@ let str = (v: unknown): string => v == null ? '' : String(v)
 let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
 
-let col = (c: Comp | undefined, k: string): string => str(c?.[k])
+let prop = (c: Comp | undefined, k: string): string => str(c?.[k])
 
 // One entity whole, by eid. Everything here works from the letter as it
 // stands rather than from a patch, the way ./send.ts does.
@@ -129,7 +129,7 @@ export let addressedTo = (who: Eid, address: string): Clause =>
     ...(address ? [eq(`${MAIL}.to`, address)] : []),
   )
 
-// Newest first, from the limit rather than from a clock column: `mail.at` is
+// Newest first, from the limit rather than from a clock property: `mail.at` is
 // written when a letter arrives, so ordering by it would sort a letter written
 // to you here — an invitation, a reply from the address beside you — to the
 // bottom. A limited result is newest-first by the order rows were written
@@ -187,12 +187,12 @@ export let threadOf = async (
 ): Promise<Bundle[]> => {
   let found = [letter]
   let seen = new Set([letter.entity.eid])
-  for (let up = col(comp(letter, MAIL), 'reply_to'); up && !seen.has(up);) {
+  for (let up = prop(comp(letter, MAIL), 'reply_to'); up && !seen.has(up);) {
     let b = await one(ctx, up)
     if (!b) break
     seen.add(up)
     found.push(b)
-    up = col(comp(b, MAIL), 'reply_to')
+    up = prop(comp(b, MAIL), 'reply_to')
   }
   for (let front = [...seen]; front.length;) {
     let down = (await ctx.read(and(eq(`${MAIL}.reply_to`, list(...front)))))
@@ -204,7 +204,7 @@ export let threadOf = async (
   // do not — a sort that is stable either way rather than one that invents a
   // time.
   return found.sort((a, b) =>
-    col(comp(a, MAIL), 'at').localeCompare(col(comp(b, MAIL), 'at'))
+    prop(comp(a, MAIL), 'at').localeCompare(prop(comp(b, MAIL), 'at'))
   )
 }
 
@@ -213,9 +213,9 @@ export let threadOf = async (
 let line = (id: (b: Bundle) => string) => (b: Bundle): string => {
   let mail = comp(b, MAIL)
   let dot = b[ARCHIVED] ? '×' : b[OPENED] ? '·' : '●'
-  let who = col(mail, 'from')
+  let who = prop(mail, 'from')
   return `${dot} ${id(b)}${who ? ` ${who}` : ''} — ${
-    col(comp(b, DOC), TITLE) || '(no subject)'
+    prop(comp(b, DOC), TITLE) || '(no subject)'
   }`
 }
 
@@ -225,15 +225,15 @@ let page = (id: (b: Bundle) => string, letter: Bundle, thread: Bundle[]) => {
   let mail = comp(letter, MAIL)
   let doc = comp(letter, DOC)
   let said = [
-    `# ${col(doc, TITLE) || '(no subject)'}`,
+    `# ${prop(doc, TITLE) || '(no subject)'}`,
     [
-      col(mail, 'from') && `from ${col(mail, 'from')}`,
-      col(mail, 'to') && `to ${col(mail, 'to')}`,
-      col(mail, 'at'),
+      prop(mail, 'from') && `from ${prop(mail, 'from')}`,
+      prop(mail, 'to') && `to ${prop(mail, 'to')}`,
+      prop(mail, 'at'),
       mail?.verified === false && 'UNSIGNED',
     ].filter(Boolean).join(' · '),
     '',
-    col(doc, BODY),
+    prop(doc, BODY),
   ]
   if (thread.length > 1) {
     said.push(
@@ -255,7 +255,7 @@ let page = (id: (b: Bundle) => string, letter: Bundle, thread: Bundle[]) => {
 export let runs = (_host?: unknown, options: Options = {}): Runs => ({
   inbox_list: async (_bundles, ctx): Promise<Bundle[]> => {
     let who = await reader(ctx)
-    let address = col(comp(await one(ctx, who), EMAIL), 'address')
+    let address = prop(comp(await one(ctx, who), EMAIL), 'address')
     let n = ctx.args.limit == null ? PAGE : Number(ctx.args.limit)
     return await ctx.read(inbox(who, address, !!ctx.args.all, n))
   },
@@ -287,10 +287,10 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
   mail_reply: async (_bundles, ctx): Promise<Bundle[]> => {
     let letter = await letterIn(ctx, ctx.args.letter)
     let mail = comp(letter, MAIL)!
-    let arrived = !!col(mail, 'message_id')
+    let arrived = !!prop(mail, 'message_id')
     let far = arrived
-      ? await recipientOf(ctx, col(mail, 'from'), options.domain)
-      : { to: col(comp(letter, DELIVER), 'to'), made: [] as Bundle[] }
+      ? await recipientOf(ctx, prop(mail, 'from'), options.domain)
+      : { to: prop(comp(letter, DELIVER), 'to'), made: [] as Bundle[] }
     if (!far.to) {
       throw new Error(
         'cannot reply: that letter names nobody to answer — send a fresh mail',
@@ -298,16 +298,16 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
     }
     // The address it goes from: the one an arrival was delivered to, or the
     // one our own letter went out from. Either way, this side of the thread.
-    let from = arrived ? col(mail, 'to') : col(mail, 'from')
+    let from = arrived ? prop(mail, 'to') : prop(mail, 'from')
     return [
       ...far.made,
       {
         entity: { eid: '$reply' },
         [DOC]: {
-          [TITLE]: reSubject(col(comp(letter, DOC), TITLE)),
+          [TITLE]: reSubject(prop(comp(letter, DOC), TITLE)),
           [BODY]: str(ctx.args.body),
         },
-        // No `target`: on an arrival that column holds whom the letter was
+        // No `target`: on an arrival that property holds whom the letter was
         // routed to (./arrive.ts), which is this side of the thread — carrying
         // it forward would file our own answer in our own inbox. `reply_to` is
         // what threads a reply, and it is enough.
@@ -328,7 +328,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
     if (!far.to) throw new Error('a letter needs somebody to go to — say --to')
     let from = ctx.args.from != null
       ? str(ctx.args.from)
-      : col(comp(await one(ctx, str(ctx.actor?.by)), EMAIL), 'address')
+      : prop(comp(await one(ctx, str(ctx.actor?.by)), EMAIL), 'address')
     if (!from) {
       throw new Error(
         'a letter needs a from address — say --from, or give whoever is ' +

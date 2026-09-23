@@ -87,12 +87,12 @@ Three things this shape decides:
   persona built on top of it and nobody copies its text. A persona linked by
   `reads` is only listed by id.
 
-At each nesting level, documents are ordered by their edge's `ord` column, then
-by the target entity id. Missing `ord` values sort last. Nested personas are
-read breadth-first for up to eight levels; cycles and repeated inclusions are
-removed. Full inclusion takes precedence over a `reads` reference. This stable
-ordering replaces the legacy materializer's time-decaying score, which could
-change output even without a graph write.
+At each nesting level, documents are ordered by their edge's `ord` property,
+then by the target entity id. Missing `ord` values sort last. Nested personas
+are read breadth-first for up to eight levels; cycles and repeated inclusions
+are removed. Full inclusion takes precedence over a `reads` reference. This
+stable ordering replaces the legacy materializer's time-decaying score, which
+could change output even without a graph write.
 
 ## Exports
 

@@ -11,7 +11,7 @@
  *   anything else it is — adding `task` to something makes it something to do
  *   without making it stop being what it was. @yaks/project's optional
  *   `filed{project, priority, domain, assignee}` places it in a portfolio.
- * - **Where does it stand?** No column holds the answer. A task with a
+ * - **Where does it stand?** No stored property holds the answer. A task with a
  *   `completed` component is done, one with `cancelled` is cancelled, and one
  *   with neither is open. `status` is computed from those components, so
  *   finishing something records when and by whom instead of overwriting a

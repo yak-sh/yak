@@ -200,7 +200,7 @@ Deno.test('the SQL view answers the same word as the rule', () => {
     let [s] = g.read(`.session.status=${want}`) as Bundle[]
     assertEquals(s?.entity.eid, S, `${name} filters as ${want}`)
     let [read] = g.read(`.session.id=one`) as Bundle[]
-    // The two words this package owns. A host composing its own columns onto
+    // The two words this package owns. A host composing its own properties onto
     // `session` (the fleet does) reads those beside them, and they are its.
     let { id, status } = read.session as { id: string; status: string }
     assertEquals({ id, status }, { id: 'one', status: want }, `${name} reads`)
@@ -210,7 +210,7 @@ Deno.test('the SQL view answers the same word as the rule', () => {
 // The status is computed from the entries, and an entity that is not a session
 // at all has none: the model and the tool rows read `empty` too, so
 // `.session.status=empty` answered with the whole graph (T-37730). A qualified
-// path names the component as much as the column, and @yaks/sql says so for
+// path names the component as much as the property, and @yaks/sql says so for
 // every derived read.
 Deno.test('a status filter answers only the entities wearing session', () => {
   let g = store()

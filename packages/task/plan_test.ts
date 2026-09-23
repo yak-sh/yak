@@ -95,7 +95,7 @@ Deno.test('the same batch, for real, lands the whole tree at once', async () => 
 
 Deno.test('what a real run refuses, a dry run refuses the same way', async () => {
   let g = await rooted()
-  // A column the vocabulary does not declare, named in the refusal.
+  // A property the vocabulary does not declare, named in the refusal.
   let alien: Bundle[] = [
     ...plan(),
     { entity: { eid: '$goal' }, doc: { colour: 'red' } },

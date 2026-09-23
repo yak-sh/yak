@@ -13,7 +13,7 @@
 //
 // Cron is read in UTC unless its last field is an IANA time zone, for example
 // `0 9 * * 1-5 America/New_York`, or the caller supplies a default. The zone
-// is stored in `every` itself, so `wake` needs no fifth column. Croner's
+// is stored in `every` itself, so `wake` needs no fifth property. Croner's
 // calendar uses Intl, available in Deno and workerd without a build step.
 // A stored schedule may be read by a server, by a Worker in another region, or
 // by a browser tab on a plane. A recurrence that produced a different instant

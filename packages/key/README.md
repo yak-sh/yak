@@ -1,7 +1,7 @@
 # @yaks/key
 
 Unique typed values that identify entities — an ISBN, an email address, a short
-name. Each value is stored as its own entity rather than as a column on the
+name. Each value is stored as its own entity rather than as a property on the
 thing it identifies, and its id is derived from the value, so a value is unique
 within its kind by construction. An entity is a record identified by
 `entity.eid`; components are the named objects stored on that record.

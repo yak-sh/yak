@@ -49,9 +49,9 @@ export let stated = (vocab: Vocab): Hook => {
       let key = b[KEY] as Comp | null | undefined
       // nothing claimed (a patch, or a bundle about something else entirely)
       if (!key || (key.of == null && key.value == null)) continue
-      for (let col of ['of', 'value']) {
-        if (key[col] == null) {
-          throw new Refused(`key ${eid} has no \`${col}\``)
+      for (let prop of ['of', 'value']) {
+        if (key[prop] == null) {
+          throw new Refused(`key ${eid} has no \`${prop}\``)
         }
       }
       if (!tagOf(b, tags)) {

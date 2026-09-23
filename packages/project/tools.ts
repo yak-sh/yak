@@ -7,7 +7,7 @@
 //
 // A board is its query. ./guard.ts refuses an unroutable query as it is
 // written, while whoever typed it is still there — but that is not the only way
-// a query stops routing. The vocabulary moves: a column is renamed, a status
+// a query stops routing. The vocabulary moves: a property is renamed, a status
 // retires, a component this server used to load is gone. Every board written
 // against the old declarations now matches nothing and reports no error, which
 // is exactly the failure the precondition hook exists to prevent, arriving from
@@ -52,8 +52,8 @@ let governedIn = (v: Vocab): string[] =>
 // Everything a project can see: the projects themselves, whatever is filed
 // under one, and whatever those reach along the containment edges. A cycle of
 // orphans looks internally connected, so reachability is only meaningful from
-// the project seed — which is the whole reason this is a walk and not a column
-// read.
+// the project seed — which is the whole reason this is a walk and not a
+// property read.
 let reached = async (
   ctx: Pick<ToolCtx, 'read'>,
   through: string[],

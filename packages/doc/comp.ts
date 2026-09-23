@@ -10,12 +10,12 @@
 // It describes one aspect of an entity, not the whole entity. A task, a letter,
 // a recipe and a comment are all different things, and every one of them has
 // something a person reads — so the title and the body live in one component
-// any kind can carry, instead of a `title` column repeated down twenty tables.
-// That is what makes one search index, one editor and one card renderer
+// any kind can carry, instead of a `title` property repeated down twenty
+// tables. That is what makes one search index, one editor and one card renderer
 // possible: they are written against `doc`, and they work on anything that
 // carries it.
 //
-// Two columns, and why not A third. A `slug`, an `excerpt`, a `format`, an
+// Two properties, and why not A third. A `slug`, an `excerpt`, a `format`, an
 // `updated_at` all look like they belong here and none of them do: a slug is
 // addressing, an excerpt is derived, a format is a rendering decision, and the
 // clock is the graph's. Each is its own component on the same entity, which is
@@ -26,7 +26,7 @@
 // yak-blob. it is `{title: string, body: text}`"). A keyword is carried by the
 // loader and interpreted by whoever registered it, so the declaration does
 // nothing until somebody composes @yaks/blob in: load without `blobKeywords`
-// and `body` is an ordinary text column; load with them and the text is
+// and `body` is an ordinary text property; load with them and the text is
 // swapped for its content address on the way into the row and back on the way
 // out, without `doc` or the application being involved. The `$vocabulary` URI
 // is written out in the file for the same reason — it names the keyword's
@@ -45,10 +45,10 @@ import doc from './vocab.json' with { type: 'json' }
 /** The component carrying the text a person reads. */
 export let DOC = 'doc'
 
-/** The column carrying the one-line name. */
+/** The property carrying the one-line name. */
 export let TITLE = 'title'
 
-/** The column carrying the prose. */
+/** The property carrying the prose. */
 export let BODY = 'body'
 
 /**
@@ -67,6 +67,6 @@ export let BODY = 'body'
  *
  * Register {@link https://jsr.io/@yaks/blob | @yaks/blob}'s `blobKeywords` when
  * you load and `body` becomes content-addressed; register nothing and it is a
- * text column. The document is the same either way.
+ * text property. The document is the same either way.
  */
 export let docDoc: VocabDoc = doc

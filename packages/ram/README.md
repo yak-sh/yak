@@ -91,10 +91,10 @@ Options are:
 
 ### Writes are patches
 
-- An omitted column keeps its value.
-- A column set to `null` is cleared.
+- An omitted property keeps its value.
+- A property set to `null` is cleared.
 - A component set to `null` is removed, leaving the entity's identity.
-- Undeclared and computed columns are not stored.
+- Undeclared and computed properties are not stored.
 - A tombstoned entity cannot receive component patches or be recreated.
 
 ### Identity, and `num`
@@ -125,13 +125,13 @@ only changed records, without copying the entire store.
 
 ## Differences from a database adapter
 
-RAM returns the columns that were written, whereas a SQL adapter can return
-`null` for declared columns that have never been written. Missing and `null`
+RAM returns the properties that were written, whereas a SQL adapter can return
+`null` for declared properties that have never been written. Missing and `null`
 values have the same meaning in query matching. RAM also preserves JavaScript
 value types; a SQL adapter may return an integer for a stored boolean.
 
 Unsupported queries throw `Unsupported` from `@yaks/match`. Examples include
-`.tally`, `.distinct`, `.near`, `.edges!`, and computed columns. Count is
+`.tally`, `.distinct`, `.near`, `.edges!`, and computed properties. Count is
 available through `rows()`, not `read()`. See the
 [matcher documentation](../match/README.md) for the supported subset. Text
 search matches tokens in stored text without a full-text index or relevance

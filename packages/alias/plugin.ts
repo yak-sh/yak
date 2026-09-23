@@ -7,7 +7,7 @@
 // particular to a name: how you write one, and that a name resolves to an id.
 //
 // It is given the loaded vocabulary because the hook rewrites references, and
-// which columns are references is something only a loaded vocabulary knows.
+// which properties are references is something only a loaded vocabulary knows.
 
 import type { Hook, Plugin } from '@yaks/graph'
 import { then } from '@yaks/graph'

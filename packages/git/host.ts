@@ -155,10 +155,10 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   let changed = changes.filter((b) =>
     Object.entries(b).some(([k, v]) =>
       k != 'entity' &&
-      Object.entries(v as Comp).some(([col, value]) =>
+      Object.entries(v as Comp).some(([prop, value]) =>
         (typeof value == 'boolean'
-          ? Boolean((byId.get(b.entity.eid)?.[k] as Comp | undefined)?.[col])
-          : ((byId.get(b.entity.eid)?.[k] as Comp | undefined)?.[col] ??
+          ? Boolean((byId.get(b.entity.eid)?.[k] as Comp | undefined)?.[prop])
+          : ((byId.get(b.entity.eid)?.[k] as Comp | undefined)?.[prop] ??
             null)) !== (value ?? null)
       )
     )

@@ -24,7 +24,7 @@
 //
 // At most once, and how a crash is recovered: `execution{state, by}` on the
 // call is the claim. The runner writes `running` with a `$was` precondition
-// that the column was absent, so a second server loses the race instead of
+// that the property was absent, so a second server loses the race instead of
 // running the tool twice; it writes `done` or `failed` when the result is
 // applied. A call left `running` by a process that died has no result, so the
 // same rules still select it, and `reconcile()` at boot runs it again,
@@ -178,14 +178,14 @@ export let worded = (answer: Bundle[]): string => {
 }
 
 // Who wrote the call, as the graph recorded it. A transaction's `$actor` is
-// read by the write pipeline and never stored as a column, so what survives
+// read by the write pipeline and never stored as a property, so what survives
 // the commit is the stamp the provenance rule wrote — which is the point: the
 // caller is a fact recorded about the call, not something the runner has to be
 // told again. Both halves come back, so what a tool writes is attributed to
 // the caller and to the same run the call arrived through.
 let who = (call: Bundle): Actor | null => {
-  let said = (col: 'by' | 'via') =>
-    (call.created as Comp | undefined)?.[col] ?? call.$actor?.[col]
+  let said = (prop: 'by' | 'via') =>
+    (call.created as Comp | undefined)?.[prop] ?? call.$actor?.[prop]
   let by = said('by')
   let via = said('via')
   return by || via

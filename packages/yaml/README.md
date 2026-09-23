@@ -26,7 +26,7 @@ The body after the closing delimiter is preserved, including blank lines.
 Metadata is typed as a partial graph bundle (a JSON object containing one
 entity's identifier and named component objects), for example
 `{entity: {eid: '$page'}, doc: {title: 'Hello'}}`. The parser checks that it is
-an object, not that components or columns match a vocabulary. The caller owns
+an object, not that components or properties match a vocabulary. The caller owns
 schema validation, entity identity and alias resolution. References are not
 resolved as file paths, and parsing does not write to a graph.
 

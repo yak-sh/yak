@@ -74,11 +74,11 @@ export let modeOn = (tx: Tx, app: Eid): Mode | Promise<Mode> =>
 
 /**
  * Everything filed about this principal: their membership rows, their grants.
- * Both are entities with a column pointing at the principal, so the two steps
+ * Both are entities with a property pointing at the principal, so the two steps
  * that would each have been a read are one backwards read (@yaks/graph
  * `about`), and none at all when the gather already fetched them (@yaks/graph
- * `wants`, declared by
- * {@link https://jsr.io/@yaks/member/doc/~/members | members}).
+ * `wants`, declared by {@link https://jsr.io/@yaks/member/doc/~/members |
+ * members}).
  *
  * It reads a principal's whole file rather than the one row a given step needs,
  * and the steps then pick out what they want. That is the trade the gather

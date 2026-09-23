@@ -25,7 +25,7 @@
 //
 // The two relations are `requires` and `contains`, as @yaks/edge reads them: a
 // component that an edge entity carries beside `edge{from, to}`. Neither has
-// any columns — the link itself is the whole of what they mean.
+// any properties — the link itself is the whole of what they mean.
 //
 // Blocked is A component, not A status. `blocked{on}` records that something
 // outside the graph is in the way — waiting on a vendor, on a decision, on a

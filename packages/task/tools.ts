@@ -7,8 +7,8 @@
 // task with a title carries @yaks/doc's `doc`, and one filed in a portfolio
 // carries @yaks/project's `filed`. A tool returns bundles, which are plain
 // data, so naming a neighbour's component costs no import — and a server that
-// composes neither package simply has those columns dropped when the write is
-// admitted.
+// composes neither package simply has those properties dropped when the write
+// is admitted.
 //
 // There is no `task show`, no `task search` and no `task tree` here. Showing an
 // entity whole is `graph_show`, and ranked text search is `search`; both are in
@@ -45,7 +45,7 @@ let filedIn = async (ctx: ToolCtx): Promise<Comp | undefined> => {
 
 // The text a person reads, as arguments. An argument nobody passed is left out
 // of the patch, so the stored title stays as it was instead of being blanked —
-// writing `null` is what clears a column.
+// writing `null` is what clears a property.
 let docIn = (ctx: ToolCtx): Comp | undefined => {
   let doc: Comp = {}
   if (ctx.args.title != null) doc.title = String(ctx.args.title)

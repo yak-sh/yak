@@ -1,14 +1,14 @@
 // The one component this package ships: `key{of, value}`.
 //
 // It is to a has-many VALUE what `edge{from, to}` is to a link. An entity does
-// not hold its identifying values in a column; each value is a key entity of
+// not hold its identifying values in a property; each value is a key entity of
 // its own — `key{of, value}` plus a kind tag component naming which kind of
 // value it is — so a recipe is identified by both `lemon-cake` and
 // `recipe:2019-07` because two rows point at it, adding one is a write, and
-// retiring one means deleting that row. A list column would have been the other
-// design and it is the worse one: every write would be a read-modify-write of
-// somebody else's column, and two writers adding a value at once would lose
-// one.
+// retiring one means deleting that row. A list property would have been the
+// other design and it is the worse one: every write would be a
+// read-modify-write of somebody else's property, and two writers adding a value
+// at once would lose one.
 //
 // `of` is a reference declared `death: release`, which is the whole of a key's
 // lifecycle: a value for a deleted thing identifies nothing, and the row is
@@ -17,14 +17,14 @@
 // the value could never be used again by anyone.)
 //
 // The value is unique within its kind, and nothing declares that — the key's
-// own id is `sha256("<tag>|<value>")` (./eid.ts), so two writers giving the same
-// value in the same kind land on one row by construction. A `unique` on the
-// column would have been wrong anyway: two kinds may hold the same string, and
-// only the pair is the constraint.
+// own id is `sha256("<tag>|<value>")` (./eid.ts), so two writers giving the
+// same value in the same kind land on one row by construction. A `unique` on
+// the property would have been wrong anyway: two kinds may hold the same
+// string, and only the pair is the constraint.
 //
-// Both columns give up their unqualified filter names (`bare: false`): `of` and
-// `value` are far too ordinary to claim vocabulary-wide, so a filter names them
-// in full — `.key.value=lemon-cake`.
+// Both properties give up their unqualified filter names (`bare: false`): `of`
+// and `value` are far too ordinary to claim vocabulary-wide, so a filter names
+// them in full — `.key.value=lemon-cake`.
 //
 // The document itself is `./vocab.json` — plain JSON Schema, readable by
 // anything that reads JSON. This file re-exports it under the name callers
@@ -35,10 +35,10 @@ import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 import { KEY } from './kinds.ts'
 
-/** The column naming the entity the value identifies. */
+/** The property naming the entity the value identifies. */
 export let OF = 'of'
 
-/** The column carrying the value. */
+/** The property carrying the value. */
 export let VALUE = 'value'
 
 /**
@@ -54,9 +54,9 @@ export let keyOf = (b: Bundle): Comp | undefined => {
   return comp && typeof comp == 'object' ? comp as Comp : undefined
 }
 
-// One column of a bundle's key, as a non-empty string, or nothing.
-let said = (b: Bundle | undefined, col: string): string | undefined => {
-  let v = b && keyOf(b)?.[col]
+// One property of a bundle's key, as a non-empty string, or nothing.
+let said = (b: Bundle | undefined, prop: string): string | undefined => {
+  let v = b && keyOf(b)?.[prop]
   return typeof v == 'string' && v ? v : undefined
 }
 

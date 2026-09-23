@@ -13,7 +13,7 @@
 //
 // It reads the EDGE entities rather than walking them (@yaks/edge `walk`
 // returns the far ends, and a far end no longer carries the edge's `ord`) —
-// the one column the authored order depends on.
+// the one property the authored order depends on.
 //
 // An included persona is folded in: its instruction text is included like any
 // other document, and the documents it links to are added to the ones this

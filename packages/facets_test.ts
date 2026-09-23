@@ -82,9 +82,9 @@ Deno.test("every package's words load beside every other package's", async () =>
   // imports, which is where a package can still fold another's words into its
   // own document and make the two uncomposable.
   let home = new Map<string, string>()
-  // An `extends: true` entry adds columns to somebody else's word rather than
-  // saying one: @yaks/id keeps the number on @yaks/kernel's `entity` row. It
-  // owns no word, so it is checked against the homes instead of taking one.
+  // An `extends: true` entry adds properties to somebody else's word rather
+  // than saying one: @yaks/id keeps the number on @yaks/kernel's `entity` row.
+  // It owns no word, so it is checked against the homes instead of taking one.
   let added: [string, string][] = []
   let docs: VocabDoc[] = []
   let keywords: Keywords[] = []
@@ -193,8 +193,8 @@ Deno.test('compose takes every facet of the plugins a config names', async () =>
   }
   let host = await compose({ db: ':memory:', plugins, numbers: false })
   try {
-    // Every facet arrived: the words, a computed column only ./vocab declares,
-    // the rules, and a tool only ./tools implements.
+    // Every facet arrived: the words, a computed property only ./vocab
+    // declares, the rules, and a tool only ./tools implements.
     assert(host.vocab.all.includes('session'), host.vocab.all.join(' '))
     assert(host.vocab.all.includes('task'), host.vocab.all.join(' '))
     assert(host.tools.length > 0, 'no tools')
@@ -203,7 +203,7 @@ Deno.test('compose takes every facet of the plugins a config names', async () =>
     ])
     assertEquals(applied.length, 1)
     let found = await host.graph.read('.session')
-    // A derived column only ./vocab declares, answered by the store.
+    // A derived property only ./vocab declares, answered by the store.
     assertEquals((found[0].session as { status?: string }).status, 'empty')
   } finally {
     host.close()

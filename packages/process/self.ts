@@ -15,7 +15,7 @@
 // file made up. So this row is what the server signs its writes with
 // (@yaks/cli), which makes `created.by` on any row the answer to "which run
 // wrote this", and a child process's row, written by its parent, identifies its
-// parent without needing a column for it.
+// parent without needing a property for it.
 //
 // A process starting is also an event. `created(process)` where the process is
 // this one is the moment the server has to pick up what a restart left behind —

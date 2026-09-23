@@ -3,10 +3,10 @@
 //
 // It takes the loaded vocabulary as an argument because a board's query is
 // checked against the schema, not against this package — a board filtering
-// `.author=dana` is only valid if the graph has an author column, and only the
-// loaded vocabulary knows whether it does. So a graph is built in two steps,
-// the way @yaks/edge's is: load the documents, then pass the same vocabulary to
-// the plugin.
+// `.author=dana` is only valid if the graph has an author property, and only
+// the loaded vocabulary knows whether it does. So a graph is built in two
+// steps, the way @yaks/edge's is: load the documents, then pass the same
+// vocabulary to the plugin.
 
 import type { Plugin } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'

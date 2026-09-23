@@ -4,10 +4,10 @@
  * component vocabulary for a {@link https://jsr.io/@yaks/graph | @yaks/graph}.
  *
  * No running process is implied. A `session` is identity only; what it is doing
- * is read off its entries ({@link statusOf}, and the same rule expressed as a
- * derived SQL column, {@link sessionDerived}) and never stored. An `entry` is
- * one line of the transcript, `{session, seq}`, and the component beside it is
- * what makes it one kind rather than another:
+ * is read off its entries ({@link statusOf}, and the same rule expressed in SQL
+ * for the derived property, {@link sessionDerived}) and never stored. An
+ * `entry` is one line of the transcript, `{session, seq}`, and the component
+ * beside it is what makes it one kind rather than another:
  *
  * - `content{body}` — prose. Alone it is an input, an instruction from a
  *   person or a system; with an `output{source}` beside it (the ask it answers)

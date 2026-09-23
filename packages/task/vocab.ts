@@ -2,7 +2,7 @@
 // `@yaks/task/vocab`. It reaches no storage, no SQL and no runtime, so a
 // browser tab that loads this vocabulary loads nothing else.
 //
-// `derived` is here rather than beside the rules because a computed column is
+// `derived` is here rather than beside the rules because a computed property is
 // part of what a component means — `task.status` is declared but never
 // written, and the SQL that computes it from the marks is the other half of
 // that declaration.

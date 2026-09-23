@@ -21,12 +21,11 @@
  * rather than a string, the address it goes to is whatever their
  * {@link mailDoc | `email`} component holds at the moment it leaves.
  *
- * ## The subject and the body are a `doc`
- * They are `doc{title, body}`, from
+ * ## The subject and the body are a `doc` They are `doc{title, body}`, from
  * {@link https://jsr.io/@yaks/doc | @yaks/doc}, which this package depends on.
  * The words a person reads belong in the one component every readable thing
- * has, so a letter is searched, rendered and edited by whatever already
- * handles a `doc` — instead of by a second copy of the same two columns.
+ * has, so a letter is searched, rendered and edited by whatever already handles
+ * a `doc` — instead of by a second copy of the same two properties.
  *
  * Compose `docs()` beside {@link mailbox}, never inside it: a vocabulary
  * rejects a component declared twice, so an application that already declares
@@ -44,13 +43,12 @@
  * passed in, never held here) and {@link stash} (keeps them in an array — what
  * a test and a development environment want).
  *
- * ## Receiving is a pure function
- * {@link inbound} turns a message as an Email Worker receives it into the
- * bundles that record it. It queries the graph for nothing, so it can be
- * tested without one. The two columns that are lookups — whom the letter is
- * about, which letter it answers — are answered by {@link arrived} one file
- * over, where there is a graph to query, and `@yaks/mail/routes` exports the
- * HTTP route a mail edge posts a letter on.
+ * ## Receiving is a pure function {@link inbound} turns a message as an Email
+ * Worker receives it into the bundles that record it. It queries the graph for
+ * nothing, so it can be tested without one. The two properties that are lookups
+ * — whom the letter is about, which letter it answers — are answered by {@link
+ * arrived} one file over, where there is a graph to query, and
+ * `@yaks/mail/routes` exports the HTTP route a mail edge posts a letter on.
  *
  * ## The worked example
  * {@link invited} fills the `created(member)` handler slot

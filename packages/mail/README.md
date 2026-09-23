@@ -114,9 +114,10 @@ console.log(post.last()?.subject) // Thursday
 ```
 
 The outcome writer uses `trusted: true` because `delivered` and `bounced`
-columns are server-owned. `docs()` supplies the document component separately;
-`mailbox()` declares only the six mail components and normalizes addresses. Pass
-both `effects` and `sender` to `mailbox()` to enable automatic sending.
+properties are server-owned. `docs()` supplies the document component
+separately; `mailbox()` declares only the six mail components and normalizes
+addresses. Pass both `effects` and `sender` to `mailbox()` to enable automatic
+sending.
 
 Success writes `delivered{at, via}`, with the receipt id or, when absent, the
 recipient address as `via`. A rejected send writes `bounced{at, reason}`.

@@ -572,7 +572,7 @@ export type Care = Opts & {
 // What a pass remembers between passes — the only state here that is not in
 // the graph, and it is all timestamps. The graph holds the count
 // (`service.attempts`); turning that count into a wait also needs the time of
-// the last attempt, and a column for that would be a timestamp rewritten on
+// the last attempt, and a property for that would be a timestamp rewritten on
 // every restart. A supervisor that has just restarted forgets these waits,
 // which is what we want anyway: a restart is a fair reason to try again now.
 type Wait = {
@@ -592,7 +592,7 @@ type Wait = {
 let backoff = (n: number, o: Care) =>
   Math.min((o.step ?? 1000) * 2 ** (n - 1), o.ceiling ?? 60_000)
 
-// A shell runs the command line, because one text column cannot hold an argv
+// A shell runs the command line, because one text property cannot hold an argv
 // without somebody parsing quotes, and `sh -c` is the parser every machine
 // already has. It also makes a service row exactly what you would have typed.
 let shell = (s: Service): Spec => ({

@@ -225,7 +225,7 @@ export let runs = (
       ? await ctx.read(`.${CLAIM}.session=${JSON.stringify(eid)}`)
       : []
     return [
-      // Only the difference is written back — a transcript's own columns are
+      // Only the difference is written back — a transcript's own properties are
       // not this tool's to restate.
       {
         entity: found?.entity ?? { eid },

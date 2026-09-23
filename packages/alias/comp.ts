@@ -14,9 +14,9 @@
 //
 // The shorthand is what everyone writes: `alias: {name: 'lemon-cake'}` on the
 // entity's own bundle, which the plugin turns into the key entity above
-// (./sugar.ts). `name` is not a column — this component declares none — it is a
-// property the `normalize` phase consumes before the vocabulary is ever asked
-// about it.
+// (./sugar.ts). `name` is not a declared property — this component declares
+// none — it is input the `normalize` phase consumes before the vocabulary is
+// ever asked about it.
 //
 // No prefix character. `recipe:lemon-cakes` is a name that happens to contain a
 // colon, not a namespace the vocabulary knows about — the fleet's own store has

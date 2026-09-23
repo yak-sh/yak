@@ -11,7 +11,7 @@
 // tool call — so one piece of code records every exit code, and one component
 // name covers every pid.
 //
-// `pid` is the only column an adopted process has, because a pid is the only
+// `pid` is the only property an adopted process has, because a pid is the only
 // handle you get on a process nobody here launched. `command` and `cwd` are
 // present exactly when we started it: they hold the command we asked for, not
 // what the kernel reports, and a supervisor that has to start the program again
@@ -27,7 +27,7 @@
 // service entity itself: no second entity to clean up and no reference to fill
 // in.
 //
-// `exit` is a separate component rather than a nullable column on `process`,
+// `exit` is a separate component rather than a nullable property on `process`,
 // because their absence means different things: a process with no `exit` is
 // running (or was, when we last looked), and that is the query the server makes
 // when it starts up. `exit` is never rewritten; on a supervised entity the

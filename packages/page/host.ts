@@ -85,7 +85,7 @@ export let archiver = ({ run, timeout = 60_000 }: Run): Archive => {
  * Where this server's archived documents are stored.
  *
  * The default is the blob table the server already has — the same one
- * @yaks/blob keeps its text columns in, so a page's bytes are not a second
+ * @yaks/blob keeps its text properties in, so a page's bytes are not a second
  * store to configure, back up and serve, and `GET /blob/<sha>` serves them as
  * it does everything else. An archived page is one document with every asset
  * inlined and is therefore often megabytes, so a server that would rather not

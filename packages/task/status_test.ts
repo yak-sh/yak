@@ -57,10 +57,10 @@ Deno.test('an added rung reaches every reader at once', () => {
 })
 
 Deno.test('derived spells the ladder as SQL, guarded by the owner null', () => {
-  let col = derived()['task.status']
-  assertEquals(col.tag, 'enum')
-  assertEquals(col.values, ['cancelled', 'done', OPEN])
-  let sql = col.expr('"task"."entity"')
+  let prop = derived()['task.status']
+  assertEquals(prop.tag, 'enum')
+  assertEquals(prop.values, ['cancelled', 'done', OPEN])
+  let sql = prop.expr('"task"."entity"')
   // the null guard leads, so a non-task reads NULL rather than 'open'
   assert(sql.startsWith('(case when "task"."entity" is null then null'))
   // one exists per mark, in ladder order, and open is the fallthrough
@@ -70,7 +70,7 @@ Deno.test('derived spells the ladder as SQL, guarded by the owner null', () => {
 
 Deno.test('derived widens its members with the ladder', () => {
   let marks = [...MARKS, { status: 'wip', comp: 'claim', settled: false }]
-  let col = derived(marks)['task.status']
-  assertEquals(col.values, ['cancelled', 'done', 'wip', OPEN])
-  assert(col.expr('o').includes(`from "claim"`))
+  let prop = derived(marks)['task.status']
+  assertEquals(prop.values, ['cancelled', 'done', 'wip', OPEN])
+  assert(prop.expr('o').includes(`from "claim"`))
 })

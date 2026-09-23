@@ -15,7 +15,7 @@
 // doc?"). A letter is an entity like any other, and the words a person reads
 // belong in the one component every readable thing has — so a letter is
 // searched, rendered and edited by whatever already handles a `doc`, instead of
-// by a second copy of the same two columns. What is left on `mail` is the
+// by a second copy of the same two properties. What is left on `mail` is the
 // envelope: who it is from, where it went, when, what it is about, what it
 // answers.
 //
@@ -31,16 +31,16 @@
 // letter goes out. Addressing a person rather than a string is what lets them
 // change their address without rewriting the mail that has not left yet.
 //
-// Two columns give up their bare filter name (`bare: false`), because in a
+// Two properties give up their bare filter name (`bare: false`), because in a
 // graph this size another component already claims it: `.to` is the recipient
 // (`deliver.to`), and `.at` is stamped by half a dozen components. Write those
 // two in full — `.mail.to`, `.mail.at`.
 //
 // `verified` is the receiving side's verdict on an arrival: whether the sending
-// domain signed for the letter (DKIM). It is a column and not a gate — a letter
-// nobody signed for is recorded with `verified: false` rather than dropped,
-// because dropping it is silence and the reader is the one who decides what an
-// unsigned letter is worth.
+// domain signed for the letter (DKIM). It is a property and not a gate — a
+// letter nobody signed for is recorded with `verified: false` rather than
+// dropped, because dropping it is silence and the reader is the one who decides
+// what an unsigned letter is worth.
 //
 // `delivered` and `bounced` are the two ends of one outcome, and exactly one of
 // them lands on a letter. Both are stamped: they are the sender's report of

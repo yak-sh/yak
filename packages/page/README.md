@@ -7,14 +7,14 @@ external command.
 
 The graph's storage adapter stores the `web` component:
 
-| Column      | Meaning                                                               |
+| Property    | Meaning                                                               |
 | ----------- | --------------------------------------------------------------------- |
 | `url`       | Canonical page URL, used to derive the entity id.                     |
 | `frozen_at` | When the archive was stored; absent until a capture is saved.         |
 | `bytes`     | SHA-256 key for the HTML in an [@yaks/blob](../blob/README.md) store. |
 
-`frozen_at` and `bytes` are server-owned columns. Ordinary client writes cannot
-set them. Page titles and prose use the separate `doc` component from
+`frozen_at` and `bytes` are server-owned properties. Ordinary client writes
+cannot set them. Page titles and prose use the separate `doc` component from
 [@yaks/doc](../doc/README.md). This package stores the latest archive reference
 on each page entity; it does not maintain a list of snapshots.
 

@@ -50,7 +50,7 @@
         "verified": {
           "type": "boolean",
           "stamped": true,
-          "description": "whether the sender's signature verified — the same column name @yaks/mail uses in `mail.verified`"
+          "description": "whether the sender's signature verified — the same property name @yaks/mail uses in `mail.verified`"
         }
       },
       "description": "an event another system delivered, kept as it arrived — the payload is the body that was sent, not a parsed version of it"

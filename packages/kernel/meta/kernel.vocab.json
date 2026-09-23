@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yak.sh/vocab/kernel",
   "title": "yaks kernel keyword vocabulary",
-  "description": "Three keywords a graph of work needs that the core meta-model does not define: which components a project answers for, which components stay out of the snapshot a client loads at startup, and where a text column's suggested values come from.",
+  "description": "Three keywords a graph of work needs that the core meta-model does not define: which components a project answers for, which components stay out of the snapshot a client loads at startup, and where a text property's suggested values come from.",
   "$defs": {
     "governed": {
       "description": "true = a project answers for the entities carrying this component, reached by edges rooted at the project. It is what a project's reach is computed over.",
@@ -13,7 +13,7 @@
       "type": "boolean"
     },
     "well": {
-      "description": "Names a list of suggested values for this text column, offered for completion beside the values already in the column. The list is registered by whoever holds the values, so the schema stays declarative.",
+      "description": "Names a list of suggested values for this text property, offered for completion beside the values the property already holds. The list is registered by whoever holds the values, so the schema stays declarative.",
       "type": "string"
     }
   }

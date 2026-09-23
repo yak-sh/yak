@@ -1,7 +1,7 @@
 // The other direction: a name used where an eid is expected.
 //
 // Once an entity has the name `lemon-cake`, that name is accepted anywhere its
-// id is — in a reference column (`comment: {target: 'lemon-cake'}`), as a
+// id is — in a reference property (`comment: {target: 'lemon-cake'}`), as a
 // bundle's own `entity.eid`, and by any caller that reads entities by id. The
 // fleet's own store has resolved bare names alongside eids for as long as it
 // has had them (src/db.ts `resolveId`); this is the same lookup without the
@@ -61,7 +61,7 @@ export let addressed = (
 }
 
 // Every id mentioned in a list of bundles: the entity each bundle is about, and
-// whatever its reference columns point at.
+// whatever its reference properties point at.
 let spoken = (bundles: Bundle[], vocab: Vocab): string[] => {
   let out: string[] = bundles.map((b) => b.entity.eid)
   for (let b of bundles) {
@@ -79,8 +79,8 @@ let spoken = (bundles: Bundle[], vocab: Vocab): string[] => {
 /**
  * The `normalize` hook that lets a write address entities by name: every id in
  * it that is some entity's name is replaced by that entity's eid, both as a
- * bundle's own id and in every reference column. Registered by
- * {@link aliases}; exported on its own for a graph that wants it without the
+ * bundle's own id and in every reference property. Registered by {@link
+ * aliases}; exported on its own for a graph that wants it without the
  * vocabulary.
  *
  * It runs before `mint`, so a `$alias` is left alone — no entity has a name

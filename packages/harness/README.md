@@ -28,7 +28,7 @@ input.
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `@yaks/harness`       | `open`, `dbPath`, `agent`, `seed`, `harnessTools`, `graphTools`, `parametersOf`, CLI `tools`/`own`, `App`, `tui`, `changes`, `panels`, and their types |
 | `@yaks/harness/bin`   | Command-line entry point                                                                                                                               |
-| `@yaks/harness/vocab` | Vocabulary documents, `vocab`, schema `keywords`, and computed columns via `derived`                                                                   |
+| `@yaks/harness/vocab` | Vocabulary documents, `vocab`, schema `keywords`, and computed properties via `derived`                                                                |
 | `@yaks/harness/rules` | `rules({vocab, sql})`, the graph plugins used by the harness                                                                                           |
 | `@yaks/harness/tools` | `runs(host)`, implementations of the declared graph tools                                                                                              |
 
@@ -180,7 +180,7 @@ bundles from graph-backed interfaces. To embed the app, mount `App` with
   SQL; normal agent operations use the graph API. Session state is persisted;
   running sessions can be queried with `.session.status=running`.
 - **Two statuses are computed, never stored.** `@yaks/harness/vocab` registers
-  computed session and task status columns through `@yaks/session/vocab`. The
+  computed session and task status properties through `@yaks/session/vocab`. The
   task plugin uses the same `taskMarks` from @yaks/session: completed/cancelled
   win, then a claim means wip, otherwise open. `blocked` stays a component of
   its own, never a status. Queries filter in the database, and the sidebar reads
@@ -272,7 +272,7 @@ context sent to providers or the cost of frontend data refreshes.
 
 `tools` replaces the default table when supplied. `sessionTools(graph, limits)`
 from `@yaks/session` is the standalone delegation table (its scheduling queries
-use the registered `session.status` derived column).
+use the registered `session.status` derived property).
 
 ## Performance probe
 
@@ -710,7 +710,7 @@ compatibility check when an older binary first opens the file.
 ## The harness as a plugin module
 
 The harness exposes separate sub-module exports for composition:
-`@yaks/harness/vocab` supplies schema documents and computed columns,
+`@yaks/harness/vocab` supplies schema documents and computed properties,
 `@yaks/harness/rules` supplies graph plugins, and `@yaks/harness/tools` supplies
 tool implementations. `store.ts` uses the same definitions for its SQLite file
 that `@yaks/cli`'s `compose` uses for a database exposed by a server. The
@@ -778,10 +778,10 @@ Optional fields are `credential` (a hostname reference into the existing yak
 bearer store), `allow` (a JSON-encoded array of exact remote tool names), and
 `redirect_url`, `client_id`, `client_metadata_url`, `scope` for OAuth settings.
 Omitting `allow` exposes all discovered tools; `"[]"` exposes none. The graph's
-current column vocabulary stores this list as JSON text. Token values, callback
-codes, and verifiers never belong in these fields. OAuth credentials remain in
-the private authorization store. Changing the endpoint/registration selects its
-own authorization record; renaming a server does not invalidate its credentials.
+current vocabulary stores this list as JSON text. Token values, callback codes,
+and verifiers never belong in these fields. OAuth credentials remain in the
+private authorization store. Changing the endpoint/registration selects its own
+authorization record; renaming a server does not invalidate its credentials.
 
 A `credential` hostname must match the endpoint hostname. `yak login <token>`
 stores a bearer; it does not initiate OAuth. `YAKS_TOKEN` retains its existing

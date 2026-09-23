@@ -90,7 +90,7 @@
     "exception": {
       "component": true,
       "type": "object",
-      "description": "A failure the code did not expect, whoever caused it: a defect report, not a stop. On its own, its message is on the `content` component beside it; these columns are filled in by whichever process caught the error, and by nobody else.",
+      "description": "A failure the code did not expect, whoever caused it: a defect report, not a stop. On its own, its message is on the `content` component beside it; these properties are filled in by whichever process caught the error, and by nobody else.",
       "properties": {
         "at": {
           "type": "string",

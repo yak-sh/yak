@@ -28,8 +28,8 @@ deno add jsr:@yaks/project
   — separate from a task's completion status.
 - `paused{at}` — work on it is suspended. It is a separate component rather than
   a phase, so the phase underneath is untouched and resuming means removing the
-  component; there is no `paused_from` column remembering where to put the phase
-  back.
+  component; there is no `paused_from` property remembering where to put the
+  phase back.
 - `repo{repository, base_branch, gate, push}` — a project's policy for landing
   its source: which repository the work is in, which branch it branches from and
   lands into, the command a change must pass first (`gate`), and whether landing
@@ -40,13 +40,13 @@ deno add jsr:@yaks/project
 
 `projects(vocab)` returns a graph plugin registering a `precondition` hook. It
 runs inside the write transaction, before any row has changed, and rejects a
-board query with an unknown column or task status. It does not reject a valid
+board query with an unknown property or task status. It does not reject a valid
 query merely because no current records match. Because a board is its query, an
 empty board and a board with a typo in its filter look exactly alike — no error,
 no empty state saying why, just a board that is always blank. Two ways a query
 is wrong are caught:
 
-- it names a column the vocabulary does not have (`.staus=open`);
+- it names a property the vocabulary does not have (`.staus=open`);
 - it names a status outside the closed set (`.status=complete`, where @yaks/task
   declares `done`, `cancelled` and `open`).
 
@@ -57,7 +57,7 @@ one without leases knows only the three @yaks/task declares. Pass `marks` to
 `projects(vocab, marks)` to check against exactly that list instead.
 
 The empty query is still allowed, and `task.status` needs no check here: it is
-declared `computed: true`, and @yaks/graph drops a computed column before this
+declared `computed: true`, and @yaks/graph drops a computed property before this
 hook sees the write.
 
 ## Two checks
@@ -66,10 +66,10 @@ hook sees the write.
 read-only, both declared with the verb `check` so @yaks/tools can discover them:
 
 - `board_check` reads every saved board query and reports the ones that refer to
-  unknown columns or task statuses. The hook above refuses a bad query while the
-  person who typed it is still there, but loaded schemas can change: a column
-  can be renamed, a status removed, or a component no longer loaded. The check
-  detects invalid saved queries even when no one is writing the board.
+  unknown properties or task statuses. The hook above refuses a bad query while
+  the person who typed it is still there, but loaded schemas can change: a
+  property can be renamed, a status removed, or a component no longer loaded.
+  The check detects invalid saved queries even when no one is writing the board.
 - `project_check` reports governed entities that no project can reach. A
   component declaring the `governed` keyword ([@yaks/kernel](../kernel)) is one
   a project answers for: a task, a memory, a design. The check walks out from

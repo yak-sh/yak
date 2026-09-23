@@ -24,7 +24,7 @@
  * Each log line is imported exactly once. An entry read out of a log gets an
  * `imported` component recording the source file and line number, and the
  * highest line number already imported is where the next read begins, so there
- * is no cursor column to keep up to date.
+ * is no cursor property to keep up to date.
  *
  * ```ts
  * import { start } from '@yaks/spawn'

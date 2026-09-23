@@ -30,7 +30,7 @@ Deno.test('a query that routes is fine', () => {
   ) assertEquals(unroutable(q, team), null, q)
 })
 
-Deno.test('a column the vocabulary does not know is refused', () => {
+Deno.test('a property the vocabulary does not know is refused', () => {
   // the typo that is otherwise invisible forever
   let why = unroutable('.staus=open', team)
   assertEquals(typeof why, 'string')
@@ -84,7 +84,7 @@ Deno.test('dropping a board states no query and is never refused', () => {
   assertEquals((g.read('.board!') as unknown[]).length, 0)
 })
 
-Deno.test('qualified filing columns no longer belong to task', () => {
+Deno.test('qualified filing properties no longer belong to task', () => {
   for (let prop of ['project', 'priority', 'domain', 'assignee']) {
     assertEquals(typeof unroutable(`.task.${prop}=x`, team), 'string')
   }

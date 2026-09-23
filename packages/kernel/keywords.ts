@@ -7,7 +7,7 @@
 // Three keywords, because three things about a graph of work are not the core
 // meta-model's business: which components a project answers for, which
 // components stay out of the snapshot a client loads at startup, and where a
-// text column's suggested values come from. What makes a component a log line
+// text property's suggested values come from. What makes a component a log line
 // needs no keyword of its own — the core meta-model already covers it, as a
 // component reached only by its qualified filter name (`bare: false`).
 
@@ -21,7 +21,7 @@ export let KERNEL_URI = 'https://yak.sh/vocab/kernel'
 /**
  * The kernel keyword vocabulary, ready to register: `loadVocab(docs,
  * [kernelKeywords])` carries `governed` and `lazy` onto the components that
- * declare them and `well` onto the columns that do.
+ * declare them and `well` onto the properties that do.
  */
 export let kernelKeywords: Keywords = {
   uri: KERNEL_URI,

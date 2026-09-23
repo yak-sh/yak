@@ -1,8 +1,8 @@
 // The status values this package defines, and the one list every reading of a
 // task's status is computed from.
 //
-// A task's status is not a column somebody writes. It is computed from the
-// components the task carries, independently of any optional `filed`
+// A task's status is not a stored property somebody writes. It is computed from
+// the components the task carries, independently of any optional `filed`
 // component: `cancelled` means cancelled, `completed` means done, and a task
 // with neither is open. That is the whole rule, and it lives here as data — an
 // ordered list of marks — so that the two evaluators which need it (a database
@@ -25,7 +25,7 @@ export type Status = string
 
 /**
  * One rung of the status ladder: a task carrying `comp` reads as `status`.
- * A mark is a component's presence, never a column's value, so marking a task
+ * A mark is a component's presence, never a property's value, so marking a task
  * done means writing `completed{at, by}` — a fact with an author and a time —
  * and un-marking it means removing that component.
  */

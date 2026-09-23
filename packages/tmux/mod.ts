@@ -4,7 +4,7 @@
  * An agent that runs in a pane is not the same thing as the pane. A session is
  * a transcript, a process is a pid, and the terminal is what a person looks at
  * while both are happening — a third fact, which is why it is its own
- * component rather than a column on either. `tmux{of, pane}` records what is
+ * component rather than a property on either. `tmux{of, pane}` records what is
  * running there and where tmux can find it:
  *
  * - **`of`** names whatever the pane is showing — a session, a process,
@@ -17,17 +17,16 @@
  *   only have to rebuild the string to use it.
  *
  * Most processes have no pane at all, which is the other reason this is a
- * component and not a column: a graph that never touches a terminal never loads
- * this vocabulary. Enabling tmux support is loading it.
+ * component and not a property: a graph that never touches a terminal never
+ * loads this vocabulary. Enabling tmux support is loading it.
  *
- * ## Why the component is `tmux` and the column is `pane`
- * Component names share one flat namespace, and `pane` is already
- * {@link https://jsr.io/@yaks/canvas | @yaks/canvas}'s — a region of a layout,
- * a different idea under the same name. `loadVocab` rejects a component
- * declared twice, and an application may want a canvas and a terminal at once.
- * So the terminal's component is `tmux{…, pane}`: this package's own name
- * carries the component, and `pane` stays the name of the thing tmux actually
- * addresses.
+ * ## Why the component is `tmux` and the property is `pane` Component names
+ * share one flat namespace, and `pane` is already {@link
+ * https://jsr.io/@yaks/canvas | @yaks/canvas}'s — a region of a layout, a
+ * different idea under the same name. `loadVocab` rejects a component declared
+ * twice, and an application may want a canvas and a terminal at once. So the
+ * terminal's component is `tmux{…, pane}`: this package's own name carries the
+ * component, and `pane` stays the name of the thing tmux actually addresses.
  *
  * ## Declarations only, for now
  * This package declares a vocabulary and nothing else. Sending keys to a pane,

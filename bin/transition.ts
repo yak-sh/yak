@@ -5,7 +5,7 @@
 // database is exported once into the package vocabulary and imported into a
 // fresh db that `yak serve` opens with the plugins in `etc/yak.json`. Every
 // adapter the fleet's shape needs lives here and nowhere else — no package
-// carries a column, a keyword or a branch for the fleet's sake.
+// carries a property, a keyword or a branch for the fleet's sake.
 //
 // `docs/transition.md` is the spec: one row per fleet component, naming the
 // package component its rows become or why nothing takes them. This script
@@ -765,7 +765,7 @@ let MOVES: Record<string, Move | null> = {
   imported: same('imported', 'source', 'line'),
   lease: {
     says: 'effect',
-    // A run holds its own lease — these are columns of the effect run, not a
+    // A run holds its own lease — these are properties of the effect run, not a
     // row about a runner.
     make: (row, ctx) => ({
       lease_owner: ctx.ref(row.holder),

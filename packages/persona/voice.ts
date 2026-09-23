@@ -59,7 +59,7 @@ let ASK = 'Named here, not carried — ask the graph for one by id.'
 
 let doc = (b: Bundle): Comp => (b[DOC] ?? {}) as Comp
 
-let column = (b: Bundle, name: string): string => {
+let prop = (b: Bundle, name: string): string => {
   let value = doc(b)[name]
   return value == null ? '' : String(value)
 }
@@ -94,9 +94,9 @@ let column = (b: Bundle, name: string): string => {
  */
 export let voice = (vocab: Vocab): (worn: Worn) => string => {
   let id = human(vocab)
-  let head = (b: Bundle): string => safe(`${id(b)} ${column(b, TITLE)}`).trim()
+  let head = (b: Bundle): string => safe(`${id(b)} ${prop(b, TITLE)}`).trim()
   let part = (b: Bundle): string =>
-    [`# ${head(b)}`, column(b, BODY).trim()].filter(Boolean).join('\n\n')
+    [`# ${head(b)}`, prop(b, BODY).trim()].filter(Boolean).join('\n\n')
   return ({ persona, carries, names }) =>
     [
       part(persona),

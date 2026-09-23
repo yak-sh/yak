@@ -52,12 +52,12 @@ entry; for example, `@yaks/openai` stores `openai{response_id}`.
 
 Session status is derived from entries rather than stored. `statusOf()` returns
 `empty`, `pending`, `running`, `settled`, `stopped`, or `failed`.
-`sessionDerived` exposes the corresponding `session.status` SQL-derived column.
-An unanswered call from the newest model request keeps a transcript `running`
-regardless of later entries. Otherwise, input/result means `pending`, ask/call
-means `running`, output means `settled`, stop means `stopped`, and exception or
-three consecutive errors means `failed`. No entries means `empty`. There is no
-separate `input` component.
+`sessionDerived` exposes the corresponding `session.status` SQL-derived
+property. An unanswered call from the newest model request keeps a transcript
+`running` regardless of later entries. Otherwise, input/result means `pending`,
+ask/call means `running`, output means `settled`, stop means `stopped`, and
+exception or three consecutive errors means `failed`. No entries means `empty`.
+There is no separate `input` component.
 
 Applications that run a session add components from other packages:
 `process{pid, command, cwd}` and `exit{code}` describe its program;

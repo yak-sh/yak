@@ -42,7 +42,7 @@ import type { Files } from './tree.ts'
 export let refEid = (app: Eid, name: string): Eid =>
   derivedEid(`${REF}|${app}|${name}`)
 
-// Reads a reference column in either of the two forms a store returns: the
+// Reads a reference property in either of the two forms a store returns: the
 // bare eid that a read inside a transaction gives, and the `{eid, name}`
 // object that a read over a store's HTTP API gives, which names what the
 // reference points at as it goes. One reader, so a branch reads the same

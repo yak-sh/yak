@@ -27,7 +27,7 @@
       ],
       "prefix": "M",
       "governed": true,
-      "description": "one thing a person said about how they want something built or handled, kept in their own words. The words themselves are the entity's doc.body, verbatim; these columns record where they belong and what is needed to read them. The byline is the entity's created{at, by}",
+      "description": "one thing a person said about how they want something built or handled, kept in their own words. The words themselves are the entity's doc.body, verbatim; these properties record where they belong and what is needed to read them. The byline is the entity's created{at, by}",
       "properties": {
         "scope": {
           "type": "string",

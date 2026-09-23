@@ -3,7 +3,7 @@
 //
 // A wake written as a cadence alone — `{ every: '@daily' }`, with no `at` — is
 // a schedule nobody would call wrong, and it would never fire: `due` tests
-// whether `at` has passed, and a column that is absent never has. So
+// whether `at` has passed, and a property that is absent never has. So
 // `normalize` gives such a wake its first instant. That is the whole hook. It
 // runs before the transaction and reads nothing, which is what `normalize` is
 // for.

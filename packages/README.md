@@ -11,7 +11,7 @@ An **entity** is a record identified by `entity.eid`. Its **components** are
 named objects describing different aspects of the record. A **bundle** is one
 entity's components as a JSON object. A **batch** is a list of changes applied
 in one transaction. A **vocabulary** is the schema declaring the components,
-columns and relationships a graph accepts.
+properties and relationships a graph accepts.
 
 This complete example stores documents in memory. `loadVocab()` loads the
 schema, `ram()` provides storage, and `graph()` validates and applies changes:
@@ -51,14 +51,14 @@ grouped approximately by function, **not** by dependency order.
 
 - **[@yaks/vocab](./vocab)** — describe a component vocabulary as JSON Schema
   (2020-12) plus a small custom keyword vocabulary, and interrogate it at
-  runtime: column types, path routing, display ordering, instance checks.
+  runtime: property types, path routing, display ordering, instance checks.
 - **[@yaks/id](./id)** — entity ids: generate an eid, and turn the `prefix` a
   component declares plus a number into a human-readable id (`B-7`) and back. It
-  also owns the number itself — the `num` column on the `entity` row, the
+  also owns the number itself — the `num` property on the `entity` row, the
   allocator behind `$num`, and the resolver from `B-7` to an eid — so a graph
   that does not load this package has no numbers and no prefixes anywhere.
 - **[@yaks/names](./names)** — the other way to address an entity: the
-  components a vocabulary marks `by_name`, the column each one stores its name
+  components a vocabulary marks `by_name`, the property each one stores its name
   in, and the lookup for a name somebody typed.
 - **[@yaks/sql](./sql)** — Compile a query AST against a loaded vocabulary into
   SQL and bound parameters. Its intermediate representation describes relational
@@ -79,15 +79,15 @@ grouped approximately by function, **not** by dependency order.
   component tables from schemas.
 
 - **[@yaks/blob](./blob)** — Store text and binary content by hash. A marked
-  text column stores a hash while a table, directory or object store holds the
+  text property stores a hash while a table, directory or object store holds the
   content. Text substitution requires both the graph plugin and read resolution.
   SQL content and component writes share a transaction only on the same
   connection; files and object-store writes cannot roll back with SQL.
 
 - **[@yaks/fts](./fts)** — Build SQLite FTS5 indexes and compile text search
-  terms. By default it indexes stored scalar text columns marked `search: true`,
-  with one index per component. A bare query term needs this or another search
-  extension.
+  terms. By default it indexes stored scalar text properties marked
+  `search: true`, with one index per component. A bare query term needs this or
+  another search extension.
 
 - **[@yaks/embedding](./embedding)** — Store vectors and compile
   `.near=<entity>` and `.order=similar`. An injected embedding function
@@ -114,8 +114,9 @@ grouped approximately by function, **not** by dependency order.
 
 - **[@yaks/render](./render)** — Select renderers by query specificity and a
   requested view name (more specific name segments are on the right), collect
-  component actions, and select column renderers by schema. Renderers receive an
-  element-construction function so the caller chooses the output representation.
+  component actions, and select property renderers by schema. Renderers receive
+  an element-construction function so the caller chooses the output
+  representation.
 
 - **[@yaks/preact](./preact)** — Connect the render registry to Preact. Its
   `Entity` component reads a function-based store and subscribes while mounted,
@@ -160,7 +161,7 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/alias](./alias)** — the kind of key that is a name: `alias{name}` on
   an entity, expanded into a separate key entity, so seed data written twice
   updates one entity rather than creating two — and a name can be used anywhere
-  an eid can, in a reference column and in an API request.
+  an eid can, in a reference property and in an API request.
 - **[@yaks/git](./git)** — git objects as entities: an object's eid is its SHA-1
   object id, with its SHA-256 name beside it as a key, its body in a @yaks/blob
   store, and the two traversals a pack supports (`entry`, `parent`) as edges —
@@ -436,7 +437,7 @@ object. `options` contains the plugin configuration.
 Server behavior exports (`rules`, `runs`, `effects` and `routes`) are factories
 taking `(host, options)`; `service` additionally takes an `AbortSignal`. Schema
 `docs`, `keywords` and renderer `views` are values, while `derived(vocab)`
-produces computed-column definitions. A **facet** is one of these sub-module
+produces computed-property definitions. A **facet** is one of these sub-module
 exports, not another kind of plugin. For example, a check that queries a
 package's own SQL table gets the connection through `host.sql`, and a threshold
 or a relation name comes from config rather than being hard-coded. Everything a
@@ -554,14 +555,14 @@ distinguish implemented behavior from remaining proposals.
   alongside every other), so only one of them can have it — and a program may
   well want both a canvas and a terminal. Resolved by nesting one: `@yaks/tmux`
   declares `tmux{of, pane}`, where the component is named after the package and
-  `pane` is just a column naming what tmux addresses. That is also what the
+  `pane` is just a property naming what tmux addresses. That is also what the
   fleet's own note in `src/sessions.ts` proposed. The alternative, renaming the
   canvas's `pane` to `region`, is a better name for a layout split but belongs
   with the canvas's own redesign rather than with this split.
 - **The list of statuses depends on loaded schemas.** `task.status` is computed
-  from marks. `@yaks/session/vocab` contributes computed-column rules including
-  `claim` as `wip`; load it after `@yaks/task/vocab` to select that calculation.
-  The schemas' status enums are combined for board validation, so
+  from marks. `@yaks/session/vocab` contributes computed-property rules
+  including `claim` as `wip`; load it after `@yaks/task/vocab` to select that
+  calculation. The schemas' status enums are combined for board validation, so
   `@yaks/project/rules` already recognizes `wip` when session schemas are
   loaded. `projects(vocab, marks)` remains available for an explicit status
   list; it is not required just to enable the loaded session statuses.
@@ -589,7 +590,7 @@ distinguish implemented behavior from remaining proposals.
   policy data, not executable guard functions. A config-expressible guard is a
   remaining design question, not an implemented authentication service.
 - **Numbers and prefixes are one package, and they are opt in.**
-  [@yaks/id](./id) declares the `num` column, ships `numbers(allocate)` for
+  [@yaks/id](./id) declares the `num` property, ships `numbers(allocate)` for
   explicit `$num` requests and `ids(vocab)` for resolving what a person typed;
   storage numbering (`number: true`) is the other, plugin-free way to have them.
   A component's `prefix` controls formatting, not allocation: a proposal to
@@ -618,11 +619,11 @@ distinguish implemented behavior from remaining proposals.
   a request — one extra component, matched by the runner's pattern — so an
   imported transcript can record everything it saw.
 - **A view that needs SQL.** No package has one yet. When one does — a renderer
-  that wants a computed column the store produces — the column is declared as
-  `derived` in `./vocab` and the renderer reads it off the bundle. A `./views`
-  that imports a database driver has crossed into the server half, and
+  that wants a computed property the store produces — the property is declared
+  as `derived` in `./vocab` and the renderer reads it off the bundle. A
+  `./views` that imports a database driver has crossed into the server half, and
   `deno task check:browser` will fail it.
-- **`@yaks/render`'s `vocab.json` describes a column schema**, not a set of
+- **`@yaks/render`'s `vocab.json` describes a property schema**, not a set of
   domain components, so it is the one vocabulary document with no `./vocab`
   subpath, and `packages/facets_test.ts` lists it as an exception.
 - **`@yaks/harness`'s `./vocab` is an application's list** of packages, rather
@@ -649,9 +650,9 @@ differ in supported queries, rules and transaction guarantees:
   database and it handles reading and writing entities for you, using the query,
   vocabulary and SQL packages plus schema/storage support.
 - `@yaks/blob` moves long values out of the rows transparently: one schema
-  keyword on the column, a plugin that substitutes the text for its hash inside
-  the write's own transaction, and a read override that resolves it back in the
-  SQL statement — so a writer sends text and a reader gets text.
+  keyword on the property, a plugin that substitutes the text for its hash
+  inside the write's own transaction, and a read override that resolves it back
+  in the SQL statement — so a writer sends text and a reader gets text.
 - `@yaks/fts` adds search on top: by default it indexes stored scalar text
   properties marked `search: true` and registers a clause compiler with
   `@yaks/sql` — the same extension point the other search and traversal packages

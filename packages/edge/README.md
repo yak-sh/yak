@@ -147,7 +147,7 @@ let statement = compile(parse('.cites[<=3]->p2'), vocab, {
 - `.edges[cites]!` requests links alongside selected entities. The extension
   accepts this clause without filtering the selection; fetching those links is
   the caller's responsibility. It does not itself add links to returned rows.
-- A reference-column traversal such as `.fork.from->S-7` remains the SQL
+- A reference-property traversal such as `.fork.from->S-7` remains the SQL
   compiler's responsibility. An undeclared relation is rejected.
 
 Pass the same extension to the SQLite adapter's `extend` option to enable these

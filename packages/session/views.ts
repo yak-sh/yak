@@ -2,7 +2,8 @@
 // transcript itself, as portable @yaks/render renderers — the same tree prints
 // as plain text in a CLI (@yaks/text) or mounts in a browser. The status is
 // computed from the entries the caller hands in as `ctx.entries`, because a
-// store with no derived columns (@yaks/ram) has nothing else to read it from.
+// store with no derived properties (@yaks/ram) has nothing else to read it
+// from.
 
 import type { Comp } from '@yaks/graph'
 import { parse } from '@yaks/query'

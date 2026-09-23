@@ -11,7 +11,7 @@
 //
 // Two ways a query is wrong, both caught in one walk over its clauses:
 //
-//   Routing   `.staus=open` names no column. The vocabulary refuses it.
+//   Routing   `.staus=open` names no property. The vocabulary refuses it.
 //   Members   `.status=complete` names no status. The status set refuses it.
 //
 // The second is what a closed set of statuses buys: `complete` and `completed`
@@ -22,7 +22,7 @@
 // board nobody has written a filter for should show.
 //
 // Writing `task.status` itself needs no refusal here: it is declared
-// `computed: true`, and @yaks/graph's `admit` phase drops a computed column
+// `computed: true`, and @yaks/graph's `admit` phase drops a computed property
 // before this hook ever sees the write.
 //
 // The hook runs at `precondition`, inside the transaction and before any row

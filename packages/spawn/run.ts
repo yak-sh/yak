@@ -15,11 +15,11 @@
 //    recognizes, each with an `imported` component recording the source file
 //    and the line number. That also serves as the read position — the highest
 //    line number already imported is where a resume begins — so every line is
-//    imported exactly once, with no cursor column to keep up to date.
+//    imported exactly once, with no cursor property to keep up to date.
 // 3. The request is an entry. A session asks for a provider, a model and an
 //    effort through the `using` component on its first entry, and the text next
 //    to it is the instruction. There is no HTTP endpoint that launches an agent
-//    and no `launch` column: the transaction that writes that entry is the
+//    and no `launch` property: the transaction that writes that entry is the
 //    request, and ./effects.ts is what answers it.
 //
 // Killing a run means writing a `stop` component on the session's own entity,

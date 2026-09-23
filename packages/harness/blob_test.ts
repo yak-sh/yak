@@ -1,7 +1,7 @@
 // Prose in this graph is content-addressed: a body is stored once in
-// `blob_text` and every column holding it keeps only its address. The read side
-// resolves it back, so nothing above storage ever sees a hash — and a database
-// written before the move is migrated once, exactly, on open.
+// `blob_text` and every property holding it keeps only its address. The read
+// side resolves it back, so nothing above storage ever sees a hash — and a
+// database written before the move is migrated once, exactly, on open.
 import { assertEquals } from '@std/assert'
 import { address } from '@yaks/blob'
 import type { Bundle, Comp } from '@yaks/graph'

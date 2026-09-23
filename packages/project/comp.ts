@@ -23,7 +23,7 @@
 // A venture has A phase, not A status. It is never done: it is incubating, or
 // building, or live, or shuttered. Suspending work on it is the separate
 // `paused` component, so the phase underneath is untouched and resuming means
-// removing that component — there is no column remembering which phase to put
+// removing that component — there is no property remembering which phase to put
 // back.
 //
 // The document itself is `./vocab.json` — plain JSON Schema, readable by

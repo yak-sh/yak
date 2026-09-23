@@ -71,7 +71,7 @@ Deno.test('one step against a fake model appends its ask and its prose', async (
   h.close()
 })
 
-Deno.test('session.status is a derived column, so a query filters on it', async () => {
+Deno.test('session.status is a derived property, so a query filters on it', async () => {
   let h = seeded()
   assertEquals((await h.g.read('.session.status=pending')).length, 1)
   assertEquals((await h.g.read('.session.status=settled')).length, 0)

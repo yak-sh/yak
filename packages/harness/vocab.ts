@@ -24,7 +24,7 @@ import { modelDoc } from '@yaks/model/vocab'
 import { openaiDoc } from '@yaks/openai/vocab'
 import { processDoc } from '@yaks/process/vocab'
 import { projectDoc } from '@yaks/project/vocab'
-import { derived as sessionColumns, sessionDoc } from '@yaks/session/vocab'
+import { derived as sessionDerived, sessionDoc } from '@yaks/session/vocab'
 import { taskDoc } from '@yaks/task/vocab'
 import {
   type Keywords,
@@ -49,7 +49,7 @@ export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
  * live, and its marks, which is where `archived` lives: a harness archives a
  * session, it does not own the component for putting something away.
  * @yaks/id's document is loaded beside it because a harness shows `S-12`: it
- * adds the `num` column to that same `entity` row.
+ * adds the `num` property to that same `entity` row.
  *
  * This is a list, package by package, because that is the only way each
  * component has exactly one home: no document here redeclares another's
@@ -83,13 +83,13 @@ export let keywords: Keywords[] = [edgeKeywords, blobKeywords, idKeywords]
 /** Every one of those documents, loaded into one vocabulary. */
 export let vocab: Vocab = loadVocab(docs, keywords)
 
-/** The columns a harness graph computes rather than stores: a transcript's
+/** The properties a harness graph computes rather than stores: a transcript's
  * status and a task's — both from @yaks/session, since the claim this graph
  * adds is the step in a task's status that it contributes — and a body whose
  * text lives in the blob table. Every part of this comes from another package's
  * `./vocab` subpath, so the harness's vocabulary loads in a browser tab as
  * readily as in the daemon. */
 export let derived = (vocab: Vocab): Derived => ({
-  ...sessionColumns(),
+  ...sessionDerived(),
   ...blobRead(vocab),
 })
