@@ -59,10 +59,10 @@ let blog = {
 }
 ```
 
-`edge: true` uses the component name in queries. A string gives it a
-different query name: `links` is stored as a component but queried as `linked`.
-`link()` and `unlink()` take the **component name**; `walk()` takes the **query
-name**. The package declares no application relations of its own.
+`edge: true` uses the component name in queries. A string gives it a different
+query name: `links` is stored as a component but queried as `linked`. `link()`
+and `unlink()` take the **component name**; `walk()` takes the **query name**.
+The package declares no application relations of its own.
 
 ## Creating a link
 
@@ -166,9 +166,10 @@ clauses on its reads.
 | `walk`, `traverse`                 | Storage traversal and SQL extension                           |
 
 `@yaks/edge/vocab` exports `docs` and `keywords` for plugin loading, plus
-`edgeDoc` and `edgeKeywords`. `@yaks/edge/rules` exports `rules(host)`, where
-the **host** is the process that opened the graph; its vocabulary is used to
-create `edges(vocab)`.
+`edgeDoc` and `edgeKeywords`. `@yaks/edge/rules` exports `rules(host)` and
+`extend(host)`, where the **host** is the process that opened the graph; its
+vocabulary is used to create `edges(vocab)` and `traverse(vocab)`, so a host
+that composes this package compiles both clauses above.
 
 ## Composition
 
