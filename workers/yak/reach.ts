@@ -39,7 +39,7 @@ import { vouched, type Who } from './session.ts'
 import { edits, mode } from '@yaks/member'
 import { storeOf } from './door.ts'
 import { appKeywords, coreDocs, meant } from './vocab.ts'
-import { type Bundle, dead, type Entity, requested } from '@yaks/graph'
+import { type Bundle, dead, type Entity, requested, status } from '@yaks/graph'
 import { matcher } from '@yaks/match'
 import { parse } from '@yaks/query'
 import {
@@ -153,7 +153,7 @@ let every = (line: string) => {
 // and neither may cut its answer short, or the rows the order wanted would be
 // gone before the merge saw them. So when the caller asks for an order, these
 // leave the per-store lines entirely and @yaks/match settles them once, over
-// the merged bundles (`sorted`).
+// the merged bundles (`sorting`).
 let ORDERS = ['order', 'limit', 'after']
 
 let orderWord = (seg: string) => {
@@ -168,16 +168,22 @@ let window = (line: string) => {
 
 // The order and its window, over the merged bundles, in the space's own
 // vocabulary. @yaks/match evaluates the same query grammar a store compiles to
-// SQL, so a line ordered here and a line ordered in one store agree. A
-// directive this vocabulary cannot answer exactly throws (@yaks/match
-// `Unsupported`) — a read that quietly answered in some other order would be
-// worse than one that says so.
-let sorted = (
-  bundles: Bundle[],
+// SQL, so a line ordered here and a line ordered in one store agree. It is
+// compiled before any store is asked, and a directive this vocabulary cannot
+// answer exactly (@yaks/match `Unsupported`) refuses the caller's line, as a
+// single store would — a read that quietly answered in some other order would
+// be worse than one that says so.
+let sorting = (
   orders: { segs: string[]; order: boolean },
   vocab: Vocab,
-): Bundle[] =>
-  orders.order ? matcher(orders.segs.join('&'), vocab)(bundles) : bundles
+): (bundles: Bundle[]) => Bundle[] => {
+  if (!orders.order) return (bundles) => bundles
+  try {
+    return matcher(orders.segs.join('&'), vocab)
+  } catch (e) {
+    throw status(e) < 500 ? rejected(status(e), (e as Error).message) : e
+  }
+}
 
 // A filter line cut into parts: the segments that name each component, and
 // the ones that ride with every part. A part whose every segment is a request
@@ -504,7 +510,7 @@ export let composed = async (
 // the newest of what they had in common.
 //
 // Unless the caller asked for an order, and then the sequence is nobody's to
-// cut until the bundles are one: `sorted` runs the order and the window over
+// cut until the bundles are one: `sorting` runs the order and the window over
 // the merged answer, in the space's own vocabulary (@yaks/match). A store can
 // only sort what it holds, and the property being sorted by may live in the
 // other store.
@@ -532,6 +538,7 @@ export let read = async (
   // home), and every store for a word nobody declares, which is the
   // platform's and spoken everywhere.
   let { words, apart, vocab } = await spoken(env, reach)
+  let sorted = sorting(orders, vocab)
   let speak = (name: string) => words.get(name) ?? reach
   let need = [...parts].filter(([, part]) => !part.asks)
   let lines: [Reach[], string][] = need.length
@@ -587,8 +594,6 @@ export let read = async (
       let rank = ranks.get(eidOf(b))
       return rank ? { ...b, rank } : b
     }),
-    orders,
-    vocab,
   )
 }
 

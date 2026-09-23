@@ -21,7 +21,7 @@ import {
   parse,
   type Query as Ast,
 } from '@yaks/query'
-import { Unsupported } from '@yaks/sql'
+import { Unsupported, whole } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { BY, clause, type Ctx, type Test } from './clause.ts'
 import {
@@ -123,6 +123,7 @@ let compiled = (
 let field = (ctx: Ctx, path: string): Read => {
   let hops = ctx.v.aim(path)
   if (hops.length != 1) throw new Unsupported('an ordered path', path, BY)
+  if (!hops[0].prop) throw whole(ctx.v, hops[0].comp, BY)
   let read = reader(ctx.v, hops[0].comp, hops[0].prop, ctx.computed)
   if (!read) throw new Unsupported('a computed property here', path, BY)
   return read

@@ -8,6 +8,7 @@
 // landing anywhere.
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
+import { CallError } from '@yaks/tools'
 import { durable } from '../../packages/durable-object/harness.ts'
 import { Store } from './graph.ts'
 import { type App, appStore, type Space } from './directory.ts'
@@ -189,6 +190,13 @@ Deno.test('an order holds across the merge, and its window cuts after it', async
   assertEquals(
     await by('.book!&.loan?&.book.pages>0&.order=book.pages&.limit=2'),
     [100, 200],
+  )
+  // An order the space's words cannot settle is the caller's line refused,
+  // as one store refuses it, and never a failure of ours.
+  await assertRejects(
+    () => read(env, reach, '.book!&.loan?&.order=created'),
+    CallError,
+    'a component where a property belongs: created — try created.at',
   )
 })
 

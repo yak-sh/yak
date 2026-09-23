@@ -500,3 +500,16 @@ Deno.test('a computed property nobody registered still declines', () => {
   // ordering by one declines the same way
   assertThrows(() => matcher('.task!&.order=status', todo), Unsupported)
 })
+
+// An order names a property. A whole component in its place is refused by
+// both compilers alike, and the refusal names what the caller could order by.
+Deno.test('an order naming a whole component declines, naming its properties', () => {
+  let mine = assertThrows(() => matcher('.order=doc', shop), Unsupported)
+  let theirs = assertThrows(() => sql().read('.order=doc'), Unsupported)
+  assertEquals(
+    mine.message,
+    '@yaks/match cannot compile a component where a property belongs: ' +
+      'doc — try doc.title, doc.body',
+  )
+  assertEquals(theirs.message, mine.message.replace('match', 'sql'))
+})

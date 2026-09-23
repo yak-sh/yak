@@ -101,6 +101,22 @@ export class Unsupported extends Error {
   }
 }
 
+/** The refusal for a directive naming a whole component (`.order=created`)
+ * where one of its properties belongs; it names them, so the next line the
+ * caller writes is the one that compiles. `by` is as for {@link Unsupported}. */
+export let whole = (
+  v: Vocab,
+  comp: string,
+  by = '@yaks/sql',
+): Unsupported => {
+  let props = v.comp(comp) ? v.props(comp).map((p) => `${comp}.${p}`) : []
+  return new Unsupported(
+    'a component where a property belongs',
+    props.length ? `${comp} — try ${props.join(', ')}` : comp,
+    by,
+  )
+}
+
 export type BindOpts = {
   dialect?: Dialect
   derived?: Derived
@@ -939,6 +955,7 @@ let resolveField = (
     throw new Unsupported('a projected/ordered path', pathStr)
   }
   let h = hops[0]
+  if (!h.prop) throw whole(ctx.v, h.comp)
   ctx.tables.add(h.comp)
   let read = readProp(ctx, h.comp, h.prop, `"${h.comp}"."entity"`)
   if (!read) throw new Unsupported('a computed property here', pathStr)

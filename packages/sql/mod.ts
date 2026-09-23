@@ -56,7 +56,7 @@ export * from './extend.ts'
 export * from './ident.ts'
 export * from './walk.ts'
 export * from './archetype.ts'
-export { bind, type BindOpts, Unsupported } from './bind.ts'
+export { bind, type BindOpts, Unsupported, whole } from './bind.ts'
 
 // The compiled statement: a SQL string and the parameters to bind to it, in
 // order.
