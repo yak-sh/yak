@@ -35,6 +35,7 @@ import type { Bundle, Eid } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import { aliasEid } from '@yaks/alias'
 import { derivedEid, identityEid } from '@yaks/graph'
+import { messageIdOf } from '@yaks/mail'
 
 // ─── the fleet side ──────────────────────────────────────────────────────────
 
@@ -602,7 +603,11 @@ let MOVES: Record<string, Move | null> = {
         at: text(row.received_at),
         target: ctx.ref(row.target),
         reply_to: ctx.ref(row.reply_to),
-        message_id: text(row.message_id),
+        // The fleet stored its edge's key (`msg:<ms>:<id>`); the letter's own
+        // Message-ID is what @yaks/mail threads and deduplicates on.
+        message_id: row.message_id == null
+          ? undefined
+          : messageIdOf(String(row.message_id)),
         in_reply_to: text(row.in_reply_to),
         sent_id: text(row.sent_id),
         verified: bool(row.verified),

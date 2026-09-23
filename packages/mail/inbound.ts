@@ -118,6 +118,7 @@ export let messageId = (m: Received): string =>
  */
 export let inbound = (m: Received, arrival: Arrival = {}): Bundle[] => {
   let at = arrival.at ?? m.headers.get('date') ?? new Date().toISOString()
+  let answers = m.headers.get('in-reply-to')
   return [{
     entity: { eid: arrival.eid ?? crypto.randomUUID() },
     [DOC]: {
@@ -131,6 +132,9 @@ export let inbound = (m: Received, arrival: Arrival = {}): Bundle[] => {
       message_id: messageId(m),
       ...(arrival.target ? { target: arrival.target } : {}),
       ...(arrival.reply ? { reply_to: arrival.reply } : {}),
+      // The header as written, beside `reply_to`: a reply to a letter this
+      // graph never kept still says what it answers.
+      ...(answers ? { in_reply_to: answers } : {}),
       ...(arrival.verified == null ? {} : { verified: arrival.verified }),
     },
   }]

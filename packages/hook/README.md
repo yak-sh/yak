@@ -1,8 +1,11 @@
 # @yaks/hook
 
 Defines a graph component for recording incoming webhook requests: their source,
-event name, original HTTP body and headers, and signature-verification result.
-It does not expose an HTTP endpoint or verify signatures itself.
+event name, original HTTP body and headers, and signature-verification result,
+and `hooked()`, which turns a captured request into the bundles that record it.
+It does not expose an HTTP endpoint or verify signatures itself;
+[@yaks/mail](../mail/README.md) pulls requests from a mail edge's hook paths and
+records them this way.
 
 ## Stored data
 
@@ -26,8 +29,18 @@ Use graph provenance components for arrival timestamps; the signature result is
 
 ## Exports and use
 
-The root import exports `hookDoc`, a JSON Schema document. `@yaks/hook/vocab`
-also exports `docs: [hookDoc]` for plugin loaders.
+The root import exports `hookDoc`, a JSON Schema document, and the recorder:
+
+- `hooked(request, about?)` returns a `hook` bundle with a `doc` title naming
+  the event, plus an `about` link when you pass the entity it is for. Apply it
+  trusted, since every `hook` property is server-owned.
+- `event(request)` names the event: the sender's `X-GitHub-Event` or
+  `X-Event-Key` header, else a JSON body's `event`, `type` or `action`, else the
+  method and path.
+- `hookEid(request)` derives the entity id from `source` and the receiver's
+  request `id`, so recording one request twice writes one entity.
+
+`@yaks/hook/vocab` also exports `docs: [hookDoc]` for plugin loaders.
 
 ```ts
 import { hookDoc } from '@yaks/hook'
@@ -45,5 +58,5 @@ and body component and the display kind referenced by this vocabulary.
 
 ## Compatibility
 
-Deno, Node and browsers. This package exports JSON declarations, with no runtime
-calls or storage implementation.
+Deno, Node and browsers. `hooked()` is pure: no runtime calls and no storage
+implementation.

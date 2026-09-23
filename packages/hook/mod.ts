@@ -4,7 +4,9 @@
  * because an unsigned hook is still something that happened, and whoever reads
  * it decides what to trust.
  *
- * Components only: a vocabulary document, with no code.
+ * The components, and `hooked()`: a captured request in, the bundles that
+ * record it out.
  */
 
 export { hookDoc } from './vocab.ts'
+export { event, hooked, hookEid, type Request } from './hooked.ts'

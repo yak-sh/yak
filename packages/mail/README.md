@@ -231,8 +231,8 @@ curl -X POST http://localhost:8000/mail/inbound \
 `verified` is an optional top-level boolean when the receiving system supplies a
 DKIM result separately. Configure `door.secret` to require a bearer token. If it
 is absent, this route performs no token check itself; enclosing server
-authentication, if any, still applies. `door.path` changes the path and
-`door.triage` sets the fallback recipient entity.
+authentication, if any, still applies. `door.path` changes the path, and the
+top-level `triage` sets the fallback recipient entity.
 
 A plugin entry in a `yak serve` configuration can be:
 
@@ -242,6 +242,7 @@ A plugin entry in a `yak serve` configuration can be:
   "with": {
     "domain": "books.example",
     "local": true,
+    "triage": "inbox",
     "sender": {
       "via": "cloudflare",
       "account": "a1b2",
@@ -249,8 +250,7 @@ A plugin entry in a `yak serve` configuration can be:
     },
     "door": {
       "path": "/mail/inbound",
-      "secret": { "env": "MAIL_DOOR_SECRET" },
-      "triage": "inbox"
+      "secret": { "env": "MAIL_DOOR_SECRET" }
     }
   }
 }
@@ -262,6 +262,44 @@ Cloudflare credentials or an unsupported transport registers a handler that
 sends nothing: it warns once, when it meets a message it cannot send, and leaves
 that message for the first process with a sender. `mail check` reports the
 configuration problem too.
+
+## Pulling from an edge
+
+A graph behind a perimeter cannot be posted to. Its edge keeps what arrived
+instead, and `@yaks/mail/service` pulls it: a duty the host runs under the
+`@yaks/mail` lease, so one process over the graph pulls at a time, and a
+one-shot `yak` command pulls once when nobody else is. Name the edge under
+`pull`:
+
+```json
+{
+  "use": "@yaks/mail",
+  "with": {
+    "domain": "books.example",
+    "pull": {
+      "url": "https://inbox.books.example",
+      "token": { "env": "INBOX_TOKEN" },
+      "every": 10000
+    }
+  }
+}
+```
+
+The edge holds two trays. `GET /messages?unnotified=1&.dir=in&limit=100` lists
+the letters nobody has taken; each is recorded through `arrived()`, and
+`POST /messages/notified {ids}` tells the edge they are taken.
+`GET /requests?unprocessed=1&limit=100` lists the requests posted to its hook
+paths (a 404 means there is no such tray); where the graph declares
+[@yaks/hook](../hook/README.md), each becomes a `hook` about the mailbox its
+first path segment names (`/hook/books/…` is whoever has `books@<domain>`), and
+`POST /requests/processed {ids}` acknowledges them.
+
+Taking is first come, first served at the edge: two graphs must never name the
+same edge, and a copy of a config that pulls takes the mail from the graph it
+was copied from. Every record is idempotent — a letter by its Message-ID, a
+request by the id derived from it — so a crash between recording and
+acknowledging only repeats the pull. An item that cannot be recorded stays at
+the edge and is tried again.
 
 ## The tools
 
@@ -367,22 +405,23 @@ The root import `@yaks/mail` provides:
 | `stash`, `Stash`, `Kept`                                                   | In-memory transport.                                                       |
 | `inbound`, `author`, `messageId`, `verdict`, `Received`, `Arrival`, `Head` | Incoming-message conversion and header interpretation.                     |
 | `arrived`, `wearer`, `named`, `routed`, `known`, `Arrivals`, `Book`        | Graph lookups used when receiving.                                         |
+| `pull`, `edge`, `received`, `hookTo`, `messageIdOf`, `Edge`, `Pulled`      | Pulling arrivals from an edge.                                             |
 | `invited`, `Invite`, `Welcome`, `Seat`                                     | Membership invitation handler and types.                                   |
 | `canon`, `local`, `at`, `parts`, `address`                                 | Address parsing and normalization.                                         |
 | `html`, `text`, `tokens`, `linkable`, `escape`, `Token`                    | Body rendering.                                                            |
-| `Options`, `Transport`, `Door`                                             | Plugin configuration types.                                                |
+| `Options`, `Transport`, `Door`, `Pull`                                     | Plugin configuration types.                                                |
 
 Separate entry points provide `mailDoc` and `docs` from `@yaks/mail/vocab`,
 `rules()` from `@yaks/mail/rules`, `effects()` and `post()` from
 `@yaks/mail/effects`, `routes()`, `PATH`, and `Posted` from `@yaks/mail/routes`,
-and `runs()` plus inbox and thread helpers from `@yaks/mail/tools`. They are not
-root re-exports. Their `host` argument is the process that opened the graph,
-represented by the services each function needs; for example, `routes()` needs
-`{ graph }`.
+`service()` and `EVERY` from `@yaks/mail/service`, and `runs()` plus inbox and
+thread helpers from `@yaks/mail/tools`. They are not root re-exports. Their
+`host` argument is the process that opened the graph, represented by the
+services each function needs; for example, `routes()` needs `{ graph }`.
 
 ## What is deliberately not here
 
-The package does not parse MIME, poll for mail, schedule retries, or manage
+The package does not parse MIME, speak IMAP or POP, schedule retries, or manage
 credentials. Applications supply those services. A failed message remains
 queryable, and a retry is a new message. `deliver.to` is an entity id; the
 recipient's address is resolved when sending.

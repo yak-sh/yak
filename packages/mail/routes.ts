@@ -79,7 +79,7 @@ export let routes = (
   host: { graph: Graph },
   options: Options = {},
 ): Route[] => {
-  let { path = PATH, secret, triage } = options.door ?? {}
+  let { path = PATH, secret } = options.door ?? {}
   return [{
     method: 'POST',
     path,
@@ -92,7 +92,7 @@ export let routes = (
         let receive = arrived({
           graph: host.graph,
           domain: options.domain,
-          triage,
+          triage: options.triage,
         })
         let batch = await receive({ from, to, headers: head(headers) }, {
           text,
