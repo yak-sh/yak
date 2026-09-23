@@ -26,7 +26,7 @@
 // about each other. And the space's vocabulary is the union of what its apps
 // declare — the language a merged bundle is written in, and the one @yaks/match
 // reads an order out of.
-import { asking, listed, PLATFORM, type Row } from './listing.ts'
+import { asking, listed, PLATFORM, type Row, STAMPS } from './listing.ts'
 import {
   type App,
   appStore,
@@ -182,6 +182,39 @@ let sorting = (
     return matcher(orders.segs.join('&'), vocab)
   } catch (e) {
     throw status(e) < 500 ? rejected(status(e), (e as Error).message) : e
+  }
+}
+
+// The component an order reads. A store sorts by a column it never answers,
+// but the merge can only sort what it holds, so this rides the gather whether
+// or not the caller asked to see it — and leaves before the answer does
+// (`unasked`), which is then the one a single store gives.
+let orderedBy = (
+  orders: { segs: string[] },
+  vocab: Vocab,
+): string | null => {
+  let seg = orders.segs.find((s) => orderWord(s) == 'order')
+  let path = seg?.slice(seg.indexOf('=') + 1).replace(/^-/, '')
+  return path ? vocab.aim(path)[0]?.comp ?? null : null
+}
+
+// A component off a merged bundle the caller's own line would not carry: one
+// it did not name when it named any (graph.ts `#wanted`), or a stamp it did
+// not name at all (listing.ts `listed`).
+let unasked = (comp: string, want: Set<string> | null, line: string) => {
+  let kept = (want ? want.has(comp) : true) &&
+    (!STAMPS.includes(comp) || line.includes(`.${comp}`))
+  return (b: Bundle): Bundle => {
+    if (kept) return b
+    let out: Bundle = { ...b }
+    let homes = Object.entries((b._stores ?? {}) as Record<string, string>)
+      .filter(([name]) => name != comp)
+    delete out[comp]
+    delete out._stores
+    if (new Set(homes.map(([, at]) => at)).size > 1) {
+      out._stores = Object.fromEntries(homes)
+    }
+    return out
   }
 }
 
@@ -583,18 +616,25 @@ export let read = async (
     ? new Set(named)
     : null
   let from = named.length ? [...new Set(named.flatMap(speak))] : reach
-  let bundles = await composed(env, from, eids, {
-    want,
-    apart,
-    said: line,
-    must: need.map(([name]) => name),
-  })
-  return sorted(
+  let by = orderedBy(orders, vocab)
+  let bundles = await composed(
+    env,
+    by ? [...new Set([...from, ...speak(by)])] : from,
+    eids,
+    {
+      want: want && by ? new Set([...want, by]) : want,
+      apart,
+      said: by ? `${line}&.${by}?` : line,
+      must: need.map(([name]) => name),
+    },
+  )
+  let out = sorted(
     bundles.map((b) => {
       let rank = ranks.get(eidOf(b))
       return rank ? { ...b, rank } : b
     }),
   )
+  return by ? out.map(unasked(by, want, line)) : out
 }
 
 // A write is routed the same way a read is composed (T-32700): a bundle is

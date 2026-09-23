@@ -191,6 +191,15 @@ Deno.test('an order holds across the merge, and its window cuts after it', async
     await by('.book!&.loan?&.book.pages>0&.order=book.pages&.limit=2'),
     [100, 200],
   )
+  // An order by a word the line never names, kept in the other store, is
+  // gathered to sort by and left off the answer, as one store leaves it.
+  let ordered = await read(env, reach, '.book!&.order=loan.to')
+  assertEquals(bundles(ordered).map((b) => comp(b, 'book').pages), [
+    300,
+    100,
+    200,
+  ])
+  assert(bundles(ordered).every((b) => !b.loan && !b._stores))
   // An order the space's words cannot settle is the caller's line refused,
   // as one store refuses it, and never a failure of ours.
   await assertRejects(
