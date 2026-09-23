@@ -7,6 +7,9 @@
 # once the owner points DNS at it — nothing deploys on its own.
 name = "yak"
 main = "index.ts"
+# Where esbuild finds each `@yaks/*` package: the workspace, written out by
+# the wrangler door before every run (wrangler.ts `aliased`; see `[alias]`).
+tsconfig = ".wrangler/paths.json"
 account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"
 compatibility_date = "2025-05-08"
 # global_fetch_strictly_public sends every outbound fetch out to the public
@@ -414,58 +417,18 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 
 # Where a bare specifier goes. The kernel is Deno source that imports the
 # packages by NAME (`@yaks/graph`), which deno resolves through the workspace
-# in the repo's one deno.json — wrangler's esbuild has no idea about that, and
-# a package resolves for `deno check` and then fails to bundle. So the same
-# names are written once here, as paths.
+# in the repo's one deno.json — wrangler's esbuild has no idea about that. So
+# the workspace is handed to esbuild as tsconfig `paths` (the `tsconfig` line
+# at the top), written from every member's deno.json by the wrangler door
+# (wrangler.ts `aliased`) before wrangler runs: no `@yaks/*` name is listed
+# here, and none can be missing.
 #
-# The npm ones are aliased too, and only because of WHERE they are imported
+# The npm ones are aliased here, and only because of WHERE they are imported
 # from: esbuild walks up from the importing file, and a `packages/mcp/*.ts`
 # has no `node_modules` above it. Each points into this directory's own, which
 # is what `npm ci` here fills (package.json), so an SDK subpath is aliased to
 # the file it actually is.
 [alias]
-"@yaks/alias" = "../../packages/alias/mod.ts"
-"@yaks/api" = "../../packages/api/mod.ts"
-"@yaks/blob" = "../../packages/blob/mod.ts"
-"@yaks/canvas" = "../../packages/canvas/mod.ts"
-"@yaks/doc" = "../../packages/doc/mod.ts"
-"@yaks/durable-object" = "../../packages/durable-object/mod.ts"
-"@yaks/edge" = "../../packages/edge/mod.ts"
-"@yaks/effects" = "../../packages/effects/mod.ts"
-"@yaks/embedding" = "../../packages/embedding/mod.ts"
-"@yaks/fts" = "../../packages/fts/mod.ts"
-"@yaks/git" = "../../packages/git/mod.ts"
-"@yaks/graph" = "../../packages/graph/mod.ts"
-"@yaks/graph/tools" = "../../packages/graph/tools.ts"
-"@yaks/hook" = "../../packages/hook/mod.ts"
-"@yaks/html" = "../../packages/html/mod.ts"
-"@yaks/id" = "../../packages/id/mod.ts"
-"@yaks/journal" = "../../packages/journal/mod.ts"
-"@yaks/key" = "../../packages/key/mod.ts"
-"@yaks/mail" = "../../packages/mail/mod.ts"
-"@yaks/markdown" = "../../packages/markdown/mod.ts"
-"@yaks/match" = "../../packages/match/mod.ts"
-"@yaks/mcp" = "../../packages/mcp/mod.ts"
-"@yaks/mcp/roster" = "../../packages/mcp/roster.ts"
-"@yaks/member" = "../../packages/member/mod.ts"
-"@yaks/memory" = "../../packages/memory/mod.ts"
-"@yaks/preact" = "../../packages/preact/mod.ts"
-"@yaks/ram" = "../../packages/ram/mod.ts"
-"@yaks/names" = "../../packages/names/mod.ts"
-"@yaks/query" = "../../packages/query/mod.ts"
-"@yaks/render" = "../../packages/render/mod.ts"
-"@yaks/session" = "../../packages/session/mod.ts"
-"@yaks/sql" = "../../packages/sql/mod.ts"
-"@yaks/archetype" = "../../packages/archetype/mod.ts"
-"@yaks/sqlite" = "../../packages/sqlite/mod.ts"
-"@yaks/task" = "../../packages/task/mod.ts"
-"@yaks/tools" = "../../packages/tools/mod.ts"
-"@yaks/vocab" = "../../packages/vocab/mod.ts"
-"@yaks/vocab/tools" = "../../packages/vocab/tools.ts"
-"@yaks/wake" = "../../packages/wake/mod.ts"
-"@yaks/wake/cloudflare" = "../../packages/wake/cloudflare.ts"
-"@yaks/workerd" = "../../packages/workerd/mod.ts"
-"@yaks/yaml" = "../../packages/yaml/mod.ts"
 # @yaks/yaml's own dependency, aliased to the file it is. esbuild walks up from
 # packages/yaml/yaml.ts and finds no node_modules above it — the same reason
 # every npm name below is aliased — so the JSR package's npm build is named

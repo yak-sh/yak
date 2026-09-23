@@ -25,6 +25,7 @@
 // and drops kernels under the parallel slow tier (`Network connection lost`),
 // where 4.111.0 runs it at the old pin's pace. Measure before moving.
 // Exact pins can reuse npm's restored cache without registry revalidation.
+import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import packages from './package.json' with { type: 'json' }
 
@@ -57,15 +58,62 @@ export let stale = (root = dir) =>
   at(`${root}/node_modules/.package-lock.json`) <
     at(`${root}/package-lock.json`)
 
+// Where a `@yaks/*` name goes when esbuild bundles. The kernel imports the
+// packages by name, which deno resolves through the repo's workspace; esbuild
+// knows nothing of the workspace. So the workspace itself is handed to it:
+// every member's name and exports, read out of its deno.json, written as the
+// tsconfig `paths` wrangler.toml points esbuild at. A package the kernel starts
+// importing is bundled because it is in the workspace, never because somebody
+// remembered to list it.
+export let TSCONFIG = `${dir}/.wrangler/paths.json`
+
+let repo = fileURLToPath(new URL('../../', import.meta.url))
+
+type Member = { name?: string; exports?: string | Record<string, string> }
+
+/** Every import name the workspace exports, to the file it is. */
+export let members = (root = repo): Record<string, string> => {
+  let config = (at: string) =>
+    JSON.parse(Deno.readTextFileSync(join(root, at, 'deno.json')))
+  let { workspace = [] } = config('.') as { workspace?: string[] }
+  return Object.fromEntries(workspace.flatMap((at) => {
+    let { name, exports } = config(at) as Member
+    if (!name || exports == null) return []
+    let map = typeof exports == 'string' ? { '.': exports } : exports
+    return Object.entries(map).map(([sub, file]) => [
+      name + sub.slice(1),
+      join(root, at, file),
+    ])
+  }))
+}
+
+/**
+ * Write {@link TSCONFIG}: the workspace as `paths`, relative to the file.
+ * Through a rename, so a parallel probe never reads half of one.
+ */
+export let aliased = (root = repo, to = TSCONFIG) => {
+  let paths = Object.fromEntries(
+    Object.entries(members(root)).map((
+      [name, file],
+    ) => [name, [relative(dirname(to), file)]]),
+  )
+  Deno.mkdirSync(dirname(to), { recursive: true })
+  let tmp = `${to}.${Deno.pid}`
+  Deno.writeTextFileSync(tmp, JSON.stringify({ compilerOptions: { paths } }))
+  Deno.renameSync(tmp, to)
+}
+
 /**
  * `npm ci` when it is needed, at most one at a time, and never twice at once:
  * `npm ci` empties node_modules before it fills it, and the slow tier boots
  * several kernels in parallel (bin/test.ts), so a second install would delete
  * the tree the first is bundling from. mkdir is the atomic create POSIX gives
  * us — whoever makes the directory installs, everyone else waits for the
- * stamp. Answers whether it installed.
+ * stamp. Answers whether it installed. The workspace's paths are written
+ * first ({@link aliased}), so everything wrangler bundles from is current.
  */
 export let ready = async (root = dir, timeout = 600_000) => {
+  aliased()
   if (!stale(root)) return false
   let lock = `${root}/node_modules.lock`
   try {

@@ -3,13 +3,13 @@
 // `deno task deploy:yak` from a worktree with no node_modules is the proof.
 //
 // And the two maps that must say the same thing: workers.json is what
-// `deno check` reads, wrangler.toml's `[alias]` is what esbuild bundles by. A
-// package added to one and not the other type-checks green and then fails to
-// resolve at boot — where the only witness is the slow tier's kernel hanging
-// on its first request (T-34390 added @yaks/key and @yaks/alias that way).
+// `deno check` reads, and the workspace (wrangler.ts `members`) is what esbuild
+// bundles by. A workers.json entry pointing anywhere else type-checks one file
+// and bundles another.
 import { assertEquals } from '@std/assert'
-import { parse } from '@std/toml'
-import { command, stale } from './wrangler.ts'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { aliased, command, members, stale } from './wrangler.ts'
 
 let read = (path: string) =>
   Deno.readTextFileSync(new URL(path, import.meta.url))
@@ -28,17 +28,39 @@ Deno.test('wrangler: staging keeps deploy annotations with either flag position'
   assertEquals(command(['secret', 'put', 'deploy']), 'secret')
 })
 
-Deno.test('every @yaks/* the checker knows, the bundler resolves', () => {
+Deno.test('every @yaks/* the checker knows is the file the bundler gets', () => {
   let checked = (JSON.parse(read('./workers.json')) as {
     imports: Record<string, string>
   }).imports
-  let bundled = (parse(read('./wrangler.toml')) as {
-    alias: Record<string, string>
-  }).alias
+  let bundled = members()
+  let here = fileURLToPath(new URL('./', import.meta.url))
   for (let [name, path] of Object.entries(checked)) {
     if (!name.startsWith('@yaks/')) continue
-    assertEquals(bundled[name], path, `wrangler.toml [alias] has no ${name}`)
+    assertEquals(bundled[name], join(here, path), `${name} in workers.json`)
   }
+})
+
+Deno.test('aliased: every export of a member, relative to the paths file', () => {
+  let root = Deno.makeTempDirSync({ prefix: 'yak-paths-' })
+  let write = (at: string, json: unknown) => {
+    Deno.mkdirSync(`${root}/${at}`, { recursive: true })
+    Deno.writeTextFileSync(`${root}/${at}/deno.json`, JSON.stringify(json))
+  }
+  write('.', { workspace: ['./app', './packages/one', './packages/two'] })
+  write('app', {})
+  write('packages/one', { name: '@yaks/one', exports: './mod.ts' })
+  write('packages/two', {
+    name: '@yaks/two',
+    exports: { '.': './mod.ts', './tools': './tools.ts' },
+  })
+  let to = `${root}/app/.wrangler/paths.json`
+  aliased(root, to)
+  assertEquals(JSON.parse(Deno.readTextFileSync(to)).compilerOptions.paths, {
+    '@yaks/one': ['../../packages/one/mod.ts'],
+    '@yaks/two': ['../../packages/two/mod.ts'],
+    '@yaks/two/tools': ['../../packages/two/tools.ts'],
+  })
+  Deno.removeSync(root, { recursive: true })
 })
 
 Deno.test('stale: no stamp, an older stamp, a newer stamp', () => {
