@@ -33,3 +33,9 @@ Deno.test('builds: any other event is nothing to file', () => {
     assertEquals(broke(event(type)), null)
   }
 })
+
+Deno.test('builds: a failed build of a branch that deploys nothing is not filed', () => {
+  let branch = event('failed')
+  branch.payload!.buildTriggerMetadata!.branch = 'worktree-agent-1'
+  assertEquals(broke(branch), null)
+})

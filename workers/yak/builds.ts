@@ -8,7 +8,9 @@
 // one is news rather than another event on an issue already seen.
 //
 // The subscription asks for failures alone; anything else that arrives is
-// acknowledged unread.
+// acknowledged unread, and so is a failed build of any branch but the one
+// Builds deploys (README "Workers Builds"): nothing it built was on its way
+// to production.
 
 import { withScope } from '@sentry/core'
 import type { Env } from './env.ts'
@@ -33,12 +35,17 @@ export class BuildFailed extends Error {
   override name = 'BuildFailed'
 }
 
-/** What a failed build is filed as, and nothing for any other event. */
+/** The branch whose builds deploy. */
+export let PRODUCTION = 'main'
+
+/** What a failed build of {@link PRODUCTION} is filed as, and nothing for any
+ * other event. */
 export let broke = (b: Built) => {
   if (b.type != 'cf.workersBuilds.worker.build.failed') return null
   let worker = b.source?.workerName ?? 'yak'
   let { branch, commitHash, commitMessage } = b.payload?.buildTriggerMetadata ??
     {}
+  if (branch && branch != PRODUCTION) return null
   let commit = commitHash?.slice(0, 8) ?? 'unknown'
   return {
     build: b.payload?.buildUuid ?? commit,
