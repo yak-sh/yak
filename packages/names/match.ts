@@ -4,7 +4,7 @@
 // returns "no such author" far too often.
 //
 // This is scoring only. Which entities are addressable by name, and which
-// column holds the name, is names.ts; what to do with the winner is up to the
+// property holds the name, is names.ts; what to do with the winner is up to the
 // caller.
 
 // Two names are compared with both stripped: case, spaces and punctuation carry

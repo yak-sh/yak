@@ -1,7 +1,7 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // small made-up vocabulary and a set of bundles the test files run against. The
 // domain is a bookshop — documents, books, reviews, members — chosen because it
-// exercises every column type the grammar can ask about (text, prose, number,
+// exercises every property type the grammar can ask about (text, prose, number,
 // boolean, enum, timestamp, reference) and both directions of a reference, and
 // because reading the tests needs no knowledge from outside this file.
 
@@ -60,10 +60,10 @@ let doc: VocabDoc = {
       before: ['doc'],
       properties: { joined: { type: 'string', format: 'date-time' } },
     },
-    // A tag: a component with no columns at all, where having it is the whole
-    // fact. It records that the shop signed this copy; there is nothing else to
-    // record about it, so `.signed!` and `.signed=` are the only questions it
-    // answers.
+    // A tag: a component with no properties at all, where having it is the
+    // whole fact. It records that the shop signed this copy; there is nothing
+    // else to record about it, so `.signed!` and `.signed=` are the only
+    // questions it answers.
     signed: {
       component: true,
       type: 'object',

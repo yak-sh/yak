@@ -69,7 +69,7 @@ Deno.test('what a pass needs is read whole, and a bad name waits rather than thr
   assert(bad.waiting?.includes('book.spine'), `${bad.waiting}`)
 })
 
-Deno.test('text defaults to every textual column and narrows by name', () => {
+Deno.test('text defaults to every textual property and narrows by name', () => {
   assertEquals(chosen(shop, {}).map((f) => `${f.comp}.${f.prop}`), [
     'book.title',
     'book.blurb',
@@ -81,7 +81,7 @@ Deno.test('text defaults to every textual column and narrows by name', () => {
   }])
 })
 
-Deno.test('a column nothing declares is a refusal, not a field that embeds nothing', () => {
+Deno.test('a property nothing declares is a refusal, not a field that embeds nothing', () => {
   assertThrows(
     () => chosen(shop, { text: ['book.spine'] }),
     Error,

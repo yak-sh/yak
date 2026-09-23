@@ -6,7 +6,7 @@
   "$comment": "A vocabulary declaration in the JSON Schema sense: a URI naming this keyword set, plus the schema of each keyword. A vocab file declares it under $vocabulary; a loader registers it with loadVocab(docs, [nameKeywords]).",
   "$defs": {
     "by_name": {
-      "description": "true = this component's entities are addressable by name, read from the vocabulary's default name column (`title`). A string names a different column instead: \"by_name\": \"label\" reads the name from `label`.",
+      "description": "true = this component's entities are addressable by name, read from the vocabulary's default name property (`title`). A string names a different property instead: \"by_name\": \"label\" reads the name from `label`.",
       "anyOf": [{ "type": "boolean" }, { "type": "string" }]
     }
   }

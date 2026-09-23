@@ -5,7 +5,7 @@ bundle is one entity's components as a JSON object. This package stores no data
 itself: callers supply the array to search, and no database is opened.
 `matcher()` selects from an array of bundles, including ordering and paging;
 `filter()` tests a single bundle. Both read a [@yaks/vocab](../vocab/README.md)
-schema to find out which component a column belongs to and what type it holds.
+schema to find out which component a property belongs to and what type it holds.
 
 The same query text can be run against a database by
 [@yaks/sql](../sql/README.md), which compiles it into a `SELECT`.
@@ -23,7 +23,7 @@ deno add jsr:@yaks/match jsr:@yaks/vocab
 ## A bundle
 
 A bundle puts identity under `entity` and each component under its own name,
-with the component's columns inside. For example:
+with the component's properties inside. For example:
 
 ```ts
 const b1 = {
@@ -101,33 +101,34 @@ and therefore do not affect a single-entity test.
 
 Both functions accept a query string or an AST from `@yaks/query`, followed by
 the vocabulary and an optional options object. They return complete input
-bundles: `.fields`, `*` and optional-column predicates do not trim the result.
+bundles: `.fields`, `*` and optional-property predicates do not trim the result.
 
 Both functions take an options object. `opts.now` is the millisecond timestamp
 that relative time phrases (`today`, `1 hour ago`) resolve against; it defaults
 to `Date.now()`. Pass the same value to @yaks/sql and both sides select the same
-rows. `opts.computed` is described under [Computed columns](#computed-columns).
+rows. `opts.computed` is described under
+[Computed properties](#computed-properties).
 
 ## Operators
 
-| query                | matches                                                 |
-| -------------------- | ------------------------------------------------------- |
-| `.price=12`          | the column equals the operand                           |
-| `.status=draft,sold` | any of the listed values                                |
-| `.price=7.5..12`     | an inclusive range                                      |
-| `.price=0...12`      | a range that excludes its upper bound                   |
-| `.author=`           | the column is absent or empty                           |
-| `.author!`           | the column has a value                                  |
-| `.status!=sold`      | not equal, including entities with no `status` at all   |
-| `.title~=spring`     | contains, case-insensitive                              |
-| `.price<20`          | less than; also `<=`, `>`, `>=`                         |
-| `.price?`            | a request for the column in the result; filters nothing |
+| query                | matches                                                   |
+| -------------------- | --------------------------------------------------------- |
+| `.price=12`          | the property equals the operand                           |
+| `.status=draft,sold` | any of the listed values                                  |
+| `.price=7.5..12`     | an inclusive range                                        |
+| `.price=0...12`      | a range that excludes its upper bound                     |
+| `.author=`           | the property is absent or empty                           |
+| `.author!`           | the property has a value                                  |
+| `.status!=sold`      | not equal, including entities with no `status` at all     |
+| `.title~=spring`     | contains, case-insensitive                                |
+| `.price<20`          | less than; also `<=`, `>`, `>=`                           |
+| `.price?`            | a request for the property in the result; filters nothing |
 
-An absent column never compares true under `<`, `<=`, `>` or `>=`, and `~=` with
-an empty operand (`.title~=`) asks for presence rather than selecting
+An absent property never compares true under `<`, `<=`, `>` or `>=`, and `~=`
+with an empty operand (`.title~=`) asks for presence rather than selecting
 everything.
 
-Number, priority and boolean columns compare numerically; every other type
+Number, priority and boolean properties compare numerically; every other type
 compares as text. A boolean is stored as 0 or 1, so `.available=1` selects the
 books in stock and `.available=true` selects nothing. An operand no stored
 number could equal selects nothing rather than raising: `.price=12.0` is empty,
@@ -135,10 +136,10 @@ because a stored `12` formats back as `12`. A comparison is stricter —
 `.price>cheap` is refused at compile time, because there is no number to compare
 against.
 
-### Time columns
+### Time properties
 
-A column the vocabulary types as a timestamp reads its operand as a time phrase
-first. A phrase defines a time interval, interpreted by the operator:
+A property the vocabulary types as a timestamp reads its operand as a time
+phrase first. A phrase defines a time interval, interpreted by the operator:
 
 - `=` — inside the span (`.released=today`)
 - `>=` — from its start (`.released>=yesterday`)
@@ -154,15 +155,15 @@ timestamp range do not match time comparisons.
 ### Components
 
 `.signed!` selects the entities that have the `signed` component, and `.signed=`
-the ones that do not. This works for a component with no columns at all — a tag
-that records a boolean property through its presence — as well as for one with
-columns.
+the ones that do not. This works for a component with no properties at all — a
+tag that records a boolean property through its presence — as well as for one
+with properties.
 
 A trailing `!` on a bare name is resolved as a component before it is resolved
-as a column. In the bookshop `.book!` selects the four books (the entities with
-a `book` component), while `.book=b1` still resolves to `review.book`, the
-reference column of that name, and selects the two reviews of `b1`. Use the
-qualified column name to avoid this ambiguity: `.review.book!` selects the
+as a property. In the bookshop `.book!` selects the four books (the entities
+with a `book` component), while `.book=b1` still resolves to `review.book`, the
+reference property of that name, and selects the two reviews of `b1`. Use the
+qualified property name to avoid this ambiguity: `.review.book!` selects the
 reviews that name a book.
 
 ### Kinds
@@ -177,17 +178,17 @@ means `.kind=book`. A value that names no kind is refused.
 
 ### References and paths
 
-A reference column holds another entity's id, so `.author=a1` selects that
-author's books. A dotted path follows the reference and tests a column on the
+A reference property holds another entity's id, so `.author=a1` selects that
+author's books. A dotted path follows the reference and tests a property on the
 entity it points at:
 
 ```
 .author.doc.title~=vale   // books whose author's title contains "vale"
 ```
 
-Every hop but the last must be a reference column; anything else is refused when
-the query is compiled. Each step is looked up in the bundle array, and an entity
-missing from it reads as absent.
+Every hop but the last must be a reference property; anything else is refused
+when the query is compiled. Each step is looked up in the bundle array, and an
+entity missing from it reads as absent.
 
 For the operators only a present value can satisfy — `!`, the four comparisons,
 and `=` or `~=` with a non-empty operand — the entity must also have the root
@@ -216,7 +217,7 @@ because this form is unsupported.
 ### Backlinks
 
 `.refs=b1` selects every entity holding a reference to `b1`, across every
-reference column the vocabulary declares — in the bookshop, the two reviews of
+reference property the vocabulary declares — in the bookshop, the two reviews of
 that book. Only a nonempty `=` operand is supported here. The parser accepts
 `.refs!` and `.refs=`, but this evaluator rejects both.
 
@@ -224,7 +225,7 @@ that book. Only a nonempty `=` operand is supported here. The parser accepts
 
 `.eid=b1`, `.eid=b1,b2` and `.num=3` name entities rather than filter them, and
 are answered as a lookup in the array. A human-readable id works in either
-column: `B-3` is read as the entity numbered 3 (the prefix is ignored for
+property: `B-3` is read as the entity numbered 3 (the prefix is ignored for
 lookup), so one operand form fetches by eid, by entity number, or by the id a
 person types.
 
@@ -241,23 +242,23 @@ One hop is a `(from, to)` pair, and a bundle can state one in three ways:
 - an edge entity — a bundle carrying [@yaks/edge](../edge/README.md)'s
   `edge{from, to}` component alongside the relation's tag component
   (`cites {}`);
-- a reference column on the entity itself — `.fork.from->S-7` reads `fork.from`
-  as this entity → the entry it names;
-- a chain of reference columns composed into one pair —
+- a reference property on the entity itself — `.fork.from->S-7` reads
+  `fork.from` as this entity → the entry it names;
+- a chain of reference properties composed into one pair —
   `.fork.from.session->S-1` reads this entity → the session of the entry it
   forked from.
 
 Reachable entities are computed breadth-first and cached within each evaluation
 of the supplied array. The target itself is selected only when a cycle leads
 back to it. A path that is neither a relation tag nor a chain of reference
-columns is refused.
+properties is refused.
 
 ### Full-text terms
 
-A bare word in the query is a full-text term over every stored text column of
+A bare word in the query is a full-text term over every stored text property of
 every component the entity has. This evaluator does not inspect the `search`
-keyword; `@yaks/fts` indexes only columns explicitly marked `search: true`. It
-matches whole words, so `fables` finds "writes fables" while `fable` finds
+keyword; `@yaks/fts` indexes only properties explicitly marked `search: true`.
+It matches whole words, so `fables` finds "writes fables" while `fable` finds
 nothing. A trailing `*` prefix-matches the final word: `catalog*` finds "Spring
 Catalogue". The parser keeps a quoted run together as one term, whose words must
 then appear in that order: `"narrow kitchens"`.
@@ -267,11 +268,11 @@ in it at all matches nothing, never everything.
 
 ## Ordering and paging
 
-`.order=price` sorts ascending by that column and `.order=-price` descending.
+`.order=price` sorts ascending by that property and `.order=-price` descending.
 Values sort absent first, then numbers, then text — the order SQLite's
 `ORDER BY` gives over the same values — and the entity number breaks ties, so
-ties are deterministic. Ascending column order puts missing values first;
-descending order reverses that column order.
+ties are deterministic. Ascending property order puts missing values first;
+descending order reverses that property order.
 
 `.limit=n` keeps the first n results. `.after=<num>` continues past the entity
 with that number, wherever it sits in the order. It is one cursor form for every
@@ -279,8 +280,8 @@ ordering, so callers need only the last entity number to request another page:
 
 - The anchor is looked up in the whole array rather than among the matches, so
   an anchor that no longer matches the query still names a place in the order.
-- An anchor with no value for the ordered column sorts as an absent value, with
-  its entity number breaking ties.
+- An anchor with no value for the ordered property sorts as an absent value,
+  with its entity number breaking ties.
 - An anchor not found in the array leaves the results unchanged, as on the first
   page.
 
@@ -294,16 +295,16 @@ number first. With none of the three, this matcher keeps input order while
 `@yaks/sql` defaults to oldest entity number first. For a query without ordering
 or pagination, compare membership rather than result order.
 
-## Computed columns
+## Computed properties
 
-A vocabulary can declare a column it never stores (`computed: true`), because
+A vocabulary can declare a property it never stores (`computed: true`), because
 its formula belongs to the application rather than the schema. The caller
 supplies its read function, keyed by `comp.prop`, through `opts.computed`. This
 corresponds to the `derived` SQL expression hook
 [@yaks/sql](https://jsr.io/@yaks/sql) takes:
 
 ```ts
-// With the book vocabulary above, override reads of a stored column.
+// With the book vocabulary above, override reads of a stored property.
 const discounted = matcher('.price<10', vocab, {
   computed: {
     'book.price': (b) => Number((b.book as { price: number }).price) / 2,
@@ -312,10 +313,10 @@ const discounted = matcher('.price<10', vocab, {
 discounted(bundles) // [b1, b4]
 ```
 
-`opts.computed` maps `comp.prop` to a function of the bundle. The column's type
-still comes from the vocabulary, and ordering uses the registered function too.
-A registration also serves as a plain read override for a stored column. A
-computed column nobody registered is refused.
+`opts.computed` maps `comp.prop` to a function of the bundle. The property's
+type still comes from the vocabulary, and ordering uses the registered function
+too. A registration also serves as a plain read override for a stored property.
+A computed property nobody registered is refused.
 
 ## Refused queries
 
@@ -331,14 +332,14 @@ before any bundle is read.
   see above.
 - **`.count!`, `.distinct=`, `.tally=`** — these return aggregate rows rather
   than entities. Count what comes back instead.
-- **A computed column nobody registered** — no function was supplied to
+- **A computed property nobody registered** — no function was supplied to
   calculate it. Register it through `opts.computed` and it is answered;
-  @yaks/sql refuses the same column for the same reason when its `derived` hook
-  has no entry.
+  @yaks/sql refuses the same property for the same reason when its `derived`
+  hook has no entry.
 - **`.refs!` and `.refs=`** — only `.refs=<id>` is a question about backlinks.
-- **A predicate the column's type cannot answer** (`.price>cheap`), **a path
-  whose root is not a reference column**, and **a reverse hop that is neither a
-  count nor a child filter**.
+- **A predicate the property's type cannot answer** (`.price>cheap`), **a path
+  whose root is not a reference property**, and **a reverse hop that is neither
+  a count nor a child filter**.
 
 The evaluators also differ in their text behavior:
 
@@ -347,11 +348,12 @@ The evaluators also differ in their text behavior:
   `toLowerCase`.
 - This evaluator can search stored text without a registered extension.
   `@yaks/sql` requires a text extension such as [@yaks/fts](../fts/README.md).
-  FTS searches only selected columns, normally those marked `search: true`, and
-  treats an unquoted word as a prefix. This evaluator searches every stored
-  scalar text column and requires an explicit trailing `*` for prefix matching.
-  Even with identical fields, tokenization and Unicode case handling can differ.
-  Use the database search when exact agreement with its index is required.
+  FTS searches only selected properties, normally those marked `search: true`,
+  and treats an unquoted word as a prefix. This evaluator searches every stored
+  scalar text property and requires an explicit trailing `*` for prefix
+  matching. Even with identical fields, tokenization and Unicode case handling
+  can differ. Use the database search when exact agreement with its index is
+  required.
 
 ## Exports
 
@@ -367,7 +369,7 @@ Pure TypeScript. It imports no platform API — no `Deno` global, no Node
 built-in, no DOM global — and type-checks under `lib: ["dom", "esnext"]`, so it
 runs unchanged in a browser, on Deno, and on Node (via JSR or npm). Its only
 dependencies are sibling packages: a @yaks/query AST, a @yaks/vocab schema, and
-@yaks/sql's `Unsupported` error and column type categories.
+@yaks/sql's `Unsupported` error and property type categories.
 
 ## License
 

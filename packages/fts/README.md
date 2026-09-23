@@ -33,14 +33,14 @@ Mark searchable string properties with `search: true` in the vocabulary:
 }
 ```
 
-`fields(vocab)` selects marked, stored scalar text columns. It excludes computed
-columns, references and numbers. Unmarked columns remain readable but are not
-indexed. A vocabulary with no searchable columns produces no indexes or results.
-An optional `pick(column)` replaces the default selection predicate; combine it
-with `searched(column)` when narrowing the default.
+`fields(vocab)` selects marked, stored scalar text properties. It excludes
+computed properties, references and numbers. Unmarked properties remain readable
+but are not indexed. A vocabulary with no searchable properties produces no
+indexes or results. An optional `pick(prop)` replaces the default selection
+predicate; combine it with `searched(prop)` when narrowing the default.
 
-There is **one index per component**, containing all its selected columns. For
-example, `book_fts` contains both `title` and `blurb`. Each is an
+There is **one index per component**, containing all its selected properties.
+For example, `book_fts` contains both `title` and `blurb`. Each is an
 external-content FTS5 table: the index stores terms while the original text
 remains in the component table. Insert, update and delete triggers keep it
 current.
@@ -71,7 +71,7 @@ let statement = compile(parse('hobbit .book.price<20'), vocab, {
 
 The pieces can be used independently:
 
-- `fields(vocab, pick?)` selects columns.
+- `fields(vocab, pick?)` selects properties.
 - `schema(fields, reads?)` returns SQL statements to create the indexes and
   triggers. It does not populate indexes from existing rows; call `heal()` or
   use `adopt()` for an existing database.

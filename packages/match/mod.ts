@@ -25,7 +25,7 @@
  * compiles the same query into a test on one bundle, for a caller re-checking
  * the single entity that changed.
  *
- * A column a vocabulary declares but never stores (`computed: true`) is read
+ * A property a vocabulary declares but never stores (`computed: true`) is read
  * through `opts.computed` — `comp.prop` → the value for one bundle — the way
  * @yaks/sql reads it through its `derived` hook, so an application states the
  * rule once and both evaluators return the same rows.

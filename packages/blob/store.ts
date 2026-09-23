@@ -39,12 +39,12 @@ let text = new TextDecoder()
 
 /**
  * The address of a string: the SHA-256 of its UTF-8 bytes, lowercase hex. This
- * is the value a content-addressed column holds in place of its text, and the
+ * is the value a content-addressed property holds in place of its text, and the
  * key the bytes are stored under.
  *
  * It reuses @yaks/graph's synchronous digest rather than `crypto.subtle`, whose
- * promise would make every write to a body column asynchronous — including one
- * over an embedded database that is otherwise synchronous end to end.
+ * promise would make every write to a body property asynchronous — including
+ * one over an embedded database that is otherwise synchronous end to end.
  */
 export let address = (value: string): string => sha256(value)
 

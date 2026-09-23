@@ -53,7 +53,7 @@ export type Options = {
 export type Backend =
   | {
     /** the server's own SQLite table — the default, and text: it is the table
-     * SQL reads a body column through (./sqlite.ts), so a server accepting
+     * SQL reads a body property through (./sqlite.ts), so a server accepting
      * binary uploads names one of the others */
     via: 'sqlite'
   }

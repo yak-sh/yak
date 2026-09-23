@@ -60,7 +60,7 @@ let doc: VocabDoc = {
       prefix: 'K',
       type: 'object',
       properties: {
-        // A column that says its words are worth looking for: the host cuts
+        // A property that says its words are worth looking for: the host cuts
         // the index from this alone (@yaks/fts).
         title: { type: 'string', search: true },
         price: { type: 'number' },
@@ -208,7 +208,7 @@ Deno.test('compose takes each facet from its own subpath, and mounts the doors',
       'graph_query',
       'graph_show',
       'graph_schema',
-      // `search` is there because a column of this vocabulary said
+      // `search` is there because a property of this vocabulary said
       // `search: true`; a vocabulary that indexes nothing lists no search.
       'search',
       'book_list',
@@ -850,7 +850,7 @@ Deno.test('a duty that throws is reported, and the host still serves', async () 
   }
 })
 
-Deno.test('a column that declares its words searched is indexed, and ranked', async () => {
+Deno.test('a property that declares its words searched is indexed, and ranked', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop', ...HTTP] },
     only({ shop }),
@@ -953,7 +953,7 @@ Deno.test('an option written {env} is read from the environment', () => {
 })
 
 Deno.test('a body kept in the store is still found by its own words', async () => {
-  // The index is cut from the words, and a column that says `store: blob`
+  // The index is cut from the words, and a property that says `store: blob`
   // holds an address where its text was. An index raised over the raw column
   // would hold hashes, so the host hands its computed reads to the index the
   // same way it hands them to the store — a search over a long body is what

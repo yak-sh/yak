@@ -6,11 +6,11 @@
 // here, at compile time, rather than halfway through an array of bundles.
 //
 // Results come back in the order the query asks for: `.order=field` sorts by
-// that column (a leading `-` descending), the entity number breaks ties, and a
-// `.limit`/`.after` window pages within that order — `.after` naming the entity
-// to continue past, wherever it sits in the sequence. A window with no `.order`
-// is newest-first by entity number, the way a database answers the same
-// directives. With neither, the bundles keep the order they were given.
+// that property (a leading `-` descending), the entity number breaks ties, and
+// a `.limit`/`.after` window pages within that order — `.after` naming the
+// entity to continue past, wherever it sits in the sequence. A window with no
+// `.order` is newest-first by entity number, the way a database answers the
+// same directives. With neither, the bundles keep the order they were given.
 
 import {
   type After,
@@ -26,24 +26,24 @@ import type { Vocab } from '@yaks/vocab'
 import { BY, clause, type Ctx, type Test } from './clause.ts'
 import {
   type Bundle,
-  column,
   type Computed,
   index,
   live,
   type Read,
+  reader,
 } from './read.ts'
 
 /** A query, as text (parsed by @yaks/query) or an already-built AST. */
 export type Query = string | Ast
 
 /** Options for one run: the moment a relative time phrase resolves against, and
- * the rules that read the vocabulary's computed columns. */
+ * the rules that read the vocabulary's computed properties. */
 export type MatchOpts = {
   /** the reference moment for time phrases (default: now) */
   now?: number
-  /** `comp.prop` → the value for one bundle, for a column the vocabulary
+  /** `comp.prop` → the value for one bundle, for a property the vocabulary
    * declares but never stores. The in-memory equivalent of @yaks/sql's
-   * `derived` hook: an unregistered computed column is refused, as it is
+   * `derived` hook: an unregistered computed property is refused, as it is
    * there. */
   computed?: Computed
 }
@@ -65,7 +65,7 @@ let ast = (q: Query): And => typeof q == 'string' ? parse(q) : q
 // The directives that sit in the clause list without filtering anything, and
 // the ones this package refuses: an aggregate is a row shape, not a selection
 // of entities, and `.near` and `.edges` need an index no bundle holds. A
-// projection (`fields`, `*`) names which columns the result should carry and
+// projection (`fields`, `*`) names which properties the result should carry and
 // nothing about which bundles match, so it is carried along and never tested.
 let DIRECTIVES = new Set([
   'order',
@@ -119,12 +119,12 @@ let compiled = (
   return { ctx, cs, test: clause(ctx, { kind: 'and', clauses: filters }) }
 }
 
-// A directive's path resolved to the one column it names.
+// A directive's path resolved to the one property it names.
 let field = (ctx: Ctx, path: string): Read => {
   let hops = ctx.v.aim(path)
   if (hops.length != 1) throw new Unsupported('an ordered path', path, BY)
-  let read = column(ctx.v, hops[0].comp, hops[0].prop, ctx.computed)
-  if (!read) throw new Unsupported('a computed column here', path, BY)
+  let read = reader(ctx.v, hops[0].comp, hops[0].prop, ctx.computed)
+  if (!read) throw new Unsupported('a computed property here', path, BY)
   return read
 }
 

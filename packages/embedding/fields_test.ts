@@ -31,7 +31,7 @@ Deno.test('a vocabulary with no prose has no statement to write', () => {
   assertEquals(pieces([]), null)
 })
 
-Deno.test('a column stored by address is read as the text it stands for', () => {
+Deno.test('a property stored by address is read as the text it stands for', () => {
   let read = { 'book.blurb': { text: (s: string) => `(lookup ${s})` } }
   let text = resolved(fields(shop), read)
   assertEquals(text.map((f) => !!f.text), [false, true, false])

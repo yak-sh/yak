@@ -3,9 +3,9 @@
 `@yaks/cli` provides `yak`, a command-line client for a
 [@yaks/graph](../graph/README.md), and the functions that assemble a graph from
 a JSON config file. A graph stores entities. Each entity has a stable ID and
-components, which are named objects containing columns. A bundle is one entity's
-components represented as a JSON object; it can describe the entity's current
-state or a change to it. A batch is a list of changes applied in one
+components, which are named objects containing properties. A bundle is one
+entity's components represented as a JSON object; it can describe the entity's
+current state or a change to it. A batch is a list of changes applied in one
 transaction.
 
 ```sh

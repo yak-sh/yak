@@ -121,7 +121,7 @@ export type Host = {
   vocab: Vocab
   storage: Store
   sql: Driver
-  /** every column the store reads through an expression rather than as
+  /** every property the store reads through an expression rather than as
    * stored, keyed `comp.prop` — a @yaks/blob body resolves its address to its
    * text — so a plugin reading SQL directly reads what the store reads */
   derived: Derived
@@ -139,7 +139,7 @@ export type Host = {
    * with this graph's own generic tier (@yaks/graph `tier`) first. One list: a
    * command line runs it, and a transport that lists tools lists it. */
   tools: NamedTool[]
-  /** ranked text search over this graph, where its vocabulary marks a column
+  /** ranked text search over this graph, where its vocabulary marks a property
    * `search: true` and @yaks/fts indexed it — what the tier's `search` tool
    * answers with, and what a transport restating the tier asks for. */
   search?: Search
@@ -200,7 +200,7 @@ export type VocabFacet = {
   docs?: VocabDoc[]
   /** the JSON Schema keywords those documents use (@yaks/vocab `loadVocab`) */
   keywords?: Keywords[]
-  /** columns the store computes rather than stores, written as SQL */
+  /** properties the store computes rather than stores, written as SQL */
   derived?: (vocab: Vocab) => Derived
 }
 
@@ -376,15 +376,15 @@ let said = (docs: VocabDoc[]): VocabDoc[] => {
 }
 
 // The JSON Schema keywords that belong to the host rather than to any plugin:
-// which letter an entity's id carries (`prefix`, @yaks/id) and which column is
-// a name somebody may type (`by_name`, @yaks/names). Every package uses them
+// which letter an entity's id carries (`prefix`, @yaks/id) and which property
+// is a name somebody may type (`by_name`, @yaks/names). Every package uses them
 // in its `$vocabulary`, none registers them — and an unregistered keyword is
 // silently ignored, so a host that skipped these would mint `entity.num` and
 // then render `P-1` for a persona that declared `N`, having fallen back to the
 // component's first letter. Minting the number and printing human-readable ids
 // are both this host's doing, so registering the keywords that shape them is
-// too. A plugin that supplies its own copy wins; this adds only the
-// difference, never a second registration.
+// too. A plugin that supplies its own copy wins; this adds only the difference,
+// never a second registration.
 let understood = (brought: Keywords[]): Keywords[] => {
   let taken = new Set(brought.map((k) => k.uri))
   return [
@@ -402,7 +402,7 @@ let understood = (brought: Keywords[]): Keywords[] => {
  * writers — so the identity is the `process` row this run wrote on the way in
  * (@yaks/process `started`). That makes `created.by` the answer to *which run*
  * wrote a thing, and lets a child process's row, written by its parent, record
- * whose child it is without needing a column for it.
+ * whose child it is without needing a property for it.
  *
  * A graph whose vocabulary has no `process` component has no such row, and
  * writes go unattributed rather than attributed to an id nothing created.
@@ -514,10 +514,10 @@ export let compose = async (
       ...vocabs.map(([v]) => v.derived?.(vocab) ?? {}),
     )
     let store: Store | undefined
-    // Search is a property of the declaration: a column marked `search: true`
+    // Search is a property of the declaration: a property marked `search: true`
     // is indexed, whoever declared it, so wiring @yaks/fts here rather than in
     // a plugin is what takes the vocabulary at its word. Two things follow
-    // from that one list of columns — a bare word in any query compiles to a
+    // from that one list of properties — a bare word in any query compiles to a
     // text match (one more clause compiler beside the plugins'), and `/mcp`
     // lists a ranked `search` tool.
     let text = searched(vocab)
@@ -633,8 +633,8 @@ export let compose = async (
         fx.on(comp, watch)
       }
     }
-    // After every table exists, the plugins' own included: a full-text index
-    // is built over the tables it reads, and a column the graph stores under a
+    // After every table exists, the plugins' own included: a full-text index is
+    // built over the tables it reads, and a property the graph stores under a
     // content address is read through the plugin's table — so the index is
     // created once the rules have installed theirs. `adopt` brings the indexes
     // into line with what the vocabulary declares and rebuilds one that
@@ -816,7 +816,7 @@ export let compose = async (
 /**
  * What an effect's `sweep` means here: its `pending` is a query in the graph's
  * own grammar, so the rows it selects are read the way everything else is, and
- * flattened to the `{eid, …columns}` shape a registration's handler is given
+ * flattened to the `{eid, …props}` shape a registration's handler is given
  * (@yaks/effects `relay`).
  */
 export let unfinished = (g: Graph): SweepRows => (comp, pending) =>

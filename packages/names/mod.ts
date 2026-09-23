@@ -7,10 +7,10 @@
  * store's prose matches by coincidence, and in a large store there is always
  * one such word. So each component declares which case it is.
  *
- * ## The `by_name` keyword
- * This package owns one keyword. A component that declares `"by_name": true`
- * makes its entities addressable by name, read from the vocabulary's name
- * column (`title` by default); a string names a different column.
+ * ## The `by_name` keyword This package owns one keyword. A component that
+ * declares `"by_name": true` makes its entities addressable by name, read from
+ * the vocabulary's name property (`title` by default); a string names a
+ * different property.
  *
  * ```json
  * { "$defs": { "author": { "type": "object", "kind": true, "by_name": true } } }
@@ -42,8 +42,8 @@
  * The pieces:
  * - `keywords.ts` — the `by_name` keyword vocabulary, ready to register
  * - `names.ts` — what the vocabulary declares: which components are addressable
- *   by name, which column holds the name, and which entity a typed name refers
- *   to
+ *   by name, which property holds the name, and which entity a typed name
+ *   refers to
  * - `match.ts` — the scoring, on its own: how close two names are
  *
  * @module

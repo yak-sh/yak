@@ -1,4 +1,4 @@
-// How one operand tests against one column value, in memory. This mirrors the
+// How one operand tests against one property value, in memory. This mirrors the
 // SQL fragments a @yaks/sql dialect emits for the same predicates: where the
 // dialect returns a SQL fragment, this returns a JavaScript predicate over the
 // value read out of a bundle. Same grammar, same branch order, same refusals —
@@ -8,25 +8,25 @@
 // The rules a caller can rely on, in the order they are tried:
 //   `` (equals)  an empty operand means absent; `lo..hi` is an inclusive range
 //                and `lo...hi` excludes its end; `a,b` is any-of; a number
-//                column compares numerically, anything else as text.
-//   `!`          not-equals, where an absent column counts as different.
+//                property compares numerically, anything else as text.
+//   `!`          not-equals, where an absent property counts as different.
 //   `~`          contains, case-insensitively; an empty operand means presence.
-//   < <= > >=    comparisons, and an absent column never compares true.
-//   exists       the column has a value.
-// A time-typed column reads its operand as a time phrase first (a span, one
+//   < <= > >=    comparisons, and an absent property never compares true.
+//   exists       the property has a value.
+// A time-typed property reads its operand as a time phrase first (a span, one
 // edge of which the operator picks) and falls back to the plain rules when the
 // operand is no phrase at all.
 //
 // A function here returns `null` where it cannot express the question exactly —
-// a comparison against an operand the column's type cannot hold. The caller
+// a comparison against an operand the property's type cannot hold. The caller
 // turns that into an `Unsupported` refusal rather than a wrong answer.
 
 import { type Span, timeSpan } from '@yaks/query'
 import type { Tag } from '@yaks/sql'
 
 /**
- * A test over one column's value. The value is whatever the bundle holds, or
- * `null` when the column (or its whole component) is absent.
+ * A test over one property's value. The value is whatever the bundle holds, or
+ * `null` when the property (or its whole component) is absent.
  */
 export type Check = (value: unknown) => boolean
 
@@ -50,7 +50,7 @@ let rel = <T extends string | number>(a: T, b: T, op: string): boolean =>
     ? a >= b
     : a == b
 
-// A time column holds one format (an ISO 8601 timestamp), over which
+// A time property holds one format (an ISO 8601 timestamp), over which
 // lexicographic order is chronological. A value outside the range a canonical
 // timestamp falls in is not a timestamp, and never matches a time comparison.
 let LO = '0000-01-01T00:00:00.000Z'
@@ -60,8 +60,9 @@ let stamp = (v: unknown): v is string =>
 
 /**
  * A comparison (`<`, `<=`, `>`, `>=`) against a typed operand, or `null` where
- * the operand's type does not match the column's: text against a number
- * column, a number against a text one. An absent column never compares true.
+ * the operand's type does not match the property's: text against a number
+ * property, a number against a text one. An absent property never compares
+ * true.
  */
 export let cmp = (op: string, value: string, tag: Tag): Check | null => {
   if (NUMERIC.includes(tag)) {
@@ -75,10 +76,10 @@ export let cmp = (op: string, value: string, tag: Tag): Check | null => {
 }
 
 /**
- * Equality: an empty operand asks for an absent (or empty) column, `lo..hi` for
- * an inclusive range and `lo...hi` for one that excludes its end, `a,b,c` for
- * any of several. Returns `null` when a bound or a list member has a type the
- * column cannot hold.
+ * Equality: an empty operand asks for an absent (or empty) property, `lo..hi`
+ * for an inclusive range and `lo...hi` for one that excludes its end, `a,b,c`
+ * for any of several. Returns `null` when a bound or a list member has a type
+ * the property cannot hold.
  */
 export let eq = (value: string, tag: Tag): Check | null => {
   if (value == '') return (v) => v == null || String(v) == ''
@@ -108,7 +109,7 @@ export let eq = (value: string, tag: Tag): Check | null => {
 
 /**
  * Not-equals: everything equality does not select, including the rows whose
- * column (or whole component) is absent.
+ * property (or whole component) is absent.
  */
 export let ne = (value: string, tag: Tag): Check | null => {
   let hit = eq(value, tag)
@@ -149,7 +150,7 @@ let edge = (op: string, s: Span): Check => {
 }
 
 /**
- * A time-typed column against a time phrase, resolved relative to `now`. A
+ * A time-typed property against a time phrase, resolved relative to `now`. A
  * comma list of phrases is any-of under equals (none-of under not-equals);
  * anything else reads the whole operand as one phrase. Returns `null` when the
  * operand is not a time phrase, so the caller falls back to the plain rules.
@@ -169,9 +170,9 @@ export let time = (op: string, value: string, now: number): Check | null => {
 }
 
 /**
- * The whole scalar path in one call: an operator, its operand and the column's
- * type, to a single test. Returns `null` for a question this package cannot
- * answer exactly — the caller turns that into an `Unsupported` refusal.
+ * The whole scalar path in one call: an operator, its operand and the
+ * property's type, to a single test. Returns `null` for a question this package
+ * cannot answer exactly — the caller turns that into an `Unsupported` refusal.
  */
 export let check = (
   op: string,

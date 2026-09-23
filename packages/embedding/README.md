@@ -74,21 +74,21 @@ The plugin configuration selects a model, endpoint, credentials and text fields:
 
 `@yaks/embedding/rules` creates the vector tables through the host's SQL driver.
 Its `extend()` export registers the `.near` compiler. `@yaks/embedding/effects`
-returns component watches: creation, changes to selected columns, and removal
+returns component watches: creation, changes to selected properties, and removal
 schedule a sweep after a debounce timer. The graph write does not await
 embedding. The host's `stopping` signal cancels pending timers.
 
 Options:
 
-| Option       | Meaning                                                                         |
-| ------------ | ------------------------------------------------------------------------------- |
-| `embedder`   | `{ via: 'hash', dim? }`, or a remote embedder configuration                     |
-| `text`       | Selected `component.property` names; defaults to all stored scalar text columns |
-| `neighbours` | Maximum `.near` results, default 8                                              |
-| `floor`      | Minimum similarity for `.near`, default 0                                       |
-| `after`      | Debounce delay in milliseconds, default 3000                                    |
-| `batch`      | Maximum entities embedded per sweep; default all                                |
-| `stale`      | Age threshold in minutes used by `vector_check`, default 30                     |
+| Option       | Meaning                                                                            |
+| ------------ | ---------------------------------------------------------------------------------- |
+| `embedder`   | `{ via: 'hash', dim? }`, or a remote embedder configuration                        |
+| `text`       | Selected `component.property` names; defaults to all stored scalar text properties |
+| `neighbours` | Maximum `.near` results, default 8                                                 |
+| `floor`      | Minimum similarity for `.near`, default 0                                          |
+| `after`      | Debounce delay in milliseconds, default 3000                                       |
+| `batch`      | Maximum entities embedded per sweep; default all                                   |
+| `stale`      | Age threshold in minutes used by `vector_check`, default 30                        |
 
 The `batch` option limits embedding work; it does not mean a graph transaction.
 If a pass leaves stale vectors because of this limit, another write or an
@@ -113,9 +113,9 @@ in ordinary graph snapshots or client sync.
 
 ## Which text is embedded
 
-`fields(vocab)` selects stored scalar text columns in vocabulary order,
-excluding computed columns and references. A `pick(column)` argument replaces
-that default predicate; combine it with `textual(column)` to narrow the default
+`fields(vocab)` selects stored scalar text properties in vocabulary order,
+excluding computed properties and references. A `pick(prop)` argument replaces
+that default predicate; combine it with `textual(prop)` to narrow the default
 safely.
 
 Each entity gets one vector from its nonblank selected fields joined with

@@ -3,7 +3,7 @@
 // just enough table creation to search it. The example domain is a bookshop:
 // books with a title and a blurb, reviews with prose of their own, and a price
 // that is not text at all — so the tests can prove that search reaches every
-// column marked searchable and no others.
+// property marked searchable and no others.
 
 import { Database } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -39,7 +39,7 @@ let doc: VocabDoc = {
       },
     },
     // What a reader wrote about one. Prose in a second component — the whole
-    // point of searching any column rather than one document component.
+    // point of searching any property rather than one document component.
     review: {
       component: true,
       type: 'object',
@@ -77,7 +77,7 @@ let TABLES = [
 
 // A stocked shop: the tables, the indexes, and a few rows to find. Pass `text`
 // and the blurbs are stored in `stash` under a key instead of in the row
-// itself, which is the same data seen through a content-addressed column.
+// itself, which is the same data seen through a content-addressed property.
 export let shelf = (text: Text = {}): Driver => {
   let db = mem()
   let away = !!text['book.blurb']

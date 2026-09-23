@@ -9,7 +9,7 @@ import { shelf, shop, stashed } from './harness.ts'
 let all = schema(fields(shop)).join('\n')
 let away = schema(fields(shop), stashed).join('\n')
 
-Deno.test('one external-content index per component, over its text columns', () => {
+Deno.test('one external-content index per component, over its text properties', () => {
   assert(
     /create virtual table if not exists "book_fts" using fts5\(/.test(all),
     all,
@@ -71,25 +71,25 @@ Deno.test('heal leaves a true index alone and rebuilds a drifted one', () => {
   )
 })
 
-// A column whose stored value is an address, not its own words (@yaks/blob's
+// A property whose stored value is an address, not its own words (@yaks/blob's
 // `store: "blob"`). The index has to hold the prose, or a search finds a book
 // by its title alone.
 
-Deno.test('a resolved column indexes its words on both sides of the mirror', () => {
+Deno.test('a resolved property indexes its words on both sides of the mirror', () => {
   // Every place the address could leak in: the two trigger sides, and the view
   // FTS5 reads a column back out of for `snippet()` and `rebuild`.
   assert(away.includes(`create view if not exists "book_text" as`), away)
   assert(away.includes(`content='book_text'`), away)
   assert(away.includes(`__s."key" = new."blurb"`), away)
   assert(away.includes(`__s."key" = old."blurb"`), away)
-  // The column that is its own text is left alone, and so is a component with
-  // no resolved column at all.
+  // The property that is its own text is left alone, and so is a component
+  // with no resolved property at all.
   assert(away.includes(`coalesce(new."title", '')`), away)
   assert(away.includes(`"prose", content='review'`), away)
   assert(!away.includes('review_text'), away)
 })
 
-Deno.test('a search over a stashed column matches its words, not its address', () => {
+Deno.test('a search over a stashed property matches its words, not its address', () => {
   let db = shelf(stashed)
   let hits = (word: string) =>
     find(db, fields(shop), word).map((h) => h.entity).sort()

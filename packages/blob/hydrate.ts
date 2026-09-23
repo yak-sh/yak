@@ -11,11 +11,11 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { each, then } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { bodies } from './columns.ts'
+import { bodies } from './props.ts'
 import { type Blobs, decode } from './store.ts'
 
 /**
- * Resolve every content-addressed column in these bundles: each address is
+ * Resolve every content-addressed property in these bundles: each address is
  * looked up in the store and replaced by the text it names. An address the
  * store does not hold is left in place — dropping the value would be a worse
  * result than an address nobody can resolve.
@@ -35,12 +35,12 @@ export let hydrate = (
   store: Blobs,
   bundles: Bundle[],
 ): Bundle[] | Promise<Bundle[]> => {
-  let cols = bodies(vocab)
-  if (!cols.length) return bundles
+  let props = bodies(vocab)
+  if (!props.length) return bundles
   return each(bundles, [] as Bundle[], (out, b) => {
     let one: Bundle = { ...b }
     return then(
-      each(cols, null, (_, { comp, prop }) => {
+      each(props, null, (_, { comp, prop }) => {
         let held = one[comp]
         if (!held || typeof held != 'object') return null
         let sha = (held as Comp)[prop]

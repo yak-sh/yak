@@ -1,13 +1,13 @@
 // One clause of a query to one test over a bundle. This is the routing half:
 // where ./value.ts knows how a value compares, this knows what a dotted path
-// names — a column on this entity, a component it either has or does not, a
+// names — a property on this entity, a component it either has or does not, a
 // reference followed to another entity, the children pointing back at it, the
 // kind it displays as, or a search term to look for in its text.
 //
 // Every route is resolved through the vocabulary, never guessed, and the tests
-// are built once, when the query is compiled: a path that names no column, a
-// comparison a column's type cannot answer, or a directive that needs an index
-// is refused there and then, before any bundle is read.
+// are built once, when the query is compiled: a path that names no property, a
+// comparison a property's type cannot answer, or a directive that needs an
+// index is refused there and then, before any bundle is read.
 
 import {
   bare,
@@ -23,10 +23,10 @@ import { identity, Unsupported } from '@yaks/sql'
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
 import {
   type Bundle,
-  column,
   comp,
   type Computed,
   type Index,
+  reader,
   wears,
 } from './read.ts'
 import { check, EXISTS } from './value.ts'
@@ -45,7 +45,7 @@ export type Test = (bundle: Bundle, among: Index) => boolean
 
 /**
  * What a run needs besides the clause: the vocabulary, the reference moment,
- * and the rules that read the vocabulary's computed columns.
+ * and the rules that read the vocabulary's computed properties.
  */
 export type Ctx = { v: Vocab; now: number; computed: Computed }
 
@@ -79,12 +79,13 @@ let opOf = (p: Pred): string =>
     ? '~'
     : p.op
 
-// A test over a column read off one entity, or a refusal naming the predicate.
+// A test over a property read off one entity, or a refusal naming the
+// predicate.
 let scalar = (ctx: Ctx, hop: Hop, p: Pred): (b?: Bundle) => boolean => {
-  let read = column(ctx.v, hop.comp, hop.prop, ctx.computed)
+  let read = reader(ctx.v, hop.comp, hop.prop, ctx.computed)
   if (!read) {
     throw new Unsupported(
-      'a computed column',
+      'a computed property',
       `.${hop.comp}.${hop.prop} has no registered rule`,
       BY,
     )
@@ -110,7 +111,7 @@ let scalar = (ctx: Ctx, hop: Hop, p: Pred): (b?: Bundle) => boolean => {
   return (b) => hit(b ? read.read(b) : null)
 }
 
-// A single-hop predicate: a direct column, or a test for the component itself
+// A single-hop predicate: a direct property, or a test for the component itself
 // (an empty leaf prop, which is the presence form). `.review!` and `.review~=`
 // ask for entities that have the component, everything else for those that do
 // not.
@@ -122,8 +123,8 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Test => {
     return (b) => wears(b, hop.comp) == present
   }
   // On the identity component, `=` names entities instead of comparing a
-  // column, so it is a set lookup — the same operand list @yaks/sql compiles to
-  // `in (?, …)`.
+  // property, so it is a set lookup — the same operand list @yaks/sql compiles
+  // to `in (?, …)`.
   if (hop.comp == 'entity' && op == '') {
     let set = identity(hop.prop, flat(p.value))
     if (set) {
@@ -141,11 +142,11 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Test => {
 let isRef = (v: Vocab, hop: Hop) =>
   v.prop(hop.comp, hop.prop)?.category == 'ref'
 
-// A dereference path: a chain of one-to-one lookups through reference columns,
-// ending in a leaf column tested against the operator. Every hop but the last
-// must be a reference, and every step is looked up in the bundle array — an
-// entity the array does not hold reads as an absent value, exactly as a missing
-// row does.
+// A dereference path: a chain of one-to-one lookups through reference
+// properties, ending in a leaf property tested against the operator. Every hop
+// but the last must be a reference, and every step is looked up in the bundle
+// array — an entity the array does not hold reads as an absent value, exactly
+// as a missing row does.
 let path = (ctx: Ctx, hops: Hop[], p: Pred): Test => {
   let op = opOf(p)
   if (op == 'want') return YES
@@ -169,7 +170,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Test => {
     return typeof eid == 'string' ? among.of(eid) : undefined
   }
   let leaf = hops[hops.length - 1]
-  // The leaf is a component rather than a column: does the target have it?
+  // The leaf is a component rather than a property: does the target have it?
   if (!leaf.prop) {
     let present = op == '~' || op == EXISTS
     return (b, among) => {
@@ -204,28 +205,29 @@ let kindScope = (ctx: Ctx, value: string): Test => {
 }
 
 // `.refs=X`: the backlinks of X — every entity holding a reference to it, over
-// every reference column the vocabulary declares. The presence and absence
+// every reference property the vocabulary declares. The presence and absence
 // forms are refused: "references anything" is a different question, and
-// answering it as a union over all reference columns would not be what the
+// answering it as a union over all reference properties would not be what the
 // query means.
 let refs = (ctx: Ctx, r: Refs): Test => {
   if (r.op != '=' || !r.value) {
     throw new Unsupported('.refs', 'only .refs=<id> is answered', BY)
   }
-  let cols = ctx.v.refProps()
+  let props = ctx.v.refProps()
   return (b, among) =>
     !!among.of(r.value) &&
-    cols.some(([c, p]) => comp(b, c)?.[p] === r.value)
+    props.some(([c, p]) => comp(b, c)?.[p] === r.value)
 }
 
 // The walk, in memory: `.cites[<=3]->p1` selects the bundles that reach the
 // target in at most `depth` hops; `<-` selects the bundles the target reaches.
 // A hop is one (from, to) pair, and a bundle can supply one in three ways — an
 // edge entity, which has the relation's tag component alongside `edge{from,to}`
-// (`cites {}` beside `edge`); an entity's own reference column (`fork.from`
-// reads as this entity → the entry); or a chain of reference columns composed
-// into one pair (`fork.from.session` reads as this entity → the session of the
-// entry it forked from). All three are resolved through the same vocabulary
+// (`cites {}` beside `edge`); an entity's own reference property (`fork.from`
+// reads as this entity → the entry); or a chain of reference properties
+// composed into one pair (`fork.from.session` reads as this entity → the
+// session of the entry it forked from). All three are resolved through the same
+// vocabulary
 // @yaks/edge and @yaks/sql read. The closure is one breadth-first traversal per
 // bundle array, capped at the same row count as the recursive CTE @yaks/sql
 // emits, then a set lookup per candidate; the target itself is selected only
@@ -256,7 +258,7 @@ let stepOf = (ctx: Ctx, w: Walk): Step => {
   if (!hops.length || !hops.every((h) => h.prop && isRef(ctx.v, h))) {
     throw new Unsupported(
       'a walk',
-      `${spelled} is neither a relation nor a chain of reference columns`,
+      `${spelled} is neither a relation nor a chain of reference properties`,
       BY,
     )
   }
@@ -393,7 +395,7 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Test => {
   return (b, among) => kids(b, among).some((k) => inner(k, among)) != !!p.not
 }
 
-// A bare word: a search over the entity's text. Every stored text column of
+// A bare word: a search over the entity's text. Every stored text property of
 // every component the entity has is searched — the same fields a full-text
 // index covers by default.
 let words = (ctx: Ctx, value: string): Test => {
@@ -402,10 +404,10 @@ let words = (ctx: Ctx, value: string): Test => {
   let fields = ctx.v.all.flatMap((c) =>
     ctx.v.props(c)
       .map((p) => ctx.v.prop(c, p)!)
-      .filter((col) =>
-        !col.computed && col.category == 'scalar' && col.scalar == 'text'
+      .filter((prop) =>
+        !prop.computed && prop.category == 'scalar' && prop.scalar == 'text'
       )
-      .map((col) => [c, col.prop] as [string, string])
+      .map((prop) => [c, prop.prop] as [string, string])
   )
   return (b) =>
     fields.some(([c, p]) => {

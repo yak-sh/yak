@@ -3,7 +3,7 @@
 A parser and a set of builders for the yaks query format, with no knowledge of
 any schema. `parse()` turns a query string into a serializable abstract syntax
 tree (AST); the builders construct the same tree from code. The parser checks
-syntax only — not whether a column exists, and not whether a given backend can
+syntax only — not whether a property exists, and not whether a given backend can
 answer the query. Use [@yaks/sql](../sql/README.md) to compile the tree to SQL,
 or [@yaks/match](../match/README.md) to evaluate it over bundles in memory. A
 bundle is one entity's components represented as a JSON object. This package
@@ -119,9 +119,9 @@ with it:
 
 `*comp` also asserts that the component is present, so it needs no `.comp`
 beside it; `+comp` and `+!comp` are how a rule writes a component that is not
-there yet. A `+` or `*` prefix may also name a column and a value
-(`+result.call=$call`), to assign a column as part of the rule. `+!comp` accepts
-only a component name, not a column assignment.
+there yet. A `+` or `*` prefix may also name a property and a value
+(`+result.call=$call`), to assign a property as part of the rule. `+!comp`
+accepts only a component name, not a property assignment.
 
 The first three rows describe reads: presence, absence and requested output. The
 other prefixes describe rule behavior. `declared(ast)` separates filters from
@@ -142,12 +142,12 @@ therefore a clause, not a text term.
 `requires` hops; `.requires<-item-42` walks the other way, selecting what
 `item-42` reaches. `.requires[<=3]->item-42` caps the depth at three hops.
 
-The path is a relation name, a reference column (`.fork.from->S-7`), or a chain
-of reference columns (`.fork.from.session->S-1`, one step composed of those
-hops, so walking it follows the fork lineage) — the vocabulary determines which
-form applies. The target is a single entity, named by eid or by human id. Under
-the standard evaluator contract, without a bracket a walk has no hop cap and
-returns at most 10,000 nearest nodes other than its target; only an explicit
+The path is a relation name, a reference property (`.fork.from->S-7`), or a
+chain of reference properties (`.fork.from.session->S-1`, one step composed of
+those hops, so walking it follows the fork lineage) — the vocabulary determines
+which form applies. The target is a single entity, named by eid or by human id.
+Under the standard evaluator contract, without a bracket a walk has no hop cap
+and returns at most 10,000 nearest nodes other than its target; only an explicit
 `[<=N]` adds a hop cap. It parses to a `walk` node:
 `walk(field, dir, target, depth?)`.
 
@@ -193,9 +193,9 @@ projection, aggregation or pagination; `.refs` filters by references:
 | `.near=42`             | rank by similarity to this entity                                                                                                          |
 | `.refs=42`             | everything that references entity 42; `.refs!` references anything, `.refs=` references nothing                                            |
 | `.count!`              | how many rows match, instead of the rows                                                                                                   |
-| `.distinct=col`        | the distinct values of one column                                                                                                          |
-| `.tally=col`           | each value of one column with its count                                                                                                    |
-| `.fields=pin.x,pin.z~` | the columns each row carries; a trailing `~` excludes changes to that column from subscription notifications                               |
+| `.distinct=prop`       | the distinct values of one property                                                                                                        |
+| `.tally=prop`          | each value of one property with its count                                                                                                  |
+| `.fields=pin.x,pin.z~` | the properties each row carries; a trailing `~` excludes changes to that property from subscription notifications                          |
 | `*`                    | every component of each selected entity                                                                                                    |
 | `.limit=200`           | at most this many rows                                                                                                                     |
 | `.after=13882`         | continue past this entity                                                                                                                  |
@@ -205,7 +205,7 @@ projection, aggregation or pagination; `.refs` filters by references:
 only cursor form there is (`.after=T-13882` is the same number written with its
 display prefix). It deliberately does not depend on the ordering — an evaluator
 works out where that entity sits in whatever order the query asked for, so a
-caller does not need the ordered column's value to request the next page. This
+caller does not need the ordered property's value to request the next page. This
 parser only records which entity it names; working out where that entity sits is
 evaluation (`@yaks/sql`, `@yaks/match`).
 
@@ -227,7 +227,7 @@ evaluation (`@yaks/sql`, `@yaks/match`).
 Nothing about how a value is written makes it a time — `today` looks like any
 other word, and `.team=today` is a plain string. Whether a field holds a time is
 schema, so `parse` emits scalars and never a `time` node. The helpers below let
-a schema-aware compiler interpret scalars in time columns:
+a schema-aware compiler interpret scalars in time properties:
 
 ```ts
 import { isTimeLiteral, timeInstant, timeSpan } from '@yaks/query'
@@ -258,13 +258,13 @@ Schema-dependent interpretation belongs to a compiler such as `@yaks/sql`:
   The mid-bang form carries `not: true`; nested quantifiers keep a child `where`
   clause. The binder refuses names that are not reverse associations. Builders
   may also put a conjunction in `where`. A builder-set `facet: true` keeps a
-  trailing component name from being read as a same-named column.
+  trailing component name from being read as a same-named property.
 - **Scopes** — `.kind=book` parses as an ordinary predicate; expanding it into
   the presence and absence clauses that kind implies needs the schema's kind
   order.
 - **Directive validation** — whether a walk's path names a relation or a chain
-  of reference columns, which edge types `.edges` may name, and whether a
-  `.distinct` or `.fields` path is a single column.
+  of reference properties, which edge types `.edges` may name, and whether a
+  `.distinct` or `.fields` path is a single property.
 - **Evaluation** — matching rows, compiling SQL, and interpreting the `.order`
   rankings (`hot`, `search`, `similar`) against stored data.
 
@@ -281,8 +281,8 @@ into a match plan is [@yaks/graph](../graph/join.ts)'s job.
 prose description of the format composed from them — what a CLI or an MCP server
 prints when asked how a query is written. A help page and a tab-completion list
 read the same two tables, so they share the same syntax definitions. These
-exports contain no schema: which columns hold times, which names are kinds, and
-how an id resolves are for a schema-aware caller to describe alongside.
+exports contain no schema: which properties hold times, which names are kinds,
+and how an id resolves are for a schema-aware caller to describe alongside.
 
 The root export also includes AST types, `coerce()` for builder values,
 `parseDot()` for one clause token, `cursor()` for entity-number cursors, and

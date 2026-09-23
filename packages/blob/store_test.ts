@@ -57,7 +57,7 @@ Deno.test('hydrate resolves a gathered bundle through any backend', async () => 
     { entity: { eid: 'p1' }, post: { title: 'one', body: sha } },
     // an address nobody stored is left alone rather than lost
     { entity: { eid: 'p2' }, post: { body: 'deadbeef' } },
-    // a bundle with no body column at all passes straight through
+    // a bundle with no body property at all passes straight through
     { entity: { eid: 't1' }, tag: { label: 'x' } },
   ])
   assertEquals((out[0].post as Record<string, unknown>).body, 'a long essay')

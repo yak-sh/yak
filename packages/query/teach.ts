@@ -2,16 +2,16 @@
 // everything else is built from — a help page prints them, a tab-completion
 // list offers them — and FORMAT is the prose a CLI or an MCP server returns
 // when asked how a query is written, composed from those same tables so the two
-// cannot disagree. None of it knows a schema: which columns hold times, which
-// names are kinds, and how an id resolves are for a schema-aware caller to
-// describe alongside.
+// cannot disagree. None of it knows a schema: which properties hold times,
+// which names are kinds, and how an id resolves are for a schema-aware caller
+// to describe alongside.
 
 // One piece of the format: how it is written, the single word for what it is,
 // and what it does.
 export type Taught = { spell: string; word: string; means: string }
 
 // The predicate operators, in the order someone learns them. The word is the
-// reading for a time column (a phrase names a range, and the operator picks
+// reading for a time property (a phrase names a range, and the operator picks
 // which edge of it), which reads sensibly for ordinary values too.
 export let OPERATORS: Taught[] = [
   {
@@ -60,8 +60,9 @@ export let DIRECTIVES: Taught[] = [
   {
     spell: '.fields=',
     word: 'projection',
-    means: 'the columns each row carries (.fields=pin.x,pin.z~; a trailing ' +
-      '~ mutes a column from the change signal)',
+    means:
+      'the properties each row carries (.fields=pin.x,pin.z~; a trailing ' +
+      '~ mutes a property from the change signal)',
   },
   { spell: '*', word: 'projection', means: 'every component of each row' },
   { spell: '.limit=', word: 'window', means: 'at most N of the answer' },
@@ -92,7 +93,7 @@ let row = (t: Taught) => `'${t.spell}' ${t.word}: ${t.means}`
 export let FORMAT = `Filters are dot-params: '.prop=value'. Operators — ${
   OPERATORS.map(row).join('; ')
 }.
-A time-typed column takes time phrases: today, yesterday, tomorrow, now,
+A time-typed property takes time phrases: today, yesterday, tomorrow, now,
 this|last|next minute|hour|day|week|month|year, '5 minutes ago', 'in 2 days'
 (or 'in 60m', 'after 8h'), clock times (9am, 9:30pm, 14:00, noon, '9am
 tomorrow'), a date, and a full stamp ('2026-07-25T09:00'). A phrase is a

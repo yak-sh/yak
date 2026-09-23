@@ -51,8 +51,8 @@ let doc: VocabDoc = {
       kind: true,
       properties: { name: { type: 'string' } },
     },
-    // a component with no body column at all, to prove the substitution is
-    // made per column
+    // a component with no body property at all, to prove the substitution is
+    // made per property
     tag: {
       component: true,
       type: 'object',

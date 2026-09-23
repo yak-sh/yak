@@ -1,15 +1,15 @@
 /**
- * @yaks/fts — full-text search over a yaks graph, on any text column.
+ * @yaks/fts — full-text search over a yaks graph, on any text property.
  *
  * Search is not limited to a single "document" component. A vocabulary declares
- * components, and some of their columns hold prose — a book's title, a review's
- * paragraph, a shop's own description. Each such column is marked
- * `"search": true` in the vocabulary; this package indexes every marked column
- * and searches all of them at once.
+ * components, and some of their properties hold prose — a book's title, a
+ * review's paragraph, a shop's own description. Each such property is marked
+ * `"search": true` in the vocabulary; this package indexes every marked
+ * property and searches all of them at once.
  *
  * It is four small pieces, each usable on its own:
  *
- * - {@link fields} reads the searchable columns off a
+ * - {@link fields} reads the searchable properties off a
  *   {@link https://jsr.io/@yaks/vocab | @yaks/vocab} schema — the ones marked
  *   `"search": true`;
  * - {@link schema} returns the SQL that creates the SQLite FTS5 indexes and the
@@ -24,7 +24,7 @@
  * import { compile } from '@yaks/sql'
  * import { parse } from '@yaks/query'
  *
- * let text = fields(shop) // the columns the vocabulary marks searchable
+ * let text = fields(shop) // the properties the vocabulary marks searchable
  * for (let stmt of schema(text)) db.exec(stmt)
  *
  * // which books match, with the rest of the query still filtering

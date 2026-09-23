@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "Indexes a graph's text columns with SQLite FTS5 and adds ranked full-text search to queries.",
+  "description": "Indexes a graph's text properties with SQLite FTS5 and adds ranked full-text search to queries.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0"

@@ -17,7 +17,7 @@ import {
   type Value,
 } from './ast.ts'
 
-/** One column a rule writes: the component, the column, and the value as
+/** One property a rule writes: the component, the property, and the value as
  * written (a literal, or a `$name` the compiler reads as a variable).
  * `mutable` records which prefix it came from — `*` writes into a component
  * that has to be there already, `+` into one the rule adds. */
@@ -50,7 +50,7 @@ export type Declares = {
   /** `$name=value` — the variables it binds, which is what a template
    * invocation's arguments are */
   values: [string, Value][]
-  /** `+comp.col=value` / `*comp.col=value` — the columns it writes */
+  /** `+comp.prop=value` / `*comp.prop=value` — the properties it writes */
   sets: Set[]
 }
 

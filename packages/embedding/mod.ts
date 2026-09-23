@@ -8,12 +8,11 @@
  * "more like this", "related reading" and "you may already have written this"
  * are all the same query.
  *
- * It is generic over the text, exactly as
- * {@link https://jsr.io/@yaks/fts | @yaks/fts} is: a vocabulary declares
- * components, some of their columns hold prose, and {@link fields} chooses
- * which of them a vector is made from. An entity gets one vector, made from all
- * of its text fields joined together — a vector is a point in a space of
- * meanings, and an entity is one thing.
+ * It is generic over the text, exactly as {@link https://jsr.io/@yaks/fts |
+ * @yaks/fts} is: a vocabulary declares components, some of their properties
+ * hold prose, and {@link fields} chooses which of them a vector is made from.
+ * An entity gets one vector, made from all of its text fields joined together —
+ * a vector is a point in a space of meanings, and an entity is one thing.
  *
  * Five small pieces, each usable alone:
  *

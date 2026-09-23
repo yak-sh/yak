@@ -10,8 +10,8 @@ import type { Bucket } from './object.ts'
 import { type Backend, type Options, PREFIX, routes } from './routes.ts'
 import { blobSchema } from './sqlite.ts'
 
-// The spine, which no package's own document declares: a host composes it
-// from its kernel, and a test needs the two columns a bundle is addressed by.
+// The spine, which no package's own document declares: a host composes it from
+// its kernel, and a test needs the two properties a bundle is addressed by.
 let spine: VocabDoc = {
   $defs: {
     entity: {

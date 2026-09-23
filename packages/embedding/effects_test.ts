@@ -23,7 +23,7 @@ let until = async (want: () => boolean) => {
 
 let fire = (w: Watch) => (w.created as () => void)()
 
-Deno.test('one watch per embedded component, over its own columns', () => {
+Deno.test('one watch per embedded component, over its own properties', () => {
   let watches = effects({ vocab: shop, sql: shelf() }, now)
   assertEquals(watches.map((w) => w.comp), ['book', 'review'])
   assertEquals(Object.keys(watches[0].changed ?? {}), ['title', 'blurb'])

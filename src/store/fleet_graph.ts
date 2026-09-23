@@ -282,7 +282,7 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
       touched.add(eid)
     },
   }, {
-    columns,
+    props: columns,
     reference: (eid) => {
       let held = row('select id from entity where eid = ?', eid)
       if (!held) throw new Error(`missing artifact entity ${eid}`)

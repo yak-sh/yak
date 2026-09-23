@@ -48,7 +48,7 @@ let shelf = [leguin, review, fiction]
 
 Deno.test('the vocabulary says which components answer to a name', () => {
   assertEquals(named(v), {
-    author: { comp: 'doc', prop: 'title' }, // the default name column
+    author: { comp: 'doc', prop: 'title' }, // the default name property
     shelf: { comp: 'shelf', prop: 'label' }, // its own, by declaration
   })
 })
@@ -87,7 +87,7 @@ Deno.test('exact-only resolution is one option away', () => {
   assertEquals(exact('ursula', shelf), undefined)
 })
 
-Deno.test('the name column is the vocabulary’s, and a missing one refuses', () => {
+Deno.test('the name property is the vocabulary’s, and a missing one refuses', () => {
   let byLabel = nameOf(v, { prop: 'body' })
   assertEquals(byLabel(leguin), undefined) // the author's doc has no body
   assertThrows(() => named(v, { prop: 'nonsense' }), Error, 'unknown prop')

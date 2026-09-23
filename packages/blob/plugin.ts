@@ -1,8 +1,8 @@
 // The substitution, as a graph plugin. A writer sends text; the row keeps the
 // text's address and the bytes go to the store; a reader gets text back.
-// Neither the component that declared the column nor the application writing to
-// it has to know any of this happened — that is the whole point, and it is why
-// the substitution happens inside `apply()` rather than in a caller.
+// Neither the component that declared the property nor the application writing
+// to it has to know any of this happened — that is the whole point, and it is
+// why the substitution happens inside `apply()` rather than in a caller.
 //
 // Which phase, and why it is the only one that works. The bytes and the row
 // must land together — a row pointing at bytes that were never written is a
@@ -22,17 +22,17 @@
 // transaction, so what `apply()` returns is what the caller wrote. A client
 // that applies the return value to its cache gets its document back, not a hash
 // of it. The text is carried between the two hooks on the bundle itself, under
-// `$blob` — a key beginning with `$` is never written as a column, which is the
-// ordinary way one phase passes a decision to a later one.
+// `$blob` — a key beginning with `$` is never written as a property, which is
+// the ordinary way one phase passes a decision to a later one.
 
 import type { Bundle, Comp, Plugin } from '@yaks/graph'
 import { each, then } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { bodies, type Body } from './columns.ts'
+import { bodies, type Body } from './props.ts'
 import { address, type Blobs, encode } from './store.ts'
 
 /** Where the substituted-out text waits between the two hooks: `comp.prop` →
- * the text the caller sent. Never written as a column — the key starts with
+ * the text the caller sent. Never written as a property — the key starts with
  * `$`. */
 let STASH = '$blob'
 
@@ -43,22 +43,23 @@ let patch = (b: Bundle, comp: string): Comp | undefined => {
   return c && typeof c == 'object' && !Array.isArray(c) ? c as Comp : undefined
 }
 
-// One bundle's content-addressed columns that carry a string in this write.
-let written = (b: Bundle, cols: Body[]): [Body, string][] =>
-  cols.flatMap(({ comp, prop }) => {
+// One bundle's content-addressed properties that carry a string in this write.
+let written = (b: Bundle, props: Body[]): [Body, string][] =>
+  props.flatMap(({ comp, prop }) => {
     let value = patch(b, comp)?.[prop]
     return typeof value == 'string' ? [[{ comp, prop }, value] as const] : []
   })
 
-// Convert one bundle: every body column's text becomes its address, the text is
-// stashed for the return trip, and the bytes go to the store — skipped when the
-// store already holds them, which is what makes a repeated value one object.
+// Convert one bundle: every body property's text becomes its address, the text
+// is stashed for the return trip, and the bytes go to the store — skipped when
+// the store already holds them, which is what makes a repeated value one
+// object.
 let swap = (
   b: Bundle,
-  cols: Body[],
+  props: Body[],
   intern: (value: string) => string | number | Promise<string | number>,
 ): Bundle | Promise<Bundle> => {
-  let mine = written(b, cols)
+  let mine = written(b, props)
   if (!mine.length) return b
   let stash: Record<string, string> = {}
   let out: Bundle = { ...b }
@@ -99,14 +100,14 @@ export type Reference = (
 ) => string | number | Promise<string | number>
 
 export type BlobOpts = {
-  /** Narrow the vocabulary's blob columns for a partially migrated store. */
-  columns?: Body[]
+  /** Narrow the vocabulary's blob properties for a partially migrated store. */
+  props?: Body[]
   /** Translate the content hash into the reference the row should hold. */
   reference?: Reference
 }
 
 /**
- * The blob plugin: content-addressed storage for every column the vocabulary
+ * The blob plugin: content-addressed storage for every property the vocabulary
  * marks `store: "blob"`.
  *
  * ```ts
@@ -120,20 +121,19 @@ export type BlobOpts = {
  * ```
  *
  * The write side is here. The read side belongs to the storage adapter, which
- * is the half that knows its own layout: over SQL, register
- * {@link blobRead}'s column overrides and a row resolves in the statement
- * itself; over any other store, {@link hydrate} resolves the bundles a read
- * returned.
+ * is the half that knows its own layout: over SQL, register {@link blobRead}'s
+ * property overrides and a row resolves in the statement itself; over any other
+ * store, {@link hydrate} resolves the bundles a read returned.
  *
- * A vocabulary loaded without {@link blobKeywords} declares no body columns, so
- * this plugin is a no-op on it rather than a surprise.
+ * A vocabulary loaded without {@link blobKeywords} declares no body properties,
+ * so this plugin is a no-op on it rather than a surprise.
  */
 export let blobs = (
   vocab: Vocab,
   store: Blobs,
   opts: BlobOpts = {},
 ): Plugin => {
-  let cols = opts.columns ?? bodies(vocab)
+  let props = opts.props ?? bodies(vocab)
   let reference = opts.reference ?? ((sha: string) => sha)
   return {
     name: '@yaks/blob',
@@ -166,7 +166,7 @@ export let blobs = (
         return each(
           bundles,
           [] as Bundle[],
-          (out, b) => then(swap(b, cols, intern), (one) => [...out, one]),
+          (out, b) => then(swap(b, props, intern), (one) => [...out, one]),
         )
       },
       commit: (bundles) => bundles.map(restore),

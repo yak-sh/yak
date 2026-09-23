@@ -1,9 +1,9 @@
 /**
- * @yaks/blob — content-addressed storage for a text column, applied without
+ * @yaks/blob — content-addressed storage for a text property, applied without
  * any caller having to know.
  *
  * A blog post's body, a product description, a page of notes: values that are
- * long, often repeated, and awkward in a row. Mark the column and they move:
+ * long, often repeated, and awkward in a row. Mark the property and they move:
  *
  * ```ts
  * let blog = {
@@ -41,7 +41,7 @@
  *
  * - **One keyword.** {@link blobKeywords} registers `store` with @yaks/vocab,
  *   so a schema can carry the word and this package supplies its meaning. To
- *   the schema a body column is a plain string column, and it stays one for
+ *   the schema a body property is a plain string property, and it stays one for
  *   validation, routing and queries.
  * - **One plugin.** {@link blobs} replaces the text with its address on the way
  *   in and puts it back before `apply()` returns. It runs inside the
@@ -55,8 +55,8 @@
  *   statement itself; over any other store, {@link hydrate} resolves the
  *   bundles a read returned.
  *
- * Removing the plugin does not strand your data: a body column is a text column
- * holding a hash, and the store is a table of hashes and text.
+ * Removing the plugin does not strand your data: a body property is a text
+ * property holding a hash, and the store is a table of hashes and text.
  *
  * The core — the keyword, the plugin, the interface, and the SQLite store —
  * imports no platform API, so the same code runs on a server, in a worker, and
@@ -67,7 +67,7 @@
  */
 
 export * from './keywords.ts'
-export * from './columns.ts'
+export * from './props.ts'
 export * from './store.ts'
 export * from './driver.ts'
 export * from './plugin.ts'

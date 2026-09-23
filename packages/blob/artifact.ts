@@ -1,5 +1,5 @@
-// Bytes that are not text: a picture, a PDF, anything a column would only get
-// in the way of. They are stored the same way a body column is — under the
+// Bytes that are not text: a picture, a PDF, anything a property would only get
+// in the way of. They are stored the same way a body property is — under the
 // SHA-256 of the bytes themselves — so an artifact has one identity wherever it
 // came from, and a row that names it names that exact object.
 //
@@ -10,7 +10,7 @@
 //
 // `crypto.subtle` is the web platform's own, so this loads anywhere the package
 // does — which is why the digest here returns a promise, and why ./store.ts
-// keeps a separate synchronous one for text columns.
+// keeps a separate synchronous one for text properties.
 
 import type { Blobs } from './store.ts'
 import type { VocabDoc } from '@yaks/vocab'

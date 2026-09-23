@@ -1,8 +1,9 @@
 // Which text is embedded. Semantic search here is not tied to one "document"
-// component: a vocabulary declares components, some of their columns hold prose,
-// and a vector can be made from any of them. This module is that choice — a
-// `Field` is one `comp.prop` pair, `fields()` reads them off a vocabulary, and
-// a `Pick` narrows that default when an application wants only some of them.
+// component: a vocabulary declares components, some of their properties hold
+// prose, and a vector can be made from any of them. This module is that choice
+// — a `Field` is one `comp.prop` pair, `fields()` reads them off a vocabulary,
+// and a `Pick` narrows that default when an application wants only some of
+// them.
 //
 // The difference from a search index: an entity gets one vector, not one per
 // component. A vector is a point in a space of meanings, and an entity is one
@@ -14,7 +15,7 @@
 
 import type { Prop, Vocab } from '@yaks/vocab'
 
-/** A `comp.prop` pair naming one embedded text property, and — for a column
+/** A `comp.prop` pair naming one embedded text property, and — for a property
  * that does not hold its own text, like a @yaks/blob body holding an address —
  * the SQL that reads the text a stored value stands for. */
 export type Field = {
@@ -35,14 +36,14 @@ export let resolved = (
   })
 
 /**
- * Decides whether a column is embedded. An application passes its own to embed
- * less than everything textual — say, the blurb but not the title.
+ * Decides whether a property is embedded. An application passes its own to
+ * embed less than everything textual — say, the blurb but not the title.
  */
-export type Pick = (column: Prop) => boolean
+export type Pick = (prop: Prop) => boolean
 
 /**
- * The default choice: every stored text column. A computed column has no row to
- * read, and a number, a stamp or a reference is not prose.
+ * The default choice: every stored text property. A computed property has no
+ * row to read, and a number, a stamp or a reference is not prose.
  */
 export let textual: Pick = (c) =>
   !c.computed && c.category == 'scalar' && c.scalar == 'text'
@@ -73,7 +74,7 @@ export let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
  * Blank fields are dropped here, so an entity appears in this result exactly
  * when it has something to embed — which makes this the one statement both the
  * sweep and the prune read, so the two cannot disagree. Returns null for a
- * vocabulary with no text columns at all: there is no statement to write.
+ * vocabulary with no text properties at all: there is no statement to write.
  */
 export let pieces = (fields: Field[]): Stmt | null =>
   fields.length

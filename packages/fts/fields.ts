@@ -1,5 +1,5 @@
 // Which text is searchable. Search is not limited to a single "document"
-// component: a vocabulary declares components, some of their columns hold
+// component: a vocabulary declares components, some of their properties hold
 // prose, and any of those can be indexed. This module makes that selection — a
 // `Field` is one `comp.prop` pair, `fields()` reads them off a vocabulary, and
 // a `Pick` narrows the default when an application wants only some of them.
@@ -9,22 +9,22 @@
 
 import type { Prop, Vocab } from '@yaks/vocab'
 
-// A `comp.prop` pair naming one indexed text column — a book's title, a
+// A `comp.prop` pair naming one indexed text property — a book's title, a
 // review's prose, a shop's own description.
 export type Field = { comp: string; prop: string }
 
-// Decides whether a column is indexed. An application passes its own to index
+// Decides whether a property is indexed. An application passes its own to index
 // less than the vocabulary marked — say, titles only.
-export type Pick = (column: Prop) => boolean
+export type Pick = (prop: Prop) => boolean
 
-// The default selection: the columns the vocabulary marked searchable with
+// The default selection: the properties the vocabulary marked searchable with
 // `"search": true` (@yaks/vocab). Deciding which prose is worth finding belongs
 // to the vocabulary, not to this package: a repository path and a provider name
 // are text nobody goes looking for, and indexing them only adds terms a search
 // has to wade through. A vocabulary that marks none has nothing to search.
 //
 // The storage checks stand beside that mark because an index is created from a
-// table: a computed column has no stored value to index, and a number or an
+// table: a computed property has no stored value to index, and a number or an
 // entity reference holds no words even if the vocabulary marked it.
 export let searched: Pick = (c) =>
   c.search && !c.computed && c.category == 'scalar' && c.scalar == 'text'
@@ -38,10 +38,10 @@ export let fields = (vocab: Vocab, pick: Pick = searched): Field[] =>
       .map((c) => ({ comp, prop: c.prop }))
   )
 
-// How a stored column is turned into the text to index, keyed `comp.prop`:
+// How a stored property is turned into the text to index, keyed `comp.prop`:
 // given a SQL expression for the stored value, the entry returns a SQL
-// expression for the text that value stands for. A column with no entry is
-// indexed as stored, which covers every ordinary text column.
+// expression for the text that value stands for. A property with no entry
+// is indexed as stored, which covers every ordinary text property.
 //
 // It exists because a stored value is not always its own text: @yaks/blob
 // stores a body's SHA-256 and keeps the prose in a separate table, so a trigger
@@ -50,8 +50,8 @@ export let fields = (vocab: Vocab, pick: Pick = searched): Field[] =>
 // no dependency.
 export type Text = Record<string, (stored: string) => string>
 
-// One component's search index: the component it mirrors and the columns it
-// covers, in the order they are declared to FTS5.
+// One component's search index: the component it mirrors and the properties
+// it covers, in the order they are declared to FTS5.
 export type Index = { comp: string; props: string[] }
 
 // The fields grouped into indexes, one per component, in first-seen order.

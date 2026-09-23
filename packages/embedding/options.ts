@@ -53,7 +53,7 @@ export type Options = {
    * space every stored row is stamped with */
   embedder?: Named
   /** which text feeds a vector, as `comp.prop` pairs. The default is every
-   * stored text column the vocabulary declares. */
+   * stored text property the vocabulary declares. */
   text?: string[]
   /** how many neighbours a `.near` selects (default 8) */
   neighbours?: number
@@ -116,8 +116,9 @@ export let embedderOf = (options: Options): Ready => {
   }
 }
 
-/** The fields a config chose, or every text column. A name the vocabulary does
- * not declare is an error rather than a field that silently embeds nothing. */
+/** The fields a config chose, or every text property. A name the vocabulary
+ * does not declare is an error rather than a field that silently embeds
+ * nothing. */
 export let chosen = (vocab: Vocab, options: Options): Field[] => {
   if (!options.text) return fields(vocab)
   return options.text.map((said) => {
@@ -126,7 +127,7 @@ export let chosen = (vocab: Vocab, options: Options): Field[] => {
       throw new Error(
         `@yaks/embedding: \`text\` names ${
           JSON.stringify(said)
-        }, which is not a comp.prop column`,
+        }, which is not a declared comp.prop`,
       )
     }
     return { comp, prop }

@@ -92,8 +92,8 @@ let nudge = (
   return () => arm(ms)
 }
 
-// The components those fields live on, each with the columns watched on it: an
-// entity's vector is made from all of its text fields, so a change to any of
+// The components those fields live on, each with the properties watched on it:
+// an entity's vector is made from all of its text fields, so a change to any of
 // them means the same thing.
 let watched = (text: Field[]): Map<string, string[]> => {
   let by = new Map<string, string[]>()
@@ -102,7 +102,7 @@ let watched = (text: Field[]): Map<string, string[]> => {
 }
 
 /** The watches that keep the vectors in step with the text: a component added,
- * one of its embedded columns patched, or the component removed — each is a
+ * one of its embedded properties patched, or the component removed — each is a
  * reason to reconcile. A server with no embedder yet still registers them:
  * what it is missing is the model, not the notifications. */
 export let effects = (

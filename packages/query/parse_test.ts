@@ -339,7 +339,7 @@ Deno.test('qualifiers', () => {
 // Malformed or ambiguous forms are refused at the format layer.
 Deno.test('refusals', () => {
   assertThrows(() => parse('.limit=abc'), Error, 'whole number')
-  assertThrows(() => parse('.distinct='), Error, 'names a column')
+  assertThrows(() => parse('.distinct='), Error, 'names a property')
   assertThrows(() => parse('.refs<3'), Error, '.refs')
   // Mid-path bang is reverse negation; the vocabulary validates the name.
   assertEquals(

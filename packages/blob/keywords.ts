@@ -3,7 +3,7 @@
 // source (the keyword's schema and its prose); this module gives it a URI and
 // wraps it in the shape `loadVocab(docs, [blobKeywords])` accepts.
 //
-// One keyword, on a column rather than a component, because what varies from
+// One keyword, on a property rather than a component, because what varies from
 // application to application is which values are too big — or too repeated — to
 // keep in the row. The schema language itself has no opinion about that; it
 // only carries the keyword.
@@ -16,8 +16,8 @@ export let BLOB_URI = 'https://yak.sh/vocab/blob'
 
 /**
  * The `store` keyword vocabulary, ready to register:
- * `loadVocab(docs, [blobKeywords])` carries each column's declaration onto
- * `v.column(comp, prop).keywords.store`, which is where {@link bodies} reads
+ * `loadVocab(docs, [blobKeywords])` carries each property's declaration onto
+ * `v.prop(comp, prop).keywords.store`, which is where {@link bodies} reads
  * it.
  */
 export let blobKeywords: Keywords = { uri: BLOB_URI, prop: ['store'], doc }

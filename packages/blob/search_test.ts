@@ -1,7 +1,7 @@
 // A body that lives in the store is still findable by its words. The row holds
-// an address, so an index built straight over the column would hold hashes and
-// a search would match titles alone; `blobText` is what a full-text index is
-// handed so both its triggers and the view it reads back through resolve the
+// an address, so an index built straight over the property would hold hashes
+// and a search would match titles alone; `blobText` is what a full-text index
+// is handed so both its triggers and the view it reads back through resolve the
 // address first.
 //
 // This is the composition an application makes — @yaks/blob's plugin over

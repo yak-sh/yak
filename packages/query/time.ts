@@ -2,7 +2,7 @@
 // caller that wants a single moment takes the relevant edge of it
 // (`timeInstant`). This is the schema-independent half of time in a query:
 // recognizing the literal forms (today, 1 hour ago, in 60m, 9am, an ISO
-// timestamp) and resolving them against a clock. It knows no column and no
+// timestamp) and resolving them against a clock. It knows no property and no
 // schema — deciding that a given field holds a time, and so that its scalar
 // should be read through here, is for a compiler that has one.
 //

@@ -34,7 +34,7 @@ Deno.test('fields group into one index per component', () => {
   assertEquals(indexName('book'), 'book_fts')
 })
 
-Deno.test('a text column nobody declared is stored, readable, and never searched', () => {
+Deno.test('a text property nobody declared is stored, readable, and never searched', () => {
   let quiet = loadVocab({
     $defs: {
       book: {

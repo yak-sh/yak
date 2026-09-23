@@ -1,23 +1,23 @@
-// Which columns are content-addressed. The vocabulary carries the `store`
+// Which properties are content-addressed. The vocabulary carries the `store`
 // keyword; this module is the one place that reads it, so every other module
-// here calls a function ("is this column a body?", "which are they?") instead
+// here calls a function ("is this property a body?", "which are they?") instead
 // of digging through schemas itself.
 //
-// A column marked `store: "blob"` is an ordinary string column in every other
-// respect — it is declared, validated, queried and written as text. Only where
-// the value lives differs, and that is this package's whole subject.
+// A property marked `store: "blob"` is an ordinary string property in every
+// other respect — it is declared, validated, queried and written as text. Only
+// where the value lives differs, and that is this package's whole subject.
 
 import type { Prop, Vocab } from '@yaks/vocab'
 
-/** One content-addressed column, named the way a vocabulary names it. */
+/** One content-addressed property, named the way a vocabulary names it. */
 export type Body = { comp: string; prop: string }
 
-/** Whether a column keeps its value in a content-addressed store. */
-export let isBody = (column: Prop | undefined): boolean =>
-  column?.keywords?.store == 'blob'
+/** Whether a property keeps its value in a content-addressed store. */
+export let isBody = (prop: Prop | undefined): boolean =>
+  prop?.keywords?.store == 'blob'
 
 /**
- * Every content-addressed column in a vocabulary, by component then
+ * Every content-addressed property in a vocabulary, by component then
  * declaration order. Requires the vocabulary to have been loaded with
  * {@link blobKeywords} — without that registration the loader does not carry
  * the `store` keyword at all, and this returns an empty list, which is the

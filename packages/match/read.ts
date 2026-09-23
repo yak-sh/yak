@@ -1,12 +1,12 @@
-// Reading a bundle: which components an entity has, what one column holds, and
-// how to find another entity from a reference.
+// Reading a bundle: which components an entity has, what one property holds,
+// and how to find another entity from a reference.
 //
 // A bundle is the whole entity — its identity under `entity`, every component
 // under that component's name. Storage keeps the same facts as one row per
 // component table, so the two representations differ in exactly two places, and
 // both are smoothed over here: a boolean is read as 0/1 (the way an integer
-// column stores it), and a missing column and a missing component both read as
-// `null`.
+// property stores it), and a missing property and a missing component both read
+// as `null`.
 //
 // A question about another entity — a reference followed to its target, the
 // backlinks of an id, the children pointing at a row — is answered from the
@@ -22,7 +22,7 @@ export type Eid = string
 
 /**
  * A bundle, as this package reads one: the identity under `entity`, every
- * component under its own name, columns inside.
+ * component under its own name, properties inside.
  *
  * It is the structural shape a matcher needs, and deliberately not an import of
  * {@link https://jsr.io/@yaks/graph | @yaks/graph}'s `Bundle` — which is one of
@@ -33,8 +33,8 @@ export type Eid = string
 export type Bundle = {
   /** the identity component: the entity this bundle is about */
   entity: { eid: Eid; num?: number | null }
-  /** a component's columns, `null` where the component is being deleted, or one
-   * of the `$`-prefixed markers a client may include alongside them */
+  /** a component's properties, `null` where the component is being deleted, or
+   * one of the `$`-prefixed markers a client may include alongside them */
   [comp: string]:
     | Record<string, unknown>
     | null
@@ -89,28 +89,27 @@ export let live = (b: Bundle): boolean => !b.$delete && !wears(b, 'tombstone')
 let held = (v: unknown): unknown =>
   typeof v == 'boolean' ? Number(v) : v ?? null
 
-/** How to read one column out of a bundle, and which type a value compares
+/** How to read one property out of a bundle, and which type a value compares
  * against it as. */
 export type Read = { read: (b: Bundle) => unknown; tag: Tag }
 
 /**
- * The computed-column registry, keyed `comp.prop`: the function that reads a
- * column the vocabulary declares but never stores (`computed: true`). It is the
- * in-memory equivalent of
- * {@link https://jsr.io/@yaks/sql/doc/~/Derived | @yaks/sql}'s `derived` hook —
- * the formula belongs to the application rather than the schema, so both
- * compilers take it from the caller and one rule serves both sides. A
- * registration also works as a plain read override for a stored column, the way
- * a `derived` entry does.
+ * The computed-property registry, keyed `comp.prop`: the function that reads a
+ * property the vocabulary declares but never stores (`computed: true`). It is
+ * the in-memory equivalent of {@link https://jsr.io/@yaks/sql/doc/~/Derived |
+ * @yaks/sql}'s `derived` hook — the formula belongs to the application rather
+ * than the schema, so both compilers take it from the caller and one rule
+ * serves both sides. A registration also works as a plain read override for a
+ * stored property, the way a `derived` entry does.
  */
 export type Computed = Record<string, (b: Bundle) => unknown>
 
 /**
  * How to read `comp.prop` off an entity, or `null` when there is nothing to
- * read: a column the vocabulary does not declare, or a computed one no rule was
- * registered for. The caller turns that into an `Unsupported` refusal.
+ * read: a property the vocabulary does not declare, or a computed one no rule
+ * was registered for. The caller turns that into an `Unsupported` refusal.
  */
-export let column = (
+export let reader = (
   v: Vocab,
   name: string,
   prop: string,
@@ -125,13 +124,13 @@ export let column = (
   if (prop == 'eid') {
     return { read: (b) => wears(b, name) ? b.entity.eid : null, tag: 'eid' }
   }
-  let col = v.prop(name, prop)
-  if (!col) return null
-  // A registered rule wins, computed column or not — the same order the SQL
+  let def = v.prop(name, prop)
+  if (!def) return null
+  // A registered rule wins, computed property or not — the same order the SQL
   // binder consults its `derived` map in. The type stays the vocabulary's: the
-  // vocabulary declares the column, the caller only supplies the read.
+  // vocabulary declares the property, the caller only supplies the read.
   let own = computed[`${name}.${prop}`]
-  if (own) return { read: (b) => held(own(b)), tag: tagOf(col) }
-  if (col.computed) return null
-  return { read: (b) => held(comp(b, name)?.[prop]), tag: tagOf(col) }
+  if (own) return { read: (b) => held(own(b)), tag: tagOf(def) }
+  if (def.computed) return null
+  return { read: (b) => held(comp(b, name)?.[prop]), tag: tagOf(def) }
 }

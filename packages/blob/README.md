@@ -17,7 +17,7 @@ deno add jsr:@yaks/blob
 # or: npx jsr add @yaks/blob
 ```
 
-## Mark the column
+## Mark the property
 
 Declare a string property with `store: 'blob'` and register `blobKeywords` when
 loading the schema:
@@ -45,8 +45,8 @@ let blog = {
 
 The property remains a string in validation and client JSON. `search: true` is
 optional and selects the property for `@yaks/fts`. Without `blobKeywords`, the
-schema's string columns still exist, but this package does not recognize them as
-blob-backed columns.
+schema's string properties still exist, but this package does not recognize them
+as blob-backed properties.
 
 ## What the address is
 
@@ -154,7 +154,7 @@ does not make SQL predicates on externally stored text work.
 
 ## Indexing the text
 
-An FTS index built directly from a blob-backed column would index addresses.
+An FTS index built directly from a blob-backed property would index addresses.
 Supply text-resolution expressions when creating the index:
 
 ```ts
@@ -253,7 +253,7 @@ entity. Repeating a successful upload uses the same address and entity ID.
   code, not serializable JSON configuration.
 
 These route options choose the upload/download backend. The `rules` sub-module
-continues to use SQLite for marked graph text columns. Missing `dir`, missing
+continues to use SQLite for marked graph text properties. Missing `dir`, missing
 `bucket` or an unknown backend logs a reason and returns no routes.
 
 ## Bounded text inspection for tools
@@ -294,7 +294,7 @@ format remains accessible to application code.
 | Root export                                         | Purpose                                                  |
 | --------------------------------------------------- | -------------------------------------------------------- |
 | `blobKeywords`, `BLOB_URI`                          | Register the `store` keyword                             |
-| `bodies`, `isBody`                                  | Select marked columns                                    |
+| `bodies`, `isBody`                                  | Select marked properties                                 |
 | `blobs`, `BlobOpts`, `Reference`                    | Graph write plugin and optional stored-reference mapping |
 | `Blobs`, `address`, `encode`, `decode`              | Store interface and text addressing                      |
 | `Driver`, `sqliteBlobs`, `blobSchema`, `Layout`     | SQLite text storage                                      |

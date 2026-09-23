@@ -16,7 +16,7 @@ export type Prop = {
   items?: Prop
   default?: unknown
   /** standard JSON Schema, and what tab completion offers when nothing else
-   * narrows the argument (@yaks/vocab: a text column's examples are unioned
+   * narrows the argument (@yaks/vocab: a text property's examples are unioned
    * with its own stored values) */
   examples?: unknown[]
   /** the component whose entities this argument names — where tab completion

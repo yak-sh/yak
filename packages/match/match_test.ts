@@ -11,7 +11,7 @@ import { bundles, NOW, shop } from './harness.ts'
 let sel = (q: string): string[] =>
   matcher(q, shop, { now: NOW })(bundles).map((b) => b.entity.eid)
 
-Deno.test('a scalar filter selects, and an absent column is a value', () => {
+Deno.test('a scalar filter selects, and an absent property is a value', () => {
   assertEquals(sel('.price>=12'), ['b1', 'b2'])
   assertEquals(sel('.status=shelved,sold'), ['b1', 'b2', 'b4'])
   // every entity with no released stamp, book or not
@@ -31,7 +31,7 @@ Deno.test('a scalar filter selects, and an absent column is a value', () => {
 Deno.test('a component is worn or it is not', () => {
   assertEquals(sel('.review!'), ['r1', 'r2', 'r3'])
   assertEquals(sel('.member!'), ['m1'])
-  // a tag — no columns at all, so wearing it is the whole fact
+  // a tag — no properties at all, so wearing it is the whole fact
   assertEquals(sel('.signed!'), ['b4'])
   assertEquals(sel('.signed~='), ['b4'])
   assertFalse(sel('.signed=').includes('b4'))
@@ -55,10 +55,10 @@ Deno.test('presence reads plugin components without a declared schema', () => {
   assertThrows(() => filter('.invoice=1', shop), Error, 'unknown prop')
 })
 
-Deno.test('a bare bang names the component, not the column beside it', () => {
-  // `book` is both a component and review's reference column. The bang
-  // completes the component sentence; every other form keeps the column, and
-  // the column's qualified spelling still reaches it.
+Deno.test('a bare bang names the component, not the property beside it', () => {
+  // `book` is both a component and review's reference property. The bang
+  // completes the component sentence; every other form keeps the property, and
+  // the property's qualified spelling still reaches it.
   assertEquals(sel('.book!'), ['b1', 'b2', 'b3', 'b4'])
   assertEquals(sel('.book=b1'), ['r1', 'r2'])
   assertEquals(sel('.review.book!'), ['r1', 'r2', 'r3'])
@@ -160,7 +160,7 @@ Deno.test('what it cannot answer exactly, it declines', () => {
   assertThrows(() => matcher('.reviews~=deep', shop), Unsupported)
   // a path whose root is no reference
   assertThrows(() => matcher('.price.title=x', shop), Unsupported)
-  // and a column the vocabulary does not declare is a routing error, as ever
+  // and a property the vocabulary does not declare is a routing error, as ever
   assertThrows(() => matcher('.nonesuch=1', shop), Error, 'unknown prop')
 })
 

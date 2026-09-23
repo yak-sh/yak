@@ -20,8 +20,8 @@ it contains matching words.
 ## The `by_name` keyword
 
 This package owns one keyword. A component that declares `"by_name": true` makes
-its entities addressable by name, read from the vocabulary's name column
-(`title` by default); a string names a different column.
+its entities addressable by name, read from the vocabulary's name property
+(`title` by default); a string names a different property.
 
 ```json
 {
@@ -88,13 +88,13 @@ somewhere inside, because a prefix is how a name usually gets shortened.
 
 ## Exports
 
-| export                                   | is                                                    |
-| ---------------------------------------- | ----------------------------------------------------- |
-| `nameKeywords`, `NAMES_URI`              | the `by_name` keyword vocabulary, ready to register   |
-| `named(v)`                               | every component addressable by name → its name column |
-| `nameOf(v)`                              | an entity → its name, or nothing when it has none     |
-| `resolve(v)`                             | a typed name + candidates → the entity it refers to   |
-| `score`, `closeness`, `nearest`, `CLOSE` | the matching, on its own                              |
+| export                                   | is                                                      |
+| ---------------------------------------- | ------------------------------------------------------- |
+| `nameKeywords`, `NAMES_URI`              | the `by_name` keyword vocabulary, ready to register     |
+| `named(v)`                               | every component addressable by name → its name property |
+| `nameOf(v)`                              | an entity → its name, or nothing when it has none       |
+| `resolve(v)`                             | a typed name + candidates → the entity it refers to     |
+| `score`, `closeness`, `nearest`, `CLOSE` | the matching, on its own                                |
 
 ## Integration
 

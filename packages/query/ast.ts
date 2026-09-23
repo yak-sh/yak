@@ -2,7 +2,7 @@
 // the same shape from code. Everything here is plain serializable data — no
 // class, no method, no schema. A node records the format (an operator, a list,
 // a range, a directive) and never what a field means; deciding whether
-// `status` is a column, a reference or an enum is left to a compiler that has
+// `status` is a property, a reference or an enum is left to a compiler that has
 // a schema.
 //
 // That boundary is the point: `parse('.a=1 .b=2')` deep-equals
@@ -22,7 +22,7 @@ export type Op = '=' | '!=' | '~=' | '<' | '<=' | '>' | '>=' | '!' | '?'
 // `exclusiveEnd` (`x..y` against `x...y`); a time node is an explicit time
 // phrase, built either by a builder or by a compiler promoting a scalar —
 // `parse` never emits one, because telling a time literal from a plain word
-// (`.domain=today`) needs the column's type. `timeSpan` (time.ts) is the
+// (`.domain=today`) needs the property's type. `timeSpan` (time.ts) is the
 // recognizer a compiler uses to promote a scalar.
 export type Scalar = { kind: 'scalar'; raw: string }
 export type List = { kind: 'list'; items: Value[] }
@@ -45,7 +45,7 @@ export type Pred = {
   value: Value | null
   /** Negate a reverse association child test (none rather than any). */
   not?: boolean
-  /** Builder-only: the last path segment names a component, not a column. */
+  /** Builder-only: the last path segment names a component, not a property. */
   facet?: boolean
   /** Child condition; path names the reverse association. Builders compose
    * conjunctions here; parsing uses it to preserve nested quantifiers. */
@@ -69,8 +69,8 @@ export type Refs = { kind: 'refs'; op: '=' | '!'; value: string }
 export type Count = { kind: 'count' }
 export type Distinct = { kind: 'distinct'; path: string[] }
 export type Tally = { kind: 'tally'; path: string[] }
-// One projected column, and whether a change to it wakes a subscription (a
-// trailing `~` projects the column but does not wake on it). `path` is raw
+// One projected property, and whether a change to it wakes a subscription (a
+// trailing `~` projects the property but does not wake on it). `path` is raw
 // segments.
 export type FieldSel = { path: string[]; wake: boolean }
 export type Fields = { kind: 'fields'; fields: FieldSel[] }
@@ -86,8 +86,8 @@ export type Limit = { kind: 'limit'; n: number }
 // ordering — an evaluator works out where that entity sits.
 export type After = { kind: 'after'; n: number }
 // Carries stored edges back with the answer. `select` picks one edge type and
-// optionally projects an endpoint through a reference column (`via`, raw
-// segments); `peers` names the columns of the far endpoint (each a raw path)
+// optionally projects an endpoint through a reference property (`via`, raw
+// segments); `peers` names the properties of the far endpoint (each a raw path)
 // to carry back.
 export type EdgeSelect = { type: string; via?: string[] }
 export type Edges = {
@@ -104,7 +104,7 @@ export type Qual = { key?: string; op?: string; value: string }
 
 // A transitive walk: `.requires[<=3]->T-42` selects what reaches `target`
 // through at most `depth` hops of `path`; `<-` walks the other way. The path is
-// raw segments — a relation name or a reference column, which is schema. The
+// raw segments — a relation name or a reference property, which is schema. The
 // optional cap bounds the hops; without it the walk is bounded by WALK_LIMIT
 // rows instead. `target` is one entity, by eid or human id.
 export type Dir = '->' | '<-'
@@ -119,18 +119,17 @@ export let WALK_DEPTH = 16
 // Default closure: no hop cap, at most this many non-seed nodes (nearest first).
 export const WALK_LIMIT = 10_000
 
-// ---- rule prefixes ----
-// A component name may carry a prefix character saying what a rule does with
-// it. Two of those are ordinary predicates, because an evaluator can answer
-// them from stored data alone: `.comp` is present, `!comp` is absent. The four
-// below mean something only a rule can act on — the component to add before it
-// runs, the gate that makes it run once, the components it writes, and the
-// singleton resource it reads — and `$name` binds a variable, the way `$alias`
-// names an entity in a bundle. An evaluator with no rule engine refuses them
-// rather than guessing. A `+` or `*` may name a column and a value as well as
-// a component — `+result.call=$call` — because the prefix already means "this
-// is written", and naming the column is part of the same statement. A gate has
-// no such form: an absence has no value.
+// ---- rule prefixes ---- A component name may carry a prefix character saying
+// what a rule does with it. Two of those are ordinary predicates, because an
+// evaluator can answer them from stored data alone: `.comp` is present, `!comp`
+// is absent. The four below mean something only a rule can act on — the
+// component to add before it runs, the gate that makes it run once, the
+// components it writes, and the singleton resource it reads — and `$name` binds
+// a variable, the way `$alias` names an entity in a bundle. An evaluator with
+// no rule engine refuses them rather than guessing. A `+` or `*` may name a
+// property and a value as well as a component — `+result.call=$call` — because
+// the prefix already means "this is written", and naming the property is part
+// of the same statement. A gate has no such form: an absence has no value.
 export type Ensure = {
   kind: 'ensure'
   comp: string
@@ -266,7 +265,7 @@ export let pred = (field: string, o: Op, value: Value | null): Pred => ({
 /**
  * Is this the bare presence form — one segment, a trailing `!`, no value?
  * `.canvas!` names a component, so an evaluator resolves it to that component
- * even where a column of the same name would otherwise win the bare form
+ * even where a property of the same name would otherwise win the bare form
  * (@yaks/vocab's `aim(path, facet)`).
  */
 export let bare = (p: Pred): boolean =>
@@ -297,7 +296,7 @@ export let walk = (
   depth?: number,
 ): Walk => ({ kind: 'walk', path: dot(field), dir, depth, target })
 
-// A field selector from `'pin.x'`, or from `'pin.z~'` for a column that does
+// A field selector from `'pin.x'`, or from `'pin.z~'` for a property that does
 // not wake a subscription — or a FieldSel that is already built.
 export let field = (spec: string | FieldSel): FieldSel => {
   if (typeof spec != 'string') return spec

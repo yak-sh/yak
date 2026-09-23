@@ -10,7 +10,7 @@ import type { Vocab } from '@yaks/vocab'
 import { blobs } from './plugin.ts'
 import { blobSchema, sqliteBlobs } from './sqlite.ts'
 
-/** The plugin for every body column this vocabulary marks `store: blob`,
+/** The plugin for every body property this vocabulary marks `store: blob`,
  * storing each distinct value once in the server's own SQLite file however
  * many rows hold the same text. */
 export let rules = (host: { vocab: Vocab; sql: Driver }): Plugin[] => {

@@ -115,7 +115,7 @@ Deno.test('interned references do not survive a rolled-back batch', () => {
   }])
 })
 
-Deno.test('a bundle that names no body column is untouched', () => {
+Deno.test('a bundle that names no body property is untouched', () => {
   let { g, db } = fixture()
   g.apply([
     { entity: { eid: 'p1' }, post: { title: 'one', body: 'first' } },
@@ -135,7 +135,7 @@ Deno.test('a body reads back through a query predicate too', () => {
     { entity: { eid: 'p2' }, post: { body: 'nothing like it' } },
   ])
   // the filter resolves the address the same way the gather does, so a saved
-  // query over a body column means one thing in both readers
+  // query over a body property means one thing in both readers
   assertEquals(db.rows('.body~=spain').map((r) => r.eid), ['p1'])
   assertEquals(db.rows('.body="the rain in spain"').map((r) => r.eid), ['p1'])
 })
@@ -164,7 +164,7 @@ Deno.test('the $was guard is hashed over the text, not the address', () => {
   assert(stale, 'a guard on a moved body refuses the batch')
 })
 
-Deno.test('clearing a body clears the column, not the store', () => {
+Deno.test('clearing a body clears the property, not the store', () => {
   let { g, db, driver } = fixture()
   g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay' } }])
   g.apply([{ entity: { eid: 'p1' }, post: { body: null } }])
@@ -219,11 +219,11 @@ Deno.test('zero is a reusable backend reference, not a cache miss', () => {
   }])
 })
 
-Deno.test('column selection leaves inline body columns alone', async () => {
+Deno.test('property selection leaves inline body properties alone', async () => {
   let { blobs } = await import('./plugin.ts')
   let { blog } = await import('./harness.ts')
   let { g, driver, blobs: store } = fixture()
-  g.plugins.splice(0, g.plugins.length, blobs(blog, store, { columns: [] }))
+  g.plugins.splice(0, g.plugins.length, blobs(blog, store, { props: [] }))
   let out = g.apply([{
     entity: { eid: 'p' },
     post: { body: 'inline' },

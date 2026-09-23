@@ -21,7 +21,7 @@ import { matcher } from './match.ts'
 import { bundles, corpus, DEAD, NOW, shop } from './harness.ts'
 
 // Bundles in a fresh in-memory database, read through the vocabulary they were
-// written under and whatever computed columns it declares.
+// written under and whatever computed properties it declares.
 //
 // Straight into storage: this test is about reads, so it skips the graph's
 // apply() and puts the rows where the two evaluators can be held against each
@@ -79,13 +79,13 @@ let QUERIES = [
   '.price<10',
   '.stars>3',
   '.stars<=3',
-  // a tag: a component with no columns, where presence is the whole fact
+  // a tag: a component with no properties, where presence is the whole fact
   '.signed!',
   '.signed=',
   '.signed~=',
-  // a bare bang completes a component sentence even where a column of the same
-  // name claims the bare spelling: `.book!` is the books, `.book=b1` is still
-  // review.book, and `.review.book!` still reaches the column.
+  // a bare bang completes a component sentence even where a property of the
+  // same name claims the bare spelling: `.book!` is the books, `.book=b1` is
+  // still review.book, and `.review.book!` still reaches the property.
   '.book!',
   '.review.book!',
   // booleans and enums
@@ -180,7 +180,7 @@ let QUERIES = [
   '.kind=book&.order=-price&.limit=2&.after=4',
   '.kind=book&.order=title&.after=4',
   '.kind=book&.order=-released&.limit=2&.after=5',
-  // an anchor with no value for the ordered column pages by its num alone
+  // an anchor with no value for the ordered property pages by its num alone
   '.order=price&.limit=3&.after=2',
   // an anchor outside the selection still names a place in the order
   '.kind=book&.order=price&.after=9',
@@ -314,7 +314,8 @@ Deno.test('a walk over nothing declares is declined by both', () => {
   }
 })
 
-// ---- the walk over a chain of reference columns, both evaluators ------------
+// ---- the walk over a chain of reference properties, both evaluators
+// ------------
 //
 // `.fork.from.session->S-1` is one step over a composed relation: a session's
 // `fork` names the entry it forked from, and that entry names the session it
@@ -402,7 +403,8 @@ Deno.test('a chain with a hop that is no reference is declined by both', () => {
   }
 })
 
-// ---- a computed column, one rule, both evaluators ---------------------------
+// ---- a computed property, one rule, both evaluators
+// ---------------------------
 //
 // `task.status` (@yaks/task) is declared `computed: true`: no row holds it, and
 // its value is read off the marks a task wears. The package states that rule
@@ -462,18 +464,18 @@ let STATUS = [
   // absence and presence: a non-task has no status to read
   '.status=',
   '.status!',
-  // beside an ordinary column, the way a board actually reads
+  // beside an ordinary property, the way a board actually reads
   '.status=open&.priority=1',
   '.status!=cancelled&.priority>=2',
   '.kind=task&.status=done',
-  // and ordered by the computed column itself, windowed as a page would ask
+  // and ordered by the computed property itself, windowed as a page would ask
   '.status!&.order=status',
   '.status!&.order=-status',
   '.status!&.order=status&.limit=2',
   '.status!&.order=status&.after=2',
 ]
 
-Deno.test('a computed column agrees when both sides are given the rule', () => {
+Deno.test('a computed property agrees when both sides are given the rule', () => {
   let s = loaded(todo, ROWS, taskDerived())
   let select = (q: string) =>
     matcher(q, todo, { now: NOW, computed: compute() })
@@ -489,7 +491,7 @@ Deno.test('a computed column agrees when both sides are given the rule', () => {
   assertEquals(eids(select('.status=cancelled')(todos)).sort(), ['t3', 't4'])
 })
 
-Deno.test('a computed column nobody registered still declines', () => {
+Deno.test('a computed property nobody registered still declines', () => {
   let e = assertThrows(
     () => matcher('.status=open', todo),
     Unsupported,

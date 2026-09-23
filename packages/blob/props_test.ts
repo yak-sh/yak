@@ -1,22 +1,22 @@
 import { assertEquals } from '@std/assert'
-import { bodies, isBody } from './columns.ts'
+import { bodies, isBody } from './props.ts'
 import { blog, plain } from './harness.ts'
 
-Deno.test('the body columns are the ones declaring store: blob', () => {
+Deno.test('the body properties are the ones declaring store: blob', () => {
   assertEquals(bodies(blog), [{ comp: 'post', prop: 'body' }])
   assertEquals(isBody(blog.prop('post', 'body')), true)
   assertEquals(isBody(blog.prop('post', 'title')), false)
   assertEquals(isBody(blog.prop('nope', 'nope')), false)
 })
 
-Deno.test('a body column is an ordinary text column to the meta-model', () => {
+Deno.test('a body property is an ordinary text property to the meta-model', () => {
   let body = blog.prop('post', 'body')!
   assertEquals([body.category, body.scalar, body.affinity], [
     'scalar',
     'text',
     'text',
   ])
-  // and it is writable, validated and routed like any other text column
+  // and it is writable, validated and routed like any other text property
   assertEquals(blog.comp('post')!.writable.includes('body'), true)
   assertEquals(blog.check('post', { body: 'a long essay' }), [])
   assertEquals(blog.route('body'), { comp: 'post', prop: 'body' })

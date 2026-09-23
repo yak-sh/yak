@@ -9,7 +9,7 @@ import { check } from './value.ts'
 let NOW = Date.parse('2024-06-15T12:00:00.000Z')
 let ago = (ms: number) => new Date(NOW - ms).toISOString()
 
-// Does `.<col> <op> <value>` select a column holding `v`?
+// Does `.<prop> <op> <value>` select a property holding `v`?
 let hit = (op: string, value: string, tag: Tag, v: unknown): boolean => {
   let c = check(op, value, tag, NOW)
   assert(c, `${op} ${value} (${tag}) should be answerable`)
@@ -27,13 +27,13 @@ Deno.test('equality reads text, numbers, lists and ranges', () => {
   assert(hit('', '1', 'bool', 1))
 })
 
-Deno.test('an empty operand asks for an absent column', () => {
+Deno.test('an empty operand asks for an absent property', () => {
   assert(hit('', '', 'text', null))
   assert(hit('', '', 'text', ''))
   assertFalse(hit('', '', 'text', 'x'))
 })
 
-Deno.test('not-equals counts an absent column as different', () => {
+Deno.test('not-equals counts an absent property as different', () => {
   assert(hit('!', 'open', 'enum', null))
   assert(hit('!', 'open', 'enum', 'done'))
   assertFalse(hit('!', 'open', 'enum', 'open'))
@@ -46,13 +46,13 @@ Deno.test('contains is case-insensitive, and empty means present', () => {
   assertFalse(hit('~', '', 'text', null))
 })
 
-Deno.test('an absent column never compares true', () => {
+Deno.test('an absent property never compares true', () => {
   assert(hit('>=', '10', 'number', 10))
   assertFalse(hit('>=', '10', 'number', null))
   assert(hit('<', 'm', 'text', 'alpha'))
 })
 
-Deno.test('presence asks only whether the column has a value', () => {
+Deno.test('presence asks only whether the property has a value', () => {
   assert(hit('exists', '', 'text', ''))
   assertFalse(hit('exists', '', 'text', null))
 })
@@ -70,7 +70,7 @@ Deno.test('a time phrase names a span and the operator picks its edge', () => {
   assert(hit('', 'someday', 'time', 'someday'))
 })
 
-Deno.test('a question the column cannot answer is refused, not guessed', () => {
+Deno.test('a question the property cannot answer is refused, not guessed', () => {
   assertEquals(check('>=', 'cheap', 'number', NOW), null)
   assertEquals(check('<', '10', 'text', NOW), null)
   assertEquals(check('nonsense', 'x', 'text', NOW), null)

@@ -84,7 +84,7 @@ let LIST = 'a list has no spaces and no empty member (.status=open,wip); ' +
 
 // One atom: a range (`x..y`, or `x...y` for an exclusive end) or a scalar.
 // Recognizing a range needs no type, because the current matcher applies `..`
-// to every column.
+// to every property.
 let atom = (raw: string): Value => {
   let m = raw.match(/^(.*?)\.\.(\.?)(.*)$/s)
   if (!m) return scalar(raw)
@@ -286,8 +286,8 @@ export let parseDot = (token: string): Clause[] | null => {
   }
   // A prefix character marks a whole component name (`+doc`), and it marks a
   // PATH carrying an operator just the same (`+doc.title=$x`): the prefix means
-  // the component is written, and the column beside it names which part of it.
-  // The gate is left out — an absence has no value to write.
+  // the component is written, and the property beside it names which part of
+  // it. The gate is left out — an absence has no value to write.
   let written = token.match(/^([+*])(\.?[A-Za-z_].*)$/s)
   if (written) {
     let [, mark, rest] = written
@@ -300,7 +300,7 @@ export let parseDot = (token: string): Clause[] | null => {
     }
     if (c.path.length != 2) {
       throw new SyntaxError(
-        `a written word names a component and a column: ${token}`,
+        `a written word names a component and a property: ${token}`,
       )
     }
     let [comp, prop] = c.path
@@ -379,23 +379,23 @@ export let parseDot = (token: string): Clause[] | null => {
       '.refs takes an id (.refs=T-3), presence (.refs) or absence (!refs)',
     )
   }
-  // `.count!` — how many rows match. It names no column, so presence is the
+  // `.count!` — how many rows match. It names no property, so presence is the
   // only form it has.
   if (pathStr == 'count' && op == '!') return [{ kind: 'count' }]
-  // `.distinct=col` / `.tally=col` — an aggregate over one column. The column
-  // stays raw segments; whether it is a single column or an invalid path is
-  // schema.
+  // `.distinct=prop` / `.tally=prop` — an aggregate over one property. The
+  // property stays raw segments; whether it is a single property or an invalid
+  // path is schema.
   if (pathStr == 'distinct' || pathStr == 'tally') {
     if (op != '=' || !val) {
-      throw new SyntaxError(`.${pathStr} names a column: .${pathStr}=domain`)
+      throw new SyntaxError(`.${pathStr} names a property: .${pathStr}=domain`)
     }
     return [{ kind: pathStr, path: path(val) }]
   }
-  // `.fields=pin.x,pin.z~` — the projection; a trailing `~` keeps a column from
-  // waking a subscription. Each column stays raw segments.
+  // `.fields=pin.x,pin.z~` — the projection; a trailing `~` keeps a property
+  // from waking a subscription. Each property stays raw segments.
   if (pathStr == 'fields') {
     if (op != '=' || !val) {
-      throw new SyntaxError('.fields names columns: .fields=pin.x,pin.y')
+      throw new SyntaxError('.fields names properties: .fields=pin.x,pin.y')
     }
     let fields = val.split(',').map((seg) => {
       let wake = !seg.endsWith('~')
