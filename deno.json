@@ -165,6 +165,7 @@
     "./packages/preact",
     "./packages/markdown",
     "./packages/html",
+    "./packages/web",
     "./packages/text",
     "./packages/graph",
     "./packages/archetype",

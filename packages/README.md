@@ -127,6 +127,11 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/text](./text)** — Markdown and plain text from those same trees,
   preserving headings, lists, links, code and emphasis while stripping control
   bytes from every text leaf and destination.
+
+- **[@yaks/web](./web)** — A read-only browser door for `yak serve`: home, a
+  search, and every entity at its own address (`/T-9`). Pages are drawn by the
+  portable views each configured plugin ships as `./views`, so a terminal prints
+  the same `Tile` and `Page` a browser shows.
 - **[@yaks/markdown](./markdown)** — Parse GitHub Flavored Markdown into
   structural nodes, not an HTML string or terminal control sequence. Its link
   filter permits relative URLs and explicit `http`, `https` and `mailto`

@@ -1,0 +1,26 @@
+{
+  "_": "The browser gate: @yaks/web's views and its app must type-check with only the web platform in scope — no Deno namespace, no Node types. `./routes` runs on the host and is not part of it.",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "strict": true
+  },
+  "entries": ["./views", "./client"],
+  "imports": {
+    "@yaks/archetype": "../archetype/mod.ts",
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/vocab": "../vocab/mod.ts",
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/match": "../match/mod.ts",
+    "@yaks/sql": "../sql/mod.ts",
+    "@yaks/ram": "../ram/mod.ts",
+    "@yaks/sync": "../sync/mod.ts",
+    "@yaks/client": "../client/mod.ts",
+    "@yaks/render": "../render/mod.ts",
+    "@yaks/preact": "../preact/mod.ts",
+    "@yaks/id": "../id/mod.ts",
+    "@yaks/names": "../names/mod.ts",
+    "@yaks/edge": "../edge/mod.ts",
+    "preact": "npm:preact@^10.29.1",
+    "preact/hooks": "npm:preact@^10.29.1/hooks"
+  }
+}

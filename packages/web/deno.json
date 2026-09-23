@@ -1,0 +1,23 @@
+{
+  "name": "@yaks/web",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./mod.ts",
+    "./routes": "./routes.ts",
+    "./views": "./views.ts",
+    "./client": "./client.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "A graph in a browser: every entity at its own address, drawn by the same portable views a terminal prints.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "preact": "npm:preact@^10.29.1",
+    "preact/hooks": "npm:preact@^10.29.1/hooks"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  }
+}
