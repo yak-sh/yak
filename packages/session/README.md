@@ -195,6 +195,35 @@ remain in logical transcript order. A plan reads entry positions first, then
 limits body reads to the selected ranges; it can be used with `@yaks/api`
 subscriptions.
 
+## Harness hooks
+
+`yak hooks install` writes lifecycle hooks into a Claude-compatible settings
+file (default `~/.claude/settings.json`), replacing an earlier install and
+leaving every other entry alone. A harness runs each hook with the event as JSON
+on stdin.
+
+| Event                       | Command                        | Effect                                                        |
+| --------------------------- | ------------------------------ | ------------------------------------------------------------- |
+| SessionStart, SubagentStart | `yak session context --hook -` | creates the session under the harness's id; prints its claims |
+| UserPromptSubmit, Stop      | `turn.ts <spool>`              | appends the prompt or the final reply to the spool file       |
+| SessionEnd                  | `yak session wrap --hook -`    | releases the session's claims                                 |
+
+The turn hooks run on every turn, so they do not open the graph: `turn.ts`
+imports nothing and appends one line to a spool file, by default
+`spool/turns.jsonl` beside the database. The `@yaks/session/service` duty reads
+the spool into transcripts, in order, about once a second while a host is up and
+once per one-shot command. A prompt becomes an input entry and marks the session
+`operator`; a reply becomes an output entry. Each entry's ID is derived from its
+spool line, so a line read twice writes nothing new, and the spool is trimmed
+only after its entries are written.
+
+| Option  | Default                       | Meaning                           |
+| ------- | ----------------------------- | --------------------------------- |
+| `spool` | `spool/turns.jsonl` beside db | the file the hooks and duty share |
+| `every` | `1000`                        | milliseconds between reads        |
+
+A graph held in memory has no spool, so an install there writes no turn hooks.
+
 ## Identity and HTTP attribution
 
 <a id="one-id-means-one-run"></a>
@@ -236,7 +265,8 @@ The main module exports:
 - error types including `Bounced`, `Unnamed`, and `UnknownSession`.
 
 Additional entry points are `@yaks/session/vocab`, `/rules`, `/tools`,
-`/effects`, `/routes`, and `/views`. A **host** is the process that opened the
+`/effects`, `/routes`, `/views`, `/service` (the turn spool duty), and `/turn`
+(the hook that writes the spool). A **host** is the process that opened the
 graph; effects and tools receive its graph and, where needed, its process entity
 ID.
 

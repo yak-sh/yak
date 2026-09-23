@@ -882,7 +882,7 @@ Deno.test('a host that runs no duties holds no lease and does no pass', async ()
       await host.close()
     }
   }
-  assertEquals(await held(true), ['@yaks/session', '@yaks/spawn'])
+  assertEquals(await held(true), ['@yaks/session/reap', '@yaks/spawn'])
   assertEquals(passes, 1)
   assertEquals(await held(false), [])
   assertEquals(passes, 1)

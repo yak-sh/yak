@@ -28,8 +28,10 @@ import { reapLeases } from './reap.ts'
 export let PROCESS = 'process'
 
 /** The lease name for the duty of freeing the locks whose holder is gone — one
- * process does it at a time. */
-export let REAP = '@yaks/session'
+ * process does it at a time. Not the package's own name: a host holds the
+ * package's `./service` duty under that (./service.ts), and releases it when
+ * the duty's pass is done, where this lease is kept. */
+export let REAP = '@yaks/session/reap'
 
 /** What these handlers are given: the graph, the eid of this process's own
  * `process` row (@yaks/cli `Host.me`), and whether it runs its duties

@@ -509,7 +509,7 @@
       "noun": "hooks",
       "verb": "install",
       "title": "Install the lifecycle hooks",
-      "description": "Write SessionStart and SessionEnd hooks (commands run when an agent session starts or ends) into a Claude-compatible harness settings file, so every session starts by reading its context back (session_context) and ends by wrapping up (session_wrap). Replaces an earlier install and leaves every other entry in the file alone. Writes to the machine the tool runs on. Returns a text confirmation naming the settings path. Pass remove: true to uninstall just these hooks.",
+      "description": "Write SessionStart and SessionEnd hooks (commands run when an agent session starts or ends) into a Claude-compatible harness settings file, so every session starts by reading its context back (session_context) and ends by wrapping up (session_wrap). Where the graph is a file, also write UserPromptSubmit and Stop hooks that spool each prompt and each final reply beside it, for the package's duty to add to the session's transcript. Replaces an earlier install and leaves every other entry in the file alone. Writes to the machine the tool runs on. Returns a text confirmation naming the settings path. Pass remove: true to uninstall just these hooks.",
       "input": {
         "path": {
           "type": "string",

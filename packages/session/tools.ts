@@ -7,7 +7,9 @@
 // injection loop is the other, and it is the same idea one level up — a session
 // starts by reading back what it was in the middle of, and ends by recording
 // what it did and releasing what it held. `hooks install` is what makes a
-// harness run those two at the right moments (./hooks.ts).
+// harness run those two at the right moments, and spool every turn in between
+// for the package's duty to read into the transcript (./hooks.ts,
+// ./service.ts).
 //
 // What A session should be told is undecided. `session_context` returns what a
 // hook needs and nothing else: the transcript becomes an entity under the
@@ -60,11 +62,14 @@ import { CLAIM, SESSION } from './comp.ts'
 import { sessionFor } from './who.ts'
 import { ENTRY } from './native.ts'
 import { ordered, statusOf } from './status.ts'
-import { install, settingsPath } from './hooks.ts'
+import { install, settingsPath, turning } from './hooks.ts'
+import type { Options as Spooling } from './service.ts'
+import { spoolOf } from './turn.ts'
 import { listen } from './listen.ts'
 
-/** What configuration this package's checks accept. */
-export type Options = {
+/** What a config file can set for this package: the checks' patience, and the
+ * turn spool the hooks write and the duty reads (./service.ts). */
+export type Options = Spooling & {
   /** how long a transcript may be waiting on a turn or an answer before that
    * counts as a stall rather than work in progress (default 2 hours) */
   hours?: number
@@ -152,11 +157,18 @@ let asking = async (ctx: ToolCtx): Promise<string> => {
   return session
 }
 
+// The command a turn hook runs, where this graph has a spool for it to write.
+let spooled = (spool?: string) => spool ? turning(spool) : undefined
+
 /** The implementations behind the tools ./vocab.json declares. The calling
  * application's vocabulary is what the checks name an entity with, and its
  * options are what they judge a stall by. */
 export let runs = (
-  host: { vocab: Vocab; stopping?: AbortSignal },
+  host: {
+    vocab: Vocab
+    stopping?: AbortSignal
+    config?: { db?: string }
+  },
   options: Options = {},
 ): Runs => ({
   claim_take: async (_bundles, ctx): Promise<Bundle[]> => {
@@ -271,6 +283,7 @@ export let runs = (
       body: `${ctx.args.remove ? 'removed from' : 'wrote'} ${
         install(str(ctx.args.path) || settingsPath(), {
           yak: str(ctx.args.yak) || undefined,
+          turn: spooled(options.spool ?? spoolOf(host.config?.db)),
           remove: !!ctx.args.remove,
         })
       }`,
