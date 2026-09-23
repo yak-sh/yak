@@ -1,10 +1,10 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { discover } from '@yaks/git/host'
-import { agent } from './run.ts'
 import { open } from './store.ts'
 import { sessionCwd } from './workspace.ts'
 import {
   collect,
+  collecting,
   cutFor,
   going,
   holds,
@@ -310,46 +310,44 @@ Deno.test('live homes are the checkouts named for a session and the ones it inhe
 
 Deno.test('a child that is over hands its checkout back, and gets it again on resume', async () => {
   let f = await fixture()
-  let was = Deno.env.get('HARNESS_WORKTREE_DIR')
-  Deno.env.set('HARNESS_WORKTREE_DIR', f.root)
-  let a = agent({
-    h: open(':memory:'),
-    model: () => Promise.reject(new Error('no model is asked here')),
-    tools: [],
-  })
+  // The root is passed, never set in the environment: test files run side by
+  // side in one process, and a root set there is where every other file's
+  // checkouts go until this one puts it back.
+  let h = open(':memory:')
+  let failed: unknown[] = []
+  collecting(h.g, h.fx, (error) => failed.push(error), f.root)
   try {
     let path = await f.cut('child-one')
-    assertEquals(cutFor('child:one'), path)
+    assertEquals(cutFor('child:one', f.root), path)
     await f.commit(path, 'the work')
     await git(f.repo, 'branch', 'parent', 'task-child-one')
-    let home = (await discover(a.h.g, path)).entity.eid
-    await a.h.g.apply([{
+    let home = (await discover(h.g, path)).entity.eid
+    await h.g.apply([{
       entity: { eid: 'child:one' },
       session: {},
       home: { worktree: home },
       dispatch: { state: 'queued' },
     }], { trusted: true })
     // The pool letting go says nothing about the transcript.
-    await a.h.g.apply([{
+    await h.g.apply([{
       entity: { eid: 'child:one' },
       dispatch: { state: 'settled' },
     }], { trusted: true })
-    assertEquals(await collect(a.h.g, 'child:one', f.root), undefined)
+    assertEquals(await collect(h.g, 'child:one', f.root), undefined)
     assert(await there(path))
 
     // The transcript ending is what hands it back.
-    await a.h.g.apply([stopped('child:one')], { trusted: true })
+    await h.g.apply([stopped('child:one')], { trusted: true })
     await until(async () => !await there(path))
     await until(async () => await f.branches() == 'main\nparent')
 
     // Resumed, the session asks where it runs — and its work is there.
-    assertEquals(await sessionCwd(a.h.g, 'child:one', f.repo), path)
+    assertEquals(await sessionCwd(h.g, 'child:one', f.repo), path)
     assertEquals(await Deno.readTextFile(path + '/work'), 'the work')
     assertEquals(await f.branches(), 'main\nparent\ntask-child-one')
+    assertEquals(failed, [])
   } finally {
-    await a.close()
-    if (was == null) Deno.env.delete('HARNESS_WORKTREE_DIR')
-    else Deno.env.set('HARNESS_WORKTREE_DIR', was)
+    h.close()
     await f.free()
   }
 })

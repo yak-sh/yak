@@ -37,13 +37,14 @@ Deno.test('the request starts the provider, and what it printed is the transcrip
   watching(g, { dir: where, poll: 20 })
   try {
     await g.g.apply(asking('S1', 'E1', 'do the thing'))
+    // The turn's ending is an entry, so the transcript settles by itself. It
+    // is read in after the text before it, so wait for the ending itself.
     await until(
-      async () => (await bodies(g.g)).includes('working: do the thing'),
-      'the provider to say something',
+      async () => comp((await said(g.g)).at(-1), 'stop'),
+      'the turn to end',
     )
-    // The turn's ending is an entry, so the transcript settles by itself.
-    let lines = await said(g.g)
-    let last = lines.at(-1)!
+    assert((await bodies(g.g)).includes('working: do the thing'))
+    let last = (await said(g.g)).at(-1)!
     assertEquals(comp(last, 'stop'), {})
     assertEquals(comp(last, 'usage')?.output_tokens, 34)
     await until(
