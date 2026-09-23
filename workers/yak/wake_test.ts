@@ -13,7 +13,7 @@ import type { Plugin, Wake } from './plugin.ts'
 import { wakesOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { GRAPHQL } from './usage.ts'
-import { PLATFORM_STORE, storeOf } from './door.ts'
+import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 
 let at = (time: string) => Date.parse(`2026-09-07T${time}:00Z`)
@@ -276,6 +276,15 @@ Deno.test('an app store keeps its own schedule, with no platform in the middle',
     await p.states.get('ada/app')!.storage.getAlarm(),
     Date.parse(row.wake.at),
   )
+})
+
+Deno.test('the git object store keeps a clock too, with nothing owed', async () => {
+  let p = platform('git wake')
+  await metaOf(storeOf(p.env.STORE, GIT_STORE)).query('.gitobj!')
+  assertEquals(await p.object(GIT_STORE).tick(Date.now()), {
+    fired: [],
+    refused: [],
+  })
 })
 
 // An app's own vocabulary, with a rule in it: what an app declares to say what

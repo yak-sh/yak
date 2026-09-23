@@ -1028,7 +1028,11 @@ export let platformVocab = (): Vocab => loadVocab(platformDocs, metaKeywords)
  * `gitDoc` carries the package's `ref` word too, and this store keeps no refs:
  * a branch belongs to one app, so its row is the directory's (git.ts loads
  * @yaks/git's `refDoc` there). A word a store holds no rows under costs it
- * nothing. */
+ * nothing.
+ *
+ * `wakeDoc` is here for the same reason it is in {@link coreDocs}: every store
+ * runs its own clock (graph.ts, D-37562), and the clock asks for `wake` rows
+ * whether or not the store holds any. */
 export let gitDocs: VocabDoc[] = [
   coreDoc,
   idDoc,
@@ -1036,6 +1040,7 @@ export let gitDocs: VocabDoc[] = [
   edgeDoc,
   keyDoc,
   aliasDoc,
+  wakeDoc,
   gitDoc,
 ]
 
