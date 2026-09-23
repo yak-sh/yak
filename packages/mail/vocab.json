@@ -80,6 +80,12 @@
           "ref": "entity",
           "death": "keep",
           "description": "the recipient — their address is looked up when the letter goes out"
+        },
+        "tried": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the letter was handed to the sender — one with this and no outcome may have left, so it is never handed over again"
         }
       }
     },

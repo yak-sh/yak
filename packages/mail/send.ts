@@ -76,10 +76,13 @@ export type Post = {
 
 let clock = () => new Date().toISOString()
 
-// The whole letter as it stands, post-commit: the effect works from storage
-// rather than from the patch, so it sees `mail` and `deliver` together however
-// the transaction that wrote them was shaped.
-let whole = (tx: Tx, entity: Entity) =>
+/** The whole letter as it stands, post-commit. An effect works from storage
+ * rather than from the patch, so it sees `mail` and `deliver` together however
+ * the transaction that wrote them was shaped. */
+export let letterOf = (
+  tx: Tx,
+  entity: Entity,
+): Bundle | undefined | Promise<Bundle | undefined> =>
   then(tx.get([entity.eid]), (found) => found[0])
 
 let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
@@ -87,6 +90,20 @@ let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
 
 let str = (c: Comp | undefined, k: string): string =>
   c?.[k] == null ? '' : String(c[k])
+
+/** Whether a letter is still owed a send: it asks to go, it was never handed
+ * to a sender, and it has no outcome. A letter handed over and never settled
+ * may have left, so it is not owed — sending is at most once. */
+export let owed = (letter: Bundle | undefined): boolean =>
+  !!comp(letter, MAIL) && !!comp(letter, DELIVER) &&
+  comp(letter, DELIVER)?.tried == null &&
+  !comp(letter, DELIVERED) && !comp(letter, BOUNCED)
+
+/** The letters {@link owed} a send, as a query. A host replays the sending
+ * handler over these when it starts (@yaks/effects `sweep`), so a letter
+ * written while no sender could run is sent by the first process that can. */
+export let PENDING =
+  `.${MAIL}&.${DELIVER}&!${DELIVERED}&!${BOUNCED}&!${DELIVER}.tried`
 
 /** The address an entity is reachable at: its own `email.address`. */
 export let addressOf = (
@@ -143,8 +160,10 @@ export let message = (
  *
  * Register it on `created('deliver')` too and a letter that gains its
  * recipient later is sent then — the handler reads the whole entity, so it does
- * not care which component triggered it. It is idempotent either way: a letter
- * that already carries `delivered` or `bounced` is left alone.
+ * not care which component triggered it. It is idempotent either way: only a
+ * letter still {@link owed} a send is touched, and `deliver.tried` is written
+ * before the letter reaches the transport, so a crash between the send and its
+ * outcome leaves a letter that is never handed over twice.
  *
  * The outcome is written back through @yaks/effects' write function — a new
  * transaction through the graph's own `apply()` — so "this letter left" is
@@ -163,12 +182,11 @@ export let message = (
  */
 export let sending =
   ({ sender, now = clock, local }: Post): Handler => (event, tx, write) =>
-    then(whole(tx, event.entity), (letter) => {
-      let mail = comp(letter, MAIL)
-      let deliver = comp(letter, DELIVER)
-      // Not a letter, not a request to send one, or one already settled.
-      if (!mail || !deliver) return
-      if (comp(letter, DELIVERED) || comp(letter, BOUNCED)) return
+    then(letterOf(tx, event.entity), (letter) => {
+      // Not a letter, not a request to send one, or one already handed over.
+      if (!owed(letter)) return
+      let mail = comp(letter, MAIL)!
+      let deliver = comp(letter, DELIVER)!
       let settle = (out: Comp, name: string) =>
         write([{ entity: event.entity, [name]: { at: now(), ...out } }])
       let fail = (reason: string) => settle({ reason }, BOUNCED)
@@ -189,10 +207,15 @@ export let sending =
           }])
         }
         let answered = mail.reply_to == null ? '' : String(mail.reply_to)
+        let tried = () =>
+          write([{ entity: event.entity, [DELIVER]: { tried: now() } }])
         return then(
           answered ? threadOf(tx, answered) : '',
           (replyTo) =>
-            sender.send(message(letter!, to, replyTo || undefined)).then(
+            then(
+              tried(),
+              () => sender.send(message(letter!, to, replyTo || undefined)),
+            ).then(
               (receipt) =>
                 write([{
                   entity: event.entity,

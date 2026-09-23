@@ -29,8 +29,9 @@ export let outboxPlugin: Plugin = {
     let post = metering(at.env, at.mail, posting(at.env.MAIL, at.env))
     // `sending` reads the whole entity rather than the patch that woke it, so
     // a letter written whole and one that gains its recipient later go the
-    // same way. It is idempotent — a letter already carrying `delivered` or
-    // `bounced` is left alone — so two slots are still one send.
+    // same way. It only touches a letter still owed a send (@yaks/mail
+    // `owed`), and marks it tried before the transport sees it, so two slots
+    // are still one send.
     on.created(MAIL, sending({ sender: post }))
     on.created(DELIVER, sending({ sender: post }))
   }],

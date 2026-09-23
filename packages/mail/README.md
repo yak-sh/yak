@@ -39,7 +39,7 @@ await g.apply([{
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `mail`      | Sender and recipient addresses, time, related entity (`target`), threading fields, Message-ID, verification result, and transport id. |
 | `email`     | An entity's email address (`address`).                                                                                                |
-| `deliver`   | The recipient entity id (`to`); requests outgoing delivery.                                                                           |
+| `deliver`   | The recipient entity id (`to`) and when the message was handed to the sender (`tried`); requests outgoing delivery.                   |
 | `delivered` | Delivery time and transport receipt (`at`, `via`).                                                                                    |
 | `bounced`   | Failed delivery time and reason (`at`, `reason`).                                                                                     |
 | `notified`  | When a recipient was notified, by whom, and through which entity (`at`, `by`, `via`).                                                 |
@@ -59,7 +59,15 @@ messages have no `deliver`, so receiving them does not send them back out.
 The default sending handler runs when `mail` is created. To send a draft when
 `deliver` is added later, also register
 `fx.created('deliver', sending({ sender }))`. The handler skips a message that
-already has `delivered` or `bounced`; retry by creating a new message.
+already has `delivered`, `bounced` or `deliver.tried`; retry by creating a new
+message.
+
+Sending is at most once. The handler stamps `deliver.tried` before the message
+reaches the transport, so a crash between the send and its outcome leaves a
+message with `tried` and no outcome, which is never handed over again. The
+handler declares a sweep over the messages still owed a send (`PENDING`), so a
+host replays it at start-up and a message written while no sender could run goes
+out with the first process that has one.
 
 ## Delivery after commit
 
@@ -249,8 +257,10 @@ A plugin entry in a `yak serve` configuration can be:
 
 The CLI configuration loader resolves `{ "env": "NAME" }`; direct TypeScript
 calls receive strings. No sender configuration means no sending handler. Missing
-Cloudflare credentials or an unsupported transport logs a warning and leaves the
-handler unregistered; `mail check` reports that configuration problem too.
+Cloudflare credentials or an unsupported transport registers a handler that
+sends nothing: it warns once, when it meets a message it cannot send, and leaves
+that message for the first process with a sender. `mail check` reports the
+configuration problem too.
 
 ## The tools
 

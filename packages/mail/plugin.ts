@@ -15,7 +15,7 @@ import type { Bundle, Comp, Plugin } from '@yaks/graph'
 import type { Effects } from '@yaks/effects'
 import { canon } from './addr.ts'
 import { EMAIL, MAIL, mailDoc } from './comp.ts'
-import { type Post, sending } from './send.ts'
+import { PENDING, type Post, sending } from './send.ts'
 
 /** How the plugin is built. */
 export type Mailbox = {
@@ -77,7 +77,11 @@ let clean = (fix: (a: string) => string) => (b: Bundle): Bundle => {
 export let mailbox = (
   { domain, effects, sender, now, local }: Mailbox = {},
 ): Plugin => {
-  if (effects && sender) effects.created(MAIL, sending({ sender, now, local }))
+  if (effects && sender) {
+    effects.created(MAIL, sending({ sender, now, local }), {
+      sweep: { pending: PENDING },
+    })
+  }
   let fix = domain ? clean(canon(domain)) : null
   return {
     name: '@yaks/mail',
