@@ -23,40 +23,41 @@
 // word that is not an address is a bearer, and `logout` with no account
 // forgets the bearer.
 //
-// It stays HERE rather than in the package because it cannot be anywhere else:
-// the sessions live in the main checkout's `.env` (yaks_account.ts `envPath`),
-// and a bot's sign-in code is read out of the tasks graph (yaks_api.ts
-// `codeFor`). Both are this repo, and neither is something a `deno install`
-// off jsr could reach.
+// Sessions are secrets in the graph this box's `yak` opens (yaks_account.ts),
+// so they are written through it and read back out of the vault beside it. It
+// stays HERE rather than in the package because a bot's sign-in code is read
+// out of the tasks graph (yaks_api.ts `codeFor`), which is this repo and
+// nothing a `deno install` off jsr could reach.
 import { fileURLToPath } from 'node:url'
-import { type Command, forgetToken, main, saveToken, Usage } from '@yaks/cli'
+import {
+  type Command,
+  type Ctx,
+  forgetToken,
+  main,
+  read,
+  saveToken,
+  Usage,
+} from '@yaks/cli'
+import type { Bundle } from '@yaks/graph'
+import { sealed, unsealed, vaultOf } from '@yaks/secrets'
 import { ADMIN, BOT, isTestAddress } from './bots.ts'
 import {
   type Account,
   accountsIn,
   banner,
-  CURRENT,
-  envOf,
-  envPath,
-  forgotten,
+  choose,
+  current,
   isAdmin,
   isTest,
-  LEGACY,
-  localPart,
   named,
   pick,
-  readEnv,
-  recorded,
   Refused,
   render,
-  saved,
-  setEnv,
+  sessionName,
   throwaway,
   usable,
-  writeEnv,
 } from './yaks_account.ts'
 import {
-  addressOf,
   askCode,
   claimsOf,
   close,
@@ -95,86 +96,76 @@ let whose = (a: Args): Whose => ({
 
 let json = (v: unknown) => JSON.stringify(v, null, 2)
 
-// The `.env` this box keeps its sessions in, read fresh each command so two
-// shells never fight over a cached copy.
-let store = () => {
-  let path = envPath()
-  let text = readEnv(path)
-  let env = envOf(text)
-  return { path, text, env, all: accountsIn(env) }
+// The accounts this box is signed in as: the sessions the vault beside this
+// box's graph keeps, read fresh each command so two shells never fight over a
+// cached copy.
+let vault = (c: Ctx) => {
+  if (!c.config) {
+    throw new Refused(
+      'sessions are kept in this box’s graph, and no config names one ' +
+        '(--config, $YAK_CONFIG, or ~/.yak/yak.json)',
+    )
+  }
+  return vaultOf(read(c.config))
 }
 
-let write = (path: string, text: string) => (writeEnv(path, text), text)
+let accounts = (c: Ctx) => accountsIn(vault(c))
+
+// A change to the sessions, written through the graph's own `graph_apply` —
+// the same door `yak apply` uses — which seals each session into the vault
+// and leaves the graph a sentinel (@yaks/secrets). A refusal is the tool's
+// own words.
+let wrote = async (c: Ctx, bundles: Bundle[]) => {
+  vault(c)
+  let tool = (await c.all()).find((t) => t.name == 'graph_apply')
+  if (!tool) throw new Refused(`${c.config} has no graph to keep a session in`)
+  let said: string[] = []
+  let code = await tool.run({ change: bundles }, {
+    ...c,
+    out: (line) => said.push(line),
+  })
+  if (code) throw new Refused(said.join('\n'))
+}
+
+let kept = (c: Ctx, address: string, session: string) =>
+  wrote(c, [sealed(sessionName(address), session)])
 
 // A session the platform renewed, written back under the same account
 // (yaks_api.ts `renewing`, workers/yak/session.ts `slid`): the platform
 // re-mints a cookie past half its life, and a box that kept the old value
 // would sign out ninety days after its first sign-in however often it called.
-// The file is re-read here rather than reused from `acting`, so a renewal
-// never carries away a line another shell wrote in the meantime.
-let keep = (at: Account, fresh: string) => {
-  let { path, text } = store()
-  write(
-    path,
-    at.address ? saved(text, at.address, fresh) : setEnv(text, LEGACY, fresh),
-  )
-}
+// The write is waited for before the command ends (`settled` below), so it
+// never races the graph closing.
+let renewals: Promise<unknown>[] = []
 
 // WHO this command runs as, and the mark it wears when the answer is somebody
 // else's own account. Every verb that touches the platform goes through here.
-let acting = (s: Whose, note: (line: string) => void): Account => {
-  let { env, all } = store()
-  let at = pick(all, {
+let acting = (s: Whose, c: Ctx): Account => {
+  let at = pick(accounts(c), {
     as: s.as,
     owner: s.owner === true,
     admin: s.admin === true,
-    current: env[CURRENT],
+    current: current(),
   })
-  if (!isTest(at)) note(banner(at))
-  renewing((fresh) => keep(at, fresh))
+  if (!isTest(at)) c.note(banner(at))
+  renewing((fresh) => renewals.push(kept(c, at.address, fresh)))
   return at
-}
-
-// The account whose address nobody wrote down — the hand-pasted session that
-// predates this file (yaks_account.ts LEGACY) — asked about ONCE. The platform
-// is the only one who knows it (yaks_api.ts `addressOf`), and the answer is
-// written into the file (`recorded`), so every later command reads it there. A
-// platform that cannot say leaves both the file and the account as they were:
-// an unknown address goes on reading as the owner's, which is what it did
-// before this asked at all.
-export let known = async (
-  at: Account,
-  ask: (session: string) => Promise<string> = addressOf,
-): Promise<Account> => {
-  if (at.address) return at
-  let address = await ask(at.session).catch(() => '')
-  if (!address) return at
-  let { path, text } = store()
-  write(path, recorded(text, at, address))
-  return { ...at, address, name: localPart(address) }
 }
 
 // Sign in end to end. A `@bot.yak.sh` code comes back through the tasks graph
 // (the fleet sweep files the letter); anyone else's is in their own mail, so
 // it is asked for rather than guessed at.
-let signIn = async (
-  address: string,
-  note: (line: string) => void,
-  given?: string,
-) => {
+let signIn = async (address: string, c: Ctx, given?: string) => {
   let since = Date.now()
   await askCode(address)
   let bot = address.endsWith(BOT)
-  let code = given ?? (bot ? await waited(address, since, note) : await asked(
-    address,
-    note,
-  ))
+  let code = given ??
+    (bot ? await waited(address, since, c.note) : await asked(address, c.note))
   let session = await spendCode(address, code)
-  let { path, text } = store()
-  let next = saved(text, address, session)
+  await kept(c, address, session)
   // Only a throwaway is ever remembered as the default (yaks_account.ts) — the
   // admin wears a bot address and is still not one.
-  write(path, isTestAddress(address) ? setEnv(next, CURRENT, address) : next)
+  if (isTestAddress(address)) choose(address)
   return session
 }
 
@@ -252,7 +243,7 @@ let takes = (props: Record<string, unknown> = {}, required?: string[]) => ({
   properties: { ...NAMED, ...props },
 })
 
-let verbs: Command[] = [
+let said: Command[] = [
   {
     name: 'deploys',
     title: 'yaks.app versions, commits, live times, and data boundaries',
@@ -349,9 +340,9 @@ let verbs: Command[] = [
     inputSchema: takes(),
     readOnly: true,
     run: async (args, c) => {
-      let at = await known(acting(whose(args), c.note))
+      let at = acting(whose(args), c)
       let claims = claimsOf(at.session)
-      c.out(`account   ${at.address || '(address unrecorded)'}`)
+      c.out(`account   ${at.address}`)
       c.out(
         `kind      ${
           isAdmin(at)
@@ -388,8 +379,7 @@ let verbs: Command[] = [
     inputSchema: takes(),
     readOnly: true,
     run: (_args, c) => {
-      let { env, all } = store()
-      c.out(render(all, env[CURRENT] ?? ''))
+      c.out(render(accounts(c), current()))
       return 0
     },
   },
@@ -407,7 +397,7 @@ let verbs: Command[] = [
     run: async (args, c) => {
       let name = word(args, 'name')
       let address = name ? `${name}@bot.yak.sh` : throwaway()
-      await signIn(address, c.note)
+      await signIn(address, c)
       c.out(`signed in as ${address} — current`)
       return 0
     },
@@ -450,7 +440,7 @@ let verbs: Command[] = [
             'named act: add --owner. A throwaway is `yak test`.',
         )
       }
-      await signIn(address, c.note, word(args, 'code'))
+      await signIn(address, c, word(args, 'code'))
       c.out(`signed in as ${address}`)
       return 0
     },
@@ -465,9 +455,8 @@ let verbs: Command[] = [
     }, ['account']),
     options: { positional: ['account'] },
     run: (args, c) => {
-      let { path, text, all } = store()
-      let at = one(all, String(args.account))
-      write(path, setEnv(text, CURRENT, usable(at).address))
+      let at = one(accounts(c), String(args.account))
+      choose(usable(at).address)
       c.out(`current: ${at.address}`)
       return 0
     },
@@ -484,7 +473,7 @@ let verbs: Command[] = [
     }),
     options: { positional: ['account'] },
     destructive: true,
-    run: (args, c) => {
+    run: async (args, c) => {
       let want = word(args, 'account')
       // No account named is the package's own act: forget the bearer.
       if (!want) {
@@ -492,10 +481,10 @@ let verbs: Command[] = [
         c.out(`forgot the bearer for ${c.host}`)
         return 0
       }
-      let { path, text, all } = store()
-      let at = one(all, want)
-      write(path, forgotten(text, at))
-      c.out(`forgot ${at.address || at.name}`)
+      let at = one(accounts(c), want)
+      await wrote(c, [unsealed(sessionName(at.address))])
+      if (current() == at.address) choose(null)
+      c.out(`forgot ${at.address}`)
       return 0
     },
   },
@@ -510,7 +499,7 @@ let verbs: Command[] = [
       revoke: { type: 'string', description: 'a link id to revoke instead' },
     }),
     run: async (args, c) => {
-      let at = acting(whose(args), c.note)
+      let at = acting(whose(args), c)
       let gone = word(args, 'revoke')
       if (gone) {
         let ids = await unlink(at.session, gone)
@@ -559,7 +548,7 @@ let verbs: Command[] = [
       if (bps != null && !/^\d+$/.test(bps)) {
         throw new Usage(`not a whole number of basis points: ${bps}`)
       }
-      let at = acting(whose(args), c.note)
+      let at = acting(whose(args), c)
       let now = bps == null
         ? await feeNow(at.session)
         : await setFee(at.session, Number(bps))
@@ -581,7 +570,7 @@ let verbs: Command[] = [
     destructive: true,
     run: async (args, c) => {
       let slug = String(args.space)
-      let at = acting(whose(args), c.note)
+      let at = acting(whose(args), c)
       // The naming first, and it is the page's own (workers/yak/erase.ts):
       // whoever runs this reads what would go before it goes, the same list
       // the letter carries to a person whose agent asked.
@@ -608,7 +597,7 @@ let verbs: Command[] = [
     options: { positional: ['where'], rest: 'filters' },
     readOnly: true,
     run: async (args, c) => {
-      let at = acting(whose(args), c.note)
+      let at = acting(whose(args), c)
       c.out(json(
         await storeQuery(
           at.session,
@@ -633,7 +622,7 @@ let verbs: Command[] = [
     }, ['name']),
     options: { positional: ['name'], rest: 'args' },
     run: async (args, c) => {
-      let at = acting(whose(args), c.note)
+      let at = acting(whose(args), c)
       let out = await rpc(at.session)('tools/call', {
         name: String(args.name),
         arguments: (args.args ?? {}) as Record<string, unknown>,
@@ -644,7 +633,20 @@ let verbs: Command[] = [
   },
 ]
 
-export { verbs }
+// Every verb waits for the renewals it caused (`acting`) before it returns,
+// so a renewed session is in the graph before the command closes it.
+let settled = (v: Command): Command => ({
+  ...v,
+  run: async (args, c) => {
+    try {
+      return await v.run(args, c)
+    } finally {
+      await Promise.all(renewals.splice(0))
+    }
+  },
+})
+
+export let verbs = said.map(settled)
 
 if (import.meta.main) {
   // `--timing` is @yaks/cli's own global — it lifts the flag off the line and

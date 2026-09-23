@@ -11,9 +11,10 @@ import {
   assertThrows,
 } from '@std/assert'
 import { argsFor, type Ctx } from '@yaks/cli'
-import { known, verbs } from './yak.ts'
+import { fileVault, secretEid } from '@yaks/secrets'
+import { verbs } from './yak.ts'
 import { ADMIN } from './bots.ts'
-import { envOf, Refused } from './yaks_account.ts'
+import { Refused, sessionName } from './yaks_account.ts'
 import {
   boundaries,
   type Commit,
@@ -135,42 +136,10 @@ Deno.test('login refuses the admin address that nobody named as the admin', asyn
   await assertRejects(() => ran('login', [ADMIN]), Refused, '--admin')
 })
 
-// The address nobody wrote down is asked of the platform ONCE and kept
-// (T-35376). What the file becomes is yaks_account.ts `recorded`; what is
-// here is the asking: a temp `.env` and a fake platform, so no box's own file
-// moves.
-let legacy = { address: '', session: 'legacy.token', name: 'owner' }
-let filed = async (answer: (session: string) => Promise<string>) => {
-  let path = Deno.makeTempFileSync()
-  Deno.writeTextFileSync(path, 'YAKS_SESSION=legacy.token\n')
-  Deno.env.set('YAKS_ENV', path)
-  try {
-    let at = await known(legacy, answer)
-    return { at, env: envOf(Deno.readTextFileSync(path)) }
-  } finally {
-    Deno.env.delete('YAKS_ENV')
-    Deno.removeSync(path)
-  }
-}
-
-Deno.test('an account with no address asks the platform once, and the answer is kept', async () => {
-  let asked: string[] = []
-  let { at, env } = await filed((s) => {
-    asked.push(s)
-    return Promise.resolve('jeff@yak.sh')
-  })
-  assertEquals(asked, ['legacy.token'])
-  assertEquals([at.address, at.name], ['jeff@yak.sh', 'jeff'])
-  assertEquals(env.YAKS_ADDRESS_JEFF_YAK_SH, 'jeff@yak.sh')
-  assertEquals(env.YAKS_SESSION, undefined)
-  // An address already written down asks nobody.
-  let mine = { ...legacy, address: 'x@bot.yak.sh' }
-  assertEquals(await known(mine, () => Promise.reject('asked anyway')), mine)
-  // And a platform that cannot say leaves the account as it was and writes
-  // nothing — however it failed to say it.
-  for (let no of [() => Promise.resolve(''), () => Promise.reject('down')]) {
-    assertEquals(await known(legacy, no), legacy)
-  }
+// A box with no graph named has nowhere to keep a session, and says so
+// rather than guessing at one.
+Deno.test('an account verb with no config refuses and names the doors', async () => {
+  await assertRejects(() => ran('accounts', []), Refused, '--config')
 })
 
 // `whoami` asks ONCE (T-35384). The listing carries the caller's role in each
@@ -189,15 +158,19 @@ let listing = (spaces: string[]) =>
     result: { content: [{ type: 'text', text: spaces.join('\n') }] },
   })
 
+// One test account, kept in the vault beside a graph nobody opens: `whoami`
+// only reads a session, so the graph itself never has to exist.
 let asking = async (spaces: string[]) => {
   let hit: string[] = []
-  let path = Deno.makeTempFileSync()
-  Deno.writeTextFileSync(
-    path,
-    'YAKS_SESSION_ANA_BOT_YAK_SH=ana.token\n' +
-      'YAKS_ADDRESS_ANA_BOT_YAK_SH=ana@bot.yak.sh\n',
-  )
-  Deno.env.set('YAKS_ENV', path)
+  let dir = Deno.makeTempDirSync()
+  let config = `${dir}/yak.json`
+  Deno.writeTextFileSync(config, JSON.stringify({ db: 'yak.db' }))
+  let name = sessionName('ana@bot.yak.sh')
+  fileVault(`${dir}/secrets`).seal(secretEid(name), {
+    name,
+    sentinel: 's',
+    value: 'ana.token',
+  })
   let real = globalThis.fetch
   globalThis.fetch = ((url: string | URL | Request) => {
     hit.push(String(url))
@@ -207,13 +180,13 @@ let asking = async (spaces: string[]) => {
   try {
     await ran('whoami', [], {
       ...ctx([]),
+      config,
       out: (l: string) => said.push(l),
     })
     return { hit, said: said.join('\n') }
   } finally {
     globalThis.fetch = real
-    Deno.env.delete('YAKS_ENV')
-    Deno.removeSync(path)
+    Deno.removeSync(dir, { recursive: true })
   }
 }
 
