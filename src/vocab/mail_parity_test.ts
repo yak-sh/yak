@@ -128,8 +128,8 @@ Deno.test('parity: the words a letter carries are a doc, not columns on mail', (
 
 Deno.test('parity: deliver, where the two overlap', () => {
   assertEquals(
-    shape(pkg.column('deliver', 'to')!),
-    shape(fleet.column('deliver', 'to')!),
+    shape(pkg.prop('deliver', 'to')!),
+    shape(fleet.prop('deliver', 'to')!),
   )
   assertEquals(pkg.comp('deliver')!.writable, fleet.comp('deliver')!.writable)
 })
