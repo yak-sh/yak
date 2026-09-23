@@ -20,6 +20,13 @@
 // where a derived id already exists (a tool, an edge, a key) the fleet's row
 // merges onto that entity rather than minting a second one. `--limit N` caps
 // each component table for a quick pass over the shape.
+//
+//   deno run -A bin/transition.ts --from ~/.tasks/snap.db --to ~/.yak/yak.db \
+//     --since 2026-09-21T16:47:33.701Z
+//
+// `--since` carries over what the fleet wrote after an import already made at
+// that moment: the entities minted since, and the ones a write since touched,
+// took a component from, or buried. Everything else is already there.
 
 import { Database } from '@yaks/sqlite/db'
 import { mintSql } from '@yaks/sqlite'
@@ -237,7 +244,9 @@ let MOVES: Record<string, Move | null> = {
       let quote = ctx.body(row.hunk)
       let verified = ctx.stamp(row.entity)
       return paths.map((path) => {
-        let to = derivedEid(`file|${repository}|${path}`)
+        // The id the vocabulary's identity gives it, which @yaks/code's own
+        // reading of the checkout gives it too: one file, one entity.
+        let to = identityEid('file', [path, repository])
         ctx.also({
           entity: { eid: to, num: null },
           file: { path, repository },
@@ -1172,6 +1181,7 @@ let main = async () => {
   let config = arg('config', new URL('etc/yak.json', root).pathname)
   let limit = Number(arg('limit', '0')) || 0
   let batchSize = Number(arg('batch', '4000'))
+  let since = Deno.args.includes('--since') ? arg('since') : undefined
 
   // The doc and this file must agree before a byte moves.
   let doc = saidByDoc(root)
@@ -1205,6 +1215,36 @@ let main = async () => {
   let fleet = new Database(from, { readonly: true })
   let all = (sql: string, ...params: unknown[]): Row[] =>
     fleet.prepare(sql).all(...params as never[]) as Row[]
+
+  // The fleet ids a carry-over writes: every entity minted after the last one
+  // the import saw, and every one a write since touched or buried. The import
+  // itself writes them all.
+  let delta: Set<number> | undefined
+  if (since) {
+    let [{ high }] = all(
+      'select coalesce(max(entity), 0) as high from created where at <= ?',
+      since,
+    )
+    delta = new Set(
+      [
+        ...all('select id from entity where id > ?', high),
+        ...all(
+          `select distinct c.entity as id from journal_change c
+             join journal_tx t on t.id = c.tx where t.ts > ?`,
+          since,
+        ),
+        ...all('select entity as id from updated where at > ?', since),
+        ...all(
+          'select entity as id from tombstone where deleted_at > ?',
+          since,
+        ),
+      ].map((r) => Number(r.id)),
+    )
+    console.log(`carrying over ${delta.size} entities written since ${since}`)
+  }
+  let carried = (id: unknown): boolean => !delta || delta.has(Number(id))
+  // The same set, bound into a query as `json_each(?)`.
+  let ids = delta ? [JSON.stringify([...delta])] : []
 
   console.log(`reading ${from}`)
   let started = performance.now()
@@ -1324,7 +1364,13 @@ let main = async () => {
   console.log(`composing ${cfg.plugins?.length} plugins over ${to}`)
   // The import writes the graph but not its log: the fleet's own three-table
   // journal is the history, and it is copied across whole at the end.
+  //
+  // Nor does it answer what it writes. Every row is something that already
+  // happened, and an effect would treat it as a request: a session's `using`
+  // lands before its `process` does, and @yaks/spawn would launch the agent
+  // again; a letter with no outcome yet would be sent a second time.
   let load: Load = async (plugin, name) => {
+    if (name == 'effects') return null
     let mod = await facet(plugin, name)
     if (plugin != '@yaks/journal' || name != 'rules') return mod
     // Its tables are still raised — the fleet's own log is poured into them —
@@ -1348,6 +1394,8 @@ let main = async () => {
   let batch: Bundle[] = []
   let written = 0
   let refused: Record<string, number> = {}
+  // One entity each refusal was said about, so it can be looked up.
+  let example: Record<string, string> = {}
   let flush = async () => {
     if (!batch.length) return
     let sending = batch
@@ -1366,6 +1414,7 @@ let main = async () => {
         } catch (e) {
           let why = (e as Error).message.slice(0, 120)
           refused[why] = (refused[why] ?? 0) + 1
+          example[why] ??= b.entity.eid
         }
       }
     }
@@ -1434,16 +1483,96 @@ let main = async () => {
   // It happens FIRST because a reference mints the spine it names, and the
   // first mint is the one that decides the number: T-37574 read as T-37574
   // here only if nothing numbered that eid on the way past.
-  console.log(`spines: ${spine.size}`)
+  console.log(`spines: ${delta?.size ?? spine.size}`)
   let sql = host.sql
+  // A number is the entity's everywhere, so what the fleet numbered after the
+  // import keeps its number here too. An entity this store numbered in the
+  // meantime with the same one takes the next free number instead: nothing
+  // here was ever read by a number the fleet had already given out.
+  let renumbered = 0
+  // Where each fleet transcript ends.
+  let lastSeq = new Map<string, number>()
+  for (
+    let r of all('select session, max(seq) as seq from entry group by session')
+  ) {
+    let s = eidOf(r.session)
+    if (s) lastSeq.set(s, Number(r.seq))
+  }
+  // A transcript the fleet went on writing after the import, where this store
+  // wrote an entry of its own in the meantime at a seq the fleet has since
+  // filled. That entry moves past the fleet's last one, so the fleet's keep
+  // their places and pass 1c decides again whether the transcript is over.
+  // Moving an entry is an exclusive writer's repair (@yaks/session
+  // `sequencing` refuses it on the wire), and this run is one.
+  let moved = 0
+  let held = new Map<string, Map<number, string>>()
+  if (delta) {
+    for (
+      let r of all(
+        `select session, seq, entity from entry
+          where entity in (select value from json_each(?))`,
+        ...ids,
+      )
+    ) {
+      let s = eidOf(r.session), e = eidOf(r.entity)
+      if (!s || !e) continue
+      if (!held.has(s)) held.set(s, new Map())
+      held.get(s)!.set(Number(r.seq), e)
+    }
+  }
   sql.exec('begin')
-  for (let [, s] of spine) {
+  for (let [s, seqs] of held) {
+    let next = (lastSeq.get(s) ?? 0) + 1
+    for (
+      let r of sql.query(
+        `select n.entity as id, e.eid as eid, n.seq as seq from entry n
+           join entity e on e.id = n.entity
+           join entity o on o.id = n.session
+          where o.eid = ? and n.seq <= ? order by n.seq`,
+        [s, lastSeq.get(s) ?? 0],
+      )
+    ) {
+      let fleet = seqs.get(Number(r.seq))
+      if (!fleet || fleet == r.eid) continue
+      sql.query('update entry set seq = ? where entity = ?', [
+        next++,
+        Number(r.id),
+      ])
+      moved++
+    }
+  }
+  if (delta) {
+    for (let [id, s] of spine) {
+      if (!delta.has(id) || s.num == null) continue
+      for (
+        let t of sql.query('select id from entity where num = ? and eid != ?', [
+          s.num,
+          renamed.get(s.eid) ?? s.eid,
+        ])
+      ) {
+        sql.query(
+          `update entity set num =
+             (select high + 1 from entity_sequence where singleton = 1)
+           where id = ?`,
+          [Number(t.id)],
+        )
+        renumbered++
+      }
+    }
+  }
+  for (let [id, s] of spine) {
+    if (!carried(id)) continue
     let m = mintSql(renamed.get(s.eid) ?? s.eid, s.num ?? false)
     sql.query(m.sql, m.params)
   }
   sql.exec('commit')
   say('spines')
 
+  // The entities this run writes, by the eid they have here.
+  let imported = new Set<string>()
+  for (let [id, sp] of spine) {
+    if (carried(id)) imported.add(renamed.get(sp.eid) ?? sp.eid)
+  }
   // ── pass 1: every component, as the table says ──
   let tables = new Set(
     all(
@@ -1474,14 +1603,21 @@ let main = async () => {
     ...FIRST,
     ...Object.keys(MOVES).filter((c) => !FIRST.includes(c)),
   ]
+  // A carry-over reads only the rows of the entities it carries: a component's
+  // by its owner, the spine's own by its id.
   for (let comp of order) {
     let move = MOVES[comp]
     if (!tables.has(comp)) {
       emitted[comp] = 0
       continue
     }
+    let only = delta
+      ? ` where ${
+        comp == 'entity' ? 'id' : 'entity'
+      } in (select value from json_each(?))`
+      : ''
     let count = Number(
-      all(`select count(*) as n from "${comp}"`)[0].n as number,
+      all(`select count(*) as n from "${comp}"` + only, ...ids)[0].n as number,
     )
     if (!move) {
       dropped[comp] = count
@@ -1496,7 +1632,8 @@ let main = async () => {
     // Each component's own rows go in as one run, and the run is flushed
     // before the next begins, so an ordering above is an ordering in fact.
     let rows = all(
-      `select * from "${comp}"` + (limit ? ` limit ${limit}` : ''),
+      `select * from "${comp}"` + only + (limit ? ` limit ${limit}` : ''),
+      ...ids,
     )
     let made = 0
     for (let row of rows) {
@@ -1529,6 +1666,49 @@ let main = async () => {
     dropped[comp] = count - made
     await flush()
   }
+  // What a write since took away, from an entity still alive: a released
+  // claim, a task opened again. Only where that fleet component is the one
+  // move into its package word, and lands on its own entity — anything else
+  // has no single component here to take away.
+  let removed = 0
+  if (since) {
+    let sole = (says: string) =>
+      Object.values(MOVES).filter((m) => m?.says == says).length == 1
+    for (
+      let r of all(
+        `select c.entity, c.component from journal_change c
+           join (select c2.entity, c2.component, max(c2.id) as id
+                   from journal_change c2 join journal_tx t on t.id = c2.tx
+                  where t.ts > ? group by 1, 2) l on l.id = c.id
+          where c.operation = 'remove'
+            and not exists (select 1 from tombstone g where g.entity = c.entity)`,
+        since,
+      )
+    ) {
+      let move = MOVES[String(r.component)]
+      let eid = eidOf(r.entity)
+      if (!move || !eid || move.becomes || move.onto || move.elsewhere) continue
+      if (!sole(move.says)) continue
+      await push({ entity: { eid }, [move.says]: null })
+      removed++
+    }
+    await flush()
+  }
+  // The fleet's dead. An import's never lived here, so pass 3 buries them in
+  // storage; a carry-over's were alive here, so they die through the graph,
+  // and what hangs off them goes the way the fleet sent it.
+  let graves = all(
+    'select entity, deleted_at from tombstone' +
+      (since ? ' where deleted_at > ?' : ''),
+    ...(since ? [since] : []),
+  )
+  if (since) {
+    for (let g of graves) {
+      let eid = eidOf(g.entity)
+      if (eid) await push({ entity: { eid }, tombstone: {} })
+    }
+    await flush()
+  }
   say('components')
 
   // ── pass 1b: the runs that ended while nobody was watching ──
@@ -1557,6 +1737,9 @@ let main = async () => {
     )
   ) {
     if (r.pid != null && alive(Number(r.pid))) continue
+    // A carry-over ends only the fleet's own: what this store has run since
+    // the import is its own to end.
+    if (delta && !imported.has(String(r.eid))) continue
     ended.push({ entity: { eid: String(r.eid) }, exit: { code: null } })
   }
   for (let i = 0; i < ended.length; i += batchSize) {
@@ -1572,15 +1755,6 @@ let main = async () => {
   // daemon performs nothing after this line), so each gets one as its last
   // entry: the panels show them stopped, and nothing asks a model about a
   // transcript from last year.
-  let imported = new Set<string>()
-  for (let [, sp] of spine) imported.add(renamed.get(sp.eid) ?? sp.eid)
-  let lastSeq = new Map<string, number>()
-  for (
-    let r of all('select session, max(seq) as seq from entry group by session')
-  ) {
-    let s = eidOf(r.session)
-    if (s) lastSeq.set(s, Number(r.seq))
-  }
   let stopped: Bundle[] = []
   for (
     let b of await host.graph.read('.session.status=pending,running,queued')
@@ -1617,7 +1791,8 @@ let main = async () => {
   // touched — what was already in this store was last changed when it says.
   sql.exec('create temp table imported_entity (id integer primary key)')
   sql.exec('begin')
-  for (let [, sp] of spine) {
+  for (let [fleetId, sp] of spine) {
+    if (!carried(fleetId)) continue
     let id = here.get(renamed.get(sp.eid) ?? sp.eid)
     if (id != null) {
       sql.query('insert or ignore into imported_entity values (?)', [id])
@@ -1629,7 +1804,13 @@ let main = async () => {
   )
   let touched = 0
   sql.exec('begin')
-  for (let r of all('select * from updated')) {
+  for (
+    let r of all(
+      'select * from updated' +
+        (delta ? ' where entity in (select value from json_each(?))' : ''),
+      ...ids,
+    )
+  ) {
     let e = eidOf(r.entity)
     if (!e) continue
     sql.query(
@@ -1650,16 +1831,20 @@ let main = async () => {
 
   // ── pass 3: the graves ──
   // A tombstone is spine storage, not a component: nothing can be written
-  // through the graph that says "this eid died and was never anything".
-  let graves = all('select entity, deleted_at from tombstone')
+  // through the graph that says "this eid died and was never anything". A
+  // carry-over's dead were alive here and died through the graph above, so
+  // this only gives each grave the moment the fleet dug it.
   let bury = sql
   bury.exec('begin')
   for (let g of graves) {
     let s = spine.get(Number(g.entity))
     if (!s) continue
     bury.query(
-      `insert or ignore into tombstone (entity, deleted_at)
-         select id, ? from entity where eid = ?`,
+      `insert into tombstone (entity, deleted_at)
+         select id, ? from entity where eid = ?
+       on conflict(entity) do ${
+        delta ? 'update set deleted_at = excluded.deleted_at' : 'nothing'
+      }`,
       [String(g.deleted_at), renamed.get(s.eid) ?? s.eid],
     )
   }
@@ -1708,12 +1893,13 @@ let main = async () => {
     return kept.length
   }
 
+  // A carry-over copies only the log the fleet wrote since.
+  let newer = since ? ' where ts > ?' : ''
+  let then = since ? [since] : []
   logged.tx = pour(
     'journal_tx',
     ['id', 'ts', 'actor', 'via', 'trace'],
-    all(
-      'select * from journal_tx',
-    ).map((r) => [
+    all('select * from journal_tx' + newer, ...then).map((r) => [
       txAt + Number(r.id),
       String(r.ts),
       idOf(r.actor),
@@ -1726,7 +1912,11 @@ let main = async () => {
   logged.change = pour(
     'journal_change',
     ['id', 'tx', 'ordinal', 'entity', 'component', 'operation'],
-    all('select * from journal_change').map((r) => {
+    all(
+      'select * from journal_change' +
+        (since ? ` where tx in (select id from journal_tx${newer})` : ''),
+      ...then,
+    ).map((r) => {
       let entity = idOf(r.entity)
       if (entity == null) return null
       changes.add(Number(r.id))
@@ -1744,7 +1934,14 @@ let main = async () => {
   logged.field = pour(
     'journal_field',
     ['id', 'change', 'ordinal', 'field', 'present', 'value', 'ref'],
-    all('select * from journal_field').map((r) =>
+    all(
+      'select * from journal_field' +
+        (since
+          ? ` where change in (select c.id from journal_change c
+               join journal_tx t on t.id = c.tx where t.ts > ?)`
+          : ''),
+      ...then,
+    ).map((r) =>
       !changes.has(Number(r.change)) ? null : [
         fieldAt + Number(r.id),
         changeAt + Number(r.change),
@@ -1793,7 +1990,7 @@ let main = async () => {
   if (Object.keys(refused).length) {
     console.log(`\n  bundles the packages refused:`)
     for (let [why, n] of Object.entries(refused).sort()) {
-      console.log(`    ${String(n).padStart(6)} × ${why}`)
+      console.log(`    ${String(n).padStart(6)} × ${why} (${example[why]})`)
     }
   }
   if (Object.keys(lost).length) {
@@ -1803,7 +2000,11 @@ let main = async () => {
     }
   }
   console.log(
-    `\n  spines ${spine.size} · bundles ${written} · graves ${graves.length}` +
+    `\n  spines ${delta?.size ?? spine.size} · bundles ${written}` +
+      ` · graves ${graves.length}` +
+      (delta
+        ? ` · removed ${removed} · renumbered ${renumbered} · moved ${moved}`
+        : '') +
       ` · endings ${ended.length} · stops ${stopped.length}` +
       ` · journal ${logged.tx}/${logged.change}/${logged.field}` +
       ` · ${seconds}s`,
