@@ -104,7 +104,7 @@ export {
 
 export * from './join.ts'
 export * from './declared.ts'
-// The vocabulary described as plain data: what `graph_schema` builds its
-// result from. No runtime of its own, so a browser tab that wants the index
-// pays nothing for it.
-export * from './words.ts'
+// The vocabulary described, as one JSON Schema document and as markdown: what
+// `graph_schema` answers. No runtime of its own, so a browser tab that wants
+// the index pays nothing for it.
+export * from './schema.ts'

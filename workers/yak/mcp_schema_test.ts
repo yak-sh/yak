@@ -571,61 +571,69 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
       content: vocabFile({ recipe: { serves: num } }),
     })
     await agent.tool('app_deploy', { app: 'cookbook' })
-    type Word = {
-      name: string
+    type Entry = {
       description?: string
-      kind: boolean
-      props: (string | { prop: string; type: string; description?: string })[]
-      worn_with?: string[]
-      references?: { out: unknown[]; in: { comp: string; prop: string }[] }
-      example?: Record<string, Record<string, unknown>>
-      guide?: string
+      kind?: boolean
+      before?: string[]
+      properties: Record<string, { type: unknown; description?: string }>
+      examples?: Record<string, unknown>[]
     }
-    let said = async (args: Record<string, unknown>) =>
-      JSON.parse(await agent.tool('graph_schema', args)) as {
-        comps: Word[]
-        kinds?: string[]
-        kind?: string
-      }
-
-    // The index: every word the caller can reach, its line, its properties —
-    // the app's own word among the platform's.
-    let index = await said({})
-    let names = index.comps.map((c) => c.name)
-    assert(names.includes('recipe'), 'the app own word is in the index')
-    assert(names.includes('mail'))
-    assertEquals(
-      index.comps.find((c) => c.name == 'doc')!.props,
-      ['title', 'body'],
+    // Both halves of one answer: the markdown a person reads, and the
+    // vocabulary document a program parses — held, as a client holds it, to
+    // the output schema the tool is listed with.
+    let { tools } = await agent.call('tools/list', {})
+    let fits = new Ajv({ strict: false }).compile(
+      tools.find((t: { name: string }) => t.name == 'graph_schema')
+        .outputSchema,
     )
-    assert(index.kinds!.includes('recipe'))
+    let said = async (args: Record<string, unknown>) => {
+      let reply = await agent.call('tools/call', {
+        name: 'graph_schema',
+        arguments: args,
+      })
+      assert(fits(reply.structuredContent), JSON.stringify(fits.errors))
+      return {
+        text: String(reply.content[0].text),
+        defs: reply.structuredContent.$defs as Record<string, Entry>,
+      }
+    }
 
-    // One word whole: the meaning its vocab.json carries, every property typed
-    // and described, what points at it, a bundle that writes it, and the page
-    // that covers it.
-    let [mail] = (await said({ component: 'mail' })).comps
-    assertStringIncludes(mail.description!, 'envelope')
-    let verified = mail.props.find((c) =>
-      typeof c != 'string' && c.prop == 'verified'
-    ) as { type: string; description: string }
-    assertEquals(verified.type, 'bool')
-    assertStringIncludes(verified.description, 'DKIM')
-    assertEquals(mail.guide, 'https://yaks.app/docs/mail.md')
-    assertEquals(mail.worn_with, ['doc'])
-    assertEquals(Object.keys(mail.example!.mail).includes('from'), true)
+    // The index: every word the caller can reach, what it is, each property's
+    // type — the app's own word among the platform's.
+    let index = await said({})
+    assert(index.defs.recipe, 'the app own word is in the index')
+    assert(index.defs.mail)
+    assertEquals(index.defs.doc.properties, {
+      title: { type: 'string' },
+      body: { type: 'string' },
+    })
+    assertEquals(index.defs.recipe.kind, true)
+    assertStringIncludes(index.text, '- **recipe** (kind): `serves`')
+
+    // One word whole: its entry as its vocab.json declares it, with an example
+    // value; the markdown adds what points at it and the page that covers it.
+    let mail = await said({ component: 'mail' })
+    assertEquals(Object.keys(mail.defs), ['mail'])
+    assertStringIncludes(mail.defs.mail.description!, 'envelope')
+    assertEquals(mail.defs.mail.properties.verified.type, 'boolean')
+    assertStringIncludes(
+      mail.defs.mail.properties.verified.description!,
+      'DKIM',
+    )
+    assertEquals(mail.defs.mail.before, ['doc'])
+    assert('from' in mail.defs.mail.examples![0])
+    assertStringIncludes(
+      mail.text,
+      'Documentation: https://yaks.app/docs/mail.md',
+    )
     // What points at a letter, from anywhere in reach: its own `reply_to`,
     // which is how a thread hangs together.
-    assertEquals(
-      mail.references!.in.some((r) => r.comp == 'mail' && r.prop == 'reply_to'),
-      true,
-      JSON.stringify(mail.references),
-    )
+    assertStringIncludes(mail.text, '`mail.reply_to`')
 
-    // A kind is what an entity of it is made of: the word itself, then a line
-    // for each word it is worn with.
+    // A kind is what an entity of it is made of: the word itself, then the
+    // index entry of each word it is shown with.
     let letter = await said({ kind: 'mail' })
-    assertEquals(letter.kind, 'mail')
-    assertEquals(letter.comps.map((c) => c.name), ['mail', 'doc'])
+    assertEquals(Object.keys(letter.defs), ['mail', 'doc'])
 
     // And a word nobody declared is a refusal that says where to look.
     let missing = (await assertRejects(

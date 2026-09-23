@@ -29,15 +29,14 @@
 // has no business in a browser tab that only wants the graph. Import `@yaks/graph/tools` to get it.
 
 import { toolsIn, toolsSaid } from '@yaks/vocab/tools'
-import type { VocabDoc } from '@yaks/vocab'
+import { extendMeta, type Keywords, type VocabDoc } from '@yaks/vocab'
 import type { Bundle } from './bundle.ts'
 import type { Tool, ToolCtx } from './plugin.ts'
 import { type NamedTool, toolName } from './tool.ts'
 import { graphDoc } from './vocab.ts'
 import { Refused } from './admit.ts'
-import { signed } from './stamp.ts'
 import { detached } from './storage.ts'
-import { detail, type Guide, index, ofKind } from './words.ts'
+import { type Guide, proseOf, schemaOf } from './schema.ts'
 
 /** The implementations a set of declarations needs. Keyed by the declaration's
  * own `name`, or by the name derived from its noun and verb for a module that
@@ -84,17 +83,10 @@ export type Seams = {
   /** where a component is documented at length, when this program has such a
    * page — `graph_schema` returns the address beside the properties */
   guide?: Guide
+  /** the extension keyword vocabularies this graph's documents use, which
+   * `graph_schema`'s answer carries and its output schema admits */
+  keywords?: Keywords[]
 }
-
-// A result that is not entities, returned as the one entity it can be: text
-// (here, JSON) that records which call produced it. The schema is the only
-// such result in this tier — a vocabulary is not rows in the store it
-// describes.
-let told = (ctx: ToolCtx, value: unknown): Bundle[] => [{
-  entity: { eid: '$said' },
-  content: { body: JSON.stringify(value, null, 2) },
-  output: { source: ctx.call },
-}]
 
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 let num = (v: unknown): number | undefined =>
@@ -164,22 +156,9 @@ export let runs = (seams: Seams = {}): Runs => {
   return {
     // The tool does not write: the bundles it answers are the write, landed by
     // the runner signed as the caller, and the batch as applied is what comes
-    // back.
-    //
-    // A dry run is the exception, and it has to be: bundles answered here are
-    // landed, so a rehearsal that answered them would be the write it was
-    // rehearsing. So the check is made here — `apply({check})` runs every phase
-    // and rolls the transaction back — and what it would have committed is
-    // returned as text, the way every other question about a graph is answered
-    // in this tier.
-    graph_apply: async (_, ctx) => {
-      let change = batch(ctx.args.change)
-      if (ctx.args.check !== true) return change
-      return told(
-        ctx,
-        await ctx.graph.apply(signed(change, ctx.actor), { check: true }),
-      )
-    },
+    // back. `check: true` makes the call a rehearsal, which the runner answers
+    // with what a kept write would have returned (@yaks/tools).
+    graph_apply: (_, ctx) => batch(ctx.args.change),
     // The one concession to typing by hand is the query line: `.status=shelved`
     // is the grammar @yaks/query owns, so this takes it as a string and the
     // optional `filters` list is joined onto it with `&`.
@@ -216,14 +195,12 @@ export let runs = (seams: Seams = {}): Runs => {
             `${v.kinds.join(', ')}; ask for it as component instead`,
         )
       }
-      return told(
-        ctx,
-        kind
-          ? ofKind(v, kind, seams.guide)
-          : named.length
-          ? { comps: named.map((name) => detail(v, name, seams.guide)) }
-          : index(v),
-      )
+      let about = kind ? { kind } : { comps: named }
+      return [{
+        entity: { eid: '$said' },
+        content: { body: proseOf(v, about, seams.guide) },
+        output: { source: ctx.call, value: schemaOf(v, about) },
+      }]
     },
     ...(find
       ? {
@@ -236,6 +213,13 @@ export let runs = (seams: Seams = {}): Runs => {
       : {}),
   }
 }
+
+// A schema without its `$schema` line. A tool's schemas are read as JSON
+// Schema 2020-12 already, and a client whose validator defaults to an older
+// draft refuses a schema that names 2020-12 before checking anything.
+let undialected = (
+  { $schema: _, ...rest }: Record<string, unknown>,
+): Record<string, unknown> => rest
 
 /**
  * The generic tier, declared and implemented: ./vocab.json's entries paired
@@ -253,7 +237,18 @@ export let tier = (seams: Seams = {}): NamedTool[] => {
   let doing = runs(seams)
   return toolsSaid(graphDoc)
     .filter((decl) => !!doing[decl.name!])
-    .map((decl) => ({ ...decl, name: decl.name!, run: doing[decl.name!] }))
+    .map((decl) => ({
+      ...decl,
+      name: decl.name!,
+      run: doing[decl.name!],
+      // What `graph_schema` answers is a vocabulary document, so its shape is
+      // the meta-schema, admitting the keywords this graph's documents use.
+      // No declaration could state it: the keywords come from one graph, and
+      // a declaration is written before there is a graph.
+      ...(decl.name == 'graph_schema'
+        ? { outputSchema: undialected(extendMeta(seams.keywords ?? [])) }
+        : {}),
+    }))
 }
 
 /** Every name the generic tier declares, whether or not a given graph lists

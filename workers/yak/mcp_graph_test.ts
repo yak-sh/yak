@@ -306,6 +306,24 @@ slow('a write with no app routes each component to its own app', async () => {
     ])
     assertEquals((await rows('.doc!', 'lending')).length, 0)
 
+    // A rehearsal answers what the kept write would have, name resolved, and
+    // keeps none of it: not in the app's store, not anywhere.
+    let pie = minted(
+      await agent.tool('graph_apply', {
+        change: [{
+          entity: { eid: '$pie' },
+          doc: { title: 'Apple pie' },
+          recipe: { serves: 6 },
+        }],
+        check: true,
+      }),
+      '$pie',
+    )
+    assert(pie != '$pie')
+    assertEquals((await rows('.doc!', 'recipes')).map((r) => r.entity.eid), [
+      cake,
+    ])
+
     // One bundle wearing two apps' words: the loan is the lending app's row,
     // the retitle lands where the title already lives, and the call is one.
     let spans = JSON.parse(
@@ -863,11 +881,14 @@ slow('an app declares which of its own properties are searched', async () => {
     // its borrowers declare (agent.ts `spoken`): the schema an agent reads
     // names the borrowed property too, where the home's own manifest alone
     // would have left an app unable to discover a property it deployed itself.
-    let schema = JSON.parse(await agent.tool('graph_schema', {})) as {
-      comps: { name: string; props: string[] }[]
+    let schema = (await agent.call('tools/call', {
+      name: 'graph_schema',
+      arguments: {},
+    })).structuredContent as {
+      $defs: Record<string, { properties: Record<string, unknown> }>
     }
     assertEquals(
-      schema.comps.find((c) => c.name == 'recipe')?.props.sort(),
+      Object.keys(schema.$defs.recipe.properties).sort(),
       ['blurb', 'note', 'serves'],
     )
     await agent.tool('graph_apply', {

@@ -32,7 +32,13 @@
 // the UNION of both meanings, so a refusal's `code` and a break row's
 // `message` both land instead of one of them refusing the other.
 
-import { type Bundle, comps, type Graph, graph } from '@yaks/graph'
+import {
+  type ApplyOpts,
+  type Bundle,
+  comps,
+  type Graph,
+  graph,
+} from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import {
   loadVocab,
@@ -138,13 +144,14 @@ export let ledger = (host: Graph): Graph => {
     // store refuses takes the whole apply with it before a `result` or an
     // `execution{done}` has been written, which is what lets the runner
     // record the refusal as this call's failure. The other way round, a
-    // refusal was already a success by the time it was raised.
-    apply: async (bundles: Bundle[]) => {
+    // refusal was already a success by the time it was raised. A check is a
+    // check on both sides: dropped, it would keep what it was only checking.
+    apply: async (bundles: Bundle[], opts?: ApplyOpts) => {
       let batch = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
       let here = batch.filter(mine)
       let there = batch.filter((b) => !mine(b))
-      let sent = there.length ? await host.apply(there) : []
-      let kept = here.length ? await self.apply(here) : []
+      let sent = there.length ? await host.apply(there, opts) : []
+      let kept = here.length ? await self.apply(here, opts) : []
       return [...sent, ...kept]
     },
   }

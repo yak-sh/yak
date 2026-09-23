@@ -657,7 +657,7 @@ export let compose = async (
     // declares, and a transport that needs them in its own form restates them
     // (@yaks/mcp `core`).
     let tools = made = [
-      ...tier({ search: ranked }),
+      ...tier({ search: ranked, keywords: vocab.keywords }),
       ...loadTools(
         docs,
         Object.assign(

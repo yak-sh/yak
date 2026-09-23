@@ -1,12 +1,14 @@
 /// <reference lib="deno.ns" />
 // The two schemas a client receives. The write door's input is the vocabulary:
 // every component, every writable property and every type, before an agent
-// guesses at one (T-34153). Every tool's answer is the one bundle shape
-// (server.ts `answerSchema`), listed on all of them, and a host holds us to it
-// — it compiles the schema off `tools/list` and refuses a reply that does not
-// match — so the answers are checked here against the schema as published.
+// guesses at one (T-34153). Every tool whose answer is entities answers the
+// one bundle shape (server.ts `answerSchema`), listed on all of them, and a
+// host holds us to it — it compiles the schema off `tools/list` and refuses a
+// reply that does not match — so the answers are checked here against the
+// schema as published. `graph_schema` answers a vocabulary document, and
+// publishes the meta-schema instead.
 
-import { assert, assertEquals } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 import { z } from 'zod'
 import { CallError } from '@yaks/tools'
@@ -32,7 +34,7 @@ let at = (o: unknown, ...keys: string[]): unknown =>
     o,
   )
 
-Deno.test('every tool publishes the bundle answer, and its answers fit it', async () => {
+Deno.test('every tool publishes its answer, and its answers fit it', async () => {
   let client = await connect({
     graph: shopGraph(),
     search: () => [{ entity: { eid: 'b1' }, doc: { title: 'Spring' } }],
@@ -47,16 +49,30 @@ Deno.test('every tool publishes the bundle answer, and its answers fit it', asyn
     }],
   })
   let { tools } = await client.listTools()
-  let schemas = tools.map((t: { outputSchema?: unknown }) => t.outputSchema)
-  // One shape on every tool, whichever tier it came from.
-  assert(tools.length > 1)
-  assertEquals(schemas, schemas.map(() => schemas[0]))
-  // Compiled the way a host compiles it, off the listing and nothing else.
-  let fits = new AjvJsonSchemaValidator().getValidator(
-    schemas[0] as Parameters<AjvJsonSchemaValidator['getValidator']>[0],
+  let schemas = Object.fromEntries(
+    tools.map((t: { name: string; outputSchema?: unknown }) => [
+      t.name,
+      t.outputSchema,
+    ]),
   )
-  let held = (out: { structuredContent?: unknown }, what: string) =>
-    assertEquals(fits(out.structuredContent).errorMessage, undefined, what)
+  // One shape on every tool whose answer is entities, whichever tier it came
+  // from, and the meta-schema on the one whose answer is a vocabulary.
+  let { graph_schema: meta, ...bundled } = schemas
+  assertEquals(
+    new Set(Object.values(bundled).map((s) => JSON.stringify(s))).size,
+    1,
+  )
+  assertEquals(at(meta, '$id'), 'https://yak.sh/vocab/meta')
+  // Compiled the way a host compiles it, off the listing and nothing else.
+  let validator = new AjvJsonSchemaValidator()
+  let held = (out: { structuredContent?: unknown }, name: string) =>
+    assertEquals(
+      validator.getValidator(
+        schemas[name] as Parameters<AjvJsonSchemaValidator['getValidator']>[0],
+      )(out.structuredContent).errorMessage,
+      undefined,
+      name,
+    )
 
   // The success path: a write, echoed back as the transaction it applied —
   // its components, and the `$alias` the minted entity was asked for by.
@@ -91,7 +107,7 @@ Deno.test('every tool publishes the bundle answer, and its answers fit it', asyn
     arguments: { where: 'nowhere' },
   })
   assertEquals(no.isError, true)
-  held(no, 'a refused call')
+  held(no, 'shelve')
   await client.close()
 })
 

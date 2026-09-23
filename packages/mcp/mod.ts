@@ -11,8 +11,8 @@
  * - **`graph_show`** — whole entities, plus everything that references them, as
  *   bundles;
  * - **`graph_schema`** — the index of every component, or one component in
- *   full: each property's type and description, what references it, and an
- *   example bundle that writes it;
+ *   full, as markdown and as one JSON Schema document with each component's
+ *   entry under `$defs`;
  * - **`search`** — ranked text results, when a {@link Search} is passed.
  *
  * ```ts
@@ -31,6 +31,8 @@
  * shape derived from the vocabulary, since a typed bundle per tool would send
  * the whole vocabulary over and over in one `tools/list`. The schema that is
  * derived from the vocabulary is `graph_apply`'s input ({@link bundleSchema}).
+ * `graph_schema` is the one answer that is not entities: its structured
+ * content is a vocabulary document, and its output schema the meta-schema.
  *
  * ## A call is an entity
  * An MCP `tools/call` does not call a function directly. It writes a
@@ -92,14 +94,9 @@ export {
 } from './server.ts'
 export { rosterLine, rosterVersion } from './roster.ts'
 export { core, type CoreOpts, type Search } from './tools.ts'
-export {
-  type BundleOpts,
-  bundleSchema,
-  type Depth,
-  schemaSchema,
-} from './schema.ts'
-// The vocabulary described as plain data belongs to @yaks/graph —
-// `graph_schema` builds its result there — and a server that passes `guide`
-// imports its type from the same place.
+export { type BundleOpts, bundleSchema, type Depth } from './schema.ts'
+// The vocabulary described belongs to @yaks/graph — `graph_schema` builds its
+// answer there — and a server that passes `guide` imports its type from the
+// same place.
 export type { Guide } from '@yaks/graph'
 export type { Handler } from '@yaks/api'

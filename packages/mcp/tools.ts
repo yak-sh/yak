@@ -148,7 +148,11 @@ export let core = (opts: CoreOpts): Tool[] => {
   let writes = z.array(
     bundleSchema(vocab, { depth: 'full', nulls: true, write: true, prop }),
   )
-  return tier({ search: opts.search, guide: opts.guide })
+  return tier({
+    search: opts.search,
+    guide: opts.guide,
+    keywords: vocab.keywords,
+  })
     // What this server is, decided once for the whole tier: a server that only
     // reads does not list the write at all — the write is not a tool that
     // refuses, it is a tool that is not there.

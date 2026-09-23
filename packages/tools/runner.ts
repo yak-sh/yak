@@ -177,6 +177,25 @@ export let worded = (answer: Bundle[]): string => {
   return said.length ? said.join('\n') : JSON.stringify(answer, null, 2)
 }
 
+/**
+ * A tool's answer as data, for a reader that parses rather than reads: the
+ * bundles under `result`, or, from a tool that declares an `outputSchema`
+ * because its answer is not entities, the `output{value}` it answered in that
+ * shape. A refusal carries no such value, and is its bundles like any other.
+ * MCP sends this as `structuredContent`; `yak … --json` prints it.
+ */
+export let structured = (
+  tool: { outputSchema?: Record<string, unknown> },
+  answer: Bundle[],
+): Record<string, unknown> => {
+  let value = tool.outputSchema
+    ? answer
+      .map((b) => (b.output as Comp | undefined)?.value)
+      .find((v) => v && typeof v == 'object')
+    : undefined
+  return (value as Record<string, unknown>) ?? { result: answer }
+}
+
 // Who wrote the call, as the graph recorded it. A transaction's `$actor` is
 // read by the write pipeline and never stored as a property, so what survives
 // the commit is the stamp the provenance rule wrote — which is the point: the
@@ -406,9 +425,13 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     // every row the query found and move its `updated` stamp — so a read
     // writes only the runner's bookkeeping and returns the answer as the tool
     // built it. A failure is written either way: an error is worth recording
-    // whatever the tool was.
-    let land = async (made: Bundle[], state: string): Promise<Bundle[]> => {
-      let keeps = !tool.readOnly || state == 'failed'
+    // whatever the tool was. A rehearsal's answer is what a write would have
+    // been, and is not written either.
+    let land = async (
+      made: Bundle[],
+      state: string,
+      keeps = !tool.readOnly || state == 'failed',
+    ): Promise<Bundle[]> => {
       let landed = await g.apply([
         ...(keeps ? made : []),
         {
@@ -433,7 +456,18 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         call: id,
         ...(opts.cwd ? { cwd: opts.cwd } : {}),
       }
-      return await land(signed(await tool.run([call], ctx), ctx.actor), 'done')
+      let made = signed(await tool.run([call], ctx), ctx.actor)
+      // A rehearsal: `check: true` to a tool that writes runs the write's
+      // every phase and rolls it back, so the answer is the batch as a kept
+      // write would have returned it, or the refusal it would have met.
+      if (!tool.readOnly && args.check === true) {
+        return await land(
+          await host.apply(made, { check: true }),
+          'done',
+          false,
+        )
+      }
+      return await land(made, 'done')
     } catch (error) {
       // This catches both the tool's own throw and a rejection of what it
       // returned: a transaction the graph refuses is this call's failure,

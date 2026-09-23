@@ -895,13 +895,16 @@ let routed = async (
 // single part needs no second round trip, since its commit is its rehearsal.
 //
 // The answer is what every part answered: the bundles as applied, and the
-// aliases this door minted so a caller can find what it just wrote.
+// aliases this door minted so a caller can find what it just wrote. `check`
+// stops at the rehearsal, which is then the answer: what every part would have
+// applied, and nothing kept.
 export let written = async (
   env: Env,
   reach: Reach[],
   named: Reach | undefined,
   batch: Bundle[],
   headers: Record<string, string> = {},
+  check = false,
 ): Promise<{
   bundles: Bundle[]
   aliases: Record<string, string>
@@ -917,10 +920,10 @@ export let written = async (
   requested(batch, ['$app'])
   let { parts, aliases } = await routed(env, reach, named, batch)
   if (!parts.length) throw refuse('arguments', 'entities: nothing to write')
-  if (parts.length > 1) {
+  if (parts.length > 1 && !check) {
     await Promise.all(parts.map((p) => sent(env, p, true, headers)))
   }
-  let outs = await Promise.all(parts.map((p) => sent(env, p, false, headers)))
+  let outs = await Promise.all(parts.map((p) => sent(env, p, check, headers)))
   let bundles = outs.flat()
   // Where a `$alias` actually landed. A store may put a bundle somewhere other
   // than the id this door minted for it: one carrying a name somebody already

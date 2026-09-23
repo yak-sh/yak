@@ -37,6 +37,7 @@ import {
   type Opts as RunnerOpts,
   type Runner,
   runner,
+  structured,
   toolEid,
   worded,
 } from '@yaks/tools'
@@ -162,8 +163,10 @@ export type Options = {
  * under `result` — which is what {@link said} sends as `structuredContent`,
  * and MCP wants an object there rather than an array.
  *
- * Every tool answers this one shape, so it is written once and listed on all
- * of them, a plugin's tool included without declaring anything. It says what a
+ * Every tool whose answer is entities answers this one shape, so it is written
+ * once and listed on all of them, a plugin's tool included without declaring
+ * anything; a tool whose answer is not entities declares its own
+ * `outputSchema` (`graph_schema`, a vocabulary document). It says what a
  * bundle is and not what any component holds: a fully typed bundle is tens of
  * kilobytes of vocabulary, and `tools/list` would carry a copy per tool before
  * the agent has asked its first question. What a component holds is
@@ -210,14 +213,17 @@ export let answerSchema: { type: 'object'; [key: string]: unknown } = {
 
 // The reply, built twice over from the bundles the tool returned: the text
 // they carry (or the bundles themselves, as JSON) for a client that reads
-// text, and the bundles as `structuredContent` for one that reads structure.
-// MCP requires structured content to be an object, so the array is nested
-// under `result` — the shape {@link answerSchema} publishes.
+// text, and the answer as data for one that reads structure (@yaks/tools
+// `structured`). MCP requires structured content to be an object, so the
+// bundles are nested under `result` — the shape {@link answerSchema}
+// publishes.
 //
 // Bundles carrying an `error` or an `exception` component are the tool's
 // refusal, and come back as an error rather than a success that reads like an
-// apology.
-let said = (answer: Bundle[], failed: boolean): CallToolResult => {
+// apology. A refusal from a tool that declared its own output schema carries
+// no structured content: a client checks whatever it is sent against that
+// schema, and fault bundles are not in its shape.
+let said = (t: Tool, answer: Bundle[], failed: boolean): CallToolResult => {
   return {
     // A refusal points at the tool that has the current answer: a client
     // holding a tool list from before a property was added or removed finds out
@@ -226,7 +232,9 @@ let said = (answer: Bundle[], failed: boolean): CallToolResult => {
       type: 'text',
       text: failed ? pointing(worded(answer)) : worded(answer),
     }],
-    structuredContent: { result: answer },
+    ...(failed && t.outputSchema
+      ? {}
+      : { structuredContent: structured(t, answer) }),
     ...(failed ? { isError: true } : {}),
   }
 }
@@ -456,7 +464,7 @@ export let server = (opts: Options): McpServer => {
       try {
         await run.ensure()
         let landed = await run.call([asked])
-        out = said(answerOf(landed), faulted(landed))
+        out = said(t, answerOf(landed), faulted(landed))
       } catch (err) {
         // The runner answers a tool's own throw as a fault above; a throw that
         // reaches here is the runner's (a call it could not record), reported
@@ -477,14 +485,14 @@ export let server = (opts: Options): McpServer => {
   // input as JSON Schema is sent that declaration unchanged (the SDK's
   // argument parsing is passthrough for those; the runner validates the
   // arguments before the handler runs), and every tool is listed with the one
-  // answer schema, since every tool answers bundles.
+  // answer schema, since every tool answers bundles, unless it declared its own.
   mcp.server.setRequestHandler(ListToolsRequestSchema, () => ({
     tools: tools.map((t) => ({
       name: t.name,
       ...(t.title ? { title: t.title } : {}),
       description: t.description,
       inputSchema: inputSchemaOf(t),
-      outputSchema: answerSchema,
+      outputSchema: t.outputSchema ?? answerSchema,
       annotations: annotated(t),
       ...(metaOf(t, opts.security) ? { _meta: metaOf(t, opts.security) } : {}),
     })),

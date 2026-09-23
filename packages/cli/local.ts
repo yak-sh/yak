@@ -19,7 +19,7 @@
 // importing it opens a database and pulls in every plugin the config names — a
 // cost `yak login` on a machine with no graph should not pay.
 
-import { answerOf, faulted, toolEid, worded } from '@yaks/tools'
+import { answerOf, faulted, structured, toolEid, worded } from '@yaks/tools'
 import { read } from './config.ts'
 import type { Command, Ctx } from './run.ts'
 import { compose, type Served } from './host.ts'
@@ -87,10 +87,13 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
         entity: { eid: '$call' },
         call: { to: toolEid(declared.name), args: JSON.stringify(args ?? {}) },
       }])
+      // `--json` prints the answer as data, the same object an MCP client
+      // reads as `structuredContent` (@yaks/tools `structured`).
+      let answer = answerOf(landed)
       c.out(
         c.json
-          ? JSON.stringify(answerOf(landed), null, 2)
-          : worded(answerOf(landed)),
+          ? JSON.stringify(structured(declared, answer), null, 2)
+          : worded(answer),
       )
       // A refusal is data, not an exception: the text is printed either way
       // and the exit code is what reports which it was — taken from the runner,

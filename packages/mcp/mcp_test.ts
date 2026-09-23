@@ -171,13 +171,12 @@ Deno.test('a checked batch says what would land and keeps none of it', async () 
     check: true,
   })
   assertEquals(out.isError, undefined)
-  // A rehearsal cannot answer bundles — the runner lands what a tool answers
-  // — so it answers what would have landed, in words.
-  let said = JSON.parse(
-    String(comp(bundles(result(out))[0], 'content').body),
-  ) as Bundle[]
+  // The answer a kept write would have been, with the name resolved to the
+  // eid it would have had.
+  let said = bundles(result(out))
   assertEquals(said[0].$alias, '$new')
   assert(said[0].entity.eid != '$new')
+  assertEquals(said[0].doc, { title: 'Emma' })
   assertEquals(await g.read('.doc.title="Emma"'), [])
   // And a batch it would refuse is refused, rehearsal or not.
   let no = await called(client, 'graph_apply', {
@@ -330,17 +329,16 @@ Deno.test('graph_show gathers backrefs over a vocabulary wider than a compound',
   await client.close()
 })
 
-// The three sizes are words_test.ts's; this is only that the tool is listed
-// and answers the vocabulary it was built over.
+// The three sizes are graph_schema_test.ts's; this is only that the tool is
+// listed and answers the vocabulary it was built over.
 Deno.test('graph_schema hands over the words of this graph', async () => {
   let client = await connect()
-  // A vocabulary is not rows in the store it describes, so the schema comes
-  // back as the one thing it can be: prose, in a content bundle.
-  let out = JSON.parse(text(await called(client, 'graph_schema'))) as {
-    comps: { name: string }[]
-    kinds: string[]
+  // A vocabulary is not rows in the store it describes, so its structured
+  // answer is a vocabulary document rather than bundles.
+  let out = (await called(client, 'graph_schema')).structuredContent as {
+    $defs: Record<string, { kind?: boolean }>
   }
-  assertEquals(out.comps.map((c) => c.name), [
+  assertEquals(Object.keys(out.$defs), [
     'book',
     'call',
     'content',
@@ -356,7 +354,10 @@ Deno.test('graph_schema hands over the words of this graph', async () => {
     'tool',
     'updated',
   ])
-  assertEquals(out.kinds, ['book', 'doc', 'review', 'tool'])
+  assertEquals(
+    Object.keys(out.$defs).filter((n) => out.$defs[n].kind),
+    ['book', 'doc', 'review', 'tool'],
+  )
 })
 
 Deno.test('a refusal is the tool error the agent reads, not a broken call', async () => {

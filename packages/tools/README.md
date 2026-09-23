@@ -58,8 +58,9 @@ these components:
 - `result{call, ms}` refers to the completed call and records its duration. The
   result entity also gets `content{body}` containing a text rendering of the
   answer.
-- `content{body}` stores text. `output{source, id?, phase?}` identifies what
-  produced output and can preserve provider-specific output metadata.
+- `content{body}` stores text. `output{source, id?, phase?, value?}` identifies
+  what produced output, can preserve provider-specific output metadata, and
+  carries the output as data where its producer declared a shape for it.
 - `error{code}` records an expected failure. `exception` records an unexpected
   failure and can carry diagnostic fields supplied by the graph's stamping
   rules.
@@ -68,7 +69,9 @@ The call is written before its tool runs, so the request remains recorded if
 execution is interrupted. Tool output, the result, and the final execution state
 are then committed together. A tool marked `readOnly` returns existing bundles
 without writing them again; the runner still stores its result and execution
-state.
+state. A call with `check: true` to a tool that writes is a rehearsal: the
+runner applies the tool's output with every check and rolls it back, answers
+what a kept write would have returned, and stores only its own bookkeeping.
 
 <a id="running-a-tool"></a>
 
@@ -108,7 +111,9 @@ console.log(worded(answerOf(records)))
 its tool. It returns the tool's output together with runner bookkeeping. Use
 `answerOf()` to remove `result` and `execution` bundles before displaying the
 answer. `worded()` joins `content.body` values, or returns formatted JSON when
-no text is present. `faulted()` checks the stored execution state rather than
+no text is present. `structured(tool, answer)` is the answer as data: the
+bundles under `result`, or the `output.value` of a tool that declares an
+`outputSchema`. `faulted()` checks the stored execution state rather than
 treating an answer that contains `error` data as an execution failure.
 
 Use `run(callId)` for a call already stored in the graph. Use `drive()` to run
@@ -236,8 +241,8 @@ The main `@yaks/tools` entry point exports:
 - vocabulary documents: `toolsDoc`, `callDoc`, and `toolDoc`;
 - runner construction and types: `runner`, `Runner`, and `Opts`;
 - rule metadata: `RULES`, `READY`, and `WOKEN`;
-- invocation helpers: `toolEid`, `answerOf`, `worded`, `faulted`, and
-  `reconcile`;
+- invocation helpers: `toolEid`, `answerOf`, `worded`, `structured`, `faulted`,
+  and `reconcile`;
 - errors: `CallError` and `UnfinishedCall`;
 - check helpers and types: `CHECK`, `checks`, `checked`, `ailing`, `Finding`,
   and `Level`.

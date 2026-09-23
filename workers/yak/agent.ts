@@ -503,7 +503,7 @@ export let reaching = async (
     // store: `get` fans across the reach, and a name held in whichever store
     // this caller can see answers.
     address: (ids) => addressed(detached(storage), ids),
-    apply: async (bundles) => {
+    apply: async (bundles, opts) => {
       let asked = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
       let { batch, where } = await aimed(ctx, asked)
       // The same `Reach` the fan-out is holding, where it holds one: reach.ts
@@ -517,6 +517,7 @@ export let reaching = async (
         one,
         batch,
         await titling(ctx.dir, ctx.person),
+        opts?.check === true,
       )
       return aliased(out)
     },

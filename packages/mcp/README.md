@@ -154,9 +154,9 @@ For the vocabulary in the in-memory example:
 ```
 
 `graph_apply` accepts `check: true` to test changes and roll them back; the
-proposed applied result is returned as JSON text in a result bundle. Call
-records are still written. A later application can fail even if the check
-succeeded.
+answer is what a kept write would have returned, or the refusal it would have
+met. Call records are still written. A later application can fail even if the
+check succeeded.
 
 `graph_query` accepts a query defined by [@yaks/query](../query/README.md),
 optional `filters` joined with `&`, and a `limit`. `graph_show` returns entity
@@ -164,12 +164,14 @@ bundles; references remain in their component properties, and edge entities are
 ordinary bundles. `backrefs: false` omits entities that reference the requested
 ones.
 
-With no arguments, `graph_schema` returns the component index with descriptions
-and property names. `component` selects one or more full component descriptions,
-including property types, server-owned fields, uniqueness, byte storage,
-references, and example bundles. `kind` describes a declared kind and its
-components. An application-supplied `guide` callback can add documentation
-links.
+`graph_schema` answers markdown to read and, as `structuredContent`, one JSON
+Schema document with each component's entry under `$defs`, the shape of a
+vocab.json. With no arguments it is the index: every component's description,
+whether it names a kind, and each property's type. `component` selects one or
+more components as declared, each with an example value; the markdown adds what
+references it and an example bundle. `kind` is a declared kind in full beside
+the index entries of the components it is shown with. An application-supplied
+`guide` callback adds documentation links to the markdown.
 
 ## What a call returns
 
@@ -183,10 +185,11 @@ There is no separate `{ bundles: … }` wrapper for `graph_show`. Every tool
 advertises the same `outputSchema` for that answer (`answerSchema`): an object
 with `result`, an array of bundles, each carrying `entity.eid` and any component
 beside it. It is generic rather than derived from the vocabulary, because a
-typed bundle repeated per tool would be most of a `tools/list`. Values that are
-not existing entities, such as `graph_schema`'s answer, are represented by a
-bundle with JSON text in `content.body` and the originating call ID in
-`output.source`.
+typed bundle repeated per tool would be most of a `tools/list`. A tool whose
+answer is not entities declares its own `outputSchema` and answers one bundle:
+its text in `content.body`, and the value in that shape in `output.value`, which
+is what `structuredContent` carries. `graph_schema` is that tool, and its output
+schema is the vocab meta-schema.
 
 A recorded failure carries an `error` or `exception` component and sets
 `isError`. Errors caught before a recorded answer is available can return only

@@ -259,6 +259,10 @@ export type Vocab = {
   all: string[] // every declared component name, alphabetical
   kinds: string[] // kindOrder: alphabetical, refined by `before`, topo-sorted
   comp: (name: string) => CompInfo | undefined
+  /** A component's `$defs` entry as its documents declare it, with every
+   * `extends` applied — the JSON Schema itself, for a reader that wants the
+   * schema rather than the facts this load read out of it. */
+  def: (name: string) => PropSchema | undefined
   props: (comp: string) => string[] // readable properties (writable ∪ stamped)
   prop: (comp: string, prop: string) => Prop | undefined
   /** Declared indexes plus automatic reference indexes — see
@@ -582,6 +586,7 @@ export let loadVocab = (
     all: names,
     kinds,
     comp: infoOf,
+    def: (name) => defs[name],
     props: (comp) => routes.get(comp) ?? [],
     prop: propFor,
     indexes: (comp) => indexesOf(defs[comp], (p) => propFor(comp, p)),

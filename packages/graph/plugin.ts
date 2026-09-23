@@ -223,6 +223,11 @@ export type Tool<C = ToolCtx, R = Bundle[]> = {
    * to the client verbatim — an MCP `_meta`, say, naming the page the client
    * should render the result in. Opaque here, like {@link Schema}. */
   meta?: Record<string, unknown>
+  /** what the tool answers as data, as JSON Schema, when its answer is not
+   * entities: it answers text for a person in `content{body}` and the value
+   * in this shape in `output{value}` (@yaks/tools `structured`). A tool that
+   * declares none answers its bundles. */
+  outputSchema?: Record<string, unknown>
   /** the implementation: the call's bundles in, the result's bundles out */
   run: (bundles: Bundle[], ctx: C) => R | Promise<R>
 }

@@ -164,6 +164,12 @@
         "description": {
           "type": "string"
         },
+        "examples": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
         "properties": {
           "type": "object",
           "propertyNames": {
