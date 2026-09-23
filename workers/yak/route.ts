@@ -146,6 +146,9 @@ export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
 // `fresh`, directory.ts `free` and `own`, identity.ts `choose`); an address
 // already held keeps working. `yak` is the platform's own space (directory.ts
 // `META`), and `origin` and `saas` its custom-hostname origin (`ORIGIN`).
+// `sha` and `git` are the platform's own key prefixes in the files bucket
+// (versions.ts `SHA`, gitobj.ts `BODY`): a space's files are kept under its
+// slug, so a space by either name would share storage with the platform's.
 export let RESERVED = new Set([
   'abuse',
   'account',
@@ -190,6 +193,7 @@ export let RESERVED = new Set([
   'secure',
   'security',
   'settings',
+  'sha',
   'sign-in',
   'sign-up',
   'signin',

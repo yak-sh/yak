@@ -754,6 +754,7 @@ slow('an address that reads as the platform is refused', async () => {
         'is kept for yaks.app itself',
       )
     await kept('space_new', { slug: 'login', title: 'Login' })
+    await kept('space_new', { slug: 'sha', title: 'Sha' })
     await kept('app_new', { slug: 'admin', title: 'Admin' })
     let made = await agent.tool('app_new', { slug: 'recipes', title: 'R' })
     assertStringIncludes(made, 'security2.yaks.app')
