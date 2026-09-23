@@ -1,6 +1,6 @@
 {
   "$vocabulary": {
-    "https://yaks.sh/vocab/core": true
+    "https://yak.sh/vocab/core": true
   },
   "title": "harness",
   "$defs": {

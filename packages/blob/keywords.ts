@@ -12,7 +12,7 @@ import type { Keywords } from '@yaks/vocab'
 import doc from './meta/blob.vocab.json' with { type: 'json' }
 
 /** The URI a vocabulary file lists under `$vocabulary` to use `store`. */
-export let BLOB_URI = 'https://yaks.sh/vocab/blob'
+export let BLOB_URI = 'https://yak.sh/vocab/blob'
 
 /**
  * The `store` keyword vocabulary, ready to register:

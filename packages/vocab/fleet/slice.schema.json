@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://yaks.sh/vocab/fleet/slice",
+  "$id": "https://yak.sh/vocab/fleet/slice",
   "$vocabulary": {
     "https://json-schema.org/draft/2020-12/vocab/core": true,
-    "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/blob": true,
-    "https://yaks.sh/vocab/fleet": true
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/blob": true,
+    "https://yak.sh/vocab/fleet": true
   },
   "title": "fleet slice",
   "description": "A hand-authored, query-able slice of the fleet's component vocabulary, expressed in the @yaks/vocab format: the spine, doc, blob, task, project, comment, board, and every kind their `before` constraints name. The full vocabulary is the same format at ~90 components (the parity test converts it mechanically from the fleet manifests).",

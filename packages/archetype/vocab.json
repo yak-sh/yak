@@ -1,5 +1,5 @@
 {
-  "$vocabulary": { "https://yaks.sh/vocab/core": true },
+  "$vocabulary": { "https://yak.sh/vocab/core": true },
   "title": "archetype",
   "$defs": {
     "archetype": {

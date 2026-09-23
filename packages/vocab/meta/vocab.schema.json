@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://yaks.sh/vocab/meta",
+  "$id": "https://yak.sh/vocab/meta",
   "title": "yaks vocab file",
   "description": "The meta-schema a vocabulary document validates against: a JSON Schema 2020-12 document whose $defs entries each carry a marker saying what they are \u2014 an entry marked \"component\": true is a component (an object schema whose properties are storable columns: scalar, reference, or closed set; no nesting, no arrays), an entry marked \"tool\": true is a tool declaration (a noun, a verb, or both, plus description and input), an entry marked \"rule\": true is a rule declaration (the query it matches, and the rules it runs before), and an entry with no marker is an ordinary reusable subschema this format does not constrain. Only the CORE keyword shapes are inlined, so this file validates standalone; a file using an extension vocabulary's keywords validates against extendMeta([thoseKeywords]) instead.",
   "$vocabulary": {
     "https://json-schema.org/draft/2020-12/vocab/core": true,
     "https://json-schema.org/draft/2020-12/vocab/applicator": true,
     "https://json-schema.org/draft/2020-12/vocab/validation": true,
-    "https://yaks.sh/vocab/core": true
+    "https://yak.sh/vocab/core": true
   },
   "type": "object",
   "required": [

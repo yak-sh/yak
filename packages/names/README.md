@@ -26,8 +26,8 @@ its entities addressable by name, read from the vocabulary's name column
 ```json
 {
   "$vocabulary": {
-    "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/names": true
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/names": true
   },
   "$defs": {
     "author": {

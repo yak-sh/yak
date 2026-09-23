@@ -1,7 +1,7 @@
 {
   "$vocabulary": {
-    "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/key": true
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/key": true
   },
   "title": "alias",
   "$defs": {

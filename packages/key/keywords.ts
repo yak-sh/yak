@@ -21,7 +21,7 @@ import type { Keywords } from '@yaks/vocab'
 import doc from './meta/key.vocab.json' with { type: 'json' }
 
 /** The URI a vocabulary file declares under `$vocabulary` to use `key`. */
-export let KEY_URI = 'https://yaks.sh/vocab/key'
+export let KEY_URI = 'https://yak.sh/vocab/key'
 
 /**
  * The `key` keyword vocabulary, ready to register:

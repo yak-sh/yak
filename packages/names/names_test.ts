@@ -7,7 +7,7 @@ import { nameKeywords, NAMES_URI } from './keywords.ts'
 import { named, nameOf, resolve } from './names.ts'
 
 let catalog: VocabDoc = {
-  $vocabulary: { 'https://yaks.sh/vocab/core': true, [NAMES_URI]: true },
+  $vocabulary: { 'https://yak.sh/vocab/core': true, [NAMES_URI]: true },
   $defs: {
     doc: {
       component: true,

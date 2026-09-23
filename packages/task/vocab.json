@@ -1,10 +1,10 @@
 {
   "$vocabulary": {
-    "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/id": true,
-    "https://yaks.sh/vocab/edge": true,
-    "https://yaks.sh/vocab/blob": true,
-    "https://yaks.sh/vocab/kernel": true
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/id": true,
+    "https://yak.sh/vocab/edge": true,
+    "https://yak.sh/vocab/blob": true,
+    "https://yak.sh/vocab/kernel": true
   },
   "title": "task",
   "$defs": {

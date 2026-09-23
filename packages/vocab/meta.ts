@@ -17,4 +17,4 @@ export let coreVocabulary: JsonSchema = coreDoc
 export let metaSchema: JsonSchema = metaDoc
 
 // The URI a vocabulary document declares under $vocabulary for the core layer.
-export let CORE_URI = 'https://yaks.sh/vocab/core'
+export let CORE_URI = 'https://yak.sh/vocab/core'

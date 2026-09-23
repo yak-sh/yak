@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://yaks.sh/vocab/core",
+  "$id": "https://yak.sh/vocab/core",
   "title": "yaks core keyword vocabulary",
   "description": "The keywords the yaks meta-model adds to JSON Schema 2020-12 to describe a component vocabulary. Native JSON Schema still carries type, format, enum, const, default, description, examples, $ref/$defs; these keywords add what a component table needs on top. Native keywords reach the table too: `type: integer` stores with integer affinity, a component's `required` list is NOT NULL, `default` is the column default (`{\"now\": true}` for the clock), and `enum` is a check. `examples` is native and subsumes the old `well` concept: a text field's completion draws from its examples union the column's own live distinct values.",
   "$comment": "A vocabulary declaration in the JSON Schema sense: a URI that names this keyword set, plus the schema of each keyword. A vocabulary document declares it under $vocabulary.",

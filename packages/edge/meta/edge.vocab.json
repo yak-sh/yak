@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://yaks.sh/vocab/edge",
+  "$id": "https://yak.sh/vocab/edge",
   "title": "yaks edge keyword vocabulary",
   "description": "The keyword @yaks/edge adds to a component vocabulary. A component declaring `relation` names a relation: an entity carrying it, beside `edge{from,to}`, is a link of that kind — a `cites` component beside `edge{from,to}` means this post cites that one. Which relations exist is for the application to declare, and this keyword is how it declares them.",
   "$comment": "A vocabulary declaration in the JSON Schema sense: a URI naming this keyword set, plus the schema of each keyword. A vocab file declares it under $vocabulary; a loader registers it with loadVocab(docs, [edgeKeywords]).",

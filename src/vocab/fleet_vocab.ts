@@ -175,7 +175,7 @@ export let fleetKeywords: Keywords[] = [
 
 let docOf = (m: Manifest): VocabDoc => ({
   $vocabulary: {
-    'https://yaks.sh/vocab/core': true,
+    'https://yak.sh/vocab/core': true,
     [ID_URI]: true,
     [NAMES_URI]: true,
     [EDGE_URI]: true,

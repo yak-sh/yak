@@ -1,7 +1,7 @@
 {
   "$vocabulary": {
-    "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/blob": true
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/blob": true
   },
   "title": "doc",
   "$defs": {

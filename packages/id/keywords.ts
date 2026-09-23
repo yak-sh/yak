@@ -7,7 +7,7 @@ import type { Keywords } from '@yaks/vocab'
 import doc from './meta/id.vocab.json' with { type: 'json' }
 
 /** The URI a vocab file declares under `$vocabulary` to use `prefix`. */
-export let ID_URI = 'https://yaks.sh/vocab/id'
+export let ID_URI = 'https://yak.sh/vocab/id'
 
 /**
  * The `prefix` keyword vocabulary, ready to register:

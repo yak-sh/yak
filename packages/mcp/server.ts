@@ -282,7 +282,11 @@ let metaOf = (
 }
 
 /** The `_meta` key the command-line grammar is sent under. */
-export let COMMAND = 'yaks.sh/command'
+export let COMMAND = 'yak.sh/command'
+
+// The misspelled key @yaks/cli v0.1.0 on JSR reads, sent beside COMMAND until
+// a release carries the CLI that reads COMMAND. T-37984 drops it.
+let LEGACY_COMMAND = 'yaks.sh/command'
 
 // A tool's `noun`, `verb` and `options` — the parts a CLI needs to build a
 // command out of it. MCP gives a tool one flat `name` and nowhere to put any
@@ -298,7 +302,9 @@ let spelling = (tool: NamedTool): Record<string, unknown> | undefined => {
     ...(tool.verb ? { verb: tool.verb } : {}),
     ...(tool.options ? { options: tool.options } : {}),
   }
-  return Object.keys(said).length ? { [COMMAND]: said } : undefined
+  return Object.keys(said).length
+    ? { [COMMAND]: said, [LEGACY_COMMAND]: said }
+    : undefined
 }
 
 /**

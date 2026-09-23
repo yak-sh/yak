@@ -16,7 +16,7 @@ import doc from './meta/kernel.vocab.json' with { type: 'json' }
 
 /** The URI a vocabulary file declares under `$vocabulary` to use these
  * keywords. */
-export let KERNEL_URI = 'https://yaks.sh/vocab/kernel'
+export let KERNEL_URI = 'https://yak.sh/vocab/kernel'
 
 /**
  * The kernel keyword vocabulary, ready to register: `loadVocab(docs,

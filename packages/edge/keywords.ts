@@ -13,7 +13,7 @@ import type { Keywords } from '@yaks/vocab'
 import doc from './meta/edge.vocab.json' with { type: 'json' }
 
 /** The URI a vocab file declares under `$vocabulary` to use `relation`. */
-export let EDGE_URI = 'https://yaks.sh/vocab/edge'
+export let EDGE_URI = 'https://yak.sh/vocab/edge'
 
 /**
  * The `edge` keyword vocabulary, ready to register:

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://yaks.sh/vocab/kernel",
+  "$id": "https://yak.sh/vocab/kernel",
   "title": "yaks kernel keyword vocabulary",
   "description": "Three keywords a graph of work needs that the core meta-model does not define: which components a project answers for, which components stay out of the snapshot a client loads at startup, and where a text column's suggested values come from.",
   "$defs": {

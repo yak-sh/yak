@@ -1,7 +1,7 @@
 {
   "$vocabulary": {
-    "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/edge": true
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/edge": true
   },
   "title": "edge",
   "$defs": {

@@ -279,7 +279,7 @@ rewriting those entities. A text result uses `content: { body: '…' }` and
 `output: { source: ctx.call }` on its bundle.
 
 Tool `meta` is sent as MCP `_meta`; the adapter also adds declared command
-metadata under `COMMAND` (`yaks.sh/command`). The `security` option supplies
+metadata under `COMMAND` (`yak.sh/command`). The `security` option supplies
 advertised security schemes globally or per tool, unless the tool defines its
 own. These schemes describe authentication to clients; the application enforces
 it.

@@ -1,8 +1,8 @@
 {
   "$vocabulary": {
-    "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/id": true,
-    "https://yaks.sh/vocab/kernel": true
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/id": true,
+    "https://yak.sh/vocab/kernel": true
   },
   "title": "memory",
   "$defs": {

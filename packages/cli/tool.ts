@@ -58,7 +58,7 @@ export type Listed = {
 /** The `_meta` key the command-line grammar is sent under (@yaks/mcp
  * `COMMAND`). Written out here rather than imported: a client reading a
  * listing should not have to depend on the server that wrote it. */
-export let COMMAND = 'yaks.sh/command'
+export let COMMAND = 'yak.sh/command'
 
 /**
  * The two words a tool is typed as, and how its arguments are written — what

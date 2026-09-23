@@ -150,7 +150,7 @@ column or a component.
 
 ```json
 {
-  "$vocabulary": { "https://yaks.sh/vocab/core": true },
+  "$vocabulary": { "https://yak.sh/vocab/core": true },
   "$defs": {
     "task": {
       "component": true,

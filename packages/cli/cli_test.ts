@@ -11,7 +11,7 @@ import { argsFor, type Reads } from './args.ts'
 import { doorUrl, initialize, rpc, timed, Unauthorized } from './rpc.ts'
 import { saidBy } from './roster.ts'
 import { toolHelp } from './show.ts'
-import type { Listed as Tool } from './tool.ts'
+import { type Listed as Tool, spelling } from './tool.ts'
 import { globals, via } from './run.ts'
 
 let reads: Reads = { file: () => '', stdin: () => '' }
@@ -75,6 +75,12 @@ Deno.test('the tool list is the subcommand list', async () => {
     'graph_schema',
     'graph_show',
   ])
+})
+
+Deno.test('a tool is typed as the two words the server listed it with', async () => {
+  let schema = (await listed()).find((t) => t.name == 'graph_schema')!
+  let { noun, verb } = spelling(schema)
+  assertEquals([noun, verb], ['graph', 'schema'])
 })
 
 Deno.test('a command line goes through the published schema and answers', async () => {

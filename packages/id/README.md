@@ -29,8 +29,8 @@ its numbered entities with a `B` prefix; it does not allocate numbers:
 ```json
 {
   "$vocabulary": {
-    "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/id": true
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/id": true
   },
   "$defs": {
     "book": {

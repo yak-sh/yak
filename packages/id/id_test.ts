@@ -7,7 +7,7 @@ import { ID_URI, idKeywords } from './keywords.ts'
 import { format, idOf, parse, prefixes, prefixOf, SHORT, short } from './id.ts'
 
 let catalog: VocabDoc = {
-  $vocabulary: { 'https://yaks.sh/vocab/core': true, [ID_URI]: true },
+  $vocabulary: { 'https://yak.sh/vocab/core': true, [ID_URI]: true },
   $defs: {
     book: {
       component: true,
