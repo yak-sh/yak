@@ -15,7 +15,6 @@ bin/test_runner_test.ts,25.386751,4.131067,0,0
 bin/verify-deploy_test.ts,0.120852,0.114550,0,0
 bin/yak-staging-init_test.ts,0.161331,0.114844,0,0
 bin/yak-watch_test.ts,0.293015,0.239715,0,0
-channels/tasks/server_test.ts,0.424564,0.363961,0,0
 src/account_client_test.ts,0.237190,0.204613,0,0
 src/accounts_live_test.ts,0.153069,0.125712,0,0
 src/accounts_test.ts,0.199514,0.169130,0,0
