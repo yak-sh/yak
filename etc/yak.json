@@ -32,7 +32,6 @@
           "via": "ollama",
           "model": "qwen3-embedding:0.6b",
           "base": "https://ollama.yak.sh",
-          "key": { "env": "OLLAMA_API_KEY" },
           "dim": 384
         }
       }
