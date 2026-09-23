@@ -69,6 +69,10 @@ export type Dialect = {
   time: (colExpr: string, op: string, value: string, now: number) => Frag | null
   refEq: (colExpr: string, eids: string[], negate: boolean) => Frag
   refPresent: (colExpr: string, negate: boolean) => Frag
+  // Membership in a list of any length. A host caps the parameters one
+  // statement binds (a Durable Object's SQLite takes 100), and a list of eids
+  // is as long as its caller made it, so the list is one parameter.
+  among: (colExpr: string, vals: (string | number)[]) => Frag
 }
 
 let q = (name: string) => `"${name}"`
@@ -250,6 +254,10 @@ let edge = (c: string, op: string, s: Span): Frag => {
 
 export let sqlite: Dialect = {
   refCol: (comp, prop) => `${q(comp)}.${q(prop)}`,
+  among: (c, vals) => ({
+    sql: `${c} in (select value from json_each(?))`,
+    params: [JSON.stringify(vals)],
+  }),
   name: 'sqlite',
   spine: '"entity"',
   membership: '"entity"."eid" as eid',

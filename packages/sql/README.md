@@ -220,13 +220,14 @@ stay within the engine's compound-query limit.
 ## Naming entities
 
 `.eid=` and `.num=` accept sets. `@yaks/id` also parses display ids such as
-`B-7`: the letter is a label, and 7 is the entity number.
+`B-7`: the letter is a label, and 7 is the entity number. A set binds as one
+JSON parameter however long it is, since a host caps how many parameters one
+statement binds (a Durable Object's SQLite takes 100).
 
 ```text
-.eid=a3f1       "entity"."eid" in (?)
-.eid=a3f1,b7c2  "entity"."eid" in (?, ?)
-.num=3,4       "entity"."num" in (?, ?)
-.eid=B-7       "entity"."num" in (?)
+.eid=a3f1,b7c2  "entity"."eid" in (select value from json_each(?))  ["a3f1","b7c2"]
+.num=3,4       "entity"."num" in (select value from json_each(?))  [3,4]
+.eid=B-7       "entity"."num" in (select value from json_each(?))  [7]
 ```
 
 `@yaks/match` applies the same identity predicates to a bundle: one entity's

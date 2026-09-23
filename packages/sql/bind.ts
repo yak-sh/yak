@@ -309,17 +309,13 @@ let lowerScalar = (
   return null
 }
 
-// The entity table's identity columns as one set lookup:
-// `"entity"."eid" in (?, ?)`, with a second term for the numbers a `.num=` or a
-// human-readable id named. An operand list that names nothing at all compiles
-// to a constant false.
+// The entity table's identity columns as one set lookup, the list bound as one
+// parameter however long it is (the dialect's `among`), with a second term for
+// the numbers a `.num=` or a human-readable id named. An operand list that
+// names nothing at all compiles to a constant false.
 let inSet = (ctx: Ctx, set: Identity): Frag => {
-  let arm = (prop: string, vals: Bind[]): Frag => ({
-    sql: `${ctx.d.col('entity', prop, ctx.v)} in (${
-      vals.map(() => '?').join(', ')
-    })`,
-    params: vals,
-  })
+  let arm = (prop: string, vals: Bind[]): Frag =>
+    ctx.d.among(ctx.d.col('entity', prop, ctx.v)!, vals)
   let arms = [
     ...set.eids.length ? [arm('eid', set.eids)] : [],
     ...set.nums.length ? [arm('num', set.nums)] : [],

@@ -341,33 +341,40 @@ Deno.test('.after over a derived order reads the anchor through the hook', () =>
   )
 })
 
+let among = (col: string) =>
+  `"entity"."${col}" in (select value from json_each(?))`
+
 Deno.test('.eid names entities as one set lookup on the spine', () => {
   let one = compile(parse('.eid=a3f1'), v)
-  assert(one.sql.includes('"entity"."eid" in (?)'), one.sql)
-  assertEquals(one.params, ['a3f1'])
+  assert(one.sql.includes(among('eid')), one.sql)
+  assertEquals(one.params, ['["a3f1"]'])
   let many = compile(parse('.eid=a3f1,b7c2'), v)
-  assert(many.sql.includes('"entity"."eid" in (?, ?)'), many.sql)
-  assertEquals(many.params, ['a3f1', 'b7c2'])
+  assert(many.sql.includes(among('eid')), many.sql)
+  assertEquals(many.params, ['["a3f1","b7c2"]'])
   // the explicit form routes to the same place
   assert(compile(parse('.entity.eid=a3f1'), v).sql.includes(one.sql.slice(-40)))
+  // a list binds one parameter however long it is: a Durable Object's SQLite
+  // refuses a statement binding more than 100
+  let ids = Array.from({ length: 150 }, (_, i) => `e${i}`)
+  assertEquals(compile(parse(`.eid=${ids}`), v).params, [JSON.stringify(ids)])
 })
 
 Deno.test('.num and a human id name entities by their spine number', () => {
   let nums = compile(parse('.num=3,4'), v)
-  assert(nums.sql.includes('"entity"."num" in (?, ?)'), nums.sql)
-  assertEquals(nums.params, [3, 4])
+  assert(nums.sql.includes(among('num')), nums.sql)
+  assertEquals(nums.params, ['[3,4]'])
   // `T-7` is the entity numbered 7 — the letter is display, the number is
   // identity — so a human id lands on the num arm
   let human = compile(parse('.eid=T-7'), v)
-  assert(human.sql.includes('"entity"."num" in (?)'), human.sql)
-  assertEquals(human.params, [7])
+  assert(human.sql.includes(among('num')), human.sql)
+  assertEquals(human.params, ['[7]'])
   // a mixed list asks both arms
   let both = compile(parse('.eid=a3f1,T-7'), v)
   assert(
-    both.sql.includes('("entity"."eid" in (?) or "entity"."num" in (?))'),
+    both.sql.includes(`(${among('eid')} or ${among('num')})`),
     both.sql,
   )
-  assertEquals(both.params, ['a3f1', 7])
+  assertEquals(both.params, ['["a3f1"]', '[7]'])
 })
 
 Deno.test('an OR compiles as a union of indexed selections of spine ids', () => {
