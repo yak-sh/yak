@@ -25,9 +25,9 @@ Deno.test('the facet subpaths say the harness once, and one declaration reaches 
   const h = open(':memory:')
   // The rules over that graph are `@yaks/harness/rules`, the very ones `open`
   // built it with: blobs, transcripts, edges, tasks, the portfolio they are
-  // filed in, and the programs a session runs.
+  // filed in, the programs a session runs, and the secrets it signs in with.
   assertEquals(
-    rules({ vocab: h.vocab, sql: driver(h.db) }).map((p) => p.name),
+    rules({ vocab: h.vocab, sql: driver(h.db), config: {} }).map((p) => p.name),
     [
       '@yaks/blob',
       '@yaks/session',
@@ -35,6 +35,7 @@ Deno.test('the facet subpaths say the harness once, and one declaration reaches 
       '@yaks/task',
       '@yaks/project',
       '@yaks/process',
+      '@yaks/secrets',
     ],
   )
   await h.g.apply([{ entity: { eid: 'session-one' }, session: { id: 'one' } }])

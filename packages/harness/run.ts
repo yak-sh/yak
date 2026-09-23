@@ -252,7 +252,7 @@ export let agent = (opts: Opts = {}): Agent => {
       images: configuredImages(opts.images),
       web: opts.web ?? Deno.env.get('HARNESS_WEB') != '0',
     })
-  const providerAuth = providerAuthorization(h.g)
+  const providerAuth = providerAuthorization(h)
   const implementations = {
     openai: model,
     openrouter: openrouter({ key: providerAuth.key }),
@@ -265,7 +265,7 @@ export let agent = (opts: Opts = {}): Agent => {
   // name, and a server reconfigured mid-ask serves that name from somewhere
   // else: the calls an ask issued run on the handlers it was offered.
   const offered = new Map<Eid, Tool[]>()
-  const mcp = mcpTools(h.g)
+  const mcp = mcpTools(h)
   h.fx.created('mcp_server', mcp.refresh).changed('mcp_server', mcp.refresh)
     .removed('mcp_server', mcp.refresh)
   // A child's own checkout is garbage the moment its session is over: no

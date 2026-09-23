@@ -137,7 +137,7 @@ Deno.test('tool isError uses expected tool failure rather than a defect', async 
       url: `http://127.0.0.1:${server.addr.port}/mcp`,
     },
   }])
-  const tools = mcpTools(h.g)
+  const tools = mcpTools(h)
   try {
     const [tool] = await tools.snapshot()
     await assertRejects(async () => await tool.run({}), Error, 'mockup/1')
@@ -181,7 +181,7 @@ Deno.test('remote images use external artifacts while large text retains bounded
       url: `http://127.0.0.1:${server.addr.port}/mcp`,
     },
   }])
-  const tools = mcpTools(h.g)
+  const tools = mcpTools(h)
   try {
     await h.g.apply([{ entity: { eid: 's' }, session: {} }, {
       entity: { eid: 'call' },

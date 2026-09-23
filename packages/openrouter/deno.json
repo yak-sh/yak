@@ -4,7 +4,6 @@
   "description": "Implements the model interface over OpenRouter's streaming Responses API, reusing the portable transport from @yaks/openai without its credentials or native tools.",
   "exports": {
     ".": "./mod.ts",
-    "./host": "./host.ts",
     "./oauth": "./oauth.ts",
     "./vocab": "./vocab.ts"
   },

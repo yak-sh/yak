@@ -22,6 +22,17 @@ export type AuthorizationRecord = {
 }
 /** Implementations serialize update for the whole read/refresh/write operation. */
 export type AuthorizationStore = Store<AuthorizationRecord>
+/** Refuse a kept record whose tokens are not a token set — the check a store
+ * of these records runs on every read (@yaks/secrets `records`). */
+export const checkRecord = (record: AuthorizationRecord): void => {
+  if (
+    record.tokens &&
+    (typeof record.tokens.access_token !== 'string' ||
+      typeof record.tokens.token_type !== 'string' ||
+      (record.tokens.refresh_token != null &&
+        typeof record.tokens.refresh_token !== 'string'))
+  ) throw new Error('Invalid OAuth credential record')
+}
 export type AuthorizationOptions = {
   serverUrl: string
   redirectUrl?: string

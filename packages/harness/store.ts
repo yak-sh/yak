@@ -34,6 +34,7 @@ import { type Graph, graph } from '@yaks/graph'
 import { reapLeases } from '@yaks/session'
 import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
 import { type Vocab } from '@yaks/vocab'
+import { type Vault, vaultOf } from '@yaks/secrets'
 
 import { derived } from './vocab.ts'
 import { named, renamed } from './named.ts'
@@ -56,6 +57,8 @@ export type Harness = {
   g: Graph
   fx: Effects
   vocab: Vocab
+  /** where this graph's secrets are kept — its sign-ins among them */
+  vault: Vault
   migrations: ReturnType<typeof migrations>
   close: () => void
 }
@@ -269,11 +272,15 @@ export let open = (path: string = dbPath()): Harness => {
     write: (b) => g.apply(b, { trusted: true }),
     report: (error) => diagnostics().report(error, { phase: 'effect' }),
   })
+  // The config a composed host would be handed, which is what says where this
+  // graph's secrets are kept (@yaks/secrets `vaultOf`): the plugin sealing
+  // them and the code reading them back share it.
+  let config = { db: path }
   let g = graph({
     storage: store,
     vocab,
     plugins: [
-      ...rules({ vocab, sql }),
+      ...rules({ vocab, sql, config }),
       fx,
     ],
   })
@@ -285,6 +292,7 @@ export let open = (path: string = dbPath()): Harness => {
     g,
     fx,
     vocab,
+    vault: vaultOf(config),
     migrations: migration,
     close: () => db.close(),
   }

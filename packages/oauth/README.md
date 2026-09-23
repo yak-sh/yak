@@ -14,9 +14,11 @@ Import paths:
 - `pkce()` from `@yaks/oauth`: a random verifier and its S256 challenge for
   Proof Key for Code Exchange (PKCE). S256 means the challenge is the URL-safe
   Base64 encoding of the verifier's SHA-256 hash.
-- `fileAuthorizationStore(path, validate?)` from `@yaks/oauth/host`: a private
-  JSON implementation with a file lock, atomic replacement, and optional record
-  validation.
+
+The implementation is [@yaks/secrets](../secrets)'
+`records(graph, vault,
+prefix, check?)`: each record is a secret, so the graph
+holds its name and a sentinel and the vault holds its contents.
 
 ## Example
 
@@ -32,24 +34,21 @@ const { verifier, challenge } = await pkce()
 
 `AuthorizationStore<R>.read(key)` returns a record or `undefined`.
 `update(key, fn)` passes a mutable record to an asynchronous callback and
-returns its result. The file implementation serializes updates with a file lock
-and saves mutations even if the callback throws. Callers must validate a
-response before mutating the record if failure should leave it unchanged.
+returns its result. An implementation serializes updates across every writer and
+saves mutations even if the callback throws. Callers must validate a response
+before mutating the record if failure should leave it unchanged.
 
 ## Storage and security
 
-The store contains sensitive values and is not a graph or synchronization store.
-Files use private permissions but are plaintext. The caller supplies a dedicated
-path and owns the lifecycle. The store does not open browsers, accept HTTP
-callbacks, select a provider, or execute token exchanges.
+The store contains sensitive values. The store does not open browsers, accept
+HTTP callbacks, select a provider, or execute token exchanges.
 
 `@yaks/mcp-client/oauth` retains MCP discovery, client registration and refresh.
 `@yaks/openrouter/oauth` handles OpenRouter's code-to-API-key exchange. Both use
 the same private storage and attempt lifetime; they do not pretend to implement
-identical protocols. In-flight verifiers remain in memory, not these files.
+identical protocols. In-flight verifiers remain in memory, never in the store.
 
 ## Compatibility
 
-The root module uses Web Crypto and `btoa` (modern Deno, Node, browsers, and
-Workers). `./host` uses Deno filesystem and file-lock APIs; it requires Deno and
-read/write permissions for the dedicated store directory.
+The module uses Web Crypto and `btoa` (modern Deno, Node, browsers, and
+Workers).

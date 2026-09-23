@@ -13,7 +13,6 @@ Entry points:
 
 - `@yaks/mcp-client`: connections, discovery, calls, naming, and error types.
 - `@yaks/mcp-client/oauth`: browser-based OAuth authorization.
-- `@yaks/mcp-client/host`: a local JSON-file OAuth store for Deno applications.
 - `@yaks/mcp-client/graph`: optional graph-backed server configuration.
 - `@yaks/mcp-client/vocab`: the graph vocabulary document alone.
 
@@ -116,12 +115,12 @@ pre-registered public `clientId` or `clientMetadataUrl` can replace dynamic
 registration.
 
 ```ts
-import { authorization } from '@yaks/mcp-client/oauth'
-import { fileAuthorizationStore } from '@yaks/mcp-client/host'
+import { authorization, checkRecord } from '@yaks/mcp-client/oauth'
+import { records } from '@yaks/secrets'
 
 const login = authorization({
   serverUrl: 'https://example.com/mcp',
-  store: fileAuthorizationStore('/home/me/.yaks/mcp-auth.json'),
+  store: records(graph, vault, 'mcp ', checkRecord),
 })
 const { url } = await login.begin()
 displayPrivately(url) // application UI; do not put this in an agent conversation
@@ -144,11 +143,11 @@ known expiry; failed refresh requires sign-in again. Early server revocation may
 produce an error, and mutations are not retried with another credential.
 
 `AuthorizationStore` defines `read` and serialized `update` operations.
-`fileAuthorizationStore(path)` stores a versioned JSON document with private
-file permissions, cross-process advisory locking, and atomic replacement. The
-file is not encrypted. Tokens and expiry stay in that private record; no OAuth
-graph vocabulary is introduced. Applications can implement the interface with a
-secret store. Access tokens belong only in trusted request code.
+[@yaks/secrets](../secrets)' `records` implements it: each record is a secret,
+so the graph holds its name and a sentinel, the vault holds the tokens and
+expiry, and an update holds the secret against every other writer while it
+refreshes. `checkRecord` refuses a kept record that is not a token set. Access
+tokens belong only in trusted request code.
 
 Configure only trusted MCP servers. OAuth discovery and token requests use
 bounded deadlines, refuse redirects, and require HTTPS except on loopback

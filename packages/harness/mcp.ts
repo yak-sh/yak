@@ -1,11 +1,13 @@
 /** Host composition: shared MCP connections and the existing yak credential store. */
 import { graphMCP } from './mcp_registry.ts'
-import { type Graph, toolName } from '@yaks/graph'
+import { toolName } from '@yaks/graph'
+import type { Harness } from './store.ts'
 import { type Tool, type ToolContext, ToolError } from '@yaks/session'
 import { images } from './images.ts'
 
-export const mcpTools = (g: Graph) => {
-  const connections = graphMCP(g)
+export const mcpTools = (h: Pick<Harness, 'g' | 'vault'>) => {
+  const g = h.g
+  const connections = graphMCP(h)
   const store = images({}).store
   const render = async (
     value: unknown,

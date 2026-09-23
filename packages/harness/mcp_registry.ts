@@ -1,5 +1,5 @@
 /** Graph-owned definitions; runtime handles are refreshed before discovery or authorization. */
-import type { Graph } from '@yaks/graph'
+import type { Harness } from './store.ts'
 import { checkNamespaces, checkToolNames, type Server } from '@yaks/mcp-client'
 import type { Remote } from './mcp_auth.ts'
 import { graphToolName, serverOf } from '@yaks/mcp-client/graph'
@@ -7,11 +7,14 @@ import {
   authorizedMCP,
   type MCPAuthAction,
   type MCPAuthReply,
+  mcpStore,
 } from './mcp_auth.ts'
 
 type Handle = ReturnType<typeof authorizedMCP>
 type Live = { signature: string; label: string; server: Server; handle: Handle }
-export const graphMCP = (g: Graph) => {
+export const graphMCP = (h: Pick<Harness, 'g' | 'vault'>) => {
+  const g = h.g
+  const store = mcpStore(h)
   const live = new Map<string, Live>()
   // Already-admitted calls retain their original transport. All handles drain at host close.
   const retired: Handle[] = []
@@ -59,7 +62,7 @@ export const graphMCP = (g: Graph) => {
             signature,
             label: config.label,
             server: config.server,
-            handle: authorizedMCP([config.server]),
+            handle: authorizedMCP([config.server], store),
           })
         } catch (e) {
           errors.set(

@@ -1,8 +1,8 @@
 {
   "name": "@yaks/oauth",
   "version": "0.1.0",
-  "description": "Shared OAuth building blocks: a serialized store for private authorization records, PKCE verifiers and challenges, and correlated attempts with deadlines.",
-  "exports": { ".": "./mod.ts", "./host": "./host.ts" },
+  "description": "Shared OAuth building blocks: the interface for a serialized store of private authorization records, PKCE verifiers and challenges, and correlated attempts with deadlines.",
+  "exports": { ".": "./mod.ts" },
   "license": "Apache-2.0",
   "imports": { "@std/assert": "jsr:@std/assert@^1.0.0" },
   "publish": { "exclude": ["**/*_test.ts"] }

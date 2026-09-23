@@ -5,12 +5,17 @@ import {
   MCPAuthorizationRequired,
   type Server,
 } from '@yaks/mcp-client'
-import { type Authorization, authorization } from '@yaks/mcp-client/oauth'
-import { fileAuthorizationStore } from '@yaks/mcp-client/host'
+import {
+  type Authorization,
+  authorization,
+  type AuthorizationStore,
+  checkRecord,
+} from '@yaks/mcp-client/oauth'
+import { records } from '@yaks/secrets'
 import { tokenFor } from '@yaks/cli'
 import type { Tool } from '@yaks/graph'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
-import { home } from './paths.ts'
+import type { Harness } from './store.ts'
 
 /** A remote tool wearing the connection that listed it: `reply` is that
  * server's own endpoint, recorded, so an issued call never moves to a transport
@@ -26,11 +31,15 @@ export type MCPAuthReply = {
   redirectUrl?: string
   message?: string
 }
+/** Where a harness keeps its MCP sign-ins: secrets in its own graph, one per
+ * server (@yaks/secrets `records`). */
+export const mcpStore = (h: Pick<Harness, 'g' | 'vault'>): AuthorizationStore =>
+  records(h.g, h.vault, 'mcp ', checkRecord)
+
 export const authorizedMCP = (
   servers: Server[],
-  path = Deno.env.get('HARNESS_MCP_AUTH') ?? `${home()}/mcp-auth.json`,
+  store: AuthorizationStore,
 ) => {
-  const store = fileAuthorizationStore(path)
   const auths = new Map<string, Authorization>()
   const connections = new Map<string, Connection>()
   const challenges = new Map<

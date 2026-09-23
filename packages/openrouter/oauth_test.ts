@@ -1,8 +1,10 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { AuthorizationStore } from '@yaks/oauth'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { ramVault, records, sealed, secrets, secretsDoc } from '@yaks/secrets'
 import { authorization, type Record, STORE_KEY } from './oauth.ts'
-import { fileAuthorizationStore } from '@yaks/oauth/host'
-import { fileAuthorization } from './host.ts'
 const memory = (): AuthorizationStore<Record> => {
   const records = new Map<string, Record>()
   return {
@@ -84,19 +86,14 @@ Deno.test('cancel/expiry prevents late save and failed exchange is never replaye
   await assertRejects(() => flow.complete(next.redirectUrl + '?code=c'))
   assertEquals(calls, 1)
 })
-Deno.test('local OpenRouter key store is private, atomic, and reusable after restart', async () => {
-  const dir = await Deno.makeTempDir()
-  try {
-    const path = dir + '/auth.json'
-    const store = fileAuthorizationStore<Record>(path)
-    await store.update(STORE_KEY, (r) => {
-      r.api_key = 'provisioned'
-      return Promise.resolve()
-    })
-    assertEquals(await fileAuthorization(path).token(), 'provisioned')
-    assertEquals((await Deno.stat(path)).mode! & 0o777, 0o600)
-    assert(!(await Deno.readTextFile(path)).includes('code_verifier'))
-  } finally {
-    await Deno.remove(dir, { recursive: true })
-  }
+Deno.test('a key kept as a secret is read back by a fresh authorization', async () => {
+  const vocab = loadVocab([secretsDoc])
+  const vault = ramVault()
+  const g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault)] })
+  await g.apply([
+    sealed(`openrouter ${STORE_KEY}`, '{"api_key":"provisioned"}'),
+  ])
+  const store = records<Record>(g, vault, 'openrouter ')
+  assertEquals(await authorization({ store }).token(), 'provisioned')
+  assert(!JSON.stringify(await g.read('.secret')).includes('provisioned'))
 })

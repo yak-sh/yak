@@ -45,11 +45,10 @@ Restarting requires beginning authorization again.
 
 OpenRouter exchanges the code for an **API key**, not an OAuth access/refresh
 pair. That key is stored privately; there is no refresh token and no inferred
-expiry. `@yaks/openrouter/host` supplies `fileAuthorization(path)`, using the
-same private, locked JSON file storage as MCP authorization. Files are plaintext
-with 0600 permissions and atomic replacement; they are not encrypted. Revoking
-the key is an OpenRouter account action. Authorization never initiates
-generation.
+expiry. Pass the same store MCP authorization uses, [@yaks/secrets](../secrets)'
+`records(graph, vault, 'openrouter ')`: the key is a secret, kept in the vault
+with a sentinel in the graph. Revoking the key is an OpenRouter account action.
+Authorization never initiates generation.
 
 The common store and expiring-attempt types live in `@yaks/oauth`. MCP discovery
 and registration remain in `@yaks/mcp-client`; OpenRouter key exchange stays

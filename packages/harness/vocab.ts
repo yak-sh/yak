@@ -34,6 +34,7 @@ import {
 } from '@yaks/vocab'
 import type { Derived } from '@yaks/sql'
 import { checkoutDoc } from '@yaks/git/vocab'
+import { secretsDoc } from '@yaks/secrets/vocab'
 import doc from './vocab.json' with { type: 'json' }
 
 const { home, ...core } = doc.$defs
@@ -44,7 +45,8 @@ export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
  * transcript is made of (@yaks/session), what it asks for and what answers
  * (@yaks/tools, @yaks/context), what serves it (@yaks/model, @yaks/openai),
  * what a reply carries (@yaks/blob), the programs it starts (@yaks/process),
- * and the work it is doing (@yaks/doc, @yaks/edge, @yaks/task) — over
+ * the tokens it signs in with (@yaks/secrets), and the work it is doing
+ * (@yaks/doc, @yaks/edge, @yaks/task) — over
  * @yaks/kernel's `entity` table, which is where `entity` and the two stamps
  * live, and its marks, which is where `archived` lives: a harness archives a
  * session, it does not own the component for putting something away.
@@ -75,6 +77,7 @@ export let docs: VocabDoc[] = [
   processDoc,
   projectDoc,
   taskDoc,
+  secretsDoc,
 ]
 
 /** The JSON Schema keywords those documents use. */

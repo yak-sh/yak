@@ -4,7 +4,6 @@
   "exports": {
     ".": "./mod.ts",
     "./oauth": "./oauth.ts",
-    "./host": "./host.ts",
     "./graph": "./graph.ts",
     "./vocab": "./vocab.ts"
   },

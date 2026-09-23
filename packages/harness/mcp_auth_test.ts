@@ -4,7 +4,7 @@ import { h } from 'preact'
 import { mount } from '../tui/harness.ts'
 import { MCPAuthPanel } from './MCPAuthPanel.ts'
 import { frontend } from './frontend.ts'
-import { authorizedMCP } from './mcp_auth.ts'
+import { authorizedMCP, mcpStore } from './mcp_auth.ts'
 import type { UIAgent } from './panels.ts'
 import { fixture } from '../mcp-client/testing.ts'
 import { remote } from './remote.ts'
@@ -46,8 +46,6 @@ Deno.test('authorization UI captures pasted callback privately, preserving draft
 
 Deno.test('local HTTP OAuth exchange reconnects MCP discovery and works through worker controls', async () => {
   const dir = await Deno.makeTempDir()
-  const old = Deno.env.get('HARNESS_MCP_AUTH')
-  Deno.env.set('HARNESS_MCP_AUTH', dir + '/auth.json')
   let origin = '', exchanges = 0
   const f = fixture()
   const server = Deno.serve(
@@ -113,9 +111,12 @@ Deno.test('local HTTP OAuth exchange reconnects MCP discovery and works through 
     )
     assert(reply.message!.includes('Connected'))
     assertEquals(exchanges, 1)
+    // Another process over the same graph finds the sign-in in the vault
+    // beside it, and nothing of the exchange that produced it.
+    const again = open(db)
     const local = authorizedMCP(
       [{ name: 'site', url: origin + '/mcp' }],
-      dir + '/auth.json',
+      mcpStore(again),
     )
     try {
       const tools = await local.tools()
@@ -123,17 +124,16 @@ Deno.test('local HTTP OAuth exchange reconnects MCP discovery and works through 
       assert(!JSON.stringify(tools).includes('private-access'))
     } finally {
       await local.close()
+      again.close()
     }
-    assert(
-      !(await Deno.readTextFile(dir + '/auth.json')).includes(
-        'authorization-code',
-      ),
-    )
+    const kept = [...Deno.readDirSync(dir + '/secrets')]
+      .filter((e) => e.name.endsWith('.json'))
+      .map((e) => Deno.readTextFileSync(dir + '/secrets/' + e.name))
+    assert(kept.some((text) => text.includes('private-access')))
+    assert(!kept.some((text) => text.includes('authorization-code')))
   } finally {
     await backend.close()
     await server.shutdown()
-    if (old == null) Deno.env.delete('HARNESS_MCP_AUTH')
-    else Deno.env.set('HARNESS_MCP_AUTH', old)
     await Deno.remove(dir, { recursive: true })
   }
 })

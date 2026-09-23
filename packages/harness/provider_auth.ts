@@ -1,13 +1,12 @@
 /** Provider authorization shares the MCP panel's private browser/paste transport. */
-import { fileAuthorization } from '@yaks/openrouter/host'
-import type { Graph } from '@yaks/graph'
+import { authorization } from '@yaks/openrouter/oauth'
+import { records } from '@yaks/secrets'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
-import { home } from './paths.ts'
+import type { Harness } from './store.ts'
 export const OPENROUTER_AUTH = 'OpenRouter (model provider)'
-export const providerAuthorization = (g: Graph) => {
-  const path = Deno.env.get('OPENROUTER_AUTH_FILE') ??
-    `${home()}/openrouter-auth.json`
-  const auth = fileAuthorization(path)
+export const providerAuthorization = (h: Pick<Harness, 'g' | 'vault'>) => {
+  const g = h.g
+  const auth = authorization({ store: records(g, h.vault, 'openrouter ') })
   return {
     cancel: auth.cancel,
     key: async (): Promise<string> => {
