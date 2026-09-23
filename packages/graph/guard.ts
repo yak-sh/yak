@@ -68,7 +68,7 @@ export let guard = (
         if (!vocab.comp(comp)) {
           throw new Refused(`unknown component in $was: ${comp}`)
         }
-        let declared = new Set(vocab.columns(comp))
+        let declared = new Set(vocab.props(comp))
         for (let [col, want] of Object.entries(cols)) {
           if (!declared.has(col)) {
             throw new Refused(`unknown column in $was: ${comp}.${col}`)

@@ -28,7 +28,7 @@ let columns = (sql: Driver, table: string): string[] =>
 export let pointers = (sql: Driver, vocab: Vocab): [string, string][] => {
   let all = tables(sql)
   let out = new Set<string>()
-  for (let [comp, prop] of vocab.refCols()) {
+  for (let [comp, prop] of vocab.refProps()) {
     if (all.includes(comp) && columns(sql, comp).includes(prop)) {
       out.add(JSON.stringify([comp, prop]))
     }

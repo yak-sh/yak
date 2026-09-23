@@ -24,7 +24,7 @@ Deno.test('the components this package ships', () => {
 })
 
 Deno.test('status is readable and routable, and nobody can write it', () => {
-  let status = team.column('task', 'status')!
+  let status = team.prop('task', 'status')!
   assertEquals(status.computed, true)
   assertEquals(status.values, ['cancelled', 'done', 'open'])
   // The vocabulary is a file now, so the ladder and the enum are two
@@ -37,11 +37,11 @@ Deno.test('status is readable and routable, and nobody can write it', () => {
 
 Deno.test('a board is a query — there is no membership column anywhere', () => {
   assertEquals(team.comp('board')!.writable, ['query'])
-  assertEquals(team.column('board', 'query')!.scalar, 'query')
+  assertEquals(team.prop('board', 'query')!.scalar, 'query')
   // nothing in the vocabulary points a task at a board, in either direction
-  for (let [comp, prop] of team.refCols()) {
+  for (let [comp, prop] of team.refProps()) {
     assert(
-      team.column(comp, prop)!.ref != 'board',
+      team.prop(comp, prop)!.ref != 'board',
       `${comp}.${prop} references a board — membership must never be stored`,
     )
   }
@@ -56,15 +56,15 @@ Deno.test('the two relations are declared through @yaks/edge', () => {
 
 Deno.test('the marks keep their author as history; a project only detaches', () => {
   for (let comp of ['completed', 'cancelled']) {
-    assertEquals(team.column(comp, 'by')!.death, 'keep')
+    assertEquals(team.prop(comp, 'by')!.death, 'keep')
   }
-  assertEquals(team.column('filed', 'project')!.death, 'detach')
-  assertEquals(team.column('filed', 'project')!.ref, 'project')
+  assertEquals(team.prop('filed', 'project')!.death, 'detach')
+  assertEquals(team.prop('filed', 'project')!.ref, 'project')
 })
 
 Deno.test('blocked carries a reason and is not a status', () => {
   assertEquals(team.comp('blocked')!.writable, ['on'])
-  assert(!team.column('task', 'status')!.values!.includes('blocked'))
+  assert(!team.prop('task', 'status')!.values!.includes('blocked'))
 })
 
 Deno.test('a bare task has no writable columns; filing is optional and routes alone', () => {
@@ -77,7 +77,7 @@ Deno.test('a bare task has no writable columns; filing is optional and routes al
   ])
   for (let prop of ['project', 'priority', 'domain', 'assignee']) {
     assertEquals(team.route(prop), { comp: 'filed', prop })
-    assertEquals(team.column('task', prop), undefined)
+    assertEquals(team.prop('task', prop), undefined)
   }
-  assertEquals(team.column('filed', 'assignee')!.death, 'detach')
+  assertEquals(team.prop('filed', 'assignee')!.death, 'detach')
 })

@@ -98,11 +98,11 @@ export let prefixed = (pre: string, at: At = q): Dialect => {
     // archetype yet, and a plan that matched on one would not see them.
     archetype: undefined,
     col: (comp, prop, v) => {
-      if (comp == 'entity' && v.column(comp, prop)?.category != 'ref') {
+      if (comp == 'entity' && v.prop(comp, prop)?.category != 'ref') {
         return `${q(pre + 'entity')}.${q(prop)}`
       }
       if (prop == 'eid') return `${q(pre + comp)}."entity"`
-      let c = v.column(comp, prop)
+      let c = v.prop(comp, prop)
       if (!c) return null
       return c.category == 'ref'
         ? `(select __re.eid from ${at('entity')} __re where __re.id = ${
@@ -242,7 +242,7 @@ export let statement = (
       if (!hop?.prop) {
         throw new Error(`$${b.name} names no column: .${b.path.join('.')}`)
       }
-      let c = vocab.column(hop.comp, hop.prop)
+      let c = vocab.prop(hop.comp, hop.prop)
       if (!c) {
         throw new Error(`no column ${hop.comp}.${hop.prop} for $${b.name}`)
       }

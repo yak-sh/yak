@@ -187,15 +187,15 @@ Deno.test('nested views use the same registry, context and native source props',
       h(
         'div',
         null,
-        ctx.render?.('Form.Edit', { col: 'title', suffix: '!' }),
+        ctx.render?.('Form.Edit', { prop: 'title', suffix: '!' }),
       ),
   }
   let editor: ComponentRenderer<Ent> = {
     view: 'Edit',
-    match: parse('.column.type=string'),
-    Render: ({ e, comp, col, suffix, extra }) => {
+    match: parse('.prop.type=string'),
+    Render: ({ e, comp, prop, suffix, extra }) => {
       assertEquals(e === source, true)
-      assertEquals([comp, col, extra], ['doc', 'title', 'kept'])
+      assertEquals([comp, prop, extra], ['doc', 'title', 'kept'])
       return h('strong', null, e.title + suffix)
     },
   }

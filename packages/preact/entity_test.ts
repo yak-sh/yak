@@ -38,10 +38,10 @@ let registry = define([
   },
   {
     view: 'Edit',
-    match: parse('.column.type=string'),
+    match: parse('.prop.type=string'),
     render: (b, h, ctx) =>
       h('input', {
-        value: (b[ctx.comp!] as Record<string, unknown>)[ctx.col!],
+        value: (b[ctx.comp!] as Record<string, unknown>)[ctx.prop!],
       }),
   },
 ])
@@ -72,14 +72,14 @@ let source = () => {
   }
 }
 
-Deno.test('Entity mounts the selected view and passes context, including columns', () => {
+Deno.test('Entity mounts the selected view and passes context, including properties', () => {
   let Entity = entity({ registry, vocab, store: () => bundle('a', 'A page') })
   let m = mount(h(Entity, { eid: 'a', view: 'Board.Tile', suffix: '!' }))
   try {
     assertEquals(m.root.innerHTML, '<h2>A page!</h2>')
     m.update(h(Entity, { eid: 'a', view: 'Inline' }))
     assertEquals(m.root.innerHTML, '<em>A page</em>')
-    m.update(h(Entity, { eid: 'a', view: 'Edit', comp: 'doc', col: 'title' }))
+    m.update(h(Entity, { eid: 'a', view: 'Edit', comp: 'doc', prop: 'title' }))
     assertEquals(m.root.querySelector('input')?.value, 'A page')
     m.update(h(Entity, { eid: 'a', view: 'Unknown' }))
     assertEquals(m.root.innerHTML, '')

@@ -183,7 +183,7 @@ export let liveClient = (opts: {
         for (let name of box.vocab.all) {
           coverage[name] = body || !bodyCols(name).length
             ? true
-            : box.vocab.columns(name).filter((p) => !bodyCols(name).includes(p))
+            : box.vocab.props(name).filter((p) => !bodyCols(name).includes(p))
         }
       }
       return [row.entity.eid, coverage]

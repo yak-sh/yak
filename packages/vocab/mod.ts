@@ -13,7 +13,7 @@
 //                keywords, and the loader carries them without interpreting
 //                them
 //   vocab.ts     loadVocab(docs) → Vocab: the query and routing API a storage
-//                binder (@yaks/sql) calls — column types, path routing,
+//                binder (@yaks/sql) calls — property types, path routing,
 //                kindOrder/kindOf, delete worklists, instance checks
 //   validate.ts  document validation: the storable profile, reserved names,
 //                additive-forever evolution

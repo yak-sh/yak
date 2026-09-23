@@ -67,6 +67,6 @@ Deno.test('a graph without the plugin refuses the request', () => {
 })
 
 Deno.test('a graph without the plugin has no num column at all', () => {
-  assertEquals(loadVocab([shop]).columns('entity'), [])
-  assertEquals(vocab.columns('entity'), ['num'])
+  assertEquals(loadVocab([shop]).props('entity'), [])
+  assertEquals(vocab.props('entity'), ['num'])
 })

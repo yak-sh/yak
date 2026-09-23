@@ -1,9 +1,9 @@
 // The runtime. `loadVocab(docs)` reads one or more JSON Schema vocabulary
 // documents into an in-memory `Vocab` and exposes the query and routing API a
-// storage binder (@yaks/sql) calls: what a column IS, how a dotted path routes
-// to {comp, prop} hops, the derived kindOrder and the kind an entity carries,
-// and whether an instance is well-formed. These are the same questions a
-// hand-generated set of types answers over one hardcoded vocabulary, answered
+// storage binder (@yaks/sql) calls: what a property IS, how a dotted path
+// routes to {comp, prop} hops, the derived kindOrder and the kind an entity
+// carries, and whether an instance is well-formed. These are the same questions
+// a hand-generated set of types answers over one hardcoded vocabulary, answered
 // here over a loaded document instead — parameterized, not hardcoded.
 //
 // This package declares zero components: the components you declare are an
@@ -12,7 +12,6 @@
 
 import type {
   Assoc,
-  Column,
   CompInfo,
   Composite,
   Death,
@@ -20,6 +19,7 @@ import type {
   Hop,
   Identity,
   Index,
+  Prop,
   PropSchema,
   Scalar,
   VocabDoc,
@@ -67,11 +67,11 @@ export class Ambiguous extends Error {
 // mistake rather than an override.
 let ADDABLE = ['component', 'extends', 'type', 'description', 'properties']
 
-// A component another document declares, with one plugin's columns added. The
-// spine is what this exists for: `entity` is declared once, and a plugin that
-// stores a value beside every entity (@yaks/id's number) adds its column
-// instead of declaring a second `entity`. A column the base already has is a
-// collision, not an override.
+// A component another document declares, with one plugin's properties added.
+// The spine is what this exists for: `entity` is declared once, and a plugin
+// that stores a value beside every entity (@yaks/id's number) adds its
+// property instead of declaring a second `entity`. A property the base already
+// has is a collision, not an override.
 let extended = (
   name: string,
   base: PropSchema | undefined,
@@ -85,7 +85,7 @@ let extended = (
   )
   if (stray.length) {
     throw new Error(
-      `'${name}' extends a component and may only add columns — drop ${
+      `'${name}' extends a component and may only add properties — drop ${
         stray.join(', ')
       }`,
     )
@@ -93,7 +93,7 @@ let extended = (
   let properties = { ...base.properties }
   for (let [prop, schema] of Object.entries(more.properties ?? {})) {
     if (prop in properties) {
-      throw new Error(`'${name}' already declares a '${prop}' column`)
+      throw new Error(`'${name}' already declares a '${prop}' property`)
     }
     properties[prop] = schema
   }
@@ -113,28 +113,28 @@ let carried = (
   return out
 }
 
-// The JSON types a column declares: one name, or the members of a union.
+// The JSON types a property declares: one name, or the members of a union.
 export let typesOf = (s: PropSchema): string[] =>
   Array.isArray(s.type) ? [...s.type] : s.type == null ? [] : [s.type]
 
-// A column whose value is a JSON value rather than a scalar: an object, an
+// A property whose value is a JSON value rather than a scalar: an object, an
 // array, or a union of types. It is stored as SQLite's binary JSON.
 export let jsonb = (s: PropSchema): boolean =>
   Array.isArray(s.type) || s.type == 'object' || s.type == 'array'
 
-// Every column says what it holds. A column with no `type` is refused rather
-// than read as text: the schema is what a reader expects back, and a guess is
-// not a promise.
+// Every property says what it holds. A property with no `type` is refused
+// rather than read as text: the schema is what a reader expects back, and a
+// guess is not a promise.
 export let TYPES = ['string', 'number', 'integer', 'boolean', 'object', 'array']
 let typed = (comp: string, prop: string, s: PropSchema): void => {
   if (typesOf(s).length) return
   throw new Error(
-    `${comp}.${prop} declares no type — a column says "type": ` +
+    `${comp}.${prop} declares no type — a property says "type": ` +
       `${TYPES.map((t) => `"${t}"`).join(', ')}, or a union of them`,
   )
 }
 
-// One property schema → the column it describes. The scalar type name is
+// One property schema → the property it describes. The scalar type name is
 // reconstructed from native JSON Schema (`type` + `format`), so a vocabulary
 // authored in plain JSON Schema round-trips to this compact type set.
 let scalarOf = (s: PropSchema): Scalar => {
@@ -150,7 +150,7 @@ let scalarOf = (s: PropSchema): Scalar => {
   return 'text'
 }
 
-// Whether a value is one of the JSON types a column declares. An integer is a
+// Whether a value is one of the JSON types a property declares. An integer is a
 // number too, as JSON Schema reads it.
 let holds = (types: string[], v: unknown): boolean => {
   let t = Array.isArray(v)
@@ -180,10 +180,10 @@ let jsonText = (value: unknown): boolean => {
 // native JSON Schema's way of stating the value has no fractional part — so
 // the store keeps it as one. A JSON value is SQLite's binary JSON, a blob.
 let affinityOf = (
-  category: Column['category'],
+  category: Prop['category'],
   scalar: Scalar | undefined,
   type: PropSchema['type'],
-): Column['affinity'] =>
+): Prop['affinity'] =>
   scalar == 'jsonb'
     ? 'blob'
     : category == 'ref' || scalar == 'bool' || type == 'integer'
@@ -209,15 +209,15 @@ let deathOf = (s?: string): Death | undefined =>
     ? s
     : undefined
 
-let columnOf = (
+let propOf = (
   comp: string,
   prop: string,
   s: PropSchema,
   extra: Set<string>,
   required: boolean,
-): Column => {
+): Prop => {
   typed(comp, prop, s)
-  let category: Column['category'] = s.ref != null
+  let category: Prop['category'] = s.ref != null
     ? 'ref'
     : s.enum != null
     ? 'enum'
@@ -258,12 +258,12 @@ export type Vocab = {
   all: string[] // every declared component name, alphabetical
   kinds: string[] // kindOrder: alphabetical, refined by `before`, topo-sorted
   comp: (name: string) => CompInfo | undefined
-  columns: (comp: string) => string[] // readable columns (writable ∪ stamped)
-  column: (comp: string, prop: string) => Column | undefined
+  props: (comp: string) => string[] // readable properties (writable ∪ stamped)
+  prop: (comp: string, prop: string) => Prop | undefined
   /** Declared indexes plus automatic reference indexes — see
    * {@link Index}. A storage adapter renders them; nothing else reads them. */
   indexes: (comp: string) => Index[]
-  /** The columns this component's entities are identified by — the tuple the
+  /** The properties this component's entities are identified by — the tuple the
    * id is derived from, in derivation order, or `[]` for the ordinary
    * component whose entities take a minted id. @yaks/graph does the
    * derivation. */
@@ -271,14 +271,14 @@ export type Vocab = {
   route: (prop: string) => { comp: string; prop: string }
   /** A dotted path → the hops it names. Pass `facet` when the predicate is the
    * bare presence test (`.name!`): a single segment naming a component is then
-   * a test for that component, even if a column of the same name would
-   * otherwise claim the bare name. A name no column claims is read as a
-   * component too, since a presence test needs no column schema. */
+   * a test for that component, even if a property of the same name would
+   * otherwise claim the bare name. A name no property claims is read as a
+   * component too, since a presence test needs no property schema. */
   aim: (path: string, facet?: boolean) => Hop[]
   assoc: (name: string) => Assoc | undefined
   kindOf: (has: Record<string, unknown>) => string
   deaths: (word: Death) => [string, string][]
-  refCols: () => [string, string][]
+  refProps: () => [string, string][]
   check: (
     comp: string,
     value: Record<string, unknown>,
@@ -287,20 +287,21 @@ export type Vocab = {
 }
 
 // The composite lists a component declares under one keyword, each entry read
-// to its columns and the columns it needs present. A boolean there is the
-// column form of the keyword misplaced, and means nothing about the whole
+// to its properties and the properties it needs present. A boolean there is
+// the property form of the keyword misplaced, and means nothing about the whole
 // table, so it reads as no list rather than as an error the meta-schema
 // already raises.
 export let composite = (
   c: Composite,
-): { cols: string[]; present?: string[] } => Array.isArray(c) ? { cols: c } : c
-let lists = (v: unknown): { cols: string[]; present?: string[] }[] =>
+): { props: string[]; present?: string[] } =>
+  Array.isArray(c) ? { props: c } : c
+let lists = (v: unknown): { props: string[]; present?: string[] }[] =>
   Array.isArray(v) ? (v as Composite[]).map(composite) : []
 
-// The columns a component's entities are identified by, from the two forms
-// that declare them: a column's own `identity` flag, or the component's list
-// when the identity spans several columns. The list wins when both are there,
-// because the list is what fixes the order, and the order is part of the
+// The properties a component's entities are identified by, from the two forms
+// that declare them: a property's own `identity` flag, or the component's list
+// when the identity spans several properties. The list wins when both are
+// there, because the list is what fixes the order, and the order is part of the
 // string the id is derived from.
 //
 // One tuple per component and never a list of them — `unique` may hold several
@@ -314,15 +315,15 @@ let identityOf = (comp: PropSchema | undefined): Identity => {
     .map(([prop]) => prop)
 }
 
-// A component's indexes, from the two forms that declare them: a column's own
-// `unique`/`index` flag is that one column's index, and the component's lists
-// are the composites. Column flags come first, in declaration order, then
-// the composites; a pair of columns declared twice is one index, unique if
+// A component's indexes, from the two forms that declare them: a property's own
+// `unique`/`index` flag is that one property's index, and the component's lists
+// are the composites. Property flags come first, in declaration order, then
+// the composites; a pair of properties declared twice is one index, unique if
 // either form asked for uniqueness. Every stored reference is indexed too,
 // unless it already leads a declared index (including a composite identity).
 let indexesOf = (
   comp: PropSchema | undefined,
-  cols: (prop: string) => Column | undefined,
+  read: (prop: string) => Prop | undefined,
 ): Index[] => {
   if (!comp) return []
   let out = new Map<string, Index>()
@@ -330,7 +331,7 @@ let indexesOf = (
     if (!names.length) return
     let key = names.join(',')
     let had = out.get(key)
-    let index: Index = { cols: names, unique: unique || !!had?.unique }
+    let index: Index = { props: names, unique: unique || !!had?.unique }
     // The narrower form wins: an index asked for over present rows only stays
     // partial even where the plain tuple was also declared.
     let where = present ?? had?.present
@@ -338,32 +339,32 @@ let indexesOf = (
     out.set(key, index)
   }
   for (let [prop, s] of Object.entries(comp.properties ?? {})) {
-    // A computed column has no cell to index.
-    if (cols(prop)?.computed !== false) continue
+    // A computed property has no cell to index.
+    if (read(prop)?.computed !== false) continue
     if (s.unique === true) add([prop], true)
     else if (s.index === true) add([prop], false)
   }
-  for (let c of lists(comp.unique)) add(c.cols, true, c.present)
-  for (let c of lists(comp.index)) add(c.cols, false, c.present)
+  for (let c of lists(comp.unique)) add(c.props, true, c.present)
+  for (let c of lists(comp.index)) add(c.props, false, c.present)
   // An identity is unique by construction — two rows sharing the value would
   // be one entity — so the index states what the derivation already
   // guarantees, and a store that somehow held two rejects the second one.
-  add(identityOf(comp).filter((p) => cols(p)?.computed === false), true)
-  let leading = new Set([...out.values()].map((i) => i.cols[0]))
+  add(identityOf(comp).filter((p) => read(p)?.computed === false), true)
+  let leading = new Set([...out.values()].map((i) => i.props[0]))
   for (let prop of Object.keys(comp.properties ?? {})) {
-    let col = cols(prop)
-    if (col && !col.computed && col.category == 'ref' && !leading.has(prop)) {
+    let p = read(prop)
+    if (p && !p.computed && p.category == 'ref' && !leading.has(prop)) {
       add([prop], false)
     }
   }
   return [...out.values()]
 }
 
-// The spine component, and the identity column no vocabulary declares. A
+// The spine component, and the identity property no vocabulary declares. A
 // document declares what `entity` stores beside it (the number a store mints);
 // the `eid` is built in — every entity has one — so the loader routes it
 // (`.eid=`, `.entity.eid=`) rather than making each vocabulary re-declare it.
-// It stays out of `columns()` on purpose: an id is not prose and has no column
+// It stays out of `props()` on purpose: an id is not prose and has no column
 // of its own, so it never reaches a text index, an embedding, or a component's
 // DDL.
 let SPINE = 'entity'
@@ -373,10 +374,10 @@ let EID = 'eid'
 // `doc has title (text), body (body)`. An error naming only what it failed to
 // parse teaches nothing.
 let shapeOf = (v: Vocab, comp: string): string => {
-  let cols = v.columns(comp)
-  if (!cols.length) return `${comp} has no columns`
-  let said = cols.map((p) => {
-    let c = v.column(comp, p)!
+  let props = v.props(comp)
+  if (!props.length) return `${comp} has no properties`
+  let said = props.map((p) => {
+    let c = v.prop(comp, p)!
     let t = c.category == 'enum'
       ? c.values!.join('|')
       : c.category == 'ref'
@@ -402,9 +403,9 @@ export let syncOf = (v: Vocab, comp: string): Sync =>
 let STRINGS: (Scalar | undefined)[] = ['text', 'time', 'url', 'query', 'json']
 
 /**
- * A patch with each string column's value cast to a string: a number or a
+ * A patch with each string property's value cast to a string: a number or a
  * boolean becomes its text, an object or an array its JSON text, and a null
- * still clears the column. The schema says what a reader gets back, and
+ * still clears the property. The schema says what a reader gets back, and
  * casting on the way in is what keeps that promise — the stored row, the
  * transaction a write returns and what every other client is told all carry
  * the same string. A reference names an entity rather than holding a value,
@@ -417,7 +418,7 @@ export let cast = (
 ): Record<string, unknown> =>
   Object.fromEntries(
     Object.entries(patch).map(([k, val]) => {
-      let c = v.column(comp, k)
+      let c = v.prop(comp, k)
       let text = c &&
         (c.category == 'enum' ||
           (c.category == 'scalar' && STRINGS.includes(c.scalar)))
@@ -443,20 +444,20 @@ export let loadVocab = (
 ): Vocab => {
   let docs = Array.isArray(input) ? input : [input]
   let compWords = new Set(keywords.flatMap((k) => k.comp ?? []))
-  let colWords = new Set(keywords.flatMap((k) => k.column ?? []))
+  let propWords = new Set(keywords.flatMap((k) => k.prop ?? []))
   // Merge every document's component entries into one table; a name declared
   // twice is a conflict (one name, one home). `$defs` is JSON Schema's own
   // reuse slot, so an entry carries a marker saying what it is:
   // `component: true` is a component, `tool: true` is a tool declaration
   // (tools.ts `toolsIn` reads those) and `rule: true` is a rule (rules.ts
   // `rulesIn` reads those), both of which this loader skips, and anything else
-  // is an ordinary subschema somebody `$ref`s. An entry with columns and no
+  // is an ordinary subschema somebody `$ref`s. An entry with properties and no
   // marker is the one case that throws rather than being skipped: it is a
   // component whose marker was forgotten, and creating no table for it would
   // silently lose the component.
   //
   // `extends: true` is the one entry that may name a component another document
-  // already declared: it adds columns to it (`extended`). Those are applied
+  // already declared: it adds properties to it (`extended`). Those are applied
   // after every document is read, so the order the documents were loaded in
   // decides nothing.
   let defs: Record<string, PropSchema> = {}
@@ -467,7 +468,7 @@ export let loadVocab = (
       if (schema?.component !== true) {
         if (schema?.properties || schema?.type == 'object') {
           throw new Error(
-            `'${name}' has columns but says no "component": true — mark it a ` +
+            `'${name}' has properties but says no "component": true — mark it a ` +
               'component, or it is an ordinary subschema and no table',
           )
         }
@@ -487,15 +488,15 @@ export let loadVocab = (
 
   let props = (name: string): Record<string, PropSchema> =>
     defs[name]?.properties ?? {}
-  let cols = new Map<string, Column>() // `${comp}.${prop}` → Column
-  let colFor = (comp: string, prop: string): Column | undefined => {
+  let read = new Map<string, Prop>() // `${comp}.${prop}` → Prop
+  let propFor = (comp: string, prop: string): Prop | undefined => {
     let key = `${comp}.${prop}`
-    if (cols.has(key)) return cols.get(key)
+    if (read.has(key)) return read.get(key)
     let s = props(comp)[prop]
     if (!s) return undefined
     let required = !!defs[comp].required?.includes(prop)
-    let c = columnOf(comp, prop, s, colWords, required)
-    cols.set(key, c)
+    let c = propOf(comp, prop, s, propWords, required)
+    read.set(key, c)
     return c
   }
 
@@ -513,7 +514,7 @@ export let loadVocab = (
       wire: d.wire !== false,
       kind: !!d.kind,
       before: d.before ?? [],
-      // A computed column is readable, never writable — like a stamped one,
+      // A computed property is readable, never writable — like a stamped one,
       // but with no storage either.
       writable: entries.filter((p) => {
         let s = props(name)[p]
@@ -526,14 +527,14 @@ export let loadVocab = (
     }
   }
 
-  // The readable routing table: every component to its readable columns. A
-  // component with no columns routes with an empty list (`.about!` is then a
+  // The readable routing table: every component to its readable properties. A
+  // component with no properties routes with an empty list (`.about!` is then a
   // presence test).
   let routes = new Map<string, string[]>()
   for (let name of names) routes.set(name, Object.keys(props(name)))
 
-  // Reverse index: a bare prop to the components that declare it. A column (or
-  // whole component) marked `bare: false` never claims a bare name — it is
+  // Reverse index: a bare prop to the components that declare it. A property
+  // (or whole component) marked `bare: false` never claims a bare name — it is
   // reached qualified only — so it stays out of this index entirely.
   let owners = new Map<string, string[]>()
   for (let [comp, ps] of routes) {
@@ -549,17 +550,18 @@ export let loadVocab = (
   let plural = (s: string) =>
     s.endsWith('y') ? `${s.slice(0, -1)}ies` : s.endsWith('s') ? s : `${s}s`
 
-  // The reverse associations, derived from the reference columns and never hand
-  // listed, so a new reference column earns its reverse name for free. A
+  // The reverse associations, derived from the reference properties and never
+  // hand listed, so a new reference property earns its reverse name for free. A
   // component with one reference is named by its plural (`review.book` →
-  // `.reviews`); several references disambiguate with the column (`loan.book`,
-  // `loan.member` → `.loans_book`, `.loans_member`). A name a real column or
-  // component already routes is left alone — the forward name always wins —
-  // and where two components pluralize alike the alphabetically first keeps it.
+  // `.reviews`); several references disambiguate with the property
+  // (`loan.book`, `loan.member` → `.loans_book`, `.loans_member`). A name a
+  // property or component already routes is left alone — the forward name
+  // always wins — and where two components pluralize alike the alphabetically
+  // first keeps it.
   let assocs = new Map<string, Assoc>()
   for (let comp of names) {
     let refs = Object.keys(props(comp))
-      .filter((p) => colFor(comp, p)!.category == 'ref')
+      .filter((p) => propFor(comp, p)!.category == 'ref')
     for (let prop of refs) {
       let name = refs.length == 1 ? plural(comp) : `${plural(comp)}_${prop}`
       if (owners.has(name) || routes.has(name) || assocs.has(name)) continue
@@ -579,28 +581,28 @@ export let loadVocab = (
     all: names,
     kinds,
     comp: infoOf,
-    columns: (comp) => routes.get(comp) ?? [],
-    column: colFor,
-    indexes: (comp) => indexesOf(defs[comp], (p) => colFor(comp, p)),
+    props: (comp) => routes.get(comp) ?? [],
+    prop: propFor,
+    indexes: (comp) => indexesOf(defs[comp], (p) => propFor(comp, p)),
     identity: (comp) => identityOf(defs[comp]),
-    // Bare prop → its owning component. A stamped lifecycle column never takes
-    // a bare name from a writable one (`.status` stays the task's even though
-    // sessions carry a stamped status), so non-stamped owners are preferred
-    // first. A single owner wins; several owners that are all references mean
-    // one thing to a reader (comp '' — the filter scans every owner); any other
-    // collision throws {@link Ambiguous}, which names the candidates so a
-    // caller holding the rest of the query can pick among them. A bare name
-    // that is itself a component name routes as a presence test for that
-    // component.
+    // Bare prop → its owning component. A stamped lifecycle property never
+    // takes a bare name from a writable one (`.status` stays the task's even
+    // though sessions carry a stamped status), so non-stamped owners are
+    // preferred first. A single owner wins; several owners that are all
+    // references mean one thing to a reader (comp '' — the filter scans every
+    // owner); any other collision throws {@link Ambiguous}, which names the
+    // candidates so a caller holding the rest of the query can pick among them.
+    // A bare name that is itself a component name routes as a presence test for
+    // that component.
     route: (prop) => {
       let own = owners.get(prop) ?? []
       if (own.length > 1) {
-        let live = own.filter((c) => !colFor(c, prop)!.stamped)
+        let live = own.filter((c) => !propFor(c, prop)!.stamped)
         if (live.length) own = live
       }
       if (own.length == 1) return { comp: own[0], prop }
       if (own.length > 1) {
-        if (own.every((c) => colFor(c, prop)?.category == 'ref')) {
+        if (own.every((c) => propFor(c, prop)?.category == 'ref')) {
           return { comp: '', prop }
         }
         throw new Ambiguous(prop, own)
@@ -617,10 +619,11 @@ export let loadVocab = (
     //
     // `facet` is the one exception, and it belongs to the presence test alone
     // (`.name!`): a trailing `!` tests for a component, so the component wins
-    // over a column of the same name. It has to — a presence test has no other
-    // form, while the column keeps its qualified one (`.camera.canvas!`).
+    // over a property of the same name. It has to — a presence test has no
+    // other form, while the property keeps its qualified one
+    // (`.camera.canvas!`).
     // Without it, `.canvas!` would test camera's canvas reference and return
-    // the wrong entities, or none. A name no column claims is read as a
+    // the wrong entities, or none. A name no property claims is read as a
     // component too: bundles can carry plugin components before their schemas
     // are loaded. A store still decides whether it has a table for that
     // component.
@@ -628,8 +631,8 @@ export let loadVocab = (
       let segs = path.split('.')
       if (facet && segs.length == 1) {
         let name = segs[0]
-        let column = owners.has(name) || (name == EID && routes.has(SPINE))
-        if (routes.has(name) || !column) return [{ comp: name, prop: '' }]
+        let owned = owners.has(name) || (name == EID && routes.has(SPINE))
+        if (routes.has(name) || !owned) return [{ comp: name, prop: '' }]
       }
       let out: Hop[] = []
       for (let i = 0; i < segs.length;) {
@@ -655,47 +658,47 @@ export let loadVocab = (
     // kindOrder, else the bare spine component.
     kindOf: (has) => kinds.find((k) => has[k]) ?? 'entity',
     // The cascading-delete worklist (@yaks/graph cascade.ts): every
-    // client-writable reference that declares a `death`, as (comp, col) pairs.
+    // client-writable reference that declares a `death`, as (comp, prop) pairs.
     // Stamped refs stay out — server-owned rows are deleted by server code,
     // never by a cascade a client set off (types.ts Death).
     deaths: (word) =>
       compNames.flatMap((comp) =>
         infoOf(comp)!.writable.flatMap((p) => {
-          let c = colFor(comp, p)!
+          let c = propFor(comp, p)!
           return c.category == 'ref' && c.death == word
             ? [[comp, p] as [string, string]]
             : []
         })
       ),
-    // Every reference column, client-writable or stamped — index derivation
+    // Every reference property, client-writable or stamped — index derivation
     // and reverse-hop grammar key off this one list.
-    refCols: () =>
+    refProps: () =>
       names.flatMap((comp) =>
         Object.keys(props(comp)).flatMap((p) => {
-          let c = colFor(comp, p)!
+          let c = propFor(comp, p)!
           return c.category == 'ref' ? [[comp, p] as [string, string]] : []
         })
       ),
     // Ordinary well-formedness of an instance: a known component, an object of
-    // known columns (client-writable unless stamped columns are allowed), each
-    // value one the column can hold — a scalar, or for a `jsonb` column a JSON
-    // value of a type it declares. The structure inside an object or array
-    // (`properties`, `items`) is not validated yet.
+    // known properties (client-writable unless stamped properties are allowed),
+    // each value one the property can hold — a scalar, or for a `jsonb`
+    // property a JSON value of a type it declares. The structure inside an
+    // object or array (`properties`, `items`) is not validated yet.
     check: (comp, value, opts) => {
       let errs: string[] = []
       let info = infoOf(comp)
       if (!info) return [`unknown component '${comp}'`]
       if (value == null || typeof value != 'object' || Array.isArray(value)) {
-        return [`${comp} is an object of columns`]
+        return [`${comp} is an object of properties`]
       }
-      let allowed = new Set(opts?.stamped ? v.columns(comp) : info.writable)
+      let allowed = new Set(opts?.stamped ? v.props(comp) : info.writable)
       for (let [k, val] of Object.entries(value)) {
         if (!allowed.has(k)) {
-          errs.push(`no such column ${comp}.${k} — ${shapeOf(v, comp)}`)
+          errs.push(`no such property ${comp}.${k} — ${shapeOf(v, comp)}`)
           continue
         }
-        if (val == null) continue // a null clears the column
-        let c = colFor(comp, k)!
+        if (val == null) continue // a null clears the property
+        let c = propFor(comp, k)!
         if (c.scalar == 'jsonb') {
           if (!holds(c.types!, val)) {
             errs.push(`${comp}.${k} is ${c.types!.map(a).join(' or ')}`)

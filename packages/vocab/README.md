@@ -29,7 +29,7 @@ const errors = storable(catalog)
 if (errors.length) throw new Error(errors.join('; '))
 const vocab = loadVocab(catalog)
 vocab.route('price') // { comp: 'book', prop: 'price' }
-vocab.column('book', 'price')?.scalar // 'number'
+vocab.prop('book', 'price')?.scalar // 'number'
 vocab.check('book', { price: 12 }) // []
 ```
 
@@ -41,7 +41,7 @@ full document validation.
 ## The format
 
 Each entry in `$defs` declares what it is. `"component": true` marks a
-component: an object schema whose properties are the component's columns.
+component: an object schema whose `properties` are the component's properties.
 `"tool": true` marks a tool declaration, and `"rule": true` marks a rule.
 Unmarked scalar subschemas are ignored. An unmarked entry with `type: "object"`
 or `properties` throws, because the loader treats it as a component missing its
@@ -52,53 +52,54 @@ Standard JSON Schema keywords include `type`, `format`, `enum`, `const`,
 JSON Schema's `$vocabulary` mechanism, in `meta/core.vocab.json` — add what a
 component table needs on top:
 
-| keyword     | on     | means                                                                   |
-| ----------- | ------ | ----------------------------------------------------------------------- |
-| `component` | entry  | `true` = this entry is a component. Required; there is no default       |
-| `extends`   | comp   | `true` = add these columns to a component another document declares     |
-| `rule`      | entry  | `true` = a declarative rule, read by `rulesIn`                          |
-| `tool`      | entry  | `true` = this entry is a tool declaration, not a table                  |
-| `noun`      | tool   | the resource word a CLI answers to (`session list`, `list session`)     |
-| `verb`      | tool   | the operation word; either word alone is the whole command              |
-| `input`     | tool   | one schema per named argument, as a component declares columns          |
-| `ref`       | column | the entity kind a string references (`"project"`, `"entity"`)           |
-| `death`     | column | `cascade` \| `detach` \| `release` \| `keep` when the target is deleted |
-| `computed`  | column | `true` = derived, never stored (a query-only rank)                      |
-| `stamped`   | column | `true` = the server owns it: clients read it, never write it            |
-| `search`    | column | `true` = this text column is full-text indexed                          |
-| `aliases`   | column | input forms that resolve to an enum member                              |
-| `bare`      | both   | `false` = only the qualified component/column name is accepted          |
-| `unique`    | both   | column: no two rows share it. comp: `[["space","slug"]]`                |
-| `index`     | both   | the same two forms, without the uniqueness                              |
-| `required`  | comp   | native: the columns every row holds (NOT NULL)                          |
-| `default`   | column | native: the row's fallback; `{"now": true}` is the clock                |
-| `identity`  | both   | derive the entity's id from this. comp: `["space","slug"]`              |
-| `kind`      | comp   | this component names a display kind                                     |
-| `before`    | comp   | kinds this kind sorts before (feeds the derived kindOrder)              |
-| `wire`      | comp   | `false` = a component clients read but cannot write                     |
-| `sync`      | comp   | who is told about a write: `none` \| `server` (default) \| `peers`      |
-| `durable`   | comp   | how long a value lives: `forever` (default) \| `connection` \| `5s`     |
+| keyword     | on    | means                                                                   |
+| ----------- | ----- | ----------------------------------------------------------------------- |
+| `component` | entry | `true` = this entry is a component. Required; there is no default       |
+| `extends`   | comp  | `true` = add these properties to a component another document declares  |
+| `rule`      | entry | `true` = a declarative rule, read by `rulesIn`                          |
+| `tool`      | entry | `true` = this entry is a tool declaration, not a table                  |
+| `noun`      | tool  | the resource word a CLI answers to (`session list`, `list session`)     |
+| `verb`      | tool  | the operation word; either word alone is the whole command              |
+| `input`     | tool  | one schema per named argument, as a component declares properties       |
+| `ref`       | prop  | the entity kind a string references (`"project"`, `"entity"`)           |
+| `death`     | prop  | `cascade` \| `detach` \| `release` \| `keep` when the target is deleted |
+| `computed`  | prop  | `true` = derived, never stored (a query-only rank)                      |
+| `stamped`   | prop  | `true` = the server owns it: clients read it, never write it            |
+| `search`    | prop  | `true` = this text property is full-text indexed                        |
+| `aliases`   | prop  | input forms that resolve to an enum member                              |
+| `bare`      | both  | `false` = only the qualified component/property name is accepted        |
+| `unique`    | both  | prop: no two rows share it. comp: `[["space","slug"]]`                  |
+| `index`     | both  | the same two forms, without the uniqueness                              |
+| `required`  | comp  | native: the properties every row holds (NOT NULL)                       |
+| `default`   | prop  | native: the row's fallback; `{"now": true}` is the clock                |
+| `identity`  | both  | derive the entity's id from this. comp: `["space","slug"]`              |
+| `kind`      | comp  | this component names a display kind                                     |
+| `before`    | comp  | kinds this kind sorts before (feeds the derived kindOrder)              |
+| `wire`      | comp  | `false` = a component clients read but cannot write                     |
+| `sync`      | comp  | who is told about a write: `none` \| `server` (default) \| `peers`      |
+| `durable`   | comp  | how long a value lives: `forever` (default) \| `connection` \| `5s`     |
 
 Storage adapters interpret the loaded metadata: `type: integer` stores with
 integer affinity where a plain `number` uses SQLite REAL affinity, `enum`
 becomes a CHECK on the column, `required` becomes NOT NULL, and `default` fills
-the row that omits the column. A composite `unique` or `index` entry may be
-partial: an entry of `{"cols": ["key"], "present": ["key"]}` covers only the
+the row that omits the property. A composite `unique` or `index` entry may be
+partial: an entry of `{"props": ["key"], "present": ["key"]}` covers only the
 rows that hold a key, so multiple rows can omit a key while non-null keys remain
 unique.
 
-Every stored `ref` column is indexed automatically, including stamped refs and
+Every stored `ref` property is indexed automatically, including stamped refs and
 refs with `death: "keep"`. No `index: true` is needed, and `index: false` does
 not opt out. A reference that already leads a declared index (including a
-composite unique or identity index) needs no additional single-column index.
+composite unique or identity index) needs no additional index of its own.
 
-**`search` selects columns for full-text indexing.**
+**`search` selects properties for full-text indexing.**
 [@yaks/fts](https://jsr.io/@yaks/fts) builds one index per component using
-stored text columns marked `search: true`. Unmarked columns remain readable but
-are excluded from that index. `storable()` rejects `search: true` on numbers,
-references, enums, computed columns and the `date-time`, `uri`, `query` and
-`json` string formats. `@yaks/match` searches stored text directly and currently
-does not consult this keyword. The following is a `$defs` fragment:
+stored text properties marked `search: true`. Unmarked properties remain
+readable but are excluded from that index. `storable()` rejects `search: true`
+on numbers, references, enums, computed properties and the `date-time`, `uri`,
+`query` and `json` string formats. `@yaks/match` searches stored text directly
+and currently does not consult this keyword. The following is a `$defs`
+fragment:
 
 ```json
 {
@@ -113,7 +114,7 @@ does not consult this keyword. The following is a `$defs` fragment:
 }
 ```
 
-**`identity` declares deterministic entity ids.** A component whose column is
+**`identity` declares deterministic entity ids.** A component whose property is
 marked `identity: true` derives entity ids from that value, as `@yaks/edge` and
 `@yaks/key` do. Writing the same identity again updates the same entity without
 requiring the caller to retain its `eid`. The following is a `$defs` fragment:
@@ -138,15 +139,15 @@ whose `eid` disagrees with it. A bundle is one entity's components as a JSON
 object.
 
 Applications can build completions from native `examples` and distinct stored
-values. Component names are alphabetical; writable and stamped column lists
+values. Component names are alphabetical; writable and stamped property lists
 follow their schema declarations. `kindOrder` is alphabetical, constrained
 topologically by `before`; a cycle is an error.
 
 **Reverse associations let queries follow references in reverse.** `review.book`
 makes `.reviews` mean the reviews pointing at a book, and a component with
-several references disambiguates with the column name (`loan.book` →
+several references disambiguates with the property name (`loan.book` →
 `.loans_book`). A forward name always wins, so an association never shadows a
-column or a component.
+property or a component.
 
 ```json
 {
@@ -169,23 +170,24 @@ column or a component.
 `meta/vocab.schema.json` is the meta-schema a vocabulary document validates
 against.
 
-Every column declares its `type`. An enum column says `"type": "string"`, and so
-does a reference; a column without a type is refused, never read as text.
+Every property declares its `type`. An enum property says `"type": "string"`,
+and so does a reference; a property without a type is refused, never read as
+text.
 
-A column whose type is `object` or `array`, or a union of types
+A property whose type is `object` or `array`, or a union of types
 (`["string", "object"]`), holds a JSON value. The runtime reports scalar `jsonb`
 with blob affinity: SQLite stores it as binary JSON, a write takes the value and
-a read returns it. Such a column may declare its structure with `properties` or
-`items`; the structure is accepted as written and not validated yet, while
+a read returns it. Such a property may declare its structure with `properties`
+or `items`; the structure is accepted as written and not validated yet, while
 `check` does hold the value to the declared type. A query filter on one is
 refused for now.
 
 `{ "type": "string", "format": "json" }` is JSON text in a string: scalar
 `json`, text affinity, and a string containing any valid JSON value. A null
-clears the column, while the string `"null"` stores the JSON null value.
+clears the property, while the string `"null"` stores the JSON null value.
 
-A string column's value is cast to a string on the way in (`cast`): a number or
-a boolean becomes its text, an object or an array its JSON text.
+A string property's value is cast to a string on the way in (`cast`): a number
+or a boolean becomes its text, an object or an array its JSON text.
 
 ## One word, one home — and one exception
 
@@ -195,7 +197,7 @@ other's.
 
 The exception is the spine. `entity` is the identity row every entity has, and
 more than one package keeps something in it — the archetype a component set adds
-up to, the number a human id is built from. A document adds a column to it by
+up to, the number a human id is built from. A document adds a property to it by
 marking the entry `extends`:
 
 ```json
@@ -210,18 +212,18 @@ marking the entry `extends`:
 }
 ```
 
-An extension carries columns and nothing else — `kind`, `prefix`, `wire` and the
-indexes belong to the document that declares the component — and a column the
-base already has is refused rather than overridden. Extensions are applied after
-every document is read, so the load order decides nothing, and an extension of a
-component no document declares is an error.
+An extension carries properties and nothing else — `kind`, `prefix`, `wire` and
+the indexes belong to the document that declares the component — and a property
+the base already has is refused rather than overridden. Extensions are applied
+after every document is read, so the load order decides nothing, and an
+extension of a component no document declares is an error.
 
 ## Extension keywords
 
-Packages can add metadata such as id prefixes, name columns and units through a
-**keyword vocabulary**: a URI and a registration describing the permitted
-component and column keywords. `@yaks/blob` uses this mechanism for
-`store: "blob"`, which selects string columns for content-addressed storage.
+Packages can add metadata such as id prefixes, name properties and units through
+a **keyword vocabulary**: a URI and a registration describing the permitted
+component and property keywords. `@yaks/blob` uses this mechanism for
+`store: "blob"`, which selects string properties for content-addressed storage.
 
 ```ts
 import { extendMeta, loadVocab } from '@yaks/vocab'
@@ -229,7 +231,7 @@ import { extendMeta, loadVocab } from '@yaks/vocab'
 let shelf = {
   uri: 'https://example.com/vocab/shelf',
   comp: ['shelf'], // keywords this vocabulary adds to a component
-  column: ['unit'], // …and to a column
+  prop: ['unit'], // …and to a property
   doc: { $defs: { shelf: { type: 'string' }, unit: { type: 'string' } } },
 }
 
@@ -245,7 +247,7 @@ const shelfCatalog = {
 }
 let v = loadVocab(shelfCatalog, [shelf])
 v.comp('book')?.keywords.shelf // 'fiction'
-v.column('book', 'weight')?.keywords.unit // 'gram'
+v.prop('book', 'weight')?.keywords.unit // 'gram'
 extendMeta([shelf]) // the meta-schema, now admitting those keywords
 ```
 
@@ -264,7 +266,7 @@ let v = loadVocab([kernel, work]) // application-supplied documents; each compon
 
 v.comps // client-writable component names, alphabetical
 v.kinds // display kinds: alphabetical, constrained by `before`
-v.column('task', 'project')
+v.prop('task', 'project')
 // { category: 'ref', ref: 'project', death: 'detach',
 //   affinity: 'integer', fk: true, stamped: false, computed: false, … }
 v.route('title') // { comp: 'doc', prop: 'title' }   bare prop → its component
@@ -277,26 +279,27 @@ v.aim('project', true) // [{project,''}]  the presence form: `.project!` asks
 v.assoc('reviews') // { comp: 'review', prop: 'book' }  a plural → its reverse
 v.kindOf({ task: 1, doc: 1 }) // 'task' — most specific kind wins
 v.deaths('cascade') // client-writable references with this deletion behavior
-v.check('task', { priority: 1 }) // [] when supplied columns and values are valid
+v.check('task', { priority: 1 }) // [] when supplied properties and values are valid
 ```
 
 The root export provides these document checks:
 
-- `storable(doc)` checks that every column declares its type, checks scalar,
-  reference, enum and JSON columns, rejects column `$ref` and structure on a
-  column that is not an object or array, and checks indexes, defaults,
+- `storable(doc)` checks that every property declares its type, checks scalar,
+  reference, enum and JSON properties, rejects property `$ref` and structure on
+  a property that is not an object or array, and checks indexes, defaults,
   identities and state lifetimes. A component declaring all of `at`, `by` and
-  `via` must mark each column `stamped: true` so clients cannot supply that
+  `via` must mark each property `stamped: true` so clients cannot supply that
   provenance.
 - `reserved(doc, names)` rejects entries that reuse a reserved name.
-- `grow(was, next)` reports added columns and rejects removed columns or changes
-  to their category, scalar type or reference target. Enum members can be added.
+- `grow(was, next)` reports added properties and rejects removed properties or
+  changes to their category, scalar type or reference target. Enum members can
+  be added.
 
 These functions return errors; they do not migrate or write storage. Reference
 `death` values specify what the graph does when the target is deleted: `cascade`
-deletes the referencing entity, `detach` clears its reference column, `release`
-removes its referencing component, and `keep` retains the reference without a
-foreign-key constraint.
+deletes the referencing entity, `detach` clears its reference property,
+`release` removes its referencing component, and `keep` retains the reference
+without a foreign-key constraint.
 
 `syncOf(vocab, comp)` and `durableOf(vocab, comp)` read state-lifetime metadata,
 including defaults for unknown components. `sync` selects server
@@ -430,7 +433,7 @@ documents.
 
 ## Exports
 
-The root export includes `loadVocab`, `Vocab`, schema and column types,
+The root export includes `loadVocab`, `Vocab`, schema and property types,
 `Unknown` and `Ambiguous` lookup errors, `storable`, `reserved`, `grow`,
 `kindOrder`, `composite`, state-lifetime helpers, `rulesIn`, and `RuleDecl`.
 `CORE_URI`, `coreVocabulary` and `metaSchema` expose the bundled schema

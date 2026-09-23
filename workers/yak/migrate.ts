@@ -408,7 +408,7 @@ export let install = (
     ...vocab,
     indexes: (table: string) =>
       vocab.indexes(table).filter((i) => {
-        let name = `${table}_${i.cols.join('_')}`
+        let name = `${table}_${i.props.join('_')}`
         if (held.has(name)) return false
         if (!i.unique || !count(d, table)) return true
         if (deferred(name)) return false
@@ -1334,7 +1334,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // The roster. @yaks/member's seat is `owner|member` and a level is a `grant`;
   // the directory's own `member` declares the three seats itself, so it copies
   // whole and nothing splits.
-  let seats = o.vocab.column('member', 'role')?.values ?? []
+  let seats = o.vocab.prop('member', 'role')?.values ?? []
   let splits = words.includes('grant') && !seats.includes('editor')
   // The one column the copy cannot take at its word. Where the seat splits
   // below, the old roster's level ('editor') is no longer a seat the new

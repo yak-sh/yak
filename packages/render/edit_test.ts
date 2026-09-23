@@ -43,10 +43,10 @@ let vocab = loadVocab({
   },
 })
 let bundle = { entity: { eid: 'a' }, doc: { title: 'Before', count: 2 } }
-let set = (col: string, input: unknown) =>
-  edit(vocab, { comp: 'doc', col }).run(bundle, input)
+let set = (prop: string, input: unknown) =>
+  edit(vocab, { comp: 'doc', prop }).run(bundle, input)
 
-Deno.test('column actions parse typed values and patch only their column', () => {
+Deno.test('property actions parse typed values and patch only their property', () => {
   let cases: [string, unknown, unknown][] = [
     ['title', 'new title', 'new title'],
     ['title', '', ''],
@@ -66,15 +66,15 @@ Deno.test('column actions parse typed values and patch only their column', () =>
     ['data', 'null', 'null'],
     ['data', null, null],
   ]
-  for (let [col, input, expected] of cases) {
-    assertEquals(set(col, input), { doc: { [col]: expected } }, col)
+  for (let [prop, input, expected] of cases) {
+    assertEquals(set(prop, input), { doc: { [prop]: expected } }, prop)
   }
   assertEquals(bundle.doc, { title: 'Before', count: 2 })
 })
 
-Deno.test('invalid input and read-only columns never produce patches', () => {
+Deno.test('invalid input and read-only properties never produce patches', () => {
   for (
-    let [col, input] of [
+    let [prop, input] of [
       ['title', {}],
       ['count', 'NaN'],
       ['count', 'Infinity'],
@@ -93,15 +93,15 @@ Deno.test('invalid input and read-only columns never produce patches', () => {
       ['rank', 2],
     ] as [string, unknown][]
   ) {
-    assertThrows(() => set(col, input), Error, `doc.${col}`)
+    assertThrows(() => set(prop, input), Error, `doc.${prop}`)
   }
-  assertThrows(() => edit(vocab, { comp: 'doc', col: 'missing' }))
-  assertThrows(() => edit(vocab, { comp: 'spine', col: 'num' }).run(bundle, 3))
+  assertThrows(() => edit(vocab, { comp: 'doc', prop: 'missing' }))
+  assertThrows(() => edit(vocab, { comp: 'spine', prop: 'num' }).run(bundle, 3))
 })
 
 Deno.test('applications can parse and validate without changing the write path', () => {
   let calls: string[] = []
-  let action = edit(vocab, { comp: 'doc', col: 'count' }, {
+  let action = edit(vocab, { comp: 'doc', prop: 'count' }, {
     parse: (input, c, source) => {
       assertEquals(source, bundle)
       calls.push(c.prop)
@@ -115,7 +115,7 @@ Deno.test('applications can parse and validate without changing the write path',
   assertEquals(action.run(bundle, '3'), { doc: { count: 6 } })
   assertThrows(() => action.run(bundle, '6'), Error, 'too many')
   assertThrows(() =>
-    edit(vocab, { comp: 'doc', col: 'count' }, { parse: () => 'wrong' })
+    edit(vocab, { comp: 'doc', prop: 'count' }, { parse: () => 'wrong' })
       .run(bundle, 1)
   )
 })
@@ -141,25 +141,25 @@ Deno.test('seven Edit families select by declaration with no stored value', () =
     ['data', 'textarea', undefined],
   ]
   assertEquals(family.length, 7)
-  for (let [i, [col, tag, type]] of cases.entries()) {
-    let ctx = { comp: 'doc', col }
+  for (let [i, [prop, tag, type]] of cases.entries()) {
+    let ctx = { comp: 'doc', prop }
     let renderer = resolve(registry, empty, 'Form.Edit', vocab, ctx)!
     assertStrictEquals(renderer, family[i])
     let node = renderer.render(empty, h, ctx)
     assertEquals(node.tag, tag)
     assertEquals(node.props?.type, type)
-    assertEquals(node.props?.['aria-label'], `doc.${col}`)
+    assertEquals(node.props?.['aria-label'], `doc.${prop}`)
     assertEquals(node.props?.value ?? node.props?.checked, i == 5 ? false : '')
   }
   assertStrictEquals(
-    resolve(registry, empty, 'Edit', vocab, { comp: 'doc', col: 'priority' }),
+    resolve(registry, empty, 'Edit', vocab, { comp: 'doc', prop: 'priority' }),
     family[1],
   )
 })
 
 Deno.test('enum controls use the vocabulary and offer inert patch actions', () => {
   let registry = define(editors(vocab))
-  let ctx = { comp: 'doc', col: 'state' }
+  let ctx = { comp: 'doc', prop: 'state' }
   let node = resolve(registry, bundle, 'Edit', vocab, ctx)!
     .render(bundle, h, ctx)
   let choices = node.children.flat() as Node[]
@@ -180,7 +180,7 @@ Deno.test('empty and case-distinct enum members keep their declared values', () 
     },
   })
   let registry = define(editors(vocab))
-  let ctx = { comp: 'doc', col: 'state' }
+  let ctx = { comp: 'doc', prop: 'state' }
   let node = resolve(registry, bundle, 'Edit', vocab, ctx)!
     .render(bundle, h, ctx)
   let choices = node.children.flat() as Node[]
@@ -192,29 +192,29 @@ Deno.test('empty and case-distinct enum members keep their declared values', () 
   }
 })
 
-Deno.test('column overlays use ordinary specificity and suffix resolution', () => {
+Deno.test('property overlays use ordinary specificity and suffix resolution', () => {
   let registry = define(editors(vocab))
   let custom = {
     view: 'Edit',
-    match: parse('.column.type=string, .column.comp=doc, .column.col=title'),
+    match: parse('.prop.type=string, .prop.comp=doc, .prop.prop=title'),
     render: <N>(_b: unknown, h: H<N>) => h('strong', null, 'custom title'),
   }
   extend(registry, [custom])
   assertStrictEquals(
     resolve(registry, bundle, 'Card.Edit', vocab, {
       comp: 'doc',
-      col: 'title',
+      prop: 'title',
     }),
     custom,
   )
   assertEquals(
-    resolve(registry, bundle, 'Edit', vocab, { comp: 'doc', col: 'count' })!
-      .render(bundle, h, { comp: 'doc', col: 'count' }).tag,
+    resolve(registry, bundle, 'Edit', vocab, { comp: 'doc', prop: 'count' })!
+      .render(bundle, h, { comp: 'doc', prop: 'count' }).tag,
     'input',
   )
 })
 
-Deno.test('Props lays out every declared column and delegates its editor', () => {
+Deno.test('Props lays out every declared property and delegates its editor', () => {
   let registry = define([...editors(vocab), properties(vocab)])
   let props = resolve(registry, bundle, 'Props', vocab, { comp: 'doc' })!
   let calls: unknown[] = []
@@ -222,18 +222,18 @@ Deno.test('Props lays out every declared column and delegates its editor', () =>
     comp: 'doc',
     render: (view, ctx) => {
       calls.push([view, ctx])
-      return h('span', null, ctx?.col)
+      return h('span', null, ctx?.prop)
     },
   })
   assertEquals(node.tag, 'dl')
   assertEquals(
     calls,
-    vocab.columns('doc').map((col) => ['Edit', { comp: 'doc', col }]),
+    vocab.props('doc').map((prop) => ['Edit', { comp: 'doc', prop }]),
   )
   assertThrows(() => props.render(bundle, h, { comp: 'missing' }))
   assertThrows(() => props.render(bundle, h, { comp: 'doc' }), Error, 'host')
-  for (let col of ['updated', 'rank']) {
-    let ctx = { comp: 'doc', col }
+  for (let prop of ['updated', 'rank']) {
+    let ctx = { comp: 'doc', prop }
     let node = resolve(registry, bundle, 'Edit', vocab, ctx)!
       .render(bundle, h, ctx)
     assertEquals(node.tag, 'span')

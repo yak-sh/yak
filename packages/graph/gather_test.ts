@@ -174,13 +174,13 @@ Deno.test('a delete reads backwards once per rung, not once per column', () => {
   assertEquals(n.read, 2)
 })
 
-Deno.test('a named-only gather never enumerates reverse reference columns', () => {
+Deno.test('a named-only gather never enumerates reverse reference properties', () => {
   let scans = 0
   let vocab = {
     ...books,
-    refCols: () => {
+    refProps: () => {
       scans++
-      return books.refCols()
+      return books.refProps()
     },
   }
   let storage = memory()

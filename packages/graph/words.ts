@@ -16,7 +16,7 @@
 // the one the vocab.json carries, and a column that has none is returned
 // without one rather than with a sentence invented here.
 
-import type { Column, Vocab } from '@yaks/vocab'
+import type { Prop, Vocab } from '@yaks/vocab'
 
 /** Where a component is documented at length, when the program that opened
  * the graph has such a page — `mail` → the guide's mail page. The vocabulary
@@ -67,7 +67,7 @@ let DEATH: Record<string, string> = {
 // A column's type in one word: `enum` for a closed set of values, `ref` for a
 // reference, the JSON types a JSON value may be (`object`, `string|array`),
 // otherwise the scalar type the vocabulary declares.
-let typeOf = (col: Column): string =>
+let typeOf = (col: Prop): string =>
   col.category == 'enum'
     ? 'enum'
     : col.category == 'ref'
@@ -79,13 +79,13 @@ let typeOf = (col: Column): string =>
 // What is true of a column beyond its type: who may write it, whether it is
 // stored at all, whether its value must be unique, and what deleting the
 // entity it references does to this row.
-let notesOf = (vocab: Vocab, col: Column): string[] => {
+let notesOf = (vocab: Vocab, col: Prop): string[] => {
   let notes: string[] = []
   if (col.stamped) notes.push('server-owned: readable, never written here')
   if (col.computed) notes.push('computed: read, never stored')
   if (
     vocab.indexes(col.comp).some((i) =>
-      i.unique && i.cols.length == 1 && i.cols[0] == col.prop
+      i.unique && i.props.length == 1 && i.props[0] == col.prop
     )
   ) notes.push('unique: no two rows share this value')
   if (col.keywords.store == 'blob') {
@@ -99,7 +99,7 @@ let notesOf = (vocab: Vocab, col: Column): string[] => {
 
 // A value of the right shape, for the example bundle: enough for a reader to
 // see what goes there, never a value anybody should keep.
-let sample = (col: Column): unknown =>
+let sample = (col: Prop): unknown =>
   col.category == 'enum'
     ? col.values?.[0]
     : col.category == 'ref'
@@ -130,7 +130,7 @@ export let summary = (vocab: Vocab, name: string): Word => {
     name,
     ...(info.description ? { description: info.description } : {}),
     kind: info.kind,
-    columns: vocab.columns(name),
+    columns: vocab.props(name),
   }
 }
 
@@ -140,10 +140,10 @@ export let summary = (vocab: Vocab, name: string): Word => {
  * that opened the graph supplies one. */
 export let detail = (vocab: Vocab, name: string, guide?: Guide): Word => {
   let info = vocab.comp(name)!
-  let cols = vocab.columns(name).map((prop) => vocab.column(name, prop)!)
+  let cols = vocab.props(name).map((prop) => vocab.prop(name, prop)!)
   let out = cols.filter((c) => c.category == 'ref')
-  let into = vocab.refCols()
-    .map(([comp, prop]) => vocab.column(comp, prop)!)
+  let into = vocab.refProps()
+    .map(([comp, prop]) => vocab.prop(comp, prop)!)
     .filter((c) => c.ref == name)
   let page = guide?.(name)
   return {
@@ -167,7 +167,7 @@ export let detail = (vocab: Vocab, name: string, guide?: Guide): Word => {
     example: {
       entity: { eid: '$1' },
       [name]: Object.fromEntries(
-        info.writable.map((prop) => [prop, sample(vocab.column(name, prop)!)]),
+        info.writable.map((prop) => [prop, sample(vocab.prop(name, prop)!)]),
       ),
     },
     ...(page ? { guide: page } : {}),

@@ -85,14 +85,14 @@ Deno.test('HTML retains missing, unnamed and JSON fallback view behavior', () =>
   assertEquals(render(fallback, bundle, 'Missing', vocab), '<pre>page</pre>')
 })
 
-Deno.test('HTML forwards column selection and renderer context', () => {
+Deno.test('HTML forwards property selection and renderer context', () => {
   let editors = define([{
     view: 'Edit',
-    match: parse('.column.type=string'),
+    match: parse('.prop.type=string'),
     render: (b, h, ctx) => {
       assertEquals(b, bundle)
       assertEquals(
-        [ctx.comp, ctx.col, ctx.label],
+        [ctx.comp, ctx.prop, ctx.label],
         ['doc', 'title', 'Title'],
       )
       return h('label', null, String(ctx.label))
@@ -101,7 +101,7 @@ Deno.test('HTML forwards column selection and renderer context', () => {
   assertEquals(
     render(editors, bundle, 'Edit', vocab, {
       comp: 'doc',
-      col: 'title',
+      prop: 'title',
       label: 'Title',
     }),
     '<label>Title</label>',

@@ -5,11 +5,11 @@
 // through that same mechanism.
 //
 // The core keyword set (meta.ts) describes what a component table needs.
-// Anything beyond that — an id prefix, a name column, a unit of measure — is
+// Anything beyond that — an id prefix, a name property, a unit of measure — is
 // somebody else's concern, so it arrives as a `Keywords` registration:
 // `loadVocab(docs, [myKeywords])` makes the loader copy those keywords onto the
-// components and columns that declare them, and `extendMeta` composes them into
-// the published meta-schema so a vocabulary document using them still
+// components and properties that declare them, and `extendMeta` composes them
+// into the published meta-schema so a vocabulary document using them still
 // validates.
 //
 // The loader copies an extension keyword through; it never interprets one. What
@@ -20,17 +20,17 @@ import { metaSchema } from './meta.ts'
 
 /**
  * A keyword vocabulary a package contributes: the `$vocabulary` URI that names
- * it, which keywords it adds at the component and column level, and optionally
- * the declaration document describing each keyword's own schema (the shape of
- * `meta/core.vocab.json` — a `$defs` entry per keyword).
+ * it, which keywords it adds at the component and property level, and
+ * optionally the declaration document describing each keyword's own schema
+ * (the shape of `meta/core.vocab.json` — a `$defs` entry per keyword).
  */
 export type Keywords = {
   /** the URI a vocabulary document declares under `$vocabulary` for this set */
   uri: string
   /** keywords this vocabulary adds to a component (a `$defs` entry) */
   comp?: string[]
-  /** keywords this vocabulary adds to a column (a component's property) */
-  column?: string[]
+  /** keywords this vocabulary adds to a property of a component */
+  prop?: string[]
   /** the declaration document: `$defs[keyword]` is that keyword's schema */
   doc?: JsonSchema
 }
@@ -56,10 +56,10 @@ let admit = (def: unknown, add: Record<string, unknown>): unknown =>
 
 /**
  * The meta-schema, composed with extension keyword vocabularies: every
- * registered keyword is admitted on the component or column it belongs to, and
- * each vocabulary's URI is declared under `$vocabulary`. A vocabulary document
- * that uses `prefix` validates against `extendMeta([idKeywords])`, not against
- * the bare core meta-schema.
+ * registered keyword is admitted on the component or property it belongs to,
+ * and each vocabulary's URI is declared under `$vocabulary`. A vocabulary
+ * document that uses `prefix` validates against `extendMeta([idKeywords])`, not
+ * against the bare core meta-schema.
  */
 export let extendMeta = (extras: Keywords[]): JsonSchema => {
   let defs = { ...(metaSchema.$defs as Record<string, unknown>) }
@@ -69,7 +69,7 @@ export let extendMeta = (extras: Keywords[]): JsonSchema => {
     let props = (names: string[] = []) =>
       Object.fromEntries(names.map((n) => [n, schemaOf(k, n)]))
     defs.component = admit(defs.component, props(k.comp))
-    defs.column = admit(defs.column, props(k.column))
+    defs.prop = admit(defs.prop, props(k.prop))
   }
   return { ...metaSchema, $vocabulary: vocabs, $defs: defs }
 }

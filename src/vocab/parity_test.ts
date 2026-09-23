@@ -11,7 +11,7 @@
 // (statusOf) — the derived column itself is declared here as computed: true.
 
 import { assert, assertEquals } from '@std/assert'
-import type { Column } from '@yaks/vocab'
+import type { Prop } from '@yaks/vocab'
 import { idOf, prefixes } from '@yaks/id'
 import { named } from '@yaks/names'
 import {
@@ -48,7 +48,7 @@ let canonType = (t: PropType): string =>
 // The fleet's `body` is a text column kept in content-addressed storage, which
 // the meta-model spells as a plain text column wearing @yaks/blob's `store`
 // keyword — so the keyword is what reads back as `body` here.
-let canonCol = (c: Column): string =>
+let canonCol = (c: Prop): string =>
   c.category == 'enum'
     ? `enum:${c.values!.join('|')}`
     : c.category == 'ref'
@@ -89,7 +89,7 @@ Deno.test('parity: every wire-writable column, name and type', () => {
   for (let [name, cols] of Object.entries(comps)) {
     assertEquals(v.comp(name)!.writable, Object.keys(cols), name)
     for (let [p, t] of Object.entries(cols)) {
-      assertEquals(canonCol(v.column(name, p)!), canonType(t), `${name}.${p}`)
+      assertEquals(canonCol(v.prop(name, p)!), canonType(t), `${name}.${p}`)
     }
   }
 })
@@ -104,7 +104,7 @@ Deno.test('parity: every stamped column, name and type', () => {
   }
   for (let [name, cols] of Object.entries(stamped)) {
     for (let [p, t] of Object.entries(cols)) {
-      let c = v.column(name, p)!
+      let c = v.prop(name, p)!
       assert(c.stamped, `${name}.${p} is stamped`)
       assertEquals(canonCol(c), canonType(t), `${name}.${p}`)
     }
@@ -118,7 +118,7 @@ Deno.test('parity: death worklists, all four words', () => {
 })
 
 Deno.test('parity: enum aliases ride along', () => {
-  assertEquals(v.column('review', 'verdict')!.aliases, {
+  assertEquals(v.prop('review', 'verdict')!.aliases, {
     approve: 'approved',
     reject: 'rejected',
     changes: 'changes_requested',
@@ -150,7 +150,7 @@ Deno.test('parity: the kinds whose title is a name, read through @yaks/names', (
 })
 
 Deno.test('parity: derived status is readable, never writable', () => {
-  let status = v.column('task', 'status')!
+  let status = v.prop('task', 'status')!
   assertEquals(status.computed, true)
   assertEquals(status.values, ['open', 'wip', 'done', 'cancelled'])
   assert(!v.comp('task')!.writable.includes('status'))

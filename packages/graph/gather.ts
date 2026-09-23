@@ -88,7 +88,7 @@ let key = (comp: string, prop: string, eid: Eid): string =>
 // The reference columns an ask looks through: the ones its components declare,
 // or every one in the vocabulary.
 let cols = (vocab: Vocab, names?: string[]): [string, string][] =>
-  names ? vocab.refCols().filter(([c]) => names.includes(c)) : vocab.refCols()
+  names ? vocab.refProps().filter(([c]) => names.includes(c)) : vocab.refProps()
 
 // Every (column, target) triple an `about` over these entities covers.
 let want = (
@@ -177,7 +177,7 @@ export let reached = (bundles: Bundle[], vocab: Vocab): Eid[] => {
     out.add(b.entity.eid)
     for (let [name, comp] of comps(b)) {
       for (let [prop, value] of Object.entries(comp ?? {})) {
-        if (value != null && vocab.column(name, prop)?.category == 'ref') {
+        if (value != null && vocab.prop(name, prop)?.category == 'ref') {
           out.add(String(value))
         }
       }

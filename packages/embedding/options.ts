@@ -122,7 +122,7 @@ export let chosen = (vocab: Vocab, options: Options): Field[] => {
   if (!options.text) return fields(vocab)
   return options.text.map((said) => {
     let [comp, prop, ...rest] = said.split('.')
-    if (!prop || rest.length || !vocab.column(comp, prop)) {
+    if (!prop || rest.length || !vocab.prop(comp, prop)) {
       throw new Error(
         `@yaks/embedding: \`text\` names ${
           JSON.stringify(said)

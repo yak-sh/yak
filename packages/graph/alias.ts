@@ -44,7 +44,7 @@ let pointsAt = (b: Bundle, vocab: Vocab): Eid[] =>
   comps(b).flatMap(([name, comp]) =>
     Object.entries(comp ?? {}).flatMap(([prop, val]) =>
       typeof val == 'string' && isAlias(val) &&
-        vocab.column(name, prop)?.category == 'ref'
+        vocab.prop(name, prop)?.category == 'ref'
         ? [val]
         : []
     )
@@ -66,7 +66,7 @@ let rewrite = (
     let cols: Comp | undefined
     for (let [prop, val] of Object.entries(comp)) {
       if (
-        typeof val != 'string' || vocab.column(name, prop)?.category != 'ref'
+        typeof val != 'string' || vocab.prop(name, prop)?.category != 'ref'
       ) continue
       let eid = at.get(val)
       if (!eid) {

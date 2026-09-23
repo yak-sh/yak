@@ -39,7 +39,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
-import type { Column, PropSchema, Vocab } from '@yaks/vocab'
+import type { Prop, PropSchema, Vocab } from '@yaks/vocab'
 import { idKeywords } from '@yaks/id'
 import { schema } from '@yaks/sqlite'
 import { fields, schema as ftsSchema } from '@yaks/fts'
@@ -61,7 +61,7 @@ let shipped: Record<string, PropSchema> = {
 }
 
 // Everything about a column that reaches storage or the wire, in one value.
-let shape = (c: Column) => ({
+let shape = (c: Prop) => ({
   category: c.category,
   scalar: c.scalar,
   values: c.values,
@@ -75,8 +75,8 @@ let shape = (c: Column) => ({
 
 let agree = (v: Vocab, w: Vocab, comp: string, prop: string) =>
   assertEquals(
-    shape(w.column(comp, prop)!),
-    shape(v.column(comp, prop)!),
+    shape(w.prop(comp, prop)!),
+    shape(v.prop(comp, prop)!),
     `${comp}.${prop}`,
   )
 
@@ -110,7 +110,7 @@ Deno.test('parity: the shared comps, column for column', () => {
     assertEquals(mine.stamped, theirs!.stamped, `${name} stamped`)
     assertEquals(mine.kind, theirs!.kind, `${name} kind`)
     assertEquals(mine.keywords, theirs!.keywords, `${name} keywords`)
-    for (let p of fleet.columns(name)) agree(fleet, pkg, name, p)
+    for (let p of fleet.props(name)) agree(fleet, pkg, name, p)
   }
 })
 
@@ -118,7 +118,7 @@ Deno.test('parity: the words a letter carries are a doc, not columns on mail', (
   // The move: `mail` no longer declares them, and both spellings route to the
   // same place the fleet routes them.
   for (let gone of ['subject', 'body']) {
-    assertEquals(pkg.columns('mail').includes(gone), false, `mail.${gone}`)
+    assertEquals(pkg.props('mail').includes(gone), false, `mail.${gone}`)
   }
   for (let p of ['title', 'body']) {
     assertEquals(pkg.route(p), { comp: 'doc', prop: p }, `.${p}`)
@@ -136,10 +136,10 @@ Deno.test('parity: deliver, where the two overlap', () => {
 
 Deno.test('parity: mail, where the two overlap', () => {
   for (let p of ['target', 'reply_to', 'from', 'message_id']) {
-    assert(pkg.column('mail', p), `@yaks/mail declares mail.${p}`)
+    assert(pkg.prop('mail', p), `@yaks/mail declares mail.${p}`)
     assertEquals(
-      { ...shape(pkg.column('mail', p)!), stamped: false },
-      { ...shape(fleet.column('mail', p)!), stamped: false },
+      { ...shape(pkg.prop('mail', p)!), stamped: false },
+      { ...shape(fleet.prop('mail', p)!), stamped: false },
       `mail.${p}`,
     )
   }

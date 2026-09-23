@@ -156,11 +156,11 @@ Deno.test('column overlays use the entity registry and retain its view walk', ()
     assert('Render' in selected)
     assertEquals(selected, columnView(e, comp, col, 'Board.Edit'))
   }
-  assertEquals(vocab.column('task', 'status')!.computed, true)
+  assertEquals(vocab.prop('task', 'status')!.computed, true)
   let before = registry.renderers
   let custom = {
     view: 'Inline.Edit',
-    match: parse('.column.comp=doc .column.col=title'),
+    match: parse('.prop.comp=doc .prop.prop=title'),
     Render: () => h('em', null, 'custom'),
   }
   try {
@@ -199,14 +199,14 @@ Deno.test('column overlays use the entity registry and retain its view walk', ()
 
 Deno.test('column actions keep fleet parsing and reject derived writes', () => {
   let e = ent('editing')
-  assertEquals(editColumn(e, { comp: 'filed', col: 'priority' }, 'p02'), {
+  assertEquals(editColumn(e, { comp: 'filed', prop: 'priority' }, 'p02'), {
     filed: { priority: 2 },
   })
-  assertEquals(editColumn(e, { comp: 'filed', col: 'assignee' }, null), {
+  assertEquals(editColumn(e, { comp: 'filed', prop: 'assignee' }, null), {
     filed: { assignee: null },
   })
-  assertThrows(() => editColumn(e, { comp: 'filed', col: 'priority' }, 'nope'))
-  assertThrows(() => editColumn(e, { comp: 'task', col: 'status' }, 'done'))
+  assertThrows(() => editColumn(e, { comp: 'filed', prop: 'priority' }, 'nope'))
+  assertThrows(() => editColumn(e, { comp: 'task', prop: 'status' }, 'done'))
 })
 
 Deno.test('native number and query editors retain their existing elements', () => {
@@ -273,7 +273,7 @@ Deno.test('enum, reference and domain controls retain their shared popouts', () 
     let tabs = [...document.querySelectorAll<HTMLButtonElement>('.Prop_Tab')]
     assertEquals(
       tabs.map((tab) => tab.textContent),
-      vocab.column('task', 'status')!.values,
+      vocab.prop('task', 'status')!.values,
     )
     assertEquals(
       document.querySelectorAll('.Prop_Tab .Dot').length,

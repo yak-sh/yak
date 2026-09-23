@@ -189,9 +189,10 @@ export const toolDefinition = (value: unknown): ToolDefinition => {
 }
 
 // A tool's arguments as one object schema. A declaration writes them the way a
-// component declares columns — one schema per named argument — and everything
-// downstream (the CLI's argument parser, an MCP `tools/list`, a shell
-// completion) reads the object schema, so the conversion happens once, here.
+// component declares properties — one schema per named argument — and
+// everything downstream (the CLI's argument parser, an MCP `tools/list`, a
+// shell completion) reads the object schema, so the conversion happens once,
+// here.
 let inputOf = (entry: PropSchema): Record<string, unknown> => ({
   type: 'object',
   additionalProperties: false,

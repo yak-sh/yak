@@ -64,7 +64,7 @@ let words: Record<string, Keywords> = Object.fromEntries(
 let compsOf = (d: VocabDoc) =>
   Object.entries(d.$defs ?? {}).filter(([, s]) => s.component).map(([k]) => k)
 
-// The words a file DECLARES, and the ones it only adds columns to. An
+// The words a file DECLARES, and the ones it only adds properties to. An
 // extension has no home of its own: it loads beside the file that declares the
 // component (@yaks/id's `num` beside @yaks/kernel's `entity`).
 let declaresOf = (d: VocabDoc) =>

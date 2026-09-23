@@ -40,7 +40,7 @@ let refs = (vocab: Vocab, c: Clause & { kind: 'pred' }): boolean => {
     return false
   }
   let leaf = hops[hops.length - 1]
-  return !!leaf?.prop && vocab.column(leaf.comp, leaf.prop)?.category == 'ref'
+  return !!leaf?.prop && vocab.prop(leaf.comp, leaf.prop)?.category == 'ref'
 }
 
 /** A value's id-shaped leaves, mapped. A list means any-of, so each item names

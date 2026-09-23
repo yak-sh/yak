@@ -70,7 +70,7 @@ Deno.test('storable refuses what a table cannot lower', () => {
   )
   assert(said.includes('recipe.nested declares no type'))
   assert(said.includes('recipe.linked uses $ref'))
-  assert(said.includes('recipe."eid" is not a column name'))
+  assert(said.includes('recipe."eid" is not a property name'))
   assert(said.includes('recipe.aim is a reference without a death word'))
   assert(said.includes('recipe.dead is a reference without a death word'))
   assert(
@@ -78,7 +78,7 @@ Deno.test('storable refuses what a table cannot lower', () => {
   )
 })
 
-Deno.test('storable refuses an index over a column that is not there', () => {
+Deno.test('storable refuses an index over a property that is not there', () => {
   let errs = storable(doc({
     recipe: {
       type: 'object',
@@ -87,7 +87,7 @@ Deno.test('storable refuses an index over a column that is not there', () => {
       properties: { serves: { type: 'number' } },
     },
   }))
-  assertEquals(errs, ['recipe indexes oven, which is no column of recipe'])
+  assertEquals(errs, ['recipe indexes oven, which is no property of recipe'])
 })
 
 Deno.test('storable refuses a mark a client could sign', () => {
@@ -136,7 +136,7 @@ Deno.test('storable refuses an identity nothing could derive', () => {
     },
   }))
   assertEquals(errs, [
-    'page is identified by slug, which is no column of it',
+    'page is identified by slug, which is no property of it',
     'release.version is server-owned — an identity is derived from what the ' +
     'writer states',
     'release.rank is computed — an identity is derived from what the writer ' +
@@ -159,11 +159,11 @@ Deno.test('storable refuses search on anything but stored prose', () => {
     },
   }))
   assertEquals(errs, [
-    'recipe.serves is searched but holds no prose — "search": true is for a stored text column',
-    'recipe.cook is searched but holds no prose — "search": true is for a stored text column',
-    'recipe.course is searched but holds no prose — "search": true is for a stored text column',
-    'recipe.made is searched but holds no prose — "search": true is for a stored text column',
-    'recipe.rank is searched but holds no prose — "search": true is for a stored text column',
+    'recipe.serves is searched but holds no prose — "search": true is for a stored text property',
+    'recipe.cook is searched but holds no prose — "search": true is for a stored text property',
+    'recipe.course is searched but holds no prose — "search": true is for a stored text property',
+    'recipe.made is searched but holds no prose — "search": true is for a stored text property',
+    'recipe.rank is searched but holds no prose — "search": true is for a stored text property',
   ])
 })
 
@@ -190,7 +190,7 @@ Deno.test('evolution is additive forever', () => {
       },
     },
   }))
-  // adding a column and widening an enum are additive
+  // adding a property and widening an enum are additive
   let grown = loadVocab(doc({
     recipe: {
       type: 'object',
@@ -235,18 +235,18 @@ Deno.test('text cannot become JSON after rows were written', () => {
   assertEquals(grow(vocab(), vocab('json')), {
     added: [],
     errors: [
-      'config.value was scalar:text:, now scalar:json: — a column keeps the type its rows were written under',
+      'config.value was scalar:text:, now scalar:json: — a property keeps the type its rows were written under',
     ],
   })
   assertEquals(grow(vocab('json'), vocab('json')), { added: [], errors: [] })
 })
 
-Deno.test('storable refuses a required or present column that is not there', () => {
+Deno.test('storable refuses a required or present property that is not there', () => {
   let errs = storable(doc({
     output: {
       type: 'object',
       required: ['key', 'rank'],
-      unique: [{ cols: ['key'], present: ['ghost'] }],
+      unique: [{ props: ['key'], present: ['ghost'] }],
       properties: {
         key: { type: 'string' },
         rank: { type: 'number', computed: true },
@@ -254,7 +254,7 @@ Deno.test('storable refuses a required or present column that is not there', () 
     },
   }))
   assertEquals(errs, [
-    'output indexes ghost, which is no column of output',
+    'output indexes ghost, which is no property of output',
     'output.rank is computed — it cannot be required',
   ])
 })
@@ -271,10 +271,10 @@ Deno.test('storable admits a literal or clock default and refuses the rest', () 
     [],
   )
   assertEquals(one({ a: { type: 'string', default: { now: true } } }), [
-    'row.a defaults to now but is no date-time column',
+    'row.a defaults to now but is no date-time property',
   ])
   assertEquals(one({ a: { type: 'string', default: ['x'] } }), [
-    'row.a has a default no column can hold (a literal, or {"now": true})',
+    'row.a has a default no property can hold (a literal, or {"now": true})',
   ])
 })
 
@@ -299,7 +299,7 @@ Deno.test('a relay owns nothing, so it cannot keep a value forever', () => {
 
 Deno.test('a $defs entry says what it is, or it is no table', () => {
   // The ordinary JSON Schema use of $defs: a subschema something $refs. It
-  // declares no columns, so nothing here has anything to say about it.
+  // declares no properties, so nothing here has anything to say about it.
   assertEquals(storable({ $defs: { unit: { type: 'string' } } }), [])
   // A tool declaration is a tool, checked as a tool, never lowered to a table.
   assertEquals(
@@ -316,13 +316,13 @@ Deno.test('a $defs entry says what it is, or it is no table', () => {
     }),
     [],
   )
-  // And the forgotten marker: columns, no word for what they are.
+  // And the forgotten marker: properties, no word for what they are.
   assertEquals(
     storable({
       $defs: { recipe: { properties: { serves: { type: 'number' } } } },
     }),
     [
-      'recipe has columns but says no "component": true — mark it a ' +
+      'recipe has properties but says no "component": true — mark it a ' +
       'component, or it is an ordinary subschema and no table',
     ],
   )

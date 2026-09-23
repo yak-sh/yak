@@ -69,7 +69,7 @@ let scalar = (value: unknown): Param =>
 // Whether a column is a reference — asked of the vocabulary, which knows a
 // column's category.
 let isRef = (v: Vocab, comp: string, prop: string): boolean =>
-  v.column(comp, prop)?.category == 'ref'
+  v.prop(comp, prop)?.category == 'ref'
 
 // One column's value as the SQL that writes it and the parameter it binds: a
 // reference names its target's eid and the statement looks up the id, a JSON
@@ -183,7 +183,7 @@ export let upsertSql = (
   absent = false,
 ): Sql => {
   let cols = Object.keys(patch).filter((c) =>
-    v.column(comp, c)?.computed === false
+    v.prop(comp, c)?.computed === false
   )
   if (!cols.length) {
     return {
@@ -260,7 +260,7 @@ let patchOne = (
   // then insert only absent ones: partial patches need no invented defaults
   // or read/merge, and the same ordered statements work in a D1 batch.
   let cols = Object.keys(comp).filter((c) =>
-    v.column(name, c)?.computed === false
+    v.prop(name, c)?.computed === false
   )
   let params: Param[] = []
   let sets = cols.map((c) => {

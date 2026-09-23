@@ -284,12 +284,12 @@ Deno.test('the directory and an app spell one word apart: member.role', () => {
   // stores mean two things by one column, and the MCP door types it nowhere
   // rather than as either (agent.ts `spoken`, T-34273).
   assertEquals(PLATFORM_APART, ['member.role'])
-  assertEquals(platformVocab().column('member', 'role')?.values, [
+  assertEquals(platformVocab().prop('member', 'role')?.values, [
     'owner',
     'editor',
     'viewer',
   ])
-  assertEquals(appVocab().column('member', 'role')?.values, ['owner', 'member'])
+  assertEquals(appVocab().prop('member', 'role')?.values, ['owner', 'member'])
 })
 
 Deno.test('the platform declares the uniques its races are decided by', () => {
@@ -490,7 +490,7 @@ Deno.test('a manifest wears the component marker without saying it', () => {
 // platform's own two stores.
 Deno.test("an app has no numbers; the platform's own stores do", () => {
   let app = appVocab(says({ recipe: { serves: num } }))
-  assertEquals(app.column('entity', 'num'), undefined)
+  assertEquals(app.prop('entity', 'num'), undefined)
   assert(!numbered(app))
   // And a prefix an app declares is a word nothing here reads, dropped on load
   // like any unregistered keyword.

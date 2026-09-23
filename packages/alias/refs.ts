@@ -68,7 +68,7 @@ let spoken = (bundles: Bundle[], vocab: Vocab): string[] => {
     for (let [name, comp] of comps(b)) {
       for (let [prop, val] of Object.entries(comp ?? {})) {
         if (
-          typeof val == 'string' && vocab.column(name, prop)?.category == 'ref'
+          typeof val == 'string' && vocab.prop(name, prop)?.category == 'ref'
         ) out.push(val)
       }
     }

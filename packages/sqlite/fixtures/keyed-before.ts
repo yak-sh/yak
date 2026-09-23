@@ -49,7 +49,7 @@ export let keyed = (driver: Driver, vocab: Vocab, opts: BindOpts) => {
       if (!sql) columns.set(comp, sql = compSql(vocab, comp, opts.derived))
       let held = driver.query(sql, [eid])[0]
       if (held) {
-        let present = vocab.column(comp, 'present')
+        let present = vocab.prop(comp, 'present')
         if (present?.computed !== false && !opts.derived?.[`${comp}.present`]) {
           delete held.present
         }

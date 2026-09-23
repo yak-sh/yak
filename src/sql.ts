@@ -198,7 +198,7 @@ export let select = (db: Sql, ps: Pred[], now = Date.now()): Rel | null => {
   return attempt(() => {
     let { v } = context(db)
     if (
-      fields.some((f) => !v.column(f.comp, f.prop) && field(f) != 'entity.eid')
+      fields.some((f) => !v.prop(f.comp, f.prop) && field(f) != 'entity.eid')
     ) {
       throw new Unsupported('an unknown projection column')
     }

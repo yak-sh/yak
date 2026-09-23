@@ -88,7 +88,7 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
         for (let [prop, value] of Object.entries(comp ?? {})) {
           if (
             value != null &&
-            vocab.column(name, prop)?.scalar == 'bool'
+            vocab.prop(name, prop)?.scalar == 'bool'
           ) {
             comp![prop] = !!value
           }

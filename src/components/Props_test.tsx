@@ -78,7 +78,7 @@ Deno.test('component properties open anchored reference and enum controls', asyn
       render(h(Entity, { eid, view: 'Props', comp }), root)
       assertEquals(
         [...root.querySelectorAll('dt')].map((el) => el.textContent),
-        vocab.columns(comp),
+        vocab.props(comp),
       )
       assertEquals(document.querySelector('.Overlay'), null)
       let field = row(root, col).querySelector<HTMLSpanElement>('.Prop_Val')!
@@ -117,7 +117,7 @@ Deno.test('properties stay closed and native read-only fields have no edit press
         ['session', 'status', false],
       ] as const
     ) {
-      render(h(Entity, { eid, view: 'Edit', comp, col, readOnly }), root)
+      render(h(Entity, { eid, view: 'Edit', comp, prop: col, readOnly }), root)
       assertEquals(root.querySelector('.Prop-live'), null)
       assertEquals(root.querySelector('input, [contenteditable]'), null)
       assertEquals(document.querySelector('.Overlay'), null)
@@ -137,7 +137,7 @@ Deno.test('native resolve callers can mount a portable property list', () => {
     assert(root.querySelector('dl.Props'))
     assertEquals(
       root.querySelectorAll('.Props_Row').length,
-      vocab.columns('task').length,
+      vocab.props('task').length,
     )
     assertEquals(root.querySelector('.Prop-live'), null)
   } finally {

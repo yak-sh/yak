@@ -1,29 +1,29 @@
-/** Column actions parse input without touching a store or a rendering
+/** Property actions parse input without touching a store or a rendering
  * backend. */
 
 import type { Bundle } from '@yaks/match'
-import type { Column, Vocab } from '@yaks/vocab'
-import { declared, writable } from './column.ts'
+import type { Prop, Vocab } from '@yaks/vocab'
+import { declared, writable } from './prop.ts'
 import type { Action } from './types.ts'
 
 /** Applications may supply their value language and additional validation. */
 export type EditOptions = {
-  parse?: (input: unknown, column: Column, bundle: Bundle) => unknown
-  validate?: (value: unknown, column: Column, bundle: Bundle) => void
+  parse?: (input: unknown, prop: Prop, bundle: Bundle) => unknown
+  validate?: (value: unknown, prop: Prop, bundle: Bundle) => void
 }
 
-type Address = { comp: string; col: string }
+type Address = { comp: string; prop: string }
 
-let fail = (c: Column, expected: string): never => {
+let fail = (c: Prop, expected: string): never => {
   throw new Error(`${c.comp}.${c.prop} needs ${expected}`)
 }
 
 let decimal = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i
 
-let parse = (input: unknown, c: Column): unknown => {
+let parse = (input: unknown, c: Prop): unknown => {
   if (input == null) return null
   let type = c.category == 'scalar' ? c.scalar : c.category
-  // Empty text remains text; an empty optional scalar clears its column.
+  // Empty text remains text; an empty optional scalar clears its property.
   if (
     input === '' && !['text', 'url', 'query', 'json'].includes(type!) &&
     !(type == 'enum' && c.values!.includes(''))
@@ -88,8 +88,8 @@ let parse = (input: unknown, c: Column): unknown => {
 }
 
 /**
- * Offer a single-column patch. Construction is inert; run parses, validates
- * and returns only that column. The caller decides whether to apply the patch.
+ * Offer a single-property patch. Construction is inert; run parses, validates
+ * and returns only that property. The caller decides whether to apply the patch.
  */
 export let edit = (
   vocab: Vocab,

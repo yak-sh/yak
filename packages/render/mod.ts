@@ -6,13 +6,13 @@
  * breaks ties. A catch-all `true` scores 0.5. No rendering backend is imported
  * here.
  *
- * Editors use this same registry. Pass {comp, col} to resolve and it matches
- * against a bundle-shaped projection of that column's declared schema rather
- * than against the entity: parse('.column.type=string') selects a string
+ * Editors use this same registry. Pass {comp, prop} to resolve and it matches
+ * against a bundle-shaped projection of that property's declared schema rather
+ * than against the entity: parse('.prop.type=string') selects a string
  * editor. The renderer still receives the original bundle and that context, so
- * it knows both the value and where a patch belongs. Column queries and entity
- * queries describe different subjects; register them under separate view
- * names. See column.ts for the four queryable schema fields. editors(vocab)
+ * it knows both the value and where a patch belongs. Property queries and
+ * entity queries describe different subjects; register them under separate
+ * view names. See prop.ts for the four queryable schema fields. editors(vocab)
  * supplies the portable Edit family; properties(vocab) lays out a whole
  * component through that registry.
  *
@@ -49,7 +49,7 @@ import type { Query } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { type ArchetypeLookup, archetypeMatch } from './archetype.ts'
 export type { ArchetypeLookup } from './archetype.ts'
-import { column, columnVocab } from './column.ts'
+import { projection, propVocab } from './prop.ts'
 import type {
   Action,
   Context,
@@ -175,9 +175,9 @@ let walk = <R extends Registration>(
   return pick('JSON')
 }
 
-// A column ask throws the entity away — the projection is the declaration, so
+// A property ask throws the entity away — the projection is the declaration, so
 // the chosen control depends only on the registry, the vocabulary and the
-// column's address, while a property row asks again on every paint. Remember
+// property's address, while a property row asks again on every paint. Remember
 // the pick, and drop the whole memo when any of those three moves: define and
 // extend assign the lists rather than splice them, so a re-registration (or a
 // second vocabulary through the same registry) is honoured at once.
@@ -211,12 +211,12 @@ export let resolve = <R extends Registration>(
   vocab: Vocab,
   ctx: Context = {},
 ): R | undefined => {
-  if (ctx.col == null) return walk(registry, bundle, view, vocab)
+  if (ctx.prop == null) return walk(registry, bundle, view, vocab)
   let picks = memo(registry, vocab)
-  let key = `${view ?? ''}|${ctx.comp}|${ctx.col}`
+  let key = `${view ?? ''}|${ctx.comp}|${ctx.prop}`
   if (picks.has(key)) return picks.get(key)
-  // An undeclared column throws out of column(); nothing is remembered.
-  let found = walk(registry, column(vocab, ctx), view, columnVocab)
+  // An undeclared property throws out of projection(); nothing is remembered.
+  let found = walk(registry, projection(vocab, ctx), view, propVocab)
   picks.set(key, found)
   return found
 }
@@ -228,10 +228,10 @@ export let applicable = <R extends Registration>(
   vocab: Vocab,
   ctx: Context = {},
 ): string[] => {
-  let archetypes = ctx.col == null ? registry.archetypes : undefined
-  if (ctx.col != null) {
-    bundle = column(vocab, ctx)
-    vocab = columnVocab
+  let archetypes = ctx.prop == null ? registry.archetypes : undefined
+  if (ctx.prop != null) {
+    bundle = projection(vocab, ctx)
+    vocab = propVocab
   }
   let views = registry.views ??
     [...new Set(registry.renderers.map((r) => r.view))]

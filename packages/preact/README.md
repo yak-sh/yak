@@ -24,7 +24,7 @@ render(h(Entity, { eid: 'a', view: 'Tile' }), document.body)
 ```
 
 The JSX equivalent is `<Entity eid='a' view='Tile'/>`. Extra props flow to the
-renderer context, including `comp` and `col` for column views. The component
+renderer context, including `comp` and `prop` for property views. The component
 re-reads its store on notifications, handles absent bundles, and releases its
 listener when the eid changes or it unmounts. It also reads after subscribing,
 so a change between the first render and subscription is observed. Without a

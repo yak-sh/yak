@@ -212,7 +212,7 @@ let ensureClient = () => {
         comp: comp
           ? Object.fromEntries(
             Object.entries(comp).filter(([p]) =>
-              p === 'eid' || replica.box.vocab.columns(name).includes(p)
+              p === 'eid' || replica.box.vocab.props(name).includes(p)
             ),
           )
           : null,

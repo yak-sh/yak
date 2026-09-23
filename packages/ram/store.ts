@@ -117,14 +117,14 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let save = (eid: Eid) => log.push([eid, rows.get(eid), cold.get(eid)])
 
   let isRef = (comp: string, prop: string) =>
-    vocab.column(comp, prop)?.category == 'ref'
+    vocab.prop(comp, prop)?.category == 'ref'
 
   // The columns of a patch this vocabulary stores. A component whose patch
   // names none is still a component: its presence is the fact.
   let stored = (comp: string, patch: Comp): Comp =>
     Object.fromEntries(
       Object.entries(patch).filter(([p]) =>
-        vocab.column(comp, p)?.computed === false
+        vocab.prop(comp, p)?.computed === false
       ),
     )
 

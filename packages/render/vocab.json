@@ -1,13 +1,13 @@
 {
   "$defs": {
-    "column": {
+    "prop": {
       "component": true,
       "type": "object",
       "properties": {
         "comp": {
           "type": "string"
         },
-        "col": {
+        "prop": {
           "type": "string"
         },
         "type": {

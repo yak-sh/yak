@@ -90,7 +90,7 @@ let EACH = '(select value from json_each(?))'
 
 // A component's stored columns, in the order the table carries them.
 let stored = (v: Vocab, comp: string): string[] =>
-  v.columns(comp).map((p) => v.column(comp, p)!).filter((c) => !c.computed)
+  v.props(comp).map((p) => v.prop(comp, p)!).filter((c) => !c.computed)
     .map((c) => c.prop)
 
 // The spine's own columns. Fixed, because the identity table is fixed (ddl.ts
@@ -109,7 +109,7 @@ let lower = (
   ids: Map<Eid, number>,
 ): Param => {
   if (value == null) return null
-  if (v.column(comp, prop)?.category == 'ref') {
+  if (v.prop(comp, prop)?.category == 'ref') {
     return ids.get(String(value)) ?? null
   }
   if (isJsonb(v, comp, prop)) return jsonIn(value)
@@ -127,7 +127,7 @@ let named = (v: Vocab, bundles: Bundle[]): Eid[] => {
       if (!patch) continue
       for (let [prop, value] of Object.entries(patch)) {
         if (
-          v.column(comp, prop)?.category == 'ref' && typeof value == 'string'
+          v.prop(comp, prop)?.category == 'ref' && typeof value == 'string'
         ) {
           out.add(value)
         }

@@ -18,14 +18,14 @@
 // its row in the entity table, because its integer id must never be reused, but
 // it is listed in the `tombstone` table, so every query excludes it.
 
-import type { Column, Scalar, Vocab } from '@yaks/vocab'
+import type { Prop, Scalar, Vocab } from '@yaks/vocab'
 import { type Span as QSpan, timeSpan } from '@yaks/query'
 import type { Frag } from './ir.ts'
 
 // The type a value is coerced to before comparison — the vocabulary's column
 // category flattened to the one name the lowerings switch on.
 export type Tag = Scalar | 'enum' | 'eid'
-export let tagOf = (c: Column): Tag =>
+export let tagOf = (c: Prop): Tag =>
   c.category == 'ref' ? 'eid' : c.category == 'enum' ? 'enum' : c.scalar!
 
 // What the binder asks a dialect for. Everything is a pure function of the
@@ -83,11 +83,11 @@ let ownerKey = (base: string): string =>
 // through a correlated lookup in the entity table, so that every predicate
 // compares eids with eids.
 let col = (comp: string, prop: string, v: Vocab): string | null => {
-  if (comp == 'entity' && v.column(comp, prop)?.category != 'ref') {
+  if (comp == 'entity' && v.prop(comp, prop)?.category != 'ref') {
     return `"entity"."${prop}"`
   }
   if (prop == 'eid') return `"${comp}"."entity"`
-  let c = v.column(comp, prop)
+  let c = v.prop(comp, prop)
   if (!c) return null
   return c.category == 'ref'
     ? `(select __re.eid from entity __re where __re.id = "${comp}"."${prop}")`

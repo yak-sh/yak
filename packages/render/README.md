@@ -21,7 +21,7 @@ All exports come from `@yaks/render`:
 | `define`, `extend`      | Create a registry and prepend renderer registrations. |
 | `resolve`, `applicable` | Select a renderer or list matching view names.        |
 | `actions`               | List actions offered for a bundle.                    |
-| `edit`                  | Create a validated, single-column editing action.     |
+| `edit`                  | Create a validated, single-property editing action.   |
 | `editors`, `properties` | Create portable `Edit` and `Props` renderers.         |
 
 The module also exports the contracts `Registration`, `Renderer`, `Registry`,
@@ -70,7 +70,7 @@ console.log(render(registry, bundle, 'Board.List.Tile', vocab)) // ## A document
 ```
 
 A portable `Renderer` receives `(bundle, h, ctx)` and returns the node built by
-`h`. `ctx` contains values supplied by the caller, such as the column being
+`h`. `ctx` contains values supplied by the caller, such as the property being
 edited. A backend may supply `ctx.render(view, context?)` for nested views,
 using the same registry and bundle and merging the child context over the parent
 context.
@@ -110,10 +110,11 @@ queries that test only component presence, selection can use
 values. Results are cached per query, vocabulary, and table array. This supports
 bundles whose component values were omitted from a query result.
 
-Value predicates and column selection still use the ordinary matcher. Missing or
-unknown descriptor ids also fall back to it. Applications using this lookup must
-load the descriptors before rendering such bundles and keep their subscription
-open to receive new table sets. Scoring and view selection do not change.
+Value predicates and property selection still use the ordinary matcher. Missing
+or unknown descriptor ids also fall back to it. Applications using this lookup
+must load the descriptors before rendering such bundles and keep their
+subscription open to receive new table sets. Scoring and view selection do not
+change.
 
 ## Actions
 
@@ -156,7 +157,7 @@ Editors use the same registry as entity views. `editors(vocab, options?)`
 returns seven `Edit` registrations: text (`string`, `url`, `query`), number
 (`number`, `priority`), enum, entity reference (`ref`), timestamp (`time`),
 boolean, and JSON. `properties(vocab)` returns a `Props` renderer that lays out
-all declared columns of one component.
+all declared properties of one component.
 
 The text backend renders editors read-only. Continuing the example:
 
@@ -176,7 +177,7 @@ import { render as renderPreact } from '@yaks/preact'
 
 let node = renderPreact(editable, bundle, 'Edit', vocab, {
   comp: 'doc',
-  col: 'title',
+  prop: 'title',
   onPatch: (patch, entity) => console.log(entity.entity.eid, patch),
   onError: (error) => console.error(error),
 })
@@ -188,51 +189,52 @@ backend converts it to an event handler, calls `run(bundle, input)`, and sends
 the patch to `onPatch`. Validation failures reach `onError` and the control's
 native validation feedback. Native controls may also call `edit()` directly.
 
-Enum choices come from `vocab.column(comp, col).values`. References accept
-entity ids; applications can register a more specific query such as
-`.column.type=ref, .column.ref=project` to select their own picker. JSON columns
+Enum choices come from `vocab.prop(comp, prop).values`. References accept entity
+ids; applications can register a more specific query such as
+`.prop.type=ref, .prop.ref=project` to select their own picker. JSON properties
 are declared `{ type: 'string', format: 'json' }` and contain JSON text.
 
 `Props` requires `{ comp }` and a backend that supplies nested rendering. It
-selects each column's `Edit` through the same registry, including added
-registrations. It includes absent and read-only columns. Read-only output shows
-false and zero, and uses `—` for unset values. The text backend always requests
-read-only output; callers can also pass `readOnly: true` to the Preact backend.
+selects each property's `Edit` through the same registry, including added
+registrations. It includes absent and read-only properties. Read-only output
+shows false and zero, and uses `—` for unset values. The text backend always
+requests read-only output; callers can also pass `readOnly: true` to the Preact
+backend.
 
-### Column selection
+### Property selection
 
-When both `comp` and `col` are supplied, selection matches the column
+When both `comp` and `prop` are supplied, selection matches the property
 declaration as a temporary bundle:
 
 ```ts
 {
   entity: { eid: 'doc.title' },
-  column: { comp: 'doc', col: 'title', type: 'string', ref: undefined },
+  prop: { comp: 'doc', prop: 'title', type: 'string', ref: undefined },
 }
 ```
 
-The queryable fields are `column.comp`, `column.col`, `column.type`, and
-`column.ref`. The declared type is `string`, `number`, `boolean`, `ref`, `enum`,
-`time`, `url`, `query`, `priority`, or `json`. Selection therefore works even if
-the entity has no value for that column. Rendering still receives the original
-bundle. An unknown column or `col` without `comp` throws. A `comp` alone
+The queryable fields are `prop.comp`, `prop.prop`, `prop.type`, and `prop.ref`.
+The declared type is `string`, `number`, `boolean`, `ref`, `enum`, `time`,
+`url`, `query`, `priority`, or `json`. Selection therefore works even if the
+entity has no value for that property. Rendering still receives the original
+bundle. An unknown property or `prop` without `comp` throws. A `comp` alone
 supplies context without changing entity selection. Use separate view names for
-entity queries and column queries. Editors can read further schema details
-through `vocab.column(comp, col)`.
+entity queries and property queries. Editors can read further schema details
+through `vocab.prop(comp, prop)`.
 
 ### Parsing edits
 
-`edit(vocab, { comp, col }, options?)` creates an action whose
+`edit(vocab, { comp, prop }, options?)` creates an action whose
 `run(bundle, input)` parses and validates a value, then returns only
-`{ [comp]: { [col]: value } }`. Text stays text, numbers and booleans become
+`{ [comp]: { [prop]: value } }`. Text stays text, numbers and booleans become
 typed values, enum aliases resolve to declared members, and timestamps require
-an explicit timezone. JSON columns contain validated JSON text. Null clears a
-column. Computed or stamped columns, and columns of components without
+an explicit timezone. JSON properties contain validated JSON text. Null clears a
+property. Computed or stamped properties, and properties of components without
 `wire: true`, reject edits.
 
-`options.parse(input, column, bundle)` can replace the default input parser;
+`options.parse(input, prop, bundle)` can replace the default input parser;
 vocabulary validation still runs afterward.
-`options.validate(value, column, bundle)` may throw to reject a parsed value.
+`options.validate(value, prop, bundle)` may throw to reject a parsed value.
 Creating or listing an action calls neither hook and writes no data.
 
 ## Compatibility
@@ -243,4 +245,4 @@ Deno, Node, browsers, and workers. Depends on `@yaks/query`, `@yaks/match`, and
 ## Verification
 
 From the repository root, `deno test packages/render/` covers matching, view
-selection, actions, column types, parsing, and editors.
+selection, actions, property types, parsing, and editors.

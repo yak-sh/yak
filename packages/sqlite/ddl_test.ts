@@ -268,7 +268,7 @@ let strict = loadVocab({
     output: {
       component: true,
       type: 'object',
-      unique: [{ cols: ['key'], present: ['key'] }],
+      unique: [{ props: ['key'], present: ['key'] }],
       properties: { key: { type: 'string' }, source: { type: 'integer' } },
     },
   },

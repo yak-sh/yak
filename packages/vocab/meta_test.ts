@@ -58,17 +58,17 @@ Deno.test('a tool declaration is checked as a tool', () => {
   assert(ok({ ...TOOL, component: true }).length)
 })
 
-Deno.test('a column declares its type, and a JSON one may declare its shape', () => {
-  let col = (s: PropSchema) =>
+Deno.test('a property declares its type, and a JSON one may declare its shape', () => {
+  let prop = (s: PropSchema) =>
     ok({ component: true, type: 'object', properties: { c: s } })
-  assertEquals(col({ type: 'string', enum: ['a'] }), [])
-  assertEquals(col({ type: 'string', format: 'json' }), [])
+  assertEquals(prop({ type: 'string', enum: ['a'] }), [])
+  assertEquals(prop({ type: 'string', format: 'json' }), [])
   assertEquals(
-    col({ type: 'object', properties: { a: { type: 'number' } } }),
+    prop({ type: 'object', properties: { a: { type: 'number' } } }),
     [],
   )
-  assertEquals(col({ type: 'array', items: { type: 'string' } }), [])
-  assertEquals(col({ type: ['string', 'object', 'null'] }), [])
-  assert(col({ enum: ['a'] }).length)
-  assert(col({ type: 'null' }).length)
+  assertEquals(prop({ type: 'array', items: { type: 'string' } }), [])
+  assertEquals(prop({ type: ['string', 'object', 'null'] }), [])
+  assert(prop({ enum: ['a'] }).length)
+  assert(prop({ type: 'null' }).length)
 })

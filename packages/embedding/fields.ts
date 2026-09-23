@@ -12,7 +12,7 @@
 // vocabulary the same way and then do different things with it, and neither
 // should have to depend on the other in order to search.
 
-import type { Column, Vocab } from '@yaks/vocab'
+import type { Prop, Vocab } from '@yaks/vocab'
 
 /** A `comp.prop` pair naming one embedded text property, and — for a column
  * that does not hold its own text, like a @yaks/blob body holding an address —
@@ -38,7 +38,7 @@ export let resolved = (
  * Decides whether a column is embedded. An application passes its own to embed
  * less than everything textual — say, the blurb but not the title.
  */
-export type Pick = (column: Column) => boolean
+export type Pick = (column: Prop) => boolean
 
 /**
  * The default choice: every stored text column. A computed column has no row to
@@ -50,8 +50,8 @@ export let textual: Pick = (c) =>
 /** The embedded fields of a vocabulary, by component then declaration order. */
 export let fields = (vocab: Vocab, pick: Pick = textual): Field[] =>
   vocab.all.flatMap((comp) =>
-    vocab.columns(comp)
-      .map((prop) => vocab.column(comp, prop)!)
+    vocab.props(comp)
+      .map((prop) => vocab.prop(comp, prop)!)
       .filter(pick)
       .map((c) => ({ comp, prop: c.prop }))
   )

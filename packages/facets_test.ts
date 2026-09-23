@@ -52,7 +52,7 @@ Deno.test('a package with words exports them at ./vocab, and they load', async (
       Deno.statSync(new URL(`${p.dir}/vocab.json`, here))
       words = true
     } catch { /* no vocabulary to export */ }
-    // @yaks/render's document describes a column schema rather than a
+    // @yaks/render's document describes a property schema rather than a
     // component domain; it is the one vocab.json no host composes.
     if (!words || p.dir == 'render') continue
     assert(has(p, 'vocab'), `${p.name} has vocab.json and no ./vocab export`)

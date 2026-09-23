@@ -115,14 +115,14 @@ export let resolve = (e: Ent, view?: string): Renderer => {
 
 /** Column renderers share the entity registry and its qualified view walk. */
 export let columnView = (e: Ent, comp: string, col: string, view = 'Edit') =>
-  vocab.column(comp, col)
-    ? select(registry, bundle(e), view, vocab, { comp, col })
+  vocab.prop(comp, col)
+    ? select(registry, bundle(e), view, vocab, { comp, prop: col })
     : undefined
 
 /** A validated column patch; the browser decides when to apply it. */
 export let editColumn = (
   e: Ent,
-  ctx: { comp: string; col: string },
+  ctx: { comp: string; prop: string },
   value: unknown,
 ) => edit(vocab, ctx, editOptions).run(bundle(e), value)
 
@@ -135,7 +135,7 @@ export let writeColumn = (
   comp: string,
   col: string,
   value: unknown,
-) => applyPatch(eid, editColumn(ent(eid), { comp, col }, value))
+) => applyPatch(eid, editColumn(ent(eid), { comp, prop: col }, value))
 
 /** The app reads derived values through its bundle projection too. */
 export let columnValue = (e: Ent, comp: string, col: string): unknown => {

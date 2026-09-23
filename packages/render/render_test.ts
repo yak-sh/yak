@@ -1,5 +1,5 @@
 // Registry behavior against one small vocabulary: selection never renders or
-// runs an action, and a column declaration is independent of its stored value.
+// runs an action, and a property declaration is independent of its stored value.
 
 import { assertEquals, assertStrictEquals, assertThrows } from '@std/assert'
 import { and, parse } from '@yaks/query'
@@ -101,9 +101,9 @@ Deno.test('unnamed views honor the configured list; JSON is an explicit fallback
   assertEquals(resolve(define([]), bundle, 'Missing', vocab), undefined)
 })
 
-Deno.test('column types use declared schemas, even when the value is absent', () => {
+Deno.test('property types use declared schemas, even when the value is absent', () => {
   let types = ['string', 'number', 'boolean', 'enum', 'time', 'ref']
-  let rs = types.map((type) => face('Edit', `.column.type=${type}`))
+  let rs = types.map((type) => face('Edit', `.prop.type=${type}`))
   let registry = define([face('Tile', '.doc'), face('Edit', true), ...rs])
   let targets = [
     ['doc', 'title'],
@@ -113,20 +113,20 @@ Deno.test('column types use declared schemas, even when the value is absent', ()
     ['task', 'at'],
     ['task', 'owner'],
   ]
-  for (let [i, [comp, col]] of targets.entries()) {
+  for (let [i, [comp, prop]] of targets.entries()) {
     assertStrictEquals(
       resolve(registry, { entity: { eid: 'empty' } }, 'Edit', vocab, {
         comp,
-        col,
+        prop,
       }),
       rs[i],
     )
   }
-  let owner = face('Edit', '.column.type=ref, .column.ref=entity')
+  let owner = face('Edit', '.prop.type=ref, .prop.ref=entity')
   assertStrictEquals(
     resolve(define([...rs, owner]), bundle, 'Edit', vocab, {
       comp: 'task',
-      col: 'owner',
+      prop: 'owner',
     }),
     owner,
   )
@@ -134,28 +134,30 @@ Deno.test('column types use declared schemas, even when the value is absent', ()
     resolve(registry, bundle, 'Tile', vocab, { comp: 'doc' })?.view,
     'Tile',
   )
-  assertThrows(() => resolve(registry, bundle, 'Edit', vocab, { col: 'title' }))
   assertThrows(() =>
-    resolve(registry, bundle, 'Edit', vocab, { comp: 'doc', col: 'missing' })
+    resolve(registry, bundle, 'Edit', vocab, { prop: 'title' })
+  )
+  assertThrows(() =>
+    resolve(registry, bundle, 'Edit', vocab, { comp: 'doc', prop: 'missing' })
   )
 })
 
-Deno.test('a column pick is remembered per registry, and an overlay replaces it', () => {
-  let plain = face('Edit', '.column.type=string')
+Deno.test('a property pick is remembered per registry, and an overlay replaces it', () => {
+  let plain = face('Edit', '.prop.type=string')
   let registry = define([plain])
   let ask = () =>
-    resolve(registry, bundle, 'Edit', vocab, { comp: 'doc', col: 'title' })
+    resolve(registry, bundle, 'Edit', vocab, { comp: 'doc', prop: 'title' })
   assertStrictEquals(ask(), plain)
   assertStrictEquals(ask(), plain)
-  let titles = face('Edit', '.column.comp=doc, .column.col=title')
+  let titles = face('Edit', '.prop.comp=doc, .prop.prop=title')
   extend(registry, [titles])
   assertStrictEquals(ask(), titles)
-  // Two columns of the same type are different asks, never one another's answer.
-  let ranks = face('Edit', '.column.type=number')
+  // Two properties of the same type are different asks, never one another's answer.
+  let ranks = face('Edit', '.prop.type=number')
   extend(registry, [ranks])
   assertStrictEquals(ask(), titles)
   assertStrictEquals(
-    resolve(registry, bundle, 'Edit', vocab, { comp: 'task', col: 'rank' }),
+    resolve(registry, bundle, 'Edit', vocab, { comp: 'task', prop: 'rank' }),
     ranks,
   )
   // The same address under a second vocabulary is a different declaration.
@@ -169,7 +171,7 @@ Deno.test('a column pick is remembered per registry, and an overlay replaces it'
     },
   }])
   let byType = define([plain, ranks])
-  let title = { comp: 'doc', col: 'title' }
+  let title = { comp: 'doc', prop: 'title' }
   assertStrictEquals(resolve(byType, bundle, 'Edit', vocab, title), plain)
   assertStrictEquals(resolve(byType, bundle, 'Edit', other, title), ranks)
 })

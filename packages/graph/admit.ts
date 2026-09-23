@@ -59,7 +59,7 @@ let admitComp = (
   patch: Comp,
   trusted: boolean,
 ): Comp | undefined => {
-  let columns = v.columns(name)
+  let columns = v.props(name)
   let declared = new Set(columns)
   let alien = Object.keys(patch).filter((c) => !declared.has(c))
   if (alien.length) {

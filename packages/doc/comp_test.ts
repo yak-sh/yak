@@ -13,7 +13,7 @@ let addressed = loadVocab([docDoc], [blobKeywords])
 
 Deno.test('the document loads on its own, and ships one component', () => {
   assertEquals(plain.all, [DOC])
-  assertEquals(plain.columns(DOC), [TITLE, BODY])
+  assertEquals(plain.props(DOC), [TITLE, BODY])
   assertEquals(plain.comp(DOC)!.writable, [TITLE, BODY])
   assertEquals(plain.comp(DOC)!.stamped, [])
 })
@@ -25,19 +25,19 @@ Deno.test('doc is a kind, ordered against nothing it does not ship', () => {
 
 Deno.test('both columns are text, and both route bare', () => {
   for (let prop of [TITLE, BODY]) {
-    assertEquals(plain.column(DOC, prop)!.category, 'scalar')
+    assertEquals(plain.prop(DOC, prop)!.category, 'scalar')
     assertEquals(plain.route(prop), { comp: DOC, prop })
   }
 })
 
 Deno.test('store is carried only by whoever registered the keyword', () => {
-  assertEquals(plain.column(DOC, BODY)!.keywords.store, undefined)
-  assertEquals(addressed.column(DOC, BODY)!.keywords.store, 'blob')
+  assertEquals(plain.prop(DOC, BODY)!.keywords.store, undefined)
+  assertEquals(addressed.prop(DOC, BODY)!.keywords.store, 'blob')
   // and it is an ordinary text column either way — where the value lives is
   // @yaks/blob's business, never the meta-model's
   for (let v of [plain, addressed]) {
-    assertEquals(v.column(DOC, BODY)!.scalar, 'text')
-    assertEquals(v.column(DOC, BODY)!.affinity, 'text')
+    assertEquals(v.prop(DOC, BODY)!.scalar, 'text')
+    assertEquals(v.prop(DOC, BODY)!.affinity, 'text')
   }
 })
 

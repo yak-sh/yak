@@ -38,7 +38,7 @@ import { composed as perEntity, detached } from '@yaks/graph'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
 import type { Search } from '@yaks/mcp'
-import type { Column, PropSchema, Vocab } from '@yaks/vocab'
+import type { Prop, PropSchema, Vocab } from '@yaks/vocab'
 import { META } from './directory.ts'
 import { vocabIn } from './declared.ts'
 import { letters } from './letters.ts'
@@ -396,7 +396,7 @@ let spoken = async (
  */
 export let reading =
   (clashes: Set<string>) =>
-  (col: Column, o: { write?: boolean }): z.ZodTypeAny | undefined =>
+  (col: Prop, o: { write?: boolean }): z.ZodTypeAny | undefined =>
     clashes.has(`${col.comp}.${col.prop}`)
       ? z.unknown()
       : col.category == 'ref' && !o.write

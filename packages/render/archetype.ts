@@ -1,4 +1,4 @@
-// Presence-only queries have one answer per immutable table set. Column/value
+// Presence-only queries have one answer per immutable table set. Property
 // queries still read their bundle; an unknown descriptor declines the shortcut.
 import { bare, type Clause, type Query } from '@yaks/query'
 import { type Bundle, filter } from '@yaks/match'

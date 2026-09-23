@@ -24,8 +24,8 @@
 
 import { assert, assertEquals } from '@std/assert'
 import {
-  type Column,
   loadVocab,
+  type Prop,
   syncOf,
   type Vocab,
   type VocabDoc,
@@ -68,15 +68,15 @@ Deno.test('parity: the same components, writable and stamped', () => {
 // A column, less its prose. `description` is documentation a package's
 // vocab.json may carry and a manifest never does (divergence Two above); it is
 // not storage or a keyword, so parity neutralizes it and compares all else.
-let stored = (c: Column | undefined) => c && { ...c, description: undefined }
+let stored = (c: Prop | undefined) => c && { ...c, description: undefined }
 
 Deno.test('parity: every column, to the last keyword', () => {
   for (let name of ours) {
-    assertEquals(swapped.columns(name), today.columns(name), name)
-    for (let prop of today.columns(name)) {
+    assertEquals(swapped.props(name), today.props(name), name)
+    for (let prop of today.props(name)) {
       assertEquals(
-        stored(swapped.column(name, prop)),
-        stored(today.column(name, prop)),
+        stored(swapped.prop(name, prop)),
+        stored(today.prop(name, prop)),
         `${name}.${prop}`,
       )
     }
@@ -90,7 +90,7 @@ Deno.test('parity: the death worklists, all four words', () => {
 })
 
 Deno.test('parity: a card still dies with what it shows', () => {
-  assertEquals(swapped.column('card', 'target')!.death, 'cascade')
+  assertEquals(swapped.prop('card', 'target')!.death, 'cascade')
 })
 
 Deno.test('parity: routing — every bare prop lands where it lands today', () => {
@@ -104,7 +104,7 @@ Deno.test('parity: routing — every bare prop lands where it lands today', () =
   // every column name the fleet knows, not just ours: a swapped document
   // must not steal a bare word from another domain, or yield one it owns
   for (let name of today.all) {
-    for (let prop of today.columns(name)) {
+    for (let prop of today.props(name)) {
       assertEquals(asked(swapped, prop), asked(today, prop), `.${prop}`)
     }
   }
@@ -155,13 +155,13 @@ Deno.test('divergence: the package describes its columns, the manifest does not'
   // storage-and-keyword shape is identical. A description is documentation, so
   // it is the fleet's manifest to add someday, not a parity break today.
   assertEquals(
-    swapped.column('camera', 'client')!.description,
+    swapped.prop('camera', 'client')!.description,
     'the window doing the looking',
   )
-  assertEquals(today.column('camera', 'client')!.description, undefined)
+  assertEquals(today.prop('camera', 'client')!.description, undefined)
   assertEquals(
-    stored(swapped.column('camera', 'client')),
-    stored(today.column('camera', 'client')),
+    stored(swapped.prop('camera', 'client')),
+    stored(today.prop('camera', 'client')),
   )
 })
 

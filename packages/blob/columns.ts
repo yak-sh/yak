@@ -7,13 +7,13 @@
 // respect — it is declared, validated, queried and written as text. Only where
 // the value lives differs, and that is this package's whole subject.
 
-import type { Column, Vocab } from '@yaks/vocab'
+import type { Prop, Vocab } from '@yaks/vocab'
 
 /** One content-addressed column, named the way a vocabulary names it. */
 export type Body = { comp: string; prop: string }
 
 /** Whether a column keeps its value in a content-addressed store. */
-export let isBody = (column: Column | undefined): boolean =>
+export let isBody = (column: Prop | undefined): boolean =>
   column?.keywords?.store == 'blob'
 
 /**
@@ -25,7 +25,7 @@ export let isBody = (column: Column | undefined): boolean =>
  */
 export let bodies = (vocab: Vocab): Body[] =>
   vocab.all.flatMap((comp) =>
-    vocab.columns(comp)
-      .filter((prop) => isBody(vocab.column(comp, prop)))
+    vocab.props(comp)
+      .filter((prop) => isBody(vocab.prop(comp, prop)))
       .map((prop) => ({ comp, prop }))
   )

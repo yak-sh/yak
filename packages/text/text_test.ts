@@ -271,7 +271,7 @@ Deno.test('independent lists keep their boundaries and restart numbering', () =>
   assertEquals(plain(node), '- one\n  \n  two')
 })
 
-Deno.test('render resolves views and column context, and missing views are empty', () => {
+Deno.test('render resolves views and property context, and missing views are empty', () => {
   let vocab = loadVocab([{
     $defs: {
       doc: {
@@ -283,16 +283,16 @@ Deno.test('render resolves views and column context, and missing views are empty
   }])
   let registry = define([{
     view: 'Edit',
-    match: parse('.column.type=string'),
+    match: parse('.prop.type=string'),
     render: (b, h, ctx) =>
       h(
         'code',
         null,
-        String((b[ctx.comp!] as Record<string, unknown>)[ctx.col!]),
+        String((b[ctx.comp!] as Record<string, unknown>)[ctx.prop!]),
       ),
   }])
   let bundle = { entity: { eid: 'a' }, doc: { title: 'A page' } }
-  let ctx = { comp: 'doc', col: 'title' }
+  let ctx = { comp: 'doc', prop: 'title' }
   assertEquals(render(registry, bundle, 'Form.Edit', vocab, ctx), '`A page`')
   assertEquals(render(registry, bundle, 'Edit', vocab, ctx, 'plain'), 'A page')
   assertEquals(render(registry, bundle, 'Missing', vocab), '')
@@ -326,14 +326,14 @@ Deno.test('nested text views retain registry context and always render read-only
           h(
             'dd',
             null,
-            ctx.render?.('Nested.Edit', { col: 'title', readOnly: false }),
+            ctx.render?.('Nested.Edit', { prop: 'title', readOnly: false }),
           ),
         )
       },
     },
     {
       view: 'Edit',
-      match: parse('.column.type=string'),
+      match: parse('.prop.type=string'),
       render: (b, h, ctx) => {
         assertEquals(ctx.readOnly, true)
         assertEquals(ctx.extra, 'kept')

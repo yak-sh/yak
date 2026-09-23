@@ -1413,4 +1413,4 @@ export let appVocab = (source: unknown = {}): Vocab =>
  * adapter is told this (graph.ts), so there is one answer rather than a
  * vocabulary saying one thing and the writer doing another.
  */
-export let numbered = (v: Vocab): boolean => !!v.column('entity', 'num')
+export let numbered = (v: Vocab): boolean => !!v.prop('entity', 'num')

@@ -7,7 +7,7 @@
 // The fields are grouped into one index per component (`indexes()`), because an
 // FTS5 external-content index mirrors exactly one table.
 
-import type { Column, Vocab } from '@yaks/vocab'
+import type { Prop, Vocab } from '@yaks/vocab'
 
 // A `comp.prop` pair naming one indexed text column — a book's title, a
 // review's prose, a shop's own description.
@@ -15,7 +15,7 @@ export type Field = { comp: string; prop: string }
 
 // Decides whether a column is indexed. An application passes its own to index
 // less than the vocabulary marked — say, titles only.
-export type Pick = (column: Column) => boolean
+export type Pick = (column: Prop) => boolean
 
 // The default selection: the columns the vocabulary marked searchable with
 // `"search": true` (@yaks/vocab). Deciding which prose is worth finding belongs
@@ -32,8 +32,8 @@ export let searched: Pick = (c) =>
 // The searchable fields of a vocabulary, by component then declaration order.
 export let fields = (vocab: Vocab, pick: Pick = searched): Field[] =>
   vocab.all.flatMap((comp) =>
-    vocab.columns(comp)
-      .map((prop) => vocab.column(comp, prop)!)
+    vocab.props(comp)
+      .map((prop) => vocab.prop(comp, prop)!)
       .filter(pick)
       .map((c) => ({ comp, prop: c.prop }))
   )

@@ -1,5 +1,5 @@
 // Archetype selection is independent of projected component bodies; value
-// predicates, columns and registry overlays retain their existing semantics.
+// predicates, properties and registry overlays retain their existing semantics.
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { and, or, parse, present } from '@yaks/query'

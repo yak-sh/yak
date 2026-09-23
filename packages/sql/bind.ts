@@ -244,7 +244,7 @@ let readCol = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
       tag: dc.tag,
     }
   }
-  let col = ctx.v.column(comp, prop)
+  let col = ctx.v.prop(comp, prop)
   if (col?.computed) return null // computed, no expression to read it
   let expr = ctx.d.col(comp, prop, ctx.v)
   if (expr == null) return null
@@ -353,7 +353,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     }
     return inRefs(
       ctx,
-      ctx.v.refCols().filter(([, prop]) => prop == hop.prop),
+      ctx.v.refProps().filter(([, prop]) => prop == hop.prop),
       value,
     )
   }
@@ -371,7 +371,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     )
   }
   let value = flat(p.value)
-  let col = ctx.v.column(hop.comp, hop.prop)
+  let col = ctx.v.prop(hop.comp, hop.prop)
   if (
     op == '' && value && !value.includes('..') &&
     value.split(',').every(Boolean) && col?.category == 'ref' &&
@@ -433,7 +433,7 @@ let source = (ctx: Ctx, comp: string) => ctx.d.source?.(comp) ?? `"${comp}"`
 let refKey = (ctx: Ctx, comp: string, prop: string): string =>
   ctx.d.refCol?.(comp, prop) ?? `"${comp}"."${prop}"`
 let isRef = (v: Vocab, comp: string, prop: string) =>
-  v.column(comp, prop)?.category == 'ref'
+  v.prop(comp, prop)?.category == 'ref'
 
 let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   let op = opOf(p)
@@ -528,7 +528,7 @@ let leafRead = (ctx: Ctx, leaf: Hop, target: string): Read => {
       ` where "__pw"."entity" = ${target})`
     return { expr: guarded(dc, present, dc.expr(target)), tag: dc.tag }
   }
-  let col = ctx.v.column(leaf.comp, leaf.prop)
+  let col = ctx.v.prop(leaf.comp, leaf.prop)
   if (col?.computed) return null
   if (leaf.comp == 'entity') {
     return {
@@ -594,7 +594,7 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
   if (r.op != '=' || !r.value) {
     throw new Unsupported('.refs', 'only .refs=<id> compiles')
   }
-  return inRefs(ctx, ctx.v.refCols(), r.value)
+  return inRefs(ctx, ctx.v.refProps(), r.value)
 }
 
 // The rows from which some reference column among `cols` points at `value`: one
@@ -999,7 +999,7 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
         ? 'eid'
         : (hop.comp == 'entity'
           ? 'text'
-          : tagOf(ctx.v.column(hop.comp, hop.prop)!)))
+          : tagOf(ctx.v.prop(hop.comp, hop.prop)!)))
     if (!['text', 'enum', 'eid'].includes(tag)) {
       throw new Unsupported('.distinct/.tally', `over a ${tag} column`)
     }
@@ -1051,7 +1051,7 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
   // Whether this store numbers its entities: @yaks/id's document declares the
   // column, so a vocabulary that loaded it has numbers and one that did not
   // has none (the spine table holds the column either way).
-  let numbered = !!ctx.v.column('entity', 'num')
+  let numbered = !!ctx.v.prop('entity', 'num')
   // The cursor names its anchor by that entity's number, so a store which
   // mints none has nothing for it to name: `num < n` over a column of NULLs
   // answers with an empty page instead of saying so.

@@ -32,7 +32,7 @@ import { type Binding, filled, type Match, match, reads } from './join.ts'
 import type { Tx } from './storage.ts'
 import { then } from './pipe.ts'
 import type { Value } from '@yaks/query'
-import type { Column, Vocab } from '@yaks/vocab'
+import type { Prop, Vocab } from '@yaks/vocab'
 
 /**
  * A rule as declared: a name, the query it matches, and the rules it runs
@@ -94,7 +94,7 @@ let ordered = (rules: Declared[]): Declared[] => {
 // values are text and a column's are not.
 let worth = (
   value: Value,
-  col: Column | undefined,
+  col: Prop | undefined,
   row: Binding,
   made: Record<string, Eid>,
   resource: (name: string) => unknown,
@@ -150,7 +150,7 @@ export let emitted = (
       patch[s.comp] ??= {}
       let v = worth(
         s.value,
-        vocab.column(s.comp, s.prop),
+        vocab.prop(s.comp, s.prop),
         row,
         made,
         resource,

@@ -18,7 +18,7 @@ import type { Param } from './driver.ts'
 
 /** Whether `comp.prop` holds a JSON value. */
 export let isJsonb = (v: Vocab, comp: string, prop: string): boolean =>
-  v.column(comp, prop)?.scalar == 'jsonb'
+  v.prop(comp, prop)?.scalar == 'jsonb'
 
 /** A JSON value as the parameter `jsonb(?)` binds; null clears the column. */
 export let jsonIn = (value: unknown): Param =>

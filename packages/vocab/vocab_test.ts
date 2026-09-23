@@ -23,8 +23,8 @@ Deno.test('comps are alphabetical and the spine stays unwritable', () => {
   assertEquals(v.comp('entity')?.stamped, ['num'])
 })
 
-Deno.test('columns interrogate to their whole shape', () => {
-  assertEquals(v.column('task', 'priority'), {
+Deno.test('properties interrogate to their whole shape', () => {
+  assertEquals(v.prop('task', 'priority'), {
     comp: 'task',
     prop: 'priority',
     description: undefined,
@@ -51,29 +51,29 @@ Deno.test('columns interrogate to their whole shape', () => {
     v.comp('doc')?.description,
     'The written face of an entity: a title and a markdown body.',
   )
-  let target = v.column('comment', 'target')!
+  let target = v.prop('comment', 'target')!
   assertEquals(
     [target.category, target.ref, target.death, target.affinity, target.fk],
     ['ref', 'entity', 'cascade', 'integer', true],
   )
   // a kept reference carries no foreign key
-  assertEquals(v.column('memory', 'scope')!.fk, false)
-  // where a string column keeps its value is no concern of the meta-model:
-  // a body is an ordinary text column here (@yaks/blob owns `store`)
-  let body = v.column('doc', 'body')!
+  assertEquals(v.prop('memory', 'scope')!.fk, false)
+  // where a string property keeps its value is no concern of the meta-model:
+  // a body is an ordinary text property here (@yaks/blob owns `store`)
+  let body = v.prop('doc', 'body')!
   assertEquals([body.scalar, body.affinity], ['text', 'text'])
   // scalars reconstruct from native type+format
-  assertEquals(v.column('board', 'query')!.scalar, 'query')
-  assertEquals(v.column('claim', 'at')!.scalar, 'time')
-  assertEquals(v.column('role', 'state')!.values![0], 'running')
+  assertEquals(v.prop('board', 'query')!.scalar, 'query')
+  assertEquals(v.prop('claim', 'at')!.scalar, 'time')
+  assertEquals(v.prop('role', 'state')!.values![0], 'running')
 })
 
-Deno.test('stamped columns are readable, never writable', () => {
+Deno.test('stamped properties are readable, never writable', () => {
   let claim = v.comp('claim')!
   assertEquals(claim.writable, ['session'])
   assertEquals(claim.stamped, ['at'])
-  assertEquals(v.columns('claim'), ['session', 'at'])
-  assert(v.column('claim', 'at')!.stamped)
+  assertEquals(v.props('claim'), ['session', 'at'])
+  assert(v.prop('claim', 'at')!.stamped)
 })
 
 Deno.test('bare props route to their home', () => {
@@ -104,12 +104,12 @@ Deno.test('dotted paths aim to hops', () => {
   )
 })
 
-Deno.test('a bare bang aims at the component a column shadows', () => {
-  // `project` is both a component and task's reference column. Every form but
-  // the bare bang keeps the column — `.project=P-3` must not change meaning.
+Deno.test('a bare bang aims at the component a property shadows', () => {
+  // `project` is both a component and task's reference property. Every form but
+  // the bare bang keeps the property — `.project=P-3` must not change meaning.
   assertEquals(v.aim('project'), [{ comp: 'task', prop: 'project' }])
   // `.project!` completes the component sentence: the facet has no other
-  // spelling, while the column keeps its qualified one.
+  // spelling, while the property keeps its qualified one.
   assertEquals(v.aim('project', true), [{ comp: 'project', prop: '' }])
   assertEquals(v.aim('task.project', true), [{ comp: 'task', prop: 'project' }])
   // a name no component wears is routed as ever
@@ -129,23 +129,23 @@ Deno.test('the spine routes its own identity, declared or not', () => {
   // entity has one — so `.eid=` and `.entity.eid=` name entities
   assertEquals(v.route('eid'), { comp: 'entity', prop: 'eid' })
   assertEquals(v.aim('entity.eid'), [{ comp: 'entity', prop: 'eid' }])
-  // it stays out of the column set: identity is not prose, so it reaches no
+  // it stays out of the property set: identity is not prose, so it reaches no
   // text index, no embedding, and no component's DDL
-  assertEquals(v.columns('entity').includes('eid'), false)
-  assertEquals(v.column('entity', 'eid'), undefined)
+  assertEquals(v.props('entity').includes('eid'), false)
+  assertEquals(v.prop('entity', 'eid'), undefined)
 })
 
-Deno.test('reverse associations derive from the reference columns', () => {
-  // one reference column: the component's plural names it
+Deno.test('reverse associations derive from the reference properties', () => {
+  // one reference property: the component's plural names it
   assertEquals(v.assoc('comments'), { comp: 'comment', prop: 'target' })
-  // several reference columns: the column disambiguates the plural
+  // several reference properties: the property disambiguates the plural
   assertEquals(v.assoc('claims'), { comp: 'claim', prop: 'session' })
   assertEquals(v.assoc('nothings'), undefined)
   // a forward spelling is never shadowed
   assertEquals(v.assoc('task'), undefined)
 })
 
-Deno.test('an association names the column when a comp has several refs', () => {
+Deno.test('an association names the property when a comp has several refs', () => {
   let w = loadVocab({
     $defs: {
       book: {
@@ -202,32 +202,32 @@ Deno.test('death worklists derive from the declarations', () => {
   assert(keep.some(([c, p]) => c == 'memory' && p == 'scope'))
   // stamped refs stay out of the wire's cascade…
   assert(!keep.some(([c, p]) => c == 'role' && p == 'observed'))
-  // …but are still reference columns
-  assert(v.refCols().some(([c, p]) => c == 'role' && p == 'observed'))
+  // …but are still reference properties
+  assert(v.refProps().some(([c, p]) => c == 'role' && p == 'observed'))
 })
 
 Deno.test('a registered extension keyword is carried, not interpreted', () => {
   let words = {
     uri: 'https://example.com/vocab/shelf',
     comp: ['prefix', 'by_name'],
-    column: ['format'],
+    prop: ['format'],
   }
   let w = loadVocab(slice, [words])
   assertEquals(w.keywords, [words])
   assertEquals(w.comp('task')?.keywords, { prefix: 'T' })
   assertEquals(w.comp('project')?.keywords, { prefix: 'P', by_name: true })
   assertEquals(w.comp('comment')?.keywords, {}) // declares none
-  assertEquals(w.column('task', 'priority')?.keywords, { format: 'priority' })
+  assertEquals(w.prop('task', 'priority')?.keywords, { format: 'priority' })
   // unregistered keywords stay invisible
   assertEquals(v.comp('task')?.keywords, {})
-  assertEquals(v.column('task', 'priority')?.keywords, {})
+  assertEquals(v.prop('task', 'priority')?.keywords, {})
 })
 
 Deno.test('the meta-schema composes with an extension vocabulary', () => {
   let words = {
     uri: 'https://example.com/vocab/shelf',
     comp: ['shelf'],
-    column: ['unit'],
+    prop: ['unit'],
     doc: { $defs: { unit: { type: 'string' } } },
   }
   let m = extendMeta([words]) as Record<string, Record<string, unknown>>
@@ -235,8 +235,8 @@ Deno.test('the meta-schema composes with an extension vocabulary', () => {
   let props = (k: string) =>
     (m.$defs[k] as { properties: Record<string, unknown> }).properties
   assertEquals(props('component').shelf, true) // named, undescribed
-  assertEquals(props('column').unit, { type: 'string' })
-  assert(props('column').ref) // the core keywords still stand
+  assertEquals(props('prop').unit, { type: 'string' })
+  assert(props('prop').ref) // the core keywords still stand
   // composing leaves the published meta-schema alone
   let core = metaSchema.$defs as Record<string, { properties: object }>
   assert(!('shelf' in core.component.properties))
@@ -248,7 +248,7 @@ Deno.test('instances check against the loaded shape', () => {
     'task.priority is a number',
   ])
   assert(v.check('task', { bogus: 1 })[0].includes('task has'))
-  // stamped columns refuse a write unless asked for
+  // stamped properties refuse a write unless asked for
   assert(v.check('claim', { at: 'now' }).length == 1)
   assertEquals(v.check('claim', { at: 'now' }, { stamped: true }), [])
   assertEquals(v.check('notice', { event: 'wake' }), [])
@@ -256,7 +256,7 @@ Deno.test('instances check against the loaded shape', () => {
   assert(v.check('task', { domain: { nested: 1 } })[0].includes('scalar'))
 })
 
-Deno.test('JSON columns store validated JSON text', () => {
+Deno.test('JSON properties store validated JSON text', () => {
   let w = loadVocab({
     $defs: {
       config: {
@@ -266,7 +266,7 @@ Deno.test('JSON columns store validated JSON text', () => {
       },
     },
   })
-  let c = w.column('config', 'value')!
+  let c = w.prop('config', 'value')!
   assertEquals([c.category, c.scalar, c.affinity], ['scalar', 'json', 'text'])
   for (let value of [null, 'null', '{}', '[1, true]', '"text"', '0', 'false']) {
     assertEquals(w.check('config', { value }), [])
@@ -279,7 +279,7 @@ Deno.test('JSON columns store validated JSON text', () => {
   }
 })
 
-Deno.test('object, array and union columns hold a JSON value', () => {
+Deno.test('object, array and union properties hold a JSON value', () => {
   let w = loadVocab({
     $defs: {
       recipe: {
@@ -292,12 +292,12 @@ Deno.test('object, array and union columns hold a JSON value', () => {
       },
     },
   })
-  let c = w.column('recipe', 'meta')!
+  let c = w.prop('recipe', 'meta')!
   assertEquals(
     [c.category, c.scalar, c.affinity, c.types],
     ['scalar', 'jsonb', 'blob', ['object']],
   )
-  assertEquals(w.column('recipe', 'any')!.types, ['string', 'number', 'object'])
+  assertEquals(w.prop('recipe', 'any')!.types, ['string', 'number', 'object'])
   let ok = { meta: { a: 1 }, tags: ['x'], any: 'text' }
   assertEquals(w.check('recipe', ok), [])
   assertEquals(w.check('recipe', { any: 2.5 }), [])
@@ -308,7 +308,7 @@ Deno.test('object, array and union columns hold a JSON value', () => {
   ])
 })
 
-Deno.test('a column with no type is refused, never read as text', () => {
+Deno.test('a property with no type is refused, never read as text', () => {
   let load = (s: PropSchema) =>
     loadVocab({ $defs: { x: { component: true, properties: { c: s } } } })
   for (let s of [{}, { enum: ['a'] }, { format: 'date-time' }]) {
@@ -316,7 +316,7 @@ Deno.test('a column with no type is refused, never read as text', () => {
   }
 })
 
-Deno.test('a string column casts what it is sent to a string', () => {
+Deno.test('a string property casts what it is sent to a string', () => {
   let w = loadVocab({
     $defs: {
       note: {
@@ -353,7 +353,7 @@ Deno.test('a string column casts what it is sent to a string', () => {
   assertEquals(cast(w, 'note', { text: null }), { text: null })
 })
 
-Deno.test('number and priority columns refuse non-finite values', () => {
+Deno.test('number and priority properties refuse non-finite values', () => {
   for (let format of [undefined, 'priority']) {
     let w = loadVocab({
       $defs: {
@@ -372,7 +372,7 @@ Deno.test('number and priority columns refuse non-finite values', () => {
   }
 })
 
-Deno.test('a computed column reads but never writes', () => {
+Deno.test('a computed property reads but never writes', () => {
   let w = loadVocab({
     $defs: {
       task: {
@@ -388,7 +388,7 @@ Deno.test('a computed column reads but never writes', () => {
   })
   assertEquals(w.comp('task')?.writable, ['priority'])
   assertEquals(w.route('status'), { comp: 'task', prop: 'status' })
-  assertEquals(w.column('task', 'status')?.computed, true)
+  assertEquals(w.prop('task', 'status')?.computed, true)
   assert(w.check('task', { status: 'open' }).length == 1)
 })
 
@@ -434,7 +434,7 @@ Deno.test('the fleet order is unchanged: memory and project precede doc', () => 
   assert(at('project') < at('doc'))
 })
 
-Deno.test('indexes merge the column flag with the composite lists', () => {
+Deno.test('indexes merge the property flag with the composite lists', () => {
   let w = loadVocab({
     $defs: {
       space: {
@@ -463,11 +463,11 @@ Deno.test('indexes merge the column flag with the composite lists', () => {
       },
     },
   })
-  assertEquals(w.indexes('space'), [{ cols: ['slug'], unique: true }])
+  assertEquals(w.indexes('space'), [{ props: ['slug'], unique: true }])
   assertEquals(w.indexes('app'), [
-    { cols: ['hot'], unique: false },
-    { cols: ['space', 'slug'], unique: true },
-    { cols: ['space', 'version'], unique: false },
+    { props: ['hot'], unique: false },
+    { props: ['space', 'slug'], unique: true },
+    { props: ['space', 'version'], unique: false },
   ])
   assertEquals(w.indexes('alias'), [])
   assertEquals(w.indexes('nobody'), [])
@@ -485,7 +485,7 @@ Deno.test('one pair declared twice is one index, unique if either said so', () =
       },
     },
   })
-  assertEquals(w.indexes('shelf'), [{ cols: ['aisle'], unique: true }])
+  assertEquals(w.indexes('shelf'), [{ props: ['aisle'], unique: true }])
 })
 
 Deno.test('a word has one home across documents', () => {
@@ -504,7 +504,7 @@ Deno.test('a word has one home across documents', () => {
   )
 })
 
-// The spine's case: a plugin keeps a column beside every entity without
+// The spine's case: a plugin keeps a property beside every entity without
 // declaring a second `entity`.
 let spine: VocabDoc = {
   $defs: {
@@ -523,14 +523,14 @@ let adds = (
   $defs: { entity: { component: true, extends: true, properties, ...more } },
 })
 
-Deno.test('an extension adds its columns to the component another document declares', () => {
+Deno.test('an extension adds its properties to the component another document declares', () => {
   let v = loadVocab([spine, adds({ num: { type: 'number', stamped: true } })])
-  assertEquals(v.columns('entity'), ['archetype', 'num'])
+  assertEquals(v.props('entity'), ['archetype', 'num'])
   assertEquals(v.comp('entity')!.wire, false)
-  assertEquals(v.column('entity', 'num')!.stamped, true)
+  assertEquals(v.prop('entity', 'num')!.stamped, true)
   // And the order the documents arrive in decides nothing.
   assertEquals(
-    loadVocab([adds({ num: { type: 'number' } }), spine]).columns('entity'),
+    loadVocab([adds({ num: { type: 'number' } }), spine]).props('entity'),
     ['archetype', 'num'],
   )
 })
@@ -543,16 +543,16 @@ Deno.test('an extension of a component nobody declares is refused', () => {
   )
 })
 
-Deno.test('an extension may not redeclare a column or restate the component', () => {
+Deno.test('an extension may not redeclare a property or restate the component', () => {
   assertThrows(
     () => loadVocab([spine, adds({ archetype: { type: 'string' } })]),
     Error,
-    "already declares a 'archetype' column",
+    "already declares a 'archetype' property",
   )
   assertThrows(
     () => loadVocab([spine, adds({ num: { type: 'number' } }, { kind: true })]),
     Error,
-    'may only add columns',
+    'may only add properties',
   )
 })
 
@@ -577,11 +577,11 @@ Deno.test('every stored reference is indexed without an opt-in', () => {
     },
   })
   assertEquals(w.indexes('link'), [
-    { cols: ['explicit'], unique: false },
-    { cols: ['unique'], unique: true },
-    { cols: ['target'], unique: false },
-    { cols: ['by'], unique: false },
-    { cols: ['off'], unique: false },
+    { props: ['explicit'], unique: false },
+    { props: ['unique'], unique: true },
+    { props: ['target'], unique: false },
+    { props: ['by'], unique: false },
+    { props: ['off'], unique: false },
   ])
 })
 
@@ -605,8 +605,8 @@ Deno.test('only the leading reference is covered by a composite index', () => {
       },
     })
     assertEquals(w.indexes('link'), [
-      { cols: ['from', 'to'], unique: !('index' in declaration) },
-      { cols: ['to'], unique: false },
+      { props: ['from', 'to'], unique: !('index' in declaration) },
+      { props: ['to'], unique: false },
     ])
   }
 })
@@ -636,29 +636,29 @@ Deno.test('native constraints interrogate: integer, required, default', () => {
       },
     },
   })
-  let at = w.column('created', 'at')!
+  let at = w.prop('created', 'at')!
   assertEquals([at.required, at.default, at.scalar], [
     true,
     { now: true },
     'time',
   ])
-  assertEquals(w.column('created', 'by')!.required, false)
-  assertEquals(w.column('repo', 'base')!.default, { value: 'main' })
-  assertEquals(w.column('repo', 'push')!.default, { value: false })
+  assertEquals(w.prop('created', 'by')!.required, false)
+  assertEquals(w.prop('repo', 'base')!.default, { value: 'main' })
+  assertEquals(w.prop('repo', 'push')!.default, { value: false })
   // `integer` is native JSON Schema saying the value has no fraction, and the
   // store keeps it that way; a plain number stores as real.
-  assertEquals(w.column('repo', 'seq')!.affinity, 'integer')
-  assertEquals(w.column('repo', 'score')!.affinity, 'real')
-  assertEquals(w.column('repo', 'seq')!.default, undefined)
+  assertEquals(w.prop('repo', 'seq')!.affinity, 'integer')
+  assertEquals(w.prop('repo', 'score')!.affinity, 'real')
+  assertEquals(w.prop('repo', 'seq')!.default, undefined)
 })
 
-Deno.test('a composite entry may be partial: the columns a row must hold', () => {
+Deno.test('a composite entry may be partial: the properties a row must hold', () => {
   let w = loadVocab({
     $defs: {
       output: {
         component: true,
         type: 'object',
-        unique: [{ cols: ['key'], present: ['key'] }],
+        unique: [{ props: ['key'], present: ['key'] }],
         index: [['source']],
         properties: {
           key: { type: 'string' },
@@ -668,12 +668,12 @@ Deno.test('a composite entry may be partial: the columns a row must hold', () =>
     },
   })
   assertEquals(w.indexes('output'), [
-    { cols: ['key'], unique: true, present: ['key'] },
-    { cols: ['source'], unique: false },
+    { props: ['key'], unique: true, present: ['key'] },
+    { props: ['source'], unique: false },
   ])
 })
 
-Deno.test('a column says for itself whether its words are searched', () => {
+Deno.test('a property says for itself whether its words are searched', () => {
   let w = loadVocab({
     $defs: {
       recipe: {
@@ -686,6 +686,6 @@ Deno.test('a column says for itself whether its words are searched', () => {
       },
     },
   })
-  assertEquals(w.column('recipe', 'note')!.search, true)
-  assertEquals(w.column('recipe', 'origin')!.search, false)
+  assertEquals(w.prop('recipe', 'note')!.search, true)
+  assertEquals(w.prop('recipe', 'origin')!.search, false)
 })

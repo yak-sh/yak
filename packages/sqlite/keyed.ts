@@ -14,7 +14,7 @@ export let keyed = (driver: Driver, vocab: Vocab, opts: BindOpts) => {
   // A number is shown only where the vocabulary declares one (read.ts
   // `numbered`): the column stands in every layout, and a store that never
   // loaded @yaks/id has nothing to say with it.
-  let numbered = !!vocab.column('entity', 'num')
+  let numbered = !!vocab.prop('entity', 'num')
   let probes: string[] = []
   // Cut to what this engine's compound SELECT carries (`Driver.arms`): workerd
   // refuses a sixth term where an embedded SQLite takes hundreds, so a probe
@@ -69,7 +69,7 @@ export let keyed = (driver: Driver, vocab: Vocab, opts: BindOpts) => {
       if (!sql) columns.set(comp, sql = compSql(vocab, comp, opts.derived))
       let held = driver.query(sql, [eid])[0]
       if (held) {
-        let present = vocab.column(comp, 'present')
+        let present = vocab.prop(comp, 'present')
         if (present?.computed !== false && !opts.derived?.[`${comp}.present`]) {
           delete held.present
         }

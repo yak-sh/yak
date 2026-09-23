@@ -18,7 +18,7 @@
 // context than the schema ever was.
 
 import { z } from 'zod'
-import type { Column, Vocab } from '@yaks/vocab'
+import type { Prop, Vocab } from '@yaks/vocab'
 
 /**
  * How much of the vocabulary a bundle schema spells out.
@@ -54,7 +54,7 @@ export type BundleOpts = {
    * schema is being derived under, so you can type a column one way for a read
    * and another for a write; return `undefined` to use the vocabulary's own
    * type */
-  column?: (col: Column, opts: BundleOpts) => z.ZodTypeAny | undefined
+  column?: (col: Prop, opts: BundleOpts) => z.ZodTypeAny | undefined
 }
 
 // A JSON value of the types a column declares. What an object or array holds
@@ -78,7 +78,7 @@ let json = (types: string[]): z.ZodTypeAny => {
 // names), and an enum reads back as one of its members. `.catch` is
 // deliberately absent: this schema describes the reply, and a reply that does
 // not match is a bug to see, not to coerce.
-let typed = (col: Column): z.ZodTypeAny =>
+let typed = (col: Prop): z.ZodTypeAny =>
   col.category == 'enum' && col.values?.length
     ? z.enum(col.values as [string, ...string[]])
     : col.scalar == 'jsonb'
@@ -122,8 +122,8 @@ let compSchema = (
 ): z.ZodTypeAny => {
   let info = vocab.comp(name)
   let shape = Object.fromEntries(
-    vocab.columns(name).map((prop) => {
-      let col = vocab.column(name, prop)!
+    vocab.props(name).map((prop) => {
+      let col = vocab.prop(name, prop)!
       // A server-owned column is named in the write schema but left untyped: a
       // caller that reads a bundle and sends it back will include one, and
       // @yaks/graph's `admit` drops it rather than refusing the transaction.

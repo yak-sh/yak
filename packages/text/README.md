@@ -24,7 +24,7 @@ components as a JSON object; the vocabulary describes those components. Use a
 registry (named view functions with matching predicates) from `@yaks/render`.
 The first five arguments are the same as the Preact renderer's. Mode defaults to
 `'markdown'`; pass `'plain'` for undecorated text. Context includes
-`{comp, col}` for column selection and `ctx.render(view, overrides?)` for
+`{comp, prop}` for property selection and `ctx.render(view, overrides?)` for
 composing nested views through the same registry. This renderer always passes
 `readOnly: true`, including to nested views, so that portable editors display
 their values. An unmatched view produces an empty string. `tree` takes the same

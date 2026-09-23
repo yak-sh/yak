@@ -150,42 +150,42 @@ Deno.test('parity: the work spellings route the same through both', () => {
 
 Deno.test('parity: status is computed and unwritable on both sides', () => {
   for (let v of [MINE, FLEET]) {
-    let status = v.column('task', 'status')!
+    let status = v.prop('task', 'status')!
     assertEquals(status.computed, true)
     assert(!v.comp('task')!.writable.includes('status'))
   }
   // The members agree as a SET; the package orders them most-decisive-first
   // (the ladder), the fleet orders them by lifecycle. Neither order is read.
   assertEquals(
-    [...MINE.column('task', 'status')!.values!].sort(),
+    [...MINE.prop('task', 'status')!.values!].sort(),
     ['cancelled', 'done', 'open'].sort(),
   )
   assertEquals(
-    [...FLEET.column('task', 'status')!.values!].sort(),
+    [...FLEET.prop('task', 'status')!.values!].sort(),
     ['cancelled', 'done', 'open', 'wip'].sort(),
   )
 })
 
 Deno.test('parity: a task is filed under a project and never onto a board', () => {
-  assertEquals(MINE.column('filed', 'project')!.ref, 'project')
-  assertEquals(MINE.column('filed', 'project')!.death, 'detach')
+  assertEquals(MINE.prop('filed', 'project')!.ref, 'project')
+  assertEquals(MINE.prop('filed', 'project')!.death, 'detach')
   // Membership is never stored: no column of `task` points at a board, on
   // either side. (The fleet DOES reference boards elsewhere — `fold.board` is
   // one viewer's collapse state for a board's view, and `card.target` is what a
   // card shows. Neither says a task is ON a board, which is the thing that must
   // not exist.)
   for (let v of [MINE, FLEET]) {
-    for (let prop of v.columns('task')) {
+    for (let prop of v.props('task')) {
       assert(
-        v.column('task', prop)!.ref != 'board',
+        v.prop('task', prop)!.ref != 'board',
         `task.${prop} references a board — membership must never be stored`,
       )
     }
   }
   // and in the package's own vocabulary, nothing at all does
-  for (let [comp, prop] of MINE.refCols()) {
+  for (let [comp, prop] of MINE.refProps()) {
     assert(
-      MINE.column(comp, prop)!.ref != 'board',
+      MINE.prop(comp, prop)!.ref != 'board',
       `${comp}.${prop} references a board`,
     )
   }

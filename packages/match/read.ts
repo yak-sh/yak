@@ -125,7 +125,7 @@ export let column = (
   if (prop == 'eid') {
     return { read: (b) => wears(b, name) ? b.entity.eid : null, tag: 'eid' }
   }
-  let col = v.column(name, prop)
+  let col = v.prop(name, prop)
   if (!col) return null
   // A registered rule wins, computed column or not — the same order the SQL
   // binder consults its `derived` map in. The type stays the vocabulary's: the

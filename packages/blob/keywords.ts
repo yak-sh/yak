@@ -20,4 +20,4 @@ export let BLOB_URI = 'https://yak.sh/vocab/blob'
  * `v.column(comp, prop).keywords.store`, which is where {@link bodies} reads
  * it.
  */
-export let blobKeywords: Keywords = { uri: BLOB_URI, column: ['store'], doc }
+export let blobKeywords: Keywords = { uri: BLOB_URI, prop: ['store'], doc }

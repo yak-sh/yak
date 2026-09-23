@@ -57,7 +57,7 @@ Deno.test("parity: the wake table is the fleet's, plus the one new column", () =
 Deno.test('parity: every fleet wake column keeps its type and death word', () => {
   let fleet = fleetVocab(), pkg = swapped()
   for (let p of ['at', 'target', 'note']) {
-    let f = fleet.column('wake', p)!, k = pkg.column('wake', p)!
+    let f = fleet.prop('wake', p)!, k = pkg.prop('wake', p)!
     assertEquals(k.category, f.category, p)
     assertEquals(k.scalar, f.scalar, p)
     assertEquals(k.ref, f.ref, p)

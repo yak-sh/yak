@@ -28,11 +28,11 @@ export type H<Node> = (
   ...children: Child<Node>[]
 ) => Node
 
-/** Extra values the caller supplies; comp and col together select a column
+/** Extra values the caller supplies; comp and prop together select a property
  * schema. */
 export type Context = {
   comp?: string
-  col?: string
+  prop?: string
   [key: string]: unknown
 }
 

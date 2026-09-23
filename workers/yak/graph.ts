@@ -976,7 +976,7 @@ export class Store {
               let eid = (v as { eid?: unknown } | null)?.eid
               if (
                 typeof eid != 'string' ||
-                this.#vocab.column(name, col)?.category != 'ref'
+                this.#vocab.prop(name, col)?.category != 'ref'
               ) continue
               out ??= { ...b }
               out[name] = {
@@ -1836,7 +1836,7 @@ export class Store {
   // them is a person is this store's own rows — the writer it minted when they
   // first wrote here, wearing what the kernel said to call them.
   #speak = (rows: Bundle[]): Bundle[] | Promise<Bundle[]> => {
-    let refs = new Set(this.#vocab.refCols().map(([c, p]) => `${c}.${p}`))
+    let refs = new Set(this.#vocab.refProps().map(([c, p]) => `${c}.${p}`))
     let ref = (comp: string, col: string) => refs.has(`${comp}.${col}`)
     let mentioned = new Set<string>()
     for (let row of rows) {

@@ -149,9 +149,9 @@ Deno.test('an identity is a unique index, said out loud', () => {
   assertEquals(pages.identity('guide'), ['slug'])
   assertEquals(pages.identity('release'), ['app', 'version'])
   assertEquals(pages.identity('doc'), [])
-  assertEquals(pages.indexes('guide'), [{ cols: ['slug'], unique: true }])
+  assertEquals(pages.indexes('guide'), [{ props: ['slug'], unique: true }])
   assertEquals(pages.indexes('release'), [{
-    cols: ['app', 'version'],
+    props: ['app', 'version'],
     unique: true,
   }])
 })

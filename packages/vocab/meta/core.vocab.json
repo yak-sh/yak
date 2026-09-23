@@ -2,15 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yak.sh/vocab/core",
   "title": "yaks core keyword vocabulary",
-  "description": "The keywords the yaks meta-model adds to JSON Schema 2020-12 to describe a component vocabulary. Native JSON Schema still carries type, format, enum, const, default, description, examples, $ref/$defs; these keywords add what a component table needs on top. Native keywords reach the table too: `type: integer` stores with integer affinity, a component's `required` list is NOT NULL, `default` is the column default (`{\"now\": true}` for the clock), and `enum` is a check. `examples` is native and subsumes the old `well` concept: a text field's completion draws from its examples union the column's own live distinct values.",
+  "description": "The keywords the yaks meta-model adds to JSON Schema 2020-12 to describe a component vocabulary. Native JSON Schema still carries type, format, enum, const, default, description, examples, $ref/$defs; these keywords add what a component table needs on top. Native keywords reach the table too: `type: integer` stores with integer affinity, a component's `required` list is NOT NULL, `default` is the column default (`{\"now\": true}` for the clock), and `enum` is a check. `examples` is native and subsumes the old `well` concept: a text field's completion draws from its examples union the property's own live distinct values.",
   "$comment": "A vocabulary declaration in the JSON Schema sense: a URI that names this keyword set, plus the schema of each keyword. A vocabulary document declares it under $vocabulary.",
   "$defs": {
     "component": {
-      "description": "true = this $defs entry declares a component: an object schema whose properties are the component's columns. Required \u2014 an entry marked neither this nor `tool` is an ordinary reusable subschema, and the loader creates no table for it.",
+      "description": "true = this $defs entry declares a component: an object schema whose `properties` are the component's properties. Required \u2014 an entry marked neither this nor `tool` is an ordinary reusable subschema, and the loader creates no table for it.",
       "const": true
     },
     "extends": {
-      "description": "true = this component entry adds its columns to a component another document declares, instead of declaring one of its own. The spine is what it is for: `entity` is declared once, and a plugin that keeps a value beside every entity adds its column here. An extension carries columns and nothing else — kind, prefix, indexes and wire belong to the document that declares the component.",
+      "description": "true = this component entry adds its properties to a component another document declares, instead of declaring one of its own. The spine is what it is for: `entity` is declared once, and a plugin that keeps a value beside every entity adds its property here. An extension carries properties and nothing else — kind, prefix, indexes and wire belong to the document that declares the component.",
       "const": true
     },
     "tool": {
@@ -38,7 +38,7 @@
       "type": "object"
     },
     "ref": {
-      "description": "The entity kind a string column references, e.g. \"project\" or \"entity\" (any entity). Makes the column a reference that stores the target's internal id.",
+      "description": "The entity kind a string property references, e.g. \"project\" or \"entity\" (any entity). Makes the property a reference that stores the target's internal id.",
       "type": "string"
     },
     "death": {
@@ -65,16 +65,16 @@
       "default": "forever"
     },
     "computed": {
-      "description": "true = this column is derived, never stored: no column holds it, nobody writes it, a reader still sees it (a query-only rank, an aggregate, a status read off marks). Default false \u2014 a column nobody declares is stored.",
+      "description": "true = this property is derived, never stored: no column holds it, nobody writes it, a reader still sees it (a query-only rank, an aggregate, a status read off marks). Default false \u2014 a property nobody declares so is stored.",
       "type": "boolean",
       "default": false
     },
     "stamped": {
-      "description": "true = the server owns this column: clients can read it, never write it.",
+      "description": "true = the server owns this property: clients can read it, never write it.",
       "type": "boolean"
     },
     "search": {
-      "description": "true = this text column is full-text indexed: a bare word in a query matches it, and a hit is ranked by it. A column nobody declares is stored and readable but never searched.",
+      "description": "true = this text property is full-text indexed: a bare word in a query matches it, and a hit is ranked by it. A property nobody declares is stored and readable but never searched.",
       "type": "boolean"
     },
     "kind": {
@@ -94,7 +94,7 @@
       "default": true
     },
     "bare": {
-      "description": "false = this column (or every column of this component) never claims its bare filter name; it is reached qualified only (.comp.prop). Use it for a column that should only be queried explicitly — a large log partition, or a name another component already claims.",
+      "description": "false = this property (or every property of this component) never claims its bare filter name; it is reached qualified only (.comp.prop). Use it for a property that should only be queried explicitly — a large log partition, or a name another component already claims.",
       "type": "boolean",
       "default": true
     },
@@ -106,7 +106,7 @@
       }
     },
     "unique": {
-      "description": "A uniqueness constraint, which is what decides a race between two writers. On a column, true = no two rows of the component may share the value. On a component, the composite uniques as column lists: [[\"space\", \"slug\"]], or {\"cols\": [\"key\"], \"present\": [\"key\"]} for a unique over the rows that hold the key (a partial index).",
+      "description": "A uniqueness constraint, which is what decides a race between two writers. On a property, true = no two rows of the component may share the value. On a component, the composite uniques as property lists: [[\"space\", \"slug\"]], or {\"props\": [\"key\"], \"present\": [\"key\"]} for a unique over the rows that hold the key (a partial index).",
       "anyOf": [
         {
           "type": "boolean"
@@ -123,7 +123,7 @@
       ]
     },
     "identity": {
-      "description": "What the entity's own id is derived from. On a column, true = this component's entities are identified by this value: the eid is sha256(\"<component>|<value>\") formatted as a UUID, so writing the same value twice writes one entity and uniqueness is a property of the id rather than the outcome of a race. On a component, the column list a composite identity spans, in derivation order: [\"space\", \"slug\"]. One tuple, never a list of them \u2014 an entity has one id.",
+      "description": "What the entity's own id is derived from. On a property, true = this component's entities are identified by this value: the eid is sha256(\"<component>|<value>\") formatted as a UUID, so writing the same value twice writes one entity and uniqueness is a property of the id rather than the outcome of a race. On a component, the property list a composite identity spans, in derivation order: [\"space\", \"slug\"]. One tuple, never a list of them \u2014 an entity has one id.",
       "anyOf": [
         {
           "type": "boolean"
@@ -137,7 +137,7 @@
       ]
     },
     "index": {
-      "description": "An index to read by, with no uniqueness constraint. On a column, true = index it. Stored references are always indexed: true is redundant and false does not opt out. On a component, the composite indexes as column lists: [[\"app\", \"version\"]], or {\"cols\": [...], \"present\": [...]} for a partial index over the rows that hold those columns.",
+      "description": "An index to read by, with no uniqueness constraint. On a property, true = index it. Stored references are always indexed: true is redundant and false does not opt out. On a component, the composite indexes as property lists: [[\"app\", \"version\"]], or {\"props\": [...], \"present\": [...]} for a partial index over the rows that hold those properties.",
       "anyOf": [
         {
           "type": "boolean"

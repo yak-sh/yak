@@ -11,7 +11,7 @@
 // `rows()` returns and reads back every component each entity has.
 
 import { type And, parse } from '@yaks/query'
-import type { Column, Vocab } from '@yaks/vocab'
+import type { Prop, Vocab } from '@yaks/vocab'
 import {
   ARMS,
   type BindOpts,
@@ -64,8 +64,8 @@ export let rows = (
 // column like any other, and leaving it out of the bundle while the filter
 // resolves it would make `.task.status=open` select rows whose `status` the
 // result does not carry.
-let read1 = (v: Vocab, comp: string, derived: Derived): Column[] =>
-  v.columns(comp).map((p) => v.column(comp, p)!)
+let read1 = (v: Vocab, comp: string, derived: Derived): Prop[] =>
+  v.props(comp).map((p) => v.prop(comp, p)!)
     .filter((c) => !c.computed || derived[`${comp}.${c.prop}`])
 
 // The projected read for one component: each scalar straight off the row, each
@@ -185,7 +185,7 @@ export let get = (
   // loaded it has none to speak of — including one that was numbered before the
   // plugin was opt in, whose old rows still carry the value. Read off the
   // vocabulary, the way the archetype below is.
-  let numbered = !!vocab.column('entity', 'num')
+  let numbered = !!vocab.prop('entity', 'num')
   // Bound parameter count and SQL-cache size; gather a component per set,
   // never every component per entity (a 1,000-entry transcript is otherwise
   // tens of thousands of queries). A JSON array uses one bind and one stable

@@ -1,9 +1,9 @@
-/** The portable Edit family: column declarations select controls, and the
+/** The portable Edit family: property declarations select controls, and the
  * rendering backend applies the actions. */
 
 import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import { declared, writable } from './column.ts'
+import { declared, writable } from './prop.ts'
 import { edit, type EditOptions } from './edit.ts'
 import type { Renderer } from './types.ts'
 
@@ -17,11 +17,12 @@ let controls = [
   { types: 'json,jsonb', tag: 'textarea' },
 ]
 
-/** Register these alongside entity views; column overlays use ordinary queries. */
+/** Register these alongside entity views; property overlays use ordinary
+ * queries. */
 export let editors = (vocab: Vocab, options: EditOptions = {}): Renderer[] =>
   controls.map(({ types, tag, type }) => ({
     view: 'Edit',
-    match: parse(`.column.type=${types}`),
+    match: parse(`.prop.type=${types}`),
     render: (bundle, h, ctx) => {
       let c = declared(vocab, ctx)
       let row = bundle[c.comp] as Record<string, unknown> | undefined
@@ -40,13 +41,13 @@ export let editors = (vocab: Vocab, options: EditOptions = {}): Renderer[] =>
           : text
         return h(
           'span',
-          { class: 'Edit', 'data-column': `${c.comp}.${c.prop}` },
+          { class: 'Edit', 'data-prop': `${c.comp}.${c.prop}` },
           shown.split(/\r?\n/).map((line, i) =>
             i ? [h('br', null), line] : line
           ),
         )
       }
-      let action = edit(vocab, { comp: c.comp, col: c.prop }, options)
+      let action = edit(vocab, { comp: c.comp, prop: c.prop }, options)
       let props: Record<string, unknown> = {
         class: 'Edit',
         'aria-label': `${c.comp}.${c.prop}`,
@@ -80,7 +81,7 @@ export let editors = (vocab: Vocab, options: EditOptions = {}): Renderer[] =>
     },
   }))
 
-/** A component's declared columns, including absent and read-only values. */
+/** A component's declared properties, including absent and read-only values. */
 export let properties = (vocab: Vocab): Renderer => ({
   view: 'Props',
   match: true,
@@ -94,12 +95,12 @@ export let properties = (vocab: Vocab): Renderer => ({
     return h(
       'dl',
       { class: 'Props' },
-      vocab.columns(comp).map((col) =>
+      vocab.props(comp).map((prop) =>
         h(
           'div',
-          { class: 'Props_Row', key: col },
-          h('dt', null, col),
-          h('dd', null, render('Edit', { comp, col })),
+          { class: 'Props_Row', key: prop },
+          h('dt', null, prop),
+          h('dd', null, render('Edit', { comp, prop })),
         )
       ),
     )

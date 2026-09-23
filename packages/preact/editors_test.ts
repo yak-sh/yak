@@ -41,22 +41,22 @@ let bundle: Bundle = {
 let registry = define([...editors(vocab), properties(vocab)])
 let context = { comp: 'doc' }
 type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-let field = (root: Element, col: string): Control =>
-  root.querySelector<Control>(`[aria-label="doc.${col}"]`)!
+let field = (root: Element, prop: string): Control =>
+  root.querySelector<Control>(`[aria-label="doc.${prop}"]`)!
 let changed = (control: Control) => {
   let Event = control.ownerDocument.defaultView!.Event
   control.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
-Deno.test('Props lays out every column with the matching editor and current value', () => {
+Deno.test('Props lays out every property with the matching editor and current value', () => {
   let mounted = mount(render(registry, bundle, 'Props', vocab, context))
   try {
     assertEquals(
       [...mounted.root.querySelectorAll('dt')].map((el) => el.textContent),
-      vocab.columns('doc'),
+      vocab.props('doc'),
     )
     for (
-      let [col, tag, value] of [
+      let [prop, tag, value] of [
         ['title', 'input', 'A <page>'],
         ['count', 'input', '0'],
         ['owner', 'input', 'b'],
@@ -65,8 +65,8 @@ Deno.test('Props lays out every column with the matching editor and current valu
         ['absent', 'input', ''],
       ]
     ) {
-      let control = field(mounted.root, col)
-      assertEquals([control.localName, control.value], [tag, value], col)
+      let control = field(mounted.root, prop)
+      assertEquals([control.localName, control.value], [tag, value], prop)
     }
     assertEquals(
       !!(field(mounted.root, 'enabled') as HTMLInputElement).checked,
@@ -157,7 +157,7 @@ Deno.test('HTML keeps editor values through hydration without exposing actions',
 Deno.test('text Props uses read-only values and registry editor overrides', () => {
   let custom = define([{
     view: 'Edit',
-    match: parse('.column.comp=doc, .column.col=title'),
+    match: parse('.prop.comp=doc, .prop.prop=title'),
     render: (_b, h) => h('strong', null, 'Custom title'),
   }, ...registry.renderers])
   assertEquals(
@@ -181,7 +181,7 @@ Deno.test('text Props uses read-only values and registry editor overrides', () =
   )
   let missing = { entity: { eid: 'a' }, doc: { enabled: null } }
   assertEquals(
-    text(registry, missing, 'Edit', vocab, { comp: 'doc', col: 'enabled' }),
+    text(registry, missing, 'Edit', vocab, { comp: 'doc', prop: 'enabled' }),
     '—',
   )
   let mounted = mount(render(custom, bundle, 'Props', vocab, context))

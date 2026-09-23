@@ -3,9 +3,9 @@
 // Three kinds of error, each naming the offending entry and the fix, because
 // the agent reading it has no other source:
 //   storable  the shape a table can lower — a top-level object of typed
-//             scalar / ref / enum / JSON columns, no recursive $ref
+//             scalar / ref / enum / JSON properties, no recursive $ref
 //   reserved  a name the base vocabulary already owns is rejected
-//   grow      evolution is additive forever — never drop or retype a column,
+//   grow      evolution is additive forever — never drop or retype a property,
 //             the rows are already written under the old type
 //
 // This is not a new security story: a hosted store only creates tables for
@@ -23,8 +23,8 @@ let object = (v: unknown): v is Record<string, unknown> =>
 
 // One property schema is storable when it names a scalar, a reference, a
 // closed set, or a JSON value — an object, an array, or a union of types,
-// which a table holds in one column as binary JSON. Every column says its
-// type. A JSON column may declare its structure (`properties`, `items`);
+// which a table holds in one column as binary JSON. Every property says its
+// type. A JSON property may declare its structure (`properties`, `items`);
 // nothing validates that structure yet.
 let storableProp = (
   comp: string,
@@ -34,7 +34,7 @@ let storableProp = (
   if (!object(s)) return [`${comp}.${prop} is a schema object`]
   if (s.$ref) {
     return [
-      `${comp}.${prop} uses $ref — a column cannot lower a recursive reference`,
+      `${comp}.${prop} uses $ref — a property cannot lower a recursive reference`,
     ]
   }
   let said = typesOf(s)
@@ -75,14 +75,14 @@ let storableProp = (
 }
 
 // The composite index lists a component declares, both keywords together. An
-// index over a column the component never declares would emit DDL no table can
-// take, so the names are checked here where an error can still teach.
-let composites = (s: PropSchema): { cols: string[]; present?: string[] }[] =>
+// index over a property the component never declares would emit DDL no table
+// can take, so the names are checked here where an error can still teach.
+let composites = (s: PropSchema): { props: string[]; present?: string[] }[] =>
   [s.unique, s.index].flatMap((v) =>
     Array.isArray(v) ? (v as Composite[]).map(composite) : []
   )
 
-// A default a row can take: a scalar literal, or the clock on a time column.
+// A default a row can take: a scalar literal, or the clock on a time property.
 let storableDefault = (comp: string, prop: string, s: PropSchema): string[] => {
   let d = s.default
   if (d === undefined) return []
@@ -92,20 +92,20 @@ let storableDefault = (comp: string, prop: string, s: PropSchema): string[] => {
   }
   if (object(d) && (d as { now?: unknown }).now === true) {
     return s.format == 'date-time' ? [] : [
-      `${comp}.${prop} defaults to now but is no date-time column`,
+      `${comp}.${prop} defaults to now but is no date-time property`,
     ]
   }
   return [
-    `${comp}.${prop} has a default no column can hold (a literal, or {"now": true})`,
+    `${comp}.${prop} has a default no property can hold (a literal, or {"now": true})`,
   ]
 }
 
-// `search` declares that this column is full-text indexed (@yaks/fts builds
+// `search` declares that this property is full-text indexed (@yaks/fts builds
 // the index from the declaration). Only prose has words to index: a number, a
 // stamp, a reference and a closed set are matched by their value rather than
-// read, and a computed column has no stored value to index — so the keyword is
-// rejected anywhere but a stored text column, where it would otherwise declare
-// an index over nothing.
+// read, and a computed property has no stored value to index — so the keyword
+// is rejected anywhere but a stored text property, where it would otherwise
+// declare an index over nothing.
 let WORDLESS = ['date-time', 'uri', 'query', 'json']
 let searched = (comp: string, prop: string, s: PropSchema): string[] =>
   s.search !== true ||
@@ -114,15 +114,15 @@ let searched = (comp: string, prop: string, s: PropSchema): string[] =>
       !WORDLESS.includes(s.format ?? ''))
     ? []
     : [
-      `${comp}.${prop} is searched but holds no prose — "search": true is for a stored text column`,
+      `${comp}.${prop} is searched but holds no prose — "search": true is for a stored text property`,
     ]
 
 // A component carrying the whole provenance triple is a mark — `completed`,
 // `archived`, `created` — and the server writes a mark, never a client: the
 // graph fills all three from the batch's clock and actor (@yaks/graph
-// stamp.ts), so a client-writable one is a column anyone may forge and nothing
-// will correct. Two of the three is somebody's own vocabulary — a letter's `at`
-// and the address it went `via` — and means nothing here.
+// stamp.ts), so a client-writable one is a property anyone may forge and
+// nothing will correct. Two of the three is somebody's own vocabulary — a
+// letter's `at` and the address it went `via` — and means nothing here.
 let PROVENANCE = ['at', 'by', 'via']
 let signed = (comp: string, s: PropSchema): string[] => {
   let props = s.properties ?? {}
@@ -157,22 +157,22 @@ let lived = (comp: string, s: PropSchema): string[] => {
   return errs
 }
 
-// The columns an identity spans, both forms together — the component's list,
-// or the columns that flagged themselves.
+// The properties an identity spans, both forms together — the component's list,
+// or the properties that flagged themselves.
 let identified = (s: PropSchema): string[] =>
   Array.isArray(s.identity) ? s.identity : Object.entries(s.properties ?? {})
     .filter(([, c]) => object(c) && c.identity === true)
     .map(([prop]) => prop)
 
 // The storable profile over a whole document: every component entry is an
-// object schema whose properties are storable columns.
+// object schema whose properties are all storable.
 export let storable = (doc: VocabDoc): string[] => {
   let errs: string[] = []
   for (let [comp, schema] of Object.entries(doc.$defs ?? {})) {
     // Each $defs entry declares what it is (vocab.ts `loadVocab`): a tool
     // declaration is checked as a tool, an ordinary subschema is not checked at
     // all, and only a marked component is checked as a table. An entry with
-    // columns and no marker is a forgotten marker, reported here so a deploy
+    // properties and no marker is a forgotten marker, reported here so a deploy
     // fails where the message can still teach.
     if (!object(schema) || schema.tool === true || schema.rule === true) {
       continue
@@ -180,7 +180,7 @@ export let storable = (doc: VocabDoc): string[] => {
     if (schema.component !== true) {
       if (schema.properties || schema.type == 'object') {
         errs.push(
-          `${comp} has columns but says no "component": true — mark it a ` +
+          `${comp} has properties but says no "component": true — mark it a ` +
             'component, or it is an ordinary subschema and no table',
         )
       }
@@ -194,7 +194,7 @@ export let storable = (doc: VocabDoc): string[] => {
     }
     for (let [prop, s] of Object.entries(schema.properties ?? {})) {
       if (!NAME.test(prop) || prop == 'entity' || prop == 'eid') {
-        errs.push(`${comp}.${JSON.stringify(prop)} is not a column name`)
+        errs.push(`${comp}.${JSON.stringify(prop)} is not a property name`)
       }
       errs.push(...storableProp(comp, prop, s))
       if (object(s)) errs.push(...storableDefault(comp, prop, s))
@@ -203,32 +203,34 @@ export let storable = (doc: VocabDoc): string[] => {
     errs.push(...signed(comp, schema))
     errs.push(...lived(comp, schema))
     for (let c of composites(schema)) {
-      for (let col of [...c.cols, ...(c.present ?? [])]) {
-        if (!(schema.properties ?? {})[col]) {
-          errs.push(`${comp} indexes ${col}, which is no column of ${comp}`)
+      for (let prop of [...c.props, ...(c.present ?? [])]) {
+        if (!(schema.properties ?? {})[prop]) {
+          errs.push(`${comp} indexes ${prop}, which is no property of ${comp}`)
         }
       }
     }
-    // A required column is one every row holds: it has to be a stored column,
-    // and a computed one has no cell to hold anything.
-    for (let col of schema.required ?? []) {
-      let c = (schema.properties ?? {})[col]
+    // A required property is one every row holds: it has to be a stored
+    // property, and a computed one has no cell to hold anything.
+    for (let prop of schema.required ?? []) {
+      let c = (schema.properties ?? {})[prop]
       if (!c) {
-        errs.push(`${comp} requires ${col}, which is no column of ${comp}`)
+        errs.push(`${comp} requires ${prop}, which is no property of ${comp}`)
       } else if (c.computed === true) {
-        errs.push(`${comp}.${col} is computed — it cannot be required`)
+        errs.push(`${comp}.${prop} is computed — it cannot be required`)
       }
     }
     // An id is derived from what the writer states, at the moment the entity is
-    // minted: a column nothing writes — computed, or server-owned and stamped
+    // minted: a property nothing writes — computed, or server-owned and stamped
     // after the fact — could never name the entity it identifies.
-    for (let col of identified(schema)) {
-      let c = (schema.properties ?? {})[col]
+    for (let prop of identified(schema)) {
+      let c = (schema.properties ?? {})[prop]
       if (!c) {
-        errs.push(`${comp} is identified by ${col}, which is no column of it`)
+        errs.push(
+          `${comp} is identified by ${prop}, which is no property of it`,
+        )
       } else if (c.computed === true || c.stamped) {
         errs.push(
-          `${comp}.${col} is ${
+          `${comp}.${prop} is ${
             c.stamped ? 'server-owned' : 'computed'
           } — an identity is derived from what the writer states`,
         )
@@ -249,16 +251,16 @@ export let reserved = (doc: VocabDoc, base: Iterable<string>): string[] => {
     )
 }
 
-// A column's storage identity: what a retype would change under it. Enum values
-// may grow (widening a closed set is additive); category, scalar and ref kind
-// may not move, because the rows were written under the old type.
+// A property's storage identity: what a retype would change under it. Enum
+// values may grow (widening a closed set is additive); category, scalar and ref
+// kind may not move, because the rows were written under the old type.
 let identity = (v: Vocab, comp: string, prop: string): string => {
-  let c = v.column(comp, prop)!
+  let c = v.prop(comp, prop)!
   return `${c.category}:${c.scalar ?? ''}:${c.ref ?? ''}`
 }
 
-// Additive evolution: `was` → `next`. A column that changed its storage
-// identity is rejected; a column `next` no longer declares is rejected (its
+// Additive evolution: `was` → `next`. A property that changed its storage
+// identity is rejected; a property `next` no longer declares is rejected (its
 // rows are still there); everything genuinely new is reported in `added`.
 export let grow = (
   was: Vocab,
@@ -268,13 +270,13 @@ export let grow = (
   let errors: string[] = []
   for (let comp of next.all) {
     let hadComp = was.all.includes(comp)
-    for (let prop of next.columns(comp)) {
-      if (hadComp && was.column(comp, prop)) {
+    for (let prop of next.props(comp)) {
+      if (hadComp && was.prop(comp, prop)) {
         let before = identity(was, comp, prop)
         let after = identity(next, comp, prop)
         if (before != after) {
           errors.push(
-            `${comp}.${prop} was ${before}, now ${after} — a column keeps the type its rows were written under`,
+            `${comp}.${prop} was ${before}, now ${after} — a property keeps the type its rows were written under`,
           )
         }
       } else {
@@ -284,11 +286,11 @@ export let grow = (
   }
   for (let comp of was.all) {
     let dropped = next.all.includes(comp)
-      ? was.columns(comp).filter((p) => !next.column(comp, p))
-      : was.columns(comp)
+      ? was.props(comp).filter((p) => !next.prop(comp, p))
+      : was.props(comp)
     for (let p of dropped) {
       errors.push(
-        `${comp}.${p} was dropped — a column only ever arrives, never leaves`,
+        `${comp}.${p} was dropped — a property only ever arrives, never leaves`,
       )
     }
   }

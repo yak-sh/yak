@@ -152,7 +152,7 @@ let QueryEdit = ({ ...p }: EditorProps) => {
 // status set answers the pip that opened it in the same paint: each
 // choice wears its own dot.
 let EnumEdit = ({ ...p }: EditorProps) => {
-  let values = vocab.column(p.comp, p.prop)!.values!
+  let values = vocab.prop(p.comp, p.prop)!.values!
   return (
     <Pop>
       {values.map((v) => (
@@ -217,7 +217,7 @@ let WellEdit = ({ ...p }: EditorProps) => {
 // picker offers the whole graph, not just the slice the cache holds. A 'none'
 // row clears the association.
 let EidEdit = ({ ...p }: EditorProps) => {
-  let target = vocab.column(p.comp, p.prop)!.ref!
+  let target = vocab.prop(p.comp, p.prop)!.ref!
   let [q, setQ] = useState('')
   let hits = useHits(pickLine(q, target))
   return (
@@ -291,38 +291,38 @@ export function editorViews(): Renderer[] {
   return [
     {
       view: 'Inline.Edit',
-      match: parse('.column'),
-      Render: ({ e, comp, col, ...ctx }) => (
+      match: parse('.prop'),
+      Render: ({ e, comp, prop, ...ctx }) => (
         <InlineEdit
           eid={e.eid}
           comp={String(comp)}
-          prop={String(col)}
+          prop={String(prop)}
           {...ctx}
-          readOnly={!!ctx.readOnly || !canEdit(String(comp), String(col))}
+          readOnly={!!ctx.readOnly || !canEdit(String(comp), String(prop))}
         />
       ),
     },
     native(
-      '.column.comp=filed .column.col=domain',
+      '.prop.comp=filed .prop.prop=domain',
       (p) => <WellControl {...p} />,
     ),
-    native('.column.type=string', (p) => <TextControl {...p} />),
+    native('.prop.type=string', (p) => <TextControl {...p} />),
     native(
-      '.column.type=time',
+      '.prop.type=time',
       (p) => <TextControl {...p} />,
       (value) => TimeVal(value),
     ),
     native(
-      '.column.type=url',
+      '.prop.type=url',
       (p) => <TextControl {...p} />,
       (value) => UrlVal(value),
     ),
-    native('.column.type=number', (p) => <NumControl {...p} />),
-    native('.column.type=priority', (p) => <NumControl {...p} />),
-    native('.column.type=query', (p) => <QueryControl {...p} />),
-    native('.column.type=enum', (p) => <EnumControl {...p} />),
+    native('.prop.type=number', (p) => <NumControl {...p} />),
+    native('.prop.type=priority', (p) => <NumControl {...p} />),
+    native('.prop.type=query', (p) => <QueryControl {...p} />),
+    native('.prop.type=enum', (p) => <EnumControl {...p} />),
     native(
-      '.column.type=ref',
+      '.prop.type=ref',
       (p) => <EidControl {...p} />,
       (value) => titled(value),
     ),
@@ -344,15 +344,15 @@ let ColumnControl = (
     Control: (p: EditProps) => JSX.Element
   },
 ) => {
-  let { e, comp, col } = ctx
+  let { e, comp, prop } = ctx
   let editable = !ctx.readOnly &&
-    (canEdit(String(comp), String(col)) || typeof ctx.onChange == 'function')
+    (canEdit(String(comp), String(prop)) || typeof ctx.onChange == 'function')
   if (!editable || typeof ctx.done != 'function') {
     return (
       <Prop
         eid={e.eid}
         comp={String(comp)}
-        prop={String(col)}
+        prop={String(prop)}
         editable={editable}
       />
     )
@@ -361,12 +361,14 @@ let ColumnControl = (
 }
 
 let controlProps = (
-  { e, comp, col, ...ctx }: Context & { e: Ent },
+  { e, comp, prop, ...ctx }: Context & { e: Ent },
 ): EditProps => ({
   eid: e.eid,
   comp: String(comp),
-  prop: String(col),
-  value: 'value' in ctx ? ctx.value : columnValue(e, String(comp), String(col)),
+  prop: String(prop),
+  value: 'value' in ctx
+    ? ctx.value
+    : columnValue(e, String(comp), String(prop)),
   done: ctx.done as (() => void),
   onChange: ctx.onChange as EditorProps['onChange'],
   anchor: ctx.anchor as EditProps['anchor'] ?? { current: null },
@@ -383,7 +385,7 @@ export let ColumnEdit = (
   return renderView(e, 'Edit', {
     ...ctx,
     comp,
-    col: prop,
+    prop,
     onPatch: (patch) => {
       applyPatch(eid, patch)
       ctx.done()

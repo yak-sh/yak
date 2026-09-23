@@ -138,5 +138,5 @@ export let Edit = (
   { eid, comp, prop, ...ctx }: Parameters<typeof InlineEdit>[0],
 ) => {
   let e = ent(eid)
-  return renderView(e, 'Inline.Edit', { ...ctx, comp, col: prop })
+  return renderView(e, 'Inline.Edit', { ...ctx, comp, prop })
 }

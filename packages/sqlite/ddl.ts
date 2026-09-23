@@ -34,7 +34,7 @@
 // the engine, except a `keep` reference, which outlives the row it points at
 // and stays key-free.
 
-import type { Column, Index, Vocab } from '@yaks/vocab'
+import type { Index, Prop, Vocab } from '@yaks/vocab'
 import type { Driver } from './driver.ts'
 
 /**
@@ -85,7 +85,7 @@ export let NOW = `(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`
 // A column's default as SQL: the current time, or a literal a row takes when
 // the writer supplied no value. A boolean stores as the integer it reads back
 // as.
-let defaultSql = (c: Column): string | undefined => {
+let defaultSql = (c: Prop): string | undefined => {
   let d = c.default
   if (!d) return undefined
   if ('now' in d) return NOW
@@ -100,7 +100,7 @@ let defaultSql = (c: Column): string | undefined => {
 // A closed set's check. Every value the vocabulary admits on the way in is
 // admitted here too (an alias is an accepted input value), so the engine never
 // rejects what the loader accepted.
-let checkSql = (c: Column): string | undefined =>
+let checkSql = (c: Prop): string | undefined =>
   c.category == 'enum'
     ? `check(${q(c.prop)} in (${
       [...c.values!, ...Object.keys(c.aliases ?? {})].map(lit).join(', ')
@@ -112,7 +112,7 @@ let checkSql = (c: Column): string | undefined =>
 // `keep` reference, which must survive its target's tombstone and so carries
 // none. `required` becomes NOT NULL; `default` and `enum` are emitted as
 // above.
-let colDdl = (c: Column): string => {
+let colDdl = (c: Prop): string => {
   let d = defaultSql(c)
   let parts = [
     q(c.prop),
@@ -131,7 +131,7 @@ let colDdl = (c: Column): string => {
 // only when a literal fills the rows already there, and takes the clock only
 // on rows written from now on (the writer stamps them; ddl.ts NOW is for the
 // row that omits it).
-let grownDdl = (c: Column): string => {
+let grownDdl = (c: Prop): string => {
   let d = c.default && 'value' in c.default ? defaultSql(c) : undefined
   let parts = [
     q(c.prop),
@@ -147,9 +147,9 @@ let grownDdl = (c: Column): string => {
 // Which of a component's declared columns are stored: everything the vocabulary
 // lists except the computed ones (a computed column is read through a supplied
 // expression, never off a row).
-let stored = (v: Vocab, comp: string): Column[] =>
-  v.columns(comp)
-    .map((prop) => v.column(comp, prop)!)
+let stored = (v: Vocab, comp: string): Prop[] =>
+  v.props(comp)
+    .map((prop) => v.prop(comp, prop)!)
     .filter((c) => !c.computed)
 
 // One component's table. The `entity` owner is the primary key, so a component
@@ -181,7 +181,7 @@ let tableDdl = (
 // rows without them are as many as they like, the rows with them are one.
 let indexDdl = (comp: string, i: Index): string =>
   `create ${i.unique ? 'unique ' : ''}index if not exists ` +
-  `${comp}_${i.cols.join('_')} on ${q(comp)} (${i.cols.map(q).join(', ')})` +
+  `${comp}_${i.props.join('_')} on ${q(comp)} (${i.props.map(q).join(', ')})` +
   (i.present
     ? ` where ${i.present.map((p) => `${q(p)} is not null`).join(' and ')}`
     : '')

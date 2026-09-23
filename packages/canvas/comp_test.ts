@@ -13,7 +13,7 @@ Deno.test('the document is storable — every column lowers to one', () => {
 })
 
 Deno.test('a card dies with what it shows', () => {
-  assertEquals(v.column('card', 'target')!.death, 'cascade')
+  assertEquals(v.prop('card', 'target')!.death, 'cascade')
   assertEquals(
     v.deaths('cascade').some(([c, p]) => c == 'card' && p == 'target'),
     true,

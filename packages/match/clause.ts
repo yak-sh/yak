@@ -139,7 +139,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Test => {
 }
 
 let isRef = (v: Vocab, hop: Hop) =>
-  v.column(hop.comp, hop.prop)?.category == 'ref'
+  v.prop(hop.comp, hop.prop)?.category == 'ref'
 
 // A dereference path: a chain of one-to-one lookups through reference columns,
 // ending in a leaf column tested against the operator. Every hop but the last
@@ -212,7 +212,7 @@ let refs = (ctx: Ctx, r: Refs): Test => {
   if (r.op != '=' || !r.value) {
     throw new Unsupported('.refs', 'only .refs=<id> is answered', BY)
   }
-  let cols = ctx.v.refCols()
+  let cols = ctx.v.refProps()
   return (b, among) =>
     !!among.of(r.value) &&
     cols.some(([c, p]) => comp(b, c)?.[p] === r.value)
@@ -400,8 +400,8 @@ let words = (ctx: Ctx, value: string): Test => {
   let hit = search(value)
   if (!hit) return NO
   let fields = ctx.v.all.flatMap((c) =>
-    ctx.v.columns(c)
-      .map((p) => ctx.v.column(c, p)!)
+    ctx.v.props(c)
+      .map((p) => ctx.v.prop(c, p)!)
       .filter((col) =>
         !col.computed && col.category == 'scalar' && col.scalar == 'text'
       )

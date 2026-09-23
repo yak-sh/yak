@@ -2712,7 +2712,7 @@ let fleetInput = (db: Sql, changes: Change[]) => (
       let sent = Object.entries(c.comp).filter(([col]) => col != 'eid')
       let kept = sent.filter(([col]) =>
         !(columnsOf(db, c.name).has(col) &&
-          !fleetVocabOf(db).column(c.name, col))
+          !fleetVocabOf(db).prop(c.name, col))
       )
       return sent.length && !kept.length
         ? []

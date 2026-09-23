@@ -3,7 +3,7 @@ import type { Comp } from '@yaks/graph'
 import { team, teamGraph } from './harness.ts'
 
 Deno.test('completion uses by, never a second actor spelling', () => {
-  assertEquals(team.column('completed', 'actor'), undefined)
+  assertEquals(team.prop('completed', 'actor'), undefined)
   // The mark is written bare and signed: when, by whom and through what are
   // the server's, so there is nothing left for a client to state.
   assertEquals(team.comp('completed')!.writable, [])

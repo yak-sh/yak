@@ -67,7 +67,7 @@ let mark = (
 ): Comp | undefined => {
   let info = vocab.comp(comp)
   if (!info) return undefined
-  let has = new Set(vocab.columns(comp))
+  let has = new Set(vocab.props(comp))
   // A column something else already filled is left as it was found: a hook
   // that set the mark's author (@yaks/task keeps a completion's author across
   // edits) and a graph whose policy supplied the writer both run before this.

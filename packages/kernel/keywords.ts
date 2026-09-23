@@ -26,6 +26,6 @@ export let KERNEL_URI = 'https://yak.sh/vocab/kernel'
 export let kernelKeywords: Keywords = {
   uri: KERNEL_URI,
   comp: ['governed', 'lazy'],
-  column: ['well'],
+  prop: ['well'],
   doc,
 }

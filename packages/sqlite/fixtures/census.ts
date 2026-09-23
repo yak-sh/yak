@@ -1,12 +1,12 @@
 // Frozen pre-archetype gather oracle (T-37056). Test-only; do not modernize it.
-import type { Column, Vocab } from '@yaks/vocab'
+import type { Prop, Vocab } from '@yaks/vocab'
 import type { BindOpts, Derived } from '@yaks/sql'
 import type { Driver } from '../driver.ts'
 import type { Bundle, Comp } from '../bundle.ts'
 import { tombstoned } from '@yaks/graph'
 
-let read1 = (v: Vocab, comp: string, derived: Derived): Column[] =>
-  v.columns(comp).map((p) => v.column(comp, p)!)
+let read1 = (v: Vocab, comp: string, derived: Derived): Prop[] =>
+  v.props(comp).map((p) => v.prop(comp, p)!)
     .filter((c) => !c.computed || derived[`${comp}.${c.prop}`])
 
 // The projected read for one component: each scalar straight off the row, each
