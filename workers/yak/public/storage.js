@@ -1,5 +1,5 @@
 // localStorage and sessionStorage for a sandboxed app (installed.ts, D-37901).
-// An app installed from somebody else's release runs in an opaque origin of
+// An installed app its space's owner sandboxed runs in an opaque origin of
 // its own, where the browser's own storage throws. The kernel weaves this
 // script into the page's head, ahead of every script of the page's own, with
 // the person's saved keys in a JSON block beside it, so reads are synchronous
@@ -9,8 +9,8 @@
 // memory at once and is saved in the background, through the same page token
 // the rest of the page's requests carry. For a visitor who is not signed in
 // it lasts as long as the page, as sessionStorage always does. Nothing here
-// runs where the browser's storage works: a trusted app, or the space's own,
-// never reaches it.
+// runs where the browser's storage works: an app that is not sandboxed never
+// reaches it.
 //
 // A classic script, not a module: a module is deferred, and the page's own
 // inline scripts would run before it.

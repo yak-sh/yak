@@ -62,11 +62,10 @@ slow('an app names no app, and the copy works at its own address', async () => {
       assertEquals(r.status, 200)
       let html = await r.text()
       assertStringIncludes(html, '<h1>Chores</h1>')
-      // Her copy runs sandboxed (installed.ts), so its address carries the
-      // page's token, and the reporter still rides along under it.
+      // The reporter still rides along, at her address.
+      assertStringIncludes(html, '/sisters/api/report.js')
       let base = /<base href="([^"]+)">/.exec(html)?.[1]
-      assertMatch(base ?? '', /^\/sisters\/~[^/]+\/$/, at)
-      assertStringIncludes(html, `${base}api/report.js`)
+      assertEquals(base, '/sisters/', at)
       for (
         let [href, type] of [
           ['./api/client.js', /javascript/],

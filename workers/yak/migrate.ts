@@ -193,12 +193,31 @@ export let FILED = 'yak/store/filed/6'
  * identity, so its entity takes the id the name derives. */
 export let TOOLED = 'yak/store/tool/7'
 
+/** The eighth pass (C-37980): a copy of somebody else's app runs like the
+ * space's own apps unless its owner sandboxed it (`installed.sandboxed`),
+ * where it used to run sandboxed until they trusted it (`installed.trusted`).
+ * Each copy that is not sandboxed is stamped trusted as well, so the build
+ * before this one serves it the same way. The directory's alone; no other
+ * object has an install. */
+export let SANDBOXED = 'yak/store/sandboxed/8'
+
 /** Every marker in order, so "is this object caught up" is one comparison and
  * a new pass is one line here. */
-export let MARKS = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED, TOOLED]
+export let MARKS = [
+  MARK,
+  HOMED,
+  FORMER,
+  SERVES,
+  HANDLED,
+  FILED,
+  TOOLED,
+  SANDBOXED,
+]
 
 /** Passes that change stored shape, read per commit by `yak deploys`.
- * A refused pass leaves stored data and its marker unchanged, so adds no boundary. */
+ * A refused pass leaves stored data and its marker unchanged, so adds no boundary.
+ * Nor does an expanding pass the build before it reads correctly: SANDBOXED
+ * writes only the column that build already reads. */
 export let BOUNDARIES = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED, TOOLED]
 
 /** The two tables the two layouts spell identically, and so never move. */
@@ -625,6 +644,61 @@ export let tooled = (
     )
   }
   return report(true, moved, merged)
+}
+
+// ---- a copy runs like the space's own apps (C-37980) -----------------------
+//
+// Expand, not contract (D-37972): `installed.sandboxed` is the word now, and
+// empty on every copy, since the space is the trust boundary and no owner had
+// asked for a sandbox.
+// The build before this one read `installed.trusted` the other way round, so
+// a copy it would still sandbox is stamped trusted here, and tools.ts writes
+// both from now on (installed.ts `sandboxing`). A later release drops it.
+
+// The copies the build before this one would sandbox and this one does not.
+let UNTRUSTED = 'sandboxed is null and trusted is null'
+
+/** Whether a copy stands that the two builds would serve differently. */
+export let untrusted = (storage: DurableStorage): boolean => {
+  let d = driver(storage)
+  return stands(d, 'installed') &&
+    ['sandboxed', 'trusted'].every((c) =>
+      columns(d, 'installed').includes(c)
+    ) &&
+    d.query(`select 1 as n from installed where ${UNTRUSTED} limit 1`, [])
+        .length > 0
+}
+
+/** Every such copy stamped trusted, inside `transactionSync` like every
+ * numbered pass. */
+export let trusting = (
+  storage: DurableStorage,
+  o: { store: string; app: string | null },
+): Report => {
+  let d = driver(storage)
+  let left = () =>
+    Number(
+      d.query(`select count(*) as n from installed where ${UNTRUSTED}`, [])[0]
+        ?.n ?? 0,
+    )
+  let from = left()
+  let at = new Date().toISOString()
+  d.query(`update installed set trusted = ? where ${UNTRUSTED}`, [at])
+  let to = from - left()
+  return {
+    ...o,
+    at,
+    ok: to == from,
+    mark: SANDBOXED,
+    moved: [{
+      table: 'installed',
+      from,
+      to,
+      note: 'copies stamped trusted, so the build before this serves them ' +
+        'unsandboxed too',
+    }],
+    dropped: [],
+  }
 }
 
 // ---- `space.home` → `home{}` (T-34227) -------------------------------------

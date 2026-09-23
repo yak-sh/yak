@@ -1,11 +1,13 @@
-// An app installed from somebody else's release, served the way a phone
-// serves a third-party app (D-37901): sandboxed, in an opaque origin of its
-// own, until the space's owner trusts it. The apps a space built itself share
-// the space, as they always have; a copy of a stranger's code does not.
+// The sandbox an installed app can be put in (D-37901). The space is the
+// trust boundary (C-37980): an app installed from somebody else's release
+// runs like the space's own apps, and the sandbox is the exception, one
+// install at a time. What turns it on is the space's owner; nothing does it
+// on its own yet. A sandboxed app is served the way a phone serves a
+// third-party app, in an opaque origin of its own.
 //
 // Four pieces, each small, and apps.ts is where they are worn:
 //
-//  - Which apps: one wearing `installed` whose `installed.trusted` is empty
+//  - Which apps: one wearing `installed` with `installed.sandboxed` set
 //    (`sandboxed`). The owner sets and clears it (tools.ts `app_set`).
 //  - The wall: every answer the app gives carries `Content-Security-Policy:
 //    sandbox …` without `allow-same-origin`, so the browser runs its page in
@@ -30,10 +32,18 @@ import { opened, seal } from '../../src/token.ts'
 import type { App } from './directory.ts'
 import { SESSION } from './session.ts'
 
-/** Whether this app runs walled off from its space: a copy of somebody
- * else's release its owner has not trusted. A detached pin (`of` gone with
- * the app it came from) is still a copy. */
-export let sandboxed = (app: App) => !!app.installed && !app.installed.trusted
+/** Whether this app runs walled off from its space: a copy its space's owner
+ * sandboxed. */
+export let sandboxed = (app: App) => !!app.installed?.sandboxed
+
+/** What a copy's pin is written with to put it in the sandbox or let it
+ * out. `trusted` is the build before this one's spelling of the reverse,
+ * kept in step so that build serves every copy as this one does, until a
+ * later release drops it (D-37972, expand then contract). */
+export let sandboxing = (on: boolean, at = new Date().toISOString()) => ({
+  sandboxed: on ? at : null,
+  trusted: on ? null : at,
+})
 
 // The wall itself. Scripts, forms and popups are what an app is; the one
 // flag that would undo the rest, `allow-same-origin`, is never here.

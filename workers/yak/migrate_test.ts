@@ -41,6 +41,7 @@ import {
   MARK,
   Refused as Unreconciled,
   type Report,
+  SANDBOXED,
   SERVES,
   TOOLED,
 } from './migrate.ts'
@@ -235,7 +236,7 @@ slow('an app store carries every row across, and reconciles', async () => {
 
   // The dead stay dead, and every pass is done.
   assertEquals(count(ctx, 'tombstone'), 1)
-  assertEquals(marker(ctx), TOOLED)
+  assertEquals(marker(ctx), SANDBOXED)
 
   // The fleet's other words have no table on the packages, the journal among
   // them.
@@ -266,7 +267,7 @@ slow("the runtime's own table is not the object's to move", async () => {
 
   let now = newer(ctx, 'ada/cookbook')
   assertEquals((await now.query('.doc!', APP)).length, 3)
-  assertEquals(marker(ctx), TOOLED)
+  assertEquals(marker(ctx), SANDBOXED)
 
   // And it is standing where the runtime left it, with its row — proof the pass
   // neither dropped it nor renamed it aside.
@@ -354,7 +355,7 @@ slow('the second boot is a no-op', async () => {
   await seedApp(ctx)
   let first = newer(ctx, 'ada/cookbook')
   assertEquals((await first.query('.doc!', APP)).length, 3)
-  assertEquals(marker(ctx), TOOLED)
+  assertEquals(marker(ctx), SANDBOXED)
 
   // A fresh incarnation over the same storage: the marker is written, the
   // journal is gone, so nothing runs a second time.
@@ -524,7 +525,7 @@ slow(
     assertEquals(await wearing(now), ['cookbook'])
     assertEquals(count(ctx, 'home'), 1)
     // Every pass in the same breath, so none of them has anything to do.
-    assertEquals(marker(ctx), TOOLED)
+    assertEquals(marker(ctx), SANDBOXED)
   },
 )
 
@@ -546,7 +547,7 @@ slow(
       false,
     )
     // And it does not run again: the marker is written.
-    assertEquals(marker(ctx), TOOLED)
+    assertEquals(marker(ctx), SANDBOXED)
   },
 )
 
@@ -648,7 +649,7 @@ slow('a store carrying now arrives with the addresses moved', async () => {
   // so nothing was copied into it on the way past.
   assertEquals(count(ctx, 'alias'), 0)
   // Every pass in the same breath, so none of the later ones has anything left.
-  assertEquals(marker(ctx), TOOLED)
+  assertEquals(marker(ctx), SANDBOXED)
 })
 
 slow('a directory that already carried moves them on next touch', async () => {
@@ -671,7 +672,7 @@ slow('a directory that already carried moves them on next touch', async () => {
   assertEquals(count(ctx, 'alias'), 0)
 
   // And it does not run again: the marker is written.
-  assertEquals(marker(ctx), TOOLED)
+  assertEquals(marker(ctx), SANDBOXED)
 })
 
 // ---- a domain's target: `hostname.app` → `hostname.serves` (T-34596) --------
@@ -729,7 +730,7 @@ slow('a domain aimed by the old column is aimed by the new one', async () => {
   assert(!cols.includes('app'), cols.join(', '))
 
   // And it does not run again.
-  assertEquals(marker(ctx), TOOLED)
+  assertEquals(marker(ctx), SANDBOXED)
 })
 
 // ---- an app's handle: `former.slug` → `app.store` (T-34657) -----------------
@@ -804,7 +805,7 @@ slow('an app named by its birth address is named by a handle', async () => {
   assert(indexes.includes('app_store'), indexes.join(', '))
 
   // And it does not run again.
-  assertEquals(marker(ctx), TOOLED)
+  assertEquals(marker(ctx), SANDBOXED)
 })
 
 slow('two apps may hold one address, and be two stores', async () => {
@@ -889,7 +890,7 @@ for (let source of ['former', 'fallback']) {
         ['shed', 'ada/shed.000002', source == 'former' ? 'shed' : ''],
       ]
       assertEquals(await handling(now), rows)
-      assertEquals(marker(ctx), TOOLED)
+      assertEquals(marker(ctx), SANDBOXED)
       assertEquals(await handling(newer(ctx, PLATFORM_STORE)), rows)
     },
   )
@@ -909,7 +910,7 @@ slow('a handle already assigned stays with its app', async () => {
     ['orchard', 'ada/orchard.000001', 'shed plot'],
     ['shed', 'ada/shed', ''],
   ])
-  assertEquals(marker(ctx), TOOLED)
+  assertEquals(marker(ctx), SANDBOXED)
 })
 
 slow('a directory grows the handle column before indexing it', async () => {
@@ -926,7 +927,7 @@ slow('a directory grows the handle column before indexing it', async () => {
     ['orchard', 'ada/shed', 'shed plot'],
     ['shed', 'ada/shed.000002', ''],
   ])
-  assertEquals(marker(ctx), TOOLED)
+  assertEquals(marker(ctx), SANDBOXED)
   assertEquals(
     sql.exec('pragma index_info(app_store)').toArray()[0].name,
     'store',
@@ -1060,7 +1061,7 @@ Deno.test('boot leaves a populated table constraint for its preparing pass', asy
   assertEquals(created, false)
   assertEquals((await now.door('/query?q=.app!')).status, 200)
   assertEquals(created, true)
-  assertEquals(marker(ctx), TOOLED)
+  assertEquals(marker(ctx), SANDBOXED)
   assertThrows(() => exec("update app set store = 'same'"), Error, 'UNIQUE')
 })
 
@@ -1437,7 +1438,7 @@ Deno.test('app filing preserves every value and never resurrects a cleared filin
   // The Store returns canonical reference identities (the app decorates them).
   assertEquals(filing.project, SPACE)
   assertEquals(filing.assignee, ADA)
-  assertEquals(marker(ctx), TOOLED)
+  assertEquals(marker(ctx), SANDBOXED)
   let r = await now.door('/apply', {
     method: 'POST',
     headers: { 'x-yak-kernel': '1' },
@@ -1489,7 +1490,7 @@ slow(
     let [row] = await now.query('.task!&.filed?')
     assertEquals((row.filed as { priority: number }).priority, 2)
     assertEquals((row.filed as { domain: string }).domain, 'Garden')
-    assertEquals(marker(ctx), TOOLED)
+    assertEquals(marker(ctx), SANDBOXED)
   },
 )
 
@@ -1543,12 +1544,48 @@ Deno.test('a store with tools at old ids and twins boots, merges and indexes', a
     { eid: toolEid('add_chore'), name: 'add_chore' },
     { eid: toolEid('find_chore'), name: 'find_chore' },
   ])
-  assertEquals(marker(ctx), TOOLED)
+  assertEquals(marker(ctx), SANDBOXED)
   assertThrows(
     () => ctx.storage.sql.exec("update tool set name = 'add_chore'").toArray(),
     Error,
     'UNIQUE',
   )
+})
+
+// A directory one pass behind (C-37980): a copy the build before sandboxed by
+// default, one its owner trusted, and one sandboxed on purpose. Only the
+// first moves, stamped trusted so both builds serve it unsandboxed.
+Deno.test('a copy the build before would sandbox is stamped trusted', async () => {
+  let ctx = state()
+  let was = '2026-09-01T00:00:00.000Z'
+  let pin = (more = {}) => ({ of: APP, version: 1, ...more })
+  let r = await newer(ctx, PLATFORM_STORE).door('/apply', {
+    method: 'POST',
+    headers: { 'x-yak-kernel': '1' },
+    body: JSON.stringify([
+      { entity: { eid: SPACE }, space: { slug: 'ada' } },
+      { entity: { eid: APP }, app: { slug: 'cookbook', space: SPACE } },
+      { entity: { eid: ONE }, installed: pin() },
+      { entity: { eid: TWO }, installed: pin({ trusted: was }) },
+      { entity: { eid: THREE }, installed: pin({ sandboxed: was }) },
+    ]),
+  })
+  assert(r.ok, await r.text())
+  ctx.storage.sql.exec(
+    "insert into yak_kv (k, v) values ('migrated', ?) " +
+      'on conflict(k) do update set v = excluded.v',
+    TOOLED,
+  )
+  await newer(ctx, PLATFORM_STORE).query('.installed!')
+  let [one, two, three] = ctx.storage.sql.exec(
+    'select i.sandboxed, i.trusted from installed i' +
+      ' join entity e on e.id = i.entity order by e.eid',
+  ).toArray() as { sandboxed: string | null; trusted: string | null }[]
+  assertEquals(one.sandboxed, null)
+  assert(one.trusted && one.trusted > was, one.trusted ?? 'unstamped')
+  assertEquals([two.sandboxed, two.trusted], [null, was])
+  assertEquals([three.sandboxed, three.trusted], [was, null])
+  assertEquals(marker(ctx), SANDBOXED)
 })
 
 Deno.test('a refused migration reaches Sentry, tagged with its store', async () => {

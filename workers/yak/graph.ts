@@ -187,6 +187,7 @@ import {
   recut,
   Refused as Unreconciled,
   type Report,
+  SANDBOXED,
   served,
   SERVES,
   type Slots,
@@ -194,8 +195,10 @@ import {
   stale,
   TOOLED,
   tooled,
+  trusting,
   unfiled,
   unhandled,
+  untrusted,
 } from './migrate.ts'
 import {
   appDerived,
@@ -530,10 +533,11 @@ export class Store {
     // that stopped at an older marker because it had nothing to move for it
     // still has to be asked about the ones added since.
     this.#behind = this.#pending ||
-      (this.#get('migrated') != TOOLED &&
+      (this.#get('migrated') != SANDBOXED &&
         (housed(ctx.storage) || slugged(ctx.storage) ||
           aimedOld(ctx.storage) || unhandled(ctx.storage) ||
-          unfiled(ctx.storage) || mistooled(ctx.storage)))
+          unfiled(ctx.storage) || mistooled(ctx.storage) ||
+          untrusted(ctx.storage)))
   }
 
   // The vocabulary an object keeps is the document (T-37546). A store that
@@ -1340,6 +1344,11 @@ export class Store {
         mistooled,
         (storage, o) => tooled(storage, { ...o, vocab: this.#graph.vocab }),
       )
+    }
+    // The eighth (C-37980): a copy runs like the space's own apps unless
+    // sandboxed, and the build before this one reads it the same way.
+    if (!this.#refused) {
+      this.#after(request, SANDBOXED, untrusted, trusting)
     }
     this.#behind = false
   }

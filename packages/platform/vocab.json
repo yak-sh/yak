@@ -110,10 +110,10 @@
         "version": {
           "type": "number"
         },
-        "trusted": {
+        "sandboxed": {
           "type": "string",
           "format": "date-time",
-          "description": "when the space's owner let the copy run unsandboxed, like the space's own apps; empty while it runs sandboxed"
+          "description": "when the space's owner put the copy in a sandbox, a browser origin of its own; empty while it runs like the space's own apps"
         }
       },
       "description": "a copy of somebody else’s app, at the version it was copied from"

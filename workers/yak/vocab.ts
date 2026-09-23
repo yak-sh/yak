@@ -783,14 +783,23 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { name: unique(text), version: num, at: time, about: text },
     },
-    // A copy of somebody else's app (tools.ts app_install), which is served
-    // sandboxed in an opaque origin of its own (installed.ts) until the
-    // space's owner trusts it: `trusted` is when they did, empty while it is
-    // walled off.
+    // A copy of somebody else's app (tools.ts app_install), which runs like
+    // the space's own apps unless the space's owner sandboxed it in an opaque
+    // origin of its own (installed.ts): `sandboxed` is when they did.
+    //
+    // `trusted` is how the build before this one said the reverse. It is
+    // written in step (installed.ts `sandboxing`) so that build reads every
+    // copy the way this one does, and goes in a later release (D-37972,
+    // expand then contract).
     installed: {
       component: true,
       type: 'object',
-      properties: { of: ref('detach'), version: num, trusted: time },
+      properties: {
+        of: ref('detach'),
+        version: num,
+        sandboxed: time,
+        trusted: time,
+      },
     },
     // That this app — or this space — is in the trash, and since when
     // (erase.ts, T-34430, T-34431). A delete marks it and keeps everything:

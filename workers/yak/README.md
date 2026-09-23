@@ -215,7 +215,8 @@ report and refuse to serve without the declared constraint.
 - Rollback boot failed on an old vocabulary index the migrated rows violated.
 
 `migrate.ts` lists every stored-shape pass in `BOUNDARIES`, in marker order;
-today that is all of `MARKS`. A refused pass is not a boundary: its transaction
+today that is all of `MARKS` but `SANDBOXED`, which writes only a column the
+build before it already reads. A refused pass is not a boundary: its transaction
 rolls back, the data did not move, and its marker stays unchanged. `yak deploys`
 still treats a version carrying that pass as a potential boundary, because
 another Store may have completed it.
