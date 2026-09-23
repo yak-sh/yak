@@ -96,6 +96,7 @@ import {
   until,
   type Watch,
 } from '@yaks/effects'
+import { type Local, peek, vaultOf, warm } from '@yaks/secrets'
 import { type Config, given, type Options, used } from './config.ts'
 
 export {
@@ -393,6 +394,44 @@ let understood = (brought: Keywords[]): Keywords[] => {
   ]
 }
 
+// The name in `{"secret": "NAME"}`, when the object holds nothing else.
+let secretIn = (value: unknown): string | undefined => {
+  let said = value as Record<string, unknown> | null
+  return said && typeof said == 'object' && typeof said.secret == 'string' &&
+      Object.keys(said).length == 1
+    ? said.secret
+    : undefined
+}
+
+// `{"secret": "NAME"}` anywhere in a plugin's options reads that secret at the
+// moment the value is accessed (@yaks/secrets `peek`): the value written
+// through the graph, the 1Password value it is bound to, or else the
+// environment variable of that name. It is the one thing a config file cannot
+// hold in the open, and the one thing that can arrive after the host is
+// already running, so a plugin that re-reads its options on each pass starts
+// the moment a key is written rather than needing a restart. A secret nobody
+// has provided reads as undefined rather than as a guess, so the plugin
+// reports in its own words what it is waiting for.
+let revealing = (value: unknown, vault: Local): unknown => {
+  let name = secretIn(value)
+  // A whole options object written `{"secret": …}` has no parent object to
+  // define a getter on, so it is read here, once.
+  if (name) return peek(vault, name)
+  if (!value || typeof value != 'object') return value
+  let out = (Array.isArray(value) ? [] : {}) as Record<string, unknown>
+  for (let [k, v] of Object.entries(value)) {
+    let said = secretIn(v)
+    if (said) {
+      Object.defineProperty(out, k, {
+        get: () => peek(vault, said),
+        enumerable: true,
+        configurable: true,
+      })
+    } else out[k] = revealing(v, vault)
+  }
+  return out
+}
+
 /**
  * Who a host writes as when no request named a caller: this PROCESS, acting
  * for itself through itself.
@@ -443,11 +482,16 @@ export let compose = async (
 ): Promise<Served> => {
   let path = dbOf(config)
   let plugins = config.plugins ?? []
+  // Where this graph's secrets are kept (@yaks/secrets `vaultOf`), and every
+  // value bound to 1Password read once now, so an option naming one has it
+  // the first time a factory looks.
+  let vault = vaultOf(config)
+  await warm(vault)
   let got = await Promise.all(
     plugins.map(async (plug) =>
       [
         used(plug),
-        given(plug),
+        revealing(given(plug), vault) as Options,
         await Promise.all(FACETS.map((name) => load(used(plug), name))),
       ] as const
     ),

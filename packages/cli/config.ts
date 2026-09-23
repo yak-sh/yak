@@ -15,9 +15,10 @@
 
 /** The options a config passes to one plugin, given to each of that plugin's
  * exported factories as the second argument, after the host. A value written
- * `{"env": "NAME"}` is read from the environment every time it is accessed, so
- * a config names a secret without storing one — and a factory that re-reads
- * its options picks up a variable exported after the host started. */
+ * `{"secret": "NAME"}` is that secret's value, read every time it is accessed
+ * (host.ts `revealing`), so a config names a secret without holding one — and
+ * a factory that re-reads its options picks up a secret written after the host
+ * started. */
 export type Options = Record<string, unknown>
 
 /** A plugin a config names: a bare specifier, or one with options. */
@@ -104,49 +105,10 @@ export let used = (plug: Plug): string =>
 export let given = (plug: Plug): Options =>
   typeof plug == 'string' ? {} : plug.with ?? {}
 
-// The variable name in `{"env": "NAME"}`, when the object holds nothing
-// else.
-let named = (value: unknown): string | undefined => {
-  let said = value as Record<string, unknown> | null
-  return said && typeof said == 'object' && typeof said.env == 'string' &&
-      Object.keys(said).length == 1
-    ? said.env
-    : undefined
-}
-
-// `{"env": "NAME"}` anywhere in an options object reads the environment
-// variable at the moment the value is accessed — the one thing a config file
-// cannot hold in the open, and the one thing that can arrive after the host is
-// already running. A plugin that re-reads its options on each pass therefore
-// starts the moment a key is exported, rather than needing the process
-// restarted for a config that never changed. A variable nothing exports reads
-// as undefined rather than as a guess, so the plugin reports in its own words
-// what it is waiting for.
-let sourced = (value: unknown): unknown => {
-  let name = named(value)
-  // A whole options object written `{"env": …}` has no parent object to
-  // define a getter on, so it is read here, once.
-  if (name) return Deno.env.get(name)
-  if (!value || typeof value != 'object') return value
-  let out = (Array.isArray(value) ? [] : {}) as Record<string, unknown>
-  for (let [k, v] of Object.entries(value)) {
-    let said = named(v)
-    if (said) {
-      Object.defineProperty(out, k, {
-        get: () => Deno.env.get(said),
-        enumerable: true,
-        configurable: true,
-      })
-    } else out[k] = sourced(v)
-  }
-  return out
-}
-
 let resolved = (plug: Plug, base: URL): Plug =>
-  typeof plug == 'string' ? near(plug, base) : {
-    use: near(plug.use, base),
-    ...plug.with ? { with: sourced(plug.with) as Options } : {},
-  }
+  typeof plug == 'string'
+    ? near(plug, base)
+    : { ...plug, use: near(plug.use, base) }
 
 /**
  * Read a config file. Paths inside it — the database, a relative plugin — are

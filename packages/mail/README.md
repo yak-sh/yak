@@ -246,22 +246,22 @@ A plugin entry in a `yak serve` configuration can be:
     "sender": {
       "via": "cloudflare",
       "account": "a1b2",
-      "token": { "env": "CF_EMAIL_TOKEN" }
+      "token": { "secret": "CF_EMAIL_TOKEN" }
     },
     "door": {
       "path": "/mail/inbound",
-      "secret": { "env": "MAIL_DOOR_SECRET" }
+      "secret": { "secret": "MAIL_DOOR_SECRET" }
     }
   }
 }
 ```
 
-The CLI configuration loader resolves `{ "env": "NAME" }`; direct TypeScript
-calls receive strings. No sender configuration means no sending handler. Missing
-Cloudflare credentials or an unsupported transport registers a handler that
-sends nothing: it warns once, when it meets a message it cannot send, and leaves
-that message for the first process with a sender. `mail check` reports the
-configuration problem too.
+The CLI host resolves `{ "secret": "NAME" }` through
+[@yaks/secrets](../secrets); direct TypeScript calls receive strings. No sender
+configuration means no sending handler. Missing Cloudflare credentials or an
+unsupported transport registers a handler that sends nothing: it warns once,
+when it meets a message it cannot send, and leaves that message for the first
+process with a sender. `mail check` reports the configuration problem too.
 
 ## Pulling from an edge
 
@@ -278,7 +278,7 @@ one-shot `yak` command pulls once when nobody else is. Name the edge under
     "domain": "books.example",
     "pull": {
       "url": "https://inbox.books.example",
-      "token": { "env": "INBOX_TOKEN" },
+      "token": { "secret": "INBOX_TOKEN" },
       "every": 10000
     }
   }

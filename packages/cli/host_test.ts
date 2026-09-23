@@ -14,10 +14,11 @@ import {
   facet,
   FACETS,
   type Facets,
-  given,
+  type Options,
   read,
   writer,
 } from './host.ts'
+import { sealed } from '@yaks/secrets'
 
 // The host of these tests, as its own writes are signed: this process, whose
 // row every composition here writes on the way in.
@@ -959,34 +960,31 @@ Deno.test('a facet hangs its timer off the host ending, and closing cancels it',
   assertEquals(late, 0, 'a timer fired after the database was let go')
 })
 
-Deno.test('an option written {env} is read from the environment', () => {
-  let dir = Deno.makeTempDirSync()
-  Deno.env.set('YAK_TEST_TOKEN', 'hunter2')
-  try {
-    write(`${dir}/yak.json`, {
+Deno.test('an option written {secret} is that secret, read each time it is asked for', async () => {
+  let seen: Options | undefined
+  let host = await compose(
+    {
       db: ':memory:',
       plugins: [{
-        use: './plugins/mail',
-        with: { sender: { token: { env: 'YAK_TEST_TOKEN' } }, keep: [1, 2] },
-      }],
-    })
-    let said = read(`${dir}/yak.json`).plugins
-    assertEquals(said, [{
-      use: `file://${dir}/plugins/mail`,
-      with: { sender: { token: 'hunter2' }, keep: [1, 2] },
-    }])
-    // And it is read every time it is asked for, not once: a key exported
-    // after the host booted is a facet that starts on its next pass rather
-    // than one that has to be restarted (T-37699).
-    let token = () =>
-      (given(said![0]).sender as { token?: string } | undefined)?.token
-    Deno.env.set('YAK_TEST_TOKEN', 'hunter3')
-    assertEquals(token(), 'hunter3')
-    Deno.env.delete('YAK_TEST_TOKEN')
+        use: 'mail',
+        with: { sender: { token: { secret: 'YAK_TEST_TOKEN' } }, keep: [1, 2] },
+      }, '@yaks/secrets'],
+    },
+    only({ mail: { rules: { rules: (_, options) => (seen = options, []) } } }),
+  )
+  try {
+    let token = () => (seen!.sender as { token?: string }).token
+    assertEquals(seen!.keep, [1, 2])
+    // Nothing written: the environment variable of that name, as it is now.
     assertEquals(token(), undefined)
+    Deno.env.set('YAK_TEST_TOKEN', 'from-env')
+    assertEquals(token(), 'from-env')
+    // Written through the graph, it wins — without a restart (T-37699).
+    await host.graph.apply([sealed('YAK_TEST_TOKEN', 'hunter2')])
+    assertEquals(token(), 'hunter2')
   } finally {
     Deno.env.delete('YAK_TEST_TOKEN')
-    Deno.removeSync(dir, { recursive: true })
+    await host.close()
   }
 })
 

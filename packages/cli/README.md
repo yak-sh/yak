@@ -85,10 +85,11 @@ Pass a config path with `--config`, set `$YAK_CONFIG`, or place the file at
         "sender": {
           "via": "cloudflare",
           "account": "a1b2",
-          "token": { "env": "CF_EMAIL_TOKEN" }
+          "token": { "secret": "CF_EMAIL_TOKEN" }
         }
       }
-    }
+    },
+    "@yaks/secrets"
   ],
   "port": 8787
 }
@@ -121,11 +122,12 @@ handler, tool runner, duties, process entity, request authentication function,
 and shutdown signal. An entry without `with` receives an empty object. Option
 keys belong to the plugin.
 
-At any depth in `with`, an object containing only `{ "env": "NAME" }` reads that
-environment variable when the property is accessed. This keeps secrets out of
-the JSON file and lets a long-running plugin observe a value supplied after
-startup. An unset variable produces `undefined`; the plugin decides how to
-handle it.
+At any depth in `with`, an object containing only `{ "secret": "NAME" }` reads
+that secret when the property is accessed: the value written through the graph
+([@yaks/secrets](../secrets)), the 1Password value it is bound to, or else the
+environment variable `NAME`. This keeps secrets out of the JSON file and lets a
+long-running plugin observe a value supplied after startup. A secret nobody
+supplied produces `undefined`; the plugin decides how to handle it.
 
 Plugin factories may omit functionality when configuration is unavailable. Any
 diagnostic behavior, including a `check` tool, belongs to the plugin; the CLI

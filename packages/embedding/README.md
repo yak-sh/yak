@@ -59,7 +59,7 @@ The plugin configuration selects a model, endpoint, credentials and text fields:
           "via": "ollama",
           "model": "qwen3-embedding",
           "base": "https://ollama.example",
-          "key": { "env": "OLLAMA_API_KEY" },
+          "key": { "secret": "OLLAMA_API_KEY" },
           "dim": 384
         },
         "text": ["doc.title"],
@@ -101,11 +101,12 @@ again. There is no unconditional startup sweep or recurring successful sweep. An
 unknown provider is reported as unavailable; invalid `text` names are also
 reported.
 
-The CLI resolves `{ "env": "NAME" }` from the host process's environment when
-options are read. A later export in a separate shell does not change an already
-running process's environment. Field watches and the query extension are created
-when the plugin is composed; changing their configuration may require rebuilding
-them.
+The CLI resolves `{ "secret": "NAME" }` through [@yaks/secrets](../secrets) each
+time options are read, so a key written through the graph after the host started
+is used on the next pass. A later export in a separate shell does not change an
+already running process's environment. Field watches and the query extension are
+created when the plugin is composed; changing their configuration may require
+rebuilding them.
 
 The package has a `vocab.json` declaring the `vector_check` tool, but no graph
 component for stored vectors. Vectors are derived SQL data and are not included

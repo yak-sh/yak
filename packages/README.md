@@ -219,6 +219,12 @@ grouped approximately by function, **not** by dependency order.
   supplied by the application. HTTP and MCP signing alone do not enforce read
   permission.
 
+- **[@yaks/secrets](./secrets)** — Write a secret through the graph and keep it
+  elsewhere: `secret{name, value}` holds a salted-hash sentinel, and the value
+  is sealed into a vault (private files on a box, memory for a graph in memory)
+  as the write commits. Trusted code reads it back by name; a config names one
+  as `{"secret": "NAME"}`.
+
 - **[@yaks/session](./session)** — Store agent transcripts as `entry` entities:
   content, model requests, tool calls/results and stops. Status is derived from
   transcript entries and outstanding calls. The package also provides model
@@ -571,9 +577,10 @@ distinguish implemented behavior from remaining proposals.
   `with`, and whatever is under `with` is passed to each of that plugin's
   factories alongside the host. So `@yaks/mail/effects` builds its own transport
   from what the config named
-  (`{"via":"cloudflare","account":"account-id","token":{"env":"MAIL_TOKEN"}}`),
-  and a value written as `{"env": "NAME"}` is read from the environment when the
-  config is loaded — so a config can name a secret without containing one. See
+  (`{"via":"cloudflare","account":"account-id","token":{"secret":"MAIL_TOKEN"}}`),
+  and a value written as `{"secret": "NAME"}` is that secret, read when it is
+  asked for ([@yaks/secrets](./secrets)) — so a config can name a secret without
+  containing one. See
   [@yaks/cli](./cli/README.md#what-a-config-passes-to-one-plugin).
 - **`handler` is what hosts the routes.** It is exported from `./routes` by at
   most one plugin in a program — @yaks/api — and is handed the host once

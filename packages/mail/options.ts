@@ -10,15 +10,15 @@
 //             "triage": "…",
 //             "sender": { "via": "cloudflare",
 //                         "account": "…",
-//                         "token": { "env": "CF_EMAIL_TOKEN" } },
-//             "door": { "secret": { "env": "MAIL_DOOR_SECRET" } },
+//                         "token": { "secret": "CF_EMAIL_TOKEN" } },
+//             "door": { "secret": { "secret": "MAIL_DOOR_SECRET" } },
 //             "pull": { "url": "https://inbox.books.example",
-//                       "token": { "env": "INBOX_TOKEN" } } } }
+//                       "token": { "secret": "INBOX_TOKEN" } } } }
 // ```
 //
-// Nothing here holds a secret: `{"env": "NAME"}` anywhere in the object is the
-// environment's value at the moment the config is read (@yaks/cli), so the file
-// is committable and the token is not in it.
+// Nothing here holds a secret: `{"secret": "NAME"}` anywhere in the object is
+// that secret's value at the moment it is read (@yaks/cli, @yaks/secrets), so
+// the file is committable and the token is not in it.
 
 import type { Eid } from '@yaks/graph'
 
@@ -51,7 +51,7 @@ export type Transport =
     via: 'cloudflare'
     /** the Cloudflare account id */
     account: string
-    /** an API token that may send mail — `{"env": "…"}` in the config */
+    /** an API token that may send mail — `{"secret": "…"}` in the config */
     token: string
     /** the API root, to point a test at a stub */
     base?: string
@@ -78,7 +78,7 @@ export type Door = {
 export type Pull = {
   /** the edge's API root */
   url: string
-  /** the bearer token it asks for — `{"env": "…"}` in the config */
+  /** the bearer token it asks for — `{"secret": "…"}` in the config */
   token: string
   /** how long to wait between pulls, in milliseconds (default ten seconds) */
   every?: number

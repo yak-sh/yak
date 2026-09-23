@@ -13,7 +13,7 @@
 //   "with": { "embedder": { "via": "ollama",
 //                           "model": "qwen3-embedding",
 //                           "base": "https://ollama.example",
-//                           "key": { "env": "OLLAMA_API_KEY" },
+//                           "key": { "secret": "OLLAMA_API_KEY" },
 //                           "dim": 384 },
 //             "text": ["doc.title", "doc.body"] } }
 // ```
@@ -23,9 +23,8 @@
 // stores no vectors, its check reports what it is waiting for, and the first
 // pass after the key appears is the one that embeds. So nothing here throws —
 // a config amounts to a {@link Ready} value, read on every pass rather than
-// once when the plugin is composed, which is what lets a key exported into the
-// environment (or, later, written into the graph) start the sweep without a
-// restart.
+// once when the plugin is composed, which is what lets a key written into the
+// graph start the sweep without a restart.
 //
 // A `via` nothing here implements is still an error — waiting will never turn
 // it into an embedder — but it is reported, once, where it is read, rather than
@@ -141,9 +140,8 @@ export let chosen = (vocab: Vocab, options: Options): Field[] => {
  *
  * Read it on every pass rather than once when the plugin is composed. That is
  * what makes a key arriving late a server that starts embedding instead of one
- * that has to be restarted — the same call handles a config read from the
- * environment (@yaks/cli resolves `{"env": …}` when it is asked for) and one
- * that will later come from the graph.
+ * that has to be restarted: @yaks/cli resolves `{"secret": …}` each time it is
+ * asked for, so a key written into the graph is seen on the next pass.
  *
  * A `text` name the vocabulary does not declare is the one thing here that
  * cannot wait: it is reported, and this plugin does nothing, which degrades the

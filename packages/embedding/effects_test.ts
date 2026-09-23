@@ -121,8 +121,8 @@ Deno.test('an embedder that cannot be reached leaves the vectors stale, not the 
 
 // A host whose key has not arrived: the write lands, the vectors wait, and the
 // pass after the key appears is the one that embeds. The config is a live
-// reading — @yaks/cli reads `{"env": …}` when it is asked — so the same object
-// answers differently once the key is exported.
+// reading — @yaks/cli reads `{"secret": …}` when it is asked — so the same
+// object answers differently once the key is written.
 Deno.test('a key that arrives late starts the sweep, without anybody restarting', async () => {
   let db = shelf()
   let key: string | undefined
