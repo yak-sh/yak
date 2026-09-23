@@ -145,10 +145,10 @@ slow('a bare index.html is an app, once it is named', async () => {
     assertEquals(asked.status, 400)
     assertStringIncludes(await asked.text(), 'needs a name typed')
 
-    let out = await drops(k, 'jeff.yaks.app', page(), 'hello', them.cookie)
+    let out = await drops(k, 'jeff.yaks.app', page(), 'greeting', them.cookie)
     assertEquals(out.status, 200)
-    assertStringIncludes(await out.text(), 'https://jeff.yaks.app/hello/')
-    let live = await k.at('jeff.yaks.app', '/hello/')
+    assertStringIncludes(await out.text(), 'https://jeff.yaks.app/greeting/')
+    let live = await k.at('jeff.yaks.app', '/greeting/')
     assertEquals(live.status, 200)
     assertStringIncludes(await live.text(), 'Hello')
   } finally {
