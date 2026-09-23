@@ -46,9 +46,16 @@ slow('account pages remain reachable behind a custom home app', async () => {
       return (person.doc as { title: string }).title
     }
 
-    for (let app of ['site', 'private-notes', 'discarded', 'manage']) {
+    for (let app of ['site', 'private-notes', 'discarded']) {
       await agent.tool('app_new', { space: slug, slug: app, title: app })
     }
+    // `manage` is reserved now (route.ts RESERVED), and an app that held the
+    // name before that keeps it: made under another slug, then renamed in
+    // the directory the way it stood before the reservation.
+    let held = /\(([0-9a-f-]{36})\)/.exec(
+      await agent.tool('app_new', { space: slug, slug: 'held', title: 'held' }),
+    )![1]
+    await dir.apply([{ entity: { eid: held }, app: { slug: 'manage' } }])
     await agent.tool('app_set', { space: slug, app: 'site', home: true })
     await agent.tool('app_set', {
       space: slug,

@@ -509,10 +509,15 @@ slow('the free tier: a warning once, then the refusals', async () => {
         plan: { tier: 'free' },
         meter: { ...row, requests: 40_500, bytes: 0 },
       },
-      // A gigabyte held: the byte ceiling, exactly at it.
+      // A gigabyte held: the byte ceiling, exactly at it. The space's reading
+      // says so, and so does the size its one app's store reported.
       {
         entity: { eid: eids.heavy },
         plan: { tier: 'free' },
+        meter: { ...row, requests: 0, bytes: 1024 ** 3 },
+      },
+      {
+        entity: { eid: eids['heavy/big'] },
         meter: { ...row, requests: 0, bytes: 1024 ** 3 },
       },
     ])

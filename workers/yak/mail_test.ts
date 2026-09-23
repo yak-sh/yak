@@ -520,12 +520,15 @@ slow("an app's letter leaves through the runtime's own binding", async () => {
     await app.applied(letter())
     let settled = await until(async () => {
       let [one] = await app.get(
-        `.entity.eid=${NOTE}&.delivered?&.bounced?`,
+        `.entity.eid=${NOTE}&.mail?&.delivered?&.bounced?`,
       ) as unknown as Bundle[]
       return one?.delivered || one?.bounced ? one : null
     }, { timeout: 30_000, poll: 250, label: 'the letter to come to rest' })
     assertEquals(settled!.bounced, undefined)
-    assert((settled!.delivered as { via?: string }).via, 'it left with an id')
+    assert(
+      (settled!.mail as { message_id?: string }).message_id,
+      'it left with an id',
+    )
   } finally {
     await k.stop()
   }

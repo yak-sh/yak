@@ -291,13 +291,12 @@ slow('store_load reads a CSV as rows of one component', async () => {
     let recipes = async () =>
       (JSON.parse(await agent.tool('graph_query', { q: '.recipe!' })) as {
         entity: { eid: string }
-        recipe: { name: string; serves: number; vegan: number }
+        recipe: { name: string; serves: number; vegan: boolean }
       }[]).sort((a, b) => a.recipe.serves - b.recipe.serves)
     let [soup, tart] = await recipes()
-    // `yes` coerced to a boolean, which a store keeps in an integer column and
-    // reads back as one — the same 1 a JSON load's `true` writes.
-    assertEquals(soup.recipe, { name: 'Lentil, soup', serves: 4, vegan: 1 })
-    assertEquals(tart.recipe.vegan, 0)
+    // `yes` coerced to a boolean: the same true a JSON load's `true` writes.
+    assertEquals(soup.recipe, { name: 'Lentil, soup', serves: 4, vegan: true })
+    assertEquals(tart.recipe.vegan, false)
     // The `title` header is the row's doc, not the recipe's own word.
     assertEquals(
       (JSON.parse(await agent.tool('graph_query', { q: '.doc.title!' })) as {

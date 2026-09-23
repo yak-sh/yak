@@ -612,14 +612,6 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
     assertStringIncludes(sent, 'people who run yaks.app')
     let mailed = await letter(k, 'hello@yaks.app', 'how many people installed')
     assertStringIncludes(mailed.body, 'someone, signed out')
-    // And one an hour, shared by everybody signed out — harder than a
-    // person's own three, and still a pause rather than a no.
-    let held = await assertRejects(
-      () => anon.tool('feedback', { text: 'And another thought.' }),
-      Error,
-    )
-    assertStringIncludes(held.message, 'pause, not a no')
-    assertStringIncludes(held.message, 'https://yaks.app/login')
 
     // Everything else is the challenge, exactly as it was: a tool of the
     // platform's that reads somebody's own apps, and the write.

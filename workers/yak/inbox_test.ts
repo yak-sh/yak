@@ -35,8 +35,7 @@ type Row = {
   kind: string
   entity: { eid: string }
   doc: { title: string; body?: string }
-  // `verified` is a boolean property, which SQLite holds as 1 and 0.
-  mail: { from: string; to: string; at: string; verified?: number | null }
+  mail: { from: string; to: string; at: string; verified?: boolean | null }
   attachment: { mime: string; name: string }
 }
 
@@ -95,9 +94,7 @@ slow('a letter lands in the app its address named', async () => {
     assertEquals(letter.mail.from, 'ana@books.example')
     assertEquals(letter.mail.to, 'jeff.recipes@yaks.app')
     assertEquals(letter.mail.at, '2024-08-27T15:49:44.000Z')
-    // A boolean property is an integer in SQLite, here as everywhere on this
-    // platform (@yaks/sqlite `write`): the verdict reads back 1 and 0.
-    assertEquals(letter.mail.verified, 1)
+    assertEquals(letter.mail.verified, true)
 
     // Nobody wrote it: the sender is a property and never an actor, so a letter
     // cannot put words in a member's mouth.
@@ -121,7 +118,7 @@ slow('a letter lands in the app its address named', async () => {
     assertEquals(tomatoes.doc.title, 'Tomatoes are in')
     // No `Authentication-Results` at all: nobody checked, which is not the
     // same as a check that failed, so the property is left unwritten — null on
-    // the row, where a failed check is 0.
+    // the row, where a failed check is false.
     assertEquals(tomatoes.mail.verified, null)
 
     // The space's own name is its front page's address — the app it made its

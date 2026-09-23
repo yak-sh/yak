@@ -50,7 +50,7 @@ import {
 } from '@yaks/vocab'
 import { refuse, rejected } from './tool.ts'
 import { caught } from './sentry.ts'
-import { said } from './writes.ts'
+import { said as told } from './writes.ts'
 
 // The words the PLATFORM says in every store — core, member, edge, the twelve
 // relations. A word outside this list was declared by an app, which is what
@@ -97,9 +97,8 @@ let doorOf = (env: Env, r: Reach, said?: string) => async (line: string) => {
     {},
     vouched(r.who),
   )
-  let body = await res.text()
-  if (!res.ok) throw rejected(res.status, body)
-  let bundles = JSON.parse(body)
+  if (!res.ok) throw rejected(res.status, await told(res))
+  let bundles = await res.json()
   return Array.isArray(bundles)
     ? listed(bundles as Row[], said ?? asked) as Bundle[]
     : bundles
@@ -748,11 +747,10 @@ let sent = async (
   // A write the store's log kept (writes.ts) lands later, in order: the
   // agent is told so rather than that it failed, so it does not send it twice.
   if (res.status == 202) {
-    throw refuse('unavailable', `${at(r)}: ${await said(res)}`)
+    throw refuse('unavailable', `${at(r)}: ${await told(res)}`)
   }
-  let body = await res.text()
-  if (!res.ok) throw rejected(res.status, `${at(r)}: ${body}`)
-  return JSON.parse(body) as Bundle[]
+  if (!res.ok) throw rejected(res.status, `${at(r)}: ${await told(res)}`)
+  return await res.json() as Bundle[]
 }
 
 // The batch, split by component into one part per store.

@@ -30,8 +30,8 @@ export class Denied extends Error {
     public act: 'read' | 'write' = 'write',
   ) {
     super(
-      `${actor ?? 'nobody'} may not ${act} ${app} — ${need} is the least ` +
-        `that may`,
+      `${actor ?? 'someone signed out'} may not ${act} ${app} — ${need} ` +
+        `is the least that may`,
     )
     this.name = 'Denied'
   }

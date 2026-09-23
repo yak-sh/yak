@@ -219,9 +219,19 @@ slow(
       // under `result`, which is what each tool returns as structured content.
       // The shape is the generic one (@yaks/mcp `answerSchema`) and not the
       // vocabulary typed out per tool, which would be megabytes of listing.
+      // graph_schema answers a vocabulary document instead (T-37998), so it
+      // promises the vocab meta-schema.
       for (let t of tools as { name: string; outputSchema?: unknown }[]) {
+        if (t.name == 'graph_schema') continue
         assertEquals(t.outputSchema, answerSchema, `${t.name}'s answer`)
       }
+      let schema = (tools as { name: string; outputSchema?: unknown }[])
+        .find((t) => t.name == 'graph_schema')!.outputSchema as {
+          title?: string
+          required?: string[]
+        }
+      assertEquals(schema.title, 'yaks vocab file')
+      assertEquals(schema.required, ['$defs'])
 
       // What a model reads before anything else: the address, the four
       // steps, and the store a page writes to — enough to build the first
@@ -909,7 +919,7 @@ slow(
         Error,
       )).message
       assertStringIncludes(typo, 'unknown property: recipe.calories')
-      assertStringIncludes(typo, 'recipe declares title, serves')
+      assertStringIncludes(typo, 'recipe has title (string), serves (number)')
       assertStringIncludes(typo, 'graph_schema')
 
       // A manifest that reaches for one of the platform's words is refused

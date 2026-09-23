@@ -9,6 +9,7 @@ import { derivedEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { slow } from '../../src/testing.ts'
 import { handle } from './directory.ts'
+import { MARKS } from './migrate.ts'
 import { client, type Kernel, kernel, seed } from './probe.ts'
 
 // Statements into one store object, which then wakes as a new incarnation
@@ -78,7 +79,7 @@ slow(
       )
       assertEquals(
         await sql(k, store, [["select v from yak_kv where k = 'migrated'"]]),
-        [{ v: 'yak/store/tool/7' }],
+        [{ v: MARKS.at(-1) }],
       )
       assertEquals(
         await sql(k, store, [[

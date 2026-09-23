@@ -608,7 +608,7 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
       body: { type: 'string' },
     })
     assertEquals(index.defs.recipe.kind, true)
-    assertStringIncludes(index.text, '- **recipe** (kind): `serves`')
+    assertStringIncludes(index.text, '## recipe (kind)\n\nserves')
 
     // One word whole: its entry as its vocab.json declares it, with an example
     // value; the markdown adds what points at it and the page that covers it.
@@ -628,7 +628,7 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
     )
     // What points at a letter, from anywhere in reach: its own `reply_to`,
     // which is how a thread hangs together.
-    assertStringIncludes(mail.text, '`mail.reply_to`')
+    assertStringIncludes(mail.text, '- mail.reply_to')
 
     // A kind is what an entity of it is made of: the word itself, then the
     // index entry of each word it is shown with.
@@ -709,7 +709,7 @@ slow(
         Error,
       )).message
       assertStringIncludes(refused, 'unknown property: email.adress')
-      assertStringIncludes(refused, 'email declares address')
+      assertStringIncludes(refused, 'email has address (string)')
       assertStringIncludes(refused, 'graph_schema')
       // And the type is there to be read: `mail.verified` is a boolean, and the
       // vocabulary's own sentence about it rides along.
