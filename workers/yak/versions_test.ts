@@ -32,6 +32,7 @@ import {
   replaced,
   restore,
   restored,
+  rewritten,
   SHA,
   sha256,
   snapshot,
@@ -623,4 +624,38 @@ Deno.test('a renamed path carries its bytes, history and releases', async () => 
   let kept = (await history(blobs, PREFIX, 'NOTES.md'))[0]
   assertEquals(kept.sha, await sha256(bytes('cups')))
   assert(await pins(blobs, PREFIX).has(kept.sha), 'pinned')
+})
+
+// An old shape moved to the one a deploy takes, everywhere a rollback or a
+// restore reads it; the bytes an old commit names are kept aside for git.
+Deno.test('a rewritten file is new in its history and every release', async () => {
+  let { blobs } = memory()
+  let { dir, rows } = directory()
+  let up = {
+    'tools.json': (t: string) => t == t.toUpperCase() ? null : t.toUpperCase(),
+  }
+  let text = async (sha: string) =>
+    new TextDecoder().decode(await pins(blobs, PREFIX).get(sha))
+  await blobs.put(PREFIX + 'tools.json', bytes('one'))
+  await record(dir, WHO, APP, 1, await snapshot(blobs, PREFIX), '')
+  await replaced(blobs, PREFIX, 'tools.json', 'p1')
+  await blobs.put(PREFIX + 'tools.json', bytes('two'))
+  await record(dir, WHO, APP, 2, await snapshot(blobs, PREFIX), '')
+
+  assertEquals(await rewritten(blobs, dir, ONE[0], up, 'aside/'), {
+    'tools.json': ['live', 'history', 'v2', 'v1'],
+  })
+  assertEquals(await read(blobs, 'tools.json'), 'TWO')
+  assertEquals(
+    await text((await history(blobs, PREFIX, 'tools.json'))[0].sha),
+    'ONE',
+  )
+  assertEquals(
+    await Promise.all(rows().map((v) => text(v.files['tools.json']))),
+    ['ONE', 'TWO'],
+  )
+  let old = await sha256(bytes('one'))
+  assertEquals(await blobs.read('aside/' + old), bytes('one'))
+  // Idempotent: the next day's sweep finds nothing in the old shape.
+  assertEquals(await rewritten(blobs, dir, ONE[0], up, 'aside/'), {})
 })

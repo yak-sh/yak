@@ -59,6 +59,10 @@ export { MAIN, refEid }
  * A body under it would be deleted the day after it was written. Nothing
  * sweeps this space yet — an object graph's own retention is its own question,
  * for when a deleted app's orphaned objects are worth collecting.
+ *
+ * A blob's bytes land here too once no manifest names them: a file rewritten
+ * in every version (versions.ts `rewritten`) leaves its old commits naming the
+ * old bytes, and {@link bodies} reads this space first.
  */
 export let BODY = 'git/'
 
