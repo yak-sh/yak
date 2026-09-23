@@ -41,7 +41,7 @@ import { refuse } from './tool.ts'
 // And the app's own `vocab.json` — or `vocab.yml`, read through the same door
 // (@yaks/yaml, M-34605). It is a JSON Schema 2020-12 document with `$defs`
 // (D-33490 gate 3), the same shape every `packages/*/vocab.json` is written in,
-// and it is the one spelling: a keyword belongs to the column — `search`,
+// and it is the one spelling: a keyword belongs to the property — `search`,
 // `stamped`, a reference's `death` — and a manifest flattened to bare type
 // words could not carry one (T-37546).
 import { type Host, url } from './host.ts'
@@ -71,7 +71,7 @@ import { vocabOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { sweepDoc } from './wake.ts'
 
-// The column shapes these documents are written out of. A `ref` names another
+// The property shapes these documents are written out of. A `ref` names another
 // entity and says what happens to this row when that one dies; `owned` is
 // `stamped` — readable, never wire-writable, the kernel's own door the only
 // writer.
@@ -87,13 +87,13 @@ let bool: PropSchema = { type: 'boolean' }
 let time: PropSchema = { type: 'string', format: 'date-time' }
 let owned = (s: PropSchema): PropSchema => ({ ...s, stamped: true })
 // No two rows of the component may share this value — the uniqueness a race is
-// decided by, said on the column when it is one column (a composite is said on
-// the component, `unique: [['space', 'slug']]`).
+// decided by, said on the property when it is one property (a composite is said
+// on the component, `unique: [['space', 'slug']]`).
 let unique = (s: PropSchema): PropSchema => ({ ...s, unique: true })
 
-// A stamp's three columns: when, by whom, through what. `created`, `updated`
+// A stamp's three properties: when, by whom, through what. `created`, `updated`
 // and every mark a served or fixed row wears are the same three words.
-let stampCols: Record<string, PropSchema> = {
+let stampProps: Record<string, PropSchema> = {
   at: owned(time),
   by: owned(ref('keep')),
   via: owned(ref('keep')),
@@ -102,7 +102,7 @@ let stampCols: Record<string, PropSchema> = {
 /** The components every app's store has that no package owns: the spine, the
  * writer, and the two server-owned stamps. `doc` is @yaks/doc's, `member`
  * @yaks/member's, and both are loaded beside this one (see {@link coreDocs}).
- * The spine carries the eid alone: a number is @yaks/id's column, which an
+ * The spine carries the eid alone: a number is @yaks/id's property, which an
  * app's store does not load, so an app's entity has one name and it is the one
  * its client minted. */
 export let coreDoc: VocabDoc = {
@@ -125,12 +125,12 @@ export let coreDoc: VocabDoc = {
     created: {
       component: true,
       type: 'object',
-      properties: stampCols,
+      properties: stampProps,
     },
     updated: {
       component: true,
       type: 'object',
-      properties: stampCols,
+      properties: stampProps,
     },
   },
 }
@@ -181,9 +181,9 @@ export let relationDoc: VocabDoc = {
  * The server-owned ones are `stamped`: an `exception` is the platform's word
  * about the app's own code, and the kernel's door (`x-yak-kernel`, graph.ts) is
  * its only writer. The marks are stamped too and written bare — `notified: {}`
- * says the thing without saying a column.
+ * says the thing without saying a property.
  *
- * Their columns are the fleet's own (src/vocab/manifests/kernel.json,
+ * Their properties are the fleet's own (src/vocab/manifests/kernel.json,
  * comms.json), so a row written through the old store means exactly what a row
  * written through this one means.
  */
@@ -220,17 +220,17 @@ export let kernelDoc: VocabDoc = {
     archived: {
       component: true,
       type: 'object',
-      properties: stampCols,
+      properties: stampProps,
     },
     opened: {
       component: true,
       type: 'object',
-      properties: stampCols,
+      properties: stampProps,
     },
     quarantined: {
       component: true,
       type: 'object',
-      properties: stampCols,
+      properties: stampProps,
     },
     // The two rows a page's upload makes (apps.ts `took`): the content,
     // addressed by its sha, and the use of it, addressed off that. They stay
@@ -271,7 +271,7 @@ export let notifiedDoc: VocabDoc = {
     notified: {
       component: true,
       type: 'object',
-      properties: stampCols,
+      properties: stampProps,
     },
   },
 }
@@ -302,8 +302,9 @@ export let TEACH = teach()
  * each app's own — a `task` in one app is the same word as a `task` in the
  * next, so one filter reads both.
  *
- * Their columns are the fleet contract's own (src/types.ts), so a row written
- * through the old store means what a row written through this one means.
+ * Their properties are the fleet contract's own (src/types.ts), so a row
+ * written through the old store means what a row written through this one
+ * means.
  */
 export let appsDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
@@ -316,7 +317,7 @@ export let appsDoc: VocabDoc = {
       before: ['doc'],
       properties: {
         // Read, never written: what the entity wears says its state, so a
-        // task is done because it wears `completed`, not because a column was
+        // task is done because it wears `completed`, not because a property was
         // set to a word. `computed: true` says there is no column at all;
         // {@link appDerived} is the expression that reads it.
         status: {
@@ -342,12 +343,12 @@ export let appsDoc: VocabDoc = {
     completed: {
       component: true,
       type: 'object',
-      properties: stampCols,
+      properties: stampProps,
     },
     cancelled: {
       component: true,
       type: 'object',
-      properties: { ...stampCols, reason: text },
+      properties: { ...stampProps, reason: text },
     },
     project: {
       component: true,
@@ -400,12 +401,12 @@ export let appsDoc: VocabDoc = {
     // about the payment — Stripe is — and the row exists so the seller knows
     // what to put in the box and who to post it to.
     //
-    // `items` is the cart as JSON in one text column, the way `home.first`
-    // is; a column is a scalar, and this is a list.
+    // `items` is the cart as JSON in one text property, the way `home.first`
+    // is; a property is a scalar, and this is a list.
     //
-    // Every column is server-owned: the webhook writes it through the kernel's
-    // door (sell.ts `asApp`), and no page, member or visitor can say an order
-    // was paid (T-37881). Who may remove one is graph.ts `FLOORS`.
+    // Every property is server-owned: the webhook writes it through the
+    // kernel's door (sell.ts `asApp`), and no page, member or visitor can say
+    // an order was paid (T-37881). Who may remove one is graph.ts `FLOORS`.
     order: {
       component: true,
       type: 'object',
@@ -442,7 +443,7 @@ export let appsDoc: VocabDoc = {
 }
 
 /**
- * The columns a store reads rather than stores, as the SQL that reads them
+ * The properties a store reads rather than stores, as the SQL that reads them
  * (@yaks/sql `Derived`). One today: a task's `status`, which is what the entity
  * wears. There is no `claim` in an app's store, so `wip` never happens here —
  * the word is declared because the platform's status grammar is one grammar,
@@ -500,7 +501,7 @@ export const classificationDoc: VocabDoc = {
  * store that will run it is the store that has to hold it.
  *
  * `error` and `exception` are left out: both vocabularies spell them, the
- * platform's are the ones a break page reads, and the one column @yaks/tools
+ * platform's are the ones a break page reads, and the one property @yaks/tools
  * adds (`error.code`) is declared on the platform's above.
  */
 let invocationDoc: VocabDoc = {
@@ -546,16 +547,16 @@ export let coreDocs: VocabDoc[] = [
 // — and the platform's roster is its access ladder, three seats
 // (`owner|editor|viewer`) read space-wide by apps.ts, so the word is declared
 // here at the platform's own meaning. A door that can address both stores
-// therefore types that column nowhere ({@link PLATFORM_APART}). Nothing
-// installs @yaks/member's guard on this store either: the
-// kernel decides who may read and write the directory before the request
-// reaches the object (directory.ts), and there is no app to be a member of.
+// therefore types that property nowhere ({@link PLATFORM_APART}). Nothing
+// installs @yaks/member's guard on this store either: the kernel decides who
+// may read and write the directory before the request reaches the object
+// (directory.ts), and there is no app to be a member of.
 
 /**
  * The platform's own components — what the directory IS, as one JSON Schema
  * document. Every word here is the fleet contract's own (src/types.ts) read
- * back in the format @yaks/vocab loads: the same columns, the same closed sets,
- * the same death behaviour, so a row written through the old store means
+ * back in the format @yaks/vocab loads: the same properties, the same closed
+ * sets, the same death behaviour, so a row written through the old store means
  * exactly what a row written through this one means.
  *
  * The server-owned ones are `stamped`: a `plan` nobody may lift for themselves,
@@ -634,7 +635,7 @@ export let platformDoc: VocabDoc = {
     // (T-34658): its birth subdomain and every one a rename left behind, each
     // still redirecting. Not unique here — uniqueness is over an address within
     // a space for an app, and over the whole platform for a space, and neither
-    // is one column's own race; the tools decide both (tools.ts `taken`).
+    // is one property's own race; the tools decide both (tools.ts `taken`).
     former: {
       component: true,
       type: 'object',
@@ -643,19 +644,19 @@ export let platformDoc: VocabDoc = {
     // Which app is the space's front page, and the paths its worker sees first
     // before the app whose slug owns them (D-34197, T-34227). One fact, one
     // spelling: the app wearing `home` is the home app, and its globs are
-    // columns of the same word — a `space.home` beside it would be a second
+    // properties of the same word — a `space.home` beside it would be a second
     // place to say the same thing, and two spellings of one fact drift.
     //
     // At most one app per space wears it. The vocabulary cannot say so —
-    // `unique` covers one component's own columns and `home` has no space of
+    // `unique` covers one component's own properties and `home` has no space of
     // its own — so it is the directory's rule instead (directory.ts `homing`,
     // where moving it is one batch that drops the old and adds the new).
     //
-    // A column is a scalar (@yaks/vocab `storable`), so the list is JSON in one
-    // text column — ordered, and read back by router.ts `firstOf`. The
+    // A property is a scalar (@yaks/vocab `storable`), so the list is JSON in
+    // one text property — ordered, and read back by router.ts `firstOf`. The
     // `former.slugs` above splits on whitespace instead, which is the older
-    // spelling of a list here;
-    // JSON is the one that round-trips exactly what an agent passed.
+    // spelling of a list here; JSON is the one that round-trips exactly what an
+    // agent passed.
     home: {
       component: true,
       type: 'object',
@@ -693,7 +694,7 @@ export let platformDoc: VocabDoc = {
       },
     },
     // A seat or a grant offered and not yet taken (invite.ts, T-37880). `to`
-    // is the space (a seat) or the app (a grant), one column the way
+    // is the space (a seat) or the app (a grant), one property the way
     // `hostname.serves` is, and accepting is one batch that writes the
     // `member` or `grant` row and drops this one. A word of its own rather
     // than a pending mark on the seat, so everything that reads `member` and
@@ -727,10 +728,10 @@ export let platformDoc: VocabDoc = {
     },
     // A hostname somebody owns, and the one place it serves: a space, whose
     // front page it opens at `/` with every app of it at `/<app>/`, or a single
-    // app, which it opens at `/` outright (T-34596). One column for both,
+    // app, which it opens at `/` outright (T-34596). One property for both,
     // because it is one fact — what this name is aimed at — and the two forms
-    // differ only in which entity it names; a second column would let a row say
-    // both and mean neither.
+    // differ only in which entity it names; a second property would let a row
+    // say both and mean neither.
     hostname: {
       component: true,
       type: 'object',
@@ -812,7 +813,7 @@ export let platformDoc: VocabDoc = {
     // `space_restore` take the word off and give all of that back, and thirty
     // days on the daily sweep erases it for good.
     //
-    // One word on the row rather than a state column beside it, for the
+    // One word on the row rather than a state property beside it, for the
     // reason `home` is one: what is in the trash is what wears this, and a
     // second spelling of the same fact drifts from it. That is also why an
     // app and a space share the word — it says one thing, thrown away and
@@ -867,7 +868,7 @@ export let platformDoc: VocabDoc = {
     //
     // Server-owned, all three, for the reason `plan` is: `charges_enabled` is
     // what the checkout door reads before it takes anybody's money, and a
-    // column a space could write for itself is a space selling before Stripe
+    // property a space could write for itself is a space selling before Stripe
     // ever said it may. Only the Connect webhook and `space_sell` write them,
     // through the kernel's own door (directory.ts `stamp`).
     stripe: {
@@ -1041,13 +1042,13 @@ export let gitDocs: VocabDoc[] = [
 /** The git object store's whole vocabulary (graph.ts, {@link gitDocs}). */
 export let gitVocab = (): Vocab => loadVocab(gitDocs, metaKeywords)
 
-// What a column admits, as a comparison makes it: the closed set, or the type.
-// The same rule reach.ts `colsOf` holds two spaces to.
+// What a property admits, as a comparison makes it: the closed set, or the
+// type. The same rule reach.ts `propsOf` holds two spaces to.
 let shapeOf = (s: PropSchema): string =>
   s.enum ? s.enum.join('|') : String(s.type ?? '?')
 
 /**
- * The columns the directory spells at the platform's own meaning while every
+ * The properties the directory spells at the platform's own meaning while every
  * app store spells them at a package's — today `member.role` alone: three
  * seats here ({@link platformDoc}) against @yaks/member's two, because the
  * platform's roster is its access ladder and the package keeps belonging and
@@ -1058,7 +1059,7 @@ let shapeOf = (s: PropSchema): string =>
  * the store the bundle lands in (agent.ts `spoken`, `reading`) — the same rule
  * a word two spaces spell differently already gets (reach.ts `apartIn`).
  *
- * Derived rather than listed, so a platform column that starts disagreeing
+ * Derived rather than listed, so a platform property that starts disagreeing
  * cannot quietly be typed as the package's.
  */
 export let PLATFORM_APART: string[] = (() => {
@@ -1068,9 +1069,9 @@ export let PLATFORM_APART: string[] = (() => {
   for (let [name, mine] of Object.entries(platformDoc.$defs ?? {})) {
     let theirs = core[name]?.properties
     if (!theirs) continue
-    for (let [col, s] of Object.entries(mine.properties ?? {})) {
-      if (theirs[col] && shapeOf(theirs[col]) != shapeOf(s)) {
-        out.push(`${name}.${col}`)
+    for (let [prop, s] of Object.entries(mine.properties ?? {})) {
+      if (theirs[prop] && shapeOf(theirs[prop]) != shapeOf(s)) {
+        out.push(`${name}.${prop}`)
       }
     }
   }
@@ -1108,7 +1109,7 @@ export let metaKeywords: Keywords[] = [idKeywords, ...appKeywords]
  * A `tool: true` entry is NOT one of them. A document carries its components
  * and its tools in one `$defs` map, and only the components are words an app
  * may not reuse — a tool is a verb somebody calls, and `mail_send` never
- * collides with a column called `mail_send`. Reserving them made every tool a
+ * collides with a property called `mail_send`. Reserving them made every tool a
  * package declares cost an app a word it was never going to want.
  */
 export let RESERVED: string[] = [
@@ -1121,10 +1122,11 @@ export let RESERVED: string[] = [
   ]),
 ].sort()
 
-// The five words a column's type is spelled with, and the JSON Schema each is.
-// A manifest writes the schema; these are for reading one back in a sentence —
-// a refusal saying what a column already is, the arguments a kind's tools take
-// (kinds.ts), the types a CSV's cells are coerced to (csv.ts).
+// The five words a property's type is spelled with, and the JSON Schema each
+// is. A manifest writes the schema; these are for reading one back in a
+// sentence — a refusal saying what a property already is, the arguments a
+// kind's tools take (kinds.ts), the types a CSV's cells are coerced to
+// (csv.ts).
 let WORDS: Record<string, PropSchema> = {
   text: { type: 'string' },
   number: { type: 'number' },
@@ -1136,7 +1138,7 @@ let WORDS: Record<string, PropSchema> = {
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
-/** The word a declared column's type is spelled with. A column no word spells
+/** The word a declared property's type is spelled with. A property no word spells
  * reads as `text`, which is what it stores as. */
 export let wordOf = (s: PropSchema): string =>
   Object.entries(WORDS).find(([, one]) =>
@@ -1144,9 +1146,9 @@ export let wordOf = (s: PropSchema): string =>
   )?.[0] ?? 'text'
 
 /**
- * A document as `{comp: {col: word}}` — every component's columns as the word
- * each one's type is spelled with. That is how the kernel reads a vocabulary
- * where it needs the types and not the keywords (tools.ts `sheetOf`,
+ * A document as `{comp: {prop: word}}` — every component's properties as the
+ * word each one's type is spelled with. That is how the kernel reads a
+ * vocabulary where it needs the types and not the keywords (tools.ts `sheetOf`,
  * reach.ts `spoken`); the document itself is what a store keeps and answers.
  */
 export let wordsOf = (doc: VocabDoc): Record<string, Record<string, string>> =>
@@ -1155,17 +1157,17 @@ export let wordsOf = (doc: VocabDoc): Record<string, Record<string, string>> =>
       name,
       Object.fromEntries(
         Object.entries(schema.properties ?? {}).map((
-          [col, s],
-        ) => [col, wordOf(s)]),
+          [prop, s],
+        ) => [prop, wordOf(s)]),
       ),
     ]),
   )
 
 /**
- * The manifest a store keeps after a deploy: columns only ever arrive. A column
- * the new manifest stopped naming stays declared — its rows are still there —
- * and one whose type changed is refused, because the values already stored were
- * written under the old word.
+ * The manifest a store keeps after a deploy: properties only ever arrive. A
+ * property the new manifest stopped naming stays declared — its rows are still
+ * there — and one whose type changed is refused, because the values already
+ * stored were written under the old word.
  *
  * A whole component the manifest stopped naming is the one thing that may
  * leave, and only when it holds nothing: a name tried once and abandoned is a
@@ -1173,10 +1175,10 @@ export let wordsOf = (doc: VocabDoc): Record<string, Record<string, string>> =>
  * holds — the store's question, since only it has the tables.
  *
  * It also says what moved, because additive growth is silent where it matters
- * most: rename a column and the manifest reads as one word while the store
+ * most: rename a property and the manifest reads as one word while the store
  * holds two, the old one still under every row already written (C-32652 item
- * 4). `added` is every column this manifest planted; `kept` is every column the
- * store still declares that this manifest did not name.
+ * 4). `added` is every property this manifest planted; `kept` is every property
+ * the store still declares that this manifest did not name.
  */
 export let grew = (
   was: VocabDoc,
@@ -1196,24 +1198,26 @@ export let grew = (
   for (let name of dropped) delete defs[name]
   for (let [name, schema] of Object.entries(theirs)) {
     let props: Record<string, PropSchema> = { ...mine[name]?.properties }
-    for (let [col, s] of Object.entries(schema.properties ?? {})) {
-      let had = props[col]
+    for (let [prop, s] of Object.entries(schema.properties ?? {})) {
+      let had = props[prop]
       if (had && (had.type != s.type || had.format != s.format)) {
         throw refuse(
           'arguments',
-          `vocab.json: ${name}.${col} is already ${wordOf(had)} — a column ` +
+          `vocab.json: ${name}.${prop} is already ${
+            wordOf(had)
+          } — a property ` +
             'keeps the type its rows were written under',
         )
       }
-      if (!had) added.push(`${name}.${col}`)
-      props[col] = s
+      if (!had) added.push(`${name}.${prop}`)
+      props[prop] = s
     }
     defs[name] = { ...schema, properties: props }
   }
   let kept = Object.entries(defs).flatMap(([name, s]) =>
     Object.keys(s.properties ?? {})
-      .filter((col) => !(col in (theirs[name]?.properties ?? {})))
-      .map((col) => `${name}.${col}`)
+      .filter((prop) => !(prop in (theirs[name]?.properties ?? {})))
+      .map((prop) => `${name}.${prop}`)
   )
   return { doc: { ...next, $defs: defs }, dropped, added, kept }
 }
@@ -1231,19 +1235,19 @@ export type Homes = Record<
 /**
  * A manifest split by home. A word another app in the space already declares
  * is not a second declaration but a use (T-32728): nothing is planted here,
- * the writes route to the home store (reach.ts), and a column this manifest
+ * the writes route to the home store (reach.ts), and a property this manifest
  * adds grows the HOME's table by the additive rule {@link grew} holds every
  * store to.
  *
  * So a manifest arrives split three ways: `mine` the words this app homes,
- * `uses` the words it borrows and where each lives, and `grows` the columns
- * each home has to add. A column travels as its schema, never as its type
- * alone: `search` and every other keyword belong to the column, and the store
+ * `uses` the words it borrows and where each lives, and `grows` the properties
+ * each home has to add. A property travels as its schema, never as its type
+ * alone: `search` and every other keyword belong to the property, and the store
  * that plants it is the one that reads them (T-37546).
  *
- * The one refusal is a shape conflict — the same column with two types —
+ * The one refusal is a shape conflict — the same property with two types —
  * because the rows already written under the home's type are the record of
- * what that column is, and no manifest may rewrite them.
+ * what that property is, and no manifest may rewrite them.
  */
 export let homed = (next: VocabDoc, homes: Homes) => {
   let mine: Record<string, PropSchema> = {}
@@ -1257,18 +1261,18 @@ export let homed = (next: VocabDoc, homes: Homes) => {
     }
     uses[name] = home.at
     let add: Record<string, PropSchema> = {}
-    for (let [col, s] of Object.entries(schema.properties ?? {})) {
-      let had = home.props[col]
+    for (let [prop, s] of Object.entries(schema.properties ?? {})) {
+      let had = home.props[prop]
       if (had && (had.type != s.type || had.format != s.format)) {
         throw refuse(
           'arguments',
-          `vocab.json: ${name}.${col} is ${wordOf(s)} here and ${
+          `vocab.json: ${name}.${prop} is ${wordOf(s)} here and ${
             wordOf(had)
-          } in ${home.at}, where ${name} lives — a column keeps the type its ` +
+          } in ${home.at}, where ${name} lives — a property keeps the type its ` +
             'rows were written under',
         )
       }
-      if (!had) add[col] = s
+      if (!had) add[prop] = s
     }
     if (Object.keys(add).length) {
       grows[home.at] = { ...grows[home.at], [name]: add }
@@ -1311,7 +1315,7 @@ let mine = (schema: PropSchema): PropSchema => ({
  * naming the shape.
  *
  * It is checked here rather than at the load: a name the platform already owns
- * is refused, and so is anything a column cannot hold.
+ * is refused, and so is anything a property cannot hold.
  *
  * `file` is what a refusal calls it — the app may have written it as `.json` or
  * `.yml` (tools.ts `spelled`), and the sentence has to name the file they are
@@ -1320,7 +1324,7 @@ let mine = (schema: PropSchema): PropSchema => ({
  * `"tools": false` is the one word a manifest says about itself rather than
  * about a component — no tools synthesized for its kinds (kinds.ts, T-34513) —
  * so it is lifted off and carried on the document. A boolean tells it from a
- * component named `tools`, which is an object of columns like any other.
+ * component named `tools`, which is an object of properties like any other.
  */
 export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   let held = source
@@ -1344,7 +1348,7 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
     throw refuse(
       'arguments',
       `${file}: ${keys.join(', ')} — a manifest is a JSON Schema document, ` +
-        `one $defs entry per component and one properties entry per column: ` +
+        `one $defs entry per component and one properties entry per property: ` +
         `${EXAMPLE}; the whole of it is in the guide under ` +
         `"Components of your own" (${GUIDE})`,
     )

@@ -15,20 +15,20 @@
 //   a tools.json entry spelling `add_recipe` or `find_recipe` — that one wins,
 //                    whole, since a hand-written template says what the app
 //                    means and a generated one only says what it holds
-// A redeploy regenerates them from the manifest as it then reads, so a column
+// A redeploy regenerates them from the manifest as it then reads, so a property
 // added to a kind is an argument added to its two tools.
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { PropType } from '../../src/types.ts'
 import type { ToolDef, Tools } from '../../src/store/tools.ts'
 import { wordOf } from './vocab.ts'
 
-// The columns a caller may write: a server-owned column is nobody's to send,
-// and a computed one has no column at all.
-let colsOf = (schema: PropSchema): Record<string, PropType> =>
+// The properties a caller may write: a server-owned property is nobody's to
+// send, and a computed one has no column at all.
+let propsOf = (schema: PropSchema): Record<string, PropType> =>
   Object.fromEntries(
     Object.entries(schema.properties ?? {})
       .filter(([, s]) => !s.stamped && s.computed !== true)
-      .map(([col, s]) => [col, wordOf(s) as PropType]),
+      .map(([prop, s]) => [prop, wordOf(s) as PropType]),
   )
 
 // Enough English for a sentence a model reads: a `recipe` finds recipes, a
@@ -48,27 +48,28 @@ let plural = (word: string) =>
 let means = (schema: PropSchema) =>
   schema.description ? `: ${schema.description.replace(/\.$/, '')}` : ''
 
-let bound = (cols: Record<string, PropType>) =>
-  Object.fromEntries(Object.keys(cols).map((col) => [col, `$${col}`]))
+let bound = (props: Record<string, PropType>) =>
+  Object.fromEntries(Object.keys(props).map((prop) => [prop, `$${prop}`]))
 
 // Writing one: a title, a body, a name to find it by later, and the kind's own
-// columns. Only the title is required — an agent writes what it was told and
+// properties. Only the title is required — an agent writes what it was told and
 // leaves the rest of the row empty, the way the app's own form does, and a
-// column nobody named is dropped from the bundle rather than written as the
+// property nobody named is dropped from the bundle rather than written as the
 // word `undefined` (store/tools.ts `filled`).
 //
-// A kind spelling a column `title` or `body` of its own shares the variable
+// A kind spelling a property `title` or `body` of its own shares the variable
 // with `doc`: one argument, written both places, which is what a person asking
 // for "the title" means either way.
 let add = (kind: string, at: string, schema: PropSchema): ToolDef => {
-  let cols = colsOf(schema)
+  let props = propsOf(schema)
   return {
     description: `Add a ${kind} to ${at}${means(schema)}`,
-    input: { title: 'text', body: 'text', alias: 'text', ...cols },
-    optional: ['body', 'alias', ...Object.keys(cols)],
-    // The kind's own component stays even when nobody named a column — wearing
-    // it is what makes the row a recipe, and `find_recipe` asks for exactly
-    // that. A nameless alias is the other way: half a sentence, refused by
+    input: { title: 'text', body: 'text', alias: 'text', ...props },
+    optional: ['body', 'alias', ...Object.keys(props)],
+    // The kind's own component stays even when nobody named a property —
+    // wearing it is what makes the row a recipe, and `find_recipe` asks for
+    // exactly that. A nameless alias is the other way: half a sentence, refused
+    // by
     // @yaks/key, so it goes with its variable.
     drop: ['alias'],
     apply: {
@@ -77,27 +78,27 @@ let add = (kind: string, at: string, schema: PropSchema): ToolDef => {
       // A name the row answers to afterwards (@yaks/alias), so a later call
       // reaches it without having kept the eid.
       alias: { name: '$alias' },
-      [kind]: bound(cols),
+      [kind]: bound(props),
     },
   }
 }
 
 // Reading them back: the words for the title and body, an equality for every
-// column, and how many. Every one is optional, and a clause whose argument the
-// caller left out drops out of the filter line — so the tool with no arguments
-// at all is "everything of this kind".
+// property, and how many. Every one is optional, and a clause whose argument
+// the caller left out drops out of the filter line — so the tool with no
+// arguments at all is "everything of this kind".
 let find = (kind: string, at: string, schema: PropSchema): ToolDef => {
-  let cols = colsOf(schema)
+  let props = propsOf(schema)
   return {
     description: `Find ${plural(kind)} in ${at}${means(schema)}. Words match ` +
       'the title and body; leave out any filter you do not have',
-    input: { words: 'text', ...cols, limit: 'number' },
-    optional: ['words', ...Object.keys(cols), 'limit'],
+    input: { words: 'text', ...props, limit: 'number' },
+    optional: ['words', ...Object.keys(props), 'limit'],
     query: [
       `.${kind}!`,
       '.doc?',
       '$words',
-      ...Object.keys(cols).map((col) => `.${kind}.${col}=$${col}`),
+      ...Object.keys(props).map((prop) => `.${kind}.${prop}=$${prop}`),
       'limit=$limit',
     ].join('&'),
   }

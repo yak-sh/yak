@@ -345,8 +345,8 @@ let door = async (ctx: Ctx, session: string) => {
   // else's prose there reads as an attempt to steer the model rather than as
   // their own notes.
   //
-  // The graph, and how a column of it reads and writes: a reference reads back
-  // in human form, and a component two of the caller's spaces declare
+  // The graph, and how a property of it reads and writes: a reference reads
+  // back in human form, and a component two of the caller's spaces declare
   // differently is given no type at all (agent.ts `reading`). The schemas in
   // the tool list are derived through it, so they describe what this server
   // actually accepts and returns.
@@ -369,7 +369,7 @@ let door = async (ctx: Ctx, session: string) => {
     // people's stores and a question is not their data.
     calls: ledger(graph),
     prop,
-    // A read's schema is left at column names here, while the write tools are
+    // A read's schema is left at property names here, while the write tools are
     // typed in full (@yaks/mcp, T-34153). Measured over a space of three apps:
     // the typed write tools cost 9 KB of tool list, and typing the four read
     // schemas as well costs 33 KB more. The types are what a write needs — a
@@ -378,7 +378,7 @@ let door = async (ctx: Ctx, session: string) => {
     // part of it, paid on every connection.
     schema: 'names' as const,
     // And where a component is documented at length, so graph_schema hands
-    // over the page beside the columns (guide.ts `pageFor`).
+    // over the page beside the properties (guide.ts `pageFor`).
     guide: (comp: string) => pageFor(comp, ctx.env),
     // And the way back out of a delete here, which the generic tier could not
     // know: a store is not a place a mistake is final (recover.ts, T-34509).

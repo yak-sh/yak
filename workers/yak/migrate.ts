@@ -105,12 +105,12 @@ let record = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
 /**
- * A document with every column saying its type (T-37986). A column once could
- * say none, and was stored and read as text, so `"type": "string"` is what it
- * always meant; the loader now refuses a column that says none. `null` where
- * every column already says one.
+ * A document with every property saying its type (T-37986). A property once
+ * could say none, and was stored and read as text, so `"type": "string"` is
+ * what it always meant; the loader now refuses a property that says none.
+ * `null` where every property already says one.
  *
- * The build before this one still accepts a column with no type, so a
+ * The build before this one still accepts a property with no type, so a
  * manifest it planted during a rollback arrives here too, which is why this
  * runs at every wake and every read rather than once.
  */
@@ -122,10 +122,10 @@ let typed = (doc: Record<string, unknown>): string | null => {
       if (!record(s) || s.tool === true || s.rule === true) return [name, s]
       if (!record(s.properties)) return [name, s]
       let props = Object.fromEntries(
-        Object.entries(s.properties).map(([col, c]) => {
-          if (!record(c) || 'type' in c) return [col, c]
+        Object.entries(s.properties).map(([prop, c]) => {
+          if (!record(c) || 'type' in c) return [prop, c]
           moved = true
-          return [col, { type: 'string', ...c }]
+          return [prop, { type: 'string', ...c }]
         }),
       )
       return [name, { ...s, properties: props }]
@@ -148,13 +148,13 @@ let typed = (doc: Record<string, unknown>): string | null => {
  * next time anything reads it (tools.ts `declaring`).
  *
  * `null` where there is nothing to do — nothing held, a document whose
- * columns all say their type, or something no reader could parse — which is
+ * properties all say their type, or something no reader could parse — which is
  * every store after one wake and every file after one read.
  *
  * `"tools": false` is the manifest's one word about itself, so it rides across
  * as the document's own; every other key is a component.
  *
- * A document is rewritten too when one of its columns says no type
+ * A document is rewritten too when one of its properties says no type
  * ({@link typed}), through the same two doors and for the same reason.
  */
 export let documented = (held: string): string | null => {
@@ -171,20 +171,20 @@ export let documented = (held: string): string | null => {
   if (!keys.length) return null
   let defs: Record<string, unknown> = {}
   let tools: boolean | undefined
-  for (let [name, cols] of Object.entries(body)) {
-    if (name == 'tools' && typeof cols == 'boolean') {
-      tools = cols
+  for (let [name, props] of Object.entries(body)) {
+    if (name == 'tools' && typeof props == 'boolean') {
+      tools = props
       continue
     }
-    if (!cols || typeof cols != 'object' || Array.isArray(cols)) return null
+    if (!props || typeof props != 'object' || Array.isArray(props)) return null
     defs[name] = {
       component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
       properties: Object.fromEntries(
-        Object.entries(cols as Record<string, unknown>).map(([col, word]) => [
-          col,
+        Object.entries(props as Record<string, unknown>).map(([prop, word]) => [
+          prop,
           { ...(WAS[String(word)] ?? WAS.text) },
         ]),
       ),
@@ -202,7 +202,7 @@ export let documented = (held: string): string | null => {
  * marker is already there does not run. */
 export let MARK = 'yak/store/packages/1'
 
-/** The second pass (T-34227): `space.home` — the column that said which app a
+/** The second pass (T-34227): `space.home` — the property that said which app a
  * space opens at — becomes `home{}` worn by that app. The directory's alone;
  * no other object has a `space` table. */
 export let HOMED = 'yak/store/home/2'
@@ -212,15 +212,15 @@ export let HOMED = 'yak/store/home/2'
  * `former`. The directory's alone; no other object has a row of them. */
 export let FORMER = 'yak/store/former/3'
 
-/** The fourth pass (T-34596): a domain's target — the column that said which
+/** The fourth pass (T-34596): a domain's target — the property that said which
  * app a hostname opens — becomes `serves`, which names the app or the whole
  * space. The directory's alone; no other object has a hostname. */
 export let SERVES = 'yak/store/serves/4'
 
 /** The fifth pass (T-34657): an app's handle — the string its Durable Object,
- * its script and its analytics rows are named by — becomes a
- * column of its own, `app.store`, instead of being read back off the address it
- * was born at. The directory's alone; no other object has an app row. */
+ * its script and its analytics rows are named by — becomes a property of its
+ * own, `app.store`, instead of being read back off the address it was born at.
+ * The directory's alone; no other object has an app row. */
 export let HANDLED = 'yak/store/handle/5'
 
 /** The sixth pass: portfolio fields move off task into optional filed. */
@@ -252,9 +252,9 @@ export let MARKS = [
 ]
 
 /** Passes that change stored shape, read per commit by `yak deploys`.
- * A refused pass leaves stored data and its marker unchanged, so adds no boundary.
- * Nor does an expanding pass the build before it reads correctly: SANDBOXED
- * writes only the column that build already reads. */
+ * A refused pass leaves stored data and its marker unchanged, so adds no
+ * boundary. Nor does an expanding pass the build before it reads correctly:
+ * SANDBOXED writes only the property that build already reads. */
 export let BOUNDARIES = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED, TOOLED]
 
 /** The two tables the two layouts spell identically, and so never move. */
@@ -584,7 +584,7 @@ let toolIds = (d: Drive) =>
     : []
 
 // The unique index the vocabulary raises over `tool.name`, its identity, by
-// the name @yaks/sqlite gives it (`<comp>_<cols>`).
+// the name @yaks/sqlite gives it (`<comp>_<props>`).
 let TOOL_NAME = 'tool_name'
 
 /** Whether the tools are not yet their names: a row standing at an id its name
@@ -740,7 +740,7 @@ export let trusting = (
 
 // ---- `space.home` → `home{}` (T-34227) -------------------------------------
 //
-// The fact "this app is the space's front page" was a column on the space and
+// The fact "this app is the space's front page" was a property of the space and
 // is now a word the app wears (vocab.ts). It moves in both passes, because a
 // store reaches it from either side: one carrying now finds the column in the
 // table renamed aside, one that carried before this word existed finds it
@@ -860,8 +860,8 @@ export let homed = (
 // so the record is `former` (vocab.ts `platformDoc`).
 //
 // The table name is what makes this a migration and not a rename. The core tag
-// declares no columns, so its table is `alias(entity)` — and `create table if
-// not exists` over a directory that already has `alias(entity, slug, slugs)`
+// declares no properties, so its table is `alias(entity)` — and `create table
+// if not exists` over a directory that already has `alias(entity, slug, slugs)`
 // leaves the old columns standing under the new word, with the addresses still
 // in them. The rows move to `former` and the dead columns are swept.
 
@@ -977,7 +977,7 @@ export let addressed = (
 //
 // A hostname used to name the one app it opened. It now names the place it
 // opens — that app, or the whole space, whose front page it serves at `/` with
-// every app of it at `/<app>/` — and one column says which (vocab.ts). The
+// every app of it at `/<app>/` — and one property says which (vocab.ts). The
 // column a word loses is still standing with its values in it, and nothing
 // selects it, so a domain whose target stayed in `app` would resolve to
 // nothing: a live customer domain would stop serving at the deploy. The eids
@@ -1064,13 +1064,13 @@ export let served = (
 
 // ---- an app's handle: `former.slug` → `app.store` (T-34657) -----------------
 //
-// An app's store, script and analytics rows were named by the
-// address it was born at, kept in `former.slug`. That made the platform's own
-// object names a projection of a string a person picks — so an address could
-// never be freed and reused, and renaming the space was not a thing that could
-// be offered at all. The handle moves into a column of the app's own,
-// `app.store`. An unambiguous name stays put; apps sharing one are separated
-// without copying any bytes, and the report names which app keeps the rows.
+// An app's store, script and analytics rows were named by the address it was
+// born at, kept in `former.slug`. That made the platform's own object names a
+// projection of a string a person picks — so an address could never be freed
+// and reused, and renaming the space was not a thing that could be offered at
+// all. The handle moves into a property of the app's own, `app.store`. An
+// unambiguous name stays put; apps sharing one are separated without copying
+// any bytes, and the report names which app keeps the rows.
 //
 // And `former` is left as what it now only is — address history — with the
 // space prefix taken off each entry, so the history is in the space's own

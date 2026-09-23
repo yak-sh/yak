@@ -140,7 +140,7 @@ type Deploy = {
 
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 
-// A reference column, in either spelling a store answers with: the bare eid a
+// A reference property, in either spelling a store answers with: the bare eid a
 // read inside the transaction gives (the effect's own door), and the `{eid,
 // name}` a read over the store's HTTP door gives, which names what it points
 // at as it goes (listing.ts). One reader, so minting is the same act from the
@@ -252,7 +252,7 @@ let landing = async (
 /**
  * yaks.app's releases, as @yaks/git's plugin reads them (git.ts): a `deploy`
  * row is one, and the whole entity is what a landing is read from — a commit's
- * clock and author are the `created` stamp beside the component, not columns
+ * clock and author are the `created` stamp beside the component, not properties
  * of it.
  */
 export let releases = (env: Bound, dir: Held): Releases => ({

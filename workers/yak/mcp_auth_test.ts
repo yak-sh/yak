@@ -423,7 +423,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
     let made = async (
       slug: string,
       comp: string,
-      cols: Record<string, unknown>,
+      props: Record<string, unknown>,
       access?: string,
     ) => {
       await agent.tool('app_new', {
@@ -437,7 +437,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
         app: slug,
         files: [{
           path: 'vocab.json',
-          content: vocabFile({ [comp]: cols }),
+          content: vocabFile({ [comp]: props }),
         }],
       })
       await agent.tool('app_deploy', { space: 'ada', app: slug })

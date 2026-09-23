@@ -212,11 +212,11 @@ import {
 } from './vocab.ts'
 
 /**
- * The columns of a manifest that hold a JSON value (type object, array or a
+ * The properties of a manifest that hold a JSON value (type object, array or a
  * union), which a deploy may not plant yet.
  *
  * TODO(T-37988): delete once this build is the one before. It reads such a
- * column, but the build before it refuses the whole vocabulary at load, so a
+ * property, but the build before it refuses the whole vocabulary at load, so a
  * store that planted one would stop serving if production rolled back
  * (D-37972).
  */
@@ -224,8 +224,8 @@ let unplantable = (doc: VocabDoc): string[] =>
   Object.entries(doc.$defs ?? {}).flatMap(([name, s]) =>
     Object.entries(s?.properties ?? {})
       .filter(([, c]) => jsonb(c))
-      .map(([col]) =>
-        `vocab.json: ${name}.${col} holds a JSON value (type object, array ` +
+      .map(([prop]) =>
+        `vocab.json: ${name}.${prop} holds a JSON value (type object, array ` +
         'or a union), which an app cannot declare yet — keep it as JSON ' +
         'text for now: "type": "string", "format": "json"'
       )
@@ -458,7 +458,7 @@ let NO_PITR =
  * visitor's to write:
  *
  *   product  what the checkout charges (sell.ts `priced`): the seller's
- *   order    what was sold: its columns are the webhook's alone (vocab.ts),
+ *   order    what was sold: its properties are the webhook's alone (vocab.ts),
  *            and an owner may clear one
  *   deliver  the ask to send a letter, which leaves under the platform's
  *            name — an open app with no floor here is an open relay, and the
@@ -959,10 +959,10 @@ export class Store {
   /**
    * A row read back, handed straight back. A reference reads as `{eid, name}`
    * (`#speak`) because outputs speak human, and the shape a door hands out must
-   * be a shape it takes: a page that read a byline and writes it into a column
-   * of its own is doing the ordinary thing, and refusing it would make every
-   * such page carry a `.eid` of its own. So the object is lowered to the eid it
-   * carries, on the way in, before anything checks a value.
+   * be a shape it takes: a page that read a byline and writes it into a
+   * property of its own is doing the ordinary thing, and refusing it would make
+   * every such page carry a `.eid` of its own. So the object is lowered to the
+   * eid it carries, on the way in, before anything checks a value.
    */
   #lowering: Plugin = {
     name: 'yak/lower',
@@ -972,16 +972,16 @@ export class Store {
           let out: Record<string, unknown> | null = null
           for (let [name, comp] of comps(b)) {
             if (!comp) continue
-            for (let [col, v] of Object.entries(comp)) {
+            for (let [prop, v] of Object.entries(comp)) {
               let eid = (v as { eid?: unknown } | null)?.eid
               if (
                 typeof eid != 'string' ||
-                this.#vocab.prop(name, col)?.category != 'ref'
+                this.#vocab.prop(name, prop)?.category != 'ref'
               ) continue
               out ??= { ...b }
               out[name] = {
                 ...(out[name] as Record<string, unknown>),
-                [col]: eid,
+                [prop]: eid,
               }
             }
           }
@@ -1049,12 +1049,12 @@ export class Store {
    *
    * The `from` is the platform's word, stamped over whatever the batch said.
    * The address is a claim about who wrote — a letter from
-   * `ada.cookbook@yaks.app` is DKIM-signed by us and read by the world as
-   * ours — and a column a client may write is a column a client may forge. A
-   * letter the kernel writes is left alone unless it asks to leave: an
-   * arrival (T-33687) keeps the sender's own `from`, out on the web, and the
-   * receipt the platform files beside a sale (sell.ts) leaves from the app
-   * like any other letter.
+   * `ada.cookbook@yaks.app` is DKIM-signed by us and read by the world as ours
+   * — and a property a client may write is a property a client may forge. A
+   * letter the kernel writes is left alone unless it asks to leave: an arrival
+   * (T-33687) keeps the sender's own `from`, out on the web, and the receipt
+   * the platform files beside a sale (sell.ts) leaves from the app like any
+   * other letter.
    *
    * Who may ask for one to leave is `FLOORS` below, not this plugin.
    */
@@ -1115,7 +1115,7 @@ export class Store {
 
   // One batch, applied as the caller the door decided it is. `trusted` is two
   // things at once and they are the same thing: @yaks/graph admits the
-  // server-owned columns, and the guard above stands down.
+  // server-owned properties, and the guard above stands down.
   #trust(bundles: Bundle[], who: string | null, opts: ApplyOpts = {}) {
     return this.#asIs(signed(bundles, who ? { by: who } : null), opts)
   }
@@ -1284,8 +1284,8 @@ export class Store {
   }
 
   // A break this object noted about itself, written where it notes an app's
-  // (unseen.ts `noted`): server-owned columns, through the kernel's own door.
-  // Sentry hears it too, named by the store it happened in (sentry.ts).
+  // (unseen.ts `noted`): server-owned properties, through the kernel's own
+  // door. Sentry hears it too, named by the store it happened in (sentry.ts).
   #broke = async (request: string, error: unknown) => {
     defect(error, { request, store: this.#get('name') })
     try {
@@ -1347,8 +1347,8 @@ export class Store {
       this.#after(request, SERVES, aimedOld, served)
     }
     // The fifth (T-34657): an app's handle — what its store and its script are
-    // named by — becomes a column of its own instead of the address it was born
-    // at. Only the directory has an app row to name.
+    // named by — becomes a property of its own instead of the address it was
+    // born at. Only the directory has an app row to name.
     if (!this.#refused) {
       this.#after(request, HANDLED, unhandled, handled)
     }
@@ -1675,7 +1675,7 @@ export class Store {
    * the other, and so never applied twice.
    *
    * `x-yak-kernel` is the platform writing about its own data: the server-
-   * owned columns are admitted and @yaks/member's guard stands down
+   * owned properties are admitted and @yaks/member's guard stands down
    * (`#trust`). The flag is the kernel's by construction: a store is only
    * ever reached through a request the Worker builds from scratch, and
    * door.ts `storeOf` strips the whole vouch set from any request it is
@@ -1814,36 +1814,37 @@ export class Store {
     return await this.#route(request)
   }
 
-  // The word a row is named by. `kind` is not a column and no client can derive
-  // it: it is the most specific component this vocabulary says the entity wears
-  // (@yaks/vocab `kindOf`), and only a store holding the vocabulary can say
-  // which that is. Every caller above reads it — the composing read calls a row
-  // by it (reach.ts), a page's listing draws with it, and the guide documents it
-  // on every row.
+  // The word a row is named by. `kind` is not a property and no client can
+  // derive it: it is the most specific component this vocabulary says the
+  // entity wears (@yaks/vocab `kindOf`), and only a store holding the
+  // vocabulary can say which that is. Every caller above reads it — the
+  // composing read calls a row by it (reach.ts), a page's listing draws with
+  // it, and the guide documents it on every row.
   #kind = (row: Bundle): Bundle => ({
     kind: this.#vocab.kindOf(row as Record<string, unknown>),
     ...row,
   })
 
-  // Outputs speak human (db.ts `human()`): a column that references a person
+  // Outputs speak human (db.ts `human()`): a property that references a person
   // answers `{eid, name}` when this store knows who that is, and the bare eid
-  // when it does not. A view gets one query, and a byline it would need a second
-  // question for is no byline — the inline leaderboard drew "someone" on every
-  // row while `created.by` was a uuid (C-32730 item 5). Writes are unmoved: the
-  // value is the eid, and a read shape handed back is lowered to it.
+  // when it does not. A view gets one query, and a byline it would need a
+  // second question for is no byline — the inline leaderboard drew "someone" on
+  // every row while `created.by` was a uuid (C-32730 item 5). Writes are
+  // unmoved: the value is the eid, and a read shape handed back is lowered to
+  // it.
   //
-  // Which columns reference is the vocabulary's word (`refCols`), and who among
-  // them is a person is this store's own rows — the writer it minted when they
-  // first wrote here, wearing what the kernel said to call them.
+  // Which properties reference is the vocabulary's word (`refProps`), and who
+  // among them is a person is this store's own rows — the writer it minted when
+  // they first wrote here, wearing what the kernel said to call them.
   #speak = (rows: Bundle[]): Bundle[] | Promise<Bundle[]> => {
     let refs = new Set(this.#vocab.refProps().map(([c, p]) => `${c}.${p}`))
-    let ref = (comp: string, col: string) => refs.has(`${comp}.${col}`)
+    let ref = (comp: string, prop: string) => refs.has(`${comp}.${prop}`)
     let mentioned = new Set<string>()
     for (let row of rows) {
       for (let [comp, held] of Object.entries(row)) {
         if (!held || typeof held != 'object' || Array.isArray(held)) continue
-        for (let [col, v] of Object.entries(held)) {
-          if (typeof v == 'string' && ref(comp, col)) mentioned.add(v)
+        for (let [prop, v] of Object.entries(held)) {
+          if (typeof v == 'string' && ref(comp, prop)) mentioned.add(v)
         }
       }
     }
@@ -2180,13 +2181,13 @@ export class Store {
   //
   // The answer is what this app now says and what moved, which naming the
   // components does not tell whoever deployed it (C-32652 item 4): a renamed
-  // column arrives beside the old one, and `added` is how they see that. Nothing
-  // ever leaves — the DDL is additive and a column's rows are already written —
-  // so `dropped` is empty and stays that way.
+  // property arrives beside the old one, and `added` is how they see that.
+  // Nothing ever leaves — the DDL is additive and a property's rows are already
+  // written — so `dropped` is empty and stays that way.
   //
   // What is written, kept and answered is one thing: the document (T-37546).
   // A manifest is a JSON Schema document and nothing else — a keyword is the
-  // column's (`search`, `stamped`, a reference's `death`), and a manifest
+  // property's (`search`, `stamped`, a reference's `death`), and a manifest
   // flattened to bare type words dropped every one of them before any store
   // could read it.
   #vocabDoor(request: Request): Response | Promise<Response> {

@@ -58,7 +58,7 @@ import {
 } from './vocab.ts'
 import { withKinds } from './kinds.ts'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
-import type { Cols, Sheet } from './csv.ts'
+import type { Props, Sheet } from './csv.ts'
 import { mimeOf, purged } from './files.ts'
 import {
   type Access,
@@ -730,9 +730,9 @@ let applying =
     }
   }
 
-// `map {header: column}` as one argument: its shape, checked once, so a model
+// `map {header: property}` as one argument: its shape, checked once, so a model
 // that sent a list or a nested object hears that rather than a header that
-// silently went nowhere. Whether a mapped name is a column is csv.ts's, which
+// silently went nowhere. Whether a mapped name is a property is csv.ts's, which
 // is where the header it came from is still known.
 let mapping = (v: unknown): Record<string, string> | undefined => {
   if (v == null) return undefined
@@ -740,18 +740,18 @@ let mapping = (v: unknown): Record<string, string> | undefined => {
     throw refuse('arguments', 'map: {"Serves how many": "serves"}')
   }
   return Object.fromEntries(
-    Object.entries(v as Record<string, unknown>).map(([header, col]) => [
+    Object.entries(v as Record<string, unknown>).map(([header, prop]) => [
       header,
-      text(col, `map[${JSON.stringify(header)}]`),
+      text(prop, `map[${JSON.stringify(header)}]`),
     ]),
   )
 }
 
 // What a CSV is read as (csv.ts): the component a row becomes, and the type
-// each of its columns takes. The words are the platform's own plus this app's,
-// each column as the word its type is spelled with (vocab.ts `wordsOf`) — an
-// app declares scalars, and a core column that is a reference or a closed set
-// holds the text a cell has anyway.
+// each of its properties takes. The words are the platform's own plus this
+// app's, each property as the word its type is spelled with (vocab.ts
+// `wordsOf`) — an app declares scalars, and a core property that is a reference
+// or a closed set holds the text a cell has anyway.
 let sheetOf = async (
   store: Door,
   as: string,
@@ -759,7 +759,7 @@ let sheetOf = async (
   env: Pick<Env, 'APEX'> = {},
 ): Promise<Sheet> => {
   let mine = wordsOf(appDoc(await answer(await store('/vocab'))))
-  let words: Record<string, Cols> = {}
+  let words: Record<string, Props> = {}
   for (let doc of coreDocs) Object.assign(words, wordsOf(doc))
   Object.assign(words, mine)
   if (!(as in words)) {
@@ -770,7 +770,7 @@ let sheetOf = async (
       }, beside the platform's own words (doc, task, comment, …)${teach(env)}`,
     )
   }
-  return { as, cols: words[as], map }
+  return { as, props: words[as], map }
 }
 
 // The head a write into an app's store wears when the platform makes it for
@@ -784,9 +784,9 @@ let byCaller = async (ctx: Ctx, who: Who) => ({
 // Whether a manifest can land on this app at all, asked before anything moves
 // (app_update). The same two rules a deploy holds it to, both of which throw
 // rather than answer: a word another app in the space homes keeps that home's
-// column types (vocab.ts `homed`), and this app's own columns keep the types
-// their rows were written under (`grew`). Neither writes, so a refusal leaves
-// the app exactly as it was — code included.
+// property types (vocab.ts `homed`), and this app's own properties keep the
+// types their rows were written under (`grew`). Neither writes, so a refusal
+// leaves the app exactly as it was — code included.
 let fits = async (
   ctx: Ctx,
   space: Space,
@@ -840,7 +840,7 @@ let released = async (
   let planted: string[] = []
   let dropped: string[] = []
   // What this manifest moved, which naming the components does not say: a
-  // renamed column arrives beside the old one, and the old one keeps every
+  // renamed property arrives beside the old one, and the old one keeps every
   // row already written under it (C-32652 item 4).
   let added: string[] = []
   let kept: string[] = []
@@ -852,20 +852,20 @@ let released = async (
   let vocabTook = c.since()
   if (source != null) {
     // The manifest as one document (vocab.ts `appDoc`, @yaks/yaml — the file
-    // may be .json or .yml): a column's keywords ride all the way to the store
-    // that plants it.
+    // may be .json or .yml): a property's keywords ride all the way to the
+    // store that plants it.
     manifest = appDoc(source, vocabFile)
     // One word, one home: a word another app in the space already declares is
     // that app's, so this release records a use of it instead of planting a
-    // second table, and any column it adds grows the HOME's.
+    // second table, and any property it adds grows the HOME's.
     let { said, homes } = await homesIn(ctx, space, app)
     let split = homed(manifest, homes)
     uses = split.uses
-    // The home's table grows first: a use whose column the home does not have
+    // The home's table grows first: a use whose property the home does not have
     // yet is not a use anyone can write until it does. Its whole manifest is
     // written back, so it goes back as the document the home declared —
     // projected to types, a sibling's deploy would silently unsearch the
-    // home's own columns (T-37546).
+    // home's own properties (T-37546).
     for (let [slug, grown] of Object.entries(split.grows)) {
       let home = await ctx.dir.app(space, slug)
       if (!home) continue
@@ -876,7 +876,7 @@ let released = async (
           ...defs[name],
           properties: { ...defs[name]?.properties, ...props },
         }
-        for (let col of Object.keys(props)) added.push(`${name}.${col}`)
+        for (let prop of Object.keys(props)) added.push(`${name}.${prop}`)
       }
       let whole: VocabDoc = { ...was, $defs: defs }
       await answer(
@@ -1071,7 +1071,7 @@ let released = async (
       // and the answer says where its rows land (T-32728).
       livesIn(uses).map((one) => `\n${one}`).join('') +
       (added.length ? `\nadded: ${added.join(', ')}` : '') +
-      // What to DO about a column the manifest stopped naming, which the bare
+      // What to DO about a property the manifest stopped naming, which the bare
       // list never said: the board that read "5.2 mi in null min" was a
       // rename nobody was told to finish (C-32730 item 4).
       // …named in the file the app actually wrote, since either spelling of
@@ -1223,7 +1223,7 @@ let forgotten = (live: string, had: string[], drop: string) => {
 
 /** The address history this call leaves behind: the one it had, minus an
  * address forgotten, plus the address a move is leaving. Null when neither
- * happened, which is a call that must not write the column at all. */
+ * happened, which is a call that must not write the property at all. */
 let kept = (
   live: string,
   had: string[],
@@ -2655,13 +2655,13 @@ let OURS: Row[] = [
         ),
         as: str(
           'for a CSV: the component one row becomes, "city", or a platform ' +
-            'component such as "task". Its columns are the headers',
+            'component such as "task". Its properties are the headers',
         ),
         map: {
           type: 'object',
           additionalProperties: { type: 'string' },
           description:
-            'headers that do not match a column, renamed: {"Serves how ' +
+            'headers that do not match a property, renamed: {"Serves how ' +
             'many": "serves"}. A header that already matches needs no entry',
         },
       },
@@ -3045,7 +3045,7 @@ let OURS: Row[] = [
             : {}),
         })
       }
-      // The globs are columns of the word that says which app is home
+      // The globs are properties of the word that says which app is home
       // (vocab.ts), so an app that is not the front page has nowhere to put
       // them — and routing another app's paths from a page nobody is served
       // is a rule that would never fire. Said rather than silently kept.

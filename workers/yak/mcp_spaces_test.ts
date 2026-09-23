@@ -648,7 +648,7 @@ slow(
 
 // The front page is the space's router, and `first` is how it opts in
 // (D-34197): the paths its worker sees before the app whose slug owns them,
-// written as columns of the `home` component the front page wears (T-34227).
+// written as properties of the `home` component the front page wears (T-34227).
 // Routing itself is T-34200/T-34201; what this proves is the vocabulary, the
 // tool and the read back — that only a front page routes, and that the
 // platform's own paths are refused, whole, before anything is written.
@@ -664,7 +664,7 @@ slow('the front page says which paths it answers first', async () => {
       (await graph.query('.home!'))
         .map((r) => (r.home as { first: string | null }).first)
 
-    // The globs are columns of the word that says which app is home, so an
+    // The globs are properties of the word that says which app is home, so an
     // app that is not the front page has nowhere to put them.
     assertStringIncludes(
       (await assertRejects(
@@ -687,10 +687,11 @@ slow('the front page says which paths it answers first', async () => {
       said,
       'it answers /recipes/*, /*/print before the apps that own them',
     )
-    // And the column itself: one text column holding the JSON list, in order.
+    // And the property itself: one text property holding the JSON list, in
+    // order.
     assertEquals(await stored(), ['["/recipes/*","/*/print"]'])
 
-    // An empty list is an empty column now, not a component that goes away:
+    // An empty list is an empty property now, not a component that goes away:
     // the word is what says this app is the front page, and it still is.
     assertStringIncludes(
       await agent.tool('app_set', { ...at, first: [] }),

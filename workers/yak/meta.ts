@@ -6,16 +6,16 @@
 // (unseen.ts). None of them spells a store path or a mutation envelope.
 //
 // A bundle is `{entity: {eid}, comp: {...}}`, the read shape written back: an
-// omitted column is untouched, a null column is cleared, a null component is
-// dropped, and `tombstone: {}` is death. An eid the batch mints is a `$alias`,
-// and the applied bundle says what it became. A filter line is the dot-param
-// grammar @yaks/query parses — `.space.slug=ada&.doc?` — with values written
-// RAW: this door does the escaping, so no caller reaches for
+// omitted property is untouched, a null property is cleared, a null component
+// is dropped, and `tombstone: {}` is death. An eid the batch mints is a
+// `$alias`, and the applied bundle says what it became. A filter line is the
+// dot-param grammar @yaks/query parses — `.space.slug=ada&.doc?` — with values
+// written RAW: this door does the escaping, so no caller reaches for
 // encodeURIComponent again.
 //
 // `KERNEL` is the platform writing about its own data — a `plan`, a `meter`, a
-// `signin`, an `exception` — whose columns are server-owned and refused at the
-// ordinary door. It is never forwarded from anywhere a client can reach
+// `signin`, an `exception` — whose properties are server-owned and refused at
+// the ordinary door. It is never forwarded from anywhere a client can reach
 // (directory.ts vouch), so it cannot arrive from outside.
 import { type Bundle, Stale } from '@yaks/graph'
 import { type Door, type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
@@ -32,7 +32,7 @@ export type Meta = {
   ) => Promise<Bundle[]>
 }
 
-/** The platform writing about its own data: server-owned columns admitted. */
+/** The platform writing about its own data: server-owned properties admitted. */
 export let KERNEL: Record<string, string> = { 'x-yak-kernel': '1' }
 
 // A door's no, carrying the status it was answered with: a 4xx is the

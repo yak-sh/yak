@@ -64,7 +64,7 @@ import { caught } from './sentry.ts'
  * request time, so the owner changes what we charge with `yak fee 250` and the
  * next sale pays the new rate with nothing deployed.
  *
- * It is one column because it is said in four places — the Checkout Session's
+ * It is one property because it is said in four places — the Checkout Session's
  * `application_fee_amount`, the pricing page, the terms, and the sentence
  * `space_sell` answers with — and four copies of a number drift the first time
  * one moves. Unset it reads 0, which means every sale goes to the seller whole
@@ -233,8 +233,8 @@ export type Account = {
 }
 
 /** The seller's row as the directory holds it, for billing.ts's `moved` to
- * compare
- * against — the same three columns, in the vocabulary's own spelling. */
+ * compare against — the same three properties, in the vocabulary's own
+ * spelling. */
 export let held = (space: Space) =>
   space.stripe
     ? {
@@ -273,7 +273,7 @@ let dirOf = (env: Env) =>
   directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
 
 /** The space's `stripe` row, written through the kernel's own door — every
- * column of it is server-owned (vocab.ts), so this is the only writer. */
+ * property of it is server-owned (vocab.ts), so this is the only writer. */
 let wrote = (env: Env, space: Space, row: Record<string, unknown> | null) =>
   stamp(env, { entities: [{ entity: { eid: space.eid }, stripe: row }] })
 
@@ -650,8 +650,9 @@ export type Event = {
  * be. At-least-once delivery means `checkout.session.completed` arrives twice
  * for one sale; a minted eid would make two orders and a remembered-event list
  * would be a second thing to keep correct. Deriving it means the second
- * delivery addresses the row the first one wrote, derives the same columns, and
- * moves nothing — the same rule `moved` keeps for a seller's row, one level up.
+ * delivery addresses the row the first one wrote, derives the same properties,
+ * and moves nothing — the same rule `moved` keeps for a seller's row, one level
+ * up.
  *
  * Shaped as a uuid because that is what a store's eids are (src/edge.ts
  * `edgeEid` derives one the same way, off a sentence rather than a session).
@@ -718,7 +719,7 @@ let idOf = (v: string | { id?: string } | undefined | null) =>
  * that can fail for nothing. It is derived from the rate the session carries
  * (`metadata.fee`) and never from the rate in force now: the owner may have
  * moved it between the checkout and this event, and the order says what was
- * taken. A session made before that column existed carries no rate and reads
+ * taken. A session made before that property existed carries no rate and reads
  * 0, which is the fee those sales were charged.
  */
 export let orderOf = (o: Session, account: string) => {
@@ -830,10 +831,10 @@ let inApp = async (env: Env, space: Space, slug: string) => {
 /** The app's own store, written by the platform (meta.ts `KERNEL`) with the
  * app's byline. The byline is the app's entity and not a person's — nobody
  * signed in, and the buyer is not a member here and never will be. The door is
- * the kernel's because an order's columns are server-owned (vocab.ts `order`,
- * T-37881): the one writer who can say a sale was paid is the one that heard it
- * from Stripe. `editor` is what lets the reads beside it (the products a
- * receipt names, the order a refund finds) past a private app's `access`. */
+ * the kernel's because an order's properties are server-owned (vocab.ts
+ * `order`, T-37881): the one writer who can say a sale was paid is the one that
+ * heard it from Stripe. `editor` is what lets the reads beside it (the products
+ * a receipt names, the order a refund finds) past a private app's `access`. */
 let asApp = (env: Env, space: Space, app: App) => {
   let store = appStore(env.STORE, space, app, env)
   let who = { ...KERNEL, 'x-yak-person': app.eid, 'x-yak-role': 'editor' }
@@ -905,7 +906,7 @@ let sold = async (env: Env, space: Space, event: Event) => {
 }
 
 /**
- * A refund or a dispute, as one column moving on the order it is about.
+ * A refund or a dispute, as one property moving on the order it is about.
  *
  * Neither event knows anything about a checkout session, so both are found by
  * the PaymentIntent — which is why the door put its metadata on the intent as
@@ -983,7 +984,7 @@ let settled = async (env: Env, space: Space, event: Event) => {
   if (type == 'charge.dispute.closed' && row.order?.status != 'disputed') {
     return 'unchanged'
   }
-  // A dispute on an order already disputed, or a redelivery: the column is
+  // A dispute on an order already disputed, or a redelivery: the property is
   // already where it is going, so nothing is written.
   if (row.order?.status == status) return 'unchanged'
   await store.apply([{ entity: { eid: row.entity.eid }, order: { status } }])
@@ -1094,7 +1095,7 @@ export let priceAt = async (dir: Directory, file: Response) => {
 
 /**
  * `GET /api/fee` reads the platform's cut and `POST /api/fee` (`bps=250`) sets
- * it — `yak fee` on the owner's box, and the only writer of the column.
+ * it — `yak fee` on the owner's box, and the only writer of the property.
  *
  * The gate is A seat in `yak`, the platform's own space: whoever owns that row
  * owns the platform, which is the same authority `space_sell` and the meter

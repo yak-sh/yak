@@ -98,8 +98,8 @@ Deno.test('globs: a glob under an app is not a platform path', () => {
 })
 
 // The read is lenient where the write is strict: the graph tier writes this
-// column too, and a listing must not fall over on a row somebody typed.
-Deno.test('firstOf: the column as the App row reads it', () => {
+// property too, and a listing must not fall over on a row somebody typed.
+Deno.test('firstOf: the property as the App row reads it', () => {
   assertEquals(firstOf({ first: '["/recipes/*"]' }), ['/recipes/*'])
   assertEquals(firstOf(undefined), [])
   assertEquals(firstOf(null), [])

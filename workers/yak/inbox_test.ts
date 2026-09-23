@@ -7,7 +7,7 @@
 // The rules this holds:
 //   an app's address    `<space>.<app>@yaks.app` lands in that app's store
 //   the home app        `<space>@yaks.app` lands in the space's front page
-//   a stranger's word    the letter is data — `mail.from` is a column, the
+//   a stranger's word    the letter is data — `mail.from` is a property, the
 //                        writer is nobody, and an unsigned letter is recorded
 //                        with `verified: false` rather than dropped
 //   attachments          filed where a page's upload is, hung off the letter
@@ -35,7 +35,7 @@ type Row = {
   kind: string
   entity: { eid: string }
   doc: { title: string; body?: string }
-  // `verified` is a boolean column, which SQLite holds as 1 and 0.
+  // `verified` is a boolean property, which SQLite holds as 1 and 0.
   mail: { from: string; to: string; at: string; verified?: number | null }
   attachment: { mime: string; name: string }
 }
@@ -95,11 +95,11 @@ slow('a letter lands in the app its address named', async () => {
     assertEquals(letter.mail.from, 'ana@books.example')
     assertEquals(letter.mail.to, 'jeff.recipes@yaks.app')
     assertEquals(letter.mail.at, '2024-08-27T15:49:44.000Z')
-    // A boolean column is an integer in SQLite, here as everywhere on this
+    // A boolean property is an integer in SQLite, here as everywhere on this
     // platform (@yaks/sqlite `write`): the verdict reads back 1 and 0.
     assertEquals(letter.mail.verified, 1)
 
-    // Nobody wrote it: the sender is a column and never an actor, so a letter
+    // Nobody wrote it: the sender is a property and never an actor, so a letter
     // cannot put words in a member's mouth.
     let [byline] = await client(k, 'jeff.yaks.app', 'recipes', them.cookie)
       .get('.mail!&.created!') as unknown as { created: { by: unknown } }[]
@@ -120,7 +120,7 @@ slow('a letter lands in the app its address named', async () => {
     let [tomatoes] = await garden.get('.mail!&.doc?') as unknown as Row[]
     assertEquals(tomatoes.doc.title, 'Tomatoes are in')
     // No `Authentication-Results` at all: nobody checked, which is not the
-    // same as a check that failed, so the column is left unwritten — null on
+    // same as a check that failed, so the property is left unwritten — null on
     // the row, where a failed check is 0.
     assertEquals(tomatoes.mail.verified, null)
 
@@ -361,10 +361,10 @@ slow(
 )
 
 // The meter, on the receiving side (T-33688). A letter that arrives is one
-// letter on the space's month, the same column a letter that leaves is counted
-// on (meter.ts `metering`, mail_test.ts) — and it is counted past the
-// allowance rather than refused there, because a letter turned away at the
-// door is somebody else's words lost.
+// letter on the space's month, the same property a letter that leaves is
+// counted on (meter.ts `metering`, mail_test.ts) — and it is counted past the
+// allowance rather than refused there, because a letter turned away at the door
+// is somebody else's words lost.
 slow(
   'an arrival is one letter on the month, over the ceiling too',
   async () => {
@@ -418,7 +418,7 @@ slow(
         }, { timeout: 15_000, label: 'the letter to come to rest' })
         return String(rest!.bounced?.reason ?? '')
       }
-      // One that goes is one letter on the same column an arrival lands on.
+      // One that goes is one letter on the same property an arrival lands on.
       assertEquals(await outbound(FIRST), '')
       assertEquals(await spent(), 3)
 

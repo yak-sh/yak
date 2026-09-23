@@ -88,7 +88,7 @@ let APP = 'a0000000-0000-4000-8000-000000000001'
 let ADA = 'b0000000-0000-4000-8000-000000000002'
 let CAKE = 'c0000000-0000-4000-8000-000000000003'
 
-// The app every test here deploys: one component, one column, in the one
+// The app every test here deploys: one component, one property, in the one
 // spelling a vocab.json is written in.
 let SCHEMA = JSON.stringify({
   $defs: {
@@ -157,7 +157,7 @@ Deno.test('a malformed query is a 400 to the caller, not a failure', async () =>
 let words = async (store: Store) =>
   (await (await get(store, '/vocab')).json()).$defs
 
-// What a store keeps is the document, so a keyword a column declares is still
+// What a store keeps is the document, so a keyword a property declares is still
 // on it when the kernel reads the manifest back (T-37546).
 Deno.test("an app's vocab.json is read back as the document it means", async () => {
   assertEquals(
@@ -195,14 +195,14 @@ Deno.test('a manifest the vocabulary refuses leaves the store as it was', async 
   assertEquals(await words(store), was)
 })
 
-Deno.test('a column says its type, and a JSON value waits a release', async () => {
+Deno.test('a property says its type, and a JSON value waits a release', async () => {
   let store = await cookbook()
   let was = await words(store)
-  let said = async (col: string) => {
+  let said = async (prop: string) => {
     let no = await post(
       store,
       '/vocab',
-      `{"$defs": {"dish": {"properties": {"c": ${col}}}}}`,
+      `{"$defs": {"dish": {"properties": {"c": ${prop}}}}}`,
       owner,
     )
     assertEquals(no.status, 400)
@@ -452,7 +452,8 @@ Deno.test('a visitor to an open app adds, and touches no price, order or row of 
     200,
   )
   // What was sold is written by the platform, and nobody else moves it: an
-  // order's columns are server-owned, so a page's say-so lands nothing at all.
+  // order's properties are server-owned, so a page's say-so lands nothing at
+  // all.
   assertEquals(
     await status(open, {
       entity: { eid: O },

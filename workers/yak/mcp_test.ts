@@ -896,11 +896,11 @@ slow(
       )
       assertEquals(own.entity.eid, box)
       assertEquals(own.recipe, { title: 'Pancakes', serves: 4 })
-      // A column the manifest never named is still a typo, not a new word.
+      // A property the manifest never named is still a typo, not a new word.
       // The write schema describes the vocabulary (T-34153) and stays open, so
       // a client's cached copy cannot refuse a word deployed since it
-      // connected (T-34277) — the server refuses this, naming the column, the
-      // columns that do exist, and where to read them.
+      // connected (T-34277) — the server refuses this, naming the property, the
+      // properties that do exist, and where to read them.
       let typo = (await assertRejects(
         () =>
           agent.tool('graph_apply', {
@@ -984,7 +984,7 @@ slow(
         'unknown component: jot',
       )
       // `recipe` the same manifest stopped naming stays: it has rows, and
-      // the rows are the record of what its columns are.
+      // the rows are the record of what its properties are.
       assertStringIncludes(shed, 'components: recipe, note')
       assertEquals(
         JSON.parse(
@@ -995,7 +995,7 @@ slow(
         1,
       )
 
-      // A renamed column is two columns: the new spelling arrives, the old
+      // A renamed property is two properties: the new spelling arrives, the old
       // one keeps every row already written under it, and the deploy says
       // both — the manifest reads as one word and the store answers two.
       await agent.tool('graph_apply', {
@@ -1170,7 +1170,7 @@ slow(
           'page /recipes/ — sift is not a function',
         ],
       )
-      // v7: two files, a vocabulary, the word it dropped, the column it
+      // v7: two files, a vocabulary, the word it dropped, the property it
       // renamed, the same words written again as YAML — every deploy above
       // bumped it, and a break wears the version it happened on.
       assert(

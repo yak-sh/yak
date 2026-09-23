@@ -227,7 +227,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     // rows live in the spine a filter selects from. A listing must answer docs
     // and nothing else: the tester's first list rendered `undefined` for each
     // blob it got back (C-32498 item 4). An empty needle is the case that found
-    // it — `.doc.title~=` asks whether the column is there, not whether every
+    // it — `.doc.title~=` asks whether the property is there, not whether every
     // string contains ''.
     let pie = crypto.randomUUID()
     await owner.applied([

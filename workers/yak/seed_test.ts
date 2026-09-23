@@ -158,7 +158,7 @@ Deno.test('a CSV among the files is rows of the component `as` names', () => {
   let all = loaded([
     { path: 'data/02-menu.csv', text: 'id,serves\nsoup,4\n' },
     file('data/01-places.json', [one('$here', 'Here')]),
-  ], { as: 'recipe', cols: { serves: 'number' } })
+  ], { as: 'recipe', props: { serves: 'number' } })
   assertEquals(all.map((s) => [s.file, s.index]), [
     ['data/01-places.json', 0],
     ['data/02-menu.csv', 0],

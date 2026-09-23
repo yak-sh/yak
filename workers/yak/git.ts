@@ -44,7 +44,7 @@ export let gitDirectoryDoc: VocabDoc = {
       before: ['doc'],
       properties: {
         // The entity's own eid is this value too — it is the object id, which
-        // is what makes writing the same commit twice one row. The column is
+        // is what makes writing the same commit twice one row. The property is
         // spelled anyway because the fleet's `commit` spells it, and one word
         // means one thing in both graphs.
         sha: { type: 'string' },

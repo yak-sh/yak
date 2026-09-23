@@ -89,7 +89,7 @@ let sent = async (store: Meta, email: string) =>
     .sort((a, b) => b.signin.expires.localeCompare(a.signin.expires))
 
 // When the letter went out. `expires` is the code's death and LIFE is fixed,
-// so a row carries its own send time without a second column.
+// so a row carries its own send time without a second property.
 let at = (r: Signin) => Date.parse(r.signin.expires) - LIFE
 
 // A code still worth typing: not expired, and not already out of guesses.

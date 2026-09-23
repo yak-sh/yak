@@ -159,7 +159,7 @@ Deno.test('a fresh read goes past the 30-second cache, and refills it', async ()
 })
 
 // A comp is the platform holding one of its own spaces to no ceiling. It is a
-// constant read here and a column nowhere: what makes that safe is that
+// constant read here and a property nowhere: what makes that safe is that
 // nothing on the wire can reach it, which is the same reason `plan` is
 // stamped (billing.ts).
 Deno.test('a comped space reads as plus, everyone else as what they pay', () => {
@@ -190,7 +190,7 @@ Deno.test('a handle reads as the app and is the app, not its address', () => {
     'jeff/cookbook.385dac',
   )
   // An app the backfill has not reached keeps answering to the name it already
-  // had, which is what it was called before the column existed.
+  // had, which is what it was called before the property existed.
   assertEquals(dirPart.storeName(space, { ...an, store: null }), 'jeff/recipes')
 })
 
@@ -222,9 +222,9 @@ let held = () => {
         let [key, want] = t.split('=')
         if (key == '.eid') return row.entity.eid == want
         if (key == '.limit' || key == '.after') return true
-        let [, name, col] = key.split('.')
+        let [, name, prop] = key.split('.')
         let comp = row[name] as Record<string, unknown> | undefined
-        return col ? comp?.[col] == want : !!comp
+        return prop ? comp?.[prop] == want : !!comp
       })
     )
   }
@@ -251,8 +251,8 @@ let held = () => {
         return new Response('slug taken', { status: 409 })
       }
       for (let comp of Object.values(comps)) {
-        let cols = comp as Record<string, unknown>
-        for (let [k, v] of Object.entries(cols)) cols[k] = named(v)
+        let props = comp as Record<string, unknown>
+        for (let [k, v] of Object.entries(props)) props[k] = named(v)
       }
       let row = put(eid, comps)
       // The batch as applied, each minted bundle wearing the alias it was

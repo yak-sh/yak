@@ -66,10 +66,10 @@ let without = (doc: VocabDoc, names: string[]): VocabDoc => ({
   ),
 })
 
-// A column of a shared word as the ledger takes it: plainly, whoever wrote it.
-// The platform's own are `stamped` — the server writes them, a client may not
-// — and an untrusted landing would drop exactly the values a read came back
-// with, so here they are ordinary columns on an ordinary in-memory row.
+// A property of a shared word as the ledger takes it: plainly, whoever wrote
+// it. The platform's own are `stamped` — the server writes them, a client may
+// not — and an untrusted landing would drop exactly the values a read came back
+// with, so here they are ordinary properties on an ordinary in-memory row.
 let told = (props: Record<string, PropSchema>): PropSchema => ({
   component: true,
   type: 'object',

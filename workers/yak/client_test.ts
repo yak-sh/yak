@@ -198,7 +198,7 @@ slow('the served client: a page saves, lists and watches', async () => {
     assertEquals(entry.created.by.name, them.name)
     assertEquals(entry.created.by.eid.length, 36)
     // The eid is still the value a write takes: the row a page read, handed
-    // straight back — and the column it lands in answers with the name too,
+    // straight back — and the property it lands in answers with the name too,
     // since the byline is a rule about references and not about one stamp.
     await store.apply({
       entity: { eid: entry.entity.eid },
@@ -253,7 +253,8 @@ slow('the served client: a page saves, lists and watches', async () => {
       'day 2',
     )
     // `null` is a guard too — "I read no value" — which is how a page mints a
-    // row once: the column is no longer empty, so the second write is refused.
+    // row once: the property is no longer empty, so the second write is
+    // refused.
     await assertRejects(
       () =>
         store.apply({

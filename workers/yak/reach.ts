@@ -149,7 +149,7 @@ let every = (line: string) => {
 }
 
 // The directives that settle a sequence rather than a set. An `.order=` is
-// what moves that decision past the merge: the column it names may be a word
+// what moves that decision past the merge: the property it names may be a word
 // only the other store speaks, so neither store can be asked to sort by it —
 // and neither may cut its answer short, or the rows the order wanted would be
 // gone before the merge saw them. So when the caller asks for an order, these
@@ -289,19 +289,19 @@ let kindFrom = (
   }
 }
 
-// One component's columns as its schema spells them: column → the type word,
-// which is all a disagreement is read out of.
-let colsOf = (schema: PropSchema): Record<string, string> =>
+// One component's properties as its schema spells them: property → the type
+// word, which is all a disagreement is read out of.
+let propsOf = (schema: PropSchema): Record<string, string> =>
   Object.fromEntries(
     Object.entries(schema.properties ?? {}).map((
-      [col, p],
-    ) => [col, p.enum ? p.enum.join('|') : String(p.type ?? '?')]),
+      [prop, p],
+    ) => [prop, p.enum ? p.enum.join('|') : String(p.type ?? '?')]),
   )
 
 // Where one name means two things: the same word declared in two spaces with
-// a column they spell differently (T-32728). Within a space a word has one
+// a property they spell differently (T-32728). Within a space a word has one
 // home and the other apps use it, so a disagreement can only be across
-// spaces — and there the name is two words. Columns only one side declares
+// spaces — and there the name is two words. Properties only one side declares
 // agree by construction: a vocabulary only ever grows.
 let apartIn = (vocabs: { r: Reach; doc: VocabDoc }[]) => {
   let seen = new Map<string, Map<string, Record<string, string>>>()
@@ -309,7 +309,7 @@ let apartIn = (vocabs: { r: Reach; doc: VocabDoc }[]) => {
     for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
       let by = seen.get(name) ?? new Map()
       seen.set(name, by)
-      by.set(r.space.slug, { ...by.get(r.space.slug), ...colsOf(schema) })
+      by.set(r.space.slug, { ...by.get(r.space.slug), ...propsOf(schema) })
     }
   }
   let apart = new Set<string>()
@@ -317,8 +317,8 @@ let apartIn = (vocabs: { r: Reach; doc: VocabDoc }[]) => {
     let sides = [...by.values()]
     for (let i = 0; i < sides.length; i++) {
       for (let j = i + 1; j < sides.length; j++) {
-        for (let [col, type] of Object.entries(sides[i])) {
-          if (sides[j][col] && sides[j][col] != type) apart.add(name)
+        for (let [prop, type] of Object.entries(sides[i])) {
+          if (sides[j][prop] && sides[j][prop] != type) apart.add(name)
         }
       }
     }
@@ -507,7 +507,7 @@ export let composed = async (
 // Unless the caller asked for an order, and then the sequence is nobody's to
 // cut until the bundles are one: `sorted` runs the order and the window over
 // the merged answer, in the space's own vocabulary (@yaks/match). A store can
-// only sort what it holds, and the column being sorted by may live in the
+// only sort what it holds, and the property being sorted by may live in the
 // other store.
 export let read = async (
   env: Env,
@@ -555,7 +555,7 @@ export let read = async (
   )
   let limit = limitOf(line)
   // The window is cut here only while the answer's sequence is already
-  // settled. An order moves that decision past the merge, where the column it
+  // settled. An order moves that decision past the merge, where the property it
   // sorts by is in hand — so every candidate is gathered and `sorted` cuts.
   if (!orders.order && limit != null && eids.length > limit) {
     eids = eids.slice(0, limit)
@@ -659,7 +659,7 @@ let spoken = async (env: Env, reach: Reach[]) => {
 
 // The keys of a bundle that name no component: its address and its death.
 // Everything a `$` opens is the wire's own sugar (`$was`, `$delete`, `$actor`)
-// and never a column either.
+// and never a property either.
 let NOT_A_COMP = ['entity', 'tombstone']
 
 let isComp = (k: string) => !NOT_A_COMP.includes(k) && !k.startsWith('$')
@@ -687,7 +687,7 @@ let minted = (batch: Bundle[]) => {
     }
     return crypto.randomUUID()
   })
-  // An alias stands wherever an eid goes — a ref column, an edge's end,
+  // An alias stands wherever an eid goes — a ref property, an edge's end,
   // a nested bundle's address — so the swap is the whole batch's, by value.
   let swap = (v: unknown): unknown =>
     typeof v == 'string'

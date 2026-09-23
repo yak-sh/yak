@@ -21,7 +21,7 @@
 // answered and dropped, as it always was; one that failed for any other
 // reason stays, and the store replays the log oldest first on its next
 // healthy wake. A replay that the store now refuses (a `$was` that moved, a
-// column the app no longer declares) is kept as `refused` with the reason and
+// property the app no longer declares) is kept as `refused` with the reason and
 // reported, never dropped.
 import type { DurableSql } from '@yaks/durable-object'
 import { Refused } from '@yaks/graph'

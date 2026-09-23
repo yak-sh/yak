@@ -79,9 +79,9 @@ Deno.test('a reference to a person answers with a name', () => {
     // A reference to something that is not a person, and a row with none.
     { kind: 'jog', entity: { eid: 'b', num: 2 }, created: { by: 'nobody' } },
   ]
-  let ref = (comp: string, col: string) =>
-    (comp == 'created' && (col == 'by' || col == 'via')) ||
-    (comp == 'jog' && col == 'with')
+  let ref = (comp: string, prop: string) =>
+    (comp == 'created' && (prop == 'by' || prop == 'via')) ||
+    (comp == 'jog' && prop == 'with')
   let out = named(
     rows,
     ref,
@@ -91,7 +91,7 @@ Deno.test('a reference to a person answers with a name', () => {
     by: { eid: 'ada', name: 'Ada' },
     via: 'a-session',
   })
-  // Any column that references them, not just the stamp.
+  // Any property that references them, not just the stamp.
   assertEquals(out[0].jog, { miles: 5, with: { eid: 'ada', name: 'Ada' } })
   // A stranger keeps the eid the store has always answered with.
   assertEquals(out[1].created, { by: 'nobody' })

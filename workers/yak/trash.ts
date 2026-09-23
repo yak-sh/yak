@@ -31,10 +31,10 @@ export let DAILY = '20 4 * * *'
  * The trash mark, dated and signed by the store: `at` is the batch's own
  * instant and `by` is whoever the platform vouched for — the two words the
  * `created` stamp writes, for the same reason. Each is the resource written
- * straight into the column it stands for, so a mark nobody signed is dated and
- * unsigned rather than dated and blank. A batch carrying its own `at` — a row
- * stood up in the past by a test, a mark a migration carries across — does not
- * match at all.
+ * straight into the property it stands for, so a mark nobody signed is dated
+ * and unsigned rather than dated and blank. A batch carrying its own `at` — a
+ * row stood up in the past by a test, a mark a migration carries across — does
+ * not match at all.
  */
 export let trashPlugin: Plugin = {
   name: 'yak/trash',

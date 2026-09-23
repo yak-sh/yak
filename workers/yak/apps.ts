@@ -1498,10 +1498,10 @@ let saved = async (
 // "the order is unchanged" — no home app, no glob over this path, or a router
 // that passed, threw or hung (dispatch.ts `ahead`, which fails open).
 //
-// The kernel's own paths are never routed, whatever the column holds
+// The kernel's own paths are never routed, whatever the property holds
 // (router.ts PLATFORM_PATHS): `app_set` refuses a glob that names one, and
 // this is that same rule again at the door, since the graph tier writes the
-// column too and a `/garden/*` an owner wrote in good faith already covers
+// property too and a `/garden/*` an owner wrote in good faith already covers
 // `/garden/api/query`.
 let firstly = async (
   env: Env,

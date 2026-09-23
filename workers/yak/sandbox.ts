@@ -34,7 +34,7 @@
 // {@link BUDGET} the tools refuse in a sentence, the way every other ceiling
 // on this platform refuses (meter.ts): the person reading it asked for an app,
 // not for a stack trace. The month's seconds land on `meter.seconds`
-// (meter.ts `countedSandbox`) — its own column beside `tokens`, because a
+// (meter.ts `countedSandbox`) — its own property beside `tokens`, because a
 // token and a container-second are priced differently and one number made of
 // both is a number nobody can add up.
 //
@@ -475,7 +475,7 @@ export let paid = async (
  * It does not write the meter itself, where {@link paid} does, because the
  * build counts its seconds in the same write as its build (builder.ts `end`,
  * meter.ts `countedBuild`) — two writes derived from one reading of the space
- * would each put the other's columns back.
+ * would each put the other's properties back.
  */
 export let released = async (
   env: { SANDBOX?: Sandboxes },

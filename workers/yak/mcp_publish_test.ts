@@ -546,7 +546,7 @@ slow('an installed app is the installer own copy, data and all', async () => {
       }),
       '<h1>Tally v2</h1>',
     )
-    // The grown column is writable in her store, on the row she already had.
+    // The grown property is writable in her store, on the row she already had.
     await hers.tool('graph_apply', {
       app: 'tally',
       entities: [{
@@ -561,7 +561,7 @@ slow('an installed app is the installer own copy, data and all', async () => {
       'is already at v2',
     )
 
-    // A conflict: her copy declared a column of its own, and the publisher's
+    // A conflict: her copy declared a property of its own, and the publisher's
     // next version spells the same one differently. The update is refused
     // with the deploy's own sentence, and not a byte of her app moves.
     await write(hers, 'tally')(

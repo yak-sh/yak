@@ -63,7 +63,7 @@ Deno.test('the sentence says the app and what the vocabulary means', () => {
   )
 })
 
-Deno.test('add takes a title and the kind’s own columns', () => {
+Deno.test('add takes a title and the kind’s own properties', () => {
   let add = tools().add_recipe
   assertEquals(Object.keys(schemaOf(add).properties), [
     'title',

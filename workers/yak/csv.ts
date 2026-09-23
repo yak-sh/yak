@@ -2,20 +2,19 @@
 // person already has is a `.csv` — an export from a spreadsheet, a table off
 // the web — and nothing about it says which entity a row is or what its
 // columns mean. So the caller says it once: `store_load(app, path, as)` names
-// the component each row becomes, and the header row names the columns.
+// the component each row becomes, and the header row names the properties.
 //
 // The default mapping is the obvious one and needs no argument: a header lands
-// in the same-named column of `as`, coerced to that column's type; `title` and
-// `body` land in `doc`, because a row a person reads has words; an `id` (or
+// in the same-named property of `as`, coerced to that property's type; `title`
+// and `body` land in `doc`, because a row a person reads has words; an `id` (or
 // `alias`) column is the row's name — `alias{name}` (@yaks/alias), which lands
 // on the entity already holding it, so loading the file again patches the same
 // rows instead of minting a second set, and the name stands wherever an eid
-// does. `map {header: column}` renames a header that does not match — it
-// renames, it does not re-route, so a mapped name resolves by the same three
-// rules.
+// does. `map {header: prop}` renames a header that does not match — it renames,
+// it does not re-route, so a mapped name resolves by the same three rules.
 //
-// A component's own columns win over all of it: if the app declared
-// `city.title`, a `title` header is that column and not the doc's.
+// A component's own properties win over all of it: if the app declared
+// `city.title`, a `title` header is that property and not the doc's.
 //
 // Everything a spreadsheet gets wrong is refused in the file's own words, with
 // the row and the header in the sentence — a cell nobody can find is a cell
@@ -26,18 +25,18 @@ import type { Bundle } from '@yaks/graph'
 import type { Sown } from './seed.ts'
 import { refuse } from './tool.ts'
 
-/** A component's columns, as the type each takes: the word each column's type
+/** A component's properties, as the type each takes: the word each property's type
  * is spelled with (vocab.ts `wordsOf`). */
-export type Cols = Record<string, string>
+export type Props = Record<string, string>
 
 /** What a CSV is read as: the component every row wears, that component's
- * columns, and any header the caller renamed. */
-export type Sheet = { as: string; cols: Cols; map?: Record<string, string> }
+ * properties, and any header the caller renamed. */
+export type Sheet = { as: string; props: Props; map?: Record<string, string> }
 
 let SHAPE = 'a CSV is a header row naming the columns, then one row per ' +
   'entity — name,serves / Lentil soup,4'
 
-/** The headers that name the row itself rather than a column of it. */
+/** The headers that name the row itself rather than a property of it. */
 let NAMES = ['id', 'alias']
 /** The headers that land in `doc`, the words a person reads. */
 let DOC = ['title', 'body']
@@ -46,7 +45,7 @@ let DOC = ['title', 'body']
 let YES = ['true', 'yes', '1']
 let NO = ['false', 'no', '0']
 
-// One cell as its column's type. `undefined` means it will not coerce, which
+// One cell as its property's type. `undefined` means it will not coerce, which
 // the caller turns into a refusal naming the row and the header — this has no
 // idea which row it is looking at.
 let value = (type: string, cell: string): unknown => {
@@ -64,27 +63,27 @@ let value = (type: string, cell: string): unknown => {
   return cell
 }
 
-/** Where one header's values go: a column of a component, or the row's own
+/** Where one header's values go: a property of a component, or the row's own
  * name. */
-type Lands = { comp: string; col: string; type: string } | { named: true }
+type Lands = { comp: string; prop: string; type: string } | { named: true }
 
-// Which, by the three rules — the component's own columns first, so an app
-// that declared `city.id` means that column and not the row's name.
+// Which, by the three rules — the component's own properties first, so an app
+// that declared `city.id` means that property and not the row's name.
 let landing = (file: string, spec: Sheet, header: string): Lands => {
   let name = spec.map?.[header] ?? header
-  if (name in spec.cols) {
-    return { comp: spec.as, col: name, type: spec.cols[name] }
+  if (name in spec.props) {
+    return { comp: spec.as, prop: name, type: spec.props[name] }
   }
   if (NAMES.includes(name)) return { named: true }
-  if (DOC.includes(name)) return { comp: 'doc', col: name, type: 'text' }
+  if (DOC.includes(name)) return { comp: 'doc', prop: name, type: 'text' }
   throw refuse(
     'arguments',
     `${file}: ${JSON.stringify(header)}${
       name == header ? '' : ` maps to ${JSON.stringify(name)}, which`
-    } is not a column of ${spec.as} — ${spec.as} takes ${
-      Object.keys(spec.cols).join(', ') || 'no columns'
+    } is not a property of ${spec.as} — ${spec.as} takes ${
+      Object.keys(spec.props).join(', ') || 'no properties'
     }, and title, body and id land where they always do; map it with map ` +
-      `{${JSON.stringify(header)}: "<column>"} or declare it in vocab.json`,
+      `{${JSON.stringify(header)}: "<property>"} or declare it in vocab.json`,
   )
 }
 
@@ -99,7 +98,7 @@ export let sheet = (file: string, text: string, spec?: Sheet): Sown[] => {
     throw refuse(
       'arguments',
       `${file} is a CSV: say which component a row becomes — ` +
-        "store_load(as: 'city'), and the headers are its columns",
+        "store_load(as: 'city'), and the headers are its properties",
     )
   }
   let rows: string[][]
@@ -151,7 +150,7 @@ export let sheet = (file: string, text: string, spec?: Sheet): Sown[] => {
           }, not a ${to.type}`,
         )
       }
-      parts[to.comp] = { ...parts[to.comp], [to.col]: got }
+      parts[to.comp] = { ...parts[to.comp], [to.prop]: got }
     })
     return {
       file,

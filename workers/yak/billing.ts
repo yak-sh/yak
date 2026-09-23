@@ -31,11 +31,10 @@
 // The webhook door is public, so filing is capped per isolate (`FILED`): a
 // stranger posting garbage must not be able to write rows without end.
 //
-// The kernel writes `plan` and no client ever can: every column is stamped in
-// the vocabulary, so `admitted()` drops them off any
-// write that does not carry the kernel flag. `tier` is what usage.ts
-// `ceilings()` reads, and a tier a person could write is a person who can lift
-// their own ceilings.
+// The kernel writes `plan` and no client ever can: every property is stamped in
+// the vocabulary, so `admitted()` drops them off any write that does not carry
+// the kernel flag. `tier` is what usage.ts `ceilings()` reads, and a tier a
+// person could write is a person who can lift their own ceilings.
 import { managePath } from './route.ts'
 import * as dirPart from './directory.ts'
 import { directory, type Plan, type Space, stamp } from './directory.ts'
@@ -263,12 +262,12 @@ export let stale = (now: Plan | null, next: Plan) => {
   return !!now.at && next.at < now.at
 }
 
-// What actually moves, column by column. A duplicate delivery derives an
+// What actually moves, property by property. A duplicate delivery derives an
 // identical row — the same event carries the same `at` — so this is empty and
 // the write below never happens at all: idempotent because there is nothing to
-// write, not because a second write happened to be harmless.
-// Over any row of columns, because sell.ts derives a seller's row the same way
-// and the rule is the rule rather than the plan's own.
+// write, not because a second write happened to be harmless. Over any row of
+// properties, because sell.ts derives a seller's row the same way and the rule
+// is the rule rather than the plan's own.
 export let moved = <T extends Record<string, unknown>>(
   now: T | null,
   next: T,

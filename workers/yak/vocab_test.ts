@@ -28,7 +28,7 @@ import {
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 
 // A manifest in the one spelling, without every test saying `$defs` and
-// `properties` around it. The columns are written as they are declared.
+// `properties` around it. The properties are written as they are declared.
 let says = (defs: Record<string, Record<string, PropSchema>>): VocabDoc => ({
   $defs: Object.fromEntries(
     Object.entries(defs).map(([name, props]) => [name, { properties: props }]),
@@ -93,7 +93,7 @@ Deno.test('every example vocab.json in the repo loads', () => {
     let v = appVocab(m)
     for (let [name, schema] of Object.entries(m.$defs ?? {})) {
       // A rule is a declaration and not a component: it has a match where a
-      // component has columns, and no table is raised for it.
+      // component has properties, and no table is raised for it.
       if (schema.rule) continue
       assertEquals(
         v.comp(name)?.writable.sort(),
@@ -281,7 +281,7 @@ Deno.test('the directory and an app spell one word apart: member.role', () => {
   // The platform's roster is its access ladder, read space-wide (apps.ts
   // `reads`/`edits`, tools.ts `inSpace`); @yaks/member keeps belonging apart
   // from access, which it spells as a grant or the app's mode. So the two
-  // stores mean two things by one column, and the MCP door types it nowhere
+  // stores mean two things by one property, and the MCP door types it nowhere
   // rather than as either (agent.ts `spoken`, T-34273).
   assertEquals(PLATFORM_APART, ['member.role'])
   assertEquals(platformVocab().prop('member', 'role')?.values, [
@@ -346,11 +346,11 @@ Deno.test('none of the fleet vocabulary comes with it', () => {
   }
 })
 
-// A column of an app's own says whether its words are searched, the same way
+// A property of an app's own says whether its words are searched, the same way
 // @yaks/doc says it of `title` and `body` — the keyword rides the JSON Schema
 // spelling into the loaded vocabulary, which is what @yaks/fts cuts its index
 // from (graph.ts `searchable`).
-Deno.test('a searched column of an app reaches the index fields', () => {
+Deno.test('a searched property of an app reaches the index fields', () => {
   let v = appVocab({
     $defs: {
       memo: {
@@ -375,9 +375,10 @@ Deno.test('a searched column of an app reaches the index fields', () => {
 })
 
 // One word, one home (T-32728): the second app in a space to name a word does
-// not plant it again — it uses it where it lives, and a column it brings grows
-// the home's table. What travels is the column's schema, so the keywords a
-// borrowed column declares reach the store that plants it (T-37546).
+// not plant it again — it uses it where it lives, and a property it brings
+// grows the home's table. What travels is the property's schema, so the
+// keywords a borrowed property declares reach the store that plants it
+// (T-37546).
 Deno.test('a word the space already has is a use, not a home', () => {
   let shelf = appDoc(says({ book: { title: txt, pages: num } }))
   let homes = {
@@ -396,7 +397,8 @@ Deno.test('a word the space already has is a use, not a home', () => {
     'book lives in reading-list; this app reads and writes it there',
   ])
 
-  // A column the home has never seen grows the HOME's table, keywords and all.
+  // A property the home has never seen grows the HOME's table, keywords and
+  // all.
   assertEquals(
     homed(
       appDoc({
@@ -413,7 +415,7 @@ Deno.test('a word the space already has is a use, not a home', () => {
     { 'reading-list': { book: { blurb: { type: 'string', search: true } } } },
   )
 
-  // And the one refusal: the same column, two types, named with both and
+  // And the one refusal: the same property, two types, named with both and
   // with the app the word lives in.
   let why = assertThrows(
     () => homed(appDoc(says({ book: { pages: txt } })), homes),
@@ -423,9 +425,9 @@ Deno.test('a word the space already has is a use, not a home', () => {
   assertStringIncludes(why, 'reading-list, where book lives')
 })
 
-// The `search` keyword is the column's, and a column the platform refuses to
-// index says so at the deploy, in @yaks/vocab's own words.
-Deno.test('a searched column that holds no prose is refused', () => {
+// The `search` keyword is the property's, and a property the platform refuses
+// to index says so at the deploy, in @yaks/vocab's own words.
+Deno.test('a searched property that holds no prose is refused', () => {
   assertThrows(
     () =>
       appDoc({
@@ -485,8 +487,8 @@ Deno.test('a manifest wears the component marker without saying it', () => {
 })
 
 // Numbers are @yaks/id's, and an app never opted in (T-37831). The directory
-// did: `memory_recall` orders by `.order=-entity.num`, which is a column or it
-// is a refused filter — so the one place the plugin is loaded is the
+// did: `memory_recall` orders by `.order=-entity.num`, which is a property or
+// it is a refused filter — so the one place the plugin is loaded is the
 // platform's own two stores.
 Deno.test("an app has no numbers; the platform's own stores do", () => {
   let app = appVocab(says({ recipe: { serves: num } }))

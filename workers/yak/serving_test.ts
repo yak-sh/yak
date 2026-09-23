@@ -483,7 +483,10 @@ Deno.test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () =
   let no = await lines(
     await poured([
       JSON.stringify({ entity: { eid: '$ok' }, doc: { title: 'Fine' } }),
-      JSON.stringify({ entity: { eid: '$no' }, doc: { name: 'not a column' } }),
+      JSON.stringify({
+        entity: { eid: '$no' },
+        doc: { name: 'not a property' },
+      }),
     ].join('\n')),
   )
   assertEquals(no.length, 1)
@@ -681,7 +684,7 @@ Deno.test('DELETE / empties the app store and bears it again', async () => {
 // The space, `cookbook` as its home app, `garden` beside it, and a home worker
 // where one is given: an app answering `.get` for no other script is an app
 // with no worker, which is the message the runtime knows one by. `first` is a
-// column of the `home` component the front page wears, written the way
+// property of the `home` component the front page wears, written the way
 // `app_set` writes it.
 let router = async (
   worker?: (req: Request) => Response | Promise<Response>,
@@ -974,7 +977,8 @@ slow(
 Deno.test('rung 1½: a glob over a store door never takes it', async () => {
   using k = await fronted(() => new Response('the router'))
   // `/garden/*` covers `/garden/api/…` by its own shape, and the store doors
-  // are the kernel's however the column is written (router.ts PLATFORM_PATHS).
+  // are the kernel's however the property is written (router.ts
+  // PLATFORM_PATHS).
   assertEquals(
     (await (await k.at('/garden/api/graph')).json()).db,
     'do:ada/garden.bbb222',
@@ -1608,7 +1612,7 @@ slow('a cart is priced at Stripe, paid, refunded and disputed', async () => {
 
   // ---- the same event again. At-least-once delivery is the normal case,
   // and the order's eid is derived from the session — so this addresses the
-  // row already there, derives the same columns, and leaves one order.
+  // row already there, derives the same properties, and leaves one order.
   await hook(k.env, 'checkout.session.completed', {
     ...made,
     status: 'complete',

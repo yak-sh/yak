@@ -343,7 +343,7 @@ Deno.test('the short type map, as the document it means', () => {
     JSON.parse(documented('{"t": {}, "tools": false}')!).tools,
     false,
   )
-  // A document whose column says no type says the text it was stored as.
+  // A document whose property says no type says the text it was stored as.
   assertEquals(
     JSON.parse(
       documented(

@@ -8,7 +8,7 @@ import { type Sheet, sheet } from './csv.ts'
 
 let city: Sheet = {
   as: 'city',
-  cols: { name: 'text', country: 'text', pop: 'number', capital: 'bool' },
+  props: { name: 'text', country: 'text', pop: 'number', capital: 'bool' },
 }
 
 let bundles = (text: string, spec: Sheet = city) =>
@@ -17,7 +17,7 @@ let bundles = (text: string, spec: Sheet = city) =>
 let no = (text: string, spec: Sheet = city) =>
   assertThrows(() => bundles(text, spec), Error).message
 
-Deno.test('a header is the same-named column, coerced to its type', () => {
+Deno.test('a header is the same-named property, coerced to its type', () => {
   assertEquals(
     bundles('name,pop,capital\nOslo,709037,true\n'),
     [{
@@ -43,7 +43,7 @@ Deno.test('a bool is written either way round', () => {
   for (let nope of ['false', 'No', '0']) assertEquals(said(nope), false, nope)
 })
 
-Deno.test('map renames a header that does not match a column', () => {
+Deno.test('map renames a header that does not match a property', () => {
   assertEquals(
     bundles('City,How many\nOslo,709037\n', {
       ...city,
@@ -62,9 +62,9 @@ Deno.test('title and body land in doc, and the component wins the name', () => {
     city: { name: 'Oslo' },
     doc: { title: 'Oslo', body: 'the capital' },
   })
-  // An app that declared `city.title` means that column, not the doc's.
+  // An app that declared `city.title` means that property, not the doc's.
   assertEquals(
-    bundles('title\nOslo\n', { as: 'city', cols: { title: 'text' } })[0],
+    bundles('title\nOslo\n', { as: 'city', props: { title: 'text' } })[0],
     { entity: { eid: '$data/cities.csv:0' }, city: { title: 'Oslo' } },
   )
 })
@@ -127,7 +127,7 @@ Deno.test('a header naming nothing is refused, naming the header', () => {
   // A mapped one names both spellings, since neither is what the file says.
   assertStringIncludes(
     no('Mayor\nAnne\n', { ...city, map: { Mayor: 'mayor' } }),
-    '"Mayor" maps to "mayor", which is not a column of city',
+    '"Mayor" maps to "mayor", which is not a property of city',
   )
   assertStringIncludes(no('name,\nOslo,x\n'), 'column 2 has no header')
 })

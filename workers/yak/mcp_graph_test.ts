@@ -36,7 +36,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
       who: ReturnType<typeof connector>,
       slug: string,
       comp: string,
-      cols: Record<string, unknown>,
+      props: Record<string, unknown>,
       access?: string,
     ) => {
       await who.tool('app_new', {
@@ -48,7 +48,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
         app: slug,
         files: [{
           path: 'vocab.json',
-          content: vocabFile({ [comp]: cols }),
+          content: vocabFile({ [comp]: props }),
         }],
       })
       await who.tool('app_deploy', { app: slug })
@@ -198,7 +198,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
       4,
     )
     // What a search reads is what the vocabulary declares searched — @yaks/doc
-    // says so of its title and body, and a column that declares nothing is
+    // says so of its title and body, and a property that declares nothing is
     // stored, readable, and not found by a bare word. These two apps declare
     // nothing of their own; the one below declares `"search": true` and is
     // found by it.
@@ -264,14 +264,14 @@ slow('a write with no app routes each component to its own app', async () => {
     let made = async (
       slug: string,
       comp: string,
-      cols: Record<string, unknown>,
+      props: Record<string, unknown>,
     ) => {
       await agent.tool('app_new', { slug, title: slug })
       await agent.tool('app_files', {
         app: slug,
         files: [{
           path: 'vocab.json',
-          content: vocabFile({ [comp]: cols }),
+          content: vocabFile({ [comp]: props }),
         }],
       })
       await agent.tool('app_deploy', { app: slug })
@@ -573,7 +573,7 @@ slow('the free tier: a warning once, then the refusals', async () => {
 
 // One word, one home (T-32728): a second app in the space naming a word the
 // space already has uses it there — nothing is planted twice, the writes land
-// in the home store, a new column grows the home's table, and a shape
+// in the home store, a new property grows the home's table, and a shape
 // conflict is the only refusal.
 slow('a word the space already has is used where it lives', async () => {
   let k = await kernel()
@@ -653,7 +653,7 @@ slow('a word the space already has is used where it lives', async () => {
       'unknown prop: .loan',
     )
 
-    // A column the lending app adds to the shared word grows the HOME's
+    // A property the lending app adds to the shared word grows the HOME's
     // table, additively — and is then writable from either app.
     let grew = await manifest('lending', {
       book: { title: txt, isbn: txt },
@@ -737,7 +737,7 @@ slow('a word the space already has is used where it lives', async () => {
     })
     await agent.tool('app_deploy', { app: 'lending' })
 
-    // The one refusal: the same column with two types, named with both and
+    // The one refusal: the same property with two types, named with both and
     // with the app the word lives in.
     await agent.tool('app_files', {
       app: 'lending',
@@ -754,7 +754,7 @@ slow('a word the space already has is used where it lives', async () => {
     )).message
     assertStringIncludes(why, 'book.pages is text here and number in')
     assertStringIncludes(why, 'reading-list, where book lives')
-    // Refused whole: the home's column keeps the type its rows were written
+    // Refused whole: the home's property keeps the type its rows were written
     // under, and nothing about it moved.
     assertEquals(
       (await rows(`id=${piranesi}`, 'reading-list'))[0].book!.pages,
@@ -767,9 +767,9 @@ slow('a word the space already has is used where it lives', async () => {
 
 // Which prose is worth finding is the vocabulary's sentence (T-37546):
 // @yaks/doc says `"search": true` of its title and body, and an app says it of
-// its own columns, beside the type, in the one JSON Schema spelling the guide
-// teaches.
-slow('an app declares which of its own columns are searched', async () => {
+// its own properties, beside the type, in the one JSON Schema spelling the
+// guide teaches.
+slow('an app declares which of its own properties are searched', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -822,7 +822,7 @@ slow('an app declares which of its own columns are searched', async () => {
     // Declared searched by nobody, the note is stored, readable, and not found.
     assertEquals(await titles('marzipan'), [])
 
-    // The column says so, and the index is cut from the declaration — the row
+    // The property says so, and the index is cut from the declaration — the row
     // already written is found by the word in it, because a schema that moved
     // rebuilds the index off the rows it mirrors (graph.ts `#build`).
     await manifest(
@@ -834,8 +834,8 @@ slow('an app declares which of its own columns are searched', async () => {
     )
     assertEquals(await titles('marzipan'), ['Lemon cake'])
 
-    // A sibling app borrows the word and brings a searched column of its own.
-    // The column is planted in the home's table, and its keywords travel with
+    // A sibling app borrows the word and brings a searched property of its own.
+    // The property is planted in the home's table, and its keywords travel with
     // it — the deploy writes the home's whole manifest back, so this is also
     // where the home's own `search` would be erased if that manifest went back
     // as types alone.
@@ -859,10 +859,10 @@ slow('an app declares which of its own columns are searched', async () => {
     assertEquals(await titles('tearoom'), ['Lemon cake'])
     assertEquals(await titles('marzipan'), ['Lemon cake'])
 
-    // The word has one HOME, and the door speaks the UNION of what the home
-    // and its borrowers declare (agent.ts `spoken`): the schema an agent reads
-    // names the borrowed column too, where the home's own manifest alone would
-    // have left an app unable to discover a column it deployed itself.
+    // The word has one HOME, and the door speaks the UNION of what the home and
+    // its borrowers declare (agent.ts `spoken`): the schema an agent reads
+    // names the borrowed property too, where the home's own manifest alone
+    // would have left an app unable to discover a property it deployed itself.
     let schema = JSON.parse(await agent.tool('graph_schema', {})) as {
       comps: { name: string; props: string[] }[]
     }
@@ -880,7 +880,7 @@ slow('an app declares which of its own columns are searched', async () => {
 
     // A number holds no words. The deploy refuses the manifest in @yaks/vocab's
     // own sentence rather than planting an index over nothing, and refuses it
-    // whole: the column that was searched still is.
+    // whole: the property that was searched still is.
     await agent.tool('app_files', {
       app: 'kitchen',
       op: 'write',
@@ -995,8 +995,8 @@ slow(
 // says nothing about the read that came before it: two callers who both read
 // 40 gold both write 50, and the second is wrong about the world rather than
 // about the write. `$was` is the graph's `--ff-only` — the SHA-256 of the
-// value as it was read, per column — and the batch is refused whole when that
-// column has moved since.
+// value as it was read, per property — and the batch is refused whole when that
+// property has moved since.
 slow(
   'a $was precondition refuses a batch built on a value that moved',
   async () => {
@@ -1036,7 +1036,7 @@ slow(
         })
       await claim(50, 'day 2')
       // The second reward, built on the same read, is refused by name — and the
-      // sentence says which column moved, so the caller re-reads and merges.
+      // sentence says which property moved, so the caller re-reads and merges.
       await assertRejects(
         () => claim(60, 'day 2'),
         Error,

@@ -399,7 +399,7 @@ export let signedIn = async (k: Kernel, person: string) =>
   )}`
 
 // `num` is optional because a store may not have numbers at all: it is
-// @yaks/id's column, which an app's store does not load and the fleet's does.
+// @yaks/id's property, which an app's store does not load and the fleet's does.
 type Row = { entity: { eid: string; num?: number }; [k: string]: unknown }
 
 // A client on one app's graph API, as one person (or nobody).
@@ -687,9 +687,9 @@ export let rowsIn = <T>(said: string): T[] =>
   ) as T[]
 
 // An app's `vocab.json`, as a probe writes one: the document, without every
-// test spelling `$defs` and `properties` around two columns. A column is its
-// JSON Schema — {@link txt}, {@link num} and {@link when} are the three a probe
-// reaches for.
+// test spelling `$defs` and `properties` around two properties. A property is
+// its JSON Schema — {@link txt}, {@link num} and {@link when} are the three a
+// probe reaches for.
 export let vocabFile = (
   defs: Record<string, Record<string, unknown>>,
 ): string =>

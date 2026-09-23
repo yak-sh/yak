@@ -327,7 +327,7 @@ Deno.test("the meter and the plan are the platform's word, not a person's", asyn
   assertEquals(seen.meter?.month, month)
   assertEquals(seen.meter?.requests, 12)
   assertEquals(seen.tier, 'free')
-  // A person cannot lift their own ceiling: the columns are server-owned, so
+  // A person cannot lift their own ceiling: the properties are server-owned, so
   // the ordinary door drops them rather than writing them.
   await at.apply([{ entity: { eid: s.eid }, plan: { tier: 'plus' } }], as(ada))
   assertEquals((await dir.space('ada'))!.tier, 'free')

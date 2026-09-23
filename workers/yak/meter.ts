@@ -535,7 +535,7 @@ export let counted = async (
  * The seconds ride here rather than in a second call because both figures are
  * derived from one reading of the space: on a month with no row yet each
  * write starts from `empty()`, and the second would put the first one's
- * columns back at zero.
+ * properties back at zero.
  */
 export let countedBuild = async (
   env: { STORE: Namespace },

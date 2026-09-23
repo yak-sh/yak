@@ -1,7 +1,7 @@
 // The sign-in code's decisions, at the seam: signin.ts talks to the meta
 // store as a graph (meta.ts), so a stub Meta holds the rows and records the
 // bundles. What is proved here is what a workerd test cannot reach without
-// waiting ten minutes or forging a server-stamped column: a code dies of old
+// waiting ten minutes or forging a server-stamped property: a code dies of old
 // age, a code dies of too many guesses, a code minted for one address never
 // opens another, and an address gets three letters an hour — a window no test
 // can sit through, and a count nobody buys back by burning a code.

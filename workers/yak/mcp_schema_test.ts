@@ -318,14 +318,14 @@ slow('a kind an app declares is two commands, with no tools.json', async () => {
     assertStringIncludes(find.description, `Find recipes in ${space}/box.`)
     assert(add.writes, 'adding a recipe writes it')
     assert(!find.writes, 'finding them does not')
-    // The kind's own columns are the arguments, and only the title is owed —
+    // The kind's own properties are the arguments, and only the title is owed —
     // the optional ones wear the `?` the listing marks them with.
     assertEquals(add.args, 'title, body?, alias?, serves?, cuisine?')
     // Nothing at all is owed to the find: every argument it takes wears `?`.
     assertEquals(find.args.split(', ').filter((a) => !a.endsWith('?')), [])
 
-    // Adding writes the row: the kind, the title, the columns given — and the
-    // name it answers to afterwards.
+    // Adding writes the row: the kind, the title, the properties given — and
+    // the name it answers to afterwards.
     assertStringIncludes(
       await agent.tool('command', {
         name: 'add_recipe',
@@ -588,8 +588,8 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
         kind?: string
       }
 
-    // The index: every word the caller can reach, its line, its columns — the
-    // app's own word among the platform's.
+    // The index: every word the caller can reach, its line, its properties —
+    // the app's own word among the platform's.
     let index = await said({})
     let names = index.comps.map((c) => c.name)
     assert(names.includes('recipe'), 'the app own word is in the index')
@@ -600,7 +600,7 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
     )
     assert(index.kinds!.includes('recipe'))
 
-    // One word whole: the meaning its vocab.json carries, every column typed
+    // One word whole: the meaning its vocab.json carries, every property typed
     // and described, what points at it, a bundle that writes it, and the page
     // that covers it.
     let [mail] = (await said({ component: 'mail' })).comps
@@ -685,10 +685,10 @@ slow(
         },
       ]
       assert(takes(first.input, sending), JSON.stringify(ajv.errors))
-      // A column nobody declared is NOT refused by the schema (T-34277): a
+      // A property nobody declared is NOT refused by the schema (T-34277): a
       // client holds this copy for the whole conversation while the vocabulary
-      // grows under it, so a closed schema would refuse a column that exists.
-      // The schema describes; the server decides, and says which columns are
+      // grows under it, so a closed schema would refuse a property that exists.
+      // The schema describes; the server decides, and says which properties are
       // declared and where to read them.
       let misspelt = [{
         entity: { eid: '$ana' },

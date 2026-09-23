@@ -249,8 +249,8 @@ slow(
 )
 
 // The spreadsheet half (csv.ts, T-34393): `as` is what a row IS, the headers
-// are its columns, and the id column names each row — which is what makes the
-// second load patch the same two rows rather than mint two more (T-34454).
+// are its properties, and the id column names each row — which is what makes
+// the second load patch the same two rows rather than mint two more (T-34454).
 slow('store_load reads a CSV as rows of one component', async () => {
   let k = await kernel()
   try {
@@ -312,7 +312,7 @@ slow('store_load reads a CSV as rows of one component', async () => {
     assertEquals(again.length, 2)
     assertEquals(again[0].entity.eid, soup.entity.eid)
     // And the name stands where an eid does: `lentil` is that row. With the
-    // backrefs, which is `.refs=` — one term per reference column, over a
+    // backrefs, which is `.refs=` — one term per reference property, over a
     // vocabulary with thirty of them, and workerd's SQLite takes five in a
     // compound (@yaks/sql `ARMS`, T-34489). The name row points back, so it
     // comes with it.
@@ -321,10 +321,10 @@ slow('store_load reads a CSV as rows of one component', async () => {
     ) as { entity: { eid: string } }[]
     assert(shown.some((b) => b.entity.eid == soup.entity.eid))
 
-    // A header the component has no column for names itself, and says the
+    // A header the component has no property for names itself, and says the
     // two ways out.
     let why = (await assertRejects(() => load({ map: {} }), Error)).message
-    assertStringIncludes(why, '"Serves how many" is not a column of recipe')
+    assertStringIncludes(why, '"Serves how many" is not a property of recipe')
     assertStringIncludes(why, 'recipe takes name, serves, vegan')
     // And a word no store says is refused before a byte is read.
     assertStringIncludes(

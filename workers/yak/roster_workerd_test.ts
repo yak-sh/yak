@@ -264,7 +264,7 @@ slow(
         await tool('graph_schema', { component: 'note' }),
         'pages',
       )
-      // Ranked search reads the columns the vocabulary marks searchable, of
+      // Ranked search reads the properties the vocabulary marks searchable, of
       // which a title is always one.
       assertStringIncludes(await tool('search', { words: 'marzipan' }), noted)
 

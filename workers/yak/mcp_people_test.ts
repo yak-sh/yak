@@ -384,7 +384,7 @@ slow('a project document is an entity, and search finds it', async () => {
       app: 'idler-rpg',
       files: [{
         path: 'vocab.json',
-        // A component of its own, with no columns at all: what tells the
+        // A component of its own, with no properties at all: what tells the
         // documents from the app's data, which wears `doc` too.
         content: vocabFile({ note: {}, hero: { level: num } }),
       }],
@@ -446,9 +446,9 @@ slow('a project document is an entity, and search finds it', async () => {
 
 // The five things four separate builders each had to guess at (T-33145), each
 // held here as well as written in the guide, so a guide sentence that stops
-// being true fails rather than misleads: what a `time` column takes, filtering
-// a column that holds an eid, what an unwritten column reads back as, and
-// `task.status` before either mark.
+// being true fails rather than misleads: what a `time` property takes,
+// filtering a property that holds an eid, what an unwritten property reads back
+// as, and `task.status` before either mark.
 slow('the answers four builders had to guess at', async () => {
   let k = await kernel()
   try {
@@ -484,7 +484,7 @@ slow('the answers four builders had to guess at', async () => {
         task?: { status: string; priority: number }
       }[]
 
-    // A `time` column takes an ISO 8601 string with a zone, and gives it back
+    // A `time` property takes an ISO 8601 string with a zone, and gives it back
     // byte for byte. Noon UTC for a plain date is the trap: midnight renders
     // as the day before for anyone west of Greenwich.
     let written = await agent.tool('graph_apply', {
@@ -506,16 +506,16 @@ slow('the answers four builders had to guess at', async () => {
     assertEquals((await rows('.dayline.written>=2026-04-01')).length, 1)
     assertEquals((await rows('.dayline.written>=2026-05-01')).length, 0)
 
-    // A column nobody wrote is present and null, not absent, so `in` is the
+    // A property nobody wrote is present and null, not absent, so `in` is the
     // wrong test for "was this written" and the value is the right one.
     assertEquals(
       [one.dayline!.mood, one.dayline!.pages, one.dayline!.aloud],
       [null, null, null],
     )
-    assert('mood' in one.dayline!, 'an unwritten column is present, and null')
+    assert('mood' in one.dayline!, 'an unwritten property is present, and null')
     assertEquals(one.doc, undefined) // not named by the filter
-    // And the platform's own columns are no exception: a doc nobody titled
-    // answers null, the same as any column nobody wrote.
+    // And the platform's own properties are no exception: a doc nobody titled
+    // answers null, the same as any property nobody wrote.
     await agent.tool('graph_apply', {
       app: 'diary',
       entities: [{
@@ -528,7 +528,7 @@ slow('the answers four builders had to guess at', async () => {
     assertEquals(untitled.doc!.title, null)
     assertEquals(untitled.dayline!.written, null)
 
-    // A column that holds an eid is filtered by the eid, like any value —
+    // A property that holds an eid is filtered by the eid, like any value —
     // `id=` addresses the row itself, which is a different question.
     await agent.tool('graph_apply', {
       app: 'diary',

@@ -256,7 +256,7 @@ let scope = (line: string) => {
 
 // The identity operand list, wherever it appears on a line: `.eid=a,b` — which
 // is what the page's `id=` becomes (wire.ts `lined`) — names a set rather than
-// comparing a column, so its operands are ids and a word among them may be a
+// comparing a property, so its operands are ids and a word among them may be a
 // name (T-34390, @yaks/alias). `.eid!=` and the rest are untouched: this is the
 // one operator whose right-hand side is an identity.
 let IDS = /(^|&)(\.(?:entity\.)?eid=)([^&]*)/g
@@ -321,13 +321,13 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
 
 // Every reachable app's `vocab.json`, merged over the core documents. First
 // declaration wins, which is where a word lives (T-32728), so the schema an
-// agent is handed says each column the way the store that owns it does.
+// agent is handed says each property the way the store that owns it does.
 //
-// It also says which columns the reach cannot agree on: two spaces may spell
+// It also says which properties the reach cannot agree on: two spaces may spell
 // one word differently (mcp_test.ts "a word two spaces spell differently
 // stays two words"), and the merged vocabulary keeps one of the two. A schema
 // derived from it would then refuse a write the other store takes, so those
-// columns are named here and typed nowhere (`reading` below).
+// properties are named here and typed nowhere (`reading` below).
 //
 // The directory is the other side of that same disagreement, and it is not an
 // app: it answers no `/vocab`, and the words it holds are the platform's own
@@ -365,41 +365,41 @@ let spoken = async (
       }
       // Two apps in two spaces may each home one word, and then one name
       // means two things (reach.ts `apartIn`). The first declarer is the word
-      // here — the same rule the space's own union loads by — and a column
+      // here — the same rule the space's own union loads by — and a property
       // they spell differently is typed nowhere (`reading` below).
       //
       // Inside one space there is nothing to merge: a word has one home, and
-      // a column a borrower declared was planted on the home's manifest by
+      // a property a borrower declared was planted on the home's manifest by
       // the deploy that brought it (tools.ts `released`), so the home's
-      // document already says every column the word has.
-      for (let [col, s] of Object.entries(schema.properties ?? {})) {
-        let had = mine.properties?.[col]
-        if (had && wordOf(had) != wordOf(s)) clashes.add(`${name}.${col}`)
+      // document already says every property the word has.
+      for (let [prop, s] of Object.entries(schema.properties ?? {})) {
+        let had = mine.properties?.[prop]
+        if (had && wordOf(had) != wordOf(s)) clashes.add(`${name}.${prop}`)
       }
     }
   }
   let meta = ctx.person && await ctx.dir.space(META.space)
   if (meta && await ctx.dir.role(meta, ctx.person)) {
-    for (let col of PLATFORM_APART) clashes.add(col)
+    for (let prop of PLATFORM_APART) clashes.add(prop)
   }
   return { vocab: appVocab({ $defs: defs }), clashes }
 }
 
 /**
- * How this door's columns read and write, where that is not what the
+ * How this door's properties read and write, where that is not what the
  * vocabulary declares (@yaks/mcp `BundleOpts.prop`):
  *
  * - a reference reads back as the eid or as `{eid, name}`, because outputs
  *   speak human (graph.ts `#speak`); a write takes the id;
- * - a column two reachable apps spell differently is typed nowhere, since the
+ * - a property two reachable apps spell differently is typed nowhere, since the
  *   store that owns the word is the one that decides.
  */
 export let reading =
   (clashes: Set<string>) =>
-  (col: Prop, o: { write?: boolean }): z.ZodTypeAny | undefined =>
-    clashes.has(`${col.comp}.${col.prop}`)
+  (p: Prop, o: { write?: boolean }): z.ZodTypeAny | undefined =>
+    clashes.has(`${p.comp}.${p.prop}`)
       ? z.unknown()
-      : col.category == 'ref' && !o.write
+      : p.category == 'ref' && !o.write
       ? z.union([z.string(), z.object({ eid: z.string() }).passthrough()])
       : undefined
 
@@ -470,7 +470,7 @@ export let searching =
 /**
  * The caller's reach as one graph: every app they can read, asked together and
  * answered as one bundle per entity, with the platform's tools on it — and
- * beside it how a column of this graph reads and writes ({@link reading}),
+ * beside it how a property of this graph reads and writes ({@link reading}),
  * which the schema an agent is handed is derived through.
  *
  * A write routes each component to the app that declares it (reach.ts

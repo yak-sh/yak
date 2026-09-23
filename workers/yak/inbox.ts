@@ -29,7 +29,7 @@
 //
 //   The sender is data, never an actor. The batch is applied at the kernel's
 //   door (meta.ts `KERNEL`) with no person on it, so nothing an arrival says
-//   can put words in a member's mouth. Who wrote it is `mail.from`, a column,
+//   can put words in a member's mouth. Who wrote it is `mail.from`, a property,
 //   and the reader decides what that is worth — helped by `mail.verified`,
 //   which is the receiving MTA's DKIM verdict. An unsigned letter is recorded
 //   with `verified: false`, never dropped.
@@ -123,7 +123,7 @@ export let plain = (html: string) =>
 export let words = (mail: Email) =>
   mail.text?.trim() || (mail.html ? plain(mail.html) : '')
 
-// A time column takes a date-time, and a `Date:` header is RFC 5322 ("Tue, 27
+// A time property takes a date-time, and a `Date:` header is RFC 5322 ("Tue, 27
 // Aug 2024 08:49:44 -0700"). The parser's reading is used where it parses and
 // the clock stands in where it does not, so `mail.at` is always a moment.
 let when = (said: string | undefined) => {
@@ -197,7 +197,7 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
     text: words(mail),
     at: when(mail.date),
     // The MTA's verdict, recorded either way. No header at all — nobody
-    // checked — leaves the column unwritten rather than claiming a `false`
+    // checked — leaves the property unwritten rather than claiming a `false`
     // nobody said.
     ...(signed == null ? {} : { verified: signed }),
   })

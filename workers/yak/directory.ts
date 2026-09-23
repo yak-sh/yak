@@ -66,7 +66,7 @@ export type Meter = {
   builds: number
   tokens: number
   // The seconds the builder's workbench spent awake (sandbox.ts, T-34264).
-  // Its own column beside `tokens` because a token and a container-second are
+  // Its own property beside `tokens` because a token and a container-second are
   // priced differently, and one number made of both is a number nobody can
   // add up.
   seconds: number
@@ -94,8 +94,8 @@ export let tierOf = (slug: string, tier: Tier | null): Tier | null =>
 
 // What a space pays and what Stripe knows about it (platform.rs `Plan`,
 // billing.ts derives and writes it). The whole row, because the webhook reads
-// every column of it to decide whether an event is news: `at` is the moment of
-// the Stripe event that last wrote this, `status` is Stripe's own word, and
+// every property of it to decide whether an event is news: `at` is the moment
+// of the Stripe event that last wrote this, `status` is Stripe's own word, and
 // `ending` is set only when the subscription will not renew.
 export type Plan = {
   tier: Tier
@@ -108,7 +108,7 @@ export type Plan = {
 }
 
 /** A space's connected Stripe account, as the directory holds it (sell.ts).
- * Three columns and no more: the merchant's own books are Stripe's, and the
+ * Three properties and no more: the merchant's own books are Stripe's, and the
  * platform keeps only the id every call names them by and the two words that
  * say whether they are ready — `details_submitted` is "they finished the
  * form", `charges_enabled` is "Stripe will take money for them", and the
@@ -126,7 +126,7 @@ export type Space = {
   // What this space pays (D-32751). Null for a space the sweep has not
   // reached yet, which means free — the terms every space is on today.
   tier: Tier | null
-  // The same row whole, for the one caller that needs every column of it
+  // The same row whole, for the one caller that needs every property of it
   // (billing.ts). Null where no `plan` row has ever been written.
   plan: Plan | null
   // What this space sells through (sell.ts, T-34524): the connected Stripe
@@ -182,7 +182,7 @@ export type App = {
   // that true.
   home: boolean
   // The paths its worker answers before the app whose slug owns them, the
-  // columns of that same word (D-34197, router.ts). Empty for every app that
+  // properties of that same word (D-34197, router.ts). Empty for every app that
   // never opted in, which is almost all of them.
   first: string[]
   // What this app's own store spent this month, as the hourly sweep last read
@@ -263,7 +263,7 @@ export type Host = {
   at: string
 }
 
-// A reference column, as a read hands it back: the bare eid, or `{eid, name}`
+// A reference property, as a read hands it back: the bare eid, or `{eid, name}`
 // where the store could name what it points at (listing.ts `named`, T-32733).
 // What the directory wants either way is the id — the same lowering client.ts
 // `where` does on the write side.
@@ -337,7 +337,7 @@ type Row = {
   notified?: unknown
 }
 
-// The meter as a whole number, however little of the row is written: a column
+// The meter as a whole number, however little of the row is written: a property
 // nobody has filled reads zero, so nothing downstream tests for null twice.
 let meterOf = (r: Row): Meter | null =>
   r.meter
@@ -580,7 +580,7 @@ let ABOUT =
 let SPACE_ABOUT =
   '.doc?&.plan?&.meter?&.notified?&.trashed?&.stripe?&.fee?&.former?'
 
-// The plan as a whole row, however little of it is written: a column nobody
+// The plan as a whole row, however little of it is written: a property nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests
 // for null twice.
 let planOf = (r: Row): Plan | null =>
@@ -719,7 +719,7 @@ export let restoreOf = (r: Row) => ({
 // at birth (`handle` below) and read back here — never derived from a slug.
 // The fallback is the answer for an app the backfill has not reached
 // (migrate.ts `handled`), which is what the app was already named before the
-// column existed; it fires for nobody after the directory's first request of
+// property existed; it fires for nobody after the directory's first request of
 // the deploy.
 export let storeName = (space: Space, app: App) =>
   app.store ?? `${space.slug}/${app.slug}`
@@ -789,13 +789,14 @@ export let url = (space: Space, app: App, env: HostEnv = {}) =>
  * with two front pages or none it did not ask for.
  *
  * This is where "at most one home app per space" lives. The vocabulary would
- * say it if it could — `unique` is over one component's own columns, and `home`
- * has no space of its own to pair with (vocab.ts) — so the rule is the
+ * say it if it could — `unique` is over one component's own properties, and
+ * `home` has no space of its own to pair with (vocab.ts) — so the rule is the
  * directory's, and it is one function rather than a paragraph in each caller.
  *
  * `was` is the app wearing `home` now (`dir.home`), `onto` the one that should
  * wear it, or null to leave the space with no front page. `first` rides along
- * when the same call also set the globs, since they are columns of this word.
+ * when the same call also set the globs, since they are properties of this
+ * word.
  */
 export let homing = (
   was: App | null,
@@ -803,7 +804,7 @@ export let homing = (
   first?: string[] | null,
 ): EntityLiteral[] => [
   // `home: null` drops the whole component, globs and all: an app that is not
-  // the front page routes nothing first, so there is no column left to keep.
+  // the front page routes nothing first, so there is no property left to keep.
   ...(was && was.eid != onto?.eid
     ? [{ entity: { eid: was.eid }, home: null }]
     : []),
@@ -811,7 +812,8 @@ export let homing = (
     ? [{
       entity: { eid: onto.eid },
       home: first == null
-        // A patch with no columns: an app already home keeps the globs it had.
+        // A patch with no properties: an app already home keeps the globs it
+        // had.
         ? {}
         : { first: first.length ? JSON.stringify(first) : null },
     }]
@@ -819,14 +821,14 @@ export let homing = (
 ]
 
 /**
- * An address history as the two columns that hold it: the head in `slug`, the
- * rest in `slugs`, oldest first — `former` written the way types.ts `slugsOf`
- * reads it. An app wears one and so does a space (T-34658).
+ * An address history as the two properties that hold it: the head in `slug`,
+ * the rest in `slugs`, oldest first — `former` written the way types.ts
+ * `slugsOf` reads it. An app wears one and so does a space (T-34658).
  *
- * The whole record every time rather than a patch of one column, because a
+ * The whole record every time rather than a patch of one property, because a
  * single call may both leave an address and forget another (T-34659), and two
  * patches of one history disagree about what the history is. A history that has
- * emptied clears both columns, which is a row that redirects from nowhere.
+ * emptied clears both properties, which is a row that redirects from nowhere.
  */
 export let addresses = (had: string[]) => ({
   slug: had[0] ?? null,
@@ -1045,7 +1047,7 @@ export let directory = (via: Fetcher, now = false) => {
     member: async (space: Space, person: string) => {
       // Nobody is a member of nothing. An empty person is a caller who has not
       // signed in (anon.ts), and it must never be asked: `.member.person=`
-      // reads as that column being absent, which is a question that could
+      // reads as that property being absent, which is a question that could
       // answer yes and hand a stranger a seat.
       if (!person) return null
       let row = await one(
@@ -1058,7 +1060,7 @@ export let directory = (via: Fetcher, now = false) => {
     // What one person holds on one app, by a grant rather than a seat
     // (T-37615): a guest invited to this app and nothing else in the space.
     // The same guard as `member` — an empty person is a caller who has not
-    // signed in, and `.grant.person=` would read as that column being absent
+    // signed in, and `.grant.person=` would read as that property being absent
     // and hand a stranger somebody's grant.
     grant: async (app: App, person: string) => {
       if (!person) return null

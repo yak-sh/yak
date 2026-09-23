@@ -177,7 +177,7 @@ Deno.test('the seller row is the account object, flags and all', () => {
   })
 })
 
-Deno.test('a redelivered account.updated moves no column at all', () => {
+Deno.test('a redelivered account.updated moves no property at all', () => {
   let now = held(space({
     stripe: { account: 'acct_1', chargesEnabled: true, detailsSubmitted: true },
   }))
@@ -187,11 +187,11 @@ Deno.test('a redelivered account.updated moves no column at all', () => {
     details_submitted: true,
   })
   assertEquals(moved(now, next), {})
-  // And the one that did change is the only column written.
+  // And the one that did change is the only property written.
   assertEquals(moved(now, { ...next, charges_enabled: false }), {
     charges_enabled: false,
   })
-  // Nothing held yet: every column is new.
+  // Nothing held yet: every property is new.
   assertEquals(moved(held(space()), next), next)
 })
 
@@ -426,7 +426,7 @@ Deno.test('an order is charged the rate its session carried', () => {
     ).fee_cents
   assertEquals(paid({ fee: '250' }), 250)
   assertEquals(paid({ fee: '0' }), 0)
-  // A session made before the rate was a column carries none, and those sales
+  // A session made before the rate was a property carries none, and those sales
   // were charged nothing.
   assertEquals(paid({}), 0)
   // Junk in the metadata takes nothing, rather than NaN cents.
@@ -504,7 +504,7 @@ Deno.test('the order row is what one completed session says', () => {
 
 // A redelivery derives the identical row, so `moved` finds nothing and the
 // store is never written to at all.
-Deno.test('the same completed session twice moves no column', () => {
+Deno.test('the same completed session twice moves no property', () => {
   let one = orderOf(sess, 'acct_seller')
   assertEquals(moved(one, orderOf(sess, 'acct_seller')), {})
   assertEquals(moved(one, { ...one, status: 'refunded' }), {

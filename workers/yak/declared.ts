@@ -115,8 +115,8 @@ export let toolsIn = (ctx: Ctx, space: Space, app: App) =>
 /**
  * The vocabulary an app's store declares (`/vocab`), once per app per request:
  * the roster reads it for what an app holds (standing.ts) and the graph door
- * reads it for the columns it may write (agent.ts `spoken`), and both are the
- * same moment. Null where the store answers nothing.
+ * reads it for the properties it may write (agent.ts `spoken`), and both are
+ * the same moment. Null where the store answers nothing.
  */
 export let vocabIn = (ctx: Ctx, space: Space, app: App) =>
   once(ctx, `vocab:${storeName(space, app)}`, async () => {
