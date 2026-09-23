@@ -44,7 +44,7 @@ Deno.test('a patch mints identity once and reports the number', () => {
   )
 })
 
-Deno.test('a patch touches only the columns it names', () => {
+Deno.test('a patch touches only the properties it names', () => {
   let s = store()
   write(s, [{ entity: { eid: 'p1' }, product: { price: 12, status: 'live' } }])
   write(s, [{ entity: { eid: 'p1' }, product: { price: 15 } }])
@@ -53,7 +53,7 @@ Deno.test('a patch touches only the columns it names', () => {
   assertEquals(c(p, 'product').status, 'live') // untouched
 })
 
-Deno.test('a null column clears it, its siblings untouched', () => {
+Deno.test('a null property clears it, its siblings untouched', () => {
   let s = store()
   write(s, [{ entity: { eid: 'p1' }, product: { price: 12, status: 'live' } }])
   write(s, [{ entity: { eid: 'p1' }, product: { status: null } }])

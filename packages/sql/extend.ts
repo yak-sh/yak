@@ -49,7 +49,7 @@ import type { Dialect } from './sqlite.ts'
 // statement (asking for a table to be joined).
 export type Site = {
   // the vocabulary being compiled against, for routing a path or reading a
-  // column
+  // property
   vocab: Vocab
   // the dialect, for its table names, value lowerings and join keys
   dialect: Dialect
@@ -66,13 +66,13 @@ export type Site = {
 // compiles the clause itself, or refuses it by throwing `Unsupported`.
 export type Compile = (clause: Clause, site: Site) => Cond | null
 
-// How an `.order=` value that names no column becomes an ORDER BY expression.
-// `.order=` normally routes to a column, but an extension that ranks — a search
-// by relevance, a vector search by similarity — sorts by something the
-// vocabulary has no column for. It is given the order value with any leading
+// How an `.order=` value that names no property becomes an ORDER BY expression.
+// `.order=` normally routes to a property, but an extension that ranks — a
+// search by relevance, a vector search by similarity — sorts by something the
+// vocabulary has no property for. It is given the order value with any leading
 // `-` already stripped (the binder appends `desc` itself) and returns the order
-// by expression, or `null` to decline so that the binder routes to a column as
-// usual.
+// by expression, or `null` to decline so that the binder routes to a property
+// as usual.
 //
 // The expression carries no bound parameters, because the ORDER BY in this
 // representation holds none — an extension that ranks by data has to lower it

@@ -2,8 +2,8 @@
 // is the PATCH half of the adapter — the mirror image of the reads in
 // ./read.ts — and it honors the rules a graph patch honors everywhere:
 //
-//   omitted columns are untouched       a patch names only what changes
-//   a column set to null is cleared     null is a value, not an absence
+//   omitted properties are untouched    a patch names only what changes
+//   a property set to null is cleared   null is a value, not an absence
 //   a component set to null is dropped  the row goes, the entity stays
 //   a tombstoned entity takes no patch  deletion is final; ids never recycle
 //
@@ -66,12 +66,12 @@ let run = (driver: Driver, s: Sql): void => effect(driver, s.sql, s.params)
 let scalar = (value: unknown): Param =>
   typeof value == 'boolean' ? Number(value) : value as Param
 
-// Whether a column is a reference — asked of the vocabulary, which knows a
-// column's category.
+// Whether a property is a reference — asked of the vocabulary, which knows a
+// property's category.
 let isRef = (v: Vocab, comp: string, prop: string): boolean =>
   v.prop(comp, prop)?.category == 'ref'
 
-// One column's value as the SQL that writes it and the parameter it binds: a
+// One property's value as the SQL that writes it and the parameter it binds: a
 // reference names its target's eid and the statement looks up the id, a JSON
 // value goes in through `jsonb()` (./jsonb.ts), and a scalar is bound as it is.
 let slot = (
@@ -160,10 +160,10 @@ export let minted = (rows: Row[]): Entity | undefined =>
 
 /**
  * The statement that patches one component onto one entity: insert the sent
- * columns, or update just them on conflict, so an omitted column keeps what it
- * held. A reference column binds its target's eid and resolves to that target's
- * id in the statement. A component whose patch names no stored column is a tag
- * — its row's existence is the whole fact.
+ * columns, or update just them on conflict, so an omitted property keeps what
+ * it held. A reference property binds its target's eid and resolves to that
+ * target's id in the statement. A component whose patch names no stored
+ * property is a tag — its row's existence is the whole fact.
  *
  * An INSERT…select is what makes the owner a subquery: no owner row, no
  * inserted row. Its WHERE is also what lets SQLite parse the upsert clause.
@@ -299,8 +299,8 @@ export let removeSql = (v: Vocab, entity: Entity, at: string): Sql[] => [
 ]
 
 /** Every eid these bundles touch or point at, in first-touch order — each
- * bundle's own entity, then the targets of its reference columns. This is the
- * order identity is minted in, so it is the order `num` follows. */
+ * bundle's own entity, then the targets of its reference properties. This is
+ * the order identity is minted in, so it is the order `num` follows. */
 export let touched = (v: Vocab, bundles: Bundle[]): string[] =>
   bundles.flatMap((b) => [
     b.entity.eid,

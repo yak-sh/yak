@@ -1,4 +1,4 @@
-// The death cascade, compiled. A reference column declares in the vocabulary
+// The death cascade, compiled. A reference property declares in the vocabulary
 // what happens to it when the entity it points at is deleted — `cascade`
 // deletes the row's owner too, `detach` sets the column to NULL, `release`
 // deletes the row — and @yaks/graph decides all of it. What it needs from a
@@ -7,7 +7,7 @@
 // rows have to drop a reference?
 //
 // Walked, that question is one read per rung of the chain, and another per soft
-// reference column. Against a database across a network each of those is a
+// reference property. Against a database across a network each of those is a
 // round trip, so here it is a statement instead: a `with recursive` over the
 // cascade columns, seeded with the entities named as deleted, that follows
 // every reference backwards at once — a chain of any length in one query.
@@ -23,7 +23,7 @@
 // Two rounds answer the ordinary cascade, however deep it runs.
 //
 // The depth count stops climbing where the walk would otherwise loop. A cycle
-// among cascade columns (an entity that exists to describe an entity that
+// among cascade properties (an entity that exists to describe an entity that
 // exists to describe it) would increase the depth forever and never repeat a
 // row, so the rung number saturates at {@link DEEP}: past that, a row already
 // reached at that depth is a row the recursion has seen, and `union` drops it.
@@ -122,9 +122,9 @@ export let doomSql = (
 
 /**
  * Every soft reference into the closure of these entities: a surviving row's
- * `detach` or `release` column pointing at one of the deleted entities,
- * returned as (component, column, owner). Empty when the vocabulary declares no
- * soft reference at all.
+ * `detach` or `release` property pointing at one of the deleted entities,
+ * returned as (component, property, owner). Empty when the vocabulary declares
+ * no soft reference at all.
  *
  * The closure is restated inside the statement when the vocabulary is
  * {@link narrow} — which is what lets this be sent in the same batch as

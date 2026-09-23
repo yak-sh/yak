@@ -10,7 +10,7 @@
 // The only difference between the two kinds of walk is the step: the relation
 // of `"from"`/`"to"` integer id pairs that one hop follows. For an edge-typed
 // walk the step is the edge table narrowed to one edge type, which @yaks/edge
-// supplies as an extension; for a column walk it is a component's reference
+// supplies as an extension; for a reference walk it is a component's reference
 // column beside its owner column, which bind.ts supplies. Both end up here, so
 // the CTE is written once.
 //

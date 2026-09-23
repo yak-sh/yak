@@ -18,7 +18,7 @@
 // already made for the same component.
 //
 // A variable is a slot. `$call` alone is the pattern's entity (its integer
-// spine id); `$call` as a value is that column. Two slots sharing a name are
+// spine id); `$call` as a value is that property. Two slots sharing a name are
 // equated, which is the join, and an id compares to an id — a reference column
 // stores the target's integer id, so joining a reference to an entity is an
 // integer compare, never an eid round trip. Mixing an id slot with a value
@@ -240,11 +240,11 @@ export let statement = (
       let hops = vocab.aim(b.path.join('.'))
       let hop = hops[hops.length - 1]
       if (!hop?.prop) {
-        throw new Error(`$${b.name} names no column: .${b.path.join('.')}`)
+        throw new Error(`$${b.name} names no property: .${b.path.join('.')}`)
       }
       let c = vocab.prop(hop.comp, hop.prop)
       if (!c) {
-        throw new Error(`no column ${hop.comp}.${hop.prop} for $${b.name}`)
+        throw new Error(`no property ${hop.comp}.${hop.prop} for $${b.name}`)
       }
       let read = d.col(hop.comp, hop.prop, vocab)!
       slot(b.name, {

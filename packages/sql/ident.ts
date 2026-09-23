@@ -20,11 +20,11 @@ export type Identity = { eids: string[]; nums: number[] }
 
 /**
  * The entities an operand list names, or `undefined` when the value is not an
- * operand list. `column` is the entity-table column the query used: `eid`
+ * operand list. `prop` is the `entity` property the query used: `eid`
  * accepts either form, `num` accepts only numbers.
  */
 export let identity = (
-  column: string,
+  prop: string,
   value: string,
 ): Identity | undefined => {
   if (!value || value.includes('..')) return undefined
@@ -32,7 +32,7 @@ export let identity = (
   for (let operand of value.split(',')) {
     let id = parse(operand)
     if (id) out.nums.push(id.num)
-    else if (column == 'num') return undefined
+    else if (prop == 'num') return undefined
     else out.eids.push(operand)
   }
   return out

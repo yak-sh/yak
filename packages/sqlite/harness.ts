@@ -46,14 +46,14 @@ let doc: VocabDoc = {
       },
     },
     // Something for sale: a price, a state, and the maker who made it. Deleting
-    // a maker detaches the product (the column is nulled), never deletes it.
+    // a maker detaches the product (the property is nulled), never deletes it.
     product: {
       component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
       properties: {
-        // The stock number, which no two products share — the column's own
+        // The stock number, which no two products share — the property's own
         // `unique`, and what a duplicate insert is refused by.
         sku: { type: 'string', unique: true },
         price: { type: 'number' },
@@ -119,7 +119,7 @@ let doc: VocabDoc = {
 
 export let shop: Vocab = loadVocab(doc)
 
-// A recipe whose columns hold JSON values beside a plain one: an object, an
+// A recipe whose properties hold JSON values beside a plain one: an object, an
 // array, and a union that may be a string — the case a driver parsing JSON
 // itself would get wrong (./jsonb.ts). Every SQLite-shaped adapter's tests
 // write the same {@link RECIPE} through it.

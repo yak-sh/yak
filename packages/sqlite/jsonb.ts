@@ -1,4 +1,4 @@
-// A column holding a JSON value — @yaks/vocab's `jsonb` scalar, declared
+// A property holding a JSON value — @yaks/vocab's `jsonb` scalar, declared
 // `object`, `array` or a union of types — kept as SQLite's binary JSON. This
 // file is the one place that says how such a value crosses the boundary, so
 // every SQLite-shaped adapter (this package, @yaks/d1, a Durable Object's)

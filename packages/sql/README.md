@@ -65,7 +65,7 @@ The package has one import path, `@yaks/sql`. It exports:
   `not`, `TRUE`, and `FALSE` for constructing and rendering relational
   expressions;
 - `sqlite`, `Dialect`, and type/identity helpers for the supplied SQL layout;
-- `Derived`/`DerivedCol` and `Extension`/`Site` for application expressions;
+- `Derived`/`DerivedProp` and `Extension`/`Site` for application expressions;
 - `archetypeSet` and its types for component-presence optimization;
 - `doomSql`, `looseSql`, `narrow`, `DEEP`, and compound-query helpers including
   `ARMS` and `STOCK` for deletion planning;
@@ -104,11 +104,11 @@ Without a resolver or a dialect's `archetype` expression, compilation uses
 joins. `@yaks/sqlite` loads the catalog lazily when its vocabulary includes
 archetypes.
 
-## Computed columns
+## Computed properties
 
-A column declared `computed: true` has no stored value. Supply its SQL
+A property declared `computed: true` has no stored value. Supply its SQL
 expression in a `Derived` map keyed by `component.property`. A derived entry can
-also override how a stored column is read. SQL can then filter the expression
+also override how a stored property is read. SQL can then filter the expression
 without first loading every entity into JavaScript; index use depends on the
 expression and database query plan.
 
@@ -131,7 +131,7 @@ let derived: Derived = {
 extra component joins. `text(stored)` optionally reads an old/new stored value
 without looking up its owner, for example in full-text index triggers.
 
-A qualified derived column returns NULL when its entity lacks that component
+A qualified derived property returns NULL when its entity lacks that component
 unless `worn: false` is set. Use that option for expressions intended to work
 without the component, such as an update time that falls back to creation time.
 
@@ -167,7 +167,7 @@ otherwise unsupported directive such as `near`, `edges`, or `reaches` makes it a
 filter.
 
 An optional `order(value, site)` handles ordering by values that do not name a
-column. It receives the value without its leading `-` and returns an SQL
+property. It receives the value without its leading `-` and returns an SQL
 expression or `null`. Order expressions have no bound parameters, so extensions
 must construct them from trusted SQL expressions or safely represented values.
 Pagination calls this hook again for the cursor entity.
@@ -200,7 +200,7 @@ in-memory sorting and cursor comparison.
 
 ## What it compiles, and what it refuses
 
-Supported constructs include column predicates, any-of lists, ranges, time
+Supported constructs include property predicates, any-of lists, ranges, time
 phrases, booleans, reference paths, reverse associations, `.kind`,
 presence/absence, ordering, `.limit`/`.after`, `.count`/`.distinct`/`.tally`,
 `.fields`, `*` projections, `.refs=`, and `.eid=`/`.num=`. Individual
@@ -269,7 +269,7 @@ scalar hop or an edge relation without its extension throws `Unsupported`.
 
 ## The death cascade
 
-Deletion planning is separate from query filtering. Reference columns declare
+Deletion planning is separate from query filtering. Reference properties declare
 whether deleting their target also deletes the owner, removes its component, or
 clears the reference. The graph decides which changes to apply; these helpers
 compile the database lookups:

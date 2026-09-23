@@ -93,14 +93,14 @@ Deno.test('site.join pulls a component table into the statement', () => {
   assert(sql.includes('"shelf"."entity" is not null'), sql)
 })
 
-Deno.test('an extension spells an order value that names no column', () => {
+Deno.test('an extension spells an order value that names no property', () => {
   let ranks: Extension = {
     name: 'ranks',
     compile: {},
     order: (value, site) =>
       value == 'similar' ? `case ${site.owner} when 7 then 0 else 1 end` : null,
   }
-  // with nothing to claim it, `similar` routes to a column and names none
+  // with nothing to claim it, `similar` routes to a property and names none
   assertThrows(() => compile(parse('.order=similar'), v))
   let { sql } = compile(parse('.order=similar'), v, { extend: [ranks] })
   assert(
@@ -110,15 +110,16 @@ Deno.test('an extension spells an order value that names no column', () => {
     ),
     sql,
   )
-  // a leading '-' still reverses it, and a column value still routes to a column
+  // a leading '-' still reverses it, and a property name still routes to a
+  // property
   let down = compile(parse('.order=-similar'), v, { extend: [ranks] })
   assert(down.sql.includes('else 1 end desc'), down.sql)
-  let col = compile(parse('.order=title'), v, { extend: [ranks] })
+  let byTitle = compile(parse('.order=title'), v, { extend: [ranks] })
   assert(
-    col.sql.endsWith(
+    byTitle.sql.endsWith(
       'order by "doc"."title", "entity"."num" desc, "entity"."id" desc',
     ),
-    col.sql,
+    byTitle.sql,
   )
 })
 

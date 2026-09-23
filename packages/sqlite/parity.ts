@@ -6,16 +6,16 @@
 // embedded SQLite, a remote SQL service — proves itself by running the same
 // script through @yaks/graph's own `apply()` and agreeing with this one on
 // every step: the same bundles returned (new entities with the same numbers,
-// casualties, stamped columns, `$alias` resolutions), the same batches refused
-// with the same error, and the same entities read back afterwards. That
+// casualties, stamped properties, `$alias` resolutions), the same batches
+// refused with the same error, and the same entities read back afterwards. That
 // agreement is what the Storage interface promises: a graph does not care where
 // its bytes are.
 //
 // Adapters differ in one place, smoothed by `plain()`: a database reads back
-// every declared column, `null` for the ones never written, and holds a boolean
-// as 0/1; a map holds what it was given. A null column and an absent one mean
-// the same thing in this model, so both sides are compared with the nulls
-// dropped and booleans as the number a column stores.
+// every declared property, `null` for the ones never written, and holds a
+// boolean as 0/1; a map holds what it was given. A null property and an absent
+// one mean the same thing in this model, so both sides are compared with the
+// nulls dropped and booleans as the number a column stores.
 
 import { assertEquals } from '@std/assert'
 import type { Bundle, Graph, Plugin, Storage } from '@yaks/graph'
@@ -90,12 +90,12 @@ export let script: Step[] = [
     ],
   },
   {
-    name: 'patch a column, leave the rest',
+    name: 'patch a property, leave the rest',
     batch: [{ entity: { eid: 'p1' }, product: { price: 9 } }],
     now: '2026-03-02T00:00:00.000Z',
   },
   {
-    name: 'clear a column',
+    name: 'clear a property',
     batch: [{ entity: { eid: 'p1' }, product: { status: null } }],
   },
   {
@@ -188,8 +188,8 @@ let NAMED = [
   'mark:x1',
 ]
 
-// A bundle as every adapter agrees on it: nulls dropped (an absent column and a
-// cleared one are the same fact) and booleans as the 0/1 a column stores.
+// A bundle as every adapter agrees on it: nulls dropped (an absent property and
+// a cleared one are the same fact) and booleans as the 0/1 a column stores.
 let plain = (b: Bundle): Bundle => {
   let out: Bundle = { entity: b.entity }
   for (let [name, value] of Object.entries(b)) {

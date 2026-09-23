@@ -1,7 +1,7 @@
 // Reads: a query in, whole entities out. The compile half is the sibling
 // packages' — @yaks/query parses the query text, @yaks/vocab describes the
 // vocabulary, @yaks/sql compiles the two into a statement — and the per-
-// component gather is @yaks/sqlite's `compSql`, so a column that the filter
+// component gather is @yaks/sqlite's `compSql`, so a property that the filter
 // resolves one way cannot come back gathered another.
 //
 // What is this package's own is the number of round trips. @yaks/sqlite runs

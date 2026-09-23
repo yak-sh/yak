@@ -41,7 +41,7 @@ Deno.test('a batch reads as rows before it is written', () => {
   let over = overlay(driver, shop, [
     // a fresh entity, with no spine of its own yet
     { entity: { eid: 'p3' }, doc: { title: 'Valis' }, product: { price: 7 } },
-    // a patch: one column moves, the rest of the row stands
+    // a patch: one property moves, the rest of the row stands
     { entity: { eid: 'p1' }, product: { price: 20 } },
     // a component dropped
     { entity: { eid: 'p2' }, product: null },

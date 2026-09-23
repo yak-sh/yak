@@ -27,7 +27,7 @@ Identity is nested in the bundle's `entity` component:
 ```
 
 Reads return bundles. Writes accept patches in the same shape: omitted values
-are unchanged, a null column is cleared, and a null component removes its row.
+are unchanged, a null property is cleared, and a null component removes its row.
 
 ## Usage
 
@@ -104,7 +104,7 @@ await g.apply([{ entity: { eid: 'p1' }, $delete: true }]) // delete entity
 ```
 
 A deleted entity keeps its identity row and gains a tombstone; its id cannot be
-reused. Reference columns declare deletion behavior: `cascade` deletes their
+reused. Reference properties declare deletion behavior: `cascade` deletes their
 owner, `release` removes their component, `detach` clears the reference, and
 `keep` retains it as history. `tx.remove()` removes exactly the entities passed
 to it; the graph determines the full cascade.
@@ -210,7 +210,7 @@ export list.
 - `tombstone`: deletion records excluded from normal queries.
 - One table per stored component, keyed by integer `entity`. References store
   integer target ids; ordinary references have foreign keys, while `keep`
-  references can preserve historical ids. A component without columns is
+  references can preserve historical ids. A component without properties is
   represented by the existence of its row.
 - Indexes from vocabulary `unique`/`index` declarations. SQLite enforces unique
   constraints, including competing inserts.
@@ -218,11 +218,11 @@ export list.
 - `server_meta`: database metadata, separate from graph entities.
 - `entity_sequence` and triggers: the human-number high-water mark.
 
-Required columns become NOT NULL, enums become CHECK constraints, and declared
-defaults fill omitted values. A `{ "now": true }` default uses the current time
-for new writes. Added columns preserve literal defaults and CHECK constraints;
-time defaults do not backdate existing rows. Declared partial unique indexes
-apply only where their `present` columns have values.
+Required properties become NOT NULL, enums become CHECK constraints, and
+declared defaults fill omitted values. A `{ "now": true }` default uses the
+current time for new writes. Added columns preserve literal defaults and CHECK
+constraints; time defaults do not backdate existing rows. Declared partial
+unique indexes apply only where their `present` properties have values.
 
 Full-text indexing is optional: install the schema from `@yaks/fts` and pass its
 search extension in `base.extend`. SQLite storage does not create FTS indexes

@@ -35,7 +35,7 @@ Deno.test('apply lands a batch and stamps it, synchronously', () => {
   )
 })
 
-Deno.test('admission refuses an unknown column through the whole stack', () => {
+Deno.test('admission refuses an unknown property through the whole stack', () => {
   let g = shopGraph()
   assertThrows(
     () => sync(g.apply([{ entity: { eid: 'p1' }, product: { pricee: 1 } }])),

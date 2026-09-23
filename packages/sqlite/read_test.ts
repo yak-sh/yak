@@ -166,7 +166,7 @@ Deno.test('wide sparse gathers cross owner and vocabulary chunks without stale o
   assertEquals(s.tx((tx) => tx.get(ids.slice(0, 2)))[0].facet0, undefined)
 })
 
-Deno.test('numeric gather ownership stays internal; present is an ordinary column', () => {
+Deno.test('numeric gather ownership stays internal; present is an ordinary property', () => {
   let driver = mem()
   let vocab = loadVocab({
     $defs: {
@@ -249,7 +249,7 @@ Deno.test("a driver that declares no compound width is probed within workerd's",
         type: 'object',
         wire: false,
         // Numbered, since the store below mints numbers: a spine that does not
-        // declare the column does not show one (read.ts `numbered`).
+        // declare the property does not show one (read.ts `numbered`).
         properties: { num: { type: 'number', stamped: true } },
       },
       ...Object.fromEntries(

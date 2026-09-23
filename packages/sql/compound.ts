@@ -36,11 +36,11 @@ export let STOCK = 400
  * that has the behaviour being asked about. */
 export type Arm = [comp: string, props: string[]]
 
-/** Reference columns grouped by the table they belong to, so two columns of one
+/** Reference properties grouped by the table they belong to, so two of one
  * component cost one term rather than two. */
-export let arms = (cols: [string, string][]): Arm[] => {
+export let arms = (refs: [string, string][]): Arm[] => {
   let by = new Map<string, string[]>()
-  for (let [comp, prop] of cols) by.set(comp, [...(by.get(comp) ?? []), prop])
+  for (let [comp, prop] of refs) by.set(comp, [...(by.get(comp) ?? []), prop])
   return [...by]
 }
 

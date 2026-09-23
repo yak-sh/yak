@@ -41,7 +41,7 @@ Deno.test('transaction keyed gather shares whole-set projections, observes write
   )
 })
 
-Deno.test('singleton gather probes indexed owners, bounds wide vocab and retains real present columns', () => {
+Deno.test('singleton gather probes indexed owners, bounds wide vocab and retains real present properties', () => {
   let vocab = loadVocab({
     $defs: {
       entity: {

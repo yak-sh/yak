@@ -97,7 +97,7 @@ let stored = (v: Vocab, comp: string): string[] =>
 // SPINE); `archetype` rides with it where the vocabulary knows one.
 let SPINE = ['id', 'eid', 'num', 'archetype']
 
-// What a column stores, the way ./write.ts lowers it: a boolean is 0/1, a
+// What a property stores, the way ./write.ts lowers it: a boolean is 0/1, a
 // reference is its target's integer id, a JSON value is its JSON text (which
 // `json()` reads the way it reads the stored binary form), everything else
 // passes through.
@@ -117,7 +117,7 @@ let lower = (
 }
 
 // Every eid a batch names: the entities it is about, and the entities its
-// reference columns point at. Both need an id, because a rule reads them the
+// reference properties point at. Both need an id, because a rule reads them the
 // same way.
 let named = (v: Vocab, bundles: Bundle[]): Eid[] => {
   let out = new Set<Eid>()
@@ -171,7 +171,7 @@ export let overlay = (
       if (patch == null) {
         dropped.set(comp, (dropped.get(comp) ?? new Set()).add(b.entity.eid))
       } else dropped.get(comp)?.delete(b.entity.eid)
-      // Two patches for one entity in one batch compose, latest column wins.
+      // Two patches for one entity in one batch compose, latest property wins.
       rows.set(
         b.entity.eid,
         patch == null ? null : { ...(held ?? {}), ...patch },

@@ -175,13 +175,13 @@ Deno.test('a template invocation is the template merged with its arguments', () 
     { entity: { eid: 'p2' }, doc: { title: 'Ubik' }, product: { price: 4 } },
   ])
   // An app's command: "shelve this product in this aisle". `$p` names the
-  // entity it is about, `$aisle` supplies a column — both plain variables,
+  // entity it is about, `$aisle` supplies a property — both plain variables,
   // and which is which is decided by where they are written.
   let shelve = '$p .product; +shelf.aisle=$aisle'
   let made = s.tx((tx) =>
     invoked(tx, shop, shelve, { p: 'p1', aisle: 'B' })
   ) as Bundle[]
-  // One firing, about the product the argument named, writing the column the
+  // One firing, about the product the argument named, writing the property the
   // other argument supplied.
   assertEquals(made.length, 1)
   assertEquals(made[0].shelf, { aisle: 'B' })
@@ -218,7 +218,7 @@ Deno.test('an effect on a joining pattern fires over a real store', async () => 
   let g = graph({ storage: s, vocab: shop, plugins: [fx] })
   let seen: string[] = []
   // Every review of a product that is on a shelf: two entities, joined by the
-  // column between them, which no component-and-kind registration can say.
+  // property between them, which no component-and-kind registration can say.
   fx.on('$p .product, .shelf; .review, review.product=$p', (e) => {
     seen.push(`${e.entity.eid} ${e.vars?.p}`)
   })

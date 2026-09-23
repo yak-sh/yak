@@ -1,6 +1,6 @@
-// A column declared `object`, `array` or a union holds a JSON value: written
+// A property declared `object`, `array` or a union holds a JSON value: written
 // as the value, stored as SQLite's binary JSON, read back as the value — never
-// as a string. And a column declared `string` casts what it is sent, so the
+// as a string. And a property declared `string` casts what it is sent, so the
 // row, the answer to the write and every read agree.
 
 import { assertEquals, assertThrows } from '@std/assert'
@@ -38,7 +38,7 @@ Deno.test('an object and an array are written and read back as values', () => {
   })
 })
 
-Deno.test('a string column holds what it was sent as a string', () => {
+Deno.test('a string property holds what it was sent as a string', () => {
   let g = graph({ storage: kitchenStore().s, vocab: kitchen })
   let [out] = g.apply([{
     entity: { eid: 'r1' },
@@ -46,7 +46,7 @@ Deno.test('a string column holds what it was sent as a string', () => {
   }]) as Bundle[]
   assertEquals(recipe(out).title, '5')
   assertEquals(recipe((g.read('.recipe!') as Bundle[])[0]).title, '5')
-  // A JSON column is held to the types it declares.
+  // A JSON property is held to the types it declares.
   assertThrows(
     () => g.apply([{ entity: { eid: 'r1' }, recipe: { tags: { a: 1 } } }]),
     Error,
@@ -54,7 +54,7 @@ Deno.test('a string column holds what it was sent as a string', () => {
   )
 })
 
-Deno.test('a JSON column answers presence, and refuses a filter by name', () => {
+Deno.test('a JSON property answers presence, and refuses a filter by name', () => {
   let { s } = kitchenStore()
   s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   assertEquals((s.read('.recipe.tags!') as Bundle[]).length, 1)

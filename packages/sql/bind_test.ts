@@ -1,7 +1,7 @@
 // Self-contained unit tests: @yaks/sql over a tiny inline vocab, no fleet, no
 // src/. They pin the public contract the integration builds on — the shape of
-// the compiled statement, the derived-column hook, that values are bound never
-// inlined, and that a gap declines loudly.
+// the compiled statement, the derived-property hook, that values are bound
+// never inlined, and that a gap declines loudly.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { absent, and, eq, parse, present, text } from '@yaks/query'
@@ -93,13 +93,13 @@ Deno.test('a contains needle rides as a param', () => {
   assert(params.includes('hi'))
 })
 
-Deno.test('the derived hook supplies a computed column expression', () => {
+Deno.test('the derived hook supplies a computed property expression', () => {
   let { sql, params } = compile(parse('.status=open'), v, { derived: status })
   assert(sql.includes('case when'), sql)
   assertEquals(params, ['open'])
 })
 
-Deno.test('a computed column with no registration declines loudly', () => {
+Deno.test('a computed property with no registration declines loudly', () => {
   assertThrows(
     () => compile(parse('.status=open'), v),
     Unsupported,
@@ -110,8 +110,8 @@ Deno.test('a computed column with no registration declines loudly', () => {
 // `session.status` is computed from the entries a session has, and answers
 // `empty` for an owner with none. Every entity in a graph has none, so
 // `.session.status=empty` selected all of them (T-37730). A qualified path
-// names its component as much as its column, so the read is NULL without it,
-// the way every stored column reads through the left join.
+// names its component as much as its property, so the read is NULL without it,
+// the way every stored property reads through the left join.
 Deno.test('a derived read is NULL where the component is not worn', () => {
   let blind: Derived = {
     'task.status': {
@@ -228,7 +228,7 @@ Deno.test('a reverse child filter screens the child row', () => {
   let { sql, params } = compile(parse('.notes.stars=5'), v)
   assert(sql.includes('"note"."stars" = ?'), sql)
   assertEquals(params, [5])
-  // a child column in another component is left-joined inside the subquery
+  // a child property in another component is left-joined inside the subquery
   let joinSql = compile(parse('.notes.title~=hi'), v).sql
   assert(
     joinSql.includes(
@@ -262,7 +262,7 @@ Deno.test('a rule sigil throws Unsupported rather than compiling', () => {
   }
 })
 
-Deno.test('ordering by an unfiltered column still joins its table', () => {
+Deno.test('ordering by an unfiltered property still joins its table', () => {
   let { sql } = compile(parse('.priority=1&.order=title'), v)
   assert(sql.includes('left join "doc"'), sql)
   // the spine breaks ties — the num where there is one, the row id always —
@@ -285,7 +285,7 @@ Deno.test('a window with no .order is newest-first by spine num', () => {
 })
 
 // A number is opt in (@yaks/id), so the same vocabulary without it: the spine
-// is there, the column is not.
+// is there, the property is not.
 let unnumbered = loadVocab({
   $defs: {
     ...doc.$defs,
@@ -512,7 +512,7 @@ Deno.test('reference equality compares indexed keys, not projected eids', () => 
     let { sql } = compile(parse(query), v)
     assert(sql.includes('__re'), sql)
   }
-  // A derived override is authoritative even if the column is stored, and it
+  // A derived override is authoritative even if the property is stored, and it
   // reads through the guard that says the component is worn.
   let { sql } = compile(parse('.note.about=target'), v, {
     derived: { 'note.about': { tag: 'eid', expr: () => "'override'" } },
@@ -569,11 +569,11 @@ Deno.test('a builder can preserve a terminal component facet across name collisi
   assert(!c.sql.includes('join "loan"'), c.sql)
 })
 
-// A bare prop several reference columns share routes to comp '' — one read
+// A bare prop several reference properties share routes to comp '' — one read
 // concept with no one table behind it. Lowered, its path leaf named the table
 // `""` and SQLite refused the statement; the contract is to decline (S-37088).
 Deno.test('a shared reference equality unions its owners, other shapes decline', () => {
-  // Two components hold a reference column of the same name: the bare word
+  // Two components hold a reference property of the same name: the bare word
   // routes to neither (vocab route(): comp ''), and its equality is one indexed
   // question per owner, spelled the way `.refs=` is.
   let shared = loadVocab({
@@ -613,7 +613,7 @@ Deno.test('a shared reference equality unions its owners, other shapes decline',
   }
 })
 
-Deno.test('a column test says its component is present, so the planner drives from that table', () => {
+Deno.test('a property test says its component is present, so the planner drives from that table', () => {
   // `.board.query~=<id>` scanned the spine through a left join (243 ms on
   // the live graph) where the boards were 22 rows: a value test cannot hold
   // on a row without the component, and saying so lets SQLite start there.
@@ -629,7 +629,7 @@ Deno.test('a column test says its component is present, so the planner drives fr
   }
 })
 
-Deno.test('a path leaf shared by several reference columns declines', () => {
+Deno.test('a path leaf shared by several reference properties declines', () => {
   let vocab = loadVocab({
     $defs: {
       claim: {

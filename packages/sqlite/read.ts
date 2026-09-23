@@ -58,10 +58,10 @@ export let rows = (
   return indexed || opts.archetypes ? unit(driver, ask) : ask()
 }
 
-// The columns a gather reads: the stored ones, plus any computed column the
-// caller registered an expression for. A computed column has no row to read, so
-// without a registration there is nothing to select — but with one it is a
-// column like any other, and leaving it out of the bundle while the filter
+// The properties a gather reads: the stored ones, plus any computed property
+// the caller registered an expression for. A computed property has no row to
+// read, so without a registration there is nothing to select — but with one it
+// is a column like any other, and leaving it out of the bundle while the filter
 // resolves it would make `.task.status=open` select rows whose `status` the
 // result does not carry.
 let read1 = (v: Vocab, comp: string, derived: Derived): Prop[] =>
@@ -71,15 +71,15 @@ let read1 = (v: Vocab, comp: string, derived: Derived): Prop[] =>
 // The projected read for one component: each scalar straight off the row, each
 // reference joined back to its target's eid, each JSON value as its JSON text
 // (./jsonb.ts, parsed by `decoded` once the row is back), keyed by the owner
-// eid. A component with no columns reads a bare presence flag.
+// eid. A component with no properties reads a bare presence flag.
 //
-// A column whose read differs from its storage is read through its registered
+// A property whose read differs from its storage is read through its registered
 // expression instead — the same `derived` registry @yaks/sql consults when it
 // compiles a query (see @yaks/sql/derived.ts). That is what keeps the two
 // readers agreeing: a value the filter resolves one way cannot come back
-// gathered another. It is also where a content-addressed column is resolved —
-// @yaks/blob registers one override per body column, and the gather returns the
-// text rather than the address the row holds.
+// gathered another. It is also where a content-addressed property is
+// resolved — @yaks/blob registers one override per body property, and the
+// gather returns the text rather than the address the row holds.
 //
 // So the component table is aliased by its own name here, exactly as the binder
 // joins it, and an override's `deps` are left-joined the same way: a registered
@@ -134,7 +134,7 @@ let selectComp = (
 /**
  * The SELECT that reads one component of one entity — one `?`, the owner's
  * eid. Exported because gathering a bundle is every SQLite-shaped adapter's
- * job, and they must all read a column the same way: @yaks/d1 sends these
+ * job, and they must all read a property the same way: @yaks/d1 sends these
  * statements as one batch instead of one at a time, and nothing else differs.
  */
 export let compSql = (

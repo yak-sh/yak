@@ -21,8 +21,8 @@
 // `doc` plus a `price`. Each component covers one aspect of an entity; the set
 // of components an entity carries is its identity. A read returns a bundle (an
 // entity with its components gathered); a write takes a batch of bundles and
-// patches them in — omitted columns untouched, a null column cleared, a null
-// component dropped.
+// patches them in — omitted properties untouched, a null property cleared, a
+// null component dropped.
 //
 // It implements @yaks/graph's `Storage`, which is where the responsibilities
 // divide: this package owns the bytes (schema, rows, identity, transactions)
@@ -152,7 +152,7 @@ export type Tx = {
  * holding a `Store` directly never has to await a row.
  */
 // A read here takes the compiler's whole options, not just @yaks/graph's
-// `ReadOpts`: a caller of this package may pass a query a derived-column
+// `ReadOpts`: a caller of this package may pass a query a derived-property
 // registry or an @yaks/sql extension — the extension point @yaks/fts and
 // @yaks/embedding register through — and it would be unreachable if this
 // method only took `now`. `ReadOpts` is assignable to `BindOpts`, so the wider
@@ -178,8 +178,8 @@ export type Store = {
 }
 
 /**
- * What `storage()` is bound with: @yaks/sql's read options (a derived-column
- * registry, a fixed `now` for time phrases), plus `text` — how a column whose
+ * What `storage()` is bound with: @yaks/sql's read options (a derived-property
+ * registry, a fixed `now` for time phrases), plus `text` — how a property whose
  * stored value is not the text itself reads as text through `doc_value`,
  * rather than returning, for example, a blob's address (`blobText(vocab)` from
  * @yaks/blob is one). The read options apply to every read; `text` applies to
@@ -203,7 +203,7 @@ export type Opts = BindOpts & {
 
 /**
  * Bind a store to a driver and a vocabulary — a {@link Storage} @yaks/graph
- * can apply changes to. `base` options (a derived-column registry, a fixed
+ * can apply changes to. `base` options (a derived-property registry, a fixed
  * `now` for time phrases) ride every read; a per-call `opts` merges over them.
  */
 export let storage = (

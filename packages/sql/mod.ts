@@ -15,23 +15,23 @@
 // value. The storage layout and the value lowerings that are backend-specific
 // live behind a `Dialect` (./sqlite.ts); the SQLite layout is the one shipped.
 //
-// Computed columns — a vocabulary marks them `computed: true`, meaning the
+// Computed properties — a vocabulary marks them `computed: true`, meaning the
 // value is computed by the application rather than stored — are supplied by the
 // caller through the derived hook (./derived.ts). A registered expression is
-// what lets a computed column (a status rolled up from other rows, say) be
+// what lets a computed property (a status rolled up from other rows, say) be
 // filtered in SQL, through an index, instead of scanning every row in
 // JavaScript.
 //
 // A clause this package declines may still be compiled by another package: an
 // `Extension` (./extend.ts) claims a clause kind and lowers it to a condition
 // over the same representation, and may also supply an `.order=` expression for
-// a value that names no column. That is the extension point a full-text,
+// a value that names no property. That is the extension point a full-text,
 // vector, or graph-walk package registers through —
 // `compile(ast, vocab, { extend: [...] })`.
 //
 // One thing here is not a query at all. The death cascade (./cascade.ts) is a
 // question about what the vocabulary declares should happen to a reference
-// column when the entity it points at is deleted, rather than about a filter,
+// property when the entity it points at is deleted, rather than about a filter,
 // and it compiles to a `with recursive` closure — the answer @yaks/graph's
 // cascade phase asks a storage backend for, kept here so @yaks/sqlite and
 // @yaks/d1 do not each write it.
@@ -64,7 +64,7 @@ export type Compiled = { sql: string; params: Frag['params'] }
 
 // Compile an AST against a vocabulary into SQL plus parameters. `opts.dialect`
 // chooses the backend (SQLite by default), `opts.derived` supplies
-// computed-column expressions, `opts.extend` registers other packages' clause
+// computed-property expressions, `opts.extend` registers other packages' clause
 // compilers, and `opts.now` fixes the moment a relative time phrase resolves
 // against. Throws `Unsupported` for a clause outside the common path that no
 // extension claims.

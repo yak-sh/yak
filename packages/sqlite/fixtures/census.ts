@@ -11,15 +11,15 @@ let read1 = (v: Vocab, comp: string, derived: Derived): Prop[] =>
 
 // The projected read for one component: each scalar straight off the row, each
 // reference joined back to its target's eid, keyed by the owner eid. A
-// component with no columns reads a bare presence flag.
+// component with no properties reads a bare presence flag.
 //
-// A column whose READ differs from its storage is read through its registered
+// A property whose READ differs from its storage is read through its registered
 // expression instead — the same `derived` registry @yaks/sql consults when it
 // compiles a query (see @yaks/sql/derived.ts). That is what keeps the two
 // readers agreeing: a value the filter resolves one way cannot come back
-// gathered another. It is also the seam a content-addressed column lands on —
-// @yaks/blob registers one override per body column, and the gather returns the
-// text rather than the address the row holds.
+// gathered another. It is also the seam a content-addressed property lands
+// on — @yaks/blob registers one override per body property, and the gather
+// returns the text rather than the address the row holds.
 //
 // So the component table is aliased by its OWN NAME here, exactly as the binder
 // joins it, and an override's `deps` are LEFT JOINed the same way: a registered

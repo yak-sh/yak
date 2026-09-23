@@ -1,9 +1,9 @@
 // The SQLite dialect: the one place that knows how the data is laid out in
 // SQLite, and how a value lowers to a comparison there. Everything above it
 // (the binder, the relational representation) works in terms of a component and
-// a column plus a condition tree; this module turns those into the table names,
-// join keys and column expressions the database actually has, and into the
-// `cast`/`instr`/`between` comparisons whose semantics match the JavaScript
+// a property plus a condition tree; this module turns those into the table
+// names, join keys and column expressions the database actually has, and into
+// the `cast`/`instr`/`between` comparisons whose semantics match the JavaScript
 // matcher exactly.
 //
 // A second backend (D1 is byte for byte this one; a Postgres port would not be)
@@ -22,7 +22,7 @@ import type { Prop, Scalar, Vocab } from '@yaks/vocab'
 import { type Span as QSpan, timeSpan } from '@yaks/query'
 import type { Frag } from './ir.ts'
 
-// The type a value is coerced to before comparison — the vocabulary's column
+// The type a value is coerced to before comparison — the vocabulary's property
 // category flattened to the one name the lowerings switch on.
 export type Tag = Scalar | 'enum' | 'eid'
 export let tagOf = (c: Prop): Tag =>
@@ -48,7 +48,7 @@ export type Dialect = {
   joinOn: (comp: string, base: string) => string
   // A column read expression. A reference column is projected to an eid; `eid`
   // reads the owner column; a column of `entity` is read from the entity table
-  // directly. `null` if the column is not in the schema.
+  // directly. `null` if the schema has no such property.
   col: (comp: string, prop: string, v: Vocab) => string | null
   // The stored reference column, before it is projected to an eid. An equality
   // test can look the operand up once and then compare this indexed integer

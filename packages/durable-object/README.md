@@ -147,7 +147,7 @@ socket.send(JSON.stringify({ subscribe: '.status=shelved', id: 'shelf' }))
 // Response: { id: 'shelf', bundles: [{ entity: { eid: 'b1', num: 1 }, ... }] }
 ```
 
-The example stores body text directly. A column declared `store: 'blob'`
+The example stores body text directly. A property declared `store: 'blob'`
 requires the corresponding blob storage and graph plugin setup; this adapter
 does not provide that automatically. Schema installation is repeatable, but
 application schema migrations still require coordination.

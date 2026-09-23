@@ -75,7 +75,7 @@ Deno.test('the statements list in dependency order — spine first', () => {
   assertEquals(stmts[0].includes('create table if not exists entity ('), true)
 })
 
-Deno.test('a column marked unique gets a unique index named after it', () => {
+Deno.test('a property marked unique gets a unique index named after it', () => {
   assert(
     all.includes(
       'create unique index if not exists product_sku on "product" ("sku")',
@@ -109,9 +109,9 @@ Deno.test('an index comes after the table it covers', () => {
 })
 
 // A vocabulary that grew: `create table if not exists` is silent about a table
-// that is already there, so a column added to a word has to arrive by
+// that is already there, so a property added to a word has to arrive by
 // `alter table` or every read naming it fails at the engine.
-Deno.test('a column a component grew is added to the live table', () => {
+Deno.test('a property a component grew is added to the live table', () => {
   let spine = {
     component: true,
     type: 'object',

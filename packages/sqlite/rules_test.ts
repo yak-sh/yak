@@ -56,9 +56,9 @@ Deno.test('a gate is a left join that found nothing', () => {
 
 Deno.test('two patterns share a variable, and that is the join', () => {
   let { driver } = floor()
-  // The review and the product it is about, in one statement: `$p` is an
-  // entity in the first pattern and a reference column in the second, and both
-  // are integer spine ids, so the compare is an integer compare.
+  // The review and the product it is about, in one statement: `$p` is an entity
+  // in the first pattern and a reference property in the second, and both are
+  // integer spine ids, so the compare is an integer compare.
   let m = match('$p .product; .review, review.product=$p')
   let hits = matched(driver, m, shop)
   assertEquals(hits.map((h) => h.entities), [['p1', 'r1']])
@@ -68,7 +68,7 @@ Deno.test('two patterns share a variable, and that is the join', () => {
   assert(!statement(m, shop).sql.includes(';'))
 })
 
-Deno.test('a variable can tie two plain columns together', () => {
+Deno.test('a variable can tie two plain properties together', () => {
   let { driver } = floor()
   // Both products were made by the same maker, said as a join rather than as
   // a literal: two `product` rows whose `maker` agrees, one of them Dune.

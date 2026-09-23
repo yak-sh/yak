@@ -115,7 +115,7 @@ export type Store = {
 type Spine = { num?: number | null; dead: boolean } | null
 
 // A patch merged onto the bundle it patches: a null component drops the row,
-// anything else merges in, so an omitted column keeps what it held and a null
+// anything else merges in, so an omitted property keeps what it held and a null
 // one clears it. This is the overlay's copy of the same rule ./write.ts states
 // in SQL — it is what a read inside the transaction has to see.
 let merged = (v: Vocab, held: Bundle, b: Bundle): Bundle => {
@@ -139,7 +139,7 @@ let merged = (v: Vocab, held: Bundle, b: Bundle): Bundle => {
  * Bind a store to a D1 binding and a vocabulary — the `Storage` a
  * {@link https://jsr.io/@yaks/graph | @yaks/graph} applies changes to.
  *
- * `base` options (a derived-column registry, an @yaks/sql extension, a fixed
+ * `base` options (a derived-property registry, an @yaks/sql extension, a fixed
  * `now` for time phrases) ride every read; a per-call `opts` merges over them.
  *
  * ```ts
@@ -243,9 +243,9 @@ export let storage = <S extends Stmt<S>>(
     let births: { at: number; entity: Entity }[] = []
     // Whether this transaction has written something the database cannot see
     // that the death cascade would have to read: a patch touching a component
-    // that bears a death column, or a removal. Until it has, the rows the
-    // database holds are the rows the batch leaves behind, and the cascade's
-    // question is one statement; once it has, that statement would be
+    // whose references declare a death, or a removal. Until it has, the rows
+    // the database holds are the rows the batch leaves behind, and the
+    // cascade's question is one statement; once it has, that statement would be
     // answering about rows that have moved, so the question is declined and
     // @yaks/graph walks it through the overlay instead.
     let moved = false

@@ -18,10 +18,10 @@ export type { Opts, Store }
  * changes to, implemented synchronously because the object's SQLite is.
  *
  * `install()` it once (create-if-not-exists, so a constructor may call it every
- * time the object wakes). `base` options — a derived-column registry, a fixed
- * `now` for time phrases — are applied to every read; its `text` (how a column
- * whose stored value is not text is converted to text) is applied to the
- * schema.
+ * time the object wakes). `base` options — a derived-property registry, a fixed
+ * `now` for time phrases — are applied to every read; its `text` (how a
+ * property whose stored value is not text is converted to text) is applied to
+ * the schema.
  *
  * ```ts
  * // let store = storage(ctx.storage, vocab)

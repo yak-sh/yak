@@ -25,7 +25,7 @@
 // selects.
 
 import type { Bundle } from '@yaks/graph'
-import type { DerivedCol } from '@yaks/sql'
+import type { DerivedProp } from '@yaks/sql'
 import { type Mark, MARKS, OPEN, type Status, statuses } from './words.ts'
 import { TASK } from './comp.ts'
 
@@ -54,9 +54,9 @@ export let statusOf = (b: Bundle, marks: Mark[] = MARKS): Status | null => {
 }
 
 /**
- * A computed column evaluated in memory: `comp.prop` → the value for one
- * bundle. The shape {@link https://jsr.io/@yaks/match | @yaks/match} expects for
- * a column a vocabulary declares but never stores.
+ * A computed property evaluated in memory: `comp.prop` → the value for one
+ * bundle. The shape {@link https://jsr.io/@yaks/match | @yaks/match} expects
+ * for a property a vocabulary declares but never stores.
  */
 export type Compute = Record<string, (b: Bundle) => unknown>
 
@@ -88,7 +88,7 @@ export let compute = (marks: Mark[] = MARKS): Compute => ({
  * // compile(ast, vocab, { derived: derived() })
  * ```
  */
-export let derived = (marks: Mark[] = MARKS): Record<string, DerivedCol> => ({
+export let derived = (marks: Mark[] = MARKS): Record<string, DerivedProp> => ({
   [`${TASK}.status`]: {
     tag: 'enum',
     values: statuses(marks),
