@@ -5,9 +5,11 @@
 // which property moved and what the graph holds now; a refused property still
 // names itself.
 //
-// The HTTP status is derived from the error's `name` alone. That keeps this
-// table the one place statuses are decided, and lets any package's error join
-// it by setting its own `name`.
+// The HTTP status is derived from the error's `name` alone, by @yaks/graph's
+// `status`: the one table every door reads to tell a caller's refusal from a
+// defect, which any package's error joins by setting its own `name`.
+
+import { status } from '@yaks/graph'
 
 /** A refusal, as a client reads it: the error's name, its message, and any
  * fields the error carried (a {@link https://jsr.io/@yaks/graph | Stale}
@@ -33,28 +35,6 @@ export class Unauthorized extends Error {
   }
 }
 
-/** The HTTP status each error name answers with. Anything unlisted is a 500:
- * an error no package named is a bug in the server, not a fault of the
- * request. */
-export let STATUS: Record<string, number> = {
-  Refused: 400,
-  Unsupported: 400,
-  SyntaxError: 400,
-  // @yaks/vocab's `Unknown`: a component or property name the vocabulary does
-  // not define. The query named it, so the fault is the request's — and so is
-  // its `Ambiguous`, a property name several components define where the query
-  // did not say which one it meant. Both carry the name, and the ambiguous
-  // one also carries the candidates.
-  Unknown: 400,
-  Ambiguous: 400,
-  Unauthorized: 401,
-  // The request is authenticated; the answer is still no. @yaks/member's
-  // `Denied` is this, and so is any other policy refusal that uses that name.
-  Denied: 403,
-  NotFound: 404,
-  Stale: 409,
-}
-
 /** An error as the body a client reads: its name as `error`, its message, and
  * every other field it carries. */
 export let refusal = (err: unknown): Refusal => {
@@ -65,10 +45,6 @@ export let refusal = (err: unknown): Refusal => {
   }
   return out
 }
-
-/** The HTTP status an error answers with (default 500). */
-export let status = (err: unknown): number =>
-  (err instanceof Error ? STATUS[err.name] : undefined) ?? 500
 
 /** A server failure, said on the console with where it happened, so a
  * calling program's log watcher sees it; a refusal (below 500) is the

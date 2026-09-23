@@ -68,16 +68,16 @@ adapter must support the requested query.
 
 All exports are available from `@yaks/api`:
 
-| Exports                                                                    | Purpose                                                                               |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `api`, `Options`, `Handler`                                                | Build and type the request handler                                                    |
-| `Route`, `routed`                                                          | Describe and match application routes by method and exact path or trailing `*` prefix |
-| `Authenticate`, `signed`                                                   | Identify a caller and replace client-supplied write attribution                       |
-| `ask`, `write`, `pour`, `CHUNK`                                            | Query, JSON write, and streaming import handlers; import chunk size                   |
-| `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`                            | Manage subscriptions and their messages                                               |
-| `attach`, `receive`, `sink`, `Socket`, `Upgrade`, `denoUpgrade`            | Connect the subscription protocol to sockets                                          |
-| `denoListen`, `Listen`, `Listener`, `Addr`                                 | Bind a port on Deno, which is what the `serve` tool listens with                      |
-| `json`, `refusal`, `refuse`, `status`, `STATUS`, `Refusal`, `Unauthorized` | Construct JSON responses and translate errors                                         |
+| Exports                                                         | Purpose                                                                               |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `api`, `Options`, `Handler`                                     | Build and type the request handler                                                    |
+| `Route`, `routed`                                               | Describe and match application routes by method and exact path or trailing `*` prefix |
+| `Authenticate`, `signed`                                        | Identify a caller and replace client-supplied write attribution                       |
+| `ask`, `write`, `pour`, `CHUNK`                                 | Query, JSON write, and streaming import handlers; import chunk size                   |
+| `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`                 | Manage subscriptions and their messages                                               |
+| `attach`, `receive`, `sink`, `Socket`, `Upgrade`, `denoUpgrade` | Connect the subscription protocol to sockets                                          |
+| `denoListen`, `Listen`, `Listener`, `Addr`                      | Bind a port on Deno, which is what the `serve` tool listens with                      |
+| `json`, `refusal`, `refuse`, `Refusal`, `Unauthorized`          | Construct JSON responses and translate errors                                         |
 
 `Route` and `routed` help an application compose additional routes; `api()`
 itself only serves the three paths above.
@@ -225,8 +225,9 @@ the property and its current value:
 | 500    | An error name not in `STATUS`                                      |
 
 HTTP errors use these statuses. Subscription errors are socket messages, and
-streaming import errors use the final NDJSON line described above. `STATUS` is
-an exported error-name mapping.
+streaming import errors use the final NDJSON line described above. The
+error-name mapping is @yaks/graph's `STATUS`, the same table the tool runner
+reads to tell a refusal from a defect.
 
 ## The plugin: the handler, and the `serve` tool
 

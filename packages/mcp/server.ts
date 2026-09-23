@@ -21,12 +21,12 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { status } from '@yaks/api'
 import {
   type Actor,
   type Bundle,
   type Graph,
   type Schema,
+  status,
   type Tool,
   toolsOf,
 } from '@yaks/graph'

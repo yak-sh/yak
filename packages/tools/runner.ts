@@ -57,6 +57,7 @@ import {
   type Ready,
   ready,
   signed,
+  status,
   token,
   type Tool,
   type ToolCtx,
@@ -125,8 +126,9 @@ export type Opts = {
   host?: Graph
   /** where unexpected defects are reported, with the call and the name of the
    * tool it asked for; they are not thrown, because the transaction has
-   * already committed. A refusal (`CallError`) is never reported. A report
-   * that answers a promise is awaited before the call's answer is. */
+   * already committed. A refusal (a `CallError`, or an error @yaks/graph's
+   * `status` puts below 500) is never reported. A report that answers a
+   * promise is awaited before the call's answer is. */
   report?: (err: unknown, call: Bundle, tool?: string) => unknown
   /** what answers a call naming a tool this runner does not have. Omitted,
    * nothing does: the call is left for whichever runner has that tool. */
@@ -405,19 +407,22 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     }])
     let started = now()
     // What a thrown error becomes: the fault as its own entity, recording
-    // which call it came from. An expected refusal gets `error{code}`;
-    // anything else is a defect, passed to `report` as well as recorded.
+    // which call it came from. An expected refusal gets `error{code}`: a
+    // `CallError` with its code, or an error the graph's `status` puts below
+    // 500 (a `Refused` write, an `Unknown` name) with its name. Anything else
+    // is a defect, passed to `report` as well as recorded.
     let faulted = async (error: unknown): Promise<Bundle[]> => {
-      if (!(error instanceof CallError)) {
-        await opts.report?.(error, call, tool.name)
-      }
+      let code = error instanceof CallError
+        ? error.code
+        : status(error) < 500
+        ? (error as Error).name
+        : undefined
+      if (code == undefined) await opts.report?.(error, call, tool.name)
       return [{
         entity: { eid: '$fault' },
         content: { body: String(error) },
         output: { source: id },
-        ...error instanceof CallError
-          ? { error: { code: error.code } }
-          : { exception: {} },
+        ...code == undefined ? { exception: {} } : { error: { code } },
       }]
     }
     // Writing the answer. A read-only tool's answer is not a write — its

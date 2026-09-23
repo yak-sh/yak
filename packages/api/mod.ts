@@ -57,15 +57,7 @@
 export { api, type Handler, type Options, type Route, routed } from './route.ts'
 export { type Authenticate, signed } from './actor.ts'
 export { ask, CHUNK, pour, poured, write } from './doors.ts'
-export {
-  json,
-  type Refusal,
-  refusal,
-  refuse,
-  STATUS,
-  status,
-  Unauthorized,
-} from './refuse.ts'
+export { json, type Refusal, refusal, refuse, Unauthorized } from './refuse.ts'
 export {
   type Ask,
   type Frame,

@@ -4,7 +4,7 @@
 // (one another process wrote, one that was scheduled) gets run.
 
 import { assertEquals, assertRejects } from '@std/assert'
-import { type Bundle, type Comp, graph, type Tool } from '@yaks/graph'
+import { type Bundle, type Comp, graph, Refused, type Tool } from '@yaks/graph'
 import { effects } from '@yaks/effects'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -222,11 +222,15 @@ Deno.test('a defect is reported with its tool; a refusal is not', async () => {
     tools: [
       throwing('broke', broke),
       throwing('refuse', new CallError('member', 'not a member')),
+      throwing('named', new Refused("no component 'bok'")),
     ],
     report: (err, _call, tool) => said.push([err, tool]),
   })
   await r.ensure()
   await r.call(called('example_refuse', '{"value":"x"}'))
+  // A graph refusal is the caller's too, recorded under its own name.
+  let named = await r.call(called('example_named', '{"value":"x"}'))
+  assertEquals(named.find((b) => b.error)?.error, { code: 'Refused' })
   assertEquals(said, [])
   await r.call(called('example_broke', '{"value":"x"}'))
   assertEquals(said, [[broke, 'example_broke']])

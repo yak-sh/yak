@@ -15,8 +15,9 @@
 // issue names the deploy that brought it.
 //
 // Only defects. A refusal is the platform answering, never sent: the runner
-// keeps `CallError` from `report`, and the router returns before it reports
-// one (unseen.ts `refusal`).
+// keeps a `CallError`, and any error @yaks/graph's `status` puts below 500,
+// from `report`, and the router returns before it reports one (unseen.ts
+// `refusal`).
 //
 // What leaves is the error and its tags, nothing a person said: no request
 // headers (a cookie, a bearer), no query string (an OAuth code), no body, and
@@ -32,8 +33,7 @@ import {
   type ErrorEvent,
   withScope,
 } from '@sentry/core'
-import { status } from '@yaks/api'
-import type { Bundle, Comp } from '@yaks/graph'
+import { type Bundle, type Comp, status } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
 import { isTestAddress } from '../../src/bots.ts'
 import { Pending } from './writes.ts'
@@ -71,11 +71,11 @@ export let options = () => ({
 })
 
 /** Whether a caught failure is the caller's own no rather than ours: a tool's
- * refusal (`CallError`), an error @yaks/api answers below 500 (a refused or
- * stale write, a denied one, a query naming what is not there), or a door
- * that answered a 4xx and said so in its `status` (meta.ts). A write the
- * store's log kept (writes.ts `Pending`) is neither: its failure was reported
- * where it happened. */
+ * refusal (`CallError`), an error @yaks/graph's `status` puts below 500 (a
+ * refused or stale write, a denied one, a query naming what is not there), or
+ * a door that answered a 4xx and said so in its `status` (meta.ts). A write
+ * the store's log kept (writes.ts `Pending`) is neither: its failure was
+ * reported where it happened. */
 export let refused = (e: unknown) => {
   let said = (e as { status?: unknown } | null)?.status
   return e instanceof CallError || e instanceof Pending || status(e) < 500 ||
@@ -132,8 +132,7 @@ let accountOf = async (ctx: Ctx): Promise<Hit | undefined> => {
 
 /** A connector tool's defect, sent with the tool, the space and
  * app its arguments named, the client that connected, and the person who
- * called it. A refusal never arrives here: the runner keeps `CallError`
- * back. */
+ * called it. A refusal never arrives here: the runner keeps it back. */
 export let reporter =
   (ctx: Ctx, client?: string) =>
   async (err: unknown, call: Bundle, tool?: string) =>
