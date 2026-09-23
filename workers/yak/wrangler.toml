@@ -81,6 +81,15 @@ host = "127.0.0.1"
 [triggers]
 crons = []
 
+# Workers Builds, telling us a build of this Worker failed (builds.ts). The
+# queue and its event subscription are account resources, made once:
+#   wrangler queues create yak-builds
+#   wrangler queues subscription create yak-builds --source \
+#     workersBuilds.worker --events build.failed --worker-name yak
+# Production only: staging's builds are the same builds.
+[[queues.consumers]]
+queue = "yak-builds"
+
 # The account whose analytics the meter reads, and whose dispatch namespace an
 # app's worker is uploaded into — the same tag as `account_id` above, which the
 # runtime is never handed. Not a secret: it is in this file.

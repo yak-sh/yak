@@ -91,6 +91,7 @@ import * as apps from './apps.ts'
 import { sealed } from './cache.ts'
 import * as filePart from './files.ts'
 import * as billing from './billing.ts'
+import { builds } from './builds.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { customOf, reading, stageOf, type Step, steps } from './domains.ts'
@@ -667,11 +668,13 @@ let router = {
 // cookie the browser sent, whatever the router made of the request inside.
 //
 // Wrapped for Sentry (sentry.ts), so an exception that escapes the router's
-// catch, or the letter door's, is a defect we hear about.
+// catch, or the letter door's, is a defect we hear about. The queue is Workers
+// Builds telling us a build of this Worker failed (builds.ts).
 let worker = withSentry(options, {
   ...router,
   fetch: async (req: Request, env: Env): Promise<Response> =>
     slid(req, env, await router.fetch(req, env)),
+  queue: builds,
 })
 
 // A letter can arrive with no context: the runtime's own letter door (the one

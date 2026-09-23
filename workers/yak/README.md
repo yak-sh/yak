@@ -56,15 +56,17 @@ the repo root, `deno task test:workers`. A red build deploys nothing.
 
 Defects go to Sentry (org `yaks`, project `yaks-app`; sentry.ts): an exception
 nothing caught, a break the router or a job files, a Store's own, a connector
-tool's, and any `console.error`. Each carries its tags (`tool`, `space`, `app`,
-`client`, `store`, `request`) and the person's eid as the user with `account`
-set to `person` or `test` (a test account, src/bots.ts). The release is the
-Workers version id and the environment is `SENTRY_ENVIRONMENT` (`production`,
-`staging`). A refusal is never sent. With no `SENTRY_DSN` secret nothing is
-sent, which is what keeps the tests and `wrangler dev` silent. Source maps are
-not uploaded; the bundle is not minified, so a stack names our functions. To
-prove a deploy's defects arrive, a test account POSTs `/api/defect` at the apex:
-that is a defect tagged `tool:canary`, `account:test` (mcp.ts `canary`).
+tool's, any `console.error`, and a Workers Build that failed (builds.ts, fed by
+the `yak-builds` queue's event subscription). Each carries its tags (`tool`,
+`space`, `app`, `client`, `store`, `request`) and the person's eid as the user
+with `account` set to `person` or `test` (a test account, src/bots.ts). The
+release is the Workers version id and the environment is `SENTRY_ENVIRONMENT`
+(`production`, `staging`). A refusal is never sent. With no `SENTRY_DSN` secret
+nothing is sent, which is what keeps the tests and `wrangler dev` silent. Source
+maps are not uploaded; the bundle is not minified, so a stack names our
+functions. To prove a deploy's defects arrive, a test account POSTs
+`/api/defect` at the apex: that is a defect tagged `tool:canary`, `account:test`
+(mcp.ts `canary`).
 
 Sentry's uptime monitor (https://yaks.sentry.io/monitors/10414356/) POSTs
 `tools/list` to https://yaks.app/mcp every minute and is the one alarm for an
