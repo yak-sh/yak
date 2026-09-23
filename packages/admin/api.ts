@@ -7,19 +7,21 @@
 // membership and never something kept here.
 //
 // The sign-in code has two lives and this module knows both. To a
-// `@bot.yak.sh` address the letter lands in the TASKS graph, where the fleet
-// sweep files it as a `mail` entity, so `codeFor` waits on the graph and reads
-// the digits out of the subject. To anyone else's address it lands in their
-// mail, which no program here can open, so the code is asked for.
+// `@bot.yak.sh` address the letter lands in the graph this box's `yak` opens,
+// where @yaks/mail's pull files it as a `mail` entity, so `codeFor` waits on
+// that graph and reads the digits out of the subject. To anyone else's
+// address it lands in their mail, which no program here can open, so the
+// code is asked for.
 //
-// The platform's own spellings are imported, never retyped: `PLATFORM` from
-// the router, `COOKIE` from the token. A drift on either side is a type error
+// The platform's own names are imported, never retyped: `PLATFORM` from the
+// router, `COOKIE` from the token. A drift on either side is a type error
 // rather than a puzzling 401.
-import { LINK } from '../workers/yak/link.ts'
-import { PLATFORM } from '../workers/yak/route.ts'
-import { COOKIE } from './token.ts'
-import { noted } from './timing.ts'
-import { type Querier, query as graphQuery, type Row } from './client.ts'
+import type { Bundle, Comp } from '@yaks/graph'
+import { timed } from '@yaks/cli'
+import { type And, and, eq, ge, limit } from '@yaks/query'
+import { LINK } from '../../workers/yak/link.ts'
+import { PLATFORM } from '../../workers/yak/route.ts'
+import { COOKIE } from '../../src/token.ts'
 
 // The zone this client points at, so a probe can aim somewhere else.
 export let zone = () => Deno.env.get('YAKS_ZONE') ?? PLATFORM
@@ -65,28 +67,37 @@ export let cookieOf = (setCookie: string | null): string | null => {
 // `slid`), so any answer here may carry a new value for the same account, and
 // a client that dropped it would sign this box out ninety days after its
 // first sign-in however busy it had been. This module holds no credential and
-// must not learn where one lives, so it hands the value on: src/yak.ts puts
-// the account file behind this.
+// must not learn where one lives, so it hands the value on: ./tools.ts writes
+// it back into the vault.
 let told: (fresh: string) => void = () => {}
 
 export let renewing = (note: (fresh: string) => void) => (told = note)
 
+// `yak --timing` (or YAKS_TIMING=1): one line on stderr per response, the
+// same line @yaks/cli prints for the connector door. Read off the command
+// line this process was started with, since these calls go to the apex
+// rather than through the door the flag was parsed for.
+export let timing = {
+  on: Deno.args.includes('--timing') || Deno.env.get('YAKS_TIMING') == '1',
+  say: (line: string) => console.error(line),
+}
+
 // EVERY call this client makes: the account's cookie goes out here, a renewed
-// one is read back here, and `yak --timing` says its line here (timing.ts), so
-// no verb has to think about any of the three.
+// one is read back here, and `yak --timing` says its line here, so no verb
+// has to think about any of the three.
 let sent = async (
   url: string,
   session?: string,
   init: RequestInit & { headers?: Record<string, string> } = {},
 ) => {
-  let r = noted(
-    init.method ?? 'GET',
-    url,
-    await fetch(url, {
-      ...init,
-      headers: { ...init.headers, ...(session ? head(session) : {}) },
-    }),
-  )
+  let asked = {
+    ...init,
+    headers: { ...init.headers, ...(session ? head(session) : {}) },
+  }
+  let go = () => fetch(url, asked)
+  let r = timing.on
+    ? await timed(timing.say, go)(new Request(url, asked))
+    : await go()
   let fresh = session ? cookieOf(r.headers.get('set-cookie')) : null
   if (fresh && fresh != session) told(fresh)
   return r
@@ -182,16 +193,19 @@ let said = async <T>(answer: Promise<Response>): Promise<T> => {
 
 let SUBJECT = /\b(\d{6})\b is your yaks\.app code/
 
+let prop = (b: Bundle, comp: string, name: string): unknown =>
+  (b[comp] as Comp | undefined)?.[name]
+
 // The digits out of the letters the graph holds for an address. Newest first,
 // and only letters that arrived since the ask — an old code still on file
 // would be spent against a fresh mac and fail (signin.ts keeps a mac, never
 // the digits).
-export let codeIn = (rows: Row[], address: string, since: number) => {
-  let seen = rows
-    .map((r) => ({
-      code: SUBJECT.exec(String(r.comps.doc?.title ?? ''))?.[1],
-      to: String(r.comps.mail?.to_addr ?? ''),
-      at: Date.parse(String(r.comps.mail?.received_at ?? '')),
+export let codeIn = (letters: Bundle[], address: string, since: number) => {
+  let seen = letters
+    .map((b) => ({
+      code: SUBJECT.exec(String(prop(b, 'doc', 'title') ?? ''))?.[1],
+      to: String(prop(b, 'mail', 'to') ?? ''),
+      at: Date.parse(String(prop(b, 'mail', 'at') ?? '')),
     }))
     .filter((m) => m.code && m.to == address && m.at >= since)
     .sort((a, b) => b.at - a.at)
@@ -200,33 +214,33 @@ export let codeIn = (rows: Row[], address: string, since: number) => {
 
 // The letters for one address since the ask. The graph holds thousands of
 // letters, so the filter names the recipient and the window: an unfiltered
-// window of the newest few reads other mail and misses this one. A window
-// keeps the newest matches.
-let lettersFor = (address: string, since: number) => [
-  `.mail.to_addr=${address}`,
-  `.mail.received_at>=${new Date(since).toISOString()}`,
-]
+// window of the newest few reads other mail and misses this one.
+export let lettersFor = (address: string, since: number): And =>
+  and(
+    eq('mail.to', address),
+    ge('mail.at', new Date(since).toISOString()),
+    limit(10),
+  )
 
-// The fleet sweep files inbound mail every ten seconds (doing.ts), so a code
-// takes a few of them to arrive. Polls the graph rather than any mail API:
-// the graph is where the letter ends up and the only place this box can read
-// it from.
+// @yaks/mail's pull files inbound mail each time its duty comes round, so a
+// code takes a few passes to arrive. Polls the graph rather than any mail
+// API: the graph is where the letter ends up and the only place this box can
+// read it from.
 export let codeFor = async (
+  read: (q: And) => Bundle[] | Promise<Bundle[]>,
   address: string,
   since: number,
-  opts: { wait?: number; poll?: number; query?: Querier } = {},
+  opts: { wait?: number; poll?: number } = {},
 ) => {
-  let ask = opts.query ?? graphQuery
   let deadline = Date.now() + (opts.wait ?? 90_000)
   for (;;) {
-    let rows = await ask(lettersFor(address, since), { limit: 10 })
-    let code = codeIn(rows, address, since)
+    let code = codeIn(await read(lettersFor(address, since)), address, since)
     if (code) return code
     if (Date.now() > deadline) {
       throw new Error(
         `no code for ${address} in the graph after ${
           Math.round((opts.wait ?? 90_000) / 1000)
-        }s — is the tasks server up and sweeping inbound mail?`,
+        }s — is a \`yak serve\` pulling inbound mail (@yaks/mail \`pull\`)?`,
       )
     }
     await new Promise((go) => setTimeout(go, opts.poll ?? 3_000))
@@ -267,33 +281,6 @@ export let saidBy = (out: { content?: Content[]; isError?: boolean }) => {
   return text
 }
 
-export let tool = async (session: string, name: string, args: unknown) =>
-  saidBy(await rpc(session)('tools/call', { name, arguments: args }))
-
-export let tools = async (session: string) =>
-  (await rpc(session)('tools/list')).tools as {
-    name: string
-    description: string
-  }[]
-
-// A tool argument off the command line: `key=value`, JSON when it parses as
-// JSON so numbers, booleans and objects survive, and the plain string
-// otherwise — the same forgiveness the dot-param grammar shows a writer.
-export let argOf = (word: string): [string, unknown] => {
-  let eq = word.indexOf('=')
-  if (eq <= 0) throw new Error(`not a tool argument: ${word} (want key=value)`)
-  let key = word.slice(0, eq)
-  let raw = word.slice(eq + 1)
-  try {
-    return [key, JSON.parse(raw)]
-  } catch {
-    return [key, raw]
-  }
-}
-
-export let argsOf = (words: string[]) =>
-  Object.fromEntries(words.map(argOf)) as Record<string, unknown>
-
 let bodyOf = async (r: Response) => {
   let text = await r.text()
   try {
@@ -317,21 +304,6 @@ export let storeQuery = async (
   let r = await sent(url, session)
   let body = await bodyOf(r)
   if (!r.ok) throw new Error(`${at} refused the query: ${JSON.stringify(body)}`)
-  return body
-}
-
-export let storeApply = async (
-  session: string,
-  at: string,
-  batch: unknown,
-) => {
-  let r = await sent(storeUrl(at, '/apply'), session, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(batch),
-  })
-  let body = await bodyOf(r)
-  if (!r.ok) throw new Error(`${at} refused the write: ${JSON.stringify(body)}`)
   return body
 }
 

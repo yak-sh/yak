@@ -1,8 +1,8 @@
 // The owner's view of yaks.app logs. Wrangler holds this box's login; a
 // historical query may use that same token, but never a deployment secret.
 import { parse } from '@std/toml'
-import { Usage } from '@yaks/cli'
-import { WRANGLER } from '../workers/yak/wrangler.ts'
+import { CallError } from '@yaks/tools'
+import { WRANGLER } from '../../workers/yak/wrangler.ts'
 
 type Note = (line: string) => void
 type Row = Record<string, unknown>
@@ -197,7 +197,10 @@ export let duration = (since = '10m'): number => {
     ? Number(match[1]) * ({ s: 1, m: 60, h: 3600 }[match[2] || 's'] ?? 0)
     : 0
   if (!Number.isSafeInteger(seconds) || seconds <= 0 || seconds > 86_400) {
-    throw new Usage('--since needs a duration from 1s to 24h (for example 10m)')
+    throw new CallError(
+      'since',
+      '--since needs a duration from 1s to 24h (for example 10m)',
+    )
   }
   return seconds
 }

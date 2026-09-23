@@ -114,9 +114,9 @@ export let rpc = (door: Door): Rpc => {
  *
  * The numbers are the server's own `Server-Timing` header
  * (workers/yak/timing.ts), printed exactly as they arrived, so this line and a
- * `curl -i` agree. A server that sends no such header still gets a line. (The
- * owner checkout prints the same line for the calls it makes outside this
- * server — src/timing.ts.) */
+ * `curl -i` agree. A server that sends no such header still gets a line. The
+ * owner's admin plugin prints the same line for the calls it makes outside
+ * this server. */
 export let timed = (
   say: (line: string) => void,
   go: (request: Request) => Response | Promise<Response> = (r) => fetch(r),

@@ -2,11 +2,13 @@
 // session says about itself, which letter carries the code, and how a tool's
 // reply reads once the envelope is off.
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
-import type { Querier, Row } from './client.ts'
-import { matchQuery, parseQuery } from './query.ts'
+import { type Bundle, graph } from '@yaks/graph'
+import type { And } from '@yaks/query'
+import { ram } from '@yaks/ram'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { docDoc } from '@yaks/doc'
+import { mailDoc } from '@yaks/mail/vocab'
 import {
-  argOf,
-  argsOf,
   claimsOf,
   codeFor,
   codeIn,
@@ -18,14 +20,13 @@ import {
   saidBy,
   saidOn,
   storeUrl,
-} from './yaks_api.ts'
-import { timing, watching } from './timing.ts'
+  timing,
+} from './api.ts'
 
-let row = (title: string, to: string, at: string): Row => ({
-  eid: crypto.randomUUID(),
-  num: 1,
-  kind: 'mail',
-  comps: { doc: { title }, mail: { to_addr: to, received_at: at } },
+let letter = (title: string, to: string, at: string): Bundle => ({
+  entity: { eid: crypto.randomUUID() },
+  doc: { title },
+  mail: { to, at },
 })
 
 Deno.test('an app store answers under its space, the front page at the root', () => {
@@ -58,64 +59,81 @@ Deno.test('the session is read off the card’s own set-cookie', () => {
 })
 
 Deno.test('the code is the newest letter to THIS address since the ask', () => {
-  let rows = [
-    row(
+  let letters = [
+    letter(
       '111111 is your yaks.app code',
       'probe@bot.yak.sh',
       '2026-09-04T12:00:00Z',
     ),
-    row(
+    letter(
       '222222 is your yaks.app code',
       'probe@bot.yak.sh',
       '2026-09-04T12:05:00Z',
     ),
-    row(
+    letter(
       '333333 is your yaks.app code',
       'other@bot.yak.sh',
       '2026-09-04T12:06:00Z',
     ),
-    row('a letter about nothing', 'probe@bot.yak.sh', '2026-09-04T12:07:00Z'),
+    letter(
+      'a letter about nothing',
+      'probe@bot.yak.sh',
+      '2026-09-04T12:07:00Z',
+    ),
   ]
   let since = Date.parse('2026-09-04T11:59:00Z')
-  assertEquals(codeIn(rows, 'probe@bot.yak.sh', since), '222222')
+  assertEquals(codeIn(letters, 'probe@bot.yak.sh', since), '222222')
   // A code that predates the ask is a stale one: it would fail its own mac.
   assertEquals(
-    codeIn(rows, 'probe@bot.yak.sh', Date.parse('2026-09-04T12:06:00Z')),
+    codeIn(letters, 'probe@bot.yak.sh', Date.parse('2026-09-04T12:06:00Z')),
     null,
   )
-  assertEquals(codeIn(rows, 'nobody@bot.yak.sh', since), null)
+  assertEquals(codeIn(letters, 'nobody@bot.yak.sh', since), null)
   assertEquals(codeIn([], 'probe@bot.yak.sh', since), null)
 })
 
-// A graph that answers as the server does: the filters select, and a window
-// keeps the newest matches.
-let graph = (rows: Row[]): Querier => (filters, opts) => {
-  let preds = parseQuery(filters.join('&'))
-  let hits = rows.filter((r) => matchQuery(r.comps, preds))
-  return Promise.resolve(opts?.limit ? hits.slice(-opts.limit) : hits)
+// An in-memory graph holding the letters, answering the query as a store
+// does: the recipient and the window select, and the limit keeps what it
+// keeps.
+let entity: VocabDoc = {
+  $defs: {
+    entity: {
+      component: true,
+      type: 'object',
+      wire: false,
+      properties: { num: { type: 'number', stamped: true } },
+    },
+  },
+}
+
+let mailbox = async (letters: Bundle[]) => {
+  let vocab = loadVocab([entity, docDoc, mailDoc])
+  let g = graph({ storage: ram(vocab), vocab })
+  await g.apply(letters)
+  return (q: And) => g.read(q)
 }
 
 Deno.test('the code is found by its address among many newer letters', async () => {
   let since = Date.parse('2026-09-04T12:00:00Z')
-  let ours = row(
+  let ours = letter(
     '444444 is your yaks.app code',
     'probe@bot.yak.sh',
     '2026-09-04T12:00:05Z',
   )
   let others = Array.from({ length: 50 }, (_, i) =>
-    row(
+    letter(
       `${100000 + i} is your yaks.app code`,
       `other${i}@bot.yak.sh`,
       '2026-09-04T12:00:09Z',
     ))
-  let old = row(
+  let old = letter(
     '555555 is your yaks.app code',
     'probe@bot.yak.sh',
     '2026-09-04T11:00:00Z',
   )
-  let query = graph([old, ours, ...others])
+  let read = await mailbox([old, ours, ...others])
   assertEquals(
-    await codeFor('probe@bot.yak.sh', since, { query, wait: 0 }),
+    await codeFor(read, 'probe@bot.yak.sh', since, { wait: 0 }),
     '444444',
   )
 })
@@ -133,17 +151,6 @@ Deno.test('a tool answers its words, and an erring one throws them', () => {
     })
   )
   assertStringIncludes((no as Error).message, 'no space notes')
-})
-
-Deno.test('a tool argument keeps its type when it has one', () => {
-  assertEquals(argOf('slug=notes'), ['slug', 'notes'])
-  assertEquals(argOf('count=3'), ['count', 3])
-  assertEquals(argOf('open=true'), ['open', true])
-  assertEquals(argOf('files=[{"path":"a"}]'), ['files', [{ path: 'a' }]])
-  // An `=` inside the value belongs to the value.
-  assertEquals(argOf('q=a=b'), ['q', 'a=b'])
-  assertThrows(() => argOf('bare'))
-  assertEquals(argsOf(['a=1', 'b=x']), { a: 1, b: 'x' })
 })
 
 Deno.test('a kernel page is read back as the words it says', () => {
@@ -165,7 +172,7 @@ Deno.test('a kernel page is read back as the words it says', () => {
 
 // The sliding session, this end (T-35380): the platform re-mints a cookie past
 // half its life, so any answer may carry a new value for the same account and
-// the box must write it down — src/yak.ts puts the account file behind
+// the box must write it down — ./tools.ts keeps it in the vault behind
 // `renewing`. The fetch is stubbed, and the answer is as little of one as the
 // client reads: what it says, and the header a renewal would arrive in. A web
 // `Response` would cost this process its whole fetch warm-up for a test that
@@ -217,8 +224,8 @@ Deno.test('a renewed cookie is handed on, and an ordinary answer is quiet', asyn
 })
 
 // `yak --timing`, this end: the account's calls do not go through the
-// connector door, so `sent` says the same line for them (timing.ts). The stub
-// answers the header a platform answer would carry.
+// connector door, so `sent` says the same line for them (@yaks/cli `timed`).
+// The stub answers the header a platform answer would carry.
 Deno.test('--timing says one line per account call, and none without', async () => {
   let said: string[] = []
   let say = timing.say
@@ -231,9 +238,9 @@ Deno.test('--timing says one line per account call, and none without', async () 
     },
   })
   try {
-    watching(true)
+    timing.on = true
     await feeNow('a.token')
-    watching(false)
+    timing.on = false
     await feeNow('a.token')
   } finally {
     timing.say = say

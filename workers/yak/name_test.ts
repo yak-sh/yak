@@ -62,8 +62,13 @@ let walk = function* (dir: URL, at = ''): Generator<[string, string]> {
 }
 
 // This tree, the words the connector package hands an agent, and the CLI's
-// own help. `src/yak.ts` is one file, read below.
-let roots = ['./', '../../packages/mcp/', '../../packages/cli/']
+// own help, the owner's verbs included.
+let roots = [
+  './',
+  '../../packages/mcp/',
+  '../../packages/cli/',
+  '../../packages/admin/',
+]
 
 Deno.test('nothing served or written here calls the place Yaks', () => {
   let seen = 0
@@ -75,8 +80,6 @@ Deno.test('nothing served or written here calls the place Yaks', () => {
   }
   // A walk that lost its directory passes every assertion in it.
   assert(seen > 60, `walked only ${seen} files`)
-  let yak = new URL('../../src/yak.ts', import.meta.url)
-  leak('src/yak.ts', code(Deno.readTextFileSync(yak)))
 })
 
 // What an agent is handed through the connector: the server's own face and

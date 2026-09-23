@@ -50,6 +50,7 @@ export {
   Refused,
   type Rpc,
   rpc,
+  timed,
   Unauthorized,
 } from './rpc.ts'
 export { type Result, rosterAfter, saidBy, STALE, versionIn } from './roster.ts'

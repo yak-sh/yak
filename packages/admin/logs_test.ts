@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from '@std/assert'
-import { Usage } from '@yaks/cli'
+import { CallError } from '@yaks/tools'
 import {
   duration,
   eventLine,
@@ -7,7 +7,7 @@ import {
   grouped,
   queried,
   records,
-} from './yak_logs.ts'
+} from './logs.ts'
 
 let event = (over: Record<string, unknown> = {}) => ({
   eventTimestamp: 1000,
@@ -193,6 +193,6 @@ Deno.test('since accepts seconds, minutes or hours and bounds live observation',
   ) assertEquals(duration(input), expected)
   assertEquals(duration(), 600)
   for (let input of ['0', '-1', '1.5m', 'forever', '25h']) {
-    assertThrows(() => duration(input), Usage, '--since')
+    assertThrows(() => duration(input), CallError, '--since')
   }
 })

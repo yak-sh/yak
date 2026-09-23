@@ -14,7 +14,7 @@ import {
   split,
 } from './deploy-gate.ts'
 import { WRANGLER } from '../workers/yak/wrangler.ts'
-import type { Version } from '../src/yak_deploys.ts'
+import type { Version } from '../packages/admin/deploys.ts'
 
 type Event = {
   type: string

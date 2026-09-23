@@ -366,6 +366,14 @@ grouped approximately by function, **not** by dependency order.
   serialize. `yak serve` runs @yaks/api's tool over the same composition rather
   than being mandatory for local commands.
 
+- **[@yaks/admin](./admin)** — The owner's verbs on yaks.app as `yak admin`
+  tools: accounts and their sign-in, standing links, the fee, a space's
+  deletion, a store's query, any connector tool, and the platform's deploys,
+  errors, tail, rollback and revert. Sessions are secrets in the box's graph.
+  Unpublished (`"publish": false`): it reaches into this repository's `src/` and
+  `workers/yak`, and is installed into the box's own `yak` through its
+  `yak.json`.
+
 - **[@yaks/harness](./harness)** — A local agent application combining SQLite,
   model execution, shell tools, graph tools and a terminal interface. Its `new`,
   `send`, `ls`, `show`, `tasks` and `models` commands use the flat @yaks/cli

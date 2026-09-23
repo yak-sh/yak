@@ -16,10 +16,10 @@ fresh worktree has none and a bare `wrangler deploy` dies at `mcp.ts`
 `import { z } from 'zod'`. `probe.ts` installs through the same door before it
 boots a `wrangler dev`.
 
-Correct a deployed regression with `yak revert <sha> --admin`: main is always
-deployed. `yak rollback [version] --admin` is for a broken build path and
-refuses to cross a data migration boundary. A Durable Object already migrated
-keeps its data, even when older code is deployed.
+Correct a deployed regression with `yak admin revert <sha> --admin`: main is
+always deployed. `yak admin rollback [version] --admin` is for a broken build
+path and refuses to cross a data migration boundary. A Durable Object already
+migrated keeps its data, even when older code is deployed.
 
 ## Workers Builds
 
@@ -76,8 +76,8 @@ wrapper alone cannot change that dashboard setting. Build and deploy are
 separate shell commands, so deploy mode restores Deno's path before it runs
 `deno task deploy:yak`. The wrapper passes `--message "<sha> <subject>"` from
 `git log -1`, making `annotations["workers/message"]` identify the deployed
-commit. `yak deploys --owner` estimates older, unannotated versions from commit
-times and marks that estimate in its output.
+commit. `yak admin deploys --owner` estimates older, unannotated versions from
+commit times and marks that estimate in its output.
 
 The incident commands, using only this box’s Wrangler/GitHub login. An agent
 names the act with `--admin` and it is recorded as the platform’s admin person
@@ -86,11 +86,11 @@ and it is his. Same commands, same credentials — the flag says whose act it is
 and the banner on stderr says so out loud.
 
 ```sh
-yak deploys --admin              # or --owner, when it is Jeff
-yak errors --since 10m --admin
-yak tail --admin
-yak rollback [version] --admin
-yak revert <sha> --admin
+yak admin deploys --admin        # or --owner, when it is Jeff
+yak admin errors --since 10m --admin
+yak admin tail --admin
+yak admin rollback [version] --admin
+yak admin revert <sha> --admin
 ```
 
 `yak login admin@bot.yak.sh --admin` signs this box in as that person; the
@@ -218,7 +218,7 @@ report and refuse to serve without the declared constraint.
 today that is all of `MARKS` but `SANDBOXED` and `SENT`, which write only
 columns the build before them already reads. A refused pass is not a boundary:
 its transaction rolls back, the data did not move, and its marker stays
-unchanged. `yak deploys` still treats a version carrying that pass as a
+unchanged. `yak admin deploys` still treats a version carrying that pass as a
 potential boundary, because another Store may have completed it.
 
 ## App bindings
@@ -263,18 +263,18 @@ An app directory's reviewer gets a link, never a mailbox: OpenAI rejects
 credentials behind an email code, and Anthropic asks for a fully populated test
 account (T-34351). A standing link signs its holder in until it expires and is
 worth a session and nothing more — so it is minted by the account it signs in,
-with `yak` (link.ts, identity.ts `/login/link`):
+with `yak admin` (link.ts, identity.ts `/login/link`):
 
-| act    | command                                           |
-| ------ | ------------------------------------------------- |
-| mint   | `yak test chatgpt-reviewer && yak link --days=90` |
-| revoke | `yak link --revoke=<id> --as=chatgpt-reviewer`    |
+| act    | command                                                            |
+| ------ | ------------------------------------------------------------------ |
+| mint   | `yak admin throwaway chatgpt-reviewer && yak admin link --days=90` |
+| revoke | `yak admin link --revoke=<id> --as=chatgpt-reviewer`               |
 
-`yak test <name>` mints `<name>@bot.yak.sh`, signs it in, and makes it current;
-`yak link` prints the URL, the id that revokes it, and when it dies (30 days by
-asking for nothing, a year at most). Build the account out — an app or two —
-before handing the link over, since a reviewer is asked to walk a working
-account. `--as` picks the account when it is not the current one.
+`yak admin throwaway <name>` mints `<name>@bot.yak.sh`, signs it in, and makes
+it current; `yak admin link` prints the URL, the id that revokes it, and when it
+dies (30 days by asking for nothing, a year at most). Build the account out — an
+app or two — before handing the link over, since a reviewer is asked to walk a
+working account. `--as` picks the account when it is not the current one.
 
 ## STRIPE_WEBHOOK_SECRET — the billing door's events
 

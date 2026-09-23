@@ -35,7 +35,7 @@
 //
 //   The bearer is an ordinary OAuth token for a test account, an address on
 //   the bot domain (src/bots.ts), got the way a host gets one (probe.ts
-//   `bearerFor`, or `yak test` and then /oauth/allow). That run makes its own
+//   `bearerFor`, or `yak admin throwaway` and then /oauth/allow). That run makes its own
 //   scratch spaces, works only inside them, and erases them at the end; it
 //   never touches a space it did not create. Nothing it did is left for a
 //   person to see: a test account's feedback is kept and never mailed, and

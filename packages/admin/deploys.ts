@@ -1,9 +1,12 @@
 // The owner's deployment history. Uploading code does not move data; giving
 // it traffic can. Keep every stored-shape boundary in this history, even after
 // someone rolls the code back. The directory does not roll its rows back.
-import { WRANGLER } from '../workers/yak/wrangler.ts'
-import { git } from './repo.ts'
-import { Refused } from './yaks_account.ts'
+import { run } from '@yaks/git/land'
+import { WRANGLER } from '../../workers/yak/wrangler.ts'
+import { Refused } from './accounts.ts'
+
+// One git run in `cwd`, answered as it came — the runner @yaks/git lands with.
+export let git = (cwd: string, args: string[]) => run(args, cwd)
 
 export type Commit = { sha: string; at: string; subject: string }
 export type Version = {
@@ -315,7 +318,7 @@ export let rollbackTarget = (rows: Deploy[], want?: string): Deploy => {
   let target = found[0]
   if (target.refusal) {
     throw new Refused(
-      `${target.id}: ${target.refusal}. Correct code with yak revert <sha> --owner; main is always deployed.`,
+      `${target.id}: ${target.refusal}. Correct code with yak admin revert <sha> --owner; main is always deployed.`,
     )
   }
   return target

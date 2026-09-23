@@ -1,0 +1,14 @@
+{
+  "name": "@yaks/admin",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./tools": "./tools.ts"
+  },
+  "publish": false,
+  "description": "The owner's verbs on yaks.app — accounts, sign-in links, the fee, deploys, logs, rollback and revert — as `yak admin` tools. Unpublished: installed into the box's own yak.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  }
+}

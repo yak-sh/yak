@@ -1,0 +1,297 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "admin",
+  "$defs": {
+    "admin_whoami": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "whoami",
+      "title": "Show the yaks.app account this box acts as",
+      "description": "The yaks.app account this box acts as, the kind it is (test, owner or admin), the person its session names, when that session expires, and every space it can reach with its role in each.",
+      "input": {
+        "as": { "type": "string", "description": "act as this account" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "readOnly": true,
+      "openWorld": true
+    },
+    "admin_accounts": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "accounts",
+      "title": "List the yaks.app accounts signed in on this box",
+      "description": "Every yaks.app account this box holds a session for, with its kind and which test account is current. Never prints a session.",
+      "input": {},
+      "readOnly": true
+    },
+    "admin_throwaway": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "throwaway",
+      "title": "Sign in as a throwaway test account",
+      "description": "Sign this box in as a throwaway test account, <name>@bot.yak.sh, and make it current: every later admin command acts as it unless it names another account. Without a name, a fresh probe-<random> address. The sign-in code is read from the letter in this graph.\n\n  yak admin throwaway\n  yak admin throwaway cookbook",
+      "input": {
+        "name": {
+          "type": "string",
+          "description": "the local part of the address"
+        }
+      },
+      "options": { "positional": ["name"] },
+      "openWorld": true
+    },
+    "admin_login": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "login",
+      "title": "Sign in as a yaks.app account",
+      "description": "Sign this box in as the yaks.app account at an address. A @bot.yak.sh code is read from the letter in this graph; anyone else’s is typed, or given with --code. Signing in as anybody but a test account is a named act: --owner for Jeff’s, --admin for admin@bot.yak.sh.\n\n  yak admin login you@example.com --owner\n  yak admin login admin@bot.yak.sh --admin",
+      "input": {
+        "address": { "type": "string", "description": "the account’s address" },
+        "code": { "type": "string", "description": "the six-digit code" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "required": ["address"],
+      "options": { "positional": ["address"] },
+      "openWorld": true
+    },
+    "admin_use": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "use",
+      "title": "Make a test account current",
+      "description": "Remember a test account as the one every later admin command acts as. An owner or admin account is refused: those are reached per command, with --owner or --admin.",
+      "input": {
+        "account": {
+          "type": "string",
+          "description": "the account, by address or local part"
+        }
+      },
+      "required": ["account"],
+      "options": { "positional": ["account"] }
+    },
+    "admin_logout": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "logout",
+      "title": "Forget a yaks.app account’s session",
+      "description": "Forget the session this box holds for one yaks.app account. The bearer `yak login` keeps is `yak logout`.",
+      "input": {
+        "account": {
+          "type": "string",
+          "description": "the account, by address or local part"
+        }
+      },
+      "required": ["account"],
+      "options": { "positional": ["account"] },
+      "destructive": true
+    },
+    "admin_link": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "link",
+      "title": "Make a standing sign-in link",
+      "description": "One URL that signs its holder in as this account until it expires, or --revoke to take one back by its id.\n\n  yak admin throwaway reviewer && yak admin link --days=90\n  yak admin link --revoke=3f2a --as=reviewer",
+      "input": {
+        "days": { "type": "number", "description": "how long it stands" },
+        "revoke": {
+          "type": "string",
+          "description": "a link id to revoke instead"
+        },
+        "as": { "type": "string", "description": "act as this account" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "openWorld": true
+    },
+    "admin_fee": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "fee",
+      "title": "Read or set the platform’s fee",
+      "description": "What the platform takes from a sale, in basis points: read it, or set it. The rate is the platform’s, so --admin or --owner is required.\n\n  yak admin fee --admin\n  yak admin fee 250 --owner",
+      "input": {
+        "bps": {
+          "type": "string",
+          "description": "the new rate, in whole basis points"
+        },
+        "as": { "type": "string", "description": "act as this account" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "options": { "positional": ["bps"] },
+      "openWorld": true
+    },
+    "admin_delete": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "delete",
+      "title": "Close a space for good",
+      "description": "Close a space: its apps, their data, and its address. What would go is listed first, the same list the confirmation letter carries to a person whose agent asked.",
+      "input": {
+        "space": { "type": "string", "description": "the space’s slug" },
+        "as": { "type": "string", "description": "act as this account" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "required": ["space"],
+      "options": { "positional": ["space"] },
+      "destructive": true,
+      "openWorld": true
+    },
+    "admin_query": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "query",
+      "title": "Query an app’s store",
+      "description": "An app’s store as this account reads it, through the filter grammar.\n\n  yak admin query jeff/recipes .doc!\n  yak admin query jeff .kind=note",
+      "input": {
+        "where": { "type": "string", "description": "a space, or space/app" },
+        "filters": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "dot-params"
+        },
+        "as": { "type": "string", "description": "act as this account" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "required": ["where"],
+      "options": { "positional": ["where"], "rest": "filters" },
+      "readOnly": true,
+      "openWorld": true
+    },
+    "admin_tool": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "tool",
+      "title": "Call a yaks.app tool as this account",
+      "description": "Call one yaks.app connector tool as the signed-in account rather than as the bearer `yak login` keeps, which is what a probe needs. Its own arguments follow as key=value.\n\n  yak admin tool app_list\n  yak admin tool app_new slug=notes title='Notes'",
+      "input": {
+        "name": { "type": "string", "description": "the tool to call" },
+        "args": { "description": "its own arguments, as key=value" },
+        "as": { "type": "string", "description": "act as this account" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "required": ["name"],
+      "options": { "positional": ["name"], "rest": "args" },
+      "openWorld": true
+    },
+    "admin_deploys": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "deploys",
+      "title": "List yaks.app versions and deployments",
+      "description": "Recent yaks.app uploads and deployments with their commits and live times; ~ marks a commit inferred by time. Migration boundaries survive code rollbacks, and unknown history refuses a rollback. --admin or --owner is required.",
+      "input": {
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "readOnly": true,
+      "openWorld": true
+    },
+    "admin_errors": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "errors",
+      "title": "Group yaks.app errors by signature",
+      "description": "yaks.app exceptions and error logs grouped by signature: count, first and last seen, entrypoint and version. Uses Workers Logs when available; otherwise observes the next window by tail. --admin or --owner is required.",
+      "input": {
+        "since": {
+          "type": "string",
+          "description": "how far back (default 10m)"
+        },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "readOnly": true,
+      "openWorld": true
+    },
+    "admin_tail": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "tail",
+      "title": "Follow yaks.app live events",
+      "description": "One line per live yaks.app event: outcome, entrypoint, request and errors. Does not return until interrupted. --admin or --owner is required.",
+      "input": {
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "readOnly": true,
+      "openWorld": true
+    },
+    "admin_rollback": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "rollback",
+      "title": "Roll yaks.app back to a prior version",
+      "description": "Emergency rollback, only for a broken build path: code corrections use `yak admin revert`, since main deploys on every push. Defaults to the prior deployed version, refuses data boundaries and uncertain commits, then probes the public doors. --admin or --owner is required.",
+      "input": {
+        "version": {
+          "type": "string",
+          "description": "which version to serve"
+        },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "options": { "positional": ["version"] },
+      "destructive": true,
+      "openWorld": true
+    },
+    "admin_revert": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "revert",
+      "title": "Revert a main commit and wait for it to deploy",
+      "description": "Revert a main commit in a fresh worktree, run deno task check, land and push main, and wait up to 20m for Workers Builds to serve the revert. A failed worktree is kept. --admin or --owner is required.",
+      "input": {
+        "sha": { "type": "string", "description": "the main commit to revert" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "options": { "positional": ["sha"] },
+      "destructive": true,
+      "openWorld": true
+    }
+  }
+}

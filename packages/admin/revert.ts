@@ -1,9 +1,8 @@
 // Correct main, then wait for Workers Builds to serve the correction. Land is
-// the same git primitive `task land` calls; its two outcomes matter here: a
+// the same git primitive `yak land` calls; its two outcomes matter here: a
 // rebase needs another gate, and a local landing is not proof of a push.
-import { land } from './land.ts'
-import { git } from './repo.ts'
-import { deploys, needGit, table } from './yak_deploys.ts'
+import { land } from '@yaks/git/land'
+import { deploys, git, needGit, table } from './deploys.ts'
 
 export let revert = async (
   root: string,
@@ -14,7 +13,7 @@ export let revert = async (
   let list = await needGit(root, ['worktree', 'list', '--porcelain'])
   if (!list.split('\n\n')[0].split('\n').includes('branch refs/heads/main')) {
     throw new Error(
-      'task land must target main; the primary checkout is on another branch',
+      'land must target main; the primary checkout is on another branch',
     )
   }
   let remote = await needGit(root, ['config', 'branch.main.remote'])
@@ -124,7 +123,7 @@ export let revert = async (
         await new Promise((ok) => setTimeout(ok, 10_000))
       }
       throw new Error(
-        `Workers Builds did not serve ${commit} within 20m; check yak deploys --owner and the build logs`,
+        `Workers Builds did not serve ${commit} within 20m; check yak admin deploys --owner and the build logs`,
       )
     }
     throw new Error('main kept moving through three gate attempts')

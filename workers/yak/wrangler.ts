@@ -119,7 +119,7 @@ if (import.meta.main) {
   await ready()
   let argv = [...Deno.args]
   if (command(argv) === 'deploy') {
-    // Versions carry their commit so `yak deploys` need not infer it by time.
+    // Versions carry their commit so `yak admin deploys` need not infer it by time.
     let commit = await new Deno.Command('git', {
       args: ['log', '-1', '--format=%H %s'],
       cwd: dir,

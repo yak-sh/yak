@@ -258,7 +258,7 @@ export let MARKS = [
   SENT,
 ]
 
-/** Passes that change stored shape, read per commit by `yak deploys`.
+/** Passes that change stored shape, read per commit by `yak admin deploys`.
  * A refused pass leaves stored data and its marker unchanged, so adds no
  * boundary. Nor does an expanding pass the build before it reads correctly:
  * SANDBOXED and SENT write only properties that build already reads. */

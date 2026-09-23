@@ -19,7 +19,8 @@
 // kinds; the token crosses only between the vault and an http header.
 import { stateDir } from '@yaks/cli'
 import type { Local } from '@yaks/secrets'
-import { ADMIN, BOT, isTestAddress } from './bots.ts'
+import { CallError } from '@yaks/tools'
+import { ADMIN, BOT, isTestAddress } from '../../src/bots.ts'
 
 export type Account = {
   // The address it signed in as.
@@ -30,7 +31,7 @@ export type Account = {
   name: string
 }
 
-// A test account is provably a throwaway (bots.ts).
+// A test account is provably a throwaway (src/bots.ts).
 export let isTest = (a: Account) => isTestAddress(a.address)
 export let isAdmin = (a: Account) => a.address == ADMIN
 
@@ -82,7 +83,13 @@ export let choose = (address: string | null): void => {
 export let named = (all: Account[], want: string): Account[] =>
   all.filter((a) => a.address == want || a.name == want)
 
-export class Refused extends Error {}
+// What reaching an account the argv did not name is: the caller's own
+// mistake, answered in words, never a fault of the tool.
+export class Refused extends CallError {
+  constructor(message: string) {
+    super('refused', message)
+  }
+}
 
 let say = (all: Account[]) =>
   all.length
@@ -120,7 +127,7 @@ export let pick = (
     let it = all.find(isAdmin)
     if (!it) {
       throw new Refused(
-        `no admin account signed in — \`yak login ${ADMIN} --admin\``,
+        `no admin account signed in — \`yak admin login ${ADMIN} --admin\``,
       )
     }
     return it
@@ -130,7 +137,7 @@ export let pick = (
     let theirs = all.filter((a) => !isTest(a) && !isAdmin(a))
     if (!theirs.length) {
       throw new Refused(
-        'no owner account signed in — `yak login <address> --owner`',
+        'no owner account signed in — `yak admin login <address> --owner`',
       )
     }
     if (theirs.length > 1) {
@@ -147,10 +154,12 @@ export let pick = (
   }
   if (tests.length == 1) return tests[0]
   if (!tests.length) {
-    throw new Refused('no test account — `yak test` mints one and signs in')
+    throw new Refused(
+      'no test account — `yak admin throwaway` signs in as a new one',
+    )
   }
   throw new Refused(
-    `${tests.length} test accounts and none current — \`yak use <name>\`, ` +
+    `${tests.length} test accounts and none current — \`yak admin use <name>\`, ` +
       `or --as:\n${say(tests)}`,
   )
 }
@@ -160,9 +169,9 @@ let refusal = (a: Account) =>
   new Refused(
     isAdmin(a)
       ? `${a.address} is the platform’s admin. Acting as it is a named act: ` +
-        'add --admin. A throwaway is `yak test`.'
+        'add --admin. A throwaway is `yak admin throwaway`.'
       : `${a.address} is not a test account. Acting as its owner ` +
-        'is a named act: add --owner. A throwaway is `yak test`.',
+        'is a named act: add --owner. A throwaway is `yak admin throwaway`.',
   )
 
 // `use` remembers a test account and REFUSES every other kind, so the
@@ -202,7 +211,7 @@ export let render = (all: Account[], current: string, at?: Account) =>
         isAdmin(a) ? 'ADMIN' : isTest(a) ? 'test' : 'OWNER'
       }${a.address == current ? ' · current' : ''}`
     ).join('\n')
-    : 'no accounts — `yak test` mints a throwaway and signs in'
+    : 'no accounts — `yak admin throwaway` signs in as a new one'
 
 // A fresh throwaway address. Short enough to type, random enough that two
 // probes never land in one space.

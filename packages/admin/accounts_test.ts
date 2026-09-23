@@ -4,7 +4,7 @@
 // default beside the bearer.
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import { ramVault, secretEid } from '@yaks/secrets'
-import { ADMIN } from './bots.ts'
+import { ADMIN } from '../../src/bots.ts'
 import {
   type Account,
   accountsIn,
@@ -19,7 +19,7 @@ import {
   sessionName,
   throwaway,
   usable,
-} from './yaks_account.ts'
+} from './accounts.ts'
 
 let bot = (name: string, session = 'tok'): Account => ({
   address: `${name}@bot.yak.sh`,
@@ -42,7 +42,7 @@ Deno.test('no chain of defaults reaches an owner account', () => {
   // asked for by name without the flag: refused, and the refusal teaches.
   let no = assertThrows(() => pick(all, { as: 'jeff' }), Refused)
   assertStringIncludes((no as Error).message, '--owner')
-  assertStringIncludes((no as Error).message, 'yak test')
+  assertStringIncludes((no as Error).message, 'yak admin throwaway')
   // with the flag, either spelling reaches it.
   assertEquals(pick(all, { as: 'jeff', owner: true }).address, 'jeff@yak.sh')
   assertEquals(pick(all, { owner: true }).address, 'jeff@yak.sh')
@@ -50,12 +50,12 @@ Deno.test('no chain of defaults reaches an owner account', () => {
 
 Deno.test('with no throwaway signed in, the answer is how to mint one', () => {
   let no = assertThrows(() => pick([jeff], {}), Refused)
-  assertStringIncludes((no as Error).message, 'yak test')
+  assertStringIncludes((no as Error).message, 'yak admin throwaway')
   let many = assertThrows(
     () => pick([bot('a'), bot('b')], {}),
     Refused,
   )
-  assertStringIncludes((many as Error).message, 'yak use')
+  assertStringIncludes((many as Error).message, 'yak admin use')
   assertEquals(pick([bot('a'), bot('b')], { current: 'b' }).name, 'b')
 })
 
@@ -85,7 +85,7 @@ Deno.test('the admin is neither a throwaway nor anybody’s own', () => {
   )
   assertStringIncludes((both as Error).message, 'pick one')
   let none = assertThrows(() => pick([bot('p')], { admin: true }), Refused)
-  assertStringIncludes((none as Error).message, 'yak login')
+  assertStringIncludes((none as Error).message, 'yak admin login')
 })
 
 Deno.test('an owner account is never made the remembered default', () => {

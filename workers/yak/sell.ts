@@ -61,7 +61,7 @@ import { caught } from './sentry.ts'
  * What the platform takes from one sale, in basis points — hundredths of a
  * percent, so 250 is 2.5%. It is a setting and not a number in this file
  * (T-34554): `fee.bps` on the platform's own space row (vocab.ts), read at
- * request time, so the owner changes what we charge with `yak fee 250` and the
+ * request time, so the owner changes what we charge with `yak admin fee 250` and the
  * next sale pays the new rate with nothing deployed.
  *
  * It is one property because it is said in four places — the Checkout Session's
@@ -1095,7 +1095,7 @@ export let priceAt = async (dir: Directory, file: Response) => {
 
 /**
  * `GET /api/fee` reads the platform's cut and `POST /api/fee` (`bps=250`) sets
- * it — `yak fee` on the owner's box, and the only writer of the property.
+ * it — `yak admin fee` on the owner's box, and the only writer of the property.
  *
  * The gate is A seat in `yak`, the platform's own space: whoever owns that row
  * owns the platform, which is the same authority `space_sell` and the meter

@@ -8,7 +8,7 @@ import {
   versionFor,
 } from './deploy-time.ts'
 import { type Deploy, gate, readRecords, records } from './deploy-gate.ts'
-import type { Version } from '../src/yak_deploys.ts'
+import type { Version } from '../packages/admin/deploys.ts'
 
 let SHA = 'a'.repeat(40)
 let PUSHED = '2026-09-07T19:00:00Z'
