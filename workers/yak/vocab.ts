@@ -171,25 +171,16 @@ export let relationDoc: VocabDoc = {
 }
 
 /**
- * What the platform says in an app's store that the app never asked for: the
- * breaks it noted there, the marks a served or fixed item wears, and the two
- * rows an upload makes. They are core rather than an app's own for the same
- * reason the relations are — every store already holds rows under these names,
- * `app_errors` and the unseen block read them by these names in every app, and
- * a word means the same thing everywhere.
- *
- * The server-owned ones are `stamped`: an `exception` is the platform's word
- * about the app's own code, and the kernel's door (`x-yak-kernel`, graph.ts) is
- * its only writer. The marks are stamped too and written bare — `notified: {}`
- * says the thing without saying a property.
- *
- * Their properties are the fleet's own (src/vocab/manifests/kernel.json,
- * comms.json), so a row written through the old store means exactly what a row
- * written through this one means.
+ * A break the platform noted: in an app's store about the app's own code
+ * (index.ts), and in any store about the store itself (graph.ts `#broke`).
+ * Every property is server-owned, and the kernel's door (`x-yak-kernel`,
+ * graph.ts) is its only writer. The properties are the fleet's own
+ * (src/vocab/manifests/kernel.json), so a row written through the old store
+ * means exactly what a row written through this one means.
  */
-export let kernelDoc: VocabDoc = {
+export let exceptionDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
-  title: 'kernel',
+  title: 'exception',
   $defs: {
     exception: {
       component: true,
@@ -204,6 +195,28 @@ export let kernelDoc: VocabDoc = {
         stack: owned(text),
       },
     },
+  },
+}
+
+/**
+ * What the platform says in an app's store that the app never asked for: the
+ * marks a served or fixed item wears, a failure it reports on purpose, and the
+ * two rows an upload makes. They are core rather than an app's own for the
+ * same reason the relations are — every store already holds rows under these
+ * names, `app_errors` and the unseen block read them by these names in every
+ * app, and a word means the same thing everywhere.
+ *
+ * The marks are server-owned and written bare — `notified: {}` says the thing
+ * without saying a property.
+ *
+ * Their properties are the fleet's own (src/vocab/manifests/kernel.json,
+ * comms.json), so a row written through the old store means exactly what a row
+ * written through this one means.
+ */
+export let kernelDoc: VocabDoc = {
+  $vocabulary: { [CORE_URI]: true },
+  title: 'kernel',
+  $defs: {
     // A known failure state the platform reports deliberately, as against a
     // break nobody chose. `app_errors` reads both facets in every store, so
     // both are declared in every store.
@@ -469,20 +482,6 @@ export let appDerived = (): Record<
   },
 })
 
-/** The documents an app's vocabulary is built on, in load order.
- *
- * `mailDoc` is among them because every app has a mailbox (T-33686): a letter
- * is an entity here like anywhere else, and the same six words say the one it
- * sends and the one that arrives. It brings `notified` with it, which is why
- * {@link kernelDoc} does not.
- *
- * `keyDoc` and `aliasDoc` are among them because a name is how an agent
- * addresses a row it wrote last week without having kept the eid (T-34390).
- * @yaks/key's `key{of, value}` is the carrier — a value an entity answers to,
- * as an entity of its own, named after what it says — and `alias` is the kind
- * of value that is a name. They are core rather than each app's own for the
- * reason every other core word is: a word means the same thing in every
- * store. */
 /** Derived classification metadata is readable but never client-authored. */
 export const classificationDoc: VocabDoc = {
   ...archetypeDoc,
@@ -513,26 +512,49 @@ let invocationDoc: VocabDoc = {
   ),
 }
 
-export let coreDocs: VocabDoc[] = [
+/**
+ * The words the Store itself writes and reads in whichever store it runs
+ * (graph.ts): the spine, its stamps and the writer it mints ({@link coreDoc}),
+ * the archetype index, the link and the name every row can be addressed by
+ * (`edgeDoc`, `keyDoc`, `aliasDoc`, T-34390), its clock (`wakeDoc`, D-37562)
+ * and the break it notes about itself ({@link exceptionDoc}). Every store's
+ * vocabulary is built on them by {@link storeDocs}, so no store can be missing
+ * one: a store without `wake` broke its clock on every alarm, and one without
+ * `exception` could not write down that it had.
+ */
+let machineDocs: VocabDoc[] = [
   coreDoc,
   classificationDoc,
+  edgeDoc,
+  keyDoc,
+  aliasDoc,
+  wakeDoc,
+  exceptionDoc,
+]
+
+/** A store's whole list of documents: the Store's own words, then the store's.
+ * A vocabulary sorts its components by name, so where a document sits changes
+ * no table and no schema stamp. */
+let storeDocs = (own: VocabDoc[]): VocabDoc[] => [...machineDocs, ...own]
+
+/** The documents an app's vocabulary is built on.
+ *
+ * `mailDoc` is among them because every app has a mailbox (T-33686): a letter
+ * is an entity here like anywhere else, and the same six words say the one it
+ * sends and the one that arrives. It brings `notified` with it, which is why
+ * {@link kernelDoc} does not.
+ *
+ * An app writes `wake{at}` on anything it means to come back to, and what the
+ * firing means is left to the app's own rules on `fired` (D-37562). */
+export let coreDocs: VocabDoc[] = storeDocs([
   docDoc,
   memberDoc,
-  edgeDoc,
   relationDoc,
   kernelDoc,
   appsDoc,
   mailDoc,
-  keyDoc,
-  aliasDoc,
   invocationDoc,
-  // A schedule is every store's word now (D-37562): an app writes `wake{at}`
-  // on anything it means to come back to, its Durable Object arms its own
-  // alarm for the earliest one (graph.ts), and what the firing means is left
-  // to the app's own rules on `fired`. The directory's sweeps are the same
-  // rows in the same shape.
-  wakeDoc,
-]
+])
 
 // ---- the platform's own store (T-33814) -------------------------------------
 //
@@ -974,11 +996,10 @@ export let platformDoc: VocabDoc = {
 
 /** The documents the directory's vocabulary is built on, in load order.
  *
- * `kernelDoc` is among them for the same reason it is among an app's: the
- * platform notes its own breaks where it notes an app's, `app_errors` and the
- * unseen block read every store the caller can reach by the same words, and a
- * mark spelled `archived` here and nowhere else would make the directory the
- * one store those doors cannot answer for.
+ * `kernelDoc` is among them for the same reason it is among an app's:
+ * `app_errors` and the unseen block read every store the caller can reach by
+ * the same words, and a mark declared here and nowhere else would make the
+ * directory the one store those doors cannot answer for.
  *
  * A plugin's words land between the core documents and the platform's own
  * (plugin.ts `vocab`): after the words they are written in, and before the
@@ -988,22 +1009,16 @@ export let platformDoc: VocabDoc = {
  * holds whether they are looking at one app or another — so it belongs to the
  * space, and the directory is the one store a space has. The words themselves
  * are its `doc.body`, which is why @yaks/doc is loaded above every plugin. */
-export let platformDocs: VocabDoc[] = [
-  coreDoc,
+export let platformDocs: VocabDoc[] = storeDocs([
   idDoc,
-  classificationDoc,
   docDoc,
-  edgeDoc,
   relationDoc,
   kernelDoc,
   notifiedDoc,
-  keyDoc,
-  aliasDoc,
-  wakeDoc,
   sweepDoc,
   ...vocabOf(PLUGINS),
   platformDoc,
-]
+])
 
 /**
  * The directory's whole vocabulary: the core documents plus the platform's own
@@ -1014,9 +1029,9 @@ export let platformVocab = (): Vocab => loadVocab(platformDocs, metaKeywords)
 
 // ---- the git object graph's store (D-34943) ---------------------------------
 
-/** What the git object store speaks: @yaks/git's words, the two carriers they
- * ride (an `entry` and a `parent` are @yaks/edge links, a `compat` oid is a
- * @yaks/key value), and the spine.
+/** What the git object store speaks: the Store's own words ({@link storeDocs}),
+ * which carry the two links @yaks/git's words ride (an `entry` and a `parent`
+ * are @yaks/edge links, a `compat` oid is a @yaks/key value), and @yaks/git's.
  *
  * It is NOT built on {@link coreDocs}, and the reason is one word: `blob`. The
  * platform means a page's upload by it ({@link kernelDoc}) and @yaks/git means
@@ -1028,21 +1043,8 @@ export let platformVocab = (): Vocab => loadVocab(platformDocs, metaKeywords)
  * `gitDoc` carries the package's `ref` word too, and this store keeps no refs:
  * a branch belongs to one app, so its row is the directory's (git.ts loads
  * @yaks/git's `refDoc` there). A word a store holds no rows under costs it
- * nothing.
- *
- * `wakeDoc` is here for the same reason it is in {@link coreDocs}: every store
- * runs its own clock (graph.ts, D-37562), and the clock asks for `wake` rows
- * whether or not the store holds any. */
-export let gitDocs: VocabDoc[] = [
-  coreDoc,
-  idDoc,
-  classificationDoc,
-  edgeDoc,
-  keyDoc,
-  aliasDoc,
-  wakeDoc,
-  gitDoc,
-]
+ * nothing. */
+export let gitDocs: VocabDoc[] = storeDocs([idDoc, gitDoc])
 
 /** The git object store's whole vocabulary (graph.ts, {@link gitDocs}). */
 export let gitVocab = (): Vocab => loadVocab(gitDocs, metaKeywords)

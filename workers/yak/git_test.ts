@@ -9,7 +9,7 @@
 // because the whole claim is that a deploy mints a commit: the plugin list, the
 // registration, the cross-store write and the vocabulary all have to be right
 // for this file to pass.
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertObjectMatch } from '@std/assert'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -18,7 +18,7 @@ import { GIT_STORE, storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { backfilled, BODY, held, MAIN, refAt, refEid } from './gitobj.ts'
 import { platform } from './harness.ts'
-import { meta, metaOf } from './meta.ts'
+import { KERNEL, meta, metaOf } from './meta.ts'
 import type { Who } from './session.ts'
 import { pins, record, sha256 } from './versions.ts'
 
@@ -154,6 +154,24 @@ Deno.test('a deploy mints one commit whose tree is the manifest', async () => {
   )!
   let [blob] = await git.query(`.eid=${(page.edge as { to: string }).to}`)
   assertEquals((blob.blob as { sha: string }).sha, manifest['index.html'])
+})
+
+// Every store notes its own breaks where it notes an app's (graph.ts
+// `#broke`), through the kernel's door, and the git store is one of them.
+Deno.test('the git object store can write down a break of its own', async () => {
+  let { env } = platform('a probe secret')
+  let git = metaOf(storeOf(env.STORE, GIT_STORE))
+  let [noted] = await git.apply([{
+    entity: { eid: crypto.randomUUID() },
+    exception: {
+      at: new Date().toISOString(),
+      request: 'wake seed',
+      version: null,
+      message: 'it broke',
+      stack: '',
+    },
+  }], KERNEL)
+  assertObjectMatch(noted, { exception: { message: 'it broke' } })
 })
 
 Deno.test('the next deploy follows the last one and moves the branch', async () => {
