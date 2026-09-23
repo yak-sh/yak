@@ -14,11 +14,17 @@
 // Each entry's id is derived from its line, so reading a line twice writes the
 // same entry twice, which changes nothing. That is what lets the spool be
 // trimmed only after the entries are written: a crash in between repeats
-// lines and loses none.
+// lines and loses none. Each is stamped with the time the hook ran, not the
+// time it was read.
+//
+// A session that ran before the hooks were installed is read from Claude's own
+// transcript file instead (./past.ts), into the same turns, written the same
+// way: lazily, one file per pass of a long-running host.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { SESSION } from './comp.ts'
 import { CONTENT, ENTRY, OUTPUT } from './native.ts'
+import { claudeProjects, next, turnsOf } from './past.ts'
 import { spoolOf, taken, trim, type Turn } from './turn.ts'
 import { sessionFor, where } from './who.ts'
 
@@ -28,7 +34,13 @@ export type Options = {
   spool?: string
   /** how often the spool is read, in milliseconds (default one second) */
   every?: number
+  /** the Claude projects directory past transcripts are read from (default
+   * `~/.claude/projects`) */
+  transcripts?: string
 }
+
+// How long a host waits to look for past transcripts again once none is left.
+let LOOK = 10 * 60 * 1000
 
 let hex = (bytes: ArrayBuffer) =>
   [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0'))
@@ -84,13 +96,36 @@ export let recorded = async (g: Graph, turns: Turn[]): Promise<Bundle[]> => {
   return [...sessions, ...entries]
 }
 
+/** Write turns into their transcripts, each stamped with the moment it
+ * happened rather than the moment it was read, so a person's words sort by
+ * when they were said. */
+export let record = async (g: Graph, turns: Turn[]): Promise<void> => {
+  for (let t of turns) await g.apply(await recorded(g, [t]), { now: t.at })
+}
+
 /** Read the spool into the graph once, then trim what was written. Answers how
  * many lines it read. */
 export let drain = async (g: Graph, path: string): Promise<number> => {
   let { turns, bytes } = taken(path)
-  if (turns.length) await g.apply(await recorded(g, turns))
+  await record(g, turns)
   trim(path, bytes)
   return turns.length
+}
+
+/** Read one past transcript into the graph, if one is waiting (./past.ts).
+ * Answers the session it read, or nothing. */
+export let backfill = async (
+  g: Graph,
+  dir: string,
+  known: Set<string>,
+  now?: number,
+): Promise<string | undefined> => {
+  let past = await next(g, dir, known, now)
+  if (!past) return undefined
+  let lines = Deno.readTextFileSync(past.path).split('\n')
+  await record(g, turnsOf(past.sid, lines))
+  known.add(past.sid)
+  return past.sid
 }
 
 let sleep = (ms: number, signal: AbortSignal) =>
@@ -104,7 +139,9 @@ let sleep = (ms: number, signal: AbortSignal) =>
 
 /** Read the spool into transcripts until `signal` aborts; an aborted signal
  * gets one pass. A pass that fails is logged and tried again on the next, so
- * the lines wait in the spool rather than being lost. */
+ * the lines wait in the spool rather than being lost. Between passes, a
+ * long-running host reads in one past transcript; once none is waiting, it
+ * looks again every ten minutes. */
 export let service = async (
   host: { graph: Graph; config?: { db?: string } },
   options: Options = {},
@@ -112,6 +149,9 @@ export let service = async (
 ): Promise<void> => {
   let path = options.spool ?? spoolOf(host.config?.db)
   if (!path) return
+  let dir = options.transcripts ?? claudeProjects()
+  let known = new Set<string>()
+  let idle = 0
   for (;;) {
     try {
       await drain(host.graph, path)
@@ -119,6 +159,14 @@ export let service = async (
       console.error('turn spool —', e)
     }
     if (signal.aborted) return
+    if (dir && Date.now() >= idle) {
+      try {
+        if (!await backfill(host.graph, dir, known)) idle = Date.now() + LOOK
+      } catch (e) {
+        console.error('transcript backfill —', e)
+        idle = Date.now() + LOOK
+      }
+    }
     await sleep(options.every ?? 1000, signal)
   }
 }

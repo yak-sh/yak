@@ -215,12 +215,21 @@ the spool into transcripts, in order, about once a second while a host is up and
 once per one-shot command. A prompt becomes an input entry and marks the session
 `operator`; a reply becomes an output entry. Each entry's ID is derived from its
 spool line, so a line read twice writes nothing new, and the spool is trimmed
-only after its entries are written.
+only after its entries are written. Each entry is dated when the hook ran, not
+when the duty read it.
 
-| Option  | Default                       | Meaning                           |
-| ------- | ----------------------------- | --------------------------------- |
-| `spool` | `spool/turns.jsonl` beside db | the file the hooks and duty share |
-| `every` | `1000`                        | milliseconds between reads        |
+A session that ran before the hooks were installed is read from Claude's own
+transcript file (`past.ts`) into the same entries, dated from the transcript:
+each prompt the person typed, and the text of each turn's last reply. It is
+lazy: a long-running host reads one transcript per pass, and a one-shot command
+reads none. A transcript is skipped when the graph already holds entries for its
+session, and until it has gone an hour without being written.
+
+| Option        | Default                       | Meaning                              |
+| ------------- | ----------------------------- | ------------------------------------ |
+| `spool`       | `spool/turns.jsonl` beside db | the file the hooks and duty share    |
+| `every`       | `1000`                        | milliseconds between reads           |
+| `transcripts` | `~/.claude/projects`          | where past transcripts are read from |
 
 A graph held in memory has no spool, so an install there writes no turn hooks.
 
