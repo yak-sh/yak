@@ -20,9 +20,20 @@ Deno.test('staging repeats the kernel bindings without production resources', ()
       'version_metadata',
       'cache',
       'exports',
-      'observability',
     ]
   ) assertEquals(staging[key], config[key], `${key} must exist on staging`)
+
+  // The same logs and traces, kept in Cloudflare. Export destinations are
+  // production's alone, like its other resources: staging names none, so its
+  // telemetry never lands in the production Sentry project.
+  let kinds = config.observability as Record<string, Record<string, unknown>>
+  let own = staging.observability as Record<string, Record<string, unknown>>
+  assertEquals(Object.keys(own), Object.keys(kinds))
+  for (let [kind, { destinations: _, ...rest }] of Object.entries(kinds)) {
+    let { destinations, ...mine } = own[kind]
+    assertEquals(mine, rest, `observability.${kind} must match on staging`)
+    assertEquals(destinations, undefined, `staging exports no ${kind}`)
+  }
 
   for (
     let [key, resource] of [
