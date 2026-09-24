@@ -674,6 +674,7 @@ let deskCss = `
 .Desk .Desk_Trash { max-width: none; margin: 0 }
 .Connection_Head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem .75rem; margin: 0 0 .5rem }
 .Connection_Head h2 { margin: 0 }
+.Connection_Head .Apps_Tag { font-size: .8rem; color: var(--soft-ink) }
 .Connection_Status { font-size: .85rem; font-weight: 700; color: var(--soft-ink) }
 .Connection_Status-connected { color: var(--accent) }
 .Connection_Status-needed, .Connection_Status-broken { color: var(--warn) }
@@ -922,7 +923,9 @@ let connection = (c: Shown, on: boolean) => {
       '<button class="Button" type="submit" name="do" value="signin">Connect</button>',
     )
     : ''
-  let drop = c.status == 'needed' && !c.apps.length ? '' : form(
+  // A connection an app is waiting on is connected, not removed: removing it
+  // would only leave the app a new one waiting.
+  let drop = c.status == 'needed' && c.apps.length ? '' : form(
     `<button class="Button Bill_Go-quiet" type="submit" name="do" value="disconnect">${
       c.status == 'needed' ? 'Remove' : 'Disconnect'
     }</button>`,
