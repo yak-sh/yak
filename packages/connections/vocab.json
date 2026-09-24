@@ -1,0 +1,147 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/id": true,
+    "https://yak.sh/vocab/edge": true
+  },
+  "title": "connections",
+  "$defs": {
+    "integration": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "description": "an outside service, as data: where a person signs in to it and where its codes are exchanged, for one reached by OAuth, and the hosts its credential may be sent to. The built ones ship with @yaks/connections; this component is a custom one, kept in the space",
+      "properties": {
+        "name": {
+          "type": "string",
+          "identity": true,
+          "description": "what a connection names it by; the entity id is derived from it, and a built integration's name is never a custom one's"
+        },
+        "authorize": {
+          "type": "string",
+          "description": "where a person grants access, for an integration reached by OAuth"
+        },
+        "token": {
+          "type": "string",
+          "description": "where codes and refresh tokens are exchanged; an integration with none is a pasted key"
+        },
+        "scopes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "what a connection asks for when nothing narrower was needed"
+        },
+        "params": {
+          "type": "object",
+          "description": "extra parameters the authorize link carries, such as Google's access_type"
+        },
+        "auth": {
+          "type": "string",
+          "enum": ["basic", "post"],
+          "description": "how the client authenticates at the token endpoint (default basic)"
+        },
+        "hosts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the API hosts a connection's credential may be sent to, and no others"
+        },
+        "signature": {
+          "type": ["string", "object"],
+          "description": "how the service signs the webhooks it sends (@yaks/hook's Scheme)"
+        }
+      }
+    },
+    "connection": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": ["secret"],
+      "prefix": "C",
+      "description": "one link between a space or a person and an outside service, through an integration. The entity is also the secret its credential is kept as: the graph holds the handle, the vault the key or the tokens",
+      "properties": {
+        "integration": {
+          "type": "string",
+          "description": "the integration it goes through, by name"
+        },
+        "owner": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "the space or the person it belongs to; it is deleted with them, and its credential with it"
+        },
+        "account": {
+          "type": "string",
+          "description": "which account at the outside service, as the person would recognize it"
+        },
+        "scopes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "what it was granted, or what the app that needs it asked for"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["needed", "connected", "broken"],
+          "description": "needed: no credential yet; connected: one is kept; broken: the service refused it"
+        }
+      }
+    },
+    "uses": {
+      "component": true,
+      "type": "object",
+      "edge": true,
+      "properties": {},
+      "description": "the relation on a link: this app calls out through that connection"
+    },
+    "connection_need": {
+      "tool": true,
+      "noun": "connection",
+      "verb": "need",
+      "title": "Say an app needs a connection",
+      "description": "Say that an app needs an outside service: an integration by name, and the scopes it asks for. It makes a connection with no credential, owned by a space or a person, which shows them what to connect; no key or token ever passes through this tool. For a service with no built integration, name it and give the hosts its key may be sent to, and a custom integration is made for it. An app that already uses a connection through that integration is answered with it. Returns the applied changes as bundles: JSON objects with entity ids and the components written.",
+      "input": {
+        "app": {
+          "type": "string",
+          "ref": "entity",
+          "description": "the app that needs it, by id or name"
+        },
+        "owner": {
+          "type": "string",
+          "ref": "entity",
+          "description": "the space or person who will connect it, by id or name"
+        },
+        "integration": {
+          "type": "string",
+          "description": "the integration's name"
+        },
+        "scopes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "what the app asks for; omit for the integration's own"
+        },
+        "hosts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "for a custom key only: the hosts it may be sent to"
+        }
+      },
+      "required": ["app", "owner", "integration"],
+      "options": { "positional": ["integration"] }
+    },
+    "connection_list": {
+      "tool": true,
+      "noun": "connection",
+      "verb": "list",
+      "title": "List connections",
+      "description": "The connections a space or a person owns, each with its integration, account, scopes and status (needed, connected or broken), and the links from each app that uses one. A handle is shown where a credential is kept; the credential itself never is. Returns bundles: JSON objects with entity ids and component fields.",
+      "input": {
+        "owner": {
+          "type": "string",
+          "ref": "entity",
+          "description": "the space or person, by id or name"
+        }
+      },
+      "required": ["owner"],
+      "options": { "positional": ["owner"] },
+      "readOnly": true
+    }
+  }
+}

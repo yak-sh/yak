@@ -153,7 +153,7 @@ slow(
         'A second installation',
       )
       let found = await snapshots()
-      assertEquals(found.map((c) => [c.id, c.name, c.provider]), [
+      assertEquals(found.map((c) => [c.id, c.name, c.brand]), [
         ['chatgpt', 'ChatGPT', 'chatgpt'],
         ['claude', 'Claude', 'claude'],
       ])

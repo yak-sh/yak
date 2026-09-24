@@ -1,0 +1,20 @@
+{
+  "name": "@yaks/connections",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./tools": "./tools.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Integrations and connections: the outside services a space can reach, the link between a space or a person and one, and the credential behind it, kept as a secret.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  }
+}

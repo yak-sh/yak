@@ -8,7 +8,7 @@ import { agentList, agentLive } from './connected_ui.ts'
 
 let chatgpt: Agent = {
   id: 'chatgpt',
-  provider: 'chatgpt',
+  brand: 'chatgpt',
   name: 'ChatGPT',
   connectedAt: 1,
 }
@@ -65,8 +65,8 @@ Deno.test('agent rows show names and only known web agent destinations', () => {
   let hostile = '<img src=x onerror=alert(1)>'
   let m = mount([
     chatgpt,
-    { id: 'claude', provider: 'claude', name: 'Claude', connectedAt: 2 },
-    { id: 'local', provider: 'claude-code', name: hostile, connectedAt: 3 },
+    { id: 'claude', brand: 'claude', name: 'Claude', connectedAt: 2 },
+    { id: 'local', brand: 'claude-code', name: hostile, connectedAt: 3 },
   ])
   assertEquals(m.calls.length, 0, 'the server state stays intact on load')
   assertEquals(m.list.hidden, false)
@@ -89,13 +89,13 @@ Deno.test('agent rows show names and only known web agent destinations', () => {
 Deno.test('compact agents render launch links and refresh without replacing drafts or stable links', async () => {
   let claude: Agent = {
     id: 'claude',
-    provider: 'claude',
+    brand: 'claude',
     name: 'Claude',
     connectedAt: 2,
   }
   let local: Agent = {
     id: 'local',
-    provider: 'claude-code',
+    brand: 'claude-code',
     name: '<img src=x onerror=alert(1)>',
     connectedAt: 3,
   }
@@ -190,7 +190,7 @@ Deno.test('agent refresh coalesces events and preserves state on failures', asyn
     id: 'unknown',
     name: '<script>bad()</script>',
     connectedAt: 1,
-    provider: '__proto__' as Agent['provider'],
+    brand: '__proto__' as Agent['brand'],
   }])
   await m.run()
   assertEquals(m.list.querySelector('script'), null)

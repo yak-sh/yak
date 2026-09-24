@@ -223,6 +223,7 @@
     "./packages/project",
     "./packages/tmux",
     "./packages/secrets",
+    "./packages/connections",
     "./packages/admin"
   ],
   "exclude": [

@@ -238,7 +238,7 @@ Deno.test('connected empty library offers a copyable request', async () => {
   let page = await block({
     agents: [{
       id: 'chatgpt',
-      provider: 'chatgpt',
+      brand: 'chatgpt',
       name: 'ChatGPT',
       connectedAt: 1,
     }],
@@ -248,7 +248,7 @@ Deno.test('connected empty library offers a copyable request', async () => {
   let built = await block({
     agents: [{
       id: 'chatgpt',
-      provider: 'chatgpt',
+      brand: 'chatgpt',
       name: 'ChatGPT',
       connectedAt: 1,
     }],
@@ -269,7 +269,7 @@ Deno.test('connected empty library offers a copyable request', async () => {
 Deno.test('connected pages show the named client and put setup behind a disclosure', async () => {
   let agents = [{
     id: 'chatgpt',
-    provider: 'chatgpt' as const,
+    brand: 'chatgpt' as const,
     name: 'ChatGPT',
     connectedAt: 1,
   }]
@@ -407,7 +407,7 @@ Deno.test("none of the owner block is anybody else's", async () => {
     person: false,
     agents: [{
       id: 'chatgpt',
-      provider: 'chatgpt',
+      brand: 'chatgpt',
       name: 'ChatGPT',
       connectedAt: 1,
     }],

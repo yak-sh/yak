@@ -1,4 +1,4 @@
-// OAuth grant projection: pagination, expiry, provider identification and
+// OAuth grant projection: pagination, expiry, agent identification and
 // duplicate installations, without a Worker or a second ledger of agents.
 import { assertEquals, assertRejects } from '@std/assert'
 import type {
@@ -69,8 +69,8 @@ Deno.test('agents: all pages, earliest active installation, stable order', async
     ],
   ], { custom: 'My agent', expired: 'Gone' })
   assertEquals(await agentsOf(p.oauth, 'person', 100), [
-    { id: 'chatgpt', provider: 'chatgpt', name: 'ChatGPT', connectedAt: 10 },
-    { id: 'claude', provider: 'claude', name: 'Claude', connectedAt: 10 },
+    { id: 'chatgpt', brand: 'chatgpt', name: 'ChatGPT', connectedAt: 10 },
+    { id: 'claude', brand: 'claude', name: 'Claude', connectedAt: 10 },
     { id: 'custom', name: 'My agent', connectedAt: 40 },
   ])
   assertEquals(p.users, ['person', 'person'])
@@ -111,7 +111,7 @@ Deno.test('agents: callback identity requires an exact HTTPS hostname', async ()
   let p = provider([rows], names)
   let found = await agentsOf(p.oauth, 'person')
   assertEquals(found.length, uris.length)
-  assertEquals(found.every((c) => c.provider === undefined), true)
+  assertEquals(found.every((c) => c.brand === undefined), true)
 })
 
 Deno.test('agents: unknown registered clients stay visible; missing clients do not', async () => {
@@ -122,7 +122,7 @@ Deno.test('agents: unknown registered clients stay visible; missing clients do n
     grant('known', { redirectUri: 'https://claude.com/callback' }),
   ]], { unnamed: '', custom: 'Unlisted agent' })
   assertEquals(await agentsOf(p.oauth, 'person'), [
-    { id: 'claude', provider: 'claude', name: 'Claude', connectedAt: 10 },
+    { id: 'claude', brand: 'claude', name: 'Claude', connectedAt: 10 },
     { id: 'unnamed', name: 'Other agent', connectedAt: 10 },
     { id: 'custom', name: 'Unlisted agent', connectedAt: 10 },
   ])
@@ -141,7 +141,7 @@ Deno.test('agents: unavailable metadata retains its grant without hiding other a
       lookupClient: () => (looked++, Promise.resolve(undefined)),
     }, 'person'),
     [
-      { id: 'chatgpt', provider: 'chatgpt', name: 'ChatGPT', connectedAt: 10 },
+      { id: 'chatgpt', brand: 'chatgpt', name: 'ChatGPT', connectedAt: 10 },
       {
         id: 'https://unavailable.test/client.json',
         name: 'Other agent',

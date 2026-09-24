@@ -227,6 +227,13 @@ grouped approximately by function, **not** by dependency order.
   `{"secret": "NAME"}`; code that calls out gets its sentinel, the handle hashed
   under the vault's salt.
 
+- **[@yaks/connections](./connections)** — The outside services a graph can
+  reach: `integration` (a service as data: OAuth endpoints or a pasted key, and
+  the hosts its credential may go to) and `connection` (one link owned by a
+  space or a person, whose credential is a @yaks/secrets secret), with the
+  `uses` link from an app. Verbs to need, connect, disconnect, list, resolve a
+  sentinel and refresh a token; `need` and `list` are its tools.
+
 - **[@yaks/session](./session)** — Store agent transcripts as `entry` entities:
   content, model requests, tool calls/results and stops. Status is derived from
   transcript entries and outstanding calls. The package also provides model
@@ -265,9 +272,10 @@ grouped approximately by function, **not** by dependency order.
   Responses API: one streamed exchange over `fetch`, a bearer token from
   `OPENAI_API_KEY` or from the Codex sign-in, and the two endpoints those tokens
   are valid for.
-- **[@yaks/oauth](./oauth)** — Shared authorization-attempt and PKCE (Proof Key
-  for Code Exchange) helpers, a private-store interface, and an optional Deno
-  filesystem implementation. Secrets remain outside graph data.
+- **[@yaks/oauth](./oauth)** — The authorization-code client for a provider
+  described as data (begin, complete, token, refresh), and its building blocks:
+  a private-store interface, PKCE (Proof Key for Code Exchange) and expiring
+  attempts. Secrets remain outside graph data.
 - **[@yaks/openrouter](./openrouter)** — Implement the model interface over
   OpenRouter's Responses API, with response metadata schemas and optional PKCE
   authorization. The application supplies credentials or a private store.

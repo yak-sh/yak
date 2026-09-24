@@ -1,19 +1,19 @@
 // Connected agents render as status rows or compact launch links. Each
 // shape shares its server markup with the browser's refresh template; pages
 // without a list still refresh prompts without touching surrounding inputs.
-import type { Agent, Provider } from './connected.ts'
+import type { Agent, Brand } from './connected.ts'
 import { esc } from './html.ts'
 import { icon } from './icons.ts'
 
-let destinations: Partial<Record<Provider, { href: string; label: string }>> = {
+let destinations: Partial<Record<Brand, { href: string; label: string }>> = {
   chatgpt: { href: 'https://chatgpt.com/', label: 'Open ChatGPT' },
   claude: { href: 'https://claude.ai/new', label: 'Open Claude' },
 }
 
 let row = (agent?: Agent, links = false) => {
-  let link = agent?.provider &&
-      Object.hasOwn(destinations, agent.provider)
-    ? destinations[agent.provider]
+  let link = agent?.brand &&
+      Object.hasOwn(destinations, agent.brand)
+    ? destinations[agent.brand]
     : undefined
   if (links && agent && !link) return ''
   let open = `<a class="Agents_Open" data-agent-open${
@@ -66,7 +66,7 @@ let refresh=async()=>{
     if(list&&template){
       let rows=document.createDocumentFragment();
       for(let agent of data.agents){
-        let destination=Object.hasOwn(destinations,agent.provider)?destinations[agent.provider]:null;
+        let destination=Object.hasOwn(destinations,agent.brand)?destinations[agent.brand]:null;
         if(links&&!destination)continue;
         let row=template.content.firstElementChild.cloneNode(true);
         let name=row.querySelector('[data-agent-name]');

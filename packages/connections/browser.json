@@ -1,0 +1,16 @@
+{
+  "_": "The browser check: @yaks/connections' browser-facing exports must type-check with only the web platform in scope — no Deno namespace, no Node types. The main entry point reads secrets, which may fall back to the environment, so only ./vocab is checked here — the part a browser imports. Run `deno task check:browser`.",
+  "entries": [
+    "./vocab"
+  ],
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/vocab": "../vocab/mod.ts"
+  }
+}

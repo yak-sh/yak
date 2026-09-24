@@ -7,11 +7,11 @@ import type {
   OAuthHelpers,
 } from '@cloudflare/workers-oauth-provider'
 
-export type Provider = 'chatgpt' | 'claude' | 'claude-code' | 'cursor'
+export type Brand = 'chatgpt' | 'claude' | 'claude-code' | 'cursor'
 export type Agent = {
   id: string
   name: string
-  provider?: Provider
+  brand?: Brand
   connectedAt: number
 }
 
@@ -21,14 +21,14 @@ type Clients = Pick<OAuthHelpers, 'listUserGrants'> & {
   lookupClient: (id: string) => Promise<ClientInfo | null | undefined>
 }
 
-let names: Record<Provider, string> = {
+let names: Record<Brand, string> = {
   chatgpt: 'ChatGPT',
   claude: 'Claude',
   'claude-code': 'Claude Code',
   cursor: 'Cursor',
 }
 
-let named = (name = ''): Provider | undefined => {
+let named = (name = ''): Brand | undefined => {
   switch (name.trim().toLowerCase().replaceAll(/[-_]/g, ' ')) {
     case 'chatgpt':
       return 'chatgpt'
@@ -52,10 +52,10 @@ let callback = (uri: string | undefined) => {
     }
     if (url.protocol == 'https:') {
       if (['chatgpt.com', 'chat.openai.com'].includes(url.hostname)) {
-        return { provider: 'chatgpt' as Provider }
+        return { brand: 'chatgpt' as Brand }
       }
       if (['claude.ai', 'claude.com'].includes(url.hostname)) {
-        return { provider: 'claude' as Provider }
+        return { brand: 'claude' as Brand }
       }
     }
   } catch { /* An invalid callback cannot identify an agent. */ }
@@ -71,9 +71,9 @@ export let agentsOf = async (
   let found = new Map<string, Agent>()
   let identify = async (grant: GrantSummary) => {
     let host = callback(grant.redirectUri)
-    let provider = host.provider
+    let brand = host.brand
     let client: ClientInfo | null | undefined
-    if (!provider) {
+    if (!brand) {
       let lookup = clients.get(grant.clientId)
       if (!lookup) {
         lookup = oauth.lookupClient(grant.clientId)
@@ -81,16 +81,14 @@ export let agentsOf = async (
       }
       client = await lookup
       if (client === null) return
-      if (host.local) provider = named(client?.clientName)
+      if (host.local) brand = named(client?.clientName)
     }
-    let id = provider ?? grant.clientId
+    let id = brand ?? grant.clientId
     let previous = found.get(id)
     found.set(id, {
       id,
-      name: provider
-        ? names[provider]
-        : client?.clientName?.trim() || 'Other agent',
-      ...(provider ? { provider } : {}),
+      name: brand ? names[brand] : client?.clientName?.trim() || 'Other agent',
+      ...(brand ? { brand } : {}),
       connectedAt: Math.min(grant.createdAt, previous?.connectedAt ?? Infinity),
     })
   }
