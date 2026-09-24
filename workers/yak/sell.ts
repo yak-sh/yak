@@ -22,8 +22,8 @@
 // This is a different relationship from billing.ts, which is the platform's own
 // plan: there Stripe sells to us and we are the customer. Nothing crosses
 // between them — a different account object, a different webhook endpoint, a
-// different signing secret — and the two share exactly one thing, the request
-// helper and the signature verifier, because Stripe's API is Stripe's API.
+// different signing secret — and the two share the request helper and Stripe's
+// signature scheme (@yaks/hook), because Stripe's API is Stripe's API.
 //
 // v1 throughout, deliberately (Jeff, 2026-09-06, on the endpoint he was
 // creating: "v1"). `POST /v1/accounts` with controller properties, and the v1
@@ -36,7 +36,8 @@
 // and the webhook's filing is capped so a stranger posting garbage at a public
 // door cannot write rows without end.
 import { sha256 } from '@yaks/graph'
-import { ask, moved, verified } from './billing.ts'
+import { ask, moved } from './billing.ts'
+import { refusal } from '@yaks/hook'
 import { fault } from './unseen.ts'
 import * as dirPart from './directory.ts'
 import {
@@ -1048,10 +1049,11 @@ let hook = async (env: Env, req: Request) => {
     }
     return json(503, 'no_selling', 'this door is not switched on here yet')
   }
-  let no = await verified(
-    raw,
-    req.headers.get('stripe-signature'),
+  let no = await refusal(
+    'stripe',
     env.STRIPE_CONNECT_WEBHOOK_SECRET,
+    raw,
+    req.headers,
   )
   if (no) {
     if (!hushed(no)) await fault(env, 'POST /stripe/connect', new Error(no))

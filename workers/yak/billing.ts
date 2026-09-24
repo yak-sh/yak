@@ -42,6 +42,7 @@ import { bound, type Env } from './env.ts'
 import { apex, type Host, spaceHost } from './host.ts'
 
 import { cookieValue, verify } from './lib/token.ts'
+import { refusal } from '@yaks/hook'
 import { fault } from './unseen.ts'
 
 let API = 'https://api.stripe.com'
@@ -116,66 +117,8 @@ export let ask = async (
 
 // ---- the signature -------------------------------------------------------
 
-// How far a `Stripe-Signature` timestamp may be from now. Stripe's own
-// libraries default to five minutes, and the point of the timestamp is that a
-// body captured off the wire cannot be replayed later under its own signature.
-export let SKEW = 300
-
-let enc = new TextEncoder()
-
-let bytes = (hex: string) => {
-  if (!/^[0-9a-f]+$/i.test(hex) || hex.length % 2) return null
-  let out = new Uint8Array(hex.length / 2)
-  for (let i = 0; i < out.length; i++) {
-    out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
-  }
-  return out
-}
-
-// The header as its pairs, in order. A Map would not do: a header carries
-// several `v1=` signatures while a secret is being rolled, and every one of
-// them has to be tried.
-let pairs = (header: string) =>
-  header.split(',').map((p) => {
-    let at = p.indexOf('=')
-    return at < 0
-      ? ['', p.trim()]
-      : [p.slice(0, at).trim(), p.slice(at + 1).trim()]
-  })
-
-// Whether Stripe signed exactly these bytes: '' when it did, else the sentence
-// saying why not. The signed payload is `<timestamp>.<raw body>` — the RAW
-// body, the exact string that arrived, which is why the door below reads the
-// body as text once and verifies that string rather than parsing and
-// re-serializing it. The compare runs through WebCrypto's `verify`, so it is
-// constant-time without a compare of our own (lib/token.ts holds the same
-// rule).
-export let verified = async (
-  raw: string,
-  header: string | null,
-  secret: string,
-  now = Date.now(),
-) => {
-  if (!header) return 'no Stripe-Signature header'
-  let said = pairs(header)
-  let t = Number(said.find(([k]) => k == 't')?.[1])
-  if (!Number.isFinite(t)) return 'no timestamp on the signature'
-  if (Math.abs(now / 1000 - t) > SKEW) return 'the signature is too old'
-  let key = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['verify'],
-  )
-  let payload = enc.encode(`${t}.${raw}`)
-  for (let [k, v] of said) {
-    if (k != 'v1') continue
-    let sig = bytes(v)
-    if (sig && await crypto.subtle.verify('HMAC', key, sig, payload)) return ''
-  }
-  return 'the signature does not match'
-}
+// Stripe signs `<timestamp>.<raw body>` with the endpoint's secret; @yaks/hook
+// holds that scheme (`refusal('stripe', …)`), for this door and sell.ts's.
 
 // ---- the plan, derived from one subscription -----------------------------
 
@@ -572,11 +515,7 @@ let hook = async (env: Env, req: Request) => {
     }
     return json(503, 'no_billing', 'this door is not switched on here')
   }
-  let no = await verified(
-    raw,
-    req.headers.get('stripe-signature'),
-    env.STRIPE_WEBHOOK_SECRET,
-  )
+  let no = await refusal('stripe', env.STRIPE_WEBHOOK_SECRET, raw, req.headers)
   if (no) {
     if (!hushed(no)) {
       await fault(env, 'POST /stripe/webhook', new Error(no))

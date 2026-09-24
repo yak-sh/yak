@@ -36,10 +36,10 @@ export type Request = {
 }
 
 // A header off the captured set, by name, case-insensitively.
-let header = (r: Request, name: string): string | undefined => {
+export let header = (r: Request, name: string): string | undefined => {
   try {
     let all = JSON.parse(r.headers ?? '{}') as Record<string, string>
-    let k = Object.keys(all).find((k) => k.toLowerCase() == name)
+    let k = Object.keys(all).find((k) => k.toLowerCase() == name.toLowerCase())
     return k ? all[k] : undefined
   } catch {
     return undefined
