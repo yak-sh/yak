@@ -43,14 +43,14 @@ export let runs = (
   host: { sql: Driver },
   options: Options = {},
 ): Runs => ({
-  vector_check: (_bundles, ctx) => {
+  vector_check: (call) => {
     let about = 'the vector index is being rebuilt by the sweep that owns it'
     let minutes = options.stale ?? STALE
     // What this server is waiting for, if anything: a sweep that cannot embed
     // is not behind on a rebuild, it has not started at all.
     let { waiting } = embedderOf(options)
     if (waiting) {
-      return checked(ctx.call, about, [{
+      return checked(call.entity.eid, about, [{
         level: 'warn',
         text: `nothing is being embedded — ${waiting}. The sweep starts on ` +
           `its own once the config is there; nothing has to be restarted`,
@@ -63,7 +63,7 @@ export let runs = (
       // No vector table: this server never composed `@yaks/embedding/rules`,
       // so there is no index and no sweep. Not a failure, and not a pass
       // either.
-      return checked(ctx.call, about, [{
+      return checked(call.entity.eid, about, [{
         level: 'warn',
         text: 'this host keeps no vector table, so there is no index to ' +
           'rebuild — @yaks/embedding/rules is what raises one',
@@ -82,6 +82,6 @@ export let runs = (
           `opened the index it writes`,
       }]
       : []
-    return checked(ctx.call, about, found)
+    return checked(call.entity.eid, about, found)
   },
 })

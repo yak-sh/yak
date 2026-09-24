@@ -11,7 +11,7 @@
  * ```ts
  * import { codeSync } from '@yaks/code'
  *
- * // await codeSync({ graph, actor: null, cwd: '/home/me/project' })
+ * // await codeSync(graph, '/home/me/project')
  * // '/home/me/project: read 1204 files (6142 exports, …) in 21000 ms.'
  * ```
  *

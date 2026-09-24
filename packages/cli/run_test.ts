@@ -218,7 +218,7 @@ let t: Tool = {
     },
     options: { positional: ['scope'], short: { n: 'limit', a: 'all' } },
   }),
-  run: (args) => args,
+  run: () => [],
 }
 let said = (argv: string[]) => argsFor(t, argv, reads)
 

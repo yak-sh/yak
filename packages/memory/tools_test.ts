@@ -2,7 +2,7 @@
 // a patch leaves alone, and the token that stands between a merge and a
 // clobber.
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { type Bundle, type Comp, graph, token, type ToolCtx } from '@yaks/graph'
+import { type Bundle, type Comp, type Graph, graph, token } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
@@ -50,13 +50,15 @@ let tools = runs()
 
 let fresh = () => graph({ storage: ram(vocab), vocab, plugins: [] })
 
-let ctx = (args: Record<string, unknown>, g = fresh()) =>
-  ({ graph: g, read: (q: string) => g.read(q), args }) as unknown as ToolCtx
+let asked = (args: Record<string, unknown>, g = fresh()): [Bundle, Graph] => [
+  { entity: { eid: 'c1' }, call: { args } },
+  g,
+]
 
 let comp = (b: Bundle | undefined, name: string) => b?.[name] as Comp
 
 let save = async (args: Record<string, unknown>, g: ReturnType<typeof fresh>) =>
-  await g.apply(await tools.memory_save!([], ctx(args, g)) as Bundle[])
+  await g.apply(await tools.memory_save!(...asked(args, g)) as Bundle[])
 
 let read = async (g: ReturnType<typeof fresh>, eid: string) =>
   (await g.read(`.eid=${eid}`))[0]
@@ -72,8 +74,7 @@ Deno.test('a new memory is the sentence, and where it belongs', async () => {
   let g = fresh()
   await g.apply([{ entity: { eid: 'p19' }, project: {} }])
   let [said] = await tools.memory_save!(
-    [],
-    ctx({
+    ...asked({
       said: '  always commit your changes  ',
       title: 'commit as you go',
       scope: 'p19',
@@ -96,8 +97,7 @@ Deno.test('feedback names who gave it, or says only that somebody did', async ()
   let by = async (feedback: string) =>
     comp(
       (await tools.memory_save!(
-        [],
-        ctx({ said: 'use grams', feedback }),
+        ...asked({ said: 'use grams', feedback }),
       ) as Bundle[])[0],
       'feedback',
     )
@@ -126,7 +126,7 @@ Deno.test('the words are not replaced by somebody who never read them', async ()
   let m = (await g.read('.memory'))[0].entity.eid
   let no = await assertRejects(
     async () =>
-      await tools.memory_save!([], ctx({ id: m, said: 'use cups' }, g)),
+      await tools.memory_save!(...asked({ id: m, said: 'use cups' }, g)),
     Error,
   ) as Error
   assertEquals(no.message, unread(m))
@@ -145,7 +145,7 @@ Deno.test('the words are not replaced by somebody who never read them', async ()
 
 Deno.test('a memory this graph does not hold is said so', async () => {
   await assertRejects(
-    async () => await tools.memory_save!([], ctx({ id: 'nobody', said: 'x' })),
+    async () => await tools.memory_save!(...asked({ id: 'nobody', said: 'x' })),
     Error,
     'no memory: nobody',
   )
@@ -175,15 +175,14 @@ Deno.test('a recall answers whole memories, each wearing its token', async () =>
   let g = fresh()
   await save({ said: 'use grams, never cups', feedback: 'jeff' }, g)
   await save({ said: 'always commit your changes' }, g)
-  let out = await tools.memory_recall!([], ctx({}, g)) as Bundle[]
+  let out = await tools.memory_recall!(...asked({}, g)) as Bundle[]
   assertEquals(out.length, 2)
   for (let b of out) {
     assertEquals(b.$was, { doc: { body: token(comp(b, 'doc').body) } })
   }
   // Only the ones recording a correction, when that is what was asked.
   let feedback = await tools.memory_recall!(
-    [],
-    ctx({ feedback: true }, g),
+    ...asked({ feedback: true }, g),
   ) as Bundle[]
   assertEquals(feedback.map((b) => comp(b, 'doc').body), [
     'use grams, never cups',

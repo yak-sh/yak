@@ -19,7 +19,13 @@
 // (@yaks/edge) — applied in one transaction, and `graph_apply` with `check`
 // rehearses it before it is written. See the README.
 
-import { addressed, type Bundle, type Comp, type ToolCtx } from '@yaks/graph'
+import {
+  addressed,
+  argsOf,
+  type Bundle,
+  type Comp,
+  type Graph,
+} from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 
 // Where the work is filed, as arguments. The two that name an entity are
@@ -27,18 +33,21 @@ import type { Runs } from '@yaks/graph/tools'
 let PLACES = ['project', 'assignee', 'priority', 'domain'] as const
 let REFS = new Set(['project', 'assignee'])
 
-let filedIn = async (ctx: ToolCtx): Promise<Comp | undefined> => {
-  let said = PLACES.filter((k) => ctx.args[k] != null)
+let filedIn = async (
+  graph: Graph,
+  args: Record<string, unknown>,
+): Promise<Comp | undefined> => {
+  let said = PLACES.filter((k) => args[k] != null)
   if (!said.length) return undefined
   let refs = said.filter((k) => REFS.has(k))
-  let at = await addressed(ctx.graph, refs.map((k) => String(ctx.args[k])))
+  let at = await addressed(graph, refs.map((k) => String(args[k])))
   let filed: Comp = {}
   for (let k of said) {
     filed[k] = REFS.has(k)
       ? at[refs.indexOf(k)]
       : k == 'priority'
-      ? Number(ctx.args[k])
-      : String(ctx.args[k])
+      ? Number(args[k])
+      : String(args[k])
   }
   return filed
 }
@@ -46,10 +55,10 @@ let filedIn = async (ctx: ToolCtx): Promise<Comp | undefined> => {
 // The text a person reads, as arguments. An argument nobody passed is left out
 // of the patch, so the stored title stays as it was instead of being blanked —
 // writing `null` is what clears a property.
-let docIn = (ctx: ToolCtx): Comp | undefined => {
+let docIn = (args: Record<string, unknown>): Comp | undefined => {
   let doc: Comp = {}
-  if (ctx.args.title != null) doc.title = String(ctx.args.title)
-  if (ctx.args.body != null) doc.body = String(ctx.args.body)
+  if (args.title != null) doc.title = String(args.title)
+  if (args.body != null) doc.body = String(args.body)
   return Object.keys(doc).length ? doc : undefined
 }
 
@@ -84,11 +93,12 @@ export let listing = (query?: unknown, limit?: unknown): string => {
 
 /** The implementations behind the tools ./vocab.json declares. It is a factory,
  * like every subpath export in these packages, though this one needs nothing
- * from the server: everything a call reads arrives on the call's own context. */
+ * from the server: everything a call reads arrives on the call it is handed. */
 export let runs = (): Runs => ({
-  task_new: async (_bundles, ctx): Promise<Bundle[]> => {
-    let filed = await filedIn(ctx)
-    let doc = docIn(ctx)
+  task_new: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let filed = await filedIn(graph, args)
+    let doc = docIn(args)
     return [{
       entity: { eid: '$task' },
       task: {},
@@ -97,16 +107,17 @@ export let runs = (): Runs => ({
     }]
   },
 
-  task_list: (_bundles, ctx) =>
-    ctx.read(listing(ctx.args.query, ctx.args.limit)),
+  task_list: (call, graph) =>
+    graph.read(listing(argsOf(call).query, argsOf(call).limit)),
 
-  task_update: async (_bundles, ctx): Promise<Bundle[]> => {
-    let [eid] = await addressed(ctx.graph, [String(ctx.args.task)])
-    let filed = await filedIn(ctx)
-    let doc = docIn(ctx)
+  task_update: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let [eid] = await addressed(graph, [String(args.task)])
+    let filed = await filedIn(graph, args)
+    let doc = docIn(args)
     return [{
       entity: { eid },
-      ...(ctx.args.status ? marked[String(ctx.args.status)] : {}),
+      ...(args.status ? marked[String(args.status)] : {}),
       ...(doc ? { doc } : {}),
       ...(filed ? { filed } : {}),
     }]

@@ -1,7 +1,41 @@
-/** How a tool is named, independently of any transport, plus the id
- * resolution every tool that takes an id needs. */
-import type { Bundle, Eid } from './bundle.ts'
-import type { Tool, ToolCtx } from './plugin.ts'
+/** How a tool is named, independently of any transport, what a tool reads off
+ * the call it is handed, plus the id resolution every tool that takes an id
+ * needs. */
+import type { Actor, Bundle, Comp, Eid } from './bundle.ts'
+import type { Tool } from './plugin.ts'
+
+let part = (call: Bundle, comp: string): Comp | undefined =>
+  call[comp] as Comp | undefined
+
+/** A call's arguments: `call.args`, the object the tool's schema describes,
+ * already checked by the runner that handed the call over — or none at all.
+ *
+ * ```ts
+ * import { argsOf } from '@yaks/graph'
+ *
+ * argsOf({ entity: { eid: 'c' }, call: { args: { id: 'T-1' } } }).id // 'T-1'
+ * ```
+ */
+export let argsOf = (call: Bundle): Record<string, unknown> =>
+  (part(call, 'call')?.args ?? {}) as Record<string, unknown>
+
+/** Who asked: the `created{by, via}` a call carries — the identity it acts
+ * for, and the run it came through — or `null` for nobody. A tool writes in
+ * that name, never the runner's; one that needs the session behind a call
+ * reads `via`. A call not yet stamped says it on `$actor`, as the change that
+ * writes it does. */
+export let who = (call: Bundle): Actor | null => {
+  let said = (prop: 'by' | 'via') =>
+    part(call, 'created')?.[prop] ?? call.$actor?.[prop]
+  let by = said('by')
+  let via = said('via')
+  return by || via
+    ? {
+      ...(by ? { by: String(by) } : {}),
+      ...(via ? { via: String(via) } : {}),
+    }
+    : null
+}
 
 /**
  * The ids a caller passed, resolved to the eids they refer to — through
@@ -22,11 +56,11 @@ export let addressed = async (
 }
 
 /** The three fields that decide what a tool is called — all `toolName` reads,
- * so it can be called on a tool whose context and result types belong to
+ * so it can be called on a command whose `run` and result types belong to
  * another package. */
 export type ToolId = { name?: string; noun?: string; verb?: string }
 
-export type NamedTool<C = ToolCtx, R = Bundle[]> = Tool<C, R> & {
+export type NamedTool<R = Bundle[]> = Tool<R> & {
   name: string
 }
 
@@ -47,7 +81,7 @@ export const toolName = (tool: ToolId): string => {
   return tool.name
 }
 
-export const namedTool = <C, R>(tool: Tool<C, R>): NamedTool<C, R> => ({
+export const namedTool = <R>(tool: Tool<R>): NamedTool<R> => ({
   ...tool,
   name: toolName(tool),
 })

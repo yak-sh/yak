@@ -23,11 +23,12 @@
 
 import {
   addressed,
+  argsOf,
   type Bundle,
   type Comp,
   type Graph,
   signed,
-  type ToolCtx,
+  who,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
@@ -98,25 +99,25 @@ export let every = (said: unknown, dflt: number): number => {
 let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
   (await g.storage.tx((tx) => tx.get([eid])))[0]
 
-let entriesOf = async (ctx: ToolCtx, session: string): Promise<Bundle[]> =>
-  ordered(await ctx.read(`.${ENTRY}.session=${JSON.stringify(session)}`))
+let entriesOf = async (graph: Graph, session: string): Promise<Bundle[]> =>
+  ordered(await graph.read(`.${ENTRY}.session=${JSON.stringify(session)}`))
 
 // The session this call names, refused where the id is something else: a wait
 // on a task is a wait that would never end.
-let sessionAt = async (ctx: ToolCtx): Promise<Bundle> => {
-  let said = str(ctx.args.session)
-  let [eid] = await addressed(ctx.graph, [said])
-  let row = await one(ctx.graph, eid)
+let sessionAt = async (call: Bundle, graph: Graph): Promise<Bundle> => {
+  let said = str(argsOf(call).session)
+  let [eid] = await addressed(graph, [said])
+  let row = await one(graph, eid)
   if (!row?.[SESSION]) throw new Error(`not a session: ${said}`)
   return row
 }
 
 // A tool's text answer, as a row: its own entity, recording which call it came
 // from. Every tool here answers in this shape.
-let said = (ctx: ToolCtx, body: string): Bundle => ({
+let said = (call: Bundle, body: string): Bundle => ({
   entity: { eid: uuid() },
   content: { body },
-  [OUTPUT]: { source: ctx.call },
+  [OUTPUT]: { source: call.entity.eid },
 })
 
 /** A session's own account of itself: the brief it wrote if there is one,
@@ -142,9 +143,9 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
 
   // How a run ended, in a form a person reads: where it stands, the exit code
   // it ended on, and its own account of itself.
-  let ending = (ctx: ToolCtx, row: Bundle, entries: Bundle[]): string => {
+  let ending = (graph: Graph, row: Bundle, entries: Bundle[]): string => {
     let code = comp(row, EXIT)?.code
-    let head = `${human(ctx.graph.vocab)(row)} — ${statusOf(entries)}` +
+    let head = `${human(graph.vocab)(row)} — ${statusOf(entries)}` +
       (code == null ? '' : `, exited ${code}`)
     return [head, briefOf(row, entries)].filter(Boolean).join('\n')
   }
@@ -152,16 +153,16 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
   // The wait itself: the same two reads, on the beat, until the run is over
   // or the patience runs out.
   let watched = async (
-    ctx: ToolCtx,
+    graph: Graph,
     session: string,
     timeout: number,
   ): Promise<string> => {
     for (let end = Date.now() + timeout;;) {
-      let row = (await one(ctx.graph, session))!
-      let entries = await entriesOf(ctx, session)
-      if (over(row, entries)) return ending(ctx, row, entries)
+      let row = (await one(graph, session))!
+      let entries = await entriesOf(graph, session)
+      if (over(row, entries)) return ending(graph, row, entries)
       if (Date.now() >= end) {
-        return `${human(ctx.graph.vocab)(row)} — ${
+        return `${human(graph.vocab)(row)} — ${
           statusOf(entries)
         }, still running after ${Math.round(timeout / 1000)}s`
       }
@@ -170,47 +171,48 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
   }
 
   return {
-    session_spawn: async (_bundles, ctx): Promise<Bundle[]> => {
-      let [task, provider, model] = await addressed(ctx.graph, [
-        str(ctx.args.task),
-        str(ctx.args.provider),
-        str(ctx.args.model),
+    session_spawn: async (call, graph): Promise<Bundle[]> => {
+      let args = argsOf(call)
+      let [task, provider, model] = await addressed(graph, [
+        str(args.task),
+        str(args.provider),
+        str(args.model),
       ])
       // Match by eid, never by position: a read returns only the rows it
       // found, so a missing id would otherwise shift its neighbour into its
       // place and the error would name the wrong argument.
       let found = new Map(
-        (await ctx.graph.storage.tx((tx) =>
+        (await graph.storage.tx((tx) =>
           tx.get([task, provider, model].filter(Boolean))
         )).map((b) => [b.entity.eid, b]),
       )
       let [on, serves, served] = [task, provider, model].map((e) =>
         found.get(e)
       )
-      if (!on) throw new Error(`no such task: ${str(ctx.args.task)}`)
+      if (!on) throw new Error(`no such task: ${str(args.task)}`)
       if (!comp(serves, 'provider')?.name) {
-        throw new Error(`not a provider: ${str(ctx.args.provider)}`)
+        throw new Error(`not a provider: ${str(args.provider)}`)
       }
       if (model && !served?.model) {
-        throw new Error(`not a model: ${str(ctx.args.model)}`)
+        throw new Error(`not a model: ${str(args.model)}`)
       }
-      if (model && await spelling(ctx.graph, provider, model) == null) {
+      if (model && await spelling(graph, provider, model) == null) {
         throw new Error(
-          `${str(ctx.args.provider)} does not serve ${str(ctx.args.model)}`,
+          `${str(args.provider)} does not serve ${str(args.model)}`,
         )
       }
-      let effort = str(ctx.args.effort)
+      let effort = str(args.effort)
       let session = uuid()
       // The instruction names the work and no more: the session holds the
       // claim, and every session here starts by reading what it holds.
-      let instruction = str(ctx.args.instruction) ||
-        [human(ctx.graph.vocab)(on), str(comp(on, 'doc')?.title)]
+      let instruction = str(args.instruction) ||
+        [human(graph.vocab)(on), str(comp(on, 'doc')?.title)]
           .filter(Boolean).join(' — ')
       // The request, plus the lease recording who is doing the work. The
       // lease is guarded, so handing an agent work somebody else already holds
       // rejects the whole transaction rather than starting a second run on
       // it.
-      await ctx.graph.apply(
+      await graph.apply(
         signed([
           { entity: { eid: session }, [SESSION]: {} },
           {
@@ -224,36 +226,38 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
             },
           },
           { entity: { eid: task }, claim: { session } },
-        ], ctx.actor),
+        ], who(call)),
       )
-      let row = (await one(ctx.graph, session))!
-      let name = human(ctx.graph.vocab)(row)
+      let row = (await one(graph, session))!
+      let name = human(graph.vocab)(row)
       return [said(
-        ctx,
-        ctx.args.wait
-          ? await watched(ctx, session, patience(ctx.args.timeout))
+        call,
+        args.wait
+          ? await watched(graph, session, patience(args.timeout))
           : `${name} spawned`,
       )]
     },
 
-    session_wait: async (_bundles, ctx): Promise<Bundle[]> => {
-      let row = await sessionAt(ctx)
+    session_wait: async (call, graph): Promise<Bundle[]> => {
+      let args = argsOf(call)
+      let row = await sessionAt(call, graph)
       return [said(
-        ctx,
-        await watched(ctx, row.entity.eid, patience(ctx.args.timeout)),
+        call,
+        await watched(graph, row.entity.eid, patience(args.timeout)),
       )]
     },
 
-    session_peek: async (_bundles, ctx): Promise<Bundle[]> => {
-      let row = await sessionAt(ctx)
-      let entries = await entriesOf(ctx, row.entity.eid)
-      let shown = entries.slice(-lines(ctx.args.lines))
+    session_peek: async (call, graph): Promise<Bundle[]> => {
+      let args = argsOf(call)
+      let row = await sessionAt(call, graph)
+      let entries = await entriesOf(graph, row.entity.eid)
+      let shown = entries.slice(-lines(args.lines))
       return [said(
-        ctx,
+        call,
         [
-          `${human(ctx.graph.vocab)(row)} — ${statusOf(entries)}`,
+          `${human(graph.vocab)(row)} — ${statusOf(entries)}`,
           ...shown.map((b) =>
-            render(views, b, 'Line', ctx.graph.vocab, {}, 'plain').trim()
+            render(views, b, 'Line', graph.vocab, {}, 'plain').trim()
           ),
         ].join('\n'),
       )]

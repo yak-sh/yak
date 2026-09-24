@@ -172,10 +172,10 @@ grouped approximately by function, **not** by dependency order.
   document to a place in one — with `revision`, `symbol`, `lines` and `quote`
   beside it, and staleness re-derived from Git. `cites check` reports the
   citations that moved or were never checked, and `cites verify` records that
-  somebody looked. Its `land` tool operates on the checkout at `ctx.cwd` (the
-  CLI working directory), fast-forwarding its branch into the base in the
-  primary worktree. If the base moved, it rebases and returns without landing;
-  rerun tests and land again.
+  somebody looked. Its `land` tool operates on the checkout at the calling
+  process's `cwd` (the CLI working directory), fast-forwarding its branch into
+  the base in the primary worktree. If the base moved, it rebases and returns
+  without landing; rerun tests and land again.
 
 - **[@yaks/code](./code)** — a codebase read into the graph: a `package` per
   manifest, a `module` per file (wearing @yaks/git's `file`), a `symbol` per
@@ -476,8 +476,9 @@ produces computed-property definitions. A **facet** is one of these sub-module
 exports, not another kind of plugin. For example, a check that queries a
 package's own SQL table gets the connection through `host.sql`, and a threshold
 or a relation name comes from config rather than being hard-coded. Everything a
-tool needs per call — the graph, the caller, the arguments — is passed in the
-tool context instead.
+tool needs per call arrives with the call instead: `run(call, graph)` hands it
+the call's bundle — its arguments, the caller, the process that made it — and
+the graph it runs on.
 
 ### Health checks are just tools named `check`
 

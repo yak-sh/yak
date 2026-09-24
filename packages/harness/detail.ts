@@ -1,6 +1,6 @@
 /** Explicit source inspection, independent of transcript rendering and search. */
 import { valueTools } from '@yaks/blob'
-import type { Comp, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { transcriptSegments } from '@yaks/session'
 
 export const SOURCE_LIMIT = 4096
@@ -44,7 +44,15 @@ export async function entrySource(
       s.session == entry.session && Number(entry.seq) <= s.through
     )
   ) throw new Error('Entry is not in this transcript')
-  let [row] = await g.read('.entity.eid=' + JSON.stringify(eid) + '&.limit=1')
+  let [stored] = await g.read(
+    '.entity.eid=' + JSON.stringify(eid) + '&.limit=1',
+  )
+  // A call's arguments are an object; as a source they are the JSON it spells.
+  let args = (stored?.call as Comp | undefined)?.args
+  let row: Bundle | undefined = args == null ? stored : {
+    ...stored,
+    call: { ...stored.call as Comp, args: JSON.stringify(args) },
+  }
   // Stored tool receipts can carry the unabridged output alongside a preview.
   let component = ['context_output', 'content', 'call'].find((name) =>
     typeof (row?.[name] as Comp | undefined)

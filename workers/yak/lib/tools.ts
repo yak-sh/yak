@@ -37,7 +37,7 @@
 // ordinary doors with the caller's identity and the app's access rule
 // (workers/yak/declared.ts). So a tool can do exactly what the person
 // calling it could do on the page, and never more.
-import type { Bundle, Tool, ToolCtx } from '@yaks/graph'
+import { argsOf, type Bundle, type Graph, type Tool } from '@yaks/graph'
 import { type Word, WORDS } from '../vocab.ts'
 
 // One declared tool, as written. `apply` and `query` are the two acts; an
@@ -465,9 +465,9 @@ export let commands = (said: Tools): Tool[] =>
     description: def.description,
     inputSchema: schemaOf(def),
     readOnly: def.query != null,
-    run: (_bundles: Bundle[], ctx: ToolCtx) => {
-      let act = filled(def, ctx.args ?? {})
-      if (act.query != null) return ctx.read(act.query)
+    run: (call: Bundle, graph: Graph) => {
+      let act = filled(def, argsOf(call))
+      if (act.query != null) return graph.read(act.query)
       return (Array.isArray(act.apply) ? act.apply : [act.apply]) as Bundle[]
     },
   }))

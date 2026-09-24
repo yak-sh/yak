@@ -256,7 +256,7 @@ tools. Set `core: false` when the application already supplies the generic
 tools.
 
 ```ts
-import type { Plugin } from '@yaks/graph'
+import { argsOf, type Plugin } from '@yaks/graph'
 import { z } from 'zod'
 
 let shelf: Plugin = {
@@ -265,8 +265,8 @@ let shelf: Plugin = {
     name: 'shelve',
     description: 'Set a book status to shelved.',
     input: { book: z.string().describe('Book entity ID') },
-    run: (_, ctx) => [{
-      entity: { eid: String(ctx.args.book) },
+    run: (call) => [{
+      entity: { eid: String(argsOf(call).book) },
       book: { status: 'shelved' },
     }],
   }],
@@ -275,11 +275,12 @@ let shelf: Plugin = {
 graph.use(shelf)
 ```
 
-A tool receives the call bundle and a `ToolCtx` containing the graph, actor,
-validated arguments, and call ID. It returns bundles. The runner applies changes
-as the caller and records the result. Read tools return selected bundles without
-rewriting those entities. A text result uses `content: { body: '…' }` and
-`output: { source: ctx.call }` on its bundle.
+A tool is `run(call, graph)`: the call's bundle, carrying its validated
+arguments in `call.args` (`argsOf`) and the caller in `created` (`who`), and the
+graph it runs on. It returns bundles. The runner applies changes as the caller
+and records the result. Read tools return selected bundles without rewriting
+those entities. A text result uses `content: { body: '…' }` and
+`output: { source: call.entity.eid }` on its bundle.
 
 Tool `meta` is sent as MCP `_meta`; the adapter also adds declared command
 metadata under `COMMAND` (`yak.sh/command`). The `security` option supplies

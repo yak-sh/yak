@@ -13,8 +13,8 @@
 // table is a perfectly good way for one phase to tell a later one what it
 // decided.
 
-import type { Actor, Bundle, Eid } from './bundle.ts'
-import type { Query, ReadOpts, Tx } from './storage.ts'
+import type { Bundle, Eid } from './bundle.ts'
+import type { Tx } from './storage.ts'
 import type { Ask } from './gather.ts'
 import type { Resource, Rule } from './rules.ts'
 import type { Declared } from './declared.ts'
@@ -125,56 +125,32 @@ export type WriteHook = Hook & { independent?: boolean }
 export type Schema = object
 
 /**
- * What a {@link Tool} is handed beside the call's bundles: the graph to read,
- * who is asking, and the arguments the call carried.
- *
- * `actor` is the caller's, never the runner's: a tool that writes writes in
- * the name of whoever wrote the call, so authorization is decided about the
- * person asking (see {@link https://jsr.io/@yaks/tools | @yaks/tools}). It is
- * the same pair a change carries — `by` the identity, `via` the run it came
- * through — so a tool that needs the session behind a call reads `via`.
- *
- * There is no write method here: a tool returns bundles and the runner applies
- * them, signed, so a tool cannot write in somebody else's name by accident and
- * the calling program can refuse, combine, or replay what it was asked for.
- */
-export type ToolCtx = {
-  /** the graph the tool works on (its vocabulary and storage included) */
-  graph: Graph
-  /** who wrote the call — the identity it acts for and the instrument it came
-   * through, as the graph stamped them — or `null` for nobody */
-  actor: Actor | null
-  /** a query → the matching entities as whole bundles */
-  read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
-  /** the call's arguments, parsed out of `call.args` and checked against the
-   * tool's schema by the runner. The same values the call's bundle carries as
-   * JSON, so a tool reads them here rather than parsing its own input. */
-  args: Record<string, unknown>
-  /** the call entity being answered — what a bundle the tool produces records
-   * as its source (`output.source`) */
-  call: Eid
-  /** the working directory of the process running this call, where the calling
-   * program knows one. A tool that acts on the machine rather than the graph
-   * needs it — `land` fast-forwards the git checkout its caller is in, which
-   * on a command line is the directory the person ran it from. A graph in a
-   * browser tab or a worker has no working directory, and a tool that requires
-   * one has to check for itself. */
-  cwd?: string
-}
-
-/**
  * A tool: one named operation an agent can ask a graph to perform,
  * contributed the same way a plugin contributes components and hooks. A
  * transport (@yaks/mcp) lists it and calls it; this package only carries the
  * declaration.
  *
- * A tool is a function from bundles to bundles. It is handed the call's own
- * bundle and whatever the caller attached to it; it returns the bundles that
- * are the result — entities it found, entities it wants created, text as
- * `content{body}`. The runner applies them beside the `result{call}` entity in
- * one transaction.
+ * A tool is a function from the call to bundles: `run(call, graph)`. The call
+ * is one bundle, the call entity, and it carries everything the tool is told
+ * about the request (@yaks/tools builds it):
+ *
+ * - `call{to, args, source}`, the arguments already checked against the tool's
+ *   schema ({@link argsOf});
+ * - `created{by, via}`, who asked and what it came through ({@link who}) — the
+ *   caller's, never the runner's, so what a tool writes is written in the
+ *   name of whoever asked, and authorization is decided about them;
+ * - `process{pid, command, cwd}`, the program on this machine running it: a
+ *   tool that acts on the machine rather than the graph reads its working
+ *   directory there. A graph in a browser tab or a Worker has none.
+ *
+ * The graph is the other argument, because a tool without one makes no sense.
+ * A tool returns the bundles that are the result — entities it found,
+ * entities it wants created, text as `content{body}` — and the runner applies
+ * them, signed as the caller, beside the `result{call}` entity in one
+ * transaction. There is no write in a tool's hands, so the calling program can
+ * refuse, combine or replay what it was asked for.
  */
-export type Tool<C = ToolCtx, R = Bundle[]> = {
+export type Tool<R = Bundle[]> = {
   /** The older flat tool name. A tool declaring `noun`/`verb` derives it from
    * those instead. */
   name?: string
@@ -228,8 +204,8 @@ export type Tool<C = ToolCtx, R = Bundle[]> = {
    * in this shape in `output{value}` (@yaks/tools `structured`). A tool that
    * declares none answers its bundles. */
   outputSchema?: Record<string, unknown>
-  /** the implementation: the call's bundles in, the result's bundles out */
-  run: (bundles: Bundle[], ctx: C) => R | Promise<R>
+  /** the implementation: the call in, the result's bundles out */
+  run: (call: Bundle, graph: Graph) => R | Promise<R>
 }
 
 /**

@@ -61,7 +61,7 @@ export type Ctx = {
  * One command this program can run: a tool's declaration — its name, its
  * schema, how it is written on a command line — with a run of its own.
  *
- * A graph tool is `(bundles, ctx) => bundles` and only @yaks/tools' runner
+ * A graph tool is `run(call, graph) → bundles` and only @yaks/tools' runner
  * calls one. A command is the other end: it takes the arguments parsed off the
  * command line, prints, and returns an exit code. The same declaration, so a
  * command is listed, helped and tab-completed from the one schema; a different
@@ -69,7 +69,7 @@ export type Ctx = {
  * wrapping a call — local.ts writes one against the graph this command opened,
  * platform.ts sends one to the MCP server it named.
  */
-export type Command = Omit<Tool<Ctx, number>, 'run'> & {
+export type Command = Omit<Tool<number>, 'run'> & {
   run: (
     args: Record<string, unknown>,
     c: Ctx,

@@ -345,12 +345,12 @@ Deno.test('fenced code fills the boxed message interior without changing source'
   }
 })
 
-Deno.test('shell call shows command arguments and malformed args remain safe', async () => {
-  for (const args of [JSON.stringify({ command: 'printf hello\npwd' }), '{']) {
+Deno.test('shell call shows command arguments, and a call without them the ordinary view', async () => {
+  for (const args of [{ command: 'printf hello\npwd' }, undefined]) {
     const entry: Bundle = {
       entity: { eid: 'shell-call' },
       entry: { session: 's', seq: 2 },
-      call: { to: toolEid('shell'), args },
+      call: { to: toolEid('shell'), ...args ? { args } : {} },
     }
     const ui = await mount(
       () => render(transcriptViews, entry, 'Transcript', vocab),
@@ -358,7 +358,7 @@ Deno.test('shell call shows command arguments and malformed args remain safe', a
       8,
     )
     try {
-      if (args != '{') {
+      if (args) {
         assert(ui.text().includes('$ printf hello'), ui.text())
         assert(ui.text().includes('pwd'))
       } else assert(ui.text().includes(toolEid('shell')))

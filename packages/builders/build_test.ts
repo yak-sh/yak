@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
-import type { Bundle, Comp, Graph, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { edgeEid, link } from '@yaks/edge'
 import { counter, ids, noon, shop, workshop } from './harness.ts'
 import { type Desk, type Open, output } from './build.ts'
@@ -55,14 +55,10 @@ let demand = async (
   args: Record<string, unknown>,
   o: Parameters<typeof runs>[1] = { desk: scribe },
 ) => {
-  let ctx: ToolCtx = {
-    graph: g,
-    actor: null,
-    read: (q) => g.read(q),
-    args,
-    call: 'c-1',
-  }
-  let [said] = await runs({ vocab: g.vocab }, o).builder_build([], ctx)
+  let [said] = await runs({ vocab: g.vocab }, o).builder_build(
+    { entity: { eid: 'c-1' }, call: { args } },
+    g,
+  )
   return String(comp(said, 'content')?.body)
 }
 

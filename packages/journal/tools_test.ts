@@ -5,7 +5,7 @@
 // entity nothing ever touched has no history rather than an error.
 
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Comp, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { NOW, sync, wikiGraph } from './harness.ts'
 import { journalDoc } from './vocab.ts'
@@ -21,22 +21,24 @@ let fixture = () => {
   }
 }
 
-// The call context a host hands a run: the arguments, and a graph that says
-// what an id addresses. `P-1` stands for a human id nothing else resolves.
-let ctx = (args: Record<string, unknown>, at: Record<string, string> = {}) =>
-  ({
-    args,
-    graph: {
-      address: (ids: string[]) =>
-        new Map(ids.filter((i) => at[i]).map((i) => [i, at[i]])),
-    },
-  }) as unknown as ToolCtx
+// What a host hands a run: the call, and a graph that says what an id
+// addresses. `P-1` stands for a human id nothing else resolves.
+let asked = (
+  args: Record<string, unknown>,
+  at: Record<string, string> = {},
+): [Bundle, Graph] => [
+  { entity: { eid: 'c1' }, call: { args } },
+  {
+    address: (ids: string[]) =>
+      new Map(ids.filter((i) => at[i]).map((i) => [i, at[i]])),
+  } as unknown as Graph,
+]
 
 let history = async (
   tools: ReturnType<typeof runs>,
   args: Record<string, unknown>,
   at: Record<string, string> = {},
-) => await tools.history!([], ctx(args, at)) as Bundle[]
+) => await tools.history!(...asked(args, at)) as Bundle[]
 
 let comp = (b: Bundle, name: string) => b[name] as Comp
 

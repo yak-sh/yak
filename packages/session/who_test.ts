@@ -8,7 +8,7 @@ import { idKeywords } from '@yaks/id'
 import { ids } from '@yaks/id/rules'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { sessionDoc } from './comp.ts'
-import { sessionFor, speaking, where } from './who.ts'
+import { sessionFor, speaking } from './who.ts'
 
 let spine: VocabDoc = {
   $defs: {
@@ -36,7 +36,7 @@ let store = () => {
 }
 
 let found = async (said: string) =>
-  (await sessionFor(where(store()), said))?.entity.eid
+  (await sessionFor(store(), said))?.entity.eid
 
 Deno.test('a run is reached by its eid, its human id, or its own name', async () => {
   assertEquals(await found('s1'), 's1')

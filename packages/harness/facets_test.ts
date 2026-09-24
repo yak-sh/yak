@@ -1,7 +1,7 @@
 import { assertEquals, assertThrows } from '@std/assert'
 import { argsFor, commandFor, unique } from '@yaks/cli'
 import { loadTools } from '@yaks/graph/tools'
-import { namedTool } from '@yaks/graph'
+import { argsOf, type Bundle, namedTool } from '@yaks/graph'
 import { answerOf, runner, toolEid, worded } from '@yaks/tools'
 import { driver } from '@yaks/sqlite/db'
 import { connect } from '../mcp/harness.ts'
@@ -58,7 +58,7 @@ Deno.test('the facet subpaths say the harness once, and one declaration reaches 
   results.push(worded(answerOf(
     await r.call([{
       entity: { eid: '$call' },
-      call: { to: toolEid(namedTool(found.verb).name), args: '{}' },
+      call: { to: toolEid(namedTool(found.verb).name), args: {} },
     }]),
   )))
   const client = await connect({
@@ -119,13 +119,10 @@ Deno.test('JSON Schema tool uses identical metadata and constraints through MCP 
       },
       options: { positional: ['scope'], short: { n: 'limit' } },
     }),
-    run: (
-      _bundles: unknown[],
-      ctx: { args: Record<string, unknown>; call: string },
-    ) => [{
+    run: (call: Bundle) => [{
       entity: { eid: '$said' },
-      content: { body: JSON.stringify(ctx.args) },
-      output: { source: ctx.call },
+      content: { body: JSON.stringify(argsOf(call)) },
+      output: { source: call.entity.eid },
     }],
   }
   const h = open(':memory:')

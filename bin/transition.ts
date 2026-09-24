@@ -168,7 +168,7 @@ let asCall = (facet: string, ...cols: string[]): Move => ({
     if (ran) ctx.also({ entity: { eid: me }, execution: { by: ran } })
     return {
       to: ctx.tool(String(row.$tool ?? facet)),
-      args: JSON.stringify(args),
+      args,
     }
   },
 })

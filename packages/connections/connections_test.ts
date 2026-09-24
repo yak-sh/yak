@@ -299,23 +299,25 @@ slow(
     let run = Object.fromEntries(
       loadTools([connectionsDoc], runs()).map((t) => [t.name, t.run]),
     )
-    let ctx = (args: Record<string, unknown>) => ({
-      graph: g,
-      actor: null,
-      read: g.read,
-      args,
-      call: 'call',
+    let asked = (args: Record<string, unknown>) => ({
+      entity: { eid: 'call' },
+      call: { args },
     })
     let made = await run.connection_need(
-      [],
-      ctx({ app: 'app', owner: 'space', integration: 'weather', hosts: ['h'] }),
+      asked({
+        app: 'app',
+        owner: 'space',
+        integration: 'weather',
+        hosts: ['h'],
+      }),
+      g,
     )
     await g.apply(made)
-    let listed = await run.connection_list([], ctx({ owner: 'space' }))
+    let listed = await run.connection_list(asked({ owner: 'space' }), g)
     assertEquals(listed.map((b) => Object.keys(b.connection ?? b.edge ?? {})), [
       ['integration', 'owner', 'status'],
       ['from', 'to'],
     ])
-    assertEquals(await run.connection_list([], ctx({ owner: 'app' })), [])
+    assertEquals(await run.connection_list(asked({ owner: 'app' }), g), [])
   },
 )

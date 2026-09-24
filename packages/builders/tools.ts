@@ -14,10 +14,11 @@
 
 import {
   addressed,
+  argsOf,
   type Bundle,
   type Comp,
   signed,
-  type ToolCtx,
+  who,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { CallError } from '@yaks/tools'
@@ -28,47 +29,48 @@ import { BUILT, clock, decide, type Options } from './build.ts'
 let str = (v: unknown): string => v == null ? '' : String(v)
 
 // A tool's text answer, as a row recording which call it came from.
-let said = (ctx: ToolCtx, body: string): Bundle => ({
+let said = (call: Bundle, body: string): Bundle => ({
   entity: { eid: crypto.randomUUID() },
   content: { body },
-  [OUTPUT]: { source: ctx.call },
+  [OUTPUT]: { source: call.entity.eid },
 })
 
 /** The implementation behind `builder_build`, built from the same
  * configuration as the effects. */
 export let runs = (host: { vocab: Vocab }, options: Options = {}): Runs => ({
-  builder_build: async (_bundles, ctx): Promise<Bundle[]> => {
+  builder_build: async (call, graph): Promise<Bundle[]> => {
     if (!options.desk) {
       throw new CallError(
         'unconfigured',
         'no desk is configured, so nothing builds on this graph',
       )
     }
+    let args = argsOf(call)
     let id = async (v: unknown) =>
-      str(v) && (await addressed(ctx.graph, [str(v)]))[0]
-    let builder = await id(ctx.args.builder)
-    let provider = await id(ctx.args.provider)
-    let model = await id(ctx.args.model)
+      str(v) && (await addressed(graph, [str(v)]))[0]
+    let builder = await id(args.builder)
+    let provider = await id(args.provider)
+    let model = await id(args.model)
     let desk = {
       ...options.desk,
       ...(provider ? { provider } : {}),
       ...(model ? { model } : {}),
     }
     let o = { desk, rest: options.rest, vocab: host.vocab }
-    let v = await ctx.graph.storage.tx((tx) =>
+    let v = await graph.storage.tx((tx) =>
       decide(o, builder, tx, clock(), false)
     )
     if (!v) {
       throw new CallError(
         'refused',
-        `${str(ctx.args.builder)} is no builder with an instruction`,
+        `${str(args.builder)} is no builder with an instruction`,
       )
     }
     if (!v.build) {
-      return [said(ctx, `${v.plan.output} is built under this key already`)]
+      return [said(call, `${v.plan.output} is built under this key already`)]
     }
-    await ctx.graph.apply(signed(v.build, ctx.actor))
+    await graph.apply(signed(v.build, who(call)))
     let made = v.build.find((b) => b[BUILT])?.[BUILT] as Comp
-    return [said(ctx, `${v.plan.output} building in ${str(made.session)}`)]
+    return [said(call, `${v.plan.output} building in ${str(made.session)}`)]
   },
 })

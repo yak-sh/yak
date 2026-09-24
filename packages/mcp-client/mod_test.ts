@@ -1,14 +1,16 @@
 /// <reference lib="deno.ns" />
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
-import type { Bundle, ToolCtx } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
 import { clients, connect, nameOf } from './mod.ts'
 
 import { fixture } from './testing.ts'
 
-// What the runner hands a tool: the call's arguments, and the call itself.
-// A remote proxy reads nothing else.
-let asking = (args: Record<string, unknown> = {}): ToolCtx =>
-  ({ args, call: 'c1' }) as unknown as ToolCtx
+// What the runner hands a tool: the call, and the graph it runs on. A remote
+// proxy reads nothing but the call.
+let asking = (args: Record<string, unknown> = {}): [Bundle, Graph] => [
+  { entity: { eid: 'c1' }, call: { args } },
+  {} as Graph,
+]
 
 // The words a proxied tool answered — the prose of the one bundle it made.
 let words = (out: Bundle[]): string =>
@@ -29,7 +31,7 @@ Deno.test('portable client initializes, exposes unchanged schema and invokes exa
     })
     // A remote answer is prose to this graph: the words the server wrote,
     // in a bundle that says which call produced them.
-    const out = await t.run([], asking({ html: '<h1>mockup</h1>' }))
+    const out = await t.run(...asking({ html: '<h1>mockup</h1>' }))
     // Every text block the server wrote, which is what it wrote for a reader.
     assert(words(out).includes('https://example.test/mockup/1'))
     assertEquals(
@@ -214,7 +216,7 @@ Deno.test('graph Tool is usable through the CLI adapter without any session runt
       noun: 'mockup',
       verb: 'publish',
       run: async (args: Record<string, unknown>) => {
-        lines.push(JSON.stringify(await tool.run([], asking(args))))
+        lines.push(JSON.stringify(await tool.run(...asking(args))))
         return 0
       },
     }
@@ -283,13 +285,13 @@ Deno.test('about tool accepts declared draft-07 input and output through SDK val
   try {
     const [tool] = await c.tools()
     const { validateToolInput } = await import('@yaks/vocab/tools')
-    const result = await tool.run([], asking(validateToolInput(tool, {})))
+    const result = await tool.run(...asking(validateToolInput(tool, {})))
     assert(words(result).includes('about'))
     assertEquals(called, 1)
     invalid = true
     // The remote's own outputSchema still governs the remote's reply: a
     // server that breaks its published contract is refused at this hop.
-    await assertRejects(async () => await tool.run([], asking()))
+    await assertRejects(async () => await tool.run(...asking()))
   } finally {
     await c.close()
   }

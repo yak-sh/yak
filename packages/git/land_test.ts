@@ -11,7 +11,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { land, reverts } from './land.ts'
 import { runs } from './tools.ts'
 import { CallError } from '@yaks/tools'
-import type { ToolCtx } from '@yaks/graph'
+import type { Graph } from '@yaks/graph'
 
 let slow = (name: string, fn: () => Promise<void>) =>
   Deno.test({ name, fn, ignore: !Deno.env.get('TASKS_SLOW') })
@@ -145,16 +145,22 @@ slow(
   async () => {
     let r = await setup()
     try {
-      // The tool acts on the checkout its call stands in — `ctx.cwd`, which a
-      // command line fills with where the person typed.
-      let ctx = { args: {}, cwd: r.tree } as unknown as ToolCtx
+      // The tool acts on the checkout its call stands in — the `cwd` of the
+      // process that made it, which a command line fills with where the
+      // person typed.
+      let call = {
+        entity: { eid: 'c1' },
+        call: { args: {} },
+        process: { cwd: r.tree },
+      }
+      let graph = {} as Graph
       await rivalLands(r, 'rival.txt', 'rival\n')
       let refused = await assertRejects(
-        () => Promise.resolve(runs().land([], ctx)),
+        () => Promise.resolve(runs().land(call, graph)),
         CallError,
       )
       assert(refused.message.includes('moved'), refused.message)
-      let [said] = await runs().land([], ctx)
+      let [said] = await runs().land(call, graph)
       let landed = await command(r.repo, 'rev-parse', 'main')
       let body = String((said.content as { body?: unknown })?.body ?? '')
       assert(body.includes(`landed ${landed}`), body)

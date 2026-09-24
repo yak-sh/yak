@@ -190,7 +190,7 @@ export let extend = (host, options) => [semantic(host.sql, embedderOf(options))]
 
 // @yaks/sqlite/tools
 export let runs = (host, options) => ({
-  storage_check: (_bundles, ctx) => check(host.sql, options),
+  storage_check: () => check(host.sql, options),
 })
 ```
 
@@ -198,10 +198,11 @@ export let runs = (host, options) => ({
 
 Some tools change the machine running them instead of only changing the graph.
 For example, `land` updates a checkout, `hooks install` writes a settings file,
-and `serve` binds a TCP port. Tool implementations receive `ctx.cwd`, the
-working directory of the process that executes the call. A locally opened graph
-uses the directory where the user ran `yak`; a remote call uses the server
-process's directory.
+and `serve` binds a TCP port. The call such a tool is handed carries
+`process{pid, command, cwd}` (@yaks/process), the program that executes the
+call, and `cwd` is its working directory. A locally opened graph uses the
+directory where the user ran `yak`; a remote call uses the server process's
+directory.
 
 A tool that declines a call throws `CallError`. The runner records the error,
 and `yak` returns exit code `1`.

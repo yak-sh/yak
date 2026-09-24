@@ -5,7 +5,7 @@
 // package's declarations and its code each live where they belong, and neither
 // is written twice.
 //
-//   let tools = loadTools([vocab], { session_list: (args, ctx) => ... })
+//   let tools = loadTools([vocab], { session_list: (call, graph) => ... })
 //
 // A declaration nothing implements throws at load time, rather than producing
 // a tool that returns "not implemented" when it is called: the vocabulary is
@@ -15,8 +15,8 @@
 //
 // This package's own tool declarations are in ./vocab.json — the generic tier,
 // `graph apply` and the rest — and `runs` below implements them, the same
-// arrangement every other package uses. A tool is handed the call's own bundle
-// (its arguments arrive on `ctx.args`, already parsed and validated by the
+// arrangement every other package uses. A tool is handed the call and the
+// graph (the call's arguments are `argsOf(call)`, already validated by the
 // runner) and returns bundles, which for the reads here are the entities they
 // found. The two results that are not entities say so in their own way:
 // `graph_schema` returns one `content{body}` entity holding the schema as JSON,
@@ -31,8 +31,9 @@
 import { toolsIn, toolsSaid } from '@yaks/vocab/tools'
 import { extendMeta, type Keywords, type VocabDoc } from '@yaks/vocab'
 import type { Bundle } from './bundle.ts'
-import type { Tool, ToolCtx } from './plugin.ts'
-import { type NamedTool, toolName } from './tool.ts'
+import type { Graph } from './graph.ts'
+import type { Tool } from './plugin.ts'
+import { argsOf, type NamedTool, toolName } from './tool.ts'
 import { graphDoc } from './vocab.ts'
 import { Refused } from './admit.ts'
 import { detached } from './storage.ts'
@@ -42,12 +43,12 @@ import { type Guide, proseOf, schemaOf } from './schema.ts'
  * own `name`, or by the name derived from its noun and verb for a module that
  * keys them that way — `noun_verb` for a tool that declared both, and the one
  * word itself for a tool that declared only a noun or only a verb. */
-export type Runs<C = ToolCtx, R = Bundle[]> = Record<string, Tool<C, R>['run']>
+export type Runs<R = Bundle[]> = Record<string, Tool<R>['run']>
 
-export let loadTools = <C = ToolCtx, R = Bundle[]>(
+export let loadTools = <R = Bundle[]>(
   docs: VocabDoc | VocabDoc[],
-  runs: Runs<C, R>,
-): NamedTool<C, R>[] =>
+  runs: Runs<R>,
+): NamedTool<R>[] =>
   toolsIn(docs).map((decl) => {
     let name = decl.name ?? toolName(decl)
     let run = runs[name] ??
@@ -117,21 +118,21 @@ let batch = (v: unknown): Bundle[] => {
 // once. `.refs=<id>` is the query grammar's backlink union, so the incoming
 // references cost one query, not one per reference property.
 let gather = async (
-  ctx: ToolCtx,
+  graph: Graph,
   said: string[],
   backrefs: boolean,
 ): Promise<Bundle[]> => {
   // What the caller typed, as the eids it names: an id that is an entity is
   // itself, and anything else is whatever a plugin declares it addresses — a name,
   // where @yaks/alias is composed in. Nothing composed, nothing to resolve.
-  let at = await ctx.graph.address(said)
+  let at = await graph.address(said)
   let ids = said.map((id) => at.get(id) ?? id)
-  let found = await detached(ctx.graph.storage).get(ids)
+  let found = await detached(graph.storage).get(ids)
   let seen = new Map<string, Bundle>()
   for (let b of found) seen.set(b.entity.eid, b)
   if (backrefs) {
     for (let id of ids) {
-      for (let b of await ctx.read(`.refs=${id}`)) {
+      for (let b of await graph.read(`.refs=${id}`)) {
         if (!seen.has(b.entity.eid)) seen.set(b.entity.eid, b)
       }
     }
@@ -158,30 +159,33 @@ export let runs = (seams: Seams = {}): Runs => {
     // the runner signed as the caller, and the batch as applied is what comes
     // back. `check: true` makes the call a rehearsal, which the runner answers
     // with what a kept write would have returned (@yaks/tools).
-    graph_apply: (_, ctx) => batch(ctx.args.change),
+    graph_apply: (call) => batch(argsOf(call).change),
     // The one concession to typing by hand is the query line: `.status=shelved`
     // is the grammar @yaks/query owns, so this takes it as a string and the
     // optional `filters` list is joined onto it with `&`.
-    graph_query: async (_, ctx) => {
-      let line = [str(ctx.args.q), ...strings(ctx.args.filters)]
+    graph_query: async (call, graph) => {
+      let args = argsOf(call)
+      let line = [str(args.q), ...strings(args.filters)]
         .map((s) => s.trim()).filter(Boolean)
-      let n = num(ctx.args.limit)
+      let n = num(args.limit)
       if (n) line.push(`.limit=${n}`)
       if (!line.length) throw new Refused('graph_query needs a query line')
-      return await ctx.read(line.join('&'))
+      return await graph.read(line.join('&'))
     },
-    graph_show: async (_, ctx) => {
-      let ids = strings(ctx.args.ids)
+    graph_show: async (call, graph) => {
+      let args = argsOf(call)
+      let ids = strings(args.ids)
       if (!ids.length) throw new Refused('graph_show needs at least one id')
-      return await gather(ctx, ids, ctx.args.backrefs !== false)
+      return await gather(graph, ids, args.backrefs !== false)
     },
-    graph_schema: (_, ctx) => {
-      let v = ctx.graph.vocab
+    graph_schema: (call, graph) => {
+      let args = argsOf(call)
+      let v = graph.vocab
       let named = [
-        ...(typeof ctx.args.component == 'string' ? [ctx.args.component] : []),
-        ...strings(ctx.args.component),
+        ...(typeof args.component == 'string' ? [args.component] : []),
+        ...strings(args.component),
       ]
-      let kind = str(ctx.args.kind)
+      let kind = str(args.kind)
       for (let name of [...named, ...(kind ? [kind] : [])]) {
         if (v.comp(name)) continue
         throw new Refused(
@@ -199,15 +203,16 @@ export let runs = (seams: Seams = {}): Runs => {
       return [{
         entity: { eid: '$said' },
         content: { body: proseOf(v, about, seams.guide) },
-        output: { source: ctx.call, value: schemaOf(v, about) },
+        output: { source: call.entity.eid, value: schemaOf(v, about) },
       }]
     },
     ...(find
       ? {
-        search: async (_: Bundle[], ctx: ToolCtx) => {
-          let words = str(ctx.args.words).trim()
+        search: async (call: Bundle) => {
+          let args = argsOf(call)
+          let words = str(args.words).trim()
           if (!words) throw new Refused('search needs words')
-          return await find(words, { limit: num(ctx.args.limit) })
+          return await find(words, { limit: num(args.limit) })
         },
       }
       : {}),

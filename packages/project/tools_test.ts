@@ -1,7 +1,7 @@
 // The checks: a board whose query stopped routing, and work no project holds.
 
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Comp, Graph, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph } from '@yaks/graph'
 import { edges } from '@yaks/edge'
 import { tasks } from '@yaks/task'
@@ -11,13 +11,10 @@ import { runs } from './tools.ts'
 // One check run, as a host would call it: the prose it answered and the level
 // it carries.
 let checkup = async (name: 'board_check' | 'project_check', g: Graph) => {
-  let [said] = await runs({ vocab: team })[name]([], {
-    graph: g,
-    actor: null,
-    read: (q) => g.read(q),
-    args: {},
-    call: 'c1',
-  } as ToolCtx) as Bundle[]
+  let [said] = await runs({ vocab: team })[name](
+    { entity: { eid: 'c1' }, call: { args: {} } },
+    g,
+  ) as Bundle[]
   return {
     body: String((said.content as Comp).body),
     level: (said.error as Comp | undefined)?.code,

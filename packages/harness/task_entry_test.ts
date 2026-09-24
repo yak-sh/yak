@@ -282,7 +282,7 @@ Deno.test('taskEntry inherits completed output and tool results with recent inpu
       {
         entity: { eid: 'call' },
         entry: { session: 'p' },
-        call: { source: 'ask', args: '{}' },
+        call: { source: 'ask', args: {} },
       },
       {
         entity: { eid: 'result' },

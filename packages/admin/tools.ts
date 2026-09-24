@@ -27,7 +27,7 @@
 // wait that can take twenty minutes.
 
 import { fileURLToPath } from 'node:url'
-import type { Bundle, ToolCtx } from '@yaks/graph'
+import { argsOf, type Bundle, type Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { type Local, sealed, unsealed } from '@yaks/secrets'
 import { CallError } from '@yaks/tools'
@@ -80,10 +80,10 @@ let out = (line: string) => console.log(line)
 let note = (line: string) => console.error(line)
 
 // What a verb says, as the call's answer.
-let said = (ctx: ToolCtx, lines: string | string[]): Bundle => ({
+let said = (call: Bundle, lines: string | string[]): Bundle => ({
   entity: { eid: '$said' },
   content: { body: typeof lines == 'string' ? lines : lines.join('\n') },
-  output: { source: ctx.call },
+  output: { source: call.entity.eid },
 })
 
 // WHO this call runs as, and the mark it wears when the answer is somebody
@@ -108,7 +108,7 @@ let acting = (vault: Local, a: Args, keep: Bundle[]): Account => {
 // `@bot.yak.sh` code comes back as a letter in this graph; anyone else's is in
 // their own mail, so it is asked for rather than guessed at.
 let signIn = async (
-  ctx: ToolCtx,
+  graph: Graph,
   address: string,
   given?: string,
 ): Promise<Bundle> => {
@@ -116,7 +116,7 @@ let signIn = async (
   await askCode(address)
   let code = given ??
     (address.endsWith(BOT)
-      ? await waited(ctx, address, since)
+      ? await waited(graph, address, since)
       : await asked(address))
   let session = await spendCode(address, code)
   // Only a throwaway is ever remembered as the default (./accounts.ts) — the
@@ -125,9 +125,9 @@ let signIn = async (
   return sealed(sessionName(address), session)
 }
 
-let waited = (ctx: ToolCtx, address: string, since: number) => {
+let waited = (graph: Graph, address: string, since: number) => {
   note(`waiting for the code to reach the graph for ${address}…`)
-  return codeFor((q) => ctx.read(q), address, since)
+  return codeFor((q) => graph.read(q), address, since)
 }
 
 let asked = async (address: string) => {
@@ -194,27 +194,28 @@ let ended = (verb: string, code: number): Bundle[] => {
 }
 
 // A verb over this graph's vault, answering whatever it said plus any session
-// it has to keep.
+// it has to keep. The graph comes last: only a sign-in reads it.
 type Verb = (
-  ctx: ToolCtx,
+  call: Bundle,
   vault: Local,
   keep: Bundle[],
+  graph: Graph,
 ) => Promise<Bundle[]> | Bundle[]
 
 /** The implementations of the tools ./vocab.json declares. */
 export let runs = (host: { vault: Local }): Runs => {
-  let verb = (run: Verb) => async (_b: Bundle[], ctx: ToolCtx) => {
+  let verb = (run: Verb) => async (call: Bundle, graph: Graph) => {
     let keep: Bundle[] = []
     try {
-      return [...await run(ctx, host.vault, keep), ...keep]
+      return [...await run(call, host.vault, keep, graph), ...keep]
     } finally {
       renewing(() => {})
     }
   }
 
   return {
-    admin_whoami: verb(async (ctx, vault, keep) => {
-      let at = acting(vault, ctx.args, keep)
+    admin_whoami: verb(async (call, vault, keep) => {
+      let at = acting(vault, argsOf(call), keep)
       let claims = claimsOf(at.session)
       let lines = [
         `account   ${at.address}`,
@@ -238,24 +239,24 @@ export let runs = (host: { vault: Local }): Runs => {
       else {
         lines.push('spaces', ...listing.split('\n').map((l) => `  ${l}`))
       }
-      return [said(ctx, lines)]
+      return [said(call, lines)]
     }),
 
-    admin_accounts: verb((ctx, vault) => [
-      said(ctx, render(accountsIn(vault), current())),
+    admin_accounts: verb((call, vault) => [
+      said(call, render(accountsIn(vault), current())),
     ]),
 
-    admin_throwaway: verb(async (ctx) => {
-      let name = word(ctx.args, 'name')
+    admin_throwaway: verb(async (call, _vault, _keep, graph) => {
+      let name = word(argsOf(call), 'name')
       let address = name ? `${name}${BOT}` : throwaway()
       return [
-        await signIn(ctx, address),
-        said(ctx, `signed in as ${address} — current`),
+        await signIn(graph, address),
+        said(call, `signed in as ${address} — current`),
       ]
     }),
 
-    admin_login: verb(async (ctx) => {
-      let a = ctx.args
+    admin_login: verb(async (call, _vault, _keep, graph) => {
+      let a = argsOf(call)
       let address = String(a.address).trim().toLowerCase()
       if (!address.includes('@')) {
         throw new Refused(
@@ -276,35 +277,35 @@ export let runs = (host: { vault: Local }): Runs => {
         )
       }
       return [
-        await signIn(ctx, address, word(a, 'code')),
-        said(ctx, `signed in as ${address}`),
+        await signIn(graph, address, word(a, 'code')),
+        said(call, `signed in as ${address}`),
       ]
     }),
 
-    admin_use: verb((ctx, vault) => {
-      let at = one(accountsIn(vault), String(ctx.args.account))
+    admin_use: verb((call, vault) => {
+      let at = one(accountsIn(vault), String(argsOf(call).account))
       choose(usable(at).address)
-      return [said(ctx, `current: ${at.address}`)]
+      return [said(call, `current: ${at.address}`)]
     }),
 
-    admin_logout: verb((ctx, vault) => {
-      let at = one(accountsIn(vault), String(ctx.args.account))
+    admin_logout: verb((call, vault) => {
+      let at = one(accountsIn(vault), String(argsOf(call).account))
       if (current() == at.address) choose(null)
       return [
         unsealed(sessionName(at.address)),
-        said(ctx, `forgot ${at.address}`),
+        said(call, `forgot ${at.address}`),
       ]
     }),
 
-    admin_link: verb(async (ctx, vault, keep) => {
-      let a = ctx.args
+    admin_link: verb(async (call, vault, keep) => {
+      let a = argsOf(call)
       let at = acting(vault, a, keep)
       let gone = word(a, 'revoke')
       if (gone) {
         let ids = await unlink(at.session, gone)
         return [
           said(
-            ctx,
+            call,
             ids.length
               ? `revoked ${ids.join(' ')}`
               : `no link starts with ${gone}`,
@@ -316,7 +317,7 @@ export let runs = (host: { vault: Local }): Runs => {
         typeof a.days == 'number' ? a.days : undefined,
       )
       return [
-        said(ctx, [
+        said(call, [
           got.url,
           `id        ${got.id}`,
           `expires   ${got.expires}`,
@@ -329,8 +330,8 @@ export let runs = (host: { vault: Local }): Runs => {
     // (workers/yak/sell.ts `fees`) — never a throwaway's, and never a
     // default's. The flag is what says so out loud, the same named act `login`
     // asks for.
-    admin_fee: verb(async (ctx, vault, keep) => {
-      let a = ctx.args
+    admin_fee: verb(async (call, vault, keep) => {
+      let a = argsOf(call)
       if (a.owner !== true && a.admin !== true) {
         throw new Refused(
           'the fee is the platform’s: add --admin (an agent) or --owner ' +
@@ -346,76 +347,76 @@ export let runs = (host: { vault: Local }): Runs => {
       let now = bps == null
         ? await feeNow(at.session)
         : await setFee(at.session, Number(bps))
-      return [said(ctx, `${now.bps} bps — ${now.rate} of each sale`)]
+      return [said(call, `${now.bps} bps — ${now.rate} of each sale`)]
     }),
 
     // The naming first, and it is the page's own (workers/yak/erase.ts):
     // whoever runs this reads what would go before it goes, the same list the
     // letter carries to a person whose agent asked.
-    admin_delete: verb(async (ctx, vault, keep) => {
-      let slug = String(ctx.args.space)
-      let at = acting(vault, ctx.args, keep)
+    admin_delete: verb(async (call, vault, keep) => {
+      let slug = String(argsOf(call).space)
+      let at = acting(vault, argsOf(call), keep)
       let doomed = await doomedIn(at.session, slug)
       return [
-        said(ctx, [
+        said(call, [
           ...doomed.map((line) => `  - ${line}`),
           await close(at.session, slug),
         ]),
       ]
     }),
 
-    admin_query: verb(async (ctx, vault, keep) => {
-      let at = acting(vault, ctx.args, keep)
+    admin_query: verb(async (call, vault, keep) => {
+      let at = acting(vault, argsOf(call), keep)
       let rows = await storeQuery(
         at.session,
-        String(ctx.args.where),
-        (ctx.args.filters ?? []) as string[],
+        String(argsOf(call).where),
+        (argsOf(call).filters ?? []) as string[],
       )
-      return [said(ctx, json(rows))]
+      return [said(call, json(rows))]
     }),
 
-    admin_tool: verb(async (ctx, vault, keep) => {
-      let at = acting(vault, ctx.args, keep)
+    admin_tool: verb(async (call, vault, keep) => {
+      let at = acting(vault, argsOf(call), keep)
       let answer = await rpc(at.session)('tools/call', {
-        name: String(ctx.args.name),
-        arguments: (ctx.args.args ?? {}) as Record<string, unknown>,
+        name: String(argsOf(call).name),
+        arguments: (argsOf(call).args ?? {}) as Record<string, unknown>,
       })
-      return [said(ctx, saidBy(answer))]
+      return [said(call, saidBy(answer))]
     }),
 
-    admin_deploys: verb(async (ctx) => {
-      platform(ctx.args)
-      return [said(ctx, table(await deploys(root)))]
+    admin_deploys: verb(async (call) => {
+      platform(argsOf(call))
+      return [said(call, table(await deploys(root)))]
     }),
 
-    admin_errors: verb(async (ctx) => {
-      platform(ctx.args)
+    admin_errors: verb(async (call) => {
+      platform(argsOf(call))
       return ended(
         'errors',
-        await errors(root, word(ctx.args, 'since') ?? '10m', out, note),
+        await errors(root, word(argsOf(call), 'since') ?? '10m', out, note),
       )
     }),
 
-    admin_tail: verb(async (ctx) => {
-      platform(ctx.args)
+    admin_tail: verb(async (call) => {
+      platform(argsOf(call))
       return ended('tail', await tail(root, out, note))
     }),
 
-    admin_rollback: verb(async (ctx) => {
-      platform(ctx.args)
+    admin_rollback: verb(async (call) => {
+      platform(argsOf(call))
       note(
         'Cloudflare rollback is for a broken build path. Code corrections ' +
           'belong on main: yak admin revert <sha> --admin.',
       )
       return ended(
         'rollback',
-        await rollback(root, word(ctx.args, 'version'), out),
+        await rollback(root, word(argsOf(call), 'version'), out),
       )
     }),
 
-    admin_revert: verb(async (ctx) => {
-      platform(ctx.args)
-      let sha = word(ctx.args, 'sha') ?? ''
+    admin_revert: verb(async (call) => {
+      platform(argsOf(call))
+      let sha = word(argsOf(call), 'sha') ?? ''
       if (!/^[a-f\d]{7,40}$/i.test(sha)) {
         throw new CallError('sha', 'yak admin revert <sha> --admin|--owner')
       }

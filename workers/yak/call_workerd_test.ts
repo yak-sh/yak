@@ -36,7 +36,7 @@ slow('a command that takes an argument runs in its store', async () => {
     let call = crypto.randomUUID()
     await app.applied([{
       entity: { eid: call },
-      call: { to: toolEid('log_note'), args: '{"at":"monday"}' },
+      call: { to: toolEid('log_note'), args: { at: 'monday' } },
     }])
     assertEquals(
       (await app.get('.note')).map((r) => (r.note as { at: string }).at),

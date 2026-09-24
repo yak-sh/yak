@@ -172,6 +172,8 @@ import { apex, url } from './host.ts'
 import {
   addressed,
   aimedOld,
+  ARGUED,
+  argued,
   carry,
   documented,
   ENTERED,
@@ -204,6 +206,7 @@ import {
   TOOLED,
   tooled,
   trusting,
+  unargued,
   unfiled,
   unhandled,
   unholed,
@@ -569,12 +572,12 @@ export class Store {
     // that stopped at an older marker because it had nothing to move for it
     // still has to be asked about the ones added since.
     this.#behind = this.#pending ||
-      (this.#get('migrated') != ENTERED &&
+      (this.#get('migrated') != ARGUED &&
         (housed(ctx.storage) || slugged(ctx.storage) ||
           aimedOld(ctx.storage) || unhandled(ctx.storage) ||
           unfiled(ctx.storage) || mistooled(ctx.storage) ||
           untrusted(ctx.storage) || unsent(ctx.storage) ||
-          misentered(ctx.storage)))
+          misentered(ctx.storage) || unargued(ctx.storage)))
   }
 
   // What an object keeps is in the one shape a deploy takes now. A store that
@@ -1458,6 +1461,10 @@ export class Store {
         misentered,
         (storage, o) => entered(storage, { ...o, vocab: this.#graph.vocab }),
       )
+    }
+    // The eleventh (T-38042): a call's arguments are the object they spell.
+    if (!this.#refused) {
+      this.#after(request, ARGUED, unargued, argued)
     }
     this.#behind = false
   }

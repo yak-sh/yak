@@ -16,7 +16,7 @@
 
 import type { Graph } from '@yaks/graph'
 import type { Turn } from './turn.ts'
-import { sessionFor, where } from './who.ts'
+import { sessionFor } from './who.ts'
 
 /** One transcript on disk: the harness's id for the session, and the file. */
 export type Past = { sid: string; path: string }
@@ -146,7 +146,7 @@ export let transcripts = (dir: string): Past[] => {
 
 // Whether the graph already holds any of this session's transcript.
 let held = async (g: Graph, sid: string): Promise<boolean> => {
-  let s = await sessionFor(where(g), sid)
+  let s = await sessionFor(g, sid)
   return !!s &&
     (await g.read(`.entry.session=${s.entity.eid}&.limit=1`)).length > 0
 }

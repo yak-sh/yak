@@ -385,10 +385,10 @@ Either condition refuses the landing and reports the files, the diff, and the
 override flag. Only added lines can restore old content; a hunk that only
 removes lines is treated as a deletion.
 
-`land` operates on the filesystem rather than on the graph: the checkout at
-`ctx.cwd`, which the caller supplies and which on a command line is the
-directory the person ran the command in. A diverged base comes back as a
-refusal, so the exit code tells you whether anything landed.
+`land` operates on the filesystem rather than on the graph: the checkout at the
+`cwd` of the process on its call, which the caller supplies and which on a
+command line is the directory the person ran the command in. A diverged base
+comes back as a refusal, so the exit code tells you whether anything landed.
 
 ## What is not implemented
 

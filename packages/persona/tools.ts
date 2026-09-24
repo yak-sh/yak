@@ -8,7 +8,7 @@
 // persona gets the text; a caller that wants it on disk writes it there
 // itself, which is the whole reason this package renders text.
 
-import { type Bundle, Refused, type ToolCtx } from '@yaks/graph'
+import { argsOf, type Bundle, type Graph, Refused } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { voice } from './voice.ts'
 import { wear } from './worn.ts'
@@ -17,8 +17,8 @@ import { wear } from './worn.ts'
 // and a name resolves to whatever the graph addresses it to (@yaks/alias, when
 // it is composed in) — the same resolution `graph_show` performs, so a persona
 // is reachable here by every name it is reachable by there.
-let at = async (ctx: ToolCtx, said: string): Promise<string> => {
-  let found = await ctx.graph.address([said])
+let at = async (graph: Graph, said: string): Promise<string> => {
+  let found = await graph.address([said])
   return found.get(said) ?? said
 }
 
@@ -26,11 +26,11 @@ let at = async (ctx: ToolCtx, said: string): Promise<string> => {
  * like every other plugin export, though this one needs nothing from the
  * server: a persona is read through the graph the call arrived on. */
 export let runs = (): Runs => ({
-  persona_read: async (_bundles, ctx): Promise<Bundle[]> => {
-    let said = String(ctx.args.persona ?? '').trim()
+  persona_read: async (call, graph): Promise<Bundle[]> => {
+    let said = String(argsOf(call).persona ?? '').trim()
     if (!said) throw new Refused('persona_read needs a persona')
-    let worn = await wear(ctx.graph.storage, ctx.graph.vocab)(
-      await at(ctx, said),
+    let worn = await wear(graph.storage, graph.vocab)(
+      await at(graph, said),
     )
     // An entity that is not a persona is refused rather than rendered as an
     // empty document: a caller that named a task would otherwise read the
@@ -38,8 +38,8 @@ export let runs = (): Runs => ({
     if (!worn) throw new Refused(`no persona called ${said}`)
     return [{
       entity: { eid: '$voice' },
-      content: { body: voice(ctx.graph.vocab)(worn) },
-      output: { source: ctx.call },
+      content: { body: voice(graph.vocab)(worn) },
+      output: { source: call.entity.eid },
     }]
   },
 })

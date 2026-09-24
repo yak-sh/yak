@@ -16,19 +16,19 @@ Deno.test('recorded execution survives SQLite reopen and needs no session', asyn
   const echo: Tool = {
     name: 'echo',
     description: 'say hello',
-    run: (_bundles, ctx) => {
+    run: (call) => {
       runs++
       return [{
         entity: { eid: '$said' },
         content: { body: 'hello' },
-        output: { source: ctx.call },
+        output: { source: call.entity.eid },
       }]
     },
   }
   try {
     await h.g.apply([
       { entity: { eid: TOOL }, tool: { name: 'echo' } },
-      { entity: { eid: 'call' }, call: { to: TOOL, args: '{}' } },
+      { entity: { eid: 'call' }, call: { to: TOOL, args: {} } },
       {
         entity: { eid: 'unfinished' },
         call: { to: TOOL },
@@ -73,7 +73,7 @@ Deno.test('failed result commit leaves the claim and never repeats side effects'
   try {
     await g.apply([
       { entity: { eid: TOOL }, tool: { name: 'echo' } },
-      { entity: { eid: 'call' }, call: { to: TOOL, args: '{}' } },
+      { entity: { eid: 'call' }, call: { to: TOOL, args: {} } },
     ])
     const r = runner(g, {
       tools: [{

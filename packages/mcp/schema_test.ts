@@ -11,6 +11,7 @@
 import { assertEquals } from '@std/assert'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 import { z } from 'zod'
+import { argsOf } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
 import { connect, shopGraph } from './harness.ts'
 
@@ -195,10 +196,10 @@ Deno.test('a JSON Schema input declaration reaches the listing unchanged', async
       name: 'count_books',
       description: 'Count a shelf',
       inputSchema,
-      run: (_, ctx) => [{
+      run: (call) => [{
         entity: { eid: '$said' },
-        content: { body: `two on ${ctx.args.shelf}` },
-        output: { source: ctx.call },
+        content: { body: `two on ${argsOf(call).shelf}` },
+        output: { source: call.entity.eid },
       }],
     }],
   })

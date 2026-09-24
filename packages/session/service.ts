@@ -26,7 +26,7 @@ import { SESSION } from './comp.ts'
 import { CONTENT, ENTRY, OUTPUT } from './native.ts'
 import { claudeProjects, next, turnsOf } from './past.ts'
 import { spoolOf, taken, trim, type Turn } from './turn.ts'
-import { sessionFor, where } from './who.ts'
+import { sessionFor } from './who.ts'
 
 /** What a config file can set for this plugin's duty. */
 export type Options = {
@@ -70,7 +70,7 @@ export let recorded = async (g: Graph, turns: Turn[]): Promise<Bundle[]> => {
   for (let t of turns) {
     let s = seen.get(t.sid)
     if (!s) {
-      let found = await sessionFor(where(g), t.sid)
+      let found = await sessionFor(g, t.sid)
       s = found
         ? {
           eid: found.entity.eid,

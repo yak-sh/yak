@@ -61,7 +61,7 @@ export let runs = (
   host: { sql: Driver },
   options: Options = {},
 ): Runs => ({
-  storage_check: (_bundles, ctx) => {
+  storage_check: (call) => {
     let found: Finding[] = []
     // Enforcement first: every finding below is only as reliable as this
     // pragma, and a file written with it off is how a broken key gets in at
@@ -93,20 +93,20 @@ export let runs = (
       })
     }
     return checked(
-      ctx.call,
+      call.entity.eid,
       'the file holds no orphaned row and no broken reference',
       found,
     )
   },
 
-  archetype_check: (_bundles, ctx) => {
+  archetype_check: (call) => {
     let about =
       'every archetype pointer matches the components its owner carries'
     // An application that never composed @yaks/archetype has no such table and
     // no pointers to disagree with anything. Reporting that beats an audit that
     // reads every entity as drifted because nothing ever classified one.
     if (!componentTables(host.sql).includes('archetype')) {
-      return checked(ctx.call, about, [{
+      return checked(call.entity.eid, about, [{
         level: 'warn',
         text: 'this file keeps no archetypes (@yaks/archetype is not ' +
           'composed here), so there is no pointer to check',
@@ -116,7 +116,7 @@ export let runs = (
     let d = drift(host.sql, sample)
     let rest = d.drifted - d.sample.length
     return checked(
-      ctx.call,
+      call.entity.eid,
       about,
       d.drifted
         ? [{

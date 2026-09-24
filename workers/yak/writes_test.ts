@@ -99,7 +99,7 @@ Deno.test('a body carrying a key is never kept', () => {
   let key = { entity: { eid: 's' }, secret: { name: 'k', value: 'sk-1' } }
   let call = {
     entity: { eid: 'c' },
-    call: { args: JSON.stringify({ bundles: [key] }) },
+    call: { args: { bundles: [key] } },
   }
   assertEquals(
     [

@@ -50,11 +50,13 @@
 
 import {
   addressed,
+  argsOf,
   type Bundle,
   type Comp,
   detached,
   type Eid,
-  type ToolCtx,
+  type Graph,
+  who,
 } from '@yaks/graph'
 import { BODY, DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
@@ -94,25 +96,26 @@ let prop = (c: Comp | undefined, k: string): string => str(c?.[k])
 
 // One entity whole, by eid. Everything here works from the letter as it
 // stands rather than from a patch, the way ./send.ts does.
-let one = async (ctx: ToolCtx, eid: Eid): Promise<Bundle | undefined> =>
-  (await detached(ctx.graph.storage).get([eid]))[0]
+let one = async (graph: Graph, eid: Eid): Promise<Bundle | undefined> =>
+  (await detached(graph.storage).get([eid]))[0]
 
 // The eid an argument names, whatever form a person typed it in.
-let at = async (ctx: ToolCtx, said: unknown): Promise<Eid> =>
-  (await addressed(ctx.graph, [str(said)]))[0]
+let at = async (graph: Graph, said: unknown): Promise<Eid> =>
+  (await addressed(graph, [str(said)]))[0]
 
 // The letter an argument names, rejected unless it carries `mail`.
-let letterIn = async (ctx: ToolCtx, said: unknown): Promise<Bundle> => {
-  let found = await one(ctx, await at(ctx, said))
+let letterIn = async (graph: Graph, said: unknown): Promise<Bundle> => {
+  let found = await one(graph, await at(graph, said))
   if (!comp(found, MAIL)) throw new Error(`not a letter: ${str(said)}`)
   return found!
 }
 
 /** Whose inbox this is: the entity the arguments named, else whoever is
  * asking. */
-export let reader = async (ctx: ToolCtx): Promise<Eid> => {
-  if (ctx.args.who != null) return await at(ctx, ctx.args.who)
-  let me = ctx.actor?.by
+export let reader = async (call: Bundle, graph: Graph): Promise<Eid> => {
+  let asked = argsOf(call).who
+  if (asked != null) return await at(graph, asked)
+  let me = who(call)?.by
   if (!me) throw new Error('nobody is asking — say --who')
   return me
 }
@@ -154,12 +157,12 @@ export let reSubject = (said: string): string =>
 // empty address resolves to nobody, never to a blank row: an `email` entity
 // with no address is a recipient a letter can be aimed at and never reach.
 let recipientOf = async (
-  ctx: ToolCtx,
+  graph: Graph,
   address: string,
   domain?: string,
 ): Promise<{ to: Eid; made: Bundle[] }> => {
   if (!address) return { to: '', made: [] }
-  let known = await wearer(ctx.graph, address, domain)
+  let known = await wearer(graph, address, domain)
   return known
     ? { to: known, made: [] }
     : { to: '$to', made: [{ entity: { eid: '$to' }, [EMAIL]: { address } }] }
@@ -168,13 +171,13 @@ let recipientOf = async (
 // Whom an argument means: a string with an `@` is an address, anything else is
 // an id.
 let aimedAt = async (
-  ctx: ToolCtx,
+  graph: Graph,
   said: string,
   domain?: string,
 ): Promise<{ to: Eid; made: Bundle[] }> =>
   said.includes('@')
-    ? await recipientOf(ctx, said, domain)
-    : { to: await at(ctx, said), made: [] }
+    ? await recipientOf(graph, said, domain)
+    : { to: await at(graph, said), made: [] }
 
 /**
  * A letter's thread: up its one-parent `reply_to` chain, then down over
@@ -182,20 +185,20 @@ let aimedAt = async (
  * in hand, so a thread costs its own rows rather than every letter ever sent.
  */
 export let threadOf = async (
-  ctx: ToolCtx,
+  graph: Graph,
   letter: Bundle,
 ): Promise<Bundle[]> => {
   let found = [letter]
   let seen = new Set([letter.entity.eid])
   for (let up = prop(comp(letter, MAIL), 'reply_to'); up && !seen.has(up);) {
-    let b = await one(ctx, up)
+    let b = await one(graph, up)
     if (!b) break
     seen.add(up)
     found.push(b)
     up = prop(comp(b, MAIL), 'reply_to')
   }
   for (let front = [...seen]; front.length;) {
-    let down = (await ctx.read(and(eq(`${MAIL}.reply_to`, list(...front)))))
+    let down = (await graph.read(and(eq(`${MAIL}.reply_to`, list(...front)))))
       .filter((b) => !seen.has(b.entity.eid))
     for (let b of down) seen.add(b.entity.eid), found.push(b)
     front = down.map((b) => b.entity.eid)
@@ -251,31 +254,33 @@ let page = (id: (b: Bundle) => string, letter: Bundle, thread: Bundle[]) => {
  * every other entry point in these packages: the domain is what an address a
  * person typed is canonicalized against before the address book is queried,
  * into the same form the canonicalizer stored it in (./plugin.ts). Everything
- * else a handler needs arrives on the call's own context. */
+ * else a handler needs arrives on the call it is handed. */
 export let runs = (_host?: unknown, options: Options = {}): Runs => ({
-  inbox_list: async (_bundles, ctx): Promise<Bundle[]> => {
-    let who = await reader(ctx)
-    let address = prop(comp(await one(ctx, who), EMAIL), 'address')
-    let n = ctx.args.limit == null ? PAGE : Number(ctx.args.limit)
-    return await ctx.read(inbox(who, address, !!ctx.args.all, n))
+  inbox_list: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let who = await reader(call, graph)
+    let address = prop(comp(await one(graph, who), EMAIL), 'address')
+    let n = args.limit == null ? PAGE : Number(args.limit)
+    return await graph.read(inbox(who, address, !!args.all, n))
   },
 
-  inbox_archive: async (_bundles, ctx): Promise<Bundle[]> => [{
-    entity: { eid: await at(ctx, ctx.args.item) },
+  inbox_archive: async (call, graph): Promise<Bundle[]> => [{
+    entity: { eid: await at(graph, argsOf(call).item) },
     [ARCHIVED]: {},
   }],
 
   // Reading is the mark, so this writes. The prose is the result; the `opened`
   // patch is what keeps a second call from reporting it as unread.
-  mail_show: async (_bundles, ctx): Promise<Bundle[]> => {
-    let letter = await letterIn(ctx, ctx.args.letter)
-    let thread = await threadOf(ctx, letter)
+  mail_show: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let letter = await letterIn(graph, args.letter)
+    let thread = await threadOf(graph, letter)
     return [
       { entity: { eid: letter.entity.eid }, [OPENED]: {} },
       {
         entity: { eid: '$said' },
-        content: { body: page(human(ctx.graph.vocab), letter, thread) },
-        output: { source: ctx.call },
+        content: { body: page(human(graph.vocab), letter, thread) },
+        output: { source: call.entity.eid },
       },
     ]
   },
@@ -286,12 +291,13 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
   // there would look sent without being sent. An arrival is a letter with a
   // Message-ID that never asked to be sent: one of ours carries `deliver`, and
   // has a Message-ID too once the transport gave it one.
-  mail_reply: async (_bundles, ctx): Promise<Bundle[]> => {
-    let letter = await letterIn(ctx, ctx.args.letter)
+  mail_reply: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let letter = await letterIn(graph, args.letter)
     let mail = comp(letter, MAIL)!
     let arrived = !!prop(mail, 'message_id') && !comp(letter, DELIVER)
     let far = arrived
-      ? await recipientOf(ctx, prop(mail, 'from'), options.domain)
+      ? await recipientOf(graph, prop(mail, 'from'), options.domain)
       : { to: prop(comp(letter, DELIVER), 'to'), made: [] as Bundle[] }
     if (!far.to) {
       throw new Error(
@@ -307,7 +313,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
         entity: { eid: '$reply' },
         [DOC]: {
           [TITLE]: reSubject(prop(comp(letter, DOC), TITLE)),
-          [BODY]: str(ctx.args.body),
+          [BODY]: str(args.body),
         },
         // No `target`: on an arrival that property holds whom the letter was
         // routed to (./arrive.ts), which is this side of the thread — carrying
@@ -325,26 +331,27 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
     ]
   },
 
-  mail_send: async (_bundles, ctx): Promise<Bundle[]> => {
-    let far = await aimedAt(ctx, str(ctx.args.to), options.domain)
+  mail_send: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let far = await aimedAt(graph, str(args.to), options.domain)
     if (!far.to) throw new Error('a letter needs somebody to go to — say --to')
-    let from = ctx.args.from != null
-      ? str(ctx.args.from)
-      : prop(comp(await one(ctx, str(ctx.actor?.by)), EMAIL), 'address')
+    let from = args.from != null
+      ? str(args.from)
+      : prop(comp(await one(graph, str(who(call)?.by)), EMAIL), 'address')
     if (!from) {
       throw new Error(
         'a letter needs a from address — say --from, or give whoever is ' +
           'asking an `email.address`',
       )
     }
-    let target = ctx.args.about == null ? '' : await at(ctx, ctx.args.about)
+    let target = args.about == null ? '' : await at(graph, args.about)
     return [
       ...far.made,
       {
         entity: { eid: '$letter' },
         [DOC]: {
-          [TITLE]: str(ctx.args.subject),
-          [BODY]: str(ctx.args.body),
+          [TITLE]: str(args.subject),
+          [BODY]: str(args.body),
         },
         [MAIL]: { from, ...(target ? { target } : {}) },
         [DELIVER]: { to: far.to },
@@ -352,17 +359,17 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
     ]
   },
 
-  mail_check: async (_bundles, ctx) => {
+  mail_check: async (call, graph) => {
     // An arrival is a letter with a Message-ID that never asked to be sent
     // (see mail_reply), and one with no sender has nobody to answer.
-    let orphans = await ctx.read(
+    let orphans = await graph.read(
       and(
         present(`${MAIL}.message_id`),
         absent(DELIVER),
         absent(`${MAIL}.from`),
       ),
     )
-    let id = human(ctx.graph.vocab)
+    let id = human(graph.vocab)
     let found = orphans.map((b): Finding => ({
       level: 'fail',
       text: `${id(b)} arrived with no sender — a reply has nowhere to go`,
@@ -381,7 +388,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
       })
     }
     return checked(
-      ctx.call,
+      call.entity.eid,
       'every letter that arrived carries a sender, and this server can send',
       found,
     )

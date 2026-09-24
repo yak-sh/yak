@@ -1,18 +1,15 @@
 // The tools facet: what the run answers, and what it refuses.
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Bundle, Comp, Graph, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { link, memory, voiced, world } from './harness.ts'
 import { runs } from './tools.ts'
 
 let asked = (g: Graph, args: Record<string, unknown>) =>
-  runs().persona_read([], {
-    graph: g,
-    actor: null,
-    read: (q) => g.read(q),
-    args,
-    call: 'c1',
-  } as ToolCtx) as Promise<Bundle[]>
+  runs().persona_read(
+    { entity: { eid: 'c1' }, call: { args } },
+    g,
+  ) as Promise<Bundle[]>
 
 let peopled = (): Graph => {
   let g = world()

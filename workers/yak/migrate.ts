@@ -259,6 +259,11 @@ export let SENT = 'yak/store/sent/9'
  * table. */
 export let ENTERED = 'yak/store/entered/10'
 
+/** The eleventh pass (T-38042): a call's arguments are the object they spell,
+ * kept as SQLite's binary JSON, where they were that object's JSON text. Any
+ * store a tool is called in. */
+export let ARGUED = 'yak/store/args/11'
+
 /** Every marker in order, so "is this object caught up" is one comparison and
  * a new pass is one line here. */
 export let MARKS = [
@@ -272,6 +277,7 @@ export let MARKS = [
   SANDBOXED,
   SENT,
   ENTERED,
+  ARGUED,
 ]
 
 /** Passes that change stored shape, read per commit by `yak admin deploys`.
@@ -279,7 +285,16 @@ export let MARKS = [
  * boundary. Nor does an expanding pass the build before it reads correctly:
  * SANDBOXED and SENT write only properties that build already reads, and
  * ENTERED moves rows it never read into the table it does. */
-export let BOUNDARIES = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED, TOOLED]
+export let BOUNDARIES = [
+  MARK,
+  HOMED,
+  FORMER,
+  SERVES,
+  HANDLED,
+  FILED,
+  TOOLED,
+  ARGUED,
+]
 
 /** The two tables the two layouts spell identically, and so never move. */
 let SPINE = ['entity', 'tombstone']
@@ -891,6 +906,51 @@ export let entered = (
         `${from - moved - merged} with no edge dropped`,
     }],
     dropped: [{ table: ENTRY, rows: from }],
+  }
+}
+
+// ---- a call's arguments → the object they spell (T-38042) -----------------
+//
+// `call.args` was the arguments' JSON text, and is the object: @yaks/tools
+// hands a tool the call with its arguments in place, and a jsonb property is
+// kept as SQLite's binary JSON (@yaks/sqlite ./jsonb.ts). SQLite never retypes
+// a column, so the text stays text until it is rewritten. Text that is not
+// JSON becomes the JSON string holding it: nothing is lost, and the runner
+// refuses it as arguments, as it refused the text.
+
+// The calls whose arguments are still text.
+let TEXT_ARGS = `select entity from call where typeof(args) = 'text'`
+
+/** Whether a call's arguments are still their JSON text. */
+export let unargued = (storage: DurableStorage): boolean => {
+  let d = driver(storage)
+  return stands(d, 'call') && columns(d, 'call').includes('args') &&
+    d.query(`${TEXT_ARGS} limit 1`, []).length > 0
+}
+
+/** Each call's arguments rewritten as binary JSON, inside `transactionSync`
+ * like every numbered pass. */
+export let argued = (
+  storage: DurableStorage,
+  o: { store: string; app: string | null },
+): Report => {
+  let d = driver(storage)
+  let left = () =>
+    Number(d.query(`select count(*) as n from (${TEXT_ARGS})`, [])[0]?.n ?? 0)
+  let from = left()
+  d.query(
+    `update call set args = jsonb(case when json_valid(args) then args ` +
+      `else json_quote(args) end) where typeof(args) = 'text'`,
+    [],
+  )
+  let to = from - left()
+  return {
+    ...o,
+    at: new Date().toISOString(),
+    ok: to == from,
+    mark: ARGUED,
+    moved: [{ table: 'call', from, to, note: 'arguments kept as binary JSON' }],
+    dropped: [],
   }
 }
 

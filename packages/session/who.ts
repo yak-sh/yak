@@ -30,30 +30,20 @@ import {
 } from '@yaks/graph'
 import { SESSION } from './comp.ts'
 
-/** What resolving a session needs: the ids a caller may pass, and a read. A
- * tool passes its own context; an HTTP server passes the graph. */
-export type Where = {
-  graph: Pick<Graph, 'address' | 'storage'>
-  read: (query: string) => Bundle[] | Promise<Bundle[]>
-}
-
-/** A tool context is one, and so is a graph. */
-export let where = (g: Graph): Where => ({ graph: g, read: (q) => g.read(q) })
-
 /**
  * The transcript an id names: the entity it addresses, else the one carrying it
  * as its runner's own id. Nothing is minted here — resolution only reads, and a
  * tool that wants a transcript created does that itself.
  */
 export let sessionFor = async (
-  ctx: Where,
+  g: Pick<Graph, 'address' | 'storage' | 'read'>,
   said: string,
 ): Promise<Bundle | undefined> => {
   if (!said) return undefined
-  let [eid] = await addressed(ctx.graph, [said])
-  let [row] = await detached(ctx.graph.storage).get([eid])
+  let [eid] = await addressed(g, [said])
+  let [row] = await detached(g.storage).get([eid])
   if (row?.[SESSION] && row[TOMBSTONE] == null) return row
-  return (await ctx.read(`.${SESSION}.id=${JSON.stringify(said)}`))[0]
+  return (await g.read(`.${SESSION}.id=${JSON.stringify(said)}`))[0]
 }
 
 /**

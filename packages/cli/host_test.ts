@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Handler } from '@yaks/api'
-import { type Bundle, type Comp, detached } from '@yaks/graph'
+import { argsOf, type Bundle, type Comp, detached } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
@@ -99,14 +99,14 @@ let shop: Plugged = {
     // here.
     runs: () => ({
       // A tool answers bundles: the entities it found, and nothing else.
-      book_list: (_, ctx) => ctx.read('.book'),
+      book_list: (_, graph) => graph.read('.book'),
       // And a writing one answers the entity it wants made. It never writes
       // itself: what it answers is landed for it, as whoever asked.
-      book_add: (_, ctx) => [{
+      book_add: (call) => [{
         entity: { eid: '$made' },
-        book: { title: String(ctx.args.title) },
-        content: { body: `shelved ${ctx.args.title}` },
-        output: { source: ctx.call },
+        book: { title: String(argsOf(call).title) },
+        content: { body: `shelved ${argsOf(call).title}` },
+        output: { source: call.entity.eid },
       }],
     }),
   },
@@ -582,7 +582,7 @@ Deno.test('a call written through the door is run by the effect', async () => {
           entity: { eid: 'c1' },
           call: {
             to: toolEid('book_add'),
-            args: JSON.stringify({ title: 'Later' }),
+            args: { title: 'Later' },
           },
         }]),
       }),

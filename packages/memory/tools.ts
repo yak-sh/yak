@@ -21,10 +21,11 @@
 
 import {
   addressed,
+  argsOf,
   type Bundle,
   type Comp,
+  type Graph,
   token,
-  type ToolCtx,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { MEMORY } from './comp.ts'
@@ -53,18 +54,18 @@ let ids = (v: unknown): string[] =>
 // The arguments that name an entity, resolved to eids. A person types `P-19`,
 // never an eid, and one call resolves every id the arguments carried.
 let at = async (
-  ctx: ToolCtx,
+  graph: Graph,
   said: Record<string, string>,
 ): Promise<Record<string, string>> => {
   let keys = Object.keys(said).filter((k) => said[k])
-  let found = await addressed(ctx.graph, keys.map((k) => said[k]))
+  let found = await addressed(graph, keys.map((k) => said[k]))
   return Object.fromEntries(keys.map((k, i) => [k, found[i]]))
 }
 
 // A memory as it stands right now, for a patch to be judged against: the
 // entity the caller named, or nothing where it names no memory of this graph.
-let held = async (ctx: ToolCtx, eid: string): Promise<Bundle | undefined> =>
-  (await ctx.read(`.eid=${eid}&.${MEMORY}&.doc?`))[0]
+let held = async (graph: Graph, eid: string): Promise<Bundle | undefined> =>
+  (await graph.read(`.eid=${eid}&.${MEMORY}&.doc?`))[0]
 
 /** One memory as it is returned: whole, carrying the token a save will ask
  * for. Absent words read back as `null`, which is how the precondition check
@@ -76,43 +77,44 @@ export let witnessed = (b: Bundle): Bundle => ({
 
 /** The implementations of the tools ./vocab.json declares. A factory, like
  * every other entry point in these packages, though this one needs nothing
- * from the server: everything a handler reads arrives on the call's own
- * context. */
+ * from the server: everything a handler reads arrives on the call it is
+ * handed. */
 export let runs = (): Runs => ({
-  memory_save: async (_bundles, ctx): Promise<Bundle[]> => {
-    let named = str(ctx.args.id)
-    let feedback = ctx.args.feedback
-    let eids = await at(ctx, {
+  memory_save: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let named = str(args.id)
+    let feedback = args.feedback
+    let eids = await at(graph, {
       id: named,
-      scope: str(ctx.args.scope),
+      scope: str(args.scope),
       by: str(feedback),
     })
     if (!named) {
       return saved({
         eid: '$memory',
-        said: str(ctx.args.said),
-        title: str(ctx.args.title),
-        context: str(ctx.args.context),
+        said: str(args.said),
+        title: str(args.title),
+        context: str(args.context),
         ...(eids.scope ? { scope: eids.scope } : {}),
-        about: str(ctx.args.about),
+        about: str(args.about),
         ...(feedback == null ? {} : { feedback: eids.by || true }),
       })
     }
-    let was = await held(ctx, eids.id)
+    let was = await held(graph, eids.id)
     if (!was) throw new Error(`no memory: ${named}`)
     // The words, and the one precondition that matters. A patch that leaves
     // them alone needs no token; one that replaces words the memory actually
     // holds must pass the token for the words it held.
     let doc: Comp = {}
-    if (ctx.args.title != null) doc.title = str(ctx.args.title)
-    if (ctx.args.said != null) doc.body = str(ctx.args.said)
+    if (args.title != null) doc.title = str(args.title)
+    if (args.said != null) doc.body = str(args.said)
     let words = comp(was, 'doc').body
-    let said = ctx.args.said != null
-    if (said && words != null && !ctx.args.was) throw new Error(unread(named))
+    let said = args.said != null
+    if (said && words != null && !args.was) throw new Error(unread(named))
     let memory: Comp = {}
     if (eids.scope) memory.scope = eids.scope
-    if (ctx.args.context != null) memory.context = str(ctx.args.context)
-    if (ctx.args.about != null) memory.about = str(ctx.args.about)
+    if (args.context != null) memory.context = str(args.context)
+    if (args.about != null) memory.about = str(args.about)
     return [{
       entity: { eid: eids.id },
       ...(Object.keys(doc).length ? { doc } : {}),
@@ -120,24 +122,25 @@ export let runs = (): Runs => ({
       ...(feedback == null
         ? {}
         : { [FEEDBACK]: eids.by ? { by: eids.by } : {} }),
-      ...(said ? { $was: { doc: { body: str(ctx.args.was) || null } } } : {}),
+      ...(said ? { $was: { doc: { body: str(args.was) || null } } } : {}),
     }]
   },
 
-  memory_recall: async (_bundles, ctx): Promise<Bundle[]> => {
-    let named = ids(ctx.args.ids)
-    let eids = await at(ctx, {
-      near: str(ctx.args.near),
-      scope: str(ctx.args.scope),
+  memory_recall: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let named = ids(args.ids)
+    let eids = await at(graph, {
+      near: str(args.near),
+      scope: str(args.scope),
     })
     let asked: Asked = {
-      limit: Number(ctx.args.limit ?? LIMIT),
-      said: str(ctx.args.said),
+      limit: Number(args.limit ?? LIMIT),
+      said: str(args.said),
       ...(eids.near ? { near: eids.near } : {}),
       ...(eids.scope ? { scope: eids.scope } : {}),
-      ...(ctx.args.feedback ? { feedback: true } : {}),
-      ...(named.length ? { eids: await addressed(ctx.graph, named) } : {}),
+      ...(args.feedback ? { feedback: true } : {}),
+      ...(named.length ? { eids: await addressed(graph, named) } : {}),
     }
-    return (await ctx.read(line(asked))).map(witnessed)
+    return (await graph.read(line(asked))).map(witnessed)
   },
 })

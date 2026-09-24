@@ -110,10 +110,7 @@ export let defect = (
 
 // The space and app a call's arguments named, and nothing else it said.
 let aimedAt = (args: unknown): { space?: string; app?: string } => {
-  let said: Record<string, unknown> = {}
-  try {
-    said = JSON.parse(String(args ?? '{}')) ?? {}
-  } catch { /* no arguments to read */ }
+  let said = (args ?? {}) as Record<string, unknown>
   let slug = (v: unknown) => typeof v == 'string' ? v : undefined
   return { space: slug(said.space), app: slug(said.app) }
 }

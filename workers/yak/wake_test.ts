@@ -458,14 +458,14 @@ Deno.test('a call wearing a wake waits for it, and answers when it fires', async
   // A call nobody scheduled is due when it is written: the other rule.
   await a.ask('/apply', [{
     entity: { eid: 'now' },
-    call: { to: toolEid('add_chore'), args: '{"name":"take the bins out"}' },
+    call: { to: toolEid('add_chore'), args: { name: 'take the bins out' } },
   }])
   assertEquals((await a.rows('.result.call=now')).length, 1)
   let now = Date.now() - 1
   assertEquals(
     (await a.ask('/apply', [{
       entity: { eid: 'later' },
-      call: { to: toolEid('add_chore'), args: '{"name":"water the plants"}' },
+      call: { to: toolEid('add_chore'), args: { name: 'water the plants' } },
       wake: { at: new Date(now).toISOString() },
     }])).status,
     200,
@@ -496,7 +496,7 @@ Deno.test('a recurring call is one invocation per firing, never a re-run', async
   let first = Date.now() - 1
   await a.ask('/apply', [{
     entity: { eid: 'daily' },
-    call: { to: toolEid('add_chore'), args: '{"name":"sweep"}' },
+    call: { to: toolEid('add_chore'), args: { name: 'sweep' } },
     wake: { at: new Date(first).toISOString(), every: '1d' },
   }])
   await a.ctx.storage.deleteAlarm()
@@ -546,7 +546,7 @@ Deno.test('an idle world advances offline, a missed stretch in one firing', asyn
     (await a.ask('/apply', [{
       entity: { eid: 'world' },
       world: { name: 'Eldermoor' },
-      call: { to: advance.entity.eid, args: '{}' },
+      call: { to: advance.entity.eid, args: {} },
       wake: { at: iso('09:05'), every: '5m' },
     }])).status,
     200,

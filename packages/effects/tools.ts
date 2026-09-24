@@ -54,19 +54,19 @@ export let runs = (
   host: { vocab: Vocab },
   options: Options = {},
 ): Runs => ({
-  effect_check: async (_bundles, ctx) => {
+  effect_check: async (call, graph) => {
     let about = 'every effect run reached an end somebody would hear about'
     if (!host.vocab.comp(EFFECT)) {
       // Not a fault: an application that wants at-most-once in memory loads no
       // `effect` component, so there is nothing written down to fall behind
       // on.
-      return checked(ctx.call, about, [])
+      return checked(call.entity.eid, about, [])
     }
     let id = human(host.vocab)
     let sample = options.sample ?? SAMPLE
     let cutoff = Date.now() - (options.minutes ?? MINUTES) * 60_000
-    let failed = await ctx.read(and(eq(`${EFFECT}.state`, 'failed')))
-    let stuck = (await ctx.read(and(eq(`${EFFECT}.state`, 'pending'))))
+    let failed = await graph.read(and(eq(`${EFFECT}.state`, 'failed')))
+    let stuck = (await graph.read(and(eq(`${EFFECT}.state`, 'pending'))))
       .filter((b) => {
         // Since when it has been waiting: a failure that reported is owed its
         // next run at `next`, not at the instant the run was first written
@@ -91,6 +91,6 @@ export let runs = (
           `${some(stuck, id, sample)}`,
       })
     }
-    return checked(ctx.call, about, found)
+    return checked(call.entity.eid, about, found)
   },
 })

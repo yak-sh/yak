@@ -25,5 +25,5 @@ export let runs = (host: { vocab: Vocab }): Runs => ({
   ...tasks(),
   ...sessions(host),
   ...projects(host),
-  session_list: (_bundles, ctx) => ctx.read(parse('.session')),
+  session_list: (_, graph) => graph.read(parse('.session')),
 })

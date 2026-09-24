@@ -21,7 +21,7 @@
 // open-relay rule and the month's ceiling all hold here without this file
 // knowing any of them exist (graph.ts `#posting`, meter.ts).
 import { z } from 'zod'
-import type { Bundle, Tool } from '@yaks/graph'
+import { argsOf, type Bundle, type Tool } from '@yaks/graph'
 import { canon, parts } from '@yaks/mail'
 import { mailbox } from './directory.ts'
 import { type Reach, read, written } from './reach.ts'
@@ -128,8 +128,8 @@ let listing = (ctx: Ctx): Tool => ({
     ),
     limit: z.number().optional().describe('at most this many (default: 20)'),
   },
-  run: async (_, c) => {
-    let args = c.args
+  run: async (call) => {
+    let args = argsOf(call)
     let { space, app, who } = await inApp(ctx, args)
     let said = args.direction == null ? 'all' : String(args.direction)
     let which = side(said, mailbox(space, app, ctx.env))
@@ -175,8 +175,8 @@ let sending = (ctx: Ctx): Tool => ({
     title: z.string().describe('the subject line'),
     body: z.string().describe('the body, as markdown'),
   },
-  run: async (_, c) => {
-    let args = c.args
+  run: async (call) => {
+    let args = argsOf(call)
     let { space, app, who } = await inApp(ctx, args, true)
     let mine: Reach = { space, app, who }
     let to = str(args.to, 'to')

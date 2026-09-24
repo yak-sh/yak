@@ -15,7 +15,7 @@
 
 import type { Authenticate } from '@yaks/api'
 import type { Actor, Graph } from '@yaks/graph'
-import { sessionFor, speaking, where } from './who.ts'
+import { sessionFor, speaking } from './who.ts'
 
 /** The request header a caller names its run in. */
 export let VIA = 'x-via'
@@ -30,6 +30,6 @@ export let authenticate =
   async (request: Request): Promise<Actor | null> => {
     let said = request.headers.get(VIA)
     if (!said) return null
-    let s = await sessionFor(where(host.graph), said)
+    let s = await sessionFor(host.graph, said)
     return s ? speaking(s) : null
   }

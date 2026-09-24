@@ -182,7 +182,9 @@ exports.
 
 This package exports the `Bundle`, `Storage`/`Tx`, plugin, rule, and tool
 interfaces plus the graph implementation. It does not choose a database or
-install domain components for you.
+install domain components for you. A tool is `run(call, graph)`: the call
+entity's bundle, whose arguments `argsOf(call)` reads and whose caller
+`who(call)` reads, and the graph it runs on.
 
 - [@yaks/vocab](../vocab/README.md) loads component schemas.
 - [@yaks/ram](../ram/README.md), [@yaks/sqlite](../sqlite/README.md),

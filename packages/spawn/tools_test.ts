@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import type { Bundle, Comp, Graph, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { loadTools } from '@yaks/graph/tools'
@@ -63,13 +63,10 @@ let shelf = [
   { ...link(P, 'serves', M), serves: { name: 'fake-1' } },
 ]
 
-let ctx = (g: Graph, args: Record<string, unknown>): ToolCtx => ({
-  graph: g,
-  actor: null,
-  read: (q, o) => g.read(q, o),
-  args,
-  call: 'the-call',
-})
+let asked = (g: Graph, args: Record<string, unknown>): [Bundle, Graph] => [
+  { entity: { eid: 'the-call' }, call: { args } },
+  g,
+]
 
 let tools = runs({ graph: undefined as unknown as Graph }, { poll: 20 })
 
@@ -96,8 +93,7 @@ Deno.test('a spawn lands the session, the request and the lease', async () => {
   let { g } = host()
   await g.apply(shelf)
   let said = await tools.session_spawn!(
-    [],
-    ctx(g, {
+    ...asked(g, {
       task: 'T-3',
       provider: P,
       model: M,
@@ -128,7 +124,7 @@ Deno.test('a spawn refuses what is not a provider, and work that is not there', 
   await g.apply(shelf)
   let refused = async (args: Record<string, unknown>) => {
     try {
-      await tools.session_spawn!([], ctx(g, args))
+      await tools.session_spawn!(...asked(g, args))
     } catch (e) {
       return (e as Error).message
     }
@@ -171,12 +167,12 @@ Deno.test('a peek is the transcript, and a wait on a stopped one is its ending',
     { entity: { eid: 'e3' }, entry: { session: 's' }, stop: {} },
     { entity: { eid: 's' }, brief: { text: 'shipped it' } },
   ])
-  let seen = body(await tools.session_peek!([], ctx(g, { session: 's' })))
+  let seen = body(await tools.session_peek!(...asked(g, { session: 's' })))
   assertStringIncludes(seen, 'stopped')
   assertStringIncludes(seen, 'done')
   assertEquals(seen.split('\n').length, 4) // the head, and one line per entry
 
-  let ended = body(await tools.session_wait!([], ctx(g, { session: 's' })))
+  let ended = body(await tools.session_wait!(...asked(g, { session: 's' })))
   assertStringIncludes(ended, 'stopped')
   assertStringIncludes(ended, 'shipped it')
 })
@@ -194,14 +190,14 @@ Deno.test('a peek shows the last lines, and refuses what is not a session', asyn
     { entity: { eid: 't' }, task: {}, doc: { title: 'not a session' } },
   ])
   let seen = body(
-    await tools.session_peek!([], ctx(g, { session: 's', lines: 2 })),
+    await tools.session_peek!(...asked(g, { session: 's', lines: 2 })),
   )
   assertEquals(seen.split('\n').length, 3)
   assertStringIncludes(seen, 'line 4')
   assert(!seen.includes('line 1'))
 
   let said = await Promise.resolve(
-    tools.session_wait!([], ctx(g, { session: 't' })),
+    tools.session_wait!(...asked(g, { session: 't' })),
   ).then(() => '', (e: Error) => e.message)
   assertStringIncludes(said, 'not a session')
 })
@@ -213,7 +209,7 @@ Deno.test('a wait answers "still running" rather than killing anything', async (
     { entity: { eid: 'e1' }, entry: { session: 's' }, content: { body: 'go' } },
   ])
   let said = body(
-    await tools.session_wait!([], ctx(g, { session: 's', timeout: '0' })),
+    await tools.session_wait!(...asked(g, { session: 's', timeout: '0' })),
   )
   assertStringIncludes(said, 'still running')
 })
@@ -235,8 +231,7 @@ slow('spawn --wait runs the provider and answers what it came to', async () => {
     await g.apply(shelf)
     let said = body(
       await tools.session_spawn!(
-        [],
-        ctx(g, {
+        ...asked(g, {
           task: 'the-task',
           provider: P,
           model: M,
@@ -250,7 +245,7 @@ slow('spawn --wait runs the provider and answers what it came to', async () => {
 
     let [session] = await g.read('.session')
     let seen = body(
-      await tools.session_peek!([], ctx(g, { session: session.entity.eid })),
+      await tools.session_peek!(...asked(g, { session: session.entity.eid })),
     )
     assertStringIncludes(seen, 'working: ')
     await until(async () => (await g.read('.stop')).length, 'the ending')

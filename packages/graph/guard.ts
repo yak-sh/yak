@@ -42,9 +42,12 @@ export class Stale extends Error {
 
 /** The token a caller puts in `$was`: the SHA-256 of a value it read, or
  * `null` when it read no value. One function, so both ends hash the same
- * way. */
+ * way. A JSON value (an `object` or `array` property) is hashed as its JSON
+ * text, so two different objects never share a token. */
 export let token = (value: unknown): string | null =>
-  value == null ? null : sha256(String(value))
+  value == null
+    ? null
+    : sha256(typeof value == 'object' ? JSON.stringify(value) : String(value))
 
 /**
  * The precondition phase: check every `$was` the change carries against the

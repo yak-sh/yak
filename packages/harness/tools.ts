@@ -77,7 +77,7 @@ export let graphTools = (
       return worded(answerOf(
         await r.call([{
           entity: { eid: '$call' },
-          call: { to: toolEid(toolName(t)), args: JSON.stringify(args ?? {}) },
+          call: { to: toolEid(toolName(t)), args: args ?? {} },
           ...(actor ? { $actor: { by: actor.eid } } : {}),
         }]),
       ))

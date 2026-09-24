@@ -12,10 +12,11 @@ deno add jsr:@yaks/tools
 A **bundle** is one entity's components represented as a JSON object. In
 [@yaks/graph](../graph), it is also the patch used to read or write that entity:
 the `entity` field contains its id, and the other fields contain its components.
-A tool receives the call entity as a bundle and returns an array of bundles:
+A tool is `run(call, graph)`: it receives the call entity as a bundle and the
+graph it runs on, and returns an array of bundles:
 
 ```ts
-import type { Tool } from '@yaks/graph'
+import { argsOf, type Tool } from '@yaks/graph'
 
 const greet: Tool = {
   noun: 'person',
@@ -26,19 +27,20 @@ const greet: Tool = {
     required: ['name'],
     properties: { name: { type: 'string' } },
   },
-  run: (_bundles, ctx) => [{
+  run: (call) => [{
     entity: { eid: '$greeting' },
-    content: { body: `hello ${ctx.args.name}` },
-    output: { source: ctx.call },
+    content: { body: `hello ${argsOf(call).name}` },
+    output: { source: call.entity.eid },
   }],
 }
 ```
 
-The runner parses `call.args`, validates it against `inputSchema`, and exposes
-the result as `ctx.args`. The context also provides the call id, caller
-identity, graph access, and an optional working directory. A tool does not apply
-its returned bundles. The runner applies them and attributes the writes to the
-caller.
+`call.args` is an object. The runner validates it against `inputSchema` and
+hands the tool the call with the validated arguments in their place (`argsOf`),
+the caller in `created{by, via}` (`who`), and, where a program on this machine
+runs the call, that program in `process{pid, command, cwd}`. A tool does not
+apply its returned bundles. The runner applies them and attributes the writes to
+the caller.
 
 <a id="components"></a>
 
@@ -51,8 +53,9 @@ these components:
   (the vocabulary's `identity` keyword): the entity id is derived from it, and
   `toolEid(name)` computes that id for a call to point at.
 - `call{to, args, id?, source?}` records an invocation. `to` refers to a `tool`
-  entity, `args` is a JSON string, `id` can preserve a transport's correlation
-  id, and `source` can refer to the request or schedule that created the call.
+  entity, `args` is an object of arguments, `id` can preserve a transport's
+  correlation id, and `source` can refer to the request or schedule that created
+  the call.
 - `execution{state, by?}` records the state (`running`, `done`, or `failed`)
   and, when configured, the process that claimed the call.
 - `result{call, ms}` refers to the completed call and records its duration. The
@@ -100,7 +103,7 @@ await r.ensure()
 
 const records = await r.call([{
   entity: { eid: '$call' },
-  call: { to: toolEid('person_greet'), args: '{"name":"Ada"}' },
+  call: { to: toolEid('person_greet'), args: { name: 'Ada' } },
 }])
 
 if (faulted(records)) throw new Error(worded(answerOf(records)))
@@ -127,16 +130,16 @@ the caller rather than the process executing the tool. If the vocabulary does
 not declare and stamp `created`, the tool runs without a caller identity.
 
 The graph passed as the first argument to `runner()` stores calls and runner
-bookkeeping. The optional `host` setting is a `Graph` that tools access through
-`ctx.graph` and `ctx.read`; it defaults to the storage graph. This separation
-lets a process keep invocation records in one graph while tools operate on
-another.
+bookkeeping. The optional `host` setting is the `Graph` handed to tools as their
+second argument; it defaults to the storage graph. This separation lets a
+process keep invocation records in one graph while tools operate on another.
 
 Other runner options are `owner`, the process entity written to `execution.by`;
-`cwd`, passed to tools as `ctx.cwd`; `report`, called for unexpected errors;
-`otherwise`, the tool that answers a call naming none of the runner's tools
-(left out, such a call is left for the runner that has its tool); and `now`, an
-injectable clock used to measure `result.ms`.
+`process`, the `{pid, command, cwd}` of the program running the calls, put on
+every call a tool is handed and never stored; `report`, called for unexpected
+errors; `otherwise`, the tool that answers a call naming none of the runner's
+tools (left out, such a call is left for the runner that has its tool); and
+`now`, an injectable clock used to measure `result.ms`.
 
 <a id="the-two-rules"></a>
 

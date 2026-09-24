@@ -233,11 +233,11 @@ Deno.test('a secret inside a call is its handle there too, and sealed when the c
   let { g, vault } = setup()
   let [call] = await g.apply([{
     entity: { eid: 'c1' },
-    call: { args: JSON.stringify({ change: [sealed('A', 'hidden')] }) },
+    call: { args: { change: [sealed('A', 'hidden')] } },
   }])
-  let args = (call.call as Record<string, string>).args
-  assert(!args.includes('hidden'))
-  let [change] = JSON.parse(args).change as Bundle[]
+  let args = (call.call as Record<string, { change: Bundle[] }>).args
+  assert(!JSON.stringify(args).includes('hidden'))
+  let [change] = args.change
   await g.apply([change])
   assertEquals(await reveal(vault, 'A'), 'hidden')
   assertEquals(

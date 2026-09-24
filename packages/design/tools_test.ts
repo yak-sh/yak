@@ -1,7 +1,7 @@
 // The two halves of a decision: writing a proposal down, and settling it.
 
 import { assertEquals } from '@std/assert'
-import type { Bundle, Comp, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { designDoc } from './vocab.ts'
 import { runs } from './tools.ts'
@@ -9,14 +9,17 @@ import { runs } from './tools.ts'
 // The runs, built the way a host builds them: a facet is a factory.
 let tools = runs()
 
-let ctx = (args: Record<string, unknown>, at: Record<string, string> = {}) =>
-  ({
-    args,
-    graph: {
-      address: (ids: string[]) =>
-        new Map(ids.filter((i) => at[i]).map((i) => [i, at[i]])),
-    },
-  }) as unknown as ToolCtx
+// A call, and a graph that knows the ids in `at`.
+let asked = (
+  args: Record<string, unknown>,
+  at: Record<string, string> = {},
+): [Bundle, Graph] => [
+  { entity: { eid: 'c1' }, call: { args } },
+  {
+    address: (ids: string[]) =>
+      new Map(ids.filter((i) => at[i]).map((i) => [i, at[i]])),
+  } as unknown as Graph,
+]
 
 let comp = (b: Bundle, name: string) => b[name] as Comp
 
@@ -29,8 +32,7 @@ Deno.test('every design tool is declared and implemented', () => {
 
 Deno.test('a proposal is design{} plus the words, put forward', async () => {
   let [said] = await tools.design_new!(
-    [],
-    ctx({ title: 'One shape', body: 'why', project: 'P-19' }, {
+    ...asked({ title: 'One shape', body: 'why', project: 'P-19' }, {
       'P-19': 'p19',
     }),
   ) as Bundle[]
@@ -41,7 +43,7 @@ Deno.test('a proposal is design{} plus the words, put forward', async () => {
 })
 
 Deno.test('a proposal nobody filed wears no filing', async () => {
-  let [said] = await tools.design_new!([], ctx({ title: 'A thought' }))
+  let [said] = await tools.design_new!(...asked({ title: 'A thought' }))
   assertEquals(Object.keys(said as Bundle).sort(), [
     'design',
     'doc',
@@ -54,8 +56,7 @@ Deno.test('a proposal nobody filed wears no filing', async () => {
 // stamped from the caller, so the line cannot name somebody else as decider.
 Deno.test('a decision is the verdict on the design it names', async () => {
   let [said] = await tools.design_decide!(
-    [],
-    ctx({ design: 'D-1', verdict: 'declined' }, { 'D-1': 'd1' }),
+    ...asked({ design: 'D-1', verdict: 'declined' }, { 'D-1': 'd1' }),
   ) as Bundle[]
   assertEquals(said.entity.eid, 'd1')
   assertEquals(Object.keys(said).sort(), ['decided', 'entity'])

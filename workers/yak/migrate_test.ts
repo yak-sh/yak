@@ -34,6 +34,7 @@ import { Store } from './graph.ts'
 import {
   carry,
   documented,
+  ENTERED,
   FILED,
   FORMER,
   HANDLED,
@@ -1786,6 +1787,46 @@ Deno.test("a tree's links under the old tag are reached again", async () => {
   )
   assertEquals(count(ctx, 'edge'), 3)
   assertEquals(columns(ctx, 'entry'), [])
+  assertEquals(marker(ctx), LATEST)
+})
+
+// An app's store one pass behind: two calls whose arguments the build before
+// kept as text, one of them text that is not JSON. Both come back as values,
+// kept as binary JSON: the object, and the string the text was.
+Deno.test("a call's arguments become the object they spell", async () => {
+  let ctx = state()
+  let r = await newer(ctx, 'ada/cookbook').door('/apply', {
+    method: 'POST',
+    headers: { 'x-yak-kernel': '1' },
+    body: JSON.stringify([
+      { entity: { eid: ONE }, call: { args: {} } },
+      { entity: { eid: TWO }, call: { args: {} } },
+    ]),
+  }, APP)
+  assert(r.ok, await r.text())
+  let sql = ctx.storage.sql
+  for (let [eid, text] of [[ONE, '{"name":"sweep"}'], [TWO, '{']]) {
+    sql.exec(
+      'update call set args = ? where entity = (select id from entity ' +
+        'where eid = ?)',
+      text,
+      eid,
+    )
+  }
+  sql.exec(
+    "insert into yak_kv (k, v) values ('migrated', ?) " +
+      'on conflict(k) do update set v = excluded.v',
+    ENTERED,
+  )
+  let calls = await newer(ctx, 'ada/cookbook').query('.call!', APP)
+  let args = new Map(
+    calls.map((c) => [c.entity.eid, (c.call as { args: unknown }).args]),
+  )
+  assertEquals([args.get(ONE), args.get(TWO)], [{ name: 'sweep' }, '{'])
+  assertEquals(
+    sql.exec('select distinct typeof(args) as t from call').toArray(),
+    [{ t: 'blob' }],
+  )
   assertEquals(marker(ctx), LATEST)
 })
 

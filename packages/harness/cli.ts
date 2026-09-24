@@ -260,7 +260,7 @@ let overGraph = (tool: typeof declared[number]): Command => ({
       c.out(worded(answerOf(
         await r.call([{
           entity: { eid: '$call' },
-          call: { to: toolEid(tool.name), args: JSON.stringify(args ?? {}) },
+          call: { to: toolEid(tool.name), args: args ?? {} },
         }]),
       )))
       return 0

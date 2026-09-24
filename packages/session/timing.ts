@@ -32,10 +32,7 @@ export let toolTiming = (rows: TimingRow[]): string => {
     ) return []
     seen.add(call)
     let c = byId.get(call)?.comps
-    let args: Record<string, unknown> = {}
-    try {
-      args = JSON.parse(String(c?.call?.args ?? '{}')) ?? {}
-    } catch { /* malformed calls still have a measured result */ }
+    let args = (c?.call?.args ?? {}) as Record<string, unknown>
     let label = String(
       c?.bash?.command ?? args.command ?? c?.tool?.name ?? c?.call?.to ??
         'tool',

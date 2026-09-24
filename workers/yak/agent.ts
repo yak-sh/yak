@@ -34,7 +34,7 @@ import type {
   Tool,
   Tx,
 } from '@yaks/graph'
-import { composed as perEntity, detached } from '@yaks/graph'
+import { argsOf, composed as perEntity, detached } from '@yaks/graph'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
 import type { Search } from '@yaks/mcp'
@@ -187,10 +187,10 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   // The page a host renders this answer in (MCP Apps): the tool names it, the
   // transport hands it over verbatim, and a host without views ignores it.
   ...metaOf(t),
-  // The runner hands a tool the call's bundles and a host; what a platform
-  // verb reads is its arguments, which the runner has already checked, and the
-  // call it is answering.
-  run: (_, c) => running(ctx, t)(c.args, c.call),
+  // The runner hands a tool the call and the graph; what a platform verb reads
+  // is its arguments, which the runner has already checked, and the call it is
+  // answering.
+  run: (call) => running(ctx, t)(argsOf(call), call.entity.eid),
 })
 
 /**

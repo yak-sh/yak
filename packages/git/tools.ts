@@ -2,9 +2,10 @@
 // exported as `@yaks/git/tools`.
 //
 // All three act on the machine the call runs on as much as on the graph: the
-// checkout at `ctx.cwd`, which on a command line is the directory the person
-// ran the command in, because `yak land` and `yak cites check` build the graph
-// and call the tool in that same process (@yaks/cli local.ts).
+// checkout at the `cwd` of the process that made the call, which on a command
+// line is the directory the person ran the command in, because `yak land` and
+// `yak cites check` build the graph and call the tool in that same process
+// (@yaks/cli local.ts).
 //
 // A diverged base is A failure. Landing ends in one of two ways (./land.ts):
 // it landed, or the base moved and the branch was rebased and left waiting for
@@ -28,12 +29,12 @@
 
 import {
   addressed,
+  argsOf,
   type Bundle,
   type Comp,
   detached,
   type Eid,
   Refused,
-  type ToolCtx,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { and, present } from '@yaks/query'
@@ -63,14 +64,15 @@ let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 let count = (v: unknown): number | undefined =>
   typeof v == 'number' && Number.isFinite(v) ? v : undefined
 
-let checkout = (ctx: ToolCtx, verb: string): string => {
-  if (!ctx.cwd) {
+let checkout = (call: Bundle, verb: string): string => {
+  let cwd = comp(call, 'process')?.cwd
+  if (!cwd) {
     throw new CallError(
       'cwd',
       `${verb} reads a checkout, and this graph runs nowhere in particular`,
     )
   }
-  return ctx.cwd
+  return String(cwd)
 }
 
 // What the journal recorded about one entity after a moment, one line per
@@ -117,15 +119,16 @@ let verdict = (
 
 /** The implementations of the tools ./vocab.json declares. */
 export let runs = (host: Seams = {}): Runs => ({
-  land: async (_bundles, ctx: ToolCtx): Promise<Bundle[]> => {
-    let cwd = checkout(ctx, 'land')
+  land: async (call): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let cwd = checkout(call, 'land')
     // Git's output, exactly as Git wrote it, collected in the order it
     // arrived: what the caller reads is Git's own account, not a summary of
     // it.
     let said: string[] = []
     let outcome = await land({
       cwd,
-      allow: str(ctx.args['allow-revert']).split(',').filter(Boolean),
+      allow: str(args['allow-revert']).split(',').filter(Boolean),
       write: (text) => {
         let line = text.trimEnd()
         if (line) said.push(line)
@@ -138,13 +141,14 @@ export let runs = (host: Seams = {}): Runs => ({
     }]
   },
 
-  cites_check: async (_bundles, ctx: ToolCtx): Promise<Bundle[]> => {
-    let cwd = checkout(ctx, 'checking citations')
-    let id = human(ctx.graph.vocab)
-    let of = str(ctx.args.of)
-    let [scope] = of ? await addressed(ctx.graph, [of]) : []
-    let path = str(ctx.args.path)
-    let cites = await ctx.read(and(present(CITES)))
+  cites_check: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let cwd = checkout(call, 'checking citations')
+    let id = human(graph.vocab)
+    let of = str(args.of)
+    let [scope] = of ? await addressed(graph, [of]) : []
+    let path = str(args.path)
+    let cites = await graph.read(and(present(CITES)))
     // Both ends of every citation in one read: a finding names who cites what,
     // and an id a person recognizes rather than a uuid.
     let ends = [
@@ -154,7 +158,7 @@ export let runs = (host: Seams = {}): Runs => ({
       ),
     ]
     let get = async (eids: string[]) =>
-      (await detached(ctx.graph.storage).get(eids)).map((b) =>
+      (await detached(graph.storage).get(eids)).map((b) =>
         [b.entity.eid, b] as const
       )
     let at = new Map(await get(ends))
@@ -182,22 +186,23 @@ export let runs = (host: Seams = {}): Runs => ({
         text: `${id(from)} cites ${where(cite, to, file, id)} — ${why}`,
       })
     }
-    return checked(ctx.call, 'every citation still holds', found)
+    return checked(call.entity.eid, 'every citation still holds', found)
   },
 
-  cites_verify: async (_bundles, ctx: ToolCtx): Promise<Bundle[]> => {
-    let cwd = checkout(ctx, 'verifying a citation')
-    let cite = str(ctx.args.cite)
-    let of = str(ctx.args.of)
+  cites_verify: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let cwd = checkout(call, 'verifying a citation')
+    let cite = str(args.cite)
+    let of = str(args.of)
     if (!cite && !of) {
       throw new Refused(
         'verify needs a citation, or an entity whose citations to verify',
       )
     }
-    let [asked] = await addressed(ctx.graph, [cite || of])
+    let [asked] = await addressed(graph, [cite || of])
     let found = cite
-      ? (await detached(ctx.graph.storage).get([asked])).filter((b) => b[CITES])
-      : (await ctx.read(and(present(CITES))))
+      ? (await detached(graph.storage).get([asked])).filter((b) => b[CITES])
+      : (await graph.read(and(present(CITES))))
         .filter((b) => str(comp(b, 'edge')?.from) == asked)
     if (!found.length) {
       throw new Refused(

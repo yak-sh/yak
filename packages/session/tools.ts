@@ -47,11 +47,13 @@
 
 import {
   addressed,
+  argsOf,
   type Bundle,
   type Comp,
   detached,
+  type Graph,
   TOMBSTONE,
-  type ToolCtx,
+  who,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
@@ -99,8 +101,8 @@ export let hookSession = (hook: unknown): string => {
 // line's argument, else the one in the hook payload. Resolving it is ./who.ts's
 // job — an eid, a human-readable id, or the harness's own id for the run, which
 // is the only one of the three that may not exist yet.
-let idIn = (ctx: ToolCtx): string =>
-  str(ctx.args.session) || hookSession(ctx.args.hook)
+let idIn = (args: Record<string, unknown>): string =>
+  str(args.session) || hookSession(args.hook)
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
@@ -116,10 +118,6 @@ export let line = (vocab: Vocab, b: Bundle): string => {
 // and nothing in the graph refers to it.
 let minted = (eid: string) => !eid.startsWith('$')
 
-// The transcript an id names, however the caller wrote it (./who.ts).
-let sessionOf = (ctx: ToolCtx, id: string): Promise<Bundle | undefined> =>
-  sessionFor(ctx, id)
-
 // A session's own account of itself, as the patch that records it.
 let briefed = (eid: string, text: unknown): Bundle => ({
   entity: { eid },
@@ -131,8 +129,8 @@ let holderOf = (b: Bundle): string => str(comp(b, CLAIM).session)
 
 // One transcript's entries. Few sessions hold a lock, so this is queried per
 // holder rather than by reading every entry in the graph.
-let transcript = (ctx: Pick<ToolCtx, 'read'>, session: string) =>
-  ctx.read(and(eq(`${ENTRY}.session`, session)))
+let transcript = (graph: Pick<Graph, 'read'>, session: string) =>
+  graph.read(and(eq(`${ENTRY}.session`, session)))
 
 // When an entry was written, as the kernel stamps it. A graph that stamps
 // nothing has no timestamp to judge a stall by, which the check reports rather
@@ -142,11 +140,11 @@ let writtenAt = (b: Bundle): number => Date.parse(str(comp(b, 'created').at))
 // The session a call speaks for: the one `--session` names, else whoever is
 // asking — the actor the caller was authenticated as records which run the
 // call came through.
-let asking = async (ctx: ToolCtx): Promise<string> => {
-  let said = str(ctx.args.session)
+let asking = async (call: Bundle, graph: Graph): Promise<string> => {
+  let said = str(argsOf(call).session)
   let session = said
-    ? (await sessionOf(ctx, said))?.entity.eid
-    : str(ctx.actor?.via || ctx.actor?.by)
+    ? (await sessionFor(graph, said))?.entity.eid
+    : str(who(call)?.via || who(call)?.by)
   if (!session) {
     throw new Error(
       said
@@ -171,50 +169,57 @@ export let runs = (
   },
   options: Options = {},
 ): Runs => ({
-  claim_take: async (_bundles, ctx): Promise<Bundle[]> => {
-    let [on] = await addressed(ctx.graph, [str(ctx.args.target)])
-    return [{ entity: { eid: on }, [CLAIM]: { session: await asking(ctx) } }]
+  claim_take: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let [on] = await addressed(graph, [str(args.target)])
+    return [{
+      entity: { eid: on },
+      [CLAIM]: { session: await asking(call, graph) },
+    }]
   },
 
   // Stays up until its process stops, so the call is `running` for as long as
   // somebody is listening — the way `serve` is while it answers.
-  session_listen: async (_bundles, ctx): Promise<Bundle[]> => {
+  session_listen: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
     // A command run in-process writes as its process, not as the transcript
     // that ran it, so "whoever is asking" may be no session at all — and a
     // listener for nobody is silent, which reads as nothing to hear.
-    let session = await asking(ctx)
-    let [row] = await detached(ctx.graph.storage).get([session])
+    let session = await asking(call, graph)
+    let [row] = await detached(graph.storage).get([session])
     if (!row?.[SESSION]) {
       throw new Error(
         'no session is asking — say --session, for example ' +
           '--session "$CLAUDE_CODE_SESSION_ID"',
       )
     }
-    await listen(ctx, session, {
+    await listen(graph, who(call), session, {
       out: (line) => console.log(line),
-      every: 1000 * (Number(ctx.args.every) || 2),
+      every: 1000 * (Number(args.every) || 2),
       stop: host.stopping,
     })
     return []
   },
 
-  claim_release: async (_bundles, ctx): Promise<Bundle[]> => {
-    let [on] = await addressed(ctx.graph, [str(ctx.args.target)])
+  claim_release: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let [on] = await addressed(graph, [str(args.target)])
     return [{ entity: { eid: on }, [CLAIM]: null }]
   },
 
-  session_brief: async (_bundles, ctx): Promise<Bundle[]> => {
-    let id = idIn(ctx)
+  session_brief: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let id = idIn(args)
     if (!id) throw new Error('which session? say --session')
-    let s = await sessionOf(ctx, id)
+    let s = await sessionFor(graph, id)
     // A transcript nobody has created yet is created here, carrying its own
     // name, the way `session_context` reifies one. Never on the word the
     // caller typed: `--session S-37703` is a human id, not an eid, and taking
     // it for one mints an entity whose eid is `S-37703` (./who.ts is what
     // tells the two apart).
     return [
-      s ? briefed(s.entity.eid, ctx.args.text) : {
-        ...briefed('$session', ctx.args.text),
+      s ? briefed(s.entity.eid, args.text) : {
+        ...briefed('$session', args.text),
         [SESSION]: { id },
       },
     ]
@@ -223,18 +228,17 @@ export let runs = (
   // The start of the loop: the transcript becomes an entity, and what it
   // holds comes back as the prose the harness injects. Its own id and its
   // locks, and deliberately nothing else — see the head of this file.
-  session_context: async (_bundles, ctx): Promise<Bundle[]> => {
-    let id = idIn(ctx)
+  session_context: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let id = idIn(args)
     if (!id) return []
-    let found = await sessionOf(ctx, id)
-    let [actor] = ctx.args.actor
-      ? await addressed(ctx.graph, [str(ctx.args.actor)])
-      : []
+    let found = await sessionFor(graph, id)
+    let [actor] = args.actor ? await addressed(graph, [str(args.actor)]) : []
     let eid = found?.entity.eid ?? '$session'
     // A fresh transcript holds nothing: it has no entity yet, so nothing in
     // the graph can name it as a holder.
     let held = minted(eid)
-      ? await ctx.read(`.${CLAIM}.session=${JSON.stringify(eid)}`)
+      ? await graph.read(`.${CLAIM}.session=${JSON.stringify(eid)}`)
       : []
     return [
       // Only the difference is written back — a transcript's own properties are
@@ -262,14 +266,15 @@ export let runs = (
   },
 
   // The end of it: what the session did, and everything it was holding let go.
-  session_wrap: async (_bundles, ctx): Promise<Bundle[]> => {
-    let id = idIn(ctx)
-    let s = id ? await sessionOf(ctx, id) : undefined
+  session_wrap: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let id = idIn(args)
+    let s = id ? await sessionFor(graph, id) : undefined
     if (!s) return []
     let eid = s.entity.eid
-    let held = await ctx.read(`.${CLAIM}.session=${JSON.stringify(eid)}`)
+    let held = await graph.read(`.${CLAIM}.session=${JSON.stringify(eid)}`)
     return [
-      ...(ctx.args.brief == null ? [] : [briefed(eid, ctx.args.brief)]),
+      ...(args.brief == null ? [] : [briefed(eid, args.brief)]),
       ...held.map((b): Bundle => ({
         entity: { eid: b.entity.eid },
         [CLAIM]: null,
@@ -277,26 +282,27 @@ export let runs = (
     ]
   },
 
-  hooks_install: (_bundles, ctx): Bundle[] => [{
-    entity: { eid: '$said' },
-    content: {
-      body: `${ctx.args.remove ? 'removed from' : 'wrote'} ${
-        install(str(ctx.args.path) || settingsPath(), {
-          yak: str(ctx.args.yak) || undefined,
-          turn: spooled(options.spool ?? spoolOf(host.config?.db)),
-          remove: !!ctx.args.remove,
-        })
-      }`,
-    },
-  }],
+  hooks_install: (call): Bundle[] => {
+    let args = argsOf(call)
+    return [{
+      entity: { eid: '$said' },
+      content: {
+        body: `${args.remove ? 'removed from' : 'wrote'} ${
+          install(str(args.path) || settingsPath(), {
+            yak: str(args.yak) || undefined,
+            turn: spooled(options.spool ?? spoolOf(host.config?.db)),
+            remove: !!args.remove,
+          })
+        }`,
+      },
+    }]
+  },
 
-  claim_check: async (_bundles, ctx) => {
+  claim_check: async (call, graph) => {
     let id = human(host.vocab)
-    let locks = await ctx.read(and(present(`${CLAIM}.session`)))
+    let locks = await graph.read(and(present(`${CLAIM}.session`)))
     let holders = [...new Set(locks.map(holderOf))]
-    let rows = holders.length
-      ? await detached(ctx.graph.storage).get(holders)
-      : []
+    let rows = holders.length ? await detached(graph.storage).get(holders) : []
     // A tombstoned holder is a holder that is gone: `claim.session` is declared
     // `death: 'release'`, so a lock still naming one is the same leak.
     let held = new Map(
@@ -305,7 +311,7 @@ export let runs = (
     )
     let over = new Map<string, string>()
     for (let eid of held.keys()) {
-      let state = statusOf(await transcript(ctx, eid))
+      let state = statusOf(await transcript(graph, eid))
       if (ENDED.includes(state)) over.set(eid, state)
     }
     let found = locks.flatMap((b): Finding[] => {
@@ -328,31 +334,31 @@ export let runs = (
         : []
     })
     return checked(
-      ctx.call,
+      call.entity.eid,
       'no entity is locked by a session that is over',
       found,
     )
   },
 
-  session_check: async (_bundles, ctx) => {
+  session_check: async (call, graph) => {
     let id = human(host.vocab)
     let hours = options.hours ?? HOURS
     let cutoff = Date.now() - hours * 3_600_000
-    let sessions = await ctx.read(and(present(SESSION)))
+    let sessions = await graph.read(and(present(SESSION)))
     if (!sessions.length) {
-      return checked(ctx.call, 'no transcript has stalled', [])
+      return checked(call.entity.eid, 'no transcript has stalled', [])
     }
     // One read of the entries, grouped here: a transcript is only readable as
     // a whole, and asking per session would be one query per session.
     let lines = new Map<string, Bundle[]>()
     let stamped = false
-    for (let b of await ctx.read(and(present(ENTRY)))) {
+    for (let b of await graph.read(and(present(ENTRY)))) {
       let of = str(comp(b, ENTRY).session)
       lines.set(of, [...lines.get(of) ?? [], b])
       if (!isNaN(writtenAt(b))) stamped = true
     }
     if (!stamped) {
-      return checked(ctx.call, 'no transcript has stalled', [{
+      return checked(call.entity.eid, 'no transcript has stalled', [{
         level: 'warn',
         text: 'this graph stamps no time on an entry, so a transcript that ' +
           'stalled cannot be told from one that is merely quiet — UNVERIFIED',
@@ -374,6 +380,6 @@ export let runs = (
         }, with nothing appended since`,
       }]
     })
-    return checked(ctx.call, 'no transcript has stalled', found)
+    return checked(call.entity.eid, 'no transcript has stalled', found)
   },
 })

@@ -2,7 +2,7 @@
 // mark reading leaves, the far side a reply is aimed at, and the check.
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Actor, Bundle, Comp, Graph, ToolCtx } from '@yaks/graph'
+import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
 import { clubhouse } from './harness.ts'
 import type { Options } from './options.ts'
 import { reSubject, runs } from './tools.ts'
@@ -15,13 +15,14 @@ let ask = (
   options: Options = {},
 ): Promise<Bundle[]> =>
   Promise.resolve(
-    runs(undefined, { domain: 'books.example', ...options })[tool]([], {
-      graph: g,
-      actor,
-      read: (q) => g.read(q),
-      args,
-      call: 'c1',
-    } as ToolCtx),
+    runs(undefined, { domain: 'books.example', ...options })[tool](
+      {
+        entity: { eid: 'c1' },
+        call: { args },
+        ...(actor ? { created: actor } : {}),
+      },
+      g,
+    ),
   ) as Promise<Bundle[]>
 
 // A tool asked, and its answer landed — what the runner does for a writing

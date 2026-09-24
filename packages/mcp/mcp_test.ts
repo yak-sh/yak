@@ -6,7 +6,7 @@
 
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { z } from 'zod'
-import { type Bundle, graph } from '@yaks/graph'
+import { type Bundle, graph, who } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools'
 import { storage } from '@yaks/sqlite'
@@ -232,8 +232,8 @@ Deno.test('a tool runs as whoever called it', async () => {
       name: 'shelve',
       description: 'put a book on the shelf',
       input: {},
-      run: (_, ctx) => {
-        seen = ctx.actor?.by ?? null
+      run: (call) => {
+        seen = who(call)?.by ?? null
         return [{ entity: { eid: 'b1' }, book: { status: 'shelved' } }]
       },
     }],
@@ -437,10 +437,10 @@ Deno.test('a tool whose answer is words says them as content, and its bundles be
       meta: { ui: { resourceUri: 'ui://shop/shelf' } },
       // An answer that is not entities is the one entity it can be: prose
       // that says which call produced it.
-      run: (_, ctx) => [{
+      run: (call) => [{
         entity: { eid: '$said' },
         content: { body: 'two books here' },
-        output: { source: ctx.call },
+        output: { source: call.entity.eid },
       }],
     }],
   })
@@ -568,20 +568,20 @@ Deno.test('every tool says how a client signs in for it', async () => {
       description: 'what this shop is',
       input: {},
       meta: { securitySchemes: [{ type: 'noauth' }] },
-      run: (_, ctx) => [{
+      run: (call) => [{
         entity: { eid: '$said' },
         content: { body: 'a bookshop' },
-        output: { source: ctx.call },
+        output: { source: call.entity.eid },
       }],
     }, {
       name: 'shelve',
       description: 'put a book on the shelf',
       input: {},
       meta: { ui: { resourceUri: 'ui://shelf' } },
-      run: (_, ctx) => [{
+      run: (call) => [{
         entity: { eid: '$said' },
         content: { body: 'shelved' },
-        output: { source: ctx.call },
+        output: { source: call.entity.eid },
       }],
     }],
   })

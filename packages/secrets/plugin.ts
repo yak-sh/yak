@@ -12,7 +12,7 @@
 // that no phase but this one sees it. The same hook reaches into a tool call's
 // arguments, because `graph_apply` records what it was asked in the `call` row
 // before it applies it — without this the value would land in the graph as the
-// text of a call. A handle minted there is remembered for its secret, so the
+// arguments of a call. A handle minted there is remembered for its secret, so the
 // write the call goes on to make gets the same one.
 //
 // The bundle that writes a value, or carries a handle a value is waiting
@@ -89,15 +89,7 @@ let walk = (
   return out
 }
 
-let args = (b: Bundle): unknown => {
-  let text = obj(b.call)?.args
-  if (typeof text != 'string') return undefined
-  try {
-    return JSON.parse(text)
-  } catch {
-    return undefined
-  }
-}
+let args = (b: Bundle): unknown => obj(b.call)?.args
 
 // The secrets inside a call's arguments, in the order `walk` visits them.
 let inside = (called: unknown): [string, Eid | undefined][] => {
@@ -176,7 +168,7 @@ export let secrets = (vault: Vault): Plugin => {
           ...!found.length ? {} : {
             call: {
               ...obj(b.call),
-              args: JSON.stringify(walk(called, () => hs[i++])),
+              args: walk(called, () => hs[i++]),
             },
           },
           ...mark ? { [PROVISIONAL]: { note: SAVING } } : {},

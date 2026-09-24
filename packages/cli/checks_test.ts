@@ -31,7 +31,7 @@ let ask = async (h: Served, name: string): Promise<string> => {
   await h.runner.ensure()
   let landed = await h.runner.call([{
     entity: { eid: `$${name}` },
-    call: { to: toolEid(name), args: '{}' },
+    call: { to: toolEid(name), args: {} },
   }]) as Bundle[]
   return worded(answerOf(landed))
 }

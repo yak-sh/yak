@@ -7,7 +7,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import type { Bundle, Comp, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { toolsIn } from '@yaks/vocab/tools'
 import { vaultOf } from '@yaks/cli'
 import { secretEid } from '@yaks/secrets'
@@ -40,11 +40,10 @@ let ask = async (
   console.error = (line: string) => heard.push(line)
   Deno.env.set('YAKS_HOME', at.dir)
   try {
-    return await runs(at)[tool]([], {
-      args,
-      call: 'c1',
-      read: o.read ?? (() => []),
-    } as unknown as ToolCtx) as Bundle[]
+    return await runs(at)[tool](
+      { entity: { eid: 'c1' }, call: { args } },
+      { read: o.read ?? (() => []) } as unknown as Graph,
+    ) as Bundle[]
   } finally {
     console.error = error
     Deno.env.delete('YAKS_HOME')

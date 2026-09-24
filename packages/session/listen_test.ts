@@ -1,5 +1,5 @@
 import { assertEquals } from '@std/assert'
-import type { Bundle, ToolCtx } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
 import { idKeywords } from '@yaks/id'
 import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
@@ -27,28 +27,25 @@ Deno.test('an item is one line, whitespace folded, naming what it points at', ()
 let heard = async (rows: Bundle[], session: string) => {
   let lines: string[] = []
   let applied: Bundle[] = []
-  let ctx = {
-    graph: {
-      vocab: loadVocab([docDoc, sessionDoc, {
-        $defs: {
-          comment: {
-            component: true,
-            type: 'object',
-            properties: { target: { type: 'string' } },
-          },
-          notified: { component: true, type: 'object', properties: {} },
+  let graph = {
+    vocab: loadVocab([docDoc, sessionDoc, {
+      $defs: {
+        comment: {
+          component: true,
+          type: 'object',
+          properties: { target: { type: 'string' } },
         },
-      }], [idKeywords]),
-      storage: {
-        tx: (run: (tx: { get: () => Bundle[] }) => unknown) =>
-          run({ get: () => [] }),
+        notified: { component: true, type: 'object', properties: {} },
       },
-      apply: (bundles: Bundle[]) => (applied.push(...bundles), bundles),
+    }], [idKeywords]),
+    storage: {
+      tx: (run: (tx: { get: () => Bundle[] }) => unknown) =>
+        run({ get: () => [] }),
     },
+    apply: (bundles: Bundle[]) => (applied.push(...bundles), bundles),
     read: () => rows,
-    actor: null,
-  } as unknown as ToolCtx
-  await hear(ctx, session, (line) => lines.push(line))
+  } as unknown as Graph
+  await hear(graph, null, session, (line) => lines.push(line))
   return { lines, marked: applied.map((b) => b.entity.eid) }
 }
 

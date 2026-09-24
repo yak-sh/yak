@@ -3,7 +3,7 @@
 // the four things it reads off the host it was composed into.
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Bundle, ToolCtx } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
 import type { Runner } from '@yaks/tools'
 import { PORT, runs, type Serving } from './tools.ts'
 
@@ -29,8 +29,12 @@ let said = async (url: string, ms = 2000): Promise<string> => {
   }
 }
 
-let ctx = (args: Record<string, unknown> = {}): ToolCtx =>
-  ({ args, call: 'c1' }) as unknown as ToolCtx
+// The call the runner hands the tool; the graph it is handed is never read.
+let asked = (args: Record<string, unknown> = {}): Bundle => ({
+  entity: { eid: 'c1' },
+  call: { args },
+})
+let graph = {} as Graph
 
 // What the tool is handed, and a tally of what it asked for.
 let fake = (port?: number) => {
@@ -57,7 +61,7 @@ let fake = (port?: number) => {
 Deno.test('serve answers with the host handler until the host stops', async () => {
   let port = free()
   let { host, told, stopping } = fake(port)
-  let call = runs(host).serve([], ctx()) as Promise<Bundle[]>
+  let call = runs(host).serve(asked(), graph) as Promise<Bundle[]>
   assertEquals(await said(`http://localhost:${port}`), 'ok')
   // A process that is about to stay up finishes what a crash left claimed,
   // and takes the duties in their long-running form.
@@ -76,7 +80,7 @@ Deno.test('a host that composed no handler has nothing to serve', async () => {
   let { host } = fake(PORT)
   await assertRejects(
     () =>
-      runs({ ...host, handler: undefined }).serve([], ctx()) as Promise<
+      runs({ ...host, handler: undefined }).serve(asked(), graph) as Promise<
         Bundle[]
       >,
     Error,
@@ -90,8 +94,8 @@ Deno.test('the call names the port, over the one the config named', async () => 
   // The config names one port and the call another: the call wins.
   let { host, stopping } = fake(PORT)
   let call = runs(host).serve(
-    [],
-    ctx({ port, hostname: '127.0.0.1' }),
+    asked({ port, hostname: '127.0.0.1' }),
+    graph,
   ) as Promise<Bundle[]>
   assertEquals(await said(`http://127.0.0.1:${port}`), 'ok')
   stopping.abort()

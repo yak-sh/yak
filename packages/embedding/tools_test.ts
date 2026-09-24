@@ -2,7 +2,7 @@
 // host with no index at all.
 
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Comp, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Driver } from './driver.ts'
 import { mem, shelf, stocked } from './harness.ts'
 import { TABLE } from './ddl.ts'
@@ -18,10 +18,10 @@ let checkup = async (
   let [said] = await runs({ sql }, {
     embedder: { via: 'hash' },
     ...options,
-  }).vector_check([], {
-    args: {},
-    call: 'c1',
-  } as ToolCtx) as Bundle[]
+  }).vector_check(
+    { entity: { eid: 'c1' }, call: { args: {} } },
+    {} as Graph,
+  ) as Bundle[]
   return {
     body: String((said.content as Comp).body),
     level: (said.error as Comp | undefined)?.code,

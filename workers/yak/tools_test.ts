@@ -30,6 +30,7 @@ import { inApp } from './tool.ts'
 import { accept } from './invite.ts'
 import type { Address } from './post.ts'
 import { letters } from './letters.ts'
+import type { Graph } from '@yaks/graph'
 import { clock } from './timing.ts'
 import { KERNEL, meta } from './meta.ts'
 import { stages } from '../../bin/app-deploy-time.ts'
@@ -92,21 +93,23 @@ Deno.test('staging tool URLs and app mail use the same configured host', async (
 
   let [listing, sending] = letters(ctx)
   assertStringIncludes(sending.description!, '<space>.<app>@yaks.fyi')
-  // A tool takes the call's bundles and its arguments ride on the host
-  // (@yaks/tools): these two answer the letters themselves.
-  let out = await sending.run([], {
-    args: {
+  // A tool takes the call, its arguments on it, and the graph (@yaks/tools):
+  // these two answer the letters themselves.
+  let asked = (args: Record<string, unknown>) =>
+    [{ entity: { eid: 'c1' }, call: { args } }, {} as Graph] as const
+  let out = await sending.run(
+    ...asked({
       space: 'ada',
       app: 'recipes',
       to: 'ana@books.example',
       title: 'Dinner',
       body: 'Bring pudding.',
-    },
-  } as never) as unknown as { mail: { from: string } }[]
+    }),
+  ) as unknown as { mail: { from: string } }[]
   assertEquals(out[0].mail.from, 'ada.recipes@yaks.fyi')
-  let sent = await listing.run([], {
-    args: { space: 'ada', app: 'recipes', direction: 'sent' },
-  } as never) as unknown as { mail: { from: string } }[]
+  let sent = await listing.run(
+    ...asked({ space: 'ada', app: 'recipes', direction: 'sent' }),
+  ) as unknown as { mail: { from: string } }[]
   assertEquals(sent.map((l) => l.mail.from), ['ada.recipes@yaks.fyi'])
   let { store } = await inApp(ctx, { space: 'ada', app: 'recipes' })
   let read = await store('/query?q=.mail!', {}, {

@@ -53,6 +53,7 @@
 import {
   type Actor,
   type Bundle,
+  type Comp,
   detached,
   type Eid,
   type Graph,
@@ -737,13 +738,13 @@ export let compose = async (
       // own interrupted calls and leaves alone another runner's, or those an
       // imported transcript recorded as already run.
       ...(self ? { owner: self.by } : {}),
-      // This process's working directory, for a tool that acts on the machine
-      // rather than the graph: `yak land` fast-forwards the checkout the
-      // person typed in, because the tool runs in the same process that read
-      // the command line (local.ts). A host answering HTTP reports its own
-      // working directory, which is the accurate answer — a call arriving over
-      // HTTP acts on the machine that received it.
-      cwd: Deno.cwd(),
+      // This process, on every call it runs, for a tool that acts on the
+      // machine rather than the graph: `yak land` fast-forwards the checkout
+      // the person typed in, because the tool runs in the same process that
+      // read the command line (local.ts). A host answering HTTP reports its
+      // own, which is the accurate answer — a call arriving over HTTP acts on
+      // the machine that received it.
+      process: started()[PROCESS] as Comp,
       report: (err) => console.error('tool failed —', err),
     })
     for (let rule of run.rules) {

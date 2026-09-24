@@ -458,7 +458,7 @@ export let server = (opts: Options): McpServer => {
       let out: CallToolResult
       let asked: Bundle = {
         entity: { eid: '$call' },
-        call: { to: toolEid(t.name), args: JSON.stringify(args ?? {}) },
+        call: { to: toolEid(t.name), args: args ?? {} },
         ...(actor ? { $actor: { ...actor } } : {}),
       }
       try {

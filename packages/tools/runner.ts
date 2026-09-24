@@ -1,10 +1,16 @@
 // The runner: the one place a tool function is called, and the record it
-// leaves behind. A tool is a function `(bundles, ctx) => bundles`, and knows
-// nothing about the `call` and `result` components. A caller can invoke one
+// leaves behind. A tool is a function `(call, graph) => bundles`, handed the
+// call entity and nothing else about the request. A caller can invoke one
 // directly and get its bundles back; what this file adds is the stored record,
 // which is why callers normally go through here: the `call` entity recording
 // what was asked, the `result{call, ms}` recording what came back, and the
 // `execution{state}` recording that a run is in flight.
+//
+// The call a tool is handed is the stored one, completed: its arguments
+// checked against the tool's schema, `created{by, via}` saying who asked even
+// where the graph stamps nothing, and `process{pid, command, cwd}` naming the
+// program running it where the caller named one. That is a bundle, not a row —
+// the stored call never wears `process`.
 //
 // The result entity is emitted by a declared rule (./vocab.json, @yaks/graph
 // `emitted`), so its id is derived from the match — `call_ready(<the call>)` —
@@ -44,7 +50,6 @@
 // the execution rows — belongs to the server and carries no identity at all.
 
 import {
-  type Actor,
   asked,
   type Bundle,
   type Comp,
@@ -60,7 +65,7 @@ import {
   status,
   token,
   type Tool,
-  type ToolCtx,
+  who,
 } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph'
 import { rulesIn } from '@yaks/vocab'
@@ -142,10 +147,11 @@ export type Opts = {
    * that has written an `exit` row holds nothing: its calls are free. Omitted,
    * this runner claims anonymously and takes any call nobody else holds. */
   owner?: Eid
-  /** the working directory the process running these calls is in, for a tool
-   * that acts on the machine rather than the graph. The caller supplies it;
-   * this package touches no runtime API and never looks it up. */
-  cwd?: string
+  /** the program running these calls on this machine, as @yaks/process
+   * records one — `{pid, command, cwd}` — put on every call a tool is handed,
+   * for a tool that acts on the machine rather than the graph. The caller
+   * supplies it; this package touches no runtime API and never looks it up. */
+  process?: Comp
 }
 
 /** A live runner: the rules a sweep queries, and the functions a caller
@@ -198,25 +204,6 @@ export let structured = (
   return (value as Record<string, unknown>) ?? { result: answer }
 }
 
-// Who wrote the call, as the graph recorded it. A transaction's `$actor` is
-// read by the write pipeline and never stored as a property, so what survives
-// the commit is the stamp the provenance rule wrote — which is the point: the
-// caller is a fact recorded about the call, not something the runner has to be
-// told again. Both halves come back, so what a tool writes is attributed to
-// the caller and to the same run the call arrived through.
-let who = (call: Bundle): Actor | null => {
-  let said = (prop: 'by' | 'via') =>
-    (call.created as Comp | undefined)?.[prop] ?? call.$actor?.[prop]
-  let by = said('by')
-  let via = said('via')
-  return by || via
-    ? {
-      ...(by ? { by: String(by) } : {}),
-      ...(via ? { via: String(via) } : {}),
-    }
-    : null
-}
-
 /**
  * Did this call fail? Read from the runner's own record — `execution{state}`
  * on the call — rather than guessed from the shape of the answer: a tool that
@@ -235,17 +222,14 @@ export let faulted = (landed: Bundle[]): boolean =>
 export let answerOf = (landed: Bundle[]): Bundle[] =>
   landed.filter((b) => !b.result && !b.execution)
 
+// A call's arguments as stored: an object, or none at all, which asks with
+// none.
 let parsed = (args: unknown): Record<string, unknown> => {
-  let value: unknown
-  try {
-    value = JSON.parse(String(args ?? '{}'))
-  } catch {
-    throw new CallError('arguments', 'Invalid JSON tool arguments')
-  }
-  if (!value || typeof value != 'object' || Array.isArray(value)) {
+  if (args == null) return {}
+  if (typeof args != 'object' || Array.isArray(args)) {
     throw new CallError('arguments', 'Tool arguments must be an object')
   }
-  return value as Record<string, unknown>
+  return args as Record<string, unknown>
 }
 
 // A tool's arguments, validated against the JSON Schema on its declaration, or
@@ -282,7 +266,7 @@ let checked = (
  * await r.ensure()
  * // the call entity is the record; the answer is the tool's own bundles
  * let answer = await r.call([
- *   { entity: { eid: '$c' }, call: { to: toolEid('text_echo'), args: '{}' } },
+ *   { entity: { eid: '$c' }, call: { to: toolEid('text_echo'), args: {} } },
  * ])
  * ```
  *
@@ -453,15 +437,14 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     }
     try {
       let args = checked(tool, parsed(c.args))
-      let ctx: ToolCtx = {
-        graph: host,
-        actor: who(call),
-        read: (query, readOpts) => host.read(query, readOpts),
-        args,
-        call: id,
-        ...(opts.cwd ? { cwd: opts.cwd } : {}),
+      let actor = who(call)
+      let asking: Bundle = {
+        ...call,
+        call: { ...c, args },
+        ...actor ? { created: { ...call.created as Comp, ...actor } } : {},
+        ...opts.process ? { process: opts.process } : {},
       }
-      let made = signed(await tool.run([call], ctx), ctx.actor)
+      let made = signed(await tool.run(asking, host), actor)
       // A rehearsal: `check: true` to a tool that writes runs the write's
       // every phase and rolls it back, so the answer is the batch as a kept
       // write would have returned it, or the refusal it would have met.

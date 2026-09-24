@@ -7,7 +7,7 @@ import {
   type Tool as RemoteTool,
   ToolListChangedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js'
-import type { Tool, ToolId } from '@yaks/graph'
+import { argsOf, type Tool, type ToolId } from '@yaks/graph'
 import { errorsText, toolCheck } from '@yaks/vocab/tools'
 import type { jsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/types.js'
 
@@ -299,8 +299,8 @@ export const connect = (server: Server, options: Options = {}): Connection => {
         // produced it. A caller that needs the reply whole — artifacts,
         // resources, the error flag — calls the connection's own `call`
         // instead.
-        run: async (_bundles, ctx) => {
-          let reply = await call(t.name, ctx.args)
+        run: async (asked) => {
+          let reply = await call(t.name, argsOf(asked))
           let blocks = (reply.content ?? []) as Record<string, unknown>[]
           let said = blocks
             .filter((block) => block.type == 'text')
@@ -311,7 +311,7 @@ export const connect = (server: Server, options: Options = {}): Connection => {
           return [{
             entity: { eid: '$said' },
             content: { body: said.join('\n') },
-            output: { source: ctx.call },
+            output: { source: asked.entity.eid },
             ...(reply.isError ? { error: { code: 'mcp_tool' } } : {}),
           }]
         },

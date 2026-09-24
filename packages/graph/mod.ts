@@ -97,10 +97,12 @@ export * from './transient.ts'
 
 export {
   addressed,
+  argsOf,
   type NamedTool,
   namedTool,
   type ToolId,
   toolName,
+  who,
 } from './tool.ts'
 
 export * from './join.ts'

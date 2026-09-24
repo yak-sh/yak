@@ -82,25 +82,20 @@ const resultPreview: Renderer['render'] = (b, h) => {
 }
 
 const shellCommand: Renderer['render'] = (b, h, ctx) => {
-  try {
-    const args: unknown = JSON.parse(String((b.call as Comp)?.args ?? ''))
-    if (
-      args && typeof args == 'object' && 'command' in args &&
-      typeof args.command == 'string'
-    ) {
-      return h(
-        'div',
-        { wrap: '1' },
-        h('span', { class: 'Muted' }, '$ '),
-        ...args.command.split('\n').flatMap((line, i) =>
-          i ? [h('br', null), line] : [line]
-        ),
-      )
-    }
-  } catch {
-    /* Streaming or malformed arguments still get the ordinary view. */
+  const command = ((b.call as Comp)?.args as Comp | undefined)?.command
+  // A call with no command to show, or arguments the model spelled as no
+  // object, gets the ordinary view.
+  if (typeof command != 'string') {
+    return body.render(b, h, { ...ctx, full: true })
   }
-  return body.render(b, h, { ...ctx, full: true })
+  return h(
+    'div',
+    { wrap: '1' },
+    h('span', { class: 'Muted' }, '$ '),
+    ...command.split('\n').flatMap((line, i) =>
+      i ? [h('br', null), line] : [line]
+    ),
+  )
 }
 
 // A view matching more predicates beats the generic entry/content rows. Views

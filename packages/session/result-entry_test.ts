@@ -18,10 +18,10 @@ let saying = (g: Graph, say: () => unknown) =>
     tools: [{
       name: 'echo',
       description: 'say it back',
-      run: async (_: Bundle[], ctx): Promise<Bundle[]> => [{
+      run: async (call): Promise<Bundle[]> => [{
         entity: { eid: '$said' },
         content: { body: String(await say()) },
-        output: { source: ctx.call },
+        output: { source: call.entity.eid },
       }],
     }],
   })
@@ -40,7 +40,7 @@ Deno.test('result membership is joined before sequence allocation and observers'
     {
       entity: { eid: 'c' },
       entry: { session: 's' },
-      call: { to: T, args: '{}' },
+      call: { to: T, args: {} },
     },
   ])
   await saying(g, () => 'hello').run('c')
@@ -89,12 +89,12 @@ Deno.test('independent callers can complete out of order without losing transcri
     {
       entity: { eid: 'a' },
       entry: { session: 's' },
-      call: { to: T, args: '{}' },
+      call: { to: T, args: {} },
     },
     {
       entity: { eid: 'b' },
       entry: { session: 's' },
-      call: { to: T, args: '{}' },
+      call: { to: T, args: {} },
     },
   ])
   let release!: () => void

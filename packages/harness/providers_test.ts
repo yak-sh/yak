@@ -117,7 +117,7 @@ Deno.test('fork and spawn selecting an existing model are served by a provider t
       await h.g.apply([{
         entity: { eid },
         entry: { session: parent },
-        call: { to: toolEid(kind), id: eid, args: '{}' },
+        call: { to: toolEid(kind), id: eid, args: {} },
       }])
       const child = await tool.run({
         prompt: 'child task',

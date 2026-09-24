@@ -18,39 +18,41 @@
 // acting for, and an owner's approval is recorded as the owner's only when the
 // owner is the one calling.
 
-import { addressed, type Bundle, type Comp, type ToolCtx } from '@yaks/graph'
+import { addressed, argsOf, type Bundle, type Comp } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 
 // The text a person reads. A body nobody supplied is omitted rather than
 // written as an empty string — a design is written to be argued with, and the
 // argument may arrive after the title.
-let docIn = (ctx: ToolCtx): Comp => ({
-  title: String(ctx.args.title ?? '').trim(),
-  ...(ctx.args.body == null ? {} : { body: String(ctx.args.body) }),
+let docIn = (args: Record<string, unknown>): Comp => ({
+  title: String(args.title ?? '').trim(),
+  ...(args.body == null ? {} : { body: String(args.body) }),
 })
 
 /** The implementations behind the tools ./vocab.json declares. A factory, like
  * every such module, although this one needs nothing from the server: each
- * implementation reads what it needs from the call's own context. */
+ * implementation reads what it needs from the call it is handed. */
 export let runs = (): Runs => ({
-  design_new: async (_bundles, ctx): Promise<Bundle[]> => {
-    let project = ctx.args.project == null
+  design_new: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let project = args.project == null
       ? undefined
-      : (await addressed(ctx.graph, [String(ctx.args.project)]))[0]
+      : (await addressed(graph, [String(args.project)]))[0]
     return [{
       entity: { eid: '$design' },
       design: {},
-      doc: docIn(ctx),
+      doc: docIn(args),
       proposed: {},
       ...(project ? { filed: { project } } : {}),
     }]
   },
 
-  design_decide: async (_bundles, ctx): Promise<Bundle[]> => {
-    let [eid] = await addressed(ctx.graph, [String(ctx.args.design)])
+  design_decide: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let [eid] = await addressed(graph, [String(args.design)])
     return [{
       entity: { eid },
-      decided: { verdict: String(ctx.args.verdict) },
+      decided: { verdict: String(args.verdict) },
     }]
   },
 })

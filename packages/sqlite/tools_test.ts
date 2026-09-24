@@ -3,7 +3,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
-import type { Bundle, Comp, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import type { Driver } from './driver.ts'
@@ -47,10 +47,10 @@ let checkup = async (
   name: 'storage_check' | 'archetype_check',
   sql: Driver,
 ) => {
-  let [said] = await runs({ sql })[name]([], {
-    args: {},
-    call: 'c1',
-  } as ToolCtx) as Bundle[]
+  let [said] = await runs({ sql })[name](
+    { entity: { eid: 'c1' }, call: { args: {} } },
+    {} as Graph,
+  ) as Bundle[]
   return {
     body: String((said.content as Comp).body),
     level: (said.error as Comp | undefined)?.code,

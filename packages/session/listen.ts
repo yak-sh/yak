@@ -13,12 +13,13 @@
 // commits made in its own process.
 
 import {
+  type Actor,
   type Bundle,
   type Comp,
   detached,
   type Eid,
+  type Graph,
   signed,
-  type ToolCtx,
 } from '@yaks/graph'
 import { human } from '@yaks/id'
 import { absent, type And, and, type Clause, eq, present } from '@yaks/query'
@@ -105,15 +106,16 @@ let pause = (ms: number, stop?: AbortSignal) =>
 /** One pass: read what is addressed to the session, say each item, mark each
  * said. Returns how many were said. */
 export let hear = async (
-  ctx: Pick<ToolCtx, 'graph' | 'read' | 'actor'>,
+  graph: Pick<Graph, 'vocab' | 'read' | 'storage' | 'apply'>,
+  actor: Actor | null,
   session: Eid,
   out: (line: string) => void,
 ): Promise<number> => {
-  let vocab = ctx.graph.vocab
+  let vocab = graph.vocab
   let seen = new Set<string>()
   let items: Bundle[] = []
   for (let q of addressedTo(vocab, session)) {
-    for (let b of await ctx.read(q)) {
+    for (let b of await graph.read(q)) {
       if (seen.has(b.entity.eid) || author(b) == session) continue
       seen.add(b.entity.eid)
       items.push(b)
@@ -130,15 +132,15 @@ export let hear = async (
     ),
   ]
   let names = new Map<string, string>()
-  for (let b of await detached(ctx.graph.storage).get(pointed)) {
+  for (let b of await detached(graph.storage).get(pointed)) {
     names.set(b.entity.eid, human(vocab)(b))
   }
   let named = (eid: string) => names.get(eid) ?? eid
   for (let b of items) out(said(vocab, b, named))
-  await ctx.graph.apply(
+  await graph.apply(
     signed(
       items.map((b) => ({ entity: { eid: b.entity.eid }, [NOTIFIED]: {} })),
-      ctx.actor,
+      actor,
     ),
   )
   return items.length
@@ -147,18 +149,19 @@ export let hear = async (
 /** Say everything addressed to the session as it arrives, until `stop`
  * aborts. */
 export let listen = async (
-  ctx: Pick<ToolCtx, 'graph' | 'read' | 'actor'>,
+  graph: Pick<Graph, 'vocab' | 'read' | 'storage' | 'apply'>,
+  actor: Actor | null,
   session: Eid,
   ear: Ear,
 ): Promise<void> => {
-  if (!ctx.graph.vocab.comp(NOTIFIED)) {
+  if (!graph.vocab.comp(NOTIFIED)) {
     throw new Error(
       'session listen marks what it said with `notified`, which @yaks/mail ' +
         'declares — compose that plugin',
     )
   }
   while (!ear.stop?.aborted) {
-    await hear(ctx, session, ear.out)
+    await hear(graph, actor, session, ear.out)
     await pause(ear.every, ear.stop)
   }
 }

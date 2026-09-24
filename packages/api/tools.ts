@@ -27,7 +27,7 @@
 // stops another runner from re-driving it — nobody wants a start-up sweep
 // launching a second server.
 
-import type { Bundle, ToolCtx } from '@yaks/graph'
+import { argsOf, type Bundle } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { reconcile, type Runner } from '@yaks/tools'
 import { denoListen } from './deno.ts'
@@ -56,14 +56,15 @@ let seconds = (ms: number): string => `${Math.round(ms / 1000)}s`
 
 /** The implementation of the tool ./vocab.json declares. */
 export let runs = (host: Serving): Runs => ({
-  serve: async (_bundles, ctx: ToolCtx): Promise<Bundle[]> => {
+  serve: async (call): Promise<Bundle[]> => {
     let handler = host.handler
     // A host that composed this package has a handler; one that does not has
     // nothing to listen with, and binding a port to refuse every request is
     // not a server.
     if (!handler) throw new Error('serve has no handler — compose @yaks/api')
-    let port = Number(ctx.args.port ?? host.config.port ?? PORT)
-    let hostname = ctx.args.hostname ?? host.config.hostname
+    let args = argsOf(call)
+    let port = Number(args.port ?? host.config.port ?? PORT)
+    let hostname = args.hostname ?? host.config.hostname
     // What a crash left claimed and unanswered, finished before this process
     // takes new requests. A one-shot command must not touch calls another
     // process is running; a process that is about to stay up is the one that

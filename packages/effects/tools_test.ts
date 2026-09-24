@@ -1,19 +1,16 @@
 // The check: a run left for a person, and a run nobody is dispatching.
 
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Comp, Graph, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { blog, blogGraph, durableBlog } from './harness.ts'
 import { type Options, runs } from './tools.ts'
 
 let checkup = async (g: Graph, vocab: Vocab, options: Options = {}) => {
-  let [said] = await runs({ vocab }, options).effect_check([], {
-    graph: g,
-    actor: null,
-    read: (q) => g.read(q),
-    args: {},
-    call: 'c1',
-  } as ToolCtx) as Bundle[]
+  let [said] = await runs({ vocab }, options).effect_check(
+    { entity: { eid: 'c1' }, call: { args: {} } },
+    g,
+  ) as Bundle[]
   return {
     body: String((said.content as Comp).body),
     level: (said.error as Comp | undefined)?.code,

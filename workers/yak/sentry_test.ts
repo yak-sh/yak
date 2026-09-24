@@ -58,7 +58,10 @@ Deno.test('a connector tool names the tool, space, app, client and account', asy
     }) as unknown as Ctx
   let call = {
     entity: { eid: 'c' },
-    call: { to: 't', args: '{"space":"jeff","app":"recipes","text":"secret"}' },
+    call: {
+      to: 't',
+      args: { space: 'jeff', app: 'recipes', text: 'secret' },
+    },
   }
   let broke = () => new TypeError('x is undefined')
   await reporter(ctx('probe-1@bot.yak.sh'), 'claude-ai')(

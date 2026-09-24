@@ -17,8 +17,8 @@
           "description": "the provider's id for it, echoed in the result"
         },
         "args": {
-          "type": "string",
-          "description": "its arguments, as JSON"
+          "type": "object",
+          "description": "its arguments: the object the tool's input schema describes"
         },
         "source": {
           "type": "string",

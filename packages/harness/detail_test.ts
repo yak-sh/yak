@@ -117,7 +117,7 @@ Deno.test('SOURCE prefers full receipt and supports call arguments without searc
       {
         entity: { eid: 'tool' },
         entry: { session: 's', seq: 2 },
-        call: { args: '{"query":"x"}' },
+        call: { args: { query: 'x' } },
       },
       {
         entity: { eid: 'empty' },

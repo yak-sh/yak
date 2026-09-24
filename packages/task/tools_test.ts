@@ -1,5 +1,5 @@
 import { assertEquals } from '@std/assert'
-import type { Bundle, Comp, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { taskDoc } from './comp.ts'
 import { statusOf } from './status.ts'
@@ -9,15 +9,19 @@ import { listing, runs } from './tools.ts'
 // The runs, built the way a host builds them: a facet is a factory.
 let tools = runs()
 
-let ctx = (args: Record<string, unknown>, at: Record<string, string> = {}) =>
-  ({
-    args,
-    graph: {
-      address: (ids: string[]) =>
-        new Map(ids.filter((i) => at[i]).map((i) => [i, at[i]])),
-    },
+// A call, and a graph that knows the ids in `at` and answers a read with the
+// query it was asked.
+let asked = (
+  args: Record<string, unknown>,
+  at: Record<string, string> = {},
+): [Bundle, Graph] => [
+  { entity: { eid: 'c1' }, call: { args } },
+  {
+    address: (ids: string[]) =>
+      new Map(ids.filter((i) => at[i]).map((i) => [i, at[i]])),
     read: (q: string) => [{ entity: { eid: q } }],
-  }) as unknown as ToolCtx
+  } as unknown as Graph,
+]
 
 let comp = (b: Bundle, name: string) => b[name] as Comp
 
@@ -31,8 +35,9 @@ Deno.test('every task tool is declared and implemented', () => {
 
 Deno.test('a new task is task{} plus the words, filed where the line said', async () => {
   let [said] = await tools.task_new!(
-    [],
-    ctx({ title: 'ship it', project: 'P-19', priority: 2 }, { 'P-19': 'p19' }),
+    ...asked({ title: 'ship it', project: 'P-19', priority: 2 }, {
+      'P-19': 'p19',
+    }),
   ) as Bundle[]
   assertEquals(comp(said, 'task'), {})
   assertEquals(comp(said, 'doc'), { title: 'ship it' })
@@ -41,8 +46,7 @@ Deno.test('a new task is task{} plus the words, filed where the line said', asyn
 
 Deno.test('a task nobody filed wears no filing', async () => {
   let [said] = await tools.task_new!(
-    [],
-    ctx({ title: 'a microtask' }),
+    ...asked({ title: 'a microtask' }),
   ) as Bundle[]
   assertEquals(Object.keys(said).sort(), ['doc', 'entity', 'task'])
 })
@@ -58,8 +62,7 @@ Deno.test('a status is the marks that mean it', async () => {
   await g.apply([{ entity: { eid: 't' }, task: {}, doc: { title: 'a task' } }])
   let move = async (status: string) => {
     let said = await tools.task_update!(
-      [],
-      ctx({ task: 't', status }),
+      ...asked({ task: 't', status }),
     ) as Bundle[]
     await g.apply(said)
     return statusOf((await g.read('.entity.eid="t"'))[0])
@@ -78,8 +81,7 @@ Deno.test('what the line left out is left alone', async () => {
   }])
   await g.apply(
     await tools.task_update!(
-      [],
-      ctx({ task: 't', title: 'a better title' }),
+      ...asked({ task: 't', title: 'a better title' }),
     ) as Bundle[],
   )
   assertEquals(comp((await g.read('.entity.eid="t"'))[0], 'doc'), {

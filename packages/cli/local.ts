@@ -85,7 +85,7 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
       await host.runner.ensure()
       let landed = await host.runner.call([{
         entity: { eid: '$call' },
-        call: { to: toolEid(declared.name), args: JSON.stringify(args ?? {}) },
+        call: { to: toolEid(declared.name), args: args ?? {} },
       }])
       // `--json` prints the answer as data, the same object an MCP client
       // reads as `structuredContent` (@yaks/tools `structured`).

@@ -23,7 +23,7 @@
 import { and, present } from '@yaks/query'
 import { human } from '@yaks/id'
 import { checked, type Finding } from '@yaks/tools'
-import type { Bundle, Comp, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'
 import { BOARD, FILED, PROJECT } from './comp.ts'
@@ -55,14 +55,14 @@ let governedIn = (v: Vocab): string[] =>
 // the project seed — which is the whole reason this is a walk and not a
 // property read.
 let reached = async (
-  ctx: Pick<ToolCtx, 'read'>,
+  graph: Pick<Graph, 'read'>,
   through: string[],
 ): Promise<Set<string>> => {
   let seeds = [
-    ...await ctx.read(and(present(PROJECT))),
-    ...await ctx.read(and(present(`${FILED}.project`))),
+    ...await graph.read(and(present(PROJECT))),
+    ...await graph.read(and(present(`${FILED}.project`))),
   ]
-  let links = (await ctx.read(and(present('edge'))))
+  let links = (await graph.read(and(present('edge'))))
     .filter((b) => through.some((tag) => tag in b))
   let out = new Map<string, string[]>()
   for (let b of links) {
@@ -91,9 +91,9 @@ export let runs = (
   host: { vocab: Vocab },
   options: Options = {},
 ): Runs => ({
-  board_check: async (_bundles, ctx) => {
+  board_check: async (call, graph) => {
     let id = human(host.vocab)
-    let found = (await ctx.read(and(present(`${BOARD}.query`))))
+    let found = (await graph.read(and(present(`${BOARD}.query`))))
       .flatMap((b): Finding[] => {
         let query = String(comp(b, BOARD)?.query ?? '')
         let why = query.trim() && unroutable(query, host.vocab)
@@ -104,15 +104,19 @@ export let runs = (
           }]
           : []
       })
-    return checked(ctx.call, 'every saved board query still routes', found)
+    return checked(
+      call.entity.eid,
+      'every saved board query still routes',
+      found,
+    )
   },
 
-  project_check: async (_bundles, ctx) => {
+  project_check: async (call, graph) => {
     let id = human(host.vocab)
-    let seen = await reached(ctx, options.through ?? CONTAINS)
+    let seen = await reached(graph, options.through ?? CONTAINS)
     let found: Finding[] = []
     for (let word of governedIn(host.vocab)) {
-      for (let b of await ctx.read(and(present(word)))) {
+      for (let b of await graph.read(and(present(word)))) {
         if (seen.has(b.entity.eid)) continue
         found.push({
           level: 'fail',
@@ -122,7 +126,7 @@ export let runs = (
       }
     }
     return checked(
-      ctx.call,
+      call.entity.eid,
       'every governed entity is reachable from a project',
       found,
     )

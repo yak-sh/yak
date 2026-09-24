@@ -1,6 +1,6 @@
 import { CallError, runner, UnfinishedCall } from '@yaks/tools'
 export { CallError as ToolError } from '@yaks/tools'
-import { transient } from '@yaks/graph'
+import { argsOf, transient } from '@yaks/graph'
 // The daemon's one step. `react(graph, session)` reads the newest entry of a
 // transcript and does the one next thing it calls for: a pending input or
 // result asks the model; an open tool call is run; an error within the retry
@@ -118,6 +118,18 @@ export type Step = {
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
+// The object a model's JSON text spells, or nothing where it spells none.
+let objectIn = (text: string): Record<string, unknown> | undefined => {
+  try {
+    let value = JSON.parse(text || '{}')
+    return value && typeof value == 'object' && !Array.isArray(value)
+      ? value
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** A transcript's entries: a fork's prefix from its parent up to the anchor,
  * then its own, in order. */
 export let transcript = async (g: Graph, session: Eid): Promise<Bundle[]> => {
@@ -161,7 +173,7 @@ export let project = (
         kind: 'call',
         id: String(c!.id),
         name: tools.get(String(c!.to))?.name ?? 'tool',
-        args: String(c!.args ?? '{}'),
+        args: c!.args == null ? textOf(b) || '{}' : JSON.stringify(c!.args),
       })
     } else if (kind == 'result') {
       let call = byId.get(String(comp(b, RESULT)?.call))
@@ -275,28 +287,32 @@ export let react = async (
     // Its plugin is deliberately not registered on this graph: a call here is
     // run in the order the transcript asked for, one at a time, and an
     // effect-phase runner would race that.
-    const at = new Map(open.map((b) => [b.entity.eid, b]))
     // What a session tool is, expressed as a graph tool: the text it returns
-    // carries
-    // `content` and `output{source}`, so the answer names the call it came
-    // from and the runner lands it like any other.
+    // carries `content` and `output{source}`, so the answer names the call it
+    // came from and the runner lands it like any other. A call carrying text
+    // is one whose model text spelled no object: it has no arguments to run
+    // with.
     const served = (tool: Tool): GraphTool => ({
       name: tool.name,
       description: tool.description ?? '',
       inputSchema: tool.parameters,
-      run: async (bundles, ctx) => [{
-        entity: { eid: '$said' },
-        [CONTENT]: {
-          body: String(
-            await tool.run(ctx.args, {
-              session,
-              call: at.get(ctx.call) ?? bundles[0],
-              entries,
-            }),
-          ),
-        },
-        [OUTPUT]: { source: ctx.call },
-      }],
+      run: async (call) => {
+        if (textOf(call)) {
+          throw new CallError(
+            'arguments',
+            'Invalid JSON tool arguments: ' + textOf(call),
+          )
+        }
+        return [{
+          entity: { eid: '$said' },
+          [CONTENT]: {
+            body: String(
+              await tool.run(argsOf(call), { session, call, entries }),
+            ),
+          },
+          [OUTPUT]: { source: call.entity.eid },
+        }]
+      },
     })
     // A call naming a tool this session does not serve is answered by a tool
     // that refuses. The runner leaves a call it has no word for alone —
@@ -305,11 +321,8 @@ export let react = async (
     const unserved: GraphTool = {
       name: 'unserved',
       description: 'a tool this session does not serve',
-      run: (bundles, ctx) => {
-        throw new CallError(
-          'tool',
-          'no such tool: ' + comp(at.get(ctx.call) ?? bundles[0], CALL)?.to,
-        )
+      run: (call) => {
+        throw new CallError('tool', 'no such tool: ' + comp(call, CALL)?.to)
       },
     }
     const run = runner(g, {
@@ -549,14 +562,21 @@ export let react = async (
           }),
       )
     } else if (item.kind == 'call') {
-      added.push(line({
-        [CALL]: {
-          to: byName.get(item.name),
-          id: item.id,
-          args: item.args,
-          source: ask.entity.eid,
+      // The model's arguments are JSON text; a call's are the object it
+      // spells. Text that spells no object is kept as the model wrote it, so
+      // the transcript resends it verbatim, and the call is refused (`served`).
+      let args = objectIn(item.args)
+      added.push(line(
+        {
+          [CALL]: {
+            to: byName.get(item.name),
+            id: item.id,
+            ...args ? { args } : {},
+            source: ask.entity.eid,
+          },
         },
-      }))
+        args ? undefined : item.args,
+      ))
     }
   }
   for (let artifact of reply.artifacts ?? []) {

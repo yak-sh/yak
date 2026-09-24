@@ -1,5 +1,5 @@
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Comp, Graph, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { idKeywords } from '@yaks/id'
 import { loadVocab } from '@yaks/vocab'
@@ -22,30 +22,32 @@ let tools = runs({ vocab })
 //
 // `actor` is the run a door signed the call with: `via` the transcript, `by`
 // whoever it speaks for.
-let ctx = (
+let asked = (
   args: Record<string, unknown>,
   rows: Bundle[] = [],
   actor?: string,
-) =>
-  ({
-    args,
-    actor: actor ? { by: 'p1', via: actor } : null,
-    graph: {
-      vocab,
-      address: () => new Map(),
-      storage: {
-        tx: (run: (tx: { get: (eids: string[]) => Bundle[] }) => unknown) =>
-          run({
-            get: (eids: string[]) =>
-              rows.filter((b) => eids.includes(b.entity.eid)),
-          }),
-      },
+): [Bundle, Graph] => [
+  {
+    entity: { eid: 'c1' },
+    call: { args },
+    ...(actor ? { created: { by: 'p1', via: actor } } : {}),
+  },
+  {
+    vocab,
+    address: () => new Map(),
+    storage: {
+      tx: (run: (tx: { get: (eids: string[]) => Bundle[] }) => unknown) =>
+        run({
+          get: (eids: string[]) =>
+            rows.filter((b) => eids.includes(b.entity.eid)),
+        }),
     },
     read: (q: string) =>
       rows.filter((b) =>
         Object.entries(b.$match ?? {}).every(([k]) => String(q).includes(k))
       ),
-  }) as unknown as ToolCtx
+  } as unknown as Graph,
+]
 
 // A row the stub answers for any query naming `on`.
 let row = (b: Bundle, on: string): Bundle => ({ ...b, $match: { [on]: true } })
@@ -68,8 +70,7 @@ Deno.test('every session tool is declared and implemented', () => {
 
 Deno.test('a claim is taken for whoever is asking', async () => {
   let [said] = await tools.claim_take!(
-    [],
-    ctx({ target: 't' }, [], 's'),
+    ...asked({ target: 't' }, [], 's'),
   ) as Bundle[]
   assertEquals(said.entity.eid, 't')
   assertEquals(comp(said, 'claim'), { session: 's' })
@@ -84,15 +85,13 @@ Deno.test('one word means one run: the lock and the wrap take the same --session
     row({ entity: { eid: 't1' } }, 'claim.session'),
   ]
   let [took] = await tools.claim_take!(
-    [],
-    ctx({ target: 't1', session: 'abc' }, rows),
+    ...asked({ target: 't1', session: 'abc' }, rows),
   ) as Bundle[]
   // The lock names the session, never the word the caller typed.
   assertEquals(comp(took, 'claim'), { session: 's1' })
 
   let [, freed] = await tools.session_wrap!(
-    [],
-    ctx({ session: 'abc', brief: 'done' }, rows),
+    ...asked({ session: 'abc', brief: 'done' }, rows),
   ) as Bundle[]
   assertEquals([freed.entity.eid, freed.claim], ['t1', null])
 })
@@ -100,7 +99,7 @@ Deno.test('one word means one run: the lock and the wrap take the same --session
 Deno.test('a lock for a run nothing answers to is a refusal, not a lock', async () => {
   let threw = ''
   try {
-    await tools.claim_take!([], ctx({ target: 't', session: 'S-404' }))
+    await tools.claim_take!(...asked({ target: 't', session: 'S-404' }))
   } catch (e) {
     threw = (e as Error).message
   }
@@ -110,7 +109,7 @@ Deno.test('a lock for a run nothing answers to is a refusal, not a lock', async 
 Deno.test('nobody asking and nobody named is a refusal, not a lock', async () => {
   let threw = false
   try {
-    await tools.claim_take!([], ctx({ target: 't' }))
+    await tools.claim_take!(...asked({ target: 't' }))
   } catch {
     threw = true
   }
@@ -118,7 +117,7 @@ Deno.test('nobody asking and nobody named is a refusal, not a lock', async () =>
 })
 
 Deno.test('a release drops the component', async () => {
-  let [said] = await tools.claim_release!([], ctx({ target: 't' })) as Bundle[]
+  let [said] = await tools.claim_release!(...asked({ target: 't' })) as Bundle[]
   assertEquals(said.claim, null)
 })
 
@@ -130,8 +129,7 @@ Deno.test('a hook payload names the session; anything else says nothing', () => 
 
 Deno.test('a session nobody has seen is minted, with its own heading', async () => {
   let said = await tools.session_context!(
-    [],
-    ctx({ hook: '{"session_id":"abc"}', actor: 'p1' }),
+    ...asked({ hook: '{"session_id":"abc"}', actor: 'p1' }),
   ) as Bundle[]
   assertEquals(comp(said[0], 'session'), { id: 'abc', actor: 'p1' })
   assert(said[0].entity.eid.startsWith('$'))
@@ -157,8 +155,7 @@ Deno.test('a session that exists is handed back what it was in the middle of', a
     ),
   ]
   let said = await tools.session_context!(
-    [],
-    ctx({ session: 'abc' }, rows),
+    ...asked({ session: 'abc' }, rows),
   ) as Bundle[]
   assertEquals(said[0].entity.eid, 's1')
   assertEquals(
@@ -174,8 +171,7 @@ Deno.test('a wrap records the account and lets go of everything', async () => {
     row({ entity: { eid: 't2' } }, 'claim.session'),
   ]
   let said = await tools.session_wrap!(
-    [],
-    ctx({ hook: '{"session_id":"abc"}', brief: 'did the thing' }, rows),
+    ...asked({ hook: '{"session_id":"abc"}', brief: 'did the thing' }, rows),
   ) as Bundle[]
   assertEquals(comp(said[0], 'brief'), { text: 'did the thing' })
   assertEquals(said.slice(1).map((b) => [b.entity.eid, b.claim]), [
@@ -185,7 +181,7 @@ Deno.test('a wrap records the account and lets go of everything', async () => {
 })
 
 Deno.test('a session nobody reified wraps to nothing', async () => {
-  assertEquals(await tools.session_wrap!([], ctx({ session: 'gone' })), [])
+  assertEquals(await tools.session_wrap!(...asked({ session: 'gone' })), [])
 })
 
 Deno.test('a brief lands on the transcript wearing that name', async () => {
@@ -193,8 +189,7 @@ Deno.test('a brief lands on the transcript wearing that name', async () => {
     row({ entity: { eid: 's1' }, session: { id: 'abc' } }, 'session.id'),
   ]
   let [said] = await tools.session_brief!(
-    [],
-    ctx({ session: 'abc', text: 'did the thing' }, rows),
+    ...asked({ session: 'abc', text: 'did the thing' }, rows),
   ) as Bundle[]
   assertEquals(said.entity.eid, 's1')
   assertEquals(comp(said, 'brief'), { text: 'did the thing' })
@@ -202,8 +197,7 @@ Deno.test('a brief lands on the transcript wearing that name', async () => {
 
 Deno.test('a brief for a transcript nobody reified reifies it, never the word', async () => {
   let [said] = await tools.session_brief!(
-    [],
-    ctx({ session: 'S-37703', text: 'did the thing' }),
+    ...asked({ session: 'S-37703', text: 'did the thing' }),
   ) as Bundle[]
   // Not `S-37703` — a human id is not an eid, and writing it as one would mint
   // an entity called that.
@@ -224,13 +218,10 @@ let checkup = async (
   g: Graph,
   options: Options = {},
 ) => {
-  let [said] = await runs({ vocab: pages }, options)[name]([], {
-    graph: g,
-    actor: null,
-    read: (q) => g.read(q),
-    args: {},
-    call: 'c1',
-  } as ToolCtx) as Bundle[]
+  let [said] = await runs({ vocab: pages }, options)[name](
+    { entity: { eid: 'c1' }, call: { args: {} } },
+    g,
+  ) as Bundle[]
   return {
     body: String((said.content as Comp).body),
     level: (said.error as Comp | undefined)?.code,
