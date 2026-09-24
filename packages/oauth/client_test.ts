@@ -6,6 +6,7 @@ import {
   type AuthorizationStore,
   client,
   OAuthError,
+  pkce,
   type Provider,
   type Tokens,
 } from './mod.ts'
@@ -42,18 +43,22 @@ let memory = (seed?: Tokens) => {
   return { store, held }
 }
 
-// A token endpoint that answers each request with the next scripted reply.
+// A token endpoint that answers each request with the next scripted reply. The
+// answer is as little of a Response as the client reads (ok, status, json): a
+// web Response or Headers would cost the first test that builds one the
+// process's whole fetch warm-up, which is not the client's time.
 let endpoint = (...replies: [number, unknown][]) => {
-  let seen: { headers: Headers; body: URLSearchParams }[] = []
+  let seen: { headers: Record<string, string>; body: URLSearchParams }[] = []
   let fetch = (_: RequestInfo | URL, init?: RequestInit) => {
     seen.push({
-      headers: new Headers(init?.headers),
+      headers: { ...init?.headers as Record<string, string> },
       body: new URLSearchParams(String(init?.body)),
     })
     let [status, body] = replies.shift() ?? [500, {}]
-    return Promise.resolve(Response.json(body, { status }))
+    let ok = status >= 200 && status < 300
+    return Promise.resolve({ ok, status, json: () => Promise.resolve(body) })
   }
-  return { fetch, seen }
+  return { fetch: fetch as unknown as typeof globalThis.fetch, seen }
 }
 
 let setup = (
@@ -74,6 +79,13 @@ let setup = (
   return { c, ...m, ...e }
 }
 
+// Web Crypto's first digest and the first URL a process parses pay for
+// starting those up (up to about 10ms cold), which would land on whichever test
+// calls `begin` first. They are paid here, as the module loads, so each test's
+// time is its own.
+await pkce()
+new URL('https://warm.example/?a=b').searchParams.set('c', 'd')
+
 let s256 = async (verifier: string) =>
   btoa(String.fromCharCode(
     ...new Uint8Array(
@@ -84,20 +96,23 @@ let s256 = async (verifier: string) =>
 Deno.test('begin: the link carries the flow, and data cannot replace its state', async () => {
   let { c } = setup()
   let { url, attempt } = await c.begin()
-  let q = new URL(url).searchParams
-  assertEquals(new URL(url).origin + new URL(url).pathname, PROVIDER.authorize)
-  assertEquals(q.get('response_type'), 'code')
-  assertEquals(q.get('client_id'), 'app id')
-  assertEquals(q.get('redirect_uri'), REDIRECT)
-  assertEquals(q.get('state'), attempt.state)
-  assertEquals(q.get('scope'), 'calendar email')
-  assertEquals(q.get('access_type'), 'offline')
-  assertEquals(q.get('code_challenge_method'), 'S256')
-  assertEquals(q.get('code_challenge'), await s256(attempt.verifier))
-  assertEquals(
-    new URL((await c.begin(['one'])).url).searchParams.get('scope'),
-    'one',
-  )
+  let link = new URL(url)
+  assertEquals(link.origin + link.pathname, PROVIDER.authorize)
+  assertEquals(Object.fromEntries(link.searchParams), {
+    access_type: 'offline',
+    response_type: 'code',
+    client_id: 'app id',
+    redirect_uri: REDIRECT,
+    state: attempt.state,
+    code_challenge: await s256(attempt.verifier),
+    code_challenge_method: 'S256',
+    scope: 'calendar email',
+  })
+})
+
+Deno.test("begin: the scopes asked for replace the provider's own", async () => {
+  let { url } = await setup().c.begin(['one'])
+  assertEquals(new URL(url).searchParams.get('scope'), 'one')
 })
 
 Deno.test('complete: exchanges the code with the verifier and keeps the grant', async () => {
@@ -111,7 +126,7 @@ Deno.test('complete: exchanges the code with the verifier and keeps the grant', 
   let { attempt } = await c.begin()
   await c.complete(attempt, `${REDIRECT}?code=C&state=${attempt.state}`)
   let { headers, body } = seen[0]
-  assertEquals(headers.get('authorization'), `Basic ${btoa('app+id:s3cret')}`)
+  assertEquals(headers.authorization, `Basic ${btoa('app+id:s3cret')}`)
   assertEquals(Object.fromEntries(body), {
     grant_type: 'authorization_code',
     code: 'C',
@@ -219,7 +234,7 @@ Deno.test('client credentials: in the body for post, the id alone for a public c
       provider,
     )
     await c.refresh('A1')
-    assert(!seen[0].headers.has('authorization'))
+    assert(!('authorization' in seen[0].headers))
     assertEquals(Object.fromEntries(seen[0].body), {
       grant_type: 'refresh_token',
       refresh_token: 'R1',
