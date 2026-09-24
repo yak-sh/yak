@@ -32,6 +32,37 @@ let doc: VocabDoc = {
     contains: { component: true, type: 'object', edge: true },
     reads: { component: true, type: 'object', edge: true },
     memory: { component: true, type: 'object', kind: true, prefix: 'M' },
+    proposed: { component: true, type: 'object' },
+    decided: {
+      component: true,
+      type: 'object',
+      properties: { verdict: { type: 'string' } },
+    },
+    // Where the persona files go: @yaks/project's project and its repo,
+    // @yaks/git's worktree, @yaks/kernel's archived, and a name @yaks/alias
+    // keeps as a key.
+    project: { component: true, type: 'object', kind: true, prefix: 'P' },
+    repo: {
+      component: true,
+      type: 'object',
+      properties: { repository: { type: 'string' } },
+    },
+    worktree: {
+      component: true,
+      type: 'object',
+      properties: {
+        repository: { type: 'string' },
+        path: { type: 'string' },
+        managed: { type: 'boolean' },
+      },
+    },
+    archived: { component: true, type: 'object' },
+    key: {
+      component: true,
+      type: 'object',
+      properties: { of: { type: 'string' }, value: { type: 'string' } },
+    },
+    alias: { component: true, type: 'object' },
   },
 }
 

@@ -110,6 +110,19 @@
         ]
       },
       "readOnly": true
+    },
+    "persona_sync": {
+      "tool": true,
+      "noun": "persona",
+      "verb": "sync",
+      "title": "Write the persona files",
+      "description": "Write each project’s personas into its checkout, where a harness started there reads them: the persona the project contains as .tasks/AGENTS.md (a repository’s CLAUDE.md and AGENTS.md link to it), and every other persona whose home is the project as .tasks/personas/<name>.md (a .claude/agents/<name>.md links to one). Only a file whose text moved is written; the file of a renamed or deleted persona is removed; a file edited by hand while the graph also moved is left alone and reported. Returns one line per file it wrote, removed or left.",
+      "input": {
+        "check": {
+          "type": "boolean",
+          "description": "write nothing: report the files that would change"
+        }
+      }
     }
   }
 }

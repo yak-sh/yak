@@ -3,8 +3,8 @@
 Define human identities, agent instructions and agent roles in a graph, and
 assemble an agent's instructions into Markdown. The graph stores `person`,
 `persona` and `role` components alongside document text and relationships. This
-package supplies their schemas and read/render functions; it opens no database,
-starts no agent and writes no files.
+package supplies their schemas and read/render functions, and writes each
+project's personas into its checkout; it opens no database and starts no agent.
 
 ```sh
 deno add jsr:@yaks/persona
@@ -69,13 +69,15 @@ use those relationships. The minimal example has no linked documents.
 
 Rendering behavior:
 
-Three things this shape decides:
+Four things this shape decides:
 
-- **It returns text, and never writes a file.** Where the document goes —
-  `AGENTS.md` in a repo, the system prompt of a spawned agent, a card in a
-  browser — is the caller's decision, and a package that wrote files could only
-  guess at one of those. That is also why there is no `./effects` export here:
-  an effect would have to know that destination to be worth registering.
+- **It returns text.** Where the document goes — `AGENTS.md` in a repo, the
+  system prompt of a spawned agent, a card in a browser — is the caller's
+  decision. The persona files below are one caller.
+- **A proposal is not said.** A document carrying [@yaks/kernel](../kernel)'s
+  `proposed` is left out, by either edge, until a `decided` approves it; a
+  declined one stays out. Linking a proposal to a persona files it where it
+  belongs without making the persona say it.
 - **What a persona links to is a `doc`, nothing more specific.** A memory is
   [@yaks/memory](../memory)'s component and a goal is [@yaks/goal](../goal)'s; a
   persona that links to either renders it the same way, because the only thing
@@ -94,13 +96,49 @@ are removed. Full inclusion takes precedence over a `reads` reference. This
 stable ordering replaces the legacy materializer's time-decaying score, which
 could change output even without a graph write.
 
+## The persona files
+
+A harness started in a checkout reads its instructions from files, so each
+project's personas are written into its checkout:
+
+- the persona the project `contains` is `.tasks/AGENTS.md`, which the
+  repository's `CLAUDE.md` and `AGENTS.md` link to;
+- every other persona whose `home` is the project is
+  `.tasks/personas/<name>.md`, which a `.claude/agents/<name>.md` links to.
+  `<name>` is the persona's [@yaks/alias](../alias) name, or its id. The file
+  opens with the frontmatter a Claude agent file needs (`name`, `description`),
+  and leaves out what `AGENTS.md` already says, since the two are read together.
+
+Each file is `voice`'s text under a line naming the persona it was generated
+from. The checkout is the project's [@yaks/project](../project) `repo` →
+[@yaks/git](../git) `worktree` that no tool made; an archived project keeps what
+it last had.
+
+The files are a write-only [@yaks/mirror](../mirror) binding: the graph owns
+them. A hand edit is put back; one made while the graph also moved is left and
+reported; the file of a renamed or deleted persona is removed. What each file
+last agreed on is kept in `mirror/personas.json` beside the database.
+
+`persona_sync` writes them (`check` reports what would change instead). A host
+keeps them current after every write that touches a persona or a document one
+says, when its config asks:
+
+```json
+{ "use": "@yaks/persona", "with": { "files": true } }
+```
+
+It is off by default because the paths come from the graph, not the database: a
+host opened on a copy of a graph would write into the checkouts the original
+names.
+
 ## Exports
 
-| subpath   | what it provides                                                        |
-| --------- | ----------------------------------------------------------------------- |
-| `.`       | `wear`, `voice`, the component names, and the vocabulary document       |
-| `./vocab` | the component declarations alone                                        |
-| `./tools` | `runs(host)` — supplies `persona_read`, which returns rendered Markdown |
+| subpath     | what it provides                                                          |
+| ----------- | ------------------------------------------------------------------------- |
+| `.`         | `wear`, `voice`, the component names, and the vocabulary document         |
+| `./vocab`   | the component declarations alone                                          |
+| `./tools`   | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes |
+| `./effects` | `effects(host, {files})` — keeps the persona files current                |
 
 The two edge relations are borrowed rather than invented here: `contains` is
 [@yaks/task](../task)'s and `reads` is [@yaks/kernel](../kernel)'s. A relation
@@ -108,9 +146,11 @@ the composed vocabulary does not declare contributes nothing rather than
 throwing — a graph with no `contains` in it has a persona that includes no
 documents, which is a fair reading of that graph.
 
-`host` in `runs(host)` is the process that opened the graph; it supplies the
-loaded vocabulary. Tool calls supply the graph read function separately.
+`host` in `runs(host)` is the process that opened the graph; its config names
+the database the persona files' memory is kept beside. Tool calls supply the
+graph separately.
 
 ## Compatibility
 
-Deno, Node and the browser — it calls no platform API.
+`.` and `./vocab` run in Deno, Node and the browser — they call no platform API.
+`./tools` and `./effects` write files through Deno.

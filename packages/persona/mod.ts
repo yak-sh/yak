@@ -22,9 +22,10 @@
  * ```
  *
  * It returns text. Where that text goes — a file, a repo, the system prompt
- * of a spawned agent — is the caller's decision, which is why nothing here
- * writes a file, and why the package has no `./effects` export: an effect
- * would have to know that destination to be worth registering.
+ * of a spawned agent — is the caller's decision. One caller ships beside it
+ * and stays out of this entry point, because it writes files: each project's
+ * personas in its checkout, `persona_sync` in `./tools` and kept current by
+ * `./effects`.
  *
  * @module
  */

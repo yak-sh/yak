@@ -101,6 +101,20 @@ Deno.test('a ring of personas ends the gather rather than spinning', () => {
   assertEquals(ids(now(g, 'n1')!.carries), ['n2', 'm1'])
 })
 
+Deno.test('a proposal is said only once somebody approves it', () => {
+  let g = graph(
+    { entity: { eid: 'm1' }, proposed: {} },
+    { entity: { eid: 'm2' }, proposed: {}, decided: { verdict: 'declined' } },
+    { entity: { eid: 'm3' }, proposed: {}, decided: { verdict: 'approved' } },
+    link('n1', 'contains', 'm1'),
+    link('n1', 'reads', 'm2'),
+    link('n1', 'reads', 'm3'),
+  )
+  let worn = now(g, 'n1')!
+  assertEquals(ids(worn.carries), [])
+  assertEquals(ids(worn.names), ['m3'])
+})
+
 Deno.test('an entity that is not a persona is nobody to wear', () => {
   let g = graph()
   assertEquals(now(g, 'm1'), undefined)

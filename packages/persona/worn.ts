@@ -52,6 +52,16 @@ let DEPTH = 8
 
 let value = (eids: Eid[]): Input => eids.length == 1 ? eids[0] : list(...eids)
 
+// A document put forward for a decision (@yaks/kernel's `proposed`) is a
+// suggestion until somebody decides it, and one declined stays a suggestion:
+// linking it to a persona files it where it belongs, but the persona does not
+// say it.
+let undecided = (b: Bundle): boolean => {
+  if (!b.proposed) return false
+  let decided = b.decided as { verdict?: unknown } | undefined
+  return !decided || decided.verdict == 'declined'
+}
+
 let far = (b: Bundle): Eid => {
   let to = (b[EDGE] as { to?: unknown } | undefined)?.to
   return typeof to == 'string' ? to : ''
@@ -120,7 +130,7 @@ export let wear = (
                     // `seen` holds the persona itself, so a cycle of
                     // personas never includes the text it started from
                     // twice.
-                    if (!b?.[DOC] || seen.has(id)) {
+                    if (!b?.[DOC] || seen.has(id) || undecided(b)) {
                       continue
                     }
                     seen.add(id)
@@ -134,7 +144,7 @@ export let wear = (
                   }
                   for (let id of said) {
                     let b = by.get(id)
-                    if (b?.[DOC] && !names.has(id)) {
+                    if (b?.[DOC] && !names.has(id) && !undecided(b)) {
                       names.set(id, b)
                     }
                   }

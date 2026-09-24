@@ -4,7 +4,8 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./tools": "./tools.ts"
+    "./tools": "./tools.ts",
+    "./effects": "./effects.ts"
   },
   "license": "Apache-2.0",
   "description": "Who is acting and what they are responsible for — the people a graph knows, the personas an agent runs with, the roles those personas are assigned to, and a persona rendered as one markdown document.",
