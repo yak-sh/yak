@@ -14,6 +14,7 @@
 import type { Runs } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
+import { runs as connections } from '@yaks/connections/tools'
 import { runs as projects } from '@yaks/project/tools'
 import { runs as sessions } from '@yaks/session/tools'
 import { runs as tasks } from '@yaks/task/tools'
@@ -23,6 +24,7 @@ import { runs as tasks } from '@yaks/task/tools'
  * transcripts. */
 export let runs = (host: { vocab: Vocab }): Runs => ({
   ...tasks(),
+  ...connections(),
   ...sessions(host),
   ...projects(host),
   session_list: (_, graph) => graph.read(parse('.session')),

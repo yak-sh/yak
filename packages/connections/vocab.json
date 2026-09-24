@@ -39,6 +39,11 @@
           "enum": ["basic", "post"],
           "description": "how the client authenticates at the token endpoint (default basic)"
         },
+        "answers": {
+          "type": "string",
+          "enum": ["tokens", "key"],
+          "description": "what the token endpoint answers: tokens (the default), or an API key, as OpenRouter's PKCE exchange does"
+        },
         "hosts": {
           "type": "array",
           "items": { "type": "string" },

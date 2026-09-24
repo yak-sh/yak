@@ -23,11 +23,17 @@ export type Provider = {
    * `access_type: 'offline'` for a refresh token. They never replace the
    * flow's own (state, challenge, redirect). */
   params?: Record<string, string>
-  client: { id: string; secret?: string }
+  /** The client registered with it; one that answers a key has none. */
+  client?: { id: string; secret?: string }
   /** How a confidential client authenticates at the token endpoint: HTTP
    * Basic, which every server must accept (RFC 6749 §2.3.1), or in the form
    * body. A client with no secret sends its id in the body either way. */
   auth?: 'basic' | 'post'
+  /** What the exchange answers: tokens, or an API key, as OpenRouter's PKCE
+   * does. A key is kept as an access token that never expires, and its flow
+   * carries no state: PKCE already binds the code to this attempt (RFC 9700
+   * §2.1). */
+  answers?: 'tokens' | 'key'
 }
 
 /** One grant, as the store keeps it. `expires_at` is epoch milliseconds. */
@@ -102,6 +108,7 @@ let NONE: Tokens = {
 
 export let client = (provider: Provider, o: Options): Client => {
   let now = o.now ?? Date.now
+  let key = provider.answers == 'key'
   let fresh = (t: Tokens) =>
     !!t.access_token && (t.expires_at == null || t.expires_at - SKEW > now())
 
@@ -109,8 +116,10 @@ export let client = (provider: Provider, o: Options): Client => {
     fields: Record<string, string>,
     was: Tokens = {},
   ): Promise<Tokens> => {
-    let { id, secret } = provider.client
-    let pair = secret != null && (provider.auth ?? 'basic') == 'basic'
+    let id = provider.client?.id
+    let secret = provider.client?.secret
+    let pair = id != null && secret != null &&
+        (provider.auth ?? 'basic') == 'basic'
       ? `${enc(id)}:${enc(secret)}`
       : undefined
     let basic = pair != null
@@ -119,11 +128,13 @@ export let client = (provider: Provider, o: Options): Client => {
       redirect: 'error',
       signal: AbortSignal.timeout(30_000),
       headers: {
-        'content-type': 'application/x-www-form-urlencoded',
+        'content-type': key
+          ? 'application/json'
+          : 'application/x-www-form-urlencoded',
         accept: 'application/json',
         ...(pair ? { authorization: `Basic ${btoa(pair)}` } : {}),
       },
-      body: form({
+      body: key ? JSON.stringify(fields) : form({
         ...fields,
         client_id: basic ? undefined : id,
         client_secret: basic ? undefined : secret,
@@ -134,7 +145,7 @@ export let client = (provider: Provider, o: Options): Client => {
       string,
       unknown
     >
-    let access = str(body?.access_token)
+    let access = str(key ? body.key : body.access_token)
     // Some providers answer a refusal with 200 and an `error` field.
     if (!res.ok || !access) {
       let code = str(body?.error) ?? `http_${res.status}`
@@ -178,15 +189,17 @@ export let client = (provider: Provider, o: Options): Client => {
       let url = new URL(provider.authorize)
       let fields = {
         ...provider.params,
-        response_type: 'code',
-        client_id: provider.client.id,
-        redirect_uri: o.redirect,
-        state: pending.state,
+        ...key ? { callback_url: o.redirect } : {
+          response_type: 'code',
+          client_id: provider.client?.id,
+          redirect_uri: o.redirect,
+          state: pending.state,
+          ...(scopes.length ? { scope: scopes.join(' ') } : {}),
+        },
         code_challenge: challenge,
         code_challenge_method: 'S256',
-        ...(scopes.length ? { scope: scopes.join(' ') } : {}),
       }
-      for (let [k, v] of Object.entries(fields)) url.searchParams.set(k, v)
+      for (let [k, v] of form(fields)) url.searchParams.set(k, v)
       return { url: url.href, attempt: pending }
     },
 
@@ -198,7 +211,7 @@ export let client = (provider: Provider, o: Options): Client => {
           'the authorization expired; begin again',
         )
       }
-      if (q.get('state') != pending.state) {
+      if (!key && q.get('state') != pending.state) {
         throw new OAuthError('state', 'the return does not match this attempt')
       }
       let error = q.get('error')
@@ -207,12 +220,20 @@ export let client = (provider: Provider, o: Options): Client => {
       if (codes.length != 1 || !codes[0]) {
         throw new OAuthError('code', 'the return carried no single code')
       }
-      let got = await exchange({
-        grant_type: 'authorization_code',
-        code: codes[0],
-        redirect_uri: o.redirect,
-        code_verifier: pending.verifier,
-      })
+      let got = await exchange(
+        key
+          ? {
+            code: codes[0],
+            code_verifier: pending.verifier,
+            code_challenge_method: 'S256',
+          }
+          : {
+            grant_type: 'authorization_code',
+            code: codes[0],
+            redirect_uri: o.redirect,
+            code_verifier: pending.verifier,
+          },
+      )
       await o.store.update(o.key, (record) => {
         Object.assign(record, NONE, got)
         return Promise.resolve()

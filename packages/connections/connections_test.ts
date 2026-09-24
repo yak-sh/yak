@@ -21,8 +21,10 @@ import {
 import { effects } from '@yaks/effects'
 import {
   begin,
+  BUILT as SHIPPED,
   connect,
   connectionsDoc,
+  credential,
   type Ctx,
   disconnect,
   type Integration,
@@ -55,7 +57,7 @@ let CALENDAR: Integration = {
   hosts: ['api.example'],
 }
 let TEXTS: Integration = { name: 'texts', hosts: ['api.texts.example'] }
-let BUILT = { calendar: CALENDAR, texts: TEXTS }
+let BUILT = { calendar: CALENDAR, texts: TEXTS, ...SHIPPED }
 let REDIRECT = 'https://yourname.yaks.app/_yaks/connections/back'
 let NOW = 1_000_000
 
@@ -236,6 +238,17 @@ slow(
       JSON.parse((await reveal(vault, String(of(b, 'secret').name)))!),
       { access_token: 'A1', refresh_token: 'R1', expires_at: NOW + 3_600_000 },
     )
+  },
+)
+
+slow(
+  'a sign-in answering a key needs no registered client, and the key is its credential',
+  async () => {
+    let { c, needs } = await setup([200, { key: 'sk-or' }])
+    let eid = await needs({ integration: 'openrouter' })
+    let { attempt } = await begin(c, eid)
+    await connect(c, eid, { attempt, callback: `${REDIRECT}?code=C` })
+    assertEquals(await credential(c, eid), 'sk-or')
   },
 )
 

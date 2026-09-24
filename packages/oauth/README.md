@@ -79,6 +79,11 @@ let next = await calendar.refresh(token!)
 - A confidential client authenticates at the token endpoint with HTTP Basic, or
   in the form body with `auth: 'post'`. A client with no secret sends its id in
   the body.
+- A provider with `answers: 'key'` runs OpenRouter's PKCE exchange instead: the
+  link carries `callback_url` and the challenge, the exchange posts JSON and
+  answers `{key}`, and the key is kept as an access token that never expires. It
+  needs no registered client and carries no `state`; PKCE binds the code to the
+  attempt (RFC 9700 §2.1).
 - A refusal throws `OAuthError`, whose `code` is the provider's `error`
   (`invalid_grant` means the grant is gone and the person must connect again),
   `http_<status>` when the provider gave no code, or the client's own: `state`,
@@ -99,9 +104,8 @@ accepts an HTTP callback, or keeps anything of its own: the host routes the
 redirect to `complete` and gives the client its store.
 
 Protocols that are not this flow keep their own adapters.
-`@yaks/mcp-client/oauth` retains MCP discovery, client registration and refresh.
-`@yaks/openrouter/oauth` handles OpenRouter's code-to-API-key exchange. Both use
-the same private storage and attempt lifetime and keep their in-flight verifiers
+`@yaks/mcp-client/oauth` retains MCP discovery, client registration and refresh,
+with the same private storage and attempt lifetime and its in-flight verifiers
 in memory, never in the store.
 
 ## Compatibility

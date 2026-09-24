@@ -48,11 +48,16 @@ let memory = (seed?: Tokens) => {
 // web Response or Headers would cost the first test that builds one the
 // process's whole fetch warm-up, which is not the client's time.
 let endpoint = (...replies: [number, unknown][]) => {
-  let seen: { headers: Record<string, string>; body: URLSearchParams }[] = []
+  let seen: {
+    headers: Record<string, string>
+    body: URLSearchParams
+    text: string
+  }[] = []
   let fetch = (_: RequestInfo | URL, init?: RequestInit) => {
     seen.push({
       headers: { ...init?.headers as Record<string, string> },
       body: new URLSearchParams(String(init?.body)),
+      text: String(init?.body),
     })
     let [status, body] = replies.shift() ?? [500, {}]
     let ok = status >= 200 && status < 300
@@ -217,6 +222,29 @@ Deno.test('the provider refusing, by status or by an error field, is its code', 
     (await assertRejects(() => dead.c.token(), OAuthError)).code,
     'expired',
   )
+})
+
+Deno.test('a provider answering a key: its own link, a JSON exchange, the key kept for good', async () => {
+  let { c, held, seen } = setup(undefined, [[200, { key: 'sk-1' }]], {
+    authorize: 'https://openrouter.ai/auth',
+    token: 'https://openrouter.ai/api/v1/auth/keys',
+    answers: 'key',
+  })
+  let { url, attempt } = await c.begin()
+  assertEquals(Object.fromEntries(new URL(url).searchParams), {
+    callback_url: REDIRECT,
+    code_challenge: await s256(attempt.verifier),
+    code_challenge_method: 'S256',
+  })
+  await c.complete(attempt, `${REDIRECT}?code=C`)
+  assertEquals(seen[0].headers['content-type'], 'application/json')
+  assertEquals(JSON.parse(seen[0].text), {
+    code: 'C',
+    code_verifier: attempt.verifier,
+    code_challenge_method: 'S256',
+  })
+  assertEquals(held.get('k')?.expires_at, undefined)
+  assertEquals(await c.token(), 'sk-1')
 })
 
 Deno.test('client credentials: in the body for post, the id alone for a public client', async () => {

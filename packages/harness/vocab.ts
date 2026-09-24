@@ -35,6 +35,7 @@ import {
 import type { Derived } from '@yaks/sql'
 import { checkoutDoc } from '@yaks/git/vocab'
 import { secretsDoc } from '@yaks/secrets/vocab'
+import { connectionsDoc } from '@yaks/connections/vocab'
 import { provisionalDoc } from '@yaks/effects/vocab'
 import doc from './vocab.json' with { type: 'json' }
 
@@ -46,7 +47,8 @@ export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
  * transcript is made of (@yaks/session), what it asks for and what answers
  * (@yaks/tools, @yaks/context), what serves it (@yaks/model, @yaks/openai),
  * what a reply carries (@yaks/blob), the programs it starts (@yaks/process),
- * the tokens it signs in with (@yaks/secrets) and the mark one wears while it
+ * the sign-ins it keeps (@yaks/secrets, @yaks/connections) and the mark one
+ * wears while it
  * is being saved (@yaks/effects), and the work it is doing
  * (@yaks/doc, @yaks/edge, @yaks/task) — over
  * @yaks/kernel's `entity` table, which is where `entity` and the two stamps
@@ -80,6 +82,7 @@ export let docs: VocabDoc[] = [
   projectDoc,
   taskDoc,
   secretsDoc,
+  connectionsDoc,
   provisionalDoc,
 ]
 

@@ -921,10 +921,11 @@ Choose a model identifier available to your OpenRouter account. Then press
 **Esc, A**, select **OpenRouter (model provider)**, open the authorization URL,
 and paste the full return URL into the private authorization input. No callback
 listener runs: a browser connection-error page is expected; copy its address
-bar. The API key is a secret in the same vault, never in the graph, transcript,
-or draft. This is a separate account from MCP servers and OpenAI; existing
-credentials are never borrowed. No model request is sent merely by configuring
-or authorizing the provider.
+bar. The API key is kept as a connection the provider owns
+([@yaks/connections](../connections)): its secret is in the vault, never in the
+graph, transcript, or draft. This is a separate account from MCP servers and
+OpenAI; existing credentials are never borrowed. No model request is sent merely
+by configuring or authorizing the provider.
 
 To select that model for a session, append an entry containing `using` with the
 returned provider/model EIDs. This selects the next request intentionally:

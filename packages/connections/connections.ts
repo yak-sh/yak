@@ -296,7 +296,9 @@ let signIn = async (c: Ctx, b: Bundle): Promise<Client> => {
     throw new Error(`${name} is connected with a pasted key, not by signing in`)
   }
   let registered = await c.client?.(i)
-  if (!registered) throw new Error(`no OAuth client is registered for ${name}`)
+  if (!registered && i.answers != 'key') {
+    throw new Error(`no OAuth client is registered for ${name}`)
+  }
   let scopes = strs(comp(b, CONNECTION).scopes)
   return client({
     authorize: i.authorize,
@@ -305,6 +307,7 @@ let signIn = async (c: Ctx, b: Bundle): Promise<Client> => {
     params: i.params,
     client: registered,
     auth: i.auth,
+    answers: i.answers,
   }, {
     store: records(c.graph, c.vault, ''),
     key: nameOf(b),

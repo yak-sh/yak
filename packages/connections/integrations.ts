@@ -13,6 +13,7 @@
 
 import { type Bundle, type Eid, identityEid, type Query } from '@yaks/graph'
 import type { Scheme } from '@yaks/hook'
+import openrouter from './openrouter.json' with { type: 'json' }
 
 export let INTEGRATION = 'integration'
 
@@ -29,6 +30,8 @@ export type Integration = {
   params?: Record<string, string>
   /** how the client authenticates at the token endpoint (@yaks/oauth) */
   auth?: 'basic' | 'post'
+  /** what the exchange answers: tokens, or a key, as OpenRouter's does */
+  answers?: 'tokens' | 'key'
   /** the API hosts its credential may be sent to, and no others */
   hosts: string[]
   /** how the service signs the webhooks it sends */
@@ -39,7 +42,9 @@ export type Integration = {
 export type Read = (query: Query) => Bundle[] | Promise<Bundle[]>
 
 /** The integrations this package builds, by name. */
-export let BUILT: Record<string, Integration> = {}
+export let BUILT: Record<string, Integration> = {
+  openrouter: { ...openrouter, answers: 'key' },
+}
 
 /** Whether a person connects it by pasting a key rather than signing in. */
 export let keyed = (i: Integration): boolean => !i.token

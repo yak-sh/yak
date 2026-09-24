@@ -39,7 +39,9 @@ swaps sentinels on the way out with them.
 The built integrations ship with this package as data, one JSON file each, in
 `BUILT` by name. A built name is never a custom one's: `need` will not make one,
 and a lookup finds the built one first, so a space cannot change where a built
-integration's tokens are sent.
+integration's tokens are sent. `openrouter` is built: its sign-in needs no
+registered client, and its exchange answers an API key (`answers: 'key'`,
+@yaks/oauth), kept as the connection's grant.
 
 ## Verbs
 
