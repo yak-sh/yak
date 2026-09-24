@@ -470,6 +470,12 @@ routes = [
 [env.staging.triggers]
 crons = []
 
+# No queue consumer: yak-builds is production's alone (`[[queues.consumers]]`
+# above). Empty rather than absent, because queues do not inherit and wrangler
+# warns about an environment that leaves them out.
+[env.staging.queues]
+consumers = []
+
 [env.staging.vars]
 APEX = "yaks.fyi"
 CF_ACCOUNT = "0f9613dfd3f0451df0bd0f12a1372ea3"
