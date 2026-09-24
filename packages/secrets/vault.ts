@@ -2,13 +2,14 @@
 // handle; the vault holds what the handle stands for, keyed by the secret's
 // entity id, and the salt a handle is hashed under to make its sentinel.
 //
-// A vault is the one thing that differs between the places a graph runs. On a
-// box it is a directory of private files (./file.ts); in a test, or a graph
-// that lasts as long as its process, it is memory (below); on yaks.app it will
-// be the platform's own store, encrypted under a key per space (T-33445). The
-// plugin, the reveal and the records store are written against this type
-// alone, and every method may answer now or later, so a vault that has to ask
-// a network is as good as one that reads a file.
+// A vault is the one thing that differs between the places a graph runs, so
+// this package keeps none but memory (below), for a test or a graph that lasts
+// as long as its process. A vault that stores somewhere lives with that
+// storage and meets this shape: a directory of private files on a box
+// (@yaks/cli), a D1 database on yaks.app (@yaks/d1). The plugin, the reveal and
+// the records store are written against this type alone, and every method may
+// answer now or later, so a vault that has to ask a network is as good as one
+// that reads a file.
 
 import type { Eid } from '@yaks/graph'
 

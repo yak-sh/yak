@@ -101,8 +101,28 @@ Read options are `@yaks/sql`'s bind options, such as `derived`, `extend`, and
 `base.number: true`, or `{ except: ['entry'] }` for component exclusions.
 
 The root also exports `D1Like`, `Stmt`, `D1Stmt`, `D1Result`, value/row types,
-`bind`/`unbind`, query/gather helpers, shared SQL write builders, and graph
-`Storage`/`Tx` types. See [mod.ts](./mod.ts) for the complete list.
+`bind`/`unbind`, query/gather helpers, shared SQL write builders, graph
+`Storage`/`Tx` types, and the secrets vault below. See [mod.ts](./mod.ts) for
+the complete list.
+
+## Secrets
+
+`d1Vault(db, key)` keeps a graph's secrets in D1, in two tables it creates on
+first use: `yak_vault` holds each secret, and the salt its sentinels are hashed
+under, encrypted with AES-GCM under `key`; `yak_vault_lock` holds the leases
+that make a read, a change and its write back one step across isolates. It meets
+[@yaks/secrets](../secrets)' vault by shape without importing it:
+
+```ts
+import { d1Vault } from '@yaks/d1'
+
+// let vault = d1Vault(env.DB, key) // a CryptoKey for AES-GCM
+// graph({ storage, vocab, plugins: [secrets(vault)] }) // @yaks/secrets
+```
+
+The database, its Time Travel history and its exports hold only ciphertext; the
+key is the caller's to keep. A lease stands for 30 seconds if its holder dies
+holding it, and a caller waits as long for one before it gives up.
 
 ## Async, with sync pass-through
 

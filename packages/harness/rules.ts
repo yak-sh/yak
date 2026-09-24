@@ -16,14 +16,14 @@ import { projects } from '@yaks/project'
 import { tasks } from '@yaks/task'
 import type { Driver } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
-import { secrets, vaultOf } from '@yaks/secrets'
+import { secrets, type Vault } from '@yaks/secrets'
 
 /** Addressed bodies, transcripts, edges, tasks, the portfolio they are filed
  * in, the programs a session runs, and the secrets it signs in with, kept in
- * the vault beside the database. The blob tables are created first — a plugin
- * may create what it needs through the caller's connection. */
+ * the host's vault. The blob tables are created first — a plugin may create
+ * what it needs through the caller's connection. */
 export let rules = (
-  host: { vocab: Vocab; sql: Driver; config: { db?: string } },
+  host: { vocab: Vocab; sql: Driver; vault: Vault },
 ): Plugin[] => {
   for (let statement of blobSchema()) host.sql.exec(statement)
   return [
@@ -33,6 +33,6 @@ export let rules = (
     tasks(),
     projects(host.vocab, taskMarks),
     processes(),
-    secrets(vaultOf(host.config)),
+    secrets(host.vault),
   ]
 }

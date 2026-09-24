@@ -29,7 +29,7 @@ input.
 | `@yaks/harness`       | `open`, `dbPath`, `agent`, `seed`, `harnessTools`, `graphTools`, `parametersOf`, CLI `tools`/`own`, `App`, `tui`, `changes`, `panels`, and their types |
 | `@yaks/harness/bin`   | Command-line entry point                                                                                                                               |
 | `@yaks/harness/vocab` | Vocabulary documents, `vocab`, schema `keywords`, and computed properties via `derived`                                                                |
-| `@yaks/harness/rules` | `rules({vocab, sql})`, the graph plugins used by the harness                                                                                           |
+| `@yaks/harness/rules` | `rules({vocab, sql, vault})`, the graph plugins used by the harness                                                                                    |
 | `@yaks/harness/tools` | `runs(host)`, implementations of the declared graph tools                                                                                              |
 
 ## Use

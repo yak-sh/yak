@@ -117,17 +117,23 @@ present.
 
 A plugin entry is either a package specifier or an object with `use` and `with`
 fields. Each exported plugin factory receives `(host, options)`. The host
-contains the config, vocabulary, database connection, store, graph, request
-handler, tool runner, duties, process entity, request authentication function,
-and shutdown signal. An entry without `with` receives an empty object. Option
-keys belong to the plugin.
+contains the config, vocabulary, database connection, secrets vault, store,
+graph, request handler, tool runner, duties, process entity, request
+authentication function, and shutdown signal. An entry without `with` receives
+an empty object. Option keys belong to the plugin.
+
+The vault is where [@yaks/secrets](../secrets) keeps what is written through the
+graph: one private file per secret in a `secrets` directory beside the database
+(`~/.yak/secrets` for `~/.yak/yak.db`), or memory for a graph in memory.
+`fileVault` and `vaultOf` ([vault.ts](./vault.ts)) are exported for code that
+opens a graph without `compose`.
 
 At any depth in `with`, an object containing only `{ "secret": "NAME" }` reads
-that secret when the property is accessed: the value written through the graph
-([@yaks/secrets](../secrets)), the 1Password value it is bound to, or else the
-environment variable `NAME`. This keeps secrets out of the JSON file and lets a
-long-running plugin observe a value supplied after startup. A secret nobody
-supplied produces `undefined`; the plugin decides how to handle it.
+that secret when the property is accessed: the value in the vault, the 1Password
+value it is bound to, or else the environment variable `NAME`. This keeps
+secrets out of the JSON file and lets a long-running plugin observe a value
+supplied after startup. A secret nobody supplied produces `undefined`; the
+plugin decides how to handle it.
 
 Plugin factories may omit functionality when configuration is unavailable. Any
 diagnostic behavior, including a `check` tool, belongs to the plugin; the CLI

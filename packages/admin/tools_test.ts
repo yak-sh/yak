@@ -9,7 +9,8 @@ import {
 } from '@std/assert'
 import type { Bundle, Comp, ToolCtx } from '@yaks/graph'
 import { toolsIn } from '@yaks/vocab/tools'
-import { fileVault, secretEid } from '@yaks/secrets'
+import { vaultOf } from '@yaks/cli'
+import { secretEid } from '@yaks/secrets'
 import { CallError } from '@yaks/tools'
 import { ADMIN } from '../../workers/yak/lib/bots.ts'
 import { Refused, sessionName } from './accounts.ts'
@@ -20,7 +21,7 @@ import { adminDoc } from './vocab.ts'
 // opens, and whose remembered account is its own, never this machine's.
 let box = () => {
   let dir = Deno.makeTempDirSync()
-  return { dir, config: { db: `${dir}/yak.db` } }
+  return { dir, vault: vaultOf(`${dir}/yak.db`) }
 }
 
 // What the last verb said on stderr: a banner, a note.
@@ -39,7 +40,7 @@ let ask = async (
   console.error = (line: string) => heard.push(line)
   Deno.env.set('YAKS_HOME', at.dir)
   try {
-    return await runs({ config: at.config })[tool]([], {
+    return await runs(at)[tool]([], {
       args,
       call: 'c1',
       read: o.read ?? (() => []),
@@ -129,9 +130,9 @@ Deno.test('an agent names a platform operation with --admin', async () => {
 })
 
 // One test account, kept in the vault beside the graph.
-let kept = (dir: string, address: string, value: string) => {
+let kept = (at: ReturnType<typeof box>, address: string, value: string) => {
   let name = sessionName(address)
-  fileVault(`${dir}/secrets`).seal(secretEid(name), {
+  at.vault.seal(secretEid(name), {
     name,
     handle: 'h',
     value,
@@ -169,7 +170,7 @@ let listing = (spaces: string[]) =>
 
 let whoami = (spaces: string[]) => {
   let at = box()
-  kept(at.dir, 'ana@bot.yak.sh', 'ana.token')
+  kept(at, 'ana@bot.yak.sh', 'ana.token')
   return answering(() => listing(spaces), async (hit) => {
     try {
       return { hit, said: body(await ask('admin_whoami', {}, { at })) }

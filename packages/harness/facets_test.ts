@@ -27,7 +27,9 @@ Deno.test('the facet subpaths say the harness once, and one declaration reaches 
   // built it with: blobs, transcripts, edges, tasks, the portfolio they are
   // filed in, the programs a session runs, and the secrets it signs in with.
   assertEquals(
-    rules({ vocab: h.vocab, sql: driver(h.db), config: {} }).map((p) => p.name),
+    rules({ vocab: h.vocab, sql: driver(h.db), vault: h.vault }).map((p) =>
+      p.name
+    ),
     [
       '@yaks/blob',
       '@yaks/session',

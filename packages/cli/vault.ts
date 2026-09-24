@@ -1,12 +1,19 @@
-// A vault on a box: one private file per secret in a directory of its own.
+// Where a box keeps its graph's secrets: one private file per secret, in a
+// `secrets` directory beside the database. @yaks/secrets says what a vault is
+// and keeps no storage of its own; this host owns `~/.yak`, so the files are
+// its business, and it hands the vault to every plugin as `host.vault`
+// (./host.ts).
 //
-// The directory sits beside the graph's database and never inside it
-// (./rules.ts `vaultFor`), so the database, its journal, its backups and the
-// text dump a backup commits hold only handles. The discipline is the one a
-// credential file on a shared machine needs: the directory is 0700, every file
-// 0600, a write is a temporary file renamed over the old one so a reader never
-// sees half a secret, and a symlink anywhere is refused rather than followed —
-// the vault is exactly the files it wrote.
+// Beside the database and never inside it, so the database, its journal, its
+// backups and the text dump a backup commits hold only handles. One rule
+// rather than an option, so the plugin sealing a value and the host reading it
+// back for a config can never disagree about where it went. A graph in memory
+// keeps its secrets in memory too, for exactly as long.
+//
+// The discipline is the one a credential file on a shared machine needs: the
+// directory is 0700, every file 0600, a write is a temporary file renamed over
+// the old one so a reader never sees half a secret, and a symlink anywhere is
+// refused rather than followed — the vault is exactly the files it wrote.
 //
 // One file per secret, rather than one file of all of them, so two processes
 // sealing two secrets never write the same file, and deleting a secret is
@@ -14,7 +21,7 @@
 // a snapshot or a host backup; it promises nothing here names them.
 
 import type { Eid } from '@yaks/graph'
-import { type Local, queue, type Sealed } from './vault.ts'
+import { type Local, queue, ramVault, type Sealed } from '@yaks/secrets'
 
 // A secret's id is derived from its name, so it is always a uuid. Anything
 // else never came from this vault, and is never turned into a path.
@@ -126,4 +133,14 @@ export let fileVault = (dir: string): Local => {
         return await fn()
       }),
   }
+}
+
+/** The vault for the graph in the database at `db`: files in a `secrets`
+ * directory beside it, or memory for a graph in memory. Made once per graph
+ * and handed round, so the plugin sealing a value and the code reading it back
+ * hold the same vault — for a graph in memory, the only way they could. */
+export let vaultOf = (db: string): Local => {
+  if (db == ':memory:') return ramVault()
+  let at = db.lastIndexOf('/')
+  return fileVault(`${at < 0 ? '.' : db.slice(0, at) || '/'}/secrets`)
 }

@@ -221,8 +221,9 @@ grouped approximately by function, **not** by dependency order.
 
 - **[@yaks/secrets](./secrets)** — Write a secret through the graph and keep it
   elsewhere: `secret{name, value}` holds a random handle, and the value is
-  sealed into a vault (private files on a box, memory for a graph in memory) as
-  the write commits. Trusted code reads it back by name; a config names one as
+  sealed into the host's vault as the write commits. The package defines the
+  vault and keeps one in memory; a box's files are @yaks/cli's and yaks.app's D1
+  is @yaks/d1's. Trusted code reads it back by name; a config names one as
   `{"secret": "NAME"}`; code that calls out gets its sentinel, the handle hashed
   under the vault's salt.
 
@@ -365,7 +366,8 @@ grouped approximately by function, **not** by dependency order.
   `help`, `login`, `logout` and `apply`; graph tools and application commands
   add others. Multiple processes can share a SQLite WAL database, but writes
   serialize. `yak serve` runs @yaks/api's tool over the same composition rather
-  than being mandatory for local commands.
+  than being mandatory for local commands. The host keeps the graph's secrets in
+  private files beside its database and hands that vault to every plugin.
 
 - **[@yaks/admin](./admin)** — The owner's verbs on yaks.app as `yak admin`
   tools: accounts and their sign-in, standing links, the fee, a space's
@@ -394,7 +396,9 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/d1](./d1)** — the other Cloudflare database, and the one that is only
   reachable asynchronously: the same `Storage`, answered with promises, where a
   transaction buffers its writes and sends them as one atomic `batch()`, because
-  D1 has no interactive transaction to hold open.
+  D1 has no interactive transaction to hold open. It also keeps a vault of
+  secrets in D1, encrypted under a key the caller holds, meeting @yaks/secrets'
+  vault shape without importing it.
 - **[@yaks/sync](./sync)** — Send local graph changes to a server and reconcile
   or revert optimistic updates. Deletion batches wait for the server. Schema
   keywords `sync` and `durable` separately describe delivery and intended

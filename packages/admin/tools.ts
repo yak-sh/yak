@@ -29,7 +29,7 @@
 import { fileURLToPath } from 'node:url'
 import type { Bundle, ToolCtx } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import { type Local, sealed, unsealed, vaultOf } from '@yaks/secrets'
+import { type Local, sealed, unsealed } from '@yaks/secrets'
 import { CallError } from '@yaks/tools'
 import { ADMIN, BOT, isTestAddress } from '../../workers/yak/lib/bots.ts'
 import {
@@ -202,11 +202,11 @@ type Verb = (
 ) => Promise<Bundle[]> | Bundle[]
 
 /** The implementations of the tools ./vocab.json declares. */
-export let runs = (host: { config: { db?: string } }): Runs => {
+export let runs = (host: { vault: Local }): Runs => {
   let verb = (run: Verb) => async (_b: Bundle[], ctx: ToolCtx) => {
     let keep: Bundle[] = []
     try {
-      return [...await run(ctx, vaultOf(host.config), keep), ...keep]
+      return [...await run(ctx, host.vault, keep), ...keep]
     } finally {
       renewing(() => {})
     }

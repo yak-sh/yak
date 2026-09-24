@@ -21,7 +21,7 @@
 // as itself, and the assignment below is what proves the parameter binds.
 
 import type { D1Like, D1Result, D1Value, Row, Stmt } from './d1.ts'
-import { storage } from './mod.ts'
+import { d1Vault, type D1Vault, storage } from './mod.ts'
 import type { Vocab } from '@yaks/vocab'
 import type { Storage } from '@yaks/graph'
 
@@ -40,3 +40,5 @@ let _rows: Row[] = _result.results
 // And the entry point, called the way a Worker calls it — implementing the
 // `Storage` interface @yaks/graph applies changes through.
 let _store = (vocab: Vocab): Storage => storage(db, vocab)
+// The vault over the same binding.
+let _vault = (key: CryptoKey): D1Vault => d1Vault(db, key)

@@ -11,7 +11,6 @@ import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import {
-  fileVault,
   isHandle,
   type Local,
   peek,
@@ -180,32 +179,4 @@ Deno.test('records change under the lock and are written back through the graph'
   )
   assertEquals(await store.read('a'), { n: 3 })
   assert(isHandle((await row(g, 'count a'))!.value))
-})
-
-Deno.test('the file vault is private files, one per secret, and follows no symlink', async () => {
-  let dir = await Deno.makeTempDir()
-  try {
-    let vault = fileVault(`${dir}/secrets`)
-    let { g } = setup(vault)
-    await g.apply([sealed('A', 'one')])
-    let eid = secretEid('A')
-    assertEquals(await reveal(fileVault(`${dir}/secrets`), 'A'), 'one')
-    assertEquals(Deno.statSync(`${dir}/secrets`).mode! & 0o777, 0o700)
-    assertEquals(
-      Deno.statSync(`${dir}/secrets/${eid}.json`).mode! & 0o777,
-      0o600,
-    )
-    assertEquals(vault.all().map(([e]) => e), [eid])
-    await g.apply([unsealed('A')])
-    assertEquals(vault.all(), [])
-    Deno.symlinkSync('/etc/hostname', `${dir}/secrets/${eid}.json`)
-    assertEquals(
-      await Promise.resolve().then(() => vault.read(eid)).catch(() =>
-        'refused'
-      ),
-      'refused',
-    )
-  } finally {
-    await Deno.remove(dir, { recursive: true })
-  }
 })

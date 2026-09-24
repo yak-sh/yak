@@ -30,6 +30,11 @@
  * reference, read from 1Password each time it is used, and a name nothing was
  * written for falls back to the environment variable of that name.
  *
+ * This package says what a vault is ({@link Vault}) and keeps one in memory;
+ * a vault that stores somewhere lives with that storage: private files on a
+ * box in @yaks/cli, a D1 database in @yaks/d1. The host hands its vault to the
+ * plugin (`@yaks/secrets/rules`).
+ *
  * @module
  */
 
@@ -43,8 +48,6 @@ export {
   type Sealed,
   type Vault,
 } from './vault.ts'
-export { fileVault } from './file.ts'
-export { vaultOf } from './home.ts'
 export { isOpRef, type OpRead, opRead } from './op.ts'
 export {
   peek,

@@ -96,8 +96,9 @@ import {
   until,
   type Watch,
 } from '@yaks/effects'
-import { type Local, peek, vaultOf, warm } from '@yaks/secrets'
+import { type Local, peek, warm } from '@yaks/secrets'
 import { type Config, given, type Options, used } from './config.ts'
+import { vaultOf } from './vault.ts'
 
 export {
   type Config,
@@ -122,6 +123,10 @@ export type Host = {
   vocab: Vocab
   storage: Store
   sql: Driver
+  /** where this graph's secrets are kept (./vault.ts): private files beside
+   * its database, or memory for a graph in memory — what @yaks/secrets seals
+   * into and a config's `{"secret": "NAME"}` is read from */
+  vault: Local
   /** every property the store reads through an expression rather than as
    * stored, keyed `comp.prop` — a @yaks/blob body resolves its address to its
    * text — so a plugin reading SQL directly reads what the store reads */
@@ -482,10 +487,10 @@ export let compose = async (
 ): Promise<Served> => {
   let path = dbOf(config)
   let plugins = config.plugins ?? []
-  // Where this graph's secrets are kept (@yaks/secrets `vaultOf`), and every
+  // Where this graph's secrets are kept (./vault.ts), and every
   // value bound to 1Password read once now, so an option naming one has it
   // the first time a factory looks.
-  let vault = vaultOf(config)
+  let vault = vaultOf(path)
   await warm(vault)
   let got = await Promise.all(
     plugins.map(async (plug) =>
@@ -599,6 +604,7 @@ export let compose = async (
       config,
       vocab,
       sql,
+      vault,
       derived,
       me: selfEid(),
       who: (request) => authenticate(request),

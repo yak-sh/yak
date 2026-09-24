@@ -39,6 +39,11 @@
  * cannot be enrolled in a batch that has not been sent. See the README's
  * "The transaction" for exactly what that costs and when it matters.
  *
+ * ## Secrets
+ * {@link d1Vault} keeps a graph's secrets in D1, each value encrypted under a
+ * key the caller holds. It meets @yaks/secrets' vault by shape, without this
+ * package importing it.
+ *
  * ## Where it sits
  * One of three interchangeable adapters behind the same seam:
  * **@yaks/d1** (this package, async), {@link
@@ -75,4 +80,5 @@ export {
   upsertSql,
 } from '@yaks/sqlite'
 export { storage, type Store } from './store.ts'
+export { type D1Vault, d1Vault, type Sealed } from './vault.ts'
 export type { Storage, Tx } from '@yaks/graph'
