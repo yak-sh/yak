@@ -36,15 +36,26 @@ instead; it was reverted the same day (M-37262).
 
 The dashboard settings, in full (Workers & Pages → `yak` → Settings → Builds):
 
-| setting                 | value                                                                        |
-| ----------------------- | ---------------------------------------------------------------------------- |
-| Repository              | `yak-sh/yak` (Cloudflare GitHub App)                                         |
-| Production branch       | `main`                                                                       |
-| Root directory          | `workers/yak`                                                                |
-| Build command           | `../../bin/build-yak`                                                        |
-| Deploy command          | `../../bin/build-yak deploy`                                                 |
-| Build watch paths       | `workers/yak/*`, `packages/*`                                                |
-| Non-production branches | build only, no deploy — preview URLs do not apply to a Durable Object Worker |
+| setting                 | value                                    |
+| ----------------------- | ---------------------------------------- |
+| Repository              | `yak-sh/yak` (Cloudflare GitHub App)     |
+| Production branch       | `main`                                   |
+| Root directory          | `workers/yak`                            |
+| Build command           | `../../bin/build-yak`                    |
+| Deploy command          | `../../bin/build-yak deploy`             |
+| Build watch paths       | `workers/yak/*`, `packages/*`            |
+| Non-production branches | build only; previews off for now (below) |
+
+Worker Previews give a branch its own URL, and since Cloudflare's 2026-09-22
+launch each preview gets its own Durable Object namespace
+(https://developers.cloudflare.com/workers/previews/). They are off for now.
+Turning them on for `yak` means a `previews` block in wrangler.toml and
+`npx wrangler preview` (Wrangler 4.135 or later), and these hold for us: D1, R2
+and KV bind by id, so a preview shares production's rows and objects unless it
+names its own; service bindings call the production Worker; queue consumers and
+cron triggers stay on production, so no job or build alert runs in a preview;
+and a preview is one hostname, while yaks.app serves each space at
+`<space>.<APEX>`, so spaces need a wildcard below the preview's hostname.
 
 A push outside the watch paths deploys nothing: no build check, no version, and
 so nothing for the gate's `deploy time` step to measure — it says so and the
@@ -175,12 +186,13 @@ already hold them (staging: the `[env.staging]` copies, `yak-*-staging` names).
 
 ## Staging (yaks.fyi)
 
-`yak-staging` serves `yaks.fyi` and `*.yaks.fyi` with its own stores, app
-workers, buckets, memories, OAuth grants and analytics. Staging data is
-disposable. The same Workers Builds run on `main` deploys production first, then
-staging; a staging failure marks the build red and leaves production deployed.
-The individual doors are `deno task deploy:yak-staging`,
-`deno task dev:yak-staging`, and `deno task verify:yak --staging`.
+Staging exists to test billing against Stripe's sandbox. `yak-staging` serves
+`yaks.fyi` and `*.yaks.fyi` with its own stores, app workers, buckets, memories,
+OAuth grants and analytics. Staging data is disposable. The same Workers Builds
+run on `main` deploys production first, then staging; a staging failure marks
+the build red and leaves production deployed. The individual doors are
+`deno task deploy:yak-staging`, `deno task dev:yak-staging`, and
+`deno task verify:yak --staging`.
 
 Before the first deploy, run `bin/yak-staging-init` on the owner’s box, paste
 its OAuth KV id into the staging `OAUTH_KV` binding, and set the listed secrets
