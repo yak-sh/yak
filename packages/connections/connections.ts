@@ -40,7 +40,6 @@ import {
   OAuthError,
   type Provider,
 } from '@yaks/oauth'
-import { and, eq, list as among, present } from '@yaks/query'
 import {
   records,
   reveal,
@@ -119,7 +118,12 @@ let comp = (b: Bundle | undefined, name: string): Comp =>
 
 let strs = (v: unknown): string[] => Array.isArray(v) ? v.map(String) : []
 
-let one = (eids: Eid[]) => eids.length == 1 ? eids[0] : among(...eids)
+// Reads are filter lines, the form every door to a graph takes, so these verbs
+// run over a graph in this process or one behind HTTP alike (yaks.app's
+// directory). What a line here spells is an eid or a word of this package's,
+// never a name somebody chose, which a line would have to quote: a connection's
+// integration is compared here, after the read.
+let any = (eids: Eid[]) => eids.join(',')
 
 let nameOf = (b: Bundle): string => String(comp(b, SECRET).name)
 
@@ -147,7 +151,7 @@ let held = async (read: Read, eid: Eid): Promise<Bundle> => {
 
 // The `uses` links at one end, and the far end of one.
 let links = (read: Read, at: 'from' | 'to', eid: Eid) =>
-  read(and(eq(`${EDGE}.${at}`, eid), present(USES)))
+  read(`.${EDGE}.${at}=${eid}&.${USES}!`)
 let far = (l: Bundle, at: 'from' | 'to'): Eid =>
   String(comp(l, EDGE)[at == 'from' ? 'to' : 'from'])
 
@@ -163,10 +167,8 @@ let using = async (
 ): Promise<Bundle | undefined> => {
   let to = await ends(read, 'from', app)
   if (!to.length) return undefined
-  let found = await read(
-    and(eq('eid', one(to)), eq(`${CONNECTION}.integration`, integration)),
-  )
-  return found[0]
+  let found = await read(`.eid=${any(to)}&.${CONNECTION}`)
+  return found.find((b) => comp(b, CONNECTION).integration == integration)
 }
 
 let same = (a: string[], b: string[]) =>
@@ -213,10 +215,10 @@ export let need = async (
 /** A space's or a person's connections, and the `uses` links from the apps
  * that use them. */
 export let list = async (read: Read, owner: Eid): Promise<Bundle[]> => {
-  let owned = await read(and(eq(`${CONNECTION}.owner`, owner)))
+  let owned = await read(`.${CONNECTION}.owner=${owner}`)
   if (!owned.length) return []
   let links = await read(
-    and(eq(`${EDGE}.to`, one(owned.map((b) => b.entity.eid))), present(USES)),
+    `.${EDGE}.to=${any(owned.map((b) => b.entity.eid))}&.${USES}!`,
   )
   return [...owned, ...links]
 }
@@ -227,10 +229,11 @@ export let list = async (read: Read, owner: Eid): Promise<Bundle[]> => {
 export let used = async (c: Ctx, app: Eid): Promise<Resolved[]> => {
   let out = await links(c.graph.read, 'from', app)
   if (!out.length) return []
-  let found = await c.graph.read(and(
-    eq('eid', one(out.map((l) => far(l, 'from')))),
-    eq(`${CONNECTION}.status`, 'connected' satisfies Status),
-  ))
+  let found = await c.graph.read(
+    `.eid=${
+      any(out.map((l) => far(l, 'from')))
+    }&.${CONNECTION}.status=${'connected' satisfies Status}`,
+  )
   let all = await Promise.all(found.map(async (connection) => ({
     connection,
     link: out.find((l) => far(l, 'from') == connection.entity.eid)!,
