@@ -45,6 +45,7 @@ import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { pilled, standing } from './gallery.ts'
 import { checkout, portal } from './billing.ts'
+import { connecting, connectionsOf } from './connections.ts'
 import {
   buying,
   connect,
@@ -1266,6 +1267,17 @@ let visits = async (env: Env, apps: App[]): Promise<Visits[] | null> => {
   }
 }
 
+// What a page arrived back from says: a form saved, or a service's sign-in
+// finished or not (connections.ts `callback`).
+let returned = (q: URLSearchParams) =>
+  q.has('saved')
+    ? { say: 'Saved.', no: false }
+    : q.has('connected')
+    ? { say: 'Connected.', no: false }
+    : q.has('refused')
+    ? { say: "The sign-in didn't finish. Try connecting again.", no: true }
+    : null
+
 // The public app list and the owner's account share the same visibility
 // rules. Account sections stay independent of whichever app serves `/`.
 let index = async (
@@ -1347,13 +1359,23 @@ let index = async (
     fee: rate(await feeOf(dir)),
     name: owner ? await dir.nameAt(owner) ?? '' : '',
     agents: owner ? await (await identity()).agents(env, owner) : [],
+    // What the space's apps call out through, and what the owner connected
+    // for themselves (connections.ts), read only for the page that shows it.
+    connections: owner && view == 'connections'
+      ? await connectionsOf(
+        env,
+        space,
+        owner,
+        all,
+        await (await identity()).services(env, owner),
+      )
+      : undefined,
     // Something is built here while an app sits in the trash: its store is
     // named for this address and its files live under it, so the address
     // stays put until the trash is empty (T-32576).
     fixed: !!here.length,
-    say: said?.say ??
-      (new URL(req.url).searchParams.has('saved') ? 'Saved.' : ''),
-    no: said?.no,
+    say: said?.say ?? returned(new URL(req.url).searchParams)?.say ?? '',
+    no: said?.no ?? returned(new URL(req.url).searchParams)?.no,
   }, env)
 }
 
@@ -1414,6 +1436,15 @@ let saved = async (
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
   if (who.role != 'owner' || !who.person) return nothingHere(env)
   let form = await req.formData().catch(() => new FormData())
+  // The connections page's buttons (connections.ts): each is one form with a
+  // `do`, answered with the page saying what came of it, or sent on to a
+  // service to sign in there.
+  if (form.has('do')) {
+    let said = await connecting(req, env, space, who, form)
+    return said instanceof Response
+      ? said
+      : index(req, env, dir, space, said, 'connections')
+  }
   if (form.get('billing') == 'checkout') return checkout(env, req, space)
   if (form.get('billing') == 'portal') return portal(env, req, space)
   // The other button on this page: one app out of the trash (erase.ts,

@@ -7,7 +7,7 @@ import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
 import { state } from './harness.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { Pending } from './writes.ts'
+import { keyed, Pending } from './writes.ts'
 
 let NAME = 'ada/notes'
 
@@ -93,4 +93,23 @@ Deno.test('a replay that no longer applies is kept as refused, and the rest go o
     seq: 1,
     state: 'refused',
   }])
+})
+
+Deno.test('a body carrying a key is never kept', () => {
+  let key = { entity: { eid: 's' }, secret: { name: 'k', value: 'sk-1' } }
+  let call = {
+    entity: { eid: 'c' },
+    call: { args: JSON.stringify({ bundles: [key] }) },
+  }
+  assertEquals(
+    [
+      [key],
+      { entities: [key] },
+      [call],
+      [{ entity: { eid: 's' }, secret: { name: 'k' } }],
+      [titled('n1', 'one')],
+      'not json, secret',
+    ].map((b) => keyed(typeof b == 'string' ? b : JSON.stringify(b))),
+    [true, true, true, false, false, true],
+  )
 })

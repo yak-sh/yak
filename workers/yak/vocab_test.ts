@@ -275,6 +275,9 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       'tool',
       'content',
       'output',
+      // @yaks/hook — a webhook a service sent through one of the space's
+      // connections (connections.ts)
+      'hook',
       // the app's own
       'recipe',
       'cooked',

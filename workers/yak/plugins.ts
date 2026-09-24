@@ -11,6 +11,7 @@
 // This module is nothing but the list, on purpose: everything it imports is a
 // domain, and everything that imports it is a host, so the one file that knows
 // both sides knows nothing else.
+import { connectionsPlugin } from './connections.ts'
 import { gitPlugin } from './git.ts'
 import { memoryPlugin } from './memory.ts'
 import { meterPlugin } from './meter.ts'
@@ -28,4 +29,5 @@ export let PLUGINS: Plugin[] = [
   outboxPlugin,
   seoPlugin,
   gitPlugin,
+  connectionsPlugin,
 ]

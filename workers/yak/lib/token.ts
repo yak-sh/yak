@@ -60,6 +60,7 @@ export type Use =
   | 'review' // a gallery review ticket (gallery.ts)
   | 'invite' // an invitation's accept link (workers/yak/invite.ts)
   | 'page' // a sandboxed app's page speaking to its own API (installed.ts)
+  | 'connect' // a connection's sign-in, on its way back (connections.ts)
 
 let HMAC = { name: 'HMAC', hash: 'SHA-256' }
 

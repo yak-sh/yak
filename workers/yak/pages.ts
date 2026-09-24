@@ -10,6 +10,7 @@
 
 import type { Frame } from './build.ts'
 import type { Agent } from './connected.ts'
+import type { Connections, Shown } from './connections.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icon, type IconName } from './icons.ts'
 import { esc } from './html.ts'
@@ -614,6 +615,7 @@ export type SpacePage = {
   say?: string
   no?: boolean
   view?: ManageView
+  connections?: Connections
 }
 
 let deskCss = `
@@ -670,6 +672,14 @@ let deskCss = `
 .Desk_Trash p { color: var(--ink) }
 .Desk_Trash small { display: block; color: var(--soft-ink) }
 .Desk .Desk_Trash { max-width: none; margin: 0 }
+.Connection_Head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem .75rem; margin: 0 0 .5rem }
+.Connection_Head h2 { margin: 0 }
+.Connection_Status { font-size: .85rem; font-weight: 700; color: var(--soft-ink) }
+.Connection_Status-connected { color: var(--accent) }
+.Connection_Status-needed, .Connection_Status-broken { color: var(--warn) }
+.Desk .Connection_Do { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; max-width: none; margin: 1rem 0 0 }
+.Connection_Do .Field { flex: 1 1 14rem }
+.Connection_Do + .Connection_Do { margin-top: .6rem }
 .Desk_Skip { position: absolute; top: -5rem; left: 1rem; padding: .6rem 1rem; background: var(--paper); z-index: 1 }
 .Desk_Skip:focus { top: 1rem }
 @media (max-width: 700px) {
@@ -693,6 +703,7 @@ let deskCss = `
 let navIcons = {
   apps: 'layout-grid',
   connect: 'bot',
+  connections: 'plug',
   visits: 'chart-no-axes-column-increasing',
   selling: 'credit-card',
   billing: 'credit-card',
@@ -718,7 +729,9 @@ ${icon(navIcons[key])}${label}${
     url(env, '/yaks-app.png')
   }" width="36" height="36" alt="">yaks.app</a>
 <nav class="SideNav" aria-label="Manage your apps">
-${link('apps', 'Apps')}${link('connect', 'Agents')}<hr>
+${link('apps', 'Apps')}${link('connect', 'Agents')}${
+    link('connections', 'Connections')
+  }<hr>
 ${link('visits', 'Visits')}${at.sell ? link('selling', 'Selling') : ''}
 ${link('billing', 'Billing')}${link('settings', 'Settings')}${
     link('trash', 'Trash')
@@ -868,11 +881,136 @@ let trash = (at: SpacePage) =>
     }</section>`
     : '<section class="Desk_Empty"><h2>Trash is empty</h2></section>'
 
+// A sentence out of a lowercase line: what a failed seal wrote beside it.
+let sentence = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1) +
+  (/[.!?]$/.test(text) ? '' : '.')
+
+let STATUS = {
+  needed: 'Needs connecting',
+  connected: 'Connected',
+  broken: 'Needs reconnecting',
+}
+
+// One connection: whose it is, which apps use it and where its key may go,
+// whether its key is still being saved or could not be, and what to do next.
+let connection = (c: Shown, on: boolean) => {
+  let form = (inner: string) =>
+    `<form class="Connection_Do" method="post" action="${
+      managePath('connections')
+    }"><input type="hidden" name="connection" value="${
+      esc(c.eid)
+    }">${inner}</form>`
+  let keyForm = (label: string) =>
+    form(
+      `<input class="Field" name="key" type="password" autocomplete="off" spellcheck="false" aria-label="${label} for ${
+        esc(c.integration)
+      }" placeholder="${label}" required>
+<button class="Button" type="submit" name="do" value="key">Save key</button>`,
+    )
+  let open = c.status != 'connected' || !!c.failed
+  let act = !on && c.keyed
+    ? ''
+    : c.keyed
+    ? open
+      ? keyForm('Paste the key')
+      : `<details class="Note"><summary>Replace the key</summary>${
+        keyForm('Paste the new key')
+      }</details>`
+    : open
+    ? form(
+      '<button class="Button" type="submit" name="do" value="signin">Connect</button>',
+    )
+    : ''
+  let drop = c.status == 'needed' && !c.apps.length ? '' : form(
+    `<button class="Button Bill_Go-quiet" type="submit" name="do" value="disconnect">${
+      c.status == 'needed' ? 'Remove' : 'Disconnect'
+    }</button>`,
+  )
+  return `<section class="Card Connection"><header class="Connection_Head"><h2>${
+    esc(c.integration)
+  }</h2><span class="Connection_Status Connection_Status-${c.status}">${
+    STATUS[c.status]
+  }${c.account ? ` as ${esc(c.account)}` : ''}</span><span class="Apps_Tag">${
+    c.own ? 'Yours' : 'This space'
+  }</span></header>
+<p>${
+    c.apps.length
+      ? `Used by ${c.apps.map(esc).join(', ')}.`
+      : 'No app uses it yet.'
+  }${
+    c.hosts.length
+      ? ` Its key is only ever sent to ${
+        c.hosts.map((h) => `<code>${esc(h)}</code>`).join(', ')
+      }.`
+      : ''
+  }</p>${
+    c.failed
+      ? `<p class="Say Say-no" role="status">${esc(sentence(c.failed))}</p>`
+      : c.saving
+      ? `<p class="Say" role="status">${esc(sentence(c.saving))}</p>`
+      : ''
+  }${act}${drop}</section>`
+}
+
+// The page: what the apps asked for and what is connected, the services that
+// hold a grant, and a box for a key no app asked for yet.
+let connections = (at: SpacePage) => {
+  let c = at.connections ?? { on: false, list: [], services: [], built: [] }
+  let first = [...c.list].sort((a, b) =>
+    Number(a.status == 'connected' && !a.failed) -
+    Number(b.status == 'connected' && !b.failed)
+  )
+  let add = `<form class="Card Card-sectioned" method="post" action="${
+    managePath('connections')
+  }">
+<header class="Card_Header"><h2>Add a key</h2></header>
+<div class="Card_Body Desk_Profile"><p>For a service your apps call that isn't listed above. Your apps use it through yaks.app, which keeps the key and sends it only to the addresses you list.</p>
+<label for="new-name">Service</label><input class="Field" id="new-name" name="integration" maxlength="60" placeholder="Weather API" required>
+<label for="new-hosts">Where it may be sent</label><input class="Field" id="new-hosts" name="hosts" autocomplete="off" spellcheck="false" placeholder="api.example.com" required>
+<label for="new-key">Key</label><input class="Field" id="new-key" name="key" type="password" autocomplete="off" spellcheck="false" required>
+</div><footer class="Card_Footer"><button class="Button" type="submit" name="do" value="add">Save key</button></footer></form>`
+  return `${
+    c.on
+      ? ''
+      : `<section class="Card"><h2>Keys can't be saved here yet</h2><p>This server has nowhere safe to keep a key, so connecting is switched off.</p></section>`
+  }${
+    c.list.length || c.services.length
+      ? ''
+      : `<section class="Desk_Empty"><h2>No connections yet</h2><p>When an app needs an outside service, like a calendar or an API key, it shows up here for you to connect.</p></section>`
+  }${first.map((one) => connection(one, c.on)).join('')}${
+    c.services.map((s) =>
+      `<section class="Card Connection"><header class="Connection_Head"><h2>${
+        esc(s.name)
+      }</h2><span class="Connection_Status Connection_Status-connected">Connected</span></header><p>Signed in with your yaks.app account on ${
+        esc(day(new Date(s.connectedAt * 1000).toISOString()))
+      }.</p></section>`
+    ).join('')
+  }${
+    c.built.map((i) =>
+      `<form class="Card Connection" method="post" action="${
+        managePath('connections')
+      }"><header class="Connection_Head"><h2>${
+        esc(i.name)
+      }</h2></header><input type="hidden" name="integration" value="${
+        esc(i.name)
+      }"><div class="Connection_Do">${
+        i.keyed
+          ? `<input class="Field" name="key" type="password" autocomplete="off" aria-label="Key for ${
+            esc(i.name)
+          }" placeholder="Paste the key" required><button class="Button" type="submit" name="do" value="add">Save key</button>`
+          : '<button class="Button" type="submit" name="do" value="add">Connect</button>'
+      }</div></form>`
+    ).join('')
+  }${c.on ? add : ''}`
+}
+
 let desk = (at: SpacePage, env: Host) => {
   let view = at.view ?? 'apps'
   let titles = {
     apps: 'Your apps',
     connect: 'Your agents',
+    connections: 'Connections',
     new: 'New app',
     visits: 'Visits',
     selling: 'Selling',
@@ -912,6 +1050,7 @@ let desk = (at: SpacePage, env: Host) => {
     ) + billing
   }
   if (view == 'trash') body = trash(at)
+  if (view == 'connections') body = connections(at)
   return shell(
     env,
     `${titles[view]} · ${esc(at.space)}`,

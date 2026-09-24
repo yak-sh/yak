@@ -59,6 +59,7 @@ import { blobKeywords } from '@yaks/blob'
 import { docDoc } from '@yaks/doc'
 import { EDGE_URI, edgeDoc, edgeKeywords } from '@yaks/edge'
 import { gitDoc } from '@yaks/git'
+import { hookDoc } from '@yaks/hook'
 import { idDoc, idKeywords } from '@yaks/id'
 import { keyDoc, keyKeywords } from '@yaks/key'
 import { mailDoc } from '@yaks/mail'
@@ -553,6 +554,7 @@ export let coreDocs: VocabDoc[] = storeDocs([
   appsDoc,
   mailDoc,
   invocationDoc,
+  hookDoc,
 ])
 
 // ---- the platform's own store (T-33814) -------------------------------------

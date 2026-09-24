@@ -9,7 +9,7 @@
 // straight to the vault, and nothing that reads the graph — an agent, a sync, a
 // backup — ever holds more than the handle. Being one entity is what makes its
 // end one: deleting a connection, or the space or person it belongs to, drops
-// its credential from the vault in the same transaction.
+// its credential from the vault once the change commits.
 //
 // The secret's name is `connection:` and a random id, and the entity's id is
 // derived from that name (@yaks/secrets `secretEid`), so a refreshed token
@@ -122,8 +122,10 @@ let strs = (v: unknown): string[] => Array.isArray(v) ? v.map(String) : []
 // run over a graph in this process or one behind HTTP alike (yaks.app's
 // directory). What a line here spells is an eid or a word of this package's,
 // never a name somebody chose, which a line would have to quote: a connection's
-// integration is compared here, after the read.
+// integration is compared here, after the read. A line answers the components
+// it names, so one that needs the rest of an entity asks for them (`*`).
 let any = (eids: Eid[]) => eids.join(',')
+let ALL = '&*'
 
 let nameOf = (b: Bundle): string => String(comp(b, SECRET).name)
 
@@ -144,14 +146,14 @@ let fresh = (owner: Eid, integration: string, scopes: string[]): Bundle => {
 
 // The connection as the graph holds it, or a refusal naming it.
 let held = async (read: Read, eid: Eid): Promise<Bundle> => {
-  let [b] = await read(`.eid=${eid}&.${CONNECTION}`)
+  let [b] = await read(`.eid=${eid}&.${CONNECTION}${ALL}`)
   if (!b) throw new Error(`no connection ${eid}`)
   return b
 }
 
 // The `uses` links at one end, and the far end of one.
 let links = (read: Read, at: 'from' | 'to', eid: Eid) =>
-  read(`.${EDGE}.${at}=${eid}&.${USES}!`)
+  read(`.${EDGE}.${at}=${eid}&.${USES}!${ALL}`)
 let far = (l: Bundle, at: 'from' | 'to'): Eid =>
   String(comp(l, EDGE)[at == 'from' ? 'to' : 'from'])
 
@@ -215,10 +217,10 @@ export let need = async (
 /** A space's or a person's connections, and the `uses` links from the apps
  * that use them. */
 export let list = async (read: Read, owner: Eid): Promise<Bundle[]> => {
-  let owned = await read(`.${CONNECTION}.owner=${owner}`)
+  let owned = await read(`.${CONNECTION}.owner=${owner}${ALL}`)
   if (!owned.length) return []
   let links = await read(
-    `.${EDGE}.to=${any(owned.map((b) => b.entity.eid))}&.${USES}!`,
+    `.${EDGE}.to=${any(owned.map((b) => b.entity.eid))}&.${USES}!${ALL}`,
   )
   return [...owned, ...links]
 }
@@ -232,7 +234,7 @@ export let used = async (c: Ctx, app: Eid): Promise<Resolved[]> => {
   let found = await c.graph.read(
     `.eid=${
       any(out.map((l) => far(l, 'from')))
-    }&.${CONNECTION}.status=${'connected' satisfies Status}`,
+    }&.${CONNECTION}.status=${'connected' satisfies Status}${ALL}`,
   )
   let all = await Promise.all(found.map(async (connection) => ({
     connection,

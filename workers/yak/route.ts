@@ -15,6 +15,7 @@ export let MANAGE = '/_yaks'
 export type ManageView =
   | 'apps'
   | 'connect'
+  | 'connections'
   | 'new'
   | 'visits'
   | 'selling'
@@ -27,6 +28,7 @@ export let manageView = (path: string): ManageView | null => {
   let views: ManageView[] = [
     'apps',
     'connect',
+    'connections',
     'new',
     'visits',
     'selling',

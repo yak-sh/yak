@@ -630,6 +630,9 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       'tool',
       'content',
       'output',
+      // @yaks/hook — a webhook a service sent through one of the space's
+      // connections (connections.ts)
+      'hook',
       // the app's own
       'recipe',
     ].sort(),

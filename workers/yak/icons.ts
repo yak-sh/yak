@@ -11,6 +11,7 @@ import {
   ExternalLink,
   type IconNode,
   LayoutGrid,
+  Plug,
   Plus,
   Settings2,
   Trash2,
@@ -19,6 +20,7 @@ import {
 export let icons = {
   'layout-grid': LayoutGrid,
   bot: Bot,
+  plug: Plug,
   'chart-no-axes-column-increasing': ChartNoAxesColumnIncreasing,
   'credit-card': CreditCard,
   'settings-2': Settings2,
