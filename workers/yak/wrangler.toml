@@ -64,9 +64,16 @@ routes = [
 # This is telemetry ABOUT the platform and is not where an app's failures go:
 # those are `exception` entities in the app's own store, where the person's
 # agent reads them (unseen.ts, V-32361). A log nobody opens is not a report.
+#
+# Logs and traces both go on to Sentry's OTLP endpoints for `yaks-app`, through
+# the destinations `sentry-logs` and `sentry-traces`. Those are account config,
+# not repo config: Workers & Pages → Observability → Destinations, holding each
+# endpoint and its `x-sentry-auth` header. Staging names neither, so its
+# telemetry stays out of the production project.
 [observability.logs]
 enabled = true
 invocation_logs = true
+destinations = ["sentry-logs"]
 
 # Workers traces: Cloudflare's own spans for every fetch, R2 read and Durable
 # Object call, nested across the Store hop. The Sentry SDK's spans cannot say
@@ -74,11 +81,6 @@ invocation_logs = true
 # Store's synchronous SQL reads 0 ms and no span covers the hop itself. No
 # head_sampling_rate: 20M events a month are included, and past that Cloudflare
 # samples, which is what we want rather than paying for more.
-#
-# `sentry-traces` sends them on to Sentry's OTLP endpoint for `yaks-app`. It is
-# account config, not repo config: Workers & Pages → Observability →
-# Destinations, holding the endpoint and the `x-sentry-auth` header. Staging
-# names no destination, so its traces stay out of the production project.
 [observability.traces]
 enabled = true
 destinations = ["sentry-traces"]
