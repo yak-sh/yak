@@ -1,6 +1,7 @@
 import type { Comp } from '@yaks/graph'
 import { assertEquals, assertRejects } from '@std/assert'
-import { instructionFiles, promptEntry } from './prompts.ts'
+import { promptEntry } from '@yaks/context'
+import { instructionFiles } from '@yaks/context/host'
 import { input } from '../openai/responses.ts'
 
 Deno.test('instruction admission snapshots files in stable ancestor order', async () => {
