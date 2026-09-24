@@ -1,7 +1,7 @@
 // Connected agents render as status rows or compact launch links. Each
 // shape shares its server markup with the browser's refresh template; pages
 // without a list still refresh prompts without touching surrounding inputs.
-import type { Connection, Provider } from './connections.ts'
+import type { Agent, Provider } from './connected.ts'
 import { esc } from './html.ts'
 import { icon } from './icons.ts'
 
@@ -10,47 +10,45 @@ let destinations: Partial<Record<Provider, { href: string; label: string }>> = {
   claude: { href: 'https://claude.ai/new', label: 'Open Claude' },
 }
 
-let row = (connection?: Connection, links = false) => {
-  let link = connection?.provider &&
-      Object.hasOwn(destinations, connection.provider)
-    ? destinations[connection.provider]
+let row = (agent?: Agent, links = false) => {
+  let link = agent?.provider &&
+      Object.hasOwn(destinations, agent.provider)
+    ? destinations[agent.provider]
     : undefined
-  if (links && connection && !link) return ''
-  let open = `<a class="Connections_Open" data-connection-open${
+  if (links && agent && !link) return ''
+  let open = `<a class="Agents_Open" data-agent-open${
     link ? ` href="${link.href}"` : ' hidden'
-  } target="_blank" rel="noopener noreferrer"><span data-connection-action>${
+  } target="_blank" rel="noopener noreferrer"><span data-agent-action>${
     link?.label ?? ''
   }</span>${icon('external-link')}</a>`
-  return links ? `<li>${open}</li>` : `<li class="Connections_Row">
-<div class="Connections_Info"><strong data-connection-name>${
-    esc(connection?.name ?? '')
+  return links ? `<li>${open}</li>` : `<li class="Agents_Row">
+<div class="Agents_Info"><strong data-agent-name>${
+    esc(agent?.name ?? '')
   }</strong>
-<span class="Connections_State">${icon('check')}Connected</span></div>
+<span class="Agents_State">${icon('check')}Connected</span></div>
 ${open}</li>`
 }
 
-export let connectionList = (
-  connections: Connection[],
+export let agentList = (
+  agents: Agent[],
   view: 'rows' | 'links' = 'rows',
 ) =>
-  `<div data-connections${
-    view == 'links' ? ' data-connection-links' : ''
+  `<div data-agents${
+    view == 'links' ? ' data-agent-links' : ''
   } aria-live="polite">
-<ul class="Connections${
-    view == 'links' ? ' Connections-links' : ''
+<ul class="Agents${
+    view == 'links' ? ' Agents-links' : ''
   }" aria-label="Connected agents" data-connected${
-    connections.length ? '' : ' hidden'
-  }>${connections.map((c) => row(c, view == 'links')).join('')}</ul>
-<template data-connection-row>${
-    row(undefined, view == 'links')
-  }</template></div>`
+    agents.length ? '' : ' hidden'
+  }>${agents.map((c) => row(c, view == 'links')).join('')}</ul>
+<template data-agent-row>${row(undefined, view == 'links')}</template></div>`
 
-export let connectionLive = (endpoint: string) =>
+export let agentLive = (endpoint: string) =>
   `<script>(()=>{
-let root=document.querySelector('[data-connections]');
-let links=root?.hasAttribute('data-connection-links');
-let list=root?.querySelector('.Connections');
-let template=root?.querySelector('[data-connection-row]');
+let root=document.querySelector('[data-agents]');
+let links=root?.hasAttribute('data-agent-links');
+let list=root?.querySelector('.Agents');
+let template=root?.querySelector('[data-agent-row]');
 let disconnected=document.querySelector('[data-disconnected]');
 if(!list&&!disconnected)return;
 let destinations=${JSON.stringify(destinations)};
@@ -64,29 +62,29 @@ let refresh=async()=>{
   },{credentials:'same-origin',cache:'no-store',headers:{accept:'application/json'}});
     if(!response.ok)return;
     let data=await response.json();
-    if(!Array.isArray(data.connections)||!data.connections.every(c=>c&&typeof c.name==='string'&&typeof c.id==='string'))return;
+    if(!Array.isArray(data.agents)||!data.agents.every(c=>c&&typeof c.name==='string'&&typeof c.id==='string'))return;
     if(list&&template){
       let rows=document.createDocumentFragment();
-      for(let connection of data.connections){
-        let destination=Object.hasOwn(destinations,connection.provider)?destinations[connection.provider]:null;
+      for(let agent of data.agents){
+        let destination=Object.hasOwn(destinations,agent.provider)?destinations[agent.provider]:null;
         if(links&&!destination)continue;
         let row=template.content.firstElementChild.cloneNode(true);
-        let name=row.querySelector('[data-connection-name]');
-        if(name)name.textContent=connection.name;
-        let link=row.querySelector('[data-connection-open]');
+        let name=row.querySelector('[data-agent-name]');
+        if(name)name.textContent=agent.name;
+        let link=row.querySelector('[data-agent-open]');
         if(destination){
           link.href=destination.href;
           link.hidden=false;
-          link.querySelector('[data-connection-action]').textContent=destination.label;
+          link.querySelector('[data-agent-action]').textContent=destination.label;
         }
         rows.append(row);
       }
       if(list.children.length!==rows.children.length||[...list.children].some((row,i)=>!row.isEqualNode(rows.children[i])))list.replaceChildren(rows);
     }
-    let any=data.connections.length>0;
+    let any=data.agents.length>0;
     document.querySelectorAll('[data-connected]').forEach(el=>{el.hidden=!any});
     document.querySelectorAll('[data-disconnected]').forEach(el=>{el.hidden=any});
-    if(any!==connected)document.querySelectorAll('details[data-connection-setup]').forEach(el=>{el.toggleAttribute('open',!any)});
+    if(any!==connected)document.querySelectorAll('details[data-agent-setup]').forEach(el=>{el.toggleAttribute('open',!any)});
     connected=any;
   }catch{}finally{busy=false}
 };

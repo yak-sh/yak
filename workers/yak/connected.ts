@@ -8,7 +8,7 @@ import type {
 } from '@cloudflare/workers-oauth-provider'
 
 export type Provider = 'chatgpt' | 'claude' | 'claude-code' | 'cursor'
-export type Connection = {
+export type Agent = {
   id: string
   name: string
   provider?: Provider
@@ -62,13 +62,13 @@ let callback = (uri: string | undefined) => {
   return {}
 }
 
-export let connectionsOf = async (
+export let agentsOf = async (
   oauth: Clients,
   person: string,
   now = Math.floor(Date.now() / 1000),
-): Promise<Connection[]> => {
+): Promise<Agent[]> => {
   let clients = new Map<string, Promise<ClientInfo | null | undefined>>()
-  let found = new Map<string, Connection>()
+  let found = new Map<string, Agent>()
   let identify = async (grant: GrantSummary) => {
     let host = callback(grant.redirectUri)
     let provider = host.provider

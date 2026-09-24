@@ -236,7 +236,7 @@ Deno.test('the fixed app address links to the displayed host and emphasizes its 
 
 Deno.test('connected empty library offers a copyable request', async () => {
   let page = await block({
-    connections: [{
+    agents: [{
       id: 'chatgpt',
       provider: 'chatgpt',
       name: 'ChatGPT',
@@ -246,7 +246,7 @@ Deno.test('connected empty library offers a copyable request', async () => {
   assert(/class="[^"]*\bCopy_Go\b/.test(page), page)
   assert(!page.includes('<textarea'), page)
   let built = await block({
-    connections: [{
+    agents: [{
       id: 'chatgpt',
       provider: 'chatgpt',
       name: 'ChatGPT',
@@ -257,9 +257,9 @@ Deno.test('connected empty library offers a copyable request', async () => {
   assert(!/class="[^"]*\bCopy_Go\b/.test(built), built)
   for (let html of [page, built]) {
     let { document } = parseHTML(html)
-    assertEquals(document.querySelector('.Connections'), null)
-    assertEquals(document.querySelector('[data-connection-row]'), null)
-    assertEquals(document.querySelector('[data-connection-name]'), null)
+    assertEquals(document.querySelector('.Agents'), null)
+    assertEquals(document.querySelector('[data-agent-row]'), null)
+    assertEquals(document.querySelector('[data-agent-name]'), null)
     assert(
       document.querySelector('[data-disconnected]')!.hasAttribute('hidden'),
     )
@@ -267,15 +267,15 @@ Deno.test('connected empty library offers a copyable request', async () => {
 })
 
 Deno.test('connected pages show the named client and put setup behind a disclosure', async () => {
-  let connections = [{
+  let agents = [{
     id: 'chatgpt',
     provider: 'chatgpt' as const,
     name: 'ChatGPT',
     connectedAt: 1,
   }]
   for (let view of ['new', 'connect'] as const) {
-    let { document } = parseHTML(await block({ view, connections }))
-    let list = document.querySelector('.Connections')!
+    let { document } = parseHTML(await block({ view, agents }))
+    let list = document.querySelector('.Agents')!
     assertStringIncludes(list.textContent!, 'ChatGPT')
     assertEquals(
       list.querySelector('a')?.getAttribute('href'),
@@ -287,7 +287,7 @@ Deno.test('connected pages show the named client and put setup behind a disclosu
     }
     if (view == 'connect') {
       assert(
-        !document.querySelector('[data-connection-setup]')!.hasAttribute(
+        !document.querySelector('[data-agent-setup]')!.hasAttribute(
           'open',
         ),
       )
@@ -295,7 +295,7 @@ Deno.test('connected pages show the named client and put setup behind a disclosu
   }
   let { document } = parseHTML(await block({ view: 'connect' }))
   assert(
-    document.querySelector('[data-connection-setup]')!.hasAttribute('open'),
+    document.querySelector('[data-agent-setup]')!.hasAttribute('open'),
   )
 })
 
@@ -405,7 +405,7 @@ Deno.test("none of the owner block is anybody else's", async () => {
   let page = await block({
     role: null,
     person: false,
-    connections: [{
+    agents: [{
       id: 'chatgpt',
       provider: 'chatgpt',
       name: 'ChatGPT',

@@ -1293,7 +1293,7 @@ let index = async (
   // Trashed apps appear only in the owner's Trash section.
   let all = here.filter((a) => !a.trashed)
   let mine = all.filter((a) => reads(mode(a.access), who.role))
-  // Account details are the owner's alone; connection status comes from the
+  // Account details are the owner's alone; the connected agents come from the
   // OAuth provider rather than a second record of the same state.
   let owner = who.role == 'owner' && who.person ? who.person : null
   return spaceIndex({
@@ -1346,7 +1346,7 @@ let index = async (
     paid: new URL(req.url).searchParams.get('paid') == '1',
     fee: rate(await feeOf(dir)),
     name: owner ? await dir.nameAt(owner) ?? '' : '',
-    connections: owner ? await (await identity()).connections(env, owner) : [],
+    agents: owner ? await (await identity()).agents(env, owner) : [],
     // Something is built here while an app sits in the trash: its store is
     // named for this address and its files live under it, so the address
     // stays put until the trash is empty (T-32576).
@@ -1597,13 +1597,13 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // hostname of it answers nothing, and its owner is answered the page that
   // brings it back (`closed` above, T-34431).
   if (space.trashed) return closed(req, env, dir, space)
-  if (url.pathname == `${MANAGE}/connections` && req.method == 'GET') {
+  if (url.pathname == `${MANAGE}/agents` && req.method == 'GET') {
     let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
     let allowed = who.person && who.role == 'owner'
     return Response.json(
       allowed
         ? {
-          connections: await (await identity()).connections(env, who.person!),
+          agents: await (await identity()).agents(env, who.person!),
         }
         : { error: who.person ? 'not_an_owner' : 'not_signed_in' },
       {

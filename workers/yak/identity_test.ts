@@ -31,7 +31,7 @@ import {
 import { COOKIE, sign } from './lib/token.ts'
 import { SENDS } from './signin.ts'
 import { MANAGE, managePath } from './route.ts'
-import type { Connection } from './connections.ts'
+import type { Agent } from './connected.ts'
 
 // Styling and attribute order do not change the sign-in form's contract.
 let emailCard = async (r: Response) => {
@@ -65,7 +65,7 @@ let b64u = (b: ArrayBuffer) =>
     .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 
 slow(
-  'agent connections identify existing grants and belong to the signed-in browser',
+  'agents identify existing grants and belong to the signed-in browser',
   async () => {
     let k = await kernel()
     try {
@@ -77,17 +77,17 @@ slow(
         headers: Record<string, string> = {},
       ) => k.at(host, path, { headers })
       let snapshots = async () => {
-        let found: Connection[][] = []
+        let found: Agent[][] = []
         for (
           let [hostname, path] of [
-            ['yaks.app', '/oauth/connections'],
-            [host, `${MANAGE}/connections`],
+            ['yaks.app', '/oauth/agents'],
+            [host, `${MANAGE}/agents`],
           ]
         ) {
           let res = await at(hostname, path, { cookie: owner.cookie })
           assertEquals(res.status, 200)
           assertEquals(res.headers.get('cache-control'), 'private, no-store')
-          found.push((await res.json()).connections)
+          found.push((await res.json()).agents)
         }
         assertEquals(found[0], found[1])
         return found[0]
@@ -169,31 +169,31 @@ slow(
       ]
       for (
         let [hostname, path] of [
-          ['yaks.app', '/oauth/connections'],
-          [host, `${MANAGE}/connections`],
+          ['yaks.app', '/oauth/agents'],
+          [host, `${MANAGE}/agents`],
         ]
       ) {
         for (let headers of credentials) {
           let res = await at(hostname, path, headers)
           assertEquals(res.status, 401)
           assertEquals(res.headers.get('cache-control'), 'private, no-store')
-          assertEquals((await res.json()).connections, undefined)
+          assertEquals((await res.json()).agents, undefined)
         }
       }
       let other = await signIn(k)
-      let denied = await at(host, `${MANAGE}/connections`, {
+      let denied = await at(host, `${MANAGE}/agents`, {
         cookie: other.cookie,
       })
       assertEquals(denied.status, 403)
       assertEquals(denied.headers.get('cache-control'), 'private, no-store')
-      assertEquals((await denied.json()).connections, undefined)
-      let own = await at('yaks.app', '/oauth/connections', {
+      assertEquals((await denied.json()).agents, undefined)
+      let own = await at('yaks.app', '/oauth/agents', {
         cookie: other.cookie,
       })
-      assertEquals(await own.json(), { connections: [] })
+      assertEquals(await own.json(), { agents: [] })
 
       // Revoking one installation leaves another; removing its last grant
-      // removes the agent on the next read, with no connection cache.
+      // removes the agent on the next read, with no cache of agents.
       for (
         let [client, remaining] of [
           [chatgpt, ['chatgpt', 'claude']],
@@ -674,7 +674,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
   }
 })
 
-// A connection stays connected (T-34416). The owner: "the oauth should never
+// An agent stays connected (T-34416). The owner: "the oauth should never
 // expire" — so a connector holds its door until the person closes it, and the
 // two ways it used to be closed for them are shut: a refresh token with an
 // expiry, and a public client's refresh refused for carrying a `client_secret`
@@ -1374,7 +1374,7 @@ slow('a link signs a person in, once or until it is revoked', async () => {
     )
     assertEquals((them.signed_in as { via: string }).via, 'link')
 
-    // A connection in flight is finished by the link, because the authorize
+    // An authorization in flight is finished by the link, because the authorize
     // request rides inside the seal rather than on the URL.
     let back = 'https://probe.invalid/cb'
     let reg = await k.at('yaks.app', '/oauth/register', {

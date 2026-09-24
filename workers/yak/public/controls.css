@@ -561,20 +561,20 @@
     outline-offset: 3px;
   }
 
-  .Connections {
+  .Agents {
     display: grid;
     gap: var(--half-gap);
     margin: 0 0 var(--gap);
     padding: 0;
     list-style: none;
   }
-  .Connections-links {
+  .Agents-links {
     display: flex;
     flex-wrap: wrap;
     gap: .5rem 1.5rem;
     margin: 0;
   }
-  .Connections_Row {
+  .Agents_Row {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
@@ -586,7 +586,7 @@
     box-shadow: inset 0 1px var(--rim);
     text-align: left;
   }
-  .Connections_Info {
+  .Agents_Info {
     display: grid;
     flex: 1 1 10rem;
     gap: var(--quarter-gap);
@@ -594,15 +594,15 @@
     color: var(--ink);
     overflow-wrap: anywhere;
   }
-  .Connections_State,
-  .Connections_Open {
+  .Agents_State,
+  .Agents_Open {
     display: inline-flex;
     align-items: center;
     gap: var(--quarter-gap);
     color: var(--accent);
     font-size: var(--small);
   }
-  .Connections_Open {
+  .Agents_Open {
     font-weight: 700;
     text-underline-offset: .18em;
     white-space: nowrap;

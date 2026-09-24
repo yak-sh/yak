@@ -1,12 +1,12 @@
 // OAuth grant projection: pagination, expiry, provider identification and
-// duplicate installations, without a Worker or a second connection ledger.
+// duplicate installations, without a Worker or a second ledger of agents.
 import { assertEquals, assertRejects } from '@std/assert'
 import type {
   ClientInfo,
   GrantSummary,
   OAuthHelpers,
 } from '@cloudflare/workers-oauth-provider'
-import { connectionsOf } from './connections.ts'
+import { agentsOf } from './connected.ts'
 
 let grant = (
   clientId: string,
@@ -52,7 +52,7 @@ let provider = (
   return { oauth, looked, users }
 }
 
-Deno.test('connections: all pages, earliest active installation, stable order', async () => {
+Deno.test('agents: all pages, earliest active installation, stable order', async () => {
   let p = provider([
     [
       grant('new-chatgpt', {
@@ -68,7 +68,7 @@ Deno.test('connections: all pages, earliest active installation, stable order', 
       grant('custom', { createdAt: 40 }),
     ],
   ], { custom: 'My agent', expired: 'Gone' })
-  assertEquals(await connectionsOf(p.oauth, 'person', 100), [
+  assertEquals(await agentsOf(p.oauth, 'person', 100), [
     { id: 'chatgpt', provider: 'chatgpt', name: 'ChatGPT', connectedAt: 10 },
     { id: 'claude', provider: 'claude', name: 'Claude', connectedAt: 10 },
     { id: 'custom', name: 'My agent', connectedAt: 40 },
@@ -77,7 +77,7 @@ Deno.test('connections: all pages, earliest active installation, stable order', 
   assertEquals(p.looked, ['custom'])
 })
 
-Deno.test('connections: local and older grants use explicit registered names', async () => {
+Deno.test('agents: local and older grants use explicit registered names', async () => {
   let p = provider([[
     grant('chat', { redirectUri: 'http://localhost:1234/callback' }),
     grant('code', { redirectUri: 'http://127.0.0.1:4567/callback' }),
@@ -89,7 +89,7 @@ Deno.test('connections: local and older grants use explicit registered names', a
     desktop: 'Claude desktop',
     cursor: 'Cursor',
   })
-  assertEquals((await connectionsOf(p.oauth, 'person')).map((c) => c.id), [
+  assertEquals((await agentsOf(p.oauth, 'person')).map((c) => c.id), [
     'chatgpt',
     'claude',
     'claude-code',
@@ -97,7 +97,7 @@ Deno.test('connections: local and older grants use explicit registered names', a
   ])
 })
 
-Deno.test('connections: callback identity requires an exact HTTPS hostname', async () => {
+Deno.test('agents: callback identity requires an exact HTTPS hostname', async () => {
   let uris = [
     'https://chatgpt.com.evil.test/callback',
     'https://evil.test/chatgpt.com',
@@ -109,26 +109,26 @@ Deno.test('connections: callback identity requires an exact HTTPS hostname', asy
   let rows = uris.map((redirectUri, i) => grant(String(i), { redirectUri }))
   let names = Object.fromEntries(rows.map((g) => [g.clientId, 'ChatGPT']))
   let p = provider([rows], names)
-  let found = await connectionsOf(p.oauth, 'person')
+  let found = await agentsOf(p.oauth, 'person')
   assertEquals(found.length, uris.length)
   assertEquals(found.every((c) => c.provider === undefined), true)
 })
 
-Deno.test('connections: unknown registered clients stay visible; missing clients do not', async () => {
+Deno.test('agents: unknown registered clients stay visible; missing clients do not', async () => {
   let p = provider([[
     grant('unnamed'),
     grant('custom', { redirectUri: 'https://other.test/callback' }),
     grant('deleted'),
     grant('known', { redirectUri: 'https://claude.com/callback' }),
   ]], { unnamed: '', custom: 'Unlisted agent' })
-  assertEquals(await connectionsOf(p.oauth, 'person'), [
+  assertEquals(await agentsOf(p.oauth, 'person'), [
     { id: 'claude', provider: 'claude', name: 'Claude', connectedAt: 10 },
     { id: 'unnamed', name: 'Other agent', connectedAt: 10 },
     { id: 'custom', name: 'Unlisted agent', connectedAt: 10 },
   ])
 })
 
-Deno.test('connections: unavailable metadata retains its grant without hiding other agents', async () => {
+Deno.test('agents: unavailable metadata retains its grant without hiding other agents', async () => {
   let p = provider([[
     grant('https://unavailable.test/client.json'),
     grant('https://unavailable.test/client.json', { createdAt: 20 }),
@@ -136,7 +136,7 @@ Deno.test('connections: unavailable metadata retains its grant without hiding ot
   ]])
   let looked = 0
   assertEquals(
-    await connectionsOf({
+    await agentsOf({
       ...p.oauth,
       lookupClient: () => (looked++, Promise.resolve(undefined)),
     }, 'person'),
@@ -152,11 +152,11 @@ Deno.test('connections: unavailable metadata retains its grant without hiding ot
   assertEquals(looked, 1)
 })
 
-Deno.test('connections: storage failures remain errors', async () => {
+Deno.test('agents: storage failures remain errors', async () => {
   let p = provider([[grant('custom')]])
   await assertRejects(
     () =>
-      connectionsOf({
+      agentsOf({
         ...p.oauth,
         lookupClient: () => Promise.reject(new Error('KV unavailable')),
       }, 'person'),

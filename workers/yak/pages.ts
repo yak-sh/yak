@@ -9,8 +9,8 @@
 // and web content never speaks HTML (the repo's md.ts rule, one floor down).
 
 import type { Frame } from './build.ts'
-import type { Connection } from './connections.ts'
-import { connectionList, connectionLive } from './connection_ui.ts'
+import type { Agent } from './connected.ts'
+import { agentList, agentLive } from './connected_ui.ts'
 import { icon, type IconName } from './icons.ts'
 import { esc } from './html.ts'
 import { tile } from './render/mod.ts'
@@ -601,7 +601,7 @@ export type SpacePage = {
   person: boolean
   signIn: string
   name?: string
-  connections?: Connection[]
+  agents?: Agent[]
   fixed?: boolean
   views?: Visits[] | null
   viewDays?: number
@@ -736,7 +736,7 @@ let state = (connected: boolean, show: boolean) =>
   `data-${connected ? 'connected' : 'disconnected'}${show ? '' : ' hidden'}`
 
 let connectCard = (at: SpacePage) =>
-  `<section class="Desk_Connect" ${state(false, !at.connections?.length)}>
+  `<section class="Desk_Connect" ${state(false, !at.agents?.length)}>
 <div><h2>Connect your agent</h2><p>Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p></div>
 <a class="Button" href="${managePath('connect')}">Connect agent</a></section>`
 
@@ -746,7 +746,7 @@ let library = (at: SpacePage) =>
       ? `<div class="Apps">${at.apps.map(tile).join('')}</div>`
       : `<section class="Desk_Empty"><h2>Your apps will live here</h2>
 <div ${
-        state(true, !!at.connections?.length)
+        state(true, !!at.agents?.length)
       }><p>Ask your agent for your first app. Try this:</p>${
         copyable(
           'Use yaks.app to build me a recipe box.',
@@ -754,7 +754,7 @@ let library = (at: SpacePage) =>
         )
       }</div>
 <div ${
-        state(false, !at.connections?.length)
+        state(false, !at.agents?.length)
       }><p>A recipe box, a book club page, a tool for your day. Start with an idea.</p>
 <a href="${managePath('new')}">More ways to make an app</a></div></section>`
   }`
@@ -883,14 +883,12 @@ let desk = (at: SpacePage, env: Host) => {
   let body = ''
   if (view == 'apps') body = library(at)
   if (view == 'connect') {
-    body = `${connectionSetup(at.connections ?? [], env)}${copying}${tabbing}`
+    body = `${agentSetup(at.agents ?? [], env)}${copying}${tabbing}`
   }
   if (view == 'new') {
-    body = `<section class="Desk_Start" ${
-      state(true, !!at.connections?.length)
-    }>
+    body = `<section class="Desk_Start" ${state(true, !!at.agents?.length)}>
 <h2>Ask your agent for a new yaks.app</h2>${
-      connectionList(at.connections ?? [], 'links')
+      agentList(at.agents ?? [], 'links')
     }</section>${connectCard(at)}
 <div class="Desk_Options">${chat()}
 <section class="Card"><h2>Upload your website</h2>${dropZone()}</section></div>${chatLive}${dropping}`
@@ -940,7 +938,7 @@ let desk = (at: SpacePage, env: Host) => {
         : ''
     }${body}</div></div>${view == 'apps' ? copying : ''}${
       ['apps', 'new', 'connect'].includes(view)
-        ? connectionLive(managePath() + '/connections')
+        ? agentLive(managePath() + '/agents')
         : ''
     }`,
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
@@ -1262,7 +1260,7 @@ export let askAllow = (
 // instruction with no way past it is worse than none.
 export type Yours = {
   slug: string
-  connections?: Connection[]
+  agents?: Agent[]
   // A space with apps in it keeps its address: an app's URL is this slug,
   // and moving one wants the redirect a rename already wants (T-32576).
   fixed: boolean
@@ -1418,7 +1416,7 @@ let oauthHelp = (env: Host) =>
 // This repository is itself a plugin marketplace (T-34666): `.agents/plugins/
 // marketplace.json` offers `plugins/yaks.app/`, whose `.mcp.json` names the
 // same MCP address every other door on this page hands out. So the shorthand
-// is a third route to the same connection, not a different product.
+// is a third route to the same server, not a different product.
 let REPO = 'yak-sh/yak'
 
 // Nothing interpolated below is anybody's input, so it is written as the
@@ -1426,7 +1424,7 @@ let REPO = 'yak-sh/yak'
 //
 // Keep setup paths and field labels matched to each client's form, including
 // differences between its desktop and mobile interfaces.
-let agents = (env: Host) => [
+let clients = (env: Host) => [
   {
     key: 'claude',
     tab: 'Claude',
@@ -1487,7 +1485,7 @@ let agents = (env: Host) => [
       'Sign in with your email when ChatGPT asks.',
     ],
     // The repository's plugin names production; a staging visitor needs the
-    // manual connection above to stay with this deployment.
+    // manual setup above to stay with this deployment.
     details: apex(env) == apex()
       ? {
         summary: 'Connect from the ChatGPT desktop app',
@@ -1560,7 +1558,7 @@ let doors = (env: Host) =>
   `<fieldset class="Tabs">
 <legend class="Tabs_Legend">Which app do you use?</legend>
 ${
-    agents(env).map((a, i) =>
+    clients(env).map((a, i) =>
       `<div class="Tabs_Item">
 <input type="radio" name="agent" id="tab-${a.key}" value="${a.key}"${
         i ? '' : ' checked'
@@ -1588,18 +1586,16 @@ ${a.finish}, then ask:${request}
   }
 </fieldset>`
 
-let connectionSetup = (connections: Connection[], env: Host) =>
-  `${connectionList(connections)}
+let agentSetup = (agents: Agent[], env: Host) =>
+  `${agentList(agents)}
 <p ${
-    state(true, !!connections.length)
+    state(true, !!agents.length)
   }>Ask for an app, or keep improving one in the same chat.</p>
 <p ${
-    state(false, !connections.length)
+    state(false, !agents.length)
   }>Connect once, then build and keep improving your apps in your usual chats.</p>
-<details class="Connect_Setup" data-connection-setup${
-    connections.length ? '' : ' open'
-  }>
-<summary ${state(true, !!connections.length)}>Connect another agent</summary>
+<details class="Connect_Setup" data-agent-setup${agents.length ? '' : ' open'}>
+<summary ${state(true, !!agents.length)}>Connect another agent</summary>
 ${doors(env)}</details>`
 
 // The only script a tab needs, and it is not what switches one: the radios do
@@ -1697,7 +1693,7 @@ export let connect = (yours: Yours, status = 200, env: Host = {}) =>
     'Connect yaks.app',
     'Build and manage your apps from your usual chats.',
     status,
-    `${connectionSetup(yours.connections ?? [], env)}
+    `${agentSetup(yours.agents ?? [], env)}
 <details class="Attach"${status != 200 || yours.paid ? ' open' : ''}>
 <summary>Your address and plan</summary>
 ${mine(yours, env)}${plan(yours, env)}
@@ -1707,6 +1703,6 @@ ${mine(yours, env)}${plan(yours, env)}
     }${managePath()}">Your apps and settings</a></p>
 <p class="Note"><a href="${url(env, '/help')}">Need help?</a></p>
 ${home(env)}${copying}${tabbing}${inline}${billing}${
-      connectionLive('/oauth/connections')
+      agentLive('/oauth/agents')
     }`,
   )

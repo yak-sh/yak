@@ -181,23 +181,26 @@ slow(
   },
 )
 
-slow('the consent card says where the connection goes (T-37877)', async () => {
-  let k = await kernel()
-  try {
-    let me = await signIn(k)
-    let q = await authorizing(k)
-    // Registered as "Claude", sent to the attacker: both are on the card,
-    // signed in or not.
-    for (let cookie of [me.cookie, '']) {
-      let page = await (await k.at('yaks.app', `/oauth/authorize?${q}`, {
-        headers: { cookie },
-      })).text()
-      assertStringIncludes(page, 'Claude (attacker.invalid)')
+slow(
+  'the consent card says where the authorization goes (T-37877)',
+  async () => {
+    let k = await kernel()
+    try {
+      let me = await signIn(k)
+      let q = await authorizing(k)
+      // Registered as "Claude", sent to the attacker: both are on the card,
+      // signed in or not.
+      for (let cookie of [me.cookie, '']) {
+        let page = await (await k.at('yaks.app', `/oauth/authorize?${q}`, {
+          headers: { cookie },
+        })).text()
+        assertStringIncludes(page, 'Claude (attacker.invalid)')
+      }
+    } finally {
+      await k.stop()
     }
-  } finally {
-    await k.stop()
-  }
-})
+  },
+)
 
 slow('a page in another space forges no signed-in form (T-37874)', async () => {
   let k = await kernel()

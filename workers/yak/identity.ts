@@ -60,7 +60,7 @@
 // claiming support and a URL client_id is looked for in the store like any
 // other, which leaves a client dynamic registration to fall back to.
 //
-// A connection, once made, does not lapse (T-34416). The owner: "the oauth
+// An agent, once connected, stays connected (T-34416). The owner: "the oauth
 // should never expire". So the refresh token has no expiry and the access
 // token lives a year (`opts`), and a public client's refresh is taken even
 // when it carries a `client_secret` it was never issued (`plain`), which is
@@ -82,7 +82,7 @@ import {
   type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
 import { cookieValue, opened, seal, verify } from './lib/token.ts'
-import { connectionsOf } from './connections.ts'
+import { agentsOf } from './connected.ts'
 import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
 import { directory, META, type Space } from './directory.ts'
@@ -283,9 +283,9 @@ let backTo = (mine: string, back: string, env: Host) =>
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
-export let connections = (env: Env, person: string) => {
+export let agents = (env: Env, person: string) => {
   let oauth = api(env)
-  return connectionsOf({
+  return agentsOf({
     listUserGrants: (person, options) => oauth.listUserGrants(person, options),
     lookupClient: async (id) => {
       try {
@@ -438,7 +438,7 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
   return connect(
     {
       slug: space.slug,
-      connections: await connections(env, who.person),
+      agents: await agents(env, who.person),
       fixed: !!(await dir.apps(space)).length,
       said,
       say,
@@ -707,7 +707,7 @@ let consented = async (
 }
 
 // The name a person sees on the consent card: what the client called itself
-// when it registered, or its bare id, and beside it the host the connection
+// when it registered, or its bare id, and beside it the host the authorization
 // is sent to. The name is the client's own choice, so anybody can register as
 // "Claude"; the host of its redirect is the one thing on the card it cannot
 // borrow from somebody else (T-37877).
@@ -730,11 +730,11 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     : new FormData()
   let field = (name: string) => String(form.get(name) ?? '')
 
-  if (path == '/oauth/connections' && req.method == 'GET') {
+  if (path == '/oauth/agents' && req.method == 'GET') {
     let person = await browser(env, req)
     return Response.json(
       person
-        ? { connections: await connections(env, person) }
+        ? { agents: await agents(env, person) }
         : { error: 'not_signed_in' },
       {
         status: person ? 200 : 401,
