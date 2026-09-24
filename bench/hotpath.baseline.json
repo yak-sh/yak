@@ -40,6 +40,8 @@
     "scan: session mentions over a 60-row thread": 0.00923382628373402,
     "search: the ranked FTS read alone": 0.08285170198093393,
     "similar: ANN KNN over 800 vectors": 0.002555862020298283,
+    "store boot: an app store wakes": 0.052675632045920184,
+    "store boot: the directory wakes": 0.05386373038665925,
     "subserve: a board sub answers its first frame": 0.163436899661825,
     "subserve: a route sub on a hub answers its bounded rider": 0.08247912782194511,
     "subserve: a small sub first-frames while a large one is in flight": 0.029673878712813406,

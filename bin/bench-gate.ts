@@ -68,6 +68,7 @@ let FILES = [
   'src/render_bench.ts',
   'src/recall_bench.ts',
   'src/embed_bench.ts',
+  'workers/yak/boot_bench.ts', // a Store's constructor after hibernation
 ]
 
 type Baseline = {
