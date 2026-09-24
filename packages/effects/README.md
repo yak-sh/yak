@@ -11,8 +11,8 @@ write phases.
 
 The default registry is in memory and stores no graph data. Optional `effect`
 and `lease` components support retry records and coordination of duties, and
-`provisional` marks an entity whose effect has not finished yet.
-Applications supply the handlers and their domain components.
+`provisional` marks an entity whose effect has not finished yet. Applications
+supply the handlers and their domain components.
 
 ## Install
 
@@ -257,9 +257,9 @@ An entity whose write commits before an asynchronous step about it has finished
 wears `provisional{note}` beside its other components: `note` is a line for the
 person reading it, such as "saving the key". The effect that finishes the step
 removes the mark. A write that waits for its effects never shows its own writer
-the mark; another reader in between sees it, and can say so.
-`provisionalDoc` declares the mark alone, for a vocabulary that does not load
-the ledger; `effectDoc` carries it too.
+the mark; another reader in between sees it, and can say so. `provisionalDoc`
+declares the mark alone, for a vocabulary that does not load the ledger;
+`effectDoc` carries it too.
 
 ## Composition
 
@@ -310,10 +310,10 @@ consumers supply their own transaction. `docs()` describes grouped hooks and
 The root exports `effects`, registry/event/registration types, event derivation
 helpers, effect-write generation helpers, `ledger`, `effectDoc`, retry settings,
 lease operations, `PROVISIONAL` and `provisionalDoc`. `@yaks/effects/vocab`
-exports `docs`, `effectDoc`, which declares `effect`, `lease`, `provisional`
-and `effect_check`, and `provisionalDoc`. `@yaks/effects/tools`
-exports the tool implementations. Loading declarations alone does not install a
-registry or start reconciliation.
+exports `docs`, `effectDoc`, which declares `effect`, `lease`, `provisional` and
+`effect_check`, and `provisionalDoc`. `@yaks/effects/tools` exports the tool
+implementations. Loading declarations alone does not install a registry or start
+reconciliation.
 
 ## Compatibility
 
