@@ -77,6 +77,7 @@ import {
   manageView,
   MOUNT,
   route,
+  signInAt,
 } from './route.ts'
 import { covers, PLATFORM_PATHS } from './router.ts'
 import { nobody, titling, vouched, type Who, whoIs } from './session.ts'
@@ -178,16 +179,10 @@ let json = (
     { status },
   )
 
-// Where a refusal sends someone who has not signed in: the platform's login
-// page, already carrying the page to hand them back to (T-32593). At the file
-// door that page is the request itself; at an `/api/` door — nowhere to return
-// to — it is the Referer, and the request's own address when the browser sent
-// none. Whether that address is one to follow is the login door's to decide.
-let signInAt = (page: string, env: Host) => {
-  let to = new URL(`https://${apex(env)}/login`)
-  to.searchParams.set('return', page)
-  return to.href
-}
+// Where a refusal sends someone who has not signed in (route.ts `signInAt`).
+// At the file door the page to return to is the request itself; at an `/api/`
+// door — nowhere to return to — it is the Referer, and the request's own
+// address when the browser sent none.
 
 let redirect = (to: string, status = 302) =>
   new Response(null, { status, headers: { location: to } })

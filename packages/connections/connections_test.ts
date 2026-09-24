@@ -104,8 +104,8 @@ let setup = async (...replies: [number, unknown][]) => {
     fetch: e.fetch,
     now: () => NOW,
   }
-  // Make what `need` asks for, and answer the connection it made, or the one
-  // it answered with.
+  // Make what `need` asks for, and answer the connection it made or answered
+  // with, which comes first.
   let needs = async (asked: Partial<Parameters<typeof need>[1]> = {}) => {
     let made = await g.apply(
       await need(g.read, {
@@ -115,7 +115,7 @@ let setup = async (...replies: [number, unknown][]) => {
         ...asked,
       }, BUILT),
     )
-    return (made.find((b) => b.connection) ?? made[0]).entity.eid
+    return made[0].entity.eid
   }
   return { g, vault, c, needs, seen: e.seen }
 }

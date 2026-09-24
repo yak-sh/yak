@@ -76,6 +76,15 @@ export let MCP_ASK = `${MCP}?auth=required`
 // cannot import identity.ts, which re-exports it, without dragging the
 // runtime's own modules into a Deno test.
 export let SIGN_IN = url({}, '/login')
+
+/** Where someone who has not signed in is sent: the login page, already
+ * carrying the page to hand them back to (T-32593). Whether that address is
+ * one to follow is the login door's to decide. */
+export let signInAt = (page: string, env: Host) => {
+  let to = new URL(`https://${apex(env)}/login`)
+  to.searchParams.set('return', page)
+  return to.href
+}
 export let says = (env: Host = {}) =>
   `sign in at ${url(env, '/login')} to reach your apps from here`
 

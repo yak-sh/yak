@@ -1,6 +1,7 @@
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import {
   askCode,
+  askConnect,
   askEmail,
   connect,
   lost,
@@ -92,6 +93,58 @@ Deno.test('pages: only production offers its repository marketplace shortcut', a
     )
     assertEquals(html.includes('yak-sh/yak'), host == env ? false : true)
   }
+})
+
+Deno.test('connections: the space’s ask of each person offers nothing to connect, and a person’s own is theirs to remove', async () => {
+  let drawn = async (own: boolean) =>
+    await spaceIndex({
+      ...page,
+      view: 'connections',
+      connections: {
+        on: true,
+        list: [{
+          eid: 'c',
+          integration: 'Weather',
+          own,
+          each: true,
+          status: 'needed',
+          account: '',
+          keyed: true,
+          hosts: [],
+          apps: ['Notes'],
+          saving: '',
+          failed: '',
+        }],
+        services: [],
+        built: [],
+      },
+    }, env).text()
+  let ask = await drawn(false)
+  assertStringIncludes(ask, 'Each person who uses Notes connects their own')
+  assertEquals(ask.includes('Paste the key for Weather'), false)
+  assertEquals(ask.includes('value="disconnect"'), false)
+  let own = await drawn(true)
+  assertStringIncludes(own, 'Paste the key for Weather')
+  assertStringIncludes(own, 'value="disconnect">Remove')
+})
+
+Deno.test('askConnect: the app, the service, the one form, and the way back', async () => {
+  let html = await askConnect({
+    app: 'Notes',
+    integration: 'Cal',
+    keyed: false,
+    on: true,
+    status: 'connected',
+    back: 'https://ada.yaks.fyi/notes/',
+  }, env).text()
+  for (
+    let text of [
+      'Notes asks each person who uses it to connect their own Cal account',
+      'Yours is connected.',
+      'Connect again',
+      'href="https://ada.yaks.fyi/notes/">Back to Notes',
+    ]
+  ) assertStringIncludes(html, text)
 })
 
 Deno.test('paid plan settings describe unlimited apps', async () => {

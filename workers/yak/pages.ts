@@ -895,7 +895,10 @@ let STATUS = {
 
 // One connection: whose it is, which apps use it and where its key may go,
 // whether its key is still being saved or could not be, and what to do next.
+// The space's side of an app that asks each person to connect their own is
+// only the ask: nothing here connects it, and it stays while the app asks.
 let connection = (c: Shown, on: boolean) => {
+  let ask = c.each && !c.own
   let form = (inner: string) =>
     `<form class="Connection_Do" method="post" action="${
       managePath('connections')
@@ -910,7 +913,7 @@ let connection = (c: Shown, on: boolean) => {
 <button class="Button" type="submit" name="do" value="key">Save key</button>`,
     )
   let open = c.status != 'connected' || !!c.failed
-  let act = !on && c.keyed
+  let act = ask || !on && c.keyed
     ? ''
     : c.keyed
     ? open
@@ -923,24 +926,29 @@ let connection = (c: Shown, on: boolean) => {
       '<button class="Button" type="submit" name="do" value="signin">Connect</button>',
     )
     : ''
-  // A connection an app is waiting on is connected, not removed: removing it
-  // would only leave the app a new one waiting.
-  let drop = c.status == 'needed' && c.apps.length ? '' : form(
+  // A connection an app shares and is waiting on is connected, not removed:
+  // removing it would only leave the app a new one waiting. A person's own,
+  // for an app that asks each person, is theirs to remove.
+  let waiting = c.status == 'needed' && c.apps.length && !c.each
+  let drop = ask || waiting ? '' : form(
     `<button class="Button Bill_Go-quiet" type="submit" name="do" value="disconnect">${
       c.status == 'needed' ? 'Remove' : 'Disconnect'
     }</button>`,
   )
+  let apps = c.apps.map(esc).join(', ')
   return `<section class="Card Connection"><header class="Connection_Head"><h2>${
     esc(c.integration)
   }</h2><span class="Connection_Status Connection_Status-${c.status}">${
-    STATUS[c.status]
+    ask ? 'Each person connects their own' : STATUS[c.status]
   }${c.account ? ` as ${esc(c.account)}` : ''}</span><span class="Apps_Tag">${
     c.own ? 'Yours' : 'This space'
   }</span></header>
 <p>${
-    c.apps.length
-      ? `Used by ${c.apps.map(esc).join(', ')}.`
-      : 'No app uses it yet.'
+    !c.apps.length
+      ? 'No app uses it yet.'
+      : ask
+      ? `Each person who uses ${apps} connects their own account, from the app.`
+      : `Used by ${apps}.`
   }${
     c.hosts.length
       ? ` Its key is only ever sent to ${
@@ -1361,6 +1369,59 @@ export let closed = (env: Host = {}) =>
     'This invitation is no longer open.',
     'Ask whoever invited you to send a new one.',
     410,
+  )
+
+// The Connect button an app that asks each person to connect their own
+// account is given (connections.ts `own`): which app, which service, whether
+// this person's is connected, and the one form that connects it — a key
+// pasted, or a sign-in at the service. The form posts back to this page.
+export let askConnect = (at: {
+  app: string
+  integration: string
+  keyed: boolean
+  /** whether a key can be kept here at all */
+  on: boolean
+  status: Shown['status']
+  /** the app's own address, to go back to */
+  back: string
+  say?: string
+  no?: boolean
+}, env: Host = {}) =>
+  shell(
+    env,
+    `Connect ${esc(at.integration)}`,
+    `${esc(at.app)} asks each person who uses it to connect their own ${
+      esc(at.integration)
+    } account. Yours is used only when you use the app, and you can disconnect it from your own connections page.`,
+    200,
+    `${
+      at.status == 'needed'
+        ? ''
+        : `<p class="Say${at.status == 'broken' ? ' Say-no' : ''}">${
+          at.status == 'broken'
+            ? 'Yours needs reconnecting.'
+            : 'Yours is connected.'
+        }</p>`
+    }${
+      at.say
+        ? `<p class="Say${at.no ? ' Say-no' : ''}" role="status">${
+          esc(at.say)
+        }</p>`
+        : ''
+    }${
+      !at.on
+        ? "<p>Keys can't be saved here yet.</p>"
+        : `<form method="post">${
+          at.keyed
+            ? `<input class="Field" name="key" type="password" autocomplete="off" spellcheck="false" aria-label="Your key for ${
+              esc(at.integration)
+            }" placeholder="Paste your key" required>
+<button class="Button" type="submit">Save key</button>`
+            : `<button class="Button" type="submit">${
+              at.status == 'needed' ? 'Connect' : 'Connect again'
+            }</button>`
+        }</form>`
+    }<p class="Note"><a href="${esc(at.back)}">Back to ${esc(at.app)}</a></p>`,
   )
 
 // An app asking, for a browser that is already signed in: one click is the

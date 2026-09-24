@@ -192,7 +192,7 @@ let same = (a: string[], b: string[]) =>
 /** Make a connection needing a credential, linked from the app that needs it,
  * with the custom integration a key for an unbuilt service needs. An app that
  * already uses a connection through that integration is answered with it:
- * with `each`, the one the owner holds. */
+ * with `each`, the one the owner holds. The connection comes first. */
 export let need = async (
   read: Read,
   a: Need,
@@ -219,11 +219,11 @@ export let need = async (
   if (used) return [{ entity: { eid: used.entity.eid } }]
   let made = fresh(a.owner, name, a.scopes ?? [])
   return [
+    made,
     ...i ? [] : [{
       entity: { eid: integrationEid(name) },
       [INTEGRATION]: { name, hosts },
     }],
-    made,
     ...a.app
       ? [{
         ...link(a.app, USES, made.entity.eid),

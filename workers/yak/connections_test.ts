@@ -3,19 +3,25 @@
 // vault and nowhere else, a seal's state reaches the page, and a webhook lands
 // in the app's store only when its signature holds.
 import { assert, assertEquals } from '@std/assert'
-import { integrationEid } from '@yaks/connections'
+import { integrationEid, need } from '@yaks/connections'
 import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
 import { isHandle } from '@yaks/secrets'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/harness.ts'
-import { connecting, connectionsOf, connectionsPlugin } from './connections.ts'
+import {
+  CALLBACK,
+  connecting,
+  connectionsOf,
+  connectionsPlugin,
+  ctxOf,
+} from './connections.ts'
 import { directory, over, storeName } from './directory.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { platform } from './harness.ts'
 import { KERNEL, meta } from './meta.ts'
-import { routed } from './plugin.ts'
-import type { Who } from './session.ts'
+import { answered, routed } from './plugin.ts'
+import { minted, type Who } from './session.ts'
 import { vaultOf } from './vault.ts'
 import { slow } from '../../bin/testing.ts'
 
@@ -164,6 +170,145 @@ slow('a connection elsewhere is not this page to change', async () => {
     { say: 'That connection is not here any more.', no: true },
   )
 })
+
+// A space whose Notes app asks each person to connect their own account
+// through an integration; bob, who is nobody there; the door he connects at;
+// and the connections his own page lists as his.
+let asks = async (
+  s: Awaited<ReturnType<typeof setup>>,
+  integration: string,
+  hosts?: string[],
+) => {
+  await s.at.apply([{
+    entity: { eid: '$app' },
+    doc: { title: 'Notes' },
+    app: {
+      slug: 'notes',
+      space: s.space.eid,
+      version: 0,
+      access: 'public',
+      store: 'ada/notes.a1',
+    },
+  }], KERNEL)
+  let app = (await s.dir.app(s.space, 'notes'))!
+  let c = ctxOf(s.p.env, { person: s.person, role: 'owner' })
+  await c.graph.apply(
+    await need(c.graph.read, {
+      owner: s.space.eid,
+      app: app.eid,
+      integration,
+      hosts,
+      each: true,
+    }),
+  )
+  let bob = crypto.randomUUID()
+  await s.at.apply([{ entity: { eid: bob }, person: {} }], KERNEL)
+  let door = async (
+    who: Who,
+    init?: RequestInit,
+    path = `/connections/${integration}`,
+    host = 'ada.yaks.app',
+  ) =>
+    (await answered([connectionsPlugin], {
+      env: s.p.env,
+      req: new Request(`https://${host}/notes/api${path}`, init),
+      path,
+      space: s.space,
+      app,
+      who,
+      refuse: () => new Response(null, { status: 403 }),
+      json: (status) => new Response(null, { status }),
+    }))!
+  let his = async () =>
+    (await connectionsOf(s.p.env, s.space, bob, [])).list.filter((c) => c.own)
+  return { bob, door, his }
+}
+
+let posted = (fields: Record<string, string> = {}) => {
+  let body = new FormData()
+  for (let [k, v] of Object.entries(fields)) body.set(k, v)
+  return { method: 'POST', body }
+}
+
+let to = (r: Response) => [r.status, r.headers.get('location')]
+
+slow(
+  'a person connects their own account for an app that asks each person, and the space holds only the ask',
+  async () => {
+    let s = await setup()
+    let { bob, door, his } = await asks(s, 'Weather', ['api.weather.test'])
+    let him: Who = { person: bob, role: null }
+    let here = 'https://ada.yaks.app/notes/api/connections/Weather'
+    assertEquals(
+      to(await door({ person: null, role: null })),
+      [303, `https://yaks.app/login?return=${encodeURIComponent(here)}`],
+    )
+    assertEquals(to(await door(him, undefined, undefined, 'n.io')), [303, here])
+    assertEquals((await door(him, undefined, '/connections/Mail')).status, 404)
+    assert((await (await door(him)).text()).includes('Notes asks each person'))
+    assertEquals(
+      to(await door(him, posted({ key: 'bob-key' }))),
+      [303, 'https://ada.yaks.app/notes/?connected=1'],
+    )
+    let [mine] = await his()
+    assertEquals(
+      [mine.integration, mine.status, mine.each, mine.apps],
+      ['Weather', 'connected', true, ['Notes']],
+    )
+    assertEquals((await vaultOf(s.p.env).read(mine.eid))?.value, 'bob-key')
+    let [asked] = (await s.shown()).list
+    assertEquals([asked.each, asked.own, asked.status], [true, false, 'needed'])
+    assertEquals(
+      await s.post({ do: 'key', connection: asked.eid, key: 'k' }),
+      { say: 'Each person connects their own, from the app.', no: true },
+    )
+  },
+)
+
+slow(
+  'a person signs in for their own connection and comes back to the app',
+  async () => {
+    let s = await setup()
+    s.p.env.OAUTH_CLIENTS = JSON.stringify({ Cal: { id: 'yaks' } })
+    await s.at.apply([{
+      entity: { eid: integrationEid('Cal') },
+      integration: {
+        name: 'Cal',
+        authorize: 'https://auth.test/authorize',
+        token: 'https://auth.test/token',
+        hosts: ['api.cal.test'],
+      },
+    }], KERNEL)
+    let { bob, door, his } = await asks(s, 'Cal')
+    let went = await door({ person: bob, role: null }, posted())
+    let state = new URL(went.headers.get('location')!).searchParams.get('state')
+    let attempt = went.headers.get('set-cookie')!.split(';')[0]
+    let session = (await minted(
+      new Request('https://yaks.app/'),
+      s.p.env,
+      SECRET,
+      bob,
+    )).split(';')[0]
+    let real = globalThis.fetch
+    globalThis.fetch = () =>
+      Promise.resolve(Response.json({ access_token: 'A', refresh_token: 'R' }))
+    try {
+      let back = await routed([connectionsPlugin], {
+        env: s.p.env,
+        req: new Request(`https://yaks.app${CALLBACK}?code=C&state=${state}`, {
+          headers: { cookie: `${attempt}; ${session}` },
+        }),
+        path: CALLBACK,
+        space: null,
+      })
+      assertEquals(to(back!), [303, 'https://ada.yaks.app/notes/?connected=1'])
+    } finally {
+      globalThis.fetch = real
+    }
+    let [mine] = await his()
+    assertEquals([mine.integration, mine.status], ['Cal', 'connected'])
+  },
+)
 
 let signed = async (secret: string, body: string) => {
   let key = await crypto.subtle.importKey(

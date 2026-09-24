@@ -14,7 +14,15 @@
 // yaks.app, so the return is a door at the apex and the attempt rides a cookie
 // there from the space's page: sealed for this use alone (lib/token.ts
 // `connect`), naming the person, the space and the connection it was begun
-// for.
+// for, and the page to bring them back to.
+//
+// An app may ask each person who uses it to connect their own account
+// (@yaks/connections `each`). The platform draws the Connect button for it, at
+// the app's own address, `/<app>/api/connections/<integration>`: the page says
+// which app wants which service, and connecting there makes the person's own
+// connection, owned by them and shown in their own dashboard, and brings them
+// back to the app. The space holds only the ask, which its page shows and
+// nobody connects.
 //
 // A webhook lands as a `hook` (@yaks/hook) in the store of an app that uses
 // the connection, at `/_yaks/hooks/<app>/<connection>` on the space's own
@@ -36,10 +44,12 @@ import {
   type Read,
   type Status,
   USES,
+  using,
 } from '@yaks/connections'
 import { PROVISIONAL, provisionalDoc } from '@yaks/effects'
 import type { Bundle, Comp } from '@yaks/graph'
 import { hooked, refusal } from '@yaks/hook'
+import { mode, reads } from '@yaks/member'
 import { reveal, SECRET, secretsDoc } from '@yaks/secrets'
 import { toolsDoc } from '@yaks/tools'
 import type { Service } from './connected.ts'
@@ -49,8 +59,8 @@ import { bound, type Env } from './env.ts'
 import { apex, url } from './host.ts'
 import { cookieValue, opened, seal } from './lib/token.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
-import type { Door, Plugin } from './plugin.ts'
-import { MANAGE, managePath } from './route.ts'
+import type { Answer, Door, Plugin } from './plugin.ts'
+import { MANAGE, managePath, signInAt } from './route.ts'
 import { caught } from './sentry.ts'
 import { domainOf, vouched, type Who, whoIs } from './session.ts'
 import { vaulted, vaultOf } from './vault.ts'
@@ -79,6 +89,9 @@ export type Shown = {
   integration: string
   /** the signed-in person's own, rather than the space's */
   own: boolean
+  /** each person who uses its apps connects their own; the space's is only
+   * the ask */
+  each: boolean
   status: Status
   account: string
   /** connected by pasting a key, rather than by signing in */
@@ -133,7 +146,8 @@ export let ctxOf = (env: Env, who: Who): Ctx => {
 }
 
 /** Everything the page shows a space's owner: the space's connections and
- * their own, with the apps that use each. */
+ * their own, with the apps that use each — the space's by the titles given,
+ * and another space's app they connected their own account for by its own. */
 export let connectionsOf = async (
   env: Env,
   space: Space,
@@ -145,22 +159,34 @@ export let connectionsOf = async (
   let all = [...await list(read, space.eid), ...await list(read, person)]
   let links = all.filter((b) => b[USES])
   let named = new Map(apps.map((a) => [a.eid, a.title || a.slug]))
+  let elsewhere = [...new Set(links.map((l) => String(comp(l, 'edge').from)))]
+    .filter((eid) => !named.has(eid))
+  if (elsewhere.length) {
+    for (let b of await read(`.eid=${elsewhere.join(',')}&.app&*`)) {
+      named.set(
+        b.entity.eid,
+        String(comp(b, 'doc').title || comp(b, 'app').slug),
+      )
+    }
+  }
   let shown = await Promise.all(
     all.filter((b) => b[CONNECTION]).map(async (b): Promise<Shown> => {
       let c = comp(b, CONNECTION)
       let i = await known(read, String(c.integration))
       let failed = !b[PROVISIONAL] && (b.error || b.exception)
+      let to = links.filter((l) => comp(l, 'edge').to == b.entity.eid)
       return {
         eid: b.entity.eid,
         integration: String(c.integration),
         own: c.owner == person,
+        each: to.some((l) => comp(l, USES).each),
         status: (c.status ?? 'needed') as Status,
         account: String(c.account ?? ''),
         keyed: !i || keyed(i),
         hosts: i?.hosts ?? [],
-        apps: links
-          .filter((l) => comp(l, 'edge').to == b.entity.eid)
-          .map((l) => named.get(String(comp(l, 'edge').from)) ?? 'another app'),
+        apps: to.map((l) =>
+          named.get(String(comp(l, 'edge').from)) ?? 'another app'
+        ),
         saving: String(comp(b, PROVISIONAL).note ?? ''),
         failed: failed
           ? String(comp(b, 'content').body ?? 'the key could not be saved')
@@ -189,13 +215,31 @@ let hostsOf = (text: string): string[] =>
   text.toLowerCase().split(/[\s,]+/).filter(Boolean)
 let HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/
 
-// The attempt a sign-in is begun with, as its cookie holds it.
+// The attempt a sign-in is begun with, as its cookie holds it, and the page to
+// bring the person back to.
 type Held = {
   space: string
   connection: string
   person: string
   attempt: { state: string; until: number; verifier: string }
+  back: string
 }
+
+// The connections page of a space, where a sign-in begun there comes back to.
+let pageOf = (env: Env, space: string) =>
+  `https://${space}.${apex(env)}${managePath('connections')}`
+
+// A page, told how a sign-in went.
+let told = (page: string, how: 'connected' | 'refused') => {
+  let to = new URL(page)
+  to.searchParams.set(how, '1')
+  return to.href
+}
+
+// Whether a connection is an app's ask that each person answers with their
+// own, which is nobody's to connect.
+let asking = async (read: Read, eid: string) =>
+  (await read(`.edge.to=${eid}&.${USES}!&*`)).some((l) => comp(l, USES).each)
 
 // Send the person to the service, the attempt riding a cookie to the return.
 let signingIn = async (
@@ -205,6 +249,7 @@ let signingIn = async (
   space: Space,
   who: Who,
   eid: string,
+  back = pageOf(env, space.slug),
 ): Promise<Response> => {
   let { url: to, attempt } = await begin(c, eid)
   let held: Held = {
@@ -212,6 +257,7 @@ let signingIn = async (
     connection: eid,
     person: who.person!,
     attempt,
+    back,
   }
   let domain = domainOf(req, env)
   return new Response(null, {
@@ -266,7 +312,7 @@ export let connecting = async (
           hosts,
         }),
       )
-      eid = made.find((b) => b[CONNECTION])!.entity.eid
+      eid = made[0].entity.eid
       let i = await known(c.graph.read, name)
       if (i && !keyed(i)) return signingIn(req, env, c, space, who, eid)
     }
@@ -280,6 +326,9 @@ export let connecting = async (
     if (act == 'disconnect') {
       await disconnect(c, eid)
       return { say: 'Disconnected.', no: false }
+    }
+    if (owner == space.eid && await asking(c.graph.read, eid)) {
+      return no('Each person connects their own, from the app.')
     }
     if (act == 'signin') return signingIn(req, env, c, space, who, eid)
     if (!key) return no('Paste the key first.')
@@ -297,12 +346,9 @@ export let connecting = async (
 // The directory the doors below ask, as apps.ts asks it.
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
-let back = (env: Env, space: string, query: string) =>
-  `https://${space}.${apex(env)}${managePath('connections')}?${query}`
-
 // The return from a service's sign-in page. The attempt must be this
-// person's, for a space they still own; anything else is sent back to their
-// account to start again.
+// person's, for their own connection or one of a space they still own;
+// anything else is sent back to their account to start again.
 let callback: Door = async ({ env, req, path, space }) => {
   if (space != null || path != CALLBACK) return null
   let gone = `${ATTEMPT}=; Path=${CALLBACK}; Max-Age=0; Secure; HttpOnly`
@@ -319,20 +365,106 @@ let callback: Door = async ({ env, req, path, space }) => {
   let at = held ? await dir.space(held.space) : null
   let who = at &&
     await whoIs(req, env.SESSION_SECRET, (p) => dir.role(at, p))
+  let [b] = held && who?.person == held.person
+    ? await readOf(env)(`.eid=${held.connection}&.${CONNECTION}`)
+    : []
+  let owner = comp(b, CONNECTION).owner
   if (
-    !held || !at || !who || who.person != held.person || who.role != 'owner'
+    !held || !at || !who || !b ||
+    owner != who.person && !(owner == at.eid && who.role == 'owner')
   ) {
     return answer(url(env, '/manage'))
   }
+  // An attempt begun before its cookie named a page came from the space's.
+  let back = held.back ?? pageOf(env, at.slug)
   try {
     await connect(ctxOf(env, who), held.connection, {
       attempt: held.attempt,
       callback: req.url,
     })
-    return answer(back(env, at.slug, 'connected=1'))
+    return answer(told(back, 'connected'))
   } catch (e) {
     caught(e, { request: `GET ${CALLBACK}` })
-    return answer(back(env, at.slug, 'refused=1'))
+    return answer(told(back, 'refused'))
+  }
+}
+
+// Where an app sends a person to connect their own account, within its
+// `/api/`.
+let OWN = '/connections/'
+
+// The Connect button an app asks for, drawn by the platform at the app's own
+// address. Whoever may read the app may connect their own account for it, once
+// the app asks each person for that integration; what they connect is theirs,
+// and only they call out through it. A sign-in's cookie must reach the
+// platform's callback, so a request at a space's own domain is sent to the
+// same page at the platform's address first.
+let own: Answer = async ({ env, req, path, space, app, who, refuse }) => {
+  if (!path.startsWith(OWN)) return null
+  let integration = decodeURIComponent(path.slice(OWN.length))
+  let here = `https://${space.slug}.${apex(env)}/${app.slug}/api${path}`
+  if (!domainOf(req, env)) return Response.redirect(here, 303)
+  if (!who.person) return Response.redirect(signInAt(here, env), 303)
+  if (!reads(mode(app.access), who.role)) return refuse('not_a_reader')
+  let c = ctxOf(env, who)
+  let asked = await using(c.graph.read, {
+    app: app.eid,
+    integration,
+    owner: space.eid,
+    each: true,
+  })
+  let i = asked && await known(c.graph.read, integration)
+  // Loaded here, as the doors are (T-37977): pages.ts reaches the plugin list,
+  // which names this file.
+  let { askConnect, lost } = await import('./pages.ts')
+  if (!asked || !i) return lost(env)
+  let back = `https://${space.slug}.${apex(env)}/${app.slug}/`
+  let page = async (said?: Said) => {
+    let mine = await using(c.graph.read, {
+      app: app.eid,
+      integration,
+      owner: who.person!,
+      each: true,
+    })
+    return askConnect({
+      app: app.title,
+      integration,
+      keyed: keyed(i),
+      on: !keyed(i) || vaulted(env),
+      status: (comp(mine, CONNECTION).status ?? 'needed') as Status,
+      back,
+      ...said,
+    }, env)
+  }
+  if (req.method != 'POST') return page()
+  let form = await req.formData().catch(() => new FormData())
+  let key = String(form.get('key') ?? '').trim()
+  if (keyed(i) && !vaulted(env)) {
+    return page(no("Keys can't be saved here yet."))
+  }
+  if (keyed(i) && !key) return page(no('Paste the key first.'))
+  try {
+    let [made] = await c.graph.apply(
+      await need(c.graph.read, {
+        owner: who.person,
+        app: app.eid,
+        integration,
+        scopes: (comp(asked, CONNECTION).scopes ?? []) as string[],
+        each: true,
+      }),
+    )
+    let eid = made.entity.eid
+    if (!keyed(i)) return signingIn(req, env, c, space, who, eid, back)
+    await connect(c, eid, { key })
+    let [now] = await c.graph.read(`.eid=${eid}&.${CONNECTION}&*`)
+    return now?.error || now?.exception
+      ? page(
+        no(String(comp(now, 'content').body ?? 'The key could not be saved.')),
+      )
+      : Response.redirect(told(back, 'connected'), 303)
+  } catch (e) {
+    caught(e, { request: `POST /api${path}` })
+    return page(no(e instanceof Error ? e.message : "That didn't work."))
   }
 }
 
@@ -404,7 +536,8 @@ let hook: Door = async ({ env, req, path, space: slug }) => {
  * Connections, as what they contribute (plugin.ts): the words the directory
  * keeps them in — the connection and its integration, the secret its
  * credential is, the mark it wears while that is saved, and the text a
- * failure is said in beside `error` — and the two doors.
+ * failure is said in beside `error` — the two doors, and the Connect button
+ * at an app's address.
  */
 export let connectionsPlugin: Plugin = {
   name: 'connections',
@@ -415,4 +548,5 @@ export let connectionsPlugin: Plugin = {
     { title: 'content', $defs: { content: toolsDoc.$defs!.content } },
   ],
   routes: [callback, hook],
+  answers: [own],
 }
