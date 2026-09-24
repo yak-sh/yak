@@ -225,7 +225,8 @@
     "./packages/secrets",
     "./packages/connections",
     "./packages/egress",
-    "./packages/admin"
+    "./packages/admin",
+    "./packages/heal"
   ],
   "exclude": [
     "src/vendor",

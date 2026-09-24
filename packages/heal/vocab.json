@@ -1,0 +1,52 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/id": true
+  },
+  "title": "heal",
+  "$defs": {
+    "bug": {
+      "component": true,
+      "type": "object",
+      "description": "on a task filed for an unexpected failure: which fault it is, and how often it has been caught. One open task per fault, however often it recurs",
+      "properties": {
+        "fault": {
+          "type": "string",
+          "stamped": true,
+          "description": "what makes two failures the same one: the broken entity's kind, the message with its ids, paths and numbers taken out, and the top frame of the stack"
+        },
+        "hits": {
+          "type": "number",
+          "stamped": true,
+          "description": "how many times the fault was caught while this task was open"
+        },
+        "last": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was last caught"
+        }
+      }
+    },
+    "fixer": {
+      "component": true,
+      "type": "object",
+      "description": "on a session started to fix a bug",
+      "properties": {
+        "bug": {
+          "type": "string",
+          "ref": "bug",
+          "death": "keep",
+          "stamped": true,
+          "description": "the task it was started for — kept when that task is deleted, so the cooldown still counts the run"
+        }
+      }
+    },
+    "nofix": {
+      "component": true,
+      "type": "object",
+      "properties": {},
+      "description": "on a project: bugs filed under it start no fixer. On the project unowned bugs are filed under, no bug starts one"
+    }
+  }
+}
