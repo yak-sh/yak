@@ -3,7 +3,7 @@
 // look at. What is proved is the shape of each format's own statement of its
 // size — and that a file which states none gets none rather than a guess.
 import { assertEquals } from '@std/assert'
-import { sizeOf } from './image.ts'
+import { mediaTypeOf, sizeOf } from './image.ts'
 
 let bytes = (...xs: (number | number[] | string)[]) =>
   new Uint8Array(
@@ -117,4 +117,14 @@ Deno.test('a file that states no size gets none', () => {
   assertEquals(sizeOf(new Uint8Array(0)), undefined)
   assertEquals(sizeOf(bytes('%PDF-1.7', pad(40))), undefined)
   assertEquals(sizeOf(bytes('RIFF', be32(0), 'WAVE', pad(30))), undefined)
+})
+
+Deno.test('a picture is named by its signature, never by a guess', () => {
+  assertEquals(mediaTypeOf(png(1, 1)), 'image/png')
+  assertEquals(mediaTypeOf(jpeg(1, 1)), 'image/jpeg')
+  assertEquals(mediaTypeOf(gif(1, 1)), 'image/gif')
+  assertEquals(mediaTypeOf(riff('VP8X', pad(10))), 'image/webp')
+  assertEquals(mediaTypeOf(bytes('<svg/>')), undefined)
+  assertEquals(mediaTypeOf(bytes('RIFF', be32(0), 'WAVE')), undefined)
+  assertEquals(mediaTypeOf(new Uint8Array(0)), undefined)
 })

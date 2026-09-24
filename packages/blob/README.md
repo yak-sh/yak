@@ -197,6 +197,10 @@ let save = artifactStore(fileBlobs('/var/lib/blobs'))
 let artifact = await save(new Uint8Array([0, 255]), 'application/octet-stream')
 ```
 
+`artifactBytes(store, artifact)` reads the bytes an artifact row names back:
+`undefined` when the store holds nothing under its address, and an error when
+the bytes it holds are another size or another SHA-256.
+
 Use a file or object store for arbitrary binary content.
 `keep(store, address,
 bytes)` performs the store-and-read-back check directly. A
@@ -206,7 +210,9 @@ content may still fail that repair.
 
 `sizeOf(bytes)` reads `{ w, h }` from PNG, JPEG, GIF and WebP headers without
 bitmap decoding. Unsupported or invalid headers, including zero dimensions,
-return `undefined`.
+return `undefined`. `mediaTypeOf(bytes)` names the same four formats from their
+signatures (`image/png`, `image/jpeg`, `image/gif`, `image/webp`), and
+`undefined` for anything else.
 
 `served(bytes, { mime?, name? })` creates an HTTP response with immutable
 one-year public caching, `content-security-policy: sandbox; script-src 'none'`,
@@ -298,19 +304,19 @@ format remains accessible to application code.
 
 ## Exports
 
-| Root export                                         | Purpose                                                  |
-| --------------------------------------------------- | -------------------------------------------------------- |
-| `blobKeywords`, `BLOB_URI`                          | Register the `store` keyword                             |
-| `bodies`, `isBody`                                  | Select marked properties                                 |
-| `blobs`, `BlobOpts`, `Reference`                    | Graph write plugin and optional stored-reference mapping |
-| `Blobs`, `address`, `encode`, `decode`              | Store interface and text addressing                      |
-| `Driver`, `sqliteBlobs`, `blobSchema`, `Layout`     | SQLite text storage                                      |
-| `fileBlobs`, `objectBlobs`, `Bucket`                | Filesystem and object storage                            |
-| `Objects`, `bucketObjects`                          | A bucket keyed by name: read, delete, list               |
-| `blobRead`, `blobText`, `hydrate`                   | SQL and post-read text resolution                        |
-| `addressOf`, `keep`, `artifactStore`, `artifactDoc` | Artifact storage and declarations                        |
-| `sizeOf`, `served`                                  | Image dimensions and HTTP responses                      |
-| `valueTools`, `VALUE_LIMIT`, `ValueTool`            | Bounded text-inspection tools                            |
+| Root export                                                          | Purpose                                                  |
+| -------------------------------------------------------------------- | -------------------------------------------------------- |
+| `blobKeywords`, `BLOB_URI`                                           | Register the `store` keyword                             |
+| `bodies`, `isBody`                                                   | Select marked properties                                 |
+| `blobs`, `BlobOpts`, `Reference`                                     | Graph write plugin and optional stored-reference mapping |
+| `Blobs`, `address`, `encode`, `decode`                               | Store interface and text addressing                      |
+| `Driver`, `sqliteBlobs`, `blobSchema`, `Layout`                      | SQLite text storage                                      |
+| `fileBlobs`, `objectBlobs`, `Bucket`                                 | Filesystem and object storage                            |
+| `Objects`, `bucketObjects`                                           | A bucket keyed by name: read, delete, list               |
+| `blobRead`, `blobText`, `hydrate`                                    | SQL and post-read text resolution                        |
+| `addressOf`, `keep`, `artifactStore`, `artifactBytes`, `artifactDoc` | Artifact storage, verified reads and declarations        |
+| `sizeOf`, `mediaTypeOf`, `served`                                    | Image dimensions and formats, and HTTP responses         |
+| `valueTools`, `VALUE_LIMIT`, `ValueTool`                             | Bounded text-inspection tools                            |
 
 | Sub-module export   | Purpose                                                      |
 | ------------------- | ------------------------------------------------------------ |

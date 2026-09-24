@@ -2,30 +2,23 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Item } from '@yaks/model'
 import { type Tool, ToolError } from '@yaks/session'
-import { fileBlobs } from '@yaks/blob'
-import { type ImageOptions, images } from './images.ts'
+import { artifactBytes, mediaTypeOf } from '@yaks/blob'
+import { imageBlobs, imageDir, type ImageOptions, images } from './images.ts'
 import { sessionCwd } from './workspace.ts'
-import { home } from './paths.ts'
 
 const MAX = 20 * 1024 * 1024
-const directory = (opts?: ImageOptions | false) =>
-  (opts && opts.directory) || Deno.env.get('HARNESS_IMAGE_DIR') ||
-  `${home()}/images`
+const VISION = ['image/png', 'image/jpeg', 'image/webp']
 
-/** Supported vision formats; SVG and unrecognized bytes are never image inputs. */
+/** Supported vision formats; SVG, GIF and unrecognized bytes are never image
+ * inputs. */
 export let imageType = (b: Uint8Array): string | undefined => {
-  if ([137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => b[i] == v)) {
-    return 'image/png'
-  }
-  if (b[0] == 255 && b[1] == 216 && b[2] == 255) return 'image/jpeg'
-  if (
-    new TextDecoder().decode(b.subarray(0, 4)) == 'RIFF' &&
-    new TextDecoder().decode(b.subarray(8, 12)) == 'WEBP'
-  ) return 'image/webp'
+  let type = mediaTypeOf(b)
+  return type && VISION.includes(type) ? type : undefined
 }
 
-/** Graph authorization is applied before resolving an external address. */
-export let artifactBytes = async (
+/** A registered artifact's bytes. Graph authorization is applied before
+ * resolving an external address. */
+export let registered = async (
   g: Graph,
   eid: string,
   opts?: ImageOptions | false,
@@ -41,20 +34,18 @@ export let artifactBytes = async (
       'Missing, unauthorized, or oversized artifact',
     )
   }
-  let bytes = await fileBlobs(directory(opts)).get(a.address)
-  if (!bytes || bytes.length != a.size) {
-    throw new ToolError('artifact', 'Artifact bytes unavailable')
-  }
-  let hash = Array.from(
-    new Uint8Array(
-      await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>),
-    ),
-    (b) => b.toString(16).padStart(2, '0'),
-  ).join('')
-  if (hash != a.address) {
+  let bytes: Uint8Array | undefined
+  try {
+    bytes = await artifactBytes(imageBlobs(opts), {
+      address: a.address,
+      media_type: String(a.media_type),
+      size: a.size,
+    })
+  } catch {
     throw new ToolError('artifact', 'Artifact integrity check failed')
   }
-  return { bytes, mediaType: String(a.media_type), revision: hash }
+  if (!bytes) throw new ToolError('artifact', 'Artifact bytes unavailable')
+  return { bytes, mediaType: String(a.media_type), revision: a.address }
 }
 
 export let artifactTools = (
@@ -108,7 +99,7 @@ export let artifactTools = (
       } finally {
         file.close()
       }
-      let artifact = await images({ directory: directory(opts.images) }).store(
+      let artifact = await images({ directory: imageDir(opts.images) }).store(
         bytes,
         imageType(bytes) ?? 'application/octet-stream',
       )
@@ -130,7 +121,7 @@ export let artifactTools = (
     run: async (args, ctx) => {
       if (!ctx) throw new ToolError('artifact', 'Session context required')
       let eid = String(args.artifact ?? '')
-      let { bytes, mediaType, revision } = await artifactBytes(
+      let { bytes, mediaType, revision } = await registered(
         g,
         eid,
         opts.images,
@@ -175,7 +166,7 @@ export let imageContext = async (
     let attachment = call?.attachment as Comp | undefined
     if (attachment?.audience != 'model') continue
     let eid = String(attachment.artifact)
-    let { bytes, mediaType, revision } = await artifactBytes(g, eid, opts)
+    let { bytes, mediaType, revision } = await registered(g, eid, opts)
     if (attachment.revision != revision) {
       throw new ToolError('image', 'Image reference changed since admission')
     }

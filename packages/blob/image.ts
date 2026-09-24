@@ -72,6 +72,29 @@ let jpeg = (b: Uint8Array) => {
 }
 
 /**
+ * What kind of picture the bytes are, read from their own signature — the one
+ * thing a caller can trust over the label it was handed — or `undefined` for
+ * anything that is not one of the four formats.
+ *
+ * ```ts
+ * import { mediaTypeOf } from '@yaks/blob'
+ *
+ * mediaTypeOf(pngBytes) // 'image/png'
+ * mediaTypeOf(svgBytes) // undefined
+ * ```
+ */
+export let mediaTypeOf = (b: Uint8Array): string | undefined =>
+  at(b, 0, '\x89PNG\r\n\x1a\n')
+    ? 'image/png'
+    : at(b, 0, '\xff\xd8\xff')
+    ? 'image/jpeg'
+    : at(b, 0, 'GIF87a') || at(b, 0, 'GIF89a')
+    ? 'image/gif'
+    : at(b, 0, 'RIFF') && at(b, 8, 'WEBP')
+    ? 'image/webp'
+    : undefined
+
+/**
  * The size a file states about itself, or `undefined` — including for a header
  * that states a zero, which is a broken file and not a picture of no width.
  *

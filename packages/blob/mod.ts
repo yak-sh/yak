@@ -82,6 +82,7 @@ export { VALUE_LIMIT, type ValueTool, valueTools } from './value.ts'
 export {
   addressOf,
   type Artifact,
+  artifactBytes,
   artifactDoc,
   type ArtifactStore,
   artifactStore,

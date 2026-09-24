@@ -66,4 +66,26 @@ export let artifactStore =
     return { address, media_type: mediaType, size: bytes.byteLength }
   }
 
+/** The bytes an {@link Artifact} names, read back from where they are kept:
+ * `undefined` when the store holds nothing under its address, and an error
+ * when what it holds is not those bytes — another size, or another SHA-256.
+ * A row is a promise about the bytes, and this is where the promise is
+ * checked, so a reader never hands on bytes the row did not name. */
+export let artifactBytes = async (
+  blobs: Blobs,
+  artifact: Artifact,
+): Promise<Uint8Array | undefined> => {
+  let bytes = await blobs.get(artifact.address)
+  if (!bytes) return
+  if (
+    bytes.length != artifact.size ||
+    await addressOf(bytes) != artifact.address
+  ) {
+    throw new Error(
+      `@yaks/blob: the bytes kept under ${artifact.address} are not the ones it names`,
+    )
+  }
+  return bytes
+}
+
 export let artifactDoc: VocabDoc = doc
