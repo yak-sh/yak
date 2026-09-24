@@ -20,6 +20,7 @@
 // importing it opens a database and pulls in every plugin the config names — a
 // cost `yak login` on a machine with no graph should not pay.
 
+import { offered } from '@yaks/graph'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools'
 import { hold, printed, registry } from './answer.ts'
 import { read, used } from './config.ts'
@@ -69,15 +70,16 @@ export let close = async (code?: number): Promise<void> => {
   held.clear()
 }
 
-/** The tools of the graph a config names, as subcommands a person types — the
- * list `cli` gathers when the command named a config (run.ts `more`). */
+/** The tools of the graph a config names that are offered on a command line,
+ * as subcommands a person types — the list `cli` gathers when the command
+ * named a config (run.ts `more`). */
 export let commands = async (c: Ctx): Promise<Command[]> => {
   let host = await opened(c.config!, c.duties)
   // The views are imported when an answer is first drawn, never to list.
   let views: ReturnType<typeof registry> | undefined
   let drawn = () =>
     views ??= registry((read(c.config!).plugins ?? []).map(used))
-  return host.tools.map((declared) => ({
+  return host.tools.filter(offered('cli')).map((declared) => ({
     ...declared,
     // A tool arrives declaring its arguments as JSON Schema — the same
     // document `tools/list` sends — so a command typed against a local graph

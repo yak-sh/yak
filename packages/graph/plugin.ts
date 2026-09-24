@@ -124,6 +124,10 @@ export type WriteHook = Hook & { independent?: boolean }
  */
 export type Schema = object
 
+/** Where a tool can be offered: `cli`, the `yak` command line; `mcp`, an MCP
+ * server's listing. */
+export type Surface = 'cli' | 'mcp'
+
 /**
  * A tool: one named operation an agent can ask a graph to perform,
  * contributed the same way a plugin contributes components and hooks. A
@@ -199,6 +203,11 @@ export type Tool<R = Bundle[]> = {
    * to the client verbatim — an MCP `_meta`, say, naming the page the client
    * should render the result in. Opaque here, like {@link Schema}. */
   meta?: Record<string, unknown>
+  /** where the tool is offered: `cli`, the `yak` command line; `mcp`, an MCP
+   * server's listing. A tool that names none is offered on every one. A tool
+   * that keeps the process — a server, a stream that never returns — is
+   * offered only where a person holds that process: `["cli"]`. */
+  surfaces?: readonly Surface[]
   /** what the tool answers as data, as JSON Schema, when its answer is not
    * entities: it answers text for a person in `content{body}` and the value
    * in this shape in `output{value}` (@yaks/tools `structured`). A tool that

@@ -100,6 +100,7 @@ export {
   argsOf,
   type NamedTool,
   namedTool,
+  offered,
   type ToolId,
   toolName,
   who,

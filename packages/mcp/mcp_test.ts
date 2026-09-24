@@ -485,6 +485,24 @@ Deno.test('the line names what moved, and says nothing when nothing did', () => 
   )
 })
 
+Deno.test('a tool offered only on a command line is not listed here', () => {
+  let tool = (name: string, surfaces?: ('cli' | 'mcp')[]) => ({
+    name,
+    description: name,
+    surfaces,
+    run: () => [],
+  })
+  let names = roster({
+    graph: shopGraph(),
+    core: false,
+    tools: [tool('here'), tool('there', ['cli']), tool('both', ['cli', 'mcp'])],
+  })
+  assertEquals(names.filter((n) => ['here', 'there', 'both'].includes(n)), [
+    'here',
+    'both',
+  ])
+})
+
 Deno.test('a session that connected against another roster is told, once', async () => {
   let graph = shopGraph()
   // What this client cached at connect — a roster from before the release

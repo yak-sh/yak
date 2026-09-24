@@ -2,7 +2,7 @@
  * the call it is handed, plus the id resolution every tool that takes an id
  * needs. */
 import type { Actor, Bundle, Comp, Eid } from './bundle.ts'
-import type { Tool } from './plugin.ts'
+import type { Surface, Tool } from './plugin.ts'
 
 let part = (call: Bundle, comp: string): Comp | undefined =>
   call[comp] as Comp | undefined
@@ -80,6 +80,20 @@ export const toolName = (tool: ToolId): string => {
   if (!tool.name) throw new Error('Tool needs a noun, a verb, or a legacy name')
   return tool.name
 }
+
+/** Is a tool offered on this surface? A tool that names no surfaces is
+ * offered on every one.
+ *
+ * ```ts
+ * import { offered } from '@yaks/graph'
+ *
+ * offered('mcp')({ surfaces: ['cli'] }) // false
+ * offered('mcp')({}) // true
+ * ```
+ */
+export let offered =
+  (surface: Surface) => (tool: { surfaces?: readonly Surface[] }): boolean =>
+    !tool.surfaces || tool.surfaces.includes(surface)
 
 export const namedTool = <R>(tool: Tool<R>): NamedTool<R> => ({
   ...tool,

@@ -353,6 +353,12 @@ about the other. The entry's key is the tool's name, which is how an
 implementation is found: `loadTools` in `@yaks/graph/tools` joins a declaration
 to the handler the module supplies, and rejects a declaration without a handler.
 
+`surfaces` says where a tool is offered: `["cli"]` on the `yak` command line
+only, `["mcp"]` in an MCP server's listing only. Without it, a tool is offered
+on both. A tool that keeps its process, such as `serve` or a stream that never
+returns, is `["cli"]`. `offered(surface)` in `@yaks/graph` is the test each door
+applies.
+
 `@yaks/vocab/tools` also validates a declaration written in code, independently
 of any document.
 
@@ -371,7 +377,7 @@ const definition = toolDefinition({
   },
   options: { short: { n: 'limit' } },
 })
-const tool: Tool = { ...definition, run: (args) => args }
+const tool: Tool = { ...definition, run: () => [] }
 ```
 
 `toolDefinitionSchema` is the JSON Schema for the declaration itself.

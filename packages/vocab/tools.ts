@@ -122,6 +122,16 @@ export type ToolDefinition = {
   destructive?: boolean
   idempotent?: boolean
   openWorld?: boolean
+  /** where it is offered — `cli`, `mcp`; every surface when absent */
+  surfaces?: ('cli' | 'mcp')[]
+}
+
+// Where a tool is offered; the same list the meta-schema allows.
+let SURFACES = {
+  type: 'array',
+  minItems: 1,
+  uniqueItems: true,
+  items: { enum: ['cli', 'mcp'] },
 }
 
 /** JSON Schema for tool declarations. Their location within vocab.json is not fixed. */
@@ -162,6 +172,7 @@ export const toolDefinitionSchema: Record<string, unknown> = {
     destructive: { type: 'boolean' },
     idempotent: { type: 'boolean' },
     openWorld: { type: 'boolean' },
+    surfaces: SURFACES,
   },
 }
 
@@ -209,6 +220,7 @@ let HINTS = [
   'idempotent',
   'openWorld',
   'outputSchema',
+  'surfaces',
 ] as const
 
 /**

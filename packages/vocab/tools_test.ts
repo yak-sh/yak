@@ -106,6 +106,7 @@ Deno.test('a vocabulary carries tool declarations beside its components', async 
         required: ['scope'],
         options: { positional: ['scope'] },
         readOnly: true,
+        surfaces: ['cli'],
       },
     },
   }
@@ -113,6 +114,12 @@ Deno.test('a vocabulary carries tool declarations beside its components', async 
   assertEquals(toolsIn(doc).length, 1) // the component and the subschema pass by
   assertEquals(t.name, 'session_list')
   assertEquals(t.readOnly, true)
+  assertEquals(t.surfaces, ['cli'])
+  assertThrows(
+    () => toolDefinition({ description: 'No.', surfaces: ['fax'] }),
+    Error,
+    'Invalid tool arguments',
+  )
   // `input` is one schema per argument; what travels is the object schema
   // every door downstream already reads.
   assertEquals(t.inputSchema, {

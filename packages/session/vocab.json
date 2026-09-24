@@ -458,6 +458,7 @@
     },
     "session_listen": {
       "tool": true,
+      "surfaces": ["cli"],
       "noun": "session",
       "verb": "listen",
       "title": "Listen for a session’s work",

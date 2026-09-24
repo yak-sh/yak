@@ -310,7 +310,8 @@ import { cli, helpTool } from '@yaks/cli'
 Deno.exitCode = await cli([helpTool(opts), ...mine], opts)
 ```
 
-Commands earlier in the array take precedence. Tools with a noun and verb can be
+Commands earlier in the array take precedence. A graph's tools become commands
+unless their `surfaces` leaves out `cli`. Tools with a noun and verb can be
 written in either order, such as `yak task list` or `yak list task`. The usage
 page groups verbs under their noun. `yak graph`, `yak graph --help`, and
 `yak help graph` print the commands in the `graph` group.

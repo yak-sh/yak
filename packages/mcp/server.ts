@@ -1,4 +1,4 @@
-import { type NamedTool, namedTool, toolName } from '@yaks/graph'
+import { type NamedTool, namedTool, offered, toolName } from '@yaks/graph'
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 // The server: a graph, its tools, and the MCP protocol implementation that
@@ -349,26 +349,28 @@ export let inputSchemaOf = (
  * Every tool this server lists, in the order it registers them: the generic
  * tier, then the graph's plugins', then the caller's own. A caller that
  * already has the tier in its own list passes `core: false`, so the tier is
- * not added twice.
+ * not added twice. A tool offered only elsewhere (`surfaces` without `mcp`)
+ * is neither listed nor callable here.
  *
  * ```ts
  * let names = listing(opts).map(toolName)
  * ```
  */
-export let listing = (opts: Options): Tool[] => [
-  ...(opts.core === false ? [] : core({
-    vocab: opts.graph.vocab,
-    depth: opts.schema,
-    prop: opts.prop,
-    guide: opts.guide,
-    search: opts.search,
-    readOnly: opts.readOnly,
-    scope: opts.scope,
-    undo: opts.undo,
-  })),
-  ...toolsOf(opts.graph.plugins),
-  ...(opts.tools ?? []),
-]
+export let listing = (opts: Options): Tool[] =>
+  [
+    ...(opts.core === false ? [] : core({
+      vocab: opts.graph.vocab,
+      depth: opts.schema,
+      prop: opts.prop,
+      guide: opts.guide,
+      search: opts.search,
+      readOnly: opts.readOnly,
+      scope: opts.scope,
+      undo: opts.undo,
+    })),
+    ...toolsOf(opts.graph.plugins),
+    ...(opts.tools ?? []),
+  ].filter(offered('mcp'))
 
 /** The roster this server serves: the tool names it lists, in listing order.
  * This is what a client caches when it connects, and what

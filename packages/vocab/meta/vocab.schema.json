@@ -322,6 +322,18 @@
         },
         "openWorld": {
           "type": "boolean"
+        },
+        "surfaces": {
+          "description": "Where the tool is offered: cli, the yak command line; mcp, an MCP server's listing. Every surface when absent.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "cli",
+              "mcp"
+            ]
+          }
         }
       },
       "required": [

@@ -253,7 +253,8 @@ handler. `scope` alone does not implement tenant selection or isolation.
 A graph plugin can contribute tools, and `Options.tools` adds tools directly.
 The list is ordered: generic tools, plugin tools, then explicitly supplied
 tools. Set `core: false` when the application already supplies the generic
-tools.
+tools. A tool whose `surfaces` leaves out `mcp`, such as `serve`, is neither
+listed nor callable here.
 
 ```ts
 import { argsOf, type Plugin } from '@yaks/graph'

@@ -47,6 +47,7 @@
     },
     "admin_login": {
       "tool": true,
+      "surfaces": ["cli"],
       "noun": "admin",
       "verb": "login",
       "title": "Sign in as a yaks.app account",
@@ -240,6 +241,7 @@
     },
     "admin_tail": {
       "tool": true,
+      "surfaces": ["cli"],
       "noun": "admin",
       "verb": "tail",
       "title": "Follow yaks.app live events",
