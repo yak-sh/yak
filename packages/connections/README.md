@@ -54,6 +54,7 @@ caller to apply in its own name:
   connection that holds a credential: giving an app a person's account is the
   person's act. With `each`, the owner is the space asking each person, or a
   person making their own, and an app is answered with the one that owner holds.
+  The connection comes first in what it returns.
 - `list(read, owner)` returns the owner's connections and the `uses` links to
   them.
 
