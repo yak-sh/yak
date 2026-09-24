@@ -1,12 +1,17 @@
 # @yaks/oauth
 
-Authorization-flow helpers and private record storage shared by provider
-integrations. This package does not implement an OAuth client by itself.
+The OAuth authorization-code client for a provider described as data, and the
+building blocks it shares with protocol-specific adapters: private record
+storage, PKCE, and expiring attempts.
 
 ## Exports
 
 Import paths:
 
+- `client(provider, options)` from `@yaks/oauth`: the authorization-code client
+  (RFC 6749 §4.1 with PKCE): `begin`, `complete`, `token` and `refresh`.
+- `Provider`, `Tokens`, `Options`, `Client` and `OAuthError` from `@yaks/oauth`:
+  its data and its refusal.
 - `AuthorizationStore<Record>` from `@yaks/oauth`: the private-record interface,
   with reads and serialized updates.
 - `attempt(now?)` from `@yaks/oauth`: a unique correlation value and ten-minute
@@ -15,22 +20,71 @@ Import paths:
   Proof Key for Code Exchange (PKCE). S256 means the challenge is the URL-safe
   Base64 encoding of the verifier's SHA-256 hash.
 
-The implementation is [@yaks/secrets](../secrets)'
-`records(graph, vault,
-prefix, check?)`: each record is a secret, so the graph
+The store's implementation is [@yaks/secrets](../secrets)'
+`records(graph,
+vault, prefix, check?)`: each record is a secret, so the graph
 holds its name and a handle and the vault holds its contents.
 
-## Example
+## The client
+
+A provider is data: where a person authorizes, where codes and refresh tokens
+are exchanged, the scopes to ask for, any extra authorize parameters, and the
+client registered with it.
 
 ```ts
-import { attempt, pkce } from '@yaks/oauth'
+import { client, type Provider } from '@yaks/oauth'
 
-const pending = attempt()
-const { verifier, challenge } = await pkce()
-// Keep pending and verifier in memory. A protocol adapter includes challenge in
-// the authorization URL, checks the returned state and deadline, then sends the
-// verifier in its code exchange. These helpers do not perform those checks.
+let google: Provider = {
+  authorize: 'https://accounts.google.com/o/oauth2/v2/auth',
+  token: 'https://oauth2.googleapis.com/token',
+  scopes: ['https://www.googleapis.com/auth/calendar.events'],
+  params: { access_type: 'offline', prompt: 'consent' },
+  client: { id: clientId, secret: clientSecret },
+}
+
+let calendar = client(google, {
+  store, // an AuthorizationStore<Tokens>, such as @yaks/secrets records()
+  key: connectionEid, // where this grant is kept in the store
+  redirect: 'https://yourname.yaks.app/_yaks/connections/back',
+})
+
+// Request one: send the person to the link, and hold the attempt.
+let { url, attempt } = await calendar.begin()
+
+// Request two, at the redirect: exchange the code and keep the grant.
+await calendar.complete(attempt, request.url)
+
+// Any time after: a usable access token, refreshed when it is about to expire.
+let token = await calendar.token()
+
+// When the API refuses a token, a new one (once, however many callers ask).
+let next = await calendar.refresh(token!)
 ```
+
+- `begin(scopes?)` returns the authorize link and the attempt: its `state`, its
+  deadline and its PKCE verifier. The client keeps nothing, because the request
+  that begins and the request that completes may not share a process; the caller
+  holds the attempt across the redirect (a sealed cookie, a short-lived record).
+  Extra `params` never replace the flow's own parameters.
+- `complete(attempt, url)` checks the return's `state`, the deadline, any
+  `error`, and that exactly one `code` came back, before any request. It then
+  exchanges the code with the verifier and replaces the stored grant whole.
+- `token()` answers from the store while the token has more than a minute left,
+  and refreshes it otherwise. It is `undefined` when there is no grant.
+- `refresh(stale)` refreshes after the provider refused `stale`, unless another
+  caller already replaced it. A refresh that returns no new refresh token keeps
+  the old one (RFC 6749 §6).
+- Refreshing happens inside the store's `update`, so two callers refreshing one
+  grant at once never both spend the refresh token.
+- A confidential client authenticates at the token endpoint with HTTP Basic, or
+  in the form body with `auth: 'post'`. A client with no secret sends its id in
+  the body.
+- A refusal throws `OAuthError`, whose `code` is the provider's `error`
+  (`invalid_grant` means the grant is gone and the person must connect again),
+  `http_<status>` when the provider gave no code, or the client's own: `state`,
+  `code`, `expired`.
+
+## The store
 
 `AuthorizationStore<R>.read(key)` returns a record or `undefined`.
 `update(key, fn)` passes a mutable record to an asynchronous callback and
@@ -40,15 +94,17 @@ before mutating the record if failure should leave it unchanged.
 
 ## Storage and security
 
-The store contains sensitive values. The store does not open browsers, accept
-HTTP callbacks, select a provider, or execute token exchanges.
+The store contains sensitive values. Nothing in this package opens a browser,
+accepts an HTTP callback, or keeps anything of its own: the host routes the
+redirect to `complete` and gives the client its store.
 
+Protocols that are not this flow keep their own adapters.
 `@yaks/mcp-client/oauth` retains MCP discovery, client registration and refresh.
 `@yaks/openrouter/oauth` handles OpenRouter's code-to-API-key exchange. Both use
-the same private storage and attempt lifetime; they do not pretend to implement
-identical protocols. In-flight verifiers remain in memory, never in the store.
+the same private storage and attempt lifetime and keep their in-flight verifiers
+in memory, never in the store.
 
 ## Compatibility
 
-The module uses Web Crypto and `btoa` (modern Deno, Node, browsers, and
+The module uses `fetch`, Web Crypto and `btoa` (modern Deno, Node, browsers, and
 Workers).

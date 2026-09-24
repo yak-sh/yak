@@ -1,5 +1,7 @@
-/** Shared private authorization storage and expiring browser-flow attempts.
- * Protocol discovery and token exchanges belong to provider adapters.
+/** Shared private authorization storage, expiring browser-flow attempts, and
+ * the generic authorization-code client for a provider described as data
+ * (./client.ts). Protocols that are not that flow — MCP discovery, OpenRouter's
+ * key exchange — stay in their own adapters.
  */
 export type AuthorizationStore<R extends object> = {
   read(key: string): Promise<R | undefined>
@@ -28,3 +30,11 @@ export const pkce = async (): Promise<
   )
   return { verifier, challenge }
 }
+export {
+  type Client,
+  client,
+  OAuthError,
+  type Options,
+  type Provider,
+  type Tokens,
+} from './client.ts'
