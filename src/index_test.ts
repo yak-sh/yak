@@ -79,6 +79,9 @@ Deno.test('anchor picks the reverse-index set for an eid-ref equality', () => {
   // .deliver.to=s1 anchors on the reverse set {w1,w3}, smaller than byComp[wake]
   let a = anchor(ix, parseQuery('.wake! .deliver.to=s1 .delivered= .failed='))
   assertEquals(a, new Set(['w1', 'w3']))
+  // nothing points at s9, and no row carries mail: empty, never a whole scan
+  assertEquals(anchor(ix, parseQuery('.wake! .deliver.to=s9')), new Set())
+  assertEquals(anchor(ix, parseQuery('.mail!')), new Set())
 })
 
 Deno.test('anchor falls back to component presence, and to nothing', () => {

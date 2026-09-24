@@ -178,6 +178,12 @@ export let implies = (p: Pred): boolean => {
 // requiring a component present anchors on byComp. Path preds (`p.at`) anchor on
 // their NEAR component's presence, never mistaking the near ref for a value.
 // The returned set is the index's own — callers read it, never mutate it.
+//
+// A set nobody holds is deleted from the index (`drop`), so a missing one means
+// NO candidates, not no anchor: a component no row carries, or a ref value
+// nothing points at, anchors on the empty set. Reading it as "no anchor" made a
+// query for an absent component scan the whole cache on every resolve.
+let NONE: Set<string> = new Set()
 export let anchor = (ix: Index, preds: Pred[]): Set<string> | undefined => {
   let best: Set<string> | undefined
   let consider = (s: Set<string> | undefined) => {
@@ -216,10 +222,10 @@ export let anchor = (ix: Index, preds: Pred[]): Set<string> | undefined => {
       !p.at && p.comp && p.prop && p.op == '' && p.value &&
       !p.value.includes(',') && !/\.\./.test(p.value) && isRef(p.comp, p.prop)
     ) {
-      consider(ix.refs.get(refKey(p.comp, p.prop))?.get(p.value))
+      consider(ix.refs.get(refKey(p.comp, p.prop))?.get(p.value) ?? NONE)
       continue
     }
-    if (p.comp && implies(p)) consider(ix.byComp.get(p.comp))
+    if (p.comp && implies(p)) consider(ix.byComp.get(p.comp) ?? NONE)
   }
   return best
 }
