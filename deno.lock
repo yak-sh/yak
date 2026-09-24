@@ -1876,7 +1876,8 @@
       },
       "packages/cli": {
         "dependencies": [
-          "jsr:@std/assert@1"
+          "jsr:@std/assert@1",
+          "npm:preact@^10.29.1"
         ]
       },
       "packages/client": {

@@ -186,7 +186,8 @@ export type Host = {
 }
 
 /** The six modules a host imports from a plugin, one subpath each. `views` is
- * not among them: a renderer is the web UI's to import, never a host's. */
+ * not among them: a renderer is the caller's to import — the web UI, or the
+ * `yak` command showing a tool's answer (./answer.ts) — never a host's. */
 export let FACETS = [
   'vocab',
   'rules',
@@ -329,8 +330,12 @@ let unexported = (error: unknown, spec: string, facet: string): boolean =>
   (error.message.startsWith(`Unknown export './${facet}' for `) ||
     error.message == `Module not found "${spec}".`)
 
-/** The default {@link Load}: `import('<plugin>/<subpath>')`. */
-export let facet: Load = async (plugin, name) => {
+/** `import('<plugin>/<name>')`, or `null` where the package does not export
+ * that subpath — a facet, or the `./views` a caller draws with. */
+export let subpath = async <M>(
+  plugin: string,
+  name: string,
+): Promise<M | null> => {
   let spec = `${plugin}/${name}`
   try {
     return await import(spec)
@@ -339,6 +344,9 @@ export let facet: Load = async (plugin, name) => {
     throw error
   }
 }
+
+/** The default {@link Load}: {@link subpath}. */
+export let facet: Load = (plugin, name) => subpath(plugin, name)
 
 /** An assembled host: everything a plugin factory was given, plus what only
  * the caller of {@link compose} needs. */

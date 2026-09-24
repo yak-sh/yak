@@ -10,7 +10,8 @@
   "license": "Apache-2.0",
   "description": "The yak command line: it opens the graph a config file names, or connects to an MCP server, and turns every tool it finds there into a subcommand parsed through that tool's own input schema.",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "preact": "npm:preact@^10.29.1"
   },
   "compilerOptions": {
     "lib": [

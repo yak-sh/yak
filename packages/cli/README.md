@@ -171,10 +171,10 @@ six.
 | `./service` | `service?: (host, options, signal)` for a duty                                                |
 | `.`         | Public types and library functions; not loaded by `compose`                                   |
 
-The web UI separately imports `./vocab` and `./views`. Those modules must work
-in a browser and must not import SQL, storage drivers, or server-only APIs.
-`deno task check:browser` verifies this constraint. `compose` does not load
-`./views`.
+The web UI separately imports `./vocab` and `./views`, and `yak` imports
+`./views` to show a tool's answer. Those modules must work in a browser and must
+not import SQL, storage drivers, or server-only APIs. `deno task check:browser`
+verifies this constraint. `compose` does not load `./views`.
 
 ```ts
 // @yaks/mail/vocab
@@ -320,6 +320,7 @@ page groups verbs under their noun. `yak graph`, `yak graph --help`, and
 | `--config <path>` | Open the graph described by a local config.                            |
 | `--host <host>`   | Call a remote MCP server.                                              |
 | `--json`          | Print structured results as JSON.                                      |
+| `--tui`           | Hold the answer in the terminal (@yaks/tui) until Ctrl-C.              |
 | `--timing`        | Print response timing to stderr. `$YAKS_TIMING=1` enables it globally. |
 | `--no-duties`     | Take no lease and run no duties (config `duties: false`).              |
 | `--help`, `-h`    | Print general or command-specific help.                                |

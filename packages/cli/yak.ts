@@ -53,6 +53,7 @@ let TAIL =
                   machine cannot open as a file (default $YAKS_HOST, else
                   ${HOST})
   --json          print the structured result instead of the text
+  --tui           hold the answer in the terminal, scrollable, until Ctrl-C
   --timing        one line on stderr per response, with its Server-Timing
                   (or YAKS_TIMING=1)
   --no-duties     take no lease and run no duty — the effect sweep, the

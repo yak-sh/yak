@@ -10,7 +10,8 @@
 // answering HTTP over the same file (@yaks/api).
 //
 // A command line runs a tool exactly as the HTTP server does: it writes a
-// `call` row, the tool runner executes it, and what came back is printed. So
+// `call` row, the tool runner executes it, and what came back is shown through
+// the plugins' views (./answer.ts). So
 // the record of a tool a person typed and a tool an agent requested is
 // identical, and the rules, the post-commit effects and the attribution are
 // one set for both.
@@ -19,8 +20,9 @@
 // importing it opens a database and pulls in every plugin the config names — a
 // cost `yak login` on a machine with no graph should not pay.
 
-import { answerOf, faulted, structured, toolEid, worded } from '@yaks/tools'
-import { read } from './config.ts'
+import { answerOf, faulted, structured, toolEid } from '@yaks/tools'
+import { hold, printed, registry } from './answer.ts'
+import { read, used } from './config.ts'
 import type { Command, Ctx } from './run.ts'
 import { compose, type Served } from './host.ts'
 
@@ -71,6 +73,10 @@ export let close = async (code?: number): Promise<void> => {
  * list `cli` gathers when the command named a config (run.ts `more`). */
 export let commands = async (c: Ctx): Promise<Command[]> => {
   let host = await opened(c.config!, c.duties)
+  // The views are imported when an answer is first drawn, never to list.
+  let views: ReturnType<typeof registry> | undefined
+  let drawn = () =>
+    views ??= registry((read(c.config!).plugins ?? []).map(used))
   return host.tools.map((declared) => ({
     ...declared,
     // A tool arrives declaring its arguments as JSON Schema — the same
@@ -90,11 +96,13 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
       // `--json` prints the answer as data, the same object an MCP client
       // reads as `structuredContent` (@yaks/tools `structured`).
       let answer = answerOf(landed)
-      c.out(
-        c.json
-          ? JSON.stringify(structured(declared, answer), null, 2)
-          : worded(answer),
-      )
+      if (c.json) {
+        c.out(JSON.stringify(structured(declared, answer), null, 2))
+      } else if (c.tui) await hold(await drawn(), host.vocab, answer)
+      else {
+        let text = printed(await drawn(), host.vocab, answer)
+        if (text) c.out(text)
+      }
       // A refusal is data, not an exception: the text is printed either way
       // and the exit code is what reports which it was — taken from the runner,
       // since a tool that returns fault rows has not itself failed.

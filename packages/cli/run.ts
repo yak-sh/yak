@@ -44,6 +44,9 @@ export type Ctx = {
    * `--no-duties`, which takes no lease and runs none of them. */
   duties: boolean
   json: boolean
+  /** Whether an answer is held in the terminal (@yaks/tui) rather than
+   * printed — `--tui`. */
+  tui: boolean
   help: boolean
   ask: Rpc
   reads: Reads
@@ -256,12 +259,14 @@ export let globals = (
   config?: string
   duties: boolean
   json: boolean
+  tui: boolean
   help: boolean
   timing: boolean
   rest: string[]
 } => {
   let host: string | undefined
   let json = false
+  let tui = false
   let duties = true
   let help = false
   let config: string | undefined
@@ -272,6 +277,7 @@ export let globals = (
   for (let i = 0; i < argv.length; i++) {
     let a = argv[i]
     if (a == '--json') json = true
+    else if (a == '--tui') tui = true
     else if (a == '--no-duties') duties = false
     else if (a == '--help' || a == '-h') help = true
     else if (a == '--timing') timing = true
@@ -281,7 +287,7 @@ export let globals = (
     else if (a.startsWith('--config=')) config = a.slice(9)
     else rest.push(a)
   }
-  return { host, config, duties, json, help, timing, rest }
+  return { host, config, duties, json, tui, help, timing, rest }
 }
 
 /**
@@ -350,7 +356,7 @@ export let cli = async (
   let out = opts.out ?? ((line: string) => console.log(safe(line)))
   let note = opts.note ?? ((line: string) => console.error(safe(line)))
   let said = globals(opts.argv ?? Deno.args)
-  let { duties, json, help, timing, rest } = said
+  let { duties, json, tui, help, timing, rest } = said
   try {
     // Where this command runs: a file it opens, or an MCP server it calls. A
     // command line naming both is refused here, like any other that means two
@@ -376,6 +382,7 @@ export let cli = async (
       config,
       duties,
       json,
+      tui,
       help,
       ask: opts.ask ?? rpc({
         url: doorUrl(host),

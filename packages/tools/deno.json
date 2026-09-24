@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
-    "./vocab": "./vocab.ts"
+    "./vocab": "./vocab.ts",
+    "./views": "./views.ts"
   },
   "license": "Apache-2.0",
   "description": "Executes recorded graph tool invocations and stores results independently of sessions.",
