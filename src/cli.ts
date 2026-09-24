@@ -64,7 +64,6 @@ import {
   param,
   patchChanges,
   patches,
-  projectionSnapshot,
   query,
   readerFor,
   readerRows,
@@ -140,15 +139,13 @@ import {
   claudePid,
   descends,
 } from './proc.ts'
-import { personaMirror } from './persona.ts'
-import { plan, sync as mirror } from '@yaks/mirror'
 import {
   configPath as yakConfig,
   type Plug,
   read as yakRead,
   used as yakUsed,
 } from '@yaks/cli/config'
-import { commit, revision } from './git.ts'
+import { revision } from './git.ts'
 import { gitSync } from './repo.ts'
 import { resolve } from 'node:path'
 import { land as landTree } from './land.ts'
@@ -3037,71 +3034,6 @@ let usageReport = async (got: Got) => {
 
 // Backup is bin/backup (a data-dir git commit) — the CLI is its front
 // door so 'task backup' works wherever the CLI is installed.
-// Materialize every persona into its project repo's .tasks/ — write what
-// changed, DELETE what the render no longer produces (a deleted or renamed
-// persona's stale file), then commit the paths git already tracks (git.ts
-// keeps that safe; --no-commit stops at the write, for a look before
-// anything lands). --check writes nothing: it reports drift and exits
-// non-zero, the gate's guard against a hand-edit to a generated file. The
-// server's effect keeps files fresh on graph changes; this verb is the
-// explicit door — the first sync of a new repo, or the committed story until
-// the permission-gated actuator (T-3926) owns it.
-let sync = async (got: Got) => {
-  let check = got.flags.has('--check')
-  let snap
-  try {
-    snap = await projectionSnapshot()
-  } catch (e) {
-    // A dead server can't answer, and a check that can't run must not wedge
-    // the gate — skip rather than fail. The normal verb still surfaces it.
-    if (check) return print(`sync --check skipped: ${(e as Error).message}`)
-    throw e
-  }
-  let { binding, paths } = personaMirror(rows(snap), snap.deps)
-  if (check) {
-    let drift = (await plan(binding)).filter((p) => p.act != 'same')
-      .map((p) =>
-        `${
-          p.act == 'conflict'
-            ? 'conflict'
-            : p.text == null
-            ? 'orphan'
-            : p.sides.file == null
-            ? 'missing'
-            : 'stale'
-        } ${p.path}`
-      )
-    if (!drift.length) return print('projections in sync')
-    for (let d of drift) warn(d)
-    warn(`${drift.length} projection(s) drifted — run: task sync`)
-    Deno.exit(1)
-  }
-  if (!paths.length) {
-    return print('no personas with a homed repo — nothing to write')
-  }
-  let { wrote, removed, conflicts, failed } = await mirror(binding)
-  for (let p of wrote) print(`wrote ${p}`)
-  for (let p of removed) print(`removed ${p}`)
-  for (let p of conflicts) {
-    warn(
-      `conflict ${p} — edited here and in the graph; move the edit into ` +
-        'the graph and delete the file',
-    )
-  }
-  for (let f of failed) warn(`failed ${f}`)
-  if (!wrote.length && !removed.length && !conflicts.length && !failed.length) {
-    print('all fresh')
-  }
-  if (got.flags.has('--no-commit')) return
-  // Every path, not just this run's writes: a file left dirty by an
-  // earlier sync (or adopted with `git add` since) lands here too.
-  let done = await commit(paths, 'personas: materialize')
-  for (let root of done.committed) print(`committed ${root}`)
-  for (let root of done.pushed) print(`pushed ${root}`)
-  for (let p of done.untracked) print(`untracked ${p} — git add to adopt`)
-  for (let f of done.failed) warn(`sync failed ${f}`)
-}
-
 let backup = async () => {
   let script = fileURLToPath(new URL('../bin/backup', import.meta.url))
   let { code } = await new Deno.Command(script, {
@@ -3632,7 +3564,6 @@ export let verbs = bind({
   meta: (got) => colon(undefined, ['meta', got.body ?? '']),
   edge,
   backup: () => backup(),
-  sync,
   design,
   goal,
   goals,

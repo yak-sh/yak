@@ -3,15 +3,9 @@
 // (contains = preload the whole body, reads = carry the one-line index;
 // everything else in
 // scope stays searchable) — and this module renders that view as one
-// markdown document: for a spawned session's system prompt, and for the
-// repo-local .tasks/ files native harnesses read (CLAUDE.md symlinks
-// there when a repo adopts them — the flip is the owner's move, never
-// ours). materialize() and filesFor() are pure over rows+deps so the
-// CLI verb, the server effect, and the tests render the same bytes;
-// personaMirror() hands them to @yaks/mirror as a write-only binding, which
-// is the only thing that touches the files, and it stops at the write —
-// committing what it wrote is git.ts's job, at the callers.
-import { type Binding, memo, present } from '@yaks/mirror'
+// markdown document for a spawned session's system prompt. materialize() is
+// pure over rows+deps. The repo-local .tasks/ files native harnesses read are
+// @yaks/persona's to write (`persona_sync`), from the same graph.
 import { type Dep, type Edge, idOf } from './types.ts'
 import { accepted, memoryHead, type Row } from './client.ts'
 import { hot } from './warmth.ts'
@@ -27,7 +21,7 @@ import { entityUrl } from './url.ts'
 // adapters.ts provider rows declare their dialect + target filenames,
 // and sync renders one persona into N provider files.
 export type Dialect = {
-  header: (id: string, title: string, name: string) => string
+  header: (id: string, title: string) => string
   rule: string
   index: string
 }
@@ -41,37 +35,6 @@ next sync overwrites hand edits. -->`,
   index:
     '## Memory Index\n\n*Recall a body by id (MCP `memory_recall` / CLI `task show`).*',
 }
-
-// The claude AGENT-FILE dialect. `claude --agent <name>` (and every native
-// harness that reads `.claude/agents/<name>.md`) loads a persona as the
-// session's system prompt — but ONLY if the file OPENS with YAML frontmatter
-// carrying `name` and `description`; a file that starts with the HTML banner
-// is silently "not found" (verified against claude 2.1.250). So a specialist
-// persona projection — the file `.claude/agents/<slug>.md` symlinks to — leads
-// with frontmatter, then the same banner as its first body line. `name` is the
-// slug, because claude keys the agent by this frontmatter name, not the
-// filename: an `operator.md` symlink to `taskmaster.md` registers as agent
-// `taskmaster`. codex reads the very same file RAW (model_instructions_file),
-// where the frontmatter is harmless preamble. The description is the persona's
-// one-line doc title, JSON-encoded so any character stays a valid YAML scalar.
-export let AGENT: Dialect = {
-  header: (id, title, name) =>
-    `---\nname: ${name}\ndescription: ${JSON.stringify(title)}\n---\n${
-      DIALECT.header(id, title, name)
-    }`,
-  rule: DIALECT.rule,
-  index: DIALECT.index,
-}
-
-// The claude agent name a persona registers under — its slug, sanitized to
-// claude's charset (lowercase, digits, hyphens), falling back to its lowered
-// id. cli.ts resolves the same name from the operator symlink's realpath, so
-// the two agree without a shared table.
-export let agentName = (p: Row) =>
-  String(p.comps.alias?.slug ?? idOf(p)).toLowerCase().replace(
-    /[^a-z0-9-]+/g,
-    '-',
-  )
 
 // One index line — the memory_recall rendering, tolerant of non-memory
 // targets (any doc can ride the index tier). Dynamic composition may order
@@ -300,11 +263,7 @@ let render = (
     pre = pre.filter((r) => !omit.pre.has(r.eid))
     idx = idx.filter((r) => !omit.idx.has(r.eid))
   }
-  let header = d.header(
-    idOf(p),
-    String(p.comps.doc?.title ?? 'persona'),
-    agentName(p),
-  )
+  let header = d.header(idOf(p), String(p.comps.doc?.title ?? 'persona'))
   let body = (r: Row) => [
     d.rule,
     `# ${idOf(r)} ${r.comps.doc?.title ?? ''}\n\n${
@@ -408,7 +367,7 @@ export let composeWorn = (
 }
 
 // A project's SPECIALIST personas, surfaced as edges. `home` is the
-// one truth for ownership (commonOf and filesFor derive from it); these
+// one truth for ownership (commonOf derives from it); these
 // project→persona `reads` edges are DERIVED from it — never stored — so a
 // specialist shows on its project's card and navigates, and the two facts
 // can't drift (a home is a fact, like a board is a query: membership is
@@ -434,71 +393,6 @@ export let homeReads = (
       : []
   )
 
-// A venture the materializer writes to: a project with a checkout that is
-// not retired. Retired drops out of BOTH the render and the sweep — no new
-// projection, and its adopted files left exactly as the venture last saw
-// them (deleting them would dangle a CLAUDE.md symlink). filesFor and
-// taskRoots share this so the two can't disagree on who is managed.
-let managed = (r: Row) =>
-  !!(r.comps.project && r.comps.repo?.path && !r.comps.archived)
-
-// Every file materialization owes the fleet: for each project with a
-// checkout, the common persona (if any) as .tasks/AGENTS.md and each
-// other home persona as .tasks/personas/<slug>.md. Fleet-shared
-// personas (no home) ride spawns only — they are nobody's file.
-//
-// Each file carries its venture's `push` permission, because that is the
-// only place the two facts meet: git.ts sees paths, and only the project
-// row knows whether this venture's origin may hear from us. Generated files
-// use the stored tier order: unlike a one-run prompt, their bytes must stay a
-// pure function of graph state while the wall clock advances.
-export let filesFor = (all: Row[], deps: Dep[]) => {
-  let out: { path: string; body: string; push: boolean }[] = []
-  for (let proj of all.filter(managed)) {
-    let root = `${proj.comps.repo.path}/.tasks`
-    let push = !!proj.comps.repo.push
-    let base = commonOf(all, deps, proj.eid)
-    if (base) {
-      out.push({
-        path: `${root}/AGENTS.md`,
-        body: render(all, deps, base, null),
-        push,
-      })
-    }
-    // A specialist file only exists BESIDE its repo's AGENTS.md, and a
-    // session reading one reads both — so tiers the common persona already
-    // delivers are omitted here rather than said twice (T-21957). Outside a
-    // repo the specialist rides the spawn path, which renders complete.
-    let said = base ? delivered(all, deps, base.eid, null) : undefined
-    for (
-      let p of all.filter((r) =>
-        r.comps.persona?.home == proj.eid && r.eid != base?.eid
-      )
-    ) {
-      // The filename IS the frontmatter name (agentName): claude keys the
-      // agent by the frontmatter, cli.ts resolves the `--agent` value from the
-      // symlink's realpath BASENAME, and the two must never disagree.
-      out.push({
-        path: `${root}/personas/${agentName(p)}.md`,
-        body: render(all, deps, p, null, AGENT, said),
-        push,
-      })
-    }
-  }
-  return out
-}
-
-// The .tasks roots the materializer OWNS, one per managed venture, with the
-// venture's push permission. filesFor says what SHOULD be there; the mirror
-// binding also lists what IS there and deletes the difference — so a repo
-// whose last persona was deleted is still reconciled, even though it produced
-// no file this render.
-export let taskRoots = (all: Row[]): { root: string; push: boolean }[] =>
-  all.filter(managed).map((r) => ({
-    root: `${r.comps.repo.path}/.tasks`,
-    push: !!r.comps.repo.push,
-  }))
-
 // A repo has ADOPTED the projection when its root CLAUDE.md or AGENTS.md
 // resolves into .tasks/AGENTS.md — then a native harness run in that repo
 // already reads the common persona from disk, and a spawn's composed prompt
@@ -513,55 +407,4 @@ export let adopted = (repoPath: string) => {
     } catch { /* absent or dangling — not adopted via this name */ }
   }
   return false
-}
-
-// The two file shapes the materializer can hold under a .tasks root. We own
-// the directory end to end, so a listing is authoritative: anything matching
-// these shapes is ours, and a missing dir or file is simply nothing to sweep.
-let held = (root: string) => {
-  let out: string[] = []
-  try {
-    Deno.statSync(`${root}/AGENTS.md`)
-    out.push(`${root}/AGENTS.md`)
-  } catch { /* no common persona here */ }
-  try {
-    for (let e of Deno.readDirSync(`${root}/personas`)) {
-      if (e.isFile && e.name.endsWith('.md')) {
-        out.push(`${root}/personas/${e.name}`)
-      }
-    }
-  } catch { /* no specialists here */ }
-  return out
-}
-
-// Where the persona binding remembers what each file last agreed on. The
-// graph cannot hold it for the legacy server, so it is a file in the data dir.
-let memory = () => memo(`${Deno.env.get('HOME')}/.tasks/mirror/personas.json`)
-
-// The persona files as a write-only @yaks/mirror binding: the graph owns them.
-// `files` is what the owned roots hold now plus what the render wants, so a
-// deleted or renamed persona's stale file is removed, and a file somebody
-// edited by hand while the graph also moved is a conflict, left as it is.
-// `paths` carries each path's venture push, for git.ts to commit — every path
-// the render names and every one found under an owned root.
-export let personaMirror = (
-  all: Row[],
-  deps: Dep[],
-  mem: Pick<Binding, 'agreed' | 'remember'> = memory(),
-) => {
-  let want = filesFor(all, deps)
-  let push = new Map(want.map((f) => [f.path, f.push]))
-  for (let { root, push: p } of taskRoots(all)) {
-    for (let path of held(root)) if (!push.has(path)) push.set(path, p)
-  }
-  let binding: Binding = {
-    name: 'personas',
-    files: () => present([...push.keys()]),
-    values: () => Promise.resolve(new Map(want.map((f) => [f.path, f.body]))),
-    ...mem,
-  }
-  return {
-    binding,
-    paths: [...push].map(([path, push]) => ({ path, push })),
-  }
 }

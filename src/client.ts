@@ -4500,20 +4500,6 @@ export let contextSnapshot = async (
   return { changes: changesOf(all), deps: near.deps }
 }
 
-// Persona projection is graph-shaped but small: managed projects, every
-// persona, and the tier edges touching those personas. Asking all persona
-// neighborhoods at once includes recursive persona bases because each base is
-// already a root in the same keyed read.
-export let projectionSnapshot = async (): Promise<Snapshot> => {
-  let [projects, personas] = await Promise.all([
-    query(['.kind=project', '.repo!']),
-    query(['.persona!']),
-  ])
-  let near = await neighborhoods(personas.map((r) => r.eid))
-  let all = uniq([...projects, ...personas, ...near.rows])
-  return { changes: changesOf(all), deps: near.deps }
-}
-
 // The rows the bus's selector might pick, as index queries: a comment on work
 // this run claims, a knock aimed at the session or its actor, and mail aimed
 // at the session or its project.

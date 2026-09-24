@@ -846,7 +846,7 @@ Deno.test('boot runs background jobs without operator lifecycle hooks', async ()
       codexReady: () => Promise.resolve(true),
       readyProviders: () => Promise.resolve([]),
     }
-    let { syncSoon } = wireDoing(doing)
+    wireDoing(doing)
     assert(
       docs().filter((effect) => effect.comp == 'role').every((effect) =>
         !effect.sweep &&
@@ -854,7 +854,7 @@ Deno.test('boot runs background jobs without operator lifecycle hooks', async ()
       ),
       'legacy role state has no lifecycle handler or boot replay',
     )
-    bootDoing(doing, syncSoon)
+    bootDoing(doing)
     await nextTick()
 
     assertEquals(verifiersFor(work.eid).length, 1)

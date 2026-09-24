@@ -4,7 +4,7 @@
 // every `where:'do'` effect off rows journaled with a fed() trace — the
 // server's writes and any other library writer's, uniformly. The serving
 // process keeps the sockets; this process owns the worldly half: spawns,
-// kills, mail, knocks, wakes, sweeps, persona sync, embeddings, dispatch —
+// kills, mail, knocks, wakes, sweeps, embeddings, dispatch —
 // and, since T-35018, the graph-native runner itself, so a slow or dead web
 // server can no longer slow or stop a native session.
 //
@@ -136,7 +136,7 @@ let deps: Doing = {
   codexReady,
   readyProviders,
 }
-let { syncSoon } = wireDoing(deps)
+wireDoing(deps)
 
 let mine = (w: Where) => w == 'do'
 let oops = (comp: string, e: unknown) =>
@@ -164,7 +164,7 @@ setInterval(() => feed.settle(), 2_000)
 // Boot reconcile — recover/reapLeases/relay(do)/ticks — then serve the feed
 // forever. bootDoing's relay covers everything committed before this cursor;
 // the feed covers everything after.
-bootDoing(deps, syncSoon)
+bootDoing(deps)
 
 // A clean stop: silence the reconcilers, let in-flight graph-native
 // generations and calls finish and settle (a source-edit restart must not kill

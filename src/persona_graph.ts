@@ -1,6 +1,6 @@
 // The persona graph read: bounded, level-batched closures over persona tier
-// edges. Persona materialization and fleet projection share this indexed input
-// boundary so neither query nor daemon callers ever need a graph snapshot.
+// edges, the indexed input a rendered persona is built from, so no caller ever
+// needs a graph snapshot.
 import type { Sql } from './store/sql.ts'
 import { depsOf, rowsOf } from './db.ts'
 import { type Dep, kindOf, sessionOf } from './types.ts'
@@ -93,15 +93,4 @@ export let personaGraph = (
   ].filter((e) => !all.has(e))
   absorb(authors)
   return { all: [...all.values()], deps }
-}
-
-// Every persona and project is a bounded indexed root set, then the same tier
-// closure above. This is the daemon-side projection universe.
-export let projectionGraph = (db: Sql) => {
-  let roots = (db.prepare(
-    `select o.eid as eid from persona t join entity o on o.id = t.entity
-     union
-     select o.eid from project t join entity o on o.id = t.entity`,
-  ).all() as { eid: string }[]).map((r) => r.eid)
-  return personaGraph(db, roots)
 }

@@ -1,17 +1,17 @@
 // The bounded persona reads render the SAME BYTES as the whole-graph
-// snapshot — the parity line for query derivation and the .tasks projection
-// off snapshot() (T-21230). Persona corruption is the failure
+// snapshot — the parity line for query derivation off snapshot()
+// (T-21230). Persona corruption is the failure
 // mode: a scoped walk that misses a tier member or a derived homeReads
 // edge silently ships a wrong prompt, so the proof is byte equality over
 // a graph with every shape that walk must reach — a contained base, an
 // index tier, a specialist homed but not contained, and noise rows that
 // must change nothing.
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import { link } from './edge.ts'
-import { idOf, uuid } from './types.ts'
-import { evalGraph, personaGraph, projectionGraph } from './graph_query.ts'
+import { uuid } from './types.ts'
+import { evalGraph, personaGraph } from './graph_query.ts'
 import { resultStates } from './result_component.ts'
-import { filesFor, materialize, taskRoots } from './persona.ts'
+import { materialize } from './persona.ts'
 import { rows } from './client.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -40,7 +40,7 @@ let seed = () => {
     { eid: proj, name: 'project', comp: {} },
     { eid: proj, name: 'repo', comp: { path: '/tmp/parity-venture' } },
   ])
-  let bare = e() // project with no repo — filesFor must skip it
+  let bare = e() // project with no repo
   doc(bare, 'Bare project')
   apply(db, [{ eid: bare, name: 'project', comp: {} }])
 
@@ -118,72 +118,4 @@ Deno.test('personaGraph materializes snapshot-identical bytes', () => {
       materialize(whole, snap.deps, p, NOW),
     )
   }
-})
-
-Deno.test('projectionGraph yields snapshot-identical files and roots', () => {
-  let { db } = seed()
-  let snap = snapshot(db)
-  let g = projectionGraph(db)
-  assertEquals(
-    filesFor(g.all, g.deps),
-    filesFor(rows(snap), snap.deps),
-  )
-  assertEquals(taskRoots(g.all), taskRoots(rows(snap)))
-  // The parity is not vacuous: the venture renders its common persona AND the
-  // homeReads-only specialist, and the walk stayed bounded (no task row).
-  let files = filesFor(g.all, g.deps)
-  assertEquals(files.length, 2)
-  assert(!g.all.some((r) => r.comps.task))
-})
-
-Deno.test('projectionGraph keeps a persona through role add and removal', () => {
-  let { db, common, spec } = seed()
-  let render = () => {
-    let g = projectionGraph(db)
-    let local = filesFor(g.all, g.deps)
-    let snap = snapshot(db)
-    assertEquals(
-      local,
-      filesFor(rows(snap), snap.deps),
-      'bounded daemon and whole local projection stay byte-identical',
-    )
-    assertEquals(local.length, 2, 'one common and one specialist file')
-    return {
-      common: local.find((f) => f.path.endsWith('/AGENTS.md'))!,
-      specialist: local.find((f) => f.path.endsWith('/specialist.md'))!,
-    }
-  }
-
-  let plain = render()
-  let initial = rows(snapshot(db))
-  let commonRow = initial.find((r) => r.eid == common)!
-  let specialistRow = initial.find((r) => r.eid == spec)!
-  assertStringIncludes(plain.common.body, `GENERATED from ${idOf(commonRow)}`)
-  assertStringIncludes(
-    plain.specialist.body,
-    `GENERATED from ${idOf(specialistRow)}`,
-  )
-  assertEquals(commonRow.kind, 'persona')
-  assertEquals(specialistRow.kind, 'persona')
-
-  apply(db, [{ eid: spec, name: 'role', comp: { state: 'stopped' } }])
-  let mixed = render()
-  let roleRow = rows(snapshot(db)).find((r) => r.eid == spec)!
-  assertEquals(roleRow.kind, 'role', 'derived kind precedence is unchanged')
-  assertStringIncludes(mixed.specialist.body, `GENERATED from ${idOf(roleRow)}`)
-  assertStringIncludes(
-    mixed.common.body,
-    `GENERATED from ${idOf(commonRow)}`,
-    'ordinary personas keep their N address',
-  )
-
-  apply(db, [{ eid: spec, name: 'role', comp: null }])
-  let restored = render()
-  let restoredRow = rows(snapshot(db)).find((r) => r.eid == spec)!
-  assertEquals(restoredRow.kind, 'persona')
-  assertStringIncludes(
-    restored.specialist.body,
-    `GENERATED from ${idOf(restoredRow)}`,
-  )
-  assertEquals(restored.specialist.body, plain.specialist.body)
 })

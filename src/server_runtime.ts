@@ -1579,15 +1579,14 @@ registerManagedSource()
 // The curated effects moved whole to doing.ts (D-22388 step 3): one list,
 // wired in every process — inline this one owns all of it, including the
 // runner hooks; in split mode (TASKS_EFFECTS=daemon) the effects daemon owns
-// every row and this registry fires nothing. wireDoing returns the persona-sync
-// debounce boot still needs below.
+// every row and this registry fires nothing.
 let doingDeps: Doing = {
   cast,
   native: runner?.native,
   codexReady,
   readyProviders,
 }
-let { syncSoon } = wireDoing(doingDeps)
+wireDoing(doingDeps)
 
 // live_db.ts completed the transactional, idempotent migration before this
 // process reached any boot reconciler. The supervisor never starts this server
@@ -1610,7 +1609,7 @@ tick('subs', () => aged(), 30_000, false)
 // graph-native runner included since T-35018 — so this process reconciles
 // nothing. App-plane-only likewise: the boot reconcilers (reapLeases,
 // standingBackfill, the outbox relay) all WRITE, and a reader holds no baton.
-if (!appOnly && !splitEffects()) bootDoing(doingDeps, syncSoon)
+if (!appOnly && !splitEffects()) bootDoing(doingDeps)
 
 // Turn hooks append to a durable local spool and return without waiting for a
 // loaded event loop. The server resolves the provider id through its unique

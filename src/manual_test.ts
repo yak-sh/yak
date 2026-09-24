@@ -124,7 +124,6 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       meta: 'meta [text…] [--body=BODY]',
       edge: '<id> <type> <child> [--gone]',
       backup: 'backup',
-      sync: 'sync [--no-commit] [--check]',
       design: 'design <title…> [--body=BODY]',
       goal: 'goal <title…> [--body=BODY] [--scope=ID]',
       goals: 'goals',

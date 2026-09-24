@@ -113,7 +113,7 @@ import {
   verificationReviewWhere,
   VERIFY_PENDING,
 } from './verification.ts'
-export { personaGraph, projectionGraph } from './persona_graph.ts'
+export { personaGraph } from './persona_graph.ts'
 
 // A filter of only rankings — or of nothing at all — selects EVERY entity, and
 // there the index has nothing to offer: matching() would read every row through

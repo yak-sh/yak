@@ -25,7 +25,6 @@
 // every journaled row (apply() and record() both journal). That is what retires
 // the handler-internal-cast residue T-22496 documented.
 import { type Change } from './types.ts'
-import { sentences } from './edge.ts'
 import { db } from './live_db.ts'
 import { docs, on, relay } from './effects.ts'
 import { PENDING } from './deliver.ts'
@@ -46,9 +45,6 @@ import { dispatchSweep } from './dispatch.ts'
 import { ruled } from './spawnrule.ts'
 import { embedSweep } from './embed.ts'
 import { initVector, ownVector } from './vector.ts'
-import { personaMirror } from './persona.ts'
-import { sync as mirror } from '@yaks/mirror'
-import { commit } from './git.ts'
 import {
   codexPending,
   commented,
@@ -76,10 +72,8 @@ import { record } from './telemetry.ts'
 import { readEntries } from './entries.ts'
 import { graphLog } from './entry_log.ts'
 import { sweepRows, vocabularyDoc } from './db.ts'
-import { projectionGraph } from './graph_query.ts'
 import { vocabularyMd } from './schema.ts'
 import { repeat } from './timers.ts'
-import type { Sql } from './store/sql.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -368,151 +362,9 @@ export let wireDoing = (d: Doing) => {
       're-drives an open, un-spawned ticket once a gate clears (D-17077, ' +
       'T-18729)',
   })
-
-  // Personas follow the graph into each repo's .tasks/ files: any change
-  // that could reshape one — a persona born or rehomed, a tier edge
-  // spoken or unsaid, a doc edit on a persona or a tiered member —
-  // re-renders the fleet (write-if-changed, debounced so a batch lands
-  // once) and commits what it wrote, so a persona edit doesn't leave every
-  // venture repo dirty. A failed write or commit is a warning, never a
-  // broken batch.
-  //
-  // This lands in the PRIMARY checkout, which an operator may be using
-  // right now — so what's safe here and what isn't: the pathspec commit
-  // leaves the index alone, so staged work survives (git.ts), and only
-  // tracked files are committed, so nothing new appears in their tree.
-  // What it does do is advance the branch under them: a worktree's pending
-  // `task land` stops being a fast-forward and needs a rebase.
-  // That's the trade we take knowingly — one small commit per persona
-  // edit, so the rebase is always trivial.
-  let syncing: ReturnType<typeof setTimeout> | undefined
-  // Nobody reads this process's stdout. A sync that can't land — a tree
-  // behind its upstream, a push origin refused — is exactly the failure
-  // that decays into a hand repair months later, so every one of them is
-  // also a telemetry row: `task telemetry --errors` is where an operator
-  // meets it, and the graph's own writes stay unbothered either way.
-  let stuck = (e: unknown) => {
-    console.warn('persona sync —', e)
-    record(db, {
-      source: 'srv',
-      name: 'persona sync',
-      ok: false,
-      error: String(e),
-    })
-  }
-  let syncSoon = () => {
-    // A probe on a scratch copy must never scribble persona files into the
-    // LIVE venture repos it happens to point at: personaMirror() computes each
-    // file's path from the project's real repo, not from DB_PATH, so an
-    // ungated probe write lands in someone's working tree (T-14612). Only
-    // the live instance materializes on a graph change; `task sync` stays
-    // the deliberate, operator-run door.
-    if (!isLive()) return
-    clearTimeout(syncing)
-    syncing = setTimeout(async () => {
-      try {
-        // The projection universe is a bounded keyed walk (every persona +
-        // project, closed over tiers), never the whole-graph snapshot — this
-        // fires on every persona-ish change, and snapshot() here cost the
-        // graph each time (M-21143).
-        let { all, deps } = projectionGraph(db)
-        let { binding, paths } = personaMirror(all, deps)
-        let done = await mirror(binding)
-        for (let f of done.failed) stuck(f)
-        for (let p of done.conflicts) stuck(`conflict ${p}`)
-        // Every projection path, not just this tick's writes: a file some
-        // earlier tick left dirty (untracked then, adopted since) is dirt
-        // this tick can clear. commit() ignores whatever matches HEAD.
-        for (let f of (await commit(paths, 'personas: materialize')).failed) {
-          stuck(f)
-        }
-      } catch (e) {
-        stuck(e)
-      }
-    }, 250)
-  }
-  wirePersonaSync(db, syncSoon)
-  return { syncSoon }
 }
 
 type Row = Record<string, unknown>
-
-// Register the graph changes that reshape persona files. Kept as a seam over
-// the database and reconcile callback so the daemon's invalidation contract is
-// testable without writing into a venture checkout.
-export let wirePersonaSync = (
-  store: Sql,
-  syncSoon: () => void,
-) => {
-  // Is this eid a persona, or on some persona's tier? The gate that keeps
-  // ordinary doc edits and edges from re-rendering the fleet.
-  let personaish = (...eids: (string | undefined)[]) =>
-    eids.some((e) =>
-      e && store.prepare(
-        `select 1 from persona
-           where entity = (select id from entity where eid = :e)
-         union select 1 from (${
-          sentences(
-            undefined,
-            'g."to" = (select id from entity where eid = :e)',
-          )
-        }) d
-           join persona p on p.entity = d.parent`,
-      ).get({ e })
-    )
-  on('persona', {
-    created: syncSoon,
-    // home is the persona's home project — re-homing it moves which
-    // repo the file lands in, so it must re-render. NOT project: the
-    // persona component has no such column (types.ts), and a changed
-    // handler naming a column that isn't there never fires.
-    changed: { home: syncSoon },
-    removed: syncSoon,
-    doc: "materialize personas into their projects' .tasks/ files " +
-      '(write-if-changed; task sync --commit is the deliberate commit)',
-  })
-  on('role', {
-    created: (eid) => personaish(eid) && syncSoon(),
-    removed: (eid) => personaish(eid) && syncSoon(),
-    doc: 'adding or removing role on a persona re-renders its human header',
-  })
-  // A tier edge is an ENTITY wearing its nature, so the tag's arrival is the
-  // link and the edge's own row names the two ends. An unlink leaves nothing to
-  // read — the row went with it — and a tier flip is rare enough that
-  // re-rendering unconditionally beats keeping a shadow copy of the sentence.
-  for (let tier of ['contains', 'reads'] as const) {
-    on(tier, {
-      created: (eid) => {
-        let ends = store.prepare(
-          `select f.eid as "from", t.eid as "to" from edge e
-             join entity f on f.id = e."from" join entity t on t.id = e."to"
-            where e.entity = (select id from entity where eid = ?)`,
-        ).get(eid) as { from: string; to: string } | undefined
-        return !!ends && personaish(ends.from, ends.to) && syncSoon()
-      },
-      removed: syncSoon,
-      doc: 'a tier edge (or common flip) at a persona re-renders its files',
-    })
-  }
-  // Every rendered persona lists the standing goals, so a goal's birth, death,
-  // or retitling is a persona change too.
-  let goalish = (eid: string) =>
-    !!store.prepare(
-      `select 1 from goal where entity = (select id from entity where eid = ?)`,
-    ).get(eid)
-  on('goal', {
-    created: syncSoon,
-    removed: syncSoon,
-    doc: 'a standing goal rides every persona file, so it re-renders them',
-  })
-  on('doc', {
-    changed: {
-      title: (eid) => (personaish(eid) || goalish(eid)) && syncSoon(),
-      body: (eid) => personaish(eid) && syncSoon(),
-    },
-    doc: 'a doc edit on a persona or a tiered memory re-renders its files',
-  })
-}
 
 // Every reconciler runs on a timer, which means nothing is holding its
 // promise — and in Deno a rejection nobody handled ENDS THE PROCESS. A sweep
@@ -575,16 +427,11 @@ export let replayDoing = async (
 // strictly after migrations: the caller guarantees the schema is current
 // (the server during its transactional boot; the daemon by being spawned after
 // the server's READY beat).
-export let bootDoing = (d: Doing, syncSoon: () => void) => {
+export let bootDoing = (d: Doing) => {
   let { cast } = d
 
   // Register background jobs before their first sweep.
   for (let spec of SYSTEMS) registerSystem(spec)
-
-  // Boot migrations may reshape graph-owned teachings without an apply
-  // trace. Reconcile once here too, or the source migrates while its
-  // generated persona files keep teaching the retired vocabulary.
-  syncSoon()
 
   // Managed children are detached (setsid) and their owner restarts on every
   // server-file edit — so booting means picking them back up: adopt the ones
