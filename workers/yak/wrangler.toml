@@ -68,6 +68,15 @@ routes = [
 enabled = true
 invocation_logs = true
 
+# Workers traces: Cloudflare's own spans for every fetch, R2 read and Durable
+# Object call, nested across the Store hop. The Sentry SDK's spans cannot say
+# where a request's time went: the Workers clock stands still until I/O, so a
+# Store's synchronous SQL reads 0 ms and no span covers the hop itself. No
+# head_sampling_rate: 20M events a month are included, and past that Cloudflare
+# samples, which is what we want rather than paying for more.
+[observability.traces]
+enabled = true
+
 # Under `wrangler dev` a request's URL carries the first route's hostname
 # unless told otherwise; the loopback keeps local dev a dev host (route.ts),
 # where `x-yak-host` picks the hostname a request stands for.
@@ -493,6 +502,9 @@ STRIPE_PRICE = ""
 [env.staging.observability.logs]
 enabled = true
 invocation_logs = true
+
+[env.staging.observability.traces]
+enabled = true
 
 [env.staging.version_metadata]
 binding = "CF_VERSION_METADATA"
