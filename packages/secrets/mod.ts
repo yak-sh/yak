@@ -40,7 +40,15 @@
 
 export { secretsDoc } from './vocab.ts'
 export { secrets } from './plugin.ts'
-export { handle, isHandle, PREFIX, SENTINEL, sentinel } from './sentinel.ts'
+export {
+  handle,
+  isHandle,
+  PREFIX,
+  SENTINEL,
+  sentinel,
+  sentinels,
+  swap,
+} from './sentinel.ts'
 export {
   type Local,
   queue,

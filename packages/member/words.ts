@@ -1,5 +1,5 @@
 // The three enumerated values this package defines, the helpers that read one
-// out of storage, and the two access rules stated once.
+// out of storage, and the three access rules stated once.
 //
 // A role is what a `member` row records: you are a space's owner, or one of its
 // members. A level is what a `grant` gives one principal on one app: owner,
@@ -59,12 +59,13 @@ export let writes = (l: Level | null): boolean => l == 'owner' || l == 'editor'
 export let reaches = (l: Level | null, floor: Level): boolean =>
   l != null && LEVELS.indexOf(l) >= LEVELS.indexOf(floor)
 
-// The two rules, stated once. Everything else in this package — the `policy`
+// The rules, stated once. Everything else in this package — the `policy`
 // helpers the HTTP layer calls, the `precondition` hook a transaction passes —
-// reads a mode and a level out of storage and then calls one of these two
-// functions. A service that already knows both (one that authenticated the
-// caller at its edge and keeps modes in a directory) calls them directly, with
-// no storage at all, and so cannot drift from the graph that enforces them.
+// reads a mode and a level out of storage and then calls `reads` or `edits`,
+// and the egress (@yaks/egress) calls `callsOut`. A service that already knows
+// both (one that authenticated the caller at its edge and keeps modes in a
+// directory) calls them directly, with no storage at all, and so cannot drift
+// from the graph that enforces them.
 
 /** May a principal holding this level read an app in this mode? Anything not
  * `private` is readable by anyone with the link; a `private` app is readable by
@@ -77,3 +78,11 @@ export let reads = (m: Mode, l: Level | null): boolean =>
  * editor. */
 export let edits = (m: Mode, l: Level | null): boolean =>
   m == 'open' || writes(l)
+
+/** May a principal holding this level call out through a credential an app
+ * uses (egress-use)? Whoever holds any level on the app may; anyone else only
+ * through one the app opened to `anyone`, as a public widget's is. The app's
+ * mode does not enter into it: the sentinel a caller presents points at a
+ * credential and is not one, so it is never enough on its own. */
+export let callsOut = (anyone: boolean, l: Level | null): boolean =>
+  anyone || l != null

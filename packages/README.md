@@ -232,7 +232,14 @@ grouped approximately by function, **not** by dependency order.
   the hosts its credential may go to) and `connection` (one link owned by a
   space or a person, whose credential is a @yaks/secrets secret), with the
   `uses` link from an app. Verbs to need, connect, disconnect, list, resolve a
-  sentinel and refresh a token; `need` and `list` are its tools.
+  sentinel, read a credential and refresh a token; `need` and `list` are its
+  tools.
+
+- **[@yaks/egress](./egress)** — Calls going out with a credential the caller
+  never holds: `forward` swaps each sentinel for its connection's key or token,
+  in a header, the query or the body, once the caller may call out through it
+  (@yaks/member `callsOut`) and the request goes to a host its integration
+  names. A refused access token is refreshed and the call made once more.
 
 - **[@yaks/session](./session)** — Store agent transcripts as `entry` entities:
   content, model requests, tool calls/results and stops. Status is derived from

@@ -27,9 +27,9 @@
 //
 // The two verbs an untrusted caller may ask, `need` and `list`, are the tools,
 // and answer bundles like every tool, for the caller to write in its own name.
-// The rest are for trusted code (the dashboard connecting, the egress asking
-// for a sentinel and refreshing a token), and act on the graph and vault they
-// are given.
+// The rest are for trusted code (the dashboard connecting, the egress finding
+// a sentinel among an app's connections, swapping in the credential and
+// refreshing a token), and act on the graph and vault they are given.
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { link } from '@yaks/edge'
@@ -41,7 +41,13 @@ import {
   type Provider,
 } from '@yaks/oauth'
 import { and, eq, list as among, present } from '@yaks/query'
-import { records, secretEid, sentinelOf, type Vault } from '@yaks/secrets'
+import {
+  records,
+  reveal,
+  secretEid,
+  sentinelOf,
+  type Vault,
+} from '@yaks/secrets'
 import {
   BUILT,
   INTEGRATION,
@@ -97,8 +103,9 @@ export type Ctx = {
   now?: () => number
 }
 
-/** What a caller calling out through a connection is given. */
-export type Resolved = { connection: Bundle; sentinel: string }
+/** What a caller calling out through a connection is given: the connection,
+ * the `uses` link to it from the app, and the sentinel for its credential. */
+export type Resolved = { connection: Bundle; link: Bundle; sentinel: string }
 
 /** How a connection's credential arrives: a pasted key, or the return from
  * the service's sign-in page with the attempt `begin` gave. */
@@ -138,11 +145,15 @@ let held = async (read: Read, eid: Eid): Promise<Bundle> => {
   return b
 }
 
+// The `uses` links at one end, and the far end of one.
+let links = (read: Read, at: 'from' | 'to', eid: Eid) =>
+  read(and(eq(`${EDGE}.${at}`, eid), present(USES)))
+let far = (l: Bundle, at: 'from' | 'to'): Eid =>
+  String(comp(l, EDGE)[at == 'from' ? 'to' : 'from'])
+
 // The far ends of the `uses` links at one end.
 let ends = async (read: Read, at: 'from' | 'to', eid: Eid): Promise<Eid[]> =>
-  (await read(and(eq(`${EDGE}.${at}`, eid), present(USES)))).map((l) =>
-    String(comp(l, EDGE)[at == 'from' ? 'to' : 'from'])
-  )
+  (await links(read, at, eid)).map((l) => far(l, at))
 
 // The connection an app uses through an integration.
 let using = async (
@@ -210,6 +221,24 @@ export let list = async (read: Read, owner: Eid): Promise<Bundle[]> => {
   return [...owned, ...links]
 }
 
+/** Every connected connection an app calls out through, each with its `uses`
+ * link and the sentinel for its credential: what the egress finds a request's
+ * sentinels among. */
+export let used = async (c: Ctx, app: Eid): Promise<Resolved[]> => {
+  let out = await links(c.graph.read, 'from', app)
+  if (!out.length) return []
+  let found = await c.graph.read(and(
+    eq('eid', one(out.map((l) => far(l, 'from')))),
+    eq(`${CONNECTION}.status`, 'connected' satisfies Status),
+  ))
+  let all = await Promise.all(found.map(async (connection) => ({
+    connection,
+    link: out.find((l) => far(l, 'from') == connection.entity.eid)!,
+    sentinel: await sentinelOf(c.vault, nameOf(connection)),
+  })))
+  return all.filter((r): r is Resolved => !!r.sentinel)
+}
+
 /** The connection an app calls out through for an integration, and the
  * sentinel it is handed for its credential; nothing while none is connected.
  * Whether the caller may use it is the egress's question. */
@@ -217,12 +246,10 @@ export let resolve = async (
   c: Ctx,
   app: Eid,
   integration: string,
-): Promise<Resolved | undefined> => {
-  let found = await using(c.graph.read, app, integration)
-  if (!found || comp(found, CONNECTION).status != 'connected') return undefined
-  let sentinel = await sentinelOf(c.vault, nameOf(found))
-  return sentinel ? { connection: found, sentinel } : undefined
-}
+): Promise<Resolved | undefined> =>
+  (await used(c, app)).find((r) =>
+    comp(r.connection, CONNECTION).integration == integration
+  )
 
 // The OAuth client for a connection: its integration's endpoints, the scopes
 // it was asked for, and its tokens kept as its own secret.
@@ -310,17 +337,15 @@ export let disconnect = async (
   ])
 }
 
-/** A new access token behind the same handle, after the service refused
- * `stale`, unless another caller already replaced it. A grant the service
- * refuses marks the connection broken; a failure on the wire leaves it be. */
-export let refresh = async (
+// A step against the service's token endpoint. A grant the service refuses
+// marks the connection broken; a failure on the wire leaves it be.
+let marking = async (
   c: Ctx,
   connection: Eid,
-  stale: string,
+  step: () => Promise<string | undefined>,
 ): Promise<string | undefined> => {
-  let oauth = await signIn(c, await held(c.graph.read, connection))
   try {
-    return await oauth.refresh(stale)
+    return await step()
   } catch (e) {
     if (e instanceof OAuthError && !e.code.startsWith('http_')) {
       await c.graph.apply([{
@@ -330,4 +355,35 @@ export let refresh = async (
     }
     throw e
   }
+}
+
+/** What a call out sends in its sentinel's place: the pasted key, or an access
+ * token, refreshed first when it is about to expire. */
+export let credential = async (
+  c: Ctx,
+  connection: Eid,
+): Promise<string | undefined> => {
+  let b = await held(c.graph.read, connection)
+  let i = await known(
+    c.graph.read,
+    String(comp(b, CONNECTION).integration),
+    c.built,
+  )
+  if (i && keyed(i)) {
+    return await reveal(c.vault, nameOf(b), { env: () => undefined })
+  }
+  let oauth = await signIn(c, b)
+  return marking(c, connection, oauth.token)
+}
+
+/** A new access token behind the same handle, after the service refused
+ * `stale`, unless another caller already replaced it. A grant the service
+ * refuses marks the connection broken; a failure on the wire leaves it be. */
+export let refresh = async (
+  c: Ctx,
+  connection: Eid,
+  stale: string,
+): Promise<string | undefined> => {
+  let oauth = await signIn(c, await held(c.graph.read, connection))
+  return marking(c, connection, () => oauth.refresh(stale))
 }

@@ -24,6 +24,8 @@ import {
   SENTINEL,
   sentinel,
   sentinelOf,
+  sentinels,
+  swap,
   unsealed,
   warm,
 } from './mod.ts'
@@ -92,6 +94,17 @@ Deno.test('the sentinel is the handle hashed under the vault salt, and survives 
   assertNotEquals(await sentinel(await ramVault().salt(), handle), said)
   await g.apply([sealed('A', 'two')])
   assertEquals(await sentinelOf(vault, 'A'), said)
+})
+
+Deno.test('a swap replaces the sentinels it has values for, and nothing else', async () => {
+  let a = await sentinel(new Uint8Array(32), 'yak_secret_a')
+  let b = await sentinel(new Uint8Array(32), 'yak_secret_b')
+  let text = `Bearer ${a}; ${b}x; ${SENTINEL}short; yak_secret_a`
+  assertEquals(sentinels(text), [a, b])
+  assertEquals(
+    swap(text, new Map([[a, 'sk-live']])),
+    `Bearer sk-live; ${b}x; ${SENTINEL}short; yak_secret_a`,
+  )
 })
 
 Deno.test('deleting a secret, or its component, drops it from the vault', async () => {

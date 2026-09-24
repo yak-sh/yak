@@ -21,14 +21,15 @@
  * // await g.apply(await need(g.read, { owner: space, app, integration: 'twilio' }))
  * // the person pastes the key; it goes to the vault
  * // await connect({ graph: g, vault }, connection, { key })
- * // the egress asks what the app calls out with
- * // await resolve({ graph: g, vault }, app, 'twilio') → { connection, sentinel }
+ * // the app is handed what it calls out with
+ * // await resolve({ graph: g, vault }, app, 'twilio') → { connection, link, sentinel }
  * ```
  *
  * The verbs: {@link need}, {@link list} (the two tools), {@link begin} and
- * {@link connect}, {@link disconnect}, {@link resolve}, {@link refresh}. A host
- * that composes this package composes @yaks/secrets, over its vault, and
- * @yaks/edge beside it.
+ * {@link connect}, {@link disconnect}, {@link resolve} and {@link used},
+ * {@link credential}, {@link refresh}. A host that composes this package
+ * composes @yaks/secrets, over its vault, and @yaks/edge beside it; the egress
+ * that swaps sentinels is @yaks/egress.
  *
  * @module
  */
@@ -47,6 +48,7 @@ export {
   begin,
   connect,
   CONNECTION,
+  credential,
   type Ctx,
   disconnect,
   type Given,
@@ -57,5 +59,6 @@ export {
   resolve,
   type Resolved,
   type Status,
+  used,
   USES,
 } from './connections.ts'

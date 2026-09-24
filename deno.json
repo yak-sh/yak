@@ -224,6 +224,7 @@
     "./packages/tmux",
     "./packages/secrets",
     "./packages/connections",
+    "./packages/egress",
     "./packages/admin"
   ],
   "exclude": [

@@ -7,9 +7,9 @@ holding the credential it uses. No key or token is ever graph data: a connection
 is also a [@yaks/secrets](../secrets) secret, so the graph holds a handle, the
 vault holds the credential, and code that calls out is handed a sentinel.
 
-It builds no HTTP route, page or egress. A host draws the page where a person
-connects, runs the OAuth callback, and swaps sentinels on the way out with these
-verbs.
+It builds no HTTP route or page. A host draws the page where a person connects
+and runs the OAuth callback with these verbs, and [@yaks/egress](../egress)
+swaps sentinels on the way out with them.
 
 ## Stored data
 
@@ -27,8 +27,11 @@ verbs.
   same entity wears `secret{name, value}`: its name is `connection:` and a
   random id, and the entity id is derived from it. Its value is the handle of a
   pasted key, or of the OAuth tokens kept as a JSON record.
-- `uses` is the relation on an [@yaks/edge](../edge) link from an app to the
-  connection it calls out through.
+- `uses{anyone}` is the relation on an [@yaks/edge](../edge) link from an app to
+  the connection it calls out through. Only a caller holding a level on the app
+  may call out through it, unless `anyone` opens it to everyone, signed in or
+  not, as a public widget's key is. Opening it, like giving an app a connection,
+  is the person's act.
 
 The built integrations ship with this package as data, one JSON file each, in
 `BUILT` by name. A built name is never a custom one's: `need` will not make one,
@@ -63,11 +66,16 @@ the redirect):
   credential from the vault. Each app that used it is linked to a new `needed`
   connection in the same change.
 - `resolve(ctx, app, integration)` returns the connected connection an app uses
-  and the sentinel for its credential, or nothing. Whether the caller may use it
+  through an integration, its `uses` link and the sentinel for its credential,
+  or nothing. `used(ctx, app)` returns every one. Whether the caller may use it
   is the egress's check.
+- `credential(ctx, connection)` returns what a call out sends in the sentinel's
+  place: the pasted key, or an access token, refreshed first when it is about to
+  expire.
 - `refresh(ctx, connection, stale)` gets a new access token behind the same
-  handle once the service has refused `stale`. A grant the service refuses marks
-  the connection `broken`. A failure on the wire does not.
+  handle once the service has refused `stale`. A grant the service refuses, here
+  or in `credential`, marks the connection `broken`. A failure on the wire does
+  not.
 
 ## Hosting it
 

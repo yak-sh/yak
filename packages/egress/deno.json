@@ -1,0 +1,9 @@
+{
+  "name": "@yaks/egress",
+  "version": "0.1.0",
+  "exports": { ".": "./mod.ts" },
+  "license": "Apache-2.0",
+  "description": "Calls going out with a credential the caller never holds: each sentinel swapped for its connection's key or token, for a caller allowed to use it and a host its integration names, with a refused access token refreshed once.",
+  "imports": { "@std/assert": "jsr:@std/assert@^1.0.0" },
+  "publish": { "exclude": ["**/*_test.ts"] }
+}

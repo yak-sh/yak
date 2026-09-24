@@ -73,11 +73,14 @@ every app. Omitting `space` from the policy or guard disables this source of
 permission. The package does not combine multiple grants by taking their highest
 level; avoid conflicting duplicate grants for a person and app.
 
-## The two checks
+## The three checks
 
 `reads(mode, level)` allows reads when the mode is not `private` or the
 principal has any level. `edits(mode, level)` allows writes when the mode is
-`open` or the level is `owner` or `editor`.
+`open` or the level is `owner` or `editor`. `callsOut(anyone, level)` is
+egress-use: it allows calling out through a credential an app uses when the app
+opened that credential to anyone, or the principal has any level, whatever the
+mode. [@yaks/egress](../egress) asks it before it swaps a sentinel.
 
 These exported functions require no storage. A viewer can write an `open` app;
 on `public` and `private` apps a viewer can only read. `writes(level)` checks
@@ -222,7 +225,7 @@ The main export includes:
 | `MEMBER`, `GRANT`, `ACCESS`, `GOVERNED`                | Component names and the list requiring owner permission.                       |
 | `Role`, `Level`, `Mode`; `ROLES`, `LEVELS`, `MODES`    | Value types and their supported values.                                        |
 | `role`, `level`, `mode`                                | Read a value with its default: member, viewer or public.                       |
-| `reads`, `edits`, `writes`, `reaches`                  | Pure permission checks.                                                        |
+| `reads`, `edits`, `callsOut`, `writes`, `reaches`      | Pure permission checks.                                                        |
 | `members(guard)`                                       | Graph plugin with the vocabulary, permission-read requirements and write hook. |
 | `guarding(guard)`, `wanting(guard)`, `actorOf`, `asks` | Write hook and supporting helpers.                                             |
 | `policy(storage, where)`                               | Read and write checks bound to storage.                                        |

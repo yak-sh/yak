@@ -24,10 +24,11 @@
  * is then one row: delete the membership and every permission implied by it
  * goes too.
  *
- * ## The two checks
+ * ## The three checks
  * ```text
- * read    the mode is not `private`, or the principal holds any level
- * write   the mode is `open`,        or the principal holds owner or editor
+ * read      the mode is not `private`, or the principal holds any level
+ * write     the mode is `open`,        or the principal holds owner or editor
+ * call out  the credential is open to anyone, or the principal holds any level
  * ```
  * A `viewer` never writes, under any mode. A `member` who was never granted
  * anything holds no level at all.

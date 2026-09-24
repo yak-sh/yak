@@ -113,6 +113,10 @@ let setup = async (...replies: [number, unknown][]) => {
   return { g, vault, c, needs, seen: e.seen }
 }
 
+// A test over the 1ms budget runs with the heavy tier, under TASKS_SLOW.
+let slow = (name: string, fn: () => Promise<void>) =>
+  Deno.test({ name, fn, ignore: !Deno.env.get('TASKS_SLOW') })
+
 let at = async (g: { read: Ctx['graph']['read'] }, eid: string) =>
   (await g.read(`.eid=${eid}`))[0] as Bundle | undefined
 
@@ -127,135 +131,154 @@ await sentinelOf(warm.vault, 'none')
 await crypto.subtle.digest('SHA-256', new Uint8Array())
 new URL('https://warm.example/?a=b').searchParams.set('c', 'd')
 
-Deno.test('need: a connection with no credential, linked from the app, and asked again is the same one', async () => {
-  let { g, c, needs } = await setup()
-  let eid = await needs({ scopes: ['events.read'] })
-  let b = await at(g, eid)
-  assertEquals(of(b, 'connection'), {
-    integration: 'calendar',
-    owner: 'space',
-    scopes: ['events.read'],
-    status: 'needed',
-  })
-  assertEquals(of(b, 'secret').value, undefined)
-  assertEquals(await resolve(c, 'app', 'calendar'), undefined)
-  let again = await need(g.read, {
-    owner: 'space',
-    app: 'app',
-    integration: 'calendar',
-  }, BUILT)
-  assertEquals(again, [{ entity: { eid } }])
-  await g.apply(again)
-  assertEquals((await g.read('.connection')).length, 1)
-})
+slow(
+  'need: a connection with no credential, linked from the app, and asked again is the same one',
+  async () => {
+    let { g, c, needs } = await setup()
+    let eid = await needs({ scopes: ['events.read'] })
+    let b = await at(g, eid)
+    assertEquals(of(b, 'connection'), {
+      integration: 'calendar',
+      owner: 'space',
+      scopes: ['events.read'],
+      status: 'needed',
+    })
+    assertEquals(of(b, 'secret').value, undefined)
+    assertEquals(await resolve(c, 'app', 'calendar'), undefined)
+    let again = await need(g.read, {
+      owner: 'space',
+      app: 'app',
+      integration: 'calendar',
+    }, BUILT)
+    assertEquals(again, [{ entity: { eid } }])
+    await g.apply(again)
+    assertEquals((await g.read('.connection')).length, 1)
+  },
+)
 
-Deno.test('need: a key for an unbuilt service names its hosts, which no later need may change', async () => {
-  let { g, needs } = await setup()
-  await needs({ integration: 'weather', hosts: ['api.weather.example'] })
-  assertEquals(of(await at(g, integrationEid('weather')), 'integration'), {
-    name: 'weather',
-    hosts: ['api.weather.example'],
-  })
-  await needs({
-    app: 'other',
-    integration: 'weather',
-    hosts: ['api.weather.example'],
-  })
-  for (
-    let asked of [
-      { app: 'other', integration: 'weather', hosts: ['evil.example'] },
-      { integration: 'calendar', hosts: ['evil.example'] },
-      { integration: 'nothing' },
-    ]
-  ) {
-    await assertRejects(() =>
-      need(g.read, { owner: 'space', app: 'app', ...asked }, BUILT)
+slow(
+  'need: a key for an unbuilt service names its hosts, which no later need may change',
+  async () => {
+    let { g, needs } = await setup()
+    await needs({ integration: 'weather', hosts: ['api.weather.example'] })
+    assertEquals(of(await at(g, integrationEid('weather')), 'integration'), {
+      name: 'weather',
+      hosts: ['api.weather.example'],
+    })
+    await needs({
+      app: 'other',
+      integration: 'weather',
+      hosts: ['api.weather.example'],
+    })
+    for (
+      let asked of [
+        { app: 'other', integration: 'weather', hosts: ['evil.example'] },
+        { integration: 'calendar', hosts: ['evil.example'] },
+        { integration: 'nothing' },
+      ]
+    ) {
+      await assertRejects(() =>
+        need(g.read, { owner: 'space', app: 'app', ...asked }, BUILT)
+      )
+    }
+  },
+)
+
+slow(
+  'connect: a pasted key goes to the vault, and the app is handed its sentinel',
+  async () => {
+    let { g, vault, c, needs } = await setup()
+    let eid = await needs({ integration: 'texts' })
+    await connect(c, eid, { key: 'sk-live' }, 'shop@example.com')
+    let b = await at(g, eid)
+    let name = String(of(b, 'secret').name)
+    assert(isHandle(String(of(b, 'secret').value)))
+    assertEquals(of(b, 'connection').status, 'connected')
+    assertEquals(of(b, 'connection').account, 'shop@example.com')
+    assertEquals(await reveal(vault, name), 'sk-live')
+    assertEquals(await resolve(c, 'app', 'texts'), {
+      connection: b!,
+      link: (await g.read('.uses'))[0],
+      sentinel: (await sentinelOf(vault, name))!,
+    })
+    let signs = await needs()
+    await assertRejects(() => connect(c, signs, { key: 'k' }))
+    await assertRejects(() => begin(c, eid))
+  },
+)
+
+slow(
+  'begin and connect: a sign-in keeps its grant behind the connection’s own handle',
+  async () => {
+    let { g, vault, c, needs, seen } = await setup([200, {
+      access_token: 'A1',
+      refresh_token: 'R1',
+      expires_in: 3600,
+    }])
+    let eid = await needs({ scopes: ['events.read'] })
+    let { url, attempt } = await begin(c, eid)
+    assertEquals(new URL(url).searchParams.get('scope'), 'events.read')
+    await connect(c, eid, {
+      attempt,
+      callback: `${REDIRECT}?code=C&state=${attempt.state}`,
+    })
+    let b = await at(g, eid)
+    assertEquals(seen[0].get('code'), 'C')
+    assertEquals(of(b, 'connection').status, 'connected')
+    assertEquals(
+      JSON.parse((await reveal(vault, String(of(b, 'secret').name)))!),
+      { access_token: 'A1', refresh_token: 'R1', expires_at: NOW + 3_600_000 },
     )
-  }
-})
+  },
+)
 
-Deno.test('connect: a pasted key goes to the vault, and the app is handed its sentinel', async () => {
-  let { g, vault, c, needs } = await setup()
-  let eid = await needs({ integration: 'texts' })
-  await connect(c, eid, { key: 'sk-live' }, 'shop@example.com')
-  let b = await at(g, eid)
-  let name = String(of(b, 'secret').name)
-  assert(isHandle(String(of(b, 'secret').value)))
-  assertEquals(of(b, 'connection').status, 'connected')
-  assertEquals(of(b, 'connection').account, 'shop@example.com')
-  assertEquals(await reveal(vault, name), 'sk-live')
-  assertEquals(await resolve(c, 'app', 'texts'), {
-    connection: b!,
-    sentinel: (await sentinelOf(vault, name))!,
-  })
-  let signs = await needs()
-  await assertRejects(() => connect(c, signs, { key: 'k' }))
-  await assertRejects(() => begin(c, eid))
-})
+slow(
+  'refresh: a new token behind the same handle; a refused grant is broken, a failed wire is not',
+  async () => {
+    let { g, c, needs } = await setup(
+      [200, { access_token: 'A2' }],
+      [502, 'oops'],
+      [400, { error: 'invalid_grant' }],
+    )
+    let eid = await needs()
+    let name = String(of(await at(g, eid), 'secret').name)
+    await g.apply([{
+      entity: { eid: secretEid(name) },
+      secret: { name, value: '{"access_token":"A1","refresh_token":"R1"}' },
+    }])
+    let handle = of(await at(g, eid), 'secret').value
+    assertEquals(await refresh(c, eid, 'A1'), 'A2')
+    assertEquals(of(await at(g, eid), 'secret').value, handle)
+    await assertRejects(() => refresh(c, eid, 'A2'))
+    assertEquals(of(await at(g, eid), 'connection').status, 'needed')
+    await assertRejects(() => refresh(c, eid, 'A2'))
+    assertEquals(of(await at(g, eid), 'connection').status, 'broken')
+  },
+)
 
-Deno.test('begin and connect: a sign-in keeps its grant behind the connection’s own handle', async () => {
-  let { g, vault, c, needs, seen } = await setup([200, {
-    access_token: 'A1',
-    refresh_token: 'R1',
-    expires_in: 3600,
-  }])
-  let eid = await needs({ scopes: ['events.read'] })
-  let { url, attempt } = await begin(c, eid)
-  assertEquals(new URL(url).searchParams.get('scope'), 'events.read')
-  await connect(c, eid, {
-    attempt,
-    callback: `${REDIRECT}?code=C&state=${attempt.state}`,
-  })
-  let b = await at(g, eid)
-  assertEquals(seen[0].get('code'), 'C')
-  assertEquals(of(b, 'connection').status, 'connected')
-  assertEquals(
-    JSON.parse((await reveal(vault, String(of(b, 'secret').name)))!),
-    { access_token: 'A1', refresh_token: 'R1', expires_at: NOW + 3_600_000 },
-  )
-})
-
-Deno.test('refresh: a new token behind the same handle; a refused grant is broken, a failed wire is not', async () => {
-  let { g, c, needs } = await setup(
-    [200, { access_token: 'A2' }],
-    [502, 'oops'],
-    [400, { error: 'invalid_grant' }],
-  )
-  let eid = await needs()
-  let name = String(of(await at(g, eid), 'secret').name)
-  await g.apply([{
-    entity: { eid: secretEid(name) },
-    secret: { name, value: '{"access_token":"A1","refresh_token":"R1"}' },
-  }])
-  let handle = of(await at(g, eid), 'secret').value
-  assertEquals(await refresh(c, eid, 'A1'), 'A2')
-  assertEquals(of(await at(g, eid), 'secret').value, handle)
-  await assertRejects(() => refresh(c, eid, 'A2'))
-  assertEquals(of(await at(g, eid), 'connection').status, 'needed')
-  await assertRejects(() => refresh(c, eid, 'A2'))
-  assertEquals(of(await at(g, eid), 'connection').status, 'broken')
-})
-
-Deno.test('disconnect: the credential is forgotten, and an app that used it needs a new one', async () => {
-  let { g, vault, c, needs } = await setup()
-  let used = await needs({ integration: 'texts' })
-  await connect(c, used, { key: 'sk-live' })
-  await disconnect(c, used)
-  assertEquals(await at(g, used), undefined)
-  assertEquals(vault.all(), [])
-  let [now] = await g.read('.connection')
-  assertEquals(of(now, 'connection').status, 'needed')
-  assertEquals(
-    (await list(g.read, 'space')).map((b) => b.edge ?? b.connection),
-    [
-      of(now, 'connection'),
-      { from: 'app', to: now.entity.eid },
-    ],
-  )
-  let alone = await needs({ app: undefined, integration: 'texts' })
-  await disconnect(c, alone)
-  assertEquals((await g.read('.connection')).length, 1)
-})
+slow(
+  'disconnect: the credential is forgotten, and an app that used it needs a new one',
+  async () => {
+    let { g, vault, c, needs } = await setup()
+    let used = await needs({ integration: 'texts' })
+    await connect(c, used, { key: 'sk-live' })
+    await disconnect(c, used)
+    assertEquals(await at(g, used), undefined)
+    assertEquals(vault.all(), [])
+    let [now] = await g.read('.connection')
+    assertEquals(of(now, 'connection').status, 'needed')
+    assertEquals(
+      (await list(g.read, 'space')).map((b) => b.edge ?? b.connection),
+      [
+        of(now, 'connection'),
+        { from: 'app', to: now.entity.eid },
+      ],
+    )
+    let alone = await needs({ app: undefined, integration: 'texts' })
+    await disconnect(c, alone)
+    assertEquals((await g.read('.connection')).length, 1)
+  },
+)
 
 Deno.test('a deleted owner takes its connections, and their credentials', async () => {
   let { g, vault, c, needs } = await setup()
@@ -265,27 +288,30 @@ Deno.test('a deleted owner takes its connections, and their credentials', async 
   assertEquals(vault.all(), [])
 })
 
-Deno.test('the tools: need writes nothing secret, and list answers the owner’s', async () => {
-  let { g } = await setup()
-  let run = Object.fromEntries(
-    loadTools([connectionsDoc], runs()).map((t) => [t.name, t.run]),
-  )
-  let ctx = (args: Record<string, unknown>) => ({
-    graph: g,
-    actor: null,
-    read: g.read,
-    args,
-    call: 'call',
-  })
-  let made = await run.connection_need(
-    [],
-    ctx({ app: 'app', owner: 'space', integration: 'weather', hosts: ['h'] }),
-  )
-  await g.apply(made)
-  let listed = await run.connection_list([], ctx({ owner: 'space' }))
-  assertEquals(listed.map((b) => Object.keys(b.connection ?? b.edge ?? {})), [
-    ['integration', 'owner', 'status'],
-    ['from', 'to'],
-  ])
-  assertEquals(await run.connection_list([], ctx({ owner: 'app' })), [])
-})
+slow(
+  'the tools: need writes nothing secret, and list answers the owner’s',
+  async () => {
+    let { g } = await setup()
+    let run = Object.fromEntries(
+      loadTools([connectionsDoc], runs()).map((t) => [t.name, t.run]),
+    )
+    let ctx = (args: Record<string, unknown>) => ({
+      graph: g,
+      actor: null,
+      read: g.read,
+      args,
+      call: 'call',
+    })
+    let made = await run.connection_need(
+      [],
+      ctx({ app: 'app', owner: 'space', integration: 'weather', hosts: ['h'] }),
+    )
+    await g.apply(made)
+    let listed = await run.connection_list([], ctx({ owner: 'space' }))
+    assertEquals(listed.map((b) => Object.keys(b.connection ?? b.edge ?? {})), [
+      ['integration', 'owner', 'status'],
+      ['from', 'to'],
+    ])
+    assertEquals(await run.connection_list([], ctx({ owner: 'app' })), [])
+  },
+)

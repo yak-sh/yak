@@ -88,7 +88,12 @@
       "component": true,
       "type": "object",
       "edge": true,
-      "properties": {},
+      "properties": {
+        "anyone": {
+          "type": "boolean",
+          "description": "anyone may call out through it, signed in or not, as a public widget does; otherwise only a caller holding a level on the app"
+        }
+      },
       "description": "the relation on a link: this app calls out through that connection"
     },
     "connection_need": {

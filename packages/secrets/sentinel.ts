@@ -55,3 +55,14 @@ export let sentinel = async (
   )
   return SENTINEL + b64url(new Uint8Array(mac))
 }
+
+// A sentinel as it appears in text: the prefix and a SHA-256 in base64url.
+let FOUND = new RegExp(`${SENTINEL}[\\w-]{43}`, 'g')
+
+/** Every sentinel a text carries. */
+export let sentinels = (text: string): string[] => text.match(FOUND) ?? []
+
+/** The text with each sentinel `values` has a value for replaced by it,
+ * verbatim: the swap on the way out. */
+export let swap = (text: string, values: Map<string, string>): string =>
+  text.replace(FOUND, (s) => values.get(s) ?? s)
