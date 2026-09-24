@@ -1,9 +1,14 @@
-/** File snapshots and explicit image context. All bytes remain in external storage. */
+/** File snapshots and explicit image context: @yaks/blob artifacts, each an
+ * entity named by its bytes' address, the bytes in the graph's byte store. */
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Item } from '@yaks/model'
 import { type Tool, ToolError } from '@yaks/session'
-import { artifactBytes, mediaTypeOf } from '@yaks/blob'
-import { imageBlobs, imageDir, type ImageOptions, images } from './images.ts'
+import {
+  artifactBytes,
+  artifactStore,
+  type Blobs,
+  mediaTypeOf,
+} from '@yaks/blob'
 import { sessionCwd } from './workspace.ts'
 
 const MAX = 20 * 1024 * 1024
@@ -18,11 +23,7 @@ export let imageType = (b: Uint8Array): string | undefined => {
 
 /** A registered artifact's bytes. Graph authorization is applied before
  * resolving an external address. */
-export let registered = async (
-  g: Graph,
-  eid: string,
-  opts?: ImageOptions | false,
-) => {
+export let registered = async (g: Graph, eid: string, blobs?: Blobs) => {
   let [row] = await g.read('.entity.eid=' + JSON.stringify(eid))
   let a = row?.artifact as Comp | undefined
   if (
@@ -34,9 +35,10 @@ export let registered = async (
       'Missing, unauthorized, or oversized artifact',
     )
   }
+  if (!blobs) throw new ToolError('artifact', 'No artifact store here')
   let bytes: Uint8Array | undefined
   try {
-    bytes = await artifactBytes(imageBlobs(opts), {
+    bytes = await artifactBytes(blobs, {
       address: a.address,
       media_type: String(a.media_type),
       size: a.size,
@@ -50,7 +52,7 @@ export let registered = async (
 
 export let artifactTools = (
   g: Graph,
-  opts: { cwd?: string; images?: ImageOptions | false } = {},
+  opts: { cwd?: string; artifacts?: Blobs } = {},
 ): Tool[] => [
   {
     name: 'artifact_import',
@@ -99,11 +101,14 @@ export let artifactTools = (
       } finally {
         file.close()
       }
-      let artifact = await images({ directory: imageDir(opts.images) }).store(
+      if (!opts.artifacts) {
+        throw new ToolError('artifact', 'No artifact store here')
+      }
+      let artifact = await artifactStore(opts.artifacts)(
         bytes,
         imageType(bytes) ?? 'application/octet-stream',
       )
-      let eid = 'artifact:' + artifact.address
+      let eid = artifact.address
       await g.apply([{ entity: { eid }, artifact }])
       return JSON.stringify({ artifact: eid, ...artifact })
     },
@@ -124,7 +129,7 @@ export let artifactTools = (
       let { bytes, mediaType, revision } = await registered(
         g,
         eid,
-        opts.images,
+        opts.artifacts,
       )
       if (audience == 'model' && imageType(bytes) != mediaType) {
         throw new ToolError('image', 'Unsupported or invalid image type')
@@ -154,7 +159,7 @@ export let imageContext = async (
   g: Graph,
   window: Bundle[],
   entries: Bundle[],
-  opts?: ImageOptions | false,
+  blobs?: Blobs,
 ): Promise<Item[]> => {
   let items: Item[] = []
   let total = 0
@@ -166,7 +171,7 @@ export let imageContext = async (
     let attachment = call?.attachment as Comp | undefined
     if (attachment?.audience != 'model') continue
     let eid = String(attachment.artifact)
-    let { bytes, mediaType, revision } = await registered(g, eid, opts)
+    let { bytes, mediaType, revision } = await registered(g, eid, blobs)
     if (attachment.revision != revision) {
       throw new ToolError('image', 'Image reference changed since admission')
     }

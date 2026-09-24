@@ -1,24 +1,22 @@
 import { assertEquals, assertRejects } from '@std/assert'
-import { readImage } from './images.ts'
+import { registered } from './artifact_tools.ts'
 import { open } from './store.ts'
-import { artifactStore, fileBlobs } from '@yaks/blob'
-Deno.test('image reads resolve registered blobs and verify bytes; no arbitrary address access', async () => {
-  let directory = await Deno.makeTempDir()
+import { artifactStore } from '@yaks/blob'
+Deno.test('image reads resolve registered artifacts and verify bytes; no arbitrary address access', async () => {
   let h = open(':memory:')
   try {
     let bytes = new Uint8Array([1, 2, 3])
-    let record = await artifactStore(fileBlobs(directory))(bytes, 'image/png')
+    let record = await artifactStore(h.artifacts)(bytes, 'image/png')
     await h.g.apply([{ entity: { eid: 'picture' }, artifact: record }])
-    assertEquals(await readImage(h.g, 'picture', { directory }), bytes)
-    await assertRejects(() => readImage(h.g, record.address, { directory }))
+    assertEquals((await registered(h.g, 'picture', h.artifacts)).bytes, bytes)
+    await assertRejects(() => registered(h.g, 'elsewhere', h.artifacts))
     await h.g.apply([{
       entity: { eid: 'picture' },
       artifact: { size: 40000000 },
     }])
-    await assertRejects(() => readImage(h.g, 'picture', { directory }))
+    await assertRejects(() => registered(h.g, 'picture', h.artifacts))
   } finally {
     h.close()
-    await Deno.remove(directory, { recursive: true })
   }
 })
 
@@ -35,14 +33,13 @@ Deno.test('worker retrieves registered image bytes for the lazy attachment rende
   bytes.set([137, 80, 78, 71, 13, 10, 26, 10])
   new DataView(bytes.buffer).setUint32(16, 1)
   new DataView(bytes.buffer).setUint32(20, 1)
-  let record = await artifactStore(fileBlobs(directory))(bytes, 'image/png')
+  let record = await artifactStore(h.artifacts)(bytes, 'image/png')
   await h.g.apply([{ entity: { eid: 'image' }, artifact: record }])
   h.close()
   let r = await remote({
     db: directory + '/db',
     cwd: directory,
     fake: true,
-    images: { directory },
   })
   let screen = install(), output: string[] = []
   onPaint(() => {})

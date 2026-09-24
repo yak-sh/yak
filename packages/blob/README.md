@@ -124,6 +124,7 @@ graph writes; an asynchronous backend makes those writes asynchronous.
 | `sqliteBlobs(driver, layout?)` | A SQL table, default `blob_text(sha, value)`  | Synchronous  |
 | `fileBlobs(dir)`               | One file per address at `<dir>/<sha>`         | Asynchronous |
 | `objectBlobs(bucket, prefix?)` | Objects accessed through `head`, `get`, `put` | Asynchronous |
+| `memoryBlobs()`                | This process's memory, while it runs          | Synchronous  |
 
 `sqliteBlobs` stores **text** and rejects bytes that are not valid UTF-8. Its
 inserts use `insert or ignore`. `blobSchema(layout?)` returns its DDL

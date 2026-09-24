@@ -3,13 +3,16 @@ import { graphMCP } from './mcp_registry.ts'
 import { toolName } from '@yaks/graph'
 import type { Harness } from './store.ts'
 import { type Tool, type ToolContext, ToolError } from '@yaks/session'
-import { images } from './images.ts'
+import { artifactStore } from '@yaks/blob'
 import type { SignIns } from './signin.ts'
 
-export const mcpTools = (h: Pick<Harness, 'g' | 'vault'>, signin: SignIns) => {
+export const mcpTools = (
+  h: Pick<Harness, 'g' | 'vault' | 'artifacts'>,
+  signin: SignIns,
+) => {
   const g = h.g
   const connections = graphMCP(h, signin)
-  const store = images({}).store
+  const store = artifactStore(h.artifacts)
   const render = async (
     value: unknown,
     call?: ToolContext,
@@ -56,7 +59,7 @@ export const mcpTools = (h: Pick<Harness, 'g' | 'vault'>, signin: SignIns) => {
           bytes,
           String(item.mimeType ?? 'application/octet-stream'),
         )
-        const eid = 'artifact:' + record.address
+        const eid = record.address
         await g.apply([{ entity: { eid }, artifact: record }])
         if (call) {
           await g.apply([{

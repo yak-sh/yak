@@ -3,12 +3,14 @@ import { open } from './store.ts'
 import { artifactTools, imageContext } from './artifact_tools.ts'
 import { input } from '@yaks/openai'
 import type { Bundle } from '@yaks/graph'
+import { artifactStore, fileBlobs } from '@yaks/blob'
 
 const png = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0)
 
 Deno.test('file import snapshots bytes; attach is user-only; explicit view projects bounded image bytes', async () => {
   let dir = await Deno.makeTempDir()
   let h = open(':memory:')
+  let blobs = fileBlobs(dir + '/blobs')
   try {
     await Deno.writeFile(dir + '/source.png', png)
     let call: Bundle = {
@@ -18,10 +20,7 @@ Deno.test('file import snapshots bytes; attach is user-only; explicit view proje
     }
     await h.g.apply([{ entity: { eid: 's' }, session: {} }, call])
     let ctx = { session: 's', call, entries: [call] }
-    let tools = artifactTools(h.g, {
-      cwd: dir,
-      images: { directory: dir + '/blobs' },
-    })
+    let tools = artifactTools(h.g, { cwd: dir, artifacts: blobs })
     let invoke = async (name: string, args: Record<string, unknown>) =>
       await tools.find((t) => t.name == name)!.run(args, ctx)
     let imported = JSON.parse(
@@ -42,14 +41,12 @@ Deno.test('file import snapshots bytes; attach is user-only; explicit view proje
     }
     let rows = await h.g.read('.entry')
     assertEquals(
-      await imageContext(h.g, [result], rows, { directory: dir + '/blobs' }),
+      await imageContext(h.g, [result], rows, blobs),
       [],
     )
     await invoke('image_view', { artifact: imported.artifact })
     rows = await h.g.read('.entry')
-    let items = await imageContext(h.g, [result], rows, {
-      directory: dir + '/blobs',
-    })
+    let items = await imageContext(h.g, [result], rows, blobs)
     assertEquals(items.length, 1)
     assertEquals(items[0].kind, 'image')
     if (items[0].kind == 'image') assertEquals(items[0].bytes, png)
@@ -63,14 +60,12 @@ Deno.test('file import snapshots bytes; attach is user-only; explicit view proje
     assert(!JSON.stringify(rows).includes('base64'))
     // Explicit image exposure only follows its result, not unrelated subsequent windows.
     assertEquals(
-      await imageContext(h.g, [], rows, { directory: dir + '/blobs' }),
+      await imageContext(h.g, [], rows, blobs),
       [],
     )
     await assertRejects(() => invoke('image_view', { artifact: 'missing' }))
     await Deno.writeTextFile(dir + '/blobs/' + imported.address, 'corrupt')
-    await assertRejects(() =>
-      imageContext(h.g, [result], rows, { directory: dir + '/blobs' })
-    )
+    await assertRejects(() => imageContext(h.g, [result], rows, blobs))
   } finally {
     h.close()
     await Deno.remove(dir, { recursive: true })
@@ -80,18 +75,13 @@ Deno.test('file import snapshots bytes; attach is user-only; explicit view proje
 Deno.test('tool-driven vision reaches the next model request and survives database reopen', async () => {
   const { local } = await import('./local.ts')
   let dir = await Deno.makeTempDir()
-  const { images } = await import('./images.ts')
-  let record = await images({ directory: dir + '/blobs' }).store(
-    png,
-    'image/png',
-  )
   let h = open(dir + '/test.db')
+  let record = await artifactStore(h.artifacts)(png, 'image/png')
   await h.g.apply([{ entity: { eid: 'picture' }, artifact: record }])
   let turn = 0
   let a = local({
     h,
     cwd: dir,
-    images: { directory: dir + '/blobs' },
     name: 'fake',
     model: (req) => {
       turn++
@@ -133,9 +123,7 @@ Deno.test('tool-driven vision reaches the next model request and survives databa
     assertEquals(entries.filter((e) => e.exception).length, 0)
     await a.close()
     h = open(dir + '/test.db')
-    let restored = await imageContext(h.g, entries, entries, {
-      directory: dir + '/blobs',
-    })
+    let restored = await imageContext(h.g, entries, entries, h.artifacts)
     assertEquals(restored.length, 1)
     h.close()
   } finally {
@@ -145,11 +133,11 @@ Deno.test('tool-driven vision reaches the next model request and survives databa
 })
 
 Deno.test('vision admission rejects unsupported files and changed artifact revisions', async () => {
-  const { images } = await import('./images.ts')
   let dir = await Deno.makeTempDir()
   let h = open(':memory:')
+  let blobs = fileBlobs(dir)
   try {
-    let store = images({ directory: dir }).store
+    let store = artifactStore(blobs)
     let record = await store(png, 'image/png')
     let call: Bundle = {
       entity: { eid: 'inspect' },
@@ -166,7 +154,7 @@ Deno.test('vision admission rejects unsupported files and changed artifact revis
         'image/svg+xml',
       ),
     }])
-    let view = artifactTools(h.g, { images: { directory: dir } }).find((t) =>
+    let view = artifactTools(h.g, { artifacts: blobs }).find((t) =>
       t.name == 'image_view'
     )!
     let ctx = { session: 's', call, entries: [call] }
@@ -181,7 +169,7 @@ Deno.test('vision admission rejects unsupported files and changed artifact revis
         h.g,
         [{ entity: { eid: 'r' }, result: { call: 'inspect' } }],
         rows,
-        { directory: dir },
+        blobs,
       )
     )
   } finally {

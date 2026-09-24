@@ -151,9 +151,6 @@ Deno.test('tool isError uses expected tool failure rather than a defect', async 
 
 Deno.test('remote images use external artifacts while large text retains bounded context policy', async () => {
   const f = fixture()
-  const old = Deno.env.get('HARNESS_IMAGE_DIR')
-  const directory = await Deno.makeTempDir()
-  Deno.env.set('HARNESS_IMAGE_DIR', directory)
   const image = btoa('image-bytes')
   const server = Deno.serve(
     { port: 0, hostname: '127.0.0.1', onListen() {} },
@@ -201,7 +198,7 @@ Deno.test('remote images use external artifacts while large text retains bounded
     assertEquals(artifacts.length, 1)
     const address = (artifacts[0].artifact as { address: string }).address
     assertEquals(
-      await Deno.readTextFile(directory + '/' + address),
+      new TextDecoder().decode(await h.artifacts.get(address)),
       'image-bytes',
     )
     assertEquals((await h.g.read('.attachment')).length, 1)
@@ -211,8 +208,5 @@ Deno.test('remote images use external artifacts while large text retains bounded
     await tools.close()
     h.close()
     await server.shutdown()
-    if (old == null) Deno.env.delete('HARNESS_IMAGE_DIR')
-    else Deno.env.set('HARNESS_IMAGE_DIR', old)
-    await Deno.remove(directory, { recursive: true })
   }
 })

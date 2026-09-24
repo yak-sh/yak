@@ -23,8 +23,8 @@ import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { mcpTools } from './mcp.ts'
 import { stepLock } from './step_lock.ts'
 import { streamingEnabled } from './streaming.ts'
-import { imageContext } from './artifact_tools.ts'
-import { configuredImages, type ImageOptions, readImage } from './images.ts'
+import { imageContext, registered } from './artifact_tools.ts'
+import { configuredImages, type ImageOptions } from './images.ts'
 import { diagnostics, type FailureContext } from './diagnostics.ts'
 import { homeAt, workspace } from './workspace.ts'
 import { worktrees } from './paths.ts'
@@ -129,7 +129,7 @@ export let local = (opts: Opts = {}): Local => {
   let model = opts.model ??
     responses({
       credential: credential(Deno.env.get, (p) => Deno.readTextFile(p)),
-      images: configuredImages(opts.images),
+      images: configuredImages(h.artifacts, opts.images),
       web: opts.web ?? Deno.env.get('HARNESS_WEB') != '0',
     })
   const signin = signins(h)
@@ -163,7 +163,8 @@ export let local = (opts: Opts = {}): Local => {
       }),
       ...opts.providers,
     },
-    tools: opts.tools ?? harnessTools(h.g, { ...opts, worktrees: root }),
+    tools: opts.tools ??
+      harnessTools(h.g, { ...opts, worktrees: root, artifacts: h.artifacts }),
     remote: mcp.snapshot,
     streaming: streamingEnabled(opts),
     opening: async () => ({
@@ -171,7 +172,7 @@ export let local = (opts: Opts = {}): Local => {
       files: await instructionFiles(cwd),
     }),
     context: (window, entries) =>
-      imageContext(h.g, window, entries, opts.images),
+      imageContext(h.g, window, entries, h.artifacts),
     lock: h.path == ':memory:' ? undefined : stepLock(h.path),
     report,
     // What abnormal endings left in the worktree root, taken back by the same
@@ -215,7 +216,14 @@ export let local = (opts: Opts = {}): Local => {
         return reply
       },
     ),
-    image: a.admitted((eid: string) => readImage(h.g, eid, opts.images)),
+    // What the terminal draws inline: a PNG, and not a large one.
+    image: a.admitted(async (eid: string) => {
+      let { bytes, mediaType } = await registered(h.g, eid, h.artifacts)
+      if (mediaType != 'image/png' || bytes.length > 4 * 1024 * 1024) {
+        throw new Error('Not a displayable PNG artifact')
+      }
+      return bytes
+    }),
     entry: (b: Bundle) =>
       tree(transcriptViews, b, 'Transcript', h.vocab, {
         inlineImages: Deno.env.get('HARNESS_GRAPHICS') == 'kitty',

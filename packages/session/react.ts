@@ -580,7 +580,7 @@ export let react = async (
     }
   }
   for (let artifact of reply.artifacts ?? []) {
-    let eid = 'artifact:' + artifact.address
+    let eid = artifact.address
     added.push({
       entity: { eid },
       artifact: {

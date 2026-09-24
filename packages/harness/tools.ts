@@ -1,8 +1,8 @@
 import { toolName } from '@yaks/graph'
 import { answerOf, runner, toolEid, worded } from '@yaks/tools'
 import { artifactTools } from './artifact_tools.ts'
-import type { ImageOptions } from './images.ts'
-import { valueTools } from '@yaks/blob'
+
+import { type Blobs, valueTools } from '@yaks/blob'
 // What the agent can do here: run a program, and read and write its own graph.
 //
 // Both halves already exist as packages — @yaks/process declares the shell as
@@ -94,7 +94,8 @@ export let harnessTools = (
     & {
       cwd?: string
       depth?: Depth
-      images?: ImageOptions | false
+      /** where artifacts' bytes are kept (the harness's `artifacts`) */
+      artifacts?: Blobs
       /** the root a task child's checkout is cut under */
       worktrees?: string
     }

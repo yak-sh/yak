@@ -3,6 +3,7 @@ import { local } from './local.ts'
 import { open } from './store.ts'
 import { images } from './images.ts'
 import { responses } from '@yaks/openai'
+import { fileBlobs, memoryBlobs } from '@yaks/blob'
 import { remote } from './remote.ts'
 
 const png =
@@ -10,6 +11,7 @@ const png =
 Deno.test('generated artifacts survive database reopen and keep payloads out of transcript and requests', async () => {
   let dir = await Deno.makeTempDir()
   let db = dir + '/graph.db', directory = dir + '/images'
+  let h = open(db)
   let requests: string[] = []
   let image = {
     type: 'image_generation_call',
@@ -20,7 +22,7 @@ Deno.test('generated artifacts survive database reopen and keep payloads out of 
   }
   let model = responses({
     credential: () => ({ token: 'test', base: 'https://api.openai.com/v1' }),
-    images: images({ directory }),
+    images: images(h.artifacts),
     fetch: ((_url, init) => {
       requests.push(String(init?.body))
       let frames = [
@@ -39,7 +41,7 @@ Deno.test('generated artifacts survive database reopen and keep payloads out of 
       )
     }) as typeof fetch,
   })
-  let a = local({ h: open(db), cwd: dir, model, name: 'gpt-4.1', tools: [] })
+  let a = local({ h, cwd: dir, model, name: 'gpt-4.1', tools: [] })
   try {
     let id = await a.start('draw')
     await a.idle(id)
@@ -58,11 +60,11 @@ Deno.test('generated artifacts survive database reopen and keep payloads out of 
     assert(!requests.some((r) => r.includes(png)))
     assertEquals(Array.from(Deno.readDirSync(directory)).length, 1)
     await a.close()
-    let h = open(db)
+    let again = open(db)
     try {
-      assertEquals((await h.g.read('.artifact')).length, 1)
+      assertEquals((await again.g.read('.artifact')).length, 1)
     } finally {
-      h.close()
+      again.close()
     }
   } finally {
     // close is idempotent at the driver boundary; all model turns are idle.
@@ -74,7 +76,7 @@ Deno.test('generated artifacts survive database reopen and keep payloads out of 
 Deno.test('host store failure returns no artifact and retry repairs partial bytes', async () => {
   let dir = await Deno.makeTempDir()
   try {
-    let store = images({ directory: dir }).store
+    let store = images(fileBlobs(dir)).store
     let bytes = Uint8Array.from(atob(png), (c) => c.charCodeAt(0))
     let first = await store(bytes, 'image/png')
     await Deno.writeFile(dir + '/' + first.address, bytes.slice(0, 2))
@@ -82,7 +84,7 @@ Deno.test('host store failure returns no artifact and retry repairs partial byte
     assertEquals(await Deno.readFile(dir + '/' + first.address), bytes)
     await Deno.writeTextFile(dir + '/not-dir', 'file')
     await assertRejects(() =>
-      images({ directory: dir + '/not-dir' }).store(bytes, 'image/png')
+      images(fileBlobs(dir + '/not-dir')).store(bytes, 'image/png')
     )
   } finally {
     await Deno.remove(dir, { recursive: true })
@@ -96,7 +98,6 @@ Deno.test('image options cross the worker boundary without serializing callbacks
     cwd: dir,
     fake: true,
     images: {
-      directory: dir + '/images',
       tool: { output_format: 'png' },
       maxBytes: 1024,
     },
@@ -112,11 +113,15 @@ Deno.test('image options cross the worker boundary without serializing callbacks
 
 Deno.test('image configuration defaults to enabled with explicit disable and override', async () => {
   let { configuredImages } = await import('./images.ts')
-  assertEquals(typeof configuredImages(undefined, '')?.store, 'function')
-  assertEquals(typeof configuredImages(undefined, '1')?.store, 'function')
-  assertEquals(configuredImages(undefined, '0'), undefined)
-  assertEquals(configuredImages(false, '1'), undefined)
-  assertEquals(configuredImages({}, '0')?.auto, undefined)
+  let blobs = memoryBlobs()
+  assertEquals(typeof configuredImages(blobs, undefined, '')?.store, 'function')
+  assertEquals(
+    typeof configuredImages(blobs, undefined, '1')?.store,
+    'function',
+  )
+  assertEquals(configuredImages(blobs, undefined, '0'), undefined)
+  assertEquals(configuredImages(blobs, false, '1'), undefined)
+  assertEquals(configuredImages(blobs, {}, '0')?.auto, undefined)
 })
 
 Deno.test('image disable crosses the worker boundary', async () => {

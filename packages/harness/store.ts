@@ -26,6 +26,8 @@ import {
   blobSchema,
   bodies,
   encode,
+  fileBlobs,
+  memoryBlobs,
   sqliteBlobs,
 } from '@yaks/blob'
 import { Database, driver } from '@yaks/sqlite/db'
@@ -60,6 +62,9 @@ export type Harness = {
   vocab: Vocab
   /** where this graph's secrets are kept — its sign-ins among them */
   vault: Vault
+  /** where its artifacts' bytes are kept (@yaks/blob): the `images` directory
+   * beside the database, or memory for a graph in memory */
+  artifacts: Blobs
   migrations: ReturnType<typeof migrations>
   close: () => void
 }
@@ -297,6 +302,9 @@ export let open = (path: string = dbPath()): Harness => {
     fx,
     vocab,
     vault,
+    artifacts: path == ':memory:'
+      ? memoryBlobs()
+      : fileBlobs(path.slice(0, path.lastIndexOf('/') + 1) + 'images'),
     migrations: migration,
     close: () => db.close(),
   }

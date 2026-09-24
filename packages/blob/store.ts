@@ -53,3 +53,14 @@ export let encode = (value: string): Uint8Array => utf8.encode(value)
 
 /** Stored bytes read back as the string they encode. */
 export let decode = (bytes: Uint8Array): string => text.decode(bytes)
+
+/** A {@link Blobs} held in this process's memory, for exactly as long as it
+ * runs: where a graph in memory keeps its bytes. */
+export let memoryBlobs = (): Blobs => {
+  let held = new Map<string, Uint8Array>()
+  return {
+    has: (sha) => held.has(sha),
+    get: (sha) => held.get(sha),
+    put: (sha, bytes) => void held.set(sha, bytes),
+  }
+}

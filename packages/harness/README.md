@@ -520,10 +520,10 @@ Current provider errors do not reliably distinguish unsupported image tools from
 other invalid requests, so there is no negative capability cache or speculative
 fallback. Disable images explicitly if your endpoint rejects them.
 
-Binary bytes use `@yaks/blob`'s external file backend under
-`$HARNESS_HOME/images` (default `~/.yak/images`), or `HARNESS_IMAGE_DIR`. This
-directory is made private. Keep it with database backups. Do not point it at an
-unrelated shared directory: the harness enforces mode 0700 on it.
+Images are `@yaks/blob` artifacts: each is an entity named by its bytes'
+SHA-256, and the bytes are kept in the graph's byte store (`h.artifacts`), the
+`images` directory beside the database (`~/.yak/images`), or memory for a graph
+in memory. Keep that directory with database backups.
 
 Configure it in code with:
 
@@ -531,7 +531,7 @@ Configure it in code with:
 local({
   h,
   name: 'gpt-4.1',
-  images: { directory, tool: { output_format: 'png' }, maxBytes: 33554432 },
+  images: { tool: { output_format: 'png' }, maxBytes: 33554432 },
 })
 ```
 
