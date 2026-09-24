@@ -406,6 +406,14 @@ entrypoint = "Files"
 binding = "OAUTH_KV"
 id = "64fa009267934abe8bc0c9d23ae01b17"
 
+# Where a connection's credential is kept (vault.ts): every value encrypted
+# under VAULT_KEY, so the database, its Time Travel and its exports hold only
+# ciphertext. `wrangler dev` simulates it and ignores the id.
+[[d1_databases]]
+binding = "VAULT"
+database_name = "yak-vault"
+database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
+
 # Secrets never live in this file. SESSION_SECRET signs the platform session
 # cookie (lib/token.ts) and keys the sign-in code digests (signin.ts);
 # MAIL_TOKEN and MAIL_ACCOUNT are the Cloudflare Email Sending credentials the
@@ -436,6 +444,12 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # speaks to OpenAI instead. BUILDER_MODEL_FREE and BUILDER_MODEL_PAID are the
 # model ids, unset meaning builder.ts's own defaults.
 # SENTRY_DSN is where defects are sent (sentry.ts); unset, nothing is sent.
+# VAULT_KEY is the key the vault above is encrypted under: 32 random bytes in
+# base64 (`openssl rand -base64 32`). Changing it strands every key already
+# kept. OAUTH_CLIENTS is the OAuth client yaks.app is registered as with each
+# integration a person connects by signing in, as JSON:
+# `{"<integration>": {"id": "…", "secret": "…"}}`. Unset, the connections page
+# says keys cannot be saved here, or offers no Connect button.
 # CIMD is not a secret but rides the same door, because that door needs no
 # code deploy: `printf off | wrangler secret put CIMD` stops the well-known
 # claiming Client ID Metadata Document support, `printf on | ...` restores it,
@@ -637,3 +651,8 @@ entrypoint = "Files"
 binding = "OAUTH_KV"
 # Made by bin/yak-staging-init.
 id = "667f6be792cb4941b4faace195e6c726"
+
+[[env.staging.d1_databases]]
+binding = "VAULT"
+database_name = "yak-vault-staging"
+database_id = "8ffd95b7-15cb-4068-9030-7fc5b511eefa"

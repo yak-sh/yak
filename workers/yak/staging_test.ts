@@ -41,6 +41,7 @@ Deno.test('staging repeats the kernel bindings without production resources', ()
       ['r2_buckets', 'bucket_name'],
       ['vectorize', 'index_name'],
       ['kv_namespaces', 'id'],
+      ['d1_databases', 'database_id'],
       ['analytics_engine_datasets', 'dataset'],
       ['services', 'service'],
     ]

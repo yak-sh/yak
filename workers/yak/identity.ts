@@ -82,7 +82,7 @@ import {
   type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
 import { cookieValue, opened, seal, verify } from './lib/token.ts'
-import { agentsOf } from './connected.ts'
+import { agentsOf, servicesOf } from './connected.ts'
 import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
 import { directory, META, type Space } from './directory.ts'
@@ -295,6 +295,14 @@ export let agents = (env: Env, person: string) => {
         throw error
       }
     },
+  }, person)
+}
+
+/** The outside services holding a grant from this person (connected.ts). */
+export let services = (env: Env, person: string) => {
+  let oauth = api(env)
+  return servicesOf({
+    listUserGrants: (person, options) => oauth.listUserGrants(person, options),
   }, person)
 }
 

@@ -11,6 +11,7 @@
 // with no other change. A part never reaches another except through its
 // handler, and none keeps state another reads.
 import type { Bucket } from '@yaks/blob'
+import type { D1Like } from '@yaks/d1'
 import type { Binding } from './post.ts'
 import type { Dispatch, Fetcher, Namespace } from './door.ts'
 import type { Meta } from './meta.ts'
@@ -66,6 +67,17 @@ export type Env = {
   // the library's (identity.ts); nothing in the kernel reads it, so `unknown`
   // keeps a Cloudflare type name out of here.
   OAUTH_KV: unknown
+  // Where a connection's credential is kept (vault.ts): the D1 database of
+  // the vault (wrangler.toml `[[d1_databases]]`), and the key every value in
+  // it is encrypted under — 32 bytes in base64, a secret. Either unset, a
+  // key cannot be saved and the connections page says so.
+  VAULT?: D1Like
+  VAULT_KEY?: string
+  // The OAuth clients yaks.app is registered as with the integrations a
+  // person connects by signing in (connections.ts): a secret holding
+  // `{"<integration>": {"id": "…", "secret": "…"}}`. Unset, there is no
+  // Connect button, only the box to paste a key into.
+  OAUTH_CLIENTS?: string
   // Whether we claim Client ID Metadata Documents (identity.ts `cimd`). On
   // unless it says `off`; read per request, so dropping the claim is one
   // `wrangler secret put` and no deploy of new code.

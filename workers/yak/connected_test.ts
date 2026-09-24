@@ -6,7 +6,7 @@ import type {
   GrantSummary,
   OAuthHelpers,
 } from '@cloudflare/workers-oauth-provider'
-import { agentsOf } from './connected.ts'
+import { agentsOf, servicesOf } from './connected.ts'
 
 let grant = (
   clientId: string,
@@ -163,4 +163,26 @@ Deno.test('agents: storage failures remain errors', async () => {
     Error,
     'KV unavailable',
   )
+})
+
+Deno.test('a Zapier grant is a connection, not an agent', async () => {
+  let p = provider([[
+    grant('zap', {
+      redirectUri: 'https://zapier.com/dashboard/auth/oauth/return/App1CLIAPI/',
+      createdAt: 40,
+    }),
+    grant('zap-again', {
+      redirectUri: 'https://zapier.com/dashboard/auth/oauth/return/App1CLIAPI/',
+      createdAt: 20,
+    }),
+    grant('claude', { redirectUri: 'https://claude.ai/cb' }),
+    grant('fake', { redirectUri: 'https://zapier.com.example/cb' }),
+  ]], { fake: 'Fake' })
+  assertEquals(
+    (await agentsOf(p.oauth, 'person', 0)).map((a) => a.name),
+    ['Claude', 'Fake'],
+  )
+  assertEquals(await servicesOf(p.oauth, 'person', 0), [
+    { name: 'Zapier', connectedAt: 20 },
+  ])
 })

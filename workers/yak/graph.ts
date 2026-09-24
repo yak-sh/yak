@@ -94,6 +94,7 @@ import {
   type Wire,
 } from '@yaks/durable-object'
 import { effects } from '@yaks/effects'
+import { sealing, SECRET, secrets } from '@yaks/secrets'
 import { edges } from '@yaks/edge'
 import { keys } from '@yaks/key'
 import { aliases } from '@yaks/alias'
@@ -148,6 +149,7 @@ import { doorOf, GIT_STORE, type Namespace, PLATFORM_STORE } from './door.ts'
 import { type Meta, metaOf } from './meta.ts'
 import { caught, defect } from './sentry.ts'
 import { weighed } from './meter.ts'
+import { vaultOf } from './vault.ts'
 import {
   constrained,
   dead,
@@ -156,6 +158,7 @@ import {
   held,
   keep,
   type Kept,
+  keyed,
   logged,
   oldest,
   parked,
@@ -704,6 +707,10 @@ export class Store {
       report: (error, { handler }) =>
         defect(error, { request: `effect ${handler}`, store: name }),
     })
+    // Where the directory keeps a connection's credential (vault.ts). A key
+    // comes out of a write before anything else reads it, and is sealed once
+    // the write commits (`sealing` below); an app's store keeps none.
+    let vault = meta ? vaultOf(this.#bind) : null
     let g = graph({
       storage: store,
       vocab,
@@ -715,6 +722,7 @@ export class Store {
       // kernel's own gate in front of it is the whole rule.
       plugins: [
         this.#logging,
+        ...(vault ? [secrets(vault)] : []),
         ...(vocab.comp('archetype') ? [archetypes()] : []),
         // First, before anything reads a word that is not there. The directory
         // is left out: its words are the platform's own, its callers are the
@@ -799,6 +807,7 @@ export class Store {
         doc: rule.rule.name,
       })
     }
+    if (vault) fx.on(SECRET, sealing(vault))
     effected(PLUGINS, fx, {
       env: this.#bind,
       meta,
@@ -1629,7 +1638,7 @@ export class Store {
       let req = new Request(request, { body })
       return await this.#ready(req) ?? this.#serve(req)
     }
-    if (!fits(body)) return unkept()
+    if (!fits(body) || keyed(body)) return unkept()
     try {
       seq = keep(this.#ctx.storage.sql, request, body)
     } catch (e) {

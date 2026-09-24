@@ -1,6 +1,11 @@
 // Connected agents are a view of the OAuth provider's surviving grants.
 // Callback hosts identify web clients; local and older clients use their
 // registered names. Multiple installations of one agent share one entry.
+//
+// A service that signs in the way an agent does is not one: Zapier holds a
+// yaks.app grant as a space holds a Google Calendar token, so its grant is a
+// connection (D-38019), known by the host its callback returns to and listed
+// by `servicesOf`, never by `agentsOf`.
 import type {
   ClientInfo,
   GrantSummary,
@@ -14,6 +19,8 @@ export type Agent = {
   brand?: Brand
   connectedAt: number
 }
+/** An outside service holding a grant, as the connections page lists it. */
+export type Service = { name: string; connectedAt: number }
 
 type Clients = Pick<OAuthHelpers, 'listUserGrants'> & {
   // Missing registrations are null; unavailable metadata is undefined. The
@@ -41,6 +48,34 @@ let named = (name = ''): Brand | undefined => {
     case 'cursor':
       return 'cursor'
   }
+}
+
+// The services, by the host their callback returns to.
+let SERVICES: Record<string, string> = { 'zapier.com': 'Zapier' }
+
+let serviceOf = (uri: string | undefined): string | undefined => {
+  try {
+    let url = new URL(uri ?? '')
+    return url.protocol == 'https:' ? SERVICES[url.hostname] : undefined
+  } catch {
+    return undefined
+  }
+}
+
+// Every grant still standing, page by page.
+let live = async function* (
+  oauth: Pick<Clients, 'listUserGrants'>,
+  person: string,
+  now: number,
+) {
+  let cursor: string | undefined
+  do {
+    let page = await oauth.listUserGrants(person, { cursor, limit: 100 })
+    for (let grant of page.items) {
+      if (grant.expiresAt === undefined || grant.expiresAt > now) yield grant
+    }
+    cursor = page.cursor
+  } while (cursor)
 }
 
 let callback = (uri: string | undefined) => {
@@ -92,16 +127,27 @@ export let agentsOf = async (
       connectedAt: Math.min(grant.createdAt, previous?.connectedAt ?? Infinity),
     })
   }
-  let cursor: string | undefined
-  do {
-    let page = await oauth.listUserGrants(person, { cursor, limit: 100 })
-    for (let grant of page.items) {
-      if (grant.expiresAt !== undefined && grant.expiresAt <= now) continue
-      await identify(grant)
-    }
-    cursor = page.cursor
-  } while (cursor)
+  for await (let grant of live(oauth, person, now)) {
+    if (!serviceOf(grant.redirectUri)) await identify(grant)
+  }
   return [...found.values()].sort((a, b) =>
     a.name.localeCompare(b.name) || a.id.localeCompare(b.id)
   )
+}
+
+/** The services holding a grant from this person, one entry per service. */
+export let servicesOf = async (
+  oauth: Pick<Clients, 'listUserGrants'>,
+  person: string,
+  now = Math.floor(Date.now() / 1000),
+): Promise<Service[]> => {
+  let found = new Map<string, number>()
+  for await (let grant of live(oauth, person, now)) {
+    let name = serviceOf(grant.redirectUri)
+    if (name) {
+      found.set(name, Math.min(grant.createdAt, found.get(name) ?? Infinity))
+    }
+  }
+  return [...found].sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, connectedAt]) => ({ name, connectedAt }))
 }

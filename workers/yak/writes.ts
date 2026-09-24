@@ -25,6 +25,7 @@
 // reported, never dropped.
 import type { DurableSql } from '@yaks/durable-object'
 import { Refused } from '@yaks/graph'
+import { carries } from '@yaks/secrets'
 
 export let WRITES = `create table if not exists yak_writes (
     seq integer primary key autoincrement,
@@ -55,6 +56,19 @@ let ROOM = 1_900_000
 /** Whether a body fits in the log. */
 export let fits = (body: string): boolean =>
   body.length * 3 <= ROOM || new TextEncoder().encode(body).length <= ROOM
+
+/** Whether a body carries a secret's value (@yaks/secrets `carries`). The log
+ * keeps none: a key is kept nowhere but the vault. A body that mentions a
+ * secret and cannot be read is taken to carry one. */
+export let keyed = (body: string): boolean => {
+  if (!body.includes('secret')) return false
+  try {
+    let said = JSON.parse(body)
+    return carries(Array.isArray(said) ? said : said?.entities)
+  } catch {
+    return true
+  }
+}
 
 /** Keep one write; its place in the log. */
 export let keep = (sql: DurableSql, req: Request, body: string): number => {
