@@ -2,7 +2,8 @@
 import { checkoutAt, createWorktree, discover } from '@yaks/git/host'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { ChildLimits } from '@yaks/session'
-import { cutFor, restore } from './worktrees.ts'
+import { restore } from '@yaks/git/host'
+import { cutFor } from './worktrees.ts'
 
 export { workspaceDoc } from './vocab.ts'
 
@@ -10,7 +11,7 @@ let row = async (g: Graph, eid: string) =>
   (await g.storage.tx((tx) => tx.get([eid])))[0]
 /** Where a worktree entity is checked out — the one function everything here
  * goes through, so a worktree removed while its session was over is created
- * again before anything runs in it (worktrees.ts `restore`). */
+ * again before anything runs in it (@yaks/git/host `restore`). */
 let treeAt = async (g: Graph, eid: string): Promise<string> => {
   let tree = await row(g, eid)
   if (!tree?.worktree) throw new Error('not a worktree entity: ' + eid)

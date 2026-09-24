@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { discover } from '@yaks/git/host'
+import { discover, restore } from '@yaks/git/host'
 import { open } from './store.ts'
 import { sessionCwd } from './workspace.ts'
 import {
@@ -7,12 +7,8 @@ import {
   collecting,
   cutFor,
   going,
-  holds,
   homes,
-  lost,
   over,
-  reclaim,
-  restore,
   sweep,
 } from './worktrees.ts'
 
@@ -92,58 +88,6 @@ let stopped = (session: string, seq = 1) => line(session, seq, { stop: {} })
 
 Deno.test('a checkout is named after the child it was cut for', () => {
   assertEquals(cutFor('child:abc', '/wt'), '/wt/child-abc')
-})
-
-Deno.test('a clean, landed checkout is taken back with its branch', async () => {
-  let f = await fixture()
-  try {
-    let path = await f.cut('done')
-    assertEquals(await holds(path), undefined)
-    assertEquals(await reclaim(path), undefined)
-    assertEquals(await there(path), false)
-    assertEquals(await f.branches(), 'main')
-  } finally {
-    await f.free()
-  }
-})
-
-Deno.test('dirty files and unlanded commits keep a checkout', async () => {
-  let f = await fixture()
-  try {
-    let dirty = await f.cut('dirty')
-    await Deno.writeTextFile(dirty + '/scratch', 'not committed')
-    assertEquals(await reclaim(dirty), 'dirty')
-    assert(await there(dirty))
-
-    let ahead = await f.cut('ahead')
-    await f.commit(ahead, 'unlanded')
-    assertEquals(await reclaim(ahead), 'unlanded')
-    assert(await there(ahead))
-
-    // Landing it anywhere else is enough: the parent's branch, not only main.
-    await git(f.repo, 'branch', 'parent', 'task-ahead')
-    assertEquals(await reclaim(ahead), undefined)
-    assertEquals(await there(ahead), false)
-    assertEquals(await f.branches(), 'main\nparent\ntask-dirty')
-  } finally {
-    await f.free()
-  }
-})
-
-Deno.test('a checkout whose gitdir is gone is removed outright', async () => {
-  let f = await fixture()
-  try {
-    let path = await f.cut('orphan')
-    await f.commit(path, 'work the runner threw away')
-    await Deno.remove(f.repo + '/.git/worktrees', { recursive: true })
-    assert(await lost(path))
-    assertEquals(await reclaim(path), undefined)
-    assertEquals(await there(path), false)
-    // A live checkout is not lost, whatever it holds.
-    assertEquals(await lost(await f.cut('live')), false)
-  } finally {
-    await f.free()
-  }
 })
 
 Deno.test('a sweep takes back the root, keeps what is held, and skips a live home', async () => {

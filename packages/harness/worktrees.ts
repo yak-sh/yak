@@ -3,12 +3,11 @@
 // back. workspace.ts creates `<root>/<child id>` per delegated session and
 // nothing ever removed them: 412 of them at 167M each filled the root disk
 // twice in one day (T-37640). A worktree can be removed when its session is
-// over and holds nothing — a clean working tree whose HEAD already exists on
-// some other branch: the base it was created from, the parent's branch, main.
-// Its own branch never counts; that is what "unlanded" means. Anything dirty or
-// ahead of those branches is kept and listed in the result, so a leak has
-// nowhere to hide but that list. Nothing here passes `--force`, so Git's own
-// refusal is a second guard behind ours.
+// over and it holds nothing; what "holds nothing" means, the removal itself and
+// the re-creation are Git's business and live in @yaks/git/host (`holds`,
+// `reclaim`, `restore`). This file ties them to sessions. Anything a worktree
+// still holds is kept and listed in the result, so a leak has nowhere to hide
+// but that list.
 //
 // Whether a session is over is read from the graph, never from the pool: a
 // dispatch settling means the pool has let go of a child, while the transcript
@@ -18,10 +17,9 @@
 //
 // A session that is over can still be resumed, and then it needs its work back.
 // So the row is brought up to date before the files are deleted — `discover`
-// records the commit the worktree is checked out at — and `restore()` creates
-// it again at that commit, on the same branch, at the same path. Nothing new
-// had to be recorded for that: `worktree{path, head, branch}` already held it;
-// it had only gone stale since the worktree was created.
+// records the commit the worktree is checked out at — and @yaks/git/host's
+// `restore()` creates it again at that commit, on the same branch, at the same
+// path.
 //
 // Startup sweeps the whole root directory the same way, and also removes the
 // worktrees Git has already forgotten — a `.git` file naming a gitdir that no
@@ -30,97 +28,11 @@
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import type { Effects } from '@yaks/effects'
-import { discover } from '@yaks/git/host'
+import { discover, type Held, reclaim } from '@yaks/git/host'
 import { worktrees } from './paths.ts'
-
-/** Why a worktree was kept: uncommitted files, commits that exist nowhere
- * else, or a removal that did not succeed. */
-export type Held = 'dirty' | 'unlanded' | 'failed'
-
-let run = async (cwd: string, args: string[]) => {
-  let p = await new Deno.Command('git', {
-    cwd,
-    args,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output().catch(() => undefined)
-  let say = (bytes?: Uint8Array) =>
-    bytes ? new TextDecoder().decode(bytes).trimEnd() : ''
-  return {
-    ok: !!p?.success,
-    out: say(p?.stdout),
-    err: say(p?.stderr).trim() || 'git did not run',
-  }
-}
-
-/** A git command's output, or nothing when it failed. */
-let git = async (cwd: string, args: string[]): Promise<string | undefined> => {
-  let said = await run(cwd, args)
-  return said.ok ? said.out : undefined
-}
-
-/** The same, but throwing: a worktree that cannot be created again has to
- * report why. */
-let must = async (cwd: string, args: string[]): Promise<string> => {
-  let said = await run(cwd, args)
-  if (!said.ok) throw new Error('git ' + args.join(' ') + ': ' + said.err)
-  return said.out
-}
 
 let row = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
   (await g.storage.tx((tx) => tx.get([eid])))[0]
-
-/** A worktree Git has already lost: the gitdir its `.git` file names is gone,
- * so nothing can be committed from it and nothing read out of it. */
-export let lost = async (path: string): Promise<boolean> => {
-  let named = /^gitdir:\s*(.+)$/m.exec(
-    await Deno.readTextFile(path + '/.git').catch(() => ''),
-  )?.[1]
-  return !!named &&
-    !await Deno.stat(named.trim()).then(() => true, () => false)
-}
-
-/** What this worktree still holds, `undefined` when it holds nothing. A path
- * that is not a worktree at all is reported as `unlanded` — kept, never guessed
- * at. */
-export let holds = async (path: string): Promise<Held | undefined> => {
-  if (await git(path, ['status', '--porcelain'])) return 'dirty'
-  let head = await git(path, ['rev-parse', '--verify', 'HEAD'])
-  if (!head) return 'unlanded'
-  let own = await git(path, ['symbolic-ref', '--quiet', 'HEAD'])
-  let elsewhere = (await git(path, [
-    'for-each-ref',
-    '--contains',
-    head,
-    '--format=%(refname)',
-    'refs/heads/',
-  ]) ?? '').split('\n').filter((ref) => ref && ref != own)
-  return elsewhere.length ? undefined : 'unlanded'
-}
-
-/** Remove one worktree — the directory and the branch it was created on —
- * unless it still holds something. Returns what kept it, or nothing. */
-export let reclaim = async (path: string): Promise<Held | undefined> => {
-  if (await lost(path)) {
-    return await Deno.remove(path, { recursive: true })
-      .then(() => undefined, () => 'failed' as Held)
-  }
-  let held = await holds(path)
-  if (held) return held
-  let branch = await git(path, ['symbolic-ref', '--short', '--quiet', 'HEAD'])
-  let common = await git(path, [
-    'rev-parse',
-    '--path-format=absolute',
-    '--git-common-dir',
-  ])
-  if (await git(path, ['worktree', 'remove', path]) == null) return 'failed'
-  // The branch outlives its worktree, and only the repository can delete it.
-  // `-D` is safe here: the commits were proved to exist on another branch.
-  if (branch && common) {
-    await git(common, ['--git-dir=' + common, 'branch', '-D', branch])
-  }
-  return undefined
-}
 
 /** The path workspace.ts creates this session's worktree at. */
 export let cutFor = (session: string, dir = worktrees()): string =>
@@ -198,43 +110,6 @@ export let collecting = (
   fx.changed('dispatch', 'state', (e) => {
     if (e.comp?.state == 'settled') at(e.entity.eid)
   })
-}
-
-/** The path this worktree is checked out at, creating it again if it was
- * removed — same path, same branch, at the commit it held when it was removed,
- * which is on a merged branch or it would never have been removed — so a
- * session picked up again picks up its work. */
-export let restore = async (g: Graph, tree: Bundle): Promise<string> => {
-  let w = tree.worktree as Comp | undefined
-  if (!w?.path) throw new Error('worktree ' + tree.entity.eid + ' has no path')
-  let path = String(w.path)
-  if (await Deno.stat(path).then(() => true, () => false)) return path
-  let common =
-    ((await row(g, String(w.repository)))?.repository as Comp | undefined)
-      ?.common
-  let head = w.head
-  if (typeof common != 'string' || typeof head != 'string') {
-    throw new Error('nothing recorded to cut ' + path + ' again from')
-  }
-  let name = w.branch
-    ? String(
-      ((await row(g, String(w.branch)))?.ref as Comp | undefined)?.name ?? '',
-    )
-    : ''
-  let branch = name.replace(/^refs\/heads\//, '')
-  // Removing a worktree deletes its branch too, but a branch somebody else
-  // kept is where that work actually is, not our stale copy of it.
-  let standing = !!branch &&
-    await git(common, ['rev-parse', '--verify', '--quiet', name]) != null
-  await must(common, [
-    'worktree',
-    'add',
-    ...branch ? standing ? [] : ['-b', branch] : ['--detach'],
-    path,
-    standing ? branch : head,
-  ])
-  await discover(g, path)
-  return path
 }
 
 /** The worktrees these sessions are still using — never swept. Both halves are

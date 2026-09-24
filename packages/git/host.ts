@@ -1,5 +1,6 @@
 // Git checkouts on the machine this process runs on: find one, record what Git
-// reports about it, and create a new worktree.
+// reports about it, create a new worktree, take one back once it holds
+// nothing, and create it again where it stood.
 //
 // Git is authoritative here. The graph holds an observation of what Git
 // reports, and writing that observation again changes nothing, so discovery
@@ -325,4 +326,107 @@ export let createWorktree = async (
   } finally {
     if (pending.get(path) === run) pending.delete(path)
   }
+}
+
+/** Why a worktree was kept: uncommitted files, commits that exist nowhere
+ * else, or a removal that did not succeed. */
+export type Held = 'dirty' | 'unlanded' | 'failed'
+
+// A git command's output, or nothing when it failed or could not run at all —
+// a path that is not a checkout is an answer here, not an error.
+let quiet = (cwd: string, args: string[]): Promise<string | undefined> =>
+  git(cwd, args, true).catch(() => undefined)
+
+/** A worktree Git has already lost: the gitdir its `.git` file names is gone,
+ * so nothing can be committed from it and nothing read out of it. */
+export let lost = async (path: string): Promise<boolean> => {
+  let named = /^gitdir:\s*(.+)$/m.exec(
+    await Deno.readTextFile(path + '/.git').catch(() => ''),
+  )?.[1]
+  return !!named &&
+    !await Deno.stat(named.trim()).then(() => true, () => false)
+}
+
+/** What this worktree still holds, `undefined` when it holds nothing: a clean
+ * working tree whose HEAD already exists on some other branch — the base it was
+ * created from, a parent's branch, main. Its own branch never counts; that is
+ * what "unlanded" means. A path that is not a worktree at all is reported as
+ * `unlanded` — kept, never guessed at. */
+export let holds = async (path: string): Promise<Held | undefined> => {
+  if (await quiet(path, ['status', '--porcelain'])) return 'dirty'
+  let head = await quiet(path, ['rev-parse', '--verify', 'HEAD'])
+  if (!head) return 'unlanded'
+  let own = await quiet(path, ['symbolic-ref', '--quiet', 'HEAD'])
+  let elsewhere = (await quiet(path, [
+    'for-each-ref',
+    '--contains',
+    head,
+    '--format=%(refname)',
+    'refs/heads/',
+  ]) ?? '').split('\n').filter((ref) => ref && ref != own)
+  return elsewhere.length ? undefined : 'unlanded'
+}
+
+/** Remove one worktree — the directory and the branch it was created on —
+ * unless it still holds something. Returns what kept it, or nothing. A worktree
+ * Git has lost is deleted outright. Nothing here passes `--force`, so Git's own
+ * refusal is a second guard behind `holds`. */
+export let reclaim = async (path: string): Promise<Held | undefined> => {
+  if (await lost(path)) {
+    return await Deno.remove(path, { recursive: true })
+      .then(() => undefined, () => 'failed' as Held)
+  }
+  let held = await holds(path)
+  if (held) return held
+  let branch = await quiet(path, ['symbolic-ref', '--short', '--quiet', 'HEAD'])
+  let common = await quiet(path, [
+    'rev-parse',
+    '--path-format=absolute',
+    '--git-common-dir',
+  ])
+  if (await quiet(path, ['worktree', 'remove', path]) == null) return 'failed'
+  // The branch outlives its worktree, and only the repository can delete it.
+  // `-D` is safe here: the commits were proved to exist on another branch.
+  if (branch && common) {
+    await quiet(common, ['--git-dir=' + common, 'branch', '-D', branch])
+  }
+  return undefined
+}
+
+/** The path this worktree is checked out at, creating it again if it was
+ * removed — same path, same branch, at the commit its row recorded — so work
+ * taken back by `reclaim` comes back where it stood. Nothing new has to be
+ * recorded for that: `worktree{path, head, branch}` already holds it, as long
+ * as `discover` brought it up to date before the files went. */
+export let restore = async (g: Graph, tree: Bundle): Promise<string> => {
+  let w = tree.worktree as Comp | undefined
+  if (!w?.path) throw new Error('worktree ' + tree.entity.eid + ' has no path')
+  let path = String(w.path)
+  if (await Deno.stat(path).then(() => true, () => false)) return path
+  let common =
+    ((await row(g, String(w.repository)))?.repository as Comp | undefined)
+      ?.common
+  let head = w.head
+  if (typeof common != 'string' || typeof head != 'string') {
+    throw new Error('nothing recorded to cut ' + path + ' again from')
+  }
+  let name = w.branch
+    ? String(
+      ((await row(g, String(w.branch)))?.ref as Comp | undefined)?.name ?? '',
+    )
+    : ''
+  let branch = name.replace(/^refs\/heads\//, '')
+  // Removing a worktree deletes its branch too, but a branch somebody else
+  // kept is where that work actually is, not a stale copy of it.
+  let standing = !!branch &&
+    await quiet(common, ['rev-parse', '--verify', '--quiet', name]) != null
+  await git(common, [
+    'worktree',
+    'add',
+    ...branch ? standing ? [] : ['-b', branch] : ['--detach'],
+    path,
+    standing ? branch : head,
+  ])
+  await discover(g, path)
+  return path
 }

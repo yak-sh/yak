@@ -21,8 +21,8 @@ Entry points:
 
 - `@yaks/git`: object builders and storage, refs, packfiles, smart HTTP, and the
   commit plugin.
-- `@yaks/git/host`: local checkout discovery and worktree creation using the
-  `git` subprocess.
+- `@yaks/git/host`: local checkout discovery, and creating, taking back and
+  re-creating worktrees, using the `git` subprocess.
 - `@yaks/git/land`: the filesystem-based branch landing operation.
 - `@yaks/git/cites`: how a citation stands against the code it names, derived
   from Git.
@@ -407,11 +407,12 @@ are async, writing an object is async too.
 ## Checkouts on one machine
 
 Here a **host** is the process that opened the graph and runs these operations.
-`@yaks/git/host` adds `discover`, `checkoutAt`, and `createWorktree`, which run
-`git` as a subprocess and therefore need Deno. They are kept out of the main
-entry point, which still type-checks with only the web platform in scope. Load
-`checkoutDoc` to get just the four components below — `repository`, `worktree`,
-`ref` and `checkout` — without the Git object components.
+`@yaks/git/host` adds `discover`, `checkoutAt`, `createWorktree`, `holds`,
+`reclaim`, `lost` and `restore`, which run `git` as a subprocess and therefore
+need Deno. They are kept out of the main entry point, which still type-checks
+with only the web platform in scope. Load `checkoutDoc` to get just the four
+components below — `repository`, `worktree`, `ref` and `checkout` — without the
+Git object components.
 
 Git is authoritative here; the graph holds an observation of it that can be
 refreshed at any time without changing anything.
@@ -454,6 +455,17 @@ to adopt a directory that is already there. Nothing is merged, pruned or deleted
 automatically when an agent finishes. A managed directory that has gone missing
 is an error, not permission to recreate it and lose whatever was uncommitted in
 it.
+
+Taking a worktree back is a separate, explicit step. `holds(path)` says what a
+worktree still holds: `dirty` for uncommitted files, `unlanded` when its HEAD is
+on no branch but its own (a path that is not a checkout counts as that too), or
+nothing. `reclaim(path)` removes a worktree and the branch it was created on
+only when it holds nothing, and never with `--force`, so Git's own refusal
+stands behind that test; it returns what kept it, `failed` included. A worktree
+whose gitdir Git has lost (`lost(path)`) is deleted outright. `restore(g, row)`
+creates a worktree again at the path, branch and commit its row recorded, so run
+`discover` on it before taking it back. Which worktrees to take back, and when,
+is the caller's decision.
 
 Identity and locking assume one filesystem and one shared graph, used by
 cooperating processes on that machine. A checkout moved on disk, or changed by
