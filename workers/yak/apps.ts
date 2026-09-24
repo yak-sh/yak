@@ -25,7 +25,7 @@
 // per app: a page in a loop is a bug to see once, not a write flood. What the
 // door refused on purpose never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
-import { apex, type Host } from './host.ts'
+import { apex } from './host.ts'
 import { r2Objects } from './lib/objects.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
 import { at as cachedAt } from './cache.ts'
