@@ -12,11 +12,13 @@ import {
   isHandle,
   ramVault,
   reveal,
+  sealing,
   secretEid,
   secrets,
   secretsDoc,
   sentinelOf,
 } from '@yaks/secrets'
+import { effects } from '@yaks/effects'
 import {
   begin,
   connect,
@@ -77,11 +79,13 @@ let endpoint = (...replies: [number, unknown][]) => {
 
 let setup = async (...replies: [number, unknown][]) => {
   let vault = ramVault()
+  let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
   let g = graph({
     storage: ram(vocab),
     vocab,
-    plugins: [secrets(vault), edges(vocab)],
+    plugins: [secrets(vault), edges(vocab), fx],
   })
+  fx.on('secret', sealing(vault))
   await g.apply([
     { entity: { eid: 'space' }, space: {} },
     { entity: { eid: 'app' }, app: {} },

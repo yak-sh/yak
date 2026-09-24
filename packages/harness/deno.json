@@ -6,6 +6,7 @@
     "./bin": "./bin.ts",
     "./vocab": "./vocab.ts",
     "./rules": "./rules.ts",
+    "./effects": "./effects.ts",
     "./tools": "./runs.ts"
   },
   "license": "Apache-2.0",

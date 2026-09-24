@@ -3,7 +3,15 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { ramVault, records, sealed, secrets, secretsDoc } from '@yaks/secrets'
+import {
+  ramVault,
+  records,
+  sealed,
+  sealing,
+  secrets,
+  secretsDoc,
+} from '@yaks/secrets'
+import { effects } from '@yaks/effects'
 import {
   authorization,
   AuthorizationError,
@@ -16,7 +24,9 @@ import {
 const kept = () => {
   const vocab = loadVocab([secretsDoc])
   const vault = ramVault()
-  const g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault)] })
+  const fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
+  const g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault), fx] })
+  fx.on('secret', sealing(vault))
   return {
     g,
     vault,

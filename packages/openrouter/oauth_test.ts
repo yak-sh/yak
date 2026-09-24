@@ -3,7 +3,15 @@ import type { AuthorizationStore } from '@yaks/oauth'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { ramVault, records, sealed, secrets, secretsDoc } from '@yaks/secrets'
+import {
+  ramVault,
+  records,
+  sealed,
+  sealing,
+  secrets,
+  secretsDoc,
+} from '@yaks/secrets'
+import { effects } from '@yaks/effects'
 import { authorization, type Record, STORE_KEY } from './oauth.ts'
 const memory = (): AuthorizationStore<Record> => {
   const records = new Map<string, Record>()
@@ -89,7 +97,9 @@ Deno.test('cancel/expiry prevents late save and failed exchange is never replaye
 Deno.test('a key kept as a secret is read back by a fresh authorization', async () => {
   const vocab = loadVocab([secretsDoc])
   const vault = ramVault()
-  const g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault)] })
+  const fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
+  const g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault), fx] })
+  fx.on('secret', sealing(vault))
   await g.apply([
     sealed(`openrouter ${STORE_KEY}`, '{"api_key":"provisioned"}'),
   ])

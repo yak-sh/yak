@@ -2,12 +2,15 @@
 // seals into it, the value reads back, and the rows hold only ciphertext.
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
+import { effects } from '@yaks/effects'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import {
   records,
+  retryable,
   reveal,
   sealed,
+  sealing,
   secretEid,
   secrets,
   secretsDoc,
@@ -16,7 +19,7 @@ import {
 } from '@yaks/secrets'
 import { loadVocab } from '@yaks/vocab'
 import { d1 } from './harness.ts'
-import { d1Vault } from './vault.ts'
+import { d1Vault, transient } from './vault.ts'
 
 let vocab = loadVocab([secretsDoc])
 let key = () =>
@@ -25,14 +28,17 @@ let key = () =>
     'decrypt',
   ])
 
-let setup = async (db = d1()) => {
-  let vault: Vault = d1Vault(db, await key())
-  let g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault)] })
+let setup = (db = d1()) => {
+  // The key still on its way, as one imported from a Worker secret is.
+  let vault: Vault = d1Vault(db, key())
+  let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
+  let g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault), fx] })
+  fx.on('secret', sealing(vault))
   return { db, g, vault }
 }
 
 Deno.test('a secret sealed through the graph is ciphertext in D1', async () => {
-  let { db, g, vault } = await setup()
+  let { db, g, vault } = setup()
   await g.apply([sealed('A', 'plain-value')])
   assertEquals(await reveal(vault, 'A'), 'plain-value')
   let { results } = await db.prepare('select k, v from yak_vault').all<
@@ -53,7 +59,7 @@ Deno.test('the salt is made once, and opens only under its key', async () => {
 })
 
 Deno.test('the lock holds a read, a change and the write back as one step', async () => {
-  let { g, vault } = await setup()
+  let { g, vault } = setup()
   let store = records<{ n?: number }>(g, vault, 'count ')
   await Promise.all(
     [1, 2, 3].map(() =>
@@ -78,4 +84,20 @@ Deno.test('a lease held by another isolate is waited for', async () => {
   await two.lock('x', () => Promise.resolve(void order.push('two')))
   await first
   assertEquals(order, ['one in', 'one out', 'two'])
+})
+
+Deno.test('what D1 says to retry is flagged retryable, and nothing else is', async () => {
+  let failing = (message: string) => {
+    let db = d1()
+    return d1Vault({
+      ...db,
+      prepare: () => {
+        throw new Error(`D1_ERROR: ${message}`)
+      },
+    }, key())
+  }
+  let lost = await failing('Network connection lost.').drop('x').catch((e) => e)
+  assert(retryable(lost) && transient(lost))
+  let typo = await failing('no such table: yak_vault').drop('x').catch((e) => e)
+  assert(!retryable(typo))
 })

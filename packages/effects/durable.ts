@@ -60,10 +60,11 @@ import type { Kind } from './trace.ts'
 
 /**
  * This package's components, to load beside your own when you want durable
- * effects: `loadVocab([effectDoc, ...mine])`. Two components, one document —
+ * effects: `loadVocab([effectDoc, ...mine])`. Three components, one document —
  * `effect`, whose every property is server-owned because a client never writes
- * a run's bookkeeping, and `lease` (./lease.ts), which marks a duty as
- * held by one process at a time.
+ * a run's bookkeeping, `lease` (./lease.ts), which marks a duty as held by one
+ * process at a time, and `provisional` (./provisional.ts), which marks an
+ * entity an effect has yet to finish.
  */
 export let effectDoc: VocabDoc = doc
 

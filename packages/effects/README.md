@@ -10,7 +10,8 @@ of changes applied in one transaction, such as the array passed to
 write phases.
 
 The default registry is in memory and stores no graph data. Optional `effect`
-and `lease` components support retry records and coordination of duties.
+and `lease` components support retry records and coordination of duties, and
+`provisional` marks an entity whose effect has not finished yet.
 Applications supply the handlers and their domain components.
 
 ## Install
@@ -250,6 +251,16 @@ operations. The default hold duration is 30 seconds. Without a `lease`
 declaration, taking a lease succeeds without storing anything; that mode
 provides no coordination between processes.
 
+## Provisional entities
+
+An entity whose write commits before an asynchronous step about it has finished
+wears `provisional{note}` beside its other components: `note` is a line for the
+person reading it, such as "saving the key". The effect that finishes the step
+removes the mark. A write that waits for its effects never shows its own writer
+the mark; another reader in between sees it, and can say so.
+`provisionalDoc` declares the mark alone, for a vocabulary that does not load
+the ledger; `effectDoc` carries it too.
+
 ## Composition
 
 The basic plugin works with `@yaks/ram` or database adapters. Durable attempts
@@ -298,8 +309,9 @@ consumers supply their own transaction. `docs()` describes grouped hooks and
 
 The root exports `effects`, registry/event/registration types, event derivation
 helpers, effect-write generation helpers, `ledger`, `effectDoc`, retry settings,
-and lease operations. `@yaks/effects/vocab` exports `docs` and `effectDoc`,
-which declare `effect`, `lease` and `effect_check`. `@yaks/effects/tools`
+lease operations, `PROVISIONAL` and `provisionalDoc`. `@yaks/effects/vocab`
+exports `docs`, `effectDoc`, which declares `effect`, `lease`, `provisional`
+and `effect_check`, and `provisionalDoc`. `@yaks/effects/tools`
 exports the tool implementations. Loading declarations alone does not install a
 registry or start reconciliation.
 

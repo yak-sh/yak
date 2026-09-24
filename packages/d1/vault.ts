@@ -14,6 +14,10 @@
 // lease row: taken by an upsert that only wins over an expired lease, and
 // deleted by its holder. Callers in this isolate wait in a queue first, so the
 // lease row only ever arbitrates between isolates.
+//
+// A failure D1 documents as transient is thrown with `retryable: true`, the
+// flag the Workers runtime puts on its own and @yaks/secrets tries a seal again
+// for. Every statement here is safe to run twice: an upsert, a delete, a read.
 
 import type { D1Like, Stmt } from './d1.ts'
 
@@ -51,6 +55,32 @@ let TAKE = 'insert into yak_vault_lock (k, holder, expires) values (?, ?, ?)' +
   ' expires = excluded.expires where yak_vault_lock.expires < ?' +
   ' returning holder'
 
+// The D1 errors whose recommended action is "Retry the operation", from the
+// List of D1_ERRORs in Cloudflare's docs
+// (https://developers.cloudflare.com/d1/observability/debug-d1/#error-list).
+// The rest there — an overloaded database, a query past its time, memory or
+// size limits, a missing column — are a query or a quota to fix, not a moment
+// to wait out.
+let TRANSIENT = [
+  'D1 DB reset because its code was updated',
+  'Internal error while starting up D1 DB storage caused object to be reset',
+  'Network connection lost',
+  'Replica disconnected from primary',
+  'Internal error in D1 DB storage caused object to be reset',
+  'Cannot resolve D1 DB due to transient issue on remote node',
+  "Can't read from request stream because client disconnected",
+]
+
+/** Whether D1 said this failure is one to try again. */
+export let transient = (e: unknown): boolean =>
+  TRANSIENT.some((said) => String(e).includes(said))
+
+// The failure, with the runtime's own flag set where D1 says to retry.
+let flagged = (e: unknown) =>
+  transient(e) && e && typeof e == 'object'
+    ? Object.assign(e, { retryable: true })
+    : e
+
 let base64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes))
 let unbase64 = (text: string) =>
   Uint8Array.from(atob(text), (c) => c.charCodeAt(0))
@@ -69,7 +99,8 @@ let queue = () => {
 }
 
 /**
- * The vault in a D1 database, every value encrypted under `key` (AES-GCM). Its
+ * The vault in a D1 database, every value encrypted under `key` (AES-GCM),
+ * which may still be on its way — a key imported from a Worker secret is. Its
  * two tables are created on first use.
  *
  * ```ts
@@ -81,18 +112,23 @@ let queue = () => {
  */
 export let d1Vault = <S extends Stmt<S>>(
   db: D1Like<S>,
-  key: CryptoKey,
+  key: CryptoKey | Promise<CryptoKey>,
 ): D1Vault => {
   // Made once per vault, and asked again after a failure rather than failing
   // every call after it.
   let ready: Promise<unknown> | undefined
   let run = async (sql: string, ...params: (string | number)[]) => {
-    await (ready ??= db.batch(SCHEMA.map((s) => db.prepare(s))).catch((e) => {
-      ready = undefined
-      throw e
-    }))
-    return (await db.prepare(sql).bind(...params).all<Record<string, string>>())
-      .results
+    try {
+      await (ready ??= db.batch(SCHEMA.map((s) => db.prepare(s))).catch((e) => {
+        ready = undefined
+        throw e
+      }))
+      return (await db.prepare(sql).bind(...params).all<
+        Record<string, string>
+      >()).results
+    } catch (e) {
+      throw flagged(e)
+    }
   }
 
   let seal = async (k: string, text: string) => {
@@ -100,7 +136,7 @@ export let d1Vault = <S extends Stmt<S>>(
     let data = new Uint8Array(
       await crypto.subtle.encrypt(
         { name: 'AES-GCM', iv, additionalData: utf8.encode(k) },
-        key,
+        await key,
         utf8.encode(text),
       ),
     )
@@ -118,7 +154,7 @@ export let d1Vault = <S extends Stmt<S>>(
           iv: both.slice(0, 12),
           additionalData: utf8.encode(k),
         },
-        key,
+        await key,
         both.slice(12),
       ),
     )

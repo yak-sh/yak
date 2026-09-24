@@ -4,9 +4,12 @@
 
 import type { VocabDoc } from '@yaks/vocab'
 import { effectDoc } from './durable.ts'
+import { provisionalDoc } from './provisional.ts'
 
-export { effectDoc }
+export { effectDoc, provisionalDoc }
 
 /** Every document this plugin declares — the durable tier's ledger, which an
- * application loads only when it wants effects that survive a crash. */
+ * application loads only when it wants effects that survive a crash, and the
+ * `provisional` mark beside it. A vocabulary that wants only the mark loads
+ * `provisionalDoc` instead. */
 export let docs: VocabDoc[] = [effectDoc]

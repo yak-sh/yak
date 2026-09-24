@@ -4,22 +4,33 @@
  *
  * A secret is an entity wearing `secret{name, value}`. It is written with its
  * value like anything else; the plugin takes the value out in the first phase
- * of the write, puts the secret's handle — a random token it keeps for as long
- * as the secret lives — where it was, and seals the value into a vault as the
- * transaction commits. The graph, its journal, its sync and its backups only
- * ever hold the handle, which is safe to show anyone. Code that calls out is
- * handed the sentinel instead: the handle hashed under the vault's salt, the
- * one string a swap on the way out replaces with the value.
+ * of the write and puts the secret's handle — a random token it keeps for as
+ * long as the secret lives — where it was, and once the write commits an effect
+ * ({@link sealing}) seals the value into a vault. The graph, its journal, its
+ * sync and its backups only ever hold the handle, which is safe to show anyone.
+ * Code that calls out is handed the sentinel instead: the handle hashed under
+ * the vault's salt, the one string a swap on the way out replaces with the
+ * value.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
  * import { ram } from '@yaks/ram'
- * import { ramVault, reveal, sealed, secrets, secretsDoc } from '@yaks/secrets'
+ * import { effects } from '@yaks/effects'
+ * import {
+ *   ramVault,
+ *   reveal,
+ *   sealed,
+ *   sealing,
+ *   secrets,
+ *   secretsDoc,
+ * } from '@yaks/secrets'
  *
  * let vocab = loadVocab([secretsDoc])
  * let vault = ramVault()
- * let g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault)] })
+ * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault), fx] })
+ * fx.on('secret', sealing(vault))
  * await g.apply([sealed('MAIL_TOKEN', 'cf-token')])
  * // g.read('.secret') → value: 'yak_secret_…', the handle
  * // await reveal(vault, 'MAIL_TOKEN') → 'cf-token'
@@ -33,13 +44,17 @@
  * This package says what a vault is ({@link Vault}) and keeps one in memory;
  * a vault that stores somewhere lives with that storage: private files on a
  * box in @yaks/cli, a D1 database in @yaks/d1. The host hands its vault to the
- * plugin (`@yaks/secrets/rules`).
+ * plugin (`@yaks/secrets/rules`) and to the effect (`@yaks/secrets/effects`).
+ * While a value is on its way to the vault its secret wears `provisional`
+ * (@yaks/effects), and a failed seal leaves `error` or `exception` (@yaks/tools)
+ * with its message in `content`; a vocabulary that declares none of those
+ * still seals, and simply shows nothing in between.
  *
  * @module
  */
 
 export { secretsDoc } from './vocab.ts'
-export { secrets } from './plugin.ts'
+export { carries, retryable, sealing, SECRET, secrets } from './plugin.ts'
 export {
   handle,
   isHandle,

@@ -26,7 +26,9 @@ export type Sealed = {
 
 type Maybe<T> = T | Promise<T>
 
-/** A place to keep secrets. */
+/** A place to keep secrets. A failure trying again may cure throws an error
+ * carrying `retryable: true`, and is tried again (./plugin.ts `sealing`); any
+ * other is a defect. */
 export type Vault = {
   /** the key every sentinel this vault hands out is hashed under
    * (./sentinel.ts) */

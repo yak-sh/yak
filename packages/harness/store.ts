@@ -35,7 +35,7 @@ import { reapLeases } from '@yaks/session'
 import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
 import { type Vocab } from '@yaks/vocab'
 import { vaultOf } from '@yaks/cli'
-import type { Vault } from '@yaks/secrets'
+import { sealing, type Vault } from '@yaks/secrets'
 
 import { derived } from './vocab.ts'
 import { named, renamed } from './named.ts'
@@ -285,6 +285,9 @@ export let open = (path: string = dbPath()): Harness => {
       fx,
     ],
   })
+  // The other half of the secrets plugin in `rules`: a written value sealed
+  // into the vault once its write commits (./effects.ts).
+  fx.on('secret', sealing(vault))
   reapLeases(store)
   return {
     path,

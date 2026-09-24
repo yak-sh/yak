@@ -220,10 +220,11 @@ grouped approximately by function, **not** by dependency order.
   permission.
 
 - **[@yaks/secrets](./secrets)** — Write a secret through the graph and keep it
-  elsewhere: `secret{name, value}` holds a random handle, and the value is
-  sealed into the host's vault as the write commits. The package defines the
-  vault and keeps one in memory; a box's files are @yaks/cli's and yaks.app's D1
-  is @yaks/d1's. Trusted code reads it back by name; a config names one as
+  elsewhere: `secret{name, value}` holds a random handle, and an effect seals
+  the value into the host's vault once the write commits, the secret wearing
+  @yaks/effects' `provisional` until it has. The package defines the vault and
+  keeps one in memory; a box's files are @yaks/cli's and yaks.app's D1 is
+  @yaks/d1's. Trusted code reads it back by name; a config names one as
   `{"secret": "NAME"}`; code that calls out gets its sentinel, the handle hashed
   under the vault's salt.
 

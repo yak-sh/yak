@@ -110,6 +110,17 @@
         }
       }
     },
+    "provisional": {
+      "component": true,
+      "type": "object",
+      "description": "an entity whose asynchronous step has not finished yet: it sits where it always does, and the effect that finishes the step removes this mark. A reader who sees it knows the entity is not settled; the writer who started the step waits for it and never sees the mark",
+      "properties": {
+        "note": {
+          "type": "string",
+          "description": "a line for the person reading it: why the entity is provisional, such as \"saving the key\""
+        }
+      }
+    },
     "effect_check": {
       "tool": true,
       "noun": "effect",
