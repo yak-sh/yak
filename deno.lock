@@ -1982,6 +1982,11 @@
           "npm:zod@^3.24.0"
         ]
       },
+      "packages/heal": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/hook": {
         "dependencies": [
           "jsr:@std/assert@1"
