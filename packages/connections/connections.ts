@@ -25,6 +25,14 @@
 // links an app to a connection that already holds a credential: giving an app
 // a person's account is the person's act, not the app's.
 //
+// An app may instead ask each person who uses it to connect their own: a
+// calendar app reads the calendar of whoever is looking. Its `uses` link says
+// `each`, and so does the link to every person's own connection through that
+// integration, made when they connect (`need` again, owned by them). A link
+// marked `each` is spent only by the person who owns its connection, so one
+// person's calendar is never read on another's behalf; the needed connection
+// the space holds for it is only the ask, and nobody calls out through it.
+//
 // The two verbs an untrusted caller may ask, `need` and `list`, are the tools,
 // and answer bundles like every tool, for the caller to write in its own name.
 // The rest are for trusted code (the dashboard connecting, the egress finding
@@ -77,6 +85,8 @@ export type Need = {
   scopes?: string[]
   /** for a custom key: the hosts it may be sent to */
   hosts?: string[]
+  /** each person connects their own, and only they call out through it */
+  each?: boolean
 }
 
 /** What the acting verbs work with. */
@@ -157,20 +167,23 @@ let links = (read: Read, at: 'from' | 'to', eid: Eid) =>
 let far = (l: Bundle, at: 'from' | 'to'): Eid =>
   String(comp(l, EDGE)[at == 'from' ? 'to' : 'from'])
 
-// The far ends of the `uses` links at one end.
-let ends = async (read: Read, at: 'from' | 'to', eid: Eid): Promise<Eid[]> =>
-  (await links(read, at, eid)).map((l) => far(l, at))
-
-// The connection an app uses through an integration.
-let using = async (
+/** The connection an app uses through an integration: the one it shares with
+ * every caller, or, where `each` person connects their own, the one `owner`
+ * holds. */
+export let using = async (
   read: Read,
-  app: Eid,
-  integration: string,
+  a: { app: Eid; integration: string; owner?: Eid; each?: boolean },
 ): Promise<Bundle | undefined> => {
-  let to = await ends(read, 'from', app)
-  if (!to.length) return undefined
-  let found = await read(`.eid=${any(to)}&.${CONNECTION}`)
-  return found.find((b) => comp(b, CONNECTION).integration == integration)
+  let out = (await links(read, 'from', a.app))
+    .filter((l) => !comp(l, USES).each == !a.each)
+  if (!out.length) return undefined
+  let found = await read(
+    `.eid=${any(out.map((l) => far(l, 'from')))}&.${CONNECTION}`,
+  )
+  return found.find((b) => {
+    let c = comp(b, CONNECTION)
+    return c.integration == a.integration && (!a.each || c.owner == a.owner)
+  })
 }
 
 let same = (a: string[], b: string[]) =>
@@ -178,7 +191,8 @@ let same = (a: string[], b: string[]) =>
 
 /** Make a connection needing a credential, linked from the app that needs it,
  * with the custom integration a key for an unbuilt service needs. An app that
- * already uses a connection through that integration is answered with it. */
+ * already uses a connection through that integration is answered with it:
+ * with `each`, the one the owner holds. */
 export let need = async (
   read: Read,
   a: Need,
@@ -201,7 +215,7 @@ export let need = async (
   if (i && hosts.length && !same(i.hosts, hosts)) {
     throw new Error(`${name} already sends its key to ${i.hosts.join(', ')}`)
   }
-  let used = a.app ? await using(read, a.app, name) : undefined
+  let used = a.app ? await using(read, { ...a, app: a.app }) : undefined
   if (used) return [{ entity: { eid: used.entity.eid } }]
   let made = fresh(a.owner, name, a.scopes ?? [])
   return [
@@ -210,7 +224,12 @@ export let need = async (
       [INTEGRATION]: { name, hosts },
     }],
     made,
-    ...a.app ? [link(a.app, USES, made.entity.eid)] : [],
+    ...a.app
+      ? [{
+        ...link(a.app, USES, made.entity.eid),
+        ...a.each ? { [USES]: { each: true } } : {},
+      }]
+      : [],
   ]
 }
 
@@ -225,10 +244,16 @@ export let list = async (read: Read, owner: Eid): Promise<Bundle[]> => {
   return [...owned, ...links]
 }
 
-/** Every connected connection an app calls out through, each with its `uses`
- * link and the sentinel for its credential: what the egress finds a request's
+/** Every connected connection an app calls out through for a person, or for
+ * nobody in particular: those it shares with every caller, and that person's
+ * own where each person connects their own. Each comes with its `uses` link
+ * and the sentinel for its credential: what the egress finds a request's
  * sentinels among. */
-export let used = async (c: Ctx, app: Eid): Promise<Resolved[]> => {
+export let used = async (
+  c: Ctx,
+  app: Eid,
+  person: Eid | null = null,
+): Promise<Resolved[]> => {
   let out = await links(c.graph.read, 'from', app)
   if (!out.length) return []
   let found = await c.graph.read(
@@ -241,18 +266,24 @@ export let used = async (c: Ctx, app: Eid): Promise<Resolved[]> => {
     link: out.find((l) => far(l, 'from') == connection.entity.eid)!,
     sentinel: await sentinelOf(c.vault, nameOf(connection)),
   })))
-  return all.filter((r): r is Resolved => !!r.sentinel)
+  return all.filter((r): r is Resolved =>
+    !!r.sentinel &&
+    (!comp(r.link, USES).each ||
+      comp(r.connection, CONNECTION).owner == person)
+  )
 }
 
-/** The connection an app calls out through for an integration, and the
- * sentinel it is handed for its credential; nothing while none is connected.
- * Whether the caller may use it is the egress's question. */
+/** The connection an app calls out through for an integration, for a person
+ * or for nobody in particular, and the sentinel it is handed for its
+ * credential; nothing while none is connected. Whether the caller may use it
+ * is the egress's question. */
 export let resolve = async (
   c: Ctx,
   app: Eid,
   integration: string,
+  person: Eid | null = null,
 ): Promise<Resolved | undefined> =>
-  (await used(c, app)).find((r) =>
+  (await used(c, app, person)).find((r) =>
     comp(r.connection, CONNECTION).integration == integration
   )
 
@@ -322,14 +353,17 @@ export let connect = async (
   return c.graph.apply([{ entity: { eid: connection }, [CONNECTION]: now }])
 }
 
-/** End a connection, and forget its credential. The apps that used it each
- * need a connection again, and are linked to a new one. */
+/** End a connection, and forget its credential. The apps that shared it each
+ * need a connection again, and are linked to a new one. A person's own, for
+ * an app that asks each person, is not replaced: the app still asks them. */
 export let disconnect = async (
   c: Ctx,
   connection: Eid,
 ): Promise<Bundle[]> => {
   let b = await held(c.graph.read, connection)
-  let apps = await ends(c.graph.read, 'to', connection)
+  let apps = (await links(c.graph.read, 'to', connection))
+    .filter((l) => !comp(l, USES).each)
+    .map((l) => far(l, 'to'))
   let { integration, owner, scopes } = comp(b, CONNECTION)
   let again = apps.length
     ? fresh(String(owner), String(integration), strs(scopes))

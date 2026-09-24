@@ -11,7 +11,9 @@
 // holding a level on the app, or anyone at all where the app's `uses` link
 // opened that connection to `anyone`, as a public widget's is (@yaks/member
 // `callsOut`). So a sentinel that leaks into a page stays useless to a
-// stranger. The credential goes only to a host its integration names, over
+// stranger. Where the app asks each person to connect their own, a person's
+// connection is among them only for that person, whatever anybody else holds
+// on the app, so one person's sentinel is useless to everyone else. The credential goes only to a host its integration names, over
 // https, and a redirect the service answers comes back to the caller, whose
 // next request is checked again.
 //
@@ -31,9 +33,10 @@ import {
   USES,
 } from '@yaks/connections'
 
-/** Who is calling out: the app, and what the host vouches the caller holds on
- * it (@yaks/member), or `null` for nothing. */
-export type Caller = { app: Eid; level: Level | null }
+/** Who is calling out: the app, what the host vouches the caller holds on it
+ * (@yaks/member) or `null` for nothing, and the person the host vouches they
+ * are, or `null` for nobody signed in. */
+export type Caller = { app: Eid; level: Level | null; person: Eid | null }
 
 /** A call the egress will not send. */
 export class Refused extends Error {
@@ -72,7 +75,7 @@ let check = async (
   url: URL,
   found: string[],
 ): Promise<Hit[]> => {
-  let mine = await used(c, caller.app)
+  let mine = await used(c, caller.app, caller.person)
   return Promise.all(found.map(async (sentinel) => {
     let r = mine.find((r) => r.sentinel == sentinel)
     if (!r) {
@@ -82,7 +85,10 @@ let check = async (
     }
     let eid = r.connection.entity.eid
     let name = String(comp(r.connection, CONNECTION).integration)
-    if (!callsOut(comp(r.link, USES).anyone == true, caller.level)) {
+    // A person's own connection is theirs to spend (`used` found it for them
+    // alone); a shared one asks what the caller holds on the app.
+    let l = comp(r.link, USES)
+    if (!l.each && !callsOut(l.anyone == true, caller.level)) {
       throw new Refused(`the caller may not call out through ${name}`)
     }
     let i = await known(c.graph.read, name, c.built)

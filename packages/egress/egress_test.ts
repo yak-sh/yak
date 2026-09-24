@@ -30,6 +30,7 @@ let here: VocabDoc = {
     },
     space: { component: true, type: 'object', properties: {} },
     app: { component: true, type: 'object', properties: {} },
+    person: { component: true, type: 'object', properties: {} },
   },
 }
 
@@ -41,6 +42,7 @@ let BUILT: Record<string, Integration> = {
     hosts: ['api.example'],
   },
   texts: { name: 'texts', hosts: ['api.texts.example'] },
+  notes: { name: 'notes', hosts: ['api.notes.example'] },
 }
 
 // The network: every request it is sent, and the replies each test scripts.
@@ -77,14 +79,14 @@ let c: Ctx = {
   fetch: net,
 }
 await g.apply(
-  ['space', 'app', 'widget', 'other'].map((eid) => ({
+  ['space', 'app', 'widget', 'other', 'ann', 'bob'].map((eid) => ({
     entity: { eid },
-    [eid == 'space' ? 'space' : 'app']: {},
+    [eid == 'space' ? 'space' : eid.length == 3 ? 'person' : 'app']: {},
   })),
 )
-let needs = async (integration: string) =>
+let needs = async (integration: string, owner = 'space', each = false) =>
   (await g.apply(
-    await need(g.read, { owner: 'space', app: 'app', integration }, BUILT),
+    await need(g.read, { owner, app: 'app', integration, each }, BUILT),
   )).find((b) => b.connection)!.entity.eid
 
 // `app` uses a key and a calendar grant; `widget` uses the same key, open to
@@ -102,10 +104,18 @@ await g.apply([{
     value: JSON.stringify({ access_token: 'A0', refresh_token: 'R1' }),
   },
 }])
+// `app` also asks each person for their own notes key: ann and bob each
+// connected one, and the space's ask holds none.
+await needs('notes', 'space', true)
+for (let who of ['ann', 'bob']) {
+  await connect(c, await needs('notes', who, true), { key: `${who}-key` })
+}
 let KEY = (await resolve(c, 'app', 'texts'))!.sentinel
 let GRANT = (await resolve(c, 'app', 'calendar'))!.sentinel
+let ANN = (await resolve(c, 'app', 'notes', 'ann'))!.sentinel
 
-let viewer: Caller = { app: 'app', level: 'viewer' }
+let viewer: Caller = { app: 'app', level: 'viewer', person: null }
+let ann: Caller = { app: 'app', level: null, person: 'ann' }
 
 let bytes = (...parts: (string | number[])[]) =>
   new Uint8Array(
@@ -127,7 +137,7 @@ await forward(
 )
 await forward(
   c,
-  { app: 'other', level: null },
+  { app: 'other', level: null, person: null },
   new Request('https://x.example'),
 )
 await forward(
@@ -162,8 +172,10 @@ Deno.test('a key goes out in its sentinel’s place wherever the app put it, wit
 })
 
 let refused: [string, Caller, string][] = [
-  ['a caller holding nothing', { app: 'app', level: null }, `?k=${KEY}`],
-  ['another app', { app: 'other', level: 'owner' }, `?k=${KEY}`],
+  ['a caller holding nothing', { ...ann, person: null }, `?k=${KEY}`],
+  ['another app', { app: 'other', level: 'owner', person: null }, `?k=${KEY}`],
+  ['another person’s own', { ...viewer, person: 'bob' }, `?k=${ANN}`],
+  ['a person’s own, for nobody', { ...viewer, level: 'owner' }, `?k=${ANN}`],
   ['an unknown sentinel', viewer, `?k=${SENTINEL}${'A'.repeat(43)}`],
   ['a host not named', viewer, `https://api.example/?k=${KEY}`],
   ['plain http', viewer, `http://api.texts.example/?k=${KEY}`],
@@ -182,18 +194,29 @@ Deno.test('a key the app opened to anyone goes out for a caller holding nothing'
   answering([200])
   let res = await forward(
     c,
-    { app: 'widget', level: null },
+    { app: 'widget', level: null, person: null },
     new Request(`https://api.texts.example/?k=${KEY}`),
   )
   assertEquals(res.status, 200)
   assertEquals(seen[0].url, 'https://api.texts.example/?k=sk-live')
 })
 
+Deno.test('a person’s own key goes out for them, whatever they hold on the app', async () => {
+  answering([200])
+  let res = await forward(
+    c,
+    ann,
+    new Request(`https://api.notes.example/?k=${ANN}`),
+  )
+  assertEquals(res.status, 200)
+  assertEquals(seen[0].url, 'https://api.notes.example/?k=ann-key')
+})
+
 Deno.test('a request carrying no sentinel goes out as it came', async () => {
   answering([302])
   let res = await forward(
     c,
-    { app: 'other', level: null },
+    { app: 'other', level: null, person: null },
     new Request('https://anywhere.example/a?b=c', { redirect: 'follow' }),
   )
   assertEquals(res.status, 302)

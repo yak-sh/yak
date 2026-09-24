@@ -25,8 +25,13 @@
  * // await resolve({ graph: g, vault }, app, 'twilio') → { connection, link, sentinel }
  * ```
  *
- * The verbs: {@link need}, {@link list} (the two tools), {@link begin} and
- * {@link connect}, {@link disconnect}, {@link resolve} and {@link used},
+ * An app may instead ask each person who uses it to connect their own
+ * (`each`): each person's connection is theirs, and only they call out
+ * through it.
+ *
+ * The verbs: {@link need}, {@link list} (the two tools), {@link using},
+ * {@link begin} and {@link connect}, {@link disconnect}, {@link resolve} and
+ * {@link used},
  * {@link credential}, {@link refresh}. A host that composes this package
  * composes @yaks/secrets, over its vault, and @yaks/edge beside it; the egress
  * that swaps sentinels is @yaks/egress.
@@ -61,4 +66,5 @@ export {
   type Status,
   used,
   USES,
+  using,
 } from './connections.ts'

@@ -14,7 +14,7 @@
  * import { forward } from '@yaks/egress'
  *
  * // the host vouches for the caller, and the egress does the rest
- * // let res = await forward({ graph: g, vault }, { app, level: 'viewer' }, req)
+ * // let res = await forward({ graph: g, vault }, { app, level: 'viewer', person }, req)
  * ```
  *
  * @module

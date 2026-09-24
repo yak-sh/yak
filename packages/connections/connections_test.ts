@@ -90,6 +90,8 @@ let setup = async (...replies: [number, unknown][]) => {
     { entity: { eid: 'space' }, space: {} },
     { entity: { eid: 'app' }, app: {} },
     { entity: { eid: 'other' }, app: {} },
+    { entity: { eid: 'ann' }, space: {} },
+    { entity: { eid: 'bob' }, space: {} },
   ])
   let e = endpoint(...replies)
   let c: Ctx = {
@@ -102,7 +104,8 @@ let setup = async (...replies: [number, unknown][]) => {
     fetch: e.fetch,
     now: () => NOW,
   }
-  // Make what `need` asks for, and answer the connection it made.
+  // Make what `need` asks for, and answer the connection it made, or the one
+  // it answered with.
   let needs = async (asked: Partial<Parameters<typeof need>[1]> = {}) => {
     let made = await g.apply(
       await need(g.read, {
@@ -112,7 +115,7 @@ let setup = async (...replies: [number, unknown][]) => {
         ...asked,
       }, BUILT),
     )
-    return made.find((b) => b.connection)!.entity.eid
+    return (made.find((b) => b.connection) ?? made[0]).entity.eid
   }
   return { g, vault, c, needs, seen: e.seen }
 }
@@ -281,6 +284,40 @@ slow(
     let alone = await needs({ app: undefined, integration: 'texts' })
     await disconnect(c, alone)
     assertEquals((await g.read('.connection')).length, 1)
+  },
+)
+
+slow(
+  'each: every person connects their own, which only they are handed, and which a disconnect does not replace',
+  async () => {
+    let { g, vault, c, needs } = await setup()
+    let asks = await needs({ integration: 'texts', each: true })
+    assertEquals(await needs({ integration: 'texts', each: true }), asks)
+    assertEquals(of((await g.read('.uses'))[0], 'uses'), { each: true })
+    let own = async (who: string) => {
+      let eid = await needs({ owner: who, integration: 'texts', each: true })
+      await connect(c, eid, { key: `${who}-key` })
+      return eid
+    }
+    let ann = await own('ann')
+    await own('bob')
+    assertEquals(
+      await needs({ owner: 'ann', integration: 'texts', each: true }),
+      ann,
+    )
+    let handed = async (who: string | null) => {
+      let r = await resolve(c, 'app', 'texts', who)
+      return r && reveal(vault, String(of(r.connection, 'secret').name))
+    }
+    assertEquals(
+      [await handed('ann'), await handed('bob'), await handed(null)],
+      ['ann-key', 'bob-key', undefined],
+    )
+    await needs({ integration: 'texts' })
+    assertEquals(await handed(null), undefined)
+    await disconnect(c, ann)
+    assertEquals(await handed('ann'), undefined)
+    assertEquals((await list(g.read, 'ann')).length, 0)
   },
 )
 

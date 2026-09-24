@@ -92,6 +92,10 @@
         "anyone": {
           "type": "boolean",
           "description": "anyone may call out through it, signed in or not, as a public widget does; otherwise only a caller holding a level on the app"
+        },
+        "each": {
+          "type": "boolean",
+          "description": "each person who uses the app connects their own, and only the person who owns the connection calls out through it: set on the app's ask, the needed connection its space holds, and on the link to every person's own"
         }
       },
       "description": "the relation on a link: this app calls out through that connection"
@@ -101,7 +105,7 @@
       "noun": "connection",
       "verb": "need",
       "title": "Say an app needs a connection",
-      "description": "Say that an app needs an outside service: an integration by name, and the scopes it asks for. It makes a connection with no credential, owned by a space or a person, which shows them what to connect; no key or token ever passes through this tool. For a service with no built integration, name it and give the hosts its key may be sent to, and a custom integration is made for it. An app that already uses a connection through that integration is answered with it. Returns the applied changes as bundles: JSON objects with entity ids and the components written.",
+      "description": "Say that an app needs an outside service: an integration by name, and the scopes it asks for. It makes a connection with no credential, owned by a space or a person, which shows them what to connect; no key or token ever passes through this tool. For a service with no built integration, name it and give the hosts its key may be sent to, and a custom integration is made for it. With each, every person who uses the app connects their own instead, and the owner connects nothing. An app that already uses a connection through that integration is answered with it. Returns the applied changes as bundles: JSON objects with entity ids and the components written.",
       "input": {
         "app": {
           "type": "string",
@@ -126,6 +130,10 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "for a custom key only: the hosts it may be sent to"
+        },
+        "each": {
+          "type": "boolean",
+          "description": "each person who uses the app connects their own account, rather than the owner connecting one for everyone. The host draws the Connect button for them, each person's connection shows in their own dashboard, and only they call out through it"
         }
       },
       "required": ["app", "owner", "integration"],

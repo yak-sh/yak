@@ -27,6 +27,7 @@ export let runs = (): Runs => ({
       integration: str(args.integration),
       scopes: strs(args.scopes),
       hosts: strs(args.hosts),
+      each: args.each == true,
     })
   },
 
