@@ -74,8 +74,14 @@ invocation_logs = true
 # Store's synchronous SQL reads 0 ms and no span covers the hop itself. No
 # head_sampling_rate: 20M events a month are included, and past that Cloudflare
 # samples, which is what we want rather than paying for more.
+#
+# `sentry-traces` sends them on to Sentry's OTLP endpoint for `yaks-app`. It is
+# account config, not repo config: Workers & Pages → Observability →
+# Destinations, holding the endpoint and the `x-sentry-auth` header. Staging
+# names no destination, so its traces stay out of the production project.
 [observability.traces]
 enabled = true
+destinations = ["sentry-traces"]
 
 # Under `wrangler dev` a request's URL carries the first route's hostname
 # unless told otherwise; the loopback keeps local dev a dev host (route.ts),
