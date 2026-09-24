@@ -50,9 +50,12 @@ export type Sources = {
   op?: OpRead
 }
 
+// The process environment, where the runtime has one: a Worker has none.
 let environment = (name: string): string | undefined => {
   try {
-    return Deno.env.get(name)
+    return (globalThis as {
+      Deno?: { env: { get(name: string): string | undefined } }
+    }).Deno?.env.get(name)
   } catch {
     return undefined
   }

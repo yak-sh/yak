@@ -129,7 +129,11 @@ export let client = (provider: Provider, o: Options): Client => {
         client_secret: basic ? undefined : secret,
       }),
     })
-    let body: Record<string, unknown> = await res.json().catch(() => ({}))
+    let said: unknown = await res.json().catch(() => ({}))
+    let body = (said && typeof said == 'object' ? said : {}) as Record<
+      string,
+      unknown
+    >
     let access = str(body?.access_token)
     // Some providers answer a refusal with 200 and an `error` field.
     if (!res.ok || !access) {

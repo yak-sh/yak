@@ -37,14 +37,30 @@ let opEnv = (env: (name: string) => string | undefined) => {
 
 let dec = new TextDecoder()
 
+// The runtime's way to start a process, as much of it as `op read` needs. A
+// Worker has none, and this package runs in one (yaks.app), so it is looked
+// for rather than assumed.
+type Output = { success: boolean; stdout: Uint8Array; stderr: Uint8Array }
+type Runtime = {
+  Command: new (
+    cmd: string,
+    opts: Record<string, unknown>,
+  ) => { output(): Promise<Output> }
+  errors: { NotFound: new (...a: never[]) => Error }
+  env: { get(name: string): string | undefined }
+}
+let runtime = () => (globalThis as { Deno?: Runtime }).Deno
+
 /** `op read`, run the way the header says. */
 export let opRead = (
-  env: (name: string) => string | undefined = (n) => Deno.env.get(n),
+  env: (name: string) => string | undefined = (n) => runtime()?.env.get(n),
 ): OpRead =>
 async (reference, signal) => {
-  let out: Deno.CommandOutput
+  let deno = runtime()
+  if (!deno) throw new Error('op needs a runtime that can start a process')
+  let out: Output
   try {
-    out = await new Deno.Command('op', {
+    out = await new deno.Command('op', {
       args: ['read', '--no-newline', reference],
       clearEnv: true,
       env: opEnv(env),
@@ -54,7 +70,7 @@ async (reference, signal) => {
       signal,
     }).output()
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) {
+    if (e instanceof deno.errors.NotFound) {
       throw new Error('op is not installed or not on PATH')
     }
     throw e
