@@ -30,7 +30,8 @@ import {
   VirtualList,
 } from '@yaks/tui'
 import { type Context, type Panel, panels, type UIAgent } from './panels.ts'
-import type { Agent } from './run.ts'
+export { type Context, type Panel, panels, type UIAgent } from './panels.ts'
+import type { Agent } from './agent.ts'
 
 /** UI contributions and an event callback, independent of the terminal
  * backend. */

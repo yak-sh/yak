@@ -78,7 +78,7 @@ Deno.test('file import snapshots bytes; attach is user-only; explicit view proje
 })
 
 Deno.test('tool-driven vision reaches the next model request and survives database reopen', async () => {
-  const { agent } = await import('./run.ts')
+  const { local } = await import('./local.ts')
   let dir = await Deno.makeTempDir()
   const { images } = await import('./images.ts')
   let record = await images({ directory: dir + '/blobs' }).store(
@@ -88,7 +88,7 @@ Deno.test('tool-driven vision reaches the next model request and survives databa
   let h = open(dir + '/test.db')
   await h.g.apply([{ entity: { eid: 'picture' }, artifact: record }])
   let turn = 0
-  let a = agent({
+  let a = local({
     h,
     cwd: dir,
     images: { directory: dir + '/blobs' },

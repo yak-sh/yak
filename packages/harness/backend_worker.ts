@@ -8,13 +8,13 @@ import type { ImageOptions } from './images.ts'
 /** Worker owns the authoritative database and all agent execution. */
 import { portLink } from '@yaks/sync'
 import { subscriptions } from '@yaks/api'
-import { type Agent, agent } from './run.ts'
+import { type Local, local } from './local.ts'
 import { open } from './store.ts'
 import { diagnostics, uncaught } from './diagnostics.ts'
 import type { Bundle } from '@yaks/graph'
 const removeErrors = uncaught(diagnostics(), self)
 let closing = false
-let a: Agent | undefined
+let a: Local | undefined
 let subs: ReturnType<typeof subscriptions> | undefined
 let active = new Set<Promise<unknown>>()
 let fake = false
@@ -56,7 +56,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       fake?: boolean | 'stuck' | 'held' | { delayMs: number; deltas?: number }
     }
     fake = Boolean(options.fake)
-    a = agent({
+    a = local({
       h: open(options.db),
       cwd: options.cwd,
       streaming: options.streaming,

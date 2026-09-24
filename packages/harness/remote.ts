@@ -6,7 +6,7 @@ import type {
   TranscriptWindow,
 } from '@yaks/session'
 import { streamingEnabled } from './streaming.ts'
-import { LISTED } from './run.ts'
+import { LISTED } from './agent.ts'
 import { transient } from '@yaks/graph'
 import type { ImageOptions } from './images.ts'
 import type { ModelSelection } from './model_selection.ts'

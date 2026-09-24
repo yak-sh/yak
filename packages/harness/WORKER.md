@@ -1,7 +1,7 @@
 # Web Worker runtime
 
 The default TUI separates terminal rendering from the database and agent
-runtime. The inline `agent()` API remains available for diagnostics:
+runtime. The inline `local()` API remains available for diagnostics:
 
 ```sh
 HARNESS_DB=/path/to/candidate.db deno task harness

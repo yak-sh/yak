@@ -3,7 +3,7 @@
 import { type Bundle, identityEid } from '@yaks/graph'
 import { daemon } from '@yaks/session'
 import { open } from './store.ts'
-import { seed } from './run.ts'
+import { seed } from './agent.ts'
 
 let h = open(':memory:')
 h.g.apply([...seed({ model: 'fake' }), { entity: { eid: 's' }, session: {} }])

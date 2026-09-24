@@ -1,8 +1,9 @@
-/** A thin layer connecting sessions to @yaks/git's local checkout model. */
-import { checkoutAt, createWorktree, discover } from '@yaks/git/host'
+/** A thin layer connecting sessions to @yaks/git's local checkout model. The
+ * directory a session starts in and the root its children's checkouts are cut
+ * under are the host's to say (./local.ts). */
+import { checkoutAt, createWorktree, discover, restore } from '@yaks/git/host'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { ChildLimits } from '@yaks/session'
-import { restore } from '@yaks/git/host'
 import { cutFor } from './worktrees.ts'
 
 export { workspaceDoc } from './vocab.ts'
@@ -33,7 +34,7 @@ export let sessionCwd = async (g: Graph, session: string, fallback: string) => {
   if (home?.worktree) return treeAt(g, String(home.worktree))
   return fallback
 }
-export let workspace = (g: Graph, cwd = Deno.cwd()): ChildLimits => ({
+export let workspace = (g: Graph, cwd: string, root: string): ChildLimits => ({
   taskDefaults: async (parent, child) => {
     let inherited = (await row(g, parent))?.home as Comp | undefined
     let path = inherited?.worktree
@@ -53,7 +54,7 @@ export let workspace = (g: Graph, cwd = Deno.cwd()): ChildLimits => ({
         // Named after the child, so worktrees.ts knows whose checkout it is
         // without asking the graph — and never mistakes an inherited home for
         // one of its own.
-        path: cutFor(child),
+        path: cutFor(child, root),
         base: String(head),
         branch: 'task-' + child.replaceAll(':', '-'),
       },

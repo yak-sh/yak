@@ -29,13 +29,12 @@
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import type { Effects } from '@yaks/effects'
 import { discover, type Held, reclaim } from '@yaks/git/host'
-import { worktrees } from './paths.ts'
 
 let row = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
   (await g.storage.tx((tx) => tx.get([eid])))[0]
 
 /** The path workspace.ts creates this session's worktree at. */
-export let cutFor = (session: string, dir = worktrees()): string =>
+export let cutFor = (session: string, dir: string): string =>
   `${dir}/${session.replaceAll(':', '-')}`
 
 /** The statuses a transcript has once nothing is left to do in it. */
@@ -74,7 +73,7 @@ let take = async (g: Graph, path: string): Promise<Held | undefined> => {
 export let collect = async (
   g: Graph,
   session: Eid,
-  dir = worktrees(),
+  dir: string,
 ): Promise<Held | undefined> => {
   let path = cutFor(session, dir)
   if (!await Deno.stat(path).then(() => true, () => false)) return undefined
@@ -92,7 +91,7 @@ export let collecting = (
   g: Graph,
   fx: Effects,
   report: (error: unknown, session: Eid) => void,
-  dir = worktrees(),
+  dir: string,
 ): void => {
   // Never awaited: a `git worktree remove` must not hold open the transaction
   // that ended the session, and whatever a crash leaves behind is for the
@@ -119,7 +118,7 @@ export let collecting = (
 export let homes = async (
   g: Graph,
   sessions: Bundle[],
-  dir = worktrees(),
+  dir: string,
 ): Promise<Set<string>> => {
   let live = new Set(sessions.map((b) => cutFor(b.entity.eid, dir)))
   let ids = sessions
@@ -143,7 +142,7 @@ export let homes = async (
  * abandoned one does. */
 export let sweep = async (
   g: Graph,
-  dir = worktrees(),
+  dir: string,
   live: Set<string> = new Set(),
 ): Promise<Record<string, Held>> => {
   let began = Date.now()

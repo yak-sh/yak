@@ -6,7 +6,8 @@ import { until } from '../process/harness.ts'
 import { App, changes } from './app.ts'
 import { frontend } from './frontend.ts'
 import { open } from './store.ts'
-import { agent, seed } from './run.ts'
+import { seed } from './agent.ts'
+import { local } from './local.ts'
 import { edgeEid } from '@yaks/edge'
 import { identityEid } from '@yaks/graph'
 import type { Request } from '@yaks/model'
@@ -14,7 +15,7 @@ import type { Request } from '@yaks/model'
 Deno.test('m chooses a model for a new draft; existing choice is passive, Esc preserves draft', async () => {
   const hnd = open(':memory:')
   const requests: Request[] = []
-  const a = agent({
+  const a = local({
     h: hnd,
     model: (req) => {
       requests.push(req)
@@ -87,7 +88,7 @@ Deno.test('m chooses a model for a new draft; existing choice is passive, Esc pr
 Deno.test('model row mouse selection preserves INSERT and does not submit a draft', async () => {
   const hnd = open(':memory:')
   let requests = 0
-  const a = agent({
+  const a = local({
     h: hnd,
     model: (req) => {
       requests++

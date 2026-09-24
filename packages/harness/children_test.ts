@@ -10,7 +10,8 @@ import {
   statusOf,
   textOf,
 } from '@yaks/session'
-import { type Agent, agent, seed } from './run.ts'
+import { seed } from './agent.ts'
+import { type Local, local } from './local.ts'
 import { open } from './store.ts'
 
 let reply = (text: string): Reply => ({
@@ -24,7 +25,7 @@ let call = (name: string, args: Record<string, unknown>, id = name): Reply => ({
   items: [{ kind: 'call', name, args: JSON.stringify(args), id }],
 })
 let deferred = <T>() => Promise.withResolvers<T>()
-let finish = async (a: Agent, parent: string) => {
+let finish = async (a: Local, parent: string) => {
   for (let c of await a.children(parent)) await a.idle(c.entity.eid)
   await a.idle(parent)
 }
@@ -60,7 +61,7 @@ for (let kind of ['fork', 'spawn']) {
     }
     let h = open(':memory:')
     h.g.apply([{ entity: { eid: '$other' }, model: { name: 'alternate' } }])
-    let a = agent({ h, model, cwd: directory, tools: sessionTools(h.g) })
+    let a = local({ h, model, cwd: directory, tools: sessionTools(h.g) })
     let parent = await a.start('parent context')
     let req = await childAsked.promise
     await a.idle(parent) // parent progresses before child has answered
@@ -135,7 +136,7 @@ Deno.test('wait resolves while child completion waits behind the parent tool', a
     }
     return Promise.resolve(reply('done'))
   }
-  let a = agent({ h, model, tools })
+  let a = local({ h, model, tools })
   let parent = await a.start('parent')
   await childAsked.promise
   await waiting.promise
@@ -164,7 +165,7 @@ Deno.test('child capacity queues without rejection; root starts retain their sep
     }
     return Promise.resolve(reply('done'))
   }
-  let a = agent({ h, model, tools: sessionTools(h.g, { maxChildren: 1 }) })
+  let a = local({ h, model, tools: sessionTools(h.g, { maxChildren: 1 }) })
   let parent = await a.start('parent')
   await childAsked.promise
   await a.idle(parent)
@@ -176,7 +177,7 @@ Deno.test('child capacity queues without rejection; root starts retain their sep
 
   h = open(':memory:')
   pending = deferred<Reply>()
-  a = agent({ h, model: () => pending.promise, tools: [], maxSessions: 1 })
+  a = local({ h, model: () => pending.promise, tools: [], maxSessions: 1 })
   let results = await Promise.allSettled([a.start('one'), a.start('two')])
   assertEquals(results.filter((r) => r.status == 'fulfilled').length, 1)
   assertEquals((await a.sessions()).length, 1)
@@ -294,7 +295,7 @@ Deno.test('child completion is queued behind an in-flight parent ask without col
   let parentAsked = deferred<void>()
   let turns = 0
   let h = open(':memory:')
-  let a = agent({
+  let a = local({
     h,
     tools: sessionTools(h.g),
     model: (req) => {

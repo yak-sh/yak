@@ -6,7 +6,7 @@ import { tools as declared } from './declared.ts'
 // two commands a minute apart are the same harness.
 //
 // Nothing is printed by hand. An entry is rendered through @yaks/render's
-// session views and @yaks/text (run.ts `line`), the same component trees a
+// session views and @yaks/text (agent.ts `line`), the same component trees a
 // browser or a terminal UI mounts, so a listing and a transcript cannot drift
 // from what the other interfaces show.
 
@@ -14,7 +14,8 @@ import type { Comp, Eid } from '@yaks/graph'
 import { answerOf, runner, toolEid, worded } from '@yaks/tools'
 import { type Command, type Ctx } from '@yaks/cli'
 import { codexPaths, fromCodex, fromEnv } from '@yaks/openai'
-import { type Agent, agent, titleOf } from './run.ts'
+import { titleOf } from './agent.ts'
+import { type Local, local } from './local.ts'
 import { open } from './store.ts'
 
 type Args = Record<string, unknown>
@@ -25,8 +26,8 @@ let word = (args: Args, name: string): string | undefined => {
 
 // One harness, its steps printed as they land. Opened per tool: the graph is a
 // file, and holding it open between commands would buy nothing.
-let running = (args: Args, c: Ctx): Agent => {
-  let a: Agent = agent({
+let running = (args: Args, c: Ctx): Local => {
+  let a: Local = local({
     name: word(args, 'model'),
     provider: word(args, 'provider'),
     each: (step) => step.added.forEach((b) => c.out('  ' + a.line(b))),
@@ -36,7 +37,7 @@ let running = (args: Args, c: Ctx): Agent => {
 
 /** The session a person typed: its eid, its short id, or the start of
  * either. */
-let sessionAt = async (a: Agent, id: string): Promise<Eid | undefined> => {
+let sessionAt = async (a: Local, id: string): Promise<Eid | undefined> => {
   let rows = await a.sessions()
   let is = (want: string) => (b: { entity: { eid: Eid } }) =>
     b.entity.eid == want

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { agent } from './run.ts'
+import { local } from './local.ts'
 import { open } from './store.ts'
 
 Deno.test('HARNESS_HOME isolates default storage and diagnostics without moving HOME', async () => {
@@ -43,9 +43,9 @@ Deno.test('agent rejects a spread harness before opening a default database', ()
   try {
     assertThrows(
       // @ts-expect-error A Harness belongs under h, including when spread.
-      () => agent({ ...h, name: 'fake', tools: [] }),
+      () => local({ ...h, name: 'fake', tools: [] }),
       TypeError,
-      'Pass the harness as agent({ h: open(...) })',
+      'Pass the harness as local({ h: open(...) })',
     )
   } finally {
     h.close()

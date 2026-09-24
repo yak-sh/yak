@@ -1,7 +1,7 @@
 /** Isolated worker pilot measurements; never opens the default database.
  * deno run -A packages/harness/worker_bench.ts
  */
-import { agent } from './run.ts'
+import { local } from './local.ts'
 import { open } from './store.ts'
 import { remote } from './remote.ts'
 const cwd = await Deno.makeTempDir()
@@ -10,7 +10,7 @@ try {
   for (let mode of ['inline', 'worker']) {
     let begin = performance.now()
     let inline = mode == 'inline'
-      ? agent({
+      ? local({
         h: open(':memory:'),
         cwd,
         name: 'fake',

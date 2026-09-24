@@ -1,7 +1,7 @@
 import type { Comp } from '@yaks/graph'
 import { assertEquals } from '@std/assert'
 import { streamingEnabled } from './streaming.ts'
-import { agent } from './run.ts'
+import { local } from './local.ts'
 import { open } from './store.ts'
 import { remote } from './remote.ts'
 
@@ -28,7 +28,7 @@ Deno.test('default inline streaming admits an ask for a model without deltas; op
     for (const options of [{}, { stream: false }, { streaming: false }]) {
       const h = open(':memory:')
       let observed = false
-      const a = agent({
+      const a = local({
         h,
         ...options,
         model: async () => {
@@ -53,7 +53,7 @@ Deno.test('default inline streaming admits an ask for a model without deltas; op
       }
     }
     let calls = 0
-    const failed = agent({
+    const failed = local({
       h: open(':memory:'),
       model: () => {
         calls++

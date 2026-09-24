@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
+    "./local": "./local.ts",
+    "./tui": "./app.ts",
+    "./cli": "./cli.ts",
     "./bin": "./bin.ts",
     "./vocab": "./vocab.ts",
     "./rules": "./rules.ts",

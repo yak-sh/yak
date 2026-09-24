@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { agent } from './run.ts'
+import { local } from './local.ts'
 import { open } from './store.ts'
 import { images } from './images.ts'
 import { responses } from '@yaks/openai'
@@ -39,7 +39,7 @@ Deno.test('generated artifacts survive database reopen and keep payloads out of 
       )
     }) as typeof fetch,
   })
-  let a = agent({ h: open(db), cwd: dir, model, name: 'gpt-4.1', tools: [] })
+  let a = local({ h: open(db), cwd: dir, model, name: 'gpt-4.1', tools: [] })
   try {
     let id = await a.start('draw')
     await a.idle(id)

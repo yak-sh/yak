@@ -2,7 +2,8 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Comp, identityEid } from '@yaks/graph'
 import type { Model } from '@yaks/model'
 import { react, statusOf, transcript, UnknownSession } from '@yaks/session'
-import { agent, seed, sessionTitle, titleOf } from './run.ts'
+import { seed, sessionTitle, titleOf } from './agent.ts'
+import { local } from './local.ts'
 import { open } from './store.ts'
 
 // A model that answers with whatever it was last told, so a test can see the
@@ -20,7 +21,7 @@ let echo: Model = (req) =>
   })
 
 let started = (model: Model = echo) =>
-  agent({ h: open(':memory:'), model, tools: [] })
+  local({ h: open(':memory:'), model, tools: [] })
 
 Deno.test('the seed is the same rows however many times it is applied', async () => {
   let h = open(':memory:')
@@ -147,7 +148,7 @@ Deno.test('the agent reads bare and filed open work, including claims and blocke
 Deno.test('resume wakes what a restart left owed a turn', async () => {
   let h = open(':memory:')
   // A transcript with an input nobody answered — what a killed harness leaves.
-  let quiet = agent({ h, model: echo, tools: [] })
+  let quiet = local({ h, model: echo, tools: [] })
   let s = await quiet.start('ping')
   await quiet.idle(s)
   // Straight through storage, so no effect observes it — the entry a harness
@@ -276,7 +277,7 @@ Deno.test('session titles use local assignment, not inherited parent context', a
       stop: {},
     },
   ])
-  let a = agent({ h, model: echo, tools: [] })
+  let a = local({ h, model: echo, tools: [] })
   try {
     assertEquals(
       ((await a.sessions()).find((b) => b.entity.eid == 'worker')
@@ -373,7 +374,7 @@ Deno.test('send commits during a provider turn and unserved input reaches the ne
   model.anchor = (b) =>
     (b.openai as Comp | undefined)?.response_id as string | undefined
   // The inflight attempt assertion requires streaming, regardless of HARNESS_STREAM.
-  let a = agent({ h: open(':memory:'), model, tools: [], streaming: true })
+  let a = local({ h: open(':memory:'), model, tools: [], streaming: true })
   let s = await a.start('first')
   try {
     await called

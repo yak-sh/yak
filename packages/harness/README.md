@@ -1,14 +1,23 @@
 # @yaks/harness
 
-A local agent runner with SQLite persistence, command-line tools and a terminal
-interface. It composes `@yaks/session` for model execution, `@yaks/process` for
-running commands on this machine, and graph-backed task and transcript storage.
-No server is required. Model calls may use an external provider; shell tools run
-on this machine and are not sandboxed.
+An agent runner over a graph, and the host that runs it on this machine with
+SQLite persistence, command-line tools and a terminal interface. The runner
+composes `@yaks/session` for model execution over graph-backed task and
+transcript storage, and names no machine: it runs on a box or in a Cloudflare
+Worker. The local host adds `@yaks/process` for running commands on this
+machine, a Git checkout per delegated child, MCP servers, and the `~/.yak`
+files. No server is required. Model calls may use an external provider; shell
+tools run on this machine and are not sandboxed.
 
+- `agent()` puts the session daemon on a graph and exposes session methods.
+  Whatever touches a machine is an option its host lends: tools, remote tools,
+  what a new session opens with, a step lock, defect reports, and what to
+  release on close.
+- `local()` is `agent()` here: it opens storage, lends the shell, checkouts,
+  instruction files, images, MCP and the OpenRouter sign-in, and adds the
+  terminal's entry rendering.
 - `open()` creates or opens storage and registers vocabulary and plugins.
 - `harnessTools()` combines shell, delegation and graph tools.
-- `agent()` configures the model and session daemon and exposes session methods.
 - `@yaks/harness/vocab`, `/rules`, and `/tools` expose schemas, graph rules, and
   tool implementations for `@yaks/cli` composition.
 
@@ -24,13 +33,16 @@ input.
 
 ## Exports
 
-| Import                | Main exports                                                                                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@yaks/harness`       | `open`, `dbPath`, `agent`, `seed`, `harnessTools`, `graphTools`, `parametersOf`, CLI `tools`/`own`, `App`, `tui`, `changes`, `panels`, and their types |
-| `@yaks/harness/bin`   | Command-line entry point                                                                                                                               |
-| `@yaks/harness/vocab` | Vocabulary documents, `vocab`, schema `keywords`, and computed properties via `derived`                                                                |
-| `@yaks/harness/rules` | `rules({vocab, sql, vault})`, the graph plugins used by the harness                                                                                    |
-| `@yaks/harness/tools` | `runs(host)`, implementations of the declared graph tools                                                                                              |
+| Import                | Main exports                                                                             |
+| --------------------- | ---------------------------------------------------------------------------------------- |
+| `@yaks/harness`       | `agent`, `seed`, `sessionTitle`, `titleOf`, and their types; web platform only           |
+| `@yaks/harness/local` | `local`, `open`, `dbPath`, `harnessTools`, `graphTools`, `parametersOf`, and their types |
+| `@yaks/harness/tui`   | `App`, `tui`, `changes`, `panels`, and their types                                       |
+| `@yaks/harness/cli`   | CLI `tools` and `own`                                                                    |
+| `@yaks/harness/bin`   | Command-line entry point                                                                 |
+| `@yaks/harness/vocab` | Vocabulary documents, `vocab`, schema `keywords`, and computed properties via `derived`  |
+| `@yaks/harness/rules` | `rules({vocab, sql, vault})`, the graph plugins used by the harness                      |
+| `@yaks/harness/tools` | `runs(host)`, implementations of the declared graph tools                                |
 
 ## Use
 
@@ -60,17 +72,17 @@ deno task harness models
 `$HARNESS_HOME/yak.db` and checkouts for children assigned tasks under
 `$HARNESS_HOME/worktrees`, with `~/.yak` as the state directory when unset.
 `$HARNESS_DB` (including `:memory:`) and `$HARNESS_WORKTREE_DIR` override the
-individual places. For probes, set `HARNESS_HOME` and `TASKS_HOME` to scratch
-directories and clean them up; `TASKS_HOME` moves the process supervisor's files
-(unless `PROCESS_DIR` is set). Keep `HOME` unchanged so Deno reuses its module
-cache. If a probe must move `HOME`, export the invoking `DENO_DIR` before moving
-it.
+individual places, as do `open(path)` and `local({worktrees})` in code. For
+probes, set `HARNESS_HOME` and `TASKS_HOME` to scratch directories and clean
+them up; `TASKS_HOME` moves the process supervisor's files (unless `PROCESS_DIR`
+is set). Keep `HOME` unchanged so Deno reuses its module cache. If a probe must
+move `HOME`, export the invoking `DENO_DIR` before moving it.
 
 The model is `gpt-6-astra` unless `--model` names another, reached with
 `$OPENAI_API_KEY` or the Codex CLI's sign-in (@yaks/openai).
 
 ```ts
-import { agent, open } from '@yaks/harness'
+import { local, open } from '@yaks/harness/local'
 import type { Model } from '@yaks/model'
 
 // A local model for this example; replace it with a provider adapter.
@@ -79,7 +91,7 @@ let model: Model = async (request) => ({
   model: request.model,
   items: [{ kind: 'assistant', text: 'pong' }],
 })
-let a = agent({ h: open(':memory:'), model, tools: [] })
+let a = local({ h: open(':memory:'), model, tools: [] })
 try {
   let s = await a.start('reply with the word pong')
   await a.idle(s)
@@ -90,8 +102,8 @@ try {
 ```
 
 For tests and embedded instances, pass the storage handle as `h`. Do not spread
-`open()` into the options: `agent({ ...open(':memory:') })` is rejected by both
-the type contract and a runtime check. Without an explicit `h`, `agent()` opens
+`open()` into the options: `local({ ...open(':memory:') })` is rejected by both
+the type contract and a runtime check. Without an explicit `h`, `local()` opens
 the configured persistent database. A temporary working directory does not
 isolate that database.
 
@@ -251,7 +263,7 @@ before the task is done still reports its outcome, using a receipt id derived
 from its final entry. `resume()` reconciles missed receipts without repeating
 ones already received. Fork/spawn calls themselves are idempotent by call id.
 
-`agent({maxChildren: 32, maxSessions: 64})` sets the defaults explicitly. Child
+`local({maxChildren: 32, maxSessions: 64})` sets the defaults explicitly. Child
 submissions return an ID and a persisted `dispatch.state=queued` record;
 `session.status=queued` distinguishes waiting children from active or settled
 ones. One scheduler per graph runs up to `maxChildren` child callbacks across
@@ -446,7 +458,7 @@ diagnostic write includes the original failure without recursively attempting
 more graph writes. Graph writes drain for at most 250ms at executable shutdown.
 
 Global handlers observe rather than suppress fatal runtime defaults, restoring
-the terminal on the fatal path. Embedded users of `agent()` get daemon
+the terminal on the fatal path. Embedded users of `local()` get daemon
 diagnostics; the global hooks belong only to the executable lifetime. Known
 API-key values, Bearer credentials and recognizable OpenAI keys are redacted;
 arbitrary secrets embedded in third-party exception messages cannot be
@@ -475,7 +487,8 @@ The standard tools include `graph_value_read` and `graph_value_search` from
 model requests by a short preview and a revisioned graph address. The full
 result remains in the transcript and blob-backed storage. This applies equally
 to shell output and large graph-tool responses. User messages and instruction
-snapshots are unchanged. Set `outputLimit` on `agent()` to change the threshold.
+snapshots are unchanged. Set `outputLimit` on `agent()` or `local()` to change
+the threshold.
 
 Read accepts `entity`, `component`, `property`, `start`, `count`, and optional
 `revision`. Search accepts the same address with a literal `query` and bounded
@@ -515,7 +528,7 @@ unrelated shared directory: the harness enforces mode 0700 on it.
 Configure it in code with:
 
 ```ts
-agent({
+local({
   h,
   name: 'gpt-4.1',
   images: { directory, tool: { output_format: 'png' }, maxBytes: 33554432 },
@@ -616,7 +629,7 @@ limitations.
 
 Native OpenAI web search is enabled by default, including OAuth configurations.
 Supported models can search, open pages, and find text within pages. Disable it
-with `HARNESS_WEB=0`, or pass `web: false` to `agent()` or `remote()`. Explicit
+with `HARNESS_WEB=0`, or pass `web: false` to `local()` or `remote()`. Explicit
 programmatic configuration takes precedence over the environment. The worker
 receives the same configuration. Final response citations appear as source
 links. This is provider-hosted browsing, not an unrestricted filesystem/network
@@ -931,7 +944,7 @@ this harness can reach that serves it answers, and a model two reachable
 providers serve needs the provider named in `using`. The command
 `harness new --provider openrouter --model vendor/model 'message'` creates a new
 session under that provider; authorize beforehand in the TUI. Embedding
-applications can use `agent({provider: 'openrouter', name: 'vendor/model'})`;
+applications can use `local({provider: 'openrouter', name: 'vendor/model'})`;
 configuration is recorded in the graph. Tests can inject
 `providers: {openrouter: fakeModel}`.
 

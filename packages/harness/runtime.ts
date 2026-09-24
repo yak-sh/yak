@@ -1,6 +1,6 @@
 /** Runtime inspection and explicit actions. Reads never wake a session. */
 import { type Bundle, type Comp, type Graph, token } from '@yaks/graph'
-import type { Agent } from './run.ts'
+import type { Agent } from './agent.ts'
 
 export type RuntimeAction = 'interrupt' | 'cancel-queued' | 'resume'
 export let runtimeRows = async (

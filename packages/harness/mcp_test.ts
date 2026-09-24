@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { agent } from './run.ts'
+import { local } from './local.ts'
 import { open } from './store.ts'
 import { remote } from './remote.ts'
 import { mcpTools } from './mcp.ts'
@@ -23,7 +23,7 @@ Deno.test('configured remote MCP tool publishes mockup through existing call/res
       url: `http://127.0.0.1:${server.addr.port}/mcp`,
     },
   }])
-  const a = agent({
+  const a = local({
     h,
     model: (req) => {
       requests++

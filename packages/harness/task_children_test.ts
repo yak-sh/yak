@@ -9,7 +9,7 @@ import {
 } from '@yaks/session'
 import { harnessTools } from './tools.ts'
 import { open } from './store.ts'
-import { agent } from './run.ts'
+import { local } from './local.ts'
 
 let setup = () => {
   let h = open(':memory:')
@@ -267,7 +267,7 @@ Deno.test('child marks task done through a tool before its final answer: one fin
       return 'intermediate tool output'
     },
   })
-  let a = agent({
+  let a = local({
     h,
     tools,
     model: (req) => {
@@ -540,7 +540,7 @@ Deno.test('existing fork receipts do not read inherited transcript bodies on res
     reads.push(query)
     return read(query, ...rest as [])
   }) as typeof h.g.read
-  let a = agent({
+  let a = local({
     h,
     name: 'fake',
     model: () => {

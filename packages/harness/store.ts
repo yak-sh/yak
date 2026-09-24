@@ -17,7 +17,7 @@ import { home } from './paths.ts'
 //
 // That reconciliation is `reapLeases`, which frees every lease whose holder is
 // not a session in this graph. What a half-finished step leaves behind is
-// reconciled one level up, by run.ts `resume()`, because waking a transcript
+// reconciled one level up, by agent.ts `resume()`, because waking a transcript
 // needs a model and this file has none.
 
 import {

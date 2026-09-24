@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { agent } from './run.ts'
+import { local } from './local.ts'
 import { open } from './store.ts'
 import { runtimeRows } from './runtime.ts'
 import { elapsed } from './RuntimePanel.ts'
@@ -7,7 +7,7 @@ import { elapsed } from './RuntimePanel.ts'
 Deno.test('runtime cancellation preserves partial text, waits for new input, and resumes explicitly', async () => {
   let entered = Promise.withResolvers<void>()
   let calls = 0
-  let a = agent({
+  let a = local({
     h: open(':memory:'),
     name: 'fake',
     streaming: true,
@@ -63,7 +63,7 @@ let assertMatch = (value: string, part: string) =>
 Deno.test('runtime queued cancellation is scoped, and inspection does not schedule execution', async () => {
   let h = open(':memory:')
   let calls = 0
-  let a = agent({
+  let a = local({
     h,
     maxChildren: 0,
     name: 'fake',

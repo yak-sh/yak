@@ -1,6 +1,6 @@
 /** Isolated startup benchmark. Does not open the configured harness database. */
 import { open } from './store.ts'
-import { agent } from './run.ts'
+import { local } from './local.ts'
 import { remote } from './remote.ts'
 import type { Bundle } from '@yaks/graph'
 import { h as node } from 'preact'
@@ -56,7 +56,7 @@ try {
     }
     let h = open(path)
     mark('open')
-    let a = agent({
+    let a = local({
       h,
       model: () => Promise.resolve({ id: 'fake', model: 'fake', items: [] }),
       name: 'fake',

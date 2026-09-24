@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Comp, identityEid } from '@yaks/graph'
 import { taskEntry, transcript } from '@yaks/session'
-import { agent } from './run.ts'
+import { local } from './local.ts'
 import { open } from './store.ts'
 
 let M = identityEid('model', ['fake'])
@@ -83,7 +83,7 @@ Deno.test('taskEntry rejects invalid inputs and durably accepts concurrent queue
 })
 
 Deno.test('Agent.taskEntry honors agent limits', async () => {
-  let a = agent({
+  let a = local({
     h: open(':memory:'),
     tools: [],
     maxChildren: 0,
@@ -115,7 +115,7 @@ Deno.test('auto-task notice is lazy, reaches next ask, and contextual completion
   let release!: () => void
   let waiting = new Promise<void>((resolve) => release = resolve)
   let h = open(':memory:')
-  let a = agent({
+  let a = local({
     h,
     tools: [],
     model: async (req) => {

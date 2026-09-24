@@ -382,7 +382,7 @@ Deno.test('new reads during graceful shutdown are typed expected refusals', asyn
 Deno.test('worker model selection is database-backed, passive, and forwarded on start', async () => {
   const dir = await Deno.makeTempDir()
   const { open } = await import('./store.ts')
-  const { seed } = await import('./run.ts')
+  const { seed } = await import('./agent.ts')
   const path = dir + '/model-picker.db'
   const h = open(path)
   await h.g.apply(seed({ provider: 'openrouter', model: 'test/model' }))

@@ -1,7 +1,7 @@
 // Two runtimes may read one database; only one may advance a session at once.
 import { assertEquals, assertExists, assertThrows } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import { agent } from './run.ts'
+import { local } from './local.ts'
 import { open } from './store.ts'
 import { stepLock } from './step_lock.ts'
 import type { Comp } from '@yaks/graph'
@@ -92,7 +92,7 @@ Deno.test('a second runtime cannot interrupt a live provider attempt', async () 
   let started = Promise.withResolvers<void>()
   let finish = Promise.withResolvers<void>()
   let calls = 0
-  let a = agent({
+  let a = local({
     h: open(path),
     tools: [],
     streaming: true,
@@ -107,11 +107,11 @@ Deno.test('a second runtime cannot interrupt a live provider attempt', async () 
       }
     },
   })
-  let b: ReturnType<typeof agent> | undefined
+  let b: ReturnType<typeof local> | undefined
   try {
     let id = await a.start('hello')
     await started.promise
-    b = agent({
+    b = local({
       h: open(path),
       tools: [],
       streaming: true,

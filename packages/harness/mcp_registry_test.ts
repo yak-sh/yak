@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { open } from './store.ts'
-import { agent } from './run.ts'
+import { local } from './local.ts'
 import { graphMCP } from './mcp_registry.ts'
 import { fixture } from '../mcp-client/testing.ts'
 import { graphToolName } from '@yaks/mcp-client/graph'
@@ -125,7 +125,7 @@ Deno.test('bad MCP definitions and transport failures do not block other servers
 })
 
 Deno.test('an already-running agent discovers graph additions on its next ask and hides disabled tools', async () => {
-  const { agent } = await import('./run.ts')
+  const { local } = await import('./local.ts')
   const f = fixture()
   const server = Deno.serve(
     { port: 0, hostname: '127.0.0.1', onListen() {} },
@@ -133,7 +133,7 @@ Deno.test('an already-running agent discovers graph additions on its next ask an
   )
   const h = open(':memory:')
   const offered: string[][] = []
-  const a = agent({
+  const a = local({
     h,
     tools: [],
     model: (req) => {
@@ -252,7 +252,7 @@ Deno.test('issued calls keep their handler when another ask refreshes the same p
   const started = Promise.withResolvers<void>(),
     release = Promise.withResolvers<void>()
   let asks = 0
-  const a = agent({
+  const a = local({
     h,
     tools: [],
     name: 'fake',

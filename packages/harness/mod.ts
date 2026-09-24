@@ -1,35 +1,33 @@
 /**
- * @yaks/harness — an agent harness with nothing under it but a SQLite file.
+ * @yaks/harness — an agent runner over a graph, and the host that runs it on
+ * this machine.
  *
  * A session in the fleet is a process the server spawns, watched by a daemon,
- * writing into the live graph. This package is the same session with all three
- * removed: one SQLite file it creates itself, the {@link agent} loop in this
- * process, and no server anywhere. It composes existing packages rather than
- * adding machinery —
+ * writing into the live graph. The harness is the same session with the server
+ * removed: the {@link agent} loop over any graph, written in bundles and read
+ * in queries, so the same rows run on a box, in a Cloudflare Worker, or move
+ * into the fleet's graph with no export step. It composes existing packages
+ * rather than adding machinery —
  *
  * ```
- * open()          the file, the vocabulary, the plugins        (./store.ts)
- * harnessTools()  the shell (@yaks/process) + the graph tools (@yaks/mcp)
  * agent()         the seed rows, the daemon (@yaks/session), and the
- *                 operations a caller needs                      (./run.ts)
+ *                 operations a caller needs                   (./agent.ts)
+ * local()         agent() here: the SQLite file, the shell, a checkout per
+ *                 child, MCP servers, the terminal       (@yaks/harness/local)
  * tools           the commands, over @yaks/cli                   (./cli.ts)
  * ```
  *
- * — and each of those four lines is a package doing its own job.
+ * This door is the runner alone, and type-checks with only the web platform in
+ * scope; nothing it imports names a machine.
  *
  * ```ts
- * import { agent, open } from '@yaks/harness'
+ * import { agent } from '@yaks/harness'
  *
- * let a = agent({ h: open(':memory:'), model: fake })
+ * let a = agent({ h: { g, fx, vocab }, model: fake })
  * let s = await a.start('reply with the word pong')
  * await a.idle(s)
  * for (let e of await a.transcript(s)) console.log(a.line(e))
  * ```
- *
- * Everything it does is bundles in and queries out — the transcript IS
- * entities, the work is `task` entities, what it ran is `process` entities —
- * so the same rows move into the fleet's graph the day the harness is pointed
- * at it, with no export step and no second model of anything.
  *
  * The command-line program is the other export
  * (`deno run -A jsr:@yaks/harness/bin`): `new`, `send`, `ls`, `show`,
@@ -38,10 +36,4 @@
  * @module
  */
 
-export * from './store.ts'
-export * from './tools.ts'
-export * from './run.ts'
-export { own, tools } from './cli.ts'
-
-export { App, changes, type Opts as AppOpts, tui } from './app.ts'
-export { type Context, type Panel, panels, type UIAgent } from './panels.ts'
+export * from './agent.ts'

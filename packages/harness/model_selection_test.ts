@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Model, Request } from '@yaks/model'
-import { agent, seed } from './run.ts'
+import { seed } from './agent.ts'
+import { local } from './local.ts'
 import { identityEid } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import { open } from './store.ts'
@@ -19,7 +20,7 @@ Deno.test('model selection derives provider, does not ask, and applies only to s
       items: [{ kind: 'assistant', text: 'ok' }],
     })
   }
-  const a = agent({
+  const a = local({
     h,
     providers: { openai: fake('openai'), openrouter: fake('openrouter') },
   })
@@ -64,7 +65,7 @@ Deno.test('inflight model is unchanged; a passive selection survives its complet
   const begun = new Promise<void>((resolve) => started = resolve)
   const held = new Promise<void>((resolve) => release = resolve)
   const seen: string[] = []
-  const a = agent({
+  const a = local({
     h,
     providers: {
       openai: async (req) => {
@@ -110,7 +111,7 @@ Deno.test('inflight model is unchanged; a passive selection survives its complet
 Deno.test('passive model controls do not add invented user text to the next request', async () => {
   const seen: Request[] = []
   const h = open(':memory:')
-  const a = agent({
+  const a = local({
     h,
     model: (req) => {
       seen.push(req)
@@ -142,7 +143,7 @@ Deno.test('late nonstream ask does not override an explicitly selected model', a
   let release!: () => void, started!: () => void
   const begun = new Promise<void>((r) => started = r)
   const held = new Promise<void>((r) => release = r)
-  const a = agent({
+  const a = local({
     h,
     streaming: false,
     model: async (req) => {

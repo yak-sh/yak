@@ -2,7 +2,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { outputView } from '@yaks/context'
 import { valueTools } from '@yaks/blob'
 import { open } from './store.ts'
-import { agent } from './run.ts'
+import { local } from './local.ts'
 import { harnessTools } from './tools.ts'
 import type { Request } from '@yaks/model'
 
@@ -100,7 +100,7 @@ Deno.test('model receives bounded tool result, UI keeps original and prompt/user
   const requests: Request[] = []
   const text = 'TOOL '.repeat(30000)
   const user = 'USER '.repeat(4000)
-  const a = agent({
+  const a = local({
     h,
     name: 'fake',
     tools: [...harnessTools(h.g), {

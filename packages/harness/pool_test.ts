@@ -2,7 +2,8 @@ import { assertEquals } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import type { Reply } from '@yaks/model'
 import { sessionTools } from '@yaks/session'
-import { agent, seed } from './run.ts'
+import { seed } from './agent.ts'
+import { local } from './local.ts'
 import { open } from './store.ts'
 
 let reply = (text: string): Reply => ({
@@ -28,7 +29,7 @@ Deno.test('shared FIFO pool admits IDs before preparation and never over-admits 
       return Promise.resolve({})
     },
   })
-  let a = agent({
+  let a = local({
     h,
     tools,
     model: (req) => {
@@ -78,7 +79,7 @@ Deno.test('shared FIFO pool admits IDs before preparation and never over-admits 
 Deno.test('queued intent survives daemon restart and stop does not drain durable queue', async () => {
   let h = open(':memory:')
   let tools = sessionTools(h.g, { maxChildren: 0 })
-  let a = agent({
+  let a = local({
     h,
     tools,
     model: () => {
@@ -100,7 +101,7 @@ Deno.test('queued intent survives daemon restart and stop does not drain durable
   )
   await a.d.stop()
   assertEquals((await h.g.read('.dispatch.state=queued')).length, 1)
-  let b = agent({
+  let b = local({
     h,
     tools: sessionTools(h.g, { maxChildren: 1 }),
     model: () => Promise.resolve(reply('done')),
@@ -116,7 +117,7 @@ Deno.test('cap one nested delegated wait releases and reacquires its slot', asyn
   let h = open(':memory:')
   let turns = new Map<string, number>()
   let finished = false
-  let a = agent({
+  let a = local({
     h,
     maxChildren: 1,
     model: (req) => {
@@ -168,7 +169,7 @@ Deno.test('queued cancellation skips expensive prep; prep failure has one termin
       return Promise.reject(new Error('checkout failed'))
     },
   })
-  let a = agent({ h, tools, model: () => Promise.resolve(reply('parent')) })
+  let a = local({ h, tools, model: () => Promise.resolve(reply('parent')) })
   await h.g.apply([
     { entity: { eid: 'p' }, session: {} },
     ...['cancel', 'fail'].map((id, i) => ({
@@ -212,7 +213,7 @@ Deno.test('queued submissions and fork anchors survive file reopen without dupli
   let path = dir + '/graph.sqlite'
   let h = open(path)
   let tools = sessionTools(h.g, { maxChildren: 0 })
-  let a = agent({ h, tools, model: () => Promise.resolve(reply('done')) })
+  let a = local({ h, tools, model: () => Promise.resolve(reply('done')) })
   try {
     await h.g.apply([{ entity: { eid: 'p' }, session: {} }, {
       entity: { eid: 'input' },
@@ -244,7 +245,7 @@ Deno.test('queued submissions and fork anchors survive file reopen without dupli
         return Promise.resolve({})
       },
     })
-    a = agent({ h, tools, model: () => Promise.resolve(reply('done')) })
+    a = local({ h, tools, model: () => Promise.resolve(reply('done')) })
     await until(async () =>
       (await h.g.read('.dispatch.state=settled')).length == 1
     )

@@ -1,6 +1,7 @@
 {
   "_": "The browser gate: @yaks/harness's browser-facing exports must type-check with only the web platform in scope \u2014 no Deno namespace, no Node types. `deno task check:browser` is the check.",
   "entries": [
+    ".",
     "./vocab"
   ],
   "compilerOptions": {

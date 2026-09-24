@@ -1,5 +1,5 @@
 import { daemon } from '@yaks/session'
-import { agent } from './run.ts'
+import { local } from './local.ts'
 import { harnessTools } from './tools.ts'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Comp } from '@yaks/graph'
@@ -153,7 +153,7 @@ Deno.test('host preparation separates home and cwd, defaults to sharing, and ref
   try {
     let home = await homeAt(f.h.g, f.repo)
     await f.h.g.apply([{ entity: { eid: 'parent' }, session: {}, home }])
-    let prepare = workspace(f.h.g, f.repo).prepareChild!
+    let prepare = workspace(f.h.g, f.repo, f.dir + '/worktrees').prepareChild!
     assertEquals(
       (await prepare({ parent: 'parent', child: 'one', args: {} })).home,
       home,
@@ -252,7 +252,7 @@ Deno.test('spawn prepares admitted home, replay creates nothing, shell defaults 
 
 Deno.test('root sessions discover and share the existing default worktree', async () => {
   let f = await fixture()
-  let a = agent({
+  let a = local({
     h: f.h,
     cwd: f.repo,
     tools: [],
@@ -336,7 +336,7 @@ Deno.test('queued fork preserves anchor and prepares checkout on admission', asy
 
 Deno.test('user task forks stable context and prepares an independent pinned checkout', async () => {
   let f = await fixture()
-  let a = agent({
+  let a = local({
     h: f.h,
     cwd: f.repo,
     maxChildren: 0,
@@ -367,11 +367,12 @@ Deno.test('user task forks stable context and prepares an independent pinned che
         .length,
       1,
     )
-    let prepared = await workspace(f.h.g, f.repo).prepareChild!({
-      parent: root,
-      child: admitted.child,
-      args,
-    })
+    let prepared = await workspace(f.h.g, f.repo, f.dir + '/worktrees')
+      .prepareChild!({
+        parent: root,
+        child: admitted.child,
+        args,
+      })
     await f.h.g.apply([{ entity: child.entity, ...prepared }])
     assertEquals(
       await sessionCwd(f.h.g, admitted.child, '/wrong'),
@@ -383,7 +384,7 @@ Deno.test('user task forks stable context and prepares an independent pinned che
     )
     assertEquals(await Deno.readTextFile(f.repo + '/file'), 'dirty parent')
     assertEquals(
-      await workspace(f.h.g, f.repo).prepareChild!({
+      await workspace(f.h.g, f.repo, f.dir + '/worktrees').prepareChild!({
         parent: root,
         child: admitted.child,
         args,
@@ -399,7 +400,7 @@ Deno.test('user task forks stable context and prepares an independent pinned che
 
 Deno.test('user task outside a repository fails before minting work', async () => {
   let dir = await Deno.makeTempDir()
-  let a = agent({
+  let a = local({
     h: open(':memory:'),
     cwd: dir,
     name: 'fake',

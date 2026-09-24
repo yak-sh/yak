@@ -55,11 +55,11 @@ Deno.test('instruction items map to ordered developer messages, never user text'
 
 Deno.test('root admission is snapshotted and explicit later context is an instruction', async () => {
   let dir = await Deno.makeTempDir()
-  let { agent } = await import('./run.ts')
+  let { local } = await import('./local.ts')
   let { open } = await import('./store.ts')
   let requests: import('@yaks/model').Request[] = []
   await Deno.writeTextFile(dir + '/AGENTS.md', 'shared rule')
-  let a = await agent({
+  let a = await local({
     h: open(':memory:'),
     model: (req) => {
       requests.push(req)
@@ -97,12 +97,12 @@ Deno.test('root admission is snapshotted and explicit later context is an instru
 })
 
 Deno.test('retired CLI instructions are omitted on future asks without rewriting history', async () => {
-  let { agent } = await import('./run.ts')
+  let { local } = await import('./local.ts')
   let { open } = await import('./store.ts')
   let dir = await Deno.makeTempDir()
   let h = open(':memory:')
   let requests: import('@yaks/model').Request[] = []
-  let a = agent({
+  let a = local({
     h,
     cwd: dir,
     name: 'fake',

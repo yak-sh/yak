@@ -4,13 +4,13 @@ import { hideCompletedChild, sessionTree } from './tree.ts'
 /** Sidebar contributions: one graph read and one renderer, added as one row. */
 import { type ComponentType, h } from 'preact'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
-import type { Agent } from './run.ts'
+import type { Local } from './local.ts'
 import { indicator } from './status.ts'
 
 /** The parts of the agent the UI calls; a test can supply just these. */
 export type UIAgent =
   & Pick<
-    Agent,
+    Local,
     | 'start'
     | 'send'
     | 'taskEntry'
@@ -23,7 +23,7 @@ export type UIAgent =
   >
   & Partial<
     Pick<
-      Agent,
+      Local,
       | 'models'
       | 'selectModel'
       | 'archive'

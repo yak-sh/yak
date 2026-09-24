@@ -6,7 +6,7 @@ import type { Model } from '@yaks/model'
 import { mount } from '../tui/harness.ts'
 import { App, changes } from './app.ts'
 import { panels, type UIAgent } from './panels.ts'
-import { agent } from './run.ts'
+import { local } from './local.ts'
 import { open } from './store.ts'
 import { until } from '../process/harness.ts'
 
@@ -113,7 +113,7 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
 
 Deno.test('graph effects paint a model reply without a keypress; sends are input bundles', async () => {
   let reply = deferred<Awaited<ReturnType<Model>>>()
-  let a = agent({ h: open(':memory:'), model: () => reply.promise, tools: [] })
+  let a = local({ h: open(':memory:'), model: () => reply.promise, tools: [] })
   let subscribe = changes(a)
   let ui = await mount(() => h(App, { agent: a, subscribe }), 120, 40)
   try {
@@ -323,7 +323,7 @@ Deno.test('Tab preserves editing and captures message/task mode for each queued 
 Deno.test('task mode paints claimed work and subagent, then its delivered result without keys', async () => {
   let childReply = deferred<Awaited<ReturnType<Model>>>()
   let childAsked = deferred<void>()
-  let a = agent({
+  let a = local({
     h: open(':memory:'),
     tools: [],
     model: (req) => {
@@ -698,7 +698,7 @@ Deno.test('transcript publishes before slow sidebar reads and despite ongoing ch
   let reply = deferred<Awaited<ReturnType<Model>>>()
   let sidebar = deferred<Bundle[]>()
   let dir = await Deno.makeTempDir()
-  let a = agent({
+  let a = local({
     h: open(':memory:'),
     cwd: dir,
     model: () => reply.promise,

@@ -26,6 +26,7 @@ import { valueTools } from '@yaks/blob'
 // resolve `$ref` against.
 
 import { sessionCwd, workspace } from './workspace.ts'
+import { worktrees } from './paths.ts'
 import type { Entity, Graph, Tool as GraphTool } from '@yaks/graph'
 import { shapeOf } from '@yaks/mcp'
 import { core, type Depth } from '@yaks/mcp'
@@ -90,7 +91,13 @@ export let graphTools = (
 export let harnessTools = (
   g: Graph,
   opts:
-    & { cwd?: string; depth?: Depth; images?: ImageOptions | false }
+    & {
+      cwd?: string
+      depth?: Depth
+      images?: ImageOptions | false
+      /** the root a task child's checkout is cut under */
+      worktrees?: string
+    }
     & ChildLimits = {},
 ): Tool[] => {
   let shell = shellTools(g, { cwd: opts.cwd })
@@ -103,7 +110,10 @@ export let harnessTools = (
       cwd: args.cwd ??
         (ctx ? await sessionCwd(g, ctx.session, directory) : directory),
     }, ctx)
-  let session = sessionTools(g, { ...workspace(g, directory), ...opts })
+  let session = sessionTools(g, {
+    ...workspace(g, directory, opts.worktrees ?? worktrees()),
+    ...opts,
+  })
   let processWait = shell.find((t) => t.name == 'wait')!
   let childWait = session.find((t) => t.name == 'wait')!
   let wait: Tool = {
