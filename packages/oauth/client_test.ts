@@ -247,6 +247,33 @@ Deno.test('a provider answering a key: its own link, a JSON exchange, the key ke
   assertEquals(await c.token(), 'sk-1')
 })
 
+Deno.test('a resource (RFC 8707) rides the link and every exchange', async () => {
+  let resource = 'https://mcp.example/mcp'
+  let { c, seen } = setup(
+    { access_token: 'A1', refresh_token: 'R1' },
+    [[200, { access_token: 'A2' }]],
+    { ...PROVIDER, resource },
+  )
+  let { url } = await c.begin()
+  assertEquals(new URL(url).searchParams.get('resource'), resource)
+  await c.refresh('A1')
+  assertEquals(seen[0].body.get('resource'), resource)
+})
+
+Deno.test('an issuer (RFC 9207): a return naming another, or none, makes no request', async () => {
+  let { c, seen } = setup(undefined, [], {
+    ...PROVIDER,
+    issuer: 'https://auth.example',
+  })
+  let { attempt } = await c.begin()
+  for (let iss of ['&iss=https://evil.example', '']) {
+    let back = `${REDIRECT}?code=C&state=${attempt.state}${iss}`
+    let e = await assertRejects(() => c.complete(attempt, back), OAuthError)
+    assertEquals(e.code, 'issuer')
+  }
+  assertEquals(seen.length, 0)
+})
+
 Deno.test('client credentials: in the body for post, the id alone for a public client', async () => {
   let cases: [Provider, Record<string, string>][] = [
     [{ ...PROVIDER, auth: 'post' }, {

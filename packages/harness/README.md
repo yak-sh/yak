@@ -792,9 +792,9 @@ bearer store), `allow` (a JSON-encoded array of exact remote tool names), and
 `redirect_url`, `client_id`, `client_metadata_url`, `scope` for OAuth settings.
 Omitting `allow` exposes all discovered tools; `"[]"` exposes none. The graph's
 current vocabulary stores this list as JSON text. Token values, callback codes,
-and verifiers never belong in these fields. OAuth credentials remain in the
-private authorization store. Changing the endpoint/registration selects its own
-authorization record; renaming a server does not invalidate its credentials.
+and verifiers never belong in these fields. A sign-in is a connection the server
+entity owns; changing the endpoint signs in anew, and renaming a server does not
+invalidate its sign-in.
 
 A `credential` hostname must match the endpoint hostname. `yak login <token>`
 stores a bearer; it does not initiate OAuth. `YAKS_TOKEN` retains its existing
@@ -870,7 +870,7 @@ and paste it into the authorization panel; press Enter. The return URL is hidden
 and never sent to the model, a transcript, or draft recovery storage. Esc
 cancels.
 
-The default callback is `http://127.0.0.1:8765/oauth/callback`. No listener is
+The default callback is `http://localhost:8765/oauth/callback`. No listener is
 started, so a browser connection error at that address is expected; copy the
 address bar anyway. If a server requires pre-registration, add the `client_id`
 and `redirect_url` fields to its `mcp_server` component, with `scope` or
@@ -878,15 +878,16 @@ and `redirect_url` fields to its `mcp_server` component, with `scope` or
 redirect. Browser and provider policies can restrict this copy-address-bar
 workflow.
 
-Tokens and client registrations are secrets ([@yaks/secrets](../secrets)): the
-graph holds each one's name and handle, and the vault beside the database
-(`~/.yak/secrets`, private files) holds the tokens. They do not overwrite the
-existing yak bearer store. Pending logins do not survive restart. Existing
-`credential` bearer configuration remains a fallback. Successful OAuth connects
-the shared server and makes its tools available on the next model request.
-Unauthorized optional servers are omitted until signed in; other discovery
-failures remain errors. Refresh uses the SDK and private store, not a model
-tool.
+A sign-in is a connection ([@yaks/connections](../connections)) the server
+entity owns, through an integration discovered from the server
+(`@yaks/mcp-client/oauth`) that also keeps the client registered there. The
+graph holds the connection's handle, and the vault beside the database
+(`~/.yak/secrets`, private files) holds the tokens. Pending logins do not
+survive restart. Existing `credential` bearer configuration remains a fallback.
+Successful OAuth connects the shared server and makes its tools available on the
+next model request. Unauthorized optional servers are omitted until signed in;
+other discovery failures remain errors. Tokens refresh through the connection,
+not a model tool.
 
 A program embedding the harness can call `authorizeMCP` on the agent, passing an
 action — `'list'`, `'begin'`, `'complete'` or `'cancel'` — and optionally a

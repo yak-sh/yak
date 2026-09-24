@@ -11,14 +11,14 @@
 import { responses as openrouter } from '@yaks/openrouter'
 import { credential, responses } from '@yaks/openai'
 import type { Model } from '@yaks/model'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, identityEid } from '@yaks/graph'
 import type { ChildLimits, Step, Tool } from '@yaks/session'
 import { watchMigrations } from '@yaks/sqlite'
 import { instructionFiles } from '@yaks/context/host'
 import { render as tree } from '@yaks/preact'
 import type { VNode } from 'preact'
 import { type Agent, agent } from './agent.ts'
-import { OPENROUTER_AUTH, providerAuthorization } from './provider_auth.ts'
+import { signins } from './signin.ts'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { mcpTools } from './mcp.ts'
 import { stepLock } from './step_lock.ts'
@@ -78,6 +78,14 @@ export type Opts = ChildLimits & NotHarness & {
   worktrees?: string
 }
 
+/** OpenRouter, the model provider, signed in through a connection its
+ * provider entity owns. */
+const OPENROUTER_AUTH = 'OpenRouter (model provider)'
+const OPENROUTER = identityEid('provider', ['openrouter'])
+const refuse = (message: string): never => {
+  throw new Error(message)
+}
+
 /** The harness running here: the agent, and what only a box offers it. */
 export type Local = Agent<Harness> & {
   authorizeMCP: (
@@ -124,8 +132,8 @@ export let local = (opts: Opts = {}): Local => {
       images: configuredImages(opts.images),
       web: opts.web ?? Deno.env.get('HARNESS_WEB') != '0',
     })
-  const providerAuth = providerAuthorization(h)
-  const mcp = mcpTools(h)
+  const signin = signins(h)
+  const mcp = mcpTools(h, signin)
   h.fx.created('mcp_server', mcp.refresh).changed('mcp_server', mcp.refresh)
     .removed('mcp_server', mcp.refresh)
   // A child's own checkout is garbage the moment its session is over: no
@@ -147,7 +155,12 @@ export let local = (opts: Opts = {}): Local => {
     model: opts.model,
     providers: {
       openai: model,
-      openrouter: openrouter({ key: providerAuth.key }),
+      openrouter: openrouter({
+        key: async () =>
+          await signin.key(OPENROUTER, 'openrouter') ?? refuse(
+            'OpenRouter is not connected. Press Esc then A to authorize OpenRouter.',
+          ),
+      }),
       ...opts.providers,
     },
     tools: opts.tools ?? harnessTools(h.g, { ...opts, worktrees: root }),
@@ -173,7 +186,7 @@ export let local = (opts: Opts = {}): Local => {
       )
     },
     release: async () => {
-      providerAuth.cancel()
+      signin.cancel()
       await mcp.close()
       await diagnostics().drain()
       detach()
@@ -184,12 +197,21 @@ export let local = (opts: Opts = {}): Local => {
     authorizeMCP: a.admitted(
       async (action: MCPAuthAction, name?: string, callback?: string) => {
         if (name === OPENROUTER_AUTH) {
-          return providerAuth.control(action, callback)
+          if (action === 'begin') return signin.begin(OPENROUTER, 'openrouter')
+          if (action === 'cancel') signin.cancel(OPENROUTER)
+          if (action === 'complete') {
+            await signin.complete(OPENROUTER, 'openrouter', callback ?? '')
+          }
+          return {
+            message: action === 'complete'
+              ? 'OpenRouter connected. Select an OpenRouter model explicitly to use it.'
+              : 'Authorization cancelled',
+          }
         }
         const reply = await mcp.authorize(action, name, callback)
-        if (action === 'list' && await providerAuth.listed()) {
-          reply.servers = [...reply.servers ?? [], OPENROUTER_AUTH]
-        }
+        if (
+          action === 'list' && (await h.g.read(`.eid=${OPENROUTER}`)).length
+        ) reply.servers = [...reply.servers ?? [], OPENROUTER_AUTH]
         return reply
       },
     ),

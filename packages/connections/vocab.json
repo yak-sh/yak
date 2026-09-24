@@ -44,6 +44,18 @@
           "enum": ["tokens", "key"],
           "description": "what the token endpoint answers: tokens (the default), or an API key, as OpenRouter's PKCE exchange does"
         },
+        "resource": {
+          "type": "string",
+          "description": "the resource a grant is for (RFC 8707), sent with the sign-in link and every exchange, as an MCP server asks"
+        },
+        "issuer": {
+          "type": "string",
+          "description": "the issuer every sign-in return must name (RFC 9207), for a service that says it names one"
+        },
+        "client": {
+          "type": "string",
+          "description": "the id of a public client registered with it for this host (RFC 7591), as an MCP server asks; a host may sign in with it where it has no client of its own"
+        },
         "hosts": {
           "type": "array",
           "items": { "type": "string" },

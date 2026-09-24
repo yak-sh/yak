@@ -103,10 +103,10 @@ The store contains sensitive values. Nothing in this package opens a browser,
 accepts an HTTP callback, or keeps anything of its own: the host routes the
 redirect to `complete` and gives the client its store.
 
-Protocols that are not this flow keep their own adapters.
-`@yaks/mcp-client/oauth` retains MCP discovery, client registration and refresh,
-with the same private storage and attempt lifetime and its in-flight verifiers
-in memory, never in the store.
+An MCP server is this flow over data found at the server:
+`@yaks/mcp-client/oauth` discovers its endpoints and registers a client, and
+this client signs in with `resource` (RFC 8707) and checks `issuer` (RFC 9207)
+where the server names one.
 
 ## Compatibility
 

@@ -1,9 +1,8 @@
 // A private record kept as a secret: JSON under a name, read by trusted code
 // and changed only while it is held. It is what an OAuth client keeps between
 // runs — the tokens, and the refresh that replaces them — and it has the shape
-// @yaks/oauth's `AuthorizationStore` asks for, so @yaks/mcp-client and
-// @yaks/connections keep their credentials here rather than in files of their
-// own.
+// @yaks/oauth's `AuthorizationStore` asks for, so @yaks/connections keeps each
+// connection's grant here rather than in files of its own.
 //
 // A change is a write through the graph like any other, so the record's name
 // and sentinel are in the graph and its contents are in the vault. The read,

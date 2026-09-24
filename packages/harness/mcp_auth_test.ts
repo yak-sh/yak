@@ -4,7 +4,8 @@ import { h } from 'preact'
 import { mount } from '../tui/harness.ts'
 import { MCPAuthPanel } from './MCPAuthPanel.ts'
 import { frontend } from './frontend.ts'
-import { authorizedMCP, mcpStore } from './mcp_auth.ts'
+import { authorizedMCP } from './mcp_auth.ts'
+import { signins } from './signin.ts'
 import type { UIAgent } from './panels.ts'
 import { fixture } from '../mcp-client/testing.ts'
 import { remote } from './remote.ts'
@@ -111,12 +112,14 @@ Deno.test('local HTTP OAuth exchange reconnects MCP discovery and works through 
     )
     assert(reply.message!.includes('Connected'))
     assertEquals(exchanges, 1)
-    // Another process over the same graph finds the sign-in in the vault
-    // beside it, and nothing of the exchange that produced it.
+    // Another process over the same graph finds the sign-in, a connection the
+    // server owns, in the vault beside it, and nothing of the exchange that
+    // produced it.
     const again = open(db)
+    const signin = signins(again)
     const local = authorizedMCP(
       [{ name: 'site', url: origin + '/mcp' }],
-      mcpStore(again),
+      (s) => signin.key(s.name, s.url),
     )
     try {
       const tools = await local.tools()

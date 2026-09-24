@@ -34,6 +34,12 @@ export type Provider = {
    * carries no state: PKCE already binds the code to this attempt (RFC 9700
    * §2.1). */
   answers?: 'tokens' | 'key'
+  /** The resource the grant is for (RFC 8707), as an MCP server asks: sent
+   * with the link and with every exchange. */
+  resource?: string
+  /** The issuer every return must name (RFC 9207), for a server that says it
+   * names one: a return from any other server is refused. */
+  issuer?: string
 }
 
 /** One grant, as the store keeps it. `expires_at` is epoch milliseconds. */
@@ -136,6 +142,7 @@ export let client = (provider: Provider, o: Options): Client => {
       },
       body: key ? JSON.stringify(fields) : form({
         ...fields,
+        resource: provider.resource,
         client_id: basic ? undefined : id,
         client_secret: basic ? undefined : secret,
       }),
@@ -194,6 +201,7 @@ export let client = (provider: Provider, o: Options): Client => {
           client_id: provider.client?.id,
           redirect_uri: o.redirect,
           state: pending.state,
+          resource: provider.resource,
           ...(scopes.length ? { scope: scopes.join(' ') } : {}),
         },
         code_challenge: challenge,
@@ -213,6 +221,9 @@ export let client = (provider: Provider, o: Options): Client => {
       }
       if (!key && q.get('state') != pending.state) {
         throw new OAuthError('state', 'the return does not match this attempt')
+      }
+      if (provider.issuer && q.get('iss') != provider.issuer) {
+        throw new OAuthError('issuer', 'the return names another issuer')
       }
       let error = q.get('error')
       if (error) throw new OAuthError(error, `authorization refused: ${error}`)

@@ -308,6 +308,8 @@ let signIn = async (c: Ctx, b: Bundle): Promise<Client> => {
     client: registered,
     auth: i.auth,
     answers: i.answers,
+    resource: i.resource,
+    issuer: i.issuer,
   }, {
     store: records(c.graph, c.vault, ''),
     key: nameOf(b),

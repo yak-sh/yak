@@ -32,6 +32,13 @@ export type Integration = {
   auth?: 'basic' | 'post'
   /** what the exchange answers: tokens, or a key, as OpenRouter's does */
   answers?: 'tokens' | 'key'
+  /** the resource a grant is for (RFC 8707), as an MCP server asks */
+  resource?: string
+  /** the issuer its returns name (RFC 9207), where it says it names one */
+  issuer?: string
+  /** a public client registered with it for this host (RFC 7591), as an MCP
+   * server asks */
+  client?: string
   /** the API hosts its credential may be sent to, and no others */
   hosts: string[]
   /** how the service signs the webhooks it sends */

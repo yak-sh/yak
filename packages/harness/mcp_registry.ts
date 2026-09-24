@@ -1,20 +1,25 @@
-/** Graph-owned definitions; runtime handles are refreshed before discovery or authorization. */
+/** Graph-owned definitions; runtime handles are refreshed before discovery or
+ * authorization. A server's sign-in is a connection it owns (./signin.ts),
+ * through an integration discovered from the server itself. */
 import type { Harness } from './store.ts'
 import { checkNamespaces, checkToolNames, type Server } from '@yaks/mcp-client'
 import type { Remote } from './mcp_auth.ts'
 import { graphToolName, serverOf } from '@yaks/mcp-client/graph'
+import { discover } from '@yaks/mcp-client/oauth'
+import { INTEGRATION, integrationEid, known } from '@yaks/connections'
 import {
   authorizedMCP,
   type MCPAuthAction,
   type MCPAuthReply,
-  mcpStore,
 } from './mcp_auth.ts'
+import { REDIRECT, type SignIns } from './signin.ts'
 
 type Handle = ReturnType<typeof authorizedMCP>
 type Live = { signature: string; label: string; server: Server; handle: Handle }
-export const graphMCP = (h: Pick<Harness, 'g' | 'vault'>) => {
+export const graphMCP = (h: Pick<Harness, 'g' | 'vault'>, signin: SignIns) => {
   const g = h.g
-  const store = mcpStore(h)
+  // A server's name is its entity, which owns its sign-in.
+  const token = (s: Server) => signin.key(s.name, s.url)
   const live = new Map<string, Live>()
   // Already-admitted calls retain their original transport. All handles drain at host close.
   const retired: Handle[] = []
@@ -55,14 +60,14 @@ export const graphMCP = (h: Pick<Harness, 'g' | 'vault'>) => {
           }
           errors.delete(id)
           if (old) {
-            old.handle.cancel()
+            signin.cancel(id)
             retired.push(old.handle)
           }
           live.set(id, {
             signature,
             label: config.label,
             server: config.server,
-            handle: authorizedMCP([config.server], store),
+            handle: authorizedMCP([config.server], token),
           })
         } catch (e) {
           errors.set(
@@ -74,7 +79,7 @@ export const graphMCP = (h: Pick<Harness, 'g' | 'vault'>) => {
       for (const [id, old] of live) {
         if (!wanted.has(id)) {
           live.delete(id)
-          old.handle.cancel()
+          signin.cancel(id)
           retired.push(old.handle)
         }
       }
@@ -141,7 +146,34 @@ export const graphMCP = (h: Pick<Harness, 'g' | 'vault'>) => {
             all,
           ) => all.length === 1)[0]
       if (!found) throw new Error('Unknown or ambiguous configured MCP server')
-      return await found[1].handle.control(action, found[0], callback)
+      const [id, { server: s, handle }] = found
+      if (action === 'cancel') {
+        signin.cancel(id)
+        return { message: 'Authorization cancelled.' }
+      }
+      if (action === 'begin') {
+        // Where the server signs in, kept as its integration with the client
+        // this harness registered there.
+        const redirect = s.oauth?.redirectUrl ?? REDIRECT
+        const { integration, register } = await discover(s.url, {
+          ...await handle.challenge(s),
+          ...s.oauth?.scope ? { scope: s.oauth.scope } : {},
+        })
+        const client = s.oauth?.clientId ?? s.oauth?.clientMetadataUrl ??
+          (await known(g.read, integration.name, {}))?.client ??
+          await register(redirect)
+        await g.apply([{
+          entity: { eid: integrationEid(integration.name) },
+          [INTEGRATION]: { ...integration, client },
+        }])
+        return await signin.begin(id, s.url, redirect)
+      }
+      if (action !== 'complete') throw new Error('Unknown authorization action')
+      await signin.complete(id, s.url, callback)
+      await handle.reconnect(s)
+      return {
+        message: 'Connected. Tools will be available on the next request.',
+      }
     },
     close: async () => {
       await tail

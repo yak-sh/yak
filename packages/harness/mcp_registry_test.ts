@@ -2,6 +2,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { open } from './store.ts'
 import { local } from './local.ts'
 import { graphMCP } from './mcp_registry.ts'
+import { signins } from './signin.ts'
 import { fixture } from '../mcp-client/testing.ts'
 import { graphToolName } from '@yaks/mcp-client/graph'
 
@@ -13,7 +14,7 @@ Deno.test('graph MCP definitions persist; rename keeps identity, edits and remov
   )
   const dir = await Deno.makeTempDir()
   let h = open(dir + '/graph.db')
-  let registry = graphMCP(h)
+  let registry = graphMCP(h, signins(h))
   try {
     assertEquals(await registry.tools(), [])
     await h.g.apply([{
@@ -60,7 +61,7 @@ Deno.test('graph MCP definitions persist; rename keeps identity, edits and remov
     await registry.close()
     h.close()
     h = open(dir + '/graph.db')
-    registry = graphMCP(h)
+    registry = graphMCP(h, signins(h))
     assertEquals((await registry.tools())[0].name, 'Renamed__publish_mockup')
     await h.g.apply([{
       entity: { eid: '0c300000-0000-4000-8000-000000000001' },
@@ -81,7 +82,7 @@ Deno.test('bad MCP definitions and transport failures do not block other servers
     { port: 0, hostname: '127.0.0.1', onListen() {} },
     (r) => f.fetcher(r),
   )
-  const h = open(':memory:'), registry = graphMCP(h)
+  const h = open(':memory:'), registry = graphMCP(h, signins(h))
   try {
     await h.g.apply([
       {
@@ -187,7 +188,7 @@ Deno.test('reconfiguration changes tool identity without retargeting previously 
     { port: 0, hostname: '127.0.0.1', onListen() {} },
     (r) => b.fetcher(r),
   )
-  const h = open(':memory:'), registry = graphMCP(h)
+  const h = open(':memory:'), registry = graphMCP(h, signins(h))
   try {
     await h.g.apply([{
       entity: { eid: '0c300000-0000-4000-8000-000000000001' },
@@ -216,7 +217,7 @@ Deno.test('reconfiguration changes tool identity without retargeting previously 
 })
 
 Deno.test('graph MCP namespace collisions fail explicitly without opening duplicate connections', async () => {
-  const h = open(':memory:'), registry = graphMCP(h)
+  const h = open(':memory:'), registry = graphMCP(h, signins(h))
   try {
     await h.g.apply(['yaks.app', 'yaks_app'].map((name) => ({
       entity: { eid: crypto.randomUUID() },

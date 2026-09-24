@@ -1,21 +1,15 @@
-/** Host-owned OAuth storage and reconnects. No authorization input enters a transcript. */
+/** MCP connections that carry the harness's sign-in to each server, and
+ * reconnect after one. No authorization input enters a transcript. */
 import {
   connect,
   type Connection,
   MCPAuthorizationRequired,
   type Server,
 } from '@yaks/mcp-client'
-import {
-  type Authorization,
-  authorization,
-  type AuthorizationStore,
-  checkRecord,
-} from '@yaks/mcp-client/oauth'
-import { records } from '@yaks/secrets'
+import type { AuthorizationChallenge } from '@yaks/mcp-client/oauth'
 import { tokenFor } from '@yaks/cli'
 import type { Tool } from '@yaks/graph'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
-import type { Harness } from './store.ts'
 
 /** A remote tool wearing the connection that listed it: `reply` is that
  * server's own endpoint, recorded, so an issued call never moves to a transport
@@ -31,80 +25,44 @@ export type MCPAuthReply = {
   redirectUrl?: string
   message?: string
 }
-/** Where a harness keeps its MCP sign-ins: secrets in its own graph, one per
- * server (@yaks/secrets `records`). */
-export const mcpStore = (h: Pick<Harness, 'g' | 'vault'>): AuthorizationStore =>
-  records(h.g, h.vault, 'mcp ', checkRecord)
 
-export const authorizedMCP = (
-  servers: Server[],
-  store: AuthorizationStore,
-) => {
-  const auths = new Map<string, Authorization>()
+/** The token a server is called with: its sign-in (./signin.ts), if any. */
+export type Token = (s: Server) => Promise<string | undefined>
+
+export const authorizedMCP = (servers: Server[], token: Token) => {
   const connections = new Map<string, Connection>()
-  const challenges = new Map<
-    string,
-    { resourceMetadataUrl?: string; scope?: string }
-  >()
+  const challenges = new Map<string, AuthorizationChallenge>()
   const retired: Connection[] = []
-  const getAuth = (s: Server) => {
-    let a = auths.get(s.name)
-    if (!a) {
-      a = authorization({ serverUrl: s.url, ...s.oauth, store })
-      auths.set(s.name, a)
-    }
-    return a
-  }
   const get = (s: Server) => {
     let c = connections.get(s.name)
     if (!c) {
       c = connect(s, {
         token: async () =>
-          await getAuth(s).token() ??
-            (s.credential ? tokenFor(s.credential) : null),
+          await token(s) ?? (s.credential ? tokenFor(s.credential) : null),
       })
       connections.set(s.name, c)
     }
     return c
   }
-  const control = async (
-    action: MCPAuthAction,
-    name = '',
-    callback = '',
-  ): Promise<MCPAuthReply> => {
-    if (action === 'list') return { servers: servers.map((s) => s.name) }
-    const s = servers.find((s) => s.name === name)
-    if (!s) throw new Error('Unknown configured MCP server')
-    const a = getAuth(s)
-    if (action === 'cancel') {
-      a.cancel()
-      return { message: 'Authorization cancelled.' }
-    }
-    if (action === 'begin') {
+  return {
+    /** What the server asked for when it last refused, asking it again. */
+    challenge: async (s: Server): Promise<AuthorizationChallenge> => {
       try {
         await get(s).list()
       } catch (error) {
         if (error instanceof MCPAuthorizationRequired) {
           challenges.set(s.name, error.challenge)
-        } else throw error
+        }
       }
-      return await a.begin(challenges.get(s.name))
-    }
-    if (action !== 'complete') throw new Error('Unknown authorization action')
-    await a.complete(callback)
-    const previous = connections.get(name)
-    connections.delete(name)
-    if (previous) retired.push(previous) // Already-issued calls keep their original handlers.
-    await get(s).list()
-    return {
-      message: 'Connected. Tools will be available on the next request.',
-    }
-  }
-  return {
-    cancel: () => {
-      for (const a of auths.values()) a.cancel()
+      return challenges.get(s.name) ?? {}
     },
-    control,
+    /** A new connection after a sign-in. Already-issued calls keep the old. */
+    reconnect: async (s: Server) => {
+      const previous = connections.get(s.name)
+      connections.delete(s.name)
+      if (previous) retired.push(previous)
+      await get(s).list()
+    },
     // Each tool wearing the connection that listed it (`reply`). A tool on
     // another server is a request to that server, not a function this graph
     // holds, and the harness renders the reply whole — artifacts and all — so
@@ -129,7 +87,6 @@ export const authorizedMCP = (
         }
       }))).flat(),
     close: async () => {
-      for (const a of auths.values()) a.cancel()
       await Promise.all(
         [...connections.values(), ...retired].map((c) => c.close()),
       )

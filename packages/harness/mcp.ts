@@ -4,10 +4,11 @@ import { toolName } from '@yaks/graph'
 import type { Harness } from './store.ts'
 import { type Tool, type ToolContext, ToolError } from '@yaks/session'
 import { images } from './images.ts'
+import type { SignIns } from './signin.ts'
 
-export const mcpTools = (h: Pick<Harness, 'g' | 'vault'>) => {
+export const mcpTools = (h: Pick<Harness, 'g' | 'vault'>, signin: SignIns) => {
   const g = h.g
-  const connections = graphMCP(h)
+  const connections = graphMCP(h, signin)
   const store = images({}).store
   const render = async (
     value: unknown,

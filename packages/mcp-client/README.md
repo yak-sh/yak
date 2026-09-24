@@ -12,7 +12,7 @@ deno add jsr:@yaks/mcp-client
 Entry points:
 
 - `@yaks/mcp-client`: connections, discovery, calls, naming, and error types.
-- `@yaks/mcp-client/oauth`: browser-based OAuth authorization.
+- `@yaks/mcp-client/oauth`: where a server signs in, as data.
 - `@yaks/mcp-client/graph`: optional graph-backed server configuration.
 - `@yaks/mcp-client/vocab`: the graph vocabulary document alone.
 
@@ -107,58 +107,36 @@ automatic reconnect, mutation retries, or task-based remote tools. Tools may
 still return embedded resource content and links. The SDK buffers response
 bodies in memory.
 
-## Browser authorization with a pasted return URL
+## Where a server signs in
 
-`@yaks/mcp-client/oauth` exports `authorization(options)`. It uses MCP SDK
-discovery, dynamic client registration, PKCE, token exchange, and refresh. A
-pre-registered public `clientId` or `clientMetadataUrl` can replace dynamic
-registration.
+`@yaks/mcp-client/oauth` exports `discover(url, challenge?, fetch?)`. It finds
+where an MCP server signs in the way the MCP spec says: the server's
+protected-resource metadata (RFC 9728, or the URL a 401 challenge names) points
+at the authorization server, whose metadata (RFC 8414) names the endpoints. It
+answers data, not a flow:
 
 ```ts
-import { authorization, checkRecord } from '@yaks/mcp-client/oauth'
-import { records } from '@yaks/secrets'
+import { discover } from '@yaks/mcp-client/oauth'
 
-const login = authorization({
-  serverUrl: 'https://example.com/mcp',
-  store: records(graph, vault, 'mcp ', checkRecord),
-})
-const { url } = await login.begin()
-displayPrivately(url) // application UI; do not put this in an agent conversation
-await login.complete(returnUrl) // complete URL pasted through private input
-const token = await login.token()
+const { integration, register } = await discover('https://example.com/mcp')
+// integration: { name, authorize, token, scopes?, resource, issuer?, hosts }
+const client = await register('http://127.0.0.1:8765/oauth/callback')
 ```
 
-The default redirect is `http://127.0.0.1:8765/oauth/callback`. The flow starts
-no listener. After consent, the browser may show a connection error; the user
-copies the complete address-bar URL into a private application input. Configure
-`redirectUrl` when the server requires another registered address. An
-application may instead supply a loopback listener or hosted callback page. This
-is an authorization-code flow, not the deprecated out-of-band grant.
+`integration` is an integration as [@yaks/connections](../connections) takes it:
+the grant is for the server (RFC 8707 `resource`), the server's host is the only
+one its tokens go to, and a server that says it names its issuer on a return
+(RFC 9207) has every return checked for it. `register(redirect)` registers a
+public client there (RFC 7591) and answers its id. Signing in, keeping the
+tokens and refreshing them is @yaks/connections' and @yaks/oauth's.
 
-The pending state and PKCE verifier remain in memory and expire after ten
-minutes. Restarting or cancelling requires a new authorization. The callback
-origin, path, state, and supported issuer parameter are validated before code
-exchange. Failed exchanges are not replayed. Tokens refresh shortly before a
-known expiry; failed refresh requires sign-in again. Early server revocation may
-produce an error, and mutations are not retried with another credential.
-
-`AuthorizationStore` defines `read` and serialized `update` operations.
-[@yaks/secrets](../secrets)' `records` implements it: each record is a secret,
-so the graph holds its name and a handle, the vault holds the tokens and expiry,
-and an update holds the secret against every other writer while it refreshes.
-`checkRecord` refuses a kept record that is not a token set. Access tokens
-belong only in trusted request code.
-
-Configure only trusted MCP servers. OAuth discovery and token requests use
-bounded deadlines, refuse redirects, and require HTTPS except on loopback
-addresses. This module is not a general SSRF sandbox or provider-independent
-OAuth package.
+Discovery and registration use bounded deadlines, refuse redirects, and require
+HTTPS except on loopback addresses. Configure only trusted MCP servers.
 
 ## Graph server definitions
 
 `@yaks/mcp-client/graph` is an optional adapter. It exports `mcpDoc`,
-`serverOf`, and `graphToolName`. Connections and credentials remain outside
-graph storage.
+`serverOf`, and `graphToolName`.
 
 ```ts
 await graph.apply([{
