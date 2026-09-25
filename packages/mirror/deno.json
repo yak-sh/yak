@@ -1,6 +1,6 @@
 {
   "name": "@yaks/mirror",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Syncs files and a graph through bindings, each direction optional, reporting a path changed on both sides as a conflict instead of overwriting it.",

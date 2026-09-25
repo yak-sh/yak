@@ -1,6 +1,6 @@
 {
   "name": "@yaks/d1",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Adapts Cloudflare D1 to graph storage with asynchronous queries and writes submitted as atomic statement batches.",

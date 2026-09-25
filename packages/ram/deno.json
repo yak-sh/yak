@@ -1,6 +1,6 @@
 {
   "name": "@yaks/ram",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Implements synchronous graph storage over a Map of entity bundles, using the in-memory query evaluator instead of a database.",
