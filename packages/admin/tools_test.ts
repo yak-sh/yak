@@ -22,7 +22,8 @@ import { adminDoc } from './vocab.ts'
 // opens, and whose remembered account is its own, never this machine's.
 let box = () => {
   let dir = Deno.makeTempDirSync()
-  return { dir, state: dir, vault: vaultOf(`${dir}/yak.db`) }
+  let stopping = new AbortController().signal
+  return { dir, state: dir, vault: vaultOf(`${dir}/yak.db`), stopping }
 }
 
 // What the last verb said on stderr: a banner, a note.

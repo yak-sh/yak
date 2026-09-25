@@ -174,37 +174,43 @@ export let duration = (since = '10m'): number => {
   return seconds
 }
 
+/** How long a stopped tail has to end on SIGINT before its group is killed. */
+export let GRACE = 5_000
+
 let live = async (
   root: string,
   receive: (row: Row) => void,
   note: Note,
+  signal: AbortSignal,
 ) => {
-  // GNU timeout owns a process group: stopping only npx leaves its Wrangler
-  // child alive with the pipe open. Zero means tail until the owner stops it.
-  let child = new Deno.Command('timeout', {
-    args: [
-      '--signal=INT',
-      '--kill-after=5s',
-      '0s',
-      ...WRANGLER,
-      'tail',
-      '--format',
-      'json',
-    ],
+  // npx starts Wrangler as a child of its own, so stopping npx alone leaves
+  // Wrangler alive with the pipe open. The tail is a process group of its own
+  // (`detached`), and stopping it signals the whole group: SIGINT, so Wrangler
+  // can close its tail session, then SIGKILL for whatever is still there after
+  // GRACE. It runs until the command stops (the host's `stopping`).
+  let child = new Deno.Command(WRANGLER[0], {
+    args: [...WRANGLER.slice(1), 'tail', '--format', 'json'],
     cwd: `${root}/workers/yak`,
     stdin: 'null',
     stdout: 'piped',
     stderr: 'inherit',
+    detached: true,
   }).spawn()
-  let stopped = false
-  let stop = () => {
-    stopped = true
+  let group = (sig: Deno.Signal) => {
     try {
-      child.kill('SIGINT')
-    } catch { /* Already exited. */ }
+      Deno.kill(-child.pid, sig)
+    } catch { /* The group is gone. */ }
   }
-  Deno.addSignalListener('SIGINT', stop)
-  Deno.addSignalListener('SIGTERM', stop)
+  let stopped = false
+  let kill: ReturnType<typeof setTimeout> | undefined
+  let stop = () => {
+    if (stopped) return
+    stopped = true
+    group('SIGINT')
+    kill = setTimeout(() => group('SIGKILL'), GRACE)
+  }
+  if (signal.aborted) stop()
+  signal.addEventListener('abort', stop, { once: true })
   let parser = records(receive)
   try {
     for await (let chunk of child.stdout.pipeThrough(new TextDecoderStream())) {
@@ -220,15 +226,19 @@ let live = async (
     }
     return stopped ? 130 : 0
   } finally {
-    Deno.removeSignalListener('SIGINT', stop)
-    Deno.removeSignalListener('SIGTERM', stop)
+    signal.removeEventListener('abort', stop)
     stop()
     await child.status
+    clearTimeout(kill)
   }
 }
 
-export let tail = (root: string, out: Note, note: Note): Promise<number> =>
-  live(root, (row) => out(eventLine(row)), note)
+export let tail = (
+  root: string,
+  out: Note,
+  note: Note,
+  signal: AbortSignal,
+): Promise<number> => live(root, (row) => out(eventLine(row)), note, signal)
 
 /** Where yaks.app's failures go: workers/yak/sentry.ts's org and project. */
 export let SENTRY = {

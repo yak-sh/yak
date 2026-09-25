@@ -230,7 +230,9 @@ type Verb = (
 ) => Promise<Bundle[]> | Bundle[]
 
 /** The implementations of the tools ./vocab.json declares. */
-export let runs = (host: { vault: Local; state: string }): Runs => {
+export let runs = (
+  host: { vault: Local; state: string; stopping: AbortSignal },
+): Runs => {
   let verb = (run: Verb) => async (call: Bundle, graph: Graph) => {
     let keep: Bundle[] = []
     try {
@@ -496,7 +498,7 @@ export let runs = (host: { vault: Local; state: string }): Runs => {
 
     admin_tail: verb(async (call) => {
       platform(argsOf(call))
-      return ended('tail', await tail(root, out, note))
+      return ended('tail', await tail(root, out, note, host.stopping))
     }),
 
     admin_rollback: verb(async (call) => {
