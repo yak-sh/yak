@@ -1,6 +1,6 @@
 {
   "name": "@yaks/oauth",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The OAuth authorization-code client for a provider described as data, and its building blocks: a serialized store of private authorization records, PKCE verifiers and challenges, and correlated attempts with deadlines.",
   "exports": { ".": "./mod.ts" },
   "license": "Apache-2.0",
