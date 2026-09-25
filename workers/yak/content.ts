@@ -456,7 +456,7 @@ export let WORDS: Record<string, Words> = {
   'sandbox_exec': {
     'title': 'Run a build command (listed name)',
     'description':
-      "The name sandbox_shell was listed under: run cmd in this space's build sandbox, in cwd (default /workspace), for at most timeout seconds (default and maximum 240). Returns the exit code and the last lines the command printed. New work calls sandbox_shell, which can also leave a long command running. Documentation: https://yaks.app/docs/code.",
+      "The name sandbox_shell was listed under: run cmd in this space's build sandbox, in cwd (default /workspace), for at most timeout seconds (default and maximum 240). Returns the exit code and the last lines the command printed. A command can call these tools and change apps, so its effects outside the container are not undone by discarding it. New work calls sandbox_shell, which can also leave a long command running. Documentation: https://yaks.app/docs/code.",
   },
   'app_secret_set': {
     'title': 'Set a worker secret',
