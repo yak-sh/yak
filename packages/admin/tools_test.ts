@@ -6,6 +6,7 @@ import {
   assertEquals,
   assertRejects,
   assertStringIncludes,
+  assertThrows,
 } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { toolsIn } from '@yaks/vocab/tools'
@@ -14,7 +15,7 @@ import { secretEid } from '@yaks/secrets'
 import { CallError } from '@yaks/tools'
 import { ADMIN } from '../../workers/yak/lib/bots.ts'
 import { Refused, sessionName } from './accounts.ts'
-import { runs } from './tools.ts'
+import { ended, runs } from './tools.ts'
 import { adminDoc } from './vocab.ts'
 
 // A box: one graph's directory, whose vault sits beside a database nobody
@@ -124,6 +125,17 @@ Deno.test('an agent names a platform operation with --admin', async () => {
     '<sha>',
   )
   assertStringIncludes(heard.join('\n'), `ADMIN ACCOUNT — ${ADMIN}`)
+})
+
+Deno.test('an interrupted platform operation is a call error, not a defect', () => {
+  let error = assertThrows(
+    () => ended('errors', 130),
+    CallError,
+    'was interrupted',
+  )
+  assertEquals(error.code, 'interrupted')
+  assertThrows(() => ended('errors', 1), Error, 'ended with status 1')
+  assertEquals(ended('errors', 0), [])
 })
 
 // One test account, kept in the vault beside the graph.

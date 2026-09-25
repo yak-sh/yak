@@ -192,9 +192,12 @@ let platform = (a: Args): void => {
   )
 }
 
-// A platform verb's exit status, as the call's outcome: anything but 0 is the
-// call failing, in the words the status is.
-let ended = (verb: string, code: number): Bundle[] => {
+// A platform verb's exit status, as the call's outcome. An interrupt is an
+// expected failure of this invocation; another nonzero status is a defect.
+export let ended = (verb: string, code: number): Bundle[] => {
+  if (code == 130) {
+    throw new CallError('interrupted', `the ${verb} operation was interrupted`)
+  }
   if (code) throw new Error(`${verb} ended with status ${code}`)
   return []
 }
