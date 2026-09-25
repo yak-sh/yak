@@ -421,7 +421,7 @@ Four things to know:
   `seed/02-menu.json[7] was refused: unknown property: recipe.serving`. A file
   that is not JSON names itself the same way.
 - The seed files are part of the app's inside, like `vocab.json` and
-  `tools.json`: they are never served to the web. `app_files` reads them back.
+  `worker.js`: they are never served to the web. `app_files` reads them back.
 
 Give a row a name and loading it twice is safe:
 

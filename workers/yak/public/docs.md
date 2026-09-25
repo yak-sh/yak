@@ -93,20 +93,24 @@ and a two-app pair end to end.
 
 ## Commands of your own
 
-An app can carry commands in a `tools.json` beside `vocab.json`, so the person's
-agent can act on it without a page open: a description, typed arguments, and one
-action, an `apply` template or a `query`. They are listed by `commands` and run
-by `command`; they never join the connector's own tool list, which is fixed and
-the same for everyone.
+An app can carry commands of its own, so the person's agent can act on it
+without a page open: a `$defs` entry of `vocab.json` marked `"tool": true`, the
+way a yaks package declares its tools, with a description, an argument schema,
+and one action, an `apply` template or a `query`. They are listed by `commands`
+and run by `command`; they never join the connector's own tool list, which is
+fixed and the same for everyone.
 
-    { "log_run": {
-        "description": "Log a run for the club leaderboard",
-        "input": { "who": "text", "miles": "number" },
-        "apply": { "entity": { "eid": "$run" },
-                   "jog": { "who": "$who", "miles": "$miles" } } } }
+    "log_run": {
+      "tool": true,
+      "description": "Log a run for the club leaderboard",
+      "input": { "who":   { "type": "string" },
+                 "miles": { "type": "number" } },
+      "required": ["who", "miles"],
+      "apply": { "entity": { "eid": "$run" },
+                 "jog": { "who": "$who", "miles": "$miles" } } }
 
-Deeper: <https://yaks.app/docs/tools.md> — the whole tools.json reference, and
-the view protocol.
+Deeper: <https://yaks.app/docs/tools.md> — the whole reference for a command,
+and the view protocol.
 
 ## The notes an app keeps
 

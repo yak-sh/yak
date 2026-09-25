@@ -124,9 +124,9 @@ history, not state.
 
 ## A command, later
 
-An app's own commands (the `tools.json` at its root) are things the store can
-run itself, and asking for one is a row like everything else. A `call` names the
-command and its arguments; a `wake` on that same row records when:
+An app's own commands (the tool entries of its `vocab.json`) are things the
+store can run itself, and asking for one is a row like everything else. A `call`
+names the command and its arguments; a `wake` on that same row records when:
 
     let [digest] = await query('.tool.name=send_digest')
 
@@ -169,12 +169,12 @@ carries the request and the cadence together:
       wake: { at: new Date().toISOString(), every: '5m' },
     })
 
-`advance` is the app's own command, declared in `tools.json` like any other:
+`advance` is the app's own command, declared in `vocab.json` like any other:
 
-    { "advance": {
-        "description": "Advance the world to now",
-        "input": {},
-        "apply": { "entity": { "eid": "$tick" }, "tick": {} } } }
+    "advance": {
+      "tool": true,
+      "description": "Advance the world to now",
+      "apply": { "entity": { "eid": "$tick" }, "tick": {} } }
 
 Every five minutes the store wakes itself, writes the call for that instant and
 runs it — with nothing open and nothing connected.
@@ -206,8 +206,8 @@ schedule, and a rule is for what one firing means about that row.
   page. Nothing of the app's own JavaScript runs on a firing: what a tick can do
   is what a rule and a declared command can do, which is write rows. There is no
   background `env` to reach from it, and so no secret it could carry.
-- **On the app's own declarations.** The rules in its `vocab.json` and the
-  commands in its `tools.json`, as the last deploy left them.
+- **On the app's own declarations.** The rules and the commands in its
+  `vocab.json`, as the last deploy left them.
 - **Under the Durable Object alarm's budget**, which is what a store object's
   own clock is. Cloudflare gives an alarm handler a maximum wall time of 15
   minutes, and the object 30 seconds of active CPU per invocation, raisable to

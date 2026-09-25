@@ -17,7 +17,7 @@
 //               followed for them or other agents that are granted access to
 //               the app?"
 //
-// It is the app's inside, like `vocab.json`, `tools.json` and the seeds
+// It is the app's inside, like `vocab.json`, `worker.js` and the seeds
 // (apps.ts manifest): written and read through `app_files`, never served to
 // the web. An install copies it with the rest of the app's files (tools.ts
 // `copied`), so a published app carries its notes to everyone who takes one.

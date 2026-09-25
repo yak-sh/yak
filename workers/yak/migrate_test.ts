@@ -42,6 +42,7 @@ import {
   HOMED,
   MARK,
   MARKS,
+  merged,
   Refused as Unreconciled,
   type Report,
   SANDBOXED,
@@ -49,6 +50,7 @@ import {
   SERVES,
   TOOLED,
   unholed,
+  unworded,
 } from './migrate.ts'
 import legacy from './fixtures/legacy_store.json' with { type: 'json' }
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
@@ -342,6 +344,9 @@ slow(
     let woke = newer(ctx, 'ada/cookbook')
     let tools = await (await woke.door('/tools')).json()
     assertEquals(tools.serving.query, '.recipe.serves=$n')
+    // And each argument as the JSON Schema it is now (T-38021).
+    assertEquals(tools.serving.input, { n: { type: 'number' } })
+    assertEquals(tools.serving.required, ['n'])
   },
 )
 
@@ -353,6 +358,97 @@ Deno.test('the {{arg}} hole, as the variable it became', () => {
   // Nothing to do: the variable already, `$$`, or braces that hold no name.
   assertEquals(unholed('{"a":{"query":".r.t=$t"}}'), null)
   assertEquals(unholed('{"a":{"query":".r.t=$$5 {{ }} {{T}}"}}'), null)
+})
+
+Deno.test('a tools slot, each argument the JSON Schema it meant', () => {
+  assertEquals(
+    JSON.parse(
+      unworded(JSON.stringify({
+        mine: {
+          description: 'm',
+          input: { n: 'number', at: 'time' },
+          query: 'x',
+        },
+        kind: {
+          description: 'k',
+          input: { title: 'text', ok: 'bool' },
+          optional: ['ok'],
+          drop: ['alias'],
+          apply: {},
+        },
+        none: { description: 'n', input: {}, query: 'y' },
+      }))!,
+    ),
+    {
+      mine: {
+        description: 'm',
+        query: 'x',
+        input: {
+          n: { type: 'number' },
+          at: {
+            type: 'string',
+            description: 'a time, like 2026-09-01 or 2026-09-01T10:00:00Z',
+          },
+        },
+        required: ['n', 'at'],
+      },
+      kind: {
+        description: 'k',
+        drop: ['alias'],
+        apply: {},
+        input: { title: { type: 'string' }, ok: { type: 'boolean' } },
+        required: ['title'],
+      },
+      none: { description: 'n', input: {}, query: 'y' },
+    },
+  )
+  // Nothing to do: schemas already, or nothing a store could parse.
+  assertEquals(unworded('{"a":{"input":{"n":{"type":"number"}}}}'), null)
+  assertEquals(unworded('{}'), null)
+  assertEquals(unworded('not json'), null)
+})
+
+Deno.test('a tools.json, merged into the manifest beside it', () => {
+  let tools = JSON.stringify({
+    log: {
+      description: 'Log one',
+      input: { miles: 'number' },
+      apply: { entity: { eid: '$r' }, run: { miles: '{{miles}}' } },
+    },
+    all: { description: 'All of them', input: {}, query: '.run!' },
+  })
+  let vocab = '{"$defs":{"run":{"properties":{"miles":{"type":"number"}}}}}'
+  assertEquals(JSON.parse(merged(vocab, 'vocab.json', tools, 'tools.json')!), {
+    $defs: {
+      run: { properties: { miles: { type: 'number' } } },
+      log: {
+        tool: true,
+        description: 'Log one',
+        input: { miles: { type: 'number' } },
+        required: ['miles'],
+        apply: { entity: { eid: '$r' }, run: { miles: '$miles' } },
+      },
+      all: { tool: true, description: 'All of them', query: '.run!' },
+    },
+  })
+  // No manifest yet is an empty one, and a `.yml` reads through the same door.
+  assertEquals(
+    Object.keys(
+      JSON.parse(
+        merged(null, 'vocab.json', 'all:\n  query: .x!\n', 'tools.yml')!,
+      )
+        .$defs,
+    ),
+    ['all'],
+  )
+  // Two that cannot be one document are left for a person.
+  let run = '{"run":{"description":"r","query":".run!"}}'
+  assertEquals(merged(vocab, 'vocab.json', run, 'tools.json'), null)
+  assertEquals(merged(vocab, 'vocab.json', 'not json {', 'tools.json'), null)
+  assertEquals(
+    merged('{"run":{"miles":"number"}}', 'vocab.json', '{}', 'tools.json'),
+    null,
+  )
 })
 
 Deno.test('the short type map, as the document it means', () => {

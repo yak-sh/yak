@@ -31,8 +31,8 @@ The map is at <https://yaks.app/docs.md>.
     app_files { app: 'recipes', path: 'NOTES.md', content: '…' }
 
 It is part of the app's source, not one of its pages. `GET /recipes/NOTES.md` is
-a 404 on the web, the same as `vocab.json`, `tools.json` and `worker.js`; a
-member reads it back with `app_files`:
+a 404 on the web, the same as `vocab.json` and `worker.js`; a member reads it
+back with `app_files`:
 
     app_files { app: 'recipes', op: 'read', path: 'NOTES.md' }
 

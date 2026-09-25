@@ -360,14 +360,11 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
         { path: 'index.html', content: '<h1>Recipes</h1>' },
         {
           path: 'vocab.json',
-          content: vocabFile({ recipe: { serves: num } }),
-        },
-        {
-          path: 'tools.json',
-          content: JSON.stringify({
+          content: vocabFile({ recipe: { serves: num } }, {
             add: {
               description: 'Write a recipe down',
-              input: { title: 'text' },
+              input: { title: txt },
+              required: ['title'],
               apply: { doc: { title: '$title' }, recipe: {} },
             },
           }),

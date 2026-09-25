@@ -15,7 +15,7 @@ guide:
 
 One grammar reads an app's store, and everything that reads one uses it:
 `query()` and `subscribe()` on a page, `GET ./api/query` underneath them,
-`graph_query` in an agent's tools, a `query` in the app's own `tools.json`, and
+`graph_query` in an agent's tools, a `query` in the app's own commands, and
 `env.STORE.fetch` from a worker. This page is that grammar with its examples —
 what selects rows, what a row comes back carrying, and the handful of things
 this store will not do.

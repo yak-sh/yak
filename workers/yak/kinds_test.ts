@@ -125,12 +125,12 @@ Deno.test('an app declines them, or declares one itself', () => {
     ),
     {},
   )
-  // Or a tools.json declares the name, and that one is whole: the app's own
+  // Or a tool of its own takes the name, and that one is whole: the app's own
   // template, its own sentence, its own arguments.
   let own = {
     add_recipe: {
       description: 'Add a recipe the way this app means it',
-      input: { title: 'text' as const },
+      input: { title: { type: 'string' } },
       apply: { entity: { eid: '$r' }, doc: { title: '$title' } },
     },
   }

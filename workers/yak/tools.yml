@@ -217,8 +217,9 @@ app_deploy:
     bundles, each a JSON object holding an entity id and its components, or
     a seed/ folder of *.json files when there are many) is written into the
     app's store here, once per store and after the components, so the app
-    opens with data in it; deploying again seeds nothing. A tools.json
-    beside index.html gives the app commands of its own ({{tools}}), which
+    opens with data in it; deploying again seeds nothing. A $defs entry of
+    vocab.json marked "tool": true gives the app a command of its own
+    ({{tools}}), which
     everyone who can reach the app runs with the command tool, so the person
     and their agent act on the app through its own commands. A worker.js
     beside index.html becomes the app's own server code: it handles every
@@ -426,7 +427,7 @@ commands:
   title: List app commands
   description: >-
     The commands yaks apps declare, with the arguments each one accepts. An
-    app's own commands (the ones its tools.json declares, and the two every
+    app's own commands (the ones its vocab.json declares, and the two every
     component it holds gets, such as add_recipe and find_recipe) are listed
     here rather than in this tool list, which is the same for everybody.
     command runs one of them. Omit app to list all reachable apps, or pass

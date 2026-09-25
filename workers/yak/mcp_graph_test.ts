@@ -694,18 +694,19 @@ slow('a word the space already has is used where it lives', async () => {
 
     // A command of the lending app may name the borrowed word — the word is
     // this app's to write either way — and the call goes where it lives.
+    let lent = { book: { title: txt, isbn: txt }, loan: { to: txt } }
+    let shelve = (title: string) => ({
+      description: 'Add a book to the shelf',
+      input: { title: txt },
+      required: ['title'],
+      apply: { book: { title } },
+    })
+    let every = { description: 'Every book', query: '.book!' }
     await agent.tool('app_files', {
       app: 'lending',
       op: 'write',
-      path: 'tools.json',
-      content: JSON.stringify({
-        shelve: {
-          description: 'Add a book to the shelf',
-          input: { title: 'text' },
-          apply: { book: { title: '$title' } },
-        },
-        shelf: { description: 'Every book', input: {}, query: '.book!' },
-      }),
+      path: 'vocab.json',
+      content: vocabFile(lent, { shelve: shelve('$title'), shelf: every }),
     })
     let tooled = await agent.tool('app_deploy', { app: 'lending' })
     assertStringIncludes(tooled, 'commands: shelve, shelf')
@@ -730,31 +731,44 @@ slow('a word the space already has is used where it lives', async () => {
     await agent.tool('app_files', {
       app: 'lending',
       op: 'write',
-      path: 'tools.json',
-      content: JSON.stringify({
-        shelve: {
-          description: 'Add a book to the shelf',
-          input: { title: 'text' },
-          apply: { book: { title: '{{title}}' } },
-        },
-      }),
+      path: 'vocab.json',
+      content: vocabFile(lent, { shelve: shelve('{{title}}') }),
     })
     let old = await assertRejects(() =>
       agent.tool('app_deploy', { app: 'lending' })
     ) as Error
     assertStringIncludes(old.message, '{{arg}} is not a hole any more')
+    // And so is a command in the file it was once declared in, in the
+    // sentence that says where it goes now (T-38021).
+    await agent.tool('app_files', {
+      app: 'lending',
+      op: 'write',
+      path: 'vocab.json',
+      content: vocabFile(lent),
+    })
     await agent.tool('app_files', {
       app: 'lending',
       op: 'write',
       path: 'tools.json',
-      content: JSON.stringify({
-        shelve: {
-          description: 'Add a book to the shelf',
-          input: { title: 'text' },
-          apply: { book: { title: '$title' } },
-        },
-        shelf: { description: 'Every book', input: {}, query: '.book!' },
-      }),
+      content: JSON.stringify({ shelf: { description: 'x', query: '.book!' } }),
+    })
+    let stray = await assertRejects(() =>
+      agent.tool('app_deploy', { app: 'lending' })
+    ) as Error
+    assertStringIncludes(
+      stray.message,
+      'tools.json is not read: a command is a $defs entry in vocab.json',
+    )
+    await agent.tool('app_files', {
+      app: 'lending',
+      op: 'delete',
+      path: 'tools.json',
+    })
+    await agent.tool('app_files', {
+      app: 'lending',
+      op: 'write',
+      path: 'vocab.json',
+      content: vocabFile(lent, { shelve: shelve('$title'), shelf: every }),
     })
     await agent.tool('app_deploy', { app: 'lending' })
 

@@ -174,9 +174,10 @@ To read one app rather than all of them, add '.in=recipes' to the query string
 A page reads a sibling app the same way, with store('/lending/api/') from
 './api/client.js'.
 
-An app can carry its own commands: a tools.json beside index.html declares
-them — a name, a sentence, an input, and an apply or query template over the
-app's store — and after app_deploy anyone who can reach the app runs them with
+An app can carry its own commands: a $defs entry of its vocab.json marked
+"tool": true declares one — a name, a sentence, an argument schema, and an
+apply or query template over the app's store — and after app_deploy anyone who
+can reach the app runs them with
 the command tool, and lists what there is with commands. They are commands
 rather than entries in this connector's tool list because that list never
 changes: a directory snapshots it when a connector is submitted and serves

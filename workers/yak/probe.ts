@@ -689,16 +689,22 @@ export let rowsIn = <T>(said: string): T[] =>
 // An app's `vocab.json`, as a probe writes one: the document, without every
 // test writing out `$defs` and `properties` around two properties. A property
 // is its JSON Schema — {@link txt}, {@link num} and {@link when} are the three
-// a probe reaches for.
+// a probe reaches for. `tools` are the app's commands, each marked a tool here.
 export let vocabFile = (
   defs: Record<string, Record<string, unknown>>,
+  tools: Record<string, Record<string, unknown>> = {},
 ): string =>
   JSON.stringify({
-    $defs: Object.fromEntries(
-      Object.entries(defs).map((
-        [name, props],
-      ) => [name, { properties: props }]),
-    ),
+    $defs: {
+      ...Object.fromEntries(
+        Object.entries(defs).map((
+          [name, props],
+        ) => [name, { properties: props }]),
+      ),
+      ...Object.fromEntries(
+        Object.entries(tools).map(([name, t]) => [name, { tool: true, ...t }]),
+      ),
+    },
   })
 export let txt = { type: 'string' }
 export let num = { type: 'number' }

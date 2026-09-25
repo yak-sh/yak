@@ -303,7 +303,7 @@ format the platform uses underneath: one `$defs` entry per component, one
           "again": { "type": "boolean" } } } } }
 
 After the deploy those are components like any other: write them in a bundle,
-read them back on the row, filter on them, name them in a `tools.json`.
+read them back on the row, filter on them, name them in a command.
 
     await apply({ entity: { eid: '$c' }, doc: { title: 'Chana masala' },
       recipe: { serves: 4, minutes: 35 } })

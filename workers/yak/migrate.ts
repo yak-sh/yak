@@ -81,6 +81,7 @@ import {
   type Text,
 } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
+import { read } from '@yaks/yaml'
 import { handle } from './directory.ts'
 
 /** The object's own key-value slots beside its SQL — where the old store kept
@@ -203,6 +204,114 @@ export let documented = (held: string): string | null => {
 export let unholed = (held: string): string | null => {
   let now = held.replace(/\{\{([a-z][a-z0-9_]*)\}\}/g, '$$$1')
   return now == held ? null : now
+}
+
+/** The five words a tool's argument was once written as, and the JSON Schema
+ * each was shown to a host as (lib/tools.ts `schemaOf` before T-38021) —
+ * frozen here for the same reason {@link WAS} is. */
+let ARGS: Record<string, Record<string, unknown>> = {
+  text: { type: 'string' },
+  number: { type: 'number' },
+  bool: { type: 'boolean' },
+  time: {
+    type: 'string',
+    description: 'a time, like 2026-09-01 or 2026-09-01T10:00:00Z',
+  },
+  url: { type: 'string', description: 'a url' },
+}
+
+// A tool whose arguments are words, or that says which may be left out rather
+// than which must be sent.
+let worded = (t: unknown) =>
+  record(t) && ('optional' in t ||
+    record(t.input) && Object.values(t.input).some((w) => typeof w == 'string'))
+
+// One tool in the shape a package declares one: each argument a JSON Schema,
+// and `required` naming every argument but the ones it left `optional`.
+let schemed = (t: Record<string, unknown>): Record<string, unknown> => {
+  let { input, optional, ...rest } = t
+  let args = record(input) ? input : {}
+  let loose = Array.isArray(optional) ? optional : []
+  let required = Object.keys(args).filter((a) => !loose.includes(a))
+  return {
+    ...rest,
+    input: Object.fromEntries(
+      Object.entries(args).map((
+        [a, w],
+      ) => [a, typeof w == 'string' ? { ...(ARGS[w] ?? ARGS.text) } : w]),
+    ),
+    ...(required.length ? { required } : {}),
+  }
+}
+
+/**
+ * A tools slot with every argument a JSON Schema (T-38021): a store remembers
+ * the tools its last deploy handed it, as one of five words each, and is
+ * rewritten at its next open (graph.ts `#reshaping`). `null` where there is
+ * nothing to do.
+ */
+export let unworded = (held: string): string | null => {
+  let said: unknown
+  try {
+    said = JSON.parse(held)
+  } catch {
+    return null
+  }
+  if (!record(said) || !Object.values(said).some(worded)) return null
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(said).map((
+        [name, t],
+      ) => [name, worded(t) ? schemed(t as Record<string, unknown>) : t]),
+    ),
+  )
+}
+
+/**
+ * A `tools.json` merged into the manifest beside it (T-38021): each entry a
+ * `$defs` entry marked `"tool": true`, its arguments JSON Schema and every one
+ * of them required, as every argument a file declared was. `vocab` is the
+ * manifest's text, or null where the app had none, and either file may be the
+ * `.yml`; what comes back is JSON, which a `.yml` reads as well.
+ *
+ * `null` where the two cannot be one document — a file that does not parse, a
+ * manifest that is not a document, a tool named like a component — for a
+ * person to merge by hand.
+ */
+export let merged = (
+  vocab: string | null,
+  vocabFile: string,
+  tools: string,
+  toolsFile: string,
+): string | null => {
+  let parsed = (text: string, file: string) => {
+    try {
+      let v = text.trim() ? read(text, file) : {}
+      return record(v) ? v : null
+    } catch {
+      return null
+    }
+  }
+  let doc = vocab == null ? {} : parsed(vocab, vocabFile)
+  let said = parsed(unholed(tools) ?? tools, toolsFile)
+  if (!doc || !said) return null
+  let keys = Object.keys(doc)
+  if (keys.some((k) => k != 'tools') && !keys.some((k) => k.startsWith('$'))) {
+    return null
+  }
+  let defs: Record<string, unknown> = record(doc.$defs) ? { ...doc.$defs } : {}
+  for (let [name, t] of Object.entries(said)) {
+    if (!record(t) || name in defs) return null
+    let { description, input, required, ...rest } = schemed(t)
+    defs[name] = {
+      tool: true,
+      description,
+      ...(record(input) && Object.keys(input).length ? { input } : {}),
+      ...(required ? { required } : {}),
+      ...rest,
+    }
+  }
+  return JSON.stringify({ ...doc, $defs: defs }, null, 2) + '\n'
 }
 
 /** The marker written when a pass reconciles, so it never runs twice. The

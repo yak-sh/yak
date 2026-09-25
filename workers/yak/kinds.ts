@@ -5,29 +5,41 @@
 // else here: by asking `commands` what the apps in reach can do.
 //
 // Nothing new answers them. They are ordinary declared tools (lib/tools.ts
-// ToolDef), planted in the app's store beside whatever its tools.json said and
-// listed, called, titled and described through the one seam (declared.ts) — so
+// ToolDef), planted in the app's store beside the ones its vocab.json declares
+// and listed, called, titled and described through the one seam (declared.ts) — so
 // `readOnly` on the find and the app's title and address on the description
 // come for free.
 //
 // The two ways out, in the order they are asked:
 //   "tools": false   at the top of vocab.json — this app wants none of them
-//   a tools.json entry naming `add_recipe` or `find_recipe` — that one wins,
+//   a tool of its own named `add_recipe` or `find_recipe` — that one wins,
 //                    whole, since a hand-written template says what the app
 //                    means and a generated one only says what it holds
 // A redeploy regenerates them from the manifest as it then reads, so a property
 // added to a kind is an argument added to its two tools.
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
-import type { ToolDef, Tools } from './lib/tools.ts'
-import { type Word, wordOf } from './vocab.ts'
+import type { Arg, ToolDef, Tools } from './lib/tools.ts'
+
+// What an argument takes from the property it fills: the type the column
+// holds and the words saying what it is. Nothing else rides across — a
+// property's `default` is what a row gets when nobody wrote it, and as an
+// argument's it would put a filter in every find the caller never asked for.
+let ARG = ['type', 'format', 'enum', 'description']
+
+let argOf = (s: PropSchema): Arg =>
+  Object.fromEntries(
+    ARG.filter((k) => s[k] !== undefined).map((k) => [k, s[k]]),
+  )
+
+let TEXT: Arg = { type: 'string' }
 
 // The properties a caller may write: a server-owned property is nobody's to
 // send, and a computed one has no column at all.
-let propsOf = (schema: PropSchema): Record<string, Word> =>
+let propsOf = (schema: PropSchema): Record<string, Arg> =>
   Object.fromEntries(
     Object.entries(schema.properties ?? {})
       .filter(([, s]) => !s.stamped && s.computed !== true)
-      .map(([prop, s]) => [prop, wordOf(s) as Word]),
+      .map(([prop, s]) => [prop, argOf(s)]),
   )
 
 // Enough English for a sentence a model reads: a `recipe` finds recipes, a
@@ -47,7 +59,7 @@ let plural = (word: string) =>
 let means = (schema: PropSchema) =>
   schema.description ? `: ${schema.description.replace(/\.$/, '')}` : ''
 
-let bound = (props: Record<string, Word>) =>
+let bound = (props: Record<string, Arg>) =>
   Object.fromEntries(Object.keys(props).map((prop) => [prop, `$${prop}`]))
 
 // Writing one: a title, a body, a name to find it by later, and the kind's own
@@ -63,8 +75,8 @@ let add = (kind: string, at: string, schema: PropSchema): ToolDef => {
   let props = propsOf(schema)
   return {
     description: `Add a ${kind} to ${at}${means(schema)}`,
-    input: { title: 'text', body: 'text', alias: 'text', ...props },
-    optional: ['body', 'alias', ...Object.keys(props)],
+    input: { title: TEXT, body: TEXT, alias: TEXT, ...props },
+    required: ['title'],
     // The kind's own component stays even when nobody named a property —
     // wearing it is what makes the row a recipe, and `find_recipe` asks for
     // exactly that. A nameless alias is the other way: half a sentence, refused
@@ -91,8 +103,7 @@ let find = (kind: string, at: string, schema: PropSchema): ToolDef => {
   return {
     description: `Find ${plural(kind)} in ${at}${means(schema)}. Words match ` +
       'the title and body; leave out any filter you do not have',
-    input: { words: 'text', ...props, limit: 'number' },
-    optional: ['words', ...Object.keys(props), 'limit'],
+    input: { words: TEXT, ...props, limit: { type: 'number' } },
     query: [
       `.${kind}!`,
       '.doc?',
@@ -106,7 +117,7 @@ let find = (kind: string, at: string, schema: PropSchema): ToolDef => {
 /**
  * An app's declared tools with the ones its kinds are worth beside them: what a
  * deploy hands the store. The app's own entries come first and keep their
- * names — a tools.json entry naming `add_recipe` is the `add_recipe` this app
+ * names — a tool of its own named `add_recipe` is the `add_recipe` this app
  * has.
  */
 export let withKinds = (tools: Tools, doc: VocabDoc, at: string): Tools => {

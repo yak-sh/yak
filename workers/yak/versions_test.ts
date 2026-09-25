@@ -17,6 +17,7 @@ import type { Plugin } from './plugin.ts'
 import type { Who } from './session.ts'
 import {
   addressed,
+  folded,
   GRACE,
   held,
   history,
@@ -623,4 +624,40 @@ Deno.test('a renamed path carries its bytes, history and releases', async () => 
   let kept = (await history(blobs, PREFIX, 'NOTES.md'))[0]
   assertEquals(kept.sha, await sha256(bytes('cups')))
   assert(await pins(blobs, PREFIX).has(kept.sha), 'pinned')
+})
+
+// T-38021: a tools.json is folded into the vocab.json beside it, live and in
+// every release, so a rollback deploys the one shape. The fold itself is
+// migrate.ts `merged`; this is where it lands.
+Deno.test('a folded file lands in its manifest, live and in every release', async () => {
+  let { blobs } = memory()
+  let { dir, rows } = directory()
+  let join = (into: string | null, _: string, from: string) =>
+    from == 'bad' ? null : `${into ?? ''}+${from}`
+  let fold = () =>
+    folded(blobs, dir, ONE[0], ['tools.json'], ['vocab.json'], join, 'aside/')
+  await blobs.put(PREFIX + 'vocab.json', bytes('v'))
+  await blobs.put(PREFIX + 'tools.json', bytes('t'))
+  await record(dir, WHO, APP, 1, await snapshot(blobs, PREFIX), '')
+  let was = rows()[0].files
+
+  assertEquals(await fold(), { folded: ['live', 'v1'], refused: [] })
+  assertEquals(await read(blobs, 'vocab.json'), 'v+t')
+  assertEquals(await blobs.has(PREFIX + 'tools.json'), false)
+  // What each path held before is one restore away.
+  assertEquals(
+    (await history(blobs, PREFIX, 'tools.json'))[0].sha,
+    was['tools.json'],
+  )
+  assertEquals(Object.keys(rows()[0].files), ['vocab.json'])
+  assertEquals(rows()[0].files['vocab.json'], await sha256(bytes('v+t')))
+  // A release's old bytes stay where its commit reads them.
+  assert(await blobs.has('aside/' + was['tools.json']), 'aside')
+  // Idempotent: the next day's sweep finds nothing to fold.
+  assertEquals(await fold(), { folded: [], refused: [] })
+
+  // One that cannot merge is left as it was, and said.
+  await blobs.put(PREFIX + 'tools.json', bytes('bad'))
+  assertEquals(await fold(), { folded: [], refused: ['live'] })
+  assertEquals(await read(blobs, 'tools.json'), 'bad')
 })

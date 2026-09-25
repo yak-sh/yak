@@ -413,7 +413,8 @@ Deno.test("an app's rule on `fired` advances the row its wake was about", async 
 let CHORES = JSON.stringify({
   add_chore: {
     description: 'Write down a chore',
-    input: { name: 'text' },
+    input: { name: { type: 'string' } },
+    required: ['name'],
     apply: { entity: { eid: '$chore' }, chore: { name: '$name' } },
   },
 })

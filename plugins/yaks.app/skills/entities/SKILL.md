@@ -95,11 +95,11 @@ writable from either app:
 
 **From an agent's tools and from an app's own commands, a borrowed component
 just works**: `graph_apply { app: 'lending', entities: [{ book: … }] }` lands in
-the reading list's store, and a `tools.json` entry of the lending app may name
-`book` in its `apply` or its `query`. **From a page it does not**: `./api/apply`
-and `./api/query` are this app's own HTTP endpoints onto its own store, so a
-page that writes a borrowed component gets `unknown component: book`. Reach the
-home app by its address instead — `store('/reading-list/api/')`, below.
+the reading list's store, and a command of the lending app may name `book` in
+its `apply` or its `query`. **From a page it does not**: `./api/apply` and
+`./api/query` are this app's own HTTP endpoints onto its own store, so a page
+that writes a borrowed component gets `unknown component: book`. Reach the home
+app by its address instead — `store('/reading-list/api/')`, below.
 
 ## The one refusal: a shape conflict
 

@@ -26,6 +26,7 @@ import {
   unsaid,
 } from './vocab.ts'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
+import { parseTools } from './lib/tools.ts'
 
 // A manifest in the one form, without every test saying `$defs` and
 // `properties` around it. The properties are written as they are declared.
@@ -91,10 +92,13 @@ Deno.test('every example vocab.json in the repo loads', () => {
   assert(found.length >= 15, `only ${found.length} examples found`)
   for (let [where, m] of found) {
     let v = appVocab(m)
+    // A command is a declaration too, and deploys against the words beside it.
+    parseTools(m, v.comps, where)
     for (let [name, schema] of Object.entries(m.$defs ?? {})) {
-      // A rule is a declaration and not a component: it has a match where a
-      // component has properties, and no table is raised for it.
-      if (schema.rule) continue
+      // A rule or a command is a declaration and not a component: it has a
+      // match or a template where a component has properties, and no table is
+      // raised for it.
+      if (schema.rule || schema.tool) continue
       assertEquals(
         v.comp(name)?.writable.sort(),
         Object.keys(schema.properties ?? {}).sort(),

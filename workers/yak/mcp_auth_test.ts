@@ -209,13 +209,11 @@ slow('the door before anyone signs in', async () => {
       space,
       app: 'runs',
       files: [
-        { path: 'vocab.json', content: vocabFile({ jog: { miles: num } }) },
         {
-          path: 'tools.json',
-          content: JSON.stringify({
+          path: 'vocab.json',
+          content: vocabFile({ jog: { miles: num } }, {
             leaderboard: {
               description: 'Every run so far',
-              input: {},
               query: '.jog!',
               view: 'leaderboard.html',
             },

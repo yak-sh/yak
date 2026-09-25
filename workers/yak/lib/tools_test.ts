@@ -1,17 +1,31 @@
-// An app's own tools, from the manifest to the act: what tools.json may say,
-// how one refusal names every problem in it, and what a call's arguments do
-// to a template. The workerd half — the same file through app_deploy and a
-// call at the MCP door — is in workers/yak/mcp_test.ts.
+// An app's own tools, from the manifest to the act: what a `"tool": true`
+// entry may say, how one refusal names every problem in it, and what a call's
+// arguments do to a template. The workerd half — the same file through
+// app_deploy and a call at the MCP door — is in workers/yak/mcp_test.ts.
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import { filled, parseTools, schemaOf, viewsOf } from './tools.ts'
 
 // The components the app's store knows, which a template may write.
 let runs = ['jog']
 
+let NUMBER = { type: 'number' }
+let TEXT = { type: 'string' }
+
+// A manifest of these tools, beside a component that is not one.
+let doc = (tools: Record<string, object>) => ({
+  $defs: {
+    jog: { properties: { miles: NUMBER } },
+    ...Object.fromEntries(
+      Object.entries(tools).map(([name, t]) => [name, { tool: true, ...t }]),
+    ),
+  },
+})
+
 let club = {
   log_run: {
     description: 'Log a run',
-    input: { who: 'text', miles: 'number' },
+    input: { who: TEXT, miles: NUMBER },
+    required: ['who', 'miles'],
     apply: {
       entity: { eid: '$run' },
       jog: { who: '$who', miles: '$miles' },
@@ -19,47 +33,58 @@ let club = {
   },
   leaderboard: {
     description: "This month's runs",
-    input: { since: 'time' },
+    input: { since: TEXT },
+    required: ['since'],
     query: '.jog!&.created.at>=$since',
   },
 }
 
-Deno.test('tools.json: a sentence, an input, and one act', () => {
-  let tools = parseTools(club, runs)
+let parsed = (tools: Record<string, object>, words: string[] = runs) =>
+  parseTools(doc(tools), words)
+
+Deno.test('a tool entry: a sentence, its arguments, and one act', () => {
+  let tools = parsed(club)
   assertEquals(Object.keys(tools), ['log_run', 'leaderboard'])
-  assertEquals(tools.log_run.input, { who: 'text', miles: 'number' })
+  assertEquals(tools.log_run.input, { who: TEXT, miles: NUMBER })
   assertEquals(tools.leaderboard.query, '.jog!&.created.at>=$since')
-  // A tool with no arguments is a tool.
+  // A tool with no arguments is a tool, and a component is not one.
   assertEquals(
-    parseTools({ all: { description: 'Everything', query: '.jog!' } }).all
-      .input,
+    parsed({ all: { description: 'Everything', query: '.jog!' } }).all.input,
     {},
   )
+  assertEquals(parseTools({ $defs: { jog: {} } }), {})
+  assertEquals(parseTools('{}'), {})
 })
 
-Deno.test('tools.json: one refusal names every problem', () => {
-  let why = (source: unknown, words: string[] = []) =>
-    assertThrows(() => parseTools(source, words), Error).message
-  assertStringIncludes(why('not json'), 'tools.json is not JSON')
-  assertStringIncludes(why([1]), 'tools.json is an object')
+Deno.test('a manifest: one refusal names every problem', () => {
+  let why = (tools: unknown, words: string[] = []) =>
+    assertThrows(
+      () =>
+        parseTools(
+          typeof tools == 'string' ? tools : doc(tools as never),
+          words,
+        ),
+      Error,
+    ).message
+  assertStringIncludes(why('not json'), 'vocab.json is not JSON')
   assertStringIncludes(why({ Log: { description: 'x' } }), 'not a tool name')
   // Every problem at once, so a manifest is fixed in one deploy.
   let all = why({
     log_run: {
       description: 'Log a run',
-      input: { miles: 'number' },
+      input: { miles: NUMBER },
       apply: { jog: { who: '$who', miles: '$miles' } },
       screen: 'index.html',
     },
     nothing: { description: 'Neither act' },
   })
-  assertStringIncludes(all, 'log_run: screen — a tool says')
+  assertStringIncludes(all, 'vocab.json: log_run: screen — a tool says')
   assertStringIncludes(all, 'log_run: $who names no input')
   assertStringIncludes(all, 'log_run.apply: jog is not a component')
   assertStringIncludes(all, 'nothing does one thing')
   // A component the store knows is one its tools may write.
   assertEquals(
-    Object.keys(parseTools({ log_run: club.log_run }, runs)),
+    Object.keys(parsed({ log_run: club.log_run })),
     ['log_run'],
   )
   // A view is a page in the app's own files, and a path that climbs out of
@@ -68,29 +93,40 @@ Deno.test('tools.json: one refusal names every problem', () => {
     let bad of ['/leaderboard.html', '../other/index.html', 'board', 5]
   ) {
     assertStringIncludes(
-      why({ x: { description: 'x', input: {}, query: '.doc!', view: bad } }),
+      why({ x: { description: 'x', query: '.doc!', view: bad } }),
       "x.view is a page in this app's files",
     )
   }
   assertEquals(
-    parseTools({
-      x: { description: 'x', input: {}, query: '.doc!', view: 'board.html' },
-    }).x.view,
+    parsed({ x: { description: 'x', query: '.doc!', view: 'board.html' } }).x
+      .view,
     'board.html',
   )
   // The pages a deploy checks against the app's files, each named once; a
-  // manifest that will not parse names none and the store says why.
+  // manifest that will not parse names none and parseTools says why.
   assertEquals(
-    viewsOf('{"a":{"view":"board.html"},"b":{"view":"board.html"}}'),
+    viewsOf(doc({ a: { view: 'board.html' }, b: { view: 'board.html' } })),
     ['board.html'],
   )
   assertEquals(viewsOf('not json'), [])
+  // An argument is a JSON Schema; the word it once was is refused by name.
   assertStringIncludes(
-    why({ x: { description: 'x', input: { n: 'int' }, query: '.doc!' } }),
-    'x.input.n is "int" — one of text',
+    why({ x: { description: 'x', input: { n: 'number' }, query: '.doc!' } }),
+    'x.input.n is "number" — an argument is a JSON Schema',
   )
   assertStringIncludes(
-    why({ x: { input: {}, query: '.doc!' } }),
+    why({
+      x: {
+        description: 'x',
+        input: { n: NUMBER },
+        required: ['m'],
+        query: '.doc!',
+      },
+    }),
+    'x.required: m is no input of x',
+  )
+  assertStringIncludes(
+    why({ x: { query: '.doc!' } }),
     'x.description says what the tool does',
   )
   assertStringIncludes(
@@ -100,17 +136,14 @@ Deno.test('tools.json: one refusal names every problem', () => {
 })
 
 Deno.test('a tool asks for what it declared', () => {
-  let tools = parseTools(club, runs)
-  assertEquals(schemaOf(tools.log_run).properties.miles, { type: 'number' })
+  let tools = parsed(club)
+  assertEquals(schemaOf(tools.log_run).properties.miles, NUMBER)
   assertEquals(schemaOf(tools.log_run).required, ['who', 'miles'])
-  assertEquals(
-    (schemaOf(tools.leaderboard).properties.since as { type: string }).type,
-    'string',
-  )
+  assertEquals(schemaOf(tools.leaderboard).properties.since, TEXT)
 })
 
 Deno.test('the call fills the template, typed by the input', () => {
-  let tools = parseTools(club, runs)
+  let tools = parsed(club)
   // A string that is nothing but a variable keeps the value's own type:
   // `miles` is a number column, and "5" would be text in it.
   assertEquals(filled(tools.log_run, { who: 'Ada', miles: '5' }), {
@@ -126,16 +159,18 @@ Deno.test('the call fills the template, typed by the input', () => {
     '.jog!&.created.at>=2026-09-01%2010%3A00',
   )
   // A variable inside a sentence is spliced in as text.
-  let hello = parseTools({
+  let hello = parsed({
     hi: {
       description: 'Say hi',
-      input: { name: 'text' },
+      input: { name: TEXT },
       apply: { doc: { title: 'hi $name' } },
     },
   }, ['doc'])
   assertEquals(filled(hello.hi, { name: 'Ada' }), {
     apply: { doc: { title: 'hi Ada' } },
   })
+  // An argument nobody required, left out, takes its key with it.
+  assertEquals(filled(hello.hi, {}), { apply: { doc: {} } })
   assertEquals(
     assertThrows(() => filled(tools.log_run, { who: 'Ada' }), Error).message,
     'miles is required',
@@ -153,10 +188,10 @@ Deno.test('a variable nobody bound is the alias it looks like', () => {
   // `$run` is what the store mints the entity at, and the second bundle points
   // at the same one — the join `$alias` has always meant, now said in the one
   // language a bound variable is said in too.
-  let tools = parseTools({
+  let tools = parsed({
     log_run: {
       description: 'Log a run and note it',
-      input: { miles: 'number' },
+      input: { miles: NUMBER },
       apply: [
         { entity: { eid: '$run' }, jog: { miles: '$miles' } },
         { entity: { eid: '$note' }, comment: { about: '$run' } },
@@ -170,20 +205,20 @@ Deno.test('a variable nobody bound is the alias it looks like', () => {
   // A `$name` that is neither an argument nor an entity here is a typo.
   assertStringIncludes(
     assertThrows(() =>
-      parseTools({
+      parsed({
         x: {
           description: 'x',
-          input: { miles: 'number' },
+          input: { miles: NUMBER },
           apply: { entity: { eid: '$run' }, jog: { miles: '$mile' } },
         },
-      }, runs), Error).message,
+      }), Error).message,
     'x: $mile names no input and no entity here',
   )
   // `$$` is a dollar sign, not a variable.
-  let money = parseTools({
+  let money = parsed({
     price: {
       description: 'Price it',
-      input: { n: 'number' },
+      input: { n: NUMBER },
       apply: { doc: { title: '$$$n' } },
     },
   }, ['doc'])
@@ -196,10 +231,10 @@ Deno.test('a manifest written with the {{arg}} hole no longer deploys', () => {
   // Refused in the sentence that says what to write instead.
   assertStringIncludes(
     assertThrows(() =>
-      parseTools({
+      parsed({
         x: {
           description: 'x',
-          input: { name: 'text' },
+          input: { name: TEXT },
           apply: { doc: { title: '{{name}}' } },
         },
       }), Error).message,

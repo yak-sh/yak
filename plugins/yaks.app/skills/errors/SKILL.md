@@ -249,10 +249,9 @@ Name one off `app_versions` for anything else.
 
 What moves: every file that version named, restored from its pinned bytes, and
 every file the app has now that the version did not name, deleted. Then the
-whole release runs again over those files — the components its `vocab.json`
-declares, the commands its `tools.json` declares, its `worker.js` re-uploaded —
-because everything a deploy plants is a file, so restoring the files is the
-whole of a rollback.
+whole release runs again over those files — the components and the commands its
+`vocab.json` declares, its `worker.js` re-uploaded — because everything a deploy
+plants is a file, so restoring the files is the whole of a rollback.
 
 What never moves: the app's data. Every row, every upload, everything the store
 learned. Only the files.

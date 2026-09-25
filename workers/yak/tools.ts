@@ -806,7 +806,7 @@ let fits = async (
 // A release, whichever door asked for it — app_deploy, app_install,
 // app_update. The app's files are already live; this is everything else a
 // version means: the components its vocab.json declares planted where the
-// space says each word lives, the tools its tools.json declares handed to the
+// space says each word lives, the tools it declares beside them handed to the
 // store, its worker.js uploaded to the dispatch namespace, and the version
 // moved on — recorded as a version of its own (versions.ts), so app_rollback
 // can put this release back later. The answer is every line said beneath the
@@ -836,6 +836,23 @@ let released = async (
   // The file the app declares its words in — and its name, for every sentence
   // below that tells somebody to go and edit it.
   let { file: vocabFile, source } = await declaring(blobs, space, app)
+  // A command was once declared in a file of its own; it is an entry in the
+  // manifest now (T-38021), and a file still saying one that way is refused in
+  // the sentence that says where it goes, rather than left unread.
+  let stray = (await Promise.all(
+    ['tools.yml', 'tools.json'].map(async (file) =>
+      await blobs.has(fileKey(space, app, file)) ? file : ''
+    ),
+  )).find(Boolean)
+  if (stray) {
+    throw refuse(
+      'arguments',
+      `${stray} is not read: a command is a $defs entry in ${vocabFile} ` +
+        'marked "tool": true — move each one there, with each argument a ' +
+        'JSON Schema and the ones a caller must send listed under required, ' +
+        `and delete ${stray}: ${TOOLS_EXAMPLE}`,
+    )
+  }
   let planted: string[] = []
   let dropped: string[] = []
   // What this manifest moved, which naming the components does not say: a
@@ -933,20 +950,13 @@ let released = async (
   }
   seedTook('seed')
   let toolsTook = c.since()
-  // And the app's own MCP tools (tools.json, T-32685), read the same way and
-  // after the components, since a tool may write a word this very release
-  // planted. The manifest is replaced whole — a declaration holds no rows —
-  // so an app that deleted its tools.json releases none.
-  let toolsKey = await spelled(blobs, space, app, 'tools')
-  let toolsFile = toolsKey?.split('/').pop() ?? 'tools.json'
-  // Read once, in whichever format it was written (@yaks/yaml): what the
-  // checks below and the store both take is the value.
-  let sent = toolsKey
-    ? read(
-      new TextDecoder().decode(await blobs.get(toolsKey)),
-      toolsFile,
-    )
-    : {}
+  // And the app's own commands (T-32685, T-38021): the manifest's `$defs`
+  // entries marked `"tool": true`, read after the components, since a tool may
+  // write a word this very release planted. The declaration is replaced whole
+  // — it holds no rows — so an app whose manifest declares none releases none.
+  // The file was read above and refused there if it does not parse, so this
+  // reads the same bytes as a value (@yaks/yaml), whichever format they are.
+  let sent = source?.trim() ? read(source, vocabFile) : {}
   // A `view` names a page in the app's own files (T-32687), so this is the one
   // thing about the manifest the store cannot check: it holds the words, the
   // blobs hold the pages. A view nobody deployed would be a tool whose answer
@@ -958,7 +968,7 @@ let released = async (
   if (missing.length) {
     throw refuse(
       'arguments',
-      `tools.json: ${missing.join(', ')} — a view names a page in this ` +
+      `${vocabFile}: ${missing.join(', ')} — a view names a page in this ` +
         "app's own files; deploy the page beside index.html",
     )
   }
@@ -977,10 +987,10 @@ let released = async (
   ]
   // And the two tools every kind this app declares is worth (kinds.ts,
   // T-34513), beside whatever the manifest said: an app that declared a recipe
-  // and no tools.json still has a verb for putting one in and one for finding
-  // it again, which is how the next agent discovers the app at all.
+  // and no tool of its own still has a verb for putting one in and one for
+  // finding it again, which is how the next agent discovers the app at all.
   let checked = withKinds(
-    parseTools(sent, words, toolsFile),
+    parseTools(sent, words, vocabFile),
     manifest,
     `${space.slug}/${app.slug}`,
   )
@@ -2583,8 +2593,8 @@ let OURS: Row[] = [
   {
     name: 'app_deploy',
     // The two examples the code owns, said in its words (tools.yml
-    // `app_deploy`): a vocab.json and a tools.json, so the sentence follows
-    // the example rather than keeping a copy of it.
+    // `app_deploy`): a vocab.json's component and its tool, so the sentence
+    // follows the example rather than keeping a copy of it.
     slots: { vocab: EXAMPLE, tools: TOOLS_EXAMPLE },
     destructive: false,
     openWorld: true,
@@ -3495,10 +3505,12 @@ let OURS: Row[] = [
         return {
           text: said
             ? `${said} declares no commands — app_deploy plants the two every ` +
-              'word in its vocab.json is worth, and a tools.json declares more'
+              'word in its vocab.json is worth, and a $defs entry marked ' +
+              '"tool": true declares another'
             : 'no app you can reach declares a command yet. A vocab.json is ' +
               'worth two of them per word it declares (add_<word>, ' +
-              'find_<word>); a tools.json declares any others.',
+              'find_<word>), and a $defs entry marked "tool": true declares ' +
+              'any other.',
         }
       }
       // Grouped by app, because that is how a person thinks about them: the

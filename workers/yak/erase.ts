@@ -84,9 +84,12 @@ import { apex, type Host as HostEnv } from './host.ts'
 import { destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
+import { BODY } from './gitobj.ts'
+import { merged } from './migrate.ts'
 import { NOTES } from './standing.ts'
-import { moved, own, type Pinner, pruned, renamed } from './versions.ts'
+import { folded, moved, own, type Pinner, pruned, renamed } from './versions.ts'
 import { refuse } from './tool.ts'
+import { caught } from './sentry.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
 // sign-in code's ten minutes, because nobody is standing at the form waiting
@@ -645,6 +648,37 @@ export let collected = async (env: Env, now = new Date()) => {
   let notes = 0
   for (let one of standing) {
     if (await renamed(blobs, dir, one, 'AGENTS.md', NOTES)) notes++
+  }
+  // And an app's commands where they are declared now: a `tools.json` merged
+  // into the manifest beside it, live and in every version, so a rollback and
+  // an install deploy them too (T-38021, versions.ts `folded`).
+  for (let one of standing) {
+    let said = await folded(
+      blobs,
+      dir,
+      one,
+      ['tools.yml', 'tools.json'],
+      ['vocab.yml', 'vocab.json'],
+      merged,
+      BODY,
+    )
+    if (said.folded.length) {
+      console.log(
+        `yak-trash: tools folded into the vocab of ${one.prefix}: ${
+          said.folded.join(', ')
+        }`,
+      )
+    }
+    if (said.refused.length) {
+      caught(
+        new Error(
+          `tools of ${one.prefix} cannot fold into its vocab: ${
+            said.refused.join(', ')
+          }`,
+        ),
+        { request: 'yak-trash fold' },
+      )
+    }
   }
   let unpinned = await pruned(dir, blobs, standing, now.getTime())
   if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)

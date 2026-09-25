@@ -212,6 +212,7 @@ import {
   unholed,
   unsent,
   untrusted,
+  unworded,
 } from './migrate.ts'
 import {
   appDerived,
@@ -584,10 +585,16 @@ export class Store {
   // last accepted an older one remembers it that way, and nothing converts one
   // at the door any more — so it is rewritten here, before anything above the
   // storage reads it: the vocabulary as the document (T-37546, migrate.ts
-  // `documented`) and the tools with `$arg` for `{{arg}}` (migrate.ts
-  // `unholed`). After one wake neither old shape is left in the object.
+  // `documented`), and the tools with `$arg` for `{{arg}}` (migrate.ts
+  // `unholed`) and a JSON Schema for each argument (T-38021, migrate.ts
+  // `unworded`). After one wake no old shape is left in the object.
   #reshaping() {
-    for (let [w, to] of [['vocab', documented], ['tools', unholed]] as const) {
+    let shapes = [
+      ['vocab', documented],
+      ['tools', unholed],
+      ['tools', unworded],
+    ] as const
+    for (let [w, to] of shapes) {
       let held = this.#get(w)
       let now = held && to(held)
       if (now) this.#put(w, now)

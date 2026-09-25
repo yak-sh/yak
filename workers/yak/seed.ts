@@ -17,7 +17,7 @@
 // atomically, aliases resolving across files, so a bundle in
 // `seed/02-menu.json` may point at an entity `seed/01-places.json` minted.
 //
-// The files are the app's inside, like vocab.json and tools.json: deployed,
+// The files are the app's inside, like vocab.json and worker.js: deployed,
 // never served to the web (apps.ts manifest).
 //
 // The reading is the seed's only where `seedy` and the once-only mark are. The

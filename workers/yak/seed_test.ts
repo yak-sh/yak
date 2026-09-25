@@ -41,7 +41,7 @@ Deno.test('a seed file is seed.json or seed.yml, or one under seed/', () => {
     let path of [
       'index.html',
       'vocab.json',
-      'tools.json',
+      'worker.js',
       'seeds.json',
       'seed/notes.md',
       'seed/rows.csv',

@@ -1,31 +1,43 @@
-// An app's OWN commands (T-32685, T-34541): the `tools.json` at the root of an
-// app's files, read by app_deploy and kept in that app's store beside its
-// vocabulary (store.ts). Everyone who can reach the app reads them with the
-// platform's `commands` tool and runs one with `command` — they are not MCP
-// tools themselves, because that list is snapshotted by a directory and must
-// be the same for everybody (workers/yak/declared.ts). One entry is a
-// sentence, an input, and one act:
+// An app's OWN commands (T-32685, T-34541, T-38021): the `$defs` entries of an
+// app's `vocab.json` marked `"tool": true`, the same form a package declares
+// its tools in (@yaks/vocab `toolsSaid`, D-37544). app_deploy reads them beside
+// the components and keeps them in that app's store (graph.ts `/tools`).
+// Everyone who can reach the app reads them with the platform's `commands`
+// tool and runs one with `command` — they are not MCP tools themselves,
+// because that list is snapshotted by a directory and must be the same for
+// everybody (workers/yak/declared.ts). One entry is a sentence, its arguments,
+// and one act:
 //
-//   { "log_run": {
-//       "description": "Log a run for the club leaderboard",
-//       "input": { "who": "text", "miles": "number" },
-//       "apply": { "entity": { "eid": "$run" },
-//                  "run": { "who": "$who", "miles": "$miles" } } },
-//     "leaderboard": {
-//       "description": "This month's runs",
-//       "input": { "since": "time" },
-//       "query": ".run!&.created.at>=$since" } }
+//   { "$defs": {
+//       "log_run": {
+//         "tool": true,
+//         "description": "Log a run for the club leaderboard",
+//         "input": { "who": { "type": "string" },
+//                    "miles": { "type": "number" } },
+//         "required": ["miles"],
+//         "apply": { "entity": { "eid": "$run" },
+//                    "run": { "who": "$who", "miles": "$miles" } } },
+//       "leaderboard": {
+//         "tool": true,
+//         "description": "This month's runs",
+//         "input": { "since": { "type": "string" } },
+//         "query": ".run!&.created.at>=$since" } } }
 //
-// The act is a TEMPLATE over the app's own store: `apply` is the wire's entity
-// bundle (or a list of them) and `query` is a filter line, and both are
-// written in the ONE variable language the wire and the query grammar already
-// speak. `$name` is a variable: BOUND by an argument of that name, it is that
-// argument's value, typed by the declared input; left unbound, it is what it
-// has always been — an alias the store mints an entity at, so the same `$run`
-// names the row in the bundle that made it. A `$name` that is neither an
-// argument nor an entity this template writes is refused at deploy, because a
-// tool that cannot be filled is one an agent calls once and gives up on. `$$`
-// is a literal dollar sign.
+// `input` is one JSON Schema per argument and `required` names the ones a
+// caller must send, as a package writes them. The act is what an app adds: a
+// TEMPLATE over the app's own store. `apply` is the wire's entity bundle (or a
+// list of them) and `query` is a filter line, and both are written in the ONE
+// variable language the wire and the query grammar already speak. `$name` is a
+// variable: BOUND by an argument of that name, it is that argument's value,
+// typed by its schema; left unbound, it is what it has always been — an alias
+// the store mints an entity at, so the same `$run` names the row in the bundle
+// that made it. A `$name` that is neither an argument nor an entity this
+// template writes is refused at deploy, because a tool that cannot be filled
+// is one an agent calls once and gives up on. `$$` is a literal dollar sign.
+//
+// An argument a caller left out takes its variable with it: the key holding
+// it is not written, and the `&`-clause naming it drops out of the filter
+// line.
 //
 // An entry may also name a `view`: a page in the app's own files that the
 // person's agent renders the answer in (T-32687), served at the MCP door as
@@ -38,24 +50,23 @@
 // (workers/yak/declared.ts). So a tool can do exactly what the person
 // calling it could do on the page, and never more.
 import { argsOf, type Bundle, type Graph, type Tool } from '@yaks/graph'
-import { type Word, WORDS } from '../vocab.ts'
+import { CallError } from '@yaks/tools'
 
-// One declared tool, as written. `apply` and `query` are the two acts; an
-// entry names exactly one.
+/** One argument's JSON Schema. */
+export type Arg = Record<string, unknown>
+
+// One declared tool, as its store keeps it. `apply` and `query` are the two
+// acts; an entry names exactly one.
 //
-// `optional` and `drop` are the two fields a tools.json cannot spell (see
-// KEYS): every argument an app DECLARES is required, because a variable with
-// nothing to bind it would splice the word `undefined` into the author's own
-// template. The tools a KIND is worth are generated instead
-// (workers/yak/kinds.ts) — nobody wrote their template, so nothing is surprised
-// when a clause drops out. `optional` names the arguments a caller may leave
-// out; `drop` names the components that GO when the caller named none of their
+// `drop` is the one field a manifest cannot spell (see KEYS): it belongs to the
+// tools a KIND is worth (workers/yak/kinds.ts), whose templates nobody wrote.
+// It names the components that GO when the caller named none of their
 // columns, since an empty component is a bare write and a bare `alias` is half
 // a sentence, while an empty `recipe` is still what makes the row a recipe.
 export type ToolDef = {
   description: string
-  input: Record<string, Word>
-  optional?: string[]
+  input: Record<string, Arg>
+  required?: string[]
   drop?: string[]
   apply?: unknown
   query?: string
@@ -64,14 +75,23 @@ export type ToolDef = {
 
 export type Tools = Record<string, ToolDef>
 
-export let TOOLS_EXAMPLE =
-  '{"log_run": {"description": "Log a run", "input": {"miles": "number"}, ' +
-  '"apply": {"entity": {"eid": "$run"}, "run": {"miles": "$miles"}}}}'
+export let TOOLS_EXAMPLE = '{"$defs": {"log_run": {"tool": true, ' +
+  '"description": "Log a run", "input": {"miles": {"type": "number"}}, ' +
+  '"required": ["miles"], ' +
+  '"apply": {"entity": {"eid": "$run"}, "run": {"miles": "$miles"}}}}}'
 
 // The keys an entry may carry. Unknown ones are refused rather than ignored,
 // so a misspelling is a sentence at deploy and not a tool that quietly does
 // half of what was meant.
-let KEYS = ['description', 'input', 'apply', 'query', 'view']
+let KEYS = [
+  'tool',
+  'description',
+  'input',
+  'required',
+  'apply',
+  'query',
+  'view',
+]
 
 // A `view` names a page in the app's OWN files (T-32687) — a relative path
 // under the app's root, which the MCP door serves as `ui://<space>/<app>/
@@ -138,37 +158,41 @@ let named = (v: unknown, found: Set<string> = new Set()): Set<string> => {
   return found
 }
 
-// The manifest as written, checked whole: every problem in one sentence, the
-// way vocab.json refuses (T-32628), because an agent that fixes one problem
-// per deploy stops after the second. `words` are the components the app's
-// store knows, which are the only ones a template may write.
+// The tool entries of a manifest: every `$defs` entry marked `"tool": true`.
+// The rest of the document is its components (vocab.ts `appDoc`), and neither
+// reading has to know about the other.
+let entriesOf = (held: unknown): [string, Arg][] =>
+  object(held) && object(held.$defs)
+    ? Object.entries(held.$defs).filter((e): e is [string, Arg] =>
+      object(e[1]) && e[1].tool === true
+    )
+    : []
+
+// The manifest as written, its tools checked whole: every problem in one
+// sentence, the way the components are refused (T-32628), because an agent
+// that fixes one problem per deploy stops after the second. `words` are the
+// components the app's store knows, which are the only ones a template may
+// write. `file` is what the sentence calls the manifest.
 export let parseTools = (
   source: unknown,
   words: string[] = [],
-  file = 'tools.json',
+  file = 'vocab.json',
 ): Tools => {
   if (typeof source == 'string') {
     if (!source.trim()) return {}
-    // JSON, and only JSON — the YAML door is not in this module's graph
-    // (see parseVocab): a caller who may be holding a `.yml` reads it first.
+    // JSON, and only JSON — the YAML door is not in this module's graph: a
+    // caller holding a `.yml` reads it first (tools.ts `released`).
     try {
       source = JSON.parse(source)
     } catch {
-      throw new Error(`${file} is not JSON — ${TOOLS_EXAMPLE}`)
+      throw new CallError('arguments', `${file} is not JSON — ${TOOLS_EXAMPLE}`)
     }
-  }
-  if (!object(source)) {
-    throw new Error(`${file} is an object — ${TOOLS_EXAMPLE}`)
   }
   let wrong: string[] = []
   let out: Tools = {}
-  for (let [name, entry] of Object.entries(source)) {
+  for (let [name, entry] of entriesOf(source)) {
     if (!NAME.test(name)) {
       wrong.push(`${JSON.stringify(name)} is not a tool name (a-z, 0-9, _)`)
-      continue
-    }
-    if (!object(entry)) {
-      wrong.push(`${name} is an object — ${TOOLS_EXAMPLE}`)
       continue
     }
     let alien = Object.keys(entry).filter((k) => !KEYS.includes(k))
@@ -180,24 +204,39 @@ export let parseTools = (
     if (typeof entry.description != 'string' || !entry.description) {
       wrong.push(`${name}.description says what the tool does, in a sentence`)
     }
-    let input: Record<string, Word> = {}
+    let input: Record<string, Arg> = {}
     if (entry.input != null) {
       if (!object(entry.input)) {
-        wrong.push(`${name}.input is an object of arguments — ${TOOLS_EXAMPLE}`)
+        wrong.push(
+          `${name}.input is an object of arguments — ${TOOLS_EXAMPLE}`,
+        )
       } else {
-        for (let [arg, type] of Object.entries(entry.input)) {
+        for (let [arg, schema] of Object.entries(entry.input)) {
           if (!NAME.test(arg)) {
             wrong.push(
               `${name}.input: ${JSON.stringify(arg)} is not an ` +
                 'argument name (a-z, 0-9, _)',
             )
-          } else if (typeof type != 'string' || !(type in WORDS)) {
+          } else if (!object(schema)) {
             wrong.push(
-              `${name}.input.${arg} is ${JSON.stringify(type)} — one of ${
-                Object.keys(WORDS).join(', ')
-              }`,
+              `${name}.input.${arg} is ${JSON.stringify(schema)} — an ` +
+                'argument is a JSON Schema, like {"type": "number"}',
             )
-          } else input[arg] = type as Word
+          } else input[arg] = schema
+        }
+      }
+    }
+    let required: string[] = []
+    if (entry.required != null) {
+      if (
+        !Array.isArray(entry.required) ||
+        !entry.required.every((r) => typeof r == 'string')
+      ) {
+        wrong.push(`${name}.required is a list of its input's names`)
+      } else {
+        for (let arg of entry.required as string[]) {
+          if (arg in input) required.push(arg)
+          else wrong.push(`${name}.required: ${arg} is no input of ${name}`)
         }
       }
     }
@@ -247,13 +286,14 @@ export let parseTools = (
       if (!words.includes(comp)) {
         wrong.push(
           `${name}.apply: ${comp} is not a component — declare it in ` +
-            'vocab.json, or use one the platform already says',
+            `${file}, or use one the platform already says`,
         )
       }
     }
     out[name] = {
       description: String(entry.description ?? ''),
       input,
+      ...(required.length ? { required } : {}),
       ...(entry.apply != null ? { apply: entry.apply } : {}),
       ...(typeof entry.query == 'string' ? { query: entry.query } : {}),
       ...(typeof entry.view == 'string' && VIEW.test(entry.view)
@@ -261,81 +301,70 @@ export let parseTools = (
         : {}),
     }
   }
-  if (wrong.length) throw new Error(`tools.json: ${wrong.join('; ')}`)
+  if (wrong.length) {
+    throw new CallError('arguments', `${file}: ${wrong.join('; ')}`)
+  }
   return out
 }
 
 // The pages a manifest's views name, read straight off the source so a deploy
 // can check them against the app's own files before anything is planted. A
-// manifest that will not parse yields none: the store refuses it a moment
-// later, with every problem in the one sentence.
+// manifest that will not parse yields none: {@link parseTools} says why.
 export let viewsOf = (source: unknown): string[] => {
   let seen = new Set<string>()
   try {
     // A manifest as written is a string here only when it is JSON — a `.yml`
     // is read by whoever holds it and handed on as the value (see parseTools).
     let held = typeof source == 'string' ? JSON.parse(source) : source
-    if (object(held)) {
-      for (let entry of Object.values(held)) {
-        if (object(entry) && typeof entry.view == 'string') seen.add(entry.view)
-      }
+    for (let [, entry] of entriesOf(held)) {
+      if (typeof entry.view == 'string') seen.add(entry.view)
     }
-  } catch { /* the store says why */ }
+  } catch { /* parseTools says why */ }
   return [...seen]
 }
 
-// Which arguments this tool lets a caller leave out — none, for anything a
-// person wrote.
-let loose = (tool: ToolDef) => tool.optional ?? []
+// The arguments a caller must send; every other one may be left out.
+let needed = (tool: ToolDef) => tool.required ?? []
 
-// The tool's arguments as JSON Schema, which is what a host shows the model.
-// Every declared input is required unless the tool named it optional: a hole
-// with nothing to fill it would be spliced into the template as the word
-// `undefined`, so a template that admits one says so.
+// The tool's arguments as one JSON Schema object, which is what a host shows
+// the model and what a store's runner checks a call against (@yaks/tools).
 export let schemaOf = (tool: ToolDef) => ({
   type: 'object' as const,
-  properties: Object.fromEntries(
-    Object.entries(tool.input).map(([arg, type]) => [arg, {
-      type: type == 'number' ? 'number' : type == 'bool' ? 'boolean' : 'string',
-      ...(type == 'time'
-        ? { description: 'a time, like 2026-09-01 or 2026-09-01T10:00:00Z' }
-        : type == 'url'
-        ? { description: 'a url' }
-        : {}),
-    }]),
-  ),
-  required: Object.keys(tool.input).filter((arg) => !loose(tool).includes(arg)),
+  properties: tool.input,
+  required: needed(tool),
 })
 
-// One argument, as the declared type says to read it. A model sends what it
+// One argument, as its schema's type says to read it. A model sends what it
 // sends — a number as a string, `"true"` for a flag — so the type it was
 // declared under is what it becomes, and a value that cannot become that is
-// refused by name.
-let typed = (arg: string, type: Word, v: unknown) => {
-  if (v == null) throw new Error(`${arg} is required`)
-  if (type == 'number') {
+// refused by name. A schema naming no type takes the value as it came.
+let typed = (arg: string, schema: Arg, v: unknown) => {
+  let no = (why: string) => new CallError('arguments', `${arg} ${why}`)
+  if (v == null) throw no('is required')
+  if (schema.type == 'number' || schema.type == 'integer') {
     let n = typeof v == 'number' ? v : Number(String(v))
-    if (!Number.isFinite(n)) throw new Error(`${arg} is a number`)
+    if (!Number.isFinite(n)) throw no('is a number')
     return n
   }
-  if (type == 'bool') {
+  if (schema.type == 'boolean') {
     if (typeof v == 'boolean') return v
     if (v === 'true' || v === 'false') return v == 'true'
-    throw new Error(`${arg} is true or false`)
+    throw no('is true or false')
   }
-  if (typeof v == 'object') throw new Error(`${arg} is text`)
+  if (schema.type != 'string') return v
+  if (typeof v == 'object') throw no('is text')
   return String(v)
 }
 
 // The call's arguments, read under the declared inputs. An argument nobody
 // declared is dropped: it can fill no hole, and refusing it would only teach
-// the model to guess again. An OPTIONAL one the caller left out is dropped
+// the model to guess again. One the caller may leave out and did is dropped
 // too, and what is missing from here is what makes a hole absent below.
 let args = (tool: ToolDef, sent: Record<string, unknown>) =>
   Object.fromEntries(
     Object.entries(tool.input)
-      .filter(([arg]) => sent[arg] != null || !loose(tool).includes(arg))
-      .map(([arg, type]) => [arg, typed(arg, type, sent[arg])]),
+      .filter(([arg]) => sent[arg] != null || needed(tool).includes(arg))
+      .map(([arg, schema]) => [arg, typed(arg, schema, sent[arg])]),
   )
 
 // A variable the caller left empty, travelling as a value. It takes the key
@@ -343,8 +372,8 @@ let args = (tool: ToolDef, sent: Record<string, unknown>) =>
 // the word `undefined` in the row.
 let ABSENT = Symbol('absent')
 
-// An optional argument the caller left out. A variable that is not an argument
-// at all is not a gap — it is an alias, and it travels on untouched.
+// An argument the caller left out. A variable that is not an argument at all
+// is not a gap — it is an alias, and it travels on untouched.
 let gaps = (s: string, tool: ToolDef, vals: Record<string, unknown>) =>
   [...s.matchAll(VAR)].some((m) =>
     m[1] && m[1] in tool.input && !(m[1] in vals)

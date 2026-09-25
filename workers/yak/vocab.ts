@@ -1131,9 +1131,8 @@ export let RESERVED: string[] = [
 
 // The five words that name a property's type, and the JSON Schema each
 // is. A manifest writes the schema; these are for reading one back in a
-// sentence — a refusal saying what a property already is, the arguments a
-// kind's tools take (kinds.ts), the types a CSV's cells are coerced to
-// (csv.ts).
+// sentence — a refusal saying what a property already is, the types a CSV's
+// cells are coerced to (csv.ts).
 export type Word = 'text' | 'number' | 'bool' | 'time' | 'url'
 export let WORDS: Record<Word, PropSchema> = {
   text: { type: 'string' },
@@ -1306,9 +1305,9 @@ export let livesIn = (uses: Record<string, string>) =>
 let mine = (schema: PropSchema): PropSchema => ({
   // `component: true` is the marker @yaks/vocab wants on a component, and it
   // is put on here rather than asked of the person: an app manifest's $defs
-  // entries are its components, that is the whole of what the file is for, and
-  // a store that accepted one before the marker existed reads back the same
-  // way (T-37551).
+  // entries are its components, save the ones marked `tool: true`, and a store
+  // that accepted one before the marker existed reads back the same way
+  // (T-37551).
   component: true,
   type: 'object',
   kind: true,
@@ -1335,6 +1334,10 @@ let mine = (schema: PropSchema): PropSchema => ({
  * about a component — no tools synthesized for its kinds (kinds.ts, T-34513) —
  * so it is lifted off and carried on the document. A boolean tells it from a
  * component named `tools`, which is an object of properties like any other.
+ *
+ * A `$defs` entry marked `"tool": true` is one of the app's commands, not a
+ * component: it is left out here and read by lib/tools.ts `parseTools`, so a
+ * store's vocabulary holds components alone.
  */
 export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   let held = source
@@ -1368,7 +1371,9 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
     doc = {
       ...doc,
       $defs: Object.fromEntries(
-        Object.entries(doc.$defs).map(([name, s]) => [name, mine(s)]),
+        Object.entries(doc.$defs)
+          .filter(([, s]) => s?.tool !== true)
+          .map(([name, s]) => [name, mine(s)]),
       ),
     }
   }

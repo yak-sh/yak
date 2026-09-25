@@ -75,24 +75,20 @@ let TOKEN = Deno.env.get('YAK_PROBE_TOKEN') ?? ''
 // everybody else's spaces and apps.
 let tag = () => crypto.randomUUID().slice(0, 8)
 
-// The one page the app serves, the two files that give it words of its own,
-// and a sheet for store_load to read.
+// The one page the app serves, the file that gives it words and commands of
+// its own, and a sheet for store_load to read.
 let PAGE = '<!doctype html><title>Notes</title><h1>Notes</h1>'
-let VOCAB = vocabFile({ note: { body: txt, pages: num } })
-let TOOLS = JSON.stringify({
+let VOCAB = vocabFile({ note: { body: txt, pages: num } }, {
   jot: {
     description: 'Write a note down',
-    input: { body: 'text', pages: 'number' },
+    input: { body: txt, pages: num },
+    required: ['body', 'pages'],
     apply: {
       entity: { eid: '$note' },
       note: { body: '$body', pages: '$pages' },
     },
   },
-  jotted: {
-    description: 'Every note so far',
-    input: {},
-    query: '.note!',
-  },
+  jotted: { description: 'Every note so far', query: '.note!' },
 })
 let SHEET = 'body,pages\nfrom a sheet,3\nand another,5\n'
 // A secret lives on the app's own worker, so the app has one: the least worker
@@ -225,7 +221,6 @@ slow(
           files: [
             { path: 'index.html', content: PAGE },
             { path: 'vocab.json', content: VOCAB },
-            { path: 'tools.json', content: TOOLS },
             { path: 'notes.csv', content: SHEET },
             { path: 'worker.js', content: WORKER },
           ],

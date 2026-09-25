@@ -142,7 +142,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       404,
     )
     // An app's platform manifest is not one of its pages (C-32869 item 3):
-    // the server code and the two declarations answer the same nothing an
+    // the server code and the manifest answer the same nothing an
     // unknown path does, however the address spells them — while a member
     // still reads them back through `app_files`.
     let files = connector(k, cookie)
@@ -152,11 +152,10 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       files: [
         { path: 'worker.js', content: 'export default { fetch: () => 0 }' },
         { path: 'vocab.json', content: '{}' },
-        { path: 'tools.json', content: '{}' },
       ],
     })
     for (
-      let path of ['worker.js', 'vocab.json', 'tools.json', '%77orker.js']
+      let path of ['worker.js', 'vocab.json', '%77orker.js']
     ) {
       assertEquals(
         (await k.at('jeff.yaks.app', `/recipes/${path}`)).status,

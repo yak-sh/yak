@@ -1,5 +1,5 @@
-// The commands an app declares (T-32685, T-34541): the `tools.json` a deploy
-// handed its store (lib/tools.ts) and the two tools each word it holds is
+// The commands an app declares (T-32685, T-34541): the tool entries of the
+// `vocab.json` a deploy handed its store (lib/tools.ts) and the two tools each word it holds is
 // worth (kinds.ts), read back here and run through the platform's `command`
 // tool. tools.ts owns the tools the platform has; this owns the verbs a
 // person's own app grew.

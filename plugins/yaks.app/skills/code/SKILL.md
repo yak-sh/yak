@@ -119,11 +119,11 @@ Two consequences worth building around:
   worker being called at all. Your routes live beside it.
 
 These files are never served to the web at all, worker or no worker:
-`worker.js`, `vocab.json`, `tools.json`, `wrangler.jsonc` and `wrangler.json`.
-Those are the app's inside. `GET /<app>/worker.js` serves the platform's 404
-page — the test is on the decoded path, so `/%77orker.js` is the same file and
-the same 404 — and a member reads them back through `app_files` read. Nothing
-you write in `worker.js` is visible to a visitor.
+`worker.js`, `vocab.json`, `wrangler.jsonc` and `wrangler.json`. Those are the
+app's inside. `GET /<app>/worker.js` serves the platform's 404 page — the test
+is on the decoded path, so `/%77orker.js` is the same file and the same 404 —
+and a member reads them back through `app_files` read. Nothing you write in
+`worker.js` is visible to a visitor.
 
 ## env.STORE — the app's graph, as the person looking
 
@@ -294,8 +294,8 @@ your own. Three things follow from it being served the same way:
 - An HTML page comes back **already transformed** — the `<base href>` is in it
   and the reporter script is injected. You are reading what a visitor would have
   received, not the bytes in storage.
-- `worker.js`, `vocab.json` and `tools.json` answer 404 to the worker too: it
-  cannot read its own manifest this way.
+- `worker.js` and `vocab.json` answer 404 to the worker too: it cannot read its
+  own manifest this way.
 - A path with no extension that names no file gets `index.html`, the same
   pretty-path fallback the browser gets.
 

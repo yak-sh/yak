@@ -43,24 +43,15 @@ slow('the stream names its session and replays a missed line', async () => {
     let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
       .exec(await agent.tool('app_new', { slug: 'walks', title: 'Walks' }))![1]
     let tools = (view: string) =>
-      JSON.stringify({
-        log_walk: {
-          description: 'Every walk so far',
-          input: {},
-          query: '.walk!',
-          view,
-        },
+      vocabFile({ walk: { text: txt } }, {
+        log_walk: { description: 'Every walk so far', query: '.walk!', view },
       })
     await agent.tool('app_files', {
       space,
       app: 'walks',
       files: [
-        {
-          path: 'vocab.json',
-          content: vocabFile({ walk: { text: txt } }),
-        },
+        { path: 'vocab.json', content: tools('walks.html') },
         { path: 'walks.html', content: '<!doctype html><ol id=board>' },
-        { path: 'tools.json', content: tools('walks.html') },
       ],
     })
     await agent.tool('app_deploy', { space, app: 'walks' })
@@ -79,7 +70,7 @@ slow('the stream names its session and replays a missed line', async () => {
         app: 'walks',
         files: [
           { path: view, content: '<!doctype html><ol id=board>' },
-          { path: 'tools.json', content: tools(view) },
+          { path: 'vocab.json', content: tools(view) },
         ],
       })
       await agent.tool('app_deploy', { space, app: 'walks' })
@@ -167,14 +158,11 @@ slow(
         files: [
           {
             path: 'vocab.json',
-            content: vocabFile({ jog: { miles: num } }),
-          },
-          {
-            path: 'tools.json',
-            content: JSON.stringify({
+            content: vocabFile({ jog: { miles: num } }, {
               log_run: {
                 description: 'Log a run',
-                input: { miles: 'number' },
+                input: { miles: num },
+                required: ['miles'],
                 apply: { jog: { miles: '$miles' } },
               },
             }),
@@ -224,10 +212,11 @@ slow(
           await agent.tool('app_new', { slug: 'walks', title: 'Walks' }),
         )![1]
       let manifest = (view?: string) =>
-        JSON.stringify({
+        vocabFile({ walk: { text: txt } }, {
           log_walk: {
             description: 'Write a walk',
-            input: { text: 'text' },
+            input: { text: txt },
+            required: ['text'],
             apply: { walk: { text: '$text' } },
             ...(view ? { view } : {}),
           },
@@ -236,12 +225,8 @@ slow(
         space,
         app: 'walks',
         files: [
-          {
-            path: 'vocab.json',
-            content: vocabFile({ walk: { text: txt } }),
-          },
+          { path: 'vocab.json', content: manifest() },
           { path: 'walk.html', content: '<!doctype html><h1>walks</h1>' },
-          { path: 'tools.json', content: manifest() },
         ],
       })
       await agent.tool('app_deploy', { space, app: 'walks' })
@@ -259,7 +244,7 @@ slow(
         space,
         app: 'walks',
         op: 'write',
-        path: 'tools.json',
+        path: 'vocab.json',
         content: manifest('walk.html'),
       })
       await agent.tool('app_deploy', { space, app: 'walks' })

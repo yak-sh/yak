@@ -20,6 +20,16 @@ import {
   vocabFile,
 } from './probe.ts'
 
+// A notes app's words and its one command.
+let NOTES = vocabFile({ note: { at: txt } }, {
+  log_note: {
+    description: 'Write a note',
+    input: { at: txt },
+    required: ['at'],
+    apply: { note: { at: '$at' } },
+  },
+})
+
 // A space's front page is a choice (T-32947), and one nobody makes by
 // accident: no app claims the bare hostname by being made first (T-33040), so
 // until app_set(home) says which, that address lists the apps a visitor may
@@ -392,20 +402,7 @@ slow('an app goes to the trash, and app_restore brings it back', async () => {
       ...at,
       files: [
         { path: 'index.html', content: '<!doctype html><h1>notes</h1>' },
-        {
-          path: 'vocab.json',
-          content: vocabFile({ note: { at: txt } }),
-        },
-        {
-          path: 'tools.json',
-          content: JSON.stringify({
-            log_note: {
-              description: 'Write a note',
-              input: { at: 'text' },
-              apply: { note: { at: '$at' } },
-            },
-          }),
-        },
+        { path: 'vocab.json', content: NOTES },
       ],
     })
     await agent.tool('app_deploy', at)
@@ -512,20 +509,7 @@ slow(
         ...at,
         files: [
           { path: 'index.html', content: '<!doctype html><h1>notes</h1>' },
-          {
-            path: 'vocab.json',
-            content: vocabFile({ note: { at: txt } }),
-          },
-          {
-            path: 'tools.json',
-            content: JSON.stringify({
-              log_note: {
-                description: 'Write a note',
-                input: { at: 'text' },
-                apply: { note: { at: '$at' } },
-              },
-            }),
-          },
+          { path: 'vocab.json', content: NOTES },
         ],
       })
       await agent.tool('app_deploy', at)

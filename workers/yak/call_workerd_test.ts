@@ -18,13 +18,13 @@ slow('a command that takes an argument runs in its store', async () => {
       ...at,
       files: [
         { path: 'index.html', content: '<!doctype html><h1>notes</h1>' },
-        { path: 'vocab.json', content: vocabFile({ note: { at: txt } }) },
         {
-          path: 'tools.json',
-          content: JSON.stringify({
+          path: 'vocab.json',
+          content: vocabFile({ note: { at: txt } }, {
             log_note: {
               description: 'Write a note',
-              input: { at: 'text' },
+              input: { at: txt },
+              required: ['at'],
               apply: { entity: { eid: '$n' }, note: { at: '$at' } },
             },
           }),

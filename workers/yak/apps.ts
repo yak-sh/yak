@@ -357,8 +357,8 @@ export let manifesting = (app: App, at: string) => ({
 })
 
 // The files that are the app's platform manifest rather than its page: the
-// server code the dispatch namespace runs (dispatch.ts), the two declarations
-// a deploy reads, the data it seeds the store with (tools.ts, seed.ts), and
+// server code the dispatch namespace runs (dispatch.ts), the manifest a
+// deploy reads, the data it seeds the store with (tools.ts, seed.ts), and
 // the notes its person left beside it under either name (standing.ts).
 // Those are the app's inside — the platform reads them out of the blob store,
 // and a member reads them back through `app_files` — so the door that serves
@@ -376,8 +376,6 @@ let MANIFEST = new Set([
   // is the app's inside exactly as much as the `.json` is.
   '/vocab.json',
   '/vocab.yml',
-  '/tools.json',
-  '/tools.yml',
   // The notes file (standing.ts `NOTES`). Written out rather than imported:
   // standing.ts reaches this module through declared.ts, and a set built at
   // module top time cannot wait on a cycle.

@@ -211,9 +211,9 @@ Read it before you build something somebody may already have made.
 - The copy is not made the front page: `<space>.yaks.app/` lists the space's
   apps until somebody sets which app opens there (`app_set(app, home: true)`).
 - The install ends in a release of the copy: its `vocab.json` installed in its
-  own store, its `tools.json` listed under its own slug, its `worker.js`
-  uploaded as its own script. So the answer carries the deploy's own lines —
-  components, tools, worker — under the install's.
+  own store, its commands listed under its own slug, its `worker.js` uploaded as
+  its own script. So the answer carries the deploy's own lines — components,
+  tools, worker — under the install's.
 
 The answer names the address, the file count, and the pin:
 
@@ -279,7 +279,7 @@ starting at v1. Their first row goes into a graph nobody else has ever touched.
 Nothing is synced, nothing phones home, and the publisher never sees any of it.
 
 What travels is the app's own files — the pages, the stylesheets, the
-`vocab.json`, the `tools.json`, the `worker.js`. What does not:
+`vocab.json`, the `worker.js`. What does not:
 
 - **Data.** Every row the publisher's copy holds stays there.
 - **Uploads.** The photos a visitor sent to the publisher's copy are that app's

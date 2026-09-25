@@ -20,8 +20,8 @@ import {
 } from './probe.ts'
 import { hearing, HELLO } from './mcp-probe.ts'
 
-// An app's own tools (T-32685): a tools.json beside vocab.json, planted by
-// the same deploy, called at the same door as `<app>__<tool>` — and doing
+// An app's own tools (T-32685, T-38021): `$defs` entries of its vocab.json
+// marked `"tool": true`, planted by the same deploy, called at the same door as `<app>__<tool>` — and doing
 // through it exactly what the caller could do on the app's own page.
 slow('an app declares its own commands, and command runs them', async () => {
   let k = await kernel()
@@ -33,19 +33,17 @@ slow('an app declares its own commands, and command runs them', async () => {
         1
       ]
     let app = { space, app: 'runs' }
+    let jogs = { jog: { who: txt, miles: num } }
     await agent.tool('app_files', {
       ...app,
       files: [
         {
           path: 'vocab.json',
-          content: vocabFile({ jog: { who: txt, miles: num } }),
-        },
-        {
-          path: 'tools.json',
-          content: JSON.stringify({
+          content: vocabFile(jogs, {
             log_run: {
               description: 'Log a run for the club leaderboard',
-              input: { who: 'text', miles: 'number' },
+              input: { who: txt, miles: num },
+              required: ['who', 'miles'],
               apply: {
                 entity: { eid: '$run' },
                 jog: { who: '$who', miles: '$miles' },
@@ -53,7 +51,6 @@ slow('an app declares its own commands, and command runs them', async () => {
             },
             leaderboard: {
               description: 'Every run so far',
-              input: {},
               query: '.jog!&.created!',
               // The page the answer draws itself in (T-32687).
               view: 'leaderboard.html',
@@ -241,9 +238,14 @@ slow('an app declares its own commands, and command runs them', async () => {
     await agent.tool('app_files', {
       ...app,
       op: 'write',
-      path: 'tools.json',
-      content: '{"bad":{"description":"x","input":{},"apply":' +
-        '{"jog":{"who":"$who"}},"screen":"index.html"}}',
+      path: 'vocab.json',
+      content: vocabFile(jogs, {
+        bad: {
+          description: 'x',
+          apply: { jog: { who: '$who' } },
+          screen: 'index.html',
+        },
+      }),
     })
     let why = (await assertRejects(() => agent.tool('app_deploy', app), Error))
       .message
@@ -254,9 +256,10 @@ slow('an app declares its own commands, and command runs them', async () => {
     await agent.tool('app_files', {
       ...app,
       op: 'write',
-      path: 'tools.json',
-      content: '{"board":{"description":"x","input":{},"query":".jog!",' +
-        '"view":"gone.html"}}',
+      path: 'vocab.json',
+      content: vocabFile(jogs, {
+        board: { description: 'x', query: '.jog!', view: 'gone.html' },
+      }),
     })
     assertStringIncludes(
       (await assertRejects(() => agent.tool('app_deploy', app), Error)).message,
@@ -275,132 +278,138 @@ slow('an app declares its own commands, and command runs them', async () => {
 })
 
 // The commands a kind is worth (T-34513): an app that declares a `recipe` and
-// no tools.json at all still has a verb for adding one and a verb for finding
+// no tool of its own still has a verb for adding one and a verb for finding
 // it, so the next agent the person talks to discovers the app the way it
 // discovers anything else here — by asking what the apps in reach can do.
-slow('a kind an app declares is two commands, with no tools.json', async () => {
-  let k = await kernel()
-  try {
-    let jeff = await signIn(k)
-    let agent = connector(k, jeff.cookie)
-    let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
-      .exec(await agent.tool('app_new', { slug: 'box', title: 'Recipe box' }))![
-        1
-      ]
-    let app = { space, app: 'box' }
-    await agent.tool('app_files', {
-      ...app,
-      files: [
-        { path: 'index.html', content: '<!doctype html><p>recipes' },
-        {
-          path: 'vocab.json',
-          content: vocabFile({ recipe: { serves: num, cuisine: txt } }),
-        },
-      ],
-    })
-    // The deploy says them in the same line it says a declared command's name.
-    assertStringIncludes(
-      await agent.tool('app_deploy', app),
-      'commands: add_recipe, find_recipe',
-    )
+slow(
+  'a kind an app declares is two commands, with no tool of its own',
+  async () => {
+    let k = await kernel()
+    try {
+      let jeff = await signIn(k)
+      let agent = connector(k, jeff.cookie)
+      let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
+        .exec(
+          await agent.tool('app_new', { slug: 'box', title: 'Recipe box' }),
+        )![
+          1
+        ]
+      let app = { space, app: 'box' }
+      await agent.tool('app_files', {
+        ...app,
+        files: [
+          { path: 'index.html', content: '<!doctype html><p>recipes' },
+          {
+            path: 'vocab.json',
+            content: vocabFile({ recipe: { serves: num, cuisine: txt } }),
+          },
+        ],
+      })
+      // The deploy says them in the same line it says a declared command's name.
+      assertStringIncludes(
+        await agent.tool('app_deploy', app),
+        'commands: add_recipe, find_recipe',
+      )
 
-    // They are ordinary declared commands: the app's title and address on the
-    // sentence, and the read half marked read-only.
-    let listed = async () => commandsIn(await agent.tool('commands'))
-    let all = await listed()
-    let add = all.find((t) => t.name == 'add_recipe')!
-    let find = all.find((t) => t.name == 'find_recipe')!
-    assertStringIncludes(
-      add.description,
-      `Add a recipe to ${space}/box — Recipe box, an app at ` +
-        `${space}.yaks.app/box/`,
-    )
-    assertStringIncludes(find.description, `Find recipes in ${space}/box.`)
-    assert(add.writes, 'adding a recipe writes it')
-    assert(!find.writes, 'finding them does not')
-    // The kind's own properties are the arguments, and only the title is owed —
-    // the optional ones wear the `?` the listing marks them with.
-    assertEquals(add.args, 'title, body?, alias?, serves?, cuisine?')
-    // Nothing at all is owed to the find: every argument it takes wears `?`.
-    assertEquals(find.args.split(', ').filter((a) => !a.endsWith('?')), [])
+      // They are ordinary declared commands: the app's title and address on the
+      // sentence, and the read half marked read-only.
+      let listed = async () => commandsIn(await agent.tool('commands'))
+      let all = await listed()
+      let add = all.find((t) => t.name == 'add_recipe')!
+      let find = all.find((t) => t.name == 'find_recipe')!
+      assertStringIncludes(
+        add.description,
+        `Add a recipe to ${space}/box — Recipe box, an app at ` +
+          `${space}.yaks.app/box/`,
+      )
+      assertStringIncludes(find.description, `Find recipes in ${space}/box.`)
+      assert(add.writes, 'adding a recipe writes it')
+      assert(!find.writes, 'finding them does not')
+      // The kind's own properties are the arguments, and only the title is owed —
+      // the optional ones wear the `?` the listing marks them with.
+      assertEquals(add.args, 'title, body?, alias?, serves?, cuisine?')
+      // Nothing at all is owed to the find: every argument it takes wears `?`.
+      assertEquals(find.args.split(', ').filter((a) => !a.endsWith('?')), [])
 
-    // Adding writes the row: the kind, the title, the properties given — and
-    // the name it answers to afterwards.
-    assertStringIncludes(
+      // Adding writes the row: the kind, the title, the properties given — and
+      // the name it answers to afterwards.
+      assertStringIncludes(
+        await agent.tool('command', {
+          name: 'add_recipe',
+          args: {
+            title: 'Lemon cake',
+            body: '3 lemons',
+            alias: 'lemon-cake',
+            serves: 8,
+          },
+        }),
+        // Two: the recipe, and the name it answers to — a key is an entity of
+        // its own (@yaks/key).
+        'add_recipe: wrote 2 entities',
+      )
+      // A second one with nothing but a title still wears the kind, so the find
+      // answers it — and writes no nameless alias.
       await agent.tool('command', {
         name: 'add_recipe',
-        args: {
-          title: 'Lemon cake',
-          body: '3 lemons',
-          alias: 'lemon-cake',
-          serves: 8,
-        },
-      }),
-      // Two: the recipe, and the name it answers to — a key is an entity of
-      // its own (@yaks/key).
-      'add_recipe: wrote 2 entities',
-    )
-    // A second one with nothing but a title still wears the kind, so the find
-    // answers it — and writes no nameless alias.
-    await agent.tool('command', {
-      name: 'add_recipe',
-      args: { title: 'Toast' },
-    })
-    let found = async (args: Record<string, unknown>) =>
-      rowsIn<{ doc: { title: string } }>(
-        await agent.tool('command', { name: 'find_recipe', args }),
-      )
-    assertEquals((await found({})).map((r) => r.doc.title), [
-      'Lemon cake',
-      'Toast',
-    ])
-    // A clause whose argument is left out drops out of the filter line.
-    assertEquals((await found({ words: 'lemons' })).map((r) => r.doc.title), [
-      'Lemon cake',
-    ])
-    assertEquals((await found({ serves: 8 })).map((r) => r.doc.title), [
-      'Lemon cake',
-    ])
+        args: { title: 'Toast' },
+      })
+      let found = async (args: Record<string, unknown>) =>
+        rowsIn<{ doc: { title: string } }>(
+          await agent.tool('command', { name: 'find_recipe', args }),
+        )
+      assertEquals((await found({})).map((r) => r.doc.title), [
+        'Lemon cake',
+        'Toast',
+      ])
+      // A clause whose argument is left out drops out of the filter line.
+      assertEquals((await found({ words: 'lemons' })).map((r) => r.doc.title), [
+        'Lemon cake',
+      ])
+      assertEquals((await found({ serves: 8 })).map((r) => r.doc.title), [
+        'Lemon cake',
+      ])
 
-    // And a tools.json entry naming one of the names takes it over, whole: the
-    // app's own sentence and the app's own template, beside the other half
-    // still generated for it.
-    await agent.tool('app_files', {
-      ...app,
-      op: 'write',
-      path: 'tools.json',
-      content: JSON.stringify({
-        add_recipe: {
-          description: 'Add a recipe the way this box means it',
-          input: { title: 'text' },
-          apply: {
-            entity: { eid: '$r' },
-            doc: { title: '$title' },
-            recipe: { cuisine: 'house' },
+      // And a tool of its own taking one of the names takes it over, whole: the
+      // app's own sentence and the app's own template, beside the other half
+      // still generated for it.
+      await agent.tool('app_files', {
+        ...app,
+        op: 'write',
+        path: 'vocab.json',
+        content: vocabFile({ recipe: { serves: num, cuisine: txt } }, {
+          add_recipe: {
+            description: 'Add a recipe the way this box means it',
+            input: { title: txt },
+            required: ['title'],
+            apply: {
+              entity: { eid: '$r' },
+              doc: { title: '$title' },
+              recipe: { cuisine: 'house' },
+            },
           },
-        },
-      }),
-    })
-    assertStringIncludes(
-      await agent.tool('app_deploy', app),
-      'commands: add_recipe, find_recipe',
-    )
-    assertEquals((await listed()).map((t) => t.name), [
-      'add_recipe',
-      'find_recipe',
-    ])
-    await agent.tool('command', {
-      name: 'add_recipe',
-      args: { title: 'Fried rice' },
-    })
-    assertEquals(
-      (await found({ cuisine: 'house' })).map((r) => r.doc.title),
-      ['Fried rice'],
-    )
-  } finally {
-    await k.stop()
-  }
-})
+        }),
+      })
+      assertStringIncludes(
+        await agent.tool('app_deploy', app),
+        'commands: add_recipe, find_recipe',
+      )
+      assertEquals((await listed()).map((t) => t.name), [
+        'add_recipe',
+        'find_recipe',
+      ])
+      await agent.tool('command', {
+        name: 'add_recipe',
+        args: { title: 'Fried rice' },
+      })
+      assertEquals(
+        (await found({ cuisine: 'house' })).map((r) => r.doc.title),
+        ['Fried rice'],
+      )
+    } finally {
+      await k.stop()
+    }
+  },
+)
 
 // One roster, for everybody (T-34541). A directory snapshots `tools/list`
 // when a connector is submitted and serves that snapshot forever — only
@@ -415,10 +424,11 @@ slow(
     let ear: ReturnType<typeof hearing> | undefined
     try {
       let tools = (comp: string, name: string) =>
-        JSON.stringify({
+        vocabFile({ [comp]: { text: txt } }, {
           [name]: {
             description: `Write a ${comp}`,
-            input: { text: 'text' },
+            input: { text: txt },
+            required: ['text'],
             apply: { [comp]: { text: '$text' } },
           },
         })
@@ -443,11 +453,7 @@ slow(
           space,
           app: slug,
           files: [
-            {
-              path: 'vocab.json',
-              content: vocabFile({ [comp]: { text: txt } }),
-            },
-            { path: 'tools.json', content: tools(comp, name) },
+            { path: 'vocab.json', content: tools(comp, name) },
           ],
         })
         await agent.tool('app_deploy', { space, app: slug })
@@ -525,14 +531,15 @@ slow(
         space: club.space,
         app: 'runs',
         op: 'write',
-        path: 'tools.json',
-        content: JSON.stringify({
+        path: 'vocab.json',
+        content: vocabFile({ jog: { text: txt } }, {
           log_run: {
             description: 'Write a jog',
-            input: { text: 'text' },
+            input: { text: txt },
+            required: ['text'],
             apply: { jog: { text: '$text' } },
           },
-          jogs: { description: 'Every jog', input: {}, query: '.jog!' },
+          jogs: { description: 'Every jog', query: '.jog!' },
         }),
       })
       let grew = await club.agent.tool('app_deploy', {
