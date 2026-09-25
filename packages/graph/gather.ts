@@ -38,7 +38,7 @@
 // memory, synchronously, so the phases between them stay a plain loop
 // (./pipe.ts).
 
-import { and, eq, or, type Query as Ast } from '@yaks/query'
+import { and, eq, list, or, type Query as Ast } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps } from './bundle.ts'
@@ -104,12 +104,18 @@ let want = (
 
 /**
  * The query that finds everything whose reference properties point at one of
- * these targets: one disjunction over (property, target), so what would have
- * been one read per property per entity is a single read. `null` when there is
- * nothing to ask.
+ * these targets: one disjunction over the properties, each naming its targets
+ * as one list, so what would have been one read per property per entity is a
+ * single read. A statement binds what its query names, so the list is what
+ * keeps a delete of many entities inside a host's cap on bound values (a
+ * Durable Object's SQLite takes 100). `null` when there is nothing to ask.
  */
-export let pointing = (pairs: [string, string, Eid][]): Ast | null =>
-  pairs.length ? and(or(...pairs.map(([c, p, e]) => eq(`${c}.${p}`, e)))) : null
+export let pointing = (pairs: [string, string, Eid][]): Ast | null => {
+  let at = Map.groupBy(pairs, ([c, p]) => `${c}.${p}`)
+  return at.size
+    ? and(or(...[...at].map(([f, ts]) => eq(f, list(...ts.map((t) => t[2]))))))
+    : null
+}
 
 // Run a pointing query. It selects a set — a disjunction of equalities, never
 // a windowed query — which is exactly what `Tx.whole` promises to answer in a

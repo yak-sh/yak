@@ -498,15 +498,26 @@ Deno.test('a request for a word this vocabulary never planted asks, and passes',
 })
 
 Deno.test('reference equality compares indexed keys, not projected eids', () => {
-  for (let value of ['target', 'target,other']) {
-    let { sql, params } = compile(parse(`.note.about=${value}`), v)
-    assert(
-      sql.includes('"note"."about" = (select id from "entity" where eid = ?)'),
-      sql,
-    )
-    assert(!sql.includes('__re'), sql)
-    assertEquals(params, value.split(','))
-  }
+  let one = compile(parse('.note.about=target'), v)
+  assert(
+    one.sql.includes(
+      '"note"."about" = (select id from "entity" where eid = ?)',
+    ),
+    one.sql,
+  )
+  assertEquals(one.params, ['target'])
+  // A list is one bound value however long it is: a host caps what one
+  // statement binds, and a delete asks about every entity it deleted.
+  let many = compile(parse('.note.about=target,other'), v)
+  assert(
+    many.sql.includes(
+      '"note"."about" in (select id from "entity" where eid in ' +
+        '(select value from json_each(?)))',
+    ),
+    many.sql,
+  )
+  assertEquals(many.params, ['["target","other"]'])
+  for (let { sql } of [one, many]) assert(!sql.includes('__re'), sql)
   // Projection-based semantics still handle absent values, ranges and text
   // matching; these must not be mistaken for a list of literal reference ids.
   for (

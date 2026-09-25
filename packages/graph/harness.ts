@@ -99,27 +99,27 @@ export let books: Vocab = loadVocab(doc)
 
 type Rec = { num: number; dead: boolean; comps: Record<string, Comp> }
 
-// One `comp.prop = value` equality, as the two query shapes this adapter
-// answers spell it.
-type Eq = { comp: string; prop: string; value: string }
+// One `comp.prop = value` equality, or `comp.prop = a,b` for any of a list, as
+// the two query shapes this adapter answers spell it.
+type Eq = { comp: string; prop: string; values: string[] }
 
 let equality = (clause: Clause): Eq => {
   if (clause.kind != 'pred' || clause.op != '=') {
     throw new Error('memory(): only `comp.prop = value` is answered')
   }
   let [comp, prop] = clause.path
-  let value = clause.value && clause.value.kind == 'scalar'
-    ? clause.value.raw
-    : undefined
-  if (!prop || value == null) {
+  let v = clause.value
+  let items = v?.kind == 'list' ? v.items : v ? [v] : []
+  let values = items.flatMap((i) => i.kind == 'scalar' ? [i.raw] : [])
+  if (!prop || !values.length || values.length < items.length) {
     throw new Error('memory(): only `comp.prop = value` is answered')
   }
-  return { comp, prop, value }
+  return { comp, prop, values }
 }
 
-// The query shapes this adapter answers: one `comp.prop = value`, or a
-// disjunction of them — which is what the gather's backwards read is
-// (@yaks/graph's `pointing`).
+// The query shapes this adapter answers: one equality, or a disjunction of
+// them — which is what the gather's backwards read is (@yaks/graph's
+// `pointing`).
 let equalities = (query: Query): Eq[] => {
   if (typeof query == 'string') throw new Error('memory(): AST queries only')
   let [clause, ...rest] = (query as Ast).clauses
@@ -151,7 +151,8 @@ export let memory = (): Storage => {
       let any = equalities(query)
       return [...rows]
         .filter(([, r]) =>
-          !r.dead && any.some((e) => r.comps[e.comp]?.[e.prop] === e.value)
+          !r.dead &&
+          any.some((e) => e.values.some((v) => v === r.comps[e.comp]?.[e.prop]))
         )
         .flatMap(([eid]) => bundleOf(eid) ?? [])
     },

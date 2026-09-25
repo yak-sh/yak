@@ -105,15 +105,22 @@ let col = (comp: string, prop: string, v: Vocab): string | null => {
  * lowering's: @yaks/sqlite's `prefixed` passes the CTE that overlays a pending
  * transaction, so the comparison also finds entities that transaction has not
  * committed yet.
+ *
+ * A list is one parameter however long it is, for the reason {@link
+ * Dialect.among} gives: the reverse read behind a delete names every entity it
+ * deleted (T-38059).
  */
 export let refEqAt = (from: string): Dialect['refEq'] => (c, eids, negate) => {
-  let hit = nest(
-    eids.map(() => `${c} = (select id from ${from} where eid = ?)`),
-    ' or ',
-  )
+  let hit = eids.length == 1
+    ? { sql: `${c} = (select id from ${from} where eid = ?)`, params: eids }
+    : {
+      sql: `${c} in (select id from ${from} where eid in ` +
+        `(select value from json_each(?)))`,
+      params: [JSON.stringify(eids)],
+    }
   return negate
-    ? { sql: `(${c} is null or not ${hit})`, params: eids }
-    : { sql: hit, params: eids }
+    ? { sql: `(${c} is null or not ${hit.sql})`, params: hit.params }
+    : hit
 }
 
 let asText = (c: string) => `cast(${c} as text)`

@@ -3,6 +3,7 @@
 // and an aggregate comes back as raw rows.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
+import { gather } from '@yaks/graph'
 import { and, eq, or } from '@yaks/query'
 import { ARMS, Unsupported } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
@@ -290,6 +291,31 @@ Deno.test("a driver that declares no compound width is probed within workerd's",
     let terms = sql.split(/\bunion\b/i).length
     assert(terms <= ARMS, `${terms} terms in a compound SELECT:\n${sql}`)
   }
+})
+
+Deno.test('a reverse read binds one value per property, however many it asks about', async () => {
+  // A Durable Object's SQLite binds 100 values a statement and refuses the
+  // 101st, which is what erasing a space met: the gather's read of everything
+  // pointing at what a delete took bound one per property per entity.
+  let raw = mem()
+  let cap = Infinity
+  let s = storage({
+    ...raw,
+    query: (sql, params) => {
+      assert(params.length <= cap, `${params.length} values bound:\n${sql}`)
+      return raw.query(sql, params)
+    },
+  }, vocab)
+  s.install()
+  let makers = Array.from({ length: 21 }, (_, i) => `m${i}`)
+  seed(s, [
+    ...makers.map((eid) => ({ entity: { eid }, doc: { title: eid } })),
+    { entity: { eid: 'p1' }, product: { price: 5, maker: 'm20' } },
+  ])
+  cap = 100
+  let snap = await s.tx((tx) => gather(tx, vocab, [{ about: makers }]))
+  assertEquals(eids(snap.near.get('product.maker m20')!), ['p1'])
+  assertEquals(snap.near.get('product.maker m0'), [])
 })
 
 Deno.test('a disjunction longer than SQLite nests expressions reads', () => {
