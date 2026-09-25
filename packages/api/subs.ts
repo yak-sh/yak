@@ -34,7 +34,7 @@ import {
   transient,
   type TransientFrame,
 } from '@yaks/graph'
-import { comps } from '@yaks/graph'
+import { comps, only, wanted } from '@yaks/graph'
 import { type Filter, filter } from '@yaks/match'
 import { bare, type Clause, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
@@ -117,6 +117,9 @@ type Sub = {
   /** the per-bundle test, or `null` when this subscription runs its query
    * again instead */
   test: Filter | null
+  /** the components its rows carry, or `null` for every one (@yaks/graph
+   * `wanted`), so a pushed bundle is cut the way the first answer was */
+  want?: Set<string> | null
   /** the reduction an aggregate query asks for, and its last answer */
   agg?: Agg
   answer?: string
@@ -231,6 +234,7 @@ export let subscriptions = (graph: Graph, opts: {
       sub.agg = aggregate(ast)
       if (sub.agg) return tell(sub, true)
       sub.test = judge(ast, line, graph.vocab)
+      sub.want = wanted(graph.vocab, line)
       return then(graph.read(line, { durable: true }), (bundles) => {
         for (let b of bundles) sub.members.add(b.entity.eid)
         rememberFields(sub, bundles)
@@ -263,7 +267,7 @@ export let subscriptions = (graph: Graph, opts: {
     })
 
   // One query subscription against the entities a transaction changed, read
-  // whole.
+  // whole for the test and sent cut to what the query names.
   let push = (sub: Sub, now: Bundle[], touched: Eid[]) => {
     if (sub.agg) return tell(sub)
     let test = sub.test
@@ -275,7 +279,7 @@ export let subscriptions = (graph: Graph, opts: {
         let eid = b.entity.eid
         if (test(b, now)) {
           sub.members.add(eid)
-          bundles.push(b)
+          bundles.push(only(sub.want ?? null)(b))
         } else if (sub.members.delete(eid)) gone.push(eid)
       }
       // An entity storage no longer holds at all has left the set too.

@@ -76,6 +76,7 @@ import { state } from './state.ts'
 import { each, isPromise, then } from './pipe.ts'
 import { addressing } from './said.ts'
 import { meaning } from './meant.ts'
+import { only, wanted } from './projection.ts'
 
 /** The options one `apply()` call can pass. */
 export type ApplyOpts = {
@@ -162,7 +163,8 @@ export type Graph = {
   ddl: () => string[]
   /** create the tables and indexes it needs */
   install: () => void | Promise<void>
-  /** a query → the matching entities as whole bundles */
+  /** a query → the matching entities, each carrying the components the query
+   * names (`*` for every one, ./projection.ts) */
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
   /** a query → the compiled statement's raw rows */
   rows: (query: Query, opts?: ReadOpts) => Row[] | Promise<Row[]>
@@ -657,8 +659,12 @@ export let graph = (opts: Options): Graph => {
     },
     ddl: () => storage.ddl(),
     install: () => storage.install(),
+    // The rows carry what the query names (./projection.ts), the same answer
+    // at every door.
     read: (query, readOpts) =>
-      then(aim(mean(query), address), (q) => storage.read(q, readOpts)),
+      then(aim(mean(query), address), (q) =>
+        then(storage.read(q, readOpts), (rows) =>
+          rows.map(only(wanted(vocab, q))))),
     rows: (query, readOpts) =>
       then(aim(mean(query), address), (q) => storage.rows(q, readOpts)),
     apply,
