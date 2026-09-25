@@ -4,22 +4,33 @@
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { assertEquals, assertThrows } from '@std/assert'
+import { col, type Insert, render, scan, type Tx, val } from '@yaks/sql'
 import { driver } from './native.ts'
+
+let insert = (value: number): Insert => ({
+  t: 'insert',
+  into: 'sample',
+  cols: ['value'],
+  rows: [[val(value)]],
+  returning: [col('value')],
+})
 
 Deno.test('failed row decoding releases a cached write before rollback and the next savepoint', () => {
   let db = new Database(':memory:')
   try {
-    db.exec('create table sample (value integer unique)')
     let sql = driver(db)
+    sql.query({
+      t: 'create table',
+      name: 'sample',
+      cols: [{ name: 'value', type: 'integer', unique: true }],
+    })
+    let tx = (...steps: Tx[]) => steps.forEach((s) => sql.query(s))
     let prepare = db.prepare.bind(db)
     let attempts = 0
     let original = new Error('row conversion failed')
     db.prepare = (text: string) => {
       let statement = prepare(text)
-      if (
-        text == 'insert into sample values (?) returning value' &&
-        ++attempts == 1
-      ) {
+      if (text == render(insert(0)).sql && ++attempts == 1) {
         // Fault exactly after sqlite3_step returned SQLITE_ROW, before all()
         // resets it. No fake SQLite error: without eviction the next SAVEPOINT
         // actually throws "cannot open savepoint - SQL statements in progress".
@@ -29,25 +40,21 @@ Deno.test('failed row decoding releases a cached write before rollback and the n
       }
       return statement
     }
-    sql.exec('savepoint outer')
-    let error = assertThrows(() =>
-      sql.query('insert into sample values (?) returning value', [1])
-    )
+    tx({ t: 'savepoint', name: 'outer' })
+    let error = assertThrows(() => sql.query(insert(1)))
     assertEquals(error, original)
-    sql.exec('savepoint after_failure')
-    sql.exec('release after_failure')
-    sql.exec('rollback to outer')
-    sql.exec('release outer')
-    sql.exec('savepoint next')
-    sql.exec('savepoint nested')
-    assertEquals(sql.query('select * from sample', []), [])
-    assertEquals(
-      sql.query('insert into sample values (?) returning value', [2]),
-      [{ value: 2 }],
+    tx(
+      { t: 'savepoint', name: 'after_failure' },
+      { t: 'release', name: 'after_failure' },
+      { t: 'rollback', to: 'outer' },
+      { t: 'release', name: 'outer' },
+      { t: 'savepoint', name: 'next' },
+      { t: 'savepoint', name: 'nested' },
     )
+    assertEquals(scan(sql, 'sample'), [])
+    assertEquals(sql.query(insert(2)), [{ value: 2 }])
     assertEquals(attempts, 2, 'failed statement was re-prepared, not retried')
-    sql.exec('release nested')
-    sql.exec('release next')
+    tx({ t: 'release', name: 'nested' }, { t: 'release', name: 'next' })
   } finally {
     db.close()
   }

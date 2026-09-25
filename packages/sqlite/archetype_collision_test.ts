@@ -3,9 +3,45 @@ import { archetypeDoc, archetypes, eidOf, tablesOf } from '@yaks/archetype'
 import { type Bundle, graph, sha256 } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
+import {
+  by,
+  col,
+  type Driver,
+  eq,
+  join,
+  scan,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
 import { backfill, storage } from './mod.ts'
 import { open } from './db.ts'
 import { mem } from './testing.ts'
+
+// Every descriptor, with the tables it names, joined to its spine row.
+let descriptors = (d: Driver) =>
+  d.query(select({
+    cols: ['id', 'eid', 'num'].map((c) => col(c, 'e')).concat(
+      col('tables', 'a'),
+    ),
+    from: table('entity', 'e'),
+    joins: [
+      join(table('archetype', 'a'), eq(col('entity', 'a'), col('id', 'e'))),
+    ],
+  }))
+
+// A descriptor called by the bare SHA of its tables, as the first contract
+// minted it.
+let legacy = (d: Driver, id: number, eid: string) =>
+  d.query({
+    t: 'update',
+    table: 'entity',
+    set: { eid: val(eid) },
+    where: by({ id }),
+  })
+
+let spine = (d: Driver) =>
+  d.query(select({ from: table('entity'), order: [col('id')] }))
 
 // Fleet's text blobs are entities wearing blob + blob_text; exercise the same
 // physical shape, including text equal to old/new descriptor hash preimages.
@@ -124,24 +160,15 @@ Deno.test('archetype: migrate legacy SHA descriptors in place, references and re
     { entity: { eid: '$gone' }, archetype: { tables: '["gone"]' } },
   ])
   backfill(d) // Retire the missing-table descriptor before migration.
-  let rows = d.query(
-    'select e.id, e.eid, e.num, a.tables from entity e join archetype a on a.entity = e.id',
-    [],
-  )
+  let rows = descriptors(d)
   for (let r of rows) {
-    d.query('update entity set eid = ? where id = ?', [
-      sha256(tablesOf(r.tables).join('|')),
-      Number(r.id),
-    ])
+    legacy(d, Number(r.id), sha256(tablesOf(r.tables).join('|')))
   }
   backfill(d)
   for (let r of rows) {
-    assertEquals(
-      d.query('select eid, num from entity where id = ?', [Number(r.id)]),
-      [
-        { eid: r.eid, num: r.num },
-      ],
-    )
+    assertEquals(scan(d, 'entity', by({ id: Number(r.id) }), ['eid', 'num']), [
+      { eid: r.eid, num: r.num },
+    ])
   }
   let get = (eid: string) => s.tx((tx) => tx.get([eid]))[0]
   assertEquals(get('reference').link, { to: eidOf([]) })
@@ -160,15 +187,9 @@ for (let fault of ['occupied', 'invalid']) {
     let s = storage(d, vocab)
     s.install()
     graph({ storage: s, vocab, plugins: [archetypes()] }).apply(owners)
-    let rows = d.query(
-      'select e.id, e.eid, a.tables from entity e join archetype a on a.entity = e.id',
-      [],
-    )
+    let rows = descriptors(d)
     for (let r of rows) {
-      d.query('update entity set eid = ? where id = ?', [
-        sha256(tablesOf(r.tables).join('|')),
-        Number(r.id),
-      ])
+      legacy(d, Number(r.id), sha256(tablesOf(r.tables).join('|')))
     }
     // Fail on the last descriptor so earlier verified renames must roll back.
     if (fault == 'occupied') {
@@ -176,12 +197,9 @@ for (let fault of ['occupied', 'invalid']) {
         tx.patch([{ entity: { eid: rows.at(-1)!.eid as string }, doc: {} }])
       )
     } else {
-      d.query('update entity set eid = ? where id = ?', [
-        'not-a-legacy-descriptor',
-        Number(rows.at(-1)!.id),
-      ])
+      legacy(d, Number(rows.at(-1)!.id), 'not-a-legacy-descriptor')
     }
-    let snapshot = d.query('select * from entity order by id', [])
+    let snapshot = spine(d)
     assertThrows(
       () => backfill(d),
       Error,
@@ -189,7 +207,7 @@ for (let fault of ['occupied', 'invalid']) {
         ? 'Archetype identity is occupied'
         : 'Invalid archetype identity',
     )
-    assertEquals(d.query('select * from entity order by id', []), snapshot)
+    assertEquals(spine(d), snapshot)
   })
 }
 
@@ -198,31 +216,28 @@ Deno.test('archetype: migration never steals content from a shared legacy blob s
   let s = storage(d, vocab)
   s.install()
   graph({ storage: s, vocab, plugins: [archetypes()] }).apply(owners)
-  let rows = d.query(
-    'select e.id, a.tables from entity e join archetype a on a.entity = e.id',
-    [],
-  )
-  for (let r of rows) {
-    d.query('update entity set eid = ? where id = ?', [
-      sha256(tablesOf(r.tables).join('|')),
-      Number(r.id),
-    ])
+  for (let r of descriptors(d)) {
+    legacy(d, Number(r.id), sha256(tablesOf(r.tables).join('|')))
   }
   // Old writers could attach a blob to an already-minted descriptor. The bytes
   // must stay at their SHA, not migrate with the descriptor to a UUID.
   s.tx((tx) => tx.patch([blob('')]))
-  let before = d.query('select * from entity order by id', [])
+  let before = spine(d)
   assertThrows(
     () => backfill(d),
     Error,
     'Legacy archetype identity has extra facets',
   )
-  assertEquals(d.query('select * from entity order by id', []), before)
+  assertEquals(spine(d), before)
   assertEquals(
-    d.query(
-      'select b.text from blob_text b join entity e on e.id = b.entity where e.eid = ?',
-      [sha256('')],
-    ),
+    d.query(select({
+      cols: [col('text', 'b')],
+      from: table('blob_text', 'b'),
+      joins: [
+        join(table('entity', 'e'), eq(col('id', 'e'), col('entity', 'b'))),
+      ],
+      where: eq(col('eid', 'e'), val(sha256(''))),
+    })),
     [{ text: '' }],
   )
 })

@@ -1,7 +1,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
-import { col, fn, lit } from '@yaks/sql'
+import { by, col, fn, insert, lit, scan } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { mem, shop, spy, unit } from './testing.ts'
 import { get, storage } from './mod.ts'
@@ -65,14 +65,18 @@ Deno.test('archetype gather golden: wide sparse sets, chunks and a smaller reade
   }])
   let s = storage(driver, wide)
   s.install()
-  driver.exec(`with recursive n(x) as
-    (values(1) union all select x+1 from n where x<4101)
-    insert into entity(eid,num) select 'owner-'||x, 100+x from n;
-    insert into facet404(entity,value) select id,'last chunk' from entity where eid='owner-4101';
-    insert into doc(entity,title) select id,'first' from entity where eid='owner-1'`)
+  let ids = Array.from({ length: 4101 }, (_, i) => `owner-${i + 1}`)
+  driver.query(
+    insert('entity', ...ids.map((eid, i) => ({ eid, num: 101 + i }))),
+  )
+  let idOf = (eid: string) =>
+    Number(scan(driver, 'entity', by({ eid }), ['id'])[0].id)
+  driver.query(
+    insert('facet404', { entity: idOf('owner-4101'), value: 'last chunk' }),
+  )
+  driver.query(insert('doc', { entity: idOf('owner-1'), title: 'first' }))
   // Physical table sets, not the smaller reader's vocabulary, determine shape.
   s.install()
-  let ids = Array.from({ length: 4101 }, (_, i) => `owner-${i + 1}`)
   ids.push('missing', ids[0])
   assertEquals(get(driver, wide, ids), census(driver, wide, ids))
   assertEquals(get(driver, vocab, ids), census(driver, vocab, ids))

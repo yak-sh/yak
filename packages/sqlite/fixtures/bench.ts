@@ -3,7 +3,7 @@ import type { Comp } from '@yaks/graph'
 import { assertEquals } from '@std/assert'
 import '../sqlitepath.ts'
 import { Database } from '@db/sqlite'
-import { compile, type Driver, render } from '@yaks/sql'
+import { compile, type Driver, render, type Stmt } from '@yaks/sql'
 import { parse } from '@yaks/query'
 import { schema as ftsSchema } from '@yaks/fts'
 import { get, storage } from '@yaks/sqlite'
@@ -43,6 +43,18 @@ export let perCall = (db: Database): Driver => ({
   exec: (s) => db.exec(typeof s == 'string' ? s : render(s).sql),
 })
 
+/** A file as every bench opens it: keys enforced, WAL, normal sync. */
+export let tuned = (db: Database): Driver => {
+  let driver = perCall(db)
+  let pragmas: Stmt[] = [
+    { t: 'pragma', name: 'foreign_keys', value: 'on' },
+    { t: 'pragma', name: 'journal_mode', value: 'wal' },
+    { t: 'pragma', name: 'synchronous', value: 'normal' },
+  ]
+  for (let p of pragmas) driver.query(p)
+  return driver
+}
+
 export function packageBenches(layer: 'sqlite' | 'sql' | 'query') {
   let loc = location()
   let db = new Database(loc.path)
@@ -50,18 +62,14 @@ export function packageBenches(layer: 'sqlite' | 'sql' | 'query') {
     db.close()
     loc.cleanup()
   })
-  db.exec(
-    'pragma foreign_keys=on; pragma journal_mode=wal; pragma synchronous=normal',
-  )
-  let driver = perCall(db)
+  let driver = tuned(db)
   let store = storage(driver, vocab, options)
   store.install()
-  for (let sql of ftsSchema(textFields)) driver.exec(sql)
-  assertEquals(db.prepare('pragma synchronous').get(), { synchronous: 1 })
+  for (let s of ftsSchema(textFields)) driver.query(s)
+  let pragma = (name: string) => driver.query({ t: 'pragma', name })[0]
+  assertEquals(pragma('synchronous'), { synchronous: 1 })
   if (loc.mode == 'file') {
-    assertEquals(db.prepare('pragma journal_mode').get(), {
-      journal_mode: 'wal',
-    })
+    assertEquals(pragma('journal_mode'), { journal_mode: 'wal' })
   }
   let data = workload()
   store.tx((tx) => tx.patch(data.bundles))
@@ -70,10 +78,9 @@ export function packageBenches(layer: 'sqlite' | 'sql' | 'query') {
     let compiled = compile(ast, vocab, options)
     let read = () => {
       if (layer == 'query') return store.read(q.query)
-      let { sql, params } = layer == 'sql'
-        ? compile(ast, vocab, options)
-        : compiled
-      let ids = driver.query(sql, params).map((r) => String(r.eid))
+      let ids = driver.query(
+        layer == 'sql' ? compile(ast, vocab, options) : compiled,
+      ).map((r) => String(r.eid))
       return get(driver, vocab, ids, options)
     }
     assertEquals(

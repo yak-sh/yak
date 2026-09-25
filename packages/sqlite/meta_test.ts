@@ -3,8 +3,8 @@
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
 import { META, schema } from './ddl.ts'
 import { EPOCH, epoch, meta } from './meta.ts'
-import { storage } from './mod.ts'
-import { type Driver, render } from '@yaks/sql'
+import { objects, storage } from './mod.ts'
+import { type Driver, insert, render } from '@yaks/sql'
 import { mem, shop } from './testing.ts'
 
 // A store over a fresh database, installed — what a host has after boot.
@@ -13,11 +13,8 @@ let installed = (d: Driver = mem()) => {
   return d
 }
 
-// The table as the live database holds it, straight out of sqlite_master.
-let master = (d: Driver) =>
-  d.query(`select sql from sqlite_master where name = ?`, [META])[0]?.sql as
-    | string
-    | undefined
+// The table as the live database holds it, straight out of its schema.
+let master = (d: Driver) => objects(d, { name: META })[0]?.sql
 
 Deno.test('the meta table is raised with the spine', () => {
   assert(
@@ -78,11 +75,16 @@ Deno.test('epoch: mints on a store whose row was stripped', () => {
 Deno.test('install adopts a server_meta the host already raised', () => {
   let d = mem()
   // The fleet's live table, as src/db.ts writes it.
-  d.exec(`create table if not exists server_meta (
-    k text primary key,
-    v text not null
-  )`)
-  d.exec(`insert into server_meta (k, v) values ('epoch', 'held')`)
+  d.query({
+    t: 'create table',
+    name: 'server_meta',
+    ifNot: true,
+    cols: [
+      { name: 'k', type: 'text', pk: true },
+      { name: 'v', type: 'text', notNull: true },
+    ],
+  })
+  d.query(insert('server_meta', { k: 'epoch', v: 'held' }))
   let before = master(d)
   storage(d, shop).install()
   // Same table, untouched — not a second one, not a rewritten one.

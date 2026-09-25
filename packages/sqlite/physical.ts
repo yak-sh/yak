@@ -1,10 +1,13 @@
 import {
   as,
+  by,
   col,
   count,
   type Driver,
   eq,
   fn,
+  type Param,
+  type Row,
   select,
   table,
   val,
@@ -18,6 +21,24 @@ export let tables = (driver: Driver): string[] =>
     where: eq(col('type'), val('table')),
     order: [col('name')],
   })).map((r) => String(r.name))
+
+/** What the file's schema holds — each table, index, view and trigger, with
+ * the table it is on and its definition — or the entries these fields name. */
+export let objects = (
+  driver: Driver,
+  fields: Record<string, Param> = {},
+): Row[] =>
+  driver.query(select({
+    cols: [col('type'), col('name'), col('tbl_name'), col('sql')],
+    from: table('sqlite_schema'),
+    where: by(fields),
+    order: [col('name')],
+  }))
+
+/** A table's columns, in declaration order. */
+export let columns = (driver: Driver, name: string): string[] =>
+  driver.query({ t: 'pragma', name: 'table_info', arg: name })
+    .map((c) => String(c.name))
 
 /**
  * Component tables actually in the file, irrespective of the loaded vocabulary.

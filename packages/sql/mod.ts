@@ -53,6 +53,7 @@ export {
   and,
   as,
   at,
+  by,
   call,
   cast,
   col,
@@ -73,6 +74,7 @@ export {
   each,
   eq,
   exists,
+  type Explain,
   type Expr,
   FALSE,
   fn,
@@ -81,6 +83,7 @@ export {
   gt,
   iff,
   type Insert,
+  insert,
   isNull,
   isRaw,
   type Join,
@@ -123,7 +126,7 @@ export {
   type Write,
 } from './ast.ts'
 export { render } from './render.ts'
-export { type Driver, effect, type Row } from './driver.ts'
+export { type Driver, effect, type Row, scan, tally } from './driver.ts'
 export { type Tag, tagOf } from './sqlite.ts'
 export * from './cascade.ts'
 export * from './compound.ts'

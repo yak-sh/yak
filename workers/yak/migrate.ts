@@ -97,6 +97,7 @@ import {
   select,
   sub,
   table,
+  tally,
   val,
 } from '@yaks/sql'
 import { backfill, fold, grown, indexed, pointers, tabled } from '@yaks/sqlite'
@@ -415,10 +416,6 @@ let FORMERLY = 'alias'
 
 /** How many rows a query answers, as its `n`. */
 let n = (d: Driver, q: Query): number => Number(d.query(q)[0]?.n ?? 0)
-
-/** How many rows a table holds, or how many of them match. */
-let tally = (d: Driver, name: string, where?: Expr): number =>
-  n(d, select({ cols: [as(count(), 'n')], from: table(name), where }))
 
 /** How many rows a query selects. */
 let many = (d: Driver, q: Query): number =>

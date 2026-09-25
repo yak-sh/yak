@@ -311,6 +311,9 @@ export type Pragma = {
   arg?: string
 }
 
+/** How SQLite would run a statement, one row per step of its plan. */
+export type Explain = { t: 'explain query plan'; of: Stmt }
+
 export type Tx =
   | { t: 'begin'; mode?: 'deferred' | 'immediate' | 'exclusive' }
   | { t: 'commit' }
@@ -332,6 +335,7 @@ export type Stmt =
   | Alter
   | Drop
   | Pragma
+  | Explain
   | Tx
 
 // ---- expression builders ----
@@ -468,3 +472,34 @@ export let each = (list: readonly Param[]): Query =>
     cols: [col('value')],
     from: call('json_each', [val(JSON.stringify(list))]),
   })
+
+/** Rows written as objects, each value bound: the first row's keys are the
+ * columns.
+ *
+ * ```ts
+ * import { insert, render } from '@yaks/sql'
+ *
+ * render(insert('entity', { id: 1, eid: 'a' }, { id: 2, eid: 'b' })).sql
+ * // 'insert into "entity" ("id", "eid") values (?, ?), (?, ?)'
+ * ```
+ */
+export let insert = (
+  into: string,
+  ...rows: Record<string, Param>[]
+): Insert => {
+  let cols = Object.keys(rows[0] ?? {})
+  return {
+    t: 'insert',
+    into,
+    cols,
+    rows: rows.map((r) => cols.map((c) => val(r[c] ?? null))),
+  }
+}
+
+/** The rows whose columns hold these values, a null one null. */
+export let by = (fields: Record<string, Param>): Expr =>
+  and(
+    ...Object.entries(fields).map(([k, v]) =>
+      v === null ? isNull(col(k)) : eq(col(k), val(v))
+    ),
+  )

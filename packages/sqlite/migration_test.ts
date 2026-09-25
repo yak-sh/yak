@@ -1,6 +1,14 @@
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { type CreateTable, insert, lit, scan } from '@yaks/sql'
 import { open, type Opened } from './db.ts'
 import { MigrationPending, migrations, watchMigrations } from './migration.ts'
+import { objects } from './physical.ts'
+
+let raised = (name: string, col: string): CreateTable => ({
+  t: 'create table',
+  name,
+  cols: [{ name: col }],
+})
 
 function fixture() {
   const path = Deno.makeTempFileSync()
@@ -36,7 +44,7 @@ Deno.test('committed announcement is visible, blocks startup and competitors, mo
       assertEquals(notices.length, 1)
       a.control.apply(
         claim,
-        (db) => db.exec('create table widget (value text)'),
+        (db) => db.query(raised('widget', 'value')),
       )
       watch.check()
       assertEquals(notices.length, 1)
@@ -56,14 +64,11 @@ Deno.test('migration failure rolls back data/DDL and leaves explicit recoverable
     const claim = a.control.announce('broken', 0)
     assertThrows(() =>
       a.control.apply(claim, (db) => {
-        db.exec('create table unfinished (x)')
+        db.query(raised('unfinished', 'x'))
         throw new Error('broken callback')
       })
     )
-    assertEquals(
-      b.db.query("select name from sqlite_master where name='unfinished'", []),
-      [],
-    )
+    assertEquals(objects(b.db, { name: 'unfinished' }), [])
     assertEquals(b.control.read()?.state, 'failed')
     assertThrows(() => b.control.ready(), MigrationPending)
     assertThrows(() => b.control.acknowledge(claim.generation + 1))
@@ -77,17 +82,22 @@ Deno.test('missed pending notification still detects applied data-only migration
   const f = fixture()
   try {
     const a = f.connect(), b = f.connect()
-    a.db.exec("create table value (body); insert into value values ('old')")
+    a.db.query(raised('value', 'body'))
+    a.db.query(insert('value', { body: 'old' }))
     const errors: Error[] = []
     const watch = watchMigrations(b.control, (e) => errors.push(e))
     try {
       for (let i = 0; i < 5; i++) watch.check()
       assertEquals(errors.length, 0)
       const c = a.control.announce('encoding', 0)
-      a.control.apply(c, (db) => db.exec("update value set body='new'"))
+      a.control.apply(
+        c,
+        (db) =>
+          db.query({ t: 'update', table: 'value', set: { body: lit('new') } }),
+      )
       watch.check()
       assertEquals(errors.length, 1)
-      assertEquals(b.db.query('select body from value', []), [{ body: 'new' }])
+      assertEquals(scan(b.db, 'value'), [{ body: 'new' }])
     } finally {
       watch.stop()
     }

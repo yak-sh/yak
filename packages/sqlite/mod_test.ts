@@ -30,9 +30,10 @@ Deno.test('install() is idempotent', () => {
 Deno.test('a second store over an installed file leaves its schema alone', () => {
   let d = mem()
   storage(d, shop).install()
-  let before = d.query('pragma schema_version', [])
+  let version = () => d.query({ t: 'pragma', name: 'schema_version' })
+  let before = version()
   storage(d, shop).install()
-  assertEquals(d.query('pragma schema_version', []), before)
+  assertEquals(version(), before)
 })
 
 Deno.test('a driver that owns transactions is asked for them', () => {

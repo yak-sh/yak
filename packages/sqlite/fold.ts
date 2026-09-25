@@ -9,7 +9,7 @@
 
 import type { Vocab } from '@yaks/vocab'
 import { col, type Driver, eq, fn, lit, select, table, val } from '@yaks/sql'
-import { componentTables, tables as listed } from './physical.ts'
+import { columns, componentTables, tables as listed } from './physical.ts'
 
 // A Durable Object lists its runtime's own tables (`_cf_KV`) and then refuses
 // to read them, so they are left out as componentTables leaves them out.
@@ -17,10 +17,6 @@ let tables = (sql: Driver): string[] =>
   listed(sql).filter((name) =>
     !name.startsWith('sqlite_') && !/^_+cf_/i.test(name)
   )
-
-let columns = (sql: Driver, name: string): string[] =>
-  sql.query({ t: 'pragma', name: 'table_info', arg: name })
-    .map((c) => String(c.name))
 
 /** Every column that holds an entity's integer id: the vocabulary's reference
  * columns, and every foreign key onto `entity` (a journal's among them). */

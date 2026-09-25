@@ -1,11 +1,26 @@
-// Frozen pre-archetype gather oracle (T-37056). Test-only; do not modernize it.
+// Frozen pre-archetype gather oracle (T-37056). Test-only: it reads the way
+// gather read before archetypes, so keep its plan, not the newer one.
 import type { Prop, Vocab } from '@yaks/vocab'
 import {
+  among,
+  and,
+  as,
   type BindOpts,
   col,
+  cross,
   type Derived,
   type Driver,
-  render,
+  each,
+  eq,
+  exists,
+  type Expr,
+  type Join,
+  left,
+  lit,
+  select,
+  sub,
+  table,
+  unionAll,
 } from '@yaks/sql'
 import type { Bundle, Comp } from '../bundle.ts'
 import { tombstoned } from '@yaks/graph'
@@ -33,29 +48,28 @@ let project = (
   v: Vocab,
   comp: string,
   derived: Derived,
-): { sel: string[]; joins: string[] } => {
-  let self = `"${comp}"`
-  let sel: string[] = []
-  let joins: string[] = []
+): { sel: Expr[]; joins: Join[] } => {
+  let sel: Expr[] = []
+  let joins: Join[] = []
   let deps = new Set<string>()
   for (let c of read1(v, comp, derived)) {
     let own = derived[`${comp}.${c.prop}`]
     if (own) {
       for (let d of own.deps ?? []) deps.add(d)
-      // TODO(T-39499): the oracle still writes text; an expression it reads
-      // binds no values.
-      sel.push(`${render(own.expr(col('entity', comp))).sql} as "${c.prop}"`)
+      sel.push(as(own.expr(col('entity', comp)), c.prop))
     } else if (c.category == 'ref') {
       let a = `r_${c.prop.replaceAll(/[^A-Za-z0-9]/g, '_')}`
-      joins.push(`left join entity "${a}" on "${a}".id = ${self}."${c.prop}"`)
-      sel.push(`"${a}".eid as "${c.prop}"`)
+      joins.push(
+        left(table('entity', a), eq(col('id', a), col(c.prop, comp))),
+      )
+      sel.push(as(col('eid', a), c.prop))
     } else {
-      sel.push(`${self}."${c.prop}" as "${c.prop}"`)
+      sel.push(as(col(c.prop, comp), c.prop))
     }
   }
   for (let d of deps) {
     if (d == comp) continue
-    joins.push(`left join "${d}" on "${d}"."entity" = ${self}."entity"`)
+    joins.push(left(table(d), eq(col('entity', d), col('entity', comp))))
   }
   return { sel, joins }
 }
@@ -76,20 +90,32 @@ export let get = (
   // Keep caller order and duplicate semantics.
   for (let i = 0; i < eids.length; i += 4096) {
     let ids = eids.slice(i, i + 4096)
-    let params = [JSON.stringify(ids)]
-    let sub = 'select value from json_each(?)'
     let owners: number[] = []
     let byId = new Map<number, Bundle>()
     for (
-      let row of driver.query(
-        `select e.id, e.eid, e.num, t.entity as dead${
-          vocab.comp('archetype')
-            ? ', (select a.eid from entity a where a.id = e.archetype) as archetype'
-            : ''
-        } from entity e
-       left join tombstone t on t.entity = e.id where e.eid in (${sub})`,
-        params,
-      )
+      let row of driver.query(select({
+        cols: [
+          col('id', 'e'),
+          col('eid', 'e'),
+          col('num', 'e'),
+          as(col('entity', 't'), 'dead'),
+          ...(vocab.comp('archetype')
+            ? [as(
+              sub(select({
+                cols: [col('eid', 'a')],
+                from: table('entity', 'a'),
+                where: eq(col('id', 'a'), col('archetype', 'e')),
+              })),
+              'archetype',
+            )]
+            : []),
+        ],
+        from: table('entity', 'e'),
+        joins: [
+          left(table('tombstone', 't'), eq(col('entity', 't'), col('id', 'e'))),
+        ],
+        where: among(col('eid', 'e'), each(ids)),
+      }))
     ) {
       let eid = String(row.eid)
       owners.push(Number(row.id))
@@ -103,7 +129,6 @@ export let get = (
       byId.set(Number(row.id), bundle)
     }
     if (!owners.length) continue
-    params = [JSON.stringify(owners)]
     // A wide vocabulary is usually sparse. Ask which tables have rows in
     // this set before projecting their columns; an empty component table needs
     // no join and no driver round trip. Short-circuit globally empty tables
@@ -116,17 +141,27 @@ export let get = (
     let present: string[] = []
     // Stay below SQLite's compound-select limit even for very wide vocabularies.
     for (let j = 0; j < names.length; j += 400) {
+      let probes = names.slice(j, j + 400).map((c) =>
+        select({
+          cols: [as(lit(c), 'name')],
+          where: and(
+            ...(owners.length > 1
+              ? [exists(select({ cols: [lit(1)], from: table(c) }))]
+              : []),
+            exists(select({
+              cols: [lit(1)],
+              from: table('owners'),
+              joins: [cross(table(c))],
+              where: eq(col('entity', c), col('value', 'owners')),
+            })),
+          ),
+        })
+      )
       present.push(
-        ...driver.query(
-          `with owners as materialized (select value from json_each(?)) ` +
-            names.slice(j, j + 400).map((c) =>
-              `select '${c}' as name where ${
-                owners.length > 1 ? `exists (select 1 from "${c}") and ` : ''
-              }exists (select 1 from owners
-            cross join "${c}" where "${c}".entity = owners.value)`
-            ).join(' union all '),
-          params,
-        ).map((r) => String(r.name)),
+        ...driver.query({
+          ...unionAll(...probes),
+          with: [{ name: 'owners', q: each(owners), materialized: true }],
+        }).map((r) => String(r.name)),
       )
     }
     for (let comp of present) {
@@ -135,12 +170,12 @@ export let get = (
       // References still use project()'s joins; only ownership stays numeric.
       let { sel, joins } = project(vocab, comp, opts.derived ?? {})
       for (
-        let row of driver.query(
-          `select ${[`"${comp}".entity as "@id"`, ...sel].join(', ')} ` +
-            `from "${comp}" ${joins.join(' ')} ` +
-            `where "${comp}".entity in (${sub})`,
-          params,
-        )
+        let row of driver.query(select({
+          cols: [as(col('entity', comp), '@id'), ...sel],
+          from: table(comp),
+          joins,
+          where: among(col('entity', comp), each(owners)),
+        }))
       ) {
         let { '@id': owner, ...value } = row
         let b = byId.get(Number(owner))!

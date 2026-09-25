@@ -69,6 +69,7 @@ import { bindings } from './rules.ts'
 
 export * from './archetype.ts'
 export { catalog } from './catalog.ts'
+export { columns, objects } from './physical.ts'
 export { fold, pointers } from './fold.ts'
 export { GONE, OVER, type Overlay, overlay } from './overlay.ts'
 export { bindings, matched } from './rules.ts'

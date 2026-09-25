@@ -368,6 +368,8 @@ let stmt = (s: Stmt, c: Ctx): string => {
               ? literal(s.value)
               : word(s.value, 'pragma value')
           }`)
+    case 'explain query plan':
+      return `explain query plan ${stmt(s.of, c)}`
     case 'begin':
       return `begin${s.mode ? ` ${s.mode}` : ''}`
     case 'commit':

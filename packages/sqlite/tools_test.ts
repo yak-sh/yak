@@ -6,10 +6,13 @@ import { archetypeDoc, archetypes } from '@yaks/archetype'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
-import type { Driver } from '@yaks/sql'
+import { by, col, type Driver, insert, select, table } from '@yaks/sql'
 import { mem } from './testing.ts'
 import { storage } from './mod.ts'
 import { runs } from './tools.ts'
+
+let keys = (sql: Driver, value: 'on' | 'off') =>
+  sql.query({ t: 'pragma', name: 'foreign_keys', value })
 
 let domain = {
   $defs: {
@@ -69,9 +72,9 @@ Deno.test('a component row written with the key off is a fail', async () => {
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
   // The way the impossible gets in: a writer that opened the file with
   // enforcement off and left a row whose spine is not there.
-  sql.exec('pragma foreign_keys = off')
-  sql.exec('insert into "doc" (entity, title) values (99999, \'ghost\')')
-  sql.exec('pragma foreign_keys = on')
+  keys(sql, 'off')
+  sql.query(insert('doc', { entity: 99999, title: 'ghost' }))
+  keys(sql, 'on')
   let said = await checkup('storage_check', sql)
   assertEquals(said.level, 'fail')
   assert(said.body.includes('doc → entity'), said.body)
@@ -81,7 +84,7 @@ Deno.test('a component row written with the key off is a fail', async () => {
 Deno.test('a connection with the key off says so before anything else', async () => {
   let { sql, g } = file()
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
-  sql.exec('pragma foreign_keys = off')
+  keys(sql, 'off')
   let said = await checkup('storage_check', sql)
   assertEquals(said.level, 'warn')
   assert(said.body.includes('`foreign_keys` off'), said.body)
@@ -91,9 +94,16 @@ Deno.test('a row landed past the graph drifts its pointer', async () => {
   let { sql, g } = file()
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
   // A raw writer: the entity wears `task` now, and nothing reclassified it.
-  sql.exec(
-    'insert into "task" (entity) select id from entity where eid = \'a\'',
-  )
+  sql.query({
+    t: 'insert',
+    into: 'task',
+    cols: ['entity'],
+    q: select({
+      cols: [col('id')],
+      from: table('entity'),
+      where: by({ eid: 'a' }),
+    }),
+  })
   let said = await checkup('archetype_check', sql)
   assertEquals(said.level, 'fail')
   assert(said.body.includes('disagree with the'), said.body)

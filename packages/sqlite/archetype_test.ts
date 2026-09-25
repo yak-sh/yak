@@ -4,7 +4,25 @@ import { type Bundle, graph, type Plugin } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ddl, journal, log } from '@yaks/journal'
 import {
+  among,
+  by,
+  col,
+  type CreateTable,
+  desc,
+  type Driver,
+  eq,
+  insert,
+  join,
+  lit,
+  scan,
+  select,
+  table,
+  tally,
+  val,
+} from '@yaks/sql'
+import {
   backfill,
+  columns,
   componentTables,
   drift,
   reclassify,
@@ -12,6 +30,30 @@ import {
   storage,
 } from './mod.ts'
 import { mem, spy } from './testing.ts'
+
+// A table as a file an older install, or a writer outside the vocabulary,
+// raised it.
+let raised = (name: string, ...cols: CreateTable['cols']): CreateTable => ({
+  t: 'create table',
+  name,
+  cols,
+})
+let key = { name: 'entity', type: 'integer', pk: true }
+let OLD_SPINE = raised(
+  'entity',
+  { name: 'id', type: 'integer', pk: true },
+  { name: 'eid', type: 'text', unique: true },
+  { name: 'num', type: 'integer', unique: true },
+)
+let HIDDEN = raised('hidden', {
+  ...key,
+  ref: { table: 'entity', cols: ['id'] },
+})
+
+let idOf = (d: Driver, eid: string) =>
+  Number(scan(d, 'entity', by({ eid }), ['id'])[0].id)
+let indexes = (d: Driver, name: string) =>
+  d.query({ t: 'pragma', name: 'index_list', arg: name }).map((r) => r.name)
 
 let domain = {
   $defs: {
@@ -48,22 +90,12 @@ let setup = (extra: Plugin[] = []) => {
 
 Deno.test('archetype: non-opt-in schema adapters can reinstall over a legacy spine', () => {
   let d = mem()
-  d.exec(
-    'create table entity(id integer primary key, eid text unique, num integer unique)',
-  )
-  for (let sql of schema(loadVocab([domain]))) d.exec(sql)
-  assertEquals(d.query('pragma table_info(entity)', []).map((r) => r.name), [
-    'id',
-    'eid',
-    'num',
-  ])
+  d.query(OLD_SPINE)
+  for (let s of schema(loadVocab([domain]))) d.query(s)
+  assertEquals(columns(d, 'entity'), ['id', 'eid', 'num'])
   let s = storage(d, vocab)
   s.install()
-  assert(
-    d.query('pragma index_list(entity)', []).some((r) =>
-      r.name == 'entity_archetype'
-    ),
-  )
+  assert(indexes(d, 'entity').includes('entity_archetype'))
 })
 
 Deno.test('archetype: two writers, create, value-only, add/remove, same-batch net move', () => {
@@ -80,12 +112,7 @@ Deno.test('archetype: two writers, create, value-only, add/remove, same-batch ne
   let other = graph({ storage: store, vocab, plugins: [archetypes()] })
   other.apply([{ entity: { eid: 'b' }, doc: {} }])
   assertEquals(get('b').entity.archetype, get('a').entity.archetype)
-  assertEquals(
-    driver.query('select count(*) as n from archetype where tables = ?', [
-      '["doc"]',
-    ])[0].n,
-    1,
-  )
+  assertEquals(tally(driver, 'archetype', by({ tables: '["doc"]' })), 1)
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'B' } }])
   assertEquals(get('a').entity.archetype, eidOf(['doc']))
   g.apply([{ entity: { eid: 'a' }, task: {} }])
@@ -127,7 +154,7 @@ Deno.test('archetype: dry run and late rollback cannot poison cached sets', () =
   }])
   g.apply([{ entity: { eid: 'a' }, task: {} }], { check: true })
   assertEquals(get('a'), undefined)
-  assertEquals(driver.query('select * from archetype', []).length, 0)
+  assertEquals(tally(driver, 'archetype'), 0)
   fail = true
   assertThrows(() => g.apply([{ entity: { eid: 'a' }, task: {} }]))
   fail = false
@@ -157,16 +184,9 @@ Deno.test('archetype: the journal sees a descriptor creation, once', () => {
   let j = log({ rows: (s) => d.query(s) })
   let g = graph({ storage: s, vocab: v, plugins: [journal(j), archetypes()] })
   g.apply([{ entity: { eid: 'a' }, task: {} }])
-  assertEquals(
-    d.query('select count(*) as n from entity where archetype is null', [])[0]
-      .n,
-    0,
-  )
+  assertEquals(tally(d, 'entity', by({ archetype: null })), 0)
   let descriptors = () =>
-    d.query(
-      "select count(*) as n from journal_change where component = 'archetype'",
-      [],
-    )[0].n as number
+    tally(d, 'journal_change', by({ component: 'archetype' }))
   assert(descriptors() > 0)
   let before = descriptors()
   // A descriptor is minted once: the second batch finds the same archetype and
@@ -177,12 +197,10 @@ Deno.test('archetype: the journal sees a descriptor creation, once', () => {
 
 Deno.test('archetype: additive boot, physical hidden table, idempotent backfill, retirement', () => {
   let d = mem()
-  d.exec(
-    `create table entity(id integer primary key, eid text unique, num integer unique);
-    create table hidden(entity integer primary key references entity(id));
-    insert into entity values (1, 'old', 1);
-    insert into hidden values (1);`,
-  )
+  d.query(OLD_SPINE)
+  d.query(HIDDEN)
+  d.query(insert('entity', { id: 1, eid: 'old', num: 1 }))
+  d.query(insert('hidden', { entity: 1 }))
   let s = storage(d, vocab)
   s.install()
   let read = () => s.tx((tx) => tx.get(['old']))[0]
@@ -194,24 +212,17 @@ Deno.test('archetype: additive boot, physical hidden table, idempotent backfill,
   assertEquals(read().entity.archetype, eidOf(['hidden', 'doc']))
   g.apply([{ entity: { eid: 'old' }, doc: null }])
   assertEquals(read().entity.archetype, eidOf(['hidden']))
-  let count = d.query('select count(*) as n from archetype', [])[0].n
-  d.exec('drop table hidden')
+  let count = tally(d, 'archetype')
+  d.query({ t: 'drop', kind: 'table', name: 'hidden' })
   s.install()
   assertEquals(read().entity.archetype, eidOf([]))
   let old = s.tx((tx) => tx.get([eidOf(['hidden'])]))[0]
   assertEquals(old.retired, {})
   assertEquals(old.entity.archetype, eidOf(['archetype', 'retired']))
   assertEquals(old.tombstone, undefined)
-  assert(
-    Number(d.query('select count(*) as n from archetype', [])[0].n) >=
-      Number(count),
-  )
+  assert(tally(d, 'archetype') >= count)
   assertEquals(backfill(d), { entities: 0, archetypes: 0, retired: 0 })
-  assert(
-    d.query('pragma index_list(entity)', []).some((r) =>
-      r.name == 'entity_archetype'
-    ),
-  )
+  assert(indexes(d, 'entity').includes('entity_archetype'))
 })
 
 Deno.test('archetype: pre-existing reference stub can become a descriptor', () => {
@@ -299,15 +310,13 @@ Deno.test('archetype: backfill classifies a future descriptor stub in either ord
 
 Deno.test('archetype: deletion removes physical facets outside the writer vocabulary', () => {
   let { driver, store, g, get } = setup()
-  driver.exec(
-    'create table hidden(entity integer primary key references entity(id))',
-  )
+  driver.query(HIDDEN)
   store.tx((tx) => tx.patch([{ entity: { eid: 'old' }, task: {} }]))
-  driver.exec("insert into hidden select id from entity where eid = 'old'")
+  driver.query(insert('hidden', { entity: idOf(driver, 'old') }))
   store.install()
   g.apply([{ entity: { eid: 'old' }, $delete: true }])
   assertEquals(get('old').entity.archetype, eidOf(['tombstone']))
-  assertEquals(driver.query('select * from hidden', []), [])
+  assertEquals(tally(driver, 'hidden'), 0)
   assertEquals(backfill(driver), { entities: 0, archetypes: 0, retired: 0 })
 })
 
@@ -318,16 +327,28 @@ Deno.test('archetype: boot respects number exclusions and the persistent high-wa
       number: { except: numbered ? ['task'] : ['archetype'] },
     })
     // A file an older install wrote, holding an owner nothing classified.
-    for (let stmt of s.ddl()) d.exec(stmt)
+    for (let stmt of s.ddl()) d.query(stmt)
     s.tx((tx) => tx.patch([{ entity: { eid: 'owner' }, doc: {} }]))
-    d.exec(
-      "update entity set num = 99 where eid = 'owner'; update entity set num = null where eid = 'owner'",
-    )
+    let num = (n: number | null) =>
+      d.query({
+        t: 'update',
+        table: 'entity',
+        set: { num: val(n) },
+        where: by({ eid: 'owner' }),
+      })
+    num(99)
+    num(null)
     s.install()
-    let numbers = d.query(
-      'select num from entity join archetype a on a.entity = entity.id',
-      [],
-    )
+    let numbers = d.query(select({
+      cols: [col('num', 'entity')],
+      from: table('entity'),
+      joins: [
+        join(
+          table('archetype', 'a'),
+          eq(col('entity', 'a'), col('id', 'entity')),
+        ),
+      ],
+    }))
     assert(numbers.length > 0)
     assert(numbers.every((r) => numbered ? Number(r.num) > 99 : r.num == null))
     assertEquals(backfill(d), { entities: 0, archetypes: 0, retired: 0 })
@@ -336,9 +357,9 @@ Deno.test('archetype: boot respects number exclusions and the persistent high-wa
 
 Deno.test('physical archetype discovery never inspects provider-owned SQLite tables', () => {
   let base = mem()
-  base.exec('create table _cf_KV (entity integer primary key, value text)')
-  base.exec('create table __cf_METADATA (entity integer primary key)')
-  base.exec('create table ordinary (entity integer primary key)')
+  base.query(raised('_cf_KV', key, { name: 'value', type: 'text' }))
+  base.query(raised('__cf_METADATA', key))
+  base.query(raised('ordinary', key))
   let d = spy(base, (sql) => {
     if (/pragma.*table_info.*_cf_/i.test(sql)) {
       throw new Error('provider table access prohibited')
@@ -353,30 +374,31 @@ Deno.test('one-archetype paged reads use the compound ordering index', async () 
   s.install()
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
   await g.apply([{ entity: { eid: 'one' }, doc: { title: 'One' } }])
-  const id =
-    d.query('select archetype from entity where eid=?', ['one'])[0].archetype
-  const plan = d.query(
-    'explain query plan select eid from entity where archetype in (?) order by num desc limit 25',
-    [Number(id)],
-  ).map((r) => String(r.detail)).join('\n')
+  let [{ archetype }] = scan(d, 'entity', by({ eid: 'one' }), ['archetype'])
+  let plan = d.query({
+    t: 'explain query plan',
+    of: select({
+      cols: [col('eid')],
+      from: table('entity'),
+      where: among(col('archetype'), [val(Number(archetype))]),
+      order: [desc(col('num'))],
+      limit: lit(25),
+    }),
+  }).map((r) => String(r.detail)).join('\n')
   assert(plan.includes('entity_archetype_num'), plan)
   assert(!plan.includes('TEMP B-TREE'), plan)
   // Installing into an existing tracked database adds the ordering index too.
-  d.exec('drop index entity_archetype_num')
+  d.query({ t: 'drop', kind: 'index', name: 'entity_archetype_num' })
   s.install()
-  assert(
-    d.query('pragma index_list(entity)', []).some((r) =>
-      r.name == 'entity_archetype_num'
-    ),
-  )
+  assert(indexes(d, 'entity').includes('entity_archetype_num'))
 })
 
 Deno.test('archetype: reclassify classifies rows written past the graph, no triggers', () => {
   let { driver, g, get } = setup()
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
   assertEquals(get('a').entity.archetype, eidOf(['doc']))
-  let id = driver.query('select id from entity where eid = ?', ['a'])[0].id
-  driver.exec(`insert into task(entity) values (${id})`)
+  let id = idOf(driver, 'a')
+  driver.query(insert('task', { entity: id }))
   assertEquals(get('a').entity.archetype, eidOf(['doc']))
   let echoes = reclassify(driver, ['a'])
   assertEquals(echoes.at(-1), {
@@ -385,7 +407,7 @@ Deno.test('archetype: reclassify classifies rows written past the graph, no trig
   assertEquals(echoes[0].archetype, { tables: '["doc","task"]' })
   assertEquals(get('a').entity.archetype, eidOf(['doc', 'task']))
   assertEquals(reclassify(driver, ['a']), [])
-  driver.exec(`delete from doc where entity = ${id}`)
+  driver.query({ t: 'delete', from: 'doc', where: by({ entity: id }) })
   let moved = reclassify(driver, ['a', 'a', 'nobody'])
   assertEquals(moved.length, 2) // The {task} descriptor is born here.
   assertEquals(moved[1], { entity: { eid: 'a', archetype: eidOf(['task']) } })
@@ -393,10 +415,8 @@ Deno.test('archetype: reclassify classifies rows written past the graph, no trig
   assertEquals(get(eidOf(['task'])).entity.archetype, eidOf(['archetype']))
   // A table raised after the first call is seen: the facet list follows the
   // schema version, not the first look.
-  driver.exec(
-    `create table hidden(entity integer primary key references entity(id));
-     insert into hidden values (${id})`,
-  )
+  driver.query(HIDDEN)
+  driver.query(insert('hidden', { entity: id }))
   assertEquals(get('a').entity.archetype, eidOf(['task']))
   reclassify(driver, ['a'])
   assertEquals(get('a').entity.archetype, eidOf(['hidden', 'task']))
@@ -410,9 +430,8 @@ Deno.test('archetype: drift finds the pointer a raw writer left behind', () => {
     { entity: { eid: 'b' }, doc: {}, task: {} },
   ])
   assertEquals(drift(driver), { checked: 2, drifted: 0, sample: [] })
-  let id = driver.query('select id from entity where eid = ?', ['a'])[0].id
   // The forgetful raw writer: rows in, no eids named, no reclassify.
-  driver.exec(`insert into task(entity) values (${id})`)
+  driver.query(insert('task', { entity: idOf(driver, 'a') }))
   assertEquals(drift(driver), { checked: 2, drifted: 1, sample: ['a'] })
   assertEquals(drift(driver, 0).sample, []) // a bound on the sample, not the count
   reclassify(driver, ['a']) // an audit reports; only a writer repairs

@@ -9,7 +9,7 @@ import { kitchen, mem, PROJECTED, PROJECTED_ROW, RECIPE } from './testing.ts'
 import { storage } from './mod.ts'
 import { overlay } from './overlay.ts'
 import { jsonOut } from './jsonb.ts'
-import { as, col, desc, select, table } from '@yaks/sql'
+import { as, col, desc, fn, select, table } from '@yaks/sql'
 
 let recipe = (b: Bundle) => b.recipe as Record<string, unknown>
 
@@ -24,7 +24,10 @@ Deno.test('an object and an array are written and read back as values', () => {
   let { driver, s } = kitchenStore()
   s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   assertEquals(
-    driver.query('select typeof(meta) as t from recipe', []),
+    driver.query(select({
+      cols: [as(fn('typeof', col('meta')), 't')],
+      from: table('recipe'),
+    })),
     [{ t: 'blob' }],
   )
   assertEquals(recipe((s.read('.recipe') as Bundle[])[0]), RECIPE)

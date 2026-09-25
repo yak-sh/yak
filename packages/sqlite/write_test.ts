@@ -8,6 +8,7 @@ import type { Bundle, Comp } from './bundle.ts'
 import { mem, shop, spy, store } from './testing.ts'
 import { storage } from './mod.ts'
 import { graph } from '@yaks/graph'
+import { lit } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 
 let c = (b: Bundle, name: string): Comp => b[name] as Comp
@@ -237,9 +238,21 @@ Deno.test('number:false reports explicit unnumbered births without consuming num
 Deno.test('partial updates and bare tags respect required columns and SQL defaults', () => {
   let d = mem(), s = storage(d, shop)
   s.install()
-  d.exec(`drop table doc;
-    create table doc (entity integer primary key references entity(id),
-      title text not null default 'untitled', body text not null)`)
+  d.query({ t: 'drop', kind: 'table', name: 'doc' })
+  d.query({
+    t: 'create table',
+    name: 'doc',
+    cols: [
+      {
+        name: 'entity',
+        type: 'integer',
+        pk: true,
+        ref: { table: 'entity', cols: ['id'] },
+      },
+      { name: 'title', type: 'text', notNull: true, default: lit('untitled') },
+      { name: 'body', type: 'text', notNull: true },
+    ],
+  })
   write(s, [{ entity: { eid: 'a' }, doc: { body: 'body' } }])
   write(s, [{ entity: { eid: 'a' }, doc: { title: 'changed' } }])
   write(s, [{ entity: { eid: 'a' }, doc: {} }])

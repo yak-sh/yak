@@ -5,29 +5,28 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
 import {
+  by,
   col,
   compile,
-  type Driver,
   eq,
   type Expr,
+  insert,
   render,
+  scan,
   select,
   type Stmt,
   sub,
   table,
+  val,
 } from '@yaks/sql'
 import memberDoc from '../member/vocab.json' with { type: 'json' }
 import { schema } from './ddl.ts'
 import { open } from './db.ts'
-import { storage } from './mod.ts'
+import { columns as cols, objects, storage } from './mod.ts'
 import { mem, shop, spy } from './testing.ts'
 
 let text = (stmts: Stmt[]) => stmts.map((s) => render(s).sql)
 let all = text(schema(shop)).join('\n')
-
-// The live shape of a table, in declaration order.
-let cols = (d: Driver, table: string) =>
-  d.query(`pragma table_info("${table}")`, []).map((r) => String(r.name))
 
 Deno.test('the shop vocabulary loads with its kinds and death words', () => {
   assertEquals(shop.all.includes('product'), true)
@@ -168,11 +167,8 @@ Deno.test('a property a component grew is added to the live table', () => {
   grew.install()
   assertEquals(cols(d, 'book'), ['entity', 'title', 'isbn', 'of'])
   assertEquals(
-    d.query(
-      `select name from sqlite_master where type = 'index' and name = 'book_of'`,
-      [],
-    ),
-    [{ name: 'book_of' }],
+    objects(d, { type: 'index', name: 'book_of' }).map((o) => o.name),
+    ['book_of'],
   )
   // And a wake under a vocabulary the tables already match adds nothing.
   assertEquals(grew.grown(), [])
@@ -194,7 +190,7 @@ Deno.test('reference indexes are installed on new and existing member stores', (
           'grant_person',
         ]
       ) {
-        d.exec(`drop index ${name}`)
+        d.query({ t: 'drop', kind: 'index', name })
       }
     }
     s.tx((tx) =>
@@ -225,12 +221,10 @@ Deno.test('reference indexes are installed on new and existing member stores', (
       ]
     ) {
       let query = `.${comp}.${prop}=${value}`
-      let { sql, params } = compile(parse(query), vocab)
-      let plan = d.query(
-        `explain query plan ${sql}`,
-        params as (string | number)[],
-      )
-        .map((r) => String(r.detail)).join('\n')
+      let plan = d.query({
+        t: 'explain query plan',
+        of: compile(parse(query), vocab),
+      }).map((r) => String(r.detail)).join('\n')
       assert(/SEARCH/.test(plan) && plan.includes(`${comp}_${prop}`), plan)
       assertEquals(s.read(query).map((b) => b.entity.eid), [expected])
       assertEquals(
@@ -293,26 +287,32 @@ let strict = loadVocab({
 Deno.test('the engine holds what the vocabulary said', () => {
   let d = mem()
   storage(d, strict).install()
-  d.exec(`insert into entity (id, eid) values (1, 'a'), (2, 'b'), (3, 'c')`)
+  d.query(insert('entity', { id: 1, eid: 'a' }, { id: 2, eid: 'b' }, {
+    id: 3,
+    eid: 'c',
+  }))
   // A default fills what the writer omitted; the clock stamps an instant.
-  d.exec(`insert into created (entity) values (1)`)
-  d.exec(`insert into repo (entity) values (1)`)
-  let [row] = d.query(`select base, push from repo where entity = 1`, [])
+  d.query(insert('created', { entity: 1 }))
+  d.query(insert('repo', { entity: 1 }))
+  let [row] = scan(d, 'repo', by({ entity: 1 }), ['base', 'push'])
   assertEquals(row, { base: 'main', push: 0 })
-  let [at] = d.query(`select at from created where entity = 1`, [])
+  let [at] = scan(d, 'created', by({ entity: 1 }), ['at'])
   assert(/^\d{4}-\d\d-\d\dT.*Z$/.test(String(at.at)), String(at.at))
   // NOT NULL and CHECK refuse at the engine.
-  assertThrows(() =>
-    d.exec(`insert into created (entity, at) values (2, null)`)
-  )
-  assertThrows(() =>
-    d.exec(`insert into repo (entity, state) values (2, 'flying')`)
-  )
-  d.exec(`insert into repo (entity, state) values (2, 'on')`)
+  assertThrows(() => d.query(insert('created', { entity: 2, at: null })))
+  assertThrows(() => d.query(insert('repo', { entity: 2, state: 'flying' })))
+  d.query(insert('repo', { entity: 2, state: 'on' }))
   // A partial unique lets keyless rows be many and keyed rows be one.
-  d.exec(`insert into output (entity) values (1), (2)`)
-  d.exec(`insert into output (entity, key) values (3, 'k')`)
-  assertThrows(() => d.exec(`update output set key = 'k' where entity = 2`))
+  d.query(insert('output', { entity: 1 }, { entity: 2 }))
+  d.query(insert('output', { entity: 3, key: 'k' }))
+  assertThrows(() =>
+    d.query({
+      t: 'update',
+      table: 'output',
+      set: { key: val('k') },
+      where: by({ entity: 2 }),
+    })
+  )
 })
 
 Deno.test('a grown column keeps a literal default, takes the clock only ahead', () => {
@@ -338,9 +338,9 @@ Deno.test('a grown column keeps a literal default, takes the clock only ahead', 
     },
   })
   storage(d, was).install()
-  d.exec(`insert into entity (id, eid) values (1, 'a')`)
-  d.exec(`insert into repo (entity) values (1)`)
-  d.exec(`insert into created (entity) values (1)`)
+  d.query(insert('entity', { id: 1, eid: 'a' }))
+  d.query(insert('repo', { entity: 1 }))
+  d.query(insert('created', { entity: 1 }))
   let grew = storage(d, strict)
   let stmts = text(grew.grown())
   // A NOT NULL with a literal default is added as such (the literal fills the
@@ -357,18 +357,22 @@ Deno.test('a grown column keeps a literal default, takes the clock only ahead', 
     stmts.join('\n'),
   )
   grew.install()
-  assertEquals(d.query(`select base from repo`, []), [{ base: 'main' }])
-  assertEquals(d.query(`select at from created`, []), [{ at: null }])
+  assertEquals(scan(d, 'repo', undefined, ['base']), [{ base: 'main' }])
+  assertEquals(scan(d, 'created', undefined, ['at']), [{ at: null }])
 })
 
 Deno.test('a death word that moved rebuilds its table without the key', () => {
   let d = mem()
   storage(d, shop).install()
-  d.exec(`insert into entity (id, eid) values (1, 'm'), (2, 'p')`)
-  d.exec(`insert into product (entity, maker) values (2, 1)`)
+  d.query(insert('entity', { id: 1, eid: 'm' }, { id: 2, eid: 'p' }))
+  d.query(insert('product', { entity: 2, maker: 1 }))
   // A column the vocabulary has since forgotten still holds its rows.
-  d.exec(`alter table product add column colour text`)
-  d.exec(`update product set colour = 'red'`)
+  d.query({
+    t: 'alter table',
+    table: 'product',
+    add: { name: 'colour', type: 'text' },
+  })
+  d.query({ t: 'update', table: 'product', set: { colour: val('red') } })
   let kept = loadVocab({
     $defs: {
       ...(shop.docs[0].$defs as Record<string, never>),
@@ -384,16 +388,17 @@ Deno.test('a death word that moved rebuilds its table without the key', () => {
     },
   })
   let keys = () =>
-    d.query(`pragma foreign_key_list("product")`, []).map((r) => r.from).sort()
+    d.query({ t: 'pragma', name: 'foreign_key_list', arg: 'product' })
+      .map((r) => r.from).sort()
   assertEquals(keys(), ['entity', 'maker'])
   storage(d, kept).install()
   assertEquals(keys(), ['entity'])
-  assertEquals(d.query(`select maker, colour from product`, []), [
+  assertEquals(scan(d, 'product', undefined, ['maker', 'colour']), [
     { maker: 1, colour: 'red' },
   ])
   // and the maker can go without taking the record of it
-  d.exec(`delete from entity where id = 1`)
-  assertEquals(d.query(`select maker from product`, []), [{ maker: 1 }])
+  d.query({ t: 'delete', from: 'entity', where: by({ id: 1 }) })
+  assertEquals(scan(d, 'product', undefined, ['maker']), [{ maker: 1 }])
 })
 
 Deno.test('a store over a file installs the sizes its planner reads it by', () => {
@@ -401,8 +406,11 @@ Deno.test('a store over a file installs the sizes its planner reads it by', () =
   let d = open(path)
   try {
     storage(d, shop).install()
-    d.exec(`insert into entity (id, eid) values (1, 'a'), (2, 'b'), (3, 'c')`)
-    d.exec(`insert into product (entity, sku) values (1, 'x')`)
+    d.query(insert('entity', { id: 1, eid: 'a' }, { id: 2, eid: 'b' }, {
+      id: 3,
+      eid: 'c',
+    }))
+    d.query(insert('product', { entity: 1, sku: 'x' }))
     // A second install is what a later boot runs: the sizes are recorded
     // there, so a query over `product` is planned as the one row it is rather
     // than as a walk of the spine.
@@ -410,9 +418,7 @@ Deno.test('a store over a file installs the sizes its planner reads it by', () =
     // The first word of a `stat` is the table's row count, whether the row is
     // an index's or the table's own.
     let rows = (t: string) =>
-      String(
-        d.query(`select stat from sqlite_stat1 where tbl = ?`, [t])[0]?.stat,
-      )
+      String(scan(d, 'sqlite_stat1', by({ tbl: t }), ['stat'])[0]?.stat)
         .split(' ')[0]
     assertEquals(rows('entity'), '3')
     assertEquals(rows('product'), '1')

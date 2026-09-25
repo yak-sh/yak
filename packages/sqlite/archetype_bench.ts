@@ -8,8 +8,9 @@ import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
+import { among, col, each, lit, scan, tally } from '@yaks/sql'
 import { backfill, storage } from './mod.ts'
-import { location, perCall } from './fixtures/bench.ts'
+import { location, tuned } from './fixtures/bench.ts'
 import { vocab as corpus, workload } from './fixtures/fleet.ts'
 
 let loc = location()
@@ -18,31 +19,30 @@ addEventListener('unload', () => {
   db.close()
   loc.cleanup()
 })
-db.exec(
-  'pragma foreign_keys=on; pragma journal_mode=wal; pragma synchronous=normal',
-)
-let driver = perCall(db)
+let driver = tuned(db)
 let vocab = loadVocab([...corpus.docs, archetypeDoc], [edgeKeywords])
 let store = storage(driver, vocab)
 store.install()
 let data = workload()
 store.tx((tx) => tx.patch(data.bundles))
-let size = driver.query('select count(*) as n from entity', [])[0].n
+let size = tally(driver, 'entity')
 Deno.bench(`archetype/${loc.mode}/backfill`, (b) => {
-  driver.exec('savepoint sample')
-  let descriptors = driver.query('select entity from archetype', []).map((r) =>
-    r.entity
-  )
-  driver.exec('update entity set archetype = null; delete from archetype')
-  driver.query(
-    'delete from entity where id in (select value from json_each(?))',
-    [JSON.stringify(descriptors)],
-  )
+  driver.query({ t: 'savepoint', name: 'sample' })
+  let descriptors = scan(driver, 'archetype', undefined, ['entity'])
+    .map((r) => Number(r.entity))
+  driver.query({ t: 'update', table: 'entity', set: { archetype: lit(null) } })
+  driver.query({ t: 'delete', from: 'archetype' })
+  driver.query({
+    t: 'delete',
+    from: 'entity',
+    where: among(col('id'), each(descriptors)),
+  })
   b.start()
   let result = backfill(driver)
   b.end()
   assertEquals(result.entities, size)
-  driver.exec('rollback to sample; release sample')
+  driver.query({ t: 'rollback', to: 'sample' })
+  driver.query({ t: 'release', name: 'sample' })
 })
 backfill(driver)
 assertEquals(backfill(driver), { entities: 0, archetypes: 0, retired: 0 })

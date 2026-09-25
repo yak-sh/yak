@@ -5,7 +5,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { gather } from '@yaks/graph'
 import { and, eq, or } from '@yaks/query'
-import { ARMS, Unsupported } from '@yaks/sql'
+import { ARMS, insert, Unsupported } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import { mem, seed, shop as vocab, spy, store } from './testing.ts'
@@ -141,22 +141,22 @@ Deno.test('wide sparse gathers cross owner and vocabulary chunks without stale o
   s.install()
   // Raw setup keeps this test about reads, not 4101 write pipelines. Most
   // tables stay empty, one has a row beyond the first 4096-owner chunk.
-  driver.exec(`with recursive n(x) as
-    (values(1) union all select x+1 from n where x<4101)
-    insert into entity(id,eid,num) select x, 'owner-'||x, x from n;
-    insert into facet404(entity,value) values(4101,'last chunk')`)
   let ids = Array.from({ length: 4101 }, (_, i) => `owner-${i + 1}`)
+  driver.query(
+    insert('entity', ...ids.map((eid, i) => ({ id: i + 1, eid, num: i + 1 }))),
+  )
+  driver.query(insert('facet404', { entity: 4101, value: 'last chunk' }))
   let fetched = s.tx((tx) => tx.get([...ids, 'absent', ids[0]]))
   assertEquals(fetched.map((b) => b.entity.eid), [...ids, ids[0]])
   assertEquals(fetched[0], { entity: { eid: ids[0], num: 1 } })
   assertEquals(fetched[4100].facet404, { value: 'last chunk' })
   // Another writer can fill or clear a table between reads. The empty-table
   // shortcut must be a live query, never a vocabulary/connection-wide cache.
-  driver.exec("insert into facet0(entity,value) values(1,'newly populated')")
+  driver.query(insert('facet0', { entity: 1, value: 'newly populated' }))
   assertEquals(s.tx((tx) => tx.get(ids.slice(0, 2)))[0].facet0, {
     value: 'newly populated',
   })
-  driver.exec('delete from facet0')
+  driver.query({ t: 'delete', from: 'facet0' })
   assertEquals(s.tx((tx) => tx.get(ids.slice(0, 2)))[0].facet0, undefined)
 })
 
@@ -183,9 +183,9 @@ Deno.test('numeric gather ownership stays internal; present is an ordinary prope
   })
   let s = storage(driver, vocab)
   s.install()
-  driver.exec(`insert into entity(id,eid,num) values(47,'not-a-storage-id',9);
-    insert into sample(entity,present) values(47,'stored');
-    insert into marker(entity) values(47)`)
+  driver.query(insert('entity', { id: 47, eid: 'not-a-storage-id', num: 9 }))
+  driver.query(insert('sample', { entity: 47, present: 'stored' }))
+  driver.query(insert('marker', { entity: 47 }))
   assertEquals(s.read('.sample'), [{
     entity: { eid: 'not-a-storage-id', num: 9 },
     marker: {},
@@ -212,8 +212,8 @@ Deno.test('a store with no number in its vocabulary shows none it has', () => {
   })
   let s = storage(driver, vocab)
   s.install()
-  driver.exec(`insert into entity(id,eid,num) values(47,'was-numbered',9);
-    insert into sample(entity,present) values(47,'stored')`)
+  driver.query(insert('entity', { id: 47, eid: 'was-numbered', num: 9 }))
+  driver.query(insert('sample', { entity: 47, present: 'stored' }))
   assertEquals(s.read('.sample'), [{
     entity: { eid: 'was-numbered' },
     sample: { present: 'stored' },

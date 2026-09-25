@@ -2,6 +2,7 @@ import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
+import { among, by, col, select, table, val } from '@yaks/sql'
 import { mem } from './testing.ts'
 import { mintSql, storage } from './mod.ts'
 
@@ -85,13 +86,24 @@ Deno.test('SQLite migration retains historic high-water across clearing and reop
     ])
   )
   // Represents a legacy allocator's last number, higher than surviving tasks.
-  d.exec("update entity set num = 90000 where eid = 'entry'")
+  d.query({
+    t: 'update',
+    table: 'entity',
+    set: { num: val(90000) },
+    where: by({ eid: 'entry' }),
+  })
   let s = storage(d, vocab, { number: { except: ['entry'] } })
   for (let i = 0; i < 2; i++) {
     s.install()
-    d.exec(
-      'update entity set num = null where id in (select entity from entry)',
-    )
+    d.query({
+      t: 'update',
+      table: 'entity',
+      set: { num: val(null) },
+      where: among(
+        col('id'),
+        select({ cols: [col('entity')], from: table('entry') }),
+      ),
+    })
   }
   s.tx((tx) => {
     tx.patch([{ entity: { eid: 'next' }, task: {} }])

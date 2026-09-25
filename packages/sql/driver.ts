@@ -11,7 +11,16 @@
 // packages that wrote SQL text move onto the AST; the string form and `exec`
 // go once none does.
 
-import type { Param, Stmt } from './ast.ts'
+import {
+  as,
+  col,
+  count,
+  type Expr,
+  type Param,
+  select,
+  type Stmt,
+  table,
+} from './ast.ts'
 
 /** One row, a bag of column values keyed by name. */
 export type Row = Record<string, unknown>
@@ -60,3 +69,27 @@ export let effect = (
   if (driver.run) driver.run(s, params)
   else driver.query(s, params)
 }
+
+/** How many rows a table holds, or how many of them a condition keeps. */
+export let tally = (driver: Driver, name: string, where?: Expr): number =>
+  Number(
+    driver.query(
+      select({ cols: [as(count(), 'n')], from: table(name), where }),
+    )[
+      0
+    ]?.n ?? 0,
+  )
+
+/** A table's rows, or the ones a condition keeps: every column, or the ones
+ * named. */
+export let scan = (
+  driver: Driver,
+  name: string,
+  where?: Expr,
+  cols?: string[],
+): Row[] =>
+  driver.query(select({
+    cols: cols?.map((c) => col(c)),
+    from: table(name),
+    where,
+  }))

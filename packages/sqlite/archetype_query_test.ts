@@ -59,7 +59,7 @@ Deno.test('archetype query golden: presence/kind, value joins, boolean, paths, r
   }
   let bool = and(or(present('doc'), present('product')), absent('marker'))
   let old = compile(bool, vocab)
-  assertEquals(rows(driver, vocab, bool), driver.query(old.sql, old.params))
+  assertEquals(rows(driver, vocab, bool), driver.query(old))
 })
 
 Deno.test('archetype query/gather see new sets, rollback and reused descriptor ids', () => {
@@ -69,10 +69,14 @@ Deno.test('archetype query/gather see new sets, rollback and reused descriptor i
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
   let ids = (q: string) => s.read(q).map((b) => b.entity.eid)
   assertEquals(ids('.marker'), [])
-  driver.exec('savepoint outer')
+  let undo = (name: string) => {
+    driver.query({ t: 'rollback', to: name })
+    driver.query({ t: 'release', name })
+  }
+  driver.query({ t: 'savepoint', name: 'outer' })
   g.apply([{ entity: { eid: 'rolled-back' }, marker: {} }])
   assertEquals(ids('.marker'), ['rolled-back'])
-  driver.exec('rollback to outer; release outer')
+  undo('outer')
   // A fresh writer learns a different set at the rolled-back descriptor's id.
   let other = graph({ storage: s, vocab, plugins: [archetypes()] })
   other.apply([{ entity: { eid: 'doc' }, doc: {} }])
@@ -80,10 +84,10 @@ Deno.test('archetype query/gather see new sets, rollback and reused descriptor i
   assertEquals(ids('.doc'), ['doc'])
   other.apply([{ entity: { eid: 'doc' }, marker: {} }])
   assertEquals(ids('.marker'), ['doc'])
-  driver.exec('savepoint remove')
+  driver.query({ t: 'savepoint', name: 'remove' })
   other.apply([{ entity: { eid: 'doc' }, marker: null }])
   assertEquals(ids('.marker'), [])
-  driver.exec('rollback to remove; release remove')
+  undo('remove')
   assertEquals(ids('.marker'), ['doc'])
 })
 
@@ -146,7 +150,7 @@ Deno.test('archetype plans and gathers observe commits from another SQLite handl
     }
     assertEquals(reader.rows('.marker .count'), [{ value: '', n: 1 }])
     assertEquals(reader.rows('.marker .count'), [{ value: '', n: 3 }])
-    first.exec('drop table marker')
+    first.query({ t: 'drop', kind: 'table', name: 'marker' })
     let smaller = loadVocab([...shop.docs, archetypeDoc])
     storage(d1, smaller).install()
     assertEquals(reader.tx((tx) => tx.get(['raw']))[0].marker, undefined)
