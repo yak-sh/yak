@@ -3,7 +3,7 @@
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { cache, ent } from '../live.ts'
-import { byline, composerChanges, viaName } from './Comments.tsx'
+import { byline, composerChanges, prompt, viaName } from './Comments.tsx'
 
 Deno.test('viaName names a session by its chip id, never its harness uuid', () => {
   cache.value = {
@@ -52,5 +52,16 @@ Deno.test('byline reads actor and instrument from the created stamp', () => {
     },
   }
   assertEquals(byline(ent('comment')), 'jeff · via S-31')
+  cache.value = {}
+})
+
+Deno.test('composer names an unnamed session by its chip id', () => {
+  cache.value = {
+    session: {
+      entity: { eid: 'session', num: 31 },
+      session: { eid: 'session', id: 'raw-session-uuid', status: 'settled' },
+    },
+  }
+  assertEquals(prompt(ent('session')), 'send to S-31… (resumes the session)')
   cache.value = {}
 })

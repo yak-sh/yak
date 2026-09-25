@@ -98,3 +98,32 @@ Deno.test('a new chat reuses the composer input with a terse prompt', () => {
     cache.value = {}
   }
 })
+
+// T-37445: the referencing sessions ride the citation answer as peers, so the
+// held list opens no rows sub of its own; an unheld list still does.
+Deno.test('a held reference list asks for no rows of its own', async () => {
+  let sent: Record<string, unknown>[] = []
+  let prior = useRoute((f) => sent.push(f as Record<string, unknown>))
+  let peer = 'c0000000-0000-4000-8000-000000000001'
+  let cited = 'c0000000-0000-4000-8000-000000000002'
+  let held = mount(
+    h(ReferenceList, {
+      label: 'referenced by',
+      items: [{ eid: peer }],
+      held: true,
+    }),
+  )
+  let asked = mount(
+    h(ReferenceList, { label: 'references', items: [{ eid: cited }] }),
+  )
+  try {
+    await Promise.resolve()
+    let lines = sent.map((f) => f.subscribe)
+    assertEquals(lines.includes(`.eid=${cited}`), true)
+    assertEquals(lines.some((l) => String(l).includes(peer)), false)
+  } finally {
+    asked.free()
+    held.free()
+    useRoute(prior)
+  }
+})

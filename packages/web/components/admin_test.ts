@@ -16,13 +16,13 @@ import { assertEquals } from '@std/assert'
 // seam — the cache here is only ever what the test seeds.
 useRoute(() => {})
 
-// The index is a DB renderer: each section fetches `/query?.{kind}!`. Answer
+// The index is a DB renderer: each section fetches `/query?q=.{kind}!`. Answer
 // that fetch from the seeded cache bags, so these tests keep one source of
 // truth; everything else falls through to the real fetch.
 let stubFetch = () => {
   let real = globalThis.fetch
   globalThis.fetch = ((input: RequestInfo | URL) => {
-    let m = String(input).match(/\/query\?\.(\w+)!/)
+    let m = String(input).match(/\/query\?q=\.(\w+)!/)
     if (!m) return real(input)
     let kind = m[1]
     let out = Object.values(cache.peek())
@@ -65,6 +65,177 @@ Deno.test('the index shows the component description from its vocabulary', async
       root.querySelector('.Admin_Description')?.textContent,
       'a thing to do',
     )
+  } finally {
+    render(null, root)
+    restore()
+    cache.value = {}
+    route.value = '/'
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+Deno.test('the index is a typed grid and grid mode is bare tiles', async () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let project = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let task = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  cache.value = {
+    [project]: {
+      entity: { eid: project, num: 1 },
+      doc: { eid: project, title: 'Task Graph', body: '' },
+      project: { eid: project },
+    },
+    [task]: {
+      entity: { eid: task, num: 2 },
+      doc: { eid: task, title: 'Ship it', body: '' },
+      task: { eid: task },
+      filed: {
+        eid: task,
+        priority: 1,
+        project: project,
+        assignee: null,
+        domain: null,
+      },
+    },
+  }
+  route.value = '/admin/task'
+  let root = document.querySelector('main')!
+  let restore = stubFetch()
+  try {
+    render(h(Admin, {}), root)
+    await settle(root)
+    let table = root.querySelector('.Admin_Table')!
+    assertEquals(table.tagName, 'DIV')
+    assertEquals(
+      [...root.querySelectorAll('.Admin_Cell')].map((x) => x.textContent),
+      ['T-2', 'Ship it', 'open', ''],
+    )
+
+    let grid = [...root.querySelectorAll<HTMLButtonElement>('.Admin_Tool')]
+      .find((x) => x.textContent == 'grid')!
+    grid.dispatchEvent(
+      new document.defaultView!.Event('click', { bubbles: true }),
+    )
+    await Promise.resolve()
+    assertEquals(root.querySelector('.Admin_Grid > .Tile') != null, true)
+    assertEquals(root.querySelector('.Admin_Grid > div > .Tile'), null)
+  } finally {
+    render(null, root)
+    restore()
+    cache.value = {}
+    route.value = '/'
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+Deno.test('facet pages list their carriers without widening task', async () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let project = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let mailbox = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+  let task = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  cache.value = {
+    [project]: {
+      entity: { eid: project, num: 19 },
+      doc: { eid: project, title: 'Task Graph', body: '' },
+      project: { eid: project },
+    },
+    [mailbox]: {
+      entity: { eid: mailbox, num: 21 },
+      doc: { eid: mailbox, title: 'Task mail', body: '' },
+      email: { eid: mailbox, address: 'task@bot.yak.sh' },
+    },
+    [task]: {
+      entity: { eid: task, num: 20 },
+      doc: { eid: task, title: 'Ship it', body: '' },
+      task: { eid: task },
+      filed: { eid: task, priority: 1, project },
+    },
+  }
+  let root = document.querySelector('main')!
+  let restore = stubFetch()
+  let texts = async (kind: string, lead: string) => {
+    route.value = `/admin/${kind}`
+    render(h(Admin, {}), root)
+    // The section clears then refetches on kind change, so wait for a row of
+    // THIS kind — any row could still be the outgoing section's.
+    await until(
+      () =>
+        [...root.querySelectorAll('.Admin_Row:not(.Admin_Row-head)')]
+          .some((x) => x.textContent?.startsWith(lead)),
+      { label: kind },
+    )
+    return [...root.querySelectorAll('.Admin_Row:not(.Admin_Row-head)')]
+      .map((x) => x.textContent)
+  }
+  try {
+    assertEquals(await texts('email', 'A-21'), [
+      'A-21Task mailtask@bot.yak.sh',
+    ])
+    assertEquals(await texts('task', 'T-20'), ['T-20Ship itopen'])
+  } finally {
+    render(null, root)
+    restore()
+    cache.value = {}
+    route.value = '/'
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+Deno.test('an admin query deep link filters the index', async () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let home = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let away = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  let mine = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  let other = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+  cache.value = {
+    [home]: {
+      entity: { eid: home, num: 19 },
+      doc: { eid: home, title: 'Task Graph', body: '' },
+      project: { eid: home },
+    },
+    [away]: {
+      entity: { eid: away, num: 20 },
+      doc: { eid: away, title: 'Elsewhere', body: '' },
+      project: { eid: away },
+    },
+    [mine]: {
+      entity: { eid: mine, num: 21 },
+      doc: { eid: mine, title: 'Mine', body: '' },
+      task: { eid: mine },
+      filed: { eid: mine, priority: 1, project: home },
+    },
+    [other]: {
+      entity: { eid: other, num: 22 },
+      doc: { eid: other, title: 'Other', body: '' },
+      task: { eid: other },
+      filed: { eid: other, priority: 1, project: away },
+    },
+  }
+  route.value = '/admin/task?q=.filed.project%3DP-19'
+  let root = document.querySelector('main')!
+  let restore = stubFetch()
+  try {
+    render(h(Admin, {}), root)
+    await settle(root)
+    assertEquals(root.textContent.includes('Mine'), true)
+    assertEquals(root.textContent.includes('Other'), false)
   } finally {
     render(null, root)
     restore()
