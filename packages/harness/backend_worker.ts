@@ -52,12 +52,14 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       images?: ImageOptions | false
       streaming?: boolean
       migrationPollMs?: number
+      hold?: number
       instructions?: string
       fake?: boolean | 'stuck' | 'held' | { delayMs: number; deltas?: number }
     }
     fake = Boolean(options.fake)
     a = local({
-      h: open(options.db),
+      h: open(options.db, { hold: options.hold }),
+      hold: options.hold,
       cwd: options.cwd,
       streaming: options.streaming,
       instructions: options.instructions,
@@ -120,13 +122,11 @@ async function handle(method: string, value: unknown): Promise<unknown> {
   }
   if (method == 'close') {
     closing = true
-    let drained = a.d.stop()
     await Promise.allSettled([...active])
-    // Do not finalize native SQLite statements while a model turn still owns them.
-    await drained
-    // Keep subscribers attached through final writes from admitted work.
-    subs.drop(link.frame)
+    // Closing drains the step in flight before SQLite is let go, and the
+    // subscribers stay attached through the final writes it makes.
     await a.close()
+    subs.drop(link.frame)
     a = undefined
     removeErrors()
     return true

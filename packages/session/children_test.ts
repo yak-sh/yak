@@ -28,13 +28,13 @@ let shapes: [string, Bundle[], boolean][] = [
     [entry('s', 1, { content: { body: 'hi' } })],
     false,
   ],
-  ['asking the daemon for a model turn', [
+  ['asking the runner for a model turn', [
     entry('s', 1, { content: { body: 'hi' }, using: {} }),
   ], true],
-  ['a turn the daemon is taking', [entry('s', 1, { ask: {} })], true],
+  ['a turn the runner is taking', [entry('s', 1, { ask: {} })], true],
 ]
 
-Deno.test('the session cap counts the transcripts the daemon is running', async () => {
+Deno.test('the session cap counts the transcripts the runner is running', async () => {
   for (let [name, entries, fills] of shapes) {
     let s = storage(mem(), vocab, { derived: sessionDerived })
     s.install()

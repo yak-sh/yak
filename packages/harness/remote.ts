@@ -33,6 +33,9 @@ export let remote = async (
     streaming?: boolean
     stream?: boolean
     migrationPollMs?: number
+    /** how long a run the backend holds stands before another may take it
+     * over from a backend that died (ms) */
+    hold?: number
     instructions?: string
     fake?: boolean | 'stuck' | 'held' | { delayMs: number; deltas?: number }
     /** where settings such as `HARNESS_STREAM` are read (default this

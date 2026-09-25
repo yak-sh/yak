@@ -1,4 +1,5 @@
-/** Runtime inspection and explicit actions. Reads never wake a session. */
+/** Runtime inspection and explicit actions. Reads never wake a session; an
+ * action is a write, which whoever runs the transcript reads. */
 import { type Bundle, type Comp, type Graph, token } from '@yaks/graph'
 import type { Agent } from './agent.ts'
 
@@ -39,46 +40,49 @@ export let runtimeRows = async (
 }
 
 export let runtimeAction = async (
-  a: Pick<Agent, 'h' | 'd' | 'send'>,
+  a: Pick<Agent, 'h' | 'send'>,
   session: string,
   action: RuntimeAction,
 ): Promise<string> => {
   let [row] = await a.h.g.read('.session&.entity.eid=' + session)
   if (!row) throw new Error('Session not found')
   if (action == 'interrupt') {
-    let active = await a.h.g.read(
+    let [attempt] = await a.h.g.read(
       '.entry.session=' + session + '&.attempt.state=inflight',
     )
-    if (!active.length || !a.d.interrupt(session)) {
-      return 'No cancellable model request is running.'
-    }
+    if (!attempt) return 'No cancellable model request is running.'
+    // The run holding the transcript sees the withdrawal and aborts the
+    // request (@yaks/session run.ts).
+    await a.h.g.apply([{
+      entity: { eid: crypto.randomUUID() },
+      entry: { session },
+      notice: {},
+      cancel: { target: attempt.entity.eid },
+    }])
     return 'Cancellation requested. Provider must acknowledge abort; independent processes are unchanged.'
   }
   if (action == 'cancel-queued') {
-    return a.d.enqueue(session, async () => {
-      let [row] = await a.h.g.read(
-        '.session&.entity.eid=' + session + '&?dispatch',
-      )
-      if (!row) throw new Error('Session not found')
-      if ((row.dispatch as Comp | undefined)?.state != 'queued') {
-        throw new Error('Only queued work can be cancelled here')
-      }
-      // Preconditions prevent cancelling a child that started while the view was open.
-      await a.h.g.apply([{
-        entity: row.entity,
-        dispatch: { state: 'settled' },
-        $was: { dispatch: { state: token('queued') } },
-      }, {
-        entity: { eid: crypto.randomUUID() },
-        entry: { session },
-        stop: {},
-        content: {
-          body:
-            'Queued session cancelled by the user; task state is unchanged.',
-        },
-      }], { trusted: true })
-      return 'Queued session cancelled. Its task was not cancelled.'
-    })
+    let [row] = await a.h.g.read(
+      '.session&.entity.eid=' + session + '&?dispatch',
+    )
+    if (!row) throw new Error('Session not found')
+    if ((row.dispatch as Comp | undefined)?.state != 'queued') {
+      throw new Error('Only queued work can be cancelled here')
+    }
+    // Preconditions prevent cancelling a child that started while the view was open.
+    await a.h.g.apply([{
+      entity: row.entity,
+      dispatch: { state: 'settled' },
+      $was: { dispatch: { state: token('queued') } },
+    }, {
+      entity: { eid: crypto.randomUUID() },
+      entry: { session },
+      stop: {},
+      content: {
+        body: 'Queued session cancelled by the user; task state is unchanged.',
+      },
+    }], { trusted: true })
+    return 'Queued session cancelled. Its task was not cancelled.'
   }
   if (action != 'resume') throw new Error('Unknown runtime action')
   let [tail] = await a.h.g.read(

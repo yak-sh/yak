@@ -1,6 +1,6 @@
 /**
  * @yaks/session — a session is a transcript: the entries that make it up, the
- * lock it holds, and the daemon that reacts to its newest entry. The session
+ * lock it holds, and the runner that reacts to its newest entry. The session
  * component vocabulary for a {@link https://jsr.io/@yaks/graph | @yaks/graph}.
  *
  * No running process is implied. A `session` is identity only; what it is doing
@@ -13,27 +13,28 @@
  *   person or a system; with an `output{source}` beside it (the ask it answers)
  *   it is what a model returned. A `result`, `error` or `exception` carries its
  *   prose the same way.
- * - `ask{to, through}` — the daemon asked a model, from the prefix ending at
+ * - `ask{to, through}` — the runner asked a model, from the prefix ending at
  *   `through`. What the provider keeps about it is the provider's own component
  *   on the same entry (`@yaks/openai` declares `openai{response_id}`).
  * - `call{to, id, args, source}` — a tool the model asked for, from that ask;
  *   `result{call}` is what the tool returned.
  * - `using{provider, model, effort}` — set or switched on an input, recorded
  *   as served on an ask.
- * - `stop`, `error{code}`, `exception` — a marker the daemon does nothing
+ * - `stop`, `error{code}`, `exception` — a marker the runner does nothing
  *   after; an expected outcome; a defect report.
  *
  * `fork{from}` on a session continues another transcript from one of its
  * entries: the parent's entries up to it are the fork's prefix.
  * `spawned{parent, call}` records delegation independently of that prefix.
- * {@link sessionTools} exposes fork/spawn/wait; the daemon delivers a child's
+ * {@link sessionTools} exposes fork/spawn/wait; the runner delivers a child's
  * final output to its parent's queue, idempotently.
  *
- * ## The daemon
+ * ## The runner
  * {@link react} is one step: read the newest entry, do the one thing it calls
- * for, append what happened. {@link daemon} registers it as a `created(entry)`
- * effect on @yaks/effects; {@link settle} loops it. It is handed a @yaks/model
- * `Model` and a table of tools and imports no platform API.
+ * for, append what happened. {@link settle} loops it under the transcript's
+ * lease, and {@link running} is the `session_run` handler any @yaks/effects
+ * worker runs it by. It is handed a @yaks/model `Model` and a table of tools
+ * and imports no platform API.
  *
  * ## A lock is a lease, not a patch
  * A `claim{session}` is a session's lock, stored on the entity it locks.
@@ -75,8 +76,8 @@ export * from './who.ts'
 export * from './naming.ts'
 export * from './react.ts'
 export * from './run.ts'
+export { admitNext } from './admission.ts'
 export * from './providers.ts'
-export * from './daemon.ts'
 export * from './views.ts'
 export * from './readers.ts'
 

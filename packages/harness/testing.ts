@@ -1,11 +1,33 @@
-/** Test fixtures for code that starts in a checkout or cuts one. A harness
- * started in `Deno.cwd()` works in the repository the suite runs in: it reads
- * every ref there into the graph on each start, over a thousand of them, and a
- * child it delegates cuts its worktree and a `task-child-*` branch there, which
- * outlive the run's scratch directory — 405 worktree entries and 925 branches
- * piled up in the real repository (T-38366). So every test hands `local()` a
- * repository of its own: `repo()` when it only needs somewhere to start, and
- * `scratchRepo()` when it cuts checkouts it will look at. */
+/** Test fixtures: a harness graph worked by the runner as an agent works it,
+ * for a test that drives the graph itself (`working`), and the repositories a
+ * harness starts in.
+ *
+ * The repositories are for code that starts in a checkout or cuts one. A
+ * harness started in `Deno.cwd()` works in the repository the suite runs in:
+ * it reads every ref there into the graph on each start, over a thousand of
+ * them, and a child it delegates cuts its worktree and a `task-child-*` branch
+ * there, which outlive the run's scratch directory — 405 worktree entries and
+ * 925 branches piled up in the real repository (T-38366). So every test hands
+ * `local()` a repository of its own: `repo()` when it only needs somewhere to
+ * start, and `scratchRepo()` when it cuts checkouts it will look at. */
+
+import { type Runner, running } from '@yaks/session'
+import type { Harness } from './store.ts'
+
+/** The runner over `h`, lent `deps`, working its pool as an agent does;
+ * `stop()` leaves the pool once what it started has settled. */
+export let working = (h: Harness, deps: Omit<Runner, 'holder'>) => {
+  let leave = new AbortController()
+  h.fx.handle(running(h.g, { holder: h.me, ...deps }))
+  let work = h.fx.work(h.g, leave.signal)
+  return {
+    stop: async () => {
+      leave.abort()
+      await h.fx.stop()
+      await work
+    },
+  }
+}
 
 /** Run git in `cwd`, answering its trimmed stdout; a failure throws stderr. */
 export let git = async (cwd: string, ...args: string[]) => {

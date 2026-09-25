@@ -1,4 +1,4 @@
-import { daemon } from '@yaks/session'
+import { kindOf } from '@yaks/session'
 import { local } from './local.ts'
 import { harnessTools } from './tools.ts'
 import { assert, assertEquals, assertRejects } from '@std/assert'
@@ -7,7 +7,17 @@ import { checkoutAt, createWorktree, discover } from '@yaks/git/host'
 import { refEid } from '../git/refs.ts'
 import { open } from './store.ts'
 import { homeAt, sessionCwd, workspace } from './workspace.ts'
-import { git, scratchRepo } from './testing.ts'
+import { git, scratchRepo, working } from './testing.ts'
+import { worktrees } from './paths.ts'
+
+// The runner over the fixture's graph, bound and prepared as the harness
+// tools that queue its children are (./tools.ts).
+let run = (f: { h: ReturnType<typeof open>; repo: string }) =>
+  working(f.h, {
+    ...workspace(f.h.g, f.repo, worktrees()),
+    tools: [],
+    model: () => Promise.resolve({ id: 'r', model: 'fake', items: [] }),
+  })
 
 let fixture = async () => {
   let { dir, repo, free } = await scratchRepo()
@@ -171,7 +181,7 @@ Deno.test('host preparation separates home and cwd, defaults to sharing, and ref
 
 Deno.test('spawn prepares admitted home, replay creates nothing, shell defaults are session-local', async () => {
   let f = await fixture()
-  let d: ReturnType<typeof daemon> | undefined
+  let d = run(f)
   try {
     await f.h.g.apply([{
       entity: { eid: 'parent' },
@@ -197,19 +207,9 @@ Deno.test('spawn prepares admitted home, replay creates nothing, shell defaults 
     let args = { prompt: 'work', worktree: { path: f.dir + '/child' } }
     let child = await spawn.run(args, ctx)
     assertEquals(await spawn.run(args, ctx), child)
-    let entries = await f.h.g.read('.entry.session=' + child)
-    assertEquals(entries.length, 1)
-    d = daemon(
-      f.h.g,
-      f.h.fx,
-      {
-        tools: [],
-        model: () => Promise.resolve({ id: 'r', model: 'fake', items: [] }),
-      },
-      undefined,
-      () => {},
-    )
-    await d.idle(child)
+    await f.h.fx.idle()
+    let said = await f.h.g.read('.entry.session=' + child + '&*')
+    assertEquals(said.filter((b) => kindOf(b) == 'input').length, 1)
     assertEquals(await sessionCwd(f.h.g, child, '/wrong'), f.dir + '/child')
     let shell = tools.find((t) => t.name == 'shell')!
     let out = await shell.run({ command: 'pwd' }, { ...ctx, session: child })
@@ -224,11 +224,12 @@ Deno.test('spawn prepares admitted home, replay creates nothing, shell defaults 
       prompt: 'no',
       worktree: { path: f.dir + '/fail', branch: 'main' },
     }, { ...ctx, call: { entity: { eid: 'bad-spawn' } } })
-    await d.idle(failed)
+    await f.h.fx.idle()
+    assertEquals(String(failed), 'child:bad-spawn')
     assertEquals((await f.h.g.read('.session.id=child:bad-spawn&*')).length, 1)
     assertEquals((await f.h.g.read('.checkout.state=failed&*')).length, 1)
   } finally {
-    await d?.stop()
+    await d.stop()
     await f.free()
   }
 })
@@ -265,7 +266,7 @@ Deno.test('root sessions discover and share the existing default worktree', asyn
 
 Deno.test('queued fork preserves anchor and prepares checkout on admission', async () => {
   let f = await fixture()
-  let d: ReturnType<typeof daemon> | undefined
+  let d = run(f)
   try {
     let root = 'parent'
     let entries = [
@@ -298,21 +299,11 @@ Deno.test('queued fork preserves anchor and prepares checkout on admission', asy
       prompt: 'fork work',
       worktree: { path: f.dir + '/forked' },
     }, { session: root, call, entries })
-    d = daemon(
-      f.h.g,
-      f.h.fx,
-      {
-        tools: [],
-        model: () => Promise.resolve({ id: 'r', model: 'fake', items: [] }),
-      },
-      undefined,
-      () => {},
-    )
-    await d.idle(child)
+    await f.h.fx.idle()
     assertEquals(await sessionCwd(f.h.g, child, '/wrong'), f.dir + '/forked')
     assertEquals((await f.h.g.read('.worktree&*')).length, 2)
   } finally {
-    await d?.stop()
+    await d.stop()
     await f.free()
   }
 })

@@ -292,11 +292,14 @@ export type RulesFacet = {
  * arguments — still arrives on the tool context. */
 export type ToolsFacet = { runs?: (host: Host, options: Options) => Runs }
 
-/** `<plugin>/effects` — the code behind the effects this plugin's vocabulary
+/** `<plugin>/effects` — the code behind effects the composed vocabulary
  * declares (`effect: true`), keyed by the name each is declared under. A mail
  * sender, a process launcher: what an effect acts on is named in this
- * plugin's options, and a declared effect this config gives no code has
- * nothing to do here — its runs are settled as done. */
+ * plugin's options. Usually the code is the declaring plugin's own; a plugin
+ * may instead handle one another declares, lending what only it has (the
+ * machine a transcript's run is given, @yaks/harness). Each effect has one
+ * handler, and a declared effect this config gives no code has nothing to do
+ * here — its runs are settled as done. */
 export type EffectsFacet = {
   effects?: (host: Host, options: Options) => Handlers
 }
@@ -304,10 +307,14 @@ export type EffectsFacet = {
 // What a declared effect does where this config gives it no code.
 let nothing: Handlers[string] = () => {}
 
-// A plugin's `./effects` handling a name its vocabulary never declares: code
-// that would never run, since nothing owes it.
+// A plugin's `./effects` handling a name no vocabulary declares: code that
+// would never run, since nothing owes it.
 let undeclared = (plugin: string, name: string) =>
-  new Error(`${plugin} handles ${name}, which it never declares`)
+  new Error(`${plugin} handles ${name}, which nothing declares`)
+
+// Two plugins' `./effects` handling one name: a run is done once, by one.
+let twice = (name: string, plugins: string[]) =>
+  new Error(`${name} is handled by both ${plugins.join(' and ')}`)
 
 /** `<plugin>/routes` — the HTTP a plugin adds, and, for the one plugin that
  * hosts them, what answers a request at all.
@@ -828,33 +835,31 @@ export let compose = async (
       plugins: [...rules, fx],
     })
     // The code behind the plugins' effects, where this process serves
-    // `effects` (their facets were never imported anywhere else). Each plugin
-    // handles the effects its own vocabulary declares, and one this config
-    // gives no code has nothing to do here: its runs are settled as done, not
-    // left owed to a process that will never come.
+    // `effects` (their facets were never imported anywhere else). Each
+    // declared effect has one handler, from whichever plugin gives it code,
+    // and one this config gives no code has nothing to do here: its runs are
+    // settled as done, not left owed to a process that will never come.
     let effecting = roles.includes('effects')
     if (effecting) {
-      let given = new Map(
-        watched.map(([mod, options, plugin]) => [
-          plugin,
-          mod.effects?.(host, options) ?? {},
-        ]),
+      let declared = new Set(
+        vocabs.flatMap(([v]) => effectsIn(v.docs ?? []).map((e) => e.name)),
       )
-      for (let [v, , plugin] of vocabs) {
-        let names = effectsIn(v.docs ?? []).map((e) => e.name)
-        let code = given.get(plugin) ?? {}
-        given.delete(plugin)
-        let stray = Object.keys(code).find((n) => !names.includes(n))
-        if (stray) throw undeclared(plugin, stray)
-        fx.handle({
-          ...Object.fromEntries(names.map((n) => [n, nothing])),
-          ...code,
-        })
+      let code: Handlers = {}
+      let by = new Map<string, string>()
+      for (let [mod, options, plugin] of watched) {
+        for (
+          let [name, run] of Object.entries(mod.effects?.(host, options) ?? {})
+        ) {
+          if (!declared.has(name)) throw undeclared(plugin, name)
+          if (by.has(name)) throw twice(name, [by.get(name)!, plugin])
+          by.set(name, plugin)
+          code[name] = run
+        }
       }
-      for (let [plugin, code] of given) {
-        let [stray] = Object.keys(code)
-        if (stray) throw undeclared(plugin, stray)
-      }
+      fx.handle({
+        ...Object.fromEntries([...declared].map((n) => [n, nothing])),
+        ...code,
+      })
     }
     // After every table exists, the plugins' own included: a full-text index is
     // built over the tables it reads, and a property the graph stores under a

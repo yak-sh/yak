@@ -1,5 +1,5 @@
 // What a transcript is doing, computed from its entries — never stored. The
-// rule is written twice on purpose, once over bundles (for the daemon,
+// rule is written twice on purpose, once over bundles (for the runner,
 // @yaks/ram, and any code holding entries) and once as SQL (the
 // `session.status` derived property @yaks/sqlite reads and filters through),
 // and a test holds the two together. There is no third copy: a stored `status`
@@ -17,16 +17,16 @@
 //   ask, call     → running   a model or a tool owes an answer
 //   output        → settled   the turn returned prose and asked for nothing
 //   stop          → stopped   nothing may be done
-//   exception     → failed    the daemon could not continue past it
+//   exception     → failed    the runner could not continue past it
 //   error         → failed once the last RETRIES entries are all errors,
-//                   else pending (the daemon retries)
+//                   else pending (the runner retries)
 //   nothing       → empty
 //
-// `pending` is the daemon's to answer, and the daemon answers only a
+// `pending` is the runner's to answer (./run.ts), and it answers only a
 // transcript that asked it: one carrying a `using` (its request) or an `ask`
 // (a turn it took). One with neither is run outside the graph — a harness's
-// session its hooks record, a run from before the daemon — so its newest input
-// is owed by that runner: running, never pending, which the daemon would
+// session its hooks record, a run from before the runner — so its newest input
+// is owed by whatever runs it: running, never pending, which the runner would
 // answer with no model to ask.
 //
 // A turn lands as one batch — the ask, the prose, and the calls together — so
@@ -93,7 +93,7 @@ export type TranscriptStatus =
   | 'stopped'
   | 'failed'
 
-/** How many consecutive errors the daemon retries through before it leaves a
+/** How many consecutive errors the runner retries through before it leaves a
  * transcript `failed`. */
 export let RETRIES = 3
 
@@ -134,7 +134,7 @@ export let ordered = (entries: Bundle[]): Bundle[] =>
 export let newestAsk = (entries: Bundle[]): Bundle | undefined =>
   ordered(entries).filter((b) => kindOf(b) == 'ask').at(-1)
 
-/** The calls that no result answers — what the daemon runs next, and what
+/** The calls that no result answers — what the runner runs next, and what
  * keeps a transcript running past the prose the model returned beside them. */
 export let openCalls = (entries: Bundle[]): Bundle[] => {
   let all = ordered(entries)
@@ -145,13 +145,13 @@ export let openCalls = (entries: Bundle[]): Bundle[] => {
   return all.filter((b) => kindOf(b) == 'call' && !answered.has(b.entity.eid))
 }
 
-/** A transcript the daemon answers: one that asked it, by a request or a turn
+/** A transcript the runner answers: one that asked it, by a request or a turn
  * it took. */
 export let served = (entries: Bundle[]): boolean =>
   entries.some((b) => USING in b || ASK in b)
 
 /** The transcripts a runner is working on: the ones the session cap counts
- * and a restart wakes. That is a transcript the daemon answers ({@link served})
+ * and a restart wakes. That is a transcript the runner answers ({@link served})
  * with something outstanding. An empty session has nothing to run, and one run
  * outside the graph reads `running` while its own runner owes the answer; a
  * graph holds thousands of both (every session a harness's hooks recorded).
@@ -343,7 +343,7 @@ export let sessionStatus = {
       ],
       where: eq(col('entity', 'a'), ask),
     })))
-    // `served` above: the transcript asked the daemon, by a request or a turn
+    // `served` above: the transcript asked the runner, by a request or a turn
     // it took.
     let served = exists(select({
       cols: [lit(1)],

@@ -143,7 +143,7 @@
     "dispatch": {
       "component": true,
       "type": "object",
-      "description": "durable child pool admission; queued intent survives daemon restart",
+      "description": "a child's place under the bound on children: queued, active, waiting on its own, or settled; it survives a restart",
       "properties": {
         "state": {
           "type": "string"
@@ -326,7 +326,7 @@
     "stop": {
       "component": true,
       "type": "object",
-      "description": "a marker in the transcript: the daemon does nothing after it",
+      "description": "a marker in the transcript: the runner does nothing after it",
       "properties": {}
     },
     "using": {
@@ -560,11 +560,11 @@
     },
     "session_run": {
       "effect": true,
-      "created": ["using", "completed", "cancelled"],
+      "created": ["using", "stop", "completed", "cancelled"],
       "changed": ["dispatch.state"],
       "removed": ["contains", "requires"],
-      "sweep": ".session.status=pending,running,queued (.entries.using|.entries.ask)|.dispatch.state=active",
-      "description": "run a transcript until it has nothing more to do: a `using` on an entry asks for a turn, a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency"
+      "sweep": ".session.status=pending,running,queued (.entries.using|.entries.ask)|.dispatch.state=active,queued",
+      "description": "run a transcript until it has nothing more to do: a `using` on an entry asks for a turn, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency"
     }
   }
 }

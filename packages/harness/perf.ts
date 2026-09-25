@@ -1,7 +1,7 @@
 // Reproducible hot-path probe, outside the fast test tier:
 // deno run -A packages/harness/perf.ts
 import { type Bundle, identityEid } from '@yaks/graph'
-import { daemon } from '@yaks/session'
+import { type Runner, settle } from '@yaks/session'
 import { open } from './store.ts'
 import { seed } from './agent.ts'
 
@@ -16,13 +16,14 @@ let prefix: Bundle[] = Array.from({ length: 1000 }, (_, i) => ({
 h.g.apply(prefix)
 let apply: number[] = [], overhead: number[] = []
 let applied = 0, sample = 0
-let d = daemon(h.g, h.fx, {
+let r: Runner = {
+  holder: h.me,
   tools: [],
   model: (req) => {
     if (sample >= 10) overhead.push(performance.now() - applied)
     return Promise.resolve({ id: 'r', model: req.model, items: [] })
   },
-})
+}
 for (let i = 0; i < 60; i++) {
   sample = i
   let before = performance.now()
@@ -33,7 +34,7 @@ for (let i = 0; i < 60; i++) {
   }])
   applied = performance.now()
   await wrote
-  await d.idle('s')
+  await settle(h.g, 's', r)
   // Remove the ask: every sample sees the same 1,000-entry prefix.
   let asks = [...await h.g.read('.ask'), { entity: { eid: `input${i}` } }]
   await h.g.apply(asks.map((b) => ({ entity: b.entity, tombstone: {} })))

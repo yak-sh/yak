@@ -30,7 +30,7 @@ let entry = (n: number, kind: Record<string, unknown>): Bundle => ({
   ...kind,
 })
 let input = (n: number) => entry(n, { content: { body: 'hi' } })
-// The input that asks the daemon: prose with the model it wants.
+// The input that asks the runner: prose with the model it wants.
 let request = (n: number) =>
   entry(n, { content: { body: 'hi' }, using: { model: M } })
 let said = (n: number, source: string) =>
@@ -101,7 +101,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'settled'],
   ['nothing', [], 'empty'],
   ['a request', [request(1)], 'pending'],
-  // Nothing here asked the daemon: a harness runs it, and its hooks record
+  // Nothing here asked the runner: a harness runs it, and its hooks record
   // what was typed and what came back. The answer is the harness's to give.
   ['an input nobody here answers', [input(1)], 'running'],
   ['a harness turn answered', [input(1), said(2, S)], 'settled'],
@@ -155,7 +155,7 @@ Deno.test('statusOf reads the newest entry', () => {
   }
 })
 
-// A whole tool-using turn, read as it lands. The daemon appends an ask with
+// A whole tool-using turn, read as it lands. The runner appends an ask with
 // everything the model said and asked for in one batch, so the prefixes below
 // are the states a reader can actually see: running while the tool is owed an
 // answer, and settled only at the last output, which asked for nothing.

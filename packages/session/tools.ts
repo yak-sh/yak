@@ -39,7 +39,7 @@
 //
 // A transcript stalls. `pending` means the model owes a turn and `running`
 // means a model or a tool owes an answer; both are moments, not states to live
-// in. One that has been waiting for hours means the daemon died mid-turn, or
+// in. One that has been waiting for hours means the runner died mid-turn, or
 // the answer came back to a process that was gone — the transcript just stops,
 // and nothing anywhere reports it. Both checks read the same rule everything
 // else reads, ./status.ts `statusOf` over the entries, rather than a second

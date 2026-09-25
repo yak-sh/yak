@@ -22,22 +22,19 @@
 //
 // Children share one bound (`maxChildren`, @yaks/session `ChildLimits`): a
 // spawned transcript waits `queued` until fewer than that many are `active`,
-// and one ending admits the oldest waiting. Admission is a write to the child's
-// `dispatch`, which owes it a run like any other request.
+// and one ending admits the oldest waiting (./admission.ts). Admission is a
+// write to the child's `dispatch`, which owes it a run like any other request.
+//
+// A process leaving (`stopping`) starts no step after it and lets the step in
+// flight finish; what is left is owed, for the next worker's sweep.
 //
 // What the runner is lent — the models, the tools, the limits — is the host's
 // ({@link Runner}): nothing here names a machine or a provider.
 
 import type { Event, Handlers } from '@yaks/effects'
 import { drop, HOLD, take } from '@yaks/effects'
-import {
-  type Bundle,
-  type Comp,
-  type Eid,
-  type Graph,
-  Stale,
-  token,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { active, admitNext, queue, swap } from './admission.ts'
 import { type ChildLimits, deliverChild } from './children.ts'
 import { STOP_ENTRY } from './native.ts'
 import { type Deps, react, type Step, transcript } from './react.ts'
@@ -83,47 +80,6 @@ let newest = async (g: Graph, session: Eid): Promise<number> => {
     `.entry.session=${session}&.order=-entry.seq&.limit=1&*`,
   )
   return last ? seqOf(last) : 0
-}
-
-// A patch to a transcript's `dispatch` that lands only if its state is still
-// the one read: two workers admitting one child settle it in the transaction.
-let swap = async (
-  g: Graph,
-  eid: Eid,
-  was: unknown,
-  dispatch: Comp,
-): Promise<boolean> => {
-  try {
-    await g.apply([{
-      entity: { eid },
-      dispatch,
-      $was: { dispatch: { state: token(was ?? null) } },
-    }], { trusted: true })
-    return true
-  } catch (error) {
-    if (error instanceof Stale) return false
-    throw error
-  }
-}
-
-let queue = async (g: Graph) =>
-  (await g.read('.dispatch.state=queued&*')).toSorted((a, b) =>
-    Number(comp(a, 'dispatch')?.order ?? 0) -
-    Number(comp(b, 'dispatch')?.order ?? 0)
-  )
-
-let active = async (g: Graph) => (await g.read('.dispatch.state=active')).length
-
-/** Admit the oldest queued children while fewer than the bound are active.
- * Each admission is a write to the child's `dispatch`, which owes it a run. */
-export let admitNext = async (
-  g: Graph,
-  limits: ChildLimits = {},
-): Promise<void> => {
-  let free = (limits.maxChildren ?? 32) - await active(g)
-  for (let b of (await queue(g)).slice(0, Math.max(0, free))) {
-    await swap(g, b.entity.eid, 'queued', { state: 'active' })
-  }
 }
 
 // A task this transcript holds was cancelled: the transcript is stopped, once.
@@ -253,7 +209,7 @@ let turns = async (g: Graph, session: Eid, r: Runner): Promise<number> => {
     return newest(g, session)
   }
   if (!await admitted(g, session, r)) return newest(g, session)
-  for (;;) {
+  while (!r.stopping?.aborted) {
     let s = await step(g, session, r)
     r.each?.(s)
     if (ENDED.includes(s.status)) {
@@ -325,7 +281,7 @@ export let settle = (g: Graph, session: Eid, r: Runner): Promise<void> => {
   here.set(session, p)
   p.done = (async () => {
     try {
-      while (p.again) {
+      while (p.again && !r.stopping?.aborted) {
         p.again = false
         let seen = await held(g, session, r)
         if (seen == null) return
@@ -341,6 +297,10 @@ export let settle = (g: Graph, session: Eid, r: Runner): Promise<void> => {
 /** Whether a transcript is being run by this process right now. */
 export let runningHere = (g: Graph, session: Eid): boolean =>
   going(g).has(session)
+
+/** The pass this process is running over a transcript, to wait on, if any. */
+export let passing = (g: Graph, session: Eid): Promise<void> | undefined =>
+  going(g).get(session)?.done
 
 // The transcripts an event owes a run: the one an entry is in (not a turn the
 // runner itself took, which the run that wrote it carries on from), a
@@ -376,13 +336,33 @@ let about = async (g: Graph, e: Event): Promise<Eid[]> => {
   ]
 }
 
-// Whether the transcript asks for a turn this runner gives: its `using` in
-// force names a provider this host was lent a model for.
-let ours = async (g: Graph, session: Eid, r: Runner) => {
+/** Whether this runner answers a transcript: it asked for turns (a `using` or
+ * an `ask` on an entry), and its `using` in force names a provider the runner
+ * was lent a model for. */
+export let answering = async (
+  g: Graph,
+  session: Eid,
+  r: Runner,
+): Promise<boolean> => {
   let asked = await g.read(`.entry.session=${session}&.using&*`)
   let entries = asked.length ? asked : await transcript(g, session)
   if (!entries.some((b) => b.using || b.ask)) return false
   return r.answers ? await r.answers(usingBefore(entries)) : true
+}
+
+/** Answer a transcript's request for a turn here, where this host answers the
+ * provider it asks for: {@link settle} it, or, where this process is already
+ * running it, have that pass look again (without waiting on it, since the
+ * pass may be what is asking; whoever started the pass hears how it ends). */
+export let answer = async (
+  g: Graph,
+  session: Eid,
+  r: Runner,
+): Promise<void> => {
+  if (runningHere(g, session)) {
+    return void settle(g, session, r).catch(() => {})
+  }
+  if (await answering(g, session, r)) await settle(g, session, r)
 }
 
 /**
@@ -398,12 +378,6 @@ let ours = async (g: Graph, session: Eid, r: Runner) => {
  */
 export let running = (g: Graph, r: Runner): Handlers => ({
   session_run: async (e) => {
-    for (let session of await about(g, e)) {
-      if (runningHere(g, session)) {
-        void settle(g, session, r)
-        continue
-      }
-      if (await ours(g, session, r)) await settle(g, session, r)
-    }
+    for (let session of await about(g, e)) await answer(g, session, r)
   },
 })

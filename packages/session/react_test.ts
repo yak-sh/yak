@@ -1,8 +1,8 @@
 import type { Comp } from '@yaks/graph'
-// The daemon's step over a fake model, on @yaks/ram: an input is asked, a tool
+// The runner's step over a fake model, on @yaks/ram: an input is asked, a tool
 // call is run, the transcript settles; a stop is obeyed; a fork continues from
 // its anchor with only what followed; errors retry to the bound and then stop;
-// and the same steps run themselves as a `created(entry)` effect.
+// and the same steps run themselves as `session_run`.
 
 import { assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
@@ -23,8 +23,7 @@ import { sessionDoc } from './comp.ts'
 import { kindOf, statusOf } from './status.ts'
 import { sessions } from './plugin.ts'
 import { type Deps, react, transcript } from './react.ts'
-import { settle } from './run.ts'
-import { daemon } from './daemon.ts'
+import { running, settle } from './run.ts'
 import { took } from './timing.ts'
 
 // What the fake provider keeps about an ask: its own comp, the way @yaks/openai
@@ -300,19 +299,20 @@ Deno.test('a fork must name an entry, a using a model', () => {
   )
 })
 
-Deno.test('as an effect, the steps run themselves until the transcript settles', async () => {
+Deno.test('as `session_run`, the steps run themselves until the transcript settles', async () => {
   let fx = effects(vocab)
   let g = graph({ storage: ram(vocab), vocab, plugins: [sessions(), fx] })
   let { model, asked } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
   let steps: string[] = []
-  let d = daemon(
-    g,
-    fx,
-    { model, tools: [echo], mint },
-    (s) => steps.push(s.did),
-  )
-  seed(g) // the input entry wakes the first step
-  await d.idle(ids.s)
+  fx.handle(running(g, {
+    holder: 'here',
+    model,
+    tools: [echo],
+    mint,
+    each: (s) => steps.push(s.did),
+  }))
+  await seed(g) // the input entry owes the run
+  await fx.idle()
   assertEquals(statusOf(await transcript(g, ids.s)), 'settled')
   assertEquals(asked.length, 2)
   assertEquals(steps.filter((s) => s != 'nothing'), ['asked', 'ran', 'asked'])

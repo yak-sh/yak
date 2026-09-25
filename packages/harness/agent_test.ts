@@ -16,8 +16,8 @@ let echo: Model = (req) =>
   })
 
 let host = () => {
-  let { g, fx, vocab, close } = open(':memory:')
-  return { h: { g, fx, vocab }, release: close }
+  let { g, fx, vocab, me, close } = open(':memory:')
+  return { h: { g, fx, vocab, me }, release: close }
 }
 
 Deno.test('the runner needs a graph and a model, nothing of a machine', async () => {

@@ -1,7 +1,7 @@
 import { assertEquals } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import type { Reply } from '@yaks/model'
-import { sessionTools } from '@yaks/session'
+import { type ChildLimits, sessionTools } from '@yaks/session'
 import { seed } from './agent.ts'
 import { local } from './local.ts'
 import { open } from './store.ts'
@@ -19,11 +19,27 @@ let until = async (test: () => boolean | Promise<boolean>) => {
   }
   throw new Error('pool failed to progress')
 }
+// A graph in a file of its own, for a test that closes it and opens it again:
+// what a restart finds is what the file kept.
+let file = async () => {
+  let dir = await Deno.makeTempDir({ prefix: 'pool-reopen-' })
+  return {
+    path: dir + '/graph.sqlite',
+    free: () => Deno.remove(dir, { recursive: true }),
+  }
+}
+// The same limits bound the tools that queue children and the runner that
+// admits them.
+let limited = (h: ReturnType<typeof open>, limits: ChildLimits) => ({
+  ...limits,
+  tools: sessionTools(h.g, limits),
+})
+
 Deno.test('shared FIFO pool admits IDs before preparation and never over-admits across parents', async () => {
   let h = open(':memory:')
   let starts: string[] = [], prepared: string[] = []
   let replies = Array.from({ length: 3 }, () => Promise.withResolvers<Reply>())
-  let tools = sessionTools(h.g, {
+  let bound = limited(h, {
     maxChildren: 1,
     prepareChild: ({ child }) => {
       prepared.push(child)
@@ -33,7 +49,7 @@ Deno.test('shared FIFO pool admits IDs before preparation and never over-admits 
   let a = local({
     cwd: repo(),
     h,
-    tools,
+    ...bound,
     model: (req) => {
       let text = req.items.find((i) => i.kind == 'user') as { text: string }
       starts.push(text.text)
@@ -52,7 +68,7 @@ Deno.test('shared FIFO pool admits IDs before preparation and never over-admits 
       call: {},
     })),
   )
-  let spawn = tools.find((t) => t.name == 'spawn')!
+  let spawn = bound.tools.find((t) => t.name == 'spawn')!
   let ids = await Promise.all(
     [0, 1, 2].map((i) =>
       spawn.run({ prompt: String(i), model: 'fake' }, {
@@ -78,45 +94,55 @@ Deno.test('shared FIFO pool admits IDs before preparation and never over-admits 
   assertEquals(starts, ['0', '1', '2'])
   await a.close()
 })
-Deno.test('queued intent survives daemon restart and stop does not drain durable queue', async () => {
-  let h = open(':memory:')
-  let tools = sessionTools(h.g, { maxChildren: 0 })
+
+Deno.test('queued intent survives a restart, and closing does not drain the durable queue', async () => {
+  let { path, free } = await file()
+  let h = open(path)
+  let bound = limited(h, { maxChildren: 0 })
   let a = local({
     cwd: repo(),
     h,
-    tools,
+    ...bound,
     model: () => {
       throw new Error('queued child ran')
     },
   })
-  await h.g.apply([{ entity: { eid: 'p' }, session: {} }])
-  await h.g.apply([{
-    entity: { eid: 'call' },
-    entry: { session: 'p', seq: 1 },
-    notice: {},
-    call: {},
-  }])
-  let id = String(
-    await tools.find((t) => t.name == 'spawn')!.run({
-      prompt: 'work',
-      model: 'fake',
-    }, { session: 'p', call: { entity: { eid: 'call' } }, entries: [] }),
-  )
-  await a.d.stop()
-  assertEquals((await h.g.read('.dispatch.state=queued&*')).length, 1)
-  let b = local({
-    cwd: repo(),
-    h,
-    tools: sessionTools(h.g, { maxChildren: 1 }),
-    model: () => Promise.resolve(reply('done')),
-  })
-  await until(async () =>
-    (await h.g.read('.dispatch.state=settled&*')).length == 1
-  )
-  assertEquals((await b.children('p'))[0].entity.eid, id)
-  assertEquals(((await b.children('p'))[0].dispatch as Comp).args, null)
-  await b.close()
+  let b: ReturnType<typeof local> | undefined
+  try {
+    await h.g.apply([{ entity: { eid: 'p' }, session: {} }])
+    await h.g.apply([{
+      entity: { eid: 'call' },
+      entry: { session: 'p', seq: 1 },
+      notice: {},
+      call: {},
+    }])
+    let id = String(
+      await bound.tools.find((t) => t.name == 'spawn')!.run({
+        prompt: 'work',
+        model: 'fake',
+      }, { session: 'p', call: { entity: { eid: 'call' } }, entries: [] }),
+    )
+    await a.close()
+    h = open(path)
+    assertEquals((await h.g.read('.dispatch.state=queued&*')).length, 1)
+    b = local({
+      cwd: repo(),
+      h,
+      ...limited(h, { maxChildren: 1 }),
+      model: () => Promise.resolve(reply('done')),
+    })
+    await until(async () =>
+      (await h.g.read('.dispatch.state=settled&*')).length == 1
+    )
+    assertEquals((await b.children('p'))[0].entity.eid, id)
+    assertEquals(((await b.children('p'))[0].dispatch as Comp).args, null)
+  } finally {
+    await a.close()
+    await b?.close()
+    await free()
+  }
 })
+
 Deno.test('cap one nested delegated wait releases and reacquires its slot', async () => {
   let h = open(':memory:')
   let turns = new Map<string, number>()
@@ -149,10 +175,13 @@ Deno.test('cap one nested delegated wait releases and reacquires its slot', asyn
       }
       if (name == 'nested' && n == 1) {
         let result = req.items.find((i) => i.kind == 'result') as unknown as {
-          text: string
+          output: string
         }
         return Promise.resolve(
-          call('wait', { children: [result.text], timeout: 5000 }),
+          call('wait', {
+            children: [result.output.split('\n')[0]],
+            timeout: 5000,
+          }),
         )
       }
       if (name == 'nested') finished = true
@@ -164,69 +193,81 @@ Deno.test('cap one nested delegated wait releases and reacquires its slot', asyn
   assertEquals(turns.get('leaf'), 1)
   await a.close()
 })
+
 Deno.test('queued cancellation skips expensive prep; prep failure has one terminal receipt', async () => {
-  let h = open(':memory:')
+  let { path, free } = await file()
+  let h = open(path)
   let prepared: string[] = []
-  let tools = sessionTools(h.g, {
-    maxChildren: 0,
-    prepareChild: ({ child }) => {
-      prepared.push(child)
-      return Promise.reject(new Error('checkout failed'))
-    },
-  })
+  let prepare: ChildLimits['prepareChild'] = ({ child }) => {
+    prepared.push(child)
+    return Promise.reject(new Error('checkout failed'))
+  }
+  let bound = limited(h, { maxChildren: 0, prepareChild: prepare })
   let a = local({
     cwd: repo(),
     h,
-    tools,
+    ...bound,
     model: () => Promise.resolve(reply('parent')),
   })
-  await h.g.apply([
-    { entity: { eid: 'p' }, session: {} },
-    ...['cancel', 'fail'].map((id, i) => ({
-      entity: { eid: id },
-      entry: { session: 'p', seq: i + 1 },
-      notice: {},
-      call: {},
-    })),
-  ])
-  let spawn = tools.find((t) => t.name == 'spawn')!
-  for (let id of ['cancel', 'fail']) {
-    await spawn.run({ prompt: id, model: 'fake' }, {
-      session: 'p',
-      call: { entity: { eid: id } },
-      entries: [],
+  let b: ReturnType<typeof local> | undefined
+  try {
+    await h.g.apply([
+      { entity: { eid: 'p' }, session: {} },
+      ...['cancel', 'fail'].map((id, i) => ({
+        entity: { eid: id },
+        entry: { session: 'p', seq: i + 1 },
+        notice: {},
+        call: {},
+      })),
+    ])
+    let spawn = bound.tools.find((t) => t.name == 'spawn')!
+    for (let id of ['cancel', 'fail']) {
+      await spawn.run({ prompt: id, model: 'fake' }, {
+        session: 'p',
+        call: { entity: { eid: id } },
+        entries: [],
+      })
+    }
+    await h.g.apply([{
+      entity: { eid: 'stop-cancel' },
+      entry: { session: 'child:cancel', seq: 2 },
+      stop: {},
+    }])
+    await a.close()
+    h = open(path)
+    b = local({
+      cwd: repo(),
+      h,
+      ...limited(h, { maxChildren: 1, prepareChild: prepare }),
+      model: () => Promise.resolve(reply('parent')),
     })
+    await until(async () =>
+      (await h.g.read('.dispatch.state=settled&*')).length == 2
+    )
+    await b.idle('child:fail')
+    await b.idle('p')
+    assertEquals(prepared, ['child:fail'])
+    assertEquals(
+      (await h.g.read('.entry.session=p&*')).filter((b) =>
+        b.entity.eid.startsWith('delivery:child:fail:')
+      ).length,
+      1,
+    )
+  } finally {
+    await a.close()
+    await b?.close()
+    await free()
   }
-  await h.g.apply([{
-    entity: { eid: 'stop-cancel' },
-    entry: { session: 'child:cancel', seq: 2 },
-    stop: {},
-  }])
-  sessionTools(h.g, { maxChildren: 1 })
-  a.d.wake('child:fail')
-  await until(async () =>
-    (await h.g.read('.dispatch.state=settled&*')).length == 2
-  )
-  await a.d.idle('child:fail')
-  await a.d.idle('p')
-  assertEquals(prepared, ['child:fail'])
-  assertEquals(
-    (await h.g.read('.entry.session=p&*')).filter((b) =>
-      b.entity.eid.startsWith('delivery:child:fail:')
-    ).length,
-    1,
-  )
-  await a.close()
 })
+
 Deno.test('queued submissions and fork anchors survive file reopen without duplicate preparation', async () => {
-  let dir = await Deno.makeTempDir({ prefix: 'pool-reopen-' })
-  let path = dir + '/graph.sqlite'
+  let { path, free } = await file()
   let h = open(path)
-  let tools = sessionTools(h.g, { maxChildren: 0 })
+  let bound = limited(h, { maxChildren: 0 })
   let a = local({
     cwd: repo(),
     h,
-    tools,
+    ...bound,
     model: () => Promise.resolve(reply('done')),
   })
   try {
@@ -245,7 +286,7 @@ Deno.test('queued submissions and fork anchors survive file reopen without dupli
     }])
     let entries = await a.transcript('p')
     let id = String(
-      await tools.find((t) => t.name == 'fork')!.run({
+      await bound.tools.find((t) => t.name == 'fork')!.run({
         prompt: 'child',
         model: 'fake',
       }, { session: 'p', call: { entity: { eid: 'call' } }, entries }),
@@ -253,7 +294,7 @@ Deno.test('queued submissions and fork anchors survive file reopen without dupli
     await a.close()
     h = open(path)
     let prep = 0
-    tools = sessionTools(h.g, {
+    bound = limited(h, {
       maxChildren: 1,
       prepareChild: () => {
         prep++
@@ -263,7 +304,7 @@ Deno.test('queued submissions and fork anchors survive file reopen without dupli
     a = local({
       cwd: repo(),
       h,
-      tools,
+      ...bound,
       model: () => Promise.resolve(reply('done')),
     })
     await until(async () =>
@@ -272,7 +313,9 @@ Deno.test('queued submissions and fork anchors survive file reopen without dupli
     assertEquals(((await a.children('p'))[0].fork as Comp).from, 'input')
     assertEquals(
       String(
-        await tools.find((t) => t.name == 'fork')!.run({ prompt: 'ignored' }, {
+        await bound.tools.find((t) => t.name == 'fork')!.run({
+          prompt: 'ignored',
+        }, {
           session: 'p',
           call: { entity: { eid: 'call' } },
           entries,
@@ -283,6 +326,6 @@ Deno.test('queued submissions and fork anchors survive file reopen without dupli
     assertEquals(prep, 1)
   } finally {
     await a.close()
-    await Deno.remove(dir, { recursive: true })
+    await free()
   }
 })

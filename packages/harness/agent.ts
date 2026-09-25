@@ -1,17 +1,17 @@
-// The harness is its agent runner: the rows every transcript is read from, the
-// daemon over them, and the operations a caller needs — start a session, send
-// it a message, list sessions, read one back. It runs wherever a graph does: on
-// a box over a SQLite file (./local.ts), or on Cloudflare over D1 or a Durable
-// Object's storage. So nothing here names a machine. What runs on one — the
-// shell, a checkout per child, the instruction files on disk, the lock between
-// two processes, where a defect is written — is lent by the host as an option,
+// The harness is its agent: the rows every transcript is read from, the runner
+// it lends them (@yaks/session run.ts), and the operations a caller needs —
+// start a session, send it a message, list sessions, read one back. It runs
+// wherever a graph does: on a box over a SQLite file (./local.ts), or on
+// Cloudflare over D1 or a Durable Object's storage. So nothing here names a
+// machine. What runs on one — the shell, a checkout per child, the instruction
+// files on disk, where a defect is written — is lent by the host as an option,
 // and a host that lends none of it still runs a transcript to the end.
 //
 // Everything in and out of here is a bundle or a query. Nothing writes SQL,
 // nothing reads a table, and no state lives in this process that the graph does
 // not already hold: which sessions are running is `.session.status=running`,
-// what was written is `.entry.session=<s>`. The one thing it keeps in memory
-// is the daemon's queue, which is a position in a queue rather than state.
+// what was written is `.entry.session=<s>`. The one thing kept in memory is
+// which transcripts this process is running, and that is the runner's.
 //
 // Seeding is idempotent because the ids are derived from the names — the
 // vocabulary declares `name` the identity of a provider, a model and a tool,
@@ -33,16 +33,21 @@ import { MODEL, type Model, PROVIDER, TOOL } from '@yaks/model'
 import { toolEid } from '@yaks/tools'
 import {
   admit,
+  answer,
+  answering,
+  answers,
   type ChildLimits,
   children,
   CONTENT,
-  type Daemon,
-  daemon,
   deliverChild,
   type Deps,
   ENTRY,
   live,
+  passing,
   providerResolver,
+  type Runner,
+  running,
+  statusOf,
   type Step,
   taskEntry,
   type Tool,
@@ -51,6 +56,7 @@ import {
   transcriptUsage,
   type TranscriptWindow,
   transcriptWindow,
+  usingBefore,
   views,
 } from '@yaks/session'
 import { outputView, promptEntry, type Snapshot } from '@yaks/context'
@@ -95,9 +101,10 @@ export let seed = (
   ]
 }
 
-/** What an agent runs over: a graph, the effects its commits raise, and the
- * vocabulary it reads them with. */
-export type Host = { g: Graph; fx: Effects; vocab: Vocab }
+/** What an agent runs over: a graph, the effects its commits raise, the
+ * vocabulary it reads them with, and the process working it, which a run's
+ * lease names as its holder. */
+export type Host = { g: Graph; fx: Effects; vocab: Vocab; me: Eid }
 
 /** Where a defect happened: what was running, and in which transcript. */
 export type Where = { phase: string; session?: Eid }
@@ -134,26 +141,26 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   opening?: () => Promise<Opening>
   /** context an ask carries without storing its bytes in entries */
   context?: Deps['contextItems']
-  /** one runtime per step when several open the same graph */
-  lock?: (session: Eid) => (() => void) | undefined
   /** defects, apart from refusals (default `console.error`) */
   report?: (error: unknown, where: Where) => void
   /** what the host reconciles when the agent resumes */
   resuming?: () => Promise<void>
   /** what the host lets go of once every admitted operation has drained */
   release?: () => Promise<void> | void
+  /** how long a transcript's lease stands between renewals, so how long a
+   * process that died running it holds it up (ms; default @yaks/effects') */
+  hold?: number
 }
 
 /** A running agent. */
 export type Agent<H extends Host = Host> = {
   h: H
-  d: Daemon
   tools: Tool[]
   /** the model entity every new session is started under */
   model: Eid
   /** what to call a model or tool entity, for the views */
   names: Record<string, string>
-  /** start a transcript with one instruction; the daemon takes it from there.
+  /** start a transcript with one instruction; the runner takes it from there.
    * `by` is who wrote the instruction, where the caller knows. */
   start: (
     prompt: string,
@@ -187,7 +194,8 @@ export type Agent<H extends Host = Host> = {
     request?: SourceRequest,
   ) => Promise<EntrySource>
   usage: (session: Eid) => Promise<Bundle[]>
-  /** wake every transcript a restart left mid-step */
+  /** run every transcript left owed a turn that nothing wrote a run for, and
+   * answer which they were */
   resume: () => Promise<Eid[]>
   /** wait for a transcript to run out of things to do */
   idle: (session: Eid) => Promise<void>
@@ -221,33 +229,81 @@ let byBirth = (a: Bundle, b: Bundle) =>
  * and paint nothing at all. A week of work is well inside this. */
 export let LISTED = 200
 
+// What attributes a write made here: the transcript it is about, and who
+// wrote it where the caller said. The harness runs for whoever is at the
+// keyboard and holds no entity for them, so otherwise the instrument is
+// recorded and the actor is left unset rather than guessed; a model turn
+// attributes itself (@yaks/session react.ts).
+export let through = (session: Eid, by?: Eid) => ({
+  ...by ? { by } : {},
+  via: session,
+})
+
+/** A new transcript, as one write: the session, the instruction files it
+ * opens with snapshotted ahead of the first message, and that message, which
+ * asks for a turn with `using`. Answers the session. */
+export let begin = async (
+  g: Graph,
+  prompt: string,
+  o: Opening & { using: Comp; by?: Eid },
+): Promise<Eid> => {
+  let session = crypto.randomUUID() as Eid
+  let context = (o.files ?? []).map((f, i) =>
+    promptEntry(session, i + 1, f.body, f.source, 'shared', f.revision)
+  )
+  await g.apply([
+    ...context,
+    {
+      entity: { eid: session },
+      session: { id: session.slice(0, 8) },
+      ...o.home ? { home: o.home } : {},
+      $actor: through(session, o.by),
+    },
+    {
+      entity: { eid: crypto.randomUUID() as Eid },
+      [ENTRY]: { session, seq: context.length + 1 },
+      [CONTENT]: { body: prompt },
+      using: o.using,
+    },
+  ])
+  return session
+}
+
+// The defects an agent reports, where its options name nowhere else.
+let reporter = (opts: { report?: (error: unknown, where: Where) => void }) =>
+  opts.report ??
+    ((error: unknown, where: Where) => console.error(where.phase, error))
+
+// What serves each provider, by `provider.name`.
+let served = (opts: Pick<Opts, 'model' | 'providers' | 'provider'>) => ({
+  ...opts.model ? { [opts.provider ?? 'openai']: opts.model } : {},
+  ...opts.providers,
+})
+
 /**
- * Put the daemon on a graph's entries, seeded with what serves it.
+ * The runner an agent's options lend (@yaks/session `Runner`), over the
+ * provider, model and tool rows its first step seeds: what serves each
+ * provider, what a transcript may call, and how a step is taken. A host registers it with
+ * @yaks/session `running` wherever its effects are worked.
  *
  * ```ts
- * import { agent } from '@yaks/harness'
+ * import { lend } from '@yaks/harness'
+ * import { running } from '@yaks/session'
  *
- * let a = agent({ h: { g, fx, vocab }, model: fake })
- * let s = await a.start('reply with the word pong')
- * await a.idle(s)
+ * // h.fx.handle(running(h.g, lend({ h, model })))
  * ```
  */
-export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
+export let lend = <H extends Host>(opts: Opts<H>): Runner => {
   let h = opts.h
-  let report = opts.report ??
-    ((error: unknown, where: Where) => console.error(where.phase, error))
+  let report = reporter(opts)
   const provider = opts.provider ?? 'openai'
   if (provider !== 'openai' && !opts.name) {
     throw new Error('Choose an explicit model name for a non-default provider')
   }
   let name = opts.name ?? ASTRA
-  const implementations = {
-    ...opts.model ? { [provider]: opts.model } : {},
-    ...opts.providers,
-  }
+  const implementations = served(opts)
   let model = opts.model ?? implementations[provider]
   if (!model) throw new Error('Nothing serves provider ' + provider)
-  const resolveModel = providerResolver(h.g, implementations, opts.model)
   let tools = opts.tools ?? []
   let remote = opts.remote ?? (() => Promise.resolve([]))
   let remoteSignature = ''
@@ -255,48 +311,92 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
   // name, and a server reconfigured mid-ask serves that name from somewhere
   // else: the calls an ask issued run on the handlers it was offered.
   const offered = new Map<Eid, Tool[]>()
-  h.g.apply(seed({ provider, model: name, tools }), { trusted: true })
-  let d = daemon(
-    h.g,
-    h.fx,
-    {
-      model,
-      resolveModel,
-      tools,
-      toolSnapshot: async (phase, session) => {
-        const held = phase === 'call' && offered.get(session)
-        if (held) return [...tools, ...held]
-        const served = await remote()
-        offered.set(session, served)
-        const all = [...tools, ...served]
-        if (
-          new Set(all.map((t) => t.name)).size !== all.length
-        ) throw new Error('Duplicate local/MCP tool name')
-        const signature = JSON.stringify(
-          served.map((t) => [t.name, t.description, t.parameters]),
-        )
-        if (signature !== remoteSignature) {
-          await h.g.apply(seed({ provider, model: name, tools: served }), {
-            trusted: true,
-          })
-          remoteSignature = signature
-        }
-        return all
-      },
-      streaming: opts.streaming,
-      checkpointMs: opts.checkpointMs,
-      instructions: opts.instructions,
-      resolveInstructions: (inherited) =>
-        inheritedInstructions(inherited, opts.instructions),
-      contextItems: opts.context,
-      resultText: tools.some((t) => t.name == 'graph_value_read')
-        ? (entry) => outputView(h.g, entry, opts.outputLimit)
-        : undefined,
-      report: (error, session, phase) => report(error, { session, phase }),
+  // Seeded by the first step, not when lent: a host lends the runner while it
+  // is being put together, before anything may be written in its name.
+  let seeded: unknown
+  let {
+    taskDefaults,
+    maxChildren,
+    maxSessions,
+    childProperties,
+    prepareChild,
+  } = opts
+  return {
+    holder: h.me,
+    taskDefaults,
+    maxChildren,
+    maxSessions,
+    childProperties,
+    prepareChild,
+    model,
+    resolveModel: providerResolver(h.g, implementations, opts.model),
+    answers: answers(h.g, implementations, opts.model),
+    tools,
+    toolSnapshot: async (phase, session) => {
+      await (seeded ??= h.g.apply(seed({ provider, model: name, tools }), {
+        trusted: true,
+      }))
+      const held = phase === 'call' && offered.get(session)
+      if (held) return [...tools, ...held]
+      const served = await remote()
+      offered.set(session, served)
+      const all = [...tools, ...served]
+      if (
+        new Set(all.map((t) => t.name)).size !== all.length
+      ) throw new Error('Duplicate local/MCP tool name')
+      const signature = JSON.stringify(
+        served.map((t) => [t.name, t.description, t.parameters]),
+      )
+      if (signature !== remoteSignature) {
+        await h.g.apply(seed({ provider, model: name, tools: served }), {
+          trusted: true,
+        })
+        remoteSignature = signature
+      }
+      return all
     },
-    opts.each,
-    (error, session) => report(error, { phase: 'daemon', session }),
-    opts.lock,
+    streaming: opts.streaming,
+    checkpointMs: opts.checkpointMs,
+    instructions: opts.instructions,
+    resolveInstructions: (inherited) =>
+      inheritedInstructions(inherited, opts.instructions),
+    contextItems: opts.context,
+    resultText: tools.some((t) => t.name == 'graph_value_read')
+      ? (entry) => outputView(h.g, entry, opts.outputLimit)
+      : undefined,
+    report: (error, session, phase) => report(error, { session, phase }),
+    each: opts.each,
+    hold: opts.hold,
+  }
+}
+
+/**
+ * Lend a graph the runner and work its pool, seeded with what serves it.
+ *
+ * ```ts
+ * import { agent } from '@yaks/harness'
+ *
+ * let a = agent({ h: { g, fx, vocab, me }, model: fake })
+ * let s = await a.start('reply with the word pong')
+ * await a.idle(s)
+ * ```
+ */
+export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
+  let h = opts.h
+  let report = reporter(opts)
+  const provider = opts.provider ?? 'openai'
+  let name = opts.name ?? ASTRA
+  const implementations = served(opts)
+  let tools = opts.tools ?? []
+  // The runner, taking every run this graph's commits owe it, until the agent
+  // closes: then no step starts, a waiting tool stops waiting, and the step in
+  // flight is let finish.
+  let stopping = new AbortController()
+  let r: Runner = { ...lend(opts), stopping: stopping.signal }
+  h.g.apply(seed({ provider, model: name, tools }), { trusted: true })
+  h.fx.handle(running(h.g, r))
+  let working = h.fx.work(h.g, stopping.signal).catch((error) =>
+    report(error, { phase: 'effects' })
   )
 
   let using = {
@@ -307,16 +407,6 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     [using.model]: name,
     ...Object.fromEntries(tools.map((t) => [toolEid(t.name), t.name])),
   }
-  // What attributes a write made here: the transcript it is about, and who
-  // wrote it where the caller said. The harness runs for whoever is at the
-  // keyboard and holds no entity for them, so otherwise the instrument is
-  // recorded and the actor is left unset rather than guessed; a model turn
-  // attributes itself (@yaks/session react.ts).
-  let through = (session: Eid, by?: Eid) => ({
-    ...by ? { by } : {},
-    via: session,
-  })
-
   // Lifecycle bookkeeping only; all application state remains in the graph.
   let refusal: Error | undefined
   let shutdown: Promise<void> | undefined
@@ -332,9 +422,26 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
       return pending
     }
 
+  // The request in force on a transcript: what a line said to it asks a turn
+  // with, since a turn is asked for by a `using` on an entry.
+  let asking = async (session: Eid) => {
+    let using = usingBefore(await transcript(h.g, session))
+    return using ? { using } : {}
+  }
+  // Whether a transcript has nothing more to do that this agent is doing or
+  // owes: no pass of its own over it, nothing waiting for a place, and no turn
+  // it answers outstanding.
+  let quiet = async (session: Eid) => {
+    if (passing(h.g, session)) return false
+    let [self] = await h.g.storage.tx((tx) => tx.get([session]))
+    if ((self?.dispatch as Comp | undefined)?.state == 'queued') return false
+    let status = statusOf(await transcript(h.g, session))
+    if (status != 'pending' && status != 'running') return true
+    return !await answering(h.g, session, r)
+  }
+
   let a: Agent<H> = {
     h,
-    d,
     tools,
     names,
     model: using.model,
@@ -361,31 +468,15 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
         const chosen = o.model
           ? await modelUsing(h.g, o.model, implementations)
           : {}
-        let { home, files = [] } = await opts.opening?.() ?? {}
-        let session = crypto.randomUUID() as Eid
-        let context = files.map((f, i) =>
-          promptEntry(session, i + 1, f.body, f.source, 'shared', f.revision)
-        )
-        await h.g.apply([
-          ...context,
-          {
-            entity: { eid: session },
-            session: { id: session.slice(0, 8) },
-            ...home ? { home } : {},
-            $actor: through(session, o.by),
+        return begin(h.g, prompt, {
+          ...await opts.opening?.(),
+          by: o.by,
+          using: {
+            ...using,
+            ...chosen,
+            ...o.effort ? { effort: o.effort } : {},
           },
-          {
-            entity: { eid: crypto.randomUUID() as Eid },
-            [ENTRY]: { session, seq: context.length + 1 },
-            [CONTENT]: { body: prompt },
-            using: {
-              ...using,
-              ...chosen,
-              ...o.effort ? { effort: o.effort } : {},
-            },
-          },
-        ])
-        return session
+        })
       })
     ),
     send: admitted(async (session: Eid, text: string, by?: Eid) => {
@@ -396,6 +487,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
         entity: { eid },
         [ENTRY]: { session },
         [CONTENT]: { body: text },
+        ...await asking(session),
         $actor: through(session, by),
       }])
       return eid
@@ -444,44 +536,56 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
       transcriptWindow(h.g, session, request),
     resume: admitted(async () => {
       let woken = (await h.g.read(live)).map((b) => b.entity.eid)
-      // Reconcile receipts lost between a child commit and its effect.
+      // Receipts a finished child never delivered, delivered: telling is
+      // idempotent, and runs nothing more of the child.
       for (
         let b of await h.g.read(
           '.spawned .session.status=settled,failed,stopped',
         )
       ) {
-        // Reconcile delivery without scheduling another execution of a
-        // finished child. The daemon tracks this work for shutdown draining.
-        let parent = String((b.spawned as Comp).parent)
-        d.enqueue(parent, () => deliverChild(h.g, b.entity.eid)).catch(
-          (error) =>
-            report(error, { phase: 'resume-receipt', session: parent }),
+        await deliverChild(h.g, b.entity.eid).catch((error) =>
+          report(error, {
+            phase: 'resume-receipt',
+            session: String((b.spawned as Comp).parent),
+          })
         )
       }
       await opts.resuming?.()
-      for (let s of woken) d.wake(s)
+      for (let s of woken) {
+        answer(h.g, s, r).catch((error) =>
+          report(error, { phase: 'resume', session: s })
+        )
+      }
       return woken
     }),
-    idle: admitted((session: Eid) => d.idle(session)),
+    idle: admitted(async (session: Eid) => {
+      while (!stopping.signal.aborted && !await quiet(session)) {
+        await (passing(h.g, session)?.catch(() => {}) ??
+          new Promise((go) => setTimeout(go, 10)))
+      }
+    }),
     line: (b, view = 'Line', ctx = {}) =>
       render(views, b, view, h.vocab, {
         names,
-        anchor: model.anchor,
+        anchor: r.model.anchor,
         ...ctx,
       }, 'plain'),
-    instruct: admitted((session: Eid, text: string, source = 'explicit') =>
-      d.enqueue(session, async () => {
+    instruct: admitted(
+      async (session: Eid, text: string, source = 'explicit') => {
         let entry = promptEntry(session, undefined, text, source, 'local')
-        await h.g.apply([entry])
+        await h.g.apply([{ ...entry, ...await asking(session) }])
         return entry.entity.eid
-      })
+      },
     ),
+    // Admission stops, the runner takes no new step and leaves the pool, and
+    // what was admitted and the step in flight drain before the host lets go.
     close: (reason) =>
       shutdown ??= (async () => {
         refusal ??= reason ?? new Error('Agent is closing')
-        let drained = d.stop()
+        stopping.abort()
         await Promise.allSettled([...operations])
-        await drained
+        await h.fx.stop()
+        await working
         await opts.release?.()
       })(),
   }

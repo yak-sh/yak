@@ -252,9 +252,10 @@ export let speaking = (
  * ```
  *
  * `null` when this session asked for nothing, or asked for a provider this
- * package has no adapter for — an `http` provider belongs to the in-process
- * daemon, not here. The tail keeps running after this call returns: what it
- * returns is the started process, not the finished run.
+ * package has no adapter for: it launches command-line agents only, and a
+ * provider a host lends a model for is the session runner's (@yaks/session
+ * `running`). The tail keeps running after this call returns: what it returns
+ * is the started process, not the finished run.
  */
 export let start = async (
   g: Graph,

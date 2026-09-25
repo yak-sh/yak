@@ -39,7 +39,7 @@ import type { Derived } from '@yaks/sql'
 import { checkoutDoc } from '@yaks/git/vocab'
 import { secretsDoc } from '@yaks/secrets/vocab'
 import { connectionsDoc } from '@yaks/connections/vocab'
-import { provisionalDoc } from '@yaks/effects/vocab'
+import { effectDoc } from '@yaks/effects/vocab'
 import doc from './vocab.json' with { type: 'json' }
 
 const { home, ...core } = doc.$defs
@@ -53,9 +53,9 @@ export let docs: VocabDoc[] = [harnessDoc, workspaceDoc]
  * transcript is made of (@yaks/session), what it asks for and what answers
  * (@yaks/tools, @yaks/context), what serves it (@yaks/model, @yaks/openai),
  * what a reply carries (@yaks/blob), the programs it starts (@yaks/process),
- * the sign-ins it keeps (@yaks/secrets, @yaks/connections) and the mark one
- * wears while it
- * is being saved (@yaks/effects), and the work it is doing
+ * the sign-ins it keeps (@yaks/secrets, @yaks/connections), the runs its
+ * commits owe and the leases a run is held under (@yaks/effects), and the
+ * work it is doing
  * (@yaks/doc, @yaks/edge, @yaks/task) — over
  * @yaks/kernel's `entity` table, which is where `entity` and the two stamps
  * live, and its marks, which is where `archived` lives: a harness archives a
@@ -89,7 +89,7 @@ export let made: VocabDoc[] = [
   taskDoc,
   secretsDoc,
   connectionsDoc,
-  provisionalDoc,
+  effectDoc,
 ]
 
 /** Every one of those documents, loaded into one vocabulary, with the JSON
@@ -105,7 +105,7 @@ export let vocab: Vocab = loadVocab(made, [
  * adds is the step in a task's status that it contributes — and a body whose
  * text lives in the blob table. Every part of this comes from another package's
  * `./vocab` subpath, so the harness's vocabulary loads in a browser tab as
- * readily as in the daemon. */
+ * readily as in the runner. */
 export let computed = (vocab: Vocab): Derived => ({
   ...sessionDerived(),
   ...blobRead(vocab),

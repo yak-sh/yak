@@ -10,13 +10,17 @@ commands on this machine, a Git checkout per delegated child, MCP servers, and
 the `~/.yak` files. No server is required. Model calls may use an external
 provider; shell tools run on this machine and are not sandboxed.
 
-- `agent()` puts the session daemon on a graph and exposes session methods.
-  Whatever touches a machine is an option its host lends: tools, remote tools,
-  what a new session opens with, a step lock, defect reports, and what to
-  release on close.
+- `agent()` lends a graph the session runner (@yaks/session `running`), works
+  the runs its commits owe, and exposes session methods. Whatever touches a
+  machine is an option its host lends: tools, remote tools, what a new session
+  opens with, defect reports, and what to release on close. `lend()` is that
+  runner alone.
 - `local()` is `agent()` here: it opens storage, lends the shell, checkouts,
-  instruction files, images, MCP and the OpenRouter sign-in, and adds the
-  terminal's entry rendering.
+  instruction files, images, MCP and the OpenRouter sign-in (`here()`), and adds
+  the terminal's entry rendering.
+- `@yaks/harness/effects` handles `session_run` where a `yak` host lists the
+  harness: the same runner, lent the same machine, wherever that host's effects
+  are worked.
 - `open()` creates or opens storage and registers vocabulary and plugins;
   `hosted()` is the same handle over a graph a `yak` config composed.
 - `harnessTools()` combines machine, delegation and graph tools.
@@ -270,35 +274,39 @@ The default tool table includes `fork`, `spawn`, and `wait`:
   exposes one merged `wait`: choose exactly one of process, children, or tasks.
 
 A child carries `spawned{parent, call}`; a fork additionally has `fork{from}`.
-`a.children(session)` reads that structure. When a child settles, the daemon
-queues a completion receipt behind any active parent step: a result if the
-originating call is still open, otherwise an input that wakes another parent
-turn. Failed/stopped children also report their terminal outcome. A stopped
-parent is not revived. When its claimed task is done, a child with no active
-work delivers `task T-<number> <status>` plus its final message, with the
-idempotent receipt id `delivery:<child>:task:<task>:<status>`. A child settling
-before the task is done still reports its outcome, using a receipt id derived
-from its final entry. `resume()` reconciles missed receipts without repeating
-ones already received. Fork/spawn calls themselves are idempotent by call id.
+`a.children(session)` reads that structure. When a child settles, the run that
+ended it writes a completion receipt into the parent: a result if the
+originating call is still open, otherwise an input carrying the parent's
+`using`, which asks for another parent turn. Failed/stopped children also report
+their terminal outcome. A stopped parent is not revived. When its claimed task
+is done, a child with no active work delivers `task T-<number> <status>` plus
+its final message, with the idempotent receipt id
+`delivery:<child>:task:<task>:<status>`. A child settling before the task is
+done still reports its outcome, using a receipt id derived from its final entry.
+`resume()` reconciles missed receipts without repeating ones already received.
+Fork/spawn calls themselves are idempotent by call id.
 
 `local({maxChildren: 32, maxSessions: 64})` sets the defaults explicitly. Child
 submissions return an ID and a persisted `dispatch.state=queued` record;
 `session.status=queued` distinguishes waiting children from active or settled
-ones. One scheduler per graph runs up to `maxChildren` child callbacks across
-all parents (32 by default). FIFO submission order is durable; resumed nested
-waits reacquire a slot before returning. Root sessions do not consume child
-slots; `maxSessions` remains a limit checked when starting a root session. A
-waiting delegated parent releases its slot, so capacity one supports nested
-delegation. Worktree preparation runs only when a queued child is selected to
-execute; failures and queued cancellation terminate with a completion message.
-Restart recovers interrupted scheduling; spawn replay preserves ID and fork
-boundary. `a.d.stop()` immediately prevents new execution and waits for running
-storage callbacks; it does not empty the persisted queue or complete assigned
-tasks. Use `await a.close()` to stop the daemon and close the harness database.
-Independent supervised processes are untouched. This is a single-daemon pool,
-not a distributed lease or a security boundary against arbitrary graph writes.
-Provider limits still constrain model throughput. Scheduling does not reduce the
-context sent to providers or the cost of frontend data refreshes.
+ones. At most `maxChildren` children are `active` at once across all parents (32
+by default); the bound is kept in the graph, so it holds across every process
+running the graph's effects. FIFO submission order is durable; a nested wait
+queues again for a place before returning. Root sessions do not consume child
+places; `maxSessions` remains a limit checked when starting a root session. A
+waiting delegated parent gives up its place (`dispatch.state:
+waiting`), so
+capacity one supports nested delegation. Worktree preparation runs only when a
+queued child is admitted; failures and queued cancellation terminate with a
+completion message. A worker coming up sweeps up what a restart left owed; spawn
+replay preserves ID and fork boundary. `await a.close()` stops admission, lets
+the step in flight finish, leaves the pool and closes the harness database; it
+does not empty the persisted queue or complete assigned tasks. Independent
+supervised processes are untouched. A transcript is run under a lease named for
+it, renewed while it runs: one process runs it at a time, and one that died
+holding it holds it up until the take runs out (`hold`). The lease is not a
+security boundary against arbitrary graph writes. Provider limits still
+constrain model throughput.
 
 `tools` replaces the default table when supplied. `sessionTools(graph, limits)`
 from `@yaks/session` is the standalone delegation table (its scheduling queries
@@ -312,7 +320,7 @@ deno run -A packages/harness/perf.ts
 
 This reports warmed median/p95 fresh-entry apply time and the subsequent
 `react()` step's model-dispatch overhead with a fixed 1,000-entry SQLite
-transcript. It uses a fake model and measures no network time. The SQLite/daemon
+transcript. It uses a fake model and measures no network time. The SQLite/runner
 integration suite lives under `packages/`, outside the repository's fast test
 tier.
 
@@ -462,7 +470,7 @@ adapter and its performance limits are documented in
 ### Defect diagnostics
 
 Unexpected failures at the executable boundary (including global errors and
-unhandled rejections), daemon steps, effects, and frontend
+unhandled rejections), runner steps, effects, and frontend
 projections/submissions become an `exception` entity in the graph. Inspect
 `.exception` through the graph tools. These diagnostic entities have no `entry`:
 they neither enter a conversation nor wake a model. Their `content.body`
@@ -476,7 +484,7 @@ diagnostic write includes the original failure without recursively attempting
 more graph writes. Graph writes drain for at most 250ms at executable shutdown.
 
 Global handlers observe rather than suppress fatal runtime defaults, restoring
-the terminal on the fatal path. Embedded users of `local()` get daemon
+the terminal on the fatal path. Embedded users of `local()` get runner
 diagnostics; the global hooks belong only to the executable lifetime. Known
 API-key values, Bearer credentials and recognizable OpenAI keys are redacted;
 arbitrary secrets embedded in third-party exception messages cannot be
@@ -741,13 +749,13 @@ compatibility check when an older binary first opens the file.
 ## The harness as a plugin module
 
 A `yak` config lists `@yaks/harness` as one plugin among the packages it runs
-over, and `@yaks/cli`'s `compose` takes two facets from it: `/vocab`, whose
-`docs` are the harness's own words (`home` and its tools), and `/tools`, the
-functions behind them. Every other word a harness graph speaks is its own
-package's plugin. `store.ts` still opens a harness graph on its own, loading
-`made`, the list of those packages' documents; the terminal app's worker opens
-the graph that way. Importing the facets does not start the session daemon, open
-a database, or start a server.
+over, and `@yaks/cli`'s `compose` takes three facets from it: `/vocab`, whose
+`docs` are the harness's own words (`home` and its tools), `/tools`, the
+functions behind them, and `/effects`, the runner lent this machine. Every other
+word a harness graph speaks is its own package's plugin. `store.ts` still opens
+a harness graph on its own, loading `made`, the list of those packages'
+documents; the terminal app's worker opens the graph that way. Importing the
+facets does not run a session, open a database, or start a server.
 
 `session_new`, `session_send` and `model_list` are offered on a command line
 only (`surfaces`), because they run on the machine that typed them.

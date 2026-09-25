@@ -7,10 +7,11 @@
     "./tui": "./view.ts",
     "./vocab": "./vocab.ts",
     "./machine": "./machine.ts",
-    "./tools": "./runs.ts"
+    "./tools": "./runs.ts",
+    "./effects": "./effects.ts"
   },
   "license": "Apache-2.0",
-  "description": "Runs an agent on this machine over a yak graph: the session daemon, the machine and graph tools, and the terminal app.",
+  "description": "Runs an agent on this machine over a yak graph: the machine the session runner is lent, the machine and graph tools, and the terminal app.",
   "imports": {
     "@std/path": "jsr:@std/path@^1.0.0",
     "@std/assert": "jsr:@std/assert@^1.0.0",

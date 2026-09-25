@@ -291,7 +291,7 @@ Deno.test('a transcript owed a turn for hours is a warn', async () => {
   )
 })
 
-// Nothing asked the daemon, so the turn is a harness's to take, and one that
+// Nothing asked the runner, so the turn is a harness's to take, and one that
 // never came back is owed an answer, not a turn.
 Deno.test('a harness transcript owed an answer for hours is a warn', async () => {
   let g = rigged(

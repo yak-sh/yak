@@ -303,9 +303,10 @@ process that started holds a lease instead.
    writes down the runs its commits owe, whatever roles it serves.
 5. Joins tool declarations to their `runs` implementations; a declared tool
    without an implementation is an error. Serving `effects`, it handles each
-   plugin's declared effects with that plugin's `./effects` (a declared effect
-   the config gives no code is settled as done) and the tool runner's two
-   effects for calls another process wrote.
+   declared effect with the one plugin `./effects` that gives it code, usually
+   the declaring plugin's own (a declared effect the config gives no code is
+   settled as done, and two plugins handling one is an error), and the tool
+   runner's two effects for calls another process wrote.
 6. Serving `web`, asks the plugin that hosts routes, if the config listed one,
    for the one handler this host answers with.
 7. Creates the current process entity after registrations are ready.

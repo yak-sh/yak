@@ -16,8 +16,8 @@ normal migrations.
 The main thread owns terminal input, Preact, layout, Markdown rendering, VISUAL
 selection, and the private ephemeral frontend graph. It also holds a separate
 `@yaks/client` domain replica. The worker exclusively owns the authoritative
-SQLite/blob graph, daemon, providers, and tools. Neither drafts nor selection
-state are transmitted.
+SQLite/blob graph, the runner, providers, and tools. Neither drafts nor
+selection state are transmitted.
 
 `@yaks/sync`'s `portLink` carries structured request/reply messages and existing
 subscription frames over `postMessage`. `@yaks/api` supplies subscription
@@ -51,12 +51,11 @@ process, not a sandbox or a separate fault-isolated process.
   would remove this boilerplate.
 - No transparent worker restart or mutation retry: a timeout does not prove a
   write failed. Worker errors reject pending calls and surface in diagnostics.
-- `Daemon.stop()` synchronously stops admission and new turns, then drains all
-  admitted callbacks and storage-reading effects. It does not mark sessions or
-  tasks stopped/completed. `Agent.close()` is idempotent and async: it drains
-  admitted operations and the daemon before diagnostics and SQLite are closed.
-  Inline callers must await it; a callback that never returns keeps storage
-  open.
+- `Agent.close()` is idempotent and async: it stops admission and new steps,
+  then drains admitted operations and the step in flight, and leaves the effects
+  pool, before diagnostics and SQLite are closed. It does not mark sessions or
+  tasks stopped/completed. Inline callers must await it; a callback that never
+  returns keeps storage open.
 - Interactive shutdown has two stages: the first Ctrl+C stops new commands and
   model turns, then waits for admitted callbacks to finish. The UI shows a
   shutdown message and accepts only another Ctrl+C. Frontend refresh loops stop
@@ -177,11 +176,11 @@ receipt already existed. Finished pooled children could also enter scheduling
 again. A large parent shared by many forks therefore caused repeated reads and
 status evaluation ahead of the first sidebar response.
 
-Resume now queues receipt reconciliation directly, tracked by daemon shutdown,
-rather than another child execution. Reconciliation checks the child's latest
-local entry and existing receipt first. Only missing receipts require the full
-inherited transcript. A child that finishes during those reads uses the final
-snapshot for both receipt identity and content.
+Resume now reconciles receipts directly rather than running the child again.
+Reconciliation checks the child's latest local entry and existing receipt first.
+Only missing receipts require the full inherited transcript. A child that
+finishes during those reads uses the final snapshot for both receipt identity
+and content.
 
 An isolated benchmark is available:
 

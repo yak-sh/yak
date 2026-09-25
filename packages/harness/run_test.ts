@@ -58,7 +58,7 @@ Deno.test('a turn is signed: the model wrote it, through this transcript', async
   await a.close()
 })
 
-Deno.test('send appends to a transcript and the daemon answers it', async () => {
+Deno.test('send appends to a transcript and the runner answers it', async () => {
   let a = started()
   let s = await a.start('one')
   await a.idle(s)
@@ -336,11 +336,11 @@ Deno.test('close drains a held storage callback without stopping an independent 
   try {
     let s = await a.start('callback')
     await a.idle(s)
-    let callback = a.d.enqueue(s, async () => {
+    let callback = a.admitted(async () => {
       entered.resolve()
       await release.promise
       await a.h.g.apply([{ entity: { eid: crypto.randomUUID() }, task: {} }])
-    })
+    })()
     await entered.promise
     let close = a.close()
     release.resolve()

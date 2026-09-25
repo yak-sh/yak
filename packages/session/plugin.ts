@@ -42,9 +42,9 @@ export type SessionOpts = AuditOpts
  * // let g = graph({ storage, vocab, plugins: [sessions()] })
  * ```
  *
- * What is NOT here: anything that runs. Entries appear; what reacts to them is
- * {@link react}, handed to an effects registry ({@link daemon}) or run in a
- * loop. This package is the model and the rules.
+ * The plugin runs nothing: it is the model and the rules. Entries appear, and
+ * what reacts to them is {@link react}, taken as pool work by
+ * {@link running} or looped by {@link settle}.
  */
 export let sessions = (opts: SessionOpts = {}): Plugin => {
   let lease = leasing(opts)

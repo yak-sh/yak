@@ -3,10 +3,12 @@
 // caller opens another; the shell runs here (@yaks/process), a child assigned a
 // task gets its own checkout under the worktree root, a new session snapshots
 // the AGENTS.md files above its directory, pictures live in the image
-// directory, a step holds a file lock against a second process on the same
-// graph, MCP servers and the OpenRouter sign-in are the person's own, and a
-// defect is an `exception` entity. Every `~/.yak` path is read here or in
-// ./store.ts and passed down; nothing under the runner reads one.
+// directory, MCP servers and the OpenRouter sign-in are the person's own, and a
+// defect is an `exception` entity. What a box lends is `here()`: the harness
+// on its own lends it to its agent, and a `yak` host listing the harness lends
+// it to the runner its effects are worked with (./effects.ts). Every `~/.yak`
+// path is read here or in ./store.ts and passed down; nothing under the runner
+// reads one.
 
 import { responses as openrouter } from '@yaks/openrouter'
 import { credential, responses } from '@yaks/openai'
@@ -17,11 +19,10 @@ import { watchMigrations } from '@yaks/sqlite'
 import { instructionFiles } from '@yaks/context/host'
 import { render as tree } from '@yaks/preact'
 import type { VNode } from 'preact'
-import { type Agent, agent } from './agent.ts'
+import { type Agent, agent, type Opts as AgentOpts } from './agent.ts'
 import { signins } from './signin.ts'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { mcpTools } from './mcp.ts'
-import { stepLock } from './step_lock.ts'
 import { streamingEnabled } from './streaming.ts'
 import { imageContext, registered } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions } from './images.ts'
@@ -69,6 +70,9 @@ export type Opts = ChildLimits & NotHarness & {
   env?: (name: string) => string | undefined
   /** Cooperating migrations must allow at least this polling interval. */
   migrationPollMs?: number
+  /** how long a transcript's lease stands between renewals, so how long a
+   * process that died running it holds it up (ms) */
+  hold?: number
   checkpointMs?: number
   /** The system prompt every ask carries. */
   instructions?: string
@@ -101,30 +105,29 @@ export type Local = Agent<Harness> & {
   entry: (b: Bundle) => VNode | null
 }
 
-/**
- * Start the harness here: open the graph, lend the agent this machine, and put
- * the daemon on its entries.
- *
- * ```ts
- * import { local, open } from '@yaks/harness/local'
- *
- * let a = local({ h: open(':memory:'), model: fake })
- * let s = await a.start('reply with the word pong')
- * await a.idle(s)
- * ```
- */
-export let local = (opts: Opts = {}): Local => {
-  // Check before opening any database: a misspelled handle must not fall back
-  // to the user's persistent store, including for untyped JavaScript callers.
-  for (let key of ['path', 'db', 'store', 'g', 'fx', 'vocab', 'close']) {
-    if (Object.hasOwn(opts, key)) {
-      throw new TypeError(
-        'Pass the harness as local({ h: open(...) }), not spread options',
-      )
-    }
-  }
+/** What this machine lends an agent: its options, and what answers a person
+ * here. */
+export type Here = {
+  /** the agent's options; their `release` lets go of what was opened for
+   * them, and leaves the graph open */
+  lent: AgentOpts<Harness>
+  /** a person authorizing a sign-in: an MCP server, or OpenRouter */
+  authorize: (
+    action: MCPAuthAction,
+    name?: string,
+    callback?: string,
+  ) => Promise<MCPAuthReply>
+  /** how the default model names the reply a request continues */
+  anchor: Model['anchor']
+  report: (error: unknown, where: FailureContext) => void
+}
+
+/** What this machine lends an agent over `h`: the models behind its
+ * credentials and sign-ins, the shell and a checkout per child, the MCP
+ * servers, the pictures, the instruction files where a session opens, and
+ * where a defect is written. */
+export let here = (h: Harness, opts: Opts = {}): Here => {
   let env = opts.env ?? Deno.env.get
-  let h = opts.h ?? open(dbPath(env))
   let detach = diagnostics().attach(h.g)
   let report = (error: unknown, where: FailureContext) =>
     diagnostics().report(error, where)
@@ -152,7 +155,7 @@ export let local = (opts: Opts = {}): Local => {
     (error, session) => report(error, { phase: 'worktree', session }),
     root,
   )
-  let a = agent({
+  let lent: AgentOpts<Harness> = {
     ...workspace(h.g, cwd, root),
     ...opts,
     h,
@@ -177,7 +180,6 @@ export let local = (opts: Opts = {}): Local => {
     }),
     context: (window, entries) =>
       imageContext(h.g, window, entries, h.artifacts),
-    lock: h.path == ':memory:' ? undefined : stepLock(h.path),
     report,
     // What abnormal endings left in the worktree root, taken back by the same
     // test one child's end applies — plus the checkouts Git itself has
@@ -195,31 +197,70 @@ export let local = (opts: Opts = {}): Local => {
       await mcp.close()
       await diagnostics().drain()
       detach()
+    },
+  }
+  let authorize = async (
+    action: MCPAuthAction,
+    name?: string,
+    callback?: string,
+  ): Promise<MCPAuthReply> => {
+    if (name === OPENROUTER_AUTH) {
+      if (action === 'begin') return signin.begin(OPENROUTER, 'openrouter')
+      if (action === 'cancel') signin.cancel(OPENROUTER)
+      if (action === 'complete') {
+        await signin.complete(OPENROUTER, 'openrouter', callback ?? '')
+      }
+      return {
+        message: action === 'complete'
+          ? 'OpenRouter connected. Select an OpenRouter model explicitly to use it.'
+          : 'Authorization cancelled',
+      }
+    }
+    const reply = await mcp.authorize(action, name, callback)
+    if (
+      action === 'list' && (await h.g.read(`.eid=${OPENROUTER}`)).length
+    ) reply.servers = [...reply.servers ?? [], OPENROUTER_AUTH]
+    return reply
+  }
+  return { lent, authorize, anchor: model.anchor, report }
+}
+
+/**
+ * Start the harness here: open the graph, lend the agent this machine, and
+ * work the runs its commits owe.
+ *
+ * ```ts
+ * import { local, open } from '@yaks/harness/local'
+ *
+ * let a = local({ h: open(':memory:'), model: fake })
+ * let s = await a.start('reply with the word pong')
+ * await a.idle(s)
+ * ```
+ */
+export let local = (opts: Opts = {}): Local => {
+  // Check before opening any database: a misspelled handle must not fall back
+  // to the user's persistent store, including for untyped JavaScript callers.
+  for (let key of ['path', 'db', 'store', 'g', 'fx', 'vocab', 'close']) {
+    if (Object.hasOwn(opts, key)) {
+      throw new TypeError(
+        'Pass the harness as local({ h: open(...) }), not spread options',
+      )
+    }
+  }
+  let h = opts.h ?? open(dbPath(opts.env ?? Deno.env.get))
+  let env = opts.env ?? Deno.env.get
+  let { lent, authorize, anchor, report } = here(h, opts)
+  let watch: { stop: () => void } | undefined
+  let a = agent({
+    ...lent,
+    release: async () => {
+      watch?.stop()
+      await lent.release?.()
       h.close()
     },
   })
   let l: Local = Object.assign(a, {
-    authorizeMCP: a.admitted(
-      async (action: MCPAuthAction, name?: string, callback?: string) => {
-        if (name === OPENROUTER_AUTH) {
-          if (action === 'begin') return signin.begin(OPENROUTER, 'openrouter')
-          if (action === 'cancel') signin.cancel(OPENROUTER)
-          if (action === 'complete') {
-            await signin.complete(OPENROUTER, 'openrouter', callback ?? '')
-          }
-          return {
-            message: action === 'complete'
-              ? 'OpenRouter connected. Select an OpenRouter model explicitly to use it.'
-              : 'Authorization cancelled',
-          }
-        }
-        const reply = await mcp.authorize(action, name, callback)
-        if (
-          action === 'list' && (await h.g.read(`.eid=${OPENROUTER}`)).length
-        ) reply.servers = [...reply.servers ?? [], OPENROUTER_AUTH]
-        return reply
-      },
-    ),
+    authorizeMCP: a.admitted(authorize),
     // What the terminal draws inline: a PNG, and not a large one.
     image: a.admitted(async (eid: string) => {
       let { bytes, mediaType } = await registered(h.g, eid, h.artifacts)
@@ -233,10 +274,10 @@ export let local = (opts: Opts = {}): Local => {
         inlineImages: env('HARNESS_GRAPHICS') == 'kitty',
         image: (eid: string) => l.image(eid),
         names: a.names,
-        anchor: model.anchor,
+        anchor,
       }),
   })
-  let watch = watchMigrations(h.migrations, (reason) => {
+  watch = watchMigrations(h.migrations, (reason) => {
     // Stop scheduling immediately, but leave SQLite open for admitted work to
     // drain. Restart is an explicit owner action, not a migration side effect.
     void l.close(reason).catch((error) =>
@@ -244,13 +285,5 @@ export let local = (opts: Opts = {}): Local => {
     )
     console.error(reason.message)
   }, opts.migrationPollMs ?? 1000)
-  // Daemon-only shutdown is also a supported restart boundary: a replacement
-  // agent can reuse h and later close it. The old host must not keep polling
-  // that connection (or its cached, now-finalized native statements).
-  let stopDaemon = a.d.stop
-  a.d.stop = () => {
-    watch.stop()
-    return stopDaemon()
-  }
   return l
 }

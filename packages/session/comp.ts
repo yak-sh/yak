@@ -1,6 +1,6 @@
 // The vocabulary this package ships, as one document to load beside your own
 // (./vocab.json — plain JSON Schema). A session is a transcript: no process is
-// launched — entries appear, and a daemon reacts to the newest one. The
+// launched — entries appear, and the runner reacts to the newest one. The
 // components are the session's identity, its lock, and the kinds of entry; the
 // components a run's process needs (pid, pane, a log to tail) belong to the
 // application that runs processes, never here.
@@ -23,11 +23,11 @@
 //     + call{to, id, args, source}
 //                            a tool the model asked for, from that ask
 //     + result{call}         what a tool answered
-//     + stop                 the daemon performs nothing after this
+//     + stop                 the runner performs nothing after this
 //     + error{code}          expected and recorded: normal
 //     + exception            unexpected: a defect report, not a stop
 //
-// An ask and a call share no properties on purpose: one is the daemon reaching
+// An ask and a call share no properties on purpose: one is the runner reaching
 // a model, the other the model reaching a tool. What a provider keeps about an
 // ask — OpenAI's response id, for instance — is that provider's own component
 // on the same entry (`@yaks/openai` declares `openai{response_id}`), never a

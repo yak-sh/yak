@@ -1,16 +1,10 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
-import {
-  daemon,
-  deliverChild,
-  sessionTools,
-  textOf,
-  transcript,
-} from '@yaks/session'
+import { deliverChild, sessionTools, textOf, transcript } from '@yaks/session'
 import { harnessTools } from './tools.ts'
 import { open } from './store.ts'
 import { local } from './local.ts'
-import { repo } from './testing.ts'
+import { repo, working } from './testing.ts'
 
 let setup = () => {
   let h = open(':memory:')
@@ -220,27 +214,22 @@ for (let finish of ['complete', 'unlink']) {
     ])
     await deliverChild(h.g, child) // incomplete task still reports the child settling
     let errors: unknown[] = []
-    let d = daemon(
-      h.g,
-      h.fx,
-      {
-        model: () =>
-          Promise.resolve({
-            id: 'r',
-            model: 'fake',
-            items: [{ kind: 'assistant', text: 'Received' }],
-          }),
-        tools: [],
-      },
-      undefined,
-      (e) => errors.push(e),
-    )
+    let d = working(h, {
+      model: () =>
+        Promise.resolve({
+          id: 'r',
+          model: 'fake',
+          items: [{ kind: 'assistant', text: 'Received' }],
+        }),
+      tools: [],
+      report: (e) => errors.push(e),
+    })
     await h.g.apply(
       finish == 'complete'
         ? [{ entity: { eid: 'dep' }, completed: {} }]
         : [{ entity: { eid: 'edge' }, tombstone: {} }] as Bundle[],
     )
-    await d.idle('p')
+    await h.fx.idle()
     let receipt = (await transcript(h.g, 'p')).find((b) =>
       b.entity.eid == `delivery:${child}:task:work:done`
     )
@@ -356,28 +345,25 @@ for (let writer of ['p', 'child', 'other', 'external']) {
         content: { body: 'Finished' },
         output: { source: 'call' },
       }])
-      await deliverChild(h.g, child)
-      // Close the original tool call so any new receipt would wake the parent.
-      let before = (await transcript(h.g, 'p')).length
       let asks = 0
       let errors: unknown[] = []
-      let d = daemon(
-        h.g,
-        h.fx,
-        {
-          model: () => {
-            asks++
-            return Promise.resolve({
-              id: 'r',
-              model: 'fake',
-              items: [{ kind: 'assistant', text: 'Received' }],
-            })
-          },
-          tools: [],
+      let d = working(h, {
+        model: () => {
+          asks++
+          return Promise.resolve({
+            id: 'r',
+            model: 'fake',
+            items: [{ kind: 'assistant', text: 'Received' }],
+          })
         },
-        undefined,
-        (e) => errors.push(e),
-      )
+        tools: [],
+        report: (e) => errors.push(e),
+      })
+      await deliverChild(h.g, child)
+      // Close the original tool call so any new receipt would wake the parent.
+      await h.fx.idle()
+      asks = 0
+      let before = (await transcript(h.g, 'p')).length
       let actor = writer == 'child' ? child : writer
       if (writer == 'external') {
         await h.g.apply([{ entity: { eid: 'work' }, completed: {} }])
@@ -391,7 +377,7 @@ for (let writer of ['p', 'child', 'other', 'external']) {
           }],
         }, { ...ctx, session: actor })
       }
-      await d.idle('p')
+      await h.fx.idle()
       let [work] = await h.g.read('.task&*')
       assertEquals(
         (work.completed as Comp).by ?? null,
@@ -415,7 +401,7 @@ for (let writer of ['p', 'child', 'other', 'external']) {
       }])
       await deliverChild(h.g, child)
       await deliverChild(h.g, child)
-      await d.idle('p')
+      await h.fx.idle()
       assertEquals((await transcript(h.g, 'p')).length, after)
       assertEquals(errors, [])
       await d.stop()
@@ -555,7 +541,7 @@ Deno.test('existing fork receipts do not read inherited transcript bodies on res
   })
   try {
     assertEquals(await a.resume(), [])
-    await a.d.idle('parent')
+    await a.idle('parent')
     assert(!reads.some((q) => q == '.entry.session=parent'), reads.join('\n'))
     assert(!reads.some((q) => q == '.entry.session=child'), reads.join('\n'))
     let [child] = await h.g.storage.tx((tx) => tx.get(['child']))

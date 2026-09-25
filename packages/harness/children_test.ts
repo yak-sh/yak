@@ -1,4 +1,4 @@
-// SQLite/daemon integration tests; the fast-tier runner does not collect
+// SQLite/runner integration tests; the fast-tier runner does not collect
 // packages. Deferred fake replies exercise concurrency without network calls.
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -170,6 +170,7 @@ Deno.test('child capacity queues without rejection; root starts retain their sep
     cwd: repo(),
     h,
     model,
+    maxChildren: 1,
     tools: sessionTools(h.g, { maxChildren: 1 }),
   })
   let parent = await a.start('parent')

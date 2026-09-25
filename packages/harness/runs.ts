@@ -3,12 +3,14 @@
 // config lists it as a plugin (@yaks/cli `compose`), beside every other
 // package's.
 //
-// `session_new` and `session_send` run a transcript on this machine, over the
-// host's own graph (store.ts `hosted`), until it settles, and answer with the
-// entry it settled on: the reply. Drawing it is the caller's: a line on a command line, the harness
-// itself under `--tui` (./view.ts). `model_list` says which OpenAI credential
-// this machine would send and what its endpoint lists. A step's own output is
-// never printed here — a tool answers, it does not write to a terminal.
+// `session_new` and `session_send` write a line that asks a transcript for a
+// turn, and wait for the reply: the entry the transcript settles on. Neither
+// runs the transcript. The runner does, wherever the host's effects are
+// worked (./effects.ts): a box's `yak serve`, or the command's own duty thread
+// when nothing else holds that role. Drawing the reply is the caller's: a line
+// on a command line, the harness itself under `--tui` (./view.ts).
+// `model_list` says which OpenAI credential this machine would send and what
+// its endpoint lists. A tool answers, it does not write to a terminal.
 
 import {
   addressed,
@@ -17,15 +19,16 @@ import {
   type Comp,
   type Eid,
   type Graph,
+  identityEid,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
+import { MODEL, PROVIDER } from '@yaks/model'
 import { parse } from '@yaks/query'
 import { codexPaths, fromCodex, fromEnv } from '@yaks/openai'
-import { type Local, local } from './local.ts'
-import { hosted } from './store.ts'
-
-// The host a `yak` config composed, as much of it as a harness runs over.
-type Host = Parameters<typeof hosted>[0]
+import { instructionFiles } from '@yaks/context/host'
+import { statusOf, transcript, usingBefore } from '@yaks/session'
+import { ASTRA, begin, seed, through } from './agent.ts'
+import { homeAt } from './workspace.ts'
 
 type Args = Record<string, unknown>
 let word = (args: Args, name: string): string | undefined => {
@@ -33,34 +36,28 @@ let word = (args: Args, name: string): string | undefined => {
   return typeof v == 'string' ? v : undefined
 }
 
-// One harness per call, over the host's graph and closed with the call: the
-// host outlives it and closes the graph itself.
-let running = (host: Host, args: Args): Local =>
-  local({
-    h: hosted(host),
-    name: word(args, 'model'),
-    provider: word(args, 'provider'),
-  })
-
 /** The session a person typed: whatever the graph resolves (an eid, `S-81`,
  * a name), else its short id or the start of its eid. */
 let sessionAt = async (
   graph: Graph,
-  a: Local,
   id: string,
 ): Promise<Eid | undefined> => {
-  let rows = await a.sessions()
   let [eid] = await addressed(graph, [id]).catch(() => [undefined])
-  return (rows.find((b) => b.entity.eid == eid) ??
-    rows.find((b) => String((b.session as Comp).id) == id) ??
+  if (eid) return eid
+  let rows = await graph.read(parse('.session&*'))
+  return (rows.find((b) => String((b.session as Comp).id) == id) ??
     rows.find((b) => b.entity.eid.startsWith(id)))?.entity.eid
 }
 
-// Run until it settles, then answer with where it settled: the newest entry,
-// which is the model's reply, or the error or stop the run ended on.
-let settled = async (a: Local, s: Eid): Promise<Bundle[]> => {
-  await a.idle(s)
-  return (await a.transcript(s)).slice(-1)
+// Wait for the reply: once the transcript owes nothing, where it settled — the
+// newest entry, which is the model's reply, or the error or stop it ended on.
+let settled = async (graph: Graph, s: Eid): Promise<Bundle[]> => {
+  for (;;) {
+    let entries = await transcript(graph, s)
+    let status = statusOf(entries)
+    if (status != 'pending' && status != 'running') return entries.slice(-1)
+    await new Promise((go) => setTimeout(go, 100))
+  }
 }
 
 // Who called: what they asked a session is theirs (@yaks/tools signs the call
@@ -88,32 +85,40 @@ let found = async () => {
 }
 
 /** The functions behind the tools the harness declares (./vocab.json). */
-export let runs = (host: Host): Runs => ({
+export let runs = (): Runs => ({
   session_list: (_, graph) => graph.read(parse('.session&*')),
-  session_new: async (call) => {
+  session_new: async (call, graph) => {
     let args = argsOf(call)
-    let a = running(host, args)
-    try {
-      let s = await a.start(String(args.prompt ?? ''), {
-        effort: word(args, 'effort'),
-        by: caller(call),
-      })
-      return await settled(a, s)
-    } finally {
-      await a.close()
-    }
+    let provider = word(args, 'provider') ?? 'openai'
+    let model = word(args, 'model') ?? ASTRA
+    await graph.apply(seed({ provider, model }), { trusted: true })
+    let cwd = Deno.cwd()
+    let effort = word(args, 'effort')
+    let s = await begin(graph, String(args.prompt ?? ''), {
+      home: await homeAt(graph, cwd),
+      files: await instructionFiles(cwd),
+      by: caller(call),
+      using: {
+        provider: identityEid(PROVIDER, [provider]),
+        model: identityEid(MODEL, [model]),
+        ...effort ? { effort } : {},
+      },
+    })
+    return await settled(graph, s)
   },
   session_send: async (call, graph) => {
     let args = argsOf(call)
-    let a = running(host, args)
-    try {
-      let s = await sessionAt(graph, a, String(args.session))
-      if (!s) throw new Error(`no such session: ${args.session}`)
-      await a.send(s, String(args.text), caller(call))
-      return await settled(a, s)
-    } finally {
-      await a.close()
-    }
+    let s = await sessionAt(graph, String(args.session))
+    if (!s) throw new Error(`no such session: ${args.session}`)
+    let using = usingBefore(await transcript(graph, s))
+    await graph.apply([{
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: s },
+      content: { body: String(args.text) },
+      ...using ? { using } : {},
+      $actor: through(s, caller(call)),
+    }])
+    return await settled(graph, s)
   },
   model_list: async (call) => {
     let got = await found()

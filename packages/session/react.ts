@@ -1,12 +1,12 @@
 import { CallError, runner, UnfinishedCall } from '@yaks/tools'
 export { CallError as ToolError } from '@yaks/tools'
 import { argsOf, transient } from '@yaks/graph'
-// The daemon's one step. `react(graph, session)` reads the newest entry of a
+// The runner's one step. `react(graph, session)` reads the newest entry of a
 // transcript and does the one next thing it calls for: a pending input or
 // result asks the model; an open tool call is run; an error within the retry
 // limit asks the model again; everything else does nothing. It appends what
-// happened as entries and returns, so a loop over it is a session and a
-// `created(entry)` effect over it is the daemon (./daemon.ts).
+// happened as entries and returns, so a loop over it is a session, and that
+// loop run as pool work is the runner (./run.ts).
 //
 // It owns no transport and no tools: it is handed a @yaks/model `Model` and a
 // table of tools, so the same code runs over @yaks/openai in a CLI, over a
@@ -63,8 +63,15 @@ import {
   usingBefore,
 } from './status.ts'
 
-/** The caller, supplied by react rather than by model arguments. */
-export type ToolContext = { session: Eid; call: Bundle; entries: Bundle[] }
+/** The caller, supplied by react rather than by model arguments, and a
+ * signal that aborts when the process running the transcript is leaving: a
+ * tool waiting on something stops waiting (./children.ts `wait`). */
+export type ToolContext = {
+  session: Eid
+  call: Bundle
+  entries: Bundle[]
+  signal?: AbortSignal
+}
 
 /** A refused tool invocation: expected, recorded as an error and a result. */
 export { UnknownSession } from './unknown.ts'
@@ -95,7 +102,12 @@ export type Deps = {
   tools: Tool[]
   /** Resolve a stable tool registry for one execution step. */
   toolSnapshot?: (phase: 'ask' | 'call', session: Eid) => Promise<Tool[]>
+  /** aborts the model request in flight */
   signal?: AbortSignal
+  /** aborts when the process running the transcript is leaving: no step
+   * starts after it, and a tool waiting on something stops waiting, while the
+   * step in flight is let finish */
+  stopping?: AbortSignal
   instructions?: string
   /** Resolve inherited base instructions for future asks without rewriting history. */
   resolveInstructions?: (inherited: string | undefined) => string | undefined
@@ -190,7 +202,7 @@ export let project = (
 }
 
 /**
- * One step of the daemon over one transcript. Reads the newest entry, does the
+ * One step of the runner over one transcript. Reads the newest entry, does the
  * one thing it calls for, appends the entries that record it, and reports what
  * it
  * did. Safe to call when there is nothing to do.
@@ -233,7 +245,7 @@ export let react = async (
     (b.attempt as Comp | undefined)?.state == 'inflight'
   )
   if (unfinished) {
-    // A live invocation is serialized by the daemon. Re-entering an unfinished
+    // A live invocation is serialized by the runner. Re-entering an unfinished
     // attempt means interrupted execution, not permission to repeat a request.
     return append([
       { entity: unfinished.entity, attempt: { state: 'interrupted' } },
@@ -307,7 +319,12 @@ export let react = async (
           entity: { eid: '$said' },
           [CONTENT]: {
             body: String(
-              await tool.run(argsOf(call), { session, call, entries }),
+              await tool.run(argsOf(call), {
+                session,
+                call,
+                entries,
+                signal: deps.stopping,
+              }),
             ),
           },
           [OUTPUT]: { source: call.entity.eid },

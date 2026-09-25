@@ -1,8 +1,9 @@
 // The runner as pool work: a request one process writes is answered by any
 // process working the pool, and never by two at once; a provider this host
 // was lent nothing for is left alone; children wait their turn under the
-// bound; an entry landing as a run lets go is still answered; a withdrawn
-// request is aborted; a worker coming up finds what a restart left owed.
+// bound, and one waiting on its own gives up its place; an entry landing as a
+// run lets go is still answered; a withdrawn request is aborted; a worker
+// coming up finds what a restart left owed.
 // Processes here are graphs over one in-memory SQLite store, which computes a
 // transcript's status the way a box's does.
 
@@ -25,6 +26,7 @@ import { sessions } from './plugin.ts'
 import { transcript } from './react.ts'
 import { kindOf, sessionDerived, statusOf } from './status.ts'
 import { answers } from './providers.ts'
+import { sessionTools } from './children.ts'
 import { type Runner, running, settle } from './run.ts'
 import { until } from '../../bin/testing.ts'
 
@@ -105,6 +107,22 @@ let ask = (session: string, body = 'say done', provider = P): Bundle[] => [
     entry: { session },
     content: { body },
     using: { provider, model: M },
+  },
+]
+
+// A child of `parent` waiting for its place, with its input.
+let child = (eid: string, order: number, parent = 'root'): Bundle[] => [
+  {
+    entity: { eid },
+    session: { id: eid },
+    spawned: { parent },
+    dispatch: { state: 'queued', order },
+  },
+  {
+    entity: { eid: `${eid}:in` },
+    entry: { session: eid },
+    content: { body: 'go' },
+    using: { provider: P, model: M },
   },
 ]
 
@@ -190,20 +208,6 @@ Deno.test('children past the bound wait queued, and each ending admits the next'
   let s = store()
   let { model } = fake()
   let p = proc(s, 'w1', model, { maxChildren: 1 })
-  let child = (eid: string, order: number): Bundle[] => [
-    {
-      entity: { eid },
-      session: { id: eid },
-      spawned: { parent: 'root' },
-      dispatch: { state: 'queued', order },
-    },
-    {
-      entity: { eid: `${eid}:in` },
-      entry: { session: eid },
-      content: { body: 'go' },
-      using: { provider: P, model: M },
-    },
-  ]
   let active: number[] = []
   let stop = new AbortController()
   let working = p.fx.work(p.g, stop.signal)
@@ -220,6 +224,39 @@ Deno.test('children past the bound wait queued, and each ending admits the next'
     assert(active.every((n) => n <= 1), `at most one active: ${active}`)
     let told = await p.g.read('.entry.session=root&*')
     assertEquals(told.length, 2)
+  } finally {
+    stop.abort()
+    await working
+    await p.fx.idle()
+  }
+})
+
+Deno.test('a child waiting on its own child gives up its place, and takes one back after', async () => {
+  let s = store()
+  let { model } = fake()
+  let p = proc(s, 'w1', model, { maxChildren: 1 })
+  let stop = new AbortController()
+  let working = p.fx.work(p.g, stop.signal)
+  try {
+    await p.g.apply([
+      { entity: { eid: 'root' }, session: { id: 'root' } },
+      {
+        entity: { eid: 'c1' },
+        session: { id: 'c1' },
+        spawned: { parent: 'root' },
+        dispatch: { state: 'active', order: 1 },
+      },
+      ...child('g1', 2, 'c1'),
+    ])
+    let wait = sessionTools(p.g, p.r).find((t) => t.name == 'wait')!
+    let said = await wait.run({ children: ['g1'], timeout: 5000 }, {
+      session: 'c1',
+      call: { entity: { eid: 'c1:wait' } },
+      entries: [],
+    })
+    assertEquals(JSON.parse(String(said))[0].status, 'settled')
+    let [c1] = await s.tx((tx) => tx.get(['c1']))
+    assertEquals((c1.dispatch as Comp).state, 'active')
   } finally {
     stop.abort()
     await working

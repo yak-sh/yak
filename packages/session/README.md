@@ -67,7 +67,7 @@ Start, latest-input, and finish times are entry `created.at` values. The last
 role remain referenced entities.
 
 `archived{at}` is the general `@yaks/kernel` visibility marker. Archiving a
-session does not stop its daemon, release claims, remove entries, or change
+session does not stop its runner, release claims, remove entries, or change
 transcript status.
 
 ## Claims
@@ -95,63 +95,68 @@ no longer a session; the `/service` duty runs it when it starts.
 
 ## Running a transcript
 
-<a id="the-daemon"></a>
 <a id="when-something-runs-the-session"></a>
 
 `react()` performs one required step: request a model response, run the next
-tool call, or retry an error. `settle()` repeats steps directly. `daemon()`
-registers the same work with `@yaks/effects` so new entries schedule turns.
+tool call, or retry an error. `settle()` runs a transcript until it has nothing
+more to do, under a lease named for it, so two processes never run one
+transcript at once.
+
+That is the runner, and it runs wherever the effects role does, never as a loop
+in the process that asked. `session_run` is an effect this package declares: a
+commit that asks a transcript for a turn (a `using` on an entry, a child
+admitted, a task it holds finishing) owes a run in the same transaction, and any
+process working the `@yaks/effects` pool takes it. `running(g, runner)` is the
+handler a host registers, lent the models, tools and limits it has; a transcript
+asking for a provider the host was lent nothing for, such as a command line
+`@yaks/spawn` launches, is left to whoever answers it.
 
 This complete example runs in memory with a local model function:
 
 ```ts
-import { effects } from '@yaks/effects'
 import { graph } from '@yaks/graph'
 import { type Model, modelDoc } from '@yaks/model'
 import { ram } from '@yaks/ram'
-import { daemon, sessionDoc, sessions, transcript } from '@yaks/session'
+import { sessionDoc, sessions, settle, transcript } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
 
 const vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
-const fx = effects(vocab)
-const g = graph({ storage: ram(vocab), vocab, plugins: [sessions(), fx] })
+const g = graph({ storage: ram(vocab), vocab, plugins: [sessions()] })
 const model: Model = async (request) => ({
   id: crypto.randomUUID(),
   model: request.model,
   items: [{ kind: 'assistant', text: 'pong' }],
 })
-const d = daemon(g, fx, { model, tools: [] })
-try {
-  await g.apply([
-    { entity: { eid: 'provider' }, provider: { name: 'local' } },
-    {
-      entity: { eid: 'model' },
-      model: { name: 'example', provider: 'provider' },
-    },
-    { entity: { eid: 'session' }, session: {} },
-    {
-      entity: { eid: 'input' },
-      entry: { session: 'session' },
-      content: { body: 'Reply with pong' },
-      using: { provider: 'provider', model: 'model' },
-    },
-  ])
-  await d.idle('session')
-  console.log(await transcript(g, 'session'))
-} finally {
-  await d.stop()
-}
+await g.apply([
+  { entity: { eid: 'provider' }, provider: { name: 'local' } },
+  {
+    entity: { eid: 'model' },
+    model: { name: 'example', provider: 'provider' },
+  },
+  { entity: { eid: 'session' }, session: {} },
+  {
+    entity: { eid: 'input' },
+    entry: { session: 'session' },
+    content: { body: 'Reply with pong' },
+    using: { provider: 'provider', model: 'model' },
+  },
+])
+await settle(g, 'session', { holder: 'here', model, tools: [] })
+console.log(await transcript(g, 'session'))
 ```
 
 Replace the local function with `responses({ credential })` from `@yaks/openai`
 to use that provider; also load its `openaiDoc` vocabulary.
 
-`daemon.interrupt(session)` returns whether it found an active turn and aborts
-that turn's model request. It does not wait for provider acknowledgement or stop
-independent tool processes. Models receive the abort through `Request.signal`;
-custom models must observe it. `daemon.stop()` stops accepting work and drains
-admitted callbacks.
+A streamed request is withdrawn by an entry carrying `cancel{target}` that names
+its in-flight attempt: the run holding the transcript aborts it and records the
+turn as interrupted. Models receive the abort through `Request.signal`; custom
+models must observe it. Independent tool processes are not stopped.
+
+Spawned children share one bound, `maxChildren`: a child waits
+`dispatch.state: queued` until fewer than that many are `active`, and a child
+waiting on its own children gives up its place while it waits.
 
 <a id="recorded-tool-execution"></a>
 
@@ -268,8 +273,9 @@ The main module exports:
   `ENTRY`, and the other transcript component names;
 - graph integration: `sessions()`, `leasing()`, `naming`, `auditing()`,
   `reapLeases()`, and `staleLeases()`;
-- execution: `react()`, `settle()`, `daemon()`, `transcript()`, and
-  `sessionTools()`;
+- execution: `react()`, `settle()`, `running()`, `admitNext()`, `transcript()`,
+  `sessionTools()`, and the provider lookups `offers()`, `providerResolver()`
+  and `answers()`;
 - inspection: `statusOf()`, `kindOf()`, `textOf()`, `ordered()`,
   `sessionDerived`, and the bounded transcript functions;
 - identity and rendering: `sessionFor()`, `speaking()`, `where()`, and `views`;

@@ -2,12 +2,12 @@ import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { open as opened } from '@yaks/sqlite/db'
 import { MigrationPending, migrations, objects } from '@yaks/sqlite'
-import { as, lit, select, tally } from '@yaks/sql'
+import { tally } from '@yaks/sql'
 import { local } from './local.ts'
 import { open } from './store.ts'
 import { repo } from './testing.ts'
 
-Deno.test('daemon stop releases its migration monitor before a shared harness is reused', async () => {
+Deno.test('closing the agent stops its migration monitor', async () => {
   using time = new FakeTime()
   const h = open(':memory:')
   const read = h.migrations.read
@@ -17,27 +17,14 @@ Deno.test('daemon stop releases its migration monitor before a shared harness is
     return read()
   }
   const a = local({ cwd: repo(), h })
-  let b: ReturnType<typeof local> | undefined
   try {
     time.tick(1000)
     assertEquals(reads, 1)
-    await a.d.stop()
-    time.tick(1000)
-    assertEquals(reads, 1)
-    // Daemon-only shutdown deliberately leaves the connection open for the
-    // replacement host (pool_test's durable-queue restart contract).
-    assertEquals(h.sql.query(select({ cols: [as(lit(1), 'one')] })), [{
-      one: 1,
-    }])
-    b = local({ cwd: repo(), h })
-    time.tick(1000)
-    assertEquals(reads, 2)
-    await b.close()
+    await a.close()
     time.tick(10_000)
-    assertEquals(reads, 2)
+    assertEquals(reads, 1)
   } finally {
     await a.close()
-    await b?.close()
   }
 })
 

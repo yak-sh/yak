@@ -3,7 +3,7 @@ import { home } from './paths.ts'
 // The harness's own graph: one SQLite file, the vocabulary it loads, and the
 // plugins that decide what a write means. Nothing here reaches a server — the
 // harness holds everything in `~/.yak/yak.db` (or wherever `HARNESS_DB` points,
-// `:memory:` for a test), so an agent runs with the tasks daemon down and the
+// `:memory:` for a test), so an agent runs with the tasks server down and the
 // same rows can move into the fleet's graph later.
 //
 // What the harness is made of is declared in ./vocab.ts and ./rules.ts: the
@@ -14,25 +14,31 @@ import { home } from './paths.ts'
 // reconciliation an abnormal shutdown leaves behind.
 //
 // That reconciliation is `reapLeases`, which frees every lease whose holder is
-// not a session in this graph. What a half-finished step leaves behind is
-// reconciled one level up, by agent.ts `resume()`, because waking a transcript
-// needs a model and this file has none.
+// not a session in this graph. What a half-finished step leaves behind is the
+// runner's (@yaks/session `running`), which the agent registers and which
+// sweeps up what a restart left owed when it starts working the pool: waking a
+// transcript needs a model and this file has none.
+//
+// The graph keeps the runs its commits owe (@yaks/effects), like any host's,
+// and is its own worker: a process row, written here, is what a run's lease
+// names as its holder. One is minted per graph opened, so two opened in one
+// process are two workers, and one closed reads as ended.
 
 import { type Blobs, fileBlobs, memoryBlobs } from '@yaks/blob'
-import { type Effects, effects } from '@yaks/effects'
-import { type Graph, graph, then } from '@yaks/graph'
+import { type Effects, effects, released } from '@yaks/effects'
+import { type Eid, type Graph, graph, then } from '@yaks/graph'
+import { EXIT, started } from '@yaks/process'
 import { reapLeases } from '@yaks/session'
 import { migrations, storage, type Store } from '@yaks/sqlite'
 import { open as opened, type Opened } from '@yaks/sqlite/db'
-import { type Vocab } from '@yaks/vocab'
+import type { Vocab } from '@yaks/vocab'
 import { vaultOf } from '@yaks/cli'
 import { dbOf, type Host } from '@yaks/cli/host'
 import type { Vault } from '@yaks/secrets'
 import { install } from '@yaks/connections'
 
-import { computed } from './vocab.ts'
+import { computed, vocab } from './vocab.ts'
 import { rules } from './rules.ts'
-import { vocab } from './vocab.ts'
 export { harnessDoc, vocab } from './vocab.ts'
 
 /** Where the graph lives when nothing names a path: `$HARNESS_DB`, else
@@ -41,14 +47,16 @@ export let dbPath = (
   env: (name: string) => string | undefined = Deno.env.get,
 ): string => env('HARNESS_DB') || `${home(env)}/yak.db`
 
-/** An open harness graph: its file, the store under it, the graph over it, and
- * the effects registry the daemon registers its handlers on. */
+/** An open harness graph: its file, the store under it, the graph over it, the
+ * effects registry the runner is handled on, and the process working it. */
 export type Harness = {
   path: string
   store: Store
   g: Graph
   fx: Effects
   vocab: Vocab
+  /** the process row this graph is worked by: what a run's lease names */
+  me: Eid
   /** where this graph's secrets are kept — its sign-ins among them */
   vault: Vault
   /** where its artifacts' bytes are kept (@yaks/blob): the `images` directory
@@ -77,6 +85,7 @@ export let hosted = (host: Host): Harness => {
     g: host.graph,
     fx: host.fx,
     vocab: host.vocab,
+    me: host.me,
     vault: host.vault,
     artifacts: artifactsAt(path),
     migrations: migrations(host.sql),
@@ -96,6 +105,11 @@ export let hosted = (host: Host): Harness => {
  */
 export let open = (
   path: string = dbPath(),
+  o: {
+    /** how long a run this graph claimed stands before another process may
+     * take it over from one that died (ms; default @yaks/effects') */
+    hold?: number
+  } = {},
 ): Harness & { sql: Opened } => {
   let sql = opened(path)
   const migration = migrations(sql)
@@ -112,11 +126,16 @@ export let open = (
   })
   store.install()
   // The effects registry writes through the graph's own `apply()`, trusted:
-  // what an effect writes is the harness's own data, never a client's.
+  // what an effect writes is the harness's own data, never a client's. It
+  // holds no presence lease, and handles only what the agent lends it
+  // (`session_run`): a run owed for code this graph lacks (a tool call's, an
+  // integration's) is left for a process that has it.
   let fx = effects(vocab, {
+    lease: o.hold,
     write: (b) => g.apply(b, { trusted: true }),
     report: (error) => diagnostics().report(error, { phase: 'effect' }),
   })
+  let me = crypto.randomUUID() as Eid
   // Where this graph's secrets are kept, as a composed host keeps them
   // (@yaks/cli `vaultOf`): the plugin sealing them and the code reading them
   // back share it.
@@ -135,6 +154,7 @@ export let open = (
     ],
   })
   reapLeases(store)
+  g.apply([{ ...started(), entity: { eid: me } }], { trusted: true })
   // The integrations @yaks/connections builds, installed as a composed host
   // installs them at start-up (@yaks/connections/effects): the OpenRouter
   // sign-in goes through one.
@@ -149,9 +169,29 @@ export let open = (
     g,
     fx,
     vocab,
+    me,
     vault,
     artifacts: artifactsAt(path),
     migrations: migration,
-    close: () => sql.close(),
+    // The last transaction, then the file: the leases this worker holds
+    // released and its ending stamped, as one fact.
+    close: () => {
+      let shut = () => {
+        try {
+          sql.close()
+        } catch { /* already closed */ }
+      }
+      try {
+        let last = then(
+          released(g, me),
+          (rows) =>
+            g.apply([...rows, { entity: { eid: me }, [EXIT]: {} }], {
+              trusted: true,
+            }),
+        )
+        if (last instanceof Promise) return void last.then(shut, shut)
+      } catch { /* the file is going either way */ }
+      shut()
+    },
   }
 }

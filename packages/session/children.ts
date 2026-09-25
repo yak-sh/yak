@@ -1,11 +1,12 @@
 import { appendEntry } from './append.ts'
 import { taskMarks } from './comp.ts'
-import { configurePool, pool } from './pool.ts'
 // Delegation is transcript structure, not a process handle. A spawned session
 // names its parent and originating call; a fork additionally names a prefix.
 // Submission is serialized per graph (across parents and tool tables). The
 // durable queue order and fork prefix commit with the child. Replays find
-// that same child; preparation is deferred until a daemon admits it.
+// that same child; preparation is deferred until the runner admits it
+// (./run.ts).
+import { aside } from './admission.ts'
 import {
   type Bundle,
   type Comp,
@@ -63,7 +64,6 @@ export let admit = <T>(
   limits: ChildLimits,
   create: () => Promise<T>,
 ): Promise<T> => {
-  configurePool(g, limits)
   let go = (locks.get(g) ?? Promise.resolve()).catch(() => {}).then(
     async () => {
       let maxChildren = limits.maxChildren ?? 32
@@ -344,7 +344,6 @@ export let taskEntry = async (
 /** The model-facing tools use the same admission and spawn write as
  * taskEntry. */
 export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
-  configurePool(g, limits)
   return [delegation(g, limits, true), delegation(g, limits, false), {
     name: 'notice',
     description:
@@ -417,11 +416,10 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
         throw new ToolError('timeout', 'invalid timeout')
       }
       let end = Date.now() + ms
-      pool(g).suspended.add(ctx.session)
-      pool(g).changed?.()
+      let back = await aside(g, ctx.session, limits, ctx.signal)
       try {
         for (;;) {
-          if (pool(g).stopping?.()) return JSON.stringify({ stopped: true })
+          if (ctx.signal?.aborted) return JSON.stringify({ stopped: true })
           if (args.tasks != null) {
             let results = await Promise.all(ids.map(async (id) => {
               let b = await taskRow(g, id)
@@ -460,9 +458,7 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
           )
         }
       } finally {
-        await pool(g).resume?.(ctx.session)
-        pool(g).suspended.delete(ctx.session)
-        pool(g).changed?.()
+        await back()
       }
     },
   }]

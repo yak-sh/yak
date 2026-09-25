@@ -69,10 +69,10 @@ whose inherited prefix would include an in-flight attempt are rejected rather
 than sharing a mutable response tail. Normal tool-created forks inherit the
 completed request's original prefix, as before.
 
-Shutdown drains callbacks under the existing daemon contract. A forced worker
-termination leaves the ask in flight; startup marks it interrupted rather than
-repeating it. Old inline readers must not be running against a streaming
-database.
+Shutdown lets the step in flight finish. A forced worker termination leaves the
+ask in flight and the transcript's lease held until its take runs out; the next
+run marks it interrupted rather than repeating it. Old inline readers must not
+be running against a streaming database.
 
 ## Measurements and limitations
 

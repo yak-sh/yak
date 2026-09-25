@@ -16,7 +16,7 @@ import { type Blobs, valueTools } from '@yaks/blob'
 //
 // The model never calls a tool function directly here either. A call is an
 // entity attributed to the session that asked for it, so what the tool writes
-// is written in the agent's name and not the daemon's, and the transcript's own
+// is written in the agent's name and not the runner's, and the transcript's own
 // record of the call is the same entity @yaks/tools' runner answered.
 //
 // The conversion is not hand-written. `shapeOf` (@yaks/mcp) is where a tool's
@@ -65,7 +65,7 @@ export let graphTools = (
   let tier = core({ vocab: g.vocab, depth: opts.depth ?? 'names' })
   // A runner: these calls are this agent's own, and `call()` runs them here.
   // Nothing sweeps a queue from inside an agent — a call somebody else wrote
-  // is a daemon's to notice, by registering the same rules as effects.
+  // is for whoever works the effects to notice, by handling the same rules.
   let r = runner(g, { tools: tier, host: g })
   return tier.map((t) => ({
     name: toolName(t),
