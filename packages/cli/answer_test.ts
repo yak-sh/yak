@@ -25,7 +25,7 @@ let modules: Record<string, unknown> = {
   '@yaks/tools': { views: toolViews },
 }
 let views = await registry(
-  ['@yaks/doc', '@yaks/task', '@yaks/web'],
+  ['@yaks/doc', '@yaks/task'],
   (p) => Promise.resolve(modules[p] ?? null),
 )
 let said = (...answer: Record<string, unknown>[]) =>

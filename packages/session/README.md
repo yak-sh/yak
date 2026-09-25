@@ -146,8 +146,6 @@ try {
 
 Replace the local function with `responses({ credential })` from `@yaks/openai`
 to use that provider; also load its `openaiDoc` vocabulary.
-`deno task session:spike` is the repository's provider-backed example, which
-prints a transcript with the `Line` and `Status` renderers.
 
 `daemon.interrupt(session)` returns whether it found an active turn and aborts
 that turn's model request. It does not wait for provider acknowledgement or stop

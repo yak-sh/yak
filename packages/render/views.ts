@@ -19,15 +19,15 @@
 // relations and its comments), drawn through `show` so they go through the
 // same registry as everything else.
 
-import type { Bundle } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import {
+  type Bundle,
   type Child,
   define,
   type H,
   type Registry,
   type RenderContext,
-} from '@yaks/render'
+} from './mod.ts'
 
 /** One group of related entities on a page: `requires`, `requires this`. */
 export type Related = { title: string; items: Bundle[] }

@@ -83,7 +83,6 @@
     "deploy:gate": "deno run --allow-read --allow-env bin/deploy-gate.ts",
     "app-deploy:time": "deno run --allow-read --allow-write --allow-env --allow-net bin/app-deploy-time.ts",
     "app-deploy:gate": "deno run --allow-read --allow-env bin/app-deploy-gate.ts",
-    "session:spike": "deno run -A packages/session/cli.ts",
     "tui:demo": "deno run -A packages/tui/demo.ts",
     "tui": "sh -c 'while :; do deno run -A packages/web/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
     "install": "bin/install",

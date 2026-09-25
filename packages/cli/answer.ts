@@ -10,9 +10,8 @@
 //
 // The views are every configured plugin's `./views`, then @yaks/tools' (the
 // host always carries its `content`), then the generic ones any entity has
-// (@yaks/web/views) — the order @yaks/web's browser registers them in, so an
-// entity reads the same in both. A server names no plugins, so its answers get
-// the last two. A lone entity is shown whole, as its `Page`, beside the links
+// (@yaks/render/views). A server names no plugins, so its answers get the last
+// two. A lone entity is shown whole, as its `Page`, beside the links
 // and comments the page asks for itself, since a tool answers only what it
 // was asked; several are a `Tile` each, one line apiece.
 //
@@ -40,7 +39,7 @@ import {
   sheet,
   type Shown,
   views as generic,
-} from '@yaks/web/views'
+} from '@yaks/render/views'
 import { subpath } from './config.ts'
 import { understood } from './keywords.ts'
 import type { Tty } from './run.ts'
@@ -55,7 +54,6 @@ export let registry = async (
   load: Views = (plugin) => subpath(plugin, 'views'),
 ): Promise<Registry> => {
   let named = [...new Set([...plugins, '@yaks/tools'])]
-    .filter((p) => p != '@yaks/web')
   let found = await Promise.all(named.map(load))
   return define([
     ...found.flatMap((m) => m?.views?.renderers ?? []),

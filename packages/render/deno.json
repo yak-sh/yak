@@ -1,7 +1,10 @@
 {
   "name": "@yaks/render",
   "version": "0.1.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./views": "./views.ts"
+  },
   "license": "Apache-2.0",
   "description": "Selects views, editors, and actions for entity bundles through a query-matched registry independent of the rendering host.",
   "imports": {

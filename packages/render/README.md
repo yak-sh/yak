@@ -29,6 +29,14 @@ The module also exports the contracts `Registration`, `Renderer`, `Registry`,
 `Contributor`, `Patch`, `EditOptions`, and `ArchetypeLookup`, and re-exports the
 `Bundle` and `Query` types.
 
+`@yaks/render/views` holds the views any entity has, whatever it is made of:
+`Title`, `Tile`, `Facts`, `Comment` and `Page`, with `sheet`, their dress in a
+terminal. Register a package's own views ahead of them, and the most specific
+match wins. What a view cannot know from one bundle (how an id reads, where a
+link goes, the relations and comments a page gathers) arrives in the context as
+a `Shown`. The `yak` command prints an answer through them
+(packages/cli/answer.ts).
+
 ## Use
 
 This example builds a renderer registry and renders a document as Markdown:
