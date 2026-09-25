@@ -43,9 +43,15 @@ export let quiet = (): Socket => ({
 
 // The page draws an entity by whatever components it carries (the registry
 // matches on any of them), so every line it watches asks for all of them: `*`,
-// the query grammar's widest projection (@yaks/graph `wanted`).
+// the query grammar's widest projection (@yaks/graph `wanted`). A line that
+// already says what it answers keeps it: `.fields=` names each row's columns,
+// and a `.count!` answers no rows.
 export let entire = (line: string): string =>
-  /(^|&)\*(&|$)/.test(line) ? line : line ? `${line}&*` : '*'
+  /(^|&)(\*|\.count!|\.fields=[^&]*)(&|$)/.test(line)
+    ? line
+    : line
+    ? `${line}&*`
+    : '*'
 
 export type LiveClient = ReturnType<typeof liveClient>
 export let liveClient = (opts: {
