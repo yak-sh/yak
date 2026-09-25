@@ -13,7 +13,7 @@ import { sessions, taskMarks } from '@yaks/session'
 import { processes } from '@yaks/process'
 import { projects } from '@yaks/project'
 import { tasks } from '@yaks/task'
-import type { Driver } from '@yaks/sqlite'
+import type { Driver } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { secrets, type Vault } from '@yaks/secrets'
 

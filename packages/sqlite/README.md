@@ -184,12 +184,12 @@ another runtime's synchronous SQLite driver.
 
 ### Exports
 
-| Import path          | Purpose                                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------- |
-| `@yaks/sqlite`       | Storage, driver types, schema/read/write helpers, overlays, archetype helpers, metadata, and migrations |
-| `@yaks/sqlite/db`    | `open(path)`: an embedded Deno database as a cached driver                                              |
-| `@yaks/sqlite/vocab` | `sqliteDoc` and `docs`, declaring storage and archetype diagnostic tools                                |
-| `@yaks/sqlite/tools` | `runs({ sql }, options?)`, implementing those checks on the application's connection                    |
+| Import path          | Purpose                                                                                   |
+| -------------------- | ----------------------------------------------------------------------------------------- |
+| `@yaks/sqlite`       | Storage, schema/read/write helpers, overlays, archetype helpers, metadata, and migrations |
+| `@yaks/sqlite/db`    | `open(path)`: an embedded Deno database as a cached driver                                |
+| `@yaks/sqlite/vocab` | `sqliteDoc` and `docs`, declaring storage and archetype diagnostic tools                  |
+| `@yaks/sqlite/tools` | `runs({ sql }, options?)`, implementing those checks on the application's connection      |
 
 The vocabulary export declares tools, not graph components. The checks inspect
 foreign-key enforcement/violations, SQLite integrity, and archetype consistency;

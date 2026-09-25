@@ -17,7 +17,7 @@
 
 import { addressed, argsOf, type Bundle, type Comp, Refused } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import type { Driver } from '@yaks/sqlite'
+import type { Driver } from '@yaks/sql'
 import type { Batch } from './batch.ts'
 import { applied } from './undo.ts'
 import { logFor } from './rules.ts'

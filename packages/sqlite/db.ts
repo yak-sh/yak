@@ -12,7 +12,7 @@
 
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
-import type { Driver } from './driver.ts'
+import type { Driver } from '@yaks/sql'
 import { driver } from './native.ts'
 
 /** A database this process opened: its {@link Driver}, and the way to close

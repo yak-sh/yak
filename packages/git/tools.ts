@@ -41,7 +41,7 @@ import type { Runs } from '@yaks/graph/tools'
 import { and, present, want } from '@yaks/query'
 import { human } from '@yaks/id'
 import { CallError, checked, type Finding, type Level } from '@yaks/tools'
-import type { Driver } from '@yaks/sqlite'
+import type { Driver } from '@yaks/sql'
 import { logFor } from '@yaks/journal/rules'
 import { land, LandError, run as git } from './land.ts'
 import {

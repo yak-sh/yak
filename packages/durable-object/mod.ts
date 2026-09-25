@@ -13,7 +13,7 @@
  * {@link storage} implements the `Storage` interface — in one line of
  * composition:
  * {@link driver} turns the object's SQLite into a
- * {@link https://jsr.io/@yaks/sqlite | @yaks/sqlite} `Driver`, and that package
+ * {@link https://jsr.io/@yaks/sql | @yaks/sql} `Driver`, and @yaks/sqlite over it
  * owns the schema, the compiled reads, the patches and the cascading deletes.
  * No SQL is written twice.
  *

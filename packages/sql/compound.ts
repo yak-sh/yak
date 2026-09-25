@@ -26,7 +26,7 @@ export let ARMS = 4
 
 /** What an engine allows when it is NOT workerd — an embedded SQLite is built
  * with the stock SQLITE_MAX_COMPOUND_SELECT of 500, and a driver over one
- * declares this (@yaks/sqlite `Driver.arms`) so that a query spanning the whole
+ * declares this (`Driver.arms`) so that a query spanning the whole
  * vocabulary stays one statement instead of one per four components. Set below
  * the stock limit rather than at it, because such a query is not the only
  * compound SELECT a statement may contain. */

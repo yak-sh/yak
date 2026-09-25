@@ -21,11 +21,11 @@ deno add jsr:@yaks/durable-object jsr:@yaks/graph jsr:@yaks/vocab jsr:@yaks/api
 ## Storage and sockets
 
 `storage(ctx.storage, vocab, base?)` adapts the object's SQLite API to an
-[@yaks/sqlite](../sqlite/README.md) `Driver`. That package creates the schema,
-reads components, and applies row changes. `ctx.storage.transactionSync`
-provides the transaction. Storage operations are synchronous; graph plugins can
-make an operation asynchronous, but code executing inside `transactionSync` must
-remain synchronous.
+[@yaks/sql](../sql/README.md) `Driver`, and [@yaks/sqlite](../sqlite/README.md)
+over that driver creates the schema, reads components, and applies row changes.
+`ctx.storage.transactionSync` provides the transaction. Storage operations are
+synchronous; graph plugins can make an operation asynchronous, but code
+executing inside `transactionSync` must remain synchronous.
 
 `sockets(subs, ctx)` connects hibernatable WebSockets to
 [@yaks/api](../api/README.md) subscriptions. The API registry re-evaluates saved

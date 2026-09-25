@@ -36,7 +36,7 @@
 //
 // The adapter is bound to a driver and a vocabulary once, by `storage()`, and
 // reads and writes bundles from then on. The driver is any object with
-// `query`/`exec` (see ./driver.ts) — an in-process SQLite for a test, a pooled
+// `query`/`exec` (@yaks/sql `Driver`) — an in-process SQLite for a test, a pooled
 // handle for a server — so nothing here names a concrete SQLite library.
 
 import type { Vocab } from '@yaks/vocab'
@@ -67,7 +67,6 @@ import { shape } from './physical.ts'
 import { patch, remove } from './write.ts'
 import { bindings } from './rules.ts'
 
-export * from './driver.ts'
 export * from './archetype.ts'
 export { catalog } from './catalog.ts'
 export { fold, pointers } from './fold.ts'

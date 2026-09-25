@@ -1,6 +1,6 @@
 // The Durable Object's SQLite, reduced to the two things a store needs from a
 // connection — a parameterized statement, and a transaction — and shaped as
-// @yaks/sqlite's `Driver`. That is the whole trick of this package: the schema,
+// @yaks/sql's `Driver`. That is the whole trick of this package: the schema,
 // the compiled reads, the patches and the death cascade are @yaks/sqlite's
 // already, and a Durable Object is one more place to run them.
 //
@@ -98,7 +98,7 @@ let unbind = (row: Row): Row => {
 }
 
 /**
- * A {@link https://jsr.io/@yaks/sqlite | @yaks/sqlite} `Driver` over a Durable
+ * A {@link https://jsr.io/@yaks/sql | @yaks/sql} `Driver` over a Durable
  * Object's storage. It converts the values the engine will not take, hands the
  * transaction back to `transactionSync`, and turns foreign keys on — the
  * enforcement the schema's references are written for, which workerd leaves off

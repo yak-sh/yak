@@ -69,8 +69,8 @@ import {
   type VocabDoc,
 } from '@yaks/vocab'
 import { ended, PROCESS, selfEid, started } from '@yaks/process'
-import type { Derived, Extension } from '@yaks/sql'
-import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
+import type { Derived, Driver, Extension } from '@yaks/sql'
+import { migrations, storage, type Store } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 // Types only. A route and a request handler are @yaks/api's words, and a host
 // names the shape of what it passes through without importing a line of HTTP:
