@@ -259,6 +259,7 @@
       "component": true,
       "type": "object",
       "kind": true,
+      "before": ["process"],
       "prefix": "S",
       "description": "a transcript something reacts to. Identity only: what it is doing is read off its entries (`status`), where it runs is @yaks/process `process`, and what it was asked for is the `using` on its first entry",
       "properties": {
