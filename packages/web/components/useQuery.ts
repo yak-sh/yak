@@ -33,7 +33,7 @@ import {
 } from '../live.ts'
 import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { type ResultComp } from '../route.ts'
-import type { Ent } from '../types.ts'
+import { type Ent, vocab } from '../types.ts'
 import { dotFields } from '../tray_query.ts'
 
 // A query that does not parse fails where it was asked, never in the render
@@ -139,11 +139,16 @@ export let useCommentsOn = (target: string): Ent[] =>
     .sort((a, b) => a.num - b.num)
 
 // The commits landed for an entity — the structured rows that sit in the
-// same rail as its comments (M-31946 §7).
-export let useCommitsOn = (target: string): Ent[] =>
-  useQueryEids(`.commit.target=${target}`)
-    .map(ent)
-    .sort((a, b) => a.num - b.num)
+// same rail as its comments (M-31946 §7). `commit` is @yaks/git's, so a graph
+// without that plugin has none to ask for: the query would name a component
+// its vocabulary lacks. The vocabulary is loaded before this module runs
+// (types.ts), so the choice is made once.
+export let useCommitsOn: (target: string) => Ent[] = vocab.comp('commit')
+  ? (target) =>
+    useQueryEids(`.commit.target=${target}`)
+      .map(ent)
+      .sort((a, b) => a.num - b.num)
+  : () => []
 
 // `via` — WHICH column points here — reads off each referrer's own row signal
 // (linksVia), so a retarget wakes the face without a membership change.
