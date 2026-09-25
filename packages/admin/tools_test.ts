@@ -223,7 +223,11 @@ Deno.test('the platform store is queried through its graph-tier door', async () 
         jsonrpc: '2.0',
         id: 1,
         result: {
-          content: [{ type: 'text', text: JSON.stringify(rows) }],
+          content: [
+            { type: 'text', text: JSON.stringify(rows) },
+            { type: 'text', text: 'The tool list changed; reconnect.' },
+          ],
+          structuredContent: { result: rows },
         },
       }))
     },

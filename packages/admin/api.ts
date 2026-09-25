@@ -313,7 +313,11 @@ export let storeQuery = async (
       name: 'graph_query',
       arguments: { app: at, query: filters.join('&') },
     })
-    return valueOf(saidBy(answer))
+    saidBy(answer)
+    if (!answer.structuredContent || !('result' in answer.structuredContent)) {
+      throw new Error('graph_query answered without a structured result')
+    }
+    return answer.structuredContent.result
   }
   let url = `${storeUrl(at, '/query')}?${
     filters.map(encodeURIComponent).join('&')
