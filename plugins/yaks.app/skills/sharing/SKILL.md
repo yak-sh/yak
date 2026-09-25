@@ -205,7 +205,8 @@ Read it before you build something somebody may already have made.
   moved away from and still redirects from — is refused, telling you to pass
   `as`.
 - An installed app counts against the space's app ceiling like any other (the
-  free tier allows five, Plus allows 50; trashed apps do not count).
+  free tier allows five, the Plus plan has no limit, and trashed apps do not
+  count).
 - The copy keeps the published app's `access`: an app written to be voted on has
   to stay votable. `app_set` changes it afterwards.
 - The copy is not made the front page: `<space>.yaks.app/` lists the space's
