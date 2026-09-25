@@ -2,13 +2,13 @@
 // sync, same view registry as the browser — a different document and a
 // different painter. Edits made elsewhere appear live; this is another client
 // on the same ws.
-import { onPaint, root, touch } from './dom.ts' // installs document — first
+import { root } from './doc.ts' // installs document — first
+import { onPaint, touch } from '@yaks/tui'
 import { render } from 'preact'
 import { effect } from '@preact/signals'
-import { boot, config } from '../../packages/web/live.ts'
-import { extend } from '../../packages/web/components/registry.ts'
-import { loadPlugins, pluginSpecifiers } from '../plugins.ts'
-import { onMarkdown } from '../../packages/web/components/Markdown.tsx'
+import { boot, config } from '../live.ts'
+import { extend } from '../components/registry.ts'
+import { onMarkdown } from '../components/Markdown.tsx'
 import { Md } from './md.tsx'
 import {
   App,
@@ -23,7 +23,7 @@ import {
   views,
 } from './App.tsx'
 import { paint } from './paint.ts'
-import { decode } from './input.ts'
+import { keys } from './keys.ts'
 
 let enc = new TextEncoder()
 let out = (s: string) => Deno.stdout.writeSync(enc.encode(s))
@@ -44,7 +44,7 @@ config.host = Deno.env.get('TASKS_HOST') ?? '127.0.0.1:5173'
 config.agreement = Deno.env.get('TASKS_SUBS_PROBE') == '1'
 // Hot reload is lossless the same way the web's is: the browsing state
 // lives outside the process. Restore before first render, save on change.
-let stateFile = `${Deno.env.get('HOME')}/.tasks/tui.json`
+let stateFile = `${Deno.env.get('HOME')}/.yak/tui.json`
 try {
   let s = JSON.parse(Deno.readTextFileSync(stateFile))
   sel.value = s.sel ?? sel.value
@@ -70,10 +70,6 @@ effect(() => {
 onMarkdown((text, repo, inline) => (
   <Md text={text} repo={repo ?? undefined} inline={inline} />
 ))
-// Load configured plugins before the TUI's own overlays, so plugin renderers
-// and the terminal overrides compose in one pool (D-18663 seam 1). Inert by
-// default: no TASKS_PLUGINS means an empty list and no imports.
-await loadPlugins(pluginSpecifiers())
 extend(overrides)
 await boot()
 
@@ -81,7 +77,7 @@ Deno.stdin.setRaw(true)
 // Alt screen, cursor hidden, and push the kitty keyboard protocol (disambiguate
 // flag) so a modified key like Shift+Enter is reported at all — without it the
 // terminal collapses ⇧⏎ to a bare CR. Terminals that don't speak it ignore the
-// private sequence; input.decode() turns whatever they do send back into the
+// private sequence; keys() turns whatever they do send back into the
 // legacy tokens key() reads.
 out('\x1b[?1049h\x1b[?25l\x1b[>1u')
 
@@ -96,9 +92,9 @@ onPaint(() => fit(paint(root, spot())))
 Deno.addSignalListener('SIGWINCH', touch)
 render(<App />, root as unknown as Parameters<typeof render>[1])
 
-// The key loop: raw bytes → decode() → key(). A multi-byte escape sequence
+// The key loop: raw bytes → keys() → key(). A multi-byte escape sequence
 // (an arrow, a function key, or a kitty CSI-u report like ⇧⏎) arrives as one
-// chunk; decode() turns each chunk into the tokens key() reads — legacy bytes
+// chunk; keys() turns each chunk into the tokens key() reads — legacy bytes
 // for the keys the app binds, nothing for the ones it doesn't — so their
 // `[`, `Z`, … never leak into the command line.
 let buf = new Uint8Array(64)
@@ -106,6 +102,6 @@ let dec = new TextDecoder()
 while (!quit.value) {
   let n = await Deno.stdin.read(buf)
   if (n == null) break
-  for (let k of decode(dec.decode(buf.subarray(0, n)))) key(k)
+  for (let k of keys(dec.decode(buf.subarray(0, n)))) key(k)
 }
 bye()

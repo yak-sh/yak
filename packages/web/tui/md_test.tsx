@@ -1,12 +1,12 @@
 // Terminal markdown wears the same syntax scopes as HTML, with the painter as
 // the only source of ANSI bytes.
-import './dom.ts'
+import './doc.ts'
 import { render } from 'preact'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { TElement } from './dom.ts'
+import { ansi, TElement } from '@yaks/tui'
 import { Md } from './md.tsx'
-import { ansi, pane } from './paint.ts'
-import { slow } from '../../bin/testing.ts'
+import { pane } from './paint.ts'
+import { slow } from '../../../bin/testing.ts'
 
 let painted = (text: string) => {
   let root = new TElement('root')

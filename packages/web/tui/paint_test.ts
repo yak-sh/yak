@@ -1,8 +1,8 @@
 // The window: where a screenful sits over the content, given a cursor — and
 // the escape invariant: content never speaks to the terminal.
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { TElement, TNode, TText } from './dom.ts'
-import { ansi, cursorLine, pane, win } from './paint.ts'
+import { ansi, TElement, TNode, TText } from '@yaks/tui'
+import { cursorLine, pane, win } from './paint.ts'
 
 // top, cursor, window height, content height -> where the window sits
 let cases: [number[], number][] = [
@@ -78,7 +78,11 @@ let content: [string, string, string][] = [
   ['DEL goes', 'a\x7fb', 'ab'],
   ['\\r goes — it would move the cursor in the frame', 'a\rb', 'ab'],
   ['NUL and the rest of C0 go', 'a\x00\x05\x0e\x1fb', 'ab'],
-  ['an FTS snippet keeps its hit marks', 'a \x01hit\x02 b', 'a \x01hit\x02 b'],
+  [
+    'raw FTS hit marks go too: Search draws them as <mark>',
+    'a \x01hit\x02 b',
+    'a hit b',
+  ],
   ['\\n stays a line break', 'a\nb', 'a\nb'],
   ['\\t expands to spaces we chose', 'a\tb', 'a  b'],
 ]

@@ -1,8 +1,8 @@
-// The key decoder: a raw stdin chunk becomes the tokens key() reads. The one
-// that earns this module is ⇧⏎ — a newline the terminal can only send under
-// the kitty protocol, and the reason the TUI asks for it.
+// The key tokens: a raw stdin chunk becomes the tokens key() reads. The one
+// that earns this is ⇧⏎ — a newline the terminal can only send under the kitty
+// protocol, and the reason the TUI asks for it.
 import { assertEquals } from '@std/assert'
-import { decode } from './input.ts'
+import { keys } from './keys.ts'
 
 let cases: [string, string, string[]][] = [
   ['⇧⏎ becomes a newline', '\x1b[13;2u', ['\n']],
@@ -19,10 +19,12 @@ let cases: [string, string, string[]][] = [
   ['legacy ⇧⇥ is still understood', '\x1b[Z', ['\x1b[Z']],
   ['an unbound arrow key is dropped', '\x1b[A', []],
   ['an unbound modified key is dropped', '\x1b[65;5u', []],
+  ['a raw Ctrl-C is ETX', '\x03', ['\x03']],
+  ['a paste types its characters', '\x1b[200~a\nb\x1b[201~', ['a', '\n', 'b']],
 ]
 
-Deno.test('decode maps terminal chunks to the keys the app binds', () => {
+Deno.test('keys maps terminal chunks to the keys the app binds', () => {
   for (let [what, chunk, want] of cases) {
-    assertEquals(decode(chunk), want, what)
+    assertEquals(keys(chunk), want, what)
   }
 })

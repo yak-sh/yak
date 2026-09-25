@@ -4,22 +4,19 @@
 // the words don't. This mounts the shared entry renderer through the fake DOM
 // (the very seam the web and TUI share) and asserts the bodies paint, while the
 // control-char boundary still neutralizes anything a body tries to speak.
-import '../../packages/web/testing.ts' // learns the vocabulary
-import './dom.ts' // installs the fake document — before anything renders
+import '../testing.ts' // learns the vocabulary
+import './doc.ts' // installs the fake document — before anything renders
 import { render } from 'preact'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { TElement } from './dom.ts'
+import { ansi, TElement } from '@yaks/tui'
 import { Md } from './md.tsx'
-import { onMarkdown } from '../../packages/web/components/Markdown.tsx'
+import { onMarkdown } from '../components/Markdown.tsx'
 // Entity.tsx before Entry.tsx: the two form the registry's render cycle, and
 // entering it from Entity's side lets Entry finish initializing first (the same
 // order Session_test.tsx relies on).
-import '../../packages/web/components/Entity.tsx'
-import {
-  EntryBody,
-  type EntryLine,
-} from '../../packages/web/components/views/Entry.tsx'
-import { ansi, pane } from './paint.ts'
+import '../components/Entity.tsx'
+import { EntryBody, type EntryLine } from '../components/views/Entry.tsx'
+import { pane } from './paint.ts'
 
 // The same injection tui/main.tsx makes at boot: the one markdown door paints
 // through Md instead of the HTML the fake DOM can't honor.

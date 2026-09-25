@@ -131,7 +131,11 @@ let INLINE = new Set([
   'label',
 ])
 
-type Ctx = { sheet: Sheet; metrics: Metrics }
+// `spaced` is for a tree drawn by components written for a browser, whose
+// inline siblings are kept apart by CSS gaps rather than by characters: a space
+// goes between two inline siblings unless one side brings its own, except
+// inside an `Md_Code` run, where every character is the code's.
+type Ctx = { sheet: Sheet; metrics: Metrics; spaced?: boolean }
 
 let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
   if (n instanceof TText) {
@@ -205,11 +209,16 @@ let flow = (
     return lines
   }
   let previousParagraph = false
+  let spaced = c.spaced && !el.className.split(/\s+/).includes('Md_Code')
   for (let n of el.childNodes) {
     if (n instanceof TText || INLINE.has((n as TElement).localName)) {
       let segs = inline(n, s, c)
       if (!segs.length) continue
       previousParagraph = false
+      if (
+        spaced && cur.length && !/\s$/.test(cur[cur.length - 1].text) &&
+        !/^\s/.test(segs[0].text)
+      ) cur.push({ text: ' ', style: s })
       for (let seg of segs) {
         // Newlines inside a text node are line breaks.
         seg.text.split('\n').forEach((part, i) => {
