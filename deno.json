@@ -179,6 +179,7 @@
     "./packages/dreaming",
     "./packages/project",
     "./packages/tmux",
+    "./packages/tunnel",
     "./packages/secrets",
     "./packages/connections",
     "./packages/egress",

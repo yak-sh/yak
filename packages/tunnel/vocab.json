@@ -1,0 +1,26 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "tunnel",
+  "$defs": {
+    "tunnel": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "the Cloudflare Tunnel that links a machine to this entity, and the Workers VPC Service a worker binds to reach it",
+      "properties": {
+        "id": {
+          "type": "string",
+          "stamped": true,
+          "description": "the tunnel's id in the account"
+        },
+        "service": {
+          "type": "string",
+          "stamped": true,
+          "description": "the VPC Service's id, which a worker's binding names"
+        }
+      }
+    }
+  }
+}
