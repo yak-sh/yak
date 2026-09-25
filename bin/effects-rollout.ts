@@ -6,7 +6,8 @@
 //   deno run -A bin/effects-rollout.ts ~/.yak/yak.json [--db <copy>]
 //
 // A pool row is bookkeeping the pool writes beneath the journal (tx.patch), so
-// it is removed and re-owed the same way.
+// it is removed and re-owed the same way, 500 rows a transaction so a server
+// on the same file is never kept waiting past its busy timeout.
 
 import { effectsIn } from '@yaks/vocab'
 import type { Bundle } from '@yaks/graph'
@@ -32,7 +33,7 @@ let removed = 0
 for (let h of stale) {
   while (true) {
     let rows: Bundle[] = await g.read(
-      `.effect.handler=${quoted(h)}&.limit=5000`,
+      `.effect.handler=${quoted(h)}&.limit=500`,
     )
     if (!rows.length) break
     await host.storage.tx((tx) => tx.remove(rows.map((b) => b.entity)))
