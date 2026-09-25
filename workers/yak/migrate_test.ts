@@ -1192,7 +1192,7 @@ Deno.test('boot leaves a populated table constraint for its preparing pass', asy
   let exec = sql.exec.bind(sql)
   let created = false
   sql.exec = (query, ...params) => {
-    if (query.startsWith('create unique index if not exists app_store')) {
+    if (query.startsWith('create unique index if not exists "app_store"')) {
       let [row] = exec('select count(*) as n from app where store is null')
         .toArray() as { n: number }[]
       assertEquals(row.n, 0)

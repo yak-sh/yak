@@ -71,7 +71,34 @@ import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
 import { edgeEid } from '@yaks/edge'
 import { entryEid, TREE_ENTRY } from '@yaks/git'
 import { identityEid, sha256 } from '@yaks/graph'
-import type { Derived } from '@yaks/sql'
+import {
+  among,
+  and,
+  as,
+  col,
+  count,
+  type Derived,
+  type Driver,
+  each,
+  eq,
+  type Expr,
+  fn,
+  iff,
+  isNull,
+  join,
+  left,
+  lit,
+  ne,
+  notNull,
+  op,
+  or,
+  type Query,
+  type Select,
+  select,
+  sub,
+  table,
+  val,
+} from '@yaks/sql'
 import { backfill, fold, grown, indexed, pointers, tabled } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { handle } from './directory.ts'
@@ -386,10 +413,51 @@ let ASIDE = 'yak_old_'
  * ({@link addressed}). */
 let FORMERLY = 'alias'
 
-/** A Durable Object's SQLite as @yaks/sqlite drives it. */
-export type Drive = ReturnType<typeof driver>
+/** How many rows a query answers, as its `n`. */
+let n = (d: Driver, q: Query): number => Number(d.query(q)[0]?.n ?? 0)
 
-let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
+/** How many rows a table holds, or how many of them match. */
+let tally = (d: Driver, name: string, where?: Expr): number =>
+  n(d, select({ cols: [as(count(), 'n')], from: table(name), where }))
+
+/** How many rows a query selects. */
+let many = (d: Driver, q: Query): number =>
+  n(d, select({ cols: [as(count(), 'n')], from: { t: 'from', q } }))
+
+/** Whether a query selects a row at all. */
+let found = (d: Driver, q: Select): boolean =>
+  d.query({ ...q, limit: lit(1) }).length > 0
+
+/** The schema's own catalogue, narrowed to one type of object. */
+let catalogued = (type: string, also?: Expr) =>
+  select({
+    cols: [col('name'), col('sql')],
+    from: table('sqlite_master'),
+    where: and(eq(col('type'), lit(type)), ...(also ? [also] : [])),
+  })
+
+/** The entity an eid names. */
+let byEid = (eid: string) =>
+  select({
+    cols: [col('id')],
+    from: table('entity'),
+    where: eq(col('eid'), val(eid)),
+  })
+
+/** An entity called by another eid, keeping its integer id. */
+let readdress = (id: number, eid: string) => ({
+  t: 'update' as const,
+  table: 'entity',
+  set: { eid: val(eid) },
+  where: eq(col('id'), val(id)),
+})
+
+/** A column dropped from a table. */
+let unseat = (name: string, column: string) => ({
+  t: 'alter table' as const,
+  table: name,
+  drop: column,
+})
 
 /** A refusal that unwinds the pass: the counts did not reconcile, or the new
  * schema would not stand over the old rows. It carries the report, so the
@@ -429,10 +497,7 @@ export type Report = {
  * has not moved, and its absence is one that never was or already has.
  */
 export let stale = (storage: DurableStorage): boolean =>
-  driver(storage).query(
-    `select 1 as n from sqlite_master where type = 'table' and name = ?`,
-    ['journal_tx'],
-  ).length > 0
+  stands(driver(storage), 'journal_tx')
 
 /**
  * Every definition of one type that is this object's — the single place the
@@ -444,13 +509,14 @@ export let stale = (storage: DurableStorage): boolean =>
  * its word threw `SQLITE_AUTH` in every deployed object and none of the local
  * ones, where nothing creates that table (T-34019).
  */
-let named = (d: Drive, type: string): { name: string; sql: string }[] =>
-  d.query('select name, sql from sqlite_master where type = ?', [type])
+let named = (d: Driver, type: string): { name: string; sql: string }[] =>
+  d.query(catalogued(type))
     .map((r) => ({ name: String(r.name), sql: String(r.sql ?? '') }))
     .filter((t) => !reserved(t.name))
 
-let columns = (d: Drive, table: string): string[] =>
-  d.query(`pragma table_info(${q(table)})`, []).map((r) => String(r.name))
+let columns = (d: Driver, name: string): string[] =>
+  d.query({ t: 'pragma', name: 'table_info', arg: name })
+    .map((r) => String(r.name))
 
 /**
  * Every definition this object stands on, dropped: its views, its triggers and
@@ -463,12 +529,12 @@ let columns = (d: Drive, table: string): string[] =>
  * store that has an older one, and dropping them costs only the rebuild below.
  * Dropping a virtual table takes its shadow tables with it.
  */
-export let recut = (d: Drive) => {
-  for (let t of named(d, 'trigger')) {
-    d.exec(`drop trigger if exists ${q(t.name)}`)
-  }
-  for (let v of named(d, 'view')) d.exec(`drop view if exists ${q(v.name)}`)
-  for (let f of shadowed(d)) d.exec(`drop table if exists ${q(f)}`)
+export let recut = (d: Driver) => {
+  let drop = (kind: 'table' | 'index' | 'view' | 'trigger', name: string) =>
+    d.query({ t: 'drop', kind, name, ifExists: true })
+  for (let t of named(d, 'trigger')) drop('trigger', t.name)
+  for (let v of named(d, 'view')) drop('view', v.name)
+  for (let f of shadowed(d)) drop('table', f)
 }
 
 /**
@@ -477,37 +543,30 @@ export let recut = (d: Drive) => {
  * runs first and every index of the table goes with it; `install()` raises
  * again the ones the vocabulary still declares, in the same transaction.
  */
-export let shed = (d: Drive, table: string, prop: string) => {
-  if (!columns(d, table).includes(prop)) return
+export let shed = (d: Driver, name: string, prop: string) => {
+  if (!columns(d, name).includes(prop)) return
   recut(d)
-  let indexes = d.query(
-    `select name from sqlite_master where type = 'index' and tbl_name = ? ` +
-      'and sql is not null',
-    [table],
-  )
-  for (let i of indexes) d.exec(`drop index if exists ${q(String(i.name))}`)
-  d.exec(`alter table ${q(table)} drop column ${q(prop)}`)
+  let indexes = d.query(catalogued(
+    'index',
+    and(eq(col('tbl_name'), val(name)), notNull(col('sql'))),
+  ))
+  for (let i of indexes) {
+    d.query({ t: 'drop', kind: 'index', name: String(i.name), ifExists: true })
+  }
+  d.query(unseat(name, prop))
 }
 
 /** Every full-text index refilled from the content it mirrors — what a freshly
  * raised external-content index needs, because the rows it indexes were written
  * before it existed. */
-export let rebuild = (d: Drive) => {
+export let rebuild = (d: Driver) => {
   for (let f of shadowed(d)) {
-    d.exec(`insert into ${q(f)}(${q(f)}) values ('rebuild')`)
+    d.query({ t: 'insert', into: f, cols: [f], rows: [[lit('rebuild')]] })
   }
 }
 
-let count = (d: Drive, table: string): number => {
-  let [row] = d.query(`select count(*) as n from ${q(table)}`, [])
-  return Number(row?.n ?? 0)
-}
-
-let stands = (d: Drive, table: string): boolean =>
-  d.query(
-    `select 1 as n from sqlite_master where type = 'table' and name = ?`,
-    [table],
-  ).length > 0
+let stands = (d: Driver, name: string): boolean =>
+  d.query(catalogued('table', eq(col('name'), val(name)))).length > 0
 
 /** Existing rows need a preparing pass before gaining a unique constraint.
  * Empty tables can acquire it now without changing what old rows must satisfy.
@@ -541,7 +600,7 @@ export let install = (
       vocab.indexes(table).filter((i) => {
         let name = `${table}_${i.props.join('_')}`
         if (held.has(name)) return false
-        if (!i.unique || !count(d, table)) return true
+        if (!i.unique || !tally(d, table)) return true
         if (deferred(name)) return false
         throw new Error(
           `skipped unique index ${name}: existing rows require a preparing migration`,
@@ -557,7 +616,7 @@ export let install = (
 // A full-text index is several tables — the virtual one and its shadows — and
 // the shadows are derived bytes nobody restores from. The virtual table's own
 // name prefixes every one of them, which is how they are told apart.
-let shadowed = (d: Drive): string[] =>
+let shadowed = (d: Driver): string[] =>
   named(d, 'table').filter((t) => /using\s+fts\d/i.test(t.sql)).map((t) =>
     t.name
   )
@@ -584,26 +643,23 @@ export type Carry = {
 // the same word in both stores, so this is the whole rename table.
 let RENAMED: Record<string, string> = { references: 'referenced' }
 
-let ins = (d: Drive, sql: string, params: unknown[]) =>
-  d.query(sql, params as never[])
-
 // The integer id of an eid, minting the spine row when there is none. Only the
 // split grant needs this: every other row the pass writes rides an id the old
 // store already had. The spine takes no number — this pass runs on an app's
 // store, and an app's entities are not numbered (vocab.ts) — so what it mints
 // is the eid and nothing else.
-let idOf = (d: Drive, eid: string, minted: { n: number }): number => {
-  let [row] = d.query('select id from entity where eid = ?', [eid])
+let idOf = (d: Driver, eid: string, minted: { n: number }): number => {
+  let [row] = d.query(byEid(eid))
   if (row) return Number(row.id)
-  ins(d, 'insert into entity (eid) values (?)', [eid])
+  d.query({ t: 'insert', into: 'entity', cols: ['eid'], rows: [[val(eid)]] })
   minted.n++
-  return Number(d.query('select id from entity where eid = ?', [eid])[0].id)
+  return Number(d.query(byEid(eid))[0].id)
 }
 
 // The fleet and the app store have separate schemas. Carry both deployed
 // shapes: an already-package-shaped app and an old fleet-shaped task table.
 let FILING = ['priority', 'project', 'assignee', 'domain']
-let filingCols = (d: Drive, from: string) =>
+let filingCols = (d: Driver, from: string) =>
   FILING.filter((c) => columns(d, from).includes(c))
 
 export let unfiled = (storage: DurableStorage): boolean => {
@@ -614,39 +670,44 @@ export let unfiled = (storage: DurableStorage): boolean => {
 
 // Refuse conflicting facts rather than pick a winner. Reconcile values, not
 // only counts, before the caller can remove the old place or advance a marker.
-let fileward = (d: Drive, from: string): number => {
+let fileward = (d: Driver, from: string): number => {
   let cols = filingCols(d, from)
   if (!cols.length) return 0
-  let rows = d.query(
-    `select entity, ${cols.map(q).join(', ')} from ${q(from)}`,
-    [],
-  )
+  let rows = d.query(select({
+    cols: ['entity', ...cols].map((c) => col(c)),
+    from: table(from),
+  }))
+  let filing = (entity: number) =>
+    d.query(select({
+      from: table('filed'),
+      where: eq(col('entity'), val(entity)),
+    }))
   for (let row of rows) {
-    let [held] = d.query('select * from filed where entity = ?', [
-      Number(row.entity),
-    ])
-    for (let col of cols) {
-      if (held?.[col] != null && row[col] != null && held[col] !== row[col]) {
+    let [held] = filing(Number(row.entity))
+    for (let c of cols) {
+      if (held?.[c] != null && row[c] != null && held[c] !== row[c]) {
         throw new Error(
-          `task.${col} conflicts with filed.${col} for entity ${row.entity}`,
+          `task.${c} conflicts with filed.${c} for entity ${row.entity}`,
         )
       }
     }
     let names = ['entity', ...cols]
-    ins(
-      d,
-      `insert into filed (${names.map(q).join(', ')}) values (${
-        names.map(() => '?').join(', ')
-      }) ` +
-        `on conflict(entity) do update set ${
-          cols.map((c) => `${q(c)} = coalesce(filed.${q(c)}, excluded.${q(c)})`)
-            .join(', ')
-        }`,
-      names.map((c) => row[c] as string | number | null),
-    )
-    let [landed] = d.query('select * from filed where entity = ?', [
-      Number(row.entity),
-    ])
+    d.query({
+      t: 'insert',
+      into: 'filed',
+      cols: names,
+      rows: [names.map((c) => val(row[c] as string | number | null))],
+      upsert: [{
+        on: [col('entity')],
+        set: Object.fromEntries(
+          cols.map((c) => [
+            c,
+            fn('coalesce', col(c, 'filed'), col(c, 'excluded')),
+          ]),
+        ),
+      }],
+    })
+    let [landed] = filing(Number(row.entity))
     if (!landed || cols.some((c) => row[c] != null && landed[c] !== row[c])) {
       throw new Error(`task filing did not reconcile for entity ${row.entity}`)
     }
@@ -665,11 +726,11 @@ export let filed = (
   // Dead columns are tidying, not the move (the same rule as homed). A
   // platform SQLite version that cannot drop one must not lose its data or
   // rerun this pass; the marker and copied rows commit together.
-  for (let col of filingCols(d, 'task')) {
+  for (let c of filingCols(d, 'task')) {
     try {
-      d.exec(`alter table task drop column ${q(col)}`)
+      d.query(unseat('task', c))
     } catch (e) {
-      notes.push(`${col} remains dead: ${String(e)}`)
+      notes.push(`${c} remains dead: ${String(e)}`)
     }
   }
   return {
@@ -700,14 +761,17 @@ export let filed = (
 
 // Each tool row, with the eid it stands at and the one its name derives,
 // oldest first.
-let toolIds = (d: Drive) =>
+let toolIds = (d: Driver) =>
   stands(d, 'tool')
-    ? d.query(
-      `select e.id, e.eid, t.name from ${q('tool')} t` +
-        ' join entity e on e.id = t.entity where t.name is not null' +
-        ' order by e.id',
-      [],
-    ).map((r) => ({
+    ? d.query(select({
+      cols: [col('id', 'e'), col('eid', 'e'), col('name', 't')],
+      from: table('tool', 't'),
+      joins: [
+        join(table('entity', 'e'), eq(col('id', 'e'), col('entity', 't'))),
+      ],
+      where: notNull(col('name', 't')),
+      order: [col('id', 'e')],
+    })).map((r) => ({
       id: Number(r.id),
       eid: String(r.eid),
       named: identityEid('tool', [String(r.name)]),
@@ -769,15 +833,9 @@ export let tooled = (
   let byName = Map.groupBy(rows, (t) => t.named)
   let moving = [...byName.values()]
     .filter((ts) => ts.length > 1 || ts[0].eid != ts[0].named).flat()
+  let ids = each(moving.map((t) => t.id))
   let linked = stands(d, 'edge') && moving.length
-    ? Number(
-      d.query(
-        `select count(*) as n from ${q('edge')} where "from" in` +
-          ' (select value from json_each(?1)) or "to" in' +
-          ' (select value from json_each(?1))',
-        [JSON.stringify(moving.map((t) => t.id))],
-      )[0]?.n ?? 0,
-    )
+    ? tally(d, 'edge', or(among(col('from'), ids), among(col('to'), ids)))
     : 0
   if (linked) {
     throw new Refused(report(false, 0, 0, `${linked} links touch a tool`))
@@ -792,19 +850,23 @@ export let tooled = (
       merged++
     }
     if (keep.eid == eid) continue
-    if (d.query('select 1 from entity where eid = ?', [eid]).length) {
+    if (d.query(byEid(eid)).length) {
       throw new Refused(
         report(false, 0, 0, `${eid} is already another entity's id`),
       )
     }
-    d.query('update entity set eid = ? where id = ?', [eid, keep.id])
+    d.query(readdress(keep.id, eid))
     moved++
   }
   if (rows.length) {
-    d.exec(
-      `create unique index if not exists ${TOOL_NAME} on ${q('tool')}` +
-        ` (${q('name')})`,
-    )
+    d.query({
+      t: 'create index',
+      name: TOOL_NAME,
+      on: 'tool',
+      cols: [col('name')],
+      unique: true,
+      ifNot: true,
+    })
   }
   if (mistooled(storage)) {
     throw new Refused(
@@ -824,7 +886,7 @@ export let tooled = (
 // both from now on (installed.ts `sandboxing`). A later release drops it.
 
 // The copies the build before this one would sandbox and this one does not.
-let UNTRUSTED = 'sandboxed is null and trusted is null'
+let UNTRUSTED = and(isNull(col('sandboxed')), isNull(col('trusted')))
 
 /** Whether a copy stands that the two builds would serve differently. */
 export let untrusted = (storage: DurableStorage): boolean => {
@@ -833,8 +895,10 @@ export let untrusted = (storage: DurableStorage): boolean => {
     ['sandboxed', 'trusted'].every((c) =>
       columns(d, 'installed').includes(c)
     ) &&
-    d.query(`select 1 as n from installed where ${UNTRUSTED} limit 1`, [])
-        .length > 0
+    found(
+      d,
+      select({ cols: [lit(1)], from: table('installed'), where: UNTRUSTED }),
+    )
 }
 
 /** Every such copy stamped trusted, inside `transactionSync` like every
@@ -844,15 +908,16 @@ export let trusting = (
   o: { store: string; app: string | null },
 ): Report => {
   let d = driver(storage)
-  let left = () =>
-    Number(
-      d.query(`select count(*) as n from installed where ${UNTRUSTED}`, [])[0]
-        ?.n ?? 0,
-    )
-  let from = left()
+  let rest = () => tally(d, 'installed', UNTRUSTED)
+  let from = rest()
   let at = new Date().toISOString()
-  d.query(`update installed set trusted = ? where ${UNTRUSTED}`, [at])
-  let to = from - left()
+  d.query({
+    t: 'update',
+    table: 'installed',
+    set: { trusted: val(at) },
+    where: UNTRUSTED,
+  })
+  let to = from - rest()
   return {
     ...o,
     at,
@@ -880,16 +945,26 @@ export let trusting = (
 // build writes it.
 
 // The letters whose Message-ID is still only in `delivered.via`.
-let UNSENT = `select m.entity from mail m join delivered d on d.entity = ` +
-  `m.entity where m.message_id is null and d.via is not null and ` +
-  `d.via != 'local' and d.via is not m."to"`
+let UNSENT = select({
+  cols: [col('entity', 'm')],
+  from: table('mail', 'm'),
+  joins: [
+    join(table('delivered', 'd'), eq(col('entity', 'd'), col('entity', 'm'))),
+  ],
+  where: and(
+    isNull(col('message_id', 'm')),
+    notNull(col('via', 'd')),
+    ne(col('via', 'd'), lit('local')),
+    op('is not', col('via', 'd'), col('to', 'm')),
+  ),
+})
 
 /** Whether a sent letter's Message-ID is still only in `delivered.via`. */
 export let unsent = (storage: DurableStorage): boolean => {
   let d = driver(storage)
   return stands(d, 'mail') && stands(d, 'delivered') &&
     columns(d, 'delivered').includes('via') &&
-    d.query(`${UNSENT} limit 1`, []).length > 0
+    found(d, UNSENT)
 }
 
 /** Each such Message-ID copied onto its letter, inside `transactionSync` like
@@ -899,15 +974,21 @@ export let sent = (
   o: { store: string; app: string | null },
 ): Report => {
   let d = driver(storage)
-  let left = () =>
-    Number(d.query(`select count(*) as n from (${UNSENT})`, [])[0]?.n ?? 0)
-  let from = left()
-  d.query(
-    `update mail set message_id = (select via from delivered where ` +
-      `delivered.entity = mail.entity) where entity in (${UNSENT})`,
-    [],
-  )
-  let to = from - left()
+  let rest = () => many(d, UNSENT)
+  let from = rest()
+  d.query({
+    t: 'update',
+    table: 'mail',
+    set: {
+      message_id: sub(select({
+        cols: [col('via')],
+        from: table('delivered'),
+        where: eq(col('entity', 'delivered'), col('entity', 'mail')),
+      })),
+    },
+    where: among(col('entity'), UNSENT),
+  })
+  let to = from - rest()
   return {
     ...o,
     at: new Date().toISOString(),
@@ -937,12 +1018,20 @@ export let sent = (
 let ENTRY = 'entry'
 
 // Each link still under the old tag, with the id its tree and name derive now.
-let entries = (d: Drive) =>
-  d.query(
-    `select n.entity as id, n.name, n.mode, t.eid as tree from ${q(ENTRY)} n` +
-      ' join edge e on e.entity = n.entity join entity t on t.id = e."from"',
-    [],
-  ).map((r) => ({
+let entries = (d: Driver) =>
+  d.query(select({
+    cols: [
+      as(col('entity', 'n'), 'id'),
+      col('name', 'n'),
+      col('mode', 'n'),
+      as(col('eid', 't'), 'tree'),
+    ],
+    from: table(ENTRY, 'n'),
+    joins: [
+      join(table('edge', 'e'), eq(col('entity', 'e'), col('entity', 'n'))),
+      join(table('entity', 't'), eq(col('id', 't'), col('from', 'e'))),
+    ],
+  })).map((r) => ({
     id: Number(r.id),
     name: String(r.name),
     mode: String(r.mode),
@@ -963,31 +1052,33 @@ export let entered = (
   o: { store: string; app: string | null; vocab: Vocab },
 ): Report => {
   let d = driver(storage)
-  let from = count(d, ENTRY)
-  let had = count(d, TREE_ENTRY)
+  let from = tally(d, ENTRY)
+  let had = tally(d, TREE_ENTRY)
   let into = fold(d, pointers(d, o.vocab))
   let moved = 0
   let merged = 0
   for (let r of entries(d)) {
-    let [same] = d.query('select id from entity where eid = ?', [r.eid])
+    let [same] = d.query(byEid(r.eid))
     if (same) {
       into(r.id, Number(same.id))
       merged++
       continue
     }
-    d.query(
-      `insert into ${q(TREE_ENTRY)} (entity, name, mode) values (?, ?, ?)`,
-      [r.id, r.name, r.mode],
-    )
-    d.query('update entity set eid = ? where id = ?', [r.eid, r.id])
+    d.query({
+      t: 'insert',
+      into: TREE_ENTRY,
+      cols: ['entity', 'name', 'mode'],
+      rows: [[val(r.id), val(r.name), val(r.mode)]],
+    })
+    d.query(readdress(r.id, r.eid))
     moved++
   }
-  d.exec(`drop table ${q(ENTRY)}`)
+  d.query({ t: 'drop', kind: 'table', name: ENTRY })
   return {
     store: o.store,
     app: o.app,
     at: new Date().toISOString(),
-    ok: count(d, TREE_ENTRY) == had + moved,
+    ok: tally(d, TREE_ENTRY) == had + moved,
     mark: ENTERED,
     moved: [{
       table: TREE_ENTRY,
@@ -1011,13 +1102,18 @@ export let entered = (
 // refuses it as arguments, as it refused the text.
 
 // The calls whose arguments are still text.
-let TEXT_ARGS = `select entity from call where typeof(args) = 'text'`
+let TEXTUAL = eq(fn('typeof', col('args')), lit('text'))
+let TEXT_ARGS = select({
+  cols: [col('entity')],
+  from: table('call'),
+  where: TEXTUAL,
+})
 
 /** Whether a call's arguments are still their JSON text. */
 export let unargued = (storage: DurableStorage): boolean => {
   let d = driver(storage)
   return stands(d, 'call') && columns(d, 'call').includes('args') &&
-    d.query(`${TEXT_ARGS} limit 1`, []).length > 0
+    found(d, TEXT_ARGS)
 }
 
 /** Each call's arguments rewritten as binary JSON, inside `transactionSync`
@@ -1027,15 +1123,21 @@ export let argued = (
   o: { store: string; app: string | null },
 ): Report => {
   let d = driver(storage)
-  let left = () =>
-    Number(d.query(`select count(*) as n from (${TEXT_ARGS})`, [])[0]?.n ?? 0)
-  let from = left()
-  d.query(
-    `update call set args = jsonb(case when json_valid(args) then args ` +
-      `else json_quote(args) end) where typeof(args) = 'text'`,
-    [],
-  )
-  let to = from - left()
+  let rest = () => many(d, TEXT_ARGS)
+  let from = rest()
+  let args = col('args')
+  d.query({
+    t: 'update',
+    table: 'call',
+    set: {
+      args: fn(
+        'jsonb',
+        iff(fn('json_valid', args), args, fn('json_quote', args)),
+      ),
+    },
+    where: TEXTUAL,
+  })
+  let to = from - rest()
   return {
     ...o,
     at: new Date().toISOString(),
@@ -1058,20 +1160,21 @@ export let argued = (
 /** The stamping: one `home` row per space that named an app. Answers how many
  * spaces named one and how many apps came to wear it, which is what the
  * reconciliation compares. */
-let homeward = (d: Drive, from: string): { named: number; stamped: number } => {
-  let named = Number(
-    d.query(
-      `select count(*) as n from ${q(from)} where home is not null`,
-      [],
-    )[0]
-      ?.n ?? 0,
-  )
-  let before = count(d, 'home')
-  d.exec(
-    `insert or ignore into ${q('home')} (entity) ` +
-      `select home from ${q(from)} where home is not null`,
-  )
-  return { named, stamped: count(d, 'home') - before }
+let homeward = (
+  d: Driver,
+  from: string,
+): { named: number; stamped: number } => {
+  let homes = notNull(col('home'))
+  let named = tally(d, from, homes)
+  let before = tally(d, 'home')
+  d.query({
+    t: 'insert',
+    or: 'ignore',
+    into: 'home',
+    cols: ['entity'],
+    q: select({ cols: [col('home')], from: table(from), where: homes }),
+  })
+  return { named, stamped: tally(d, 'home') - before }
 }
 
 /**
@@ -1117,7 +1220,7 @@ export let homed = (
     moved,
     dropped: [],
   })
-  let spaces = count(d, 'space')
+  let spaces = tally(d, 'space')
   let { named, stamped } = homeward(d, 'space')
   moved.push({
     table: 'home',
@@ -1139,13 +1242,13 @@ export let homed = (
   // column nobody reads, so it is noted in the report and the pass stands.
   let swept = ''
   try {
-    d.exec('alter table space drop column home')
+    d.query(unseat('space', 'home'))
   } catch (e) {
     swept = `the home column would not drop: ${
       e instanceof Error ? e.message : String(e)
     } — it is dead, nothing selects it`
   }
-  let kept = count(d, 'space')
+  let kept = tally(d, 'space')
   moved.push({
     table: 'space',
     from: spaces,
@@ -1177,19 +1280,22 @@ export let homed = (
  * rows named an address and how many landed, which is what the reconciliation
  * compares. A row with no `slug` is not an address — it is the core word's own
  * tag — so it is neither counted nor moved. */
-let formerly = (d: Drive, from: string): { rows: number; moved: number } => {
-  let rows = Number(
-    d.query(
-      `select count(*) as n from ${q(from)} where slug is not null`,
-      [],
-    )[0]?.n ?? 0,
-  )
-  let before = count(d, 'former')
-  d.exec(
-    `insert into ${q('former')} (entity, slug, slugs) ` +
-      `select entity, slug, slugs from ${q(from)} where slug is not null`,
-  )
-  return { rows, moved: count(d, 'former') - before }
+let SLUGGED = notNull(col('slug'))
+let formerly = (d: Driver, from: string): { rows: number; moved: number } => {
+  let rows = tally(d, from, SLUGGED)
+  let before = tally(d, 'former')
+  let cols = ['entity', 'slug', 'slugs']
+  d.query({
+    t: 'insert',
+    into: 'former',
+    cols,
+    q: select({
+      cols: cols.map((c) => col(c)),
+      from: table(from),
+      where: SLUGGED,
+    }),
+  })
+  return { rows, moved: tally(d, 'former') - before }
 }
 
 /**
@@ -1199,15 +1305,9 @@ let formerly = (d: Drive, from: string): { rows: number; moved: number } => {
  * the columns swept — and because the core word writes rows of its own into
  * the same table, which are not addresses and are not this pass's business.
  */
-let addressing = (d: Drive, table: string): boolean =>
-  stands(d, table) && columns(d, table).includes('slug') &&
-  columns(d, table).includes('slugs') &&
-  Number(
-      d.query(
-        `select count(*) as n from ${q(table)} where slug is not null`,
-        [],
-      )[0]?.n ?? 0,
-    ) > 0
+let addressing = (d: Driver, name: string): boolean =>
+  stands(d, name) && columns(d, name).includes('slug') &&
+  columns(d, name).includes('slugs') && tally(d, name, SLUGGED) > 0
 
 /** Whether this object still keeps app addresses under the core word's table.
  * False for every app store — no addresses — and for a directory
@@ -1256,7 +1356,7 @@ export let addressed = (
       `${rows} addresses to move and ${landed} landed in former`,
     ))
   }
-  d.exec(`delete from ${q(FORMERLY)} where slug is not null`)
+  d.query({ t: 'delete', from: FORMERLY, where: SLUGGED })
   // The old place, swept up. Tidying, not the move: the addresses are in
   // `former`, the vocabulary declares neither column, and nothing selects
   // them — so a drop the engine will not do leaves two dead columns and a
@@ -1264,9 +1364,14 @@ export let addressed = (
   // drop a column an index stands on, and that index is the old word's.
   let swept = ''
   try {
-    d.exec(`drop index if exists ${q(`${FORMERLY}_slug`)}`)
-    d.exec(`alter table ${q(FORMERLY)} drop column slug`)
-    d.exec(`alter table ${q(FORMERLY)} drop column slugs`)
+    d.query({
+      t: 'drop',
+      kind: 'index',
+      name: `${FORMERLY}_slug`,
+      ifExists: true,
+    })
+    d.query(unseat(FORMERLY, 'slug'))
+    d.query(unseat(FORMERLY, 'slugs'))
   } catch (e) {
     swept = `the address columns would not drop: ${
       e instanceof Error ? e.message : String(e)
@@ -1294,6 +1399,8 @@ export let addressed = (
 /** Whether this object still keeps a domain's target under the old column: the
  * hostname table with an `app` beside `serves`. False for every app store — no
  * hostnames — and for a directory {@link served} has already been over. */
+let AIMED = notNull(col('serves'))
+
 export let aimedOld = (storage: DurableStorage): boolean => {
   let d = driver(storage)
   return stands(d, 'hostname') && columns(d, 'hostname').includes('app')
@@ -1326,17 +1433,14 @@ export let served = (
     moved,
     dropped: [],
   })
-  let rows = count(d, 'hostname')
-  d.exec(
-    `update ${q('hostname')} set serves = app ` +
-      'where serves is null and app is not null',
-  )
-  let aimed = Number(
-    d.query(
-      `select count(*) as n from ${q('hostname')} where serves is not null`,
-      [],
-    )[0]?.n ?? 0,
-  )
+  let rows = tally(d, 'hostname')
+  d.query({
+    t: 'update',
+    table: 'hostname',
+    set: { serves: col('app') },
+    where: and(isNull(col('serves')), notNull(col('app'))),
+  })
+  let aimed = tally(d, 'hostname', AIMED)
   moved.push({
     table: 'hostname',
     from: rows,
@@ -1355,7 +1459,7 @@ export let served = (
   // working directory.
   let swept = ''
   try {
-    d.exec(`alter table ${q('hostname')} drop column app`)
+    d.query(unseat('hostname', 'app'))
   } catch (e) {
     swept = `the app column would not drop: ${
       e instanceof Error ? e.message : String(e)
@@ -1364,7 +1468,7 @@ export let served = (
   moved.push({
     table: 'hostname',
     from: rows,
-    to: count(d, 'hostname'),
+    to: tally(d, 'hostname'),
     note: swept || 'the app column dropped',
   })
   return report(true)
@@ -1390,12 +1494,7 @@ export let served = (
 export let unhandled = (storage: DurableStorage): boolean => {
   let d = driver(storage)
   return stands(d, 'app') && columns(d, 'app').includes('store') &&
-    Number(
-        d.query(
-          `select count(*) as n from ${q('app')} where store is null`,
-          [],
-        )[0]?.n ?? 0,
-      ) > 0
+    tally(d, 'app', isNull(col('store'))) > 0
 }
 
 /** One address with the space prefix taken off it: `ada/cookbook` is
@@ -1442,15 +1541,30 @@ export let handled = (
   })
   try {
     let former = stands(d, 'former')
-    let apps = d.query(
-      'select a.entity, e.eid, a.slug, s.slug as space, a.store, ' +
-        `${former ? 'f.slug' : 'null'} as birth from app a ` +
-        'join entity e on e.id = a.entity ' +
-        'left join space s on s.entity = a.space ' +
-        (former ? 'left join former f on f.entity = a.entity ' : '') +
-        'order by e.num, e.id',
-      [],
-    ).map((r) => {
+    let apps = d.query(select({
+      cols: [
+        col('entity', 'a'),
+        col('eid', 'e'),
+        col('slug', 'a'),
+        as(col('slug', 's'), 'space'),
+        col('store', 'a'),
+        as(former ? col('slug', 'f') : lit(null), 'birth'),
+      ],
+      from: table('app', 'a'),
+      joins: [
+        join(table('entity', 'e'), eq(col('id', 'e'), col('entity', 'a'))),
+        left(table('space', 's'), eq(col('entity', 's'), col('space', 'a'))),
+        ...(former
+          ? [
+            left(
+              table('former', 'f'),
+              eq(col('entity', 'f'), col('entity', 'a')),
+            ),
+          ]
+          : []),
+      ],
+      order: [col('num', 'e'), col('id', 'e')],
+    })).map((r) => {
       let space = r.space == null ? null : String(r.space)
       let slug = r.slug == null ? null : String(r.slug)
       let store = r.store == null ? null : String(r.store)
@@ -1512,31 +1626,53 @@ export let handled = (
     }
     for (let app of apps) {
       if (app.store != null) continue
-      d.query('update app set store = ? where entity = ?', [app.next, app.id])
+      d.query({
+        t: 'update',
+        table: 'app',
+        set: { store: val(app.next) },
+        where: eq(col('entity'), val(app.id)),
+      })
     }
-    let counts = d.query(
-      'select count(*) as apps, count(store) as held, count(distinct store) as names from app',
-      [],
-    )[0]
+    let [counts] = d.query(select({
+      cols: [
+        as(count(), 'apps'),
+        as(fn('count', col('store')), 'held'),
+        as(
+          { t: 'fn', name: 'count', args: [col('store')], distinct: true },
+          'names',
+        ),
+      ],
+      from: table('app'),
+    }))
     if (
       counts.apps != apps.length || counts.held != apps.length ||
       counts.names != apps.length
     ) {
       throw new Refused(report(false, 'the written handles did not reconcile'))
     }
-    d.exec('create unique index if not exists app_store on app (store)')
+    d.query({
+      t: 'create index',
+      name: 'app_store',
+      on: 'app',
+      cols: [col('store')],
+      unique: true,
+      ifNot: true,
+    })
     // The unique index the old name was decided by. It stands on `former.slug`,
     // and that column is address history now — two apps may hold one address a
     // year apart, which is the whole point of freeing one (T-34659) — so the
     // index has to come down or the second app could never be born. Its name is
     // the vocabulary's own (@yaks/sqlite `indexDdl`), which is why it can be
     // named here at all.
-    d.exec(`drop index if exists ${q('former_slug')}`)
+    d.query({ t: 'drop', kind: 'index', name: 'former_slug', ifExists: true })
     // The addresses, unqualified. `former` is the app's history within its space
     // now, so the space's name has no business in it: leave it and a space rename
     // strands every redirect the space's apps ever earned.
     let rows = stands(d, 'former')
-      ? d.query(`select entity, slug, slugs from ${q('former')}`, [])
+      ? d.query(select({
+        cols: [col('entity'), col('slug'), col('slugs')],
+        from: table('former'),
+      }))
       : []
     let stripped = 0
     for (let r of rows) {
@@ -1546,10 +1682,12 @@ export let handled = (
         : String(r.slugs).split(/\s+/).filter(Boolean).map(bare).join(' ')
       if (slug == r.slug && slugs == r.slugs) continue
       stripped++
-      d.query(
-        `update ${q('former')} set slug = ?, slugs = ? where entity = ?`,
-        [slug, slugs, r.entity as number],
-      )
+      d.query({
+        t: 'update',
+        table: 'former',
+        set: { slug: val(slug), slugs: val(slugs) },
+        where: eq(col('entity'), val(r.entity as number)),
+      })
     }
     moved.push({
       table: 'former',
@@ -1599,7 +1737,9 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // same name; an implicit one (a unique column) has no SQL and goes with its
   // table.
   for (let i of named(d, 'index')) {
-    if (i.sql) d.exec(`drop index if exists ${q(i.name)}`)
+    if (i.sql) {
+      d.query({ t: 'drop', kind: 'index', name: i.name, ifExists: true })
+    }
   }
 
   // The base tables, moved aside. The spine is NOT one of them: `entity` and
@@ -1608,16 +1748,16 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // was numbered before numbers became @yaks/id's keeps the numbers it was
   // given, in a column its vocabulary no longer names (T-37831): nothing reads
   // them, and taking them away would be a write the migration does not need.
-  let before = { entity: count(d, 'entity'), tombstone: count(d, 'tombstone') }
+  let before = { entity: tally(d, 'entity'), tombstone: tally(d, 'tombstone') }
   let old: string[] = []
   for (let t of named(d, 'table')) {
     if (KEEP.includes(t.name) || t.name.startsWith(ASIDE)) continue
-    d.exec(`alter table ${q(t.name)} rename to ${q(ASIDE + t.name)}`)
+    d.query({ t: 'alter table', table: t.name, rename: ASIDE + t.name })
     old.push(t.name)
   }
   let aside = (name: string) => ASIDE + name
   let there = (name: string) => old.includes(name)
-  let from = (name: string) => there(name) ? count(d, aside(name)) : 0
+  let from = (name: string) => there(name) ? tally(d, aside(name)) : 0
 
   // The new schema, raised by the object itself, over the spine that stayed.
   // A unique index the vocabulary declares is raised here too, so rows that
@@ -1649,27 +1789,34 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // `member` admits, and the column now CHECKs its enum (@yaks/sqlite `ddl`) —
   // so the seat lands as the seat it is here, and the level it was becomes the
   // grant minted from the row set aside.
-  let value = (comp: string, col: string) =>
-    comp == 'member' && col == 'role' && splits
-      ? `case when ${q(col)} is null or ${q(col)} = 'owner' then ${q(col)} ` +
-        `else 'member' end`
-      : q(col)
+  let value = (comp: string, c: string) =>
+    comp == 'member' && c == 'role' && splits
+      ? iff(
+        or(isNull(col(c)), eq(col(c), lit('owner'))),
+        col(c),
+        lit('member'),
+      )
+      : col(c)
   for (let comp of words) {
     if (comp == 'doc' || comp == FORMERLY) continue
     if (renamed.has(comp) || !there(comp)) continue
     let want = new Set(columns(d, comp))
     let have = columns(d, aside(comp)).filter((c) => want.has(c))
     let lost = columns(d, aside(comp)).filter((c) => !want.has(c))
-    d.exec(
-      `insert into ${q(comp)} (${have.map(q).join(', ')}) ` +
-        `select ${have.map((c) => value(comp, c)).join(', ')} ` +
-        `from ${q(aside(comp))}`,
-    )
+    d.query({
+      t: 'insert',
+      into: comp,
+      cols: have,
+      q: select({
+        cols: have.map((c) => value(comp, c)),
+        from: table(aside(comp)),
+      }),
+    })
     carried.add(comp)
     moved.push({
       table: comp,
       from: from(comp),
-      to: count(d, comp),
+      to: tally(d, comp),
       ...(lost.length ? { note: `dropped columns: ${lost.join(', ')}` } : {}),
     })
   }
@@ -1688,19 +1835,24 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // rows of different shapes; the prose is the same prose.
   let bodies = 0
   if (there('doc')) {
-    let rows = there('blob_text')
-      ? d.query(
-        `select d.entity as id, d.title as title, d.body as at, ` +
-          `b.value as body ` +
-          `from ${q(aside('doc'))} d left join ${q(aside('blob_text'))} b ` +
-          `on b.entity = d.body`,
-        [],
-      )
-      : d.query(
-        `select entity as id, title as title, body as at, null as body ` +
-          `from ${q(aside('doc'))}`,
-        [],
-      )
+    let texts = there('blob_text')
+    let rows = d.query(select({
+      cols: [
+        as(col('entity', 'd'), 'id'),
+        as(col('title', 'd'), 'title'),
+        as(col('body', 'd'), 'at'),
+        as(texts ? col('value', 'b') : lit(null), 'body'),
+      ],
+      from: table(aside('doc'), 'd'),
+      joins: texts
+        ? [
+          left(
+            table(aside('blob_text'), 'b'),
+            eq(col('entity', 'b'), col('body', 'd')),
+          ),
+        ]
+        : [],
+    }))
     let seen = new Set<string>()
     // A doc that addresses a body the blob table does not hold. Every body a
     // store wrote went in there, so this is a row nobody can read — and a body
@@ -1717,25 +1869,32 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
       let sha = body == null ? null : sha256(body)
       if (sha != null && !seen.has(sha)) {
         seen.add(sha)
-        ins(
-          d,
-          'insert or ignore into blob_text (sha, value) values (?, ?)',
-          [sha, body],
-        )
+        d.query({
+          t: 'insert',
+          or: 'ignore',
+          into: 'blob_text',
+          cols: ['sha', 'value'],
+          rows: [[val(sha), val(body)]],
+        })
       }
-      ins(d, 'insert into doc (entity, title, body) values (?, ?, ?)', [
-        Number(r.id),
-        r.title == null ? null : String(r.title),
-        sha,
-      ])
+      d.query({
+        t: 'insert',
+        into: 'doc',
+        cols: ['entity', 'title', 'body'],
+        rows: [[
+          val(Number(r.id)),
+          val(r.title == null ? null : String(r.title)),
+          val(sha),
+        ]],
+      })
     }
     bodies = seen.size
     carried.add('doc')
-    moved.push({ table: 'doc', from: from('doc'), to: count(d, 'doc') })
+    moved.push({ table: 'doc', from: from('doc'), to: tally(d, 'doc') })
     moved.push({
       table: 'blob_text',
       from: from('blob_text'),
-      to: count(d, 'blob_text'),
+      to: tally(d, 'blob_text'),
       note: `content-addressed: ${bodies} distinct bodies, ` +
         `the old blob entities are kept as they were`,
     })
@@ -1798,24 +1957,20 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
     there('hostname') && words.includes('hostname') &&
     columns(d, aside('hostname')).includes('app')
   ) {
-    let had = Number(
-      d.query(
-        `select count(*) as n from ${q(aside('hostname'))} ` +
-          'where app is not null',
-        [],
-      )[0]?.n ?? 0,
-    )
-    d.exec(
-      `update ${q('hostname')} set serves = ` +
-        `(select h.app from ${q(aside('hostname'))} h ` +
-        `where h.entity = ${q('hostname')}.entity) where serves is null`,
-    )
-    let aimed = Number(
-      d.query(
-        `select count(*) as n from ${q('hostname')} where serves is not null`,
-        [],
-      )[0]?.n ?? 0,
-    )
+    let had = tally(d, aside('hostname'), notNull(col('app')))
+    d.query({
+      t: 'update',
+      table: 'hostname',
+      set: {
+        serves: sub(select({
+          cols: [col('app', 'h')],
+          from: table(aside('hostname'), 'h'),
+          where: eq(col('entity', 'h'), col('entity', 'hostname')),
+        })),
+      },
+      where: isNull(col('serves')),
+    })
+    let aimed = tally(d, 'hostname', AIMED)
     moved.push({
       table: 'hostname',
       from: had,
@@ -1836,30 +1991,41 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // edge still points at it.
   for (let [was, now] of Object.entries(RENAMED)) {
     if (!there(was) || !words.includes(now)) continue
-    d.exec(
-      `insert into ${q(now)} (entity) select entity from ${q(aside(was))}`,
-    )
+    d.query({
+      t: 'insert',
+      into: now,
+      cols: ['entity'],
+      q: select({ cols: [col('entity')], from: table(aside(was)) }),
+    })
     let ends = there('edge')
-      ? d.query(
-        `select r.entity as id, f.eid as "from", t.eid as "to" ` +
-          `from ${q(aside(was))} r ` +
-          `join ${q(aside('edge'))} g on g.entity = r.entity ` +
-          `join entity f on f.id = g."from" ` +
-          `join entity t on t.id = g."to"`,
-        [],
-      )
+      ? d.query(select({
+        cols: [
+          as(col('entity', 'r'), 'id'),
+          as(col('eid', 'f'), 'from'),
+          as(col('eid', 't'), 'to'),
+        ],
+        from: table(aside(was), 'r'),
+        joins: [
+          join(
+            table(aside('edge'), 'g'),
+            eq(col('entity', 'g'), col('entity', 'r')),
+          ),
+          join(table('entity', 'f'), eq(col('id', 'f'), col('from', 'g'))),
+          join(table('entity', 't'), eq(col('id', 't'), col('to', 'g'))),
+        ],
+      }))
       : []
     for (let e of ends) {
-      ins(d, 'update entity set eid = ? where id = ?', [
-        edgeEid(String(e.from), now, String(e.to)),
+      d.query(readdress(
         Number(e.id),
-      ])
+        edgeEid(String(e.from), now, String(e.to)),
+      ))
     }
     carried.add(now)
     moved.push({
       table: now,
       from: from(was),
-      to: count(d, now),
+      to: tally(d, now),
       note: `was "${was}"; ${ends.length} edges re-addressed under the new ` +
         `name (the other ${from(was) - ends.length} carry no edge row)`,
     })
@@ -1873,11 +2039,13 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // The only rows this pass adds, and the reconciliation names them.
   let minted = { n: 0 }
   if (splits && carried.has('member')) {
-    let rows = d.query(
-      `select p.eid as person, m.role as role ` +
-        `from ${q(aside('member'))} m left join entity p on p.id = m.person`,
-      [],
-    )
+    let rows = d.query(select({
+      cols: [as(col('eid', 'p'), 'person'), as(col('role', 'm'), 'role')],
+      from: table(aside('member'), 'm'),
+      joins: [
+        left(table('entity', 'p'), eq(col('id', 'p'), col('person', 'm'))),
+      ],
+    }))
     for (let r of rows) {
       let was = String(r.role ?? '')
       if (was == 'owner' || !was) continue
@@ -1887,23 +2055,24 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
       }
       let person = String(r.person)
       let eid = o.grantEid(o.app, person)
-      ins(
-        d,
-        `insert or ignore into ${q('grant')} ` +
-          `(entity, app, person, access) values (?, ?, ?, ?)`,
-        [
-          idOf(d, eid, minted),
-          idOf(d, o.app, minted),
-          idOf(d, person, minted),
-          was,
-        ],
-      )
+      d.query({
+        t: 'insert',
+        or: 'ignore',
+        into: 'grant',
+        cols: ['entity', 'app', 'person', 'access'],
+        rows: [[
+          val(idOf(d, eid, minted)),
+          val(idOf(d, o.app, minted)),
+          val(idOf(d, person, minted)),
+          val(was),
+        ]],
+      })
       grants++
     }
     moved.push({
       table: 'grant',
       from: 0,
-      to: count(d, 'grant'),
+      to: tally(d, 'grant'),
       note: `minted from ${grants} non-owner member rows` +
         (stranded ? `; ${stranded} had no app to be a grant on` : ''),
     })
@@ -1913,12 +2082,12 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // is standing and empty, which is what it should be.
   for (let comp of words) {
     if (carried.has(comp) || !stands(d, comp)) continue
-    moved.push({ table: comp, from: 0, to: count(d, comp) })
+    moved.push({ table: comp, from: 0, to: tally(d, comp) })
   }
   moved.push({
     table: 'entity',
     from: before.entity,
-    to: count(d, 'entity'),
+    to: tally(d, 'entity'),
     ...(minted.n
       ? { note: `${minted.n} minted for the grants and what they are on` }
       : {}),
@@ -1926,14 +2095,14 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   moved.push({
     table: 'tombstone',
     from: before.tombstone,
-    to: count(d, 'tombstone'),
+    to: tally(d, 'tombstone'),
   })
 
   // The fleet's other words. No vocabulary names them, so their rows have
   // nowhere to go: the report names them and their tables are dropped.
   for (let name of old) {
     if (carried.has(name) || RENAMED[name] || name == 'blob_text') continue
-    let rows = count(d, aside(name))
+    let rows = tally(d, aside(name))
     if (rows) dropped.push({ table: name, rows })
   }
 
@@ -1957,10 +2126,10 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
         off.map((m) => `${m.table} ${m.from}→${m.to}`).join(', '),
     ))
   }
-  if (splits && grants != count(d, 'grant')) {
+  if (splits && grants != tally(d, 'grant')) {
     throw new Refused(report(
       false,
-      `grant: minted ${grants}, stored ${count(d, 'grant')}`,
+      `grant: minted ${grants}, stored ${tally(d, 'grant')}`,
     ))
   }
 
@@ -1970,23 +2139,23 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // that will not go yet is simply tried again on the next pass, which is the
   // dependency order without having to read it. `pragma foreign_keys` is not the
   // way out: SQLite ignores it inside a transaction, and this is all one.
-  let left = old
-  while (left.length) {
+  let rest = old
+  while (rest.length) {
     let again: string[] = []
-    for (let name of left) {
+    for (let name of rest) {
       try {
-        d.exec(`drop table if exists ${q(aside(name))}`)
+        d.query({ t: 'drop', kind: 'table', name: aside(name), ifExists: true })
       } catch {
         again.push(name)
       }
     }
-    if (again.length == left.length) {
+    if (again.length == rest.length) {
       throw new Refused(report(
         false,
         `these tables would not drop: ${again.join(', ')}`,
       ))
     }
-    left = again
+    rest = again
   }
   return report(true)
 }
