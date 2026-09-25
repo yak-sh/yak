@@ -125,9 +125,11 @@ sq "$snapshot" "pragma integrity_check;" | grep -qx ok || {
 # five shadow tables named after it. Its words refill from its three sync
 # triggers as the rows of the table it mirrors load, so index and shadows are
 # both skipped here while the virtual table and the triggers stay in the schema
-# below. The vectors are the other half: `embedding` and `embedding_index` are
-# @yaks/embedding's two tables (TABLE and MARK, packages/embedding/ddl.ts) and
-# refill on the embed sweep; `vector0_*` and `_sqliteai_vector` are the ANN
+# below. The vectors are the other half: `embedding`, `embedding_index` and
+# `embedding_owed` are @yaks/embedding's tables (TABLE, MARK and OWED,
+# packages/embedding/ddl.ts); the vectors refill on the embed sweep, and the
+# queue refills from its triggers as the rows it watches load, so a dumped copy
+# of it collides with its own refill; `vector0_*` and `_sqliteai_vector` are the ANN
 # backend's own namespace, recut by vector_init at boot.
 #
 # Every index here is EXTERNAL-CONTENT (`content=` in its CREATE): it is an
@@ -153,7 +155,7 @@ for t in $(sq "$snapshot" "select name from sqlite_master
   done
 done
 derived="name in ($indexes) or name in ($shadows)
-  or name in ('embedding', 'embedding_index')
+  or name in ('embedding', 'embedding_index', 'embedding_owed')
   or name glob 'vector0_*' or name = '_sqliteai_vector'"
 
 # Data as INSERT statements, no DDL — `.mode insert` names each table, so the
