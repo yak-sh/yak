@@ -559,6 +559,20 @@ let stale = async (r: Repo) => {
   await command(r.tree, '-c', 'core.editor=true', 'rebase', '--continue')
 }
 
+// A move deletes the old path in the landing diff; the branch's own log must
+// say so too, not only name the new path, or every rename reads as the rebase's.
+slow('a file the branch moves is the branch', async () => {
+  let r = await setup()
+  try {
+    await command(r.tree, 'mv', 'base.txt', 'moved.txt')
+    await command(r.tree, 'commit', '-m', 'move')
+    let found = await reverts((args) => command(r.tree, ...args), 'main')
+    assertEquals(found, [])
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
 slow('land refuses a rebase that rewound a file past the base', async () => {
   let r = await setup()
   try {

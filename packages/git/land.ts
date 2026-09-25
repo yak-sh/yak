@@ -215,8 +215,18 @@ export let reverts = async (
   )
   if (!adds.size) return []
   let changed = [...adds.keys()]
+  // `--no-renames` as the diff above: a move names both paths, or the old one
+  // reads as the rebase's.
   let touched = new Set(
-    lines(await ask(['log', '--format=', '--name-only', `${base}..HEAD`])),
+    lines(
+      await ask([
+        'log',
+        '--format=',
+        '--name-only',
+        '--no-renames',
+        `${base}..HEAD`,
+      ]),
+    ),
   )
   let found = changed.filter((f) => !touched.has(f))
     .map((file) => ({ file, rewound: false }))
