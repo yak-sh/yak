@@ -1,6 +1,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { local } from './local.ts'
 import { open } from './store.ts'
+import { tally } from '@yaks/sql'
 import { type Comp, transient } from '@yaks/graph'
 import { ModelError } from '@yaks/model'
 import { statusOf } from '@yaks/session'
@@ -317,8 +318,7 @@ Deno.test('an empty successful reply completes its ask rather than issuing anoth
 
 Deno.test('checkpoints bound blob versions and finalization persists one stable response', async () => {
   const h = open(':memory:')
-  const blobs = () =>
-    Number(h.sql.query('select count(*) as n from blob_text', [])[0].n)
+  const blobs = () => tally(h.sql, 'blob_text')
   const initial = blobs()
   let appends = 0
   transient(h.g).subscribe((f) => {

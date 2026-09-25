@@ -1,11 +1,18 @@
 import { assertEquals } from '@std/assert'
+import { raise, scan, select } from '@yaks/sql'
 import { open } from './store.ts'
 
 Deno.test('blob-backed graph remains writable after SQL failure and rolls back the whole batch', async () => {
   let h = open(':memory:')
   try {
-    h.sql.exec(`create trigger refuse_doc before insert on doc
-      begin select raise(abort, 'test refusal'); end`)
+    h.sql.query({
+      t: 'create trigger',
+      name: 'refuse_doc',
+      timing: 'before',
+      event: 'insert',
+      on: 'doc',
+      body: [select({ cols: [raise('abort', 'test refusal')] })],
+    })
     let error: unknown
     try {
       await h.g.apply([{
@@ -16,9 +23,9 @@ Deno.test('blob-backed graph remains writable after SQL failure and rolls back t
       error = caught
     }
     assertEquals((error as Error).message, 'test refusal')
-    assertEquals(h.sql.query('select * from blob_text', []), [])
+    assertEquals(scan(h.sql, 'blob_text'), [])
     assertEquals(await h.g.read('.doc&*'), [])
-    h.sql.exec('drop trigger refuse_doc')
+    h.sql.query({ t: 'drop', kind: 'trigger', name: 'refuse_doc' })
     await h.g.apply([{
       entity: { eid: 'accepted' },
       doc: { body: 'accepted text' },

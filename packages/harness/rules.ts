@@ -31,7 +31,7 @@ export let rules = (
     write: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
   },
 ): Plugin[] => {
-  for (let statement of blobSchema()) host.sql.exec(statement)
+  for (let statement of blobSchema()) host.sql.query(statement)
   return [
     blobs(host.vocab, sqliteBlobs(host.sql)),
     sessions(),

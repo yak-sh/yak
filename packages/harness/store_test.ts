@@ -94,7 +94,7 @@ Deno.test('a stale lease is freed at boot', async () => {
   ])
   // The holder never made it to the graph the next boot reads: delete it the
   // way an abnormal ending would have, leaving the lock behind.
-  one.sql.exec('delete from "session"')
+  one.sql.query({ t: 'delete', from: 'session' })
   one.close()
   let two = open(path)
   let [page] = await two.g.read('.doc&*')

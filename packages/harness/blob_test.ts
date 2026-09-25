@@ -5,6 +5,7 @@
 import { assertEquals } from '@std/assert'
 import { address } from '@yaks/blob'
 import type { Bundle, Comp } from '@yaks/graph'
+import { scan, tally } from '@yaks/sql'
 import { open } from './store.ts'
 
 let bodyOf = (b: Bundle, comp = 'content') =>
@@ -20,10 +21,8 @@ Deno.test('blob prose deduplicates across properties and survives reopen', async
       { entity: { eid: 'a' }, content: { body } },
       { entity: { eid: 'b' }, doc: { body } },
     ])
-    assertEquals(h.sql.query('select count(*) as n from blob_text', []), [{
-      n: 1,
-    }])
-    assertEquals(h.sql.query('select body from content', []), [{
+    assertEquals(tally(h.sql, 'blob_text'), 1)
+    assertEquals(scan(h.sql, 'content', undefined, ['body']), [{
       body: address(body),
     }])
     assertEquals(bodyOf((await h.g.read('.content&*'))[0]), body)

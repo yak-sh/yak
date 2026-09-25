@@ -1,7 +1,8 @@
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { open as opened } from '@yaks/sqlite/db'
-import { MigrationPending, migrations } from '@yaks/sqlite'
+import { MigrationPending, migrations, objects } from '@yaks/sqlite'
+import { as, lit, select, tally } from '@yaks/sql'
 import { local } from './local.ts'
 import { open } from './store.ts'
 import { repo } from './testing.ts'
@@ -25,7 +26,9 @@ Deno.test('daemon stop releases its migration monitor before a shared harness is
     assertEquals(reads, 1)
     // Daemon-only shutdown deliberately leaves the connection open for the
     // replacement host (pool_test's durable-queue restart contract).
-    assertEquals(h.sql.query('select 1 as one', []), [{ one: 1 }])
+    assertEquals(h.sql.query(select({ cols: [as(lit(1), 'one')] })), [{
+      one: 1,
+    }])
     b = local({ cwd: repo(), h })
     time.tick(1000)
     assertEquals(reads, 2)
@@ -46,10 +49,7 @@ Deno.test('pending migration refuses harness startup before installing domain ta
     const control = migrations(sql)
     control.announce('new-schema', 0)
     assertThrows(() => open(path), MigrationPending)
-    assertEquals(
-      sql.query("select name from sqlite_master where name='entity'", []),
-      [],
-    )
+    assertEquals(objects(sql, { name: 'entity' }), [])
   } finally {
     sql.close()
     Deno.removeSync(dir, { recursive: true })
@@ -106,10 +106,7 @@ Deno.test('migration observation stops admission but drains current model before
     release.resolve()
     await a.close()
     assertEquals(closed, true)
-    assertEquals(
-      Number(peer.query('select count(*) as n from entry', [])[0].n) > 0,
-      true,
-    )
+    assertEquals(tally(peer, 'entry') > 0, true)
   } finally {
     release.resolve()
     await a.close()
