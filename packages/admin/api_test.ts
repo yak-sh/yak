@@ -1,7 +1,12 @@
 // The pure seams of the platform client: where a store answers, what a
 // session says about itself, which letter carries the code, and how a tool's
 // reply reads once the envelope is off.
-import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
+import {
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
 import type { And } from '@yaks/query'
 import { ram } from '@yaks/ram'
@@ -18,6 +23,7 @@ import {
   listedOn,
   plain,
   renewing,
+  rpc,
   saidBy,
   saidOn,
   storeUrl,
@@ -232,6 +238,35 @@ Deno.test('a renewed cookie is handed on, and an ordinary answer is quiet', asyn
     }
   }
   renewing(() => {})
+})
+
+Deno.test('an expired MCP session is a refusal, not a defect', async () => {
+  let stub = answering({
+    ...fee(),
+    ok: false,
+    status: 401,
+    text: () =>
+      Promise.resolve(JSON.stringify({
+        error: {
+          code: 'unauthorized',
+          message: 'sign in at https://yaks.app/login to reach your apps',
+        },
+      })),
+  })
+  try {
+    let error = await assertRejects(
+      () =>
+        rpc('expired.token')('tools/call', {
+          name: 'app_list',
+          arguments: {},
+        }),
+      CallError,
+      'sign in at https://yaks.app/login',
+    )
+    assertEquals(error.code, 'unauthorized')
+  } finally {
+    stub.done()
+  }
 })
 
 // `yak --timing`, this end: the account's calls do not go through the

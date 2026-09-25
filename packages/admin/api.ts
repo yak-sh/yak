@@ -270,7 +270,17 @@ export let rpc = (session: string) => {
       body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method, params }),
     })
     if (r.status != 200) {
-      throw new Error(`/mcp said ${r.status}: ${await r.text()}`)
+      let text = await r.text()
+      let refusal = valueOf(text)?.error
+      // A stale session is account state, not a broken connector. Keep its
+      // code and sign-in sentence so the caller records a refusal, not a defect.
+      if (
+        r.status == 401 && typeof refusal?.code == 'string' &&
+        typeof refusal.message == 'string'
+      ) {
+        throw new CallError(refusal.code, refusal.message)
+      }
+      throw new Error(`/mcp said ${r.status}: ${text}`)
     }
     let reply = await r.json()
     if (reply.error) {
