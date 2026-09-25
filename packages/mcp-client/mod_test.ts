@@ -3,7 +3,7 @@ import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { clients, connect, nameOf } from './mod.ts'
 
-import { fixture } from './testing.ts'
+import { edge, fixture } from './testing.ts'
 
 // What the runner hands a tool: the call, and the graph it runs on. A remote
 // proxy reads nothing but the call.
@@ -194,6 +194,33 @@ Deno.test('401 does not retry a call, and error text excludes credential and bod
     const err = await assertRejects(() => c.call('publish_mockup', {}))
     assert(!String(err).includes('secret'))
     assertEquals(rejected, 1)
+  } finally {
+    await c.close()
+  }
+})
+
+Deno.test('a redirect is refused, and the credential goes nowhere else', async () => {
+  const f = fixture()
+  const reached: string[] = []
+  const c = connect({ name: 'site', url: 'https://example.test/mcp' }, {
+    token: () => 'secret',
+    fetch: edge((input, init) => {
+      const req = new Request(input, init)
+      if (new URL(req.url).host === 'example.test') {
+        return Promise.resolve(
+          new Response(null, {
+            status: 307,
+            headers: { location: 'https://elsewhere.test/mcp' },
+          }),
+        )
+      }
+      reached.push(req.headers.get('authorization') ?? '')
+      return f.fetcher(req)
+    }),
+  })
+  try {
+    await assertRejects(() => c.tools())
+    assertEquals(reached, [])
   } finally {
     await c.close()
   }

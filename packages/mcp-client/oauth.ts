@@ -54,7 +54,7 @@ export const discover = async (
   const fetchFn: typeof globalThis.fetch = (input, init) =>
     fetch(safe(input instanceof Request ? input.url : String(input)), {
       ...init,
-      redirect: 'error',
+      redirect: 'manual',
       signal: AbortSignal.timeout(30000),
     })
   const info = await discoverOAuthServerInfo(safe(url), {

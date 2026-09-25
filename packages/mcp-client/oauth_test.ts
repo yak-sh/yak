@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 import { assertEquals, assertRejects } from '@std/assert'
 import { AuthorizationError, discover } from './oauth.ts'
+import { edge } from './testing.ts'
 
 // A server whose sign-in is at issuer.test, answering the discovery the MCP
 // spec asks for and one registration.
@@ -31,7 +32,7 @@ const mock = (asked: string[] = []) => {
       Response.json({ ...body, client_id: 'registered' }, { status: 201 }),
     )
   }
-  return fetcher
+  return edge(fetcher)
 }
 
 // The SDK's first discovery and registration pay its schemas' start-up; paid
@@ -65,6 +66,26 @@ Deno.test('discover: a challenge names the metadata and the scope', async () => 
   }, mock(asked))
   assertEquals(asked[0], 'https://service.test/meta/oauth-protected-resource')
   assertEquals(found.integration.scopes, ['only'])
+})
+
+Deno.test('discover: a redirect is refused, not followed', async () => {
+  const asked: string[] = []
+  const found = mock(asked)
+  const moved: typeof fetch = (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input))
+    return url.host === 'issuer.test'
+      ? Promise.resolve(
+        new Response(null, {
+          status: 302,
+          headers: { location: 'https://elsewhere.test/meta' },
+        }),
+      )
+      : found(input, init)
+  }
+  await assertRejects(() =>
+    discover('https://service.test/mcp', {}, edge(moved))
+  )
+  assertEquals(asked.filter((u) => u.includes('elsewhere')), [])
 })
 
 Deno.test('discover: plain HTTP off this machine is refused', async () => {

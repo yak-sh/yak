@@ -43,10 +43,12 @@ let memory = (seed?: Tokens) => {
   return { store, held }
 }
 
-// A token endpoint that answers each request with the next scripted reply. The
-// answer is as little of a Response as the client reads (ok, status, json): a
-// web Response or Headers would cost the first test that builds one the
-// process's whole fetch warm-up, which is not the client's time.
+// A token endpoint that answers each request with the next scripted reply,
+// behind fetch as Workers gives it: the `error` redirect mode is refused
+// outright, and a 3xx is followed to the next reply unless the mode is
+// `manual`. The answer is as little of a Response as the client reads (ok,
+// status, json): a web Response or Headers would cost the first test that
+// builds one the process's whole fetch warm-up, which is not the client's time.
 let endpoint = (...replies: [number, unknown][]) => {
   let seen: {
     headers: Record<string, string>
@@ -54,12 +56,20 @@ let endpoint = (...replies: [number, unknown][]) => {
     text: string
   }[] = []
   let fetch = (_: RequestInfo | URL, init?: RequestInit) => {
-    seen.push({
-      headers: { ...init?.headers as Record<string, string> },
-      body: new URLSearchParams(String(init?.body)),
-      text: String(init?.body),
-    })
-    let [status, body] = replies.shift() ?? [500, {}]
+    if (init?.redirect == 'error') {
+      return Promise.reject(new TypeError('Invalid redirect value'))
+    }
+    let answer = (): [number, unknown] => {
+      seen.push({
+        headers: { ...init?.headers as Record<string, string> },
+        body: new URLSearchParams(String(init?.body)),
+        text: String(init?.body),
+      })
+      let [status, body] = replies.shift() ?? [500, {}]
+      let moved = status >= 300 && status < 400 && init?.redirect != 'manual'
+      return moved ? answer() : [status, body]
+    }
+    let [status, body] = answer()
     let ok = status >= 200 && status < 300
     return Promise.resolve({ ok, status, json: () => Promise.resolve(body) })
   }
@@ -171,6 +181,20 @@ Deno.test('complete: a mismatched, refused, doubled or late return makes no requ
     assertEquals(e.code, code)
   }
   assertEquals(seen.length, 0)
+})
+
+Deno.test('complete: a token endpoint that redirects is refused, and the code goes nowhere else', async () => {
+  let { c, held, seen } = setup(undefined, [[302, {}], [200, {
+    access_token: 'A1',
+  }]])
+  let { attempt } = await c.begin()
+  let e = await assertRejects(
+    () => c.complete(attempt, `${REDIRECT}?code=C&state=${attempt.state}`),
+    OAuthError,
+  )
+  assertEquals(e.code, 'http_302')
+  assertEquals(seen.length, 1)
+  assertEquals(held.get('k')?.access_token, undefined)
 })
 
 Deno.test('token: a fresh token needs no request; a stale one refreshes once, keeping the refresh token', async () => {

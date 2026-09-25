@@ -129,9 +129,12 @@ export let client = (provider: Provider, o: Options): Client => {
       ? `${enc(id)}:${enc(secret)}`
       : undefined
     let basic = pair != null
+    // A redirect is answered, never followed, so the code and the secret
+    // reach the token endpoint alone: `manual` hands back the 3xx, which is
+    // not ok and so refused below. (Workers has no `error` mode.)
     let res = await (o.fetch ?? fetch)(provider.token, {
       method: 'POST',
-      redirect: 'error',
+      redirect: 'manual',
       signal: AbortSignal.timeout(30_000),
       headers: {
         'content-type': key

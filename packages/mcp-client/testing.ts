@@ -1,3 +1,26 @@
+// fetch as Workers gives it: the `error` redirect mode is refused outright,
+// and a 3xx is followed, with the same request, unless the mode is `manual`.
+export const edge = (fetcher: typeof fetch): typeof fetch => {
+  const go: typeof fetch = async (input, init) => {
+    const mode = init?.redirect ??
+      (input instanceof Request ? input.redirect : 'follow')
+    if (mode === 'error') {
+      throw new TypeError(
+        'Invalid redirect value, must be "follow" or "manual"',
+      )
+    }
+    const res = await fetcher(input, init)
+    const to = res.headers.get('location')
+    return res.status >= 300 && res.status < 400 && to && mode !== 'manual'
+      ? go(
+        new URL(to, input instanceof Request ? input.url : String(input)),
+        init,
+      )
+      : res
+  }
+  return go
+}
+
 export const fixture = () => {
   const calls: { method: string; params: Record<string, unknown> }[] = []
   const requests: Request[] = []
@@ -11,7 +34,7 @@ export const fixture = () => {
     },
   }]
   let failCall = false, toolError = false
-  const fetcher: typeof fetch = async (input, init) => {
+  const fetcher = edge(async (input, init) => {
     const req = new Request(input, init)
     requests.push(req)
     if (req.method === 'GET') return new Response(null, { status: 405 })
@@ -38,7 +61,7 @@ export const fixture = () => {
     return Response.json({ jsonrpc: '2.0', id: body.id, result }, {
       headers: { 'mcp-session-id': 'test-session' },
     })
-  }
+  })
   return {
     calls,
     requests,

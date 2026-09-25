@@ -174,7 +174,7 @@ export const connect = (server: Server, options: Options = {}): Connection => {
     const response = await (options.fetch ?? fetch)(input, {
       ...init,
       headers,
-      redirect: 'error',
+      redirect: 'manual',
       signal: init?.signal
         ? AbortSignal.any([
           init.signal,
