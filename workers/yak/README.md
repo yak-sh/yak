@@ -63,7 +63,10 @@ deploy gate judges the rows already recorded (`bench/deploys.md`).
 
 Everything the build actually does is in `bin/build-yak`, so the dashboard holds
 one line: install Deno (not on the Ubuntu 24.04 image), `deno task check` from
-the repo root, `deno task test:workers`. A red build deploys nothing.
+the repo root, `deno task test:workers`. A red build deploys nothing. A push's
+build that fails is started once more through the `BUILD_HOOK` deploy hook
+(builds.ts), since most failures are the network's; the second build's failure
+stands.
 
 Defects go to Sentry (org `yaks`, project `yaks-app`; sentry.ts): an exception
 nothing caught, a break the router or a job files, a Store's own, a connector
@@ -145,6 +148,7 @@ it. Values never appear here or in the repo.
 | `MAIL_TOKEN`, `MAIL_ACCOUNT`                                                                   | yes      | Cloudflare Email Sending API token and the account tag                        | sign-in code letters do not send                                  |
 | `CF_ANALYTICS_TOKEN`                                                                           | yes      | API token, **Account · Account Analytics · Read** (see Analytics)             | the meter and Visits report counts are off                        |
 | `CF_WORKERS_TOKEN`                                                                             | yes      | API token, **Workers Scripts, D1, R2, Vectorize · Edit** (see App bindings)   | an app's files deploy, its `worker.js` does not                   |
+| `BUILD_HOOK`                                                                                   | prod     | deploy hook URL for `main` (Workers & Pages → `yak` → Settings → Builds)      | a failed push build is filed, never built again                   |
 | `CF_HOSTNAMES_TOKEN`                                                                           | domains  | API token, **Zone · SSL and Certificates · Edit** on the zone in `CF_ZONE`    | `domain_attach` refuses, saying so                                |
 | `STRIPE_KEY`                                                                                   | billing  | restricted Stripe API key (checkout, portal, one subscription read)           | billing doors say the paid tier is not switched on                |
 | `STRIPE_WEBHOOK_SECRET`                                                                        | billing  | `whsec_…` of the **Your account** destination (see the billing section)       | events go unread and are filed where the owner sees them          |

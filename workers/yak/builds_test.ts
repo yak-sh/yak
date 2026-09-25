@@ -1,6 +1,7 @@
 // A failed Workers Build is filed with its commit; nothing else is filed.
 import { assertEquals, assertInstanceOf } from '@std/assert'
-import { broke, BuildFailed, type Built } from './builds.ts'
+import { broke, BuildFailed, type Built, rebuild } from './builds.ts'
+import type { Env } from './env.ts'
 
 let event = (type: string): Built => ({
   type: `cf.workersBuilds.worker.build.${type}`,
@@ -8,6 +9,7 @@ let event = (type: string): Built => ({
   payload: {
     buildUuid: 'build-1',
     buildTriggerMetadata: {
+      buildTriggerSource: 'push_event',
       branch: 'main',
       commitHash: '191f7134aa',
       commitMessage: '@yaks/mail pulls what arrived',
@@ -38,4 +40,15 @@ Deno.test('builds: a failed build of a branch that deploys nothing is not filed'
   let branch = event('failed')
   branch.payload!.buildTriggerMetadata!.branch = 'worktree-agent-1'
   assertEquals(broke(branch), null)
+})
+
+Deno.test('builds: a push that failed is built again, and only a push', () => {
+  assertEquals(broke(event('failed'))!.again, true)
+  let retry = event('failed')
+  retry.payload!.buildTriggerMetadata!.buildTriggerSource = 'deploy_hook'
+  assertEquals(broke(retry)!.again, false)
+})
+
+Deno.test('builds: with no hook there is nothing to start', async () => {
+  assertEquals(await rebuild({} as Env), 'no BUILD_HOOK')
 })

@@ -150,6 +150,11 @@ export type Env = {
   // is told so.
   DISPATCH?: Dispatch
   CF_WORKERS_TOKEN?: string
+  // The deploy hook that builds `main` again after a push's build failed
+  // (builds.ts): a URL whose path is its own credential, scoped to this
+  // Worker's production branch and able to do nothing but start a build.
+  // Production's alone, like the queue that uses it.
+  BUILD_HOOK?: string
   // A person's own domain (domains.ts, T-33038): the yaks.app zone the
   // Cloudflare for SaaS custom hostnames are created on — not a secret, it
   // rides wrangler.toml's `[vars]` beside the account tag — and a token that
