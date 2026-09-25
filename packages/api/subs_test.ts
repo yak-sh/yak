@@ -3,8 +3,11 @@
 // moves under it, and — just as much the point — what it is never told.
 
 import { assert, assertEquals } from '@std/assert'
-import type { Graph } from '@yaks/graph'
-import { comp, shopGraph } from './harness.ts'
+import { type Graph, graph } from '@yaks/graph'
+import { Database } from '@yaks/sqlite/db'
+import { storage } from '@yaks/sqlite'
+import { loadVocab } from '@yaks/vocab'
+import { comp, shop as shopVocab, shopGraph } from './harness.ts'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
 
 // A sink that remembers, and hands over what it has heard since last asked.
@@ -156,6 +159,88 @@ Deno.test('a windowed query re-reads its whole answer', () => {
   let [moved] = take()
   assertEquals(ids(moved), ['b2'])
   assertEquals(moved.gone, ['b1'])
+})
+
+// The shop again, where a book also counts its reviews: a computed property
+// whose value lives on other entities, and says so with `reads`.
+let rated = (): Graph => {
+  let vocab = loadVocab([...shopVocab.docs, {
+    $defs: {
+      book: {
+        component: true,
+        extends: true,
+        type: 'object',
+        properties: {
+          reviewed: { type: 'number', computed: true, reads: ['review'] },
+        },
+      },
+    },
+  }])
+  let db = new Database(':memory:')
+  let store = storage(
+    {
+      query: (sql, params) => db.prepare(sql).all(...params),
+      exec: (sql) => db.exec(sql),
+    },
+    vocab,
+    {
+      derived: {
+        'book.reviewed': {
+          tag: 'number',
+          expr: (o) =>
+            `(select count(*) from "review" r where r."book" = ${o})`,
+        },
+      },
+    },
+  )
+  store.install()
+  return graph({ storage: store, vocab })
+}
+
+Deno.test('a refresh follows its query onto the entities it reads', () => {
+  let g = rated()
+  g.apply([
+    { entity: { eid: 'b1' }, book: { price: 12 } },
+    { entity: { eid: 'b2' }, book: { price: 15, author: 'a1' } },
+    { entity: { eid: 'a1' }, doc: { title: 'Bo' } },
+  ])
+  let subs = subscriptions(g)
+  let { to, take } = ear()
+  subs.open(to, 'liked', '.book&.book.reviewed>0')
+  subs.open(to, 'ada', '.book.author.doc.title=Ada')
+  take()
+
+  // a review moves the count it is read into, and its deletion moves it back
+  g.apply([{ entity: { eid: 'r1' }, review: { stars: 5, book: 'b1' } }])
+  assertEquals(take().map(ids), [['b1']])
+  g.apply([{ entity: { eid: 'r1' }, $delete: true }])
+  assertEquals(take().map((f) => f.gone), [['b1']])
+
+  // a rename one hop away moves the book that names its author
+  g.apply([{ entity: { eid: 'a1' }, doc: { title: 'Ada' } }])
+  assertEquals(take().map(ids), [['b2']])
+})
+
+Deno.test('a commit that touches nothing a query reads does not run it', () => {
+  let g = shop()
+  let runs = 0
+  let spy: Graph = {
+    ...g,
+    read: (q, o) => (runs++, g.read(q, o)),
+    rows: (q, o) => (runs++, g.rows(q, o)),
+  }
+  let subs = subscriptions(spy)
+  let { to, take } = ear()
+  subs.open(to, 'newest', '.book&.price<20&.limit=1')
+  subs.open(to, 'n', '.book&.count')
+  take()
+  let before = runs
+
+  g.apply([{ entity: { eid: 'n1' }, doc: { title: 'a note' } }])
+  assertEquals([runs - before, take()], [0, []])
+
+  g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  assertEquals(take().map((f) => f.id), ['newest', 'n'])
 })
 
 Deno.test('a query the graph cannot answer is refused, not held', () => {

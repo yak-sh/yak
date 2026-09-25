@@ -136,6 +136,7 @@
             "open"
           ],
           "computed": true,
+          "reads": [],
           "description": "where the task stands, read from its completed and cancelled marks"
         }
       }

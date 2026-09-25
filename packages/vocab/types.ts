@@ -71,6 +71,9 @@ export type Prop = {
   /** derived, never stored: no column holds it and nobody writes it, but a
    * reader still sees it (a query-only rank, an aggregate, a derived status) */
   computed: boolean
+  /** on a computed property, the components on other entities its value is
+   * read from (`[]` for its own entity alone); absent, it may read anything */
+  reads?: string[]
   /** this property is what the entity's own id is derived from — see the
    * `identity` keyword and `Vocab.identity` */
   identity: boolean
@@ -198,6 +201,8 @@ export type PropSchema = {
   death?: string
   // true = derived, never stored (on a property)
   computed?: boolean
+  // On a computed property: the components on other entities it reads.
+  reads?: string[]
   stamped?: boolean
   // On a component: who is told about a write, and how long the value lives
   // (lifetime.ts).

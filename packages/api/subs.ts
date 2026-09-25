@@ -16,7 +16,8 @@
 //   Refresh      the query follows a reference, counts, orders or limits, so
 //                its result can change when an entity the query never named
 //                does. These run the query again and compare it against the
-//                membership set.
+//                membership set — but only after a commit that touched a
+//                member or a component the query reads (./interest.ts).
 //
 // The membership Set is what makes "this entity no longer matches" as cheap
 // as "this entity now matches": a client cannot work out that something left
@@ -46,6 +47,7 @@ import {
 import { type Filter, filter } from '@yaks/match'
 import { bare, type Clause, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
+import { cares, type Interest, interest } from './interest.ts'
 import { fault, type Refusal, refusal } from './refuse.ts'
 import { type Relay, relay as relaying, type Timer } from './relay.ts'
 
@@ -130,7 +132,38 @@ type Sub = {
   /** the reduction an aggregate query asks for, and its last answer */
   agg?: Agg
   answer?: string
+  /** what a refresh or an aggregate is read from, or `null` when every
+   * commit can move it */
+  reads?: Interest | null
 }
+
+// What one commit did to each entity it touched: the components its patches
+// named, and the ones it wears now, or `null` once it is deleted.
+type Touch = Map<Eid, { named: Set<string>; worn: Set<string> | null }>
+
+let touches = (applied: Bundle[], now: Bundle[]): Touch => {
+  let out: Touch = new Map()
+  for (let b of now) {
+    out.set(b.entity.eid, { named: new Set(), worn: new Set(Object.keys(b)) })
+  }
+  for (let b of applied) {
+    let t = out.get(b.entity.eid) ?? { named: new Set(), worn: null }
+    out.set(b.entity.eid, t)
+    if (b.$delete) t.worn = null
+    for (let k of Object.keys(b)) {
+      if (k != 'entity' && k[0] != '$') t.named.add(k)
+    }
+  }
+  return out
+}
+
+// Whether a commit can have moved a refresh or an aggregate: it touched a
+// member, deleted something, or touched what the query reads.
+let moved = (sub: Sub, touch: Touch) =>
+  !sub.reads ||
+  [...touch].some(([eid, t]) =>
+    sub.members.has(eid) || !t.worn || cares(sub.reads!, t.named, t.worn)
+  )
 
 // Whether a clause can be decided against one entity on its own: a property of
 // the entity itself, a term in its own text, nothing at all. A path that hops
@@ -238,6 +271,7 @@ export let subscriptions = (graph: Graph, opts: {
       // refused rather than quietly demoted to a subscription that runs it
       // again on every commit forever.
       let ast = parse(line)
+      sub.reads = interest(ast, graph.vocab)
       sub.agg = aggregate(ast)
       if (sub.agg) return tell(sub, true)
       sub.test = judge(ast, line, graph.vocab)
@@ -303,9 +337,12 @@ export let subscriptions = (graph: Graph, opts: {
     return then(graph.read(sub.query, { durable: true }), (set) => {
       let ids = new Set(set.map((b) => b.entity.eid))
       let gone = [...sub.members].filter((e) => !ids.has(e))
+      // An entity can join without being touched: a hop or a computed
+      // property moved it from the far side.
+      let joined = [...ids].some((e) => !sub.members.has(e))
       sub.members = ids
       rememberFields(sub, set)
-      if (gone.length || touched.some((e) => ids.has(e))) {
+      if (gone.length || joined || touched.some((e) => ids.has(e))) {
         sub.sink({ id: sub.id, bundles: set, gone })
       }
     })
@@ -327,8 +364,9 @@ export let subscriptions = (graph: Graph, opts: {
     let queries = subs.filter((s) => !s.raw)
     if (!queries.length) return
     let touched = [...new Set(applied.map((b) => b.entity.eid))]
-    return then(detached(graph.storage).get(touched), (now) =>
-      then(
+    return then(detached(graph.storage).get(touched), (now) => {
+      let touch = touches(applied, now)
+      return then(
         over(queries, (s) =>
           attempt(s, () => {
             if (opts.invalidate?.(s.query, applied)) {
@@ -340,10 +378,12 @@ export let subscriptions = (graph: Graph, opts: {
                 s.sink({ id: s.id, bundles: set, gone })
               })
             }
+            if (!s.test && !moved(s, touch)) return
             return push(s, now, touched)
           })),
         () => undefined,
-      ))
+      )
+    })
   }
 
   // The relay, and how a value reaches the clients watching. A relayed value

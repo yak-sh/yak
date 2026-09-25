@@ -64,6 +64,7 @@ component table needs on top:
 | `ref`       | prop  | the entity kind a string references (`"project"`, `"entity"`)           |
 | `death`     | prop  | `cascade` \| `detach` \| `release` \| `keep` when the target is deleted |
 | `computed`  | prop  | `true` = derived, never stored (a query-only rank)                      |
+| `reads`     | prop  | on a computed prop: components on other entities it reads; `[]` = none  |
 | `stamped`   | prop  | `true` = the server owns it: clients read it, never write it            |
 | `search`    | prop  | `true` = this text property is full-text indexed                        |
 | `aliases`   | prop  | input forms that resolve to an enum member                              |

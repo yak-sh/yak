@@ -293,6 +293,9 @@
             "failed"
           ],
           "computed": true,
+          "reads": [
+            "entry"
+          ],
           "description": "what the newest entry implies: pending is waiting on the model, running is waiting on an answer, settled has nothing to do"
         }
       }

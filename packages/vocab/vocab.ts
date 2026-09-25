@@ -239,6 +239,7 @@ let propOf = (
     stamped: !!s.stamped,
     search: s.search === true,
     computed: s.computed === true,
+    ...s.reads ? { reads: [...s.reads] } : {},
     identity: s.identity === true,
     affinity: affinityOf(category, scalar, s.type),
     // A reference carries an FK to entity(id) unless its death is 'keep' — a

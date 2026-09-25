@@ -69,6 +69,13 @@
       "type": "boolean",
       "default": false
     },
+    "reads": {
+      "description": "On a computed property: the components on other entities its value is read from, so a change to an entity wearing one of them can move it. [] = the entity's own components alone. A computed property that declares none may read anything, and every change can move it.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "stamped": {
       "description": "true = the server owns this property: clients can read it, never write it.",
       "type": "boolean"

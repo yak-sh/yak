@@ -441,7 +441,13 @@
             "type": "object"
           }
         },
-        "items": true
+        "items": true,
+        "reads": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       },
       "additionalProperties": false,
       "required": [
@@ -450,6 +456,9 @@
       "dependentRequired": {
         "ref": [
           "death"
+        ],
+        "reads": [
+          "computed"
         ]
       }
     },
