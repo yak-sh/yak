@@ -7,27 +7,10 @@ import { checkoutAt, createWorktree, discover } from '@yaks/git/host'
 import { refEid } from '../git/refs.ts'
 import { open } from './store.ts'
 import { homeAt, sessionCwd, workspace } from './workspace.ts'
+import { git, scratchRepo } from './testing.ts'
 
-let git = async (cwd: string, ...args: string[]) => {
-  let p = await new Deno.Command('git', {
-    cwd,
-    args,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  if (!p.success) throw new Error(new TextDecoder().decode(p.stderr))
-  return new TextDecoder().decode(p.stdout).trim()
-}
 let fixture = async () => {
-  let dir = await Deno.makeTempDir()
-  let repo = dir + '/repo'
-  await Deno.mkdir(repo)
-  await git(repo, 'init', '-b', 'main')
-  await git(repo, 'config', 'user.email', 'test@example.org')
-  await git(repo, 'config', 'user.name', 'Test')
-  await Deno.writeTextFile(repo + '/file', 'committed')
-  await git(repo, 'add', '.')
-  await git(repo, 'commit', '-m', 'initial')
+  let { dir, repo, free } = await scratchRepo()
   let h = open(':memory:')
   return {
     dir,
@@ -35,7 +18,7 @@ let fixture = async () => {
     h,
     free: async () => {
       h.close()
-      await Deno.remove(dir, { recursive: true })
+      await free()
     },
   }
 }

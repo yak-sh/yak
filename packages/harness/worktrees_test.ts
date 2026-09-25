@@ -11,17 +11,8 @@ import {
   over,
   sweep,
 } from './worktrees.ts'
+import { git, scratchRepo } from './testing.ts'
 
-let git = async (cwd: string, ...args: string[]) => {
-  let p = await new Deno.Command('git', {
-    cwd,
-    args,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  if (!p.success) throw new Error(new TextDecoder().decode(p.stderr))
-  return new TextDecoder().decode(p.stdout).trim()
-}
 let there = (path: string) => Deno.stat(path).then(() => true, () => false)
 
 /** Poll instead of guessing: an effect runs after its batch commits. */
@@ -35,17 +26,7 @@ let until = async (fact: () => Promise<boolean>, timeout = 5000) => {
 
 /** A repository, a worktree root beside it, and one cut checkout per name. */
 let fixture = async () => {
-  let dir = await Deno.makeTempDir()
-  let repo = dir + '/repo'
-  let root = dir + '/worktrees'
-  await Deno.mkdir(repo)
-  await Deno.mkdir(root)
-  await git(repo, 'init', '-q', '-b', 'main', '.')
-  await git(repo, 'config', 'user.email', 'test@example.org')
-  await git(repo, 'config', 'user.name', 'Test')
-  await Deno.writeTextFile(repo + '/file', 'committed')
-  await git(repo, 'add', '.')
-  await git(repo, 'commit', '-qm', 'initial')
+  let { dir, repo, root, free } = await scratchRepo()
   return {
     dir,
     repo,
@@ -71,7 +52,7 @@ let fixture = async () => {
     },
     branches: () =>
       git(repo, 'for-each-ref', '--format=%(refname:short)', 'refs/heads/'),
-    free: () => Deno.remove(dir, { recursive: true }),
+    free,
   }
 }
 

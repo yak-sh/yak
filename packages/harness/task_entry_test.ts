@@ -3,6 +3,7 @@ import { type Comp, identityEid } from '@yaks/graph'
 import { taskEntry, transcript } from '@yaks/session'
 import { local } from './local.ts'
 import { open } from './store.ts'
+import { scratchRepo } from './testing.ts'
 
 let M = identityEid('model', ['fake'])
 
@@ -83,8 +84,11 @@ Deno.test('taskEntry rejects invalid inputs and durably accepts concurrent queue
 })
 
 Deno.test('Agent.taskEntry honors agent limits', async () => {
+  let r = await scratchRepo()
   let a = local({
     h: open(':memory:'),
+    cwd: r.repo,
+    worktrees: r.root,
     tools: [],
     maxChildren: 0,
     model: () =>
@@ -107,6 +111,7 @@ Deno.test('Agent.taskEntry honors agent limits', async () => {
     )
   } finally {
     await a.close()
+    await r.free()
   }
 })
 
@@ -115,8 +120,11 @@ Deno.test('auto-task notice is lazy, reaches next ask, and contextual completion
   let release!: () => void
   let waiting = new Promise<void>((resolve) => release = resolve)
   let h = open(':memory:')
+  let r = await scratchRepo()
   let a = local({
     h,
+    cwd: r.repo,
+    worktrees: r.root,
     tools: [],
     model: async (req) => {
       let text = JSON.stringify(req.items)
@@ -194,6 +202,7 @@ Deno.test('auto-task notice is lazy, reaches next ask, and contextual completion
   } finally {
     release()
     await a.close()
+    await r.free()
   }
 })
 

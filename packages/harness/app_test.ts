@@ -8,6 +8,7 @@ import { App, changes } from './app.ts'
 import { panels, type UIAgent } from './panels.ts'
 import { local } from './local.ts'
 import { open } from './store.ts'
+import { scratchRepo } from './testing.ts'
 import { until } from '../process/harness.ts'
 
 let settle = async () => {
@@ -323,8 +324,11 @@ Deno.test('Tab preserves editing and captures message/task mode for each queued 
 Deno.test('task mode paints claimed work and subagent, then its delivered result without keys', async () => {
   let childReply = deferred<Awaited<ReturnType<Model>>>()
   let childAsked = deferred<void>()
+  let r = await scratchRepo()
   let a = local({
     h: open(':memory:'),
+    cwd: r.repo,
+    worktrees: r.root,
     tools: [],
     model: (req) => {
       if (
@@ -381,6 +385,7 @@ Deno.test('task mode paints claimed work and subagent, then its delivered result
   } finally {
     ui.free()
     await a.close()
+    await r.free()
   }
 })
 
