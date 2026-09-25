@@ -3,7 +3,15 @@
 // is tested here rather than only through the door. Stripe's signature is
 // @yaks/hook's (signed_test.ts).
 import { assert, assertEquals } from '@std/assert'
-import { form, moved, periodEnd, planOf, stale, type Sub } from './billing.ts'
+import {
+  elsewhere,
+  form,
+  moved,
+  periodEnd,
+  planOf,
+  stale,
+  type Sub,
+} from './billing.ts'
 import type { Plan } from './directory.ts'
 
 // --- the plan, derived --------------------------------------------------
@@ -128,4 +136,20 @@ Deno.test('form encoding nests the way Stripe reads it', () => {
       ['metadata[space]', 'e1'],
     ],
   )
+})
+
+// --- whose purchase ------------------------------------------------------
+
+Deno.test('another apex is elsewhere; ours, or none, is ours', () => {
+  let bought = (apex?: string) => ({ metadata: apex ? { apex } : {} })
+  assert(elsewhere(bought('yaks.app'), 'yaks.fyi'))
+  assert(!elsewhere(bought('yaks.fyi'), 'yaks.fyi'))
+  assert(!elsewhere(bought(), 'yaks.fyi'))
+  // An invoice carries its subscription's metadata under `parent`.
+  let invoice = {
+    metadata: {},
+    parent: { subscription_details: { metadata: { apex: 'yaks.app' } } },
+  }
+  assert(elsewhere(invoice, 'yaks.fyi'))
+  assert(!elsewhere(invoice, 'yaks.app'))
 })

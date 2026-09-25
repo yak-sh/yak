@@ -239,6 +239,30 @@ let whose = async (
   return at.customer ? await dir.payer(at.customer) : null
 }
 
+// What every Stripe object we make for a space carries: the space, and the
+// apex it was bought on. One Stripe sandbox serves staging and every probe
+// kernel, and each of them hears the others' events; a space eid names nothing
+// outside the store that made it, so without the apex a probe's purchase reads
+// on staging as money nobody owns.
+let metaOf = (env: Host, space: Space) => ({
+  space: space.eid,
+  slug: space.slug,
+  apex: apex(env),
+})
+
+// Whether a Stripe object is another deployment's: it names an apex, and not
+// ours. The subscription says it in its own metadata, a checkout session in
+// its own, and an invoice in the copy of its subscription's under `parent`.
+// Something made before the apex was stamped names none and is ours.
+export let elsewhere = (o: Record<string, unknown>, here: string) => {
+  let parent = o.parent as
+    | { subscription_details?: { metadata?: Record<string, string> } }
+    | undefined
+  let at = (o.metadata as Record<string, string> | undefined)?.apex ??
+    parent?.subscription_details?.metadata?.apex
+  return !!at && at != here
+}
+
 // ---- the doors -----------------------------------------------------------
 
 let json = (status: number, code: string, message: string) =>
@@ -285,7 +309,7 @@ let payerFor = async (env: Env, space: Space, email: string) => {
   let made = await ask(env, '/v1/customers', {
     email,
     name: space.title,
-    metadata: { space: space.eid, slug: space.slug },
+    metadata: metaOf(env, space),
   })
   let customer = String(made.id ?? '')
   if (!customer) throw new Error('stripe made a customer with no id')
@@ -346,8 +370,8 @@ export let checkout = async (env: Env, req: Request, at?: Space) => {
         ? `https://${spaceHost(env, at.slug)}${managePath('billing')}?paid=0`
         : backTo(false, env),
       client_reference_id: space.eid,
-      metadata: { space: space.eid, slug: space.slug },
-      subscription_data: { metadata: { space: space.eid, slug: space.slug } },
+      metadata: metaOf(env, space),
+      subscription_data: { metadata: metaOf(env, space) },
       managed_payments: { enabled: true },
       allow_promotion_codes: true,
     })
@@ -459,8 +483,13 @@ let subjectOf = async (
 export let apply = async (env: Env, event: Event) => {
   let at = new Date((event.created ?? Math.floor(Date.now() / 1000)) * 1000)
     .toISOString()
+  // Another deployment's purchase is its business, not a fault of ours, and it
+  // is let go before a GET that our key may not even be able to answer.
+  let here = apex(env)
+  if (elsewhere(event.data?.object ?? {}, here)) return 'elsewhere'
   let subject = await subjectOf(env, event)
   if (!subject) return 'nothing to do'
+  if (elsewhere(subject.sub, here)) return 'elsewhere'
   let next = planOf(subject.sub, at)
   let dir = dirOf(env)
   let space = await whose(dir, {

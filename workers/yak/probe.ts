@@ -1220,6 +1220,10 @@ export let subscribed = async (
   metadata: Record<string, string>,
   customer?: string,
 ) => {
+  // Stamped the way checkout stamps it (billing.ts `metaOf`), with the apex a
+  // probe kernel runs under, so staging, which hears this sandbox's events
+  // too, lets the purchase go as another deployment's.
+  metadata = { ...metadata, apex: apex() }
   customer ??= String((await charged(key, '/v1/customers', { metadata })).id)
   let card = await charged(key, '/v1/payment_methods/pm_card_visa/attach', {
     customer,
