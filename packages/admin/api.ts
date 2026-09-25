@@ -349,6 +349,31 @@ let refusalOf = (body: unknown) => {
     : null
 }
 
+// A 4xx is the door refusing what this caller asked, whether its body came
+// from the JSON store door or from the platform's HTML 404. The latter must
+// not turn a missing app into a defect, nor put a whole page in the call's
+// error. These are the same few codes every platform tool uses
+// (workers/yak/tool.ts `rejected`).
+let refusalCode: Record<number, string> = {
+  401: 'access',
+  403: 'access',
+  404: 'missing',
+  409: 'conflict',
+  413: 'limit',
+  429: 'limit',
+}
+
+let shortBody = (body: unknown) => {
+  let text = typeof body == 'string' ? body : JSON.stringify(body) ?? ''
+  return text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)
+}
+
+let refusedResponse = (r: Response, body: unknown) =>
+  refusalOf(body) ?? {
+    code: refusalCode[r.status] ?? 'arguments',
+    message: `${r.status} ${shortBody(body) || r.statusText}`.trim(),
+  }
+
 // The filter grammar over an app's store — the same line the page's own
 // client.js sends, each segment encoded whole the way client.ts queryArgs
 // does it.
@@ -376,8 +401,8 @@ export let storeQuery = async (
   }`
   let r = await sent(url, session)
   let body = await bodyOf(r)
-  let refusal = refusalOf(body)
-  if (r.status >= 400 && r.status < 500 && refusal) {
+  if (r.status >= 400 && r.status < 500) {
+    let refusal = refusedResponse(r, body)
     throw new CallError(refusal.code, refusal.message)
   }
   if (!r.ok) throw new Error(`${at} refused the query: ${JSON.stringify(body)}`)

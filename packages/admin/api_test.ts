@@ -295,6 +295,30 @@ Deno.test("an app store's refusal keeps its code, rather than becoming a defect"
   }
 })
 
+Deno.test("an app store's HTML 404 is a missing refusal, not a defect", async () => {
+  let stub = answering({
+    ...fee(),
+    ok: false,
+    status: 404,
+    text: () =>
+      Promise.resolve(
+        '<!doctype html><html><body><h1>Nothing here yet.</h1>' +
+          '<p>There are no apps at this address yet.</p></body></html>',
+      ),
+  })
+  try {
+    let error = await assertRejects(
+      () => storeQuery('someone.token', 'sbx37901', ['.entity']),
+      CallError,
+      '404 Nothing here yet. There are no apps at this address yet.',
+    )
+    assertEquals(error.code, 'missing')
+    assertEquals(error.message.includes('<'), false)
+  } finally {
+    stub.done()
+  }
+})
+
 // `yak --timing`, this end: the account's calls do not go through the
 // connector door, so `sent` says the same line for them (@yaks/api `timed`).
 // The stub answers the header a platform answer would carry.
