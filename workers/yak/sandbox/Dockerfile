@@ -12,7 +12,7 @@
 # `image_build_context`), because the one thing this image COPYs is the CLI
 # inside its Deno workspace. The root .dockerignore admits only what that
 # needs.
-FROM registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-c1db4f5b8e1216ab
+FROM registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-ee6d899f43d821b1
 
 # The `yak` command (packages/cli): every tool the connector lists, as a
 # subcommand, signed in by the $YAKS_TOKEN sandbox.ts puts in the environment.

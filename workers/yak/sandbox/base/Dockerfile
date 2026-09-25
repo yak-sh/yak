@@ -119,13 +119,16 @@ RUN set -eux; \
 # floating toolchain this whole file exists to prevent — and it would do it
 # mid-build, on the clock. `test/` and `api/` are the Go project's own
 # conformance corpus, read by nothing here.
+#
+# The tarball comes from dl.google.com, where go.dev/dl only redirects: go.dev
+# itself answered Workers Builds with a 404 twice in one day (T-38057).
 ARG GO_VERSION=1.27.1
 ARG GO_SHA256=63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445
 ENV PATH=/usr/local/go/bin:$PATH \
     GOTOOLCHAIN=local
 RUN set -eux; \
     curl -fsSL -o /tmp/go.tgz \
-      "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"; \
+      "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz"; \
     echo "${GO_SHA256}  /tmp/go.tgz" | sha256sum -c -; \
     tar -xzf /tmp/go.tgz -C /usr/local; \
     rm -rf /tmp/go.tgz /usr/local/go/test /usr/local/go/api; \

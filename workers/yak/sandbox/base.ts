@@ -110,6 +110,20 @@ let held = async (ref: string, password: string) => {
   throw new Error(`${REGISTRY} answered ${r.status} for ${ref}`)
 }
 
+/** The build wrangler runs for an image, so the base is built the same way.
+ * On Workers Builds a build container resolves no host without the host's
+ * network, which wrangler adds when the build environment says so. */
+let BUILD = [
+  ...['docker', 'build', '--load', '--platform', 'linux/amd64'],
+  '--provenance=false',
+]
+let context = () => [
+  ...Deno.env.get('WRANGLER_CI_OVERRIDE_NETWORK_MODE_HOST')
+    ? ['--network', 'host']
+    : [],
+  here('base').pathname,
+]
+
 let must = async (go: Run, cmd: string[], input?: string) => {
   let r = await go(cmd, input)
   if (!r.ok) throw new Error(`${cmd.slice(0, 3).join(' ')} failed`)
@@ -161,7 +175,7 @@ export let based = async (
   }
   if (!missing.length) return from
   if (missing.includes(from)) {
-    await must(go, ['docker', 'build', '-t', from, here('base').pathname])
+    await must(go, [...BUILD, '-t', from, ...context()])
   } else await must(go, ['docker', 'pull', from])
   for (let ref of missing) {
     if (ref != from) await must(go, ['docker', 'tag', from, ref])

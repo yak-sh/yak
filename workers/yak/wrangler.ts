@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-run=npm,npx,git,pgrep,kill,docker
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env=WRANGLER_CI_OVERRIDE_NETWORK_MODE_HOST --allow-run=npm,npx,git,pgrep,kill,docker
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak`, their `-staging` variants and the probe (probe.ts) all
 // come through here, so the pinned version is written once and `node_modules`
