@@ -483,6 +483,7 @@ slow(
         let customer = String(held.customer ?? '')
         assert(customer, 'the session names the customer it is for')
         let sub = await subscribed(
+          k,
           key,
           { space: eids[mine], slug: mine },
           customer,

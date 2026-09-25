@@ -530,8 +530,9 @@ WORKER_NAME = "yak-staging"
 DISPATCH_NAMESPACE = "yak-apps-staging"
 VIEWS_DATASET = "yak_views_staging"
 SENTRY_ENVIRONMENT = "staging"
-# Set a recurring price from the Stripe sandbox before testing Plus billing.
-STRIPE_PRICE = ""
+# The Stripe sandbox's recurring Plus price (acct_1UBa7vRMiIEYfSxg), the one
+# the probes buy.
+STRIPE_PRICE = "price_1UIXRMRMiIEYfSxgOgO7xBdP"
 # MAIL_SINK is the owner's address, set as a staging secret, never a var.
 
 [env.staging.observability.logs]

@@ -54,7 +54,7 @@ slow(
       assertEquals(await plan(), undefined)
 
       // ---- the subscription starts ----
-      let sub = await subscribed(key, { space }) as {
+      let sub = await subscribed(k, key, { space }) as {
         id: string
         customer: string
         items: { data: { current_period_end: number }[] }

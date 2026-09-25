@@ -85,6 +85,29 @@ export type Kernel = Awaited<ReturnType<typeof kernel>>
 let byte = () => crypto.getRandomValues(new Uint8Array(1))[0]
 let somewhere = () => ({ 'cf-connecting-ip': `198.18.${byte()}.${byte()}` })
 
+// What a kernel bought in the Stripe sandbox (`subscribed`). A subscription
+// left active renews every month, and each renewal is a webhook to staging; a
+// test's own cancel runs only if the test gets that far, but every test stops
+// its kernel in a `finally`, so the stop cancels whatever is still live.
+let owning = <K extends { stop: () => Promise<void> }>(k: K) => {
+  let bought = new Set<string>()
+  let stop = async () => {
+    try {
+      for (let id of bought) await unsubscribed(id)
+    } finally {
+      await k.stop()
+    }
+  }
+  return { ...k, bought, stop }
+}
+
+let unsubscribed = async (id: string) => {
+  let key = stripeKey()
+  let path = `/v1/subscriptions/${id}`
+  if ((await charged(key, path)).status == 'canceled') return
+  await charged(key, path, undefined, undefined, 'DELETE')
+}
+
 export let kernel = async (vars: Record<string, string> = {}) => {
   if (Deno.env.get('YAK_PROBE_HOST')) {
     let lease = await leased({ vars })
@@ -97,7 +120,7 @@ export let kernel = async (vars: Record<string, string> = {}) => {
           'x-yak-host': host,
         },
       })
-    return { ...lease, at, host: apex(vars) }
+    return owning({ ...lease, at, host: apex(vars) })
   }
   await ready()
   let host = apex(vars)
@@ -196,7 +219,7 @@ export let kernel = async (vars: Record<string, string> = {}) => {
     await stop()
     throw e
   }
-  return { base, secret, at, stop, log, host, socket: undefined }
+  return owning({ base, secret, at, stop, log, host, socket: undefined })
 }
 
 /**
@@ -787,14 +810,15 @@ export let hostnames = () => {
  * subscription for it and the webhook moves the plan (billing.ts). `plan` is
  * stamped, so no door a test can reach writes it — the kernel is leased with
  * this `STRIPE_WEBHOOK_SECRET` and the event is signed with it. The
- * subscription comes back, for a test that goes on to cancel it.
+ * subscription comes back, for a test that goes on to cancel it; the kernel
+ * cancels it on stop otherwise.
  */
 export let plus = async (
-  k: Pick<Kernel, 'at'>,
+  k: Pick<Kernel, 'at' | 'bought'>,
   secret: string,
   space: string,
 ) => {
-  let sub = await subscribed(stripeKey(), { space })
+  let sub = await subscribed(k, stripeKey(), { space })
   await delivered(
     k,
     '/stripe/webhook',
@@ -938,7 +962,7 @@ export let zipped = async (entries: Packed[]) => {
 export let deployed = (url: string) => {
   let base = url.replace(/\/+$/, '')
   let host = new URL(base).host
-  return {
+  return owning({
     base,
     host,
     secret: '',
@@ -947,7 +971,7 @@ export let deployed = (url: string) => {
     at: (where: string, path: string, init: RequestInit = {}) =>
       fetch(`https://${where}${path}`, init),
     stop: () => Promise.resolve(),
-  }
+  })
 }
 
 /**
@@ -1214,8 +1238,10 @@ export let merchant = async (
  * fresh customer when none is named. It is what a completed checkout leaves:
  * Stripe's checkout page draws its card fields in cross-origin frames behind a
  * captcha, which no test can drive, so the card goes in the way the API puts it.
+ * It is bought for kernel `k`, whose stop cancels it if the test did not.
  */
 export let subscribed = async (
+  k: Pick<Kernel, 'bought'>,
   key: string,
   metadata: Record<string, string>,
   customer?: string,
@@ -1228,12 +1254,14 @@ export let subscribed = async (
   let card = await charged(key, '/v1/payment_methods/pm_card_visa/attach', {
     customer,
   })
-  return await charged(key, '/v1/subscriptions', {
+  let sub = await charged(key, '/v1/subscriptions', {
     customer,
     items: { 0: { price: await plusPrice(key) } },
     default_payment_method: String(card.id),
     metadata,
   })
+  k.bought.add(String(sub.id))
+  return sub
 }
 
 /**
