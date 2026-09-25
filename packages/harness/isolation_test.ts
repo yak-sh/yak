@@ -58,9 +58,12 @@ Deno.test('prompt admission tests never open the environment database', async ()
   try {
     // Run the actual fixture with private defaults, not the invoking harness's
     // environment. This detects accidental fallback even if its assertions pass.
+    // `check:types` already checks the fixture; checking it again here cost a
+    // cold type check of its whole graph in every new worktree.
     let result = await new Deno.Command(Deno.execPath(), {
       args: [
         'test',
+        '--no-check',
         '-A',
         fileURLToPath(new URL('./prompts_test.ts', import.meta.url)),
       ],

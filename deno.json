@@ -6,7 +6,7 @@
     "check:bytes": "deno run --allow-read --allow-run=git bin/check-bytes.ts",
     "check:types": "deno check",
     "check:publish": {
-      "command": "deno publish --dry-run --allow-dirty",
+      "command": "deno publish --dry-run --allow-dirty --no-check",
       "files": [
         "deno.json",
         "deno.lock",
@@ -67,12 +67,7 @@
       ]
     },
     "check:content": "deno task content --check",
-    "check:packages": {
-      "command": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno run -A bin/scratch.ts deno test --parallel --no-check -A packages/ packages/*_test.ts",
-      "dependencies": [
-        "check:types"
-      ]
-    },
+    "check:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno run -A bin/scratch.ts deno test --parallel --no-check -A packages/ packages/*_test.ts",
     "content": "deno run --allow-read --allow-write --allow-run=deno workers/yak/gen.ts",
     "test:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno run -A bin/scratch.ts deno test --parallel -A packages/ packages/*_test.ts",
     "test:workerd": "deno run -A bin/suite-time.ts test:workerd deno task test:workerd:run",
