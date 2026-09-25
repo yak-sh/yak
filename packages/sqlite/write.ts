@@ -417,7 +417,9 @@ export let patch = (
   // remain unnumbered.
   let excluded = new Set<string>()
   if (typeof number == 'object') {
-    for (let name of number.except) {
+    // A component no plugin here declares is worn by nothing: a config names
+    // its exceptions once, for every graph it opens.
+    for (let name of number.except.filter((n) => vocab.comp(n))) {
       for (let b of alive) {
         if (!known.has(b.entity.eid)) continue
         if (wears(driver, name, b.entity.eid)) excluded.add(b.entity.eid)

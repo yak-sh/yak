@@ -50,6 +50,21 @@ for (let backend of ['sqlite', 'ram']) {
   )
 }
 
+// A config names what it excepts once, for every graph it opens, and a graph
+// whose plugins declare no such component simply has nothing wearing it.
+for (let backend of ['sqlite', 'ram']) {
+  Deno.test(backend + ': excepting an undeclared component numbers on', () => {
+    let opts = { number: { except: ['archetype', 'entry'] } }
+    let s = backend == 'sqlite' ? storage(mem(), vocab, opts) : ram(vocab, opts)
+    s.install()
+    s.tx((tx) => {
+      tx.patch([{ entity: { eid: 'task' }, task: {} }])
+      tx.patch([{ entity: { eid: 'task' }, task: { target: 'entry' } }])
+      assertEquals(tx.get(['task'])[0].entity.num, 1)
+    })
+  })
+}
+
 for (let backend of ['sqlite', 'ram']) {
   Deno.test(backend + ': a reference to nothing numbers nothing', () => {
     let opts = { number: true }
