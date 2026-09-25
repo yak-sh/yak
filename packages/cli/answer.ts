@@ -151,24 +151,34 @@ let ENOUGH = 100
 
 /** What a page draws beside an entity: the links it is in and the comments
  * aimed at it. A tool answers only what it was asked for, so the page asks
- * for these itself, with the queries {@link nearQueries} writes. */
+ * for these itself, in the one query {@link nearQuery} writes. */
 export type Near = { links: Bundle[]; comments: Bundle[] }
 
-/** The two queries a page asks about one entity: its links, bar META, and
- * its comments — each only where this vocabulary has the component. */
-export let nearQueries = (vocab: Vocab, eid: string) => ({
-  links: vocab.comp('edge')
+/** The one query a page asks about the entity it draws: the links it is in,
+ * bar META, and the comments aimed at it — each only where this vocabulary
+ * has the component, and none at all where it has neither. */
+export let nearQuery = (vocab: Vocab, eid: string): string | null => {
+  let arms = [
+    ...vocab.comp('edge') ? [`.edge.from=${eid}`, `.edge.to=${eid}`] : [],
+    ...vocab.comp('comment') ? [`.comment.target=${eid}`] : [],
+  ]
+  return arms.length
     ? [
-      `.refs=${eid}`,
-      '.edge',
+      `(${arms.join('|')})`,
       ...META.filter((m) => vocab.comp(m)).map((m) => `!${m}`),
       `.limit=${ENOUGH}`,
       '*',
     ].join('&')
-    : null,
-  comments: vocab.comp('comment')
-    ? `.comment.target=${eid}&.limit=${ENOUGH}&*`
-    : null,
+    : null
+}
+
+// The answer to {@link nearQuery}, told apart: a comment aimed at the entity,
+// or a link.
+let nearOf = (eid: string, found: Bundle[]): Near => ({
+  links: found.filter((b) => b.edge),
+  comments: found.filter((b) =>
+    (b.comment as { target?: string } | undefined)?.target == eid
+  ),
 })
 
 // What a page says about the entity it draws: each link as the entity at its
@@ -195,7 +205,7 @@ let around = (
     ])
   }
   // Asked for at most ENOUGH, so a full answer counts only what it holds.
-  let more = near.links.length >= ENOUGH ? '+' : ''
+  let more = near.links.length + near.comments.length >= ENOUGH ? '+' : ''
   let relations = [...groups].map(([title, items]) => ({
     title: items.length > MOST
       ? `${title} (${MOST} of ${items.length}${more})`
@@ -339,7 +349,7 @@ export let reported = async (
 /** Where a drawing asks for what it draws beyond the answer, from wherever
  * the answer came from: `lookup` reads entities by eid, so a reference
  * prints as the id a person types, and `query` answers a page's
- * {@link nearQueries}. */
+ * {@link nearQuery}. */
 export type Source = {
   lookup: (eids: string[]) => Bundle[] | Promise<Bundle[]>
   query: (q: string) => Bundle[] | Promise<Bundle[]>
@@ -359,13 +369,9 @@ export let show = async (
   held: { views?: Held; db?: string } = {},
   from: Source = none,
 ): Promise<void> => {
-  let asked = answer.length == 1
-    ? nearQueries(vocab, answer[0].entity.eid)
-    : { links: null, comments: null }
-  let near: Near = {
-    links: asked.links ? await from.query(asked.links) : [],
-    comments: asked.comments ? await from.query(asked.comments) : [],
-  }
+  let [lone] = answer
+  let asked = answer.length == 1 ? nearQuery(vocab, lone.entity.eid) : null
+  let near = asked ? nearOf(lone.entity.eid, await from.query(asked)) : nothing
   let refs = referenced(vocab, [...answer, ...near.links, ...near.comments])
   let named = refs.length ? await from.lookup(refs) : []
   if (c.tui) {
