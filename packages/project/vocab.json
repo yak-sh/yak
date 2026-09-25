@@ -55,6 +55,7 @@
       "component": true,
       "type": "object",
       "kind": true,
+      "before": ["board"],
       "prefix": "P",
       "by_name": true,
       "description": "something tasks are grouped under",
