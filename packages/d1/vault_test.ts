@@ -16,6 +16,8 @@ import {
   type Vault,
 } from '@yaks/secrets'
 import { loadVocab } from '@yaks/vocab'
+import { col, select, table } from '@yaks/sql'
+import { prepare } from './d1.ts'
 import { d1 } from './testing.ts'
 import { d1Vault, transient } from './vault.ts'
 
@@ -41,9 +43,10 @@ Deno.test('a secret sealed through the graph is ciphertext in D1', async () => {
   let { db, g, vault } = setup()
   await g.apply([sealed('A', 'plain-value')])
   assertEquals(await reveal(vault, 'A'), 'plain-value')
-  let { results } = await db.prepare('select k, v from yak_vault').all<
-    { k: string; v: string }
-  >()
+  let { results } = await prepare(
+    db,
+    select({ cols: [col('k'), col('v')], from: table('yak_vault') }),
+  ).all<{ k: string; v: string }>()
   assert(results.every((r) => !atob(r.v).includes('plain-value')))
   assertEquals((await vault.all()).map(([e]) => e), [secretEid('A')])
   await g.apply([unsealed('A')])

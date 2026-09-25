@@ -10,7 +10,8 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { effects } from '@yaks/effects'
 import { ddl, journal, log } from './log.ts'
-import { mem } from '../sqlite/testing.ts'
+import { col, notNull, tally, val } from '@yaks/sql'
+import { mem, raised } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'
 import { graph } from '@yaks/graph'
 import { NOW, sync, wiki, wikiGraph, wikiLog } from './testing.ts'
@@ -196,15 +197,21 @@ Deno.test('a content-addressed property is recorded by its address', () => {
   let store = storage(db, wiki)
   store.install()
   for (let s of ddl()) db.query(s)
-  db.exec(`create table if not exists body (
-    id integer primary key, text text not null unique)`)
+  db.query(raised(
+    'body',
+    { name: 'id', type: 'integer', pk: true },
+    { name: 'text', type: 'text', notNull: true, unique: true },
+  ))
   let put = (text: string) =>
     Number(
-      (db.query(
-        `insert into body (text) values (?)
-         on conflict(text) do update set text = excluded.text returning id`,
-        [text],
-      )[0] as { id: number }).id,
+      db.query({
+        t: 'insert',
+        into: 'body',
+        cols: ['text'],
+        rows: [[val(text)]],
+        upsert: [{ on: [col('text')], set: { text: col('text', 'excluded') } }],
+        returning: [col('id')],
+      })[0].id,
     )
   let j = log({
     rows: (s) => db.query(s),
@@ -220,17 +227,11 @@ Deno.test('a content-addressed property is recorded by its address', () => {
   sync(g.apply([{ entity: { eid: 'p1' }, page: { text: 'a long body' } }]))
   sync(g.apply([{ entity: { eid: 'p2' }, page: { text: 'a long body' } }]))
   assertEquals(
-    db.query('select count(*) as n from body', [])[0],
-    { n: 1 },
+    tally(db, 'body'),
+    1,
     'the same text is landed once, and both rows point at it',
   )
-  assertEquals(
-    db.query(
-      'select count(*) as n from journal_field where ref is not null',
-      [],
-    )[0],
-    { n: 2 },
-  )
+  assertEquals(tally(db, 'journal_field', notNull(col('ref'))), 2)
   assertEquals(j.history('p1')[0].deltas.at(-1)?.after, 'a long body')
 })
 

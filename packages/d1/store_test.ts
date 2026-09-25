@@ -9,6 +9,8 @@ import { graph } from '@yaks/graph'
 import type { Bundle } from '@yaks/graph'
 import { counted, d1, shop, store } from './testing.ts'
 import { storage } from './store.ts'
+import { prepare } from './d1.ts'
+import { lit } from '@yaks/sql'
 import { kitchen, PROJECTED, PROJECTED_ROW, RECIPE } from '../sqlite/testing.ts'
 
 let titles = (bs: Bundle[]) =>
@@ -148,11 +150,21 @@ Deno.test('a number a refused batch reserved is handed out again', async () => {
 Deno.test('partial updates over D1 keep required columns and roll back late failures', async () => {
   let db = d1(), s = storage(db, shop)
   await s.install()
-  await db.prepare(`drop table doc`).all()
-  await db.prepare(
-    `create table doc (entity integer primary key references entity(id),
-    title text not null default 'untitled', body text not null)`,
-  ).all()
+  await prepare(db, { t: 'drop', kind: 'table', name: 'doc' }).all()
+  await prepare(db, {
+    t: 'create table',
+    name: 'doc',
+    cols: [
+      {
+        name: 'entity',
+        type: 'integer',
+        pk: true,
+        ref: { table: 'entity', cols: ['id'] },
+      },
+      { name: 'title', type: 'text', notNull: true, default: lit('untitled') },
+      { name: 'body', type: 'text', notNull: true },
+    ],
+  }).all()
   await s.tx((tx) =>
     tx.patch([{ entity: { eid: 'a' }, doc: { body: 'body' } }])
   )
