@@ -7,18 +7,7 @@ import { parseHTML } from 'linkedom'
 import { type Ent } from '../../types.ts'
 import { cache, ent, useRoute } from '../../live.ts'
 import { resolve } from '../Entity.tsx'
-import {
-  CommandFull,
-  CommandSummary,
-  EntryBody,
-  EntryLens,
-  EntrySummary,
-  mergeTools,
-  MessageSummary,
-  PromptSummary,
-  ResultFull,
-  ResultSummary,
-} from './Entry.tsx'
+import { CommandFull, CommandSummary, EntryBody, EntryLens, EntrySummary, mergeTools, MessageSummary, ResultFull, ResultSummary } from './Entry.tsx'
 
 // A mounted view holds subscriptions. In a test there is no server to hold
 // them against, so control frames go nowhere through live.ts's transport

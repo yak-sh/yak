@@ -1,8 +1,8 @@
 # Archetype renderer dispatch
 
-`src/live_archetypes.ts` learns immutable, content-addressed descriptors on
-**demand**, shared by browser and TUI. Neither host waits for a graph-wide
-archetype subscription before mounting.
+`packages/web/live_archetypes.ts` learns immutable, content-addressed
+descriptors on **demand**, shared by browser and TUI. Neither host waits for a
+graph-wide archetype subscription before mounting.
 
 - The fleet `Ent` adapter offers the raw cache row's component **names**, never
   component bodies or Ent's derived fields. Only a set whose hash equals the

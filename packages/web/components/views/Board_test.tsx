@@ -12,13 +12,9 @@ import {
 // Enter through the registry, as the app does; importing Board first would
 // invert its deliberate Entity render cycle.
 await import('../Entity.tsx')
-let { Board, columnLine, QuickAdd } = await import('./Board.tsx')
-let { uuid } = await import('../../types.ts')
-let { cache, ent, landSub, resetSignals, useRoute } = await import(
-  '../../live.ts'
-)
+let { columnLine, QuickAdd } = await import('./Board.tsx')
 let { mount } = await import('../mount.ts')
-let { tick, until } = await import('../../testing.ts')
+let { tick } = await import('../../testing.ts')
 let { drop } = await import('../drafts.ts')
 
 Deno.test('board columns request a projected, priority-ordered screenful', () => {
@@ -35,4 +31,29 @@ Deno.test('board columns request a projected, priority-ordered screenful', () =>
     'hot',
   )
   assertEquals(columnLine('', 'open', 8), '')
+})
+
+Deno.test('quick-add previews empty facets and ordinary properties', async () => {
+  let key = `test:quick-add:${crypto.randomUUID()}`
+  let mounted = mount(
+    <QuickAdd dkey={key} file={() => true} close={() => {}} />,
+  )
+  try {
+    let input = mounted.root.querySelector<HTMLTextAreaElement>('.Board_New')!
+    input.setSelectionRange = () => {}
+    input.value = '.design=true .architecture=false .domain=Eng Ship'
+    input.dispatchEvent(
+      new input.ownerDocument.defaultView!.Event('input', { bubbles: true }),
+    )
+    await tick()
+    assertEquals(
+      [...mounted.root.querySelectorAll('.Board_Chip')].map((e) =>
+        e.textContent
+      ),
+      ['design=true', 'architecture=false', 'domain=Eng'],
+    )
+  } finally {
+    mounted.free()
+    drop(key)
+  }
 })

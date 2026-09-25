@@ -2,28 +2,10 @@
 import '../testing.ts'
 import { effect } from '@preact/signals'
 import { parseHTML } from 'linkedom'
-import { assertEquals, assertStrictEquals, assertThrows } from '@std/assert'
-import {
-  cache,
-  clearResolved,
-  landSub,
-  peek as shellPeek,
-  unsubscribe,
-  useRoute,
-} from '../live.ts'
+import { assertEquals, assertStrictEquals } from '@std/assert'
+import { cache, landSub, peek as shellPeek, unsubscribe } from '../live.ts'
 import { type Ent } from '../types.ts'
-import {
-  actionsAt,
-  cardMenuAt,
-  clickProps,
-  eidOf,
-  menu,
-  openAt,
-  peek,
-  screenTarget,
-} from './nav.tsx'
-import { Id } from './views/Inline.tsx'
-import { mount } from './mount.ts'
+import { actionsAt, cardMenuAt, clickProps, eidOf, menu, openAt, peek } from './nav.tsx'
 
 let e: Ent = {
   eid: 'task',

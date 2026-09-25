@@ -11,7 +11,12 @@
 // documents a host composes (testing.ts), a terminal the ones its server
 // serves.
 
-import { type Keywords, loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import {
+  type Keywords,
+  loadVocab,
+  type Vocab,
+  type VocabDoc,
+} from '@yaks/vocab'
 import { idKeywords } from '@yaks/id/vocab'
 import { nameKeywords } from '@yaks/names'
 import { edgeKeywords } from '@yaks/edge/vocab'
@@ -68,7 +73,6 @@ export let appAccess = ['public', 'open', 'private'] as const
 export let planTiers = ['free', 'plus'] as const
 export let hostnameStages = ['pending', 'active', 'error'] as const
 
-
 // The keyword vocabularies the documents are written with: every set the
 // packages ship.
 export let keywords: Keywords[] = [
@@ -123,7 +127,7 @@ export let edges: string[] = []
 export let governed = ['task', 'architecture', 'memory', 'persona'] as const
 
 // A session is still going in exactly these statuses.
-export let sessionActive = ['starting', 'running', 'stopping']
+export let sessionActive = ['pending', 'running']
 
 // The session facets a spawn door may write.
 export let sessionFacetNames = [
@@ -138,7 +142,10 @@ export let sessionFacetNames = [
 // One property, in the words the views speak (PropType below).
 let typeOf = (v: Vocab, comp: string, prop: string): PropType => {
   let p = v.prop(comp, prop)!
-  let raw = (v.def(comp)?.properties?.[prop] ?? {}) as { store?: string }
+  let raw = (v.def(comp)?.properties?.[prop] ?? {}) as {
+    store?: string
+    well?: string
+  }
   if (p.category == 'ref') {
     return { eid: p.ref || 'entity', death: p.death ?? 'keep' }
   }
@@ -149,6 +156,7 @@ let typeOf = (v: Vocab, comp: string, prop: string): PropType => {
     }
   }
   if (raw.store == 'blob') return 'body'
+  if (raw.well) return { text: raw.well }
   let s = p.scalar
   return s == 'bool' || s == 'number' || s == 'priority' || s == 'time' ||
       s == 'url' || s == 'query'
@@ -168,7 +176,10 @@ export let learn = (docs: VocabDoc[]): Vocab => {
   let names = new Set<string>()
   let relations: string[] = []
   let parts: typeof partition = {}
-  // The spine is every entity's, read through spineProps below.
+  // The spine's columns are the store's to stamp: read and filtered on, never
+  // written. Its identity, eid, is read through spineProps below.
+  let spine = v.props('entity').map((p) => [p, typeOf(v, 'entity', p)])
+  if (spine.length) st.entity = Object.fromEntries(spine)
   for (let name of v.all.filter((n) => n != 'entity')) {
     let def = (v.def(name) ?? {}) as {
       bare?: boolean

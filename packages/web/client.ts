@@ -8,7 +8,25 @@
 // Values that look like numbers become numbers.
 import { IdError } from './types.ts'
 import { ownsSessionBranch } from './session_worktree.ts'
-import { byName, type Change, comps, deaths, type Dep, type Hit, kindOf, sessionFacetNames, sessionOf, settled, shapeOf, type Snapshot, stamped, statuses, statusOf, uuid, verdictName } from './types.ts'
+import {
+  byName,
+  type Change,
+  comps,
+  deaths,
+  type Dep,
+  type Hit,
+  kindOf,
+  sessionFacetNames,
+  sessionOf,
+  settled,
+  shapeOf,
+  type Snapshot,
+  stamped,
+  statuses,
+  statusOf,
+  uuid,
+  verdictName,
+} from './types.ts'
 import { checkPrefix, idOf, shortId, shortParts, slugsOf } from './types.ts'
 import { moves, typeOf } from './edge.ts'
 import { fieldOp, parseProp, propAt, refOf } from './props.ts'
@@ -90,12 +108,6 @@ export let rowOf = (r: Record<string, unknown>): Row => {
   }
 }
 
-// The server's advertised capabilities, cheaply — a spawn door checks this
-// before speaking canonical `spawn` (see facetsFor/spawnChanges). Cached per
-// process: capabilities move only when the server does, and a spawn is rare
-// enough that one small GET is free. A server too old to answer this route
-// (404) has no capabilities by definition, so treat any failure as [].
-let caps: string[] | undefined
 
 // The graph as rows: one per entity, components merged in; kind derived.
 // Quarantine is absent unless the caller takes the explicit reveal branch.
@@ -535,9 +547,6 @@ export let derefWith = (
 
 export let derefChanges = (all: Row[], changes: Change[]) =>
   derefWith((v, where, comp) => deref(all, v, where, comp), changes)
-let named = (v: unknown) =>
-  typeof v == 'number' ||
-  (typeof v == 'string' && !!v && !UUID.test(v))
 
 // Group routed params into per-component patches.
 export let patches = (params: Param[]): ComponentPatches => {
@@ -790,7 +799,6 @@ export let subChanges = (
     comp: { actor: actor, target: target, mode },
   }]
 }
-
 
 // One launch spec, however it is spelled: the four fields a spawn carries,
 // worn by an explicit ask, a task's hint, and a caller session alike.
@@ -2184,61 +2192,6 @@ export let notices = (all: Row[], who: Reader) => {
   return { lines, eids, at }
 }
 
-// Continuity is SELF-AUTHORED (T-4469): the session's final message — the
-// closing summary the operator already wrote — IS the brief for most
-// sessions, captured into the first-class `brief` component at wrap. A
-// deliberate brief (task session brief) is never clobbered. Only when
-// nothing was captured does the mechanical LEDGER stub ride instead — on
-// the session DOC, the standing invitation the scribe's sweep answers
-// (scribe.ts queues on the doc's STUB marker); continuity never depends on
-// it, and the brief and the narrative never contend for one body.
-export let STUB = 'Auto-written at wrap' // the scribe's queue marker
-let brief = (
-  all: Row[],
-  sess: Row,
-  held: Row[],
-  now: number,
-  entries: JournalEntry[],
-  final?: string,
-): Change[] => {
-  let spoke = all.some((r) =>
-    r.comps.comment && r.comps.created?.via == sess.eid
-  )
-  let tasked = !!sess.comps.session?.requested_task
-  if (!tasked && !held.length && !spoke && !entries.length) return []
-  // The self-authored handoff lands on the brief component. A deliberate
-  // brief already there is the operator's word — never overwrite it.
-  if (final) {
-    if (sess.comps.brief?.text) return []
-    return [{ eid: sess.eid, name: 'brief', comp: { text: final } }]
-  }
-  // Nothing self-authored: the ledger STUB queues the scribe on doc.body.
-  // A hand-written narrative doc is never clobbered.
-  let body = String(sess.comps.doc?.body ?? '')
-  if (sess.comps.doc && body && !body.startsWith(STUB)) return []
-  let day = new Date(now).toISOString().slice(0, 10)
-  let title = String(sess.comps.doc?.title || `Work session ${day}`)
-  let holding = held.map((r) =>
-    `- ${idOf(r)} (${taskStatus(r) ?? '?'}) ${r.comps.doc?.title ?? ''}`
-  )
-  let told = ledger(entries, all)
-  return [{
-    eid: sess.eid,
-    name: 'doc',
-    comp: {
-      title,
-      body: [
-        `${STUB} — a stub, enrich me. The ledger is the journal's account;`,
-        'the narrative is yours to add.',
-        ...(told.length ? ['', '## Ledger', '', ...told] : []),
-        '',
-        '## Ended holding',
-        '',
-        ...(holding.length ? holding : ['- (no claims — comments only)']),
-      ].join('\n'),
-    },
-  }]
-}
 
 // The scribe's desk: the cheap model wearing the scribe persona on the
 // standing task — the same spawn whether the sweep or :scribe summons it.

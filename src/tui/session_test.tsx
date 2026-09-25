@@ -15,7 +15,10 @@ import { onMarkdown } from '../../packages/web/components/Markdown.tsx'
 // entering it from Entity's side lets Entry finish initializing first (the same
 // order Session_test.tsx relies on).
 import '../../packages/web/components/Entity.tsx'
-import { EntryBody, type EntryLine } from '../../packages/web/components/views/Entry.tsx'
+import {
+  EntryBody,
+  type EntryLine,
+} from '../../packages/web/components/views/Entry.tsx'
 import { ansi, pane } from './paint.ts'
 
 // The same injection tui/main.tsx makes at boot: the one markdown door paints

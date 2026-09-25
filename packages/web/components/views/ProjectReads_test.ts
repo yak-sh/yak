@@ -1,23 +1,8 @@
 import '../../testing.ts'
 import { assertEquals } from '@std/assert'
-import { matchQuery, parseQuery, resolveRefs } from '../../query.ts'
-import {
-  applyLocal,
-  cache,
-  dropQuery,
-  ent,
-  findEid,
-  holdQuery,
-  landSub,
-  predsToQuery,
-  querySubscription,
-  useRoute,
-} from '../../live.ts'
+import { parseQuery, resolveRefs } from '../../query.ts'
+import { applyLocal, cache, dropQuery, findEid, holdQuery, landSub, predsToQuery, querySubscription, useRoute } from '../../live.ts'
 import '../Entity.tsx'
-import { sessionsOf } from './Dashboard.tsx'
-
-
-
 
 Deno.test('project reads open wire subs and retain hits without cached far rows', () => {
   let project = 'abcdef10-0000-4000-8000-000000000001'

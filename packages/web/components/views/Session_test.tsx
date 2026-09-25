@@ -3,19 +3,11 @@ import '../../testing.ts'
 import { h, render } from 'preact'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import {
-  cache,
-  deps,
-  ent,
-  landSub,
-  repoUrl,
-  resetSignals,
-  useRoute,
-} from '../../live.ts'
+import { cache, ent, landSub, repoUrl, useRoute } from '../../live.ts'
 import { type Ent } from '../../types.ts'
 import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
-import { doing, mentionSig, resolveMentions, Session, SessionContext, SessionDiagnostics, SessionEntry, sessionMentions, SessionReferences, SessionSummary, SessionTime, threadMentions } from './Session.tsx'
+import { mentionSig, resolveMentions, SessionContext, SessionDiagnostics, SessionEntry, sessionMentions, SessionReferences, SessionTime, threadMentions } from './Session.tsx'
 
 Deno.test('session list Tile omits its chip and falls back to its actor', () => {
   cache.value = {

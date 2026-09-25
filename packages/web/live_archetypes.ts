@@ -75,4 +75,3 @@ export let archetypeTables = (eid: string): readonly string[] | undefined => {
   if (value !== undefined) return descriptor(eid, value)
   if (config.host) request(eid)
 }
-

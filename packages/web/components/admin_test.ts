@@ -8,7 +8,7 @@ import { parseHTML } from 'linkedom'
 import { loadVocab } from '@yaks/vocab'
 import { Admin } from './Admin.tsx'
 import { route } from './nav.tsx'
-import { cache, landSub, useRoute } from '../live.ts'
+import { cache, useRoute } from '../live.ts'
 import { assertEquals } from '@std/assert'
 
 // A mounted view holds subscriptions. In a test there is no server to hold

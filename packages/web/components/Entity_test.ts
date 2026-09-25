@@ -5,15 +5,7 @@ import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { useState } from 'preact/hooks'
 import { parse } from '@yaks/query'
-import {
-  backlinks,
-  cache,
-  ent,
-  reveal,
-  revealed,
-  shown,
-  useRoute,
-} from '../live.ts'
+import { cache, ent, reveal, revealed, shown, useRoute } from '../live.ts'
 import { actionsFor, applicable, extend, resolve } from './registry.ts'
 import { Entity } from './Entity.tsx'
 import { mount } from './mount.ts'

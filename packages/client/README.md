@@ -375,8 +375,7 @@ after their covering subscription ends, within the row budget. They are not
 reported as loaded. A new covering result, deletion, or epoch change still
 reconciles them. Restored coverage is restricted to fields present in memory.
 `Watch.value` remains a bundle array; it does not expose aggregate or window
-metadata. Application integration is described in the
-[Tasks migration audit](../../docs/CLIENT_MIGRATION.md).
+metadata. Application integration is described in [@yaks/web](../web/README.md).
 
 `cache.onRows(eids => ...)` observes entity changes, including commits,
 eviction, epoch changes, and disk restoration. Read the current row with

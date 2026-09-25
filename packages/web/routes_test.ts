@@ -17,7 +17,15 @@ Deno.test('every id letter the vocabulary uses has a route, in both cases', () =
   let ls = letters(vocab)
   for (let l of ['T', 't', 'D', 'd']) assertEquals(ls.includes(l), true, l)
   for (
-    let path of ['/', '/T-9', '/t-9', '/T', '/T%23abc123', '/D-3', '/admin/task']
+    let path of [
+      '/',
+      '/T-9',
+      '/t-9',
+      '/T',
+      '/T%23abc123',
+      '/D-3',
+      '/admin/task',
+    ]
   ) {
     assertEquals(reached(path)?.method, 'GET', path)
   }

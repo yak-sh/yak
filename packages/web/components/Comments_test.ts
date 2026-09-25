@@ -3,7 +3,7 @@
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { cache, ent } from '../live.ts'
-import { byline, composerChanges, prompt, viaName } from './Comments.tsx'
+import { byline, composerChanges, viaName } from './Comments.tsx'
 
 Deno.test('viaName names a session by its chip id, never its harness uuid', () => {
   cache.value = {

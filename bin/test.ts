@@ -24,8 +24,6 @@ let isolated = new Set([
   // Owns the local-read arm and file DBs, and spawns a real server (the import
   // scan below only recognizes servers imported in-process).
   'src/localwrite_test.ts',
-  // This one deliberately tests a real debounce interval.
-  'src/components/Search_test.tsx',
   // These launch nested Deno/provider processes and own their cache/HOME.
   'src/cli_test.ts',
   'src/harness_integration_test.ts',

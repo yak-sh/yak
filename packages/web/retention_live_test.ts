@@ -1,6 +1,6 @@
 import './testing.ts'
 import { assertEquals } from '@std/assert'
-import { applyLocal, cache, census, config, dropQuery, ent, holdQuery, landSub, loaded, restore, subscribe, subscriptionState, unsubscribe, useRoute } from './live.ts'
+import { applyLocal, cache, census, dropQuery, ent, holdQuery, landSub, restore, subscribe, subscriptionState, unsubscribe, useRoute } from './live.ts'
 import { parseQuery } from './query.ts'
 
 let changes = (eid: string) => [

@@ -10,7 +10,7 @@
 // column-level honesty (live.ts `loaded`, in live_test.ts beside the rest of
 // landSub).
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { fieldsOf, parseQuery, PROJECT } from './query.ts'
+import { fieldsOf, parseQuery } from './query.ts'
 import { projected } from './subs.ts'
 import { select, where } from './sql.ts'
 import type { Change } from './types.ts'

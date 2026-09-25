@@ -6,8 +6,6 @@
 // the same eid grammar apply() enforces, which only a UUID clears.
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { cursorEid } from '../edge.ts'
-import type { Change } from '../types.ts'
 import { applyLocal, cache, census, myCursor, useRoute } from '../live.ts'
 
 // A mounted view holds subscriptions. In a test there is no server to hold
@@ -131,4 +129,3 @@ Deno.test('a cursor write never navigates the tab (update-only)', () => {
   }])
   assertEquals(route.value, '/') // stays: rendering ignores the cursor read
 })
-

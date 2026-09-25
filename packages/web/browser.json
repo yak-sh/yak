@@ -1,10 +1,16 @@
 {
-  "_": "The browser gate: @yaks/web's views and its app must type-check with only the web platform in scope — no Deno namespace, no Node types. `./routes` runs on the host and is not part of it.",
+  "_": "The browser gate: @yaks/web's front door (the vocabulary it learns from its host) must type-check with only the web platform in scope — no Deno namespace, no Node types. `./routes` runs on the host and is not part of it; the page's views are .tsx and are checked by the root program.",
   "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "strict": true
   },
-  "entries": ["./views", "./client"],
+  "entries": [
+    "."
+  ],
   "imports": {
     "@yaks/archetype": "../archetype/mod.ts",
     "@yaks/query": "../query/mod.ts",

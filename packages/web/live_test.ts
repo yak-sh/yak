@@ -1,20 +1,12 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
-import { slow, until } from './testing.ts'
-import { stub } from '@std/testing/mock'
-import { FakeTime } from '@std/testing/time'
-import { agreementProbe, applyLocal, assertAgree, backlinks, base, boardAll, boardPost, boardsOver, boardSub, boardTasks, boot, byWarmth, cache, census, chatFor, clearResolved, commentCount, commentsOn, config, deps, domains, dropLocal, dropQuery, edgeSub, ent, findEid, foldFor, gated, holdCommentCount, holdLocal, holdQuery, hostFrom, inbox, jobOf, landSub, loaded, myCamera, myCursor, myMode, openDeps, parents, pinned, predsToQuery, projects, queryEids, querySubscription, references, relations, repoUrl, resetSignals, resolveGen, resolvingId, resultComponent, resultSub, routeName, routeSub, ROW, row, rowsSub, serverEid, serverName, sessionRows, setInbox, shelfFor, shown, sieve, statusOf, subEids, subscribe, subscriptionChecks, subscriptionState, topZ, unreadFor, unsubscribe, useOutboxStore, useRoute } from './live.ts'
+import { slow } from './testing.ts'
+import { agreementProbe, applyLocal, assertAgree, backlinks, boardAll, boardPost, boardsOver, boardSub, boardTasks, byWarmth, cache, census, chatFor, clearResolved, commentCount, commentsOn, config, deps, domains, dropQuery, ent, findEid, foldFor, gated, holdQuery, inbox, jobOf, landSub, loaded, myCamera, myCursor, myMode, openDeps, parents, pinned, predsToQuery, projects, queryEids, querySubscription, relations, repoUrl, resetSignals, row, sessionRows, setInbox, shelfFor, shown, sieve, subEids, subscriptionChecks, subscriptionState, topZ, unreadFor, unsubscribe, useRoute } from './live.ts'
 import { edgeEid, link } from './edge.ts'
 import { EXISTS, parseQuery, PROJECT, resolveRefs } from './query.ts'
 import { type Ent } from './types.ts'
 import { effect } from '@preact/signals'
-import {
-  assert,
-  assertEquals,
-  assertNotStrictEquals,
-  assertStrictEquals,
-  assertThrows,
-} from '@std/assert'
+import { assertEquals, assertNotStrictEquals, assertStrictEquals } from '@std/assert'
 
 // Status is DERIVED (D-24102): to make a cache Ent read as done/wip/cancelled,
 // give it the mark/claim comp statusOf keys off, not a stored status column.
@@ -28,18 +20,9 @@ let mark = (status: string, eid: string): Record<string, unknown> =>
     : {}
 
 // These are cache derivations: nothing here wants a socket, so control frames
-// go nowhere through the transport seam. The few tests that drive connect()
-// put the wire back with wired(); everything else can hold a subscription
+// go nowhere through the transport seam, and a test can hold a subscription
 // without a server existing.
-let transport = useRoute(() => {})
-let wired = <T>(fn: () => T): T => {
-  useRoute(transport)
-  try {
-    return fn()
-  } finally {
-    useRoute(() => {})
-  }
-}
+useRoute(() => {})
 
 Deno.test('findEid does not scan or subscribe after indexing', () => {
   let scans = 0
@@ -126,16 +109,6 @@ Deno.test('server-resolve: a cache hit never touches the wire', () => {
   }
 })
 
-// The pending-wake membership, now a query over the derived deliver.to reverse
-// index (no bespoke wake index). The result anchors on the index — one candidate
-// read, not a whole-graph scan — and its signal wakes ONLY when this session's
-// wake membership changes: an unrelated patch (another session's wake included)
-// triggers zero re-render (T-17036, the whole point).
-let pendingWakeQ = (session: string) =>
-  resolveRefs(
-    parseQuery(`.wake! .deliver.to=${session} .delivered= .failed=`),
-    findEid,
-  )
 
 // The auto-derivation proof: filed.assignee is an {eid} reference with NO
 // hand-written index anywhere — yet it is queryable through the same reverse

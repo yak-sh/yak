@@ -3,7 +3,11 @@ import '../../packages/web/testing.ts' // learns the vocabulary
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { type Change, type Ent } from '../../packages/web/types.ts'
-import { config as liveConfig, mode, useRoute } from '../../packages/web/live.ts'
+import {
+  config as liveConfig,
+  mode,
+  useRoute,
+} from '../../packages/web/live.ts'
 import { extend, resolve } from '../../packages/web/components/registry.ts'
 import {
   accountCallback,

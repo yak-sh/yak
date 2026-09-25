@@ -5,7 +5,7 @@ import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { cache, config } from '../live.ts'
-import { type Change } from '../types.ts'
+import type { Bundle } from '@yaks/graph'
 import { Edit } from './Edit.tsx'
 
 Deno.test('double-click selects words while already editing', () => {
@@ -62,18 +62,14 @@ Deno.test('double-click selects words while already editing', () => {
   }
 })
 
-// The wire, stubbed: mutate() lands in the cache AND sends, so a test that
-// let the socket connect would write to whatever server holds the port.
-let sent: Change[] = []
+// The wire, stubbed: mutate() lands in the cache AND posts the bundles to
+// /apply, so a test that let either through would write to whatever server
+// holds the port. The socket only reads; what a write sent is what /apply got.
+let sent: Bundle[] = []
 class Socket {
   static OPEN = 1
   readyState = 1
-  send(frame: string) {
-    // A write travels as {apply, id} — the acked delivery (T-21413); a bare
-    // array is any other frame shape.
-    let got = JSON.parse(frame) as Change[] | { apply?: Change[] }
-    sent.push(...(Array.isArray(got) ? got : got.apply ?? []))
-  }
+  send() {}
   addEventListener() {}
   close() {}
 }
@@ -98,7 +94,12 @@ let typeInto = (body: string | undefined, text: string, readOnly = false) => {
     WebSocket: { value: Socket, configurable: true },
     // want() must not decide this test: there is no server here.
     fetch: {
-      value: () => Promise.reject(new Error('no server')),
+      value: (url: string, init?: RequestInit) => {
+        if (String(url).endsWith('/apply')) {
+          sent.push(...JSON.parse(String(init?.body)))
+        }
+        return Promise.reject(new Error('no server'))
+      },
       configurable: true,
     },
   })
@@ -149,6 +150,18 @@ let typeInto = (body: string | undefined, text: string, readOnly = false) => {
     }
   }
 }
+
+Deno.test('a loaded body is still edited, empty or not', () => {
+  let out = typeInto('', 'a fragment')
+  assertEquals(out.armed, true)
+  assertEquals(out.sent, [
+    {
+      entity: { eid: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
+      doc: { body: 'a fragment' },
+    },
+  ])
+  assertEquals(out.stored, 'a fragment')
+})
 
 Deno.test('an unloaded body refuses the editor and commits nothing', () => {
   let out = typeInto(undefined, 'a fragment')

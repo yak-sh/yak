@@ -1,14 +1,13 @@
 # @yaks/web
 
-A graph in a browser, read-only: a home page, a search, and every entity at its
-own address. `/T-9` opens T-9; `/T#8d83e663ef` opens an entity by the start of
-its eid. Everything on screen is a live @yaks/client watch, so a page changes
-when the graph does.
+The web door: a graph's canvas, cards, boards and editing in a browser. `/` is
+the root canvas, `/T-9` opens T-9 fullscreen, `?v=` picks its view, and every
+card on screen is live: an edit anywhere reaches the page over the socket.
 
 ## Use
 
-List it in a `yak serve` config beside @yaks/api, which serves the doors the
-page reads through (`/query`, `/ws`):
+List it in a `yak serve` config beside @yaks/api, whose doors the page reads and
+writes through:
 
 ```json
 {
@@ -17,40 +16,43 @@ page reads through (`/query`, `/ws`):
 }
 ```
 
-The routes facet (`@yaks/web/routes`) answers `/`, `/<letter>-*` and `/<letter>`
-for each id letter the vocabulary uses, and `/web/client.js`, `/web/style.css`
-and `/web/vocab.json`. It claims no catch-all, so `/query`, `/ws` and every
-other plugin's routes still reach their own handlers.
+The routes facet (`@yaks/web/routes`, routes.ts) answers:
 
-## Views
+| path                                                  | serves                                    |
+| ----------------------------------------------------- | ----------------------------------------- |
+| `/`, `/admin`, `/admin/*`                             | the page (index.html)                     |
+| `/<letter>-*`, `/<letter>%23*`, `/%23*`               | the page, for each id letter in use       |
+| `/web/app.js`                                         | main.tsx, built by `deno bundle` at start |
+| `/web/styles.css`, `/web/manifest.webmanifest`, icons | the files beside it                       |
+| `/web/vocab.json`                                     | the host's vocabulary documents           |
 
-The page is drawn by portable [@yaks/render](../render) renderers, the same ones
-a terminal prints through [@yaks/text](../text). `/web/client.js` is bundled on
-first request from each configured plugin's `./views` and `./vocab` exports, in
-config order, so a package that ships views is drawn as soon as a config lists
-it. Today that is @yaks/doc (`Title`, `Body`), @yaks/task (`Status`) and
-@yaks/session.
+It claims no catch-all, so `/query`, `/ws`, `/apply` and every other plugin's
+routes still reach their own handlers.
 
-`@yaks/web/views` holds the views any entity has, registered last so a package
-that knows its components wins by specificity:
+## How it works
 
-| view      | draws                                                               |
-| --------- | ------------------------------------------------------------------- |
-| `Title`   | the id, for an entity with no title                                 |
-| `Tile`    | a link: id, `Title`, `Status`                                       |
-| `Facts`   | every component a page does not show elsewhere, one row each        |
-| `Comment` | an entity with `comment`: its author, when, then its `Body`         |
-| `Page`    | the whole entity: head, `Title`, `Body`, relations, comments, facts |
-
-What one bundle cannot say arrives in the render context as a `Shown`: how an id
-reads, what a referenced entity is called and where it links, how a time reads,
-and `show(bundle, view)` to draw another entity through the same registry. A
-page's relations and comments ride in it too. A terminal supplies the same
-context with `tree` from @yaks/text as its `show`.
+- **Vocabulary.** The page learns the host's documents from `/web/vocab.json`
+  before any module reads them (types.ts ends with the fetch), so the browser
+  and the server speak one set of components. Tests learn the same plugin
+  documents by importing testing.ts first; the TUI's main.tsx fetches them from
+  its host.
+- **Reads.** Each named subscription in live.ts is a server-evaluated watch on a
+  @yaks/client box (live_client.ts) over @yaks/api's `/ws`. @yaks/sync owns the
+  socket, its reconnect and the resubscribe after it. Aggregates (`.tally=`,
+  `.count!`, `.distinct=`) arrive as their value and again when it moves.
+  wire.ts turns a query line into the host's grammar and bundles into the
+  cache's changes.
+- **Writes.** A change is applied locally, kept in a durable outbox, and POSTed
+  to `/apply` (live.ts `post`). A refusal is recorded in the refusal ledger and
+  the rows it touched are read again; a network error or a 5xx is redelivered.
+- **Rendering.** components/registry.ts selects renderers through @yaks/render
+  and mounts them with @yaks/preact; Entity.tsx holds the curated list, and
+  components/views holds the views. The TUI (src/tui) mounts the same registry
+  through a fake DOM and a terminal painter.
 
 ## Limits
 
-- Read-only: no view writes.
-- `/web/client.js` is built with `deno bundle`, which Deno marks experimental.
-- A status is computed by the marks' default ladder in the browser; a rung
-  another plugin adds (a claim's `wip`) is computed only by the server.
+- Session views still read some of the fleet server's session columns; on a yak
+  store they show a session's status, actor and claims, not its provider run.
+- `.order=search` and `.order=hot` are not served by @yaks/api.
+- `/web/app.js` is built with `deno bundle`, which Deno marks experimental.

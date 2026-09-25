@@ -6,11 +6,19 @@
 // painted as lines instead of CSS.
 import { signal } from '@preact/signals'
 import { parse } from '@yaks/query'
-import { useBoardSub, useEntity } from '../../packages/web/components/subscriptions.ts'
+import {
+  useBoardSub,
+  useEntity,
+} from '../../packages/web/components/subscriptions.ts'
 import { useCommentsOn } from '../../packages/web/components/useQuery.ts'
 import { tuiKeys } from '../../packages/web/keybindings.ts'
 import { formatProp, propAt } from '../../packages/web/props.ts'
-import { type Ent, idOf, statusOf, verdictName } from '../../packages/web/types.ts'
+import {
+  type Ent,
+  idOf,
+  statusOf,
+  verdictName,
+} from '../../packages/web/types.ts'
 import {
   applyLocal,
   boardTasks,
@@ -43,7 +51,11 @@ import {
 } from '../../packages/web/commands.ts'
 import { sessionFrames, spawnPlan } from '../../packages/web/client.ts'
 import { inflate } from '../client_host.ts'
-import { applicable, type Renderer, resolve } from '../../packages/web/components/registry.ts'
+import {
+  applicable,
+  type Renderer,
+  resolve,
+} from '../../packages/web/components/registry.ts'
 import { Entity } from '../../packages/web/components/Entity.tsx'
 import { byline, viaName } from '../../packages/web/components/Comments.tsx'
 import { Dot } from '../../packages/web/components/Dot.tsx'
@@ -63,11 +75,21 @@ import {
   type CredStatus,
   type SettingRow,
 } from '../config_client.ts'
-import { catalog as settingCatalog, spec as settingSpec } from '../../packages/web/config.ts'
+import {
+  catalog as settingCatalog,
+  spec as settingSpec,
+} from '../../packages/web/config.ts'
 import { catalog } from '../../packages/web/providers.ts'
-import { liveBlocked, load, providers } from '../../packages/web/components/Run.tsx'
+import {
+  liveBlocked,
+  load,
+  providers,
+} from '../../packages/web/components/Run.tsx'
 import { useQuery } from '../../packages/web/components/useQuery.ts'
-import { navigationQuery, navigationView } from '../../packages/web/navigation.ts'
+import {
+  navigationQuery,
+  navigationView,
+} from '../../packages/web/navigation.ts'
 
 export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
@@ -442,7 +464,7 @@ let spawn = async (intent: string | SpawnIntent) => {
   )
 }
 
-let exec = async (line: string) => {
+let exec = (line: string) => {
   try {
     let r = run(line, ctx(), local)
     if (r.changes?.length) mutate(...r.changes)

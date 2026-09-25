@@ -14,13 +14,7 @@ import {
   kilo,
   type LogRow,
 } from '../../types.ts'
-import {
-  ent,
-  findEid,
-  mutate,
-  retryEntrySub,
-  uuid,
-} from '../../live.ts'
+import { ent, findEid, mutate, retryEntrySub, uuid } from '../../live.ts'
 import { contextOf, graphLog } from '../../entry_log.ts'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { linkProps } from '../nav.tsx'
@@ -34,15 +28,7 @@ import { useBacklinks, useCommentsOn, useReferences } from '../useQuery.ts'
 import { UrlVal } from '../editors.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
-import {
-  EntryBody,
-  EntryLens,
-  type EntryLine,
-  EntrySummary,
-  entryVisible,
-  mergeTools,
-  ToolSummary,
-} from './Entry.tsx'
+import { EntryBody, EntryLens, type EntryLine, EntrySummary, entryVisible, mergeTools } from './Entry.tsx'
 import { entityUrl } from '../../url.ts'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar
@@ -74,7 +60,6 @@ let Frame = block('div', 'Session', {
   Key: 'span',
   Val: 'span',
   Think: 'div',
-  Transient: 'div',
   Final: 'div',
   Fault: 'p',
   EntryState: 'p',
@@ -107,7 +92,6 @@ let {
   Key,
   Val,
   Think,
-  Transient,
   Final,
   Fault,
   EntryState,

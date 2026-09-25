@@ -1,17 +1,5 @@
 import './testing.ts'
-import {
-  awake,
-  cols,
-  comps,
-  deaths,
-  friendly,
-  nick,
-  type Session,
-  settled,
-  stamped,
-  standing,
-  statusOf,
-} from './types.ts'
+import { awake, cols, comps, deaths, friendly, nick, type Session, settled, stamped, standing, statusOf } from './types.ts'
 import { assertEquals } from '@std/assert'
 
 Deno.test('the current vocabulary carries no representation suffixes', () => {
@@ -20,6 +8,19 @@ Deno.test('the current vocabulary carries no representation suffixes', () => {
       assertEquals(prop.endsWith('_eid'), false, `${comp}.${prop}`)
     }
   }
+})
+
+// The death words come from the host's vocabulary, one per reference: a
+// delete guard reads the cascade set, so a word lost in learning is a delete
+// that says less than it will do.
+Deno.test('death words: each reference carries its plugin\'s word', () => {
+  let words = (w: Parameters<typeof deaths>[0]) =>
+    new Set(deaths(w).map(([c, p]) => `${c}.${p}`))
+  assertEquals(words('cascade').has('card.target'), true)
+  assertEquals(words('cascade').has('edge.from'), true)
+  assertEquals(words('detach').has('filed.project'), true)
+  assertEquals(words('release').has('claim.session'), true)
+  assertEquals(words('keep').has('mail.target'), true)
 })
 
 Deno.test('nick: the model word, vendor and versions dropped', () => {
@@ -98,12 +99,10 @@ Deno.test('settled: done or cancelled, nothing else', () => {
 let sess = (x: Partial<Session>): Session => ({ eid: 'e', id: 'i', ...x })
 
 Deno.test('awake: a status says it, else an open door does', () => {
-  assertEquals(awake(sess({ status: 'starting' })), true)
+  assertEquals(awake(sess({ status: 'pending' })), true)
   assertEquals(awake(sess({ status: 'running' })), true)
-  assertEquals(awake(sess({ status: 'stopping' })), true)
-  // An ending stamps finished_at in the same breath as the status
-  // (sessions.ts stamp()), so the two clauses never fight over a run.
-  assertEquals(awake(sess({ status: 'completed', finished_at: 'x' })), false)
+  assertEquals(awake(sess({ status: 'settled' })), false)
+  assertEquals(awake(sess({ status: 'stopped', finished_at: 'x' })), false)
   assertEquals(awake(sess({ pid: 9 })), true) // an operator at the keyboard
   assertEquals(awake(sess({ pid: 9, finished_at: 'x' })), false) // a ghost
   assertEquals(awake(sess({})), false) // no pid, no run: no door

@@ -1,13 +1,10 @@
 // Local inference must prove a complete physical set. Unknown projected sets
 // use batched, addressed one-shots, never the graph-wide descriptor catalogue.
 import './testing.ts'
-import { effect } from '@preact/signals'
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { eidOf } from '@yaks/archetype'
 import { archetypeTables, rememberArchetype } from './live_archetypes.ts'
-import { applyLocal, type Comps, config, landSub, useRoute } from './live.ts'
-
-let tick = () => new Promise((r) => setTimeout(r, 0))
+import { type Comps } from './live.ts'
 
 Deno.test('local table names prove the spine without reading component bodies', () => {
   let tables = ['doc', 'local_plugin', 'task'], id = eidOf(tables)

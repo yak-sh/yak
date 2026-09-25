@@ -37,7 +37,6 @@ import { highlight } from './highlight.ts'
 import { prefix } from './types.ts'
 import { entityPath, entityUrl } from './url.ts'
 
-
 export type Mention =
   | { kind: 'entity'; id: string }
   | { kind: 'link'; href: string }

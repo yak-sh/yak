@@ -5,8 +5,8 @@
 // for 25 minutes. This lives in the App bar and BREAKS that silence: while any
 // write is unsent it shows how many wait and how long the oldest has waited, and
 // a write the server REFUSED persists as a returnable error the user can read and
-// dismiss (M-16612) — durable under its delivery id, surfaced again after the
-// reload the drain path triggers, never ephemeral or opaque.
+// dismiss (M-16612) — durable under its delivery id, surfaced again after a
+// reload, never ephemeral or opaque.
 import { useEffect, useState } from 'preact/hooks'
 import { clearRefusal, outboxWrites, refused } from '../live.ts'
 import { block } from './ui.tsx'

@@ -1,12 +1,12 @@
 # Cold boot: keep the answer, stop fetching rows just to count them
 
-T-37407 follows the measurement procedure in `CLIENT_MIGRATION.md`.
-`COLD_BOOT_CDP.json` records the paired runs, including **every cold
-subscription's query, bytes, frames, distinct/member/peer IDs and exclusive
-IDs**. The shared `bin/cdp-wire.ts` collector is used by both
-`bin/probe-client.ts` and `bin/archetype-probe.ts`. It counts
-unaddressed/control bytes too, and never records row contents. Sub/group ID
-counts overlap and must not be summed; their byte totals are additive.
+T-37407 measured the fleet server's cold boot (the procedure is in git history,
+`docs/CLIENT_MIGRATION.md` before T-38048). `COLD_BOOT_CDP.json` records the
+paired runs, including **every cold subscription's query, bytes, frames,
+distinct/member/peer IDs and exclusive IDs**. The shared `bin/cdp-wire.ts`
+collector is used by both `bin/probe-client.ts` and `bin/archetype-probe.ts`. It
+counts unaddressed/control bytes too, and never records row contents. Sub/group
+ID counts overlap and must not be summed; their byte totals are additive.
 
 ## What were the extra IDs?
 

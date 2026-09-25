@@ -19,7 +19,9 @@ let host = () => {
     },
   }
   let say = (f: Frame) => {
-    for (let fn of heard) fn({ data: JSON.stringify(f) } as Event & { data: string })
+    for (let fn of heard) {
+      fn({ data: JSON.stringify(f) } as Event & { data: string })
+    }
   }
   return { socket, sent, say }
 }

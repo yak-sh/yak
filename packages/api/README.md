@@ -170,9 +170,9 @@ entities that were deleted or stopped matching. A refreshed query can return its
 whole current set. An aggregate query (`.count!`, `.distinct=prop`,
 `.tally=prop`) is answered with its value in the shape `/query` answers it,
 first when it opens and again after a commit that changes it; it carries no
-bundles. `subscribe: true` selects the committed-change feed, with no
-initial snapshot: each message contains the combined transaction changes, like
-the JSON `/apply` result.
+bundles. `subscribe: true` selects the committed-change feed, with no initial
+snapshot: each message contains the combined transaction changes, like the JSON
+`/apply` result.
 
 Initial query messages also contain `transientReset` IDs and may include
 `transient` snapshots or existing peer values. `transient` messages carry

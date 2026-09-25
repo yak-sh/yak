@@ -16,26 +16,7 @@ import {
   signal,
   untracked,
 } from '@preact/signals'
-import {
-  awake,
-  type Change,
-  checkPrefix,
-  comps,
-  type Dep,
-  type Ent,
-  type EntCore,
-  idOf,
-  type Live,
-  type Pinned,
-  type Session,
-  sessionOf,
-  settled,
-  shortParts,
-  slugsOf,
-  type Snapshot,
-  statusOf,
-  vocab,
-} from './types.ts'
+import { awake, type Change, checkPrefix, comps, type Dep, type Ent, type EntCore, idOf, type Pinned, type Session, sessionOf, settled, shortParts, slugsOf, type Snapshot, statusOf, vocab } from './types.ts'
 import { moves, typeOf } from './edge.ts'
 import { dotFields } from './tray_query.ts'
 import { isUnread, type Row } from './client.ts'
@@ -140,10 +121,8 @@ let makeClient = () =>
       if (replacing) return
       let changes = changesOf(f.bundles ?? [])
       // An aggregate answers whole, every time: a count under the empty key.
-      let agg = f.count != null
-        ? { '': f.count }
-        : f.tally ??
-          (f.distinct && Object.fromEntries(f.distinct.map((v) => [v, 1])))
+      let agg = f.count != null ? { '': f.count } : f.tally ??
+        (f.distinct && Object.fromEntries(f.distinct.map((v) => [v, 1])))
       batch(() => {
         for (let sub of subs) {
           landSubFrame({
@@ -1034,10 +1013,8 @@ export let crewed = (e: Ent) => {
   return !!s && awake(s)
 }
 
-// Which door boot took, plus a cache peek — exposed for eyes (a CDP probe,
-// the console) to verify properties invisible from the DOM (the reload win,
-// live-only columns that never touch IDB). Not load-bearing.
-let mark = (path: string) => ((globalThis as { __boot?: string }).__boot = path)
+// A cache peek, exposed for eyes (a CDP probe, the console) to verify what
+// the DOM does not show. Not load-bearing.
 ;(globalThis as { __peek?: (eid: string) => unknown }).__peek = (eid) =>
   paint.value[eid]
 
@@ -1308,8 +1285,8 @@ let syncOutbox = () => {
 
 // The refusal ledger (T-21441, M-16612): a write the server REJECTED (a moved
 // precondition, a lease it can't hold) is durable and returnable. The user saw
-// it land in the optimistic cache, and the drain path is about to reload the
-// page and wipe the in-memory `problem`; a refusal must not vanish with it. Each
+// it land in the optimistic cache, and a reload wipes the in-memory
+// `problem`; a refusal must not vanish with it. Each
 // is kept under the write's own delivery id — its stable identity — so it
 // survives the reload and surfaces again at boot for seven days unless the user
 // dismisses it. It names what failed (the batch), why (the server's reason), and
@@ -1368,9 +1345,8 @@ let summarize = (changes: Change[]): string => {
   return `${n}${names ? ` (${names})` : ''}${ids ? ` to ${ids}` : ''}`
 }
 
-// Record a refusal durably and surface it now. Both refusal arms funnel here —
-// the socket rejection frame and the pre-reload /apply drain — so every refused
-// write persists the same way, under the delivery id the transport already keys.
+// Record a refusal durably and surface it now, under the delivery id the
+// outbox already keys, so a refused write reads the same after a reload.
 export let refuse = (id: string, reason: string, changes: Change[] = []) => {
   refusalStore.record({
     id,
@@ -1386,8 +1362,7 @@ export let clearRefusal = (id: string) => {
   syncRefused()
 }
 // Surface at boot what a prior life left refused — the post-reload half of the
-// durability guarantee: a drain refusal wiped by the reload it triggered is read
-// straight back into view.
+// durability guarantee.
 export let loadRefusals = () => syncRefused()
 
 // The durable outbox's disk door (T-21440). The map above is lost on a tab
@@ -1515,31 +1490,6 @@ export let replayOutbox = async () => {
   }
 }
 
-// A reload discards this tab's memory — outbox included — so undelivered
-// writes must land through the durable door first. POST /apply carries the
-// same client attribution the socket handshake does; a duplicate of an
-// already-applied batch is the same harmless re-merge redelivery makes. A
-// REFUSED batch is dropped and surfaced (retrying a refusal changes nothing);
-// an unreachable server keeps the outbox and reports failure so the caller
-// holds the reload — losing a write silently is the one unacceptable outcome.
-let drain = async (): Promise<boolean> => {
-  for (let [id, o] of [...outbox]) {
-    try {
-      let res = await fetch(`${base()}/apply`, {
-        method: 'POST',
-        headers: config.client ? { 'x-via': config.client } : {},
-        body: JSON.stringify(o.changes),
-      })
-      if (!res.ok) refuse(id, await res.text(), o.changes) // durable: the reload
-      acked(id)
-    } catch {
-      return false
-    }
-  }
-  syncOutbox()
-  return true
-}
-
 // Land a local edit: cache first (instant render), then the acked wire.
 export let mutate = (...changes: Change[]) => {
   problem.value = ''
@@ -1548,7 +1498,6 @@ export let mutate = (...changes: Change[]) => {
   applyLocal(parsed)
   deliver(parsed)
 }
-
 
 type Catchup = { catchup: Change[]; cursor: number }
 type Reset = { reset?: boolean; snapshot: Snapshot; error?: string }
@@ -1740,7 +1689,6 @@ export let edgeWindow = (eid: string): Window | undefined => {
   tick(routeName(eid)).value
   return routeWindows.get(eid)
 }
-
 
 // What each PROJECTED sub declared it carries (D-22567 §3) — recorded from the
 // server's own statement on the reply, so the client believes the frame rather

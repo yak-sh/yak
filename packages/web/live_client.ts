@@ -167,9 +167,7 @@ export let liveClient = (opts: {
       : {
         id,
         reset: f.replace,
-        bundles: bundles(f.changes ?? [], !!f.replace).filter((b) =>
-          !dead(b)
-        ),
+        bundles: bundles(f.changes ?? [], !!f.replace).filter((b) => !dead(b)),
         gone: [
           ...f.drop ?? [],
           ...bundles(f.changes ?? []).filter(dead).map((b) => b.entity.eid),

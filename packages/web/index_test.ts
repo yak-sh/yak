@@ -70,6 +70,21 @@ Deno.test('reindexEdge indexes edge triples by both endpoints', () => {
   assertEquals(ix.byParent.get('a')?.length, 1)
 })
 
+Deno.test('anchor picks the reverse-index set for an eid-ref equality', () => {
+  let ix = emptyIndex()
+  indexAll(ix, {
+    w1: { wake: {}, deliver: { to: 's1' } },
+    w2: { wake: {}, deliver: { to: 's2' } },
+    w3: { wake: {}, deliver: { to: 's1' }, delivered: {} },
+  }, [])
+  // .deliver.to=s1 anchors on the reverse set {w1,w3}, smaller than byComp[wake]
+  let a = anchor(ix, parseQuery('.wake! .deliver.to=s1 .delivered='))
+  assertEquals(a, new Set(['w1', 'w3']))
+  // nothing points at s9, and no row carries mail: empty, never a whole scan
+  assertEquals(anchor(ix, parseQuery('.wake! .deliver.to=s9')), new Set())
+  assertEquals(anchor(ix, parseQuery('.mail!')), new Set())
+})
+
 Deno.test('anchor falls back to component presence, and to nothing', () => {
   let ix = emptyIndex()
   indexAll(ix, {

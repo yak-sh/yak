@@ -122,7 +122,6 @@
     "jsr": "deno run --allow-read --allow-net=api.jsr.io --allow-env=JSR_TOKEN bin/jsr.ts",
     "mcp": "deno run -A --unstable-worker-options src/mcp.ts",
     "seed": "deno run -A src/store/sqlite.ts",
-    "icons": "deno run -A bin/gen-icons.ts",
     "test": "deno run -A bin/suite-time.ts test deno task test:run",
     "test:all": "TASKS_SLOW=1 DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/scratch.ts deno run -A bin/test.ts",
     "test:budget": "deno run -A bin/test-budget.ts",
@@ -263,7 +262,6 @@
   "imports": {
     "@huggingface/transformers": "npm:@huggingface/transformers@^3",
     "es-module-lexer": "npm:es-module-lexer@1.7.0",
-    "lucide-preact": "npm:lucide-preact@^1.31.0",
     "lucide": "npm:lucide@1.31.0",
     "preact": "npm:preact@^10.29.1",
     "@preact/signals": "npm:@preact/signals@^2.9.0",
