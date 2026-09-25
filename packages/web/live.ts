@@ -3091,6 +3091,22 @@ export let rootCanvas = () => {
     ?.[0]
 }
 
+// A fresh graph holds no canvas, so `/` would name nothing and the first page
+// a person opens would be a 404 (T-39749). `homeless` is the graph having
+// answered that it holds none — a loading or failed canvas query says nothing
+// about the graph — and `makeHome` then makes the first. Once per tab: the new
+// canvas reaches the server's answer a moment after the local write, and a
+// second mint meanwhile would leave two.
+export let homeless = () =>
+  !rootCanvas() &&
+  querySubscription([has('canvas')])?.state.status == 'ready'
+let homeMade = false
+export let makeHome = () => {
+  if (homeMade || !homeless()) return
+  homeMade = true
+  mutate({ eid: uuid(), name: 'canvas', comp: {} })
+}
+
 // The canvas working set: the carded pins on ONE canvas, scoped to it through
 // the query door so opening a canvas reads its own contents rather than
 // trusting the whole cache (T-18103) — under a partial cache a pin outside the

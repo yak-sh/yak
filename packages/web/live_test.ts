@@ -32,11 +32,13 @@ import {
   holdCommentCount,
   holdLocal,
   holdQuery,
+  homeless,
   hostFrom,
   inbox,
   jobOf,
   landSub,
   loaded,
+  makeHome,
   myCamera,
   myCursor,
   myMode,
@@ -52,6 +54,7 @@ import {
   resetSignals,
   resolveGen,
   resolvingId,
+  rootCanvas,
   routeSub,
   ROW,
   row,
@@ -2893,5 +2896,45 @@ Deno.test('boot paints the first answer while the durable outbox never answers',
     off()
     useOutboxStore(restoreStore)
     wire.free()
+  }
+})
+
+// A fresh graph has no canvas for `/` to name (T-39749). Until the server has
+// answered, nothing is made: a graph still loading may hold one. Once it says
+// there is none, the page makes the first, `/` names it, and asking again
+// makes nothing more.
+Deno.test('a graph that answers it has no canvas gets its first', async () => {
+  let prior = config.host
+  let made: Change[] = []
+  let restore = useRoute((frame) => {
+    made.push(...(frame as { apply?: Change[] }).apply ?? [])
+  })
+  config.host = 'browser.test'
+  cache.value = {}
+  resetSignals()
+  let wire = host((a) =>
+    a.subscribe.startsWith('.canvas') ? { bundles: [] } : undefined
+  )
+  let canvases = () => made.filter((c) => c.name == 'canvas').length
+  try {
+    assertEquals(homeless(), false)
+    makeHome()
+    assertEquals(canvases(), 0)
+    await until(() => homeless())
+    makeHome()
+    makeHome()
+    assertEquals(canvases(), 1)
+    // The server takes the write, and its answer names the new canvas.
+    let eid = made.find((c) => c.name == 'canvas')!.eid
+    let ask = wire.asked().find((a) => a.subscribe.startsWith('.canvas'))!
+    await wire.say({ id: ask.id, bundles: [{ entity: { eid }, canvas: {} }] })
+    assertEquals(rootCanvas(), eid)
+    assertEquals(homeless(), false)
+  } finally {
+    wire.free()
+    useRoute(restore)
+    config.host = prior
+    cache.value = {}
+    resetSignals()
   }
 })

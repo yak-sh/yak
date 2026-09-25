@@ -1,7 +1,15 @@
 import { entityPath } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
-import { ent, mode, routeSub, row, serverName } from '../live.ts'
+import {
+  ent,
+  homeless,
+  makeHome,
+  mode,
+  routeSub,
+  row,
+  serverName,
+} from '../live.ts'
 import { Admin } from './Admin.tsx'
 import { block, Chip, el } from './ui.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
@@ -146,6 +154,10 @@ export let App = () => {
     ? undefined
     : screenTarget()?.eid
   useLayoutEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
+  // `/` on a graph that has answered it holds no canvas makes the first, so a
+  // new graph opens on a canvas rather than a 404 (live.ts `makeHome`).
+  let bare = new URL(route.value, 'http://x').pathname == '/' && homeless()
+  useEffect(() => bare ? makeHome() : undefined, [bare])
   let goto = (t: string) => navigate(entityPath(idOf(ent(t))))
 
   // The census rides beside the canvas: /admin* swaps the body wholesale;
