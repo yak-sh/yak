@@ -113,6 +113,14 @@
         "each": {
           "type": "boolean",
           "description": "each person who uses the app connects their own, and only the person who owns the connection calls out through it: set on the app's ask, the needed connection its space holds, and on the link to every person's own"
+        },
+        "binding": {
+          "type": "string",
+          "description": "the name the app's code reads it by, env.NAME in a worker: the sentinel for its credential, or the credential itself where the link is direct"
+        },
+        "direct": {
+          "type": "boolean",
+          "description": "the app's code is handed the credential itself rather than a sentinel, for a key it must transform before sending (a signature, Basic auth); only a pasted key may be"
         }
       },
       "description": "the relation on a link: this app calls out through that connection"
@@ -151,6 +159,14 @@
         "each": {
           "type": "boolean",
           "description": "each person who uses the app connects their own account, rather than the owner connecting one for everyone. The host draws the Connect button for them, each person's connection shows in their own dashboard, and only they call out through it"
+        },
+        "binding": {
+          "type": "string",
+          "description": "the name the app's code reads it by (env.NAME); omit for the integration's name in capitals"
+        },
+        "direct": {
+          "type": "boolean",
+          "description": "hand the app's code the key itself rather than a sentinel, for a key it must sign with; only for a pasted key"
         }
       },
       "required": ["app", "owner", "integration"],

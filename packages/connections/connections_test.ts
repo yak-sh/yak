@@ -27,6 +27,7 @@ import {
   credential,
   type Ctx,
   disconnect,
+  envOf,
   type Integration,
   integrationEid,
   list,
@@ -306,7 +307,10 @@ slow(
     let { g, vault, c, needs } = await setup()
     let asks = await needs({ integration: 'texts', each: true })
     assertEquals(await needs({ integration: 'texts', each: true }), asks)
-    assertEquals(of((await g.read('.uses'))[0], 'uses'), { each: true })
+    assertEquals(of((await g.read('.uses'))[0], 'uses'), {
+      binding: 'TEXTS',
+      each: true,
+    })
     let own = async (who: string) => {
       let eid = await needs({ owner: who, integration: 'texts', each: true })
       await connect(c, eid, { key: `${who}-key` })
@@ -331,6 +335,54 @@ slow(
     await disconnect(c, ann)
     assertEquals(await handed('ann'), undefined)
     assertEquals((await list(g.read, 'ann')).length, 0)
+  },
+)
+
+slow(
+  'envOf: what the app reads, by name: a sentinel, or the key itself where the link is direct',
+  async () => {
+    let { g, vault, c, needs } = await setup()
+    let texts = await needs({ integration: 'texts' })
+    let sky = await needs({
+      integration: 'weather',
+      hosts: ['api.weather.example'],
+      binding: 'SKY',
+      direct: true,
+    })
+    assertEquals(await envOf(c, 'app'), {})
+    await connect(c, texts, { key: 'sk-texts' })
+    await connect(c, sky, { key: 'sk-sky' })
+    let name = String(of(await at(g, texts), 'secret').name)
+    assertEquals(await envOf(c, 'app'), {
+      TEXTS: (await sentinelOf(vault, name))!,
+      SKY: 'sk-sky',
+    })
+    for (
+      let asked of [
+        { integration: 'calendar', direct: true },
+        { integration: 'texts', binding: '1X' },
+        { integration: 'texts', each: true, direct: true },
+      ]
+    ) {
+      await assertRejects(() =>
+        need(g.read, { owner: 'space', app: 'other', ...asked }, BUILT)
+      )
+    }
+    // Renamed where it is asked for again, and kept across a disconnect.
+    await g.apply(
+      await need(g.read, {
+        owner: 'space',
+        app: 'app',
+        integration: 'texts',
+        binding: 'SMS',
+      }, BUILT),
+    )
+    await disconnect(c, sky)
+    let named = (await g.read('.uses&*')).map((l) => of(l, 'uses'))
+    assertEquals(
+      named.sort((a, b) => String(a.binding).localeCompare(String(b.binding))),
+      [{ binding: 'SKY', direct: true }, { binding: 'SMS' }],
+    )
   },
 )
 

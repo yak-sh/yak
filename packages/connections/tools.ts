@@ -28,6 +28,8 @@ export let runs = (): Runs => ({
       scopes: strs(args.scopes),
       hosts: strs(args.hosts),
       each: args.each == true,
+      binding: args.binding == null ? undefined : str(args.binding),
+      direct: args.direct == null ? undefined : args.direct == true,
     })
   },
 

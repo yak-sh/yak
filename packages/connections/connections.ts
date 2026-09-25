@@ -87,6 +87,11 @@ export type Need = {
   hosts?: string[]
   /** each person connects their own, and only they call out through it */
   each?: boolean
+  /** the name the app's code reads it by (default: the integration's name in
+   * capitals) */
+  binding?: string
+  /** hand the app's code the key itself rather than a sentinel */
+  direct?: boolean
 }
 
 /** What the acting verbs work with. */
@@ -189,6 +194,30 @@ export let using = async (
 let same = (a: string[], b: string[]) =>
   [...a].sort().join('\n') == [...b].sort().join('\n')
 
+// A binding is a name in the app's own code, so it must be one.
+let NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
+
+/** The name an app reads an integration's connection by when it names none:
+ * `google-calendar` is `GOOGLE_CALENDAR`. */
+export let bindingOf = (integration: string): string =>
+  integration.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^(?=\d)/, '_')
+    .slice(0, 64)
+
+// The link from an app, saying what its code reads the connection by, and
+// whether each person connects their own.
+let linked = (
+  app: Eid,
+  to: Eid,
+  u: { binding: string; direct: boolean; each?: boolean },
+): Bundle => ({
+  ...link(app, USES, to),
+  [USES]: {
+    binding: u.binding,
+    ...u.direct ? { direct: true } : {},
+    ...u.each ? { each: true } : {},
+  },
+})
+
 /** Make a connection needing a credential, linked from the app that needs it,
  * with the custom integration a key for an unbuilt service needs. An app that
  * already uses a connection through that integration is answered with it:
@@ -215,8 +244,33 @@ export let need = async (
   if (i && hosts.length && !same(i.hosts, hosts)) {
     throw new Error(`${name} already sends its key to ${i.hosts.join(', ')}`)
   }
+  let binding = a.binding ?? bindingOf(name)
+  if (!NAME.test(binding)) {
+    throw new Error(
+      `${binding} is not a name code can read: letters, digits and ` +
+        `underscores, not starting with a digit`,
+    )
+  }
+  if (a.direct && i && !keyed(i)) {
+    throw new Error(
+      `${name} is connected by signing in, and only a pasted key is handed ` +
+        `to an app directly`,
+    )
+  }
+  if (a.direct && a.each) {
+    throw new Error(
+      `a key each person connects is theirs, and is never handed to the app`,
+    )
+  }
+  let u = { binding, direct: !!a.direct, each: a.each }
   let used = a.app ? await using(read, { ...a, app: a.app }) : undefined
-  if (used) return [{ entity: { eid: used.entity.eid } }]
+  if (used) {
+    let said = a.binding != null || a.direct != null
+    return [
+      { entity: { eid: used.entity.eid } },
+      ...said ? [linked(a.app!, used.entity.eid, u)] : [],
+    ]
+  }
   let made = fresh(a.owner, name, a.scopes ?? [])
   return [
     made,
@@ -224,12 +278,7 @@ export let need = async (
       entity: { eid: integrationEid(name) },
       [INTEGRATION]: { name, hosts },
     }],
-    ...a.app
-      ? [{
-        ...link(a.app, USES, made.entity.eid),
-        ...a.each ? { [USES]: { each: true } } : {},
-      }]
-      : [],
+    ...a.app ? [linked(a.app, made.entity.eid, u)] : [],
   ]
 }
 
@@ -271,6 +320,26 @@ export let used = async (
     (!comp(r.link, USES).each ||
       comp(r.connection, CONNECTION).owner == person)
   )
+}
+
+/** What an app's code is handed for each connected connection it uses, for a
+ * person or for nobody in particular, by the name it reads it by: the sentinel
+ * for its credential, or the credential itself where the link is direct. */
+export let envOf = async (
+  c: Ctx,
+  app: Eid,
+  person: Eid | null = null,
+): Promise<Record<string, string>> => {
+  let out: Record<string, string> = {}
+  for (let r of await used(c, app, person)) {
+    let u = comp(r.link, USES)
+    if (typeof u.binding != 'string') continue
+    let value = u.direct
+      ? await credential(c, r.connection.entity.eid)
+      : r.sentinel
+    if (value) out[u.binding] = value
+  }
+  return out
 }
 
 /** The connection an app calls out through for an integration, for a person
@@ -366,17 +435,24 @@ export let disconnect = async (
   connection: Eid,
 ): Promise<Bundle[]> => {
   let b = await held(c.graph.read, connection)
-  let apps = (await links(c.graph.read, 'to', connection))
+  let was = (await links(c.graph.read, 'to', connection))
     .filter((l) => !comp(l, USES).each)
-    .map((l) => far(l, 'to'))
   let { integration, owner, scopes } = comp(b, CONNECTION)
-  let again = apps.length
+  let again = was.length
     ? fresh(String(owner), String(integration), strs(scopes))
     : undefined
+  // Each app is linked to the new one as it was to the old: by the same name,
+  // as directly, and as open.
   return c.graph.apply([
     { entity: { eid: connection }, tombstone: {} },
     ...again
-      ? [again, ...apps.map((app) => link(app, USES, again.entity.eid))]
+      ? [
+        again,
+        ...was.map((l) => ({
+          ...link(far(l, 'to'), USES, again.entity.eid),
+          [USES]: comp(l, USES),
+        })),
+      ]
       : [],
   ])
 }

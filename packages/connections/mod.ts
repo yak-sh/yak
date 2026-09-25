@@ -30,9 +30,9 @@
  * through it.
  *
  * The verbs: {@link need}, {@link list} (the two tools), {@link using},
- * {@link begin} and {@link connect}, {@link disconnect}, {@link resolve} and
- * {@link used},
- * {@link credential}, {@link refresh}. A host that composes this package
+ * {@link begin} and {@link connect}, {@link disconnect}, {@link resolve},
+ * {@link used} and {@link envOf}, {@link credential}, {@link refresh}. A host
+ * that composes this package
  * composes @yaks/secrets, over its vault, and @yaks/edge beside it; the egress
  * that swaps sentinels is @yaks/egress.
  *
@@ -51,11 +51,13 @@ export {
 } from './integrations.ts'
 export {
   begin,
+  bindingOf,
   connect,
   CONNECTION,
   credential,
   type Ctx,
   disconnect,
+  envOf,
   type Given,
   list,
   type Need,
