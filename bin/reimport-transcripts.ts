@@ -17,9 +17,10 @@
 // reads a transcript into a session while it is being emptied. Start it, then
 // restart the server; it takes the lease the old server gives back, the new
 // one waits for it, and reads every transcript in once it is free. The deletes
-// go in small batches, so every other writer waits well under its busy
-// timeout. `--import` runs the duty's looks here instead, once the lease is
-// let go, which is how a copy proves the whole change.
+// go in small batches with the lock left free between them, so every other
+// writer waits well under its busy timeout. `--import` runs the duty's looks
+// here instead, once the lease is let go, which is how a copy proves the whole
+// change.
 //
 //   deno run -A bin/reimport-transcripts.ts <config> [--write] [--import]
 
@@ -97,14 +98,22 @@ let migrate = async () => {
     }
     console.log('beyond the entries, a delete touches', touched)
   } else {
-    for (let i = 0; i < doomed.length; i += BATCH) {
+    // Every transaction begins immediate, reads included, and SQLite's busy
+    // handler is not a queue: a writer that takes the lock again the moment
+    // it lets go starves everyone else past their busy timeout, and a loop
+    // that never waits on a timer starves its own lease renewals too. So a
+    // batch halves while it holds the lock past half a second (an entry with
+    // many edges cascades slowly), and the lock sits free as long as it was
+    // held.
+    let size = BATCH
+    for (let i = 0; i < doomed.length;) {
       let t = performance.now()
-      await g.apply(deletes(doomed.slice(i, i + BATCH)))
-      console.log(
-        `${Math.min(i + BATCH, doomed.length)} of ${doomed.length}: ${
-          Math.round(performance.now() - t)
-        }ms`,
-      )
+      await g.apply(deletes(doomed.slice(i, i + size)))
+      i += size
+      let ms = Math.round(performance.now() - t)
+      console.log(`${Math.min(i, doomed.length)} of ${doomed.length}: ${ms}ms`)
+      size = ms > 500 ? Math.max(1, size >> 1) : Math.min(BATCH, size * 2)
+      await new Promise((go) => setTimeout(go, ms))
     }
   }
 }
