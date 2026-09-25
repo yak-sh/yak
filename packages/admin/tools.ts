@@ -8,6 +8,7 @@
 //   yak admin tool app_list        any connector tool, as that account
 //   yak admin query jeff/recipes .doc    an app's store, through the filter grammar
 //   yak admin client google <id> <secret> --admin   keep an OAuth client, from 1Password
+//   yak admin tunnel ada           the machine a space is linked to
 //
 // The one rule these verbs are shaped around: A TEST ACCOUNT IS THE DEFAULT AND
 // EVERY OTHER ACCOUNT IS A NAMED ACT. No chain of defaults arrives at one —
@@ -66,6 +67,8 @@ import {
   feeNow,
   keepClient,
   linkFor,
+  linkNow,
+  relink,
   renewing,
   rpc,
   saidBy,
@@ -81,6 +84,10 @@ import { errors, OBSERVABILITY, tail } from './logs.ts'
 import { revert } from './revert.ts'
 
 type Args = Record<string, unknown>
+
+// The vault name a linked machine's tunnel token is kept under, which the
+// box's config names for @yaks/tunnel's service.
+let TUNNEL_TOKEN = 'TUNNEL_TOKEN'
 
 let word = (a: Args, name: string): string | undefined =>
   typeof a[name] == 'string' ? a[name] as string : undefined
@@ -368,6 +375,39 @@ export let runs = (host: { vault: Local; state: string }): Runs => {
         ? await feeNow(at.session)
         : await setFee(at.session, Number(bps))
       return [said(call, `${now.bps} bps — ${now.rate} of each sale`)]
+    }),
+
+    // The machine a space is linked to (workers/yak/tunnel.ts). A token the
+    // platform answers goes straight into this graph's vault, where
+    // @yaks/tunnel's service reads it, and is never printed: whoever holds it
+    // can run the tunnel.
+    admin_tunnel: verb(async (call, vault, keep) => {
+      let a = argsOf(call)
+      let space = String(a.space)
+      let act = word(a, 'act')
+      let at = acting(vault, a, keep, host.state)
+      let fields: Record<string, string> = { space, do: act ?? '' }
+      for (let k of ['port', 'tunnel', 'service']) {
+        let v = word(a, k)
+        if (v) fields[k] = v
+      }
+      let got = act
+        ? await relink(at.session, fields)
+        : await linkNow(at.session, space)
+      if (got.token) keep.push(sealed(TUNNEL_TOKEN, got.token))
+      let t = got.tunnel
+      return [
+        said(call, [
+          t
+            ? `${got.space}  tunnel ${t.id}  service ${t.service}${
+              t.adopted ? '  (adopted)' : ''
+            }`
+            : `${got.space}  no machine linked`,
+          ...got.token
+            ? [`token     kept in the vault as ${TUNNEL_TOKEN}`]
+            : [],
+        ]),
+      ]
     }),
 
     // The naming first, and it is the page's own (workers/yak/erase.ts):

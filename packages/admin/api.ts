@@ -186,6 +186,26 @@ export let feeNow = (session: string): Promise<Fee> =>
 export let setFee = (session: string, bps: number): Promise<Fee> =>
   said(posted(apex(FEE), { bps: String(bps) }, session))
 
+/** The machine a space is linked to (workers/yak/tunnel.ts), and, answered
+ * once by a connect or a rotate, the token its `cloudflared` runs with. */
+export type Linked = {
+  space: string
+  tunnel: { id: string; service: string; adopted: boolean } | null
+  token?: string
+}
+
+export let TUNNEL = '/api/tunnel'
+
+/** The link as it stands; the space's owner or the platform's may ask. */
+export let linkNow = (session: string, space: string): Promise<Linked> =>
+  said(sent(apex(`${TUNNEL}?space=${encodeURIComponent(space)}`), session))
+
+/** A change to it: `do` is connect, rotate, disconnect or adopt. */
+export let relink = (
+  session: string,
+  fields: Record<string, string>,
+): Promise<Linked> => said(posted(apex(TUNNEL), fields, session))
+
 // The doors answer JSON both ways: a refusal says why in the same shape every
 // other door here refuses in (identity.ts `unauthorized`). The path is read
 // back off the answer, so a new door's failure names itself.

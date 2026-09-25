@@ -138,6 +138,42 @@
       "options": { "positional": ["bps"] },
       "openWorld": true
     },
+    "admin_tunnel": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "tunnel",
+      "title": "Link a machine to a space",
+      "description": "The machine a space is linked to, whose one service the space's apps reach through a vpc_services binding. With no act, what the link is. connect makes a tunnel and its service to the port given, rotate gives the tunnel a new token, and either keeps the token in this graph's vault as TUNNEL_TOKEN without printing it, where @yaks/tunnel's service reads it. disconnect removes the link. adopt records a tunnel and service made elsewhere, and is the platform's act.\n\n  yak admin tunnel yak --admin\n  yak admin tunnel yak adopt --tunnel <id> --service <id> --admin\n  yak admin tunnel ada connect --port 5173",
+      "input": {
+        "space": { "type": "string", "description": "the space’s slug" },
+        "act": {
+          "type": "string",
+          "enum": ["connect", "rotate", "disconnect", "adopt"],
+          "description": "what to change; nothing reads the link"
+        },
+        "port": {
+          "type": "string",
+          "description": "connect: the port the machine serves on"
+        },
+        "tunnel": {
+          "type": "string",
+          "description": "adopt: the tunnel’s id"
+        },
+        "service": {
+          "type": "string",
+          "description": "adopt: the VPC Service’s id"
+        },
+        "as": { "type": "string", "description": "act as this account" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "required": ["space"],
+      "options": { "positional": ["space", "act"] },
+      "openWorld": true
+    },
     "admin_delete": {
       "tool": true,
       "noun": "admin",
