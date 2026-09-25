@@ -266,7 +266,7 @@ Deno.test('a property says its type, and a JSON value waits a release', async ()
     assert(applied.some((b) => by(b) == ADA))
 
     // An answer carries the components the line names and no more, so the doc
-    // is asked for beside the recipe (the `#wanted` projection).
+    // is asked for beside the recipe (@yaks/graph `wanted`).
     let read = await (await get(
       store,
       `/query?q=${encodeURIComponent('.recipe!&.doc?')}`,

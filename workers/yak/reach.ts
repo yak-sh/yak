@@ -136,7 +136,7 @@ let limitOf = (line: string) =>
 
 // Does this line ask for every component? `*` is a directive in the grammar
 // (@yaks/query, T-34070), not a word a door cuts out of the line, so this asks
-// the parser rather than the text — the same question graph.ts `#wanted` asks.
+// the parser rather than the text — the same question @yaks/graph `wanted` asks.
 // A line this door was handed in pieces need not parse; one that does not asks
 // for nothing wider than what it named.
 let every = (line: string) => {
@@ -199,7 +199,7 @@ let orderedBy = (
 }
 
 // A component off a merged bundle the caller's own line would not carry: one
-// it did not name when it named any (graph.ts `#wanted`), or a stamp it did
+// it did not name when it named any (@yaks/graph `wanted`), or a stamp it did
 // not name at all (listing.ts `listed`).
 let unasked = (comp: string, want: Set<string> | null, line: string) => {
   let kept = (want ? want.has(comp) : true) &&
@@ -604,7 +604,7 @@ export let read = async (
   // count an entity that lives in two of them twice.
   if (agg == 'count') return { count: eids.length }
   // The bundle is read from the stores that speak a word the line named, and
-  // carries those components — the store's own rule (graph.ts `#wanted`),
+  // carries those components — the store's own rule (@yaks/graph `wanted`),
   // applied here because the composing read addresses the eids and names no
   // component. A part this door cannot confirm is a component (an unqualified
   // prop, a reference path) asks for the whole bundle rather than guess. `*` is

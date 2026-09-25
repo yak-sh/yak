@@ -411,9 +411,6 @@ async (req) => {
   throw new Denied(String(who.by), held, 'viewer', 'read')
 }
 
-// The spine's own name.
-let SPINE = 'entity'
-
 // The two pieces of the wider platform grammar an app's store refuses by name
 // rather than answering some other way (public/docs/querying.md, where both
 // are written down as this store's own limits). A work lane is the fleet's
@@ -1955,53 +1952,6 @@ export class Store {
     })
   }
 
-  // What a listing carries, beside what it selects (Jeff, 2026-09-03): "we
-  // should query for the exact components we want: `.book!&.recipe?` = must be
-  // book, recipe is optional but requested. asking for all comps is i imagine
-  // most useful for debugging". So an answer carries the components the filter
-  // names — by presence (`.book!`), by request (`.loan?`), or by a predicate of
-  // its own — and nothing else. A filter that names none (an `id=` fetch, a
-  // bare search term) left nothing out and answers the whole bundle, which is
-  // also the only useful answer to someone who does not yet know what they
-  // found; `*` is the debugging form that asks for everything by name.
-  //
-  // A component asserted absent (`.archived=`) names no component the answer
-  // could carry, which is also what keeps the door's own platform screens
-  // (listing.ts `asking`) from reading as requests.
-  #wanted(line: string): Set<string> | null {
-    let clauses = parse(line).clauses
-    // `*` is the grammar's widest projection (@yaks/query), so every door that
-    // parses the line reads it the same way and none has to strip it first.
-    if (clauses.some((c) => c.kind == 'every')) return null
-    let want = new Set<string>()
-    for (let c of clauses) {
-      if (c.kind != 'pred' || !c.path.length) continue
-      // Absence is not a request: `.archived=` names no component the answer
-      // could carry, which is also what keeps the door's own platform screens
-      // (listing.ts `asking`) from reading as one.
-      let absent = c.op == '=' &&
-        (c.value == null || (c.value.kind == 'scalar' && !c.value.raw))
-      if (absent) continue
-      try {
-        let comp = this.#vocab.aim(c.path.join('.'), c.op == '!')[0]?.comp
-        if (comp && comp != SPINE) want.add(comp)
-      } catch { /* a word this store never planted asks for nothing */ }
-    }
-    return want.size ? want : null
-  }
-
-  // The rows, cut to what was asked for. The spine and the `kind` name a row,
-  // and a text query's `rank` is the answer's own word about it, so those three
-  // ride whatever the filter said.
-  #only = (rows: Bundle[], want: Set<string> | null): Bundle[] =>
-    !want ? rows : rows.map((r) =>
-      Object.fromEntries(
-        Object.entries(r).filter(([k]) =>
-          k == SPINE || k == 'kind' || k == 'rank' || want.has(k)
-        ),
-      ) as Bundle
-    )
-
   // The read door's half of `#teaching`: `unknown prop: .recipe` is true and
   // useless on its own, so the store that holds the vocabulary adds where a
   // word of your own comes from. The directory says nothing of the kind — its
@@ -2070,23 +2020,19 @@ export class Store {
     if (!answer.ok) return this.#taught(answer)
     let rows = await answer.json()
     if (!Array.isArray(rows)) return Response.json(rows)
-    let cut = this.#only(
-      this.#ranked(rows as Bundle[], line),
-      this.#wanted(line),
-    )
-    return Response.json(await this.#speak(cut.map(this.#kind)))
+    // The rows already carry what the line names (@yaks/graph `wanted`).
+    let ranked = this.#ranked(rows as Bundle[], line)
+    return Response.json(await this.#speak(ranked.map(this.#kind)))
   }
 
   // The same word on a subscription's frames, because a subscription is that
   // query still answering: a page that swaps `query()` for `subscribe()` must
-  // get the same rows (public/client.js). The sink a socket hands in is wrapped
-  // once per sink, since `close` and `drop` find a subscription by the sink it
-  // was opened with.
+  // get the same rows (public/client.js); @yaks/api already cuts each frame to
+  // what its query names. The sink a socket hands in is wrapped once per sink,
+  // since `close` and `drop` find a subscription by the sink it was opened
+  // with.
   #naming(subs: Subs): Subs {
     let wrapped = new Map<Sink, Sink>()
-    // What each subscription on that sink asked for, by its id, so a frame is
-    // cut to the same components `/query` answers with.
-    let wants = new Map<Sink, Map<string, Set<string> | null>>()
     let by = (sink: Sink): Sink => {
       let held = wrapped.get(sink)
       if (!held) {
@@ -2094,9 +2040,8 @@ export class Store {
           sink,
           held = (f) => {
             if (!f.bundles) return sink(f)
-            let want = wants.get(sink)?.get(String(f.id)) ?? null
             then(
-              this.#speak(this.#only(f.bundles, want).map(this.#kind)),
+              this.#speak(f.bundles.map(this.#kind)),
               (bundles) => sink({ ...f, bundles }),
             )
           },
@@ -2105,25 +2050,12 @@ export class Store {
       return held
     }
     return {
-      open: (sink, id, query) => {
-        let mine = wants.get(sink) ?? new Map()
-        wants.set(sink, mine)
-        // `true` is a subscription to everything, which names no component and
-        // so cuts nothing.
-        mine.set(String(id), query === true ? null : this.#wanted(query))
-        return subs.open(by(sink), id, query)
-      },
-      close: (sink, id) => {
-        wants.get(sink)?.delete(String(id))
-        return subs.close(by(sink), id)
-      },
-      drop: (sink) => {
-        wants.delete(sink)
-        return subs.drop(by(sink))
-      },
+      open: (sink, id, query) => subs.open(by(sink), id, query),
+      close: (sink, id) => subs.close(by(sink), id),
+      drop: (sink) => subs.drop(by(sink)),
       commit: subs.commit,
       // A relay carries no membership news and no stored rows, so there is
-      // nothing here to rename or cut — only the sink to translate.
+      // nothing here to rename — only the sink to translate.
       relay: (sink, bundles) => subs.relay(by(sink), bundles),
       relaying: (sink) => subs.relaying(by(sink)),
       relayed: (sink, keys) => subs.relayed(by(sink), keys),
