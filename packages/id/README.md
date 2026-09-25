@@ -56,7 +56,7 @@ let v = loadVocab([catalog], [idKeywords])
 let id = idOf(v)
 
 id({ eid: mint(), kind: 'book', num: 7 }) // 'B-7'
-id({ eid: 'a3f19c02-4b00-4000-8000-000000000001', kind: 'book' }) // 'B#a3f19c024b'
+id({ eid: 'a3f19c02-4b00-4000-8000-000000000001', kind: 'book' }) // '#a3f19c024b'
 parse('B-7') // { prefix: 'B', num: 7 }
 parse('7') // { prefix: '', num: 7 }
 ```
@@ -66,15 +66,13 @@ the same book. `parse()` normalizes a prefix to uppercase. Resolvers may
 validate that a supplied prefix matches one of the entity's component kinds, so
 a wrong prefix is not necessarily accepted. A component that declares no prefix
 uses its own initial, so every entity has an id to show. An entity the store has
-not numbered yet gets a short handle instead: the component's prefix letter,
-`#`, and the first 10 hex characters of the eid with its dashes removed. The `#`
-is what keeps an all-digit eid fragment from being read as a number. Resolvers
-accept `#` fragments with or without the prefix letter (at least 6 hex
-characters), reject ambiguous ones, and check a supplied prefix letter after
-resolving the fragment. Full UUIDs remain valid input. Web links encode the `#`
-as `%23`, since a literal `#` starts a browser fragment rather than a path.
-Quote a bare `#` handle in a shell (`task show '#3f9a1c2e7b'`), where an
-unquoted leading `#` starts a comment.
+not numbered yet gets a short handle instead: `#` and the first 10 hex
+characters of the eid with its dashes removed, with no letter. The `#` is what
+keeps an all-digit eid fragment from being read as a number. Resolvers accept a
+`#` fragment of at least 6 hex characters and reject an ambiguous one. Full
+UUIDs remain valid input. Web links encode the `#` as `%23`, since a literal `#`
+starts a browser fragment rather than a path. Quote a bare `#` handle in a shell
+(`task show '#3f9a1c2e7b'`), where an unquoted leading `#` starts a comment.
 
 A **bundle** is one entity's components as a JSON object, with its identifier
 under `entity.eid`. `human(v)` formats the ID from that object.
@@ -126,19 +124,19 @@ among the plugins loads `idDoc` and installs `ids`.
 
 ## Exports
 
-| export                         | is                                                                 |
-| ------------------------------ | ------------------------------------------------------------------ |
-| `idKeywords`, `ID_URI`         | the `prefix` keyword vocabulary, ready to register                 |
-| `short(eid, prefix?)`, `SHORT` | the 10-hex `#` handle, and the pattern that matches one            |
-| `prefixes(v)`                  | every declared prefix: component name → letter                     |
-| `prefixOf(v)`                  | the letter a component's ids have (declared, or its initial)       |
-| `format(prefix, num)`          | `'B-7'`                                                            |
-| `parse(id)`                    | `'B-7'` → `{ prefix: 'B', num: 7 }`; `undefined` if it is no id    |
-| `idOf(v)`                      | an entity → its display ID                                         |
-| `human(v)`                     | a bundle (`{entity: {eid, num?}, ...components}`) → its display ID |
-| `idDoc`                        | `entity{num}`, the property a number is kept in                    |
-| `numbers(allocate)`            | the `$num` allocator, from `@yaks/id/rules`                        |
-| `ids(v)`                       | human id → eid, from `@yaks/id/rules`                              |
+| export                 | is                                                                 |
+| ---------------------- | ------------------------------------------------------------------ |
+| `idKeywords`, `ID_URI` | the `prefix` keyword vocabulary, ready to register                 |
+| `short(eid)`, `SHORT`  | the 10-hex `#` handle, and the pattern that matches one            |
+| `prefixes(v)`          | every declared prefix: component name → letter                     |
+| `prefixOf(v)`          | the letter a component's ids have (declared, or its initial)       |
+| `format(prefix, num)`  | `'B-7'`                                                            |
+| `parse(id)`            | `'B-7'` → `{ prefix: 'B', num: 7 }`; `undefined` if it is no id    |
+| `idOf(v)`              | an entity → its display ID                                         |
+| `human(v)`             | a bundle (`{entity: {eid, num?}, ...components}`) → its display ID |
+| `idDoc`                | `entity{num}`, the property a number is kept in                    |
+| `numbers(allocate)`    | the `$num` allocator, from `@yaks/id/rules`                        |
+| `ids(v)`               | human id → eid, from `@yaks/id/rules`                              |
 
 ## Integration
 

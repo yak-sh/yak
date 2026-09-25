@@ -78,7 +78,12 @@ let json = (text: string): Pasted | null => {
 export let pasted = (raw: string): Pasted | null => {
   let text = raw.trim()
   if (!text) return null
-  if (EID.test(text) || SHORT.test(text) || /^[A-Za-z]+-\d+$/.test(text)) {
+  // A handle written with a letter (`T#3f9a1c`) is an id too, so it is refused
+  // by the finder rather than filed as a task titled with it.
+  if (
+    EID.test(text) || SHORT.test(text) || /^[A-Za-z]+-\d+$/.test(text) ||
+    /^[A-Za-z]+#[0-9a-f]{6,64}$/i.test(text)
+  ) {
     let eid = findEid(text)
     return eid ? { changes: [], target: eid } : null
   }

@@ -6,7 +6,7 @@ import { EID, SHORT } from './types.ts'
 let origin = 'https://tasks.yak.sh'
 
 // Encode the path segment: a literal # would start a browser fragment, which
-// is never sent to the server. /T%23abcdef1234 survives copy, reload and new tab.
+// is never sent to the server. /%23abcdef1234 survives copy, reload and new tab.
 export let entityPath = (id: string) => `/${encodeURIComponent(id)}`
 export let entityUrl = (id: string) => `${origin}${entityPath(id)}`
 

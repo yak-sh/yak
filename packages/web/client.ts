@@ -26,7 +26,7 @@ import {
   uuid,
   verdictName,
 } from './types.ts'
-import { aliasOf, checkPrefix, idOf, shortId, shortParts } from './types.ts'
+import { aliasOf, idOf, shortHex, shortId } from './types.ts'
 import { moves, typeOf } from './edge.ts'
 import { fieldOp, parseProp, propAt, refOf } from './props.ts'
 import { local } from './time.ts'
@@ -627,11 +627,9 @@ export let find = (all: Row[], id: string) => {
   if (m) return all.find((r) => r.num == +m![1])
   let exact = all.find((r) => r.eid == id.toLowerCase())
   if (exact) return exact
-  let fragment = shortParts(id)
-  if (fragment) {
-    let hits = all.filter((r) =>
-      r.eid.replaceAll('-', '').startsWith(fragment.hex)
-    )
+  let hex = shortHex(id)
+  if (hex) {
+    let hits = all.filter((r) => r.eid.replaceAll('-', '').startsWith(hex))
     if (hits.length > 1) {
       throw new IdError(
         `${id} is an ambiguous id — matches ${
@@ -639,14 +637,10 @@ export let find = (all: Row[], id: string) => {
         }; use more characters`,
       )
     }
-    if (hits.length == 1) {
-      checkPrefix(id, hits[0].kind)
-      return hits[0]
-    }
-    return undefined
+    return hits[0]
   }
   if (id.includes('#')) {
-    throw new IdError(`${id}: expected [kind]# followed by 6–64 hex characters`)
+    throw new IdError(`${id}: expected # followed by 6–64 hex characters`)
   }
   let named = all.map((r) => aliasOf(r.comps)).find((a) => a?.name == id)
   return named && all.find((r) => r.eid == named.eid)

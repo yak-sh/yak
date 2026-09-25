@@ -36,10 +36,10 @@ Deno.test('pasted: sigilled ids and full UUIDs target an unnumbered entity', () 
   let eid = '3f9a1c2e-7b00-4000-8000-000000000001'
   cache.value = { [eid]: { entity: { eid, num: 0 }, task: { eid } } }
   try {
-    for (let id of [eid, 'T#3f9a1c2e7b', '#3f9a1c']) {
+    for (let id of [eid, '#3f9a1c2e7b', '#3f9a1c']) {
       assertEquals(pasted(id), { changes: [], target: eid })
     }
-    assertThrows(() => pasted('S#3f9a1c'), Error, 'prefix S')
+    assertThrows(() => pasted('T#3f9a1c'), Error, 'expected # followed by')
   } finally {
     cache.value = {}
   }

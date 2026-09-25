@@ -55,7 +55,7 @@ Deno.test('a list on a reference is any-of, so each item is addressed', () => {
 
 Deno.test("an entity's own eid names it, a range of eids does not", () => {
   assertEquals(said('.eid=jeff'), parse(`.eid=${JEFF}`))
-  assertEquals(asked('.entity.eid=T#47e9678bdf,P-1'), ['T#47e9678bdf', 'P-1'])
+  assertEquals(asked('.entity.eid=#47e9678bdf,P-1'), ['#47e9678bdf', 'P-1'])
   assertEquals(asked('.entity.eid=47e9..47ea'), [])
 })
 

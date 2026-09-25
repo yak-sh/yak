@@ -10,15 +10,15 @@
 
 import type { Vocab } from '@yaks/vocab'
 
-/** The first 10 hex characters of an eid, dashes removed, after a `#` and an
- * optional prefix letter — what an entity the store has not numbered shows
- * instead of a number. */
-export let short = (eid: string, prefix = ''): string =>
-  `${prefix}#${eid.replaceAll('-', '').slice(0, 10).toLowerCase()}`
+/** The first 10 hex characters of an eid, dashes removed, after a `#` — what
+ * an entity the store has not numbered shows instead of a number. It carries no
+ * letter: the handle names one entity by its eid, whatever it is. */
+export let short = (eid: string): string =>
+  `#${eid.replaceAll('-', '').slice(0, 10).toLowerCase()}`
 
 /** A short handle as typed: 6–64 hex characters after the `#`. Hex with no `#`
  * is never read as an eid fragment. */
-export let SHORT: RegExp = /^(?:[a-z]+)?#[0-9a-f]{6,64}$/i
+export let SHORT: RegExp = /^#[0-9a-f]{6,64}$/i
 
 /** What an id is built from: the entity's eid, the component that gives it its
  * prefix, and the number the store assigned (absent until the entity is first
@@ -83,8 +83,7 @@ export let parse = (id: string): Parsed | undefined => {
  */
 export let idOf = (v: Vocab): (e: Named) => string => {
   let letter = prefixOf(v)
-  return (e) =>
-    e.num ? format(letter(e.kind), e.num) : short(e.eid, letter(e.kind))
+  return (e) => e.num ? format(letter(e.kind), e.num) : short(e.eid)
 }
 
 /** A bundle, as this file reads one: the `entity` row, and the components

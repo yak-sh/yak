@@ -109,7 +109,7 @@ Deno.test('a read that names no app says it is needed signed out', async () => {
 // a space and a slug — true here, where the pair is the call's whole scope, and
 // not signed in, where there is a reach to read and `.in=` narrows it. An
 // assistant read it signed in, went looking for an app argument the schema does
-// not have, and asked how to target one app (E#868fa3f25c answer 5). So the
+// not have, and asked how to target one app (#868fa3f25c answer 5). So the
 // sentence and the schema are held together: the paragraph is the signed-out
 // one, it names every read that takes the pair and every argument in it, and it
 // says what the other door does instead.

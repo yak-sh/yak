@@ -45,7 +45,7 @@ Deno.test('wake lists show every pending clock in time order', () => {
   assertEquals(
     wakeList(wakes, refs[0], (eid) => refs.find((r) => r.eid == eid)),
     'pending wakes for S-31 (2):\n' +
-      `- W#aaaaaaaa00 ${local('2026-08-10T13:00:00Z')} → T-42\n` +
-      `- W#bbbbbbbb00 ${local('2026-08-10T14:00:00Z')} — check the gate`,
+      `- #aaaaaaaa00 ${local('2026-08-10T13:00:00Z')} → T-42\n` +
+      `- #bbbbbbbb00 ${local('2026-08-10T14:00:00Z')} — check the gate`,
   )
 })

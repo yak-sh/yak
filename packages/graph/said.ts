@@ -7,7 +7,7 @@
 // `.decided.by=jeff` matched nothing while `.decided.by=<eid>` matched.
 //
 // A query names an entity in exactly five places: the entity's own eid
-// (`.eid=T#47e9678bdf`), a reference property's value (`.decided.by=jeff`),
+// (`.eid=#47e9678bdf`), a reference property's value (`.decided.by=jeff`),
 // the reverse-reference filter `.refs=`, a walk's target (`.requires->T-42`)
 // and the neighbour filter `.near=`. Nowhere else —
 // `.status=done` is an enum, and a value that happens to be somebody's name

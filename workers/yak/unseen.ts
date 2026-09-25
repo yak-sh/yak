@@ -10,6 +10,7 @@
 // never SQL; the apps of a space come from the directory part. The same
 // rows are the `app_errors` answer, one line each.
 import type { Bundle } from '@yaks/graph'
+import { short } from '@yaks/id'
 import * as dirPart from './directory.ts'
 import {
   type App,
@@ -216,14 +217,13 @@ type Hit = {
   error?: Broke
 }
 // The handle a person reads a break by: `E-12` where the directory numbered
-// it, `E#` and the eid's first ten hex digits where an app's store did not.
-// The letter is the facet's own first one (exception, error).
-let idOf = (h: Hit) => {
-  let letter = h.kind.slice(0, 1).toUpperCase()
-  return h.entity.num
-    ? `${letter}-${h.entity.num}`
-    : `${letter}#${h.entity.eid.replaceAll('-', '').slice(0, 10).toLowerCase()}`
-}
+// it, and @yaks/id's short handle (`#` and the eid's first ten hex digits)
+// where an app's store did not. The letter is the facet's own first one
+// (exception, error).
+let idOf = (h: Hit) =>
+  h.entity.num
+    ? `${h.kind.slice(0, 1).toUpperCase()}-${h.entity.num}`
+    : short(h.entity.eid)
 
 // One open item and the app it broke in — what serve() hands back, so a
 // caller can write the line or archive by id from the one read.

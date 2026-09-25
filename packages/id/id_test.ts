@@ -48,10 +48,11 @@ Deno.test('a numbered entity wears its human id', () => {
   assertEquals(id({ eid, kind: 'review', num: 3 }), 'R-3')
 })
 
-Deno.test('an unnumbered entity wears its short handle', () => {
-  assertEquals(id({ eid, kind: 'book' }), 'B#9f1c8d2a0b')
-  assertEquals(id({ eid, kind: 'book', num: null }), 'B#9f1c8d2a0b')
+Deno.test('an unnumbered entity wears its short handle, with no letter', () => {
+  assertEquals(id({ eid, kind: 'book' }), '#9f1c8d2a0b')
+  assertEquals(id({ eid, kind: 'author', num: null }), '#9f1c8d2a0b')
   assert(SHORT.test(short(eid)))
+  assert(!SHORT.test('B#9f1c8d2a0b'))
 })
 
 Deno.test('an id parses back, letter optional and case-blind', () => {

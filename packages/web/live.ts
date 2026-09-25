@@ -19,7 +19,6 @@ import {
   aliasOf,
   awake,
   type Change,
-  checkPrefix,
   comps,
   type Dep,
   type Ent,
@@ -27,7 +26,7 @@ import {
   idOf,
   type Pinned,
   settled,
-  shortParts,
+  shortHex,
   type Snapshot,
   statusOf,
   vocab,
@@ -2544,10 +2543,10 @@ export let findEid = (id: string): string | undefined => {
   let num = id.match(/^[A-Za-z]+-(\d+)$/)?.[1] ?? id.match(/^(\d+)$/)?.[1]
   if (num) return numEids.get(+num)
   if (cached(id.toLowerCase())) return id.toLowerCase()
-  let fragment = shortParts(id)
-  if (fragment) {
-    let hits = [...shortEids.get(fragment.hex.slice(0, 10)) ?? []]
-      .filter((eid) => eid.replaceAll('-', '').startsWith(fragment.hex))
+  let hex = shortHex(id)
+  if (hex) {
+    let hits = [...shortEids.get(hex.slice(0, 10)) ?? []]
+      .filter((eid) => eid.replaceAll('-', '').startsWith(hex))
     if (hits.length > 1) {
       throw new IdError(
         `${id} is an ambiguous id — matches ${
@@ -2555,14 +2554,10 @@ export let findEid = (id: string): string | undefined => {
         }; use more characters`,
       )
     }
-    if (hits.length == 1) {
-      checkPrefix(id, ent(hits[0]).kind)
-      return hits[0]
-    }
-    return undefined
+    return hits[0]
   }
   if (id.includes('#')) {
-    throw new IdError(`${id}: expected [kind]# followed by 6–64 hex characters`)
+    throw new IdError(`${id}: expected # followed by 6–64 hex characters`)
   }
   return aliasEids.get(id)
 }

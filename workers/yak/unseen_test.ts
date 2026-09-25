@@ -38,7 +38,8 @@ let unnumbered = {
 }
 
 Deno.test('named: an unnumbered break answers to its short handle', () => {
-  assert(named('E#e000000000', unnumbered))
+  assert(named('#e000000000', unnumbered))
+  assert(!named('E#e000000000', unnumbered))
   assert(named(E, unnumbered))
   assert(!named('E-84', unnumbered))
 })
@@ -48,7 +49,7 @@ Deno.test('line: an app entity is named by its short handle', () => {
     app: { eid: 'a1', slug: 'recipes' } as never,
     hit: unnumbered,
   })
-  assert(said.startsWith('- E#e000000000 '), said)
+  assert(said.startsWith('- #e000000000 '), said)
 })
 
 Deno.test('named: a version bound is up to AND including', () => {

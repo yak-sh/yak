@@ -17,7 +17,7 @@ import {
   trail,
 } from '../live.ts'
 import { type Action, actionsFor, resolve } from './registry.ts'
-import { type Change, type Ent, idOf, SHORT } from '../types.ts'
+import { type Change, type Ent, IdError, idOf, SHORT } from '../types.ts'
 import { dragData } from './drag.ts'
 import { cursorEid } from '../edge.ts'
 
@@ -240,8 +240,20 @@ export let screenTarget = (at = route.value) => {
   let url = new URL(at, 'http://x')
   let id = decodeURIComponent(url.pathname.slice(1))
   let view = url.searchParams.get('v') ?? undefined
-  let eid = id ? eidOf(id) : rootCanvas()
+  let eid = id ? routed(id) : rootCanvas()
   return eid ? { eid, view } : null
+}
+
+// A route whose id the finder refuses (a handle written with a letter, an
+// ambiguous fragment) names nothing the page can draw: the Lost face, as the
+// host's own 404 for that path says, rather than an exception mid-render.
+let routed = (id: string) => {
+  try {
+    return eidOf(id)
+  } catch (error) {
+    if (error instanceof IdError) return undefined
+    throw error
+  }
 }
 
 // Writing the trail (live.ts holds it, above the hot-swap boundary): both

@@ -57,7 +57,7 @@ let LINKABLE = /^(?:https?:\/\/|mailto:|tel:|[/#?]|[\w.-]+(?:[/#?]|$))/i
 // SHA-256 stay words because their letters sit mid-word.
 let LETTERS = [...new Set([...Object.values(prefix), 'D'])].join('|')
 let REF = new RegExp(
-  `^(?:(?:${LETTERS})-\\d+|(?:[A-Za-z]+)?#[0-9a-fA-F]{6,64})\\b`,
+  `^(?:(?:${LETTERS})-\\d+|#[0-9a-fA-F]{6,64})\\b`,
 )
 
 type Ref = (id: string, text: string) => string
@@ -86,7 +86,7 @@ let door = (ref: Ref, repo?: string | null, links = true) =>
       start: (src: string) =>
         src.match(
           new RegExp(
-            `(?<![\\w])(?:(?:${LETTERS})-\\d|(?:[A-Za-z]+)?#[0-9a-fA-F]{6})`,
+            `(?<![\\w])(?:(?:${LETTERS})-\\d|#[0-9a-fA-F]{6})`,
           ),
         )?.index,
       tokenizer(src: string) {

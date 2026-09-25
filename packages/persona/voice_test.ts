@@ -53,7 +53,7 @@ Deno.test('what it only names is one line under its heading', () => {
 
 Deno.test('a numberless entity still has an id to show', () => {
   let out = told({ names: [says('m1-2-3-4-5', null, 'unnumbered', '')] })
-  assert(/- M#\w+ unnumbered/.test(out), out)
+  assert(/- #\w+ unnumbered/.test(out), out)
 })
 
 Deno.test('a control byte in a title never reaches the document', () => {

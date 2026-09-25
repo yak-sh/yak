@@ -50,7 +50,7 @@ Deno.test('every id letter the vocabulary uses has a route, in both cases', () =
       '/T-9',
       '/t-9',
       '/T',
-      '/T%23abc123',
+      '/%23abc123',
       '/D-3',
       '/admin/task',
     ]
@@ -71,7 +71,9 @@ Deno.test('a name opens the page, and a path naming nothing is the 404 page', as
   }
   assertEquals(await page('/lemon-cake'), [200, true])
   assertEquals(await page('/T-9'), [200, true])
-  for (let path of ['/lemon-pie', '/lemon-cake/x', '/favicon.ico']) {
+  for (
+    let path of ['/lemon-pie', '/lemon-cake/x', '/favicon.ico', '/T%23abc123']
+  ) {
     assertEquals(await page(path), [404, true], path)
   }
 })

@@ -369,7 +369,7 @@ slow(
   },
 )
 
-// Where a document goes (T-37616, E#868fa3f25c answer 4). `memory_save` keeps
+// Where a document goes (T-37616, #868fa3f25c answer 4). `memory_save` keeps
 // the person's sentence and nothing else, and a NOTES.md is four kilobytes of
 // house rules — so the overview an agent writes belongs in the app's own store,
 // as the entity `doc` already is. This is the guide's own example, run: the

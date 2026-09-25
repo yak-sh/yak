@@ -12,13 +12,14 @@
 // `null`: it names nothing, and it is no eid either, so the graph refuses it
 // instead of minting an entity whose eid is the string `T-998`.
 //
-// The short handle an entity shows before it is numbered (`T#47e9678bdf`, see
+// The short handle an entity shows before it is numbered (`#47e9678bdf`, see
 // ./id.ts `short`) resolves here too. It is the start of the eid with the
 // dashes taken out, and a uuid's dashes sit at fixed places, so the handle is
 // put back into the eid's own shape and read as a range: every eid that starts
 // that way. A content-addressed eid has no dashes, so the bare hex is asked
-// for as well. Two entities starting the same way are no answer, and neither
-// is a letter the entity cannot be printed with.
+// for as well. Two entities starting the same way are no answer. A handle
+// carries no letter, so one written with a letter (`T#47e9678bdf`) names
+// nothing and is refused, rather than taken for an eid of that spelling.
 //
 // Every write asks about the ids it names, and most name none of these, so
 // that answer comes back without a promise and a synchronous store's writes
@@ -28,6 +29,10 @@
 import type { Bundle, Eid, Plugin, Tx } from './graph.ts'
 import { parse, prefixOf, SHORT } from './id.ts'
 import type { Vocab } from '@yaks/vocab'
+
+/** A short handle with a letter in front of its `#`, as handles were once
+ * written. */
+let LETTERED = /^[a-z]+#[0-9a-f]{6,64}$/i
 
 /** A handle's hex with a uuid's dashes put back where they fall. */
 let dashed = (hex: string): string =>
@@ -60,12 +65,15 @@ export let ids = (vocab: Vocab): Plugin => {
       // one per handle.
       let want = new Map<number, string[]>()
       let handles: string[] = []
+      let lettered: string[] = []
       for (let id of said) {
         let p = parse(id)
         if (p) want.set(p.num, [...want.get(p.num) ?? [], id])
         else if (SHORT.test(id)) handles.push(id)
+        else if (LETTERED.test(id)) lettered.push(id)
       }
       let at = new Map<string, Eid | null>()
+      for (let id of lettered) at.set(id, null)
       if (!want.size && !handles.length) return at
       for (let id of [...want.values()].flat()) at.set(id, null)
       let wore = (found: Bundle[]) => {
@@ -77,7 +85,7 @@ export let ids = (vocab: Vocab): Plugin => {
         }
       }
       let held = (id: string, found: Bundle[]) => {
-        let [prefix, hex] = id.toLowerCase().split('#')
+        let hex = id.slice(1).toLowerCase()
         let hits = new Map<Eid, Bundle>()
         for (let b of found) {
           if (b.entity.eid.replaceAll('-', '').startsWith(hex)) {
@@ -85,10 +93,7 @@ export let ids = (vocab: Vocab): Plugin => {
           }
         }
         let [only] = hits.values()
-        at.set(
-          id,
-          hits.size == 1 && agrees(only, prefix) ? only.entity.eid : null,
-        )
+        at.set(id, hits.size == 1 ? only.entity.eid : null)
       }
       // Each read, and the handle it answers for (none: the numbers).
       let reads: [string | null, Bundle[] | Promise<Bundle[]>][] = []
@@ -96,7 +101,7 @@ export let ids = (vocab: Vocab): Plugin => {
         reads.push([null, tx.read(`.entity.num=${[...want.keys()].join(',')}`)])
       }
       for (let id of handles) {
-        for (let r of starting(tx, id.split('#')[1].toLowerCase())) {
+        for (let r of starting(tx, id.slice(1).toLowerCase())) {
           reads.push([id, r])
         }
       }

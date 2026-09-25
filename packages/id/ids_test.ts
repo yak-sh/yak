@@ -81,13 +81,13 @@ Deno.test('every id on the line costs one read', async () => {
 
 Deno.test('a short handle is the entity whose eid starts that way', async () => {
   let task = '47e9678b-df12-4000-8000-000000000001'
-  assertEquals(await at('T#47e9678bdf1'), { 'T#47e9678bdf1': task })
+  assertEquals(await at('#47e9678bdf1'), { '#47e9678bdf1': task })
   assertEquals(await at('#47E9678BDF1'), { '#47E9678BDF1': task })
-  assertEquals(await at('D#c0ffee01'), { 'D#c0ffee01': 'c0ffee0123456789' })
+  assertEquals(await at('#c0ffee01'), { '#c0ffee01': 'c0ffee0123456789' })
 })
 
-Deno.test('a handle two entities share, or a wrong letter, names nothing', async () => {
+Deno.test('a handle two entities share, or one with a letter, names nothing', async () => {
   assertEquals(await at('#47e9678bdf'), { '#47e9678bdf': null })
-  assertEquals(await at('M#47e9678bdf1'), { 'M#47e9678bdf1': null })
+  assertEquals(await at('T#47e9678bdf1'), { 'T#47e9678bdf1': null })
   assertEquals(await at('#deadbeef00'), { '#deadbeef00': null })
 })

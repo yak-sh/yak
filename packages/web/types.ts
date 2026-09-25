@@ -491,28 +491,17 @@ export let kindWord = (word: string) =>
   kindOrder.find((k) => k == word || plural(k) == word || `${k}s` == word)
 
 // Short eid handles are explicitly sigilled: never confuse a decimal fragment
-// with a num, or a bare hex word with a git commit. Kind is a check, not identity.
-export let shortId = (eid: string, kind = '') =>
-  `${prefixOf(kind)}#${eid.replaceAll('-', '').slice(0, 10).toLowerCase()}`
+// with a num, or a bare hex word with a git commit. They carry no letter
+// (@yaks/id `short`): the hex names the entity, whatever it is.
+export let shortId = (eid: string) =>
+  `#${eid.replaceAll('-', '').slice(0, 10).toLowerCase()}`
 export let prefixOf = (kind: string) =>
   prefix[kind] ?? kind.slice(0, 1).toUpperCase()
-export let SHORT = /^(?:[a-z]+)?#[0-9a-f]{6,64}$/i
+export let SHORT = /^#[0-9a-f]{6,64}$/i
 // Identity refusals must not become a saved query's ordinary "not loaded" miss.
 export class IdError extends Error {}
-export let shortParts = (id: string) => {
-  let m = id.match(/^([a-z]*)#([0-9a-f]{6,64})$/i)
-  return m ? { prefix: m[1].toUpperCase(), hex: m[2].toLowerCase() } : undefined
-}
-export let checkPrefix = (id: string, kind: string) => {
-  let p = shortParts(id)?.prefix
-  if (p && p != prefixOf(kind)) {
-    throw new IdError(
-      `${id} has prefix ${p}, but resolves to ${kind} (${
-        prefixOf(kind) || 'no prefix'
-      })`,
-    )
-  }
-}
+export let shortHex = (id: string) =>
+  SHORT.test(id) ? id.slice(1).toLowerCase() : undefined
 // A WHOLE eid, in every shape a client may name an entity by: the uuid it
 // mints, or the hash a content-addressed entity is its own name by — a
 // blob's sha-256 (64 hex), a commit's git sha (40). One spelling for every
@@ -521,7 +510,7 @@ export let checkPrefix = (id: string, kind: string) => {
 export let EID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^[0-9a-f]{40}$|^[0-9a-f]{64}$/i
 export let idOf = (e: { eid: string; kind: string; num?: number | null }) =>
-  e.num ? `${prefixOf(e.kind)}-${e.num}` : shortId(e.eid, e.kind)
+  e.num ? `${prefixOf(e.kind)}-${e.num}` : shortId(e.eid)
 
 // A model's short name — 'claude-fable-5' is fable, 'gpt-5.6-sol' is sol:
 // drop the vendor word and anything wearing a digit, keep what's left.

@@ -127,7 +127,7 @@ Deno.test('session timestamps link to graph entries', () => {
     assertEquals(linked.tagName, 'A')
     assertEquals(
       linked.getAttribute('href'),
-      '/E%231234567800',
+      '/%231234567800',
     )
     assertEquals(plain.tagName, 'TIME')
     assertEquals(plain.getAttribute('href'), null)

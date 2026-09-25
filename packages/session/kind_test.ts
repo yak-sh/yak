@@ -11,11 +11,11 @@ let vocab = loadVocab([sessionDoc, processDoc])
 
 Deno.test('a session that carries its process is shown as the session', () => {
   let row = {
-    entity: { eid: '7235e614-2fd8-411b-95a5-60746efdee1f' },
+    entity: { eid: '7235e614-2fd8-411b-95a5-60746efdee1f', num: 16765 },
     session: {},
     process: {},
     exit: {},
   }
   assertEquals(vocab.kindOf(row), 'session')
-  assertEquals(human(vocab)(row), 'S#7235e6142f')
+  assertEquals(human(vocab)(row), 'S-16765')
 })

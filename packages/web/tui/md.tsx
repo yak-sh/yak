@@ -14,7 +14,7 @@ import { EID, prefix, SHORT } from '../types.ts'
 let LETTERS = [...new Set([...Object.values(prefix), 'D'])].join('|')
 let RE = new RegExp(
   `(\\*\\*|__)(.+?)\\1|(\\*|_)(.+?)\\3|\`([^\`]+)\`|~~(.+?)~~|` +
-    `\\[([^\\]]+)\\]\\(([^)]+)\\)|(?<![\\w])((?:${LETTERS})-\\d+|(?:[A-Za-z]+)?#[0-9a-fA-F]{6,64})\\b`,
+    `\\[([^\\]]+)\\]\\(([^)]+)\\)|(?<![\\w])((?:${LETTERS})-\\d+|#[0-9a-fA-F]{6,64})\\b`,
 )
 
 let inline = (t: string, repo?: string): (string | JSX.Element)[] => {

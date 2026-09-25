@@ -234,21 +234,12 @@ Deno.test('link props do not subscribe to peek state', () => {
   peek.value = []
 })
 
-Deno.test('short id chip and browser route round trip; kind is checked', async () => {
+Deno.test('short id chip and browser route round trip; a lettered handle is lost', async () => {
   let eid = '3f9a1c2e-7b00-4000-8000-000000000001'
   let before = cache.peek()
   cache.value = { [eid]: { entity: { eid, num: 0 }, task: { eid } } }
   clearResolved()
-  let wire = host((a) =>
-    a.subscribe.includes('S#')
-      ? {
-        refused: {
-          error: 'read',
-          message: 'prefix S does not match task (T)',
-        },
-      }
-      : { bundles: [{ entity: { eid, num: 0 }, task: {} }] }
-  )
+  let wire = host(() => ({ bundles: [{ entity: { eid, num: 0 }, task: {} }] }))
   let ready = (path: string) => {
     screenTarget(path)
     return until(() => !screenResolving(path))
@@ -256,17 +247,15 @@ Deno.test('short id chip and browser route round trip; kind is checked', async (
   try {
     let row = { ...e, eid, num: 0 }
     let props = clickProps(row)
-    assertEquals(props.href, '/T%233f9a1c2e7b')
+    assertEquals(props.href, '/%233f9a1c2e7b')
     await ready(props.href)
     assertEquals(screenTarget(props.href)?.eid, eid)
-    await ready('/%233f9a1c2e7b')
-    assertEquals(screenTarget('/%233f9a1c2e7b')?.eid, eid)
-    await ready('/S%233f9a1c2e7b')
-    // The host refuses a prefix that is not the row's kind: the page is Lost.
-    assertEquals(screenTarget('/S%233f9a1c2e7b'), null)
+    await ready('/T%233f9a1c2e7b')
+    // A handle carries no letter, so one written with a letter is Lost.
+    assertEquals(screenTarget('/T%233f9a1c2e7b'), null)
     let { root, free } = mount(Id({ e: row }))
     try {
-      assertEquals(root.textContent, 'T#3f9a1c2e7b')
+      assertEquals(root.textContent, '#3f9a1c2e7b')
       assertEquals(root.querySelector('a')?.getAttribute('href'), props.href)
     } finally {
       free()

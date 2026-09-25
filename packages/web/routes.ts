@@ -1,6 +1,6 @@
 // The routes facet, exported as `@yaks/web/routes`: the addresses a person
 // opens in a browser. `/` is the root canvas, `/admin` the component tables,
-// and each entity is at its own id — `/T-9`, or `/T%23abc123` for one the
+// and each entity is at its own id — `/T-9`, or `/%23abc123` for one the
 // store has not numbered. Every one of them answers the same page, and the app
 // reads the address and draws the rest (main.tsx).
 //
@@ -95,7 +95,6 @@ export let routes = (host: Hosting): Route[] => {
     { method: 'GET', path: '/%23*', handle: page },
     ...letters(host.vocab).flatMap((l): Route[] => [
       { method: 'GET', path: `/${l}-*`, handle: page },
-      { method: 'GET', path: `/${l}%23*`, handle: page },
       { method: 'GET', path: `/${l}`, handle: page },
     ]),
     {
