@@ -327,6 +327,14 @@ permanently deleted; the app's 30 days in the trash keep them too. A declared
 binding keeps its name, including `STORE`, `FILES` or `APP`; otherwise those
 names are the convenience bindings described above.
 
+`vpc_services` reaches a machine of the space owner's own, such as a server on
+their computer, without opening a port on it. The owner links the machine to the
+space first; then `"vpc_services": [{ "binding": "BOX" }]` gives the worker
+`env.BOX`, and `env.BOX.fetch('http://localhost/path')` is a request to the one
+service on the machine the link names. Any `service_id` in the config is
+ignored: the service is the space's. A space with no linked machine, or an app
+installed from somewhere else, is refused the binding.
+
 ### Taking money is not one of your keys
 
 A worker that charges somebody does **not** hold a Stripe key. Selling is a

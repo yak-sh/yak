@@ -117,6 +117,11 @@ export type Stripe = {
   detailsSubmitted: boolean
 }
 
+/** The machine a space is linked to (tunnel.ts, @yaks/tunnel): the tunnel it
+ * dials out on, the Workers VPC Service its apps' workers bind to reach it, and
+ * whether the platform made the pair or only records one made elsewhere. */
+export type Tunnel = { id: string; service: string; adopted: boolean }
+
 export type Space = {
   eid: string
   slug: string
@@ -152,6 +157,10 @@ export type Space = {
   // never moved, which is almost all of them; each entry redirects to the
   // address it lives at now, and stays reserved until somebody forgets it.
   slugs: string[]
+  // The machine this space is linked to, whose one service an app's worker
+  // reaches through a `vpc_services` binding (deploy_worker.ts). Null for a
+  // space with no linked machine, which is almost all of them.
+  tunnel: Tunnel | null
 }
 export type App = {
   eid: string
@@ -340,6 +349,11 @@ type Row = {
   }
   meter?: Partial<Meter>
   notified?: unknown
+  tunnel?: {
+    id?: string | null
+    service?: string | null
+    adopted?: boolean | null
+  }
 }
 
 // The meter as a whole number, however little of the row is written: a property
@@ -581,7 +595,8 @@ let ABOUT = '?doc&?former&?home&?meter&?published&?installed&?gallery&?seeded' +
   '&?trashed&?theme'
 
 // And what every read of a space asks for, for the same reason.
-let SPACE_ABOUT = '?doc&?plan&?meter&?notified&?trashed&?stripe&?fee&?former'
+let SPACE_ABOUT = '?doc&?plan&?meter&?notified&?trashed&?stripe&?fee&?former' +
+  '&?tunnel'
 
 // The plan as a whole row, however little of it is written: a property nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests
@@ -620,6 +635,17 @@ let stripeOf = (r: Row): Stripe | null =>
     }
     : null
 
+// The link, or null where no machine is: a row missing either id links
+// nothing a worker could bind to.
+let tunnelOf = (r: Row): Tunnel | null =>
+  r.tunnel?.id && r.tunnel.service
+    ? {
+      id: r.tunnel.id,
+      service: r.tunnel.service,
+      adopted: !!r.tunnel.adopted,
+    }
+    : null
+
 let spaceOf = (r: Row): Space => ({
   eid: r.entity.eid,
   slug: r.space!.slug,
@@ -632,6 +658,7 @@ let spaceOf = (r: Row): Space => ({
   told: r.notified != null,
   trashed: trashedOf(r),
   slugs: slugsOf(r.former),
+  tunnel: tunnelOf(r),
 })
 
 export let appOf = (r: Row): App => ({

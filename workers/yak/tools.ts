@@ -986,8 +986,8 @@ let released = async (
   let deployed = await c.time('worker', () =>
     deployWorker(
       ctx.env,
+      space,
       app,
-      storeName(space, app),
       (path) => blobs.read(fileKey(space, app, path)),
     ))
   let worker = deployed.worker

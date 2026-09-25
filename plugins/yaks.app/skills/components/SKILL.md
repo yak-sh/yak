@@ -463,7 +463,7 @@ These are the names, all of them:
     published quarantined quote reads recalled ref referenced report repository
     requires restored result retired revision satisfies secret seeded signed_in
     signin space stripe supersedes supervises sweep task theme tool trashed
-    tree_entry updated uses wake wants web worked worktree
+    tree_entry tunnel updated uses wake wants web worked worktree
 
 When your first choice is taken, ask what the component is _for_ and name that:
 the taken name is the general one, yours is the specific one. Not `comment` but

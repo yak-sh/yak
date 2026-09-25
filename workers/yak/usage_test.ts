@@ -208,6 +208,7 @@ let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
   told: false,
   trashed: null,
   slugs: [],
+  tunnel: null,
   meter: {
     month: '2026-09',
     requests: 0,

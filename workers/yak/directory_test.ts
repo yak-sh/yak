@@ -22,6 +22,7 @@ let space: Space = {
   told: false,
   trashed: null,
   slugs: [],
+  tunnel: null,
 }
 
 let an: App = {

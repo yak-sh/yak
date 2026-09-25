@@ -33,6 +33,10 @@ export type Config = {
   durable_objects?: { bindings: { name: string; class_name: string }[] }
   migrations?: Record<string, unknown>[]
   vectorize?: Index[]
+  // The machine linked to the app's space (@yaks/tunnel, tunnel.ts), under
+  // each name its worker reaches it by. The service is the space's, never
+  // the app's: a config names the binding and nothing else.
+  vpc_services?: { binding: string }[]
 }
 export type Parsed = { config: Config; report: string[]; refused: string[] }
 export type Request = {
@@ -53,6 +57,7 @@ export let HONORED = [
   'durable_objects',
   'migrations',
   'vectorize',
+  'vpc_services',
 ]
 
 let REFUSED: Record<string, string> = {
@@ -262,6 +267,20 @@ export let allowlist = (value: unknown): Parsed => {
     }
     config[kind] = found
   }
+  if ('vpc_services' in value) {
+    let found: { binding: string }[] = []
+    for (let { row, path } of rows(value.vpc_services, 'vpc_services')) {
+      keys(row, ['binding', 'service_id'], path)
+      if (!name(row.binding, path + 'binding')) continue
+      if ('service_id' in row) {
+        report.push(
+          `ignored ${path}service_id: ${row.binding} reaches the machine linked to this space`,
+        )
+      }
+      found.push({ binding: row.binding })
+    }
+    config.vpc_services = found
+  }
   if ('durable_objects' in value) {
     if (!object(value.durable_objects)) {
       no('durable_objects', 'expected an object')
@@ -354,11 +373,14 @@ export let idReport = (config: Config, bound: Bound[]) => {
   return report
 }
 
+// `vpc` is the VPC Service of the machine linked to the app's space
+// (directory.ts `Tunnel`), which every `vpc_services` binding names.
 export let metadata = (
   config: Config = {},
   bound: Bound[] = [],
   tag?: string,
   service = 'yak',
+  vpc?: string,
 ) => {
   let bindings: Record<string, unknown>[] = [
     { type: 'service', name: 'KERNEL', service },
@@ -383,6 +405,10 @@ export let metadata = (
   }
   for (let binding of config.durable_objects?.bindings ?? []) {
     bindings.push({ type: 'durable_object_namespace', ...binding })
+  }
+  for (let { binding } of config.vpc_services ?? []) {
+    if (!vpc) throw new Error(`binding ${binding} has no linked machine`)
+    bindings.push({ type: 'vpc_service', name: binding, service_id: vpc })
   }
   let migrations = migrationMetadata(config.migrations, tag)
   return {

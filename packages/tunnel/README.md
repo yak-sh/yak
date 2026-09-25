@@ -79,8 +79,9 @@ keeps failing. Ending the role stops it. The machine needs `cloudflared` on its
 
 ## The record
 
-`tunnel{id, service}` on an entity says which tunnel links it and which VPC
-Service a Worker's binding names. Both are written by the server that made them,
-never by a client (`stamped`, `wire: false`). A hosting platform keeps one on
-each space that has a linked machine, and binds the space's Workers to its
-service.
+`tunnel{id, service, adopted}` on an entity says which tunnel links it and which
+VPC Service a Worker's binding names. `adopted` marks a pair made elsewhere and
+only recorded here: unlinking it forgets the ids and leaves the resources alone.
+All three are written by the server, never by a client (`stamped`,
+`wire: false`). A hosting platform keeps one on each space that has a linked
+machine, and binds the space's Workers to its service.

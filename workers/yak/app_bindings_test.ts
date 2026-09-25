@@ -6,7 +6,7 @@ import {
 } from '@std/assert'
 import * as apps from './apps.ts'
 import { resourceName, SCOPES } from './bindings.ts'
-import { directory } from './directory.ts'
+import { directory, stamp } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { platform } from './testing.ts'
 import { meta } from './meta.ts'
@@ -231,6 +231,31 @@ Deno.test('app bindings survive redeploy, removal and trash until permanent dele
       assert(deleted.some((c) => c.path.startsWith(path)), path)
     }
     assertEquals((await k.rows('.binding')).length, 0)
+  } finally {
+    k.done()
+  }
+})
+
+Deno.test('a vpc_services binding reaches the machine linked to the space, and nothing else', async () => {
+  let k = await fixture()
+  try {
+    let service = '66666666-7777-4888-8999-aaaaaaaaaaaa'
+    await k.write({ vpc_services: [{ binding: 'BOX', service_id: 'theirs' }] })
+    assertStringIncludes(await k.tool('app_deploy'), 'no machine is linked')
+    assertEquals(k.uploads.length, 0)
+    let space = (await k.dir.space('ada'))!
+    await stamp(k.env, {
+      entities: [{
+        entity: { eid: space.eid },
+        tunnel: { id: space.eid, service, adopted: true },
+      }],
+    })
+    let deployed = await k.tool('app_deploy')
+    assertStringIncludes(deployed, 'service_id: BOX reaches the machine')
+    let bindings = k.uploads[0].bindings as Record<string, unknown>[]
+    assertEquals(bindings.filter((b) => b.type == 'vpc_service'), [
+      { type: 'vpc_service', name: 'BOX', service_id: service },
+    ])
   } finally {
     k.done()
   }

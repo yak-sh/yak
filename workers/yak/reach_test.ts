@@ -28,6 +28,7 @@ let space = (slug: string): Space => ({
   told: false,
   trashed: null,
   slugs: [],
+  tunnel: null,
 })
 
 let app = (slug: string, spaceEid: string): App => ({

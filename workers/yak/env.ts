@@ -145,6 +145,11 @@ export type Env = {
   // is told so.
   DISPATCH?: Dispatch
   CF_WORKERS_TOKEN?: string
+  // What makes and removes a space's tunnel and its Workers VPC Service
+  // (tunnel.ts): Cloudflare Tunnel Write and the Connectivity Directory Admin
+  // role on this account. Without it a space can still be linked to a
+  // machine the owner already has a tunnel for (`adopt`); nothing new is made.
+  CF_TUNNEL_TOKEN?: string
   // The deploy hook that builds `main` again after a push's build failed
   // (builds.ts): a URL whose path is its own credential, scoped to this
   // Worker's production branch and able to do nothing but start a build.

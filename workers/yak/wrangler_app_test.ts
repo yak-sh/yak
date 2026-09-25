@@ -362,3 +362,17 @@ Deno.test('main selects the app source, including directories and explicit worke
     assertStringIncludes(read({ main }).refused[0], 'refused main:')
   }
 })
+
+Deno.test('app metadata: a vpc_services binding names the space’s service, never the config’s', () => {
+  let parsed = read({
+    vpc_services: [{ binding: 'BOX', service_id: 'theirs' }],
+  })
+  assertEquals(parsed.refused, [])
+  let { bindings } = metadata(parsed.config, [], undefined, 'yak', 'ours')
+  assertEquals(bindings.at(-1), {
+    type: 'vpc_service',
+    name: 'BOX',
+    service_id: 'ours',
+  })
+  assertThrows(() => metadata(parsed.config), Error, 'no linked machine')
+})

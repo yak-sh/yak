@@ -1,7 +1,7 @@
 // The files already serve when a release arrives here. Config and account
 // capabilities are checked before any upload, so a refused resource never
 // publishes a worker with only half of its requested bindings.
-import type { App } from './directory.ts'
+import { type App, type Space, storeName } from './directory.ts'
 import { carried, drop, NEEDS_TOKEN, upload, WORKER } from './dispatch.ts'
 import type { Env } from './env.ts'
 import {
@@ -11,7 +11,7 @@ import {
   provision,
   retained,
 } from './bindings.ts'
-import { idReport, parse } from './wrangler_app.ts'
+import { type Config, idReport, parse } from './wrangler_app.ts'
 import { meta } from './meta.ts'
 import { refuse } from './tool.ts'
 import { caught } from './sentry.ts'
@@ -30,13 +30,29 @@ export let configured = async (read: Read) => {
   return parsed
 }
 
+// Why a `vpc_services` binding cannot reach the machine linked to the app's
+// space, or null when it can. Only an app built in the space reaches it: an
+// installed copy's code was written elsewhere, and a link reaches into the
+// owner's own machine.
+let unreached = (space: Space, app: App, config: Config) =>
+  !config.vpc_services?.length
+    ? null
+    : app.installed
+    ? `refused vpc_services: ${app.slug} is an installed copy, and only an app built in ${space.slug} reaches the machine linked to it`
+    : !space.tunnel
+    ? `refused vpc_services: no machine is linked to ${space.slug}; its owner links one first`
+    : null
+
 export let deployWorker = async (
   env: Env,
+  space: Space,
   app: App,
-  store: string,
   read: Read,
 ) => {
+  let store = storeName(space, app)
   let { config, report, refused } = await configured(read)
+  let why = unreached(space, app, config)
+  if (why) refused.push(why)
   let held = await bindings(env, app)
   let worker = ''
   let unchanged = 'the files are deployed and serving; the worker is unchanged'
@@ -98,7 +114,14 @@ export let deployWorker = async (
       ],
     }
   }
-  worker = await upload(env, store, modules, config, bound)
+  worker = await upload(
+    env,
+    store,
+    modules,
+    config,
+    bound,
+    space.tunnel?.service,
+  )
   // What its code reads as env.NAME: a first upload is the first script there
   // is to bind the app's connections to (connections.ts). The worker is up
   // either way, so a binding that did not take is ours to hear about.

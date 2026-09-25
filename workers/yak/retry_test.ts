@@ -21,6 +21,7 @@ let space: Space = {
   told: false,
   trashed: null,
   slugs: [],
+  tunnel: null,
 }
 let who = { person: 'person-eid', role: 'owner' as const }
 let flagged = () => Object.assign(new Error('reset'), { retryable: true })

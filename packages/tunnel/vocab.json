@@ -19,6 +19,11 @@
           "type": "string",
           "stamped": true,
           "description": "the VPC Service's id, which a worker's binding names"
+        },
+        "adopted": {
+          "type": "boolean",
+          "stamped": true,
+          "description": "made outside whatever keeps this record, which only records it: unlinking forgets the two ids and never removes or rotates what they name"
         }
       }
     }

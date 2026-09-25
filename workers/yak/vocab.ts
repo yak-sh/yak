@@ -76,6 +76,7 @@ import { keyDoc, keyKeywords } from '@yaks/key'
 import { mailDoc } from '@yaks/mail'
 import { memberDoc } from '@yaks/member'
 import { toolsDoc } from '@yaks/tools'
+import { tunnelDoc } from '@yaks/tunnel'
 import { wakeDoc } from '@yaks/wake'
 import { read } from '@yaks/yaml'
 import { vocabOf } from './plugin.ts'
@@ -1020,6 +1021,9 @@ export let platformDoc: VocabDoc = {
  * the same words, and a mark declared here and nowhere else would make the
  * directory the one store those doors cannot answer for.
  *
+ * `tunnelDoc` is the `tunnel` a space wears when a machine is linked to it
+ * (tunnel.ts): the directory is the only store that holds one.
+ *
  * A plugin's words land between the core documents and the platform's own
  * (plugin.ts `vocab`): after the words they are written in, and before the
  * platform's, which is what the directory is and answers last. `memory` is
@@ -1035,6 +1039,7 @@ export let platformDocs: VocabDoc[] = storeDocs([
   kernelDoc,
   notifiedDoc,
   sweepDoc,
+  tunnelDoc,
   ...vocabOf(PLUGINS),
   platformDoc,
 ])

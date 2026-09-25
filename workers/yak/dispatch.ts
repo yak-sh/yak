@@ -650,6 +650,8 @@ export let carried = async (
 // deploy. Only secret_text bindings are kept: retaining resources would keep
 // a removed binding attached, while secrets cannot be read back to resend
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/bindings/).
+// A `vpc_services` binding names `vpc`, the service of the machine linked to
+// the app's space; binding it asks the token for Connectivity Directory Bind.
 //
 // The limits are the platform's, per script and not per plan: an app's worker
 // answers a page, so 50ms of CPU and 50 subrequests is roomy for a store read
@@ -670,6 +672,7 @@ export let upload = async (
   modules: Module[],
   config: Config = {},
   bound: Bound[] = [],
+  vpc?: string,
 ) => {
   let names = new Set(['metadata', WRAPPER])
   for (let { name } of modules) {
@@ -694,7 +697,7 @@ export let upload = async (
   body.append(
     'metadata',
     new Blob([
-      JSON.stringify(metadata(config, bound, tag, env.WORKER_NAME)),
+      JSON.stringify(metadata(config, bound, tag, env.WORKER_NAME, vpc)),
     ], { type: 'application/json' }),
   )
   // Each part is named by the module name that imports it, and typed by what

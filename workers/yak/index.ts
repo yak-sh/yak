@@ -123,6 +123,7 @@ import {
   shared,
 } from './route.ts'
 import * as sell from './sell.ts'
+import * as tunnel from './tunnel.ts'
 import { slid } from './session.ts'
 import { fault, refusal } from './unseen.ts'
 import { egress } from './sandbox.ts'
@@ -278,6 +279,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // this is not a tool — the connector's roster is fixed and public (T-34541),
   // and a rate is the owner's own door, not a thing an agent may move.
   if (path == '/api/fee') return sell.fees(req, env)
+  // The machine a space is linked to (tunnel.ts, T-39585): the owner's own
+  // door, before the connector for the same reason as the fee's.
+  if (path == '/api/tunnel') return tunnel.fetch(req, env)
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp, env).fetch(req)
   }
