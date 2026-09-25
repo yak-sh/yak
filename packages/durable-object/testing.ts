@@ -18,6 +18,7 @@
 // either.
 
 import { open } from '@yaks/sqlite/db'
+import { type Param, render, type Stmt } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { shop } from '../sqlite/testing.ts'
 import { type DurableStorage, prohibited, type SqlValue } from './sql.ts'
@@ -78,7 +79,7 @@ export let durable = (): DurableStorage & {
   getAlarm(): Promise<number | null>
   setAlarm(at: number): Promise<void>
   deleteAlarm(): Promise<void>
-  beneath(query: string): Record<string, unknown>[]
+  beneath(statement: Stmt): Record<string, unknown>[]
   [Symbol.dispose](): void
 } => {
   // The one alarm, as the runtime holds it: an instant or nothing, cleared by
@@ -88,7 +89,7 @@ export let durable = (): DurableStorage & {
   let closed = false
   let depth = 0
   // The runtime takes an ArrayBuffer; the engine underneath takes bytes.
-  let run = (query: string, bindings: SqlValue[]) => {
+  let run = (query: string, bindings: (SqlValue | Param)[]) => {
     if (closed) throw new Error('storage is disposed')
     return db.query(
       query,
@@ -152,7 +153,10 @@ export let durable = (): DurableStorage & {
     // creating `_cf_KV` and reading it back are both things workerd refuses to
     // an object and does itself. This is the only way a test can see what every
     // deployed object actually contains.
-    beneath: (query: string) => run(query, []),
+    beneath: (statement) => {
+      let { sql, params } = render(statement)
+      return run(sql, params)
+    },
     // Nested savepoints, which is what the runtime's own transaction is: an
     // inner throw rolls back only the inner run.
     transactionSync: (body) => {

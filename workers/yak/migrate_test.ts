@@ -29,7 +29,37 @@ import { driver, type Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { edgeEid } from '@yaks/edge'
 import { entryEid, objects } from '@yaks/git'
-import { schema } from '@yaks/sqlite'
+import {
+  type Alter,
+  among,
+  as,
+  at,
+  by,
+  col,
+  type Column,
+  count,
+  eq,
+  type Expr,
+  fn,
+  type Insert,
+  insert,
+  isNull,
+  join,
+  lit,
+  not,
+  notNull,
+  type Param,
+  raise,
+  scan,
+  select,
+  type Stmt,
+  sub,
+  table,
+  tally,
+  type Update,
+  val,
+} from '@yaks/sql'
+import { columns, objects as catalogue, schema } from '@yaks/sqlite'
 import { Store } from './graph.ts'
 import {
   carry,
@@ -162,15 +192,69 @@ let newer = (ctx: State, name: string) => {
   }
 }
 
-let columns = (ctx: State, table: string): string[] =>
-  ctx.storage.sql.exec(`pragma table_info("${table}")`).toArray()
-    .map((row) => String((row as { name: string }).name))
+// The object's own SQLite, the way the store reaches it.
+let db = (ctx: State) => driver(ctx.storage)
+let run = (ctx: State, ...statements: Stmt[]) => {
+  let d = db(ctx)
+  for (let s of statements) d.query(s)
+}
 
-let count = (ctx: State, table: string): number =>
-  Number(
-    (ctx.storage.sql.exec(`select count(*) as n from "${table}"`)
-      .toArray()[0] as { n: number }).n,
-  )
+// The names of what the object's schema holds: its tables, indexes, triggers.
+let named = (ctx: State, fields: Record<string, Param>) =>
+  catalogue(db(ctx), fields).map((r) => String(r.name))
+
+// A key-value slot of the object, read and written.
+let slot = (ctx: State, k: string): string | null =>
+  (scan(db(ctx), 'yak_kv', by({ k }), ['v'])[0]?.v as string | undefined) ??
+    null
+let keep = (ctx: State, k: string, v: string) =>
+  run(ctx, {
+    t: 'insert',
+    into: 'yak_kv',
+    cols: ['k', 'v'],
+    rows: [[val(k), val(v)]],
+    upsert: [{ on: [col('k')], set: { v: col('v', 'excluded') } }],
+  })
+
+// An entity's integer id, and the row of a component that belongs to it.
+let id = (eid: string): Expr =>
+  sub(select({ cols: [col('id')], from: table('entity'), where: by({ eid }) }))
+let of = (eid: string) => eq(col('entity'), id(eid))
+let expr = (v: Param | Expr): Expr =>
+  v && typeof v == 'object' && 't' in v ? v : val(v)
+let exprs = (fields: Record<string, Param | Expr>) =>
+  Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, expr(v)]))
+
+// A component row for an entity, written, changed, and grown the way an older
+// build had it.
+let row = (
+  name: string,
+  eid: string,
+  fields: Record<string, Param | Expr>,
+): Insert => ({
+  t: 'insert',
+  into: name,
+  cols: ['entity', ...Object.keys(fields)],
+  rows: [[id(eid), ...Object.values(fields).map(expr)]],
+})
+let patch = (
+  name: string,
+  eid: string,
+  set: Record<string, Param | Expr>,
+): Update => ({ t: 'update', table: name, set: exprs(set), where: of(eid) })
+let grow = (name: string, ...add: Column[]): Alter[] =>
+  add.map((c) => ({ t: 'alter table', table: name, add: c }))
+
+// A table's rows with the eid each belongs to, in eid order or by a column.
+let owned = (ctx: State, name: string, cols: string[], order?: string) => {
+  let [e, t] = [at('e'), at('t')]
+  return db(ctx).query(select({
+    cols: [e('eid'), ...cols.map((c) => t(c))],
+    from: table(name, 't'),
+    joins: [join(table('entity', 'e'), eq(e('id'), t('entity')))],
+    order: [order ? t(order) : e('eid')],
+  }))
+}
 
 // Why a store refused its pass, in the words its door says to every caller.
 let why = async (now: ReturnType<typeof newer>, app?: string) => {
@@ -258,14 +342,12 @@ slow('an app store carries every row across, and reconciles', async () => {
   assert(moved[0].entity.eid != said.refs, 'the address moved with the word')
 
   // The dead stay dead, and every pass is done.
-  assertEquals(count(ctx, 'tombstone'), 1)
+  assertEquals(tally(db(ctx), 'tombstone'), 1)
   assertEquals(marker(ctx), LATEST)
 
   // The fleet's other words have no table on the packages, the journal among
   // them.
-  let tables = ctx.storage.sql
-    .exec("select name from sqlite_master where type = 'table'").toArray()
-    .map((r) => (r as { name: string }).name)
+  let tables = named(ctx, { type: 'table' })
   assert(!tables.some((t) => t.startsWith('journal_')), tables.join(', '))
 })
 
@@ -278,15 +360,16 @@ slow("the runtime's own table is not the object's to move", async () => {
   // remembered in. `sqlite_master` lists it like any other and the authorizer
   // then refuses to read it, so a pass that enumerated tables and selected from
   // each threw before a row moved — and the object served 503 for its lifetime.
-  ctx.storage.beneath(
-    'create table "_cf_KV" (key text primary key, value blob) without rowid',
-  )
-  ctx.storage.beneath(`insert into "_cf_KV" values ('name', 'ada/cookbook')`)
-  assertThrows(
-    () => ctx.storage.sql.exec('select * from "_cf_KV"'),
-    Error,
-    'SQLITE_AUTH',
-  )
+  ctx.storage.beneath({
+    t: 'create table',
+    name: '_cf_KV',
+    cols: [
+      { name: 'key', type: 'text', pk: true },
+      { name: 'value', type: 'blob' },
+    ],
+  })
+  ctx.storage.beneath(insert('_cf_KV', { key: 'name', value: 'ada/cookbook' }))
+  assertThrows(() => scan(db(ctx), '_cf_KV'), Error, 'SQLITE_AUTH')
 
   let now = newer(ctx, 'ada/cookbook')
   assertEquals((await now.query('.doc', APP)).length, 3)
@@ -294,8 +377,10 @@ slow("the runtime's own table is not the object's to move", async () => {
 
   // And it is standing where the runtime left it, with its row — proof the pass
   // neither dropped it nor renamed it aside.
-  let held = ctx.storage.beneath('select count(*) as n from "_cf_KV"')
-  assertEquals(Number(held[0].n), 1)
+  let [held] = ctx.storage.beneath(
+    select({ cols: [as(count(), 'n')], from: table('_cf_KV') }),
+  )
+  assertEquals(Number(held.n), 1)
 })
 
 // ---- the slots (T-37546) ---------------------------------------------------
@@ -324,15 +409,13 @@ slow(
     assertEquals((await now.query('.recipe.serves=8', APP)).length, 1)
     // And what the object keeps is the document, so nothing reads a short map
     // again — including a later deploy, which would refuse one.
-    let held = JSON.parse(
-      (ctx.storage.sql.exec("select v from yak_kv where k = 'vocab'")
-        .toArray()[0] as { v: string }).v,
-    )
+    let held = JSON.parse(slot(ctx, 'vocab') ?? '')
     assertEquals(Object.keys(held), ['$defs'])
     assertEquals(held.$defs.recipe.kind, true)
 
-    ctx.storage.sql.exec(
-      "insert into yak_kv (k, v) values ('tools', ?)",
+    keep(
+      ctx,
+      'tools',
       JSON.stringify({
         serving: {
           description: 'Recipes that serve so many',
@@ -616,9 +699,7 @@ let wearing = async (now: ReturnType<typeof newer>) =>
 
 // The version marker this object stands at (migrate.ts `MARKS`), out of its
 // own memory.
-let marker = (ctx: State): string | null =>
-  (ctx.storage.sql.exec("select v from yak_kv where k = 'migrated'")
-    .toArray()[0] as { v: string } | undefined)?.v ?? null
+let marker = (ctx: State) => slot(ctx, 'migrated')
 
 // The marker an object caught up with every pass stands at.
 let LATEST = MARKS[MARKS.length - 1]
@@ -642,19 +723,16 @@ let carriedOne = async (ctx: State) => {
       { entity: { eid: TWO }, space: { slug: 'ben' } },
     ]),
   })
-  let sql = ctx.storage.sql
-  sql.exec('alter table space add column home integer references entity(id)')
-  sql.exec(
-    'update space set home = (select id from entity where eid = ?) ' +
-      'where entity = (select id from entity where eid = ?)',
-    APP,
-    SPACE,
+  run(
+    ctx,
+    ...grow('space', {
+      name: 'home',
+      type: 'integer',
+      ref: { table: 'entity', cols: ['id'] },
+    }),
+    patch('space', SPACE, { home: id(APP) }),
   )
-  sql.exec(
-    "insert into yak_kv (k, v) values ('migrated', ?) " +
-      'on conflict(k) do update set v = excluded.v',
-    MARK,
-  )
+  keep(ctx, 'migrated', MARK)
   return now
 }
 
@@ -666,7 +744,7 @@ slow(
     let now = newer(ctx, PLATFORM_STORE)
     // One row per space that named one — `ben` named none and gets none.
     assertEquals(await wearing(now), ['cookbook'])
-    assertEquals(count(ctx, 'home'), 1)
+    assertEquals(tally(db(ctx), 'home'), 1)
     // Every pass in the same breath, so none of them has anything to do.
     assertEquals(marker(ctx), LATEST)
   },
@@ -682,13 +760,9 @@ slow(
     // the first request carries it the rest of the way.
     let now = newer(ctx, PLATFORM_STORE)
     assertEquals(await wearing(now), ['cookbook'])
-    assertEquals(count(ctx, 'home'), 1)
+    assertEquals(tally(db(ctx), 'home'), 1)
     // The old place is gone, so nothing can read the fact from two places.
-    assertEquals(
-      ctx.storage.sql.exec('pragma table_info(space)').toArray()
-        .some((c) => (c as { name: string }).name == 'home'),
-      false,
-    )
+    assertEquals(columns(db(ctx), 'space').includes('home'), false)
     // And it does not run again: the marker is written.
     assertEquals(marker(ctx), LATEST)
   },
@@ -760,25 +834,23 @@ let carriedTwo = async (ctx: State) => {
       { entity: { eid: ONE }, app: { slug: 'orchard', space: SPACE } },
     ]),
   })
-  let sql = ctx.storage.sql
-  sql.exec('alter table alias add column slug text')
-  sql.exec('alter table alias add column slugs text')
-  sql.exec('create unique index alias_slug on alias ("slug")')
-  let put = (eid: string, slug: string, slugs: string | null) =>
-    sql.exec(
-      'insert into alias (entity, slug, slugs) ' +
-        'select id, ?, ? from entity where eid = ?',
-      slug,
-      slugs,
-      eid,
-    )
-  put(APP, 'ada/cookbook', null)
-  put(ONE, 'ada/garden', 'ada/plot')
-  sql.exec(
-    "insert into yak_kv (k, v) values ('migrated', ?) " +
-      'on conflict(k) do update set v = excluded.v',
-    HOMED,
+  run(
+    ctx,
+    ...grow('alias', { name: 'slug', type: 'text' }, {
+      name: 'slugs',
+      type: 'text',
+    }),
+    {
+      t: 'create index',
+      name: 'alias_slug',
+      on: 'alias',
+      unique: true,
+      cols: [col('slug')],
+    },
+    row('alias', APP, { slug: 'ada/cookbook', slugs: null }),
+    row('alias', ONE, { slug: 'ada/garden', slugs: 'ada/plot' }),
   )
+  keep(ctx, 'migrated', HOMED)
   return now
 }
 
@@ -792,7 +864,7 @@ slow('a store carrying now arrives with the addresses moved', async () => {
   ])
   // The core word's table is planted and empty: an address is not a name tag,
   // so nothing was copied into it on the way past.
-  assertEquals(count(ctx, 'alias'), 0)
+  assertEquals(tally(db(ctx), 'alias'), 0)
   // Every pass in the same breath, so none of the later ones has anything left.
   assertEquals(marker(ctx), LATEST)
 })
@@ -811,10 +883,8 @@ slow('a directory that already carried moves them on next touch', async () => {
 
   // The old place is gone — the columns and the unique index the old word
   // declared — so the core word has the table to itself.
-  let cols = ctx.storage.sql.exec('pragma table_info(alias)').toArray()
-    .map((c) => (c as { name: string }).name)
-  assertEquals(cols, ['entity'])
-  assertEquals(count(ctx, 'alias'), 0)
+  assertEquals(columns(db(ctx), 'alias'), ['entity'])
+  assertEquals(tally(db(ctx), 'alias'), 0)
 
   // And it does not run again: the marker is written.
   assertEquals(marker(ctx), LATEST)
@@ -837,19 +907,12 @@ let carriedThree = async (ctx: State) => {
       { entity: { eid: ONE }, hostname: { name: 'herbusiness.com' } },
     ]),
   })
-  let sql = ctx.storage.sql
-  sql.exec('alter table hostname add column app text')
-  sql.exec(
-    'update hostname set app = (select id from entity where eid = ?) ' +
-      'where entity = (select id from entity where eid = ?)',
-    APP,
-    ONE,
+  run(
+    ctx,
+    ...grow('hostname', { name: 'app', type: 'text' }),
+    patch('hostname', ONE, { app: id(APP) }),
   )
-  sql.exec(
-    "insert into yak_kv (k, v) values ('migrated', ?) " +
-      'on conflict(k) do update set v = excluded.v',
-    FORMER,
-  )
+  keep(ctx, 'migrated', FORMER)
   return now
 }
 
@@ -870,8 +933,7 @@ slow('a domain aimed by the old column is aimed by the new one', async () => {
 
   // The old column is gone with its values, so nothing can aim a domain two
   // ways.
-  let cols = ctx.storage.sql.exec('pragma table_info(hostname)').toArray()
-    .map((c) => (c as { name: string }).name)
+  let cols = columns(db(ctx), 'hostname')
   assert(!cols.includes('app'), cols.join(', '))
 
   // And it does not run again.
@@ -906,12 +968,7 @@ let carriedFour = async (ctx: State) => {
       { entity: { eid: TWO }, app: { slug: 'shed', space: SPACE } },
     ]),
   })
-  let sql = ctx.storage.sql
-  sql.exec(
-    "insert into yak_kv (k, v) values ('migrated', ?) " +
-      'on conflict(k) do update set v = excluded.v',
-    SERVES,
-  )
+  keep(ctx, 'migrated', SERVES)
   return now
 }
 
@@ -943,9 +1000,7 @@ slow('an app named by its birth address is named by a handle', async () => {
 
   // The unique index the birth address was decided by is down, which is what
   // lets one address be held by two apps a year apart (T-34659).
-  let indexes = ctx.storage.sql
-    .exec("select name from sqlite_master where type = 'index'")
-    .toArray().map((r) => (r as { name: string }).name)
+  let indexes = named(ctx, { type: 'index' })
   assert(!indexes.includes('former_slug'), indexes.join(', '))
   assert(indexes.includes('app_store'), indexes.join(', '))
 
@@ -989,20 +1044,12 @@ slow('two apps may hold one address, and be two stores', async () => {
 
 let collision = async (ctx: State, source = 'fallback') => {
   await carriedFour(ctx)
-  let sql = ctx.storage.sql
-  sql.exec('drop index if exists former_slug')
-  sql.exec(
-    'update former set slug = ? where entity = (select id from entity where eid = ?)',
-    'ada/shed',
-    ONE,
+  run(
+    ctx,
+    { t: 'drop', kind: 'index', name: 'former_slug', ifExists: true },
+    patch('former', ONE, { slug: 'ada/shed' }),
   )
-  if (source == 'former') {
-    sql.exec(
-      'insert into former (entity, slug) select id, ? from entity where eid = ?',
-      'ada/shed',
-      TWO,
-    )
-  }
+  if (source == 'former') run(ctx, row('former', TWO, { slug: 'ada/shed' }))
 }
 
 let disambiguated = (report: Report) => {
@@ -1044,11 +1091,7 @@ for (let source of ['former', 'fallback']) {
 slow('a handle already assigned stays with its app', async () => {
   let ctx = state()
   await collision(ctx)
-  ctx.storage.sql.exec(
-    'update app set store = ? where entity = (select id from entity where eid = ?)',
-    'ada/shed',
-    TWO,
-  )
+  run(ctx, patch('app', TWO, { store: 'ada/shed' }))
   let now = newer(ctx, PLATFORM_STORE)
   assertEquals(await handling(now), [
     ['cookbook', 'ada/cookbook', 'cookbook'],
@@ -1061,11 +1104,13 @@ slow('a handle already assigned stays with its app', async () => {
 slow('a directory grows the handle column before indexing it', async () => {
   let ctx = state()
   await collision(ctx)
-  let sql = ctx.storage.sql
   // A directory from before app.store existed must reach the migration too.
-  sql.exec('drop index app_store')
-  sql.exec('alter table app drop column store')
-  sql.exec("update yak_kv set v = 'before handles' where k = 'schema'")
+  run(
+    ctx,
+    { t: 'drop', kind: 'index', name: 'app_store' },
+    { t: 'alter table', table: 'app', drop: 'store' },
+  )
+  keep(ctx, 'schema', 'before handles')
   let now = newer(ctx, PLATFORM_STORE)
   assertEquals(await handling(now), [
     ['cookbook', 'ada/cookbook', 'cookbook'],
@@ -1074,7 +1119,8 @@ slow('a directory grows the handle column before indexing it', async () => {
   ])
   assertEquals(marker(ctx), LATEST)
   assertEquals(
-    sql.exec('pragma index_info(app_store)').toArray()[0].name,
+    db(ctx).query({ t: 'pragma', name: 'index_info', arg: 'app_store' })[0]
+      .name,
     'store',
   )
 })
@@ -1085,22 +1131,24 @@ for (let conflict of ['suffix', 'index']) {
     async () => {
       let ctx = state()
       await collision(ctx)
-      let sql = ctx.storage.sql
+      let d = db(ctx)
       if (conflict == 'suffix') {
         // A generated suffix must not take another app's historical store.
-        sql.exec(
-          'update former set slug = ? where entity = (select id from entity where eid = ?)',
-          'ada/shed.000002',
-          APP,
-        )
+        d.query(patch('former', APP, { slug: 'ada/shed.000002' }))
       } else {
         // The writes can still fail after planning: keep the report and rollback.
-        sql.exec(
-          'create unique index refused_handles on app ((store is not null)) where store is not null',
-        )
+        let held = notNull(col('store'))
+        d.query({
+          t: 'create index',
+          name: 'refused_handles',
+          on: 'app',
+          unique: true,
+          cols: [held],
+          where: held,
+        })
       }
-      let before = sql.exec('select * from app').toArray()
-      let history = sql.exec('select * from former').toArray()
+      let before = scan(d, 'app')
+      let history = scan(d, 'former')
       let no = assertThrows(
         () =>
           ctx.storage.transactionSync(() =>
@@ -1118,8 +1166,8 @@ for (let conflict of ['suffix', 'index']) {
       assertEquals(read.status, 503)
       assertEquals(read.headers.get('x-yak-migration'), 'refused')
       assertEquals((await read.json()).error, 'Refused')
-      assertEquals(sql.exec('select * from app').toArray(), before)
-      assertEquals(sql.exec('select * from former').toArray(), history)
+      assertEquals(scan(d, 'app'), before)
+      assertEquals(scan(d, 'former'), history)
       assertEquals(marker(ctx), SERVES)
     },
   )
@@ -1154,13 +1202,20 @@ let refused = async (now: ReturnType<typeof newer>, message: string) => {
 Deno.test('a raw constraint failure in a pass refuses once and rolls back', async () => {
   let ctx = state()
   await carriedOne(ctx)
-  let sql = ctx.storage.sql
-  sql.exec(`create trigger refuse_home before insert on home begin
-    select raise(abort, 'UNIQUE constraint failed: home.entity'); end`)
+  run(ctx, {
+    t: 'create trigger',
+    name: 'refuse_home',
+    timing: 'before',
+    event: 'insert',
+    on: 'home',
+    body: [select({
+      cols: [raise('abort', 'UNIQUE constraint failed: home.entity')],
+    })],
+  })
   let now = newer(ctx, PLATFORM_STORE)
   await refused(now, 'UNIQUE constraint failed')
   assertEquals(marker(ctx), MARK)
-  assertEquals(count(ctx, 'home'), 0)
+  assertEquals(tally(db(ctx), 'home'), 0)
   await refused(
     newer(ctx, PLATFORM_STORE),
     'UNIQUE constraint failed',
@@ -1171,31 +1226,29 @@ Deno.test('a raw constraint failure in a pass refuses once and rolls back', asyn
 Deno.test('a declared index failure refuses constructor boot', async () => {
   let ctx = state()
   await carriedOne(ctx)
-  let sql = ctx.storage.sql
-  sql.exec('drop index space_slug')
-  sql.exec("update space set slug = 'same'")
-  sql.exec("update yak_kv set v = 'older schema' where k = 'schema'")
+  run(
+    ctx,
+    { t: 'drop', kind: 'index', name: 'space_slug' },
+    { t: 'update', table: 'space', set: { slug: val('same') } },
+  )
+  keep(ctx, 'schema', 'older schema')
   let now = newer(ctx, PLATFORM_STORE)
   await refused(now, 'skipped unique index space_slug')
   assertEquals(marker(ctx), MARK)
-  assertEquals(sql.exec("select v from yak_kv where k = 'schema'").toArray(), [{
-    v: 'older schema',
-  }])
+  assertEquals(slot(ctx, 'schema'), 'older schema')
 })
 
 Deno.test('boot leaves a populated table constraint for its preparing pass', async () => {
   let ctx = state()
   await carriedFour(ctx)
+  run(ctx, { t: 'drop', kind: 'index', name: 'app_store' })
+  keep(ctx, 'schema', 'older schema')
   let sql = ctx.storage.sql
-  sql.exec('drop index app_store')
-  sql.exec("update yak_kv set v = 'older schema' where k = 'schema'")
   let exec = sql.exec.bind(sql)
   let created = false
   sql.exec = (query, ...params) => {
     if (query.startsWith('create unique index if not exists "app_store"')) {
-      let [row] = exec('select count(*) as n from app where store is null')
-        .toArray() as { n: number }[]
-      assertEquals(row.n, 0)
+      assertEquals(tally(db(ctx), 'app', isNull(col('store'))), 0)
       created = true
     }
     return exec(query, ...params)
@@ -1205,7 +1258,12 @@ Deno.test('boot leaves a populated table constraint for its preparing pass', asy
   assertEquals((await now.door('/query?q=.app')).status, 200)
   assertEquals(created, true)
   assertEquals(marker(ctx), LATEST)
-  assertThrows(() => exec("update app set store = 'same'"), Error, 'UNIQUE')
+  assertThrows(
+    () =>
+      db(ctx).query({ t: 'update', table: 'app', set: { store: val('same') } }),
+    Error,
+    'UNIQUE',
+  )
 })
 
 Deno.test('a raw index creation failure still refuses an empty store', async () => {
@@ -1235,7 +1293,7 @@ Deno.test('a marker write failure rolls back its pass, even for a thrown value',
   let now = newer(ctx, PLATFORM_STORE)
   await refused(now, 'marker unavailable')
   assertEquals(marker(ctx), MARK)
-  assertEquals(count(ctx, 'home'), 0)
+  assertEquals(tally(db(ctx), 'home'), 0)
 })
 
 for (let door of ['constructor', 'vocab']) {
@@ -1258,12 +1316,12 @@ for (let door of ['constructor', 'vocab']) {
       })).status,
       200,
     )
-    let sql = ctx.storage.sql
-    if (door == 'constructor') {
-      sql.exec("update yak_kv set v = 'older schema' where k = 'schema'")
-    }
-    let before = sql.exec('select * from yak_kv order by k').toArray()
+    if (door == 'constructor') keep(ctx, 'schema', 'older schema')
+    let slots = () =>
+      db(ctx).query(select({ from: table('yak_kv'), order: [col('k')] }))
+    let before = slots()
     ctx.slots.set('vocab', '{}')
+    let sql = ctx.storage.sql
     let exec = sql.exec.bind(sql)
     sql.exec = (query, ...params) => {
       if (
@@ -1297,18 +1355,13 @@ for (let door of ['constructor', 'vocab']) {
       assertEquals(response.headers.get('x-yak-migration'), 'refused')
     }
     await refused(now, 'fixture schema failure')
-    assertEquals(sql.exec('select * from yak_kv order by k').toArray(), before)
-    assertEquals(count(ctx, 'recipe'), 0)
-    assertEquals(
-      sql.exec("select name from sqlite_master where name = 'menu'").toArray(),
-      [],
-    )
+    assertEquals(slots(), before)
+    assertEquals(tally(db(ctx), 'recipe'), 0)
+    assertEquals(named(ctx, { name: 'menu' }), [])
     // The slot keeps the document the manifest means (graph.ts `#vocabDoor`),
     // whichever format the deploy was written in.
-    let slot = (k: string) =>
-      (before as { k: string; v: string }[]).find((r) => r.k == k)!.v
-    assertEquals(slot('name'), 'ada/cookbook')
-    assertEquals(JSON.parse(slot('vocab')).$defs.recipe.properties, {
+    assertEquals(slot(ctx, 'name'), 'ada/cookbook')
+    assertEquals(JSON.parse(slot(ctx, 'vocab') ?? '').$defs.recipe.properties, {
       title: { type: 'string' },
     })
   })
@@ -1356,8 +1409,8 @@ slow('a re-addressing that collides rolls the whole pass back', async () => {
   // unwound. The object says so rather than serving half a graph.
   let read = await now.door('/query?q=.doc', {}, APP)
   assertEquals(read.status, 503)
-  assertEquals(count(ctx, 'doc'), 3)
-  assertEquals(count(ctx, 'references'), 1)
+  assertEquals(tally(db(ctx), 'doc'), 3)
+  assertEquals(tally(db(ctx), 'references'), 1)
   let said = await why(now, APP)
   assert(/unique/i.test(said), said)
   let write = await now.door('/apply', {
@@ -1383,7 +1436,7 @@ slow('counts that do not reconcile refuse the pass', async () => {
       },
     },
   })
-  let before = count(ctx, 'doc')
+  let before = tally(db(ctx), 'doc')
   let raised: unknown = null
   try {
     ctx.storage.transactionSync(() =>
@@ -1392,12 +1445,23 @@ slow('counts that do not reconcile refuse the pass', async () => {
         app: APP,
         vocab,
         plant: () => {
-          let d = driver(ctx.storage)
+          let d = db(ctx)
           for (let stmt of [...schema(vocab), ...blobSchema()]) d.query(stmt)
-          ctx.storage.sql.exec(
-            'insert into person (entity) select id from entity ' +
-              'where id not in (select entity from yak_old_person) limit 1',
-          )
+          let kept = select({
+            cols: [col('entity')],
+            from: table('yak_old_person'),
+          })
+          d.query({
+            t: 'insert',
+            into: 'person',
+            cols: ['entity'],
+            q: select({
+              cols: [col('id')],
+              from: table('entity'),
+              where: not(among(col('id'), kept)),
+              limit: lit(1),
+            }),
+          })
         },
         grantEid: (app, person) => `${app}:${person}`,
       })
@@ -1409,7 +1473,7 @@ slow('counts that do not reconcile refuse the pass', async () => {
   assert(/person/.test(raised.report.message ?? ''), raised.report.message)
   assertEquals(raised.report.ok, false)
   // And it unwound: the old tables are standing with the rows they had.
-  assertEquals(count(ctx, 'doc'), before)
+  assertEquals(tally(db(ctx), 'doc'), before)
 })
 
 slow('a body nothing holds refuses the pass', async () => {
@@ -1417,11 +1481,14 @@ slow('a body nothing holds refuses the pass', async () => {
   await seedApp(ctx)
   // The blob a doc addresses, gone. Nothing can read that body, and a body that
   // cannot be read is what this pass may not quietly turn into a null.
-  ctx.storage.sql.exec(
-    'delete from blob_text where entity = ' +
-      '(select body from doc where entity = (select id from entity where eid = ' +
-      `'${ONE}'))`,
-  )
+  run(ctx, {
+    t: 'delete',
+    from: 'blob_text',
+    where: eq(
+      col('entity'),
+      sub(select({ cols: [col('body')], from: table('doc'), where: of(ONE) })),
+    ),
+  })
   let now = newer(ctx, 'ada/cookbook')
   let write = await now.door('/apply', {
     method: 'POST',
@@ -1431,7 +1498,7 @@ slow('a body nothing holds refuses the pass', async () => {
   assertEquals(write.status, 202)
   let said = await why(now, APP)
   assert(/address a body/.test(said), said)
-  assertEquals(count(ctx, 'doc'), 3)
+  assertEquals(tally(db(ctx), 'doc'), 3)
 })
 
 // ---- the definitions, when the schema moves under them ---------------------
@@ -1455,13 +1522,23 @@ Deno.test('a schema that moves re-cuts its definitions and refills', async () =>
   // The pre-fix definition, put back by hand: a trigger that indexes the column
   // as it is stored, which for a body is its address. A document written under
   // it is findable by its title and not by a word of its prose.
-  ctx.storage.sql.exec('drop trigger doc_fts_insert')
-  ctx.storage.sql.exec(
-    `create trigger doc_fts_insert after insert on doc begin
-      insert into doc_fts(rowid, "title", "body")
-        values (new.entity, coalesce(new."title", ''), coalesce(new."body", ''));
-    end`,
-  )
+  let fresh = at('new')
+  run(ctx, { t: 'drop', kind: 'trigger', name: 'doc_fts_insert' }, {
+    t: 'create trigger',
+    name: 'doc_fts_insert',
+    timing: 'after',
+    event: 'insert',
+    on: 'doc',
+    body: [{
+      t: 'insert',
+      into: 'doc_fts',
+      cols: ['rowid', 'title', 'body'],
+      rows: [[
+        fresh('entity'),
+        ...['title', 'body'].map((c) => fn('coalesce', fresh(c), lit(''))),
+      ]],
+    }],
+  })
   await now.door('/apply', {
     method: 'POST',
     headers: { 'x-yak-kernel': '1' },
@@ -1504,26 +1581,34 @@ Deno.test('a doc_value-backed legacy index upgrades to the composed FTS schema',
       ]),
     }, APP)
   assertEquals((await write(now, 'three lemons')).status, 200)
-  let sql = ctx.storage.sql
   // The retired sqlite DDL read external content through doc_value. Its
   // resolved triggers have the same mirror rule as FTS's, so leave them in
   // place to prove boot replaces the index without losing the stored prose.
-  sql.exec('drop table doc_fts')
-  sql.exec('drop view doc_text')
-  sql.exec(`create virtual table doc_fts using fts5(
-    title, body, content='doc_value', content_rowid='entity'
-  )`)
-  sql.exec("insert into doc_fts(doc_fts) values ('rebuild')")
-  sql.exec("update yak_kv set v = 'legacy sqlite FTS' where k = 'schema'")
+  run(
+    ctx,
+    { t: 'drop', kind: 'table', name: 'doc_fts' },
+    { t: 'drop', kind: 'view', name: 'doc_text' },
+    {
+      t: 'create virtual table',
+      name: 'doc_fts',
+      using: 'fts5',
+      args: [
+        'title',
+        'body',
+        ['content', 'doc_value'],
+        ['content_rowid', 'entity'],
+      ],
+    },
+    insert('doc_fts', { doc_fts: 'rebuild' }),
+  )
+  keep(ctx, 'schema', 'legacy sqlite FTS')
 
   let upgraded = newer(ctx, 'ada/cookbook')
   let hits = await upgraded.query('lemons', APP)
   assertEquals(hits.length, 1)
   assertEquals(hits[0].entity.eid, ONE)
-  let definition = sql.exec(
-    "select sql from sqlite_master where name = 'doc_fts'",
-  ).toArray()
-  assert(String(definition[0].sql).includes("content='doc_text'"))
+  let [definition] = catalogue(db(ctx), { name: 'doc_fts' })
+  assert(String(definition.sql).includes("content='doc_text'"))
   // New writes use the new triggers, removing the old words and adding prose
   // rather than a blob address. Another wake keeps those results intact.
   assertEquals((await write(upgraded, 'four limes')).status, 200)
@@ -1546,25 +1631,27 @@ let beforeFiling = async (ctx: State) => {
     ]),
   })
   assert(r.ok, await r.text())
-  let sql = ctx.storage.sql
-  for (
-    let [col, type] of [['priority', 'real'], ['project', 'integer'], [
-      'assignee',
-      'integer',
-    ], ['domain', 'text']]
-  ) {
-    sql.exec(`alter table task add column ${col} ${type}`)
-  }
-  sql.exec(
-    'update task set priority = 2, project = (select id from entity where eid = ?), assignee = (select id from entity where eid = ?), domain = ?',
-    SPACE,
-    ADA,
-    'Garden',
+  run(
+    ctx,
+    ...grow(
+      'task',
+      { name: 'priority', type: 'real' },
+      { name: 'project', type: 'integer' },
+      { name: 'assignee', type: 'integer' },
+      { name: 'domain', type: 'text' },
+    ),
+    {
+      t: 'update',
+      table: 'task',
+      set: exprs({
+        priority: 2,
+        project: id(SPACE),
+        assignee: id(ADA),
+        domain: 'Garden',
+      }),
+    },
   )
-  sql.exec(
-    "insert into yak_kv (k, v) values ('migrated', ?) on conflict(k) do update set v = excluded.v",
-    HANDLED,
-  )
+  keep(ctx, 'migrated', HANDLED)
 }
 
 Deno.test('app filing preserves every value and never resurrects a cleared filing', async () => {
@@ -1594,23 +1681,18 @@ Deno.test('app filing rolls back a conflicting destination', async () => {
   await beforeFiling(ctx)
   // The first row is copied before the second conflicts; both changes must
   // roll back, not just the offending row.
-  ctx.storage.sql.exec('insert into entity(eid, num) values (?, 99)', TWO)
-  ctx.storage.sql.exec(
-    'insert into task(entity, priority) select id, 2 from entity where eid = ?',
-    TWO,
-  )
-  ctx.storage.sql.exec(
-    'insert into filed(entity, priority) select id, 9 from entity where eid = ?',
-    TWO,
+  run(
+    ctx,
+    insert('entity', { eid: TWO, num: 99 }),
+    row('task', TWO, { priority: 2 }),
+    row('filed', TWO, { priority: 9 }),
   )
   await refused(newer(ctx, 'ada/cookbook'), 'conflicts with filed.priority')
   assertEquals(marker(ctx), HANDLED)
-  assertEquals(ctx.storage.sql.exec('select priority from task').toArray(), [{
-    priority: 2,
-  }, { priority: 2 }])
-  assertEquals(ctx.storage.sql.exec('select priority from filed').toArray(), [{
-    priority: 9,
-  }])
+  let priorities = (name: string) =>
+    scan(db(ctx), name, undefined, ['priority'])
+  assertEquals(priorities('task'), [{ priority: 2 }, { priority: 2 }])
+  assertEquals(priorities('filed'), [{ priority: 9 }])
 })
 
 slow(
@@ -1623,9 +1705,18 @@ slow(
     ])
     // Restore the layout that deployed before the fleet split; no filed row
     // exists. The carry must read these values before dropping the old table.
-    ctx.storage.sql.exec('alter table task add column priority real')
-    ctx.storage.sql.exec('alter table task add column domain text')
-    ctx.storage.sql.exec("update task set priority = 2, domain = 'Garden'")
+    run(
+      ctx,
+      ...grow('task', { name: 'priority', type: 'real' }, {
+        name: 'domain',
+        type: 'text',
+      }),
+      {
+        t: 'update',
+        table: 'task',
+        set: exprs({ priority: 2, domain: 'Garden' }),
+      },
+    )
     let now = newer(ctx, 'ada/cookbook')
     let [row] = await now.query('.task&?filed')
     assertEquals((row.filed as { priority: number }).priority, 2)
@@ -1642,33 +1733,21 @@ slow(
 // writes — and a call aimed at each row.
 let toolsOld = async (ctx: State, names: string[], twins: string[] = []) => {
   await newer(ctx, 'ada/cookbook').query('.tool')
-  let sql = ctx.storage.sql
-  sql.exec('drop index tool_name')
-  let tool = (eid: string, name: string, call: string) => {
-    sql.exec('insert into entity (eid) values (?), (?)', eid, call)
-    sql.exec(
-      'insert into tool (entity, name) select id, ? from entity where eid = ?',
-      name,
-      eid,
+  run(ctx, { t: 'drop', kind: 'index', name: 'tool_name' })
+  let tool = (eid: string, name: string, call: string) =>
+    run(
+      ctx,
+      insert('entity', { eid }, { eid: call }),
+      row('tool', eid, { name }),
+      row('call', call, { to: id(eid) }),
     )
-    sql.exec(
-      'insert into call (entity, "to") select c.id, t.id from entity c,' +
-        ' entity t where c.eid = ? and t.eid = ?',
-      call,
-      eid,
-    )
-  }
   for (let name of names) tool(derivedEid(`tool:${name}`), name, `c-${name}`)
   for (let name of twins) tool(toolEid(name), name, `c2-${name}`)
-  sql.exec("update yak_kv set v = 'older schema' where k = 'schema'")
-  sql.exec("update yak_kv set v = ? where k = 'migrated'", FILED)
+  keep(ctx, 'schema', 'older schema')
+  keep(ctx, 'migrated', FILED)
 }
 
-let tooling = (ctx: State) =>
-  ctx.storage.sql.exec(
-    'select e.eid, t.name from tool t join entity e on e.id = t.entity' +
-      ' order by t.name',
-  ).toArray()
+let tooling = (ctx: State) => owned(ctx, 'tool', ['name'], 'name')
 
 Deno.test('a store with tools at old ids and twins boots, merges and indexes', async () => {
   let ctx = state()
@@ -1686,7 +1765,12 @@ Deno.test('a store with tools at old ids and twins boots, merges and indexes', a
   ])
   assertEquals(marker(ctx), LATEST)
   assertThrows(
-    () => ctx.storage.sql.exec("update tool set name = 'add_chore'").toArray(),
+    () =>
+      db(ctx).query({
+        t: 'update',
+        table: 'tool',
+        set: { name: val('add_chore') },
+      }),
     Error,
     'UNIQUE',
   )
@@ -1711,16 +1795,12 @@ Deno.test('a copy the build before would sandbox is stamped trusted', async () =
     ]),
   })
   assert(r.ok, await r.text())
-  ctx.storage.sql.exec(
-    "insert into yak_kv (k, v) values ('migrated', ?) " +
-      'on conflict(k) do update set v = excluded.v',
-    TOOLED,
-  )
+  keep(ctx, 'migrated', TOOLED)
   await newer(ctx, PLATFORM_STORE).query('.installed')
-  let [one, two, three] = ctx.storage.sql.exec(
-    'select i.sandboxed, i.trusted from installed i' +
-      ' join entity e on e.id = i.entity order by e.eid',
-  ).toArray() as { sandboxed: string | null; trusted: string | null }[]
+  let [one, two, three] = owned(ctx, 'installed', [
+    'sandboxed',
+    'trusted',
+  ]) as { sandboxed: string | null; trusted: string | null }[]
   assertEquals(one.sandboxed, null)
   assert(one.trusted && one.trusted > was, one.trusted ?? 'unstamped')
   assertEquals([two.sandboxed, two.trusted], [null, was])
@@ -1748,9 +1828,8 @@ Deno.test("a sent letter's Message-ID moves onto the letter", async () => {
     ]),
   }, APP)
   assert(r.ok, await r.text())
-  let sql = ctx.storage.sql
-  if (!columns(ctx, 'delivered').includes('via')) {
-    sql.exec('alter table delivered add column via text')
+  if (!columns(db(ctx), 'delivered').includes('via')) {
+    run(ctx, ...grow('delivered', { name: 'via', type: 'text' }))
   }
   for (
     let [eid, via] of [
@@ -1759,24 +1838,11 @@ Deno.test("a sent letter's Message-ID moves onto the letter", async () => {
       [THREE, 'local'],
     ]
   ) {
-    sql.exec(
-      'insert into delivered (entity, at, via) select id, ?, ? from entity ' +
-        'where eid = ?',
-      '2026-09-01T00:00:00.000Z',
-      via,
-      eid,
-    )
+    run(ctx, row('delivered', eid, { at: '2026-09-01T00:00:00.000Z', via }))
   }
-  sql.exec(
-    "insert into yak_kv (k, v) values ('migrated', ?) " +
-      'on conflict(k) do update set v = excluded.v',
-    SANDBOXED,
-  )
+  keep(ctx, 'migrated', SANDBOXED)
   await newer(ctx, 'ada/cookbook').query('.mail', APP)
-  let ids = sql.exec(
-    'select m.message_id from mail m join entity e on e.id = m.entity ' +
-      'order by e.eid',
-  ).toArray().map((row) => (row as { message_id: string | null }).message_id)
+  let ids = owned(ctx, 'mail', ['message_id']).map((r) => r.message_id)
   assertEquals(ids, ['m1@yaks.app', null, null, 'a1@x.example'])
   assertEquals(marker(ctx), LATEST)
 })
@@ -1808,38 +1874,33 @@ Deno.test("a tree's links under the old tag are reached again", async () => {
     ]),
   })
   assert(r.ok, await r.text())
-  let sql = ctx.storage.sql
-  sql.exec(
-    'create table entry (entity integer primary key references entity(id),' +
-      ' name text, mode text)',
-  )
+  run(ctx, {
+    t: 'create table',
+    name: 'entry',
+    cols: [
+      {
+        name: 'entity',
+        type: 'integer',
+        pk: true,
+        ref: { table: 'entity', cols: ['id'] },
+      },
+      { name: 'name', type: 'text' },
+      { name: 'mode', type: 'text' },
+    ],
+  })
   let entry = (tree: string, name: string, to: string, ord: number) => {
     let eid = derivedEid(`entry|${tree}|${name}`)
-    sql.exec('insert into entity (eid) values (?)', eid)
-    sql.exec(
-      'insert into edge (entity, "from", "to", ord) select e.id, f.id, t.id,' +
-        ' ? from entity e, entity f, entity t where e.eid = ? and f.eid = ?' +
-        ' and t.eid = ?',
-      ord,
-      eid,
-      tree,
-      to,
-    )
-    sql.exec(
-      "insert into entry (entity, name, mode) select id, ?, '100644' from" +
-        ' entity where eid = ?',
-      name,
-      eid,
+    run(
+      ctx,
+      insert('entity', { eid }),
+      row('edge', eid, { from: id(tree), to: id(to), ord }),
+      row('entry', eid, { name, mode: '100644' }),
     )
   }
   entry(OLD, 'index.html', PAGE, 0)
   entry(OLD, 'vocab.json', WORDS, 1)
   entry(BOTH, 'index.html', PAGE, 0)
-  sql.exec(
-    "insert into yak_kv (k, v) values ('migrated', ?) " +
-      'on conflict(k) do update set v = excluded.v',
-    SENT,
-  )
+  keep(ctx, 'migrated', SENT)
   let now = newer(ctx, GIT_STORE)
   let read = (line: unknown) => now.query(String(line))
   assertEquals(await objects({ read }, {} as never).reach([OLD, BOTH]), [
@@ -1857,8 +1918,8 @@ Deno.test("a tree's links under the old tag are reached again", async () => {
       entryEid(BOTH, 'index.html'),
     ].sort(),
   )
-  assertEquals(count(ctx, 'edge'), 3)
-  assertEquals(columns(ctx, 'entry'), [])
+  assertEquals(tally(db(ctx), 'edge'), 3)
+  assertEquals(columns(db(ctx), 'entry'), [])
   assertEquals(marker(ctx), LATEST)
 })
 
@@ -1876,27 +1937,21 @@ Deno.test("a call's arguments become the object they spell", async () => {
     ]),
   }, APP)
   assert(r.ok, await r.text())
-  let sql = ctx.storage.sql
   for (let [eid, text] of [[ONE, '{"name":"sweep"}'], [TWO, '{']]) {
-    sql.exec(
-      'update call set args = ? where entity = (select id from entity ' +
-        'where eid = ?)',
-      text,
-      eid,
-    )
+    run(ctx, patch('call', eid, { args: text }))
   }
-  sql.exec(
-    "insert into yak_kv (k, v) values ('migrated', ?) " +
-      'on conflict(k) do update set v = excluded.v',
-    ENTERED,
-  )
+  keep(ctx, 'migrated', ENTERED)
   let calls = await newer(ctx, 'ada/cookbook').query('.call', APP)
   let args = new Map(
     calls.map((c) => [c.entity.eid, (c.call as { args: unknown }).args]),
   )
   assertEquals([args.get(ONE), args.get(TWO)], [{ name: 'sweep' }, '{'])
   assertEquals(
-    sql.exec('select distinct typeof(args) as t from call').toArray(),
+    db(ctx).query(select({
+      distinct: true,
+      cols: [as(fn('typeof', col('args')), 't')],
+      from: table('call'),
+    })),
     [{ t: 'blob' }],
   )
   assertEquals(marker(ctx), LATEST)
@@ -1919,11 +1974,11 @@ Deno.test('a refused migration reaches Sentry, tagged with its store', async () 
   let ctx = state()
   await toolsOld(ctx, ['add_chore'])
   // A link to a tool is the one shape the pass refuses.
-  let sql = ctx.storage.sql
-  sql.exec("insert into entity (eid) values ('link')")
-  sql.exec(
-    'insert into edge (entity, "from", "to") select l.id, t.entity, t.entity' +
-      " from entity l, tool t where l.eid = 'link'",
+  let tool = sub(select({ cols: [col('entity')], from: table('tool') }))
+  run(
+    ctx,
+    insert('entity', { eid: 'link' }),
+    row('edge', 'link', { from: tool, to: tool }),
   )
   let now = newer(ctx, 'ada/cookbook')
   await refused(now, 'links touch a tool')

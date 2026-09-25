@@ -49,6 +49,7 @@ import type { Raw } from './ast.ts'
 import { render } from './render.ts'
 
 export {
+  type Alter,
   among,
   and,
   as,
@@ -105,8 +106,10 @@ export {
   type Param,
   type Pragma,
   type Query,
+  raise,
   type Raw,
   type Ref,
+  type Refusal,
   type Select,
   select,
   type Source,

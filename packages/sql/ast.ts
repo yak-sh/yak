@@ -85,6 +85,10 @@ export type Expr =
   | { t: 'as'; e: Expr; name: string }
   | { t: 'desc'; e: Expr }
   | { t: 'over'; fn: Expr; partition?: Expr[]; order?: Expr[] }
+  | { t: 'raise'; how: Refusal; msg?: string }
+
+/** How a trigger's `raise` ends the statement that fired it. */
+export type Refusal = 'ignore' | 'rollback' | 'abort' | 'fail'
 
 /** The infix operators an `op` node joins its parts with. */
 export type Op =
@@ -432,6 +436,13 @@ export let over = (
   partition?: Expr[],
   order?: Expr[],
 ): Expr => ({ t: 'over', fn: f, partition, order })
+
+/** A trigger's refusal: `raise(abort, 'why')`. `ignore` carries no message. */
+export let raise = (how: Refusal, msg?: string): Expr => ({
+  t: 'raise',
+  how,
+  msg,
+})
 
 // ---- query builders ----
 

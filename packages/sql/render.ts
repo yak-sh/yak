@@ -166,6 +166,10 @@ let expr = (e: Expr, c: Ctx): string => {
           e.order?.length ? `order by ${list(e.order, c)}` : '',
         ].filter(Boolean).join(' ')
       })`
+    case 'raise':
+      return `raise(${word(e.how, 'refusal')}${
+        e.msg == null ? '' : `, ${literal(e.msg)}`
+      })`
   }
 }
 

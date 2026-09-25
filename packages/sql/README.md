@@ -79,10 +79,11 @@ See [mod.ts](./mod.ts) for the complete re-export list.
 ## The AST
 
 [ast.ts](./ast.ts) holds the nodes: expressions (columns, bound values,
-literals, functions, operators, `in`, `exists`, `case`, subqueries), queries
-(`select` with CTEs and joins, compounds such as `union all`, `values`), writes
-with upserts and `returning`, and DDL (tables, indexes, views, virtual tables,
-triggers, `alter`, `drop`, pragmas, transactions). Every node is plain data.
+literals, functions, operators, `in`, `exists`, `case`, subqueries, a trigger's
+`raise`), queries (`select` with CTEs and joins, compounds such as `union all`,
+`values`), writes with upserts and `returning`, and DDL (tables, indexes, views,
+virtual tables, triggers, `alter`, `drop`, pragmas, transactions). Every node is
+plain data.
 
 [render.ts](./render.ts) writes one as SQLite text with `?` placeholders.
 Identifiers are always quoted; function, type and pragma names are checked
