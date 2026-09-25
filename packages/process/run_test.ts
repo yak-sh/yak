@@ -8,7 +8,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { EXIT, PROCESS } from './comp.ts'
 import { gone, launchers, tracked, until } from './testing.ts'
-import { adopt, launch, watch } from './run.ts'
+import { adopt, launch, vanished, watch } from './run.ts'
 import { store } from './store.ts'
 
 let dir = () => Deno.makeTempDirSync({ prefix: 'yaks-process-' })
@@ -97,6 +97,22 @@ Deno.test('watch picks up an unfinished row and stamps the one already gone', as
   assertEquals(comp((await g.read(`.${PROCESS}&*`))[0], EXIT)?.code, null)
   // Stamped, so the next boot's reconcile has nothing left to pick up.
   assertEquals(await watch(store(g), { dir: dir(), poll: 5 }), [])
+})
+
+Deno.test('a run that ended without saying so is found; a live one, a launched one and the asker are not', async () => {
+  let g = tracked()
+  let at = dir()
+  Deno.writeTextFileSync(`${at}/launched.started`, '1')
+  await g.apply(['me', 'dead', 'live', 'launched'].map((eid) => ({
+    entity: { eid },
+    [PROCESS]: { pid: eid == 'live' ? Deno.pid : 99 },
+  })))
+  let found = await vanished(store(g), {
+    dir: at,
+    me: 'me',
+    running: (pid) => Promise.resolve(pid == Deno.pid),
+  })
+  assertEquals(found.map((b) => b.entity.eid), ['dead'])
 })
 
 // The wrapper's `echo $code > file` creates the file empty and writes it a

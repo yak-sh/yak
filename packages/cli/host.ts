@@ -50,6 +50,7 @@
 
 import {
   type Actor,
+  type Bundle,
   type Comp,
   detached,
   type Eid,
@@ -69,7 +70,15 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
-import { ended, PROCESS, selfEid, started } from '@yaks/process'
+import {
+  ended,
+  EXIT,
+  PROCESS,
+  selfEid,
+  started,
+  store as machine,
+  vanished,
+} from '@yaks/process'
 import type { Derived, Driver, Extension } from '@yaks/sql'
 import { migrations, storage, type Store } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
@@ -181,6 +190,13 @@ export type Host = {
    * pass each and no waiting, which is what a one-shot command does on its way
    * in, and the live form is what a process that stays up calls. */
   duties: (signal?: AbortSignal) => Promise<void>
+  /** What {@link Served.close} would have written for each process on this
+   * machine that ended without running it (@yaks/process `vanished`): its
+   * calls ended as interrupted, its leases released, its `exit` stamped with
+   * no code. What a process about to stay up does before it reconciles
+   * (@yaks/api `serve`), so a crash leaves nothing held by the dead. Answers
+   * the processes it closed. */
+  bury: () => Promise<Bundle[]>
 
   /** This process, as an entity (@yaks/process `started`): the row it wrote on
    * the way in, what everything it writes is attributed to, and what a
@@ -738,6 +754,23 @@ export let compose = async (
       duties: (signal) => {
         if (!doing) throw new Error('the duties are not built yet')
         return doing(signal)
+      },
+      bury: async () => {
+        if (!self || !g) return []
+        let dead = await vanished(machine(g), { me: selfEid() })
+        for (let b of dead) {
+          let eid = b.entity.eid
+          let pid = (b[PROCESS] as Comp | undefined)?.pid
+          await calls?.interrupt(
+            `interrupted: process ${pid} ended without closing`,
+            eid,
+          )
+          await g.apply([
+            ...await released(g, eid),
+            { entity: { eid }, [EXIT]: {} },
+          ])
+        }
+        return dead
       },
     }
     authenticate = doorman(ruled, host, self)

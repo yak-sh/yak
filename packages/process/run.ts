@@ -648,6 +648,40 @@ export let watch = async (store: Store, o: Opts = {}): Promise<Run[]> => {
   return runs
 }
 
+/**
+ * The processes whose row says they are running on this machine and whose pid
+ * is gone: a run that ended without writing its own `exit` — killed, crashed,
+ * or the machine restarted under it. A run this package launched is left out,
+ * since its wrapper writes the ending and {@link watch} records it with the
+ * code, and so is `me`, the process asking.
+ *
+ * ```ts
+ * import { selfEid, store, vanished } from '@yaks/process'
+ *
+ * // let dead = await vanished(store(graph), { me: selfEid() })
+ * ```
+ */
+export let vanished = async (
+  store: Store,
+  o: Opts & {
+    me?: string
+    /** whether a pid is running (default: `kill -0`) */
+    running?: (pid: number) => Promise<boolean>
+  } = {},
+): Promise<Bundle[]> => {
+  let dir = dirOf(o)
+  let out: Bundle[] = []
+  for (let b of await store.running()) {
+    let eid = b.entity.eid
+    let pid = Number((b[PROCESS] as Process)?.pid ?? 0)
+    if (eid == o.me || !pid || mtimeOf(files(dir, eid).started) != null) {
+      continue
+    }
+    if (!await (o.running ?? alive)(pid)) out.push(b)
+  }
+  return out
+}
+
 /** How supervision behaves, in addition to how a process is watched. */
 export type Care = Opts & {
   /** the first backoff step (ms, default 1000): the nth respawn waits

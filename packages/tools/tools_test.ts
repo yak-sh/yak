@@ -244,6 +244,22 @@ Deno.test('an interrupted call is answered as interrupted, and no sweep runs it 
   await assertRejects(() => asked)
 })
 
+Deno.test('a holder that died is interrupted for, from what the graph says it held', async () => {
+  let { g, r } = world([echo], 'host1')
+  await r.ensure()
+  await g.apply([{
+    entity: { eid: 'orphan' },
+    call: { to: toolEid('example_echo'), args: { value: 'lost' } },
+    execution: { state: 'running', by: 'dead' },
+  }])
+  let said = await r.interrupt('its process died', 'dead')
+  assertEquals(said.filter((b) => b.error).length, 1)
+  assertEquals((await g.read('.execution&*'))[0].execution, {
+    state: 'failed',
+    by: 'dead',
+  })
+})
+
 Deno.test('a throw is an error entity, a result, and a failed execution', async () => {
   let { g, r } = world([{
     ...echo,

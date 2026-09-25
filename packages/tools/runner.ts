@@ -188,8 +188,10 @@ export type Runner = {
   /** end every call this runner claimed and is still running, as
    * `error{code: 'interrupted'}` saying `why`: what a process that is ending
    * before its tools returned writes, so no claim of its own is left to lapse
-   * and run again somewhere it was never asked */
-  interrupt: (why: string) => Promise<Bundle[]>
+   * and run again somewhere it was never asked. Given a `holder`, the calls
+   * that holder claimed and never answered instead, read from the graph: what
+   * is written for a process that ended without writing it itself. */
+  interrupt: (why: string, holder?: Eid) => Promise<Bundle[]>
 }
 
 // A tool's answer as text: the `content{body}` values its bundles carry, or
@@ -350,14 +352,17 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   // The result entity, built the way the rule would write it: one match of
   // `call_ready`, emitted. Its id is derived from that match, so it is the
   // same entity however many times a call is run.
-  let attached = (id: Eid, ms: number, sleeps = false): Bundle => {
+  let attached = (id: Eid, ms?: number, sleeps = false): Bundle => {
     let rule = sleeps && woken ? woken : answering
     let name = rule.plan.patterns[0].entity!
     let [made] = emitted(rule, {
       entities: [id, null],
       vars: { [name]: id },
     }, g.vocab)
-    return { ...made, result: { ...made.result as Comp, ms } }
+    return {
+      ...made,
+      result: { ...made.result as Comp, ...ms == null ? {} : { ms } },
+    }
   }
 
   // The claim this runner writes.
@@ -466,14 +471,19 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   // What ends a claimed call: the result the rule names, worded from what it
   // said, and the claim moved on from `running`, refused if another hand
   // moved it first.
+  // How long it ran is left out where nobody saw it start.
   let ending = (
     call: Bundle,
-    started: number,
+    started: number | undefined,
     state: string,
     said: Bundle[],
   ): Bundle[] => [
     {
-      ...attached(call.entity.eid, Math.round(now() - started), !!call.wake),
+      ...attached(
+        call.entity.eid,
+        started == null ? undefined : Math.round(now() - started),
+        !!call.wake,
+      ),
       content: { body: worded(said) },
     },
     {
@@ -635,9 +645,14 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     drive,
     // One write per call: a call whose tool returned meanwhile has moved its
     // claim on, and its own answer stands.
-    interrupt: async (why) => {
+    interrupt: async (why, holder) => {
       let out: Bundle[] = []
-      for (let [id, { call, started }] of held) {
+      let cut: { call: Bundle; started?: number }[] = holder == null
+        ? [...held.values()]
+        : (await g.read(`.execution.by=${holder}&!results&.call&*`))
+          .map((call) => ({ call }))
+      for (let { call, started } of cut) {
+        let id = call.entity.eid
         let fault: Bundle = {
           entity: { eid: '$fault' },
           content: { body: why },

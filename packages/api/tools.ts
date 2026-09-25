@@ -25,8 +25,8 @@
 // the port is bound; and a server is never run again by a sweep. Stopped by a
 // signal, it stops taking requests, answers the ones in flight and returns
 // (@yaks/cli signal.ts); closed before it could, its call is ended as
-// interrupted (@yaks/cli host.ts `close`); killed outright, it stays `running`
-// with no `exit` on its process, a claim nobody takes over.
+// interrupted (@yaks/cli host.ts `close`); killed outright, the next server to
+// start closes for its process (host.ts `bury`), and ends it the same way.
 
 import { argsOf, type Bundle } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
@@ -50,6 +50,9 @@ export type Serving = {
   handler?: Handler
   runner: Runner
   duties: (signal?: AbortSignal) => Promise<void>
+  /** close for the processes on this machine that ended without closing
+   * (@yaks/cli host.ts `bury`); a host that tracks no processes has none */
+  bury?: () => Promise<unknown>
   stopping: AbortSignal
 }
 
@@ -66,10 +69,12 @@ export let runs = (host: Serving): Runs => ({
     let args = argsOf(call)
     let port = Number(args.port ?? host.config.port ?? PORT)
     let hostname = args.hostname ?? host.config.hostname
-    // What a crash left claimed and unanswered, finished before this process
-    // takes new requests. A one-shot command must not touch calls another
-    // process is running; a process that is about to stay up is the one that
-    // can afford to.
+    // What a crash left behind, settled before this process takes new
+    // requests: each process that died without closing is closed for, and
+    // what is left claimed and unanswered is run. A one-shot command must not
+    // touch calls another process is running; a process that is about to stay
+    // up is the one that can afford to.
+    await host.bury?.()
     await reconcile(host.runner)
     // And the duties in their long-lived form: the effect pool, where this
     // process serves `effects`, and the plugins' services, each under its own
