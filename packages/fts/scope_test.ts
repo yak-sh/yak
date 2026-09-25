@@ -7,7 +7,22 @@ import { loadVocab } from '@yaks/vocab'
 import { fields, indexes } from './fields.ts'
 import { adopt, heal, schema } from './ddl.ts'
 import { find } from './search.ts'
-import { mem } from './testing.ts'
+import { by, insert, type Stmt, val } from '@yaks/sql'
+import { mem, raised, SPINE, text as prose, TOMBSTONE } from './testing.ts'
+
+let TABLES: Stmt[] = [
+  SPINE,
+  TOMBSTONE,
+  raised(
+    'content',
+    { name: 'entity', type: 'integer', pk: true },
+    prose('body'),
+  ),
+  raised('entry', { name: 'entity', type: 'integer', pk: true }, {
+    name: 'seq',
+    type: 'real',
+  }),
+]
 
 let talk = loadVocab({
   $defs: {
@@ -32,22 +47,13 @@ let text = fields(talk)
 // the text, `entry` makes it an entry, in whichever order a test calls them.
 let talking = () => {
   let db = mem()
-  for (
-    let s of [
-      `create table entity (id integer primary key, eid text not null unique)`,
-      `create table tombstone (entity integer primary key, deleted_at text)`,
-      `create table content (entity integer primary key, body text)`,
-      `create table entry (entity integer primary key, seq real)`,
-      ...schema(text),
-    ]
-  ) db.exec(s)
+  for (let s of [...TABLES, ...schema(text)]) db.query(s)
   for (let id = 1; id <= 4; id++) {
-    db.query(`insert into entity (id, eid) values (?, ?)`, [id, `e${id}`])
+    db.query(insert('entity', { id, eid: `e${id}` }))
   }
   let said = (id: number, body: string) =>
-    db.query(`insert into content (entity, body) values (?, ?)`, [id, body])
-  let entry = (id: number) =>
-    db.query(`insert into entry (entity, seq) values (?, ?)`, [id, id])
+    db.query(insert('content', { entity: id, body }))
+  let entry = (id: number) => db.query(insert('entry', { entity: id, seq: id }))
   let found = (words: string) => find(db, text, words).map((h) => h.entity)
   return { db, said, entry, found }
 }
@@ -74,14 +80,19 @@ Deno.test('the index follows the text and the membership', () => {
   let t = talking()
   t.said(1, 'the daemon takes over')
   t.entry(1)
-  t.db.query(`update content set body = ? where entity = 1`, ['a worker'])
+  t.db.query({
+    t: 'update',
+    table: 'content',
+    set: { body: val('a worker') },
+    where: by({ entity: 1 }),
+  })
   assertEquals(t.found('daemon'), [])
   assertEquals(t.found('worker'), ['e1'])
-  t.db.exec(`delete from entry where entity = 1`)
+  t.db.query({ t: 'delete', from: 'entry', where: by({ entity: 1 }) })
   assertEquals(t.found('worker'), [])
   t.entry(1)
   assertEquals(t.found('worker'), ['e1'])
-  t.db.exec(`delete from content where entity = 1`)
+  t.db.query({ t: 'delete', from: 'content', where: by({ entity: 1 }) })
   assertEquals(t.found('worker'), [])
   assertEquals(heal(t.db, text), [])
 })
@@ -90,18 +101,19 @@ Deno.test('adopting an existing store indexes its entries once, and again change
   let db = mem()
   for (
     let s of [
-      `create table entity (id integer primary key, eid text not null unique)`,
-      `create table tombstone (entity integer primary key, deleted_at text)`,
-      `create table content (entity integer primary key, body text)`,
-      `create table entry (entity integer primary key, seq real)`,
-      `insert into entity (id, eid) values (1, 'e1'), (2, 'e2')`,
-      `insert into content (entity, body) values (1, 'plugins'), (2, 'plugins')`,
-      `insert into entry (entity, seq) values (1, 1)`,
+      ...TABLES,
+      insert('entity', { id: 1, eid: 'e1' }, { id: 2, eid: 'e2' }),
+      insert('content', { entity: 1, body: 'plugins' }, {
+        entity: 2,
+        body: 'plugins',
+      }),
+      insert('entry', { entity: 1, seq: 1 }),
     ]
-  ) db.exec(s)
+  ) db.query(s)
   assertEquals(adopt(db, text).recut, ['entry_fts'])
   assertEquals(find(db, text, 'plugins').map((h) => h.entity), ['e1'])
-  let version = () => db.query(`pragma schema_version`, [])[0].schema_version
+  let version = () =>
+    db.query({ t: 'pragma', name: 'schema_version' })[0].schema_version
   let before = version()
   assertEquals(adopt(db, text), { recut: [], dropped: [], healed: [] })
   assertEquals(version(), before)

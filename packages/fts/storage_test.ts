@@ -3,7 +3,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { render } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
-import { storage } from '@yaks/sqlite'
+import { objects, storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { fields, schema, search } from './mod.ts'
 
@@ -30,11 +30,9 @@ Deno.test('storage composes FTS explicitly for document and non-document prose',
   let text = fields(vocab)
   let store = storage(db, vocab, { extend: [search(text)] })
   store.install()
-  assertEquals(
-    db.query("select name from sqlite_master where name like '%fts%'", []),
-    [],
-  )
-  for (let stmt of schema(text)) db.exec(stmt)
+  let fts = () => objects(db).filter((o) => /fts/i.test(String(o.name)))
+  assertEquals(fts(), [])
+  for (let stmt of schema(text)) db.query(stmt)
   // Installing storage again must neither replace nor duplicate FTS objects.
   store.install()
   store.tx((tx) =>
@@ -78,7 +76,7 @@ Deno.test('.order=search puts the closest match first', () => {
   let text = fields(vocab)
   let store = storage(db, vocab, { extend: [search(text, db)] })
   store.install()
-  for (let stmt of schema(text)) db.exec(stmt)
+  for (let stmt of schema(text)) db.query(stmt)
   store.tx((tx) =>
     tx.patch([
       {

@@ -2,7 +2,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { parse } from '@yaks/query'
-import { compile } from '@yaks/sql'
+import { compile, insert } from '@yaks/sql'
 import { fields } from './fields.ts'
 import { search } from './compile.ts'
 import { find, hits } from './search.ts'
@@ -47,10 +47,7 @@ Deno.test('the limit bounds the answer', () => {
 
 Deno.test('a deleted entity is not a hit', () => {
   let db = shelf()
-  db.query(
-    `insert into tombstone (entity, deleted_at) values (1, '2026-01-01')`,
-    [],
-  )
+  db.query(insert('tombstone', { entity: 1, deleted_at: '2026-01-01' }))
   assertEquals(
     find(db, text, 'dragon').map((h) => h.entity),
     ['book-2', 'review-4'],
