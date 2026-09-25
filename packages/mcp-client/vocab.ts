@@ -3,9 +3,10 @@
 // no runtime, so a browser tab loading this vocabulary loads nothing else.
 
 import type { VocabDoc } from '@yaks/vocab'
-import { mcpDoc } from './graph.ts'
+import doc from './vocab.json' with { type: 'json' }
 
-export { mcpDoc }
+/** The `mcp_server` component: a server definition, persisted. */
+export let mcpDoc: VocabDoc = doc
 
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [mcpDoc]

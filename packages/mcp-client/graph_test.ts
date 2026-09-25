@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { mcpDoc, serverOf } from './graph.ts'
+import { serverOf } from './graph.ts'
+import { mcpDoc } from './vocab.ts'
 import { loadVocab } from '@yaks/vocab'
 
 Deno.test('MCP graph vocabulary is portable, with endpoint identity independent of label', () => {

@@ -135,8 +135,9 @@ HTTPS except on loopback addresses. Configure only trusted MCP servers.
 
 ## Graph server definitions
 
-`@yaks/mcp-client/graph` is an optional adapter. It exports `mcpDoc`,
-`serverOf`, and `graphToolName`.
+`@yaks/mcp-client/graph` is an optional adapter. It exports `serverOf` and
+`graphToolName`; the `mcp_server` component is `mcpDoc`, from
+`@yaks/mcp-client/vocab`.
 
 ```ts
 await graph.apply([{

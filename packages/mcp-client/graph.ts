@@ -1,11 +1,6 @@
 /** Persisted MCP server definitions. Connections and credentials are not graph data. */
 import type { Bundle, Comp } from '@yaks/graph'
-import type { VocabDoc } from '@yaks/vocab'
 import { nameOf, namespaceOf, type Server } from './mod.ts'
-
-import doc from './vocab.json' with { type: 'json' }
-
-export const mcpDoc: VocabDoc = doc
 
 export type GraphServer = { id: string; label: string; server: Server }
 
