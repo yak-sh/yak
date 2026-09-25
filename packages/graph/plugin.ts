@@ -280,17 +280,20 @@ export type Plugin = {
    * under an alias (see {@link Derive}) */
   derive?: Record<string, Derive>
   /** how an id a caller passed becomes an eid, for the ids that are not
-   * already one. The returned map holds only the ids that changed, so a caller
-   * reads it as `at.get(id) ?? id`, and an id this plugin knows nothing about
-   * is simply absent. Called through {@link Graph.address}. It belongs to a
-   * plugin rather than the core because "what name refers to an entity" is a
-   * question about a component —
+   * already one. The returned map holds only the ids this plugin has an answer
+   * for, and an id it knows nothing about is simply absent. `null` is an
+   * answer: the id is written the way this plugin's ids are (`T-998`) and
+   * names nothing, so it is no eid either — unless a later plugin resolves it,
+   * the graph refuses it rather than let it fall through and be minted as an
+   * entity of that literal name. Called through {@link Graph.address}. It
+   * belongs to a plugin rather than the core because "what name refers to an
+   * entity" is a question about a component —
    * {@link https://jsr.io/@yaks/alias | @yaks/alias}'s `alias{name}` is the
    * component that answers it. */
   address?: (
     tx: Tx,
     ids: string[],
-  ) => Map<string, Eid> | Promise<Map<string, Eid>>
+  ) => Map<string, Eid | null> | Promise<Map<string, Eid | null>>
 }
 
 /** Every vocabulary document a set of plugins contributes, in plugin order —

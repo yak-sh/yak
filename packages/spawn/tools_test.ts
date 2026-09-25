@@ -136,7 +136,7 @@ Deno.test('a spawn refuses what is not a provider, and work that is not there', 
   )
   assertStringIncludes(
     await refused({ task: 'T-404', provider: P }),
-    'no such task',
+    'T-404 names nothing',
   )
   assertStringIncludes(
     await refused({ task: 'the-task', provider: P, model: P }),

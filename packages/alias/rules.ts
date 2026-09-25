@@ -4,8 +4,7 @@
 // component.
 
 import type { Plugin } from '@yaks/graph'
-import type { Vocab } from '@yaks/vocab'
 import { aliases } from './plugin.ts'
 
 /** Names turned into key entities, and references resolved through them. */
-export let rules = (host: { vocab: Vocab }): Plugin[] => [aliases(host.vocab)]
+export let rules = (): Plugin[] => [aliases()]

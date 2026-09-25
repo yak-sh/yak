@@ -6,12 +6,18 @@
 //
 // This is a graph plugin's `address`, which @yaks/graph calls before a caller's
 // ids are used, so every entry point accepts the ids people type: the MCP
-// server, the HTTP `/query` endpoint, the command line. A bare number
-// (`37580`) resolves too, because the number is the identity. A letter that
-// disagrees with the entity's own is refused by being left out of the answer,
-// and the caller's string goes on to fail as the eid it is not.
+// server, the HTTP `/query` endpoint, the command line, a write. A bare number
+// (`37580`) resolves too, because the number is the identity. An id written
+// this way that finds no entity wearing its number and letter is answered
+// `null`: it names nothing, and it is no eid either, so the graph refuses it
+// instead of minting an entity whose eid is the string `T-998`.
+//
+// Every write asks about the ids it names, and most name none of these, so
+// that answer comes back without a promise and a synchronous store's writes
+// stay synchronous — the branch @yaks/graph's `then` hides, written out as in
+// ./number.ts.
 
-import type { Eid, Plugin } from './graph.ts'
+import type { Bundle, Eid, Plugin } from './graph.ts'
 import { parse, prefixOf } from './id.ts'
 import type { Vocab } from '@yaks/vocab'
 
@@ -20,7 +26,7 @@ export let ids = (vocab: Vocab): Plugin => {
   let letter = prefixOf(vocab)
   return {
     name: 'ids',
-    address: async (tx, said) => {
+    address: (tx, said) => {
       // One read for the whole list: every number asked for, as a single
       // any-of filter.
       let want = new Map<number, string[]>()
@@ -28,25 +34,30 @@ export let ids = (vocab: Vocab): Plugin => {
         let p = parse(id)
         if (p) want.set(p.num, [...want.get(p.num) ?? [], id])
       }
-      let at = new Map<string, Eid>()
+      let at = new Map<string, Eid | null>()
       if (!want.size) return at
-      for (
-        let b of await tx.read(`.entity.num=${[...want.keys()].join(',')}`)
-      ) {
-        let num = Number(b.entity.num)
-        // Every letter this entity could be printed with, not only the one it
-        // displays as. An entity has several kinds at once — a task is a `doc`
-        // too — and a person typing `T-17` for the thing to do is right
-        // whichever kind happens to win the display.
-        let series = new Set(
-          vocab.kinds.filter((k) => b[k]).map((k) => letter(k)),
-        )
-        for (let id of want.get(num) ?? []) {
-          let p = parse(id)
-          if (p && (!p.prefix || series.has(p.prefix))) at.set(id, b.entity.eid)
+      for (let id of [...want.values()].flat()) at.set(id, null)
+      let wore = (found: Bundle[]) => {
+        for (let b of found) {
+          let num = Number(b.entity.num)
+          // Every letter this entity could be printed with, not only the one
+          // it displays as. An entity has several kinds at once — a task is a
+          // `doc` too — and a person typing `T-17` for the thing to do is
+          // right whichever kind happens to win the display.
+          let series = new Set(
+            vocab.kinds.filter((k) => b[k]).map((k) => letter(k)),
+          )
+          for (let id of want.get(num) ?? []) {
+            let p = parse(id)
+            if (p && (!p.prefix || series.has(p.prefix))) {
+              at.set(id, b.entity.eid)
+            }
+          }
         }
+        return at
       }
-      return at
+      let found = tx.read(`.entity.num=${[...want.keys()].join(',')}`)
+      return found instanceof Promise ? found.then(wore) : wore(found)
     },
   }
 }

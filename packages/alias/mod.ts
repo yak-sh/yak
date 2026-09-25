@@ -43,7 +43,7 @@
  * import { aliasDoc, aliases } from '@yaks/alias'
  *
  * let vocab = loadVocab([keyDoc, aliasDoc, mine], [keyKeywords])
- * // let g = graph({ storage, vocab, plugins: [keys(vocab), aliases(vocab)] })
+ * // let g = graph({ storage, vocab, plugins: [keys(vocab), aliases()] })
  * ```
  *
  * It imports no platform API, so the same package runs on a server, in a

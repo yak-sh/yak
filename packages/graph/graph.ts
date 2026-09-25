@@ -9,7 +9,8 @@
 //
 // One run, in order:
 //
-//   normalize   hooks    pure, before the transaction opens
+//   normalize   core     every id the change names, as the eid it names
+//               hooks    pure, before the transaction opens
 //   admit       core     drop undeclared properties, refuse invalid ones, check
 //                        the values
 //   mint        core     assign an id to every $alias, and rewrite the
@@ -50,10 +51,10 @@ import { type Actor, type Bundle, comps, type Eid } from './bundle.ts'
 import type { Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
 import type { Hook, Phase, Plugin, Tracker, WriteHook } from './plugin.ts'
-import { type Derive, resolve } from './alias.ts'
+import { type Derive, isAlias, resolve, substitute } from './alias.ts'
 import { identified, identities } from './identity.ts'
 import { mint as fresh } from './mint.ts'
-import { admit } from './admit.ts'
+import { admit, Refused } from './admit.ts'
 import { requested } from './request.ts'
 import { composed } from './compose.ts'
 import { type Ask, complete, gather, holding, reached } from './gather.ts'
@@ -168,7 +169,8 @@ export type Graph = {
   /** the ids a caller passed → the eids they refer to, for the ones that are
    * not eids already (see {@link Plugin.address}). Only the ids that changed
    * are in the returned map, so a caller reads it as `at.get(id) ?? id`; with
-   * no plugin resolving names, every id is itself and this costs nothing. */
+   * no plugin resolving names, every id is itself and this costs nothing. An
+   * id a plugin recognised and found naming nothing is refused. */
   address: (ids: string[]) => Map<string, Eid> | Promise<Map<string, Eid>>
   /** apply bundles in one transaction → the bundles as applied, one per
    * entity, plus everything the pipeline generated */
@@ -560,7 +562,19 @@ export let graph = (opts: Options): Graph => {
     // `apply()` passes through, the commit and a dry run's rollback alike.
     return each(
       [
-        phase('normalize', outside),
+        // Every id the change names — a bundle's own, a reference's —
+        // resolved the way a read and a tool's arguments resolve theirs, so a
+        // name or a `T-7` lands on the entity it names and one that names
+        // nothing is refused before anything is minted under it.
+        phase(
+          'normalize',
+          outside,
+          (b) =>
+            then(
+              address(reached(b, vocab).filter((id) => !isAlias(id))),
+              (at) => substitute(b, vocab, at),
+            ),
+        ),
         phase(
           'admit',
           outside,
@@ -602,16 +616,34 @@ export let graph = (opts: Options): Graph => {
   // What a caller asks before reading by id: every plugin that knows how a
   // name becomes an eid, asked in turn, each about the ids no earlier plugin
   // resolved. It runs outside any transaction — the caller is asking before it
-  // does anything.
-  let address = (ids: string[]) => {
+  // does anything. An id some plugin recognised and none resolved names
+  // nothing, and is refused here, once for every door: otherwise the caller
+  // reads it back as an eid and a write mints an entity whose eid is `T-998`.
+  let address = (
+    ids: string[],
+  ): Map<string, Eid> | Promise<Map<string, Eid>> => {
     let asks = plugins.flatMap((p) => p.address ?? [])
     if (!asks.length || !ids.length) return new Map<string, Eid>()
     let outside = detached(storage)
-    return each(asks, new Map<string, Eid>(), (at, ask) =>
+    let asked = each(asks, new Map<string, Eid | null>(), (at, ask) =>
       then(
-        ask(outside, ids.filter((id) => !at.has(id))),
+        ask(outside, ids.filter((id) => at.get(id) == null)),
         (more) => new Map([...at, ...more]),
       ))
+    return then(asked, (at) => {
+      let found = new Map<string, Eid>()
+      let nothing: string[] = []
+      for (let [id, eid] of at) {
+        eid == null ? nothing.push(id) : found.set(id, eid)
+      }
+      if (nothing.length) {
+        throw new Refused(
+          `${nothing.join(', ')} ${nothing.length == 1 ? 'names' : 'name'} ` +
+            'nothing',
+        )
+      }
+      return found
+    })
   }
 
   let g: Graph = {

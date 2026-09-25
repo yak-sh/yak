@@ -20,7 +20,7 @@
 // same letter twice, or a sweep that pulls a message it already pulled,
 // records it once: the second call returns no bundles at all.
 
-import type { Bundle, Eid, Graph } from '@yaks/graph'
+import { type Bundle, type Eid, type Graph, Refused } from '@yaks/graph'
 import { and, type Clause, eq, limit } from '@yaks/query'
 import { canon, local as localOf } from './addr.ts'
 import { EMAIL, MAIL } from './comp.ts'
@@ -66,7 +66,16 @@ export let named = async (
   domain: string,
 ): Promise<Eid | null> => {
   let id = localOf(domain)(address)
-  return id ? (await graph.address([id])).get(id) ?? null : null
+  if (!id) return null
+  try {
+    return (await graph.address([id])).get(id) ?? null
+  } catch (e) {
+    // `S-99@yours` when there is no S-99 is a letter for nobody here, which
+    // triage takes — the address door refusing the id is that answer, not a
+    // reason to refuse the letter.
+    if (e instanceof Refused) return null
+    throw e
+  }
 }
 
 let nobody: Promise<Eid | null> = Promise.resolve(null)

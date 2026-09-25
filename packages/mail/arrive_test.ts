@@ -1,5 +1,5 @@
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Comp, Eid } from '@yaks/graph'
+import { type Bundle, type Comp, type Eid, Refused } from '@yaks/graph'
 import { arrived, type Book, known, named, routed, wearer } from './arrive.ts'
 import type { Received } from './inbound.ts'
 import { clubhouse } from './harness.ts'
@@ -42,11 +42,18 @@ let got = (
 let comp = (b: Bundle | undefined, name: string) => b?.[name] as Comp
 
 // The graph with an id door that answers — what @yaks/id contributes to a host
-// that composes it, said here so this package's tests need no dependency on it.
+// that composes it, said here so this package's tests need no dependency on it:
+// an id it knows is its entity, and one written its way that it does not know
+// is refused.
 let knowing = (graph: Book, ids: Record<string, Eid>): Book => ({
   ...graph,
-  address: (asked: string[]) =>
-    new Map(asked.flatMap((id) => ids[id] ? [[id, ids[id]] as const] : [])),
+  address: (asked: string[]) => {
+    let nobody = asked.find((id) => /^[A-Z]-\d+$/.test(id) && !ids[id])
+    if (nobody) throw new Refused(`${nobody} names nothing`)
+    return new Map(
+      asked.flatMap((id) => ids[id] ? [[id, ids[id]] as const] : []),
+    )
+  },
 })
 
 Deno.test('wearer: the address book, read backwards', async () => {

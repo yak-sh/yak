@@ -746,7 +746,7 @@ export class Store {
         // is how anything addresses a row it wrote last week without having
         // kept the eid. The carrier goes first — the name rides it (T-34390).
         keys(vocab),
-        aliases(vocab),
+        aliases(),
         blobs(vocab, bytes),
         wakes(),
         fx,

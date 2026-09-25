@@ -113,8 +113,9 @@ let g = graph({
   needs no plugin.
 - **`ids(vocab)`** resolves the id a person typed (`B-7`, or a bare `7`) to the
   eid it names, as a graph plugin's `address` — so the MCP server, the HTTP
-  `/query` endpoint and the command line all accept the ids people type. A
-  letter that disagrees with the entity's own is not resolved.
+  `/query` endpoint, the command line and a write all accept the ids people
+  type. One that names nothing, including a letter that disagrees with the
+  entity's own, is refused, never minted as an entity of that literal name.
 
 A graph that registers none of this stores no number, displays none, and refuses
 `$num: true` as a request nothing answers — an error naming the request, rather

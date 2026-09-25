@@ -74,5 +74,5 @@ export let cookbookGraph = (s: Storage = store()): Graph =>
   graph({
     storage: s,
     vocab: cookbook,
-    plugins: [keys(cookbook), aliases(cookbook)],
+    plugins: [keys(cookbook), aliases()],
   })

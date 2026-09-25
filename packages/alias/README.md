@@ -32,7 +32,7 @@ const vocab = loadVocab([keyDoc, aliasDoc, {
 const g = graph({
   storage: ram(vocab),
   vocab,
-  plugins: [keys(vocab), aliases(vocab)],
+  plugins: [keys(vocab), aliases()],
 })
 await g.install()
 await g.apply([{
@@ -52,11 +52,11 @@ entity rather than creating a duplicate. The `keys` plugin must be listed before
 
 ## Exports
 
-The root module exports `aliasDoc` (the schema document), `aliases(vocab)` (the
-graph plugin), and helpers for constructing and reading alias keys. `./vocab`
-exports the declarations for plugin loaders; `./rules` exports the plugin
-factory. This package does not provide its own database: the graph's storage
-adapter stores the key entities. The example above uses memory only.
+The root module exports `aliasDoc` (the schema document), `aliases()` (the graph
+plugin), and helpers for constructing and reading alias keys. `./vocab` exports
+the declarations for plugin loaders; `./rules` exports the plugin factory. This
+package does not provide its own database: the graph's storage adapter stores
+the key entities. The example above uses memory only.
 
 ## How a name is stored and looked up
 

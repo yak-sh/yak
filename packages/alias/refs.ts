@@ -19,11 +19,9 @@
 // like an id these packages generate — a UUID, a content hash — is not looked
 // up at all, so ordinary eid references cost nothing.
 
-import type { Bundle, Eid, Hook, Tx } from '@yaks/graph'
-import { comps, substitute, then } from '@yaks/graph'
-import { minted } from '@yaks/graph'
+import type { Eid, Tx } from '@yaks/graph'
+import { minted, then } from '@yaks/graph'
 import { ofOf } from '@yaks/key'
-import type { Vocab } from '@yaks/vocab'
 import { aliasEid } from './comp.ts'
 
 /** Whether an id is worth looking up as a name — a `$alias` and an id these
@@ -36,9 +34,9 @@ export let wordish = (id: string): boolean =>
  * that changed, so a caller reads it as `at.get(id) ?? id`, and an empty map
  * means every id was already an eid.
  *
- * This is the shared entry point: an MCP tool that takes ids, a query that
- * names one, and the hook below all call it. A graph built with this plugin
- * exposes it as `graph.address(ids)`.
+ * This is the shared entry point: a graph built with this plugin asks it
+ * through `graph.address(ids)` for an MCP tool that takes ids, a query that
+ * names one, and every id a write names.
  */
 export let addressed = (
   tx: Tx,
@@ -58,37 +56,4 @@ export let addressed = (
     }
     return at
   })
-}
-
-// Every id mentioned in a list of bundles: the entity each bundle is about, and
-// whatever its reference properties point at.
-let spoken = (bundles: Bundle[], vocab: Vocab): string[] => {
-  let out: string[] = bundles.map((b) => b.entity.eid)
-  for (let b of bundles) {
-    for (let [name, comp] of comps(b)) {
-      for (let [prop, val] of Object.entries(comp ?? {})) {
-        if (
-          typeof val == 'string' && vocab.prop(name, prop)?.category == 'ref'
-        ) out.push(val)
-      }
-    }
-  }
-  return out
-}
-
-/**
- * The `normalize` hook that lets a write address entities by name: every id in
- * it that is some entity's name is replaced by that entity's eid, both as a
- * bundle's own id and in every reference property. Registered by {@link
- * aliases}; exported on its own for a graph that wants it without the
- * vocabulary.
- *
- * It runs before `mint`, so a `$alias` is left alone — no entity has a name
- * starting with `$` — and every id the rest of `apply()` writes against is an
- * eid.
- */
-export let pointed = (vocab: Vocab): Hook => (bundles, tx) => {
-  let ids = spoken(bundles, vocab).filter(wordish)
-  if (!ids.length) return bundles
-  return then(addressed(tx, ids), (at) => substitute(bundles, vocab, at))
 }

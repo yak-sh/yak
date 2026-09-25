@@ -1,8 +1,8 @@
 // One word, one meaning: the ways a caller can say which run it means, and
 // the actor that run writes as.
 
-import { assertEquals } from '@std/assert'
-import { graph } from '@yaks/graph'
+import { assertEquals, assertRejects } from '@std/assert'
+import { graph, Refused } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { idKeywords } from '@yaks/id'
 import { ids } from '@yaks/id/rules'
@@ -46,8 +46,12 @@ Deno.test('a run is reached by its eid, its human id, or its own name', async ()
 })
 
 Deno.test('a word no run answers to reaches nothing', async () => {
-  assertEquals(await found('S-404'), undefined)
+  assertEquals(await found('nothing-here'), undefined)
   assertEquals(await found(''), undefined)
+})
+
+Deno.test('an id that names no run is refused, never taken for a name', async () => {
+  await assertRejects(() => found('S-404'), Refused, 'S-404 names nothing')
 })
 
 Deno.test('a run writes for whoever it speaks as, through itself', () => {

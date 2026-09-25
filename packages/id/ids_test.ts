@@ -44,17 +44,19 @@ Deno.test('the number is the identity; the letter only has to agree', async () =
   assertEquals(await at('t-7'), { 't-7': 'a' })
   // Every kind it wears answers for it: entity 7 is a task and a doc.
   assertEquals(await at('D-7'), { 'D-7': 'a' })
-  // M-7 is nobody: entity 7 is neither a memory nor anything else with an M.
-  assertEquals(await at('M-7'), {})
-  // T-9 is nobody either: entity 9 is a memory.
-  assertEquals(await at('T-9'), {})
+  // M-7 names nothing: entity 7 is neither a memory nor anything else with an
+  // M. T-9 names nothing either: entity 9 is a memory.
+  assertEquals(await at('M-7', 'T-9'), { 'M-7': null, 'T-9': null })
 })
 
-Deno.test('an eid, a name and an unnumbered id address nothing here', async () => {
+Deno.test("an eid and a name are not this plugin's to answer", async () => {
   asked = []
   assertEquals(await at('a', 'some-name'), {})
   assertEquals(asked, [])
-  assertEquals(await at('T-404'), {})
+})
+
+Deno.test('a human id nobody wears names nothing, and says so', async () => {
+  assertEquals(await at('T-404', '404'), { 'T-404': null, '404': null })
 })
 
 Deno.test('every id on the line costs one read', async () => {

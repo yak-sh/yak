@@ -49,5 +49,5 @@ export type Plugin = {
   address?: (
     tx: Tx,
     ids: string[],
-  ) => Map<string, Eid> | Promise<Map<string, Eid>>
+  ) => Map<string, Eid | null> | Promise<Map<string, Eid | null>>
 }

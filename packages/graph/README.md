@@ -136,7 +136,10 @@ that change. Reusing `$newBook` in a later change does not refer to the previous
 entity. For persistent, idempotent names, compose
 [@yaks/alias](../alias/README.md), which builds on
 [@yaks/key](../key/README.md). `g.address(ids)` asks the installed plugins to
-resolve names to eids; it does not replace ordinary reference validation.
+resolve names to eids, and a write asks it about every id the write names. An id
+a plugin recognises as its own form and finds naming nothing (`T-998` where
+there is no T-998) is refused rather than taken for an eid. It does not replace
+ordinary reference validation.
 
 ## Plugins and transactions
 
