@@ -10,7 +10,16 @@
 import { open } from './db.ts'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
-import { type Driver, type Param, render, type Row, type Stmt } from '@yaks/sql'
+import {
+  type Column,
+  type CreateTable,
+  type Driver,
+  insert,
+  type Param,
+  render,
+  type Row,
+  type Stmt,
+} from '@yaks/sql'
 import { storage, type Store } from './mod.ts'
 
 // A Driver over a fresh in-memory database, foreign keys enforced so a dangling
@@ -198,3 +207,52 @@ export let spy = (
     if (!saw(r.sql, r.params)) d.exec(s)
   },
 })
+
+/** A table written out by hand, as a storage adapter would raise it: for a
+ * package that works beside the tables and does not create them. */
+export let raised = (name: string, ...cols: Column[]): CreateTable => ({
+  t: 'create table',
+  name,
+  cols,
+})
+let SPINE_REF = { table: 'entity', cols: ['id'] }
+/** The column a component's table is keyed by: its owner's id. */
+export let owner: Column = {
+  name: 'entity',
+  type: 'integer',
+  pk: true,
+  ref: SPINE_REF,
+}
+export let text = (name: string): Column => ({ name, type: 'text' })
+export let SPINE = raised(
+  'entity',
+  { name: 'id', type: 'integer', pk: true },
+  { name: 'eid', type: 'text', notNull: true, unique: true },
+  { name: 'num', type: 'integer' },
+)
+export let TOMBSTONE = raised('tombstone', owner, {
+  name: 'deleted_at',
+  type: 'text',
+  notNull: true,
+})
+/** A bookshop's tables: books with a title, a blurb and a price, and reviews
+ * with prose of their own. */
+export let BOOKSHOP: CreateTable[] = [
+  SPINE,
+  TOMBSTONE,
+  raised('book', owner, text('title'), text('blurb'), {
+    name: 'price',
+    type: 'real',
+  }),
+  raised('review', owner, text('prose'), { name: 'stars', type: 'real' }, {
+    name: 'book',
+    type: 'integer',
+    ref: SPINE_REF,
+  }),
+]
+/** An entity's spine row, numbered by its id. */
+export let entity = (db: Driver, id: number, eid: string) =>
+  db.query(insert('entity', { id, eid, num: id }))
+/** An entity laid to rest. */
+export let bury = (db: Driver, entity: number, at = '2026-01-01T00:00:00Z') =>
+  db.query(insert('tombstone', { entity, deleted_at: at }))

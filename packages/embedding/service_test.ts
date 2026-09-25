@@ -3,12 +3,12 @@
 import { assert, assertEquals } from '@std/assert'
 import { service } from './service.ts'
 import { TABLE } from './ddl.ts'
-import type { Driver } from '@yaks/sql'
+import { type Driver, insert, tally } from '@yaks/sql'
+import { entity } from '../sqlite/testing.ts'
 import type { Options } from './options.ts'
 import { shelf, shop } from './testing.ts'
 
-let count = (db: Driver) =>
-  Number(db.query(`select count(*) as n from "${TABLE}"`, [])[0].n)
+let count = (db: Driver) => tally(db, TABLE)
 
 let until = async (want: () => boolean) => {
   for (let i = 0; i < 400 && !want(); i++) {
@@ -45,8 +45,8 @@ Deno.test('one pass when the signal has already ended, the way a command runs it
 Deno.test('a backlog drains pass after pass, then a write from anywhere is found', async () => {
   let { db, end } = running({ embedder: { via: 'hash' }, batch: 1, after: 1 })
   await until(() => count(db) == 4)
-  db.exec(`insert into entity (id, eid, num) values (9, 'book-9', 9)`)
-  db.query(`insert into book (entity, title) values (?, ?)`, [9, 'Late'])
+  entity(db, 9, 'book-9')
+  db.query(insert('book', { entity: 9, title: 'Late' }))
   await until(() => count(db) == 5)
   await end()
 })
@@ -114,7 +114,7 @@ Deno.test('the host ending stops the loop: nothing runs afterwards', async () =>
     let { db, end } = running({ embedder: { via: 'hash' }, after: 1 })
     await until(() => count(db) == 4)
     await end()
-    db.exec('drop table book')
+    db.query({ t: 'drop', kind: 'table', name: 'book' })
     await new Promise((go) => setTimeout(go, 10))
     assertEquals(said, [])
   })

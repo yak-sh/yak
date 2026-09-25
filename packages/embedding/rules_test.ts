@@ -3,7 +3,7 @@
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
-import { compile } from '@yaks/sql'
+import { compile, scan, tally } from '@yaks/sql'
 import { extend, rules } from './rules.ts'
 import { TABLE } from './ddl.ts'
 import { mem, shop, stocked } from './testing.ts'
@@ -13,7 +13,7 @@ let hash = { embedder: { via: 'hash' } } as const
 Deno.test('rules raises the vectors and adds no rule to apply()', () => {
   let sql = mem()
   assertEquals(rules({ sql }), [])
-  assertEquals(sql.query(`select count(*) as n from "${TABLE}"`, [])[0].n, 0)
+  assertEquals(tally(sql, TABLE), 0)
   // and it is idempotent, so a host that already had the table keeps it
   rules({ sql })
 })
@@ -72,5 +72,5 @@ Deno.test('a key that has not arrived still names the space it will fill', async
 Deno.test('the mark starts dirty: an index never built is owed one', () => {
   let sql = mem()
   rules({ sql })
-  assert(sql.query(`select dirty from "${TABLE}_index"`, [])[0].dirty)
+  assert(scan(sql, `${TABLE}_index`)[0].dirty)
 })

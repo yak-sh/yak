@@ -29,7 +29,7 @@ import { fields, hashEmbedder, schema, semantic, sweep } from '@yaks/embedding'
 import { storage } from '@yaks/sqlite'
 
 let text = fields(vocab)
-for (let statement of schema()) db.exec(statement)
+for (let statement of schema()) db.query(statement)
 
 let embedder = hashEmbedder()
 await sweep(db, text, embedder)

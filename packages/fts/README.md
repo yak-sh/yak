@@ -66,7 +66,7 @@ import { compile } from '@yaks/sql'
 import { parse } from '@yaks/query'
 
 let text = fields(vocab)
-for (let statement of schema(text)) db.exec(statement)
+for (let statement of schema(text)) db.query(statement)
 heal(db, text) // populate indexes if the component tables already had rows
 
 let screen = compile(parse('.book.price<20'), vocab)

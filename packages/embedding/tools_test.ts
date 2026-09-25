@@ -3,7 +3,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import type { Driver } from '@yaks/sql'
+import { type Driver, val } from '@yaks/sql'
 import { mem, shelf, stocked } from './testing.ts'
 import { TABLE } from './ddl.ts'
 import { clean } from './mark.ts'
@@ -31,9 +31,11 @@ let checkup = async (
 // Move every vector's timestamp back, the way an index nobody has touched for
 // an hour looks.
 let aged = (sql: Driver, hours: number) => {
-  sql.query(`update "${TABLE}" set at = ?`, [
-    new Date(Date.now() - hours * 3_600_000).toISOString(),
-  ])
+  sql.query({
+    t: 'update',
+    table: TABLE,
+    set: { at: val(new Date(Date.now() - hours * 3_600_000).toISOString()) },
+  })
   return sql
 }
 

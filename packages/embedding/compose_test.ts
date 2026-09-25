@@ -6,6 +6,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Handler } from '@yaks/api'
 import { compose } from '@yaks/cli/host'
+import { tally } from '@yaks/sql'
 
 // The door these tests ask: @yaks/api is in every config here, so a host
 // without a handler would be this file's own bug.
@@ -64,8 +65,7 @@ Deno.test('a config composes the vectors, and asking the door ranks by them', as
   try {
     void yak.duties()
     await yak.graph.apply(shelf)
-    let vectors = () =>
-      Number(yak.sql.query('select count(*) as n from embedding', [])[0].n)
+    let vectors = () => tally(yak.sql, 'embedding')
     for (let i = 0; i < 400 && vectors() < 3; i++) {
       await new Promise((go) => setTimeout(go, 1))
     }
@@ -130,7 +130,7 @@ Deno.test('a config with no key composes, and nothing about the boot is differen
     assertEquals(res.status, 200, await res.text())
     await new Promise((go) => setTimeout(go, 30))
     assertEquals(
-      Number(yak.sql.query('select count(*) as n from embedding', [])[0].n),
+      tally(yak.sql, 'embedding'),
       0,
       'a host with no key embeds nothing',
     )

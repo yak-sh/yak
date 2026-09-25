@@ -35,7 +35,7 @@
  * import { parse } from '@yaks/query'
  *
  * let text = fields(shop) // every text property the vocabulary declares
- * for (let stmt of schema()) db.exec(stmt)
+ * for (let stmt of schema()) db.query(stmt)
  *
  * let embedder = hashEmbedder() // swap in a model when you have one
  * await sweep(db, text, embedder) // keeps the vectors in step with the text

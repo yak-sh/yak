@@ -2,7 +2,18 @@
 // queue the database's triggers keep, whoever wrote.
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { type Expr, fn } from '@yaks/sql'
+import {
+  by,
+  col,
+  type Expr,
+  fn,
+  insert,
+  scan,
+  type Stmt,
+  tally,
+  val,
+} from '@yaks/sql'
+import { bury, raised, SPINE, text as prose } from '../sqlite/testing.ts'
 import { loadVocab } from '@yaks/vocab'
 import { fields, searched } from './fields.ts'
 import { sources, sweep } from './sweep.ts'
@@ -15,8 +26,15 @@ import { embedder, mem, shelf, shop } from './testing.ts'
 
 let text = fields(shop)
 type Db = ReturnType<typeof shelf>
-let count = (db: Db) =>
-  Number(db.query(`select count(*) as n from "${TABLE}"`, [])[0].n)
+let count = (db: Db) => tally(db, TABLE)
+let change = (
+  db: Db,
+  table: string,
+  entity: number,
+  set: Record<string, Expr>,
+) => db.query({ t: 'update', table, set, where: by({ entity }) })
+let unrow = (db: Db, from: string, entity: number) =>
+  db.query({ t: 'delete', from, where: by({ entity }) })
 let has = (db: Db, eid: string) => !!vectorOf(db, eid, embedder.model)
 let swept = async (db: Db, e: Embedder = embedder, limit?: number) => {
   let { fresh, left } = await sweep(db, text, e, limit)
@@ -67,8 +85,8 @@ Deno.test('a limit takes the newest and says what is left', async () => {
 
 Deno.test('a write from anywhere is owed a look; unchanged text is not re-embedded', async () => {
   let db = await stocked()
-  db.query(`update book set blurb = ? where entity = 1`, ['A cook, actually.'])
-  db.query(`update review set prose = prose where entity = 4`, [])
+  change(db, 'book', 1, { blurb: val('A cook, actually.') })
+  change(db, 'review', 4, { prose: col('prose') })
   assertEquals(left(db), 2)
   assertEquals(await swept(db), { fresh: 1, left: 0 })
 })
@@ -82,9 +100,9 @@ Deno.test('a new model re-embeds the whole corpus, once', async () => {
 
 Deno.test('emptied, deleted and undressed entities lose their vectors', async () => {
   let db = await stocked()
-  db.query(`update book set title = ?, blurb = ? where entity = 3`, ['', '  '])
-  db.exec(`insert into tombstone values (2, '2026-01-01T00:00:00Z')`)
-  db.exec(`delete from review where entity = 4`)
+  change(db, 'book', 3, { title: val(''), blurb: val('  ') })
+  bury(db, 2)
+  unrow(db, 'review', 4)
   await swept(db)
   assertEquals(count(db), 1)
   assert(has(db, 'book-1'))
@@ -92,18 +110,18 @@ Deno.test('emptied, deleted and undressed entities lose their vectors', async ()
 
 Deno.test('a restored entity, and a vector deleted by hand, are made again', async () => {
   let db = await stocked()
-  db.exec(`insert into tombstone values (2, '2026-01-01T00:00:00Z')`)
+  bury(db, 2)
   await swept(db)
-  db.exec(`delete from tombstone where entity = 2`)
-  db.exec(`delete from "${TABLE}" where entity = 1`)
+  unrow(db, 'tombstone', 2)
+  unrow(db, TABLE, 1)
   assertEquals(await swept(db), { fresh: 2, left: 0 })
   assertEquals(count(db), 4)
 })
 
 Deno.test('the vectors are derived: drop the table and the sweep rebuilds it', async () => {
   let db = await stocked()
-  db.exec(`drop table "${TABLE}"`)
-  for (let stmt of schema()) db.exec(stmt)
+  db.query({ t: 'drop', kind: 'table', name: TABLE })
+  for (let stmt of schema()) db.query(stmt)
   assertEquals(await swept(db), { fresh: 4, left: 0 })
 })
 
@@ -186,35 +204,37 @@ let desk = loadVocab({
 
 Deno.test('text found through another component counts only while that one is worn', async () => {
   let db = mem()
+  let key = { name: 'entity', type: 'integer', pk: true }
   for (
     let stmt of [
-      `create table entity (id integer primary key, eid text not null unique)`,
-      `create table tombstone (entity integer primary key, deleted_at text)`,
-      `create table page (entity integer primary key, words text)`,
-      `create table excerpt (entity integer primary key, "from" text)`,
+      SPINE,
+      raised('tombstone', key, prose('deleted_at')),
+      raised('page', key, prose('words')),
+      raised('excerpt', key, prose('from')),
       ...schema(),
     ]
-  ) db.exec(stmt)
+  ) db.query(stmt)
   let on = fields(desk, searched)
   assertEquals(on, [{ comp: 'page', prop: 'words', on: 'excerpt' }])
-  let put = (id: number, ...rows: string[]) => {
-    db.exec(`insert into entity values (${id}, 'e-${id}')`)
-    for (let r of rows) db.exec(r.replaceAll('$', String(id)))
+  let put = (id: number, ...rows: ((id: number) => Stmt)[]) => {
+    db.query(insert('entity', { id, eid: `e-${id}` }))
+    for (let r of rows) db.query(r(id))
   }
-  let page = `insert into page values ($, 'the dragon woke')`
-  let excerpt = `insert into excerpt values ($, 'book-1')`
+  let page = (entity: number) =>
+    insert('page', { entity, words: 'the dragon woke' })
+  let excerpt = (entity: number) =>
+    insert('excerpt', { entity, from: 'book-1' })
   put(1, page, excerpt)
   put(2, page) // a receipt
   let pass = async () => (await sweep(db, on, embedder)).fresh
   assertEquals(await pass(), 1)
   put(3, excerpt, page) // the other order
-  db.exec(`insert into excerpt values (2, 'book-2')`)
+  db.query(insert('excerpt', { entity: 2, from: 'book-2' }))
   assertEquals(await pass(), 2)
-  db.exec(`delete from excerpt where entity = 1`)
+  unrow(db, 'excerpt', 1)
   await pass()
   assertEquals(
-    db.query(`select entity from "${TABLE}" order by entity`, [])
-      .map((r) => r.entity),
+    scan(db, TABLE, undefined, ['entity']).map((r) => r.entity).sort(),
     [2, 3],
   )
 })

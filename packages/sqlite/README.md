@@ -341,7 +341,11 @@ const monitor = watchMigrations(control, (reason) => {
 
 // On a separate, quiescent migrator connection (not inside another transaction):
 await control.run('documents/add-summary-v1', (db) => {
-  db.exec('alter table doc add column summary text')
+  db.query({
+    t: 'alter table',
+    table: 'doc',
+    add: { name: 'summary', type: 'text' },
+  })
 }, { intervalMs: 1000, marginMs: 100 })
 
 monitor.stop() // before closing the application connection

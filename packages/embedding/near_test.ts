@@ -2,7 +2,8 @@
 // a moved model does to it.
 
 import { assert, assertEquals } from '@std/assert'
-import { among, col, render, select, table, val } from '@yaks/sql'
+import { among, col, render, select, table, tally, val } from '@yaks/sql'
+import { bury } from '../sqlite/testing.ts'
 import { nearest, vectorOf } from './near.ts'
 import { TABLE } from './ddl.ts'
 import { embedder, stocked } from './testing.ts'
@@ -47,13 +48,10 @@ Deno.test('a neighbour carries the integer id its rows key on', async () => {
 
 Deno.test('a grave stops being a neighbour before the sweep prunes it', async () => {
   let db = await stocked()
-  db.exec(`insert into tombstone values (2, '2026-01-01T00:00:00Z')`)
+  bury(db, 2)
   assert(!names(db, 'book-1').includes('book-2'))
   // the row is still there — it is the read that refuses it, not the table
-  assertEquals(
-    Number(db.query(`select count(*) n from "${TABLE}"`, [])[0].n),
-    4,
-  )
+  assertEquals(tally(db, TABLE), 4)
 })
 
 Deno.test('a screen decides what "nearest" is nearest among', async () => {

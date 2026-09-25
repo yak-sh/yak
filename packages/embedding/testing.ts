@@ -7,7 +7,8 @@
 
 import { open } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import type { Driver } from '@yaks/sql'
+import { type Driver, insert } from '@yaks/sql'
+import { BOOKSHOP, entity } from '../sqlite/testing.ts'
 import { fields, schema, sweep } from './mod.ts'
 import { hashEmbedder } from './embedder.ts'
 
@@ -54,35 +55,19 @@ export let shop: Vocab = loadVocab(doc)
 /** The deterministic embedder every test here uses. */
 export let embedder = hashEmbedder()
 
-// The entity table and the two component tables, written out by hand: this
-// package stores vectors beside those tables, it does not create them (that is
-// a storage adapter's job).
-let TABLES = [
-  `create table entity (id integer primary key, eid text not null unique, num integer)`,
-  `create table tombstone (entity integer primary key references entity(id), deleted_at text not null)`,
-  `create table book (entity integer primary key references entity(id), title text, blurb text, price real)`,
-  `create table review (entity integer primary key references entity(id), prose text, stars real, book integer references entity(id))`,
-]
-
-/** A shop with its tables, its vector table, and a few books to find. */
+/** A shop with its tables (written out by hand: this package stores vectors
+ * beside them, it does not create them), its vector table, and a few books to
+ * find. */
 export let shelf = (): Driver => {
   let db = mem()
-  for (let stmt of [...TABLES, ...schema()]) db.exec(stmt)
-  let entity = (id: number, eid: string) =>
-    db.exec(`insert into entity (id, eid, num) values (${id}, '${eid}', ${id})`)
+  for (let stmt of [...BOOKSHOP, ...schema()]) db.query(stmt)
   let book = (id: number, title: string, blurb: string, price: number) => {
-    entity(id, `book-${id}`)
-    db.query(
-      `insert into book (entity, title, blurb, price) values (?, ?, ?, ?)`,
-      [id, title, blurb, price],
-    )
+    entity(db, id, `book-${id}`)
+    db.query(insert('book', { entity: id, title, blurb, price }))
   }
   let review = (id: number, prose: string, of: number) => {
-    entity(id, `review-${id}`)
-    db.query(
-      `insert into review (entity, prose, stars, book) values (?, ?, 5, ?)`,
-      [id, prose, of],
-    )
+    entity(db, id, `review-${id}`)
+    db.query(insert('review', { entity: id, prose, stars: 5, book: of }))
   }
   // Two dragon books, one kitchen memoir: the first two should be neighbours
   // and the third should not, on shared words alone.
