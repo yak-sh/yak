@@ -6,9 +6,10 @@
 // normalize hook does it for a change's reference properties. Reads did not, so
 // `.decided.by=jeff` matched nothing while `.decided.by=<eid>` matched.
 //
-// A query names an entity in exactly four places: a reference property's value
-// (`.decided.by=jeff`), the reverse-reference filter `.refs=`, a walk's target
-// (`.requires->T-42`) and the neighbour filter `.near=`. Nowhere else —
+// A query names an entity in exactly five places: the entity's own eid
+// (`.eid=T#47e9678bdf`), a reference property's value (`.decided.by=jeff`),
+// the reverse-reference filter `.refs=`, a walk's target (`.requires->T-42`)
+// and the neighbour filter `.near=`. Nowhere else —
 // `.status=done` is an enum, and a value that happens to be somebody's name
 // must not be turned into their eid just because it sat on a scalar property.
 //
@@ -33,6 +34,15 @@ let refs = (vocab: Vocab, c: Clause & { kind: 'pred' }): boolean => {
   // Only the two equality forms compare a whole id. `~=` is a substring of
   // whatever is stored, and a range of eids means nothing.
   if (c.op != '=' && c.op != '!=') return false
+  // The entity's own eid names the entity it is.
+  let [first, second] = c.path
+  if (
+    c.path.length == 1
+      ? first == 'eid'
+      : c.path.length == 2 && first == 'entity' && second == 'eid'
+  ) {
+    return true
+  }
   let hops
   try {
     hops = vocab.aim(c.path.join('.'), c.facet)

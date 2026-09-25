@@ -42,8 +42,15 @@ Deno.test('the same, kept in IndexedDB', async () => {
 })
 
 Deno.test('a rebuild keeps the number the entity had', async () => {
-  let next = await reload(stash())
-  assertEquals(next.ent('r1')?.entity.num, 1)
+  let vault = stash()
+  let first = boxClient(undefined, { vault })
+  await first.ready
+  // The number is the server's to give; here it arrives on the patch itself.
+  await first.mutate([{ entity: { eid: 'r1', num: 7 }, draft: { text: 'x' } }])
+  first.close()
+  let next = boxClient(undefined, { vault })
+  await next.ready
+  assertEquals(next.ent('r1')?.entity.num, 7)
   next.close()
 })
 

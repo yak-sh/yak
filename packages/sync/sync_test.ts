@@ -34,13 +34,13 @@ Deno.test('a local apply lands on the server, minus what is local-tier', async (
 
 Deno.test("the server's number and stamps land back on the client", async () => {
   let srv = server()
-  // Two entities the client knows nothing about, so the two graphs would
-  // otherwise number the same recipe differently.
+  // Two entities the client knows nothing about: a number the client guessed
+  // for the recipe would be one of theirs.
   srv.graph.apply([{ entity: { eid: 'x1' } }, { entity: { eid: 'x2' } }])
   let c = client(srv)
 
   c.graph.apply([dal()])
-  assertEquals(at(c.graph, 'r1')?.entity.num, 1) // the client's own guess
+  assertEquals(at(c.graph, 'r1')?.entity.num, undefined) // none until told
   assertEquals(comp(at(c.graph, 'r1'), 'created').by, undefined)
 
   await c.idle()

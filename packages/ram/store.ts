@@ -32,11 +32,12 @@ export type { Query }
 export type RamOpts = {
   /** the reference moment for time phrases (default: the read's own `now`) */
   now?: number
-  /** keep the `num` a patch's identity already carries instead of assigning a
-   * new one. This is what a store mirroring another graph needs — a client
-   * applying the changes a server returned is being told the identity, not
-   * choosing it. Off by default: a store that mirrors nothing owns its own
-   * numbering. */
+  /** keep the `num` a patch's identity already carries, and never assign one.
+   * This is what a store mirroring another graph needs — a client applying the
+   * changes a server returned is being told the identity, not choosing it. An
+   * entity it has not been told a number for has none: a number it guessed
+   * could be another entity's. Off by default: a store that mirrors nothing
+   * owns its own numbering. */
   adopt?: boolean
   /** Give new entities a human-readable number. Opt-IN, with the same option
    * name @yaks/sqlite uses: left out, an entity has its eid and nothing else.
@@ -147,13 +148,10 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   }
 
   // The number an identity gets: the one it arrived with when this store
-  // mirrors another graph, else the next one this store has to give.
-  let numberFor = (num?: number | null) => {
-    if (!base.adopt || num === undefined) return next++
-    if (num === null) return null
-    if (num >= next) next = num + 1 // a locally minted one must not collide
-    return num
-  }
+  // mirrors another graph (none until it is told), else the next one this
+  // store has to give.
+  let numbered = (num?: number | null): { num?: number | null } =>
+    !base.adopt ? { num: next++ } : num === undefined ? {} : { num }
 
   let patch = (bundles: Bundle[]): Entity[] => {
     let born: Entity[] = []
@@ -180,14 +178,14 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     let birth = (eid: Eid, num?: number | null) => {
       let rec = rows.get(eid)
       if (rec) {
-        // A mirror adopts a correction: this store guessed a number for an
-        // entity it created optimistically, and is now being told the real one.
+        // A mirror is told a number it did not have yet: the server's answer
+        // to an entity this store created, or reached only by reference.
         if (
           base.adopt && !excluded.has(eid) && num !== undefined &&
           rec.entity.num !== num
         ) {
           save(eid)
-          rows.set(eid, { ...rec, entity: { eid, num: numberFor(num) } })
+          rows.set(eid, { ...rec, entity: { eid, num } })
         }
         return
       }
@@ -195,14 +193,8 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       let reserved = cold.get(eid)
       cold.delete(eid)
       let entity = reserved
-        ? {
-          ...reserved,
-          ...(base.adopt && num !== undefined ? { num: numberFor(num) } : {}),
-        }
-        : {
-          eid,
-          ...!base.number || excluded.has(eid) ? {} : { num: numberFor(num) },
-        }
+        ? { ...reserved, ...(base.adopt ? numbered(num) : {}) }
+        : { eid, ...!base.number || excluded.has(eid) ? {} : numbered(num) }
       rows.set(eid, { entity, comps: {} })
       if (!reserved) born.push(entity)
     }

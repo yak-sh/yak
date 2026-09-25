@@ -2589,12 +2589,12 @@ export let findEid = (id: string): string | undefined => {
 // one-shot subscription timeout, and a failure cools for COOLDOWN_MS so a
 // dead server can't drive a render→kick→fail retry storm, then heals on the
 // next render (or a reconnect, which clears the sidecar). null means the
-// server said "no such entity" — an honest Lost, not a pending spinner.
+// server said "no such entity" — an empty answer, or a refusal of the token
+// itself (`T-998 names nothing`) — an honest Lost, not a pending spinner.
 type Named = { eid: string; num: number; kind: string }
 let named = new Map<string, Named | null>() // token OR eid -> naming (null = gone)
 let resolvingIds = new Map<string, Promise<Named | null>>() // token -> in flight
 let resolveFailed = new Map<string, number>() // token -> when its resolve failed
-let resolveErrors = new Map<string, string>()
 export let resolveGen = signal(0) // bumped when a resolve settles, to re-render
 let COOLDOWN_MS = 3000
 
@@ -2621,9 +2621,11 @@ let kickResolve = (token: string): Promise<Named | null> => {
         kind: kindOf(comps),
       }))
     }, (reason) => {
+      // A reason is the server refusing this token: its answer, so it settles.
+      // None is a timeout, which cools and asks again.
+      if (reason) return resolve(settle(null))
       resolvingIds.delete(token)
       resolveFailed.set(token, Date.now())
-      if (reason) resolveErrors.set(token, reason)
       resolveGen.value++
       resolve(null)
     })
@@ -2638,8 +2640,6 @@ let kickResolve = (token: string): Promise<Named | null> => {
 // the caller live to the landing.
 let nameFor = (token: string): Named | null | undefined => {
   resolveGen.value // subscribe: a landing re-runs the reader
-  let error = resolveErrors.get(token)
-  if (error) throw new IdError(error)
   if (named.has(token)) return named.get(token)!
   if (resolvingIds.has(token)) return undefined // in flight
   let failed = resolveFailed.get(token)
@@ -2675,7 +2675,6 @@ export let clearResolved = () => {
   named.clear()
   resolvingIds.clear()
   resolveFailed.clear()
-  resolveErrors.clear()
   resolveGen.value++
 }
 // The same query over the WHOLE graph — the board's List face. No task

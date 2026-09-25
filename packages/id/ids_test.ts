@@ -21,11 +21,21 @@ let rows: Bundle[] = [
   // whichever kind wins the display, the id a person typed still lands.
   { entity: { eid: 'a', num: 7 }, task: {}, doc: {} },
   { entity: { eid: 'b', num: 9 }, memory: {} },
+  // Not numbered yet: known by their short handles. The two uuids share their
+  // first ten hex characters; the last eid is content-addressed, no dashes.
+  { entity: { eid: '47e9678b-df12-4000-8000-000000000001' }, task: {} },
+  { entity: { eid: '47e9678b-df99-4000-8000-000000000002' }, memory: {} },
+  { entity: { eid: 'c0ffee0123456789' }, doc: {} },
 ]
 let asked: string[] = []
 let tx = {
   read: (q: string) => {
     asked.push(String(q))
+    let range = String(q).match(/^\.entity\.eid=(.+)\.\.(.+)$/)
+    if (range) {
+      let [, lo, hi] = range
+      return rows.filter((r) => r.entity.eid >= lo && r.entity.eid <= hi)
+    }
     let want = String(q).slice('.entity.num='.length).split(',').map(Number)
     return rows.filter((r) => want.includes(Number(r.entity.num)))
   },
@@ -67,4 +77,17 @@ Deno.test('every id on the line costs one read', async () => {
     '7': 'a',
   })
   assertEquals(asked, ['.entity.num=7,9'])
+})
+
+Deno.test('a short handle is the entity whose eid starts that way', async () => {
+  let task = '47e9678b-df12-4000-8000-000000000001'
+  assertEquals(await at('T#47e9678bdf1'), { 'T#47e9678bdf1': task })
+  assertEquals(await at('#47E9678BDF1'), { '#47E9678BDF1': task })
+  assertEquals(await at('D#c0ffee01'), { 'D#c0ffee01': 'c0ffee0123456789' })
+})
+
+Deno.test('a handle two entities share, or a wrong letter, names nothing', async () => {
+  assertEquals(await at('#47e9678bdf'), { '#47e9678bdf': null })
+  assertEquals(await at('M#47e9678bdf1'), { 'M#47e9678bdf1': null })
+  assertEquals(await at('#deadbeef00'), { '#deadbeef00': null })
 })

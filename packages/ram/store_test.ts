@@ -144,15 +144,16 @@ Deno.test('an outer rollback undoes what an inner transaction committed', () => 
   assertEquals(at(s, 'p1'), undefined)
 })
 
-Deno.test('a mirror adopts the number it is told, and corrects the one it guessed', () => {
+Deno.test('a mirror holds only the number it is told, never a guess', () => {
   let s = shopRam({ adopt: true })
+  // Until it is told, it has none: a guess could be another entity's number.
   put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug' } })
-  assertEquals(at(s, 'p1').entity.num, 1) // its own guess, in the meantime
+  assertEquals(at(s, 'p1').entity, { eid: 'p1' })
   put(s, { entity: { eid: 'p1', num: 7 }, doc: { title: 'Mug' } })
   assertEquals(at(s, 'p1').entity.num, 7)
-  // The next one it mints itself cannot collide with what it adopted.
+  // An entity reached only by reference has none either.
   put(s, { entity: { eid: 'p2' }, doc: { title: 'Cup' } })
-  assertEquals(at(s, 'p2').entity.num, 8)
+  assertEquals(at(s, 'p2').entity, { eid: 'p2' })
 })
 
 Deno.test('a store nobody mirrors keeps its own numbering', () => {
@@ -168,15 +169,12 @@ Deno.test('a map has no schema: ddl is empty and install does nothing', () => {
   assertEquals(s.install(), undefined)
 })
 
-Deno.test('a mirror adopts an explicit unnumbered spine and corrects optimistic numbers', () => {
+Deno.test('a mirror adopts an explicit unnumbered spine', () => {
   let s = shopRam({ adopt: true })
   put(s, { entity: { eid: 'blob', num: null }, doc: {} })
   assertEquals(at(s, 'blob').entity, { eid: 'blob', num: null })
-  put(s, { entity: { eid: 'optimistic' }, doc: {} })
-  assertEquals(at(s, 'optimistic').entity.num, 1)
-  put(s, { entity: { eid: 'optimistic', num: null } })
-  put(s, { entity: { eid: 'optimistic' }, doc: { title: 'still unnumbered' } })
-  assertEquals(at(s, 'optimistic').entity.num, null)
+  put(s, { entity: { eid: 'blob' }, doc: { title: 'still unnumbered' } })
+  assertEquals(at(s, 'blob').entity.num, null)
 })
 
 Deno.test('physical eviction reserves identity and rolls back with nested transactions', () => {
