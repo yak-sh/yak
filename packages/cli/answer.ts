@@ -73,15 +73,16 @@ export let terminal = async (
 }
 
 // What a view cannot know from one bundle, for a terminal: an entity another
-// names reads as its id where the answer holds it, nothing links, and a moment
-// reads as written.
+// names reads as its id where the answer or `named` holds it, nothing links,
+// and a moment reads as written.
 let shown = <Node>(
   vocab: Vocab,
   answer: Bundle[],
   draw: (b: Bundle, view: string, ctx: Shown<Node>) => Node | null,
+  named: Bundle[] = [],
 ): Shown<Node> => {
   let id = human(vocab)
-  let held = new Map(answer.map((b) => [b.entity.eid, b]))
+  let held = new Map([...named, ...answer].map((b) => [b.entity.eid, b]))
   let ctx: Shown<Node> = {
     id,
     kind: (b) => vocab.kindOf(b) || 'entity',
@@ -97,13 +98,39 @@ let shown = <Node>(
 
 let viewOf = (answer: Bundle[]) => answer.length == 1 ? 'Page' : 'Tile'
 
-/** An answer as the lines a terminal prints. */
+/** The entities an answer's references point at that the answer does not
+ * carry itself: what a printed reference needs looked up to read as `P-19`
+ * rather than as its handle. */
+export let referenced = (vocab: Vocab, answer: Bundle[]): string[] => {
+  let held = new Set(answer.map((b) => b.entity.eid))
+  let out = new Set<string>()
+  for (let b of answer) {
+    for (let [comp, value] of Object.entries(b)) {
+      if (comp == 'entity' || !value || typeof value != 'object') continue
+      for (let [prop, v] of Object.entries(value)) {
+        if (typeof v != 'string' || held.has(v)) continue
+        if (vocab.prop(comp, prop)?.category == 'ref') out.add(v)
+      }
+    }
+  }
+  return [...out]
+}
+
+/** An answer as the lines a terminal prints. `named` holds the entities its
+ * references point at, so each prints as its id; one not there prints as its
+ * handle. */
 export let printed = (
   views: Registry,
   vocab: Vocab,
   answer: Bundle[],
+  named: Bundle[] = [],
 ): string => {
-  let ctx = shown(vocab, answer, (b, v, c) => tree(views, b, v, vocab, c))
+  let ctx = shown(
+    vocab,
+    answer,
+    (b, v, c) => tree(views, b, v, vocab, c),
+    named,
+  )
   return answer
     .map((b) => render(views, b, viewOf(answer), vocab, ctx, 'plain'))
     .filter(Boolean)
@@ -168,15 +195,20 @@ export let reported = async (
 
 /** An answer shown the way the command asked — held in the terminal under
  * `--tui`, drawn by `held` where the command has terminal views and a file to
- * read ({@link terminal}), and printed otherwise. */
+ * read ({@link terminal}), and printed otherwise. `lookup` reads the entities
+ * the answer's references point at, from wherever the answer came from, so a
+ * reference prints as the id a person types. */
 export let show = async (
   c: { tui: boolean; out: (line: string) => void },
   views: Registry,
   vocab: Vocab,
   answer: Bundle[],
   held: { views?: Held; db?: string } = {},
+  lookup: (eids: string[]) => Bundle[] | Promise<Bundle[]> = () => [],
 ): Promise<void> => {
   if (c.tui) return await hold(held.views ?? views, vocab, answer, held.db)
-  let text = printed(views, vocab, answer)
+  let refs = referenced(vocab, answer)
+  let named = refs.length ? await lookup(refs) : []
+  let text = printed(views, vocab, answer, named)
   if (text) c.out(text)
 }

@@ -126,6 +126,7 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
           c.tui
             ? { views: await terminal(plugins()), db: dbOf(host.config) }
             : {},
+          (eids) => host.graph.storage.tx((tx) => tx.get(eids)),
         )
       }
       // A refusal is data, not an exception: the text is printed either way

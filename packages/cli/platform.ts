@@ -110,7 +110,16 @@ export let printed = async (
     // Imported only to draw, so a command that never does pays nothing.
     let { reported, show } = await import('./answer.ts')
     let { views, vocab: read } = await reported(vocab)
-    await show(c, views, read, answer)
+    // The entities its references point at, asked of the same host, so each
+    // prints as the id a person types rather than as its handle.
+    let lookup = async (ids: string[]) =>
+      answered(
+        await c.ask('tools/call', {
+          name: 'graph_show',
+          arguments: { ids, backrefs: false },
+        }) as Result,
+      ) ?? []
+    await show(c, views, read, answer, {}, (ids) => lookup(ids).catch(() => []))
   } else if (text) c.out(text)
   return 0
 }

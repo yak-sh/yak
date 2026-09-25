@@ -9,7 +9,7 @@ import { toolsDoc } from '@yaks/tools'
 import { views as toolViews } from '@yaks/tools/views'
 import { loadVocab } from '@yaks/vocab'
 import { define, resolve } from '@yaks/render'
-import { printed, registry, terminal } from './answer.ts'
+import { printed, referenced, registry, terminal } from './answer.ts'
 
 let vocab = loadVocab([kernelDoc, docDoc, taskDoc, toolsDoc], [
   kernelKeywords,
@@ -55,6 +55,20 @@ Deno.test('a lone entity is shown whole', () => {
     said(t10),
     'task T-10 done\n\nShip it\n\nDetails\n\ntask: ✓\ncompleted: ✓',
   )
+})
+
+Deno.test('a reference prints as the id of the entity looked up for it', () => {
+  let t11 = {
+    entity: { eid: '33333333-3333-4333-8333-333333333333', num: 11 },
+    task: {},
+  }
+  let done = { ...t10, completed: { by: t11.entity.eid } }
+  assertEquals(referenced(vocab, [done as never]), [t11.entity.eid])
+  let facts = (named: unknown[]) =>
+    printed(views, vocab, [done as never], named as never).split('\n').pop()
+  // Not looked up: its handle, which a shell reads as a comment from the `#`.
+  assertEquals(facts([]), 'completed: by #3333333333')
+  assertEquals(facts([t11]), 'completed: by T-11')
 })
 
 Deno.test('a held answer is drawn by a plugin’s terminal views first', async () => {
