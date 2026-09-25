@@ -15,22 +15,17 @@
 // Storage answers whole entities; this is the graph's answer, not the
 // adapter's.
 
-import { parse, type Query as Ast } from '@yaks/query'
+import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle } from './bundle.ts'
 import type { Query } from './storage.ts'
 import { meaning } from './meant.ts'
 
-/** The components a query's rows carry, or `null` for every one of them.
- *
- * A bare property counts for the component the query resolves it to
- * (./meant.ts). A component asserted absent (`.archived=`) names nothing the
- * answer could carry, and a word the vocabulary does not know asks for
- * nothing. */
-export let wanted = (vocab: Vocab, query: Query): Set<string> | null => {
-  let meant = meaning(vocab)(query)
-  let clauses = (typeof meant == 'string' ? parse(meant) : meant as Ast)
-    .clauses
+/** The components a meant query's rows carry, or `null` for every one of
+ * them. A component asserted absent (`.archived=`) names nothing the answer
+ * could carry, and a word the vocabulary does not know asks for nothing. */
+export let named = (vocab: Vocab, query: Query): Set<string> | null => {
+  let { clauses } = typeof query == 'string' ? parse(query) : query
   if (clauses.some((c) => c.kind == 'every')) return null
   let want = new Set<string>()
   for (let c of clauses) {
@@ -45,6 +40,12 @@ export let wanted = (vocab: Vocab, query: Query): Set<string> | null => {
   }
   return want.size ? want : null
 }
+
+/** The same for a query as it was typed: a bare property counts for the
+ * component it resolves to (./meant.ts). `Graph.read` has meant its query
+ * already, so it asks {@link named}. */
+export let wanted = (vocab: Vocab, query: Query): Set<string> | null =>
+  named(vocab, meaning(vocab)(query))
 
 /** A row cut to what was asked for. The spine names it, a text query's `rank`
  * is the answer's own word about it, and `$` keys are the graph's notes on

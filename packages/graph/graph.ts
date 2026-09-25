@@ -76,7 +76,7 @@ import { state } from './state.ts'
 import { each, isPromise, then } from './pipe.ts'
 import { addressing } from './said.ts'
 import { meaning } from './meant.ts'
-import { only, wanted } from './projection.ts'
+import { named, only } from './projection.ts'
 
 /** The options one `apply()` call can pass. */
 export type ApplyOpts = {
@@ -666,7 +666,7 @@ export let graph = (opts: Options): Graph => {
         aim(mean(query), address),
         (q) =>
           then(storage.read(q, readOpts), (rows) =>
-            rows.map(only(wanted(vocab, q)))),
+            rows.map(only(named(vocab, q)))),
       ),
     rows: (query, readOpts) =>
       then(aim(mean(query), address), (q) => storage.rows(q, readOpts)),
