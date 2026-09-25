@@ -74,7 +74,7 @@ import {
 import { ended, PROCESS, selfEid, started } from '@yaks/process'
 import type { Derived, Extension } from '@yaks/sql'
 import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
-import { Database, driver } from '@yaks/sqlite/db'
+import { open } from '@yaks/sqlite/db'
 // Types only. A route and a request handler are @yaks/api's words, and a host
 // names the shape of what it passes through without importing a line of HTTP:
 // the package that answers requests is a plugin a config lists, never a
@@ -527,18 +527,7 @@ export let compose = async (
     understood(vocabs.flatMap(([v]) => v.keywords ?? [])),
   )
 
-  if (path != ':memory:') {
-    let dir = path.slice(0, path.lastIndexOf('/'))
-    if (dir) Deno.mkdirSync(dir, { recursive: true })
-  }
-  let db = new Database(path)
-  db.exec('pragma foreign_keys = on')
-  if (path != ':memory:') {
-    db.exec('pragma journal_mode = wal')
-    db.exec('pragma synchronous = normal')
-    db.exec('pragma busy_timeout = 5000')
-  }
-  let sql = driver(db)
+  let sql = open(path)
   try {
     migrations(sql).ready()
     let derived: Derived = Object.assign(
@@ -831,7 +820,7 @@ export let compose = async (
         stopping.abort()
         let shut = () => {
           try {
-            db.close()
+            sql.close()
           } catch { /* already closed */ }
         }
         if (!self) return shut()
@@ -848,7 +837,7 @@ export let compose = async (
       },
     }
   } catch (error) {
-    db.close()
+    sql.close()
     throw error
   }
 }

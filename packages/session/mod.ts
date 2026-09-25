@@ -79,7 +79,7 @@ export * from './views.ts'
 
 export * from './children.ts'
 
-export { appendEntry, repairSequences } from './append.ts'
+export { appendEntry } from './append.ts'
 export * from './timing.ts'
 
 export * from './window.ts'

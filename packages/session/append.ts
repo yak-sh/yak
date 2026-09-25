@@ -6,16 +6,11 @@ import {
   type Graph,
   type Hook,
   then,
-  type Tx,
 } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { UnknownSession } from './unknown.ts'
 
 let entry = (b: Bundle | undefined) => b?.entry as Comp | undefined
-
-/** When the entry was stamped, '' when nothing stamped it. ISO-8601 sorts as
- * text, so this is a plain comparison. */
-let stamp = (b: Bundle) => String((b.created as Comp | undefined)?.at ?? '')
 
 export let sequencing: Hook = (bundles, tx) =>
   then(
@@ -138,7 +133,7 @@ export let sequencing: Hook = (bundles, tx) =>
                             old && e.seq != null && e.seq != entry(old)?.seq
                           ) {
                             throw new Error(
-                              'entry.seq cannot move an existing entry; use startup repair for legacy positions',
+                              'entry.seq cannot move an existing entry',
                             )
                           }
                           let seq = e.seq == null
@@ -146,7 +141,7 @@ export let sequencing: Hook = (bundles, tx) =>
                             : e.seq
                           if (!Number.isSafeInteger(seq) || Number(seq) < 1) {
                             throw new Error(
-                              'entry sequence exhausted or legacy position requires repair',
+                              'entry sequence exhausted',
                             )
                           }
                           if (
@@ -185,75 +180,3 @@ export let appendEntry = (g: Graph, session: string, body: string, opts: {
     content: { body },
     ...opts.notice ? { notice: {} } : {},
   }])
-
-/** Repair historical ordering while retaining all entry IDs and fork anchors.
- * Run during exclusive startup, before admitting work. Parent sessions are
- * processed first so a child's initial position follows its repaired anchor. */
-export let repairSequences = (tx: Tx): number | Promise<number> =>
-  then(
-    tx.read(parse('.entry')),
-    (entries) =>
-      then(tx.read(parse('.fork')), (forks) => {
-        let groups = new Map<string, Bundle[]>()
-        for (let b of entries) {
-          let id = String(entry(b)!.session)
-          groups.set(id, [...groups.get(id) ?? [], b])
-        }
-        let byId = new Map(entries.map((b) => [b.entity.eid, b]))
-        let from = new Map(
-          forks.map((b) => [b.entity.eid, String((b.fork as Comp).from)]),
-        )
-        let done = new Set<string>(), visiting = new Set<string>()
-        let changed: Bundle[] = []
-        let visit = (id: string) => {
-          if (done.has(id)) return
-          if (visiting.has(id)) {
-            throw new Error('cyclic fork ancestry during sequence repair')
-          }
-          visiting.add(id)
-          let anchor = byId.get(from.get(id) ?? '')
-          if (anchor) visit(String(entry(anchor)!.session))
-          let first = Number(anchor ? entry(anchor)!.seq : 0)
-          let rows = groups.get(id) ?? []
-          // Storage hands the rows back in insertion order; remember it, since
-          // it is the only record of arrival an untimed entry has left.
-          let arrived = new Map(rows.map((b, i) => [b.entity.eid, i]))
-          let placed = rows.filter((b) => entry(b)!.seq != null)
-          // Where an entry sits before the renumber. An entry the old writer
-          // left unpositioned has only its stamp to go on, so it takes the
-          // position of the last entry stamped before it and the tiebreak
-          // below settles it into that slot.
-          let slot = (b: Bundle) =>
-            entry(b)!.seq != null ? Number(entry(b)!.seq) : Math.max(
-              0,
-              ...placed.filter((p) => stamp(p) <= stamp(b)).map((p) =>
-                Number(entry(p)!.seq)
-              ),
-            )
-          // Tied positions are ordered, never refused: a repair nobody can
-          // supply an "explicit order" to is not a repair. A tie falls to when
-          // the entry was stamped, then to the order the rows arrived in —
-          // insertion order — then to the eid, so every boot repairs alike.
-          let own = [...rows].sort((a, b) =>
-            slot(a) - slot(b) ||
-            stamp(a).localeCompare(stamp(b)) ||
-            arrived.get(a.entity.eid)! - arrived.get(b.entity.eid)! ||
-            a.entity.eid.localeCompare(b.entity.eid)
-          )
-          own.forEach((b, i) => {
-            let seq = first + i + 1
-            if (entry(b)!.seq != seq) {
-              entry(b)!.seq = seq
-              changed.push({ entity: b.entity, entry: { seq } })
-            }
-          })
-          visiting.delete(id)
-          done.add(id)
-        }
-        for (let id of groups.keys()) visit(id)
-        return then(
-          changed.length ? tx.patch(changed) : undefined,
-          () => changed.length,
-        )
-      }),
-  )

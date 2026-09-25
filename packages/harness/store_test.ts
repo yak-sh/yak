@@ -1,26 +1,8 @@
-import { assert, assertEquals, assertThrows } from '@std/assert'
-import { Database, driver } from '@yaks/sqlite/db'
+import { assert, assertEquals } from '@std/assert'
 import { type Comp, identityEid } from '@yaks/graph'
 import type { Model } from '@yaks/model'
 import { react, statusOf, transcript } from '@yaks/session'
 import { open } from './store.ts'
-
-Deno.test('harness driver refuses cached and new statements after native close', () => {
-  const db = new Database(':memory:')
-  const sql = driver(db)
-  try {
-    assertEquals(sql.query('select ? as value', [1]), [{ value: 1 }])
-  } finally {
-    db.close()
-  }
-  for (
-    const operation of [
-      () => sql.query('select ? as value', [2]),
-      () => sql.query('select 3 as value', []),
-      () => sql.exec('create table stale (id integer)'),
-    ]
-  ) assertThrows(operation, Error, 'the database is closed')
-})
 
 let fake: Model = (req) =>
   Promise.resolve({
@@ -112,7 +94,7 @@ Deno.test('a stale lease is freed at boot', async () => {
   ])
   // The holder never made it to the graph the next boot reads: delete it the
   // way an abnormal ending would have, leaving the lock behind.
-  one.db.exec('delete from "session"')
+  one.sql.exec('delete from "session"')
   one.close()
   let two = open(path)
   let [page] = await two.g.read('.doc&*')
@@ -120,25 +102,7 @@ Deno.test('a stale lease is freed at boot', async () => {
   two.close()
 })
 
-Deno.test('a file-backed harness uses WAL with NORMAL sync and a busy timeout', () => {
-  let dir = Deno.makeTempDirSync()
-  try {
-    let h = open(`${dir}/h.db`)
-    try {
-      assertEquals(h.db.prepare('pragma journal_mode').get(), {
-        journal_mode: 'wal',
-      })
-      assertEquals(h.db.prepare('pragma synchronous').get(), { synchronous: 1 })
-      assertEquals(h.db.prepare('pragma busy_timeout').get(), { timeout: 5000 })
-    } finally {
-      h.close()
-    }
-  } finally {
-    Deno.removeSync(dir, { recursive: true })
-  }
-})
-
-Deno.test('entries omit human numbers, including migrated entries after reopen', async () => {
+Deno.test('entries, tasks and sessions omit human numbers, after reopen too', async () => {
   let dir = Deno.makeTempDirSync()
   let path = dir + '/numbering.db'
   try {
@@ -152,8 +116,6 @@ Deno.test('entries omit human numbers, including migrated entries after reopen',
       },
     ])
     assertEquals((await h.g.read('.entry&*'))[0].entity.num, undefined)
-    // Simulate a legacy entry number; this is an isolated test database.
-    h.db.exec("update entity set num = 99999 where eid = 'e'")
     h.close()
     h = open(path)
     assertEquals((await h.g.read('.entry&*'))[0].entity.num, undefined)
@@ -193,107 +155,6 @@ Deno.test('a deleted provider leaves past entries saying what answered', () => {
   }
 })
 
-Deno.test('legacy completion actors become authors once, including anonymous marks', () => {
-  let dir = Deno.makeTempDirSync()
-  let path = dir + '/legacy.db'
-  let h = open(path)
-  try {
-    // Trusted: a completion's author is server-owned, so only server code
-    // states one outright.
-    h.g.apply([
-      { entity: { eid: 'parent' }, session: {} },
-      { entity: { eid: 'worker' }, session: {} },
-      { entity: { eid: 'known' }, task: {}, completed: { by: 'worker' } },
-      { entity: { eid: 'anonymous' }, task: {}, completed: { by: 'worker' } },
-    ], { trusted: true })
-    h.db.exec('alter table completed add column actor integer')
-    h.db.exec('create index completed_actor on completed(actor)')
-    h.db.exec(
-      `update completed set actor = (select id from entity where eid = 'parent')
-      where entity = (select id from entity where eid = 'known')`,
-    )
-    h.close()
-    h = open(path)
-    let authors = () =>
-      h.store.read('.task').map((b) => [
-        b.entity.eid,
-        (b.completed as Comp).by ?? null,
-      ]).sort()
-    assertEquals(authors(), [['anonymous', null], ['known', 'parent']])
-    assert(
-      !h.db.prepare('pragma table_info(completed)').all<{ name: string }>()
-        .some((c) => c.name == 'actor'),
-    )
-    // An edit after migration must survive the next open: no stale actor copy.
-    h.db.exec(
-      `update completed set "by" = (select id from entity where eid = 'worker')
-      where entity = (select id from entity where eid = 'known')`,
-    )
-    h.close()
-    h = open(path)
-    assertEquals(authors(), [['anonymous', null], ['known', 'worker']])
-  } finally {
-    h.close()
-    Deno.removeSync(dir, { recursive: true })
-  }
-})
-
-Deno.test('harness tasks and sessions stay num-less; existing human numbers survive', async () => {
-  let dir = Deno.makeTempDirSync()
-  let h = open(dir + '/numbers.db')
-  try {
-    await h.g.apply([
-      { entity: { eid: 'old' }, task: {} },
-      { entity: { eid: 'parent' }, session: {} },
-      { entity: { eid: 'micro' }, task: {}, doc: { title: 'TUI task' } },
-      { entity: { eid: 'child' }, session: {}, spawned: { parent: 'parent' } },
-    ])
-    assertEquals(
-      (await h.g.read('.task&*')).every((b) => b.entity.num == null),
-      true,
-    )
-    assertEquals((await h.g.read('.session&*'))[0].entity.num, undefined)
-    h.db.exec("update entity set num = 42 where eid = 'old'")
-    h.close()
-    h = open(dir + '/numbers.db')
-    assertEquals((await h.g.read('.entity.num=42&*'))[0].entity.eid, 'old')
-  } finally {
-    h.close()
-    Deno.removeSync(dir, { recursive: true })
-  }
-})
-
-Deno.test('startup repairs fractional positions once without moving fork anchors', async () => {
-  let dir = await Deno.makeTempDir()
-  let path = dir + '/sequences.db'
-  let h = open(path)
-  try {
-    await h.g.apply([
-      { entity: { eid: 's' }, session: {} },
-      { entity: { eid: 'a' }, entry: { session: 's', seq: 1 } },
-      { entity: { eid: 'b' }, entry: { session: 's', seq: 2 } },
-      { entity: { eid: 'f' }, session: {}, fork: { from: 'b' } },
-      { entity: { eid: 'c' }, entry: { session: 'f', seq: 3 } },
-    ])
-    h.db.exec('update entry set seq=seq-0.125 where seq > 1')
-    h.db.exec("delete from harness_upgrade where name='entry-seq-v1'")
-    h.close()
-    h = open(path)
-    let rows = await transcript(h.g, 'f')
-    assertEquals(rows.map((b) => b.entity.eid), ['a', 'b', 'c'])
-    assertEquals(rows.map((b) => (b.entry as Comp).seq), [1, 2, 3])
-    h.close()
-    h = open(path)
-    assertEquals(
-      (await transcript(h.g, 'f')).map((b) => (b.entry as Comp).seq),
-      [1, 2, 3],
-    )
-  } finally {
-    h.close()
-    await Deno.remove(dir, { recursive: true })
-  }
-})
-
 Deno.test('SQLite commits simultaneous append batches with distinct positions', async () => {
   let h = open(':memory:')
   try {
@@ -313,40 +174,5 @@ Deno.test('SQLite commits simultaneous append batches with distinct positions', 
     )
   } finally {
     h.close()
-  }
-})
-
-Deno.test('boot opens the store even when a transcript cannot be repaired', async () => {
-  let dir = Deno.makeTempDirSync()
-  let path = dir + '/tangled.db'
-  let warned: string[] = [], warn = console.warn
-  try {
-    let one = open(path)
-    one.g.apply([
-      { entity: { eid: 'a' }, session: { id: 'a' } },
-      { entity: { eid: 'b' }, session: { id: 'b' } },
-    ])
-    one.g.apply([{ entity: { eid: 'ea' }, entry: { session: 'a' } }])
-    one.g.apply([{ entity: { eid: 'eb' }, entry: { session: 'b' } }])
-    // A fork ring: each session anchors in the other, so no order exists.
-    // Re-arm the upgrade so the next boot meets it.
-    one.g.apply([
-      { entity: { eid: 'a' }, fork: { from: 'eb' } },
-      { entity: { eid: 'b' }, fork: { from: 'ea' } },
-    ])
-    one.db.exec('delete from harness_upgrade')
-    one.close()
-    console.warn = (...args) => warned.push(args.join(' '))
-    let two = open(path)
-    console.warn = warn
-    assertEquals(
-      (await two.g.read('.session&*')).map((b) => b.entity.eid).sort(),
-      ['a', 'b'],
-    )
-    two.close()
-    assert(warned.some((line) => line.includes('transcript repair skipped')))
-  } finally {
-    console.warn = warn
-    Deno.removeSync(dir, { recursive: true })
   }
 })

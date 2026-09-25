@@ -7,7 +7,7 @@ import { parse } from '@yaks/query'
 import { compile, STOCK } from '@yaks/sql'
 import memberDoc from '../member/vocab.json' with { type: 'json' }
 import { schema } from './ddl.ts'
-import { Database } from './db.ts'
+import { open } from './db.ts'
 import { storage } from './mod.ts'
 import type { Driver } from './driver.ts'
 import { mem, shop } from './harness.ts'
@@ -405,13 +405,7 @@ Deno.test('a death word that moved rebuilds its table without the key', () => {
 
 Deno.test('a store over a file installs the sizes its planner reads it by', () => {
   let path = Deno.makeTempFileSync({ suffix: '.sqlite' })
-  let db = new Database(path)
-  let d: Driver = {
-    query: (sql, params) => db.prepare(sql).all(...params),
-    exec: (sql) => db.exec(sql),
-    file: true,
-    arms: STOCK,
-  }
+  let d = open(path)
   try {
     storage(d, shop).install()
     d.exec(`insert into entity (id, eid) values (1, 'a'), (2, 'b'), (3, 'c')`)
@@ -430,7 +424,7 @@ Deno.test('a store over a file installs the sizes its planner reads it by', () =
     assertEquals(rows('entity'), '3')
     assertEquals(rows('product'), '1')
   } finally {
-    db.close()
+    d.close()
     Deno.removeSync(path)
   }
 })

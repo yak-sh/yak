@@ -20,12 +20,12 @@ Deno.test('blob prose deduplicates across properties and survives reopen', async
       { entity: { eid: 'a' }, content: { body } },
       { entity: { eid: 'b' }, doc: { body } },
     ])
-    assertEquals(h.db.prepare('select count(*) as n from blob_text').get(), {
+    assertEquals(h.sql.query('select count(*) as n from blob_text', []), [{
       n: 1,
-    })
-    assertEquals(h.db.prepare('select body from content').get(), {
+    }])
+    assertEquals(h.sql.query('select body from content', []), [{
       body: address(body),
-    })
+    }])
     assertEquals(bodyOf((await h.g.read('.content&*'))[0]), body)
     assertEquals((await h.g.read('.doc.body="shared instruction"&*')).length, 1)
     h.close()

@@ -5,8 +5,8 @@ import { compile } from '@yaks/sql'
 import { absent, and, or, parse, present } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { mem, shop } from './harness.ts'
-import { rows, storage } from './mod.ts'
-import { Database } from './db.ts'
+import { type Driver, rows, storage } from './mod.ts'
+import { open, type Opened } from './db.ts'
 
 let vocab = loadVocab([...shop.docs, archetypeDoc, {
   $defs: {
@@ -89,22 +89,16 @@ Deno.test('archetype query/gather see new sets, rollback and reused descriptor i
 
 Deno.test('archetype plans and gathers observe commits from another SQLite handle', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'archetype-read-' })
-  let first = new Database(`${dir}/graph.sqlite`)
-  let second = new Database(`${dir}/graph.sqlite`)
-  first.exec('pragma journal_mode=wal')
+  let first = open(`${dir}/graph.sqlite`)
+  let second = open(`${dir}/graph.sqlite`)
   let afterCatalog: (() => void) | undefined
-  let driver = (db: Database) => ({
-    query: (
-      sql: string,
-      params: Parameters<ReturnType<Database['prepare']>['all']>,
-    ) => {
-      let stmt = db.prepare(sql)
-      let result
-      try {
-        result = stmt.all(...params)
-      } finally {
-        stmt.finalize()
-      }
+  let driver = (db: Opened): Driver => ({
+    ...db,
+    // Deferred units, so the commit staged below can land while the reader's
+    // unit is open rather than wait on the write lock it would take up front.
+    file: false,
+    query: (sql, params) => {
+      let result = db.query(sql, params)
       // The planner consults the catalog through its version probe; a
       // commit landing right after it is the race this test stages.
       if (db == first && sql.startsWith('select count(*) n, max(entity) m')) {
@@ -114,7 +108,6 @@ Deno.test('archetype plans and gathers observe commits from another SQLite handl
       }
       return result
     },
-    exec: (sql: string) => db.exec(sql),
   })
   try {
     let d1 = driver(first)

@@ -317,8 +317,9 @@ Deno.test('an empty successful reply completes its ask rather than issuing anoth
 
 Deno.test('checkpoints bound blob versions and finalization persists one stable response', async () => {
   const h = open(':memory:')
-  const initial =
-    h.db.prepare('select count(*) as n from blob_text').get<{ n: number }>()!.n
+  const blobs = () =>
+    Number(h.sql.query('select count(*) as n from blob_text', [])[0].n)
+  const initial = blobs()
   let appends = 0
   transient(h.g).subscribe((f) => {
     if (f.op == 'append') appends++
@@ -340,9 +341,7 @@ Deno.test('checkpoints bound blob versions and finalization persists one stable 
   try {
     const id = await a.start('hello')
     await a.idle(id)
-    const count =
-      h.db.prepare('select count(*) as n from blob_text').get<{ n: number }>()!
-        .n
+    const count = blobs()
     assertEquals(appends, 2000)
     assert(count - initial < 20, 'not one blob per delta')
   } finally {

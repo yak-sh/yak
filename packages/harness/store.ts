@@ -1,4 +1,3 @@
-import { repairSequences } from '@yaks/session'
 import { diagnostics } from './diagnostics.ts'
 import { home } from './paths.ts'
 // The harness's own graph: one SQLite file, the vocabulary it loads, and the
@@ -12,8 +11,7 @@ import { home } from './paths.ts'
 // stores, and the plugins that decide what a write means. A `yak` config lists
 // the same packages as plugins, and the harness's tools run over that host
 // instead (local.ts `hosted`). What is here and not there is startup: the
-// migrations an older file needs, and the reconciliation an abnormal shutdown
-// leaves behind.
+// reconciliation an abnormal shutdown leaves behind.
 //
 // That reconciliation is `reapLeases`, which frees every lease whose holder is
 // not a session in this graph. What a half-finished step leaves behind is
@@ -21,11 +19,11 @@ import { home } from './paths.ts'
 // needs a model and this file has none.
 
 import { type Blobs, fileBlobs, memoryBlobs } from '@yaks/blob'
-import { Database, driver } from '@yaks/sqlite/db'
 import { type Effects, effects } from '@yaks/effects'
 import { type Graph, graph, then } from '@yaks/graph'
 import { reapLeases } from '@yaks/session'
 import { migrations, storage, type Store } from '@yaks/sqlite'
+import { open as opened, type Opened } from '@yaks/sqlite/db'
 import { type Vocab } from '@yaks/vocab'
 import { vaultOf } from '@yaks/cli'
 import { dbOf, type Host } from '@yaks/cli/host'
@@ -33,7 +31,6 @@ import { sealing, type Vault } from '@yaks/secrets'
 import { install } from '@yaks/connections'
 
 import { computed } from './vocab.ts'
-import { named, renamed } from './named.ts'
 import { rules } from './rules.ts'
 import { vocab } from './vocab.ts'
 export { harnessDoc, vocab } from './vocab.ts'
@@ -99,27 +96,13 @@ export let hosted = (host: Host): Harness => {
  */
 export let open = (
   path: string = dbPath(),
-): Harness & { db: Database } => {
-  if (path != ':memory:') {
-    let dir = path.slice(0, path.lastIndexOf('/'))
-    if (dir) Deno.mkdirSync(dir, { recursive: true })
-  }
-  let db = new Database(path)
-  db.exec('pragma foreign_keys = on')
-  // A file is read by a person's `ls` while an agent writes it; a memory
-  // database has no journal to move.
-  if (path != ':memory:') {
-    db.exec('pragma journal_mode = wal')
-    // NORMAL is WAL's crash-safe pairing: checkpoints fsync; power loss may lose recent commits.
-    db.exec('pragma synchronous = normal')
-    db.exec('pragma busy_timeout = 5000')
-  }
-  let sql = driver(db)
+): Harness & { sql: Opened } => {
+  let sql = opened(path)
   const migration = migrations(sql)
   try {
     migration.ready()
   } catch (error) {
-    db.close()
+    sql.close()
     throw error
   }
   let store = storage(sql, vocab, {
@@ -127,119 +110,7 @@ export let open = (
     number: false,
     derived: computed(vocab),
   })
-  try {
-    renamed(sql, vocab)
-  } catch (error) {
-    db.close()
-    throw error
-  }
   store.install()
-  // The short-lived `completed.actor` column duplicated the completion author.
-  // Preserve that author (including anonymous nulls), not the old
-  // work-attribution value in `by`. The column itself is the migration guard.
-  sql.exec('begin immediate')
-  try {
-    if (
-      sql.query('pragma table_info(completed)', []).some((c) =>
-        c.name == 'actor'
-      )
-    ) {
-      sql.exec('update completed set "by" = actor')
-      sql.exec('drop index if exists completed_actor')
-      sql.exec('alter table completed drop column actor')
-    }
-    sql.exec('commit')
-  } catch (error) {
-    sql.exec('rollback')
-    db.close()
-    throw error
-  }
-  // Provenance moved off the text it describes: a model's reply used to be
-  // `content{body, source}`, and which direction it went was read from whether
-  // `source` was set. It is `output{source}` now, carried only by an output.
-  // The old column is the migration's own guard — once it is gone the migration
-  // is done.
-  sql.exec('begin immediate')
-  try {
-    if (
-      sql.query('pragma table_info(content)', []).some((c) =>
-        c.name == 'source'
-      )
-    ) {
-      sql.exec(
-        'insert or ignore into "output" (entity, "source")' +
-          ' select entity, "source" from "content" where "source" is not null',
-      )
-      sql.exec('drop index if exists content_source')
-      sql.exec('alter table "content" drop column "source"')
-    }
-    sql.exec('commit')
-  } catch (error) {
-    sql.exec('rollback')
-    db.close()
-    throw error
-  }
-  // A lease's timestamp is `claim.at` now, the same property name every other
-  // mark uses. `install` above has already added the new column; this copies
-  // the values across and drops the old column, which is its own guard.
-  sql.exec('begin immediate')
-  try {
-    if (
-      sql.query('pragma table_info(claim)', []).some((c) =>
-        c.name == 'claimed_at'
-      )
-    ) {
-      sql.exec('update claim set at = claimed_at where at is null')
-      sql.exec('drop index if exists claim_claimed_at')
-      sql.exec('alter table claim drop column claimed_at')
-    }
-    sql.exec('commit')
-  } catch (error) {
-    sql.exec('rollback')
-    db.close()
-    throw error
-  }
-  // Sequence high-water was captured by install before clearing historical
-  // entry numbers. No remaining human identifier is renumbered or reused.
-  sql.exec(
-    'update entity set num = null where num is not null and id in (select entity from entry)',
-  )
-  // Exclusive startup transaction: preserve EID fork boundaries while repairing
-  // legacy fractional/duplicate positions. No live work is admitted yet.
-  sql.exec('create table if not exists harness_upgrade (name text primary key)')
-  if (
-    !sql.query(
-      "select name from harness_upgrade where name = 'entry-seq-v1'",
-      [],
-    ).length
-  ) {
-    try {
-      store.tx((tx) => {
-        repairSequences(tx)
-        sql.exec("insert into harness_upgrade values ('entry-seq-v1')")
-      })
-    } catch (error) {
-      // A transcript this pass cannot repair is a warning, never a failure to
-      // open: the harness must always start. The migration stays unrecorded, so
-      // the next startup tries again.
-      let ties = sql.query(
-        'select count(*) as n from (select "session", "seq" from entry' +
-          ' group by "session", "seq" having count(*) > 1)',
-        [],
-      )
-      console.warn(
-        'harness: transcript repair skipped:',
-        error instanceof Error ? error.message : String(error),
-        '(' + Number(ties[0]?.n ?? 0) + ' tied positions)',
-      )
-    }
-  }
-  try {
-    named(sql, store)
-  } catch (error) {
-    db.close()
-    throw error
-  }
   // The effects registry writes through the graph's own `apply()`, trusted:
   // what an effect writes is the harness's own data, never a client's.
   let fx = effects(vocab, {
@@ -271,7 +142,7 @@ export let open = (
   )
   return {
     path,
-    db,
+    sql,
     store,
     g,
     fx,
@@ -279,6 +150,6 @@ export let open = (
     vault,
     artifacts: artifactsAt(path),
     migrations: migration,
-    close: () => db.close(),
+    close: () => sql.close(),
   }
 }

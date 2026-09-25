@@ -1,26 +1,14 @@
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { Database } from './db.ts'
-import { type Driver } from './driver.ts'
+import { open, type Opened } from './db.ts'
 import { MigrationPending, migrations, watchMigrations } from './migration.ts'
 
 function fixture() {
   const path = Deno.makeTempFileSync()
-  const databases: Database[] = []
+  const databases: Opened[] = []
   const connect = () => {
-    const db = new Database(path)
+    const db = open(path)
     databases.push(db)
-    const driver: Driver = {
-      exec: (sql) => db.exec(sql),
-      query: (sql, params) => {
-        const statement = db.prepare(sql)
-        try {
-          return statement.all(...params)
-        } finally {
-          statement.finalize()
-        }
-      },
-    }
-    return { db: driver, control: migrations(driver) }
+    return { db, control: migrations(db) }
   }
   return {
     connect,

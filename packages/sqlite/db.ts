@@ -1,9 +1,10 @@
 // The embedded driver itself — @db/sqlite, opened against a library that
-// works. This is the only module that imports it: `import { Database } from
-// '@yaks/sqlite/db'`, never from '@db/sqlite' directly, so ./sqlitepath.ts has
-// already named the system library by the time the FFI initializes. Importing
-// @db/sqlite directly segfaults on Linux with nothing on stderr
-// (./sqlitepath_test.ts enforces that for the whole repo).
+// works. This module is its one door, and it hands out none of it: a caller
+// gets `open(path)`, a {@link Driver} over the database there (./native.ts),
+// and never the driver's own objects. So ./sqlitepath.ts has always named the
+// system library by the time the FFI initializes (importing @db/sqlite first
+// segfaults on Linux with nothing on stderr; ./sqlitepath_test.ts), and a
+// different driver is a change to this package alone.
 //
 // ./mod.ts stays free of it on purpose: the adapter there works against any
 // `Driver`, and only an application that wants an in-process database needs
@@ -11,85 +12,42 @@
 
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
-import { STOCK } from '@yaks/sql'
 import type { Driver } from './driver.ts'
+import { driver } from './native.ts'
 
-export * from '@db/sqlite'
-export { sqlitePath } from './sqlitepath.ts'
+/** A database this process opened: its {@link Driver}, and the way to close
+ * it. */
+export type Opened = Driver & { close: () => void }
 
 /**
- * A {@link Driver} over an open embedded database — what an application binds
- * `storage()` to.
+ * Open (or create) the database at `path` — a file, whose directory is made
+ * when missing, or `:memory:` — as a {@link Driver} to bind `storage()` to.
+ * This is the one place a connection's settings are made.
  *
- * It keeps the statements it prepares. The adapter asks the same
- * parameterized gathers and writes thousands of times a session, and
- * preparing each one afresh costs a compile for nothing; the cache is bounded
- * and `Database.close()` finalizes what it holds.
- *
- * A database on disk is a file other processes may have open too, so the
- * driver reports that ({@link Driver.file}) and the outermost unit takes the
- * write lock up front. An in-memory one belongs to this process alone and sets
- * nothing.
+ * Every connection runs with foreign keys on. A file is one other processes
+ * may have open too, so it also runs in WAL mode, with WAL's crash-safe pairing
+ * `synchronous = normal` and a five-second busy timeout; a database in memory
+ * belongs to this process alone and needs none of that.
  *
  * ```ts
- * import { Database, driver } from '@yaks/sqlite/db'
+ * import { open } from '@yaks/sqlite/db'
  *
- * let sql = driver(new Database(':memory:'))
+ * let sql = open(':memory:')
+ * sql.exec('create table t (x)')
+ * sql.close()
  * ```
  */
-export let driver = (db: Database): Driver => {
-  let cache = new Map<string, ReturnType<Database['prepare']>>()
-  // Whether this is a file other processes may have open, asked of SQLite
-  // itself rather than of the string somebody passed: `main` has a path on
-  // disk, and an in-memory or temporary database has none.
-  let file = !!(db.prepare(
-    `select file from pragma_database_list where name = 'main'`,
-  ).all()[0] as { file?: string } | undefined)?.file
-  let live = () => {
-    // @db/sqlite closes and finalizes its native handles without invalidating
-    // the JS Statement objects. Calling a cached one after close is a SIGSEGV,
-    // not a catchable SQLite error. Refuse at the boundary, before any FFI.
-    if (!db.open) throw new Error('the database is closed')
+export let open = (path: string): Opened => {
+  if (path != ':memory:') {
+    let dir = path.slice(0, path.lastIndexOf('/'))
+    if (dir) Deno.mkdirSync(dir, { recursive: true })
   }
-  return {
-    query: (sql, params) => {
-      live()
-      let statement = cache.get(sql)
-      if (!statement) {
-        if (cache.size >= 256) {
-          let oldest = cache.keys().next().value!
-          cache.get(oldest)!.finalize()
-          cache.delete(oldest)
-        }
-        statement = db.prepare(sql)
-        cache.set(sql, statement)
-      }
-      try {
-        return statement.all(...params)
-      } catch (error) {
-        // @db/sqlite resets all() on success, but an exception while decoding
-        // a row can leave a RETURNING statement at SQLITE_ROW. Retaining it
-        // then prevents every later SAVEPOINT on this connection. Evict only
-        // the failed statement; never retry SQL with possible side effects.
-        cache.delete(sql)
-        try {
-          statement.finalize()
-        } catch (cleanup) {
-          throw new AggregateError(
-            [error, cleanup],
-            String(error) +
-              '; SQLite statement finalization also reported an error',
-            { cause: error },
-          )
-        }
-        throw error
-      }
-    },
-    exec: (sql) => {
-      live()
-      db.exec(sql)
-    },
-    file,
-    arms: STOCK,
+  let db = new Database(path)
+  db.exec('pragma foreign_keys = on')
+  if (path != ':memory:') {
+    db.exec('pragma journal_mode = wal')
+    db.exec('pragma synchronous = normal')
+    db.exec('pragma busy_timeout = 5000')
   }
+  return { ...driver(db), close: () => db.close() }
 }

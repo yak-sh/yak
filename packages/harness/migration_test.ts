@@ -1,6 +1,6 @@
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
-import { Database, driver } from '@yaks/sqlite/db'
+import { open as opened } from '@yaks/sqlite/db'
 import { MigrationPending, migrations } from '@yaks/sqlite'
 import { local } from './local.ts'
 import { open } from './store.ts'
@@ -13,8 +13,6 @@ Deno.test('daemon stop releases its migration monitor before a shared harness is
   let reads = 0
   h.migrations.read = () => {
     reads++
-    // Detect the lifetime violation without passing a freed pointer to FFI.
-    if (!h.db.open) throw new Error('monitor read a closed database')
     return read()
   }
   const a = local({ cwd: repo(), h })
@@ -27,7 +25,7 @@ Deno.test('daemon stop releases its migration monitor before a shared harness is
     assertEquals(reads, 1)
     // Daemon-only shutdown deliberately leaves the connection open for the
     // replacement host (pool_test's durable-queue restart contract).
-    assertEquals(h.db.open, true)
+    assertEquals(h.sql.query('select 1 as one', []), [{ one: 1 }])
     b = local({ cwd: repo(), h })
     time.tick(1000)
     assertEquals(reads, 2)
@@ -43,17 +41,17 @@ Deno.test('daemon stop releases its migration monitor before a shared harness is
 Deno.test('pending migration refuses harness startup before installing domain tables', () => {
   const dir = Deno.makeTempDirSync()
   const path = dir + '/test.db'
-  const db = new Database(path)
+  const sql = opened(path)
   try {
-    const control = migrations(driver(db))
+    const control = migrations(sql)
     control.announce('new-schema', 0)
     assertThrows(() => open(path), MigrationPending)
     assertEquals(
-      db.prepare("select name from sqlite_master where name='entity'").all(),
+      sql.query("select name from sqlite_master where name='entity'", []),
       [],
     )
   } finally {
-    db.close()
+    sql.close()
     Deno.removeSync(dir, { recursive: true })
   }
 })
@@ -62,7 +60,7 @@ Deno.test('migration observation stops admission but drains current model before
   const dir = Deno.makeTempDirSync()
   const path = dir + '/test.db'
   const h = open(path)
-  const peer = new Database(path)
+  const peer = opened(path)
   const started = Promise.withResolvers<void>()
   const release = Promise.withResolvers<void>()
   let closed = false
@@ -88,7 +86,7 @@ Deno.test('migration observation stops admission but drains current model before
   try {
     const id = await a.start('work')
     await started.promise
-    const control = migrations(driver(peer))
+    const control = migrations(peer)
     control.announce('encoding-change', 0)
     // Wait on the observable admission condition, not on an assumed sleep.
     let observed = false
@@ -108,9 +106,8 @@ Deno.test('migration observation stops admission but drains current model before
     release.resolve()
     await a.close()
     assertEquals(closed, true)
-    const sql = driver(peer)
     assertEquals(
-      Number(sql.query('select count(*) as n from entry', [])[0].n) > 0,
+      Number(peer.query('select count(*) as n from entry', [])[0].n) > 0,
       true,
     )
   } finally {

@@ -32,8 +32,7 @@ JSON object. The components beside `entry` determine its type:
 | `exception`                           | an unexpected failure              |
 
 `entry.seq` is assigned transactionally when omitted. `appendEntry()` is the
-usual way to append text, and `repairSequences()` migrates older data while
-preserving entry IDs and references.
+usual way to append text.
 
 ```ts
 import { appendEntry } from '@yaks/session'
@@ -250,13 +249,7 @@ Explicit sequence positions are supported for imports. Fractional and occupied
 positions are rejected, while retrying an existing entry ID preserves its
 position. Passive notices do not wake a settled session; the `notice` tool
 appends them without requiring a sequence number. Direct `g.apply` calls can
-also omit `entry.seq` when additional components are needed. `repairSequences()`
-processes parents before forks and preserves `fork.from` and `ask.through`
-references. Historical ties are resolved by creation stamp, storage order, then
-entity ID; unpositioned entries are placed after the last entry stamped before
-them, with ties resolved by the same rule. Run repair before starting session
-work. Concurrent older writers that calculate their own positions must be
-upgraded to avoid collision errors.
+also omit `entry.seq` when additional components are needed.
 
 ## Exports
 

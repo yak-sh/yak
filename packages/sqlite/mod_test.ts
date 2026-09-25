@@ -4,7 +4,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { type Driver, storage, type Store } from './mod.ts'
-import { Database, driver } from './db.ts'
+import { open } from './db.ts'
 import { mem, shop } from './harness.ts'
 
 Deno.test('ddl() lists the statements install() runs', () => {
@@ -94,10 +94,9 @@ Deno.test('a driver over a FILE takes the write lock up front', () => {
     })
 
   let dir = Deno.makeTempDirSync({ prefix: 'yaks-file-' })
-  let db = new Database(`${dir}/graph.sqlite`)
+  let db = open(`${dir}/graph.sqlite`)
   try {
-    db.exec('pragma journal_mode = wal')
-    let file = storage(watched(driver(db)), shop)
+    let file = storage(watched(db), shop)
     file.install()
     said.length = 0
     write(file)

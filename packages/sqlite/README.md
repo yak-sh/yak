@@ -36,11 +36,11 @@ deno add jsr:@yaks/sqlite jsr:@yaks/graph jsr:@yaks/vocab
 ```
 
 This Deno example opens an in-memory database. Use a file path for persistence.
-The `@yaks/sqlite/db` module selects the system SQLite library before importing
-the embedded driver and provides a prepared-statement cache.
+`open(path)` from `@yaks/sqlite/db` returns a driver over the database there,
+with a prepared-statement cache, and a `close()`.
 
 ```ts
-import { Database, driver } from '@yaks/sqlite/db'
+import { open } from '@yaks/sqlite/db'
 import { storage } from '@yaks/sqlite'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -68,8 +68,7 @@ let vocab = loadVocab({
     },
   },
 })
-let db = new Database(':memory:')
-let sql = driver(db)
+let sql = open(':memory:')
 let store = storage(sql, vocab, { number: true })
 store.install()
 let g = graph({ storage: store, vocab })
@@ -83,7 +82,7 @@ await g.apply([
   },
 ])
 console.log(await g.read('.published=1'))
-db.close()
+sql.close()
 ```
 
 ### Write
@@ -95,7 +94,7 @@ implements the resulting row changes and transaction. Low-level callers can use
 plugins.
 
 ```ts
-// With g from the example, before closing db:
+// With g from the example, before closing sql:
 await g.apply([
   { entity: { eid: 'p1' }, post: { published: false } }, // keep author
 ])
@@ -185,17 +184,20 @@ transaction SQL; it must support nesting. `arms` sets the compound-query group
 size, defaulting to `@yaks/sql`'s conservative `ARMS`; the embedded driver uses
 `STOCK`. Query values use bound parameters.
 
-`@yaks/sqlite/db` exports `Database`, the other `@db/sqlite` exports, `driver`,
-and `sqlitePath`. It honors `DENO_SQLITE_PATH`, otherwise selecting the
-platform's system library. This module uses Deno environment/FFI APIs. The root
-adapter can instead receive another runtime's synchronous SQLite driver.
+`@yaks/sqlite/db` exports `open(path)` and nothing of the embedded driver
+itself, so a driver swap touches only this package. `open` creates a missing
+directory and turns on foreign keys; a file also runs in WAL mode with
+`synchronous = normal` and a five-second busy timeout. It honors
+`DENO_SQLITE_PATH`, otherwise selecting the platform's system library. This
+module uses Deno environment/FFI APIs. The root adapter can instead receive
+another runtime's synchronous SQLite driver.
 
 ### Exports
 
 | Import path          | Purpose                                                                                                 |
 | -------------------- | ------------------------------------------------------------------------------------------------------- |
 | `@yaks/sqlite`       | Storage, driver types, schema/read/write helpers, overlays, archetype helpers, metadata, and migrations |
-| `@yaks/sqlite/db`    | Embedded Deno database and cached driver                                                                |
+| `@yaks/sqlite/db`    | `open(path)`: an embedded Deno database as a cached driver                                              |
 | `@yaks/sqlite/vocab` | `sqliteDoc` and `docs`, declaring storage and archetype diagnostic tools                                |
 | `@yaks/sqlite/tools` | `runs({ sql }, options?)`, implementing those checks on the application's connection                    |
 
@@ -265,7 +267,7 @@ and do not appear in bundles or graph queries.
 ```ts
 import { EPOCH, epoch, meta } from '@yaks/sqlite'
 
-// sql is the driver from the usage example; keep db open for these calls.
+// sql is the driver from the usage example; keep it open for these calls.
 let m = meta(sql)
 m.set('sweep', '2026-01-01')
 m.get('sweep') // string | undefined

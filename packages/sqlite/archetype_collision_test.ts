@@ -5,7 +5,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { STOCK } from '@yaks/sql'
 import { backfill, type Driver, storage } from './mod.ts'
-import { Database } from './db.ts'
+import { open } from './db.ts'
 import { mem } from './harness.ts'
 
 // Fleet's text blobs are entities wearing blob + blob_text; exercise the same
@@ -78,14 +78,9 @@ for (let backend of ['ram', 'sqlite']) {
 Deno.test('archetype/blob: file backfill and reopen preserve text in both insertion orders', () => {
   for (let first of [true, false]) {
     let path = Deno.makeTempFileSync({ suffix: '.sqlite' })
-    let db = new Database(path)
-    let driver = (): Driver => ({
-      query: (sql, params) => db.prepare(sql).all(...params),
-      exec: (sql) => db.exec(sql),
-      arms: STOCK,
-    })
+    let db = open(path)
     try {
-      let s = storage(driver(), vocab)
+      let s = storage(db, vocab)
       s.install()
       let batches = [texts.map(blob), owners]
       for (let batch of first ? batches : batches.reverse()) {
@@ -93,10 +88,10 @@ Deno.test('archetype/blob: file backfill and reopen preserve text in both insert
       }
       s.install()
       db.close()
-      db = new Database(path)
-      s = storage(driver(), vocab)
+      db = open(path)
+      s = storage(db, vocab)
       s.install()
-      assertEquals(backfill(driver()), {
+      assertEquals(backfill(db), {
         entities: 0,
         archetypes: 0,
         retired: 0,

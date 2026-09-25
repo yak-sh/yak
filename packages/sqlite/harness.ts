@@ -1,5 +1,5 @@
 // Shared test fixtures (not part of the published package — see deno.json): an
-// in-memory SQLite driver over jsr:@db/sqlite, and a small made-up vocabulary
+// in-memory SQLite driver (./db.ts `open`), and a small made-up vocabulary
 // the test files write against. The domain is a tiny shop — documents,
 // products, reviews, makers, bookmarks, shelves — chosen so it exercises every
 // declared reference death behavior (a review cascades with its product, a
@@ -7,24 +7,15 @@
 // forms (a product's unique sku, a shelf's composite slot) without any
 // knowledge outside this file.
 
-import { Database } from './db.ts'
+import { open } from './db.ts'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
-import { STOCK } from '@yaks/sql'
 import type { Driver } from './driver.ts'
 import { storage, type Store } from './mod.ts'
 
 // A Driver over a fresh in-memory database, foreign keys enforced so a dangling
 // reference is rejected the way it would be in production.
-export let mem = (): Driver => {
-  let db = new Database(':memory:')
-  db.exec('pragma foreign_keys = on')
-  return {
-    query: (sql, params) => db.prepare(sql).all(...params),
-    exec: (sql) => db.exec(sql),
-    arms: STOCK,
-  }
-}
+export let mem = (): Driver => open(':memory:')
 
 // The shop vocabulary, authored as JSON Schema plus the yaks keywords.
 let doc: VocabDoc = {
