@@ -28,7 +28,7 @@
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import packages from './package.json' with { type: 'json' }
-import { based, envOf } from './sandbox/base.ts'
+import { based } from './sandbox/base.ts'
 
 export let WRANGLER = [
   'npx',
@@ -180,11 +180,7 @@ if (import.meta.main) {
     // The sandbox image builds FROM a base the registry must already hold
     // (sandbox/base.ts), unless this deploy builds no image at all.
     if (!/(^| )--containers-rollout[= ]none( |$)/.test(argv.join(' '))) {
-      await based({
-        wrangler: WRANGLER,
-        env: envOf(argv),
-        dry: argv.includes('--dry-run'),
-      })
+      await based({ wrangler: WRANGLER, dry: argv.includes('--dry-run') })
     }
   }
   let [cmd, ...args] = WRANGLER

@@ -10,13 +10,9 @@
 // `based()` runs before a deploy builds the image (wrangler.ts). It signs
 // docker in to the registry, since the build pulls the base before wrangler
 // signs in to push, and it builds and pushes the base when its tag is missing.
-//
-// The registry answers "Layer already exists" per repository and mounts
-// nothing across them (a mount request answers 202, a fresh upload). So the
-// base is pushed into the repository each deploy pushes its image to,
-// wrangler's own name for the container: `<worker>-<class>[-<env>]`.
-
-import { parse } from '@std/toml'
+// Staging builds FROM the same tag: the registry shares layers across an
+// account's repositories, so staging's push finds every base layer already
+// there.
 
 export let REGISTRY = 'registry.cloudflare.com'
 
@@ -36,32 +32,6 @@ export let tag = async (dockerfile: string) => {
 /** The image ./Dockerfile builds FROM, as its FROM line names it. */
 export let pinned = (dockerfile: string) =>
   /^FROM (\S+)$/m.exec(dockerfile)?.[1]
-
-type Conf = {
-  name: string
-  containers?: { name?: string; class_name: string }[]
-  env?: Record<string, Conf>
-}
-
-/** The repository a deploy to `env` pushes its image to: the container's
- * name, which wrangler defaults to `<worker>-<class>[-<env>]`, lowercased. */
-export let repo = (toml: string, env?: string) => {
-  let root = parse(toml) as Conf
-  let conf = env ? root.env?.[env] : root
-  let box = conf?.containers?.[0]
-  if (!conf || !box) throw new Error(`no container in ${env ?? 'production'}`)
-  return box.name ??
-    `${conf.name}-${box.class_name}${env ? '-' + env : ''}`.toLowerCase()
-      .replaceAll(' ', '-')
-}
-
-/** The environment a wrangler argv deploys to, if not production. */
-export let envOf = (args: string[]) => {
-  for (let [i, a] of args.entries()) {
-    if (a == '--env' || a == '-e') return args[i + 1]
-    if (a.startsWith('--env=')) return a.slice(6)
-  }
-}
 
 type Run = (cmd: string[], input?: string) => Promise<
   { ok: boolean; out: string }
@@ -131,15 +101,13 @@ let must = async (go: Run, cmd: string[], input?: string) => {
 }
 
 /**
- * Make the base ./Dockerfile names present for a deploy to `env`: sign docker
- * in, and build and push the base into each repository missing it. A dry run
- * builds what is missing and pushes nothing. `wrangler` is the argv prefix
- * that runs this Worker's pinned wrangler.
+ * Make the base ./Dockerfile names present: sign docker in, and build and push
+ * the base if the registry lacks it. A dry run builds it and pushes nothing.
+ * `wrangler` is the argv prefix that runs this Worker's pinned wrangler.
  */
 export let based = async (
-  { wrangler, env, dry = false, go = run, has = held }: {
+  { wrangler, dry = false, go = run, has = held }: {
     wrangler: string[]
-    env?: string
     dry?: boolean
     go?: Run
     has?: (ref: string, password: string) => Promise<boolean>
@@ -167,26 +135,13 @@ export let based = async (
     ['docker', 'login', '--password-stdin', '--username', username, REGISTRY],
     password,
   )
-  let toml = await Deno.readTextFile(here('../wrangler.toml'))
-  let mine = `${REGISTRY}/${account_id}/${repo(toml, env)}:${want}`
-  let missing = []
-  for (let ref of new Set([from, mine])) {
-    if (!await has(ref, password)) missing.push(ref)
+  if (await has(from, password)) return from
+  await must(go, [...BUILD, '-t', from, ...context()])
+  if (dry) return from
+  // The push is what timed out; a second or third try resumes it, since the
+  // layers that made it already exist.
+  for (let i = 0; i < 3; i++) {
+    if ((await go(['docker', 'push', from])).ok) return from
   }
-  if (!missing.length) return from
-  if (missing.includes(from)) {
-    await must(go, [...BUILD, '-t', from, ...context()])
-  } else await must(go, ['docker', 'pull', from])
-  for (let ref of missing) {
-    if (ref != from) await must(go, ['docker', 'tag', from, ref])
-    if (dry) continue
-    // The push is what timed out; a second or third try resumes it, since
-    // the layers that made it already exist.
-    let pushed = false
-    for (let i = 0; i < 3 && !pushed; i++) {
-      pushed = (await go(['docker', 'push', ref])).ok
-    }
-    if (!pushed) throw new Error(`docker push ${ref} failed three times`)
-  }
-  return from
+  throw new Error(`docker push ${from} failed three times`)
 }

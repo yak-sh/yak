@@ -22,7 +22,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parse } from '@std/toml'
-import { based, envOf, pinned as from, repo, tag } from './sandbox/base.ts'
+import { based, pinned as from, tag } from './sandbox/base.ts'
 import { build, fake } from './builder.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -526,29 +526,16 @@ Deno.test('the deploy names the container, and the image is the SDK version', as
 Deno.test('the sandbox builds FROM the base its Dockerfile hashes to', async () => {
   let want = await tag(await at('sandbox/base/Dockerfile'))
   let image = from(await at('sandbox/Dockerfile'))
-  assertEquals(image?.split(':').at(-1), want, `FROM …/yak-sandbox:${want}`)
-  let toml = await at('wrangler.toml')
-  assertEquals(image?.split('/').at(-1), `${repo(toml)}:${want}`)
-  assertEquals(repo(toml, 'staging'), 'yak-staging-sandbox-staging')
-  for (
-    let [args, env] of [
-      [['deploy'], undefined],
-      [['deploy', '--env', 'staging'], 'staging'],
-      [['--env=staging', 'deploy'], 'staging'],
-      [['deploy', '-e', 'staging'], 'staging'],
-    ] as const
-  ) assertEquals(envOf([...args]), env)
+  assertEquals(image?.split('/').at(-1), `yak-sandbox:${want}`)
 })
 
 // What `based()` asks docker to do, for each state the registry can be in.
-Deno.test('a deploy builds and pushes the base only where it is missing', async () => {
+Deno.test('a deploy builds and pushes the base only when it is missing', async () => {
   let image = from(await at('sandbox/Dockerfile'))!
-  let stage = image.replace('/yak-sandbox:', '/yak-staging-sandbox-staging:')
-  let calls = async (held: string[], env?: string, dry = false) => {
+  let calls = async (held: string[], dry = false) => {
     let ran: string[] = []
     await based({
       wrangler: ['wrangler'],
-      env,
       dry,
       has: (ref) => Promise.resolve(held.includes(ref)),
       go: (cmd) => {
@@ -562,19 +549,7 @@ Deno.test('a deploy builds and pushes the base only where it is missing', async 
   }
   assertEquals(await calls([image]), [])
   assertEquals(await calls([]), ['docker build', 'docker push'])
-  assertEquals(await calls([], undefined, true), ['docker build'])
-  assertEquals(await calls([image, stage], 'staging'), [])
-  assertEquals(await calls([image], 'staging'), [
-    'docker pull',
-    'docker tag',
-    'docker push',
-  ])
-  assertEquals(await calls([], 'staging'), [
-    'docker build',
-    'docker push',
-    'docker tag',
-    'docker push',
-  ])
+  assertEquals(await calls([], true), ['docker build'])
 })
 
 // The image is not Rust-specific (T-34516). What holds that is this list plus
