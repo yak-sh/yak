@@ -1,8 +1,9 @@
 // The tests' vocabulary and their one sanctioned wait. Importing this module
 // learns the documents a host composes from the plugins a yak serve config
-// lists, so a test sees the components a page does. Import it before anything
-// else in a test file: a module that reads the tables as it loads reads them
-// once, and the learning below runs before any later import evaluates. A
+// lists, so a test sees the components a page does, and gives the test a
+// localStorage of its own. Import it before anything else in a test file: a
+// module that reads the tables or the storage as it loads reads them once,
+// and both are set below before any later import evaluates. A
 // `slow` test rides a real subprocess or server and runs only under
 // TASKS_SLOW; a fast test never sleeps a fixed span, it yields with `tick` and
 // waits on a fact with `until`.
@@ -47,6 +48,26 @@ import { docs as tmux } from '@yaks/tmux/vocab'
 import { docs as platform } from '@yaks/platform/vocab'
 import { docs as member } from '@yaks/member/vocab'
 import { docs as admin } from '@yaks/admin/vocab'
+
+// A test's localStorage is its own, and starts empty the way a new browser's
+// does. Deno's is one SQLite file for every test process in a checkout, so a
+// write in one process failed a read in another with "database is locked"
+// (Tray.tsx reads it as it loads), and what one run stored, the next read.
+let kept = new Map<string, string>()
+let storage: Storage = {
+  get length() {
+    return kept.size
+  },
+  key: (i) => [...kept.keys()][i] ?? null,
+  getItem: (key) => kept.get(key) ?? null,
+  setItem: (key, value) => void kept.set(key, String(value)),
+  removeItem: (key) => void kept.delete(key),
+  clear: () => kept.clear(),
+}
+Object.defineProperty(globalThis, 'localStorage', {
+  value: storage,
+  configurable: true,
+})
 
 learn([
   kernel,

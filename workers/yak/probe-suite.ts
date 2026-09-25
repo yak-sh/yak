@@ -1,8 +1,15 @@
-// The suite owns the shared Node host, not an individual Deno test module.
-// Its stdin is a lifetime lease: runner death closes it and reaps workerd too.
+// A Node host (probe-host.mjs) for kernel leases: `deno task test:workerd`
+// starts one for the whole suite, and a test run on its own starts one per
+// lease (probe.ts). Its stdin is a lifetime lease: runner death closes it and
+// reaps workerd too.
 import { ready } from './wrangler.ts'
 import { until } from '../../bin/testing.ts'
 import { fileURLToPath } from 'node:url'
+
+// The host announces the port workerd bound for it. A TCP answer alone would
+// also accept a port before its worker is ready.
+export let readyAddress = (log: string) =>
+  /Ready on (http:\/\/127\.0\.0\.1:\d+)/.exec(log)?.[1] ?? ''
 
 export let probeSuite = async () => {
   await ready()
@@ -49,7 +56,7 @@ export let probeSuite = async () => {
     let address = await until(() => {
       let text = Deno.readTextFileSync(log)
       if (exited) throw new Error(text)
-      return /Ready on (http:\/\/127\.0\.0\.1:\d+)/.exec(text)?.[1] ?? ''
+      return readyAddress(text)
     }, { timeout: 60_000, poll: 25, label: () => Deno.readTextFileSync(log) })
     let jobs = Deno.env.get('DENO_JOBS') ?? String(Math.max(
       1,

@@ -148,6 +148,11 @@ Deno.test('a run works in a checkout of its own, taken back when it ends', async
   await Deno.mkdir(runs)
   let sh = (...args: string[]) =>
     new Deno.Command('git', { cwd: repo, args, stdout: 'null' }).output()
+  let branches = async () =>
+    new TextDecoder().decode(
+      (await new Deno.Command('git', { cwd: repo, args: ['branch', '--list'] })
+        .output()).stdout,
+    )
   await sh('init', '-q', '-b', 'main', '.')
   await sh(
     '-c',
@@ -174,10 +179,14 @@ Deno.test('a run works in a checkout of its own, taken back when it ends', async
     )
     let [row] = await g.read('.session&*')
     assertEquals(comp(row, 'process')?.cwd, checkoutOf('S1', runs))
-    // It held nothing, so once it ends its checkout is gone again.
+    // It held nothing, so once it ends its checkout is gone again, and then
+    // the branch it was cut on (@yaks/git `reclaim`). The branch goes last:
+    // until it has, git is still writing in the repository.
     await until(
-      () => Deno.stat(checkoutOf('S1', runs)).then(() => false, () => true),
-      'its checkout to be taken back',
+      async () =>
+        await Deno.stat(checkoutOf('S1', runs)).then(() => false, () => true) &&
+        !(await branches()).includes('session-S1'),
+      'its checkout and its branch to be taken back',
     )
   } finally {
     Deno.removeSync(top, { recursive: true })

@@ -1,5 +1,6 @@
 import { assertEquals } from '@std/assert'
-import { letters, mailed, readyAddress } from './probe.ts'
+import { letters, mailed } from './probe.ts'
+import { readyAddress } from './probe-suite.ts'
 
 Deno.test('mailed waits for a new delivery rather than returning a spent code', async () => {
   let log = Deno.makeTempFileSync()

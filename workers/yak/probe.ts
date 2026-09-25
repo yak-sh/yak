@@ -1,79 +1,57 @@
-// The kernel under test: `wrangler dev` boots workers/yak on a probe port
-// with a throwaway persistence directory and a test secret, and a test
-// drives it over HTTP the way a browser or a headless client would — a
+// The kernel under test: workers/yak in workerd, leased from a probe host
+// (probe-host.mjs) with private binding names, a test secret and a log of its
+// own, and driven over HTTP the way a browser or a headless client would — a
 // hostname rides `x-yak-host`, since fetch refuses a Host header and the
 // kernel honors ours on a dev host (route.ts). Slow tier only: a real
-// runtime boots. The pinned wrangler runs through npx (wrangler.ts owns the
-// pin, WRANGLER overrides the command) and boots with node_modules current,
-// since esbuild bundles the npm deps out of it and a fresh worktree has none;
-// the process is its own session so `stop` takes workerd down with it, and
-// proves the port closed before it returns.
+// runtime boots.
 //
-// `script` below boots workerd the same way for a throwaway Worker that is
-// not the kernel at all — the modules an app's own script is made of, run in
-// the runtime that would run them.
-//
-// Two ports, both allocated by the runtime: the server's and the inspector's.
-// Wrangler binds the inspector on a fixed 9229 unless told otherwise, so both
-// ask for port zero. Parallel probes neither share that default nor race over
-// a port selected and released before their child can bind it.
-import { fileURLToPath } from 'node:url'
+// `script` below leases a throwaway Worker that is not the kernel at all —
+// the modules an app's own script is made of, run in the runtime that would
+// run them.
 import { apex } from './host.ts'
 import { b64u } from './mcp-probe.ts'
 import { until } from '../../bin/testing.ts'
 import { COOKIE, sign, verify } from './lib/token.ts'
-import { ready, WRANGLER } from './wrangler.ts'
+import { probeSuite } from './probe-suite.ts'
 import type { Custom } from './domains.ts'
 import type { Bundle } from '@yaks/graph'
 
-let root = fileURLToPath(new URL('./', import.meta.url))
-let wrangler = (Deno.env.get('WRANGLER') ?? WRANGLER.join(' ')).split(' ')
-
-// Let workerd bind its own ephemeral port. Selecting a free port and closing
-// it before spawning leaves a race with every other parallel probe. A TCP/HTTP
-// answer alone also accepts Wrangler's startup proxy before its worker is ready.
-export let readyAddress = (log: string) =>
-  /Ready on (http:\/\/127\.0\.0\.1:\d+)/.exec(log)?.[1] ?? ''
-
-let started = (log: string) =>
-  until(() => readyAddress(Deno.readTextFileSync(log)), {
-    timeout: 60_000,
-    poll: 250,
-    label: () => Deno.readTextFileSync(log),
-  })
-
-let listening = async (port: number) => {
-  try {
-    ;(await Deno.connect({ hostname: '127.0.0.1', port })).close()
-    return true
-  } catch {
-    return false
-  }
-}
-
-// The suite owns one kernel runtime. A lease gets private binding names,
-// variables and logs, not a process. Direct deno test remains supported by
-// the standalone Wrangler path below.
+// `deno task test:workerd` owns one host for the whole suite and names it in
+// YAK_PROBE_HOST. A test run on its own starts a host for each lease and
+// stops it with the lease. Either way the kernel is the one bundle the host
+// built at its start: a runtime that watched the checkout, as `wrangler dev`
+// does, reloaded the kernel under a running test whenever a file in it was
+// edited, and failed whatever request was in flight.
 let leased = async (body: unknown) => {
-  let host = Deno.env.get('YAK_PROBE_HOST')!
-  let response = await fetch(host, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
-  if (!response.ok) throw new Error(await response.text())
-  let { id, ...lease } = await response.json() as {
-    id: string
-    base: string
-    secret: string
-    log: string
-    socket?: { port: number; headers: Record<string, string> }
-  }
-  let stop = async () => {
-    let response = await fetch(`${host}/${id}`, { method: 'DELETE' })
+  let own = Deno.env.get('YAK_PROBE_HOST') ? null : await probeSuite()
+  let host = own?.env.YAK_PROBE_HOST ?? Deno.env.get('YAK_PROBE_HOST')!
+  try {
+    let response = await fetch(host, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
     if (!response.ok) throw new Error(await response.text())
-    await response.body?.cancel()
+    let { id, ...lease } = await response.json() as {
+      id: string
+      base: string
+      secret: string
+      log: string
+      socket?: { port: number; headers: Record<string, string> }
+    }
+    let stop = async () => {
+      try {
+        let response = await fetch(`${host}/${id}`, { method: 'DELETE' })
+        if (!response.ok) throw new Error(await response.text())
+        await response.body?.cancel()
+      } finally {
+        await own?.stop()
+      }
+    }
+    return { ...lease, stop }
+  } catch (e) {
+    await own?.stop()
+    throw e
   }
-  return { ...lease, stop }
 }
 
 export type Kernel = Awaited<ReturnType<typeof kernel>>
@@ -109,79 +87,10 @@ let unsubscribed = async (id: string) => {
 }
 
 export let kernel = async (vars: Record<string, string> = {}) => {
-  if (Deno.env.get('YAK_PROBE_HOST')) {
-    let lease = await leased({ vars })
-    let at = (host: string, path: string, init: RequestInit = {}) =>
-      fetch(`${lease.base}${path}`, {
-        ...init,
-        headers: {
-          ...somewhere(),
-          ...(init.headers as Record<string, string>),
-          'x-yak-host': host,
-        },
-      })
-    return owning({ ...lease, at, host: apex(vars) })
-  }
-  await ready()
-  let host = apex(vars)
-  let secret = crypto.randomUUID()
-  let state = Deno.makeTempDirSync({ prefix: 'tasks-yak-' })
-  let log = Deno.makeTempFileSync({ prefix: 'tasks-yak-', suffix: '.log' })
-  // The child writes the log itself, both streams into the one file: the
-  // shell's own redirect, `$0` the file and `"$@"` the command, so nothing
-  // depends on this process pumping a pipe. Piping them here read empty —
-  // which left the boot-failure label blank and every letter unreadable.
-  let child = new Deno.Command('setsid', {
-    args: [
-      'sh',
-      '-c',
-      'exec "$@" >>"$0" 2>&1',
-      log,
-      ...wrangler,
-      'dev',
-      // AI (and any future remote binding) must not open a Cloudflare proxy:
-      // these probes exercise local workerd/SQLite, never account resources.
-      // Merely omitting --remote still enables remote bindings by default.
-      '--local',
-      '--config',
-      'wrangler.toml',
-      '--port',
-      '0',
-      '--inspector-port',
-      '0',
-      '--ip',
-      '127.0.0.1',
-      '--persist-to',
-      state,
-      '--var',
-      `SESSION_SECRET:${secret}`,
-      // Letters are printed on the Worker's log, which lands in `log` below,
-      // where a test reads its own code (`mailed`). Nothing ever files a
-      // code in a store.
-      '--var',
-      'MAIL_DEV:1',
-      // Any extra vars a test asks for: a domain-verification token
-      // (index.ts), or a kernel wearing CIMD=off (identity.ts).
-      ...Object.entries(vars).flatMap(([k, v]) => ['--var', `${k}:${v}`]),
-      // The builder's workbench is a container (wrangler.toml
-      // `[[containers]]`, sandbox.ts), and `wrangler dev` builds its image
-      // from the Dockerfile before it serves anything — which needs a
-      // container engine. No probe here calls a sandbox tool, and a test
-      // suite may not require a daemon to be running on the box, so the
-      // kernel boots with containers off and `env.SANDBOX` unbound, which is
-      // the case the tools already answer in a sentence (`NO_BOX`).
-      '--enable-containers=false',
-      '--show-interactive-dev-session=false',
-    ],
-    cwd: root,
-    stdin: 'null',
-    stdout: 'null',
-    stderr: 'null',
-  }).spawn()
-  let base = ''
+  let lease = await leased({ vars })
   // One request, at one hostname.
   let at = (host: string, path: string, init: RequestInit = {}) =>
-    fetch(`${base}${path}`, {
+    fetch(`${lease.base}${path}`, {
       ...init,
       headers: {
         ...somewhere(),
@@ -189,43 +98,12 @@ export let kernel = async (vars: Record<string, string> = {}) => {
         'x-yak-host': host,
       },
     })
-  let stop = async () => {
-    try {
-      await new Deno.Command('kill', { args: ['-TERM', `-${child.pid}`] })
-        .output()
-    } catch { /* already gone */ }
-    await until(
-      async () => !base || !(await listening(Number(new URL(base).port))),
-      {
-        timeout: 15_000,
-        poll: 100,
-        label: 'the probe port to close',
-      },
-    )
-    await child.status
-    Deno.removeSync(state, { recursive: true })
-    Deno.removeSync(log)
-  }
-  try {
-    base = await started(log)
-    await until(async () => {
-      try {
-        return (await at(host, '/')).ok
-      } catch {
-        return false
-      }
-    }, { timeout: 60_000, poll: 250, label: () => Deno.readTextFileSync(log) })
-  } catch (e) {
-    await stop()
-    throw e
-  }
-  return owning({ base, secret, at, stop, log, host, socket: undefined })
+  return owning({ ...lease, at, host: apex(vars) })
 }
 
 /**
- * A throwaway Worker under workerd — not the kernel: a directory of files, a
- * wrangler.toml naming the entry, `wrangler dev` on two runtime-allocated ports of its
- * own, and one `at(path)`.
+ * A throwaway Worker under workerd — not the kernel: a set of modules, the
+ * entry named, and one `at(path)`.
  *
  * It is how a test runs code the platform would upload rather than serve. A
  * dispatch namespace has no local implementation (dispatch.ts), so an app's
@@ -237,89 +115,19 @@ export let script = async (
   files: Record<string, string | Uint8Array>,
   main = 'entry.js',
 ) => {
-  if (Deno.env.get('YAK_PROBE_HOST')) {
-    let lease = await leased({
-      main,
-      files: Object.fromEntries(
-        Object.entries(files).map((
-          [name, body],
-        ) => [name, typeof body == 'string' ? body : [...body]]),
-      ),
-    })
-    return {
-      ...lease,
-      at: (path: string, init?: RequestInit) =>
-        fetch(`${lease.base}${path}`, init),
-    }
+  let lease = await leased({
+    main,
+    files: Object.fromEntries(
+      Object.entries(files).map((
+        [name, body],
+      ) => [name, typeof body == 'string' ? body : [...body]]),
+    ),
+  })
+  return {
+    ...lease,
+    at: (path: string, init?: RequestInit) =>
+      fetch(`${lease.base}${path}`, init),
   }
-  let dir = Deno.makeTempDirSync({ prefix: 'yak-script-' })
-  for (let [name, body] of Object.entries(files)) {
-    let at = `${dir}/${name}`
-    Deno.mkdirSync(at.slice(0, at.lastIndexOf('/')), { recursive: true })
-    if (typeof body == 'string') Deno.writeTextFileSync(at, body)
-    else Deno.writeFileSync(at, body)
-  }
-  Deno.writeTextFileSync(
-    `${dir}/wrangler.toml`,
-    `name = "probe"\nmain = "${main}"\ncompatibility_date = "2025-05-08"\n`,
-  )
-  let log = Deno.makeTempFileSync({ prefix: 'yak-script-', suffix: '.log' })
-  let child = new Deno.Command('setsid', {
-    args: [
-      'sh',
-      '-c',
-      'exec "$@" >>"$0" 2>&1',
-      log,
-      ...wrangler,
-      'dev',
-      '--port',
-      '0',
-      '--inspector-port',
-      '0',
-      '--ip',
-      '127.0.0.1',
-      '--show-interactive-dev-session=false',
-    ],
-    cwd: dir,
-    stdin: 'null',
-    stdout: 'null',
-    stderr: 'null',
-  }).spawn()
-  let base = ''
-  let at = (path: string, init?: RequestInit) => fetch(`${base}${path}`, init)
-  let stop = async () => {
-    try {
-      await new Deno.Command('kill', { args: ['-TERM', `-${child.pid}`] })
-        .output()
-    } catch { /* already gone */ }
-    await until(
-      async () => !base || !(await listening(Number(new URL(base).port))),
-      {
-        timeout: 15_000,
-        poll: 100,
-        label: 'the script port to close',
-      },
-    )
-    await child.status
-    Deno.removeSync(dir, { recursive: true })
-    Deno.removeSync(log)
-  }
-  try {
-    // Its own ready announcement names the port and confirms module startup.
-    base = await started(log)
-    await until(async () => {
-      try {
-        await (await at('/')).body?.cancel()
-        return true
-      } catch {
-        return false
-      }
-    }, { timeout: 60_000, poll: 250, label: () => Deno.readTextFileSync(log) })
-  } catch (e) {
-    await stop()
-    throw e
-  }
-  return { at, stop, log }
 }
 
 // An origin that stands in for `<space>.yaks.app` over HTTP: every request

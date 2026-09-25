@@ -16,8 +16,8 @@ Never `wrangler deploy` by hand. Both tasks go through `wrangler.ts`, which runs
 `npm ci` when `node_modules` is behind `package-lock.json` — wrangler bundles
 `zod` and the MCP SDK as files out of that directory, and it is gitignored, so a
 fresh worktree has none and a bare `wrangler deploy` dies at `mcp.ts`
-`import { z } from 'zod'`. `probe.ts` installs through the same door before it
-boots a `wrangler dev`.
+`import { z } from 'zod'`. The test probes (probe-suite.ts) install through the
+same door before they bundle the kernel.
 
 Correct a deployed regression with `yak admin revert <sha> --admin`: main is
 always deployed. `yak admin rollback [version] --admin` is for a broken build
