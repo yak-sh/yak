@@ -127,11 +127,12 @@ session is kept beside the owner’s and is never the remembered default.
 has carried, even after its deployment ages out of Cloudflare’s history. This
 conservatively includes failed builds. An inferred commit or incomplete
 migration history cannot authorize rollback. `errors` reads the preceding window
-from Workers Logs. Wrangler’s login cannot (its OAuth has no Workers
-Observability scope), so it reads with a read-only API token kept in this box’s
-vault as `cloudflare observability`, an `op://` reference, and refuses with the
-line that keeps one when there is none. `tail` watches live traffic, using the
-box’s GNU `timeout` to stop Wrangler and its launcher together.
+from Sentry, the one record of every failure the platform throws or catches
+(sentry.ts), one line per issue. It reads with a Sentry token that can read the
+org (`org:read`), kept in this box’s vault as `sentry`, an `op://` reference,
+and refuses with the line that keeps one when there is none. `tail` watches live
+traffic, using the box’s GNU `timeout` to stop Wrangler and its launcher
+together.
 
 `revert` requires main to match its remote, gates a fresh worktree, and uses the
 same primitive as `task land` to publish. It re-gates after a rebase, checks the

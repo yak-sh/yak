@@ -1,15 +1,6 @@
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { CallError } from '@yaks/tools'
-import {
-  duration,
-  errors,
-  eventLine,
-  faultsOf,
-  grouped,
-  invocation,
-  queried,
-  records,
-} from './logs.ts'
+import { duration, errors, eventLine, faultsOf, records } from './logs.ts'
 
 let event = (over: Record<string, unknown> = {}) => ({
   eventTimestamp: 1000,
@@ -27,34 +18,6 @@ let event = (over: Record<string, unknown> = {}) => ({
       'Error: missing kind\n    at index (worker.js:3:4)\n    at fetch (worker.js:5:6)',
   }],
   ...over,
-})
-
-Deno.test('log signatures keep message, top frame and entrypoint; versions share a count', () => {
-  let faults = [
-    ...faultsOf(event({ eventTimestamp: 4000, scriptVersion: { id: 'v2' } })),
-    ...faultsOf(event()),
-    ...faultsOf(event({ entrypoint: 'Store' })),
-    ...faultsOf(
-      event({
-        exceptions: [{
-          name: 'Error',
-          message: 'missing kind',
-          stack: 'at migrate (worker.js:7:8)',
-        }],
-      }),
-    ),
-  ]
-  let groups = grouped(faults)
-  assertEquals(groups.length, 3)
-  assertEquals(groups[0], {
-    message: 'Error: missing kind',
-    frame: 'at index (worker.js:3:4)',
-    entrypoint: 'Directory',
-    count: 2,
-    first: 1000,
-    last: 4000,
-    versions: ['v1', 'v2'],
-  })
 })
 
 Deno.test('console errors have their own timestamps and ignore other levels', () => {
@@ -81,27 +44,23 @@ Deno.test('console errors have their own timestamps and ignore other levels', ()
   assertEquals(faults.map((f) => f.message), ['cannot index', 'another error'])
 })
 
-Deno.test('structured Error logs group by the first frame, not the whole stack', () => {
-  let faults = ['at fetch (worker.js:5:6)', 'at alarm (worker.js:8:9)'].flatMap(
-    (caller) =>
-      faultsOf(event({
-        exceptions: [],
-        logs: [{
-          level: 'error',
-          message: [{
-            name: 'Error',
-            message: 'missing kind',
-            stack:
-              `Error: missing kind\n    at index (worker.js:3:4)\n    ${caller}`,
-          }],
-        }],
-      })),
-  )
-  assertEquals(grouped(faults).map((g) => [g.count, g.message, g.frame]), [[
-    2,
+Deno.test('a structured Error log keeps its first frame, not the whole stack', () => {
+  let [fault] = faultsOf(event({
+    exceptions: [],
+    logs: [{
+      level: 'error',
+      message: [{
+        name: 'Error',
+        message: 'missing kind',
+        stack:
+          'Error: missing kind\n    at index (worker.js:3:4)\n    at fetch (worker.js:5:6)',
+      }],
+    }],
+  }))
+  assertEquals([fault.message, fault.frame], [
     'Error: missing kind',
     'at index (worker.js:3:4)',
-  ]])
+  ])
 })
 
 Deno.test('implicit entrypoints separate scheduled, alarm, queue and RPC errors', () => {
@@ -114,7 +73,7 @@ Deno.test('implicit entrypoints separate scheduled, alarm, queue and RPC errors'
   let faults = events.flatMap((trigger) =>
     faultsOf(event({ entrypoint: undefined, event: trigger }))
   )
-  assertEquals(grouped(faults).map((g) => g.entrypoint), [
+  assertEquals(faults.map((f) => f.entrypoint), [
     'scheduled',
     'alarm',
     'queue',
@@ -152,96 +111,113 @@ Deno.test('tail renders one line with the door, status and exception', () => {
   )
 })
 
-Deno.test('Workers Logs rows use the same signature as console errors in tail', () => {
-  let row = queried({
-    timestamp: 7000,
-    $metadata: { level: 'error', message: 'cannot index' },
-    $workers: { entrypoint: 'Directory', scriptVersion: { id: 'v1' } },
-    source: { stack: 'Error: cannot index\n    at index (worker.js:3:4)' },
-  })
-  assertEquals(faultsOf(row), [{
-    message: 'cannot index',
-    frame: 'at index (worker.js:3:4)',
-    timestamp: 7000,
-    entrypoint: 'Directory',
-    version: 'v1',
-  }])
-  assertEquals(
-    faultsOf(
-      queried({
-        timestamp: 7000,
-        $metadata: { level: 'info', message: 'fine' },
-      }),
-    ),
-    [],
-  )
-  assertEquals(
-    faultsOf(queried({
-      timestamp: 9000,
-      $metadata: { error: 'missing kind' },
-      $workers: { entrypoint: 'Directory', scriptVersion: { id: 'v1' } },
-      source: { exception: event().exceptions[0] },
-    })),
-    faultsOf(event({ eventTimestamp: 9000 })),
-  )
-})
-
-Deno.test('a Workers Logs invocation row is counted, never a fault; its exception keeps the message beside it', () => {
-  let meta = { level: 'error', origin: 'alarm' }
-  let workers = { entrypoint: 'Store', scriptVersion: { id: 'v2' } }
-  let thrown = {
-    timestamp: 5000,
-    $metadata: { ...meta, type: 'cf-worker', error: 'reset' },
-    $workers: workers,
-    source: {
-      message: 'reset',
-      exception: { name: 'Error', stack: '    at Object.tx (index.js:1:2)' },
-    },
-  }
-  let summary = {
-    timestamp: 5000,
-    $metadata: { ...meta, type: 'cf-worker-event', error: 'Fri Sep 25 2026' },
-    $workers: { ...workers, outcome: 'exception' },
-    source: { level: 'error', message: 'Fri Sep 25 2026' },
-  }
-  assertEquals(invocation(summary), true)
-  assertEquals(faultsOf(queried(summary)), [])
-  assertEquals(faultsOf(queried(thrown)), [{
-    message: 'Error: reset',
-    frame: 'at Object.tx (index.js:1:2)',
-    timestamp: 5000,
-    entrypoint: 'Store',
-    version: 'v2',
-  }])
-})
-
-Deno.test('since accepts seconds, minutes or hours, up to a day', () => {
+Deno.test('since accepts seconds, minutes, hours or days, up to 90 days', () => {
   for (
-    let [input, expected] of [['10m', 600], ['1h', 3600], ['7', 7], [
-      '30s',
-      30,
-    ]] as const
+    let [input, expected] of [
+      ['10m', 600],
+      ['1h', 3600],
+      ['7', 7],
+      ['30s', 30],
+      ['3d', 259_200],
+    ] as const
   ) assertEquals(duration(input), expected)
   assertEquals(duration(), 600)
-  for (let input of ['0', '-1', '1.5m', 'forever', '25h']) {
+  for (let input of ['0', '-1', '1.5m', 'forever', '91d']) {
     assertThrows(() => duration(input), CallError, '--since')
   }
+})
+
+// Sentry's events door, answering `pages` in turn: each page's rows, and a
+// Link header naming the next page's cursor while one is left.
+let sentry = (pages: Record<string, unknown>[][], status = 200) => {
+  let asked: Request[] = []
+  let fetch = (url: string | URL | Request, init?: RequestInit) => {
+    let req = new Request(url, init)
+    asked.push(req)
+    let at = Number(new URL(req.url).searchParams.get('cursor') ?? 0)
+    let more = at + 1 < pages.length
+    let link = `<x>; rel="previous"; results="false"; cursor="0:0:1", ` +
+      `<x>; rel="next"; results="${more}"; cursor="${at + 1}"`
+    return Promise.resolve(
+      Response.json({ data: pages[at] ?? [] }, {
+        status,
+        headers: { link },
+      }),
+    )
+  }
+  return { fetch: fetch as typeof globalThis.fetch, asked }
+}
+
+let row = (
+  issue: string,
+  count: number,
+  request: string | null,
+  title: string,
+) => ({
+  issue,
+  title,
+  request,
+  'count()': count,
+  'min(timestamp)': '2026-09-25T21:35:26+00:00',
+  'max(timestamp)': '2026-09-25T22:11:17+00:00',
+})
+
+let listed = async (s: ReturnType<typeof sentry>, since = '6h') => {
+  let said: string[] = [], noted: string[] = []
+  await errors(since, 'tok', (l) => said.push(l), (l) => noted.push(l), s.fetch)
+  return { said, noted }
+}
+
+Deno.test('errors lists every issue Sentry holds for the window, across pages', async () => {
+  let s = sentry([
+    [row(
+      'YAKS-APP-12',
+      2,
+      'GET /connections/callback',
+      'TypeError: Invalid\nredirect value',
+    )],
+    [row('YAKS-APP-15', 1, null, 'Error: VPC binding failed')],
+  ])
+  let { said } = await listed(s)
+  assertEquals(said, [
+    'COUNT  FIRST SEEN  LAST SEEN  ISSUE  REQUEST  MESSAGE',
+    '2  2026-09-25T21:35:26.000Z  2026-09-25T22:11:17.000Z  YAKS-APP-12  GET /connections/callback  TypeError: Invalid redirect value',
+    '1  2026-09-25T21:35:26.000Z  2026-09-25T22:11:17.000Z  YAKS-APP-15  -  Error: VPC binding failed',
+    '3 events, 2 issues',
+  ])
+  // Each page is asked with the token, for the production errors of the
+  // preceding six hours, and the second one at the cursor the first named.
+  assertEquals(s.asked.map((r) => r.headers.get('authorization')), [
+    'Bearer tok',
+    'Bearer tok',
+  ])
+  let [first, second] = s.asked.map((r) => new URL(r.url).searchParams)
+  assertEquals(first.get('dataset'), 'errors')
+  assertEquals(first.get('environment'), 'production')
+  assertEquals(
+    Date.parse(first.get('end')!) - Date.parse(first.get('start')!),
+    6 * 3600 * 1000,
+  )
+  assertEquals(second.get('cursor'), '1')
+  assertEquals(second.get('start'), first.get('start'))
 })
 
 Deno.test('errors without a kept token refuses with the fix, and never tails forward', async () => {
   let said: string[] = []
   let refusal = await assertRejects(
-    () =>
-      errors(
-        '/nowhere',
-        '30m',
-        undefined,
-        (l) => said.push(l),
-        (l) => said.push(l),
-      ),
+    () => errors('30m', undefined, (l) => said.push(l), (l) => said.push(l)),
     CallError,
-    'cloudflare observability',
+    'sentry',
   )
   assertEquals(said, [])
   assertEquals(/yak graph apply .*op:\/\/<vault>/.test(refusal.message), true)
+})
+
+Deno.test('a token Sentry refuses is answered with the same fix', async () => {
+  let refusal = await assertRejects(
+    () => listed(sentry([[]], 401)),
+    CallError,
+    'Sentry refused the sentry token (401)',
+  )
+  assertEquals(/op:\/\/<vault>/.test(refusal.message), true)
 })

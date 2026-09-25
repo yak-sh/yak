@@ -1,12 +1,13 @@
-// The owner's view of yaks.app logs: `tail` watches live traffic through
-// Wrangler's login, and `errors` reads the past from Workers Logs. That
-// login cannot read the past: Wrangler's OAuth offers no Workers
-// Observability scope, and the query answers its token 403. So history reads
-// with a read-only API token this box's vault keeps as `cloudflare
-// observability`, an op:// reference, never a deployment secret. Without one,
+// The owner's view of yaks.app's failures: `tail` watches live traffic
+// through Wrangler's login, and `errors` reads the past from Sentry. Sentry is
+// the one record that holds them all: every failure the platform throws, logs
+// with console.error, or catches and answers (workers/yak/sentry.ts `caught`,
+// `defect`) is sent there, while Workers Logs is sampled and never sees a
+// failure a catch answered without a console line. Sentry is read with a
+// token that can read the org (`org:read`), kept in this box's vault as
+// `sentry`, an op:// reference, never a deployment secret. Without one,
 // `errors` refuses and says how to keep it; it never watches the future in
 // place of the past.
-import { parse } from '@std/toml'
 import { CallError } from '@yaks/tools'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
 
@@ -29,12 +30,6 @@ export type Fault = {
   entrypoint: string
   timestamp: number
   version: string
-}
-export type Group = Omit<Fault, 'timestamp' | 'version'> & {
-  count: number
-  first: number
-  last: number
-  versions: string[]
 }
 
 // A message can itself contain a serialized Error, so look there too when
@@ -110,40 +105,6 @@ export let faultsOf = (row: Row): Fault[] => {
   return faults
 }
 
-// Version is evidence, not part of the signature: the same bug can span a
-// deploy. Keep every version so that a change never hides its earlier count.
-export let grouped = (faults: Fault[]): Group[] => {
-  let groups = new Map<string, Group>()
-  for (let fault of faults) {
-    let { message, frame, entrypoint, timestamp, version } = fault
-    let key = JSON.stringify([message, frame, entrypoint])
-    let group = groups.get(key)
-    if (!group) {
-      group = {
-        message,
-        frame,
-        entrypoint,
-        count: 0,
-        first: timestamp,
-        last: timestamp,
-        versions: [],
-      }
-      groups.set(key, group)
-    }
-    group.count++
-    if (timestamp) {
-      group.first = group.first ? Math.min(group.first, timestamp) : timestamp
-    }
-    group.last = Math.max(group.last, timestamp)
-    if (!group.versions.includes(version)) group.versions.push(version)
-  }
-  return [...groups.values()].map((g) => ({
-    ...g,
-    versions: g.versions.sort(),
-  }))
-    .sort((a, b) => b.count - a.count || a.message.localeCompare(b.message))
-}
-
 export let eventLine = (row: Row): string => {
   let event = object(row.event)
   let request = object(event.request)
@@ -197,15 +158,17 @@ export let records = (receive: (row: Row) => void) => {
   }
 }
 
+let UNITS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86_400 }
+
+// Sentry keeps events for 90 days at most, so a longer window asks for
+// nothing more.
 export let duration = (since = '10m'): number => {
-  let match = /^(\d+)(s|m|h)?$/.exec(since)
-  let seconds = match
-    ? Number(match[1]) * ({ s: 1, m: 60, h: 3600 }[match[2] || 's'] ?? 0)
-    : 0
-  if (!Number.isSafeInteger(seconds) || seconds <= 0 || seconds > 86_400) {
+  let match = /^(\d+)(s|m|h|d)?$/.exec(since)
+  let seconds = match ? Number(match[1]) * UNITS[match[2] || 's'] : 0
+  if (!Number.isSafeInteger(seconds) || seconds <= 0 || seconds > 90 * 86_400) {
     throw new CallError(
       'since',
-      '--since needs a duration from 1s to 24h (for example 10m)',
+      '--since needs a duration from 1s to 90d (for example 10m)',
     )
   }
   return seconds
@@ -264,170 +227,131 @@ let live = async (
   }
 }
 
-// The query API uses a separate row per log or exception. Adapt it to the
-// tail shape, so both feeds share exactly the same signature computation.
-// The invocation itself is a row of its own (`cf-worker-event`), marked error
-// when it threw and carrying only its trigger as a message, so it is counted
-// and never a fault: what it threw arrives as the rows beside it. An
-// exception row keeps its message beside the exception, not in it.
-export let invocation = (row: Row) =>
-  object(row.$metadata).type == 'cf-worker-event'
-
-export let queried = (row: Row): Row => {
-  let meta = object(row.$metadata)
-  let worker = object(row.$workers)
-  let source = object(row.source)
-  let timestamp = row.timestamp
-  let message = source.message ?? meta.error ?? meta.message ?? row.source
-  let exception = source.exception ??
-    (typeof source.error == 'object' ? source.error : undefined)
-  let exceptions = invocation(row)
-    ? []
-    : Array.isArray(source.exceptions)
-    ? source.exceptions
-    : exception
-    ? [{ message: source.message, ...object(exception) }]
-    : []
-  let bad = !invocation(row) &&
-    (!!meta.error || meta.level == 'error' || source.level == 'error')
-  return {
-    ...worker,
-    eventTimestamp: timestamp,
-    entrypoint: worker.entrypoint ?? worker.eventType ?? meta.origin,
-    exceptions: exceptions.map((value) => ({ timestamp, ...object(value) })),
-    logs: bad && !exceptions.length
-      ? [{
-        level: 'error',
-        timestamp,
-        message: Array.isArray(message) ? message : [message],
-        stack: source.stack ??
-          (typeof row.source == 'string' ? row.source : undefined),
-      }]
-      : [],
-  }
-}
-
-// The name the history token is kept under in this box's vault.
-export let OBSERVABILITY = 'cloudflare observability'
-
-// Said when there is no token, or Cloudflare refuses the one kept: the one
-// line that keeps a reference to it, and the door for live traffic.
-let keepIt = (why: string) =>
-  new CallError(
-    'observability',
-    `${why}. Workers Logs needs a Cloudflare API token that can read Workers ` +
-      'Observability, which a Wrangler login cannot carry. Keep an op:// ' +
-      `reference to one in this box's vault, once:\n  yak graph apply ` +
-      `--change '[{"entity":{"eid":"$s"},"secret":{"name":"${OBSERVABILITY}",` +
-      `"value":"op://<vault>/<item>/<field>"}}]'\nLive traffic is ` +
-      '`yak admin tail --admin`.',
-  )
-
-let history = async (
-  root: string,
-  seconds: number,
-  token: string,
-): Promise<Row[]> => {
-  let config = parse(
-    await Deno.readTextFile(`${root}/workers/yak/wrangler.toml`),
-  )
-  let account = text(config.account_id)
-  if (!account) throw new Error('workers/yak/wrangler.toml names no account')
-  let end = Date.now()
-  let rows: Row[] = [], offset: string | undefined
-  let seen = new Set<string>()
-  // API contract: https://developers.cloudflare.com/api/resources/workers/subresources/observability/subresources/telemetry/methods/query/
-  for (;;) {
-    let res = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${account}/workers/observability/telemetry/query`,
-      {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-        },
-        signal: AbortSignal.timeout(15_000),
-        body: JSON.stringify({
-          queryId: 'yak-errors',
-          view: 'events',
-          dry: true,
-          limit: 2000,
-          timeframe: { from: end - seconds * 1000, to: end },
-          offset,
-          offsetDirection: 'next',
-          parameters: {
-            datasets: ['cloudflare-workers'],
-            filterCombination: 'and',
-            filters: [{
-              key: '$metadata.service',
-              operation: 'eq',
-              type: 'string',
-              value: text(config.name),
-            }],
-          },
-        }),
-      },
-    )
-    if (res.status == 401 || res.status == 403) {
-      await res.body?.cancel()
-      throw keepIt(
-        `Cloudflare refused the ${OBSERVABILITY} token (${res.status})`,
-      )
-    }
-    if (!res.ok) {
-      await res.body?.cancel()
-      throw new Error(`the Workers Logs query answered ${res.status}`)
-    }
-    let body = object(await res.json())
-    let events = object(object(body.result).events)
-    if (body.success === false || !Array.isArray(events.events)) {
-      throw new Error('the Workers Logs query answered no events')
-    }
-    let page = events.events.map(object)
-    rows.push(...page)
-    if (page.length < 2000) return rows
-    offset = text(object(page.at(-1)?.$metadata).id)
-    if (!offset || seen.has(offset)) {
-      throw new Error('the Workers Logs query repeated a page')
-    }
-    seen.add(offset)
-  }
-}
-
 export let tail = (root: string, out: Note, note: Note): Promise<number> =>
   live(root, (row) => out(eventLine(row)), note)
 
+/** Where yaks.app's failures go: workers/yak/sentry.ts's org and project. */
+export let SENTRY = {
+  api: 'https://us.sentry.io/api/0',
+  org: 'yaks',
+  project: 'yaks-app',
+  environment: 'production',
+}
+
+// The name the Sentry token is kept under in this box's vault.
+export let TOKEN = 'sentry'
+
+// Said when there is no token, or Sentry refuses the one kept: where to make
+// one, the one line that keeps a reference to it, and the door for live
+// traffic.
+let keepIt = (why: string) =>
+  new CallError(
+    TOKEN,
+    `${why}. Reading Sentry needs a token that can read the ${SENTRY.org} ` +
+      'org (org:read), made at sentry.io → User Settings → Personal Tokens. ' +
+      "Keep an op:// reference to one in this box's vault, once:\n  yak " +
+      `graph apply --change '[{"entity":{"eid":"$s"},"secret":{"name":` +
+      `"${TOKEN}","value":"op://<vault>/<item>/<field>"}}]'\nLive traffic ` +
+      'is `yak admin tail --admin`.',
+  )
+
+// One row per issue and the door it broke at, over the window.
+let FIELDS = [
+  'issue',
+  'title',
+  'request',
+  'count()',
+  'min(timestamp)',
+  'max(timestamp)',
+]
+
+/** The events query for the `seconds` before `end`, one page at `cursor`.
+ * API contract:
+ * https://docs.sentry.io/api/explore/query-explore-events-in-table-format/ */
+export let asked = (seconds: number, end: number, cursor?: string) => {
+  let q = new URLSearchParams({
+    dataset: 'errors',
+    project: SENTRY.project,
+    environment: SENTRY.environment,
+    start: new Date(end - seconds * 1000).toISOString(),
+    end: new Date(end).toISOString(),
+    sort: '-count()',
+    per_page: '100',
+  })
+  for (let f of FIELDS) q.append('field', f)
+  if (cursor) q.set('cursor', cursor)
+  return `${SENTRY.api}/organizations/${SENTRY.org}/events/?${q}`
+}
+
+/** The cursor of the next page a Sentry `Link` header offers, when that page
+ * has results. */
+export let next = (link: string | null) =>
+  /rel="next"; results="true"; cursor="([^"]+)"/.exec(link ?? '')?.[1]
+
+let history = async (
+  seconds: number,
+  token: string,
+  fetch: typeof globalThis.fetch,
+): Promise<Row[]> => {
+  let end = Date.now()
+  let rows: Row[] = [], cursor: string | undefined
+  let seen = new Set<string>()
+  for (;;) {
+    let res = await fetch(asked(seconds, end, cursor), {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (res.status == 401 || res.status == 403) {
+      await res.body?.cancel()
+      throw keepIt(`Sentry refused the ${TOKEN} token (${res.status})`)
+    }
+    if (!res.ok) {
+      throw new Error(
+        `the Sentry events query answered ${res.status}: ` +
+          line(await res.text()).slice(0, 300),
+      )
+    }
+    let data = object(await res.json()).data
+    if (!Array.isArray(data)) {
+      throw new Error('the Sentry events query answered no rows')
+    }
+    rows.push(...data.map(object))
+    cursor = next(res.headers.get('link'))
+    if (!cursor) return rows
+    if (seen.has(cursor)) throw new Error('Sentry repeated a page')
+    seen.add(cursor)
+  }
+}
+
 // The preceding window, or a refusal: never the next one in its place.
 export let errors = async (
-  root: string,
   since: string | undefined,
   token: string | undefined,
   out: Note,
   note: Note,
+  fetch: typeof globalThis.fetch = globalThis.fetch,
 ): Promise<void> => {
   let seconds = duration(since)
-  if (!token) throw keepIt(`No ${OBSERVABILITY} token is kept on this box`)
-  let rows = await history(root, seconds, token)
-  note(`Workers Logs query: preceding ${seconds}s; stored logs may be sampled`)
-  let faults = rows.flatMap((row) => faultsOf(queried(row)))
-  let groups = grouped(faults)
-  out('COUNT  FIRST SEEN  LAST SEEN  VERSION  ENTRYPOINT  MESSAGE / TOP FRAME')
-  for (let group of groups) {
+  if (!token) throw keepIt(`No ${TOKEN} token is kept on this box`)
+  let rows = await history(seconds, token, fetch)
+  note(
+    `Sentry ${SENTRY.org}/${SENTRY.project} (${SENTRY.environment}): ` +
+      `preceding ${seconds}s; each issue is at ` +
+      `https://${SENTRY.org}.sentry.io/issues/<ISSUE>`,
+  )
+  out('COUNT  FIRST SEEN  LAST SEEN  ISSUE  REQUEST  MESSAGE')
+  for (let r of rows) {
     out(
       [
-        group.count,
-        iso(group.first),
-        iso(group.last),
-        group.versions.join(','),
-        group.entrypoint,
-        group.message,
-        group.frame || '(no stack)',
+        r['count()'],
+        iso(time(r['min(timestamp)'])),
+        iso(time(r['max(timestamp)'])),
+        r.issue,
+        r.request || '-',
+        r.title,
       ].map(line).join('  '),
     )
   }
-  out(
-    `${
-      rows.filter(invocation).length
-    } events, ${faults.length} errors, ${groups.length} signatures`,
-  )
+  let events = rows.reduce((n, r) => n + (Number(r['count()']) || 0), 0)
+  out(`${events} events, ${new Set(rows.map((r) => r.issue)).size} issues`)
 }

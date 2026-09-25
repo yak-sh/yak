@@ -329,12 +329,12 @@
       "tool": true,
       "noun": "admin",
       "verb": "errors",
-      "title": "Group yaks.app errors by signature",
-      "description": "yaks.app exceptions and error logs from the preceding window, grouped by signature: count, first and last seen, entrypoint and version. Reads Workers Logs with the `cloudflare observability` token this box's vault keeps, and refuses without it; `admin tail` watches live traffic. --admin or --owner is required.",
+      "title": "List yaks.app errors by Sentry issue",
+      "description": "Every yaks.app failure from the preceding window, thrown or caught, one line per Sentry issue and the request it broke at: count, first and last seen, issue and message. Reads Sentry with the `sentry` token this box's vault keeps, and refuses without it; `admin tail` watches live traffic. --admin or --owner is required.",
       "input": {
         "since": {
           "type": "string",
-          "description": "how far back (default 10m)"
+          "description": "how far back, up to 90d (default 10m)"
         },
         "admin": {
           "type": "boolean",

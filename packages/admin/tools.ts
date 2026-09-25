@@ -24,8 +24,8 @@
 // graph too, where @yaks/mail files the letter.
 //
 // The platform verbs (deploys, errors, tail, rollback, revert) act on this
-// checkout and this box's Cloudflare and GitHub logins (errors reads with the
-// read-only token this graph's vault keeps, ./logs.ts), and print as they go:
+// checkout and this box's Cloudflare and GitHub logins (errors reads Sentry
+// with the token this graph's vault keeps, ./logs.ts), and print as they go:
 // a tail runs until it is interrupted, and a revert reports each step of a
 // wait that can take twenty minutes.
 
@@ -80,7 +80,7 @@ import {
 } from './api.ts'
 import { deploys, rollback, table } from './deploys.ts'
 import { push, read } from './push.ts'
-import { errors, OBSERVABILITY, tail } from './logs.ts'
+import { errors, tail, TOKEN } from './logs.ts'
 import { revert } from './revert.ts'
 
 type Args = Record<string, unknown>
@@ -495,8 +495,8 @@ export let runs = (host: { vault: Local; state: string }): Runs => {
 
     admin_errors: verb(async (call, vault) => {
       platform(argsOf(call))
-      let token = await reveal(vault, OBSERVABILITY, { env: () => undefined })
-      await errors(root, word(argsOf(call), 'since'), token, out, note)
+      let token = await reveal(vault, TOKEN, { env: () => undefined })
+      await errors(word(argsOf(call), 'since'), token, out, note)
       return []
     }),
 
