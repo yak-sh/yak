@@ -301,7 +301,13 @@ Deno.test('the kernel routes, vouches, serves, and surfaces', async () => {
           404,
           `${path} as ${as ? 'someone' : 'nobody'}`,
         )
-        assertMatch(await shut.text(), /Nothing here yet/)
+        // A page's address answers the page; an API's, a refusal in JSON.
+        assertMatch(
+          await shut.text(),
+          path.includes('/api/')
+            ? /no app at that address/
+            : /Nothing here yet/,
+        )
       }
     }
 

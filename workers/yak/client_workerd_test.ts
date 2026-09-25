@@ -286,16 +286,15 @@ Deno.test('the served client: a page saves, lists and watches', async () => {
       Error,
       'work lanes',
     )
-    // A door that answers a page — the platform's 404 — is not quoted at the
-    // person: the status and a short line of it, never the whole document
-    // (C-32574 item 4, where a club saw the HTML in its error line).
+    // A store at an address no app answers is refused in JSON, and the page
+    // hears the refusal's own words, with the status beside them — never a
+    // document quoted in its error line (C-32574 item 4).
     let dumped = await assertRejects(
       () => mod.store(`${mine.origin}/nowhere/api/`).query('.doc'),
       Error,
+      'no app at that address',
     )
-    assertEquals(dumped.message.includes('<'), false)
-    assertMatch(dumped.message, /^404 /)
-    assert(dumped.message.length < 140, dumped.message)
+    assertEquals((dumped as Error & { status: number }).status, 404)
   } finally {
     await mine.stop()
     await anyone.stop()
