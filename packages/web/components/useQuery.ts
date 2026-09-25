@@ -124,8 +124,10 @@ export let useChatFor = (
   actor: string | undefined,
   target: string,
 ): Ent | undefined =>
-  useQueryResult(`.chat.actor=${actor ?? ''}&.chat.target=${target}`, !!actor)
-    .eids.map(ent)[0]
+  useQueryResult(
+    actor ? `.chat.actor=${actor}&.chat.target=${target}` : '',
+    !!actor,
+  ).eids.map(ent)[0]
 
 // The far endpoints ride the citation answer as PEERS, cut to what a reference
 // row paints: a session's dot and its row line (tray_query dotFields plus the

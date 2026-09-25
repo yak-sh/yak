@@ -439,6 +439,23 @@ Deno.test('document meta names its creator and editor after their ages', () => {
   }
 })
 
+Deno.test('the full face paints the body for a viewer with no actor', () => {
+  cache.value = {
+    doc: {
+      entity: { eid: 'doc', num: 1 },
+      doc: { eid: 'doc', title: 'Read me', body: 'The body text' },
+    },
+  }
+  let e = ent('doc')
+  let { root, free } = mount(h(resolve(e, 'Full').Render, { e }))
+  try {
+    assertEquals(root.textContent?.includes('The body text'), true)
+  } finally {
+    free()
+    cache.value = {}
+  }
+})
+
 Deno.test('a hook-using renderer mounts through the helper', () => {
   // The task title's Pip holds useState — a hook-using renderer only works
   // mounted through Preact. A bare call would throw here; the helper mounts it.
