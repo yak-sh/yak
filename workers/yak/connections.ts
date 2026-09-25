@@ -230,15 +230,22 @@ let rebound = async (env: Env, apps: string[]) => {
   }
 }
 
+/** The testing integrations a page was opened for: `?enable=<name>`, several
+ * by repeating it or with commas. */
+export let enabled = (req: Request): string[] =>
+  new URL(req.url).searchParams.getAll('enable').flatMap((n) => n.split(','))
+
 /** Everything the page shows a space's owner: the space's connections and
  * their own, with the apps that use each — the space's by the titles given,
- * and another space's app they connected their own account for by its own. */
+ * and another space's app they connected their own account for by its own.
+ * A testing integration is offered only when `enable` names it. */
 export let connectionsOf = async (
   env: Env,
   space: Space,
   person: string,
   apps: { eid: string; title: string; slug: string }[],
   services: Service[] = [],
+  enable: string[] = [],
 ): Promise<Connections> => {
   let read = readOf(env)
   let all = [...await list(read, space.eid), ...await list(read, person)]
@@ -293,7 +300,10 @@ export let connectionsOf = async (
     list: shown.sort((a, b) => a.integration.localeCompare(b.integration)),
     services,
     built: Object.values(BUILT)
-      .filter((i) => !taken.has(i.name) && connectable(i, clients(env)[i.name]))
+      .filter((i) =>
+        !taken.has(i.name) && (!i.testing || enable.includes(i.name)) &&
+        connectable(i, clients(env)[i.name])
+      )
       .map((i) => ({ name: i.name, keyed: keyed(i) })),
   }
 }
@@ -516,7 +526,9 @@ let OWN = '/connections/'
 let own: Answer = async ({ env, req, path, space, app, who, refuse }) => {
   if (!path.startsWith(OWN)) return null
   let integration = decodeURIComponent(path.slice(OWN.length))
-  let here = `https://${space.slug}.${apex(env)}/${app.slug}/api${path}`
+  let here = `https://${space.slug}.${apex(env)}/${app.slug}/api${path}${
+    new URL(req.url).search
+  }`
   if (!domainOf(req, env)) return Response.redirect(here, 303)
   if (!who.person) return Response.redirect(signInAt(here, env), 303)
   if (!reads(mode(app.access), who.role)) return refuse('not_a_reader')
@@ -531,7 +543,9 @@ let own: Answer = async ({ env, req, path, space, app, who, refuse }) => {
   // Loaded here, as the doors are (T-37977): pages.ts reaches the plugin list,
   // which names this file.
   let { askConnect, lost } = await import('./pages.ts')
-  if (!asked || !i) return lost(env)
+  if (!asked || !i || (i.testing && !enabled(req).includes(integration))) {
+    return lost(env)
+  }
   let back = `https://${space.slug}.${apex(env)}/${app.slug}/`
   let page = async (said?: Said) => {
     let mine = await using(c.graph.read, {

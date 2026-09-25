@@ -65,7 +65,8 @@ let setup = async (vault = true) => {
       form,
     )
   }
-  let shown = () => connectionsOf(p.env, space, person, [])
+  let shown = (enable?: string[]) =>
+    connectionsOf(p.env, space, person, [], [], enable)
   // Every row the directory's SQLite holds, as text.
   let dump = () => {
     let sql = p.states.get(PLATFORM_STORE)!.storage.sql
@@ -132,12 +133,16 @@ slow(
   'a built integration reached by OAuth is offered once this deploy holds its client',
   async () => {
     let s = await setup()
-    let offered = async () => (await s.shown()).built.map((b) => b.name)
-    assertEquals(await offered(), ['openrouter'])
+    let offered = async (enable?: string[]) =>
+      (await s.shown(enable)).built.map((b) => b.name)
+    let google = ['google-calendar']
+    assertEquals(await offered(google), ['openrouter'])
     s.p.env.OAUTH_CLIENTS = JSON.stringify({
       'google-calendar': { id: 'yaks', secret: 's' },
     })
-    assertEquals(await offered(), ['google-calendar', 'openrouter'])
+    // Still in Google's testing mode: offered only on `?enable=`.
+    assertEquals(await offered(), ['openrouter'])
+    assertEquals(await offered(google), ['google-calendar', 'openrouter'])
   },
 )
 
@@ -228,7 +233,7 @@ let asks = async (
     (await answered([connectionsPlugin, outboundPlugin], {
       env: s.p.env,
       req: new Request(`https://${host}/notes/api${path}`, init),
-      path,
+      path: path.split('?')[0],
       space: s.space,
       app,
       who,
@@ -285,6 +290,22 @@ slow(
       await s.post({ do: 'key', connection: asked.eid, key: 'k' }),
       { say: 'Each person connects their own, from the app.', no: true },
     )
+  },
+)
+
+slow(
+  'a testing integration is asked for only on a page opened with ?enable=',
+  async () => {
+    let s = await setup()
+    let { bob, door } = await asks(s, 'google-calendar')
+    let him: Who = { person: bob, role: null }
+    let path = '/connections/google-calendar?enable=google-calendar'
+    assertEquals((await door(him)).status, 404)
+    assertEquals((await door(him, undefined, path)).status, 200)
+    assertEquals(to(await door(him, undefined, path, 'n.io')), [
+      303,
+      `https://ada.yaks.app/notes/api${path}`,
+    ])
   },
 )
 

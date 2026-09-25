@@ -48,7 +48,10 @@ registered client, and its exchange answers an API key (`answers: 'key'`,
 @yaks/oauth), kept as the connection's grant. `google-calendar` is built: it
 asks for `calendar.events` and `calendar.calendarlist.readonly` unless an app
 needs narrower, asks Google for offline access so the grant can be refreshed,
-and sends its token to `www.googleapis.com` alone.
+and sends its token to `www.googleapis.com` alone. It is `testing: true` while
+Google's app is in testing mode, where only the people Google lists may sign in,
+so yaks.app offers it only on a connections page opened with
+`?enable=google-calendar`.
 
 An integration reached by OAuth is connected through the client the host is
 registered as with it (`client` in the context, `OAUTH_CLIENTS` on yaks.app,

@@ -45,7 +45,7 @@ import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { pilled, standing } from './gallery.ts'
 import { checkout, portal } from './billing.ts'
-import { connecting, connectionsOf } from './connections.ts'
+import { connecting, connectionsOf, enabled } from './connections.ts'
 import {
   buying,
   connect,
@@ -1361,6 +1361,7 @@ let index = async (
         owner,
         all,
         await (await identity()).services(env, owner),
+        enabled(req),
       )
       : undefined,
     // Something is built here while an app sits in the trash: its store is

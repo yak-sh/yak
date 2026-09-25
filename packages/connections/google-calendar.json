@@ -7,5 +7,6 @@
     "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
   ],
   "params": { "access_type": "offline", "prompt": "consent" },
-  "hosts": ["www.googleapis.com"]
+  "hosts": ["www.googleapis.com"],
+  "testing": true
 }

@@ -44,6 +44,9 @@ export type Integration = {
   hosts: string[]
   /** how the service signs the webhooks it sends */
   signature?: Scheme
+  /** still in the service's testing mode, where only the people it lists may
+   * sign in: offered only on a page opened with `?enable=<name>` */
+  testing?: boolean
 }
 
 /** A read of the graph: what a tool's context and a graph both offer. */
