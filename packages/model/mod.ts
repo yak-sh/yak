@@ -38,7 +38,16 @@
  * @module
  */
 
-import type { Plugin } from '@yaks/graph'
+import {
+  dead,
+  type Eid,
+  identityEid,
+  minted,
+  type Plugin,
+  Refused,
+  then,
+  type Tx,
+} from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Artifact } from '@yaks/blob'
 import { modelDoc } from './vocab.ts'
@@ -49,8 +58,41 @@ export let PROVIDER = 'provider'
 export let MODEL = 'model'
 export let TOOL = 'tool'
 
-/** The vocabulary as a plugin, for a graph that lists its plugins. */
-export let models = (): Plugin => ({ name: '@yaks/model', vocab: [modelDoc] })
+/**
+ * A provider or a model named where an eid is expected: `gpt-6-astra` in
+ * `using.model`. Each one's eid is derived from its name (the `identity`
+ * keyword), so the lookup is one read of the ids the name would have, no scan.
+ * A name both a provider and a model hold is refused rather than guessed.
+ */
+export let addressed = (
+  tx: Tx,
+  ids: string[],
+): Map<string, Eid> | Promise<Map<string, Eid>> => {
+  let ask = [...new Set(ids)].filter((id) =>
+    id && !id.startsWith('$') && !minted(id)
+  )
+  let at = (id: string) => [PROVIDER, MODEL].map((c) => identityEid(c, [id]))
+  return then(tx.get(ask.flatMap(at)), (rows) => {
+    let live = new Set(rows.filter((b) => !dead(b)).map((b) => b.entity.eid))
+    let found = new Map<string, Eid>()
+    for (let id of ask) {
+      let hits = at(id).filter((eid) => live.has(eid))
+      if (hits.length > 1) {
+        throw new Refused(`${id} names both a provider and a model`)
+      }
+      if (hits.length) found.set(id, hits[0])
+    }
+    return found
+  })
+}
+
+/** The vocabulary as a plugin, for a graph that lists its plugins; a provider
+ * and a model are addressed by name ({@link addressed}). */
+export let models = (): Plugin => ({
+  name: '@yaks/model',
+  vocab: [modelDoc],
+  address: addressed,
+})
 
 /** One line of a conversation as a model sees it. */
 export type Item =

@@ -27,12 +27,13 @@ Three things, and no transport:
   models, and which provider serves which model, exported as the JSON Schema
   document `modelDoc`. A provider and a model are each identified by `name` (the
   vocabulary's `identity` keyword), so the same name is the same entity in every
-  graph. A model is the model itself, whoever serves it. A provider's offering
-  of a model is an edge, provider `serves` model, carrying `serves.name`: what
-  that provider calls the model, sent as the model of every request it serves.
-  The `tool` component belongs to [@yaks/tools](../tools), not this vocabulary.
-  `Tool` here is the provider-neutral TypeScript type for a callable tool
-  description.
+  graph, and the name is accepted wherever its eid is: `using.model` may say
+  `gpt-6-astra`. A model is the model itself, whoever serves it. A provider's
+  offering of a model is an edge, provider `serves` model, carrying
+  `serves.name`: what that provider calls the model, sent as the model of every
+  request it serves. The `tool` component belongs to [@yaks/tools](../tools),
+  not this vocabulary. `Tool` here is the provider-neutral TypeScript type for a
+  callable tool description.
 
 A provider package implements `Model`: [@yaks/openai](../openai) does it over
 the Responses API; an Ollama or a Workers AI package would sit beside it. A
@@ -42,10 +43,10 @@ into items and calls the model. Neither imports the other.
 The root module exports these types, `ModelError`, `modelDoc`, the `models()`
 graph plugin, and the `PROVIDER`, `MODEL`, and `TOOL` component-name constants.
 `@yaks/model/vocab` exports `modelDoc` and `docs: [modelDoc]` for plugin
-loaders. `@yaks/model/rules` exports `rules()`, which supplies that schema
-plugin without write-time behavior. The package has no database or conversation
-storage; the calling application stores the provider and model records if it
-needs them.
+loaders. `@yaks/model/rules` exports `rules()`, which supplies that plugin: the
+schema and the name lookup, and no other write-time behavior. The package has no
+database or conversation storage; the calling application stores the provider
+and model records if it needs them.
 
 A model that throws `ModelError` failed in a way the caller expects — a refusal,
 a rate limit, a missing credential. Other exceptions are unexpected failures
