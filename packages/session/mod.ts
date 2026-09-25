@@ -74,6 +74,8 @@ export * from './status.ts'
 export * from './who.ts'
 export * from './naming.ts'
 export * from './react.ts'
+export * from './run.ts'
+export * from './providers.ts'
 export * from './daemon.ts'
 export * from './views.ts'
 

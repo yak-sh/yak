@@ -42,6 +42,7 @@ import {
   type Deps,
   ENTRY,
   live,
+  providerResolver,
   type Step,
   taskEntry,
   type Tool,
@@ -60,7 +61,6 @@ import {
   modelUsing,
   selectedUsing,
 } from './model_selection.ts'
-import { providerResolver } from './providers.ts'
 import { type EntrySource, entrySource, type SourceRequest } from './detail.ts'
 import { inheritedInstructions } from './legacy_instructions.ts'
 import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'

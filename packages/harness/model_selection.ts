@@ -3,7 +3,7 @@
 import { type Bundle, type Comp, type Graph } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import type { Model } from '@yaks/model'
-import { offerFor, offers } from './providers.ts'
+import { offerFor, offers } from '@yaks/session'
 
 export type ModelSelection = { choices: Bundle[]; current?: string }
 

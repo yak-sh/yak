@@ -557,6 +557,14 @@
       "description": "Check that no session has stalled: waiting on a turn or a tool answer for hours with nothing appended. Uses the server’s stall threshold (two hours by default) for pending or running sessions. A stopped background process can leave such a session without an answer. Reports when timestamps are unavailable to make that judgment. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
+    },
+    "session_run": {
+      "effect": true,
+      "created": ["using", "completed", "cancelled"],
+      "changed": ["dispatch.state"],
+      "removed": ["contains", "requires"],
+      "sweep": ".session.status=pending,running,queued (.entries.using|.entries.ask)|.dispatch.state=active",
+      "description": "run a transcript until it has nothing more to do: a `using` on an entry asks for a turn, a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency"
     }
   }
 }

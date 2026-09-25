@@ -526,6 +526,9 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
   // A stop is an explicit end, not a request to wake on the next delivery.
   if (statusOf(prefix) == 'stopped') return
   let open = openCalls(prefix).some((b) => b.entity.eid == link.call)
+  // The parent's `using` in force rides on the receipt: it is the request for
+  // the turn the receipt calls for (./run.ts).
+  let using = usingBefore(prefix)
   await g.apply([{
     entity: { eid },
     entry: {
@@ -533,5 +536,6 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
     },
     content: { body: message + '\n' + context + textOf(last) },
     ...open ? { result: { call: link.call } } : {},
+    ...using ? { using } : {},
   }], { trusted: true })
 }

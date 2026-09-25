@@ -22,7 +22,8 @@ import { toolEid } from '@yaks/tools'
 import { sessionDoc } from './comp.ts'
 import { kindOf, statusOf } from './status.ts'
 import { sessions } from './plugin.ts'
-import { react, settle, transcript } from './react.ts'
+import { type Deps, react, transcript } from './react.ts'
+import { settle } from './run.ts'
 import { daemon } from './daemon.ts'
 import { took } from './timing.ts'
 
@@ -120,11 +121,18 @@ let says = (id: string, text: string): Reply => ({
   items: [{ kind: 'assistant', text }],
 })
 
+// Run the transcript to rest and answer its status: what the runner leaves it
+// at, read back off its entries.
+let rest = async (g: Graph, s: string, deps: Deps) => {
+  await settle(g, s, { ...deps, holder: 'runner' })
+  return statusOf(await transcript(g, s))
+}
+
 Deno.test('an input is asked, a tool call is run, the transcript settles', async () => {
   let g = world()
   let { model, asked } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
   let deps = { model, tools: [echo], mint }
-  let status = await settle(g, ids.s, deps)
+  let status = await rest(g, ids.s, deps)
   assertEquals(status, 'settled')
   let entries = await transcript(g, ids.s)
   assertEquals(entries.map(kindOf), [
@@ -172,7 +180,7 @@ Deno.test('a fork continues from its anchor with only what followed', async () =
   let g = world()
   let { model, asked } = scripted([says('r1', 'done'), says('r2', 'again')])
   let deps = { model, tools: [echo], mint }
-  await settle(g, ids.s, deps)
+  await rest(g, ids.s, deps)
   let entries = await transcript(g, ids.s)
   let ask = entries.find((b) => kindOf(b) == 'ask')!
   g.apply([
@@ -189,7 +197,7 @@ Deno.test('a fork continues from its anchor with only what followed', async () =
   ])
   // the fork's transcript is the parent's prefix through the anchor, then its own
   assertEquals(await kinds(g, ids.f), ['input', 'ask', 'input'])
-  assertEquals(await settle(g, ids.f, deps), 'settled')
+  assertEquals(await rest(g, ids.f, deps), 'settled')
   assertEquals(asked[1].anchor, 'r1')
   assertEquals(asked[1].items, [{ kind: 'user', text: 'and once more' }])
   // the parent is untouched
@@ -202,7 +210,7 @@ Deno.test('a provider that keeps nothing replays the whole transcript', async ()
     [calls(['c1', 'hi']), says('r2', 'done')],
     false,
   )
-  await settle(g, ids.s, { model, tools: [echo], mint })
+  await rest(g, ids.s, { model, tools: [echo], mint })
   assertEquals(asked[1].anchor, undefined)
   assertEquals(asked[1].items.map((i) => i.kind), ['user', 'call', 'result'])
   let ask = (await transcript(g, ids.s)).find((b) => kindOf(b) == 'ask')!
@@ -213,7 +221,7 @@ Deno.test('errors retry to the bound, then the transcript is failed', async () =
   let g = world()
   let { model, asked } = scripted([])
   let deps = { model, tools: [echo], mint }
-  assertEquals(await settle(g, ids.s, deps), 'failed')
+  assertEquals(await rest(g, ids.s, deps), 'failed')
   assertEquals(asked.length, 3)
   assertEquals(await kinds(g, ids.s), ['input', 'error', 'error', 'error'])
 })
@@ -225,7 +233,7 @@ Deno.test('two tool calls in one reply are both answered before the next ask', a
     says('r2', 'done'),
   ])
   assertEquals(
-    await settle(g, ids.s, { model, tools: [echo], mint }),
+    await rest(g, ids.s, { model, tools: [echo], mint }),
     'settled',
   )
   assertEquals(
@@ -238,7 +246,7 @@ Deno.test('a call for a tool this session does not serve is refused, not left op
   let g = world()
   let { model } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
   // The tool row is in the graph and the session serves no function for it.
-  assertEquals(await settle(g, ids.s, { model, tools: [], mint }), 'settled')
+  assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'settled')
   let entries = await transcript(g, ids.s)
   // The refusal is an error beside the result, which is what any expected
   // failure lands — the model hears it and the transcript goes on.
@@ -319,7 +327,7 @@ Deno.test('usage is persisted once on its ask, not on output entries', async () 
     total_tokens: 1020,
   }
   let { model } = scripted([{ ...says('r1', 'done'), usage }])
-  await settle(g, ids.s, { model, tools: [echo], mint })
+  await rest(g, ids.s, { model, tools: [echo], mint })
   let entries = await transcript(g, ids.s)
   assertEquals(entries.filter((b) => b.usage).length, 1)
   assertEquals(entries[1].usage, usage)

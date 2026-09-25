@@ -633,22 +633,3 @@ export let react = async (
     for (const active of stream.values()) active.writer.discard()
   }
 }
-
-/** Run `react` until the transcript settles, stops, or fails, or `cap` steps
- * pass; each step is reported to `each` as it lands. */
-export let settle = async (
-  g: Graph,
-  session: Eid,
-  deps: Deps,
-  cap = 20,
-  each: (step: Step) => void = () => {},
-): Promise<TranscriptStatus> => {
-  let status: TranscriptStatus = 'empty'
-  for (let i = 0; i < cap; i++) {
-    let step = await react(g, session, deps)
-    each(step)
-    status = step.status
-    if (step.did == 'nothing') break
-  }
-  return status
-}
