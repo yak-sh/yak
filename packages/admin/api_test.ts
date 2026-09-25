@@ -26,6 +26,7 @@ import {
   rpc,
   saidBy,
   saidOn,
+  storeQuery,
   storeUrl,
   timing,
 } from './api.ts'
@@ -264,6 +265,31 @@ Deno.test('an expired MCP session is a refusal, not a defect', async () => {
       'sign in at https://yaks.app/login',
     )
     assertEquals(error.code, 'unauthorized')
+  } finally {
+    stub.done()
+  }
+})
+
+Deno.test("an app store's refusal keeps its code, rather than becoming a defect", async () => {
+  let stub = answering({
+    ...fee(),
+    ok: false,
+    status: 403,
+    text: () =>
+      Promise.resolve(JSON.stringify({
+        error: {
+          code: 'not_a_reader',
+          message: "this app is its owner's — they can let you in",
+        },
+      })),
+  })
+  try {
+    let error = await assertRejects(
+      () => storeQuery('someone.token', 'mom/recipe-box', ['.recipe']),
+      CallError,
+      "this app is its owner's",
+    )
+    assertEquals(error.code, 'not_a_reader')
   } finally {
     stub.done()
   }

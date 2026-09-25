@@ -271,13 +271,10 @@ export let rpc = (session: string) => {
     })
     if (r.status != 200) {
       let text = await r.text()
-      let refusal = valueOf(text)?.error
+      let refusal = refusalOf(valueOf(text))
       // A stale session is account state, not a broken connector. Keep its
       // code and sign-in sentence so the caller records a refusal, not a defect.
-      if (
-        r.status == 401 && typeof refusal?.code == 'string' &&
-        typeof refusal.message == 'string'
-      ) {
+      if (r.status == 401 && refusal) {
         throw new CallError(refusal.code, refusal.message)
       }
       throw new Error(`/mcp said ${r.status}: ${text}`)
@@ -321,6 +318,17 @@ let valueOf = (text: string) => {
   }
 }
 
+let refusalOf = (body: unknown) => {
+  let error = body && typeof body == 'object' && 'error' in body
+    ? body.error
+    : null
+  return error && typeof error == 'object' &&
+      'code' in error && typeof error.code == 'string' &&
+      'message' in error && typeof error.message == 'string'
+    ? { code: error.code, message: error.message }
+    : null
+}
+
 // The filter grammar over an app's store — the same line the page's own
 // client.js sends, each segment encoded whole the way client.ts queryArgs
 // does it.
@@ -348,6 +356,10 @@ export let storeQuery = async (
   }`
   let r = await sent(url, session)
   let body = await bodyOf(r)
+  let refusal = refusalOf(body)
+  if (r.status >= 400 && r.status < 500 && refusal) {
+    throw new CallError(refusal.code, refusal.message)
+  }
   if (!r.ok) throw new Error(`${at} refused the query: ${JSON.stringify(body)}`)
   return body
 }
