@@ -83,8 +83,8 @@ export let statusChanges = (
 
 // The slice of a Row the scope predicates read — eid and comps, never num or
 // kind. Widening belongs()/scopeFor()/repoAt() to this lets a server-side
-// caller reuse the ONE scope truth over db.ts rowsOf() output (which carries no
-// num/kind), instead of hand-rolling a second predicate that could drift.
+// caller reuse the ONE scope truth over rows that carry no num/kind, instead
+// of hand-rolling a second predicate that could drift.
 export type Scoped = { eid: string; comps: Row['comps'] }
 
 export let rowOf = (r: Record<string, unknown>): Row => {
@@ -360,8 +360,8 @@ export let param = (
   let p: Param
   if (b) {
     if (!(b in (comps[a] ?? {}))) {
-      // The same teaching the graph doors give (db.ts admitted, query.ts
-      // groupsOf): a refusal names the component's columns and their types.
+      // The same teaching the query door gives (route.ts groupsOf): a refusal
+      // names the component's columns and their types.
       throw new Error(
         `no such prop: .${a}.${b}${
           comps[a]
@@ -468,7 +468,7 @@ export let need = (all: Row[], id: string, where = '', comp = '') => {
   )
 }
 
-// The collateral of a delete: the entities db.ts apply() tombstones ALONGSIDE
+// The collateral of a delete: the entities the host tombstones ALONGSIDE
 // the target, because they exist ABOUT it — comments aimed at it, cards and
 // knocks/wakes viewing it — walked transitively down the same
 // `deaths('cascade')` worklist the reaper uses, so a delete guard names
@@ -704,7 +704,7 @@ export let sessionFor = (
   let s = all.find((r) => r.comps.session && r.comps.session.id == session)
   let eid = s?.eid ?? uuid()
   let comp: Record<string, unknown> = s ? {} : { id: session }
-  // Like sessions.ts owns(): a swept branch is still ours to regrow. Hooks
+  // A swept branch is still ours to regrow. Hooks
   // may refresh a provider pid, but never relocate a tree the server cut.
   let tree = s?.comps.worktree
   let owned = s?.comps.session.origin == 'managed' && tree &&
@@ -946,8 +946,8 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
     if (!m.message_id) return false
     // A letter to your SESSION is direct address, so it lands whatever loop
     // you run — the same rule the comment and knock arms above already
-    // follow. Sessions are addressable by id (`S-31@<fleet domain>`, resolved
-    // in src/mail.ts), and gating that on `operator` would resolve the
+    // follow. Sessions are addressable by id (`S-31@<fleet domain>`), and
+    // gating that on `operator` would resolve the
     // address perfectly and then tell nobody.
     if (who.session && String(m.target) == who.session) return true
     // Project mail reaches only the operator loop, never a specialist.
@@ -1108,7 +1108,7 @@ export let scopeFor = (
 // doc.title, the body doc.body, and WHERE it goes the shared `deliver {to}`.
 // `to` stays AS GIVEN (a raw address or a graph reference) — a graph
 // reference resolves at the door, a raw @-address is find-or-minted into its
-// address-book entity there (db.ts), never here.
+// address-book entity there, never here.
 export let mailChanges = (m: {
   to: string
   subject: string
@@ -2039,7 +2039,7 @@ export let notices = (all: Row[], who: Reader) => {
 // is one word on the row (`.feedback.by`) and naming it here would cost a
 // graph lookup in both renderers to repeat what `task show` already says.
 // A memory counts once it has been accepted. An agent's memory lands
-// proposed (db.ts apply) and stays a suggestion — indexed with a `?`, never
+// proposed and stays a suggestion — indexed with a `?`, never
 // preloaded — until `decided` lands on it without a declined verdict. A
 // memory with no proposed stamp was born accepted.
 export let accepted = (r: Row) =>
@@ -2052,7 +2052,7 @@ export let memoryHead = (r: Row) =>
 // cadence wake that starts it. `scope` is the project the dream combs; `floor`
 // starts a week back so the first run has a window. The wake is UNTARGETED
 // (deliver.to = the dream), so replaceWakes keeps one cadence clock and the
-// server arms it on apply; its knock hooks dreamComb (dream.ts), which re-arms
+// server arms it on apply; its knock hooks dreamComb, which re-arms
 // the next at each run's end. One dream per venture — a second on the same
 // project is refused, so `task dream` is safe to run twice.
 export let dreamChanges = (

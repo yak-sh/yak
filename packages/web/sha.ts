@@ -1,7 +1,7 @@
 // What a precondition compares, and what an edge is NAMED by, defined ONCE.
 // `apply()` hashes the stored value and the caller hashes the value it read; if
 // the two ends computed the hash with different code, a guard could pass or
-// refuse for no reason the caller can see. db.ts owns the rule, mcp.ts hands
+// refuse for no reason the caller can see. apply() owns the rule, a read hands
 // agents their token, and edge.ts derives an edge's eid from its sentence — so
 // the function lives here rather than in any of them.
 //

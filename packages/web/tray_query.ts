@@ -1,7 +1,7 @@
 // The tray's standing session query, in a module the socket worker can import
 // (live.ts is the browser's). The strip is mounted in every tab, so its one
 // line is the first shell query every socket serves: a pooled worker warms it
-// before its socket arrives (wsworker.ts), and the browser asks the identical
+// before its socket arrives, and the browser asks the identical
 // string, so the warm statement is the served one.
 import type { Field } from './query.ts'
 

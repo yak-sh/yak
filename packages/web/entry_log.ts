@@ -332,7 +332,7 @@ export let pageEntries = (
 // it (adapters stamp it each turn.completed), so no rollout-file read. A
 // graph-native session derives context from its usage entries instead
 // (graphLog above); this covers the substrate whose usage never becomes an
-// entry (ingest routes token counts to summary — sessions.ts drain).
+// entry (ingest routes token counts to the summary).
 export let contextOf = (usage_json?: string | null): number | undefined => {
   if (!usage_json) return undefined
   try {

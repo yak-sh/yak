@@ -86,8 +86,8 @@ export type Ctx = {
 }
 
 // The graph access a verb needs, as narrow methods rather than a materialized
-// array — so a server door can back each by a scoped db read (graph_query.ts
-// dbReader) instead of `rows(snapshot(db))`. The browser fills it from its
+// array — so a server door can back each by a scoped read instead of a whole
+// snapshot. The browser fills it from its
 // cache (rowsReader). Every method is SYNCHRONOUS: the db reads are direct
 // sqlite, the cache reads are array scans, and run() stays sync for the web bar
 // and the TUI.
@@ -257,7 +257,7 @@ let inherit = (ctx: Ctx): Record<string, Record<string, unknown>> => {
 
 // :delete tombstones the focused entity — or the one the line names. The one
 // warm verb that REMOVES, so the graph can shrink and not only grow. Death
-// CASCADES (db.ts apply()): comments aimed at it, cards and knocks/wakes
+// CASCADES: comments aimed at it, cards and knocks/wakes
 // viewing it die with it. A leaf goes quietly; a target with dependents
 // REFUSES without --cascade, naming what it would take, so the blast radius is
 // never a surprise. `:forget` is the same verb, said the way a memory wants to
@@ -692,7 +692,7 @@ export let commands: Record<string, Command> = {
   // attention NOW. The first word IS the recipient (alias, id) and must
   // resolve; the rest ride as a plain comment on the target — the knock
   // artifact itself never carries prose. Delivery is the server's
-  // ladder (knock.ts); the stamp on the K-entity says what happened.
+  // ladder; the stamp on the K-entity says what happened.
   //
   // A BARE `:knock` still asks the entity's own project — no word was
   // said, so nothing can be mistaken. But a first word that fails to
@@ -814,7 +814,7 @@ export let commands: Record<string, Command> = {
   // session working a task gated by open `requires` blockers ends its turn but
   // must leave a PENDING WAKE on its OWN session, so settled()/reapLeases()
   // RETAIN its claim (parkedWaiting) instead of lapsing it; the dep-completion
-  // knock (unblock.ts) then resumes it WARM when a blocker lands. The wake is
+  // knock then resumes it WARM when a blocker lands. The wake is
   // the parked marker + a safety fallback; the knock is the real resume. The
   // held claim IS the wait registration — no new facet. Targets the caller's
   // own SESSION (deliver.to = session), which is what pendingWake(session)

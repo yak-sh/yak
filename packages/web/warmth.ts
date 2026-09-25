@@ -42,7 +42,7 @@ export let SUNK = 0.1
 // The far arm — a task whose PROJECT is archived — is a forward deref
 // (task → its project → that project's archived stamp), so it IS the traversal
 // grammar. `.archived.at` is the canonical presence spelling: the column is
-// not-null, and db.ts rewrites `.retired_at` to it. The self arm (this row IS
+// not-null. The self arm (this row IS
 // an archived project) has no ref to deref, so it stays a direct test.
 let SUNK_PROJECT = parseQuery('.filed.project.archived.at!')
 export let sunk = (

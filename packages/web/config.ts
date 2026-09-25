@@ -7,16 +7,16 @@
 // environment editor, D-18092).
 //
 // Two storage planes hang off the one catalog. A NON-secret override lives on a
-// `setting {key, value}` graph entity (types.ts/db.ts) and travels the ordinary
+// `setting {key, value}` graph entity (types.ts) and travels the ordinary
 // mutation + broadcast path. A SECRET stays behind the server-only credential
-// API (credentials.ts) and never becomes a graph component. This module owns
+// API and never becomes a graph component. This module owns
 // the catalog and the non-secret resolver; it holds no secret bytes.
 //
 // Resolution order for a non-secret value is graph override > process
 // environment (deployment compatibility) > catalog default. `resolve` reports
 // which plane answered so a UI can tell "reset to default" from "empty value",
 // and consumers call it at each operation boundary, so a saved override reaches
-// the next use without a tasksd restart. Validation is total on the WRITE side
+// the next use without a restart. Validation is total on the WRITE side
 // (`validate`, run by apply() at the graph boundary); reads stay total and never
 // throw, because a value that reached storage already passed validation.
 
@@ -31,9 +31,9 @@ export type Spec = {
   label: string
   group: string
   type: SettingType
-  // A secret never becomes a graph component; its bytes live behind
-  // credentials.ts. The catalog still names it so both planes render from one
-  // list and the UI can group provider accounts, endpoints, and credentials.
+  // A secret never becomes a graph component; its bytes live behind the
+  // credential store. The catalog still names it so both planes render from
+  // one list and the UI can group provider accounts, endpoints, and credentials.
   sensitive: boolean
   help: string
   // The value when neither the graph nor the environment overrides it. A secret
@@ -64,7 +64,7 @@ let invalid = (message: string): never => {
 
 // Normalize and constrain a base URL: http/https only, no embedded credentials,
 // no query, no fragment. The trailing slash is dropped so a provider appends its
-// path against a canonical origin (ollama.ts adds `/v1`). Idempotent, so
+// path against a canonical origin. Idempotent, so
 // re-normalizing a stored value is a no-op.
 export let normalizeUrl = (raw: string): string => {
   let text = raw.trim()
@@ -191,7 +191,7 @@ export let spec = (key: string): Spec | undefined => byKey.get(key)
 export let plainKeys: string[] = catalog.filter((s) => !s.sensitive).map((s) =>
   s.key
 )
-// Every secret key — the credential store's vocabulary (credentials.ts).
+// Every secret key — the credential store's vocabulary.
 export let secretKeys: string[] = catalog.filter((s) => s.sensitive).map((s) =>
   s.key
 )
@@ -241,8 +241,8 @@ export let resolve = (
 }
 
 // The effective non-secret settings, for the config panel's source report.
-// Secrets are omitted on purpose — their state comes from credentials.ts, which
-// never returns a value.
+// Secrets are omitted on purpose — their state comes from the credential
+// store, which never returns a value.
 export let effective = (
   graph: Reader,
   env: Reader = (name) => Deno.env.get(name),
@@ -266,8 +266,8 @@ export type SettingRow = {
   eid?: string
 }
 
-// The wire shape for GET /config/settings. Owns the shaping here (server.ts
-// stays a thin route) while holding no db handle: the caller injects the graph
+// The wire shape for GET /config/settings. Owns the shaping here while
+// holding no db handle: the caller injects the graph
 // reader and an eid-by-key reader, the two halves of the graph plane. Non-secret
 // only, so no secret bytes and no credential state ever cross this door.
 export let settingRows = (

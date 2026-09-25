@@ -157,7 +157,7 @@ export let Composer = (
   let { sync, spend } = useDraft(dkey, box, setLine)
 
   // The vocabulary teaches where the typing happens: a comment opening
-  // with `:` IS a command line (obey.ts runs it on landing), so the
+  // with `:` IS a command line (run when it lands), so the
   // composer completes it the way the palette does — same table, same
   // suggest(). Two lines qualify: one that already IS an order, and the
   // lone `:` that is about to be — that keystroke opens the whole menu,

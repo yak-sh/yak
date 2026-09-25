@@ -250,7 +250,7 @@ export let learn = (docs: VocabDoc[]): Vocab => {
 //                     it can't reach a live cache from here)
 
 // Every reference declares what the reaper does when its TARGET dies —
-// db.ts derives the cascade from these words, so a reference without one
+// the host derives the cascade from these words, so a reference without one
 // doesn't typecheck and an undeclared behavior can't exist:
 //   'cascade'  the row's whole entity dies with the target (a card
 //              viewing it, a comment aimed at it)
@@ -326,7 +326,7 @@ export let derivedProps: Record<string, Record<string, PropType>> = {
 
 // The spine's own identity column. The contract declares what a store STAMPS on
 // `entity` (num); the `eid` beside it is the identity itself — readable on every
-// row (db.ts `readable` has always projected it), never writable, and derived
+// row, never writable, and derived
 // from nothing, so it belongs to neither map above. Declared here so both
 // routing tables carry it and `.eid=<id>` NAMES entities at this door exactly as
 // @yaks/sql and @yaks/match answer the same predicate.
@@ -363,7 +363,7 @@ export let lazy = (name: string) => partition[name] === 'lazy'
 export let cols = (comp: string) => Object.keys(comps[comp] ?? {})
 
 // The reaper's worklists, derived: every wire-writable reference wearing
-// the given death word, as (comp, column) pairs. db.ts walks these when
+// the given death word, as (comp, column) pairs. The host walks these when
 // an entity dies — the declarations above ARE the cascade, so a new
 // reference can't dodge the reaper by forgetting a hand-kept list.
 // (`stamped` refs stay out on purpose: server-owned rows die by server
@@ -444,8 +444,8 @@ export let kilo = (n: number): string =>
 // derived (alphabetical, refined by `before`), so nothing keeps the hot
 // kinds near the front of it.
 //
-// An APP's own components (store/vocab.ts) join the same table when a store
-// plants them (db.ts plantVocab) — the registry query.ts keeps for the
+// An APP's own components join the same table when a store
+// plants them — the registry query.ts keeps for the
 // filter grammar, safe for the same reason: a row wears a word only if its
 // OWN store planted the table, so no store is ever told about another's
 // rows. They rank NEGATIVE in the order learned, so a store's word beats
@@ -517,7 +517,7 @@ export let checkPrefix = (id: string, kind: string) => {
 // mints, or the hash a content-addressed entity is its own name by — a
 // blob's sha-256 (64 hex), a commit's git sha (40). One spelling for every
 // id door, so none of them can drift out of knowing a shape the others take
-// (db.ts resolveId, props.ts reference, client.ts minting).
+// (props.ts reference, client.ts minting).
 export let EID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^[0-9a-f]{40}$|^[0-9a-f]{64}$/i
 export let idOf = (e: { eid: string; kind: string; num?: number | null }) =>
@@ -906,7 +906,7 @@ export type Resume = {
 // button. Created over the wire, acted on by the server's effect, kept
 // as audit; acted_at is stamped when the signals have been sent.
 // A stop signal, sent. It settles into `delivered` once the signals leave
-// (deliver.ts) — no receipt column of its own; the audit row is the request.
+// — no receipt column of its own; the audit row is the request.
 export type StopRequest = { eid: string; target: string }
 
 // An entity's mail address — the address-book facet, one comp for all.
@@ -920,7 +920,7 @@ export type Deliver = { eid: string; to: string }
 
 // A knock: the request column is the ask (what to look at); WHO looks is
 // the `deliver {to}` facet, and the outcome the shared `delivered`/`failed`
-// facet (deliver.ts) — neither a column here.
+// facet — neither a column here.
 export type Knock = {
   eid: string
   target: string
@@ -937,7 +937,7 @@ export type Wake = {
   note?: string | null
 }
 
-// A dream: a venture's consolidation cursor (dream.ts). `scope` is the
+// A dream: a venture's consolidation cursor. `scope` is the
 // venture project it combs; `floor` the sliding cursor over sessions
 // finished since. Both wire-writable — `task dream <project>` mints the
 // entity; the comb advances the floor.
@@ -1015,8 +1015,8 @@ export type Blocked = {
 // `paths` are repo-relative paths/globs (newline- or comma-separated); `sha`
 // the commit last verified against; the exact tiers (D-21211) narrow the first
 // path to a symbol, a hunk of raw text, and/or a 1-based inclusive line range.
-// All wire-written; freshness is derived at read time by asking git
-// (src/anchor.ts), never stored.
+// All wire-written; freshness is derived at read time by asking git, never
+// stored.
 export type Anchor = {
   eid: string
   paths?: string | null
@@ -1153,7 +1153,7 @@ export type Goal = {
 // wrote the source down. A facet — any entity may wear it.
 export type Feedback = { eid: string; by?: string | null }
 
-// Recall aggregates, server-minted on every activation (db.ts touch()).
+// Recall aggregates, server-minted on every activation.
 // Three numbers are the whole model: query.ts hot() derives stability
 // (count and spacing) and decays against last_at at read time — no
 // stored score anywhere, nothing to sweep.
@@ -1380,8 +1380,7 @@ export type Pinned = Pin & { target: string; view: string }
 // SPREAD a change rather than rebuild it. Rewrite one as `{eid, name, comp}`
 // and nothing breaks loudly — the guard just stops guarding, and the write
 // lands unguarded while the caller believes it was protected. That is worse
-// than never having had it, so precondition_test.ts drives each door and
-// refuses the shape.
+// than never having had it.
 export type Change = {
   eid: string
   name: string
@@ -1398,7 +1397,7 @@ export type Live = { live: Change[]; cursor: number }
 // edges (edges aren't components; they ride alongside).
 // `cursor` = the journal rowid this snapshot is current as of (a returning
 // client's next delta `since`); `epoch`/`vocabHash` = the server-boot and
-// vocabulary stamps a delta is validated against (db.ts). OPTIONAL so the
+// vocabulary stamps a delta is validated against. OPTIONAL so the
 // additions stay additive: snapshot() fills every field, but the many
 // consumers that only read `changes`/`deps` (and build a bare {changes, deps}
 // to feed notices/edgesOf/digests) stay valid Snapshots untouched.

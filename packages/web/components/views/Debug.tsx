@@ -247,7 +247,7 @@ let AllProps = ({ e }: { e: Ent }) => (
 
 // The add-comp picker — a `+ component` toggle listing wire-writable
 // comps this entity lacks (comps keys minus present ones). Selecting one
-// applies an empty patch; db.ts upserts the row with its column defaults
+// applies an empty patch; the host upserts the row with its column defaults
 // (a doc + empty memory reads as a memory at once, type defaulting to
 // 'project'), and its columns then surface as the editable Prop rows
 // above. The spine and `entity` are never comps here, so they can't be

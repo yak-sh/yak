@@ -327,7 +327,7 @@ export let restore = () => {
 // GRAPH (T-12788), so the fleet can see it (ui_state reports every open tab).
 // UPDATE-ONLY: this write publishes position, and nothing reads it back to
 // drive navigation — a cursor read must never influence rendering.
-// One row per client (db.ts unique(client)), minted lazily beside the client
+// One row per client, minted lazily beside the client
 // entity the way the camera mints on first pan. Written on navigation only,
 // never mid-gesture (the same gesture-end rule keep() uses), and IDEMPOTENT: a
 // write naming where the cursor already points is skipped, so a re-render never

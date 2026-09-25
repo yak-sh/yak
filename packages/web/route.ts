@@ -59,8 +59,7 @@ export let routes: Record<string, readonly string[]> = Object.fromEntries(
 // so a module-level registry made one app's word parse in another app's query
 // — an `[]` where the unknown-prop refusal is owed, and which store got it
 // depended on which store parsed first (T-32814). So every entry point takes
-// the words it may use; db.ts keys them on the `Sql` handle (vocabOf), the
-// same WeakMap the write path reads. The default is the platform vocabulary
+// the words it may use. The default is the platform vocabulary
 // alone, which is every local graph.
 //
 // Parse-time only either way: no statement is ever compiled against a table a
@@ -161,8 +160,8 @@ for (let name of reserved) {
   }
 }
 
-// The dot-param shape, sketched — the tail of every strict rejection
-// (FILTERS in grammar.ts spells the operators). Every example is a word the
+// The dot-param shape, sketched — the tail of every strict rejection.
+// Every example is a word the
 // vocabulary carries in EVERY graph: an error is read by whoever asked, and a
 // hosted app's store must never be taught with another graph's entity ids.
 let SKETCH =
@@ -171,7 +170,7 @@ let SKETCH =
 
 // What THIS process teaches a reader who named a word it does not know. The
 // sketch above by default; a store with a vocabulary of its own replaces it
-// (db.ts plantVocab → store/vocab.ts FILTERS) so the tail says vocab.json
+// so the tail says vocab.json
 // instead of a CLI the reader has never seen. Per process, because a process
 // serves one flavour of store: the fleet's local graph, or hosted apps.
 export let taught = SKETCH
@@ -352,8 +351,7 @@ export let groupsOf = (segs: string[], vocab: Vocab): Hop[] => {
     let own = routed(segs[i], vocab)
     if (own && i + 1 < segs.length) {
       let [a, b] = [segs[i], segs[i + 1]]
-      // The refusal names what IS there: one look, the whole shape (db.ts
-      // admitted() says the same thing at the write door).
+      // The refusal names what IS there: one look, the whole shape.
       if (!own.includes(b)) {
         throw new Error(
           `no such prop: .${a}.${b} — ${

@@ -5,8 +5,7 @@
 // bounded 20,000-row retention floor, ready in read doors, leak-free subs,
 // a trimmed boot working set, then @yaks/client with retention, ready and dedupe
 // upstream. Retention lets reopens paint; ready separates loading from absent.
-// Then db.ts snapshot() dissolves into @yaks/api subscriptions and @yaks/sync,
-// not a new package primitive. Never restore whole-db sync or an unbounded cache.
+// Never restore whole-db sync or an unbounded cache.
 import { IdError } from './types.ts'
 import {
   batch,

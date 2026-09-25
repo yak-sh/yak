@@ -6,8 +6,7 @@
 // a new paragraph.
 //
 // A body is UNTRUSTED and this string goes straight to innerHTML.
-// "Our own data" stopped being true when the fleet took public mail:
-// inbound.ts turns a letter from anyone on the internet into a doc body,
+// A letter from anyone on the internet becomes a doc body,
 // and the canvas is same-origin to /apply and /ws, which have no auth.
 // So markup written INSIDE a body never becomes markup — an html token
 // renders as its own escaped text, and only an href that cannot carry a

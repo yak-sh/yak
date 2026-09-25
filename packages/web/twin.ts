@@ -3,8 +3,8 @@
 // The dupe hint and the doc view ask for similarity-ranked /query results; if
 // the two halves disagreed on the
 // text a doc's vector means or on how close counts as the same, the hint would
-// lie. So those two facts live here, apart from embed.ts's server-only machinery
-// (the model, the vectors, the sweep) — which re-exports them for its own use.
+// lie. So those two facts live here, apart from the server-only machinery
+// (the model, the vectors, the sweep).
 
 // What a doc's vector means: title and body as one text, cut at the model's
 // horizon (bge reads ~512 tokens; beyond ~2KB is silence anyway).

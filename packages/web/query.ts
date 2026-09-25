@@ -174,8 +174,8 @@ export type Pred = {
 // an unbounded read below a cursor. A window states a SIZE, never a sequence:
 // with no `.order` the sequence is spine num, so `after` reads as "older than
 // this num"; with one (`.order=hot`, `.order=similar`) the asked-for order
-// survives and `after` names the entity to continue past IN THAT ORDER
-// (graph_query.ts pageRanked). One cursor spelling — the entity's num — serves
+// survives and `after` names the entity to continue past IN THAT ORDER.
+// One cursor spelling — the entity's num — serves
 // every ordering, so a caller pages without learning the order key.
 export type Win = { limit?: number; after?: number }
 
@@ -476,7 +476,7 @@ export let listed = (comps: Comps, preds: Pred[]) =>
   !comps.quarantined || reveals(preds)
 
 // A `blob` is content-addressed STORAGE wearing an entity's clothes: every doc
-// body lands as one (db.ts textBlob), and an attachment's bytes as another, so
+// body lands as one, and an attachment's bytes as another, so
 // the store's own rows sit in the spine a filter selects from. They carry no
 // doc and no kind, so a listing that catches one renders nothing for it — which
 // is what a person saw (C-32498 item 4). Naming the component is the deliberate
@@ -510,8 +510,7 @@ export let selected = (comps: Comps, preds: Pred[]) =>
 //
 // Why it matters beyond tidiness: a JS filter that runs AFTER a statement's
 // LIMIT under-fills the page, so a window can only be exact once the screens
-// the answer depends on are inside the same statement. `search()` (db.ts) has
-// unshifted the quarantine half by hand since before this existed.
+// the answer depends on are inside the same statement.
 let absent = (comp: string): Pred => ({ comp, prop: '', op: '', value: '' })
 export let screened = (preds: Pred[], entries: boolean): Pred[] => [
   ...preds,
@@ -876,7 +875,7 @@ export let pred = (token: string, vocab: Vocab = NONE): Pred | null => {
 // The rejection every strict door throws when preds() shrugs: the error is the
 // teaching moment, so it names where a stray predicate lives — a bare `kind=K`
 // is the warm mistake, and the door says the dotted spelling that now works —
-// and sketches the dot-param shape (FILTERS in grammar.ts spells the operators).
+// and sketches the dot-param shape.
 export let noFilter = (f: string) =>
   `not a filter: ${f} — ${
     f.startsWith('kind=') ? `write it dotted: .${f}; ` : ''

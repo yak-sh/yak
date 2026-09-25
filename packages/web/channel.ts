@@ -211,8 +211,8 @@ export let doneOf = (index: Index, eid: string) => {
 
 // eid → human id (T-7), or null when this index has never seen the entity.
 // A num is a REQUESTED handle now, not a birthright, so a num-less row is
-// ordinary: idOf renders it as the short eid, exactly as db.ts human() does
-// for the same entity server-side. Null stays reserved for "unknown here".
+// ordinary: idOf renders it as the short eid, as the host does. Null stays
+// reserved for "unknown here".
 export let humanId = (index: Index, eid: string): string | null => {
   let row = index.get(eid)
   if (!row) return null
@@ -234,7 +234,7 @@ export let printRun = (args: string[]) => {
 }
 
 // The session THIS process serves, derived from the whole index — the
-// shared seat rule (src/served.ts): the newest row wearing our pid, the
+// shared seat rule (served.ts): the newest row wearing our pid, the
 // same question the server-side door asks of the same graph, so the two
 // cannot disagree about who hears a knock (T-7288).
 //
@@ -277,8 +277,8 @@ export let findSession = (
 // already opened or archived never re-rings. Narrowing later is one line here.
 // `operator` gates PROJECT mail to the operator loop. Missing identity fails
 // closed; claimed-work comments and session knocks are selected independently.
-// A letter to the SESSION ITSELF (`S-31@<fleet domain>`, resolved in
-// src/mail.ts) is direct address and rings whatever loop this is — the
+// A letter to the SESSION ITSELF (`S-31@<fleet domain>`) is direct address
+// and rings whatever loop this is — the
 // operator gate belongs to project mail alone, exactly as it does in the
 // inbox predicate (client.ts `addressed`).
 export let injects = (
@@ -295,8 +295,8 @@ export let injects = (
 }
 
 // A knock the ladder settled as OURS: delivered.via `cast S-31` names the
-// very session this channel serves (knock.ts writes `cast S-${num}` when the
-// door answered). The transcript-derived `sent` gate decides whether the
+// very session this channel serves (`cast S-${num}`, written when the door
+// answered). The transcript-derived `sent` gate decides whether the
 // session already took it.
 let lost = (via: string, ctx: Ctx) => {
   let me = ctx.idOf(ctx.sessionEid)
@@ -449,11 +449,8 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   for (let c of changes) {
     if (!c.comp) continue
 
-    // A session's own write is never a message back to itself. This skip lived
-    // as a post-filter inside notices() (client.ts), so the live channel push
-    // path (channels/tasks/server.ts feed()) — the selector's other consumer —
-    // echoed a session its own comments. Moved into the shared selector, both
-    // consumers inherit one implementation and cannot drift (T-20163).
+    // A session's own write is never a message back to itself. The skip lives
+    // in the shared selector, so every consumer inherits it (T-20163).
     // `created.via` is the instrument that wrote the entity; == the reading
     // session means the session authored it. Self-directed floaters stay safe:
     // a recall and a cadence self-knock are server/actor-minted with via ==
@@ -634,7 +631,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
 // TARGET. A knock is a nudge; the accompanying comment carries what to say.
 // `near` is the resume sweep's clock: a snapshot is not a batch, so the words
 // are picked by TIME instead — the newest comment on the target born in the
-// knock's own minute, the window knock.ts's wordsFor() uses. None in that
+// knock's own minute. None in that
 // window means the knock arrives bare rather than wearing someone else's
 // words.
 let commentOn = (

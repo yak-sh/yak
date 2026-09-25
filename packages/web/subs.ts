@@ -2,9 +2,8 @@
 // {preds, members}: the parsed query and the eids currently in its set. Per
 // committed batch the server re-tests each touched eid and streams the
 // transition — this file holds the socket-free heart (the §2 transition table
-// and the comps→Changes spread) so it tests without a server. server.ts wires
-// these to the live stream and the eager db reads; subs_test.ts drives them
-// with plain values.
+// and the comps→Changes spread) so it tests without a server. subs_test.ts
+// drives it with plain values.
 //
 // The membership Set IS the memory that makes "you no longer match" (a drop)
 // as cheap as an add: no client can say that today because no client knows

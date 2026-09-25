@@ -274,8 +274,7 @@ let requiredRef = (
 
 // A field OPERATOR is a plain object whose key names an apply()-resolved op
 // (`$edit`, …) rather than a literal column value. Detected by the `$` sigil so
-// the value language leaves it alone; a real scalar is never an object. Kept
-// here (not imported from edit.ts) to avoid a props↔edit cycle.
+// the value language leaves it alone; a real scalar is never an object.
 export let isFieldOp = (v: unknown): boolean =>
   v != null && typeof v == 'object' && !Array.isArray(v) &&
   Object.keys(v as object).some((k) => k.startsWith('$'))
