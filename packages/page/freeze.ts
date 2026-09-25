@@ -27,7 +27,6 @@ import type { Handler } from '@yaks/effects'
 import { address, type Blobs, encode } from '@yaks/blob'
 import { DOC, TITLE } from '@yaks/doc'
 import { WEB } from './comp.ts'
-import { scrub } from './scrub.ts'
 import { fetchable } from './url.ts'
 
 /**
@@ -77,6 +76,9 @@ export let froze = async (
   raw: string,
   { blobs, now = clock }: Keep,
 ): Promise<Bundle[]> => {
+  // The HTML parser is imported by the first page stored, not by every host
+  // that composes this package and may never store one.
+  let { scrub } = await import('./scrub.ts')
   let { html, title } = scrub(raw)
   let sha = address(html)
   await blobs.put(sha, encode(html))
