@@ -8,6 +8,8 @@
 // port with the handler the config's own plugins built and recording the call
 // for as long as it listens — is @yaks/api's own test. What this asserts of it
 // is that a config naming that package gets the verb, and a handler at all.
+// The verb is the command line's alone (`surfaces: ["cli"]`): a server keeps
+// its process, so the MCP listing leaves it out.
 
 import { assert, assertEquals } from '@std/assert'
 import { compose, read } from './host.ts'
@@ -39,19 +41,22 @@ slow(
           '@yaks/id',
           '@yaks/session',
           '@yaks/harness',
+          '@yaks/process',
         ],
         numbers: false,
         port,
       }),
     )
     let host = await compose(read(`${dir}/yak.json`))
-    // The config named the package that hosts routes, so there is one.
+    // The config named the package that hosts routes, so there is one, and
+    // the verb that serves them.
     assert(host.handler, 'a config naming @yaks/api composed no handler')
+    assert(host.tools.some((t) => t.name == 'serve'), 'no serve verb')
     let server = Deno.serve({ port }, host.handler)
     let at = `http://localhost:${port}`
     try {
-      // The tools are the vocabulary's declarations wearing the module's runs
-      // — `serve` among them, contributed by the package in the config.
+      // The tools are the vocabulary's declarations wearing the module's runs,
+      // less the ones offered only on the command line.
       let listed = await fetch(`${at}/mcp`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -65,7 +70,7 @@ slow(
       let names = listed.result.tools.map((t: { name: string }) => t.name)
       assert(names.includes('session_list'), names.join(' '))
       assert(names.includes('graph_apply'), names.join(' '))
-      assert(names.includes('serve'), names.join(' '))
+      assert(!names.includes('serve'), names.join(' '))
 
       // A subscription hears about a write it did not make.
       let socket = new WebSocket(`ws://localhost:${port}/ws`)
@@ -82,7 +87,8 @@ slow(
         }]),
       }).then((r) => r.json())
       // The endpoint signs the batch with this process, which is the floor
-      // where no plugin named a caller.
+      // where no plugin named a caller; the config lists @yaks/process, so
+      // there is a process to sign with (host.ts `writer`).
       assertEquals(applied[0].created.by, host.me)
 
       let found = await fetch(`${at}/query?q=.session`).then((r) => r.json())
