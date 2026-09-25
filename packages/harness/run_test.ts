@@ -27,9 +27,9 @@ Deno.test('the seed is the same rows however many times it is applied', async ()
   let h = open(':memory:')
   h.g.apply(seed(), { trusted: true })
   h.g.apply(seed(), { trusted: true })
-  assertEquals((await h.g.read('.provider')).length, 1)
-  assertEquals((await h.g.read('.serves')).length, 1)
-  let models = await h.g.read('.model')
+  assertEquals((await h.g.read('.provider&*')).length, 1)
+  assertEquals((await h.g.read('.serves&*')).length, 1)
+  let models = await h.g.read('.model&*')
   assertEquals(models.map((b) => b.entity.eid), [
     identityEid('model', ['gpt-6-astra']),
   ])
@@ -191,7 +191,7 @@ Deno.test('transcript doors refuse unknown sessions before doing work', async ()
       }
     }
     assertEquals(asked, 0)
-    assertEquals(await a.h.g.read('.entry'), [])
+    assertEquals(await a.h.g.read('.entry&*'), [])
     await a.h.g.apply([{ entity: { eid: 'empty' }, session: {} }])
     assertEquals(await a.transcript('empty'), [])
     assertEquals(
@@ -314,7 +314,7 @@ Deno.test('Agent close stops admission and drains an active model before SQLite 
   await new Promise((r) => setTimeout(r, 20))
   assertEquals(closed, false)
   // The native connection is still usable under the admitted callback.
-  assertEquals((await a.h.g.read('.session')).length, 1)
+  assertEquals((await a.h.g.read('.session&*')).length, 1)
   let refused = false
   try {
     await a.start('too late')
@@ -464,7 +464,7 @@ Deno.test('task fork title uses assignment rather than copied local context', as
         content: { body: 'Improve sidebar navigation' },
       },
     ], { trusted: true })
-    const [child] = await h.g.read('.eid=child')
+    const [child] = await h.g.read('.eid=child&*')
     assertEquals(await sessionTitle(h.g, child), 'Improve sidebar navigation')
   } finally {
     h.close()
@@ -483,7 +483,7 @@ Deno.test('archive marks exactly the selected child, not its root', async () => 
       },
     ], { trusted: true })
     await a.archive('child', true)
-    const rows = await a.h.g.read('.session')
+    const rows = await a.h.g.read('.session&*')
     assertEquals(rows.find((b) => b.entity.eid == 'root')!.archived, undefined)
     assert(rows.find((b) => b.entity.eid == 'child')!.archived)
   } finally {

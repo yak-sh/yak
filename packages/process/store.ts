@@ -23,11 +23,11 @@ export type Store = {
   services: () => Bundle[] | Promise<Bundle[]>
 }
 
-/** The query {@link store} runs: every process with no `exit` yet. */
-export let RUNNING = `.${PROCESS}&.${EXIT}=`
+/** The query {@link store} runs: every process with no `exit` yet, whole. */
+export let RUNNING = `.${PROCESS}&.${EXIT}=&*`
 
 /** The query {@link store} runs for what is wanted: every service row. */
-export let SERVICES = `.${SERVICE}`
+export let SERVICES = `.${SERVICE}&*`
 
 /**
  * A @yaks/graph as this package's store — both reads are ordinary queries, so

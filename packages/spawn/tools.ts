@@ -100,7 +100,9 @@ let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
   (await g.storage.tx((tx) => tx.get([eid])))[0]
 
 let entriesOf = async (graph: Graph, session: string): Promise<Bundle[]> =>
-  ordered(await graph.read(`.${ENTRY}.session=${JSON.stringify(session)}`))
+  ordered(
+    await graph.read(`.${ENTRY}.session=${JSON.stringify(session)}&*`),
+  )
 
 // The session this call names, refused where the id is something else: a wait
 // on a task is a wait that would never end.

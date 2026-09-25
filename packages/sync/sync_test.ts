@@ -69,7 +69,7 @@ Deno.test('a second client sees the bundles, and a delete arrives as gone', asyn
   await a.idle()
   // Gone from the set: the components are off it, and no query finds it.
   assertEquals(comp(at(b.graph, 'r1'), 'recipe'), {})
-  assertEquals((b.graph.read('.course=dinner') as Bundle[]).length, 0)
+  assertEquals((b.graph.read('.course=dinner&*') as Bundle[]).length, 0)
   a.wire.close()
   b.wire.close()
 })
@@ -83,11 +83,11 @@ Deno.test('a subscriber hears an edit that pushes an entity out of the set', asy
 
   a.graph.apply([dal()])
   await a.idle()
-  assertEquals((b.graph.read('.course=dinner') as Bundle[]).length, 1)
+  assertEquals((b.graph.read('.course=dinner&*') as Bundle[]).length, 1)
 
   a.graph.apply([{ entity: { eid: 'r1' }, recipe: { course: 'pudding' } }])
   await a.idle()
-  assertEquals((b.graph.read('.course=dinner') as Bundle[]).length, 0)
+  assertEquals((b.graph.read('.course=dinner&*') as Bundle[]).length, 0)
   a.wire.close()
   b.wire.close()
 })
@@ -146,7 +146,7 @@ Deno.test('a refused write on an entity the server never had leaves it bare', as
   await c.idle()
   assertEquals(comp(at(c.graph, 'r1'), 'recipe'), {})
   assertEquals(comp(at(c.graph, 'r1'), 'doc'), {})
-  assertEquals((c.graph.read('.course=dinner') as Bundle[]).length, 0)
+  assertEquals((c.graph.read('.course=dinner&*') as Bundle[]).length, 0)
   assertEquals(c.trouble[0].reverted, true)
   c.wire.close()
 })
@@ -201,7 +201,7 @@ Deno.test('a dropped socket resubscribes and catches up on what it missed', asyn
 
   a.graph.apply([dal(), dal('r2')])
   await a.idle()
-  assertEquals((b.graph.read('.course=dinner') as Bundle[]).length, 2)
+  assertEquals((b.graph.read('.course=dinner&*') as Bundle[]).length, 2)
 
   // The socket goes; the client is deaf and does not know it.
   b.socket()!.close()
@@ -209,14 +209,14 @@ Deno.test('a dropped socket resubscribes and catches up on what it missed', asyn
   a.graph.apply([{ entity: { eid: 'r2' }, $delete: true }])
   a.graph.apply([dal('r3')])
   await a.idle()
-  assertEquals((b.graph.read('.course=dinner') as Bundle[]).length, 2) // stale
+  assertEquals((b.graph.read('.course=dinner&*') as Bundle[]).length, 2) // stale
 
   b.fire() // the one reconnect the backoff scheduled
   await b.idle()
   assert(b.wire.connected())
   // The set as it now stands: the new one arrived, the deleted one left.
   assertEquals(
-    (b.graph.read('.course=dinner') as Bundle[]).map((x) => x.entity.eid)
+    (b.graph.read('.course=dinner&*') as Bundle[]).map((x) => x.entity.eid)
       .sort(),
     ['r1', 'r3'],
   )

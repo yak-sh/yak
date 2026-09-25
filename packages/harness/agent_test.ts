@@ -60,7 +60,7 @@ Deno.test('a new session opens with what its host found for it', async () => {
     revision: 'r',
   })
   assertEquals(first.content, { body: 'ping' })
-  assertEquals(((await a.h.g.read('.session'))[0].home as Comp).cwd, '/work')
+  assertEquals(((await a.h.g.read('.session&*'))[0].home as Comp).cwd, '/work')
   await a.close(new Error('gone'))
   await assertRejects(() => a.start('pong'), Error, 'gone')
 })

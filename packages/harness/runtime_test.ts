@@ -83,12 +83,12 @@ Deno.test('runtime queued cancellation is scoped, and inspection does not schedu
       },
       { entity: { eid: 'other' }, session: { id: 'other' } },
     ])
-    let before = await h.g.read('.entry')
+    let before = await h.g.read('.entry&*')
     assertEquals(
       (await runtimeRows(h.g, 'root')).map((b) => b.entity.eid).sort(),
       ['queued', 'root'],
     )
-    assertEquals(await h.g.read('.entry'), before)
+    assertEquals(await h.g.read('.entry&*'), before)
     assertMatch(await a.control('queued', 'cancel-queued'), 'cancelled')
     assertEquals((await a.transcript('queued')).at(-1)?.stop, {})
     assertEquals(calls, 0)

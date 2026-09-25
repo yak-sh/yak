@@ -33,7 +33,7 @@ Deno.test('a failing service is respawned once, onto the same row', async () => 
     entity: { eid: 'a' },
     [SERVICE]: { command: 'exit 1', restart: 'on-failure' },
   }])
-  let row = async () => (await g.read(`.${SERVICE}`))[0]
+  let row = async () => (await g.read(`.${SERVICE}&*`))[0]
 
   let first = await pass()
   assertEquals(first.length, 1)
@@ -48,7 +48,7 @@ Deno.test('a failing service is respawned once, onto the same row', async () => 
 
   // One entity, two attempts: the new pid replaced the old, and the ending it
   // replaced went with it.
-  assertEquals((await g.read(`.${PROCESS}`)).length, 1)
+  assertEquals((await g.read(`.${PROCESS}&*`)).length, 1)
   assert(Number(comp(await row(), PROCESS)?.pid) != before)
 })
 
@@ -61,7 +61,7 @@ Deno.test('restart never leaves the ending standing', async () => {
   }])
   assertEquals(await (await pass())[0].done, 1)
   assertEquals(await pass(), [])
-  let row = (await g.read(`.${SERVICE}`))[0]
+  let row = (await g.read(`.${SERVICE}&*`))[0]
   assertEquals(comp(row, EXIT)?.code, 1)
   assertEquals(comp(row, SERVICE)?.attempts, undefined)
 })
@@ -84,7 +84,7 @@ Deno.test('a stop ends an always service, and nothing respawns after it', async 
   )
   await run.done
   assertEquals(await pass(), [])
-  assert(comp((await g.read(`.${SERVICE}`))[0], EXIT) != null)
+  assert(comp((await g.read(`.${SERVICE}&*`))[0], EXIT) != null)
 })
 
 Deno.test('deleting the service row takes its process down', async () => {
@@ -120,5 +120,5 @@ Deno.test('supervise refuses its own program, and whatever else the host names',
     },
   ])
   assertEquals(await pass(), [])
-  assertEquals(await g.read(`.${PROCESS}`), [])
+  assertEquals(await g.read(`.${PROCESS}&*`), [])
 })

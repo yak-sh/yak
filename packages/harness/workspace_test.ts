@@ -89,7 +89,7 @@ Deno.test('worktree discovery is canonical, shared, and ref identity survives mo
       (b.ref as Comp).name == 'refs/heads/temporary'
     )!
     assertEquals(Boolean((gone.ref as Comp).present), false)
-    assertEquals((await f.h.g.read('.worktree')).length, 1)
+    assertEquals((await f.h.g.read('.worktree&*')).length, 1)
   } finally {
     await f.free()
   }
@@ -128,7 +128,7 @@ Deno.test('concurrent creation and retry share identity, dirty files stay home, 
     await assertRejects(() =>
       createWorktree(f.h.g, f.repo, { path: f.dir + '/bad', branch: 'main' })
     )
-    let failed = await f.h.g.read('.checkout.state=failed')
+    let failed = await f.h.g.read('.checkout.state=failed&*')
     assertEquals(failed.length, 1)
     assert(String((failed[0].checkout as Comp).error).includes('git'))
     // Simulate a crash after Git creation, before marking preparation ready.
@@ -171,7 +171,7 @@ Deno.test('host preparation separates home and cwd, defaults to sharing, and ref
       args: { home: (prepared.home as Comp).worktree, cwd: f.repo },
     })
     assertEquals((attach.home as Comp).cwd, f.repo)
-    assertEquals((await f.h.g.read('.worktree')).length, 2)
+    assertEquals((await f.h.g.read('.worktree&*')).length, 2)
     await assertRejects(() =>
       prepare({
         parent: 'parent',
@@ -179,7 +179,7 @@ Deno.test('host preparation separates home and cwd, defaults to sharing, and ref
         args: { worktree: { path: f.dir + '/bad', base: 'missing-commit' } },
       })
     )
-    assertEquals(await f.h.g.read('.session.id=bad'), [])
+    assertEquals(await f.h.g.read('.session.id=bad&*'), [])
     assertEquals(await checkoutAt(f.h.g, f.dir), undefined)
   } finally {
     await f.free()
@@ -242,8 +242,8 @@ Deno.test('spawn prepares admitted home, replay creates nothing, shell defaults 
       worktree: { path: f.dir + '/fail', branch: 'main' },
     }, { ...ctx, call: { entity: { eid: 'bad-spawn' } } })
     await d.idle(failed)
-    assertEquals((await f.h.g.read('.session.id=child:bad-spawn')).length, 1)
-    assertEquals((await f.h.g.read('.checkout.state=failed')).length, 1)
+    assertEquals((await f.h.g.read('.session.id=child:bad-spawn&*')).length, 1)
+    assertEquals((await f.h.g.read('.checkout.state=failed&*')).length, 1)
   } finally {
     await d?.stop()
     await f.free()
@@ -268,8 +268,8 @@ Deno.test('root sessions discover and share the existing default worktree', asyn
     await a.idle(root)
     let other = await a.start('hello again')
     await a.idle(other)
-    assertEquals((await f.h.g.read('.worktree')).length, 1)
-    let roots = await f.h.g.read('.session')
+    assertEquals((await f.h.g.read('.worktree&*')).length, 1)
+    let roots = await f.h.g.read('.session&*')
     assertEquals(
       (roots[0].home as Comp).worktree,
       (roots[1].home as Comp).worktree,
@@ -327,7 +327,7 @@ Deno.test('queued fork preserves anchor and prepares checkout on admission', asy
     )
     await d.idle(child)
     assertEquals(await sessionCwd(f.h.g, child, '/wrong'), f.dir + '/forked')
-    assertEquals((await f.h.g.read('.worktree')).length, 2)
+    assertEquals((await f.h.g.read('.worktree&*')).length, 2)
   } finally {
     await d?.stop()
     await f.free()

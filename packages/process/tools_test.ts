@@ -46,7 +46,7 @@ Deno.test('a command that outlives its budget answers with the process, and stop
   let [row] = await g.storage.tx((tx) => tx.get([eid]))
   assert((row[EXIT] as Comp)?.code != null, 'the exit is stamped on the row')
   // Stamped means finished: a boot reconcile has nothing left to pick up.
-  assertEquals(await g.read('.process&.exit='), [])
+  assertEquals(await g.read('.process&.exit=&*'), [])
 })
 
 Deno.test('wait answers the code of a child that outlived its call', async () => {

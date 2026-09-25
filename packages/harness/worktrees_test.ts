@@ -109,7 +109,7 @@ Deno.test('a sweep takes back the root, keeps what is held, and skips a live hom
     assert(await there(f.root + '/not-a-directory'))
     // Where each swept checkout stood is recorded before its bytes go: that
     // row is all a resume has to cut it again from.
-    let [row] = await h.g.read(`.worktree.path=${gone}`)
+    let [row] = await h.g.read(`.worktree.path=${gone}&*`)
     assertEquals(
       (row.worktree as Record<string, unknown>).head,
       await git(
@@ -141,7 +141,7 @@ Deno.test('over: a transcript that ended, and a process that exited with it', as
     ])
     let saw = async (eid: string) =>
       over(
-        (await h.g.read('.session'))
+        (await h.g.read('.session&*'))
           .find((b) => b.entity.eid == eid)!,
       )
     assertEquals(await saw('empty'), false)
@@ -204,7 +204,7 @@ Deno.test('a collected checkout is cut again where it stood', async () => {
     assertEquals(await there(path), false)
     assertEquals(await f.branches(), 'main\nparent')
 
-    let [row] = await h.g.read(`.worktree.path=${path}`)
+    let [row] = await h.g.read(`.worktree.path=${path}&*`)
     assertEquals(await restore(h.g, row), path)
     assertEquals(await git(path, 'rev-parse', 'HEAD'), head)
     assertEquals(
@@ -227,7 +227,7 @@ Deno.test('a checkout with nothing recorded cannot be cut again', async () => {
   let h = open(':memory:')
   try {
     await h.g.apply([{ entity: { eid: 'w1' }, worktree: { path: '/wt/gone' } }])
-    let [row] = await h.g.read('.worktree')
+    let [row] = await h.g.read('.worktree&*')
     await assertRejects(() => restore(h.g, row), Error, 'nothing recorded')
   } finally {
     h.close()
@@ -242,7 +242,7 @@ Deno.test('live homes are the checkouts named for a session and the ones it inhe
       { entity: { eid: 'child:one' }, session: {}, home: { worktree: 'w1' } },
       { entity: { eid: 'child:two' }, session: {} },
     ])
-    let live = await homes(h.g, await h.g.read('.session'), '/wt')
+    let live = await homes(h.g, await h.g.read('.session&*'), '/wt')
     assertEquals(
       [...live].toSorted(),
       ['/wt/child-inherited', '/wt/child-one', '/wt/child-two'],

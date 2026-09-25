@@ -24,7 +24,7 @@ Deno.test('completion fills an author gap but preserves a named author and later
     { trusted: true },
   )
   let authors = async () =>
-    (await g.read('.task')).map((b) => (b.completed as Comp).by).sort()
+    (await g.read('.task&*')).map((b) => (b.completed as Comp).by).sort()
   assertEquals(await authors(), ['named', 'writer'])
   // Saying it again, in somebody else's voice, does not rewrite who finished it.
   await g.apply([

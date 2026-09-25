@@ -25,7 +25,7 @@ let c = (b: Bundle, name: string) => b[name] as Comp | undefined
 
 // A session's transcript as [side, text] pairs, in entry order.
 let told = async (g: ReturnType<typeof locked>, session: string) =>
-  (await g.read(`.entry.session=${session}&.order=entry.seq`)).map((b) => [
+  (await g.read(`.entry.session=${session}&.order=entry.seq&*`)).map((b) => [
     c(b, 'output') ? 'output' : 'input',
     c(b, 'content')?.body,
   ])
@@ -37,7 +37,7 @@ Deno.test('prompts and replies land in order, a new session under its own id', (
     say(path, 'Stop', 'fresh', 'fixed')
     say(path, 'UserPromptSubmit', 'one', 'and this')
     assertEquals(await drain(g, path), 3)
-    let [s] = await g.read('.session.id=fresh')
+    let [s] = await g.read('.session.id=fresh&*')
     assertEquals(c(s, 'session')?.operator, true)
     assertEquals(await told(g, s.entity.eid), [
       ['input', 'fix it'],

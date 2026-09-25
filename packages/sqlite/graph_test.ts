@@ -73,11 +73,11 @@ Deno.test('a cascade reference pulls its owner into the grave', () => {
     { entity: { eid: 'p1' }, product: { price: 12 } },
     { entity: { eid: 'r1' }, review: { stars: 5, product: 'p1' } },
   ]))
-  assertEquals((g.read('.kind=review') as Bundle[]).length, 1)
+  assertEquals((g.read('.kind=review&*') as Bundle[]).length, 1)
   let out = sync(g.apply([{ entity: { eid: 'p1' }, $delete: true }]))
   assert(out.some((b) => b.entity.eid == 'r1' && b.tombstone))
-  assertEquals(g.read('.kind=review'), [])
-  assertEquals(g.read('.kind=product'), [])
+  assertEquals(g.read('.kind=review&*'), [])
+  assertEquals(g.read('.kind=product&*'), [])
 })
 
 Deno.test('a detach reference is nulled when its target dies', () => {
@@ -121,8 +121,8 @@ Deno.test('a refused batch leaves the database as it was', () => {
       },
     ]))
   )
-  assertEquals(g.read('.kind=product') as Bundle[], [
-    ...(g.read(`.price=12`) as Bundle[]),
+  assertEquals(g.read('.kind=product&*') as Bundle[], [
+    ...(g.read(`.price=12&*`) as Bundle[]),
   ])
-  assertEquals((g.read('.kind=product') as Bundle[]).length, 1)
+  assertEquals((g.read('.kind=product&*') as Bundle[]).length, 1)
 })

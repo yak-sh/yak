@@ -87,10 +87,10 @@ Deno.test('failed result commit leaves the claim and never repeats side effects'
     })
     await assertRejects(() => r.run('call'), Error, 'storage unavailable')
     assertEquals(
-      ((await g.read('.execution'))[0].execution as Comp).state,
+      ((await g.read('.execution&*'))[0].execution as Comp).state,
       'running',
     )
-    assertEquals(await g.read('.result'), [])
+    assertEquals(await g.read('.result&*'), [])
     await assertRejects(() => r.run('call'), UnfinishedCall)
     assertEquals(runs, 1)
   } finally {

@@ -26,7 +26,7 @@ let watching = (g: ReturnType<typeof tracked>, o: Record<string, unknown>) => {
 }
 
 let said = (g: { read: (q: string) => unknown }) =>
-  g.read('.entry&.order=entry.seq') as Promise<Bundle[]>
+  g.read('.entry&.order=entry.seq&*') as Promise<Bundle[]>
 
 let bodies = async (g: { read: (q: string) => unknown }) =>
   (await said(g)).map((b) => String(comp(b, 'content')?.body ?? ''))
@@ -48,10 +48,10 @@ Deno.test('the request starts the provider, and what it printed is the transcrip
     assertEquals(comp(last, 'stop'), {})
     assertEquals(comp(last, 'usage')?.output_tokens, 34)
     await until(
-      async () => comp((await g.g.read('.session'))[0], 'exit'),
+      async () => comp((await g.g.read('.session&*'))[0], 'exit'),
       'the ending',
     )
-    let [row] = await g.g.read('.session')
+    let [row] = await g.g.read('.session&*')
     // The process rides the session's own entity, and the provider was told
     // to call its thread by that same name.
     assertEquals(comp(row, 'session')?.id, 'S1')
@@ -68,12 +68,12 @@ Deno.test('a stop on the session reaches the agent', async () => {
   try {
     await g.g.apply(asking('S1', 'E1', 'linger here'))
     await until(
-      async () => comp((await g.g.read('.session'))[0], 'process')?.pid,
+      async () => comp((await g.g.read('.session&*'))[0], 'process')?.pid,
       'a pid',
     )
     await g.g.apply([{ entity: { eid: 'S1' }, stop: {} }])
     let over = await until(
-      async () => comp((await g.g.read('.session'))[0], 'exit'),
+      async () => comp((await g.g.read('.session&*'))[0], 'exit'),
       'the agent to go',
     )
     assert(over, 'no ending stamped')
@@ -113,7 +113,7 @@ Deno.test('a restart adopts the run and reads its log on from where it stands', 
     )
     await down(g.g, 'S1', { dir: where, poll: 20, grace: 500 })
     await until(
-      async () => comp((await g.g.read('.session'))[0], 'exit'),
+      async () => comp((await g.g.read('.session&*'))[0], 'exit'),
       'the agent to go',
     )
   } finally {

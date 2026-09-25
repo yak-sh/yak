@@ -20,7 +20,7 @@ Deno.test('taskEntry atomically mints bare work, contains it, and spawns with in
       },
     ])
     let first = await taskEntry(h.g, 'p', 'Title\n\nComplete body')
-    let [task] = await h.g.read(`.task .claim.session=${first.child}`)
+    let [task] = await h.g.read(`.task .claim.session=${first.child}&*`)
     assertEquals(task.doc, { title: 'Title', body: 'Title\n\nComplete body' })
     assertEquals((task.task as Comp).status, 'wip') // derived, not written
     assert(
@@ -29,12 +29,12 @@ Deno.test('taskEntry atomically mints bare work, contains it, and spawns with in
       ),
     )
     assert(!task.filed)
-    let [edge] = await h.g.read(`.contains .edge.to=${first.task}`)
+    let [edge] = await h.g.read(`.contains .edge.to=${first.task}&*`)
     assertEquals((edge.edge as Comp).from, 'p')
-    let [child] = await h.g.read(`.spawned.parent=p`)
+    let [child] = await h.g.read(`.spawned.parent=p&*`)
     assertEquals((child.spawned as Comp).parent, 'p')
     assert(!(child.spawned as Comp).call) // no invented tool call
-    let input = (await h.g.read(`.entry.session=${first.child}`)).find((b) =>
+    let input = (await h.g.read(`.entry.session=${first.child}&*`)).find((b) =>
       b.using
     )!
     assertEquals((input.using as Comp).model, M)
@@ -48,7 +48,7 @@ Deno.test('taskEntry atomically mints bare work, contains it, and spawns with in
       { entity: { eid: 'work2' }, task: {}, claim: { session: 'p' } },
     ])
     let second = await taskEntry(h.g, 'p', 'Nested')
-    let edges = await h.g.read(`.contains .edge.to=${second.task}`)
+    let edges = await h.g.read(`.contains .edge.to=${second.task}&*`)
     assertEquals(edges.map((b) => (b.edge as Comp).from).sort(), [
       'work1',
       'work2',
@@ -68,15 +68,15 @@ Deno.test('taskEntry rejects invalid inputs and durably accepts concurrent queue
       Error,
       'not a session',
     )
-    assertEquals(await h.g.read('.task'), [])
+    assertEquals(await h.g.read('.task&*'), [])
     let results = await Promise.allSettled([
       taskEntry(h.g, 'p', 'one', { maxChildren: 1 }),
       taskEntry(h.g, 'p', 'two', { maxChildren: 1 }),
     ])
     assertEquals(results.map((r) => r.status), ['fulfilled', 'fulfilled'])
-    assertEquals((await h.g.read('.task')).length, 2)
-    assertEquals((await h.g.read('.contains')).length, 2)
-    assertEquals((await h.g.read('.spawned')).length, 2)
+    assertEquals((await h.g.read('.task&*')).length, 2)
+    assertEquals((await h.g.read('.contains&*')).length, 2)
+    assertEquals((await h.g.read('.spawned&*')).length, 2)
   } finally {
     h.close()
   }

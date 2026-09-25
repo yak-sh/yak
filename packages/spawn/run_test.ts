@@ -24,7 +24,7 @@ let logged = async (lines: unknown[], code = 0) => {
 }
 
 let entries = async (g: { read: (q: string) => unknown }) =>
-  (await g.read('.entry&.order=entry.seq')) as Bundle[]
+  (await g.read('.entry&.order=entry.seq&*')) as Bundle[]
 
 let comp = (b: Bundle | undefined, name: string) => b?.[name] as Comp
 
@@ -76,7 +76,7 @@ Deno.test('the log becomes the transcript: one entry per line that says somethin
     assertEquals(comp(said[2], 'usage').output_tokens, 3)
     // The line that says what the provider calls its own thread patches the
     // session rather than becoming an entry.
-    let [row] = await g.read('.session')
+    let [row] = await g.read('.session&*')
     assertEquals(comp(row, 'session').id, 'abc')
 
     // The stamp is the cursor: reading the same file again imports nothing.

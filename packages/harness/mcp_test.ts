@@ -194,14 +194,14 @@ Deno.test('remote images use external artifacts while large text retains bounded
     })
     assert(!text.includes(image))
     assert(text.includes('Artifact:'))
-    const artifacts = await h.g.read('.artifact')
+    const artifacts = await h.g.read('.artifact&*')
     assertEquals(artifacts.length, 1)
     const address = (artifacts[0].artifact as { address: string }).address
     assertEquals(
       new TextDecoder().decode(await h.artifacts.get(address)),
       'image-bytes',
     )
-    assertEquals((await h.g.read('.attachment')).length, 1)
+    assertEquals((await h.g.read('.attachment&*')).length, 1)
     // The full text remains available for the ordinary context output policy.
     assert(text.endsWith('a'.repeat(100000)))
   } finally {

@@ -170,7 +170,7 @@ Deno.test('child capacity queues without rejection; root starts retain their sep
   await childAsked.promise
   await a.idle(parent)
   assertEquals((await a.children(parent)).length, 2)
-  assertEquals((await h.g.read('.dispatch.state=queued')).length, 1)
+  assertEquals((await h.g.read('.dispatch.state=queued&*')).length, 1)
   pending.resolve(reply('done'))
   await finish(a, parent)
   await a.close()
@@ -224,7 +224,7 @@ Deno.test('completion answers an open delegation call; wait rejects foreign chil
   ]
   h.g.apply(entries)
   await deliverChild(h.g, 'c')
-  let [receipt] = await h.g.read('.result.call=call')
+  let [receipt] = await h.g.read('.result.call=call&*')
   assertEquals(textOf(receipt), 'child c settled\nfinal')
   let wait = sessionTools(h.g).find((t) => t.name == 'wait')!
   await assertRejects(() =>
@@ -275,10 +275,10 @@ Deno.test('tool admission serializes competing parents, replays a call once, and
   ])
   assertEquals(results[0].status, 'fulfilled')
   assertEquals(results[1].status, 'fulfilled')
-  assertEquals((await h.g.read('.spawned')).length, 2)
+  assertEquals((await h.g.read('.spawned&*')).length, 2)
   let eid = (results[0] as PromiseFulfilledResult<string>).value
   assertEquals(await spawn.run({ prompt: 'replay' }, ctx(1)), eid)
-  assertEquals((await h.g.read('.model.name=alternate')).length, 1)
+  assertEquals((await h.g.read('.model.name=alternate&*')).length, 1)
   h.g.apply([{
     entity: { eid: 'done' },
     entry: { session: eid, seq: 2 },

@@ -13,13 +13,13 @@ Deno.test('large outputs snapshot transparently, survive reopen and source mutat
   try {
     const text = ('line 😀 needle\n').repeat(10000)
     await h.g.apply([{ entity: { eid: 'result' }, content: { body: text } }])
-    const entry = (await h.g.read('.entity.eid=result'))[0]
+    const entry = (await h.g.read('.entity.eid=result&*'))[0]
     const stub = await outputView(h.g, entry)
     assert(stub.length < 2000)
     const handle = stub.match(/Handle: (.+)/)![1]
     const revision = stub.match(/Expected revision: ([a-f0-9]+)/)![1]
     assertEquals(await outputView(h.g, entry), stub)
-    assertEquals((await h.g.read('.context_output')).length, 1)
+    assertEquals((await h.g.read('.context_output&*')).length, 1)
     await h.g.apply([{ entity: { eid: 'result' }, content: { body: 'newer' } }])
     h.close()
     h = open(path)
@@ -73,7 +73,7 @@ Deno.test('generic text inspection reads doc and content with reader authorizati
       content: { body: 'content' },
     }])
     const [read] = valueTools(async (id) =>
-      id == 'note' ? (await h.g.read('.entity.eid=note'))[0] : undefined
+      id == 'note' ? (await h.g.read('.entity.eid=note&*'))[0] : undefined
     )
     const args = {
       entity: 'note',
@@ -163,7 +163,7 @@ Deno.test('fork projections reuse snapshots and escaped reads stay bounded', asy
       await outputView(h.g, child[0]),
       await outputView(h.g, parent[0]),
     )
-    const snapshots = await h.g.read('.context_output')
+    const snapshots = await h.g.read('.context_output&*')
     assertEquals(snapshots.length, 1)
     assertEquals((snapshots[0].context_output as { body: string }).body, text)
     const [read] = valueTools(async (id) =>

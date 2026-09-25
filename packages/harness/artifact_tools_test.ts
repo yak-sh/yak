@@ -39,13 +39,13 @@ Deno.test('file import snapshots bytes; attach is user-only; explicit view proje
       result: { call: 'call' },
       content: { body: 'attached' },
     }
-    let rows = await h.g.read('.entry')
+    let rows = await h.g.read('.entry&*')
     assertEquals(
       await imageContext(h.g, [result], rows, blobs),
       [],
     )
     await invoke('image_view', { artifact: imported.artifact })
-    rows = await h.g.read('.entry')
+    rows = await h.g.read('.entry&*')
     let items = await imageContext(h.g, [result], rows, blobs)
     assertEquals(items.length, 1)
     assertEquals(items[0].kind, 'image')
@@ -160,7 +160,7 @@ Deno.test('vision admission rejects unsupported files and changed artifact revis
     let ctx = { session: 's', call, entries: [call] }
     await assertRejects(async () => await view.run({ artifact: 'svg' }, ctx))
     await view.run({ artifact: 'a' }, ctx)
-    let rows = await h.g.read('.entry')
+    let rows = await h.g.read('.entry&*')
     // Authorized graph mutation cannot silently substitute pixels for an admitted image.
     let changed = await store(new Uint8Array([...png, 1]), 'image/png')
     await h.g.apply([{ entity: { eid: 'a' }, artifact: changed }])

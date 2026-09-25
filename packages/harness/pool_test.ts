@@ -64,14 +64,14 @@ Deno.test('shared FIFO pool admits IDs before preparation and never over-admits 
   await until(() => starts.length == 1)
   assertEquals(ids.length, 3)
   assertEquals(prepared.length, 1)
-  assertEquals((await h.g.read('.dispatch.state=queued')).length, 2)
-  assertEquals((await h.g.read('.session.status=queued')).length, 2)
+  assertEquals((await h.g.read('.dispatch.state=queued&*')).length, 2)
+  assertEquals((await h.g.read('.session.status=queued&*')).length, 2)
   for (let i = 0; i < 3; i++) {
     replies[i].resolve(reply('done'))
     if (i < 2) await until(() => starts.length == i + 2)
   }
   await until(async () =>
-    (await h.g.read('.dispatch.state=settled')).length == 3
+    (await h.g.read('.dispatch.state=settled&*')).length == 3
   )
   assertEquals(starts, ['0', '1', '2'])
   await a.close()
@@ -100,14 +100,14 @@ Deno.test('queued intent survives daemon restart and stop does not drain durable
     }, { session: 'p', call: { entity: { eid: 'call' } }, entries: [] }),
   )
   await a.d.stop()
-  assertEquals((await h.g.read('.dispatch.state=queued')).length, 1)
+  assertEquals((await h.g.read('.dispatch.state=queued&*')).length, 1)
   let b = local({
     h,
     tools: sessionTools(h.g, { maxChildren: 1 }),
     model: () => Promise.resolve(reply('done')),
   })
   await until(async () =>
-    (await h.g.read('.dispatch.state=settled')).length == 1
+    (await h.g.read('.dispatch.state=settled&*')).length == 1
   )
   assertEquals((await b.children('p'))[0].entity.eid, id)
   assertEquals(((await b.children('p'))[0].dispatch as Comp).args, null)
@@ -195,13 +195,13 @@ Deno.test('queued cancellation skips expensive prep; prep failure has one termin
   sessionTools(h.g, { maxChildren: 1 })
   a.d.wake('child:fail')
   await until(async () =>
-    (await h.g.read('.dispatch.state=settled')).length == 2
+    (await h.g.read('.dispatch.state=settled&*')).length == 2
   )
   await a.d.idle('child:fail')
   await a.d.idle('p')
   assertEquals(prepared, ['child:fail'])
   assertEquals(
-    (await h.g.read('.entry.session=p')).filter((b) =>
+    (await h.g.read('.entry.session=p&*')).filter((b) =>
       b.entity.eid.startsWith('delivery:child:fail:')
     ).length,
     1,
@@ -247,7 +247,7 @@ Deno.test('queued submissions and fork anchors survive file reopen without dupli
     })
     a = local({ h, tools, model: () => Promise.resolve(reply('done')) })
     await until(async () =>
-      (await h.g.read('.dispatch.state=settled')).length == 1
+      (await h.g.read('.dispatch.state=settled&*')).length == 1
     )
     assertEquals(((await a.children('p'))[0].fork as Comp).from, 'input')
     assertEquals(

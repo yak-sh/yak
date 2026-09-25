@@ -48,7 +48,7 @@ Deno.test('generated artifacts survive database reopen and keep payloads out of 
     let entries = await a.transcript(id)
     assertEquals(entries.filter((e) => e.attachment).length, 2)
     assert(!JSON.stringify(entries).includes(png))
-    let artifacts = await a.h.g.read('.artifact')
+    let artifacts = await a.h.g.read('.artifact&*')
     assertEquals(artifacts.length, 1)
     let artifact = artifacts[0].artifact as { address: string; size: number }
     assertEquals(
@@ -62,7 +62,7 @@ Deno.test('generated artifacts survive database reopen and keep payloads out of 
     await a.close()
     let again = open(db)
     try {
-      assertEquals((await again.g.read('.artifact')).length, 1)
+      assertEquals((await again.g.read('.artifact&*')).length, 1)
     } finally {
       again.close()
     }

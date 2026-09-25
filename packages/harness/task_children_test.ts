@@ -56,18 +56,21 @@ Deno.test('task spawn snapshots doc and commits claim before first entry effect;
   let observations: string[] = []
   h.fx.created('entry', async (e) => {
     if (e.comp?.session != 'child:call') return
-    let [task] = await h.g.read('.task')
+    let [task] = await h.g.read('.task&*')
     observations.push(String((task.claim as Comp).session))
   })
-  let [work] = await h.g.read('.task')
+  let [work] = await h.g.read('.task&*')
   assertEquals(work.entity.num, undefined)
   let child = await spawn.run({ task: work.entity.eid }, ctx)
-  assertEquals((await h.g.read('.spawned'))[0].entity.num, undefined)
+  assertEquals((await h.g.read('.spawned&*'))[0].entity.num, undefined)
   assertEquals(child, 'child:call')
   assertEquals(observations, [child])
-  assertEquals((await h.g.read('.task.status=wip')).map((b) => b.entity.eid), [
-    'work',
-  ])
+  assertEquals(
+    (await h.g.read('.task.status=wip&*')).map((b) => b.entity.eid),
+    [
+      'work',
+    ],
+  )
   assertEquals(
     textOf((await transcript(h.g, String(child)))[0]),
     'Title\n\nBody',
@@ -84,8 +87,8 @@ Deno.test('task spawn snapshots doc and commits claim before first entry effect;
       call: { entity: { eid: 'other-call' } },
     }))
   )
-  assertEquals((await h.g.read('.spawned')).length, 1)
-  assertEquals((await h.g.read('.model.name=orphan')).length, 0)
+  assertEquals((await h.g.read('.spawned&*')).length, 1)
+  assertEquals((await h.g.read('.model.name=orphan&*')).length, 0)
   for (
     let args of [{ task: 'missing' }, { task: 'p' }, { task: '' }, {
       task: 'work',
@@ -117,7 +120,7 @@ Deno.test('independent tasks spawn concurrently with ordinary child caps', async
     ),
   )
   assertEquals(new Set(out).size, 2)
-  assertEquals((await h.g.read('.task .claim.session!')).length, 2)
+  assertEquals((await h.g.read('.task .claim.session!&*')).length, 2)
   await assertRejects(() => Promise.resolve(spawn.run({ task: 'work' }, ctx)))
   h.close()
 })
@@ -387,7 +390,7 @@ for (let writer of ['p', 'child', 'other', 'external']) {
         }, { ...ctx, session: actor })
       }
       await d.idle('p')
-      let [work] = await h.g.read('.task')
+      let [work] = await h.g.read('.task&*')
       assertEquals(
         (work.completed as Comp).by ?? null,
         writer == 'external' ? null : actor,
@@ -494,7 +497,7 @@ Deno.test('reopening a task allows a new completion author', async () => {
     completed: {},
     $actor: { by: 'q' },
   }])
-  let [work] = await h.g.read('.task')
+  let [work] = await h.g.read('.task&*')
   assertEquals((work.completed as Comp).by, 'q')
   h.close()
 })
@@ -620,8 +623,8 @@ Deno.test('task fork claims original task and snapshots original title/body exac
     let entries = await transcript(h.g, String(child))
     assertEquals(entries.filter((b) => textOf(b) == 'Title\n\nBody').length, 1)
     assertEquals(entries[0].entity.eid, 'input')
-    assertEquals((await h.g.read('.task')).length, 1)
-    assertEquals(((await h.g.read('.task'))[0].claim as Comp).session, child)
+    assertEquals((await h.g.read('.task&*')).length, 1)
+    assertEquals(((await h.g.read('.task&*'))[0].claim as Comp).session, child)
     assertEquals(await fork.run({ task: 'work' }, ctx), child)
     assertEquals(await transcript(h.g, String(child)), entries)
   } finally {

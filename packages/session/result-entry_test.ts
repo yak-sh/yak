@@ -44,12 +44,12 @@ Deno.test('result membership is joined before sequence allocation and observers'
     },
   ])
   await saying(g, () => 'hello').run('c')
-  const [result] = await g.read('.result')
+  const [result] = await g.read('.result&*')
   assertEquals(result.entry, { session: 's', seq: 2 })
   assertEquals(observed, [result.entity.eid])
   // Updating an existing result must not append a second transcript position.
   await g.apply([{ entity: result.entity, result: { call: 'c', ms: 50 } }])
-  assertEquals((await g.read('.result'))[0].entry, result.entry)
+  assertEquals((await g.read('.result&*'))[0].entry, result.entry)
 })
 
 Deno.test('same-batch call/result join respects the absence gate and detached calls', async () => {
@@ -68,7 +68,7 @@ Deno.test('same-batch call/result join respects the absence gate and detached ca
     { entity: { eid: 'detached' }, call: { to: T } },
     { entity: { eid: 'detached-r' }, result: { call: 'detached' } },
   ])
-  const rows = await g.read('.result')
+  const rows = await g.read('.result&*')
   assertEquals(rows.find((b) => b.entity.eid == 'r')?.entry, {
     session: 's',
     seq: 2,
@@ -106,7 +106,7 @@ Deno.test('independent callers can complete out of order without losing transcri
   await saying(g, () => 'b').run('b')
   release()
   await slow
-  const results = await g.read('.result .order=entry.seq')
+  const results = await g.read('.result .order=entry.seq&*')
   assertEquals(results.map((b) => b.result), [
     { call: 'b', ms: (results[0].result as { ms: number }).ms },
     { call: 'a', ms: (results[1].result as { ms: number }).ms },

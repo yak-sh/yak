@@ -32,7 +32,7 @@ Deno.test('default inline streaming admits an ask for a model without deltas; op
         h,
         ...options,
         model: async () => {
-          observed = (await h.g.read('.ask')).length > 0
+          observed = (await h.g.read('.ask&*')).length > 0
           return {
             id: 'reply',
             model: 'fake',

@@ -20,7 +20,7 @@
 // nobody's portfolio can see — it is on no board, in nobody's queue, and
 // nothing will ever report that it was dropped.
 
-import { and, present } from '@yaks/query'
+import { and, every, present, want } from '@yaks/query'
 import { human } from '@yaks/id'
 import { checked, type Finding } from '@yaks/tools'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
@@ -62,7 +62,7 @@ let reached = async (
     ...await graph.read(and(present(PROJECT))),
     ...await graph.read(and(present(`${FILED}.project`))),
   ]
-  let links = (await graph.read(and(present('edge'))))
+  let links = (await graph.read(and(present('edge'), ...through.map(want))))
     .filter((b) => through.some((tag) => tag in b))
   let out = new Map<string, string[]>()
   for (let b of links) {
@@ -93,7 +93,7 @@ export let runs = (
 ): Runs => ({
   board_check: async (call, graph) => {
     let id = human(host.vocab)
-    let found = (await graph.read(and(present(`${BOARD}.query`))))
+    let found = (await graph.read(and(present(`${BOARD}.query`), every())))
       .flatMap((b): Finding[] => {
         let query = String(comp(b, BOARD)?.query ?? '')
         let why = query.trim() && unroutable(query, host.vocab)
@@ -116,7 +116,7 @@ export let runs = (
     let seen = await reached(graph, options.through ?? CONTAINS)
     let found: Finding[] = []
     for (let word of governedIn(host.vocab)) {
-      for (let b of await graph.read(and(present(word)))) {
+      for (let b of await graph.read(and(present(word), every()))) {
         if (seen.has(b.entity.eid)) continue
         found.push({
           level: 'fail',

@@ -322,9 +322,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   // was never written, so only the result comes back for one, and the way to
   // see the answer again is to call it again.
   let recalled = async (id: Eid): Promise<Bundle[]> => {
-    let result = await g.read(`.result.call=${id}`)
+    let result = await g.read(`.result.call=${id}&*`)
     if (!result.length) return []
-    let made = await g.read(`.output.source=${id}`)
+    let made = await g.read(`.output.source=${id}&*`)
     return [...made, ...result]
   }
 
@@ -478,7 +478,10 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   let queued = async (): Promise<Bundle[]> => {
     let out = new Map<Eid, Bundle>()
     for (let p of plans) {
-      for (let b of await g.read(p.plan.patterns[0].filter)) {
+      // Whole (`*`): a call is run as it stands, not as the pattern names it.
+      let { filter } = p.plan.patterns[0]
+      let clauses = [...filter.clauses, { kind: 'every' as const }]
+      for (let b of await g.read({ ...filter, clauses })) {
         out.set(b.entity.eid, b)
       }
     }

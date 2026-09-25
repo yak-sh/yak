@@ -69,13 +69,13 @@ Deno.test('blob-backed graph remains writable after SQL failure and rolls back t
     assertEquals((error as AggregateError).errors[0].message, 'test refusal')
     let sql = driver(h.db)
     assertEquals(sql.query('select * from blob_text', []), [])
-    assertEquals(await h.g.read('.doc'), [])
+    assertEquals(await h.g.read('.doc&*'), [])
     h.db.exec('drop trigger refuse_doc')
     await h.g.apply([{
       entity: { eid: 'accepted' },
       doc: { body: 'accepted text' },
     }])
-    assertEquals((await h.g.read('.doc'))[0].doc, {
+    assertEquals((await h.g.read('.doc&*'))[0].doc, {
       body: 'accepted text',
       title: null,
     })

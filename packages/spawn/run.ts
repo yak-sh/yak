@@ -120,7 +120,7 @@ export let asked = async (
   g: Graph,
   session: string,
 ): Promise<Asked | null> => {
-  let entries = await g.read(`.entry.session=${session}&.order=entry.seq`)
+  let entries = await g.read(`.entry.session=${session}&.order=entry.seq&*`)
   let request = entries.find((b) => b.using)
   if (!request) return null
   let using = comp(request, 'using')!
@@ -359,7 +359,7 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
   // child processes stay the shell's to watch.
   let mine = {
     ...store(g),
-    running: () => g.read(`.${SESSION}&.${PROCESS}&.${EXIT}=`),
+    running: () => g.read(`.${SESSION}&.${PROCESS}&.${EXIT}=&*`),
   }
   let runs = await watch(mine, o)
   for (let run of runs) {

@@ -66,7 +66,7 @@ export const modelSelection = async (
       b,
     ]),
   )
-  const choices = (await g.read('.serves')).flatMap((b): Bundle[] => {
+  const choices = (await g.read('.serves&.edge?')).flatMap((b): Bundle[] => {
     const { from, to } = b.edge as Comp
     const model = named.get(String(to))?.model
     const provider = named.get(String(from))?.provider

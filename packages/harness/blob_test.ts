@@ -26,18 +26,18 @@ Deno.test('blob prose deduplicates across properties and survives reopen', async
     assertEquals(h.db.prepare('select body from content').get(), {
       body: address(body),
     })
-    assertEquals(bodyOf((await h.g.read('.content'))[0]), body)
-    assertEquals((await h.g.read('.doc.body="shared instruction"')).length, 1)
+    assertEquals(bodyOf((await h.g.read('.content&*'))[0]), body)
+    assertEquals((await h.g.read('.doc.body="shared instruction"&*')).length, 1)
     h.close()
     // Reopening reads the prose back, never its address hashed again.
     h = open(path)
-    assertEquals(bodyOf((await h.g.read('.content'))[0]), body)
+    assertEquals(bodyOf((await h.g.read('.content&*'))[0]), body)
     await h.g.apply([{
       entity: { eid: 'a' },
       content: { body: 'updated' },
       $was: { content: { body: address(body) } },
     }])
-    assertEquals(bodyOf((await h.g.read('.content'))[0]), 'updated')
+    assertEquals(bodyOf((await h.g.read('.content&*'))[0]), 'updated')
   } finally {
     h.close()
     Deno.removeSync(dir, { recursive: true })

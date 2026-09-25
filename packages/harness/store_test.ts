@@ -73,11 +73,11 @@ Deno.test('one step against a fake model appends its ask and its prose', async (
 
 Deno.test('session.status is a derived property, so a query filters on it', async () => {
   let h = seeded()
-  assertEquals((await h.g.read('.session.status=pending')).length, 1)
-  assertEquals((await h.g.read('.session.status=settled')).length, 0)
+  assertEquals((await h.g.read('.session.status=pending&*')).length, 1)
+  assertEquals((await h.g.read('.session.status=settled&*')).length, 0)
   await react(h.g, 's', { model: fake, tools: [] })
   assertEquals(
-    (await h.g.read('.session.status=settled')).map((b) => b.entity.eid),
+    (await h.g.read('.session.status=settled&*')).map((b) => b.entity.eid),
     ['s'],
   )
   h.close()
@@ -91,11 +91,11 @@ Deno.test('a task applies and reads back with its derived status', async () => {
     task: {},
     filed: { priority: 2 },
   }])
-  let [t] = await h.g.read('.task.status=open')
+  let [t] = await h.g.read('.task.status=open&*')
   assertEquals((t.doc as Comp).title, 'reply with pong')
   h.g.apply([{ entity: { eid: 't1' }, completed: {} }])
-  assertEquals((await h.g.read('.task.status=open')).length, 0)
-  assert((await h.g.read('.task.status=done')).length == 1)
+  assertEquals((await h.g.read('.task.status=open&*')).length, 0)
+  assert((await h.g.read('.task.status=done&*')).length == 1)
   h.close()
 })
 
@@ -115,7 +115,7 @@ Deno.test('a stale lease is freed at boot', async () => {
   one.db.exec('delete from "session"')
   one.close()
   let two = open(path)
-  let [page] = await two.g.read('.doc')
+  let [page] = await two.g.read('.doc&*')
   assertEquals(page.claim, undefined)
   two.close()
 })
@@ -151,15 +151,15 @@ Deno.test('entries omit human numbers, including migrated entries after reopen',
         content: { body: 'hello' },
       },
     ])
-    assertEquals((await h.g.read('.entry'))[0].entity.num, undefined)
+    assertEquals((await h.g.read('.entry&*'))[0].entity.num, undefined)
     // Simulate a legacy entry number; this is an isolated test database.
     h.db.exec("update entity set num = 99999 where eid = 'e'")
     h.close()
     h = open(path)
-    assertEquals((await h.g.read('.entry'))[0].entity.num, undefined)
+    assertEquals((await h.g.read('.entry&*'))[0].entity.num, undefined)
     await h.g.apply([{ entity: { eid: 't' }, task: {} }])
-    assertEquals((await h.g.read('.task'))[0].entity.num, undefined)
-    assertEquals((await h.g.read('.session'))[0].entity.num, undefined)
+    assertEquals((await h.g.read('.task&*'))[0].entity.num, undefined)
+    assertEquals((await h.g.read('.session&*'))[0].entity.num, undefined)
     h.close()
   } finally {
     Deno.removeSync(dir, { recursive: true })
@@ -181,7 +181,7 @@ Deno.test('a deleted provider leaves past entries saying what answered', () => {
       },
     ])
     h.g.apply([{ entity: { eid: P }, tombstone: {} }])
-    assertEquals(h.store.read('.entry')[0].using, {
+    assertEquals(h.store.read('.entry&*')[0].using, {
       provider: P,
       model: A,
       effort: null,
@@ -215,7 +215,7 @@ Deno.test('legacy completion actors become authors once, including anonymous mar
     h.close()
     h = open(path)
     let authors = () =>
-      h.store.read('.task').map((b) => [
+      h.store.read('.task&*').map((b) => [
         b.entity.eid,
         (b.completed as Comp).by ?? null,
       ]).sort()
@@ -249,14 +249,14 @@ Deno.test('harness tasks and sessions stay num-less; existing human numbers surv
       { entity: { eid: 'child' }, session: {}, spawned: { parent: 'parent' } },
     ])
     assertEquals(
-      (await h.g.read('.task')).every((b) => b.entity.num == null),
+      (await h.g.read('.task&*')).every((b) => b.entity.num == null),
       true,
     )
-    assertEquals((await h.g.read('.session'))[0].entity.num, undefined)
+    assertEquals((await h.g.read('.session&*'))[0].entity.num, undefined)
     h.db.exec("update entity set num = 42 where eid = 'old'")
     h.close()
     h = open(dir + '/numbers.db')
-    assertEquals((await h.g.read('.entity.num=42'))[0].entity.eid, 'old')
+    assertEquals((await h.g.read('.entity.num=42&*'))[0].entity.eid, 'old')
   } finally {
     h.close()
     Deno.removeSync(dir, { recursive: true })
@@ -340,7 +340,7 @@ Deno.test('boot opens the store even when a transcript cannot be repaired', asyn
     let two = open(path)
     console.warn = warn
     assertEquals(
-      (await two.g.read('.session')).map((b) => b.entity.eid).sort(),
+      (await two.g.read('.session&*')).map((b) => b.entity.eid).sort(),
       ['a', 'b'],
     )
     two.close()

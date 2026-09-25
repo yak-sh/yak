@@ -101,11 +101,11 @@ Deno.test('a spawn lands the session, the request and the lease', async () => {
     }),
   ) as Bundle[]
 
-  let [session] = await g.read('.session')
+  let [session] = await g.read('.session&*')
   assertStringIncludes(body(said), 'spawned')
   // The request is the `using` on the transcript's first entry, and the
   // instruction says which work it is.
-  let [entry] = await g.read('.using')
+  let [entry] = await g.read('.using&*')
   assertEquals(comp(entry, 'using'), {
     provider: P,
     model: M,
@@ -114,7 +114,7 @@ Deno.test('a spawn lands the session, the request and the lease', async () => {
   assertEquals(comp(entry, 'entry')?.session, session.entity.eid)
   assertStringIncludes(String(comp(entry, 'content')?.body), 'ship it')
   // And the lease: the board says who is doing it.
-  let [held] = await g.read('.claim')
+  let [held] = await g.read('.claim&*')
   assertEquals(held.entity.eid, 'the-task')
   assertEquals(comp(held, 'claim')?.session, session.entity.eid)
 })
@@ -243,12 +243,12 @@ slow('spawn --wait runs the provider and answers what it came to', async () => {
     assertStringIncludes(said, 'exited 0')
     assertStringIncludes(said, 'working: ') // its own last word, as the brief
 
-    let [session] = await g.read('.session')
+    let [session] = await g.read('.session&*')
     let seen = body(
       await tools.session_peek!(...asked(g, { session: session.entity.eid })),
     )
     assertStringIncludes(seen, 'working: ')
-    await until(async () => (await g.read('.stop')).length, 'the ending')
+    await until(async () => (await g.read('.stop&*')).length, 'the ending')
   } finally {
     Deno.removeSync(where, { recursive: true })
   }

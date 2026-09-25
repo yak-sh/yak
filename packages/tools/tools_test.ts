@@ -100,9 +100,9 @@ Deno.test('a call is the transcript: the ask, the answer, the result beside it',
   assertEquals(body(answer.find((b) => b.output)), 'hi 2')
   assertEquals(body(result), 'hi 2')
   assertEquals(typeof (result.result as Comp).ms, 'number')
-  assertEquals((await g.read('.execution'))[0].execution, { state: 'done' })
+  assertEquals((await g.read('.execution&*'))[0].execution, { state: 'done' })
   // The result is the rule's own entity, so answering again is the same one.
-  let again = await r.run((await g.read('.call'))[0].entity.eid)
+  let again = await r.run((await g.read('.call&*'))[0].entity.eid)
   assertEquals(again.find((b) => b.result)!.entity.eid, result.entity.eid)
 })
 
@@ -110,10 +110,10 @@ Deno.test('a claim is a claim: a second run of a call in flight is the same run'
   let { g, r } = world()
   await r.ensure()
   let answer = await r.call(called('example_echo', { value: 'one' }))
-  let call = (await g.read('.call'))[0].entity.eid
+  let call = (await g.read('.call&*'))[0].entity.eid
   // The answer stands; a re-entry reads it back rather than running again.
   assertEquals(body((await r.run(call)).find((b) => b.result)), 'one 2')
-  assertEquals((await g.read('.result')).length, 1)
+  assertEquals((await g.read('.result&*')).length, 1)
   assertEquals(answer.filter((b) => b.result).length, 1)
 })
 
@@ -151,9 +151,9 @@ Deno.test('a call somebody else holds is left alone, redrive and all', async () 
     body((await r.drive({ redrive: true })).find((b) => b.result)),
     'here 2',
   )
-  assertEquals((await g.read('.result')).length, 1)
+  assertEquals((await g.read('.result&*')).length, 1)
   // And this runner's own claim says whose it is, still, once it is done.
-  assertEquals((await g.read('.execution.by=host1'))[0].execution, {
+  assertEquals((await g.read('.execution.by=host1&*'))[0].execution, {
     state: 'done',
     by: 'host1',
   })
@@ -182,13 +182,13 @@ Deno.test('a claim whose holder has exited is free, and runs once', async () => 
   let ran = await r.drive()
   assertEquals(ran.filter((b) => b.result).length, 1)
   assertEquals(body(ran.find((b) => b.result)), 'again 2')
-  assertEquals((await g.read('.execution.by=host1'))[0].entity.eid, 'orphan')
+  assertEquals((await g.read('.execution.by=host1&*'))[0].entity.eid, 'orphan')
   // Once: the answer stands, and the next drive finds it rather than re-running.
   assertEquals((await r.drive()).filter((b) => b.result).length, 0)
-  assertEquals((await g.read('.result')).length, 1)
+  assertEquals((await g.read('.result&*')).length, 1)
   // A live holder's call is still theirs.
   assertEquals(await r.run('theirs'), [])
-  assertEquals((await g.read('.execution.by=alive'))[0].execution, {
+  assertEquals((await g.read('.execution.by=alive&*'))[0].execution, {
     state: 'running',
     by: 'alive',
   })
@@ -206,11 +206,11 @@ Deno.test('a throw is an error entity, a result, and a failed execution', async 
   let fault = answer.find((b) => b.exception)!
   assertEquals(
     (fault.output as Comp).source,
-    (await g.read('.call'))[0].entity.eid,
+    (await g.read('.call&*'))[0].entity.eid,
   )
   assertEquals(body(fault), 'Error: no')
   assertEquals(answer.find((b) => b.result)!.result !== undefined, true)
-  assertEquals((await g.read('.execution'))[0].execution, { state: 'failed' })
+  assertEquals((await g.read('.execution&*'))[0].execution, { state: 'failed' })
 })
 
 Deno.test('a defect is reported with its tool; a refusal is not', async () => {
@@ -251,8 +251,8 @@ Deno.test('a batch the graph refuses is the call failing, not a call left claime
   await r.ensure()
   let answer = await r.call(called('example_echo', { value: 'x' }))
   assertEquals(answer.some((b) => b.exception || b.error), true)
-  assertEquals((await g.read('.execution'))[0].execution, { state: 'failed' })
-  assertEquals((await g.read('.result')).length, 1)
+  assertEquals((await g.read('.execution&*'))[0].execution, { state: 'failed' })
+  assertEquals((await g.read('.result&*')).length, 1)
 })
 
 Deno.test('a tool that ANSWERS a fault has not failed', async () => {
@@ -263,7 +263,7 @@ Deno.test('a tool that ANSWERS a fault has not failed', async () => {
     // A listing of what broke: entities wearing the very words a failure
     // wears. The runner's own `execution` is what says whether the call
     // failed, so a host reads that and not the shape of the answer.
-    run: (_, g) => g.read('.error'),
+    run: (_, g) => g.read('.error&*'),
   }])
   await r.ensure()
   await g.apply([{ entity: { eid: 'b1' }, error: { code: 'broke' } }])
@@ -277,15 +277,15 @@ Deno.test('a reading tool answers entities and writes none of them', async () =>
     ...echo,
     readOnly: true,
     inputSchema: { type: 'object', properties: {} },
-    run: (_, g) => g.read('.person'),
+    run: (_, g) => g.read('.person&*'),
   }])
   await r.ensure()
   await g.apply([{ entity: { eid: 'p1' }, person: {} }])
-  let before = (await g.read('.person'))[0]
+  let before = (await g.read('.person&*'))[0]
   let answer = await r.call(called('example_echo'))
   assertEquals(answer.find((b) => b.person)!.entity.eid, 'p1')
   // The row it found is the row it was: a read does not touch what it read.
-  assertEquals((await g.read('.person'))[0], before)
+  assertEquals((await g.read('.person&*'))[0], before)
 })
 
 Deno.test('a refused argument is an error code, not an exception', async () => {
@@ -300,7 +300,7 @@ Deno.test("a tool writes in the CALLER's name, never the runner's", async () => 
   await r.ensure()
   await g.apply([{ entity: { eid: 'p1' }, person: {} }])
   await r.call(called('example_echo', { value: 'mine' }, 'p1'))
-  let [said] = await g.read('.output')
+  let [said] = await g.read('.output&*')
   assertEquals((said.created as Comp).by, 'p1')
 })
 
@@ -314,7 +314,7 @@ Deno.test('two runners over one graph are one claimant and one answer', async ()
   for (let rule of other.rules) fx.on(rule.plan, (e) => other.run(e.entity.eid))
   let answer = await other.call(called('example_echo', { value: 'both' }))
   assertEquals(body(answer.find((b) => b.output)), 'both 2')
-  assertEquals((await g.read('.result')).length, 1)
+  assertEquals((await g.read('.result&*')).length, 1)
 })
 
 Deno.test('a call somebody else wrote is run because an effect matched it', async () => {
@@ -325,8 +325,8 @@ Deno.test('a call somebody else wrote is run because an effect matched it', asyn
     entity: { eid: 'c9' },
     call: { to: toolEid('example_echo'), args: { value: 'elsewhere' } },
   }])
-  assertEquals(body((await g.read('.result'))[0]), 'elsewhere 2')
-  assertEquals((await g.read('.execution'))[0].execution, { state: 'done' })
+  assertEquals(body((await g.read('.result&*'))[0]), 'elsewhere 2')
+  assertEquals((await g.read('.execution&*'))[0].execution, { state: 'done' })
 })
 
 Deno.test('a call for a tool this runner has no word for is left alone', async () => {
@@ -337,8 +337,8 @@ Deno.test('a call for a tool this runner has no word for is left alone', async (
     call: { to: toolEid('somebody_else'), args: {} },
   }])
   assertEquals((await r.drive()).length, 0)
-  assertEquals((await g.read('.result')).length, 0)
-  assertEquals((await g.read('.execution')).length, 0)
+  assertEquals((await g.read('.result&*')).length, 0)
+  assertEquals((await g.read('.execution&*')).length, 0)
 })
 
 let clock = {
@@ -364,14 +364,14 @@ Deno.test('a call waiting on a wake that has not fired is not this tick', async 
     call: { to: toolEid('example_echo'), args: { value: 'soon' } },
     wake: { at: '2030-01-01T00:00:00.000Z' },
   }])
-  assertEquals((await g.read('.result')).length, 0)
+  assertEquals((await g.read('.result&*')).length, 0)
   // Fired — and the second registration, which is the whole of the scheduled
   // case, selects it.
   await g.apply([{
     entity: { eid: 'later' },
     fired: { at: '2030-01-01T00:00:00.000Z' },
   }])
-  assertEquals(body((await g.read('.result'))[0]), 'soon 2')
+  assertEquals(body((await g.read('.result&*'))[0]), 'soon 2')
 })
 
 Deno.test('a recurring call is a standing ask: one invocation per firing', async () => {
@@ -384,21 +384,21 @@ Deno.test('a recurring call is a standing ask: one invocation per firing', async
     call: { to: toolEid('example_echo'), args: { value: 'tick' } },
     wake: { at: '2030-01-01T00:00:00.000Z', every: '1d' },
   }])
-  assertEquals((await g.read('.result')).length, 0)
+  assertEquals((await g.read('.result&*')).length, 0)
   for (let at of ['2030-01-01T00:00:00.000Z', '2030-01-02T00:00:00.000Z']) {
     await g.apply([{ entity: { eid: 'daily' }, fired: { at } }])
   }
   // Two firings, two calls of their own, two results — and the schedule has
   // neither a result nor a claim on it.
-  let made = await g.read('.call.source=daily')
+  let made = await g.read('.call.source=daily&*')
   assertEquals(made.length, 2)
-  assertEquals((await g.read('.result')).length, 2)
-  assertEquals((await g.read('.result.call=daily')).length, 0)
-  assertEquals((await g.read('.execution.state=done')).length, 2)
+  assertEquals((await g.read('.result&*')).length, 2)
+  assertEquals((await g.read('.result.call=daily&*')).length, 0)
+  assertEquals((await g.read('.execution.state=done&*')).length, 2)
   // The same firing twice is the same call: an instant names one invocation.
   await g.apply([{
     entity: { eid: 'daily' },
     fired: { at: '2030-01-02T00:00:00.000Z' },
   }])
-  assertEquals((await g.read('.call.source=daily')).length, 2)
+  assertEquals((await g.read('.call.source=daily&*')).length, 2)
 })

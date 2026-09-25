@@ -29,7 +29,7 @@ export const graphMCP = (h: Pick<Harness, 'g' | 'vault'>, signin: SignIns) => {
   const refresh = () => {
     const next = tail.then(async () => {
       if (closed) throw new Error('MCP registry is closed')
-      const rows = await g.read('.mcp_server')
+      const rows = await g.read('.mcp_server&*')
       // Validate the complete configured namespace set before opening transports.
       const valid = rows.flatMap((row) => {
         try {

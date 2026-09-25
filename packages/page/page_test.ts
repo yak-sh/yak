@@ -74,7 +74,7 @@ Deno.test('witnessing one page twice is one entity', async () => {
   try {
     await witness(h, { url: 'https://example.com/w', title: 'One' })
     await witness(h, { url: 'https://example.com/w/?fbclid=9', title: 'Two' })
-    let pages = await h.graph.read('.web')
+    let pages = await h.graph.read('.web&*')
     assertEquals(pages.length, 1)
     // the first title stands: an archive names a page only while nothing does
     assertEquals(comp(pages[0], 'doc')?.title, 'One')

@@ -119,7 +119,7 @@ Deno.test('a past transcript is read in once, each entry dated when it was said'
     let g = locked(store())
     let known = new Set<string>()
     assertEquals(await backfill(g, dir, known), 'old-sid')
-    let [s] = await g.read('.session.id=old-sid')
+    let [s] = await g.read('.session.id=old-sid&*')
     assertEquals(c(s, 'session')?.operator, true)
     let entries = await g.read(
       `.entry.session=${s.entity.eid}&.order=entry.seq`,
@@ -150,5 +150,5 @@ Deno.test('a transcript the graph already holds, or one still being written, is 
     let now = Date.now()
     Deno.utimeSync(`${dir}/-home-me-code/live.jsonl`, new Date(), new Date())
     assertEquals(await backfill(g, dir, new Set(), now), undefined)
-    assertEquals(await g.read('.session.id=live'), [])
+    assertEquals(await g.read('.session.id=live&*'), [])
   }))

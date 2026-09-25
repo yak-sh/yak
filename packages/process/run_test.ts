@@ -22,11 +22,11 @@ Deno.test('a launched child streams both its streams and stamps its exit', async
   }, { dir: dir(), poll: 5 })
   assertEquals(await run.done, 3)
 
-  let said = (await g.read(`.output.source=${run.eid}`))
+  let said = (await g.read(`.output.source=${run.eid}&*`))
     .map((b) => String(comp(b, 'content')?.body)).sort()
   assertEquals(said, ['err', 'out'])
 
-  let row = (await g.read(`.${PROCESS}`))[0]
+  let row = (await g.read(`.${PROCESS}&*`))[0]
   assertEquals(row.entity.eid, run.eid)
   assertEquals(
     comp(row, PROCESS)?.command,
@@ -40,7 +40,7 @@ Deno.test('adopting a pid that is already gone stamps the ending, code unknown',
   let g = tracked()
   let run = await adopt(store(g), await gone(), { dir: dir(), poll: 5 })
   assertEquals(await run.done, null)
-  let row = (await g.read(`.${PROCESS}`))[0]
+  let row = (await g.read(`.${PROCESS}&*`))[0]
   assertEquals(comp(row, PROCESS)?.pid, run.pid)
   assertEquals(comp(row, PROCESS)?.command, null)
   assertEquals(comp(row, EXIT)?.code, null)
@@ -53,7 +53,7 @@ Deno.test('watch picks up an unfinished row and stamps the one already gone', as
   let runs = await watch(store(g), { dir: dir(), poll: 5 })
   assertEquals(runs.map((r) => r.eid), ['p1'])
   assertEquals(await runs[0].done, null)
-  assertEquals(comp((await g.read(`.${PROCESS}`))[0], EXIT)?.code, null)
+  assertEquals(comp((await g.read(`.${PROCESS}&*`))[0], EXIT)?.code, null)
   // Stamped, so the next boot's reconcile has nothing left to pick up.
   assertEquals(await watch(store(g), { dir: dir(), poll: 5 }), [])
 })
@@ -69,7 +69,7 @@ Deno.test('a command keeps every dollar the caller wrote', async () => {
   }, { dir: dir(), poll: 5 })
   assertEquals(await run.done, 0)
   assertEquals(
-    (await g.read(`.output.source=${run.eid}`))
+    (await g.read(`.output.source=${run.eid}&*`))
       .map((b) => String(comp(b, 'content')?.body)),
     ['${backend} $defs $$ $'],
   )

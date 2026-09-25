@@ -26,7 +26,7 @@ Deno.test('streaming records ask before dispatch, projects text without durable 
     h,
     streaming: true,
     model: async (req) => {
-      const asks = await h.g.read('.ask')
+      const asks = await h.g.read('.ask&*')
       assertEquals(asks.length, 1)
       assertEquals((asks[0].attempt as Comp).state, 'inflight')
       started()
@@ -528,7 +528,7 @@ Deno.test('provider rejection paints crashed and successful recovery clears it',
     let id = await a.start('hello')
     await a.idle(id)
     let check = async (status: string, color: string, title: string) => {
-      let [row] = await h.g.read(`.session.status=${status}`)
+      let [row] = await h.g.read(`.session.status=${status}&*`)
       assertEquals(row?.entity.eid, id)
       assertEquals(statusOf(await a.transcript(id)), status)
       let renderer = resolve(statusViews, row, 'Indicator', statusVocab)!

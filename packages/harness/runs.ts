@@ -80,7 +80,7 @@ let found = async () => {
 
 /** The functions behind the tools the harness declares (./vocab.json). */
 export let runs = (host: Host): Runs => ({
-  session_list: (_, graph) => graph.read(parse('.session')),
+  session_list: (_, graph) => graph.read(parse('.session&*')),
   session_new: async (call) => {
     let args = argsOf(call)
     let a = running(host, args)

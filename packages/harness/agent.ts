@@ -408,7 +408,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     }),
     sessions: admitted(async () =>
       Promise.all(
-        (await h.g.read('.session')).toSorted(byBirth).slice(-LISTED).map(
+        (await h.g.read('.session&*')).toSorted(byBirth).slice(-LISTED).map(
           async (b) => ({
             ...b,
             session: {
@@ -423,7 +423,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     control: (session, action) => runtimeAction(a, session, action),
     children: admitted((session: Eid) => children(h.g, session)),
     tasks: admitted(async () =>
-      (await h.g.read('.task.status=open,wip')).toSorted(byBirth)
+      (await h.g.read('.task.status=open,wip&*')).toSorted(byBirth)
         .slice(-LISTED)
     ),
     entrySource: (session, eid, request) =>
