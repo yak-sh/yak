@@ -124,7 +124,6 @@ import { slid } from './session.ts'
 import { fault, refusal } from './unseen.ts'
 import { egress } from './sandbox.ts'
 import { outbound } from './outbound.ts'
-import { moved } from './moved.ts'
 
 // The Store, at every address the binding names — the directory at
 // `yak/platform` and every app's own beside it (T-33815). It carries the DO's
@@ -272,9 +271,6 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // this is not a tool — the connector's roster is fixed and public (T-34541),
   // and a rate is the owner's own door, not a thing an agent may move.
   if (path == '/api/fee') return sell.fees(req, env)
-  // TODO(T-38030): the one pass moving app secrets into connections, the same
-  // owner's gate; deleted with moved.ts once it has run.
-  if (path == '/api/moved') return moved(req, env)
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp, env).fetch(req)
   }
