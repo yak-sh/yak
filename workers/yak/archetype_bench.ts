@@ -4,7 +4,7 @@ import { graph } from '@yaks/graph'
 import { driver } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { backfill, storage } from '@yaks/sqlite'
-import type { Driver } from '@yaks/sql'
+import { type Driver, lit } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 
 for (let indexed of [false, true]) {
@@ -26,7 +26,11 @@ for (let indexed of [false, true]) {
         i,
       ) => [
         'field' + String.fromCharCode(97 + Math.floor(i / 26), 97 + i % 26),
-        { type: 'object', properties: { value: { type: 'number' } } },
+        {
+          type: 'object',
+          component: true,
+          properties: { value: { type: 'number' } },
+        },
       ],
     ),
   )
@@ -59,7 +63,7 @@ for (let indexed of [false, true]) {
   const writeMs = performance.now() - begin
   let migrationMs: number | null = null
   if (indexed) {
-    base.exec('update entity set archetype=null')
+    base.query({ t: 'update', table: 'entity', set: { archetype: lit(null) } })
     const at = performance.now()
     backfill(base, false)
     migrationMs = performance.now() - at

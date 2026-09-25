@@ -13,7 +13,29 @@
 // and the namespace that hands out a Store per name. Everything above them —
 // the directory, the tools, the serving door — is the kernel's own code,
 // called directly.
-import type { Wire } from '@yaks/durable-object'
+import { driver, type DurableStorage, type Wire } from '@yaks/durable-object'
+import {
+  type Alter,
+  among,
+  at,
+  by,
+  col,
+  type Column,
+  eq,
+  type Expr,
+  type Insert,
+  join,
+  lit,
+  type Param,
+  scan,
+  type Select,
+  select,
+  sub,
+  table,
+  type Update,
+  val,
+} from '@yaks/sql'
+import { objects } from '@yaks/sqlite'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { Builder } from './build.ts'
 import type { Env } from './env.ts'
@@ -121,6 +143,95 @@ export let state = () => {
     acceptWebSocket: (ws: Wire) => void live.push(ws),
     getWebSockets: () => live,
   }
+}
+
+// ---- an object's own rows, as older code left them ----
+
+/** An entity's integer id, as a statement reads it. */
+export let id = (eid: string): Expr =>
+  sub(select({ cols: [col('id')], from: table('entity'), where: by({ eid }) }))
+
+type Fields = Record<string, Param | Expr>
+let expr = (v: Param | Expr): Expr =>
+  v && typeof v == 'object' && 't' in v ? v : val(v)
+
+/** A component row for an entity. */
+export let row = (name: string, eid: string, fields: Fields): Insert => ({
+  t: 'insert',
+  into: name,
+  cols: ['entity', ...Object.keys(fields)],
+  rows: [[id(eid), ...Object.values(fields).map(expr)]],
+})
+
+/** Every row of a table, set; {@link patch} sets the one an entity owns. */
+export let every = (name: string, set: Fields): Update => ({
+  t: 'update',
+  table: name,
+  set: Object.fromEntries(Object.entries(set).map(([k, v]) => [k, expr(v)])),
+})
+export let patch = (name: string, eid: string, set: Fields): Update => ({
+  ...every(name, set),
+  where: eq(col('entity'), id(eid)),
+})
+
+/** The columns a table had under an older build. */
+export let grow = (name: string, ...add: Column[]): Alter[] =>
+  add.map((c) => ({ t: 'alter table', table: name, add: c }))
+
+/** A table's rows beside the eid each belongs to, in eid order or by a
+ * column. */
+export let owners = (name: string, cols: string[], order?: string): Select => {
+  let [e, t] = [at('e'), at('t')]
+  return select({
+    cols: [e('eid'), ...cols.map((c) => t(c))],
+    from: table(name, 't'),
+    joins: [join(table('entity', 'e'), eq(e('id'), t('entity')))],
+    order: [order ? t(order) : e('eid')],
+  })
+}
+
+/** A slot of the object's key-value memory (graph.ts `#get` and `#put`),
+ * read, and set. */
+export let slotOf = (k: string): Select =>
+  select({ cols: [col('v')], from: table('yak_kv'), where: by({ k }) })
+export let slotted = (k: string, v: string): Insert => ({
+  t: 'insert',
+  into: 'yak_kv',
+  cols: ['k', 'v'],
+  rows: [[val(k), val(v)]],
+  upsert: [{ on: [col('k')], set: { v: col('v', 'excluded') } }],
+})
+
+/** Anything holding an object's storage: its state, as a test keeps it. */
+type Held = { storage: DurableStorage }
+
+/** The object's SQLite, the way the store reaches it. */
+export let db = ({ storage }: Held) => driver(storage)
+
+/** The names of what the object's schema holds: tables, indexes, triggers. */
+export let named = (held: Held, fields: Record<string, Param>) =>
+  objects(db(held), fields).map((r) => String(r.name))
+
+export let slot = (held: Held, k: string): string | null =>
+  (db(held).query(slotOf(k))[0]?.v as string | undefined) ?? null
+export let keep = (held: Held, k: string, v: string) =>
+  db(held).query(slotted(k, v))
+
+/**
+ * A store as it stood before archetypes: its rows unclassified, no descriptor
+ * and none of their tables, and a schema stamp the next wake moves, so that
+ * wake backfills.
+ */
+export let unclassified = (held: Held, stamp: string) => {
+  let d = db(held)
+  d.query({ t: 'update', table: 'entity', set: { archetype: lit(null) } })
+  let descriptors = scan(d, 'archetype', undefined, ['entity'])
+    .map((r) => val(Number(r.entity)))
+  for (let name of ['retired', 'archetype']) {
+    d.query({ t: 'drop', kind: 'table', name })
+  }
+  d.query({ t: 'delete', from: 'entity', where: among(col('id'), descriptors) })
+  keep(held, 'schema', stamp)
 }
 
 /** One turn, as a scripted model answers it. */

@@ -4,7 +4,7 @@ import { graph } from '@yaks/graph'
 import { driver } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { backfill, storage } from '@yaks/sqlite'
-import type { Driver } from '@yaks/sql'
+import { type Driver, lit } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { gitDocs, platformDocs } from './vocab.ts'
 
@@ -56,7 +56,11 @@ for (
     const writeMs = performance.now() - started
     let backfillMs: number | null = null
     if (tracked) {
-      base.exec('update entity set archetype=null')
+      base.query({
+        t: 'update',
+        table: 'entity',
+        set: { archetype: lit(null) },
+      })
       const t = performance.now()
       backfill(base, false)
       backfillMs = performance.now() - t

@@ -15,6 +15,7 @@ import { COOKIE, sign, verify } from './lib/token.ts'
 import { probeSuite } from './probe-suite.ts'
 import type { Custom } from './domains.ts'
 import type { Bundle } from '@yaks/graph'
+import { render, type Stmt } from '@yaks/sql'
 
 // `deno task test:workerd` owns one host for the whole suite and names it in
 // YAK_PROBE_HOST. A test run on its own starts a host for each lease and
@@ -1111,4 +1112,26 @@ export let delivered = async (
   let said = await r.text()
   if (!r.ok) throw new Error(`${path}: ${r.status} ${said}`)
   return said
+}
+
+/**
+ * Statements run straight into one store object, which then wakes as a new
+ * incarnation over what they left (probe-entry.mjs), the way a deploy wakes
+ * it: a store as older code left it. Answers the last statement's rows.
+ */
+export let planted = async (
+  k: Kernel,
+  store: string,
+  ...statements: Stmt[]
+) => {
+  let sql = statements.map((s) => {
+    let { sql, params } = render(s)
+    return [sql, ...params]
+  })
+  let r = await k.at(k.host, '/__probe/sql', {
+    method: 'POST',
+    body: JSON.stringify({ store, sql }),
+  })
+  if (!r.ok) throw new Error(`probe sql ${r.status}: ${await r.text()}`)
+  return await r.json() as Record<string, unknown>[]
 }

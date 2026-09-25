@@ -19,7 +19,8 @@ import {
 } from './connections.ts'
 import { directory, over, storeName } from './directory.ts'
 import { PLATFORM_STORE } from './door.ts'
-import { platform } from './testing.ts'
+import { db, named, platform } from './testing.ts'
+import { scan } from '@yaks/sql'
 import { KERNEL, meta } from './meta.ts'
 import { outbound, outboundPlugin } from './outbound.ts'
 import { answered, routed } from './plugin.ts'
@@ -70,11 +71,9 @@ let setup = async (vault = true) => {
     connectionsOf(p.env, [space], person, [], enable)
   // Every row the directory's SQLite holds, as text.
   let dump = () => {
-    let sql = p.states.get(PLATFORM_STORE)!.storage.sql
-    return sql.exec("select name from sqlite_master where type = 'table'")
-      .toArray().map((t) =>
-        JSON.stringify(sql.exec(`select * from "${t.name}"`).toArray())
-      ).join('\n')
+    let held = p.states.get(PLATFORM_STORE)!
+    return named(held, { type: 'table' })
+      .map((t) => JSON.stringify(scan(db(held), t))).join('\n')
   }
   return { p, at, dir, space, person, post, shown, dump }
 }

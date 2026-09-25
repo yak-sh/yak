@@ -25,30 +25,23 @@ import { slow } from '../../bin/testing.ts'
 import { blobSchema } from '@yaks/blob'
 import { type Bundle, derivedEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { driver, type Wire } from '@yaks/durable-object'
+import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { edgeEid } from '@yaks/edge'
 import { entryEid, objects } from '@yaks/git'
 import {
-  type Alter,
   among,
   as,
   at,
-  by,
   col,
-  type Column,
   count,
   eq,
-  type Expr,
   fn,
-  type Insert,
   insert,
   isNull,
-  join,
   lit,
   not,
   notNull,
-  type Param,
   raise,
   scan,
   select,
@@ -56,8 +49,6 @@ import {
   sub,
   table,
   tally,
-  type Update,
-  val,
 } from '@yaks/sql'
 import { columns, objects as catalogue, schema } from '@yaks/sqlite'
 import { Store } from './graph.ts'
@@ -85,6 +76,18 @@ import {
 import legacy from './fixtures/legacy_store.json' with { type: 'json' }
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 import { appVocab } from './vocab.ts'
+import {
+  db,
+  every,
+  grow,
+  id,
+  keep,
+  named,
+  owners,
+  patch,
+  row,
+  slot,
+} from './testing.ts'
 import { slugsOf } from './directory.ts'
 
 // One object's whole state, kept across incarnations: its storage, the key-value
@@ -192,68 +195,9 @@ let newer = (ctx: State, name: string) => {
   }
 }
 
-// The object's own SQLite, the way the store reaches it.
-let db = (ctx: State) => driver(ctx.storage)
 let run = (ctx: State, ...statements: Stmt[]) => {
   let d = db(ctx)
   for (let s of statements) d.query(s)
-}
-
-// The names of what the object's schema holds: its tables, indexes, triggers.
-let named = (ctx: State, fields: Record<string, Param>) =>
-  catalogue(db(ctx), fields).map((r) => String(r.name))
-
-// A key-value slot of the object, read and written.
-let slot = (ctx: State, k: string): string | null =>
-  (scan(db(ctx), 'yak_kv', by({ k }), ['v'])[0]?.v as string | undefined) ??
-    null
-let keep = (ctx: State, k: string, v: string) =>
-  run(ctx, {
-    t: 'insert',
-    into: 'yak_kv',
-    cols: ['k', 'v'],
-    rows: [[val(k), val(v)]],
-    upsert: [{ on: [col('k')], set: { v: col('v', 'excluded') } }],
-  })
-
-// An entity's integer id, and the row of a component that belongs to it.
-let id = (eid: string): Expr =>
-  sub(select({ cols: [col('id')], from: table('entity'), where: by({ eid }) }))
-let of = (eid: string) => eq(col('entity'), id(eid))
-let expr = (v: Param | Expr): Expr =>
-  v && typeof v == 'object' && 't' in v ? v : val(v)
-let exprs = (fields: Record<string, Param | Expr>) =>
-  Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, expr(v)]))
-
-// A component row for an entity, written, changed, and grown the way an older
-// build had it.
-let row = (
-  name: string,
-  eid: string,
-  fields: Record<string, Param | Expr>,
-): Insert => ({
-  t: 'insert',
-  into: name,
-  cols: ['entity', ...Object.keys(fields)],
-  rows: [[id(eid), ...Object.values(fields).map(expr)]],
-})
-let patch = (
-  name: string,
-  eid: string,
-  set: Record<string, Param | Expr>,
-): Update => ({ t: 'update', table: name, set: exprs(set), where: of(eid) })
-let grow = (name: string, ...add: Column[]): Alter[] =>
-  add.map((c) => ({ t: 'alter table', table: name, add: c }))
-
-// A table's rows with the eid each belongs to, in eid order or by a column.
-let owned = (ctx: State, name: string, cols: string[], order?: string) => {
-  let [e, t] = [at('e'), at('t')]
-  return db(ctx).query(select({
-    cols: [e('eid'), ...cols.map((c) => t(c))],
-    from: table(name, 't'),
-    joins: [join(table('entity', 'e'), eq(e('id'), t('entity')))],
-    order: [order ? t(order) : e('eid')],
-  }))
 }
 
 // Why a store refused its pass, in the words its door says to every caller.
@@ -1229,7 +1173,7 @@ Deno.test('a declared index failure refuses constructor boot', async () => {
   run(
     ctx,
     { t: 'drop', kind: 'index', name: 'space_slug' },
-    { t: 'update', table: 'space', set: { slug: val('same') } },
+    every('space', { slug: 'same' }),
   )
   keep(ctx, 'schema', 'older schema')
   let now = newer(ctx, PLATFORM_STORE)
@@ -1259,8 +1203,7 @@ Deno.test('boot leaves a populated table constraint for its preparing pass', asy
   assertEquals(created, true)
   assertEquals(marker(ctx), LATEST)
   assertThrows(
-    () =>
-      db(ctx).query({ t: 'update', table: 'app', set: { store: val('same') } }),
+    () => db(ctx).query(every('app', { store: 'same' })),
     Error,
     'UNIQUE',
   )
@@ -1486,7 +1429,13 @@ slow('a body nothing holds refuses the pass', async () => {
     from: 'blob_text',
     where: eq(
       col('entity'),
-      sub(select({ cols: [col('body')], from: table('doc'), where: of(ONE) })),
+      sub(
+        select({
+          cols: [col('body')],
+          from: table('doc'),
+          where: eq(col('entity'), id(ONE)),
+        }),
+      ),
     ),
   })
   let now = newer(ctx, 'ada/cookbook')
@@ -1640,16 +1589,12 @@ let beforeFiling = async (ctx: State) => {
       { name: 'assignee', type: 'integer' },
       { name: 'domain', type: 'text' },
     ),
-    {
-      t: 'update',
-      table: 'task',
-      set: exprs({
-        priority: 2,
-        project: id(SPACE),
-        assignee: id(ADA),
-        domain: 'Garden',
-      }),
-    },
+    every('task', {
+      priority: 2,
+      project: id(SPACE),
+      assignee: id(ADA),
+      domain: 'Garden',
+    }),
   )
   keep(ctx, 'migrated', HANDLED)
 }
@@ -1711,11 +1656,7 @@ slow(
         name: 'domain',
         type: 'text',
       }),
-      {
-        t: 'update',
-        table: 'task',
-        set: exprs({ priority: 2, domain: 'Garden' }),
-      },
+      every('task', { priority: 2, domain: 'Garden' }),
     )
     let now = newer(ctx, 'ada/cookbook')
     let [row] = await now.query('.task&?filed')
@@ -1747,7 +1688,7 @@ let toolsOld = async (ctx: State, names: string[], twins: string[] = []) => {
   keep(ctx, 'migrated', FILED)
 }
 
-let tooling = (ctx: State) => owned(ctx, 'tool', ['name'], 'name')
+let tooling = (ctx: State) => db(ctx).query(owners('tool', ['name'], 'name'))
 
 Deno.test('a store with tools at old ids and twins boots, merges and indexes', async () => {
   let ctx = state()
@@ -1765,12 +1706,7 @@ Deno.test('a store with tools at old ids and twins boots, merges and indexes', a
   ])
   assertEquals(marker(ctx), LATEST)
   assertThrows(
-    () =>
-      db(ctx).query({
-        t: 'update',
-        table: 'tool',
-        set: { name: val('add_chore') },
-      }),
+    () => db(ctx).query(every('tool', { name: 'add_chore' })),
     Error,
     'UNIQUE',
   )
@@ -1797,10 +1733,9 @@ Deno.test('a copy the build before would sandbox is stamped trusted', async () =
   assert(r.ok, await r.text())
   keep(ctx, 'migrated', TOOLED)
   await newer(ctx, PLATFORM_STORE).query('.installed')
-  let [one, two, three] = owned(ctx, 'installed', [
-    'sandboxed',
-    'trusted',
-  ]) as { sandboxed: string | null; trusted: string | null }[]
+  let [one, two, three] = db(ctx).query(
+    owners('installed', ['sandboxed', 'trusted']),
+  ) as { sandboxed: string | null; trusted: string | null }[]
   assertEquals(one.sandboxed, null)
   assert(one.trusted && one.trusted > was, one.trusted ?? 'unstamped')
   assertEquals([two.sandboxed, two.trusted], [null, was])
@@ -1842,7 +1777,8 @@ Deno.test("a sent letter's Message-ID moves onto the letter", async () => {
   }
   keep(ctx, 'migrated', SANDBOXED)
   await newer(ctx, 'ada/cookbook').query('.mail', APP)
-  let ids = owned(ctx, 'mail', ['message_id']).map((r) => r.message_id)
+  let ids = db(ctx).query(owners('mail', ['message_id']))
+    .map((r) => r.message_id)
   assertEquals(ids, ['m1@yaks.app', null, null, 'a1@x.example'])
   assertEquals(marker(ctx), LATEST)
 })

@@ -29,6 +29,8 @@ import { metaOf } from './meta.ts'
 import type { Plugin } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { RELATIONS } from './vocab.ts'
+import { col, isNull, tally } from '@yaks/sql'
+import { db, named, slot, unclassified } from './testing.ts'
 
 // A hibernatable socket, faked: what it was sent, and the attachment that is
 // its only memory across an eviction.
@@ -552,10 +554,7 @@ Deno.test('a named row written twice is one entity, and answers to its name', as
 Deno.test('the object plants core + member + edge + the app, and nothing else', async () => {
   let ctx = state()
   await cookbook(ctx)
-  let tables = ctx.storage.sql
-    .exec("select name from sqlite_master where type = 'table'")
-    .toArray()
-    .map((r) => String((r as { name: unknown }).name))
+  let tables = named(ctx, { type: 'table' })
     .filter((n) => !n.startsWith('doc_fts') && !n.startsWith('sqlite_'))
     .sort()
   assertEquals(
@@ -778,39 +777,18 @@ Deno.test('app archetypes classify writes and migrate old rows only on schema ch
   assert(updated != 'forged')
   original = updated
   // Simulate a pre-feature store whose data and blob values already exist.
-  ctx.storage.sql.exec('update entity set archetype = null')
-  const descriptorsBefore = ctx.storage.sql.exec('select entity from archetype')
-    .toArray()
-  ctx.storage.sql.exec('drop table retired')
-  ctx.storage.sql.exec('drop table archetype')
-  for (const row of descriptorsBefore) {
-    ctx.storage.sql.exec('delete from entity where id = ?', Number(row.entity))
-  }
-  ctx.storage.sql.exec(
-    "update yak_kv set v = 'previous-schema' where k = 'schema'",
-  )
+  unclassified(ctx, 'previous-schema')
   store = new Store(ctx)
   rows = await read(store)
   assertEquals(rows[0].entity.archetype, original)
   assertEquals((rows[0].doc as { title: string }).title, 'Cake')
   assertEquals((rows[0].recipe as { serves: number }).serves, 5)
-  assertEquals(
-    ctx.storage.sql.exec(
-      'select count(*) as n from entity where archetype is null',
-    ).toArray()[0].n,
-    0,
-  )
+  assertEquals(tally(db(ctx), 'entity', isNull(col('archetype'))), 0)
   // Schema stamp prevents the next wake from rescanning/backfilling rows.
-  let stamp =
-    ctx.storage.sql.exec("select v from yak_kv where k = 'schema'").toArray()[0]
-      .v
+  let stamp = slot(ctx, 'schema')
   store = new Store(ctx)
   assertEquals((await read(store))[0].entity.archetype, original)
-  assertEquals(
-    ctx.storage.sql.exec("select v from yak_kv where k = 'schema'").toArray()[0]
-      .v,
-    stamp,
-  )
+  assertEquals(slot(ctx, 'schema'), stamp)
   await post(store, '/apply', [{ entity: { eid: CAKE }, recipe: null }], owner)
   assertEquals((await read(store)).length, 0)
   let without = await (await get(store, '/query?q=.doc', owner))

@@ -3,6 +3,7 @@ import type { Bundle } from '@yaks/graph'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 import { Store } from './graph.ts'
+import { slot, unclassified } from './testing.ts'
 
 for (const name of [PLATFORM_STORE, GIT_STORE]) {
   Deno.test(`${name}: classification, legacy backfill, and immutable metadata`, async () => {
@@ -45,24 +46,13 @@ for (const name of [PLATFORM_STORE, GIT_STORE]) {
       [],
     )
     // Simulate the previous schema with physical data but no classification.
-    storage.sql.exec('update entity set archetype=null')
-    const ids = storage.sql.exec('select entity from archetype').toArray()
-    storage.sql.exec('drop table retired')
-    storage.sql.exec('drop table archetype')
-    for (const row of ids) {
-      storage.sql.exec('delete from entity where id=?', Number(row.entity))
-    }
-    storage.sql.exec("update yak_kv set v='pre-archetypes' where k='schema'")
+    unclassified(ctx, 'pre-archetypes')
     store = new Store(ctx)
     assertEquals((await read())[0], original)
-    const stamp = storage.sql.exec("select v from yak_kv where k='schema'")
-      .toArray()
+    const stamp = slot(ctx, 'schema')
     store = new Store(ctx)
     assertEquals((await read())[0], original)
-    assertEquals(
-      storage.sql.exec("select v from yak_kv where k='schema'").toArray(),
-      stamp,
-    )
+    assertEquals(slot(ctx, 'schema'), stamp)
     res = await request('/apply', [{
       entity: { eid },
       alias: { name: 'classified-test' },

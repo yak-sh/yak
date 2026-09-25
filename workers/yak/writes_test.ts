@@ -5,7 +5,8 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { sha256 } from '@yaks/graph'
 import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
-import { state } from './testing.ts'
+import { by, scan, tally } from '@yaks/sql'
+import { db, keep, state } from './testing.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { keyed, Pending } from './writes.ts'
 
@@ -18,23 +19,21 @@ let object = () => {
   let wake = () => store = new Store(ctx)
   let door = () => metaOf(doorOf((r) => store.fetch(r), NAME))
   let apply = (b: unknown[]) => door().apply(b as never, KERNEL)
-  let sql = (q: string) => ctx.storage.sql.exec(q).toArray()
+  let writes = (state?: string) =>
+    tally(db(ctx), 'yak_writes', state ? by({ state }) : undefined)
   let title = async (eid: string) =>
     ((await door().query(`.eid=${eid}`))[0]?.doc as { title?: string })?.title
-  return { ctx, wake, apply, sql, title, alarm: () => store.alarm() }
+  return { ctx, wake, apply, writes, title, alarm: () => store.alarm() }
 }
 
 // What breaking a deploy looks like from inside: the vocabulary the object
 // boots from no longer loads, so it refuses to start.
 let broken = (o: ReturnType<typeof object>) => {
-  o.sql(
-    "insert into yak_kv (k, v) values ('vocab', 'not json') " +
-      'on conflict(k) do update set v = excluded.v',
-  )
+  keep(o.ctx, 'vocab', 'not json')
   o.wake()
 }
 let mended = (o: ReturnType<typeof object>) => {
-  o.sql("update yak_kv set v = '{}' where k = 'vocab'")
+  keep(o.ctx, 'vocab', '{}')
   o.wake()
 }
 
@@ -54,17 +53,14 @@ Deno.test('writes a refusing store was sent apply in order, once, when it is men
     titled('n2', 'other'),
   ]
   for (let b of kept) await assertRejects(() => o.apply([b]), Pending)
-  assertEquals(
-    o.sql("select count(*) n from yak_writes where state = 'pending'"),
-    [{ n: 3 }],
-  )
+  assertEquals(o.writes('pending'), 3)
   // The alarm that brings the object back for them is set.
   assert(await o.ctx.storage.getAlarm())
   mended(o)
   await o.alarm()
   assertEquals(await o.title('n1'), 'two')
   assertEquals(await o.title('n2'), 'other')
-  assertEquals(o.sql('select count(*) n from yak_writes'), [{ n: 0 }])
+  assertEquals(o.writes(), 0)
   // Woken again, it has nothing left to replay.
   o.wake()
   await o.alarm()
@@ -74,7 +70,7 @@ Deno.test('writes a refusing store was sent apply in order, once, when it is men
 Deno.test('a write refused on its own input is answered and not kept', async () => {
   let o = object()
   await assertRejects(() => o.apply([titled('n1', 'one', sha256('nope'))]))
-  assertEquals(o.sql('select count(*) n from yak_writes'), [{ n: 0 }])
+  assertEquals(o.writes(), 0)
 })
 
 Deno.test('a replay that no longer applies is kept as refused, and the rest go on', async () => {
@@ -89,7 +85,7 @@ Deno.test('a replay that no longer applies is kept as refused, and the rest go o
   // The first request after the mend replays before it is answered.
   assertEquals(await o.title('n2'), 'two')
   assertEquals(await o.title('n1'), undefined)
-  assertEquals(o.sql('select seq, state from yak_writes'), [{
+  assertEquals(scan(db(o.ctx), 'yak_writes', undefined, ['seq', 'state']), [{
     seq: 1,
     state: 'refused',
   }])

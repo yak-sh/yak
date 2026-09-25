@@ -8,7 +8,7 @@ import {
   assertThrows,
 } from '@std/assert'
 import { schema } from '@yaks/sqlite'
-import { render, type Stmt } from '@yaks/sql'
+import type { Stmt } from '@yaks/sql'
 import { fields } from '@yaks/fts'
 import { PAGES } from './guide.ts'
 import {
@@ -203,7 +203,18 @@ Deno.test('a manifest is refused in the words that fix it', () => {
 let tablesOf = (stmts: Stmt[]) =>
   stmts.flatMap((s) => s.t == 'create table' ? [s.name] : []).sort()
 
-let text = (stmts: Stmt[]) => stmts.map((s) => render(s).sql)
+// Each index a schema declares, as `unique name table column…`.
+let indexes = (stmts: Stmt[]) =>
+  stmts.flatMap((s) =>
+    s.t == 'create index'
+      ? [[
+        s.unique ? 'unique' : 'index',
+        s.name,
+        s.on,
+        ...s.cols.map((c) => c.t == 'col' ? c.name : c.t),
+      ].join(' ')]
+      : []
+  )
 
 // What the load implies: one app's schema. The fleet's store plants 83 tables
 // into every customer's Durable Object today; this is the whole of what a
@@ -309,35 +320,28 @@ Deno.test('the directory and an app spell one word apart: member.role', () => {
 })
 
 Deno.test('the platform declares the uniques its races are decided by', () => {
-  let sql = text(schema(platformVocab()))
+  let platform = indexes(schema(platformVocab()))
   for (
-    let [name, cols] of [
-      ['space_slug', '"space" ("slug")'],
-      ['app_space_slug', '"app" ("space", "slug")'],
-      ['app_store', '"app" ("store")'],
-      ['member_space_person', '"member" ("space", "person")'],
-      ['hostname_name', '"hostname" ("name")'],
-      ['deploy_app_version', '"deploy" ("app", "version")'],
-      ['published_name', '"published" ("name")'],
+    let want of [
+      'space_slug space slug',
+      'app_space_slug app space slug',
+      'app_store app store',
+      'member_space_person member space person',
+      'hostname_name hostname name',
+      'deploy_app_version deploy app version',
+      'published_name published name',
     ]
-  ) {
-    assert(
-      sql.includes(
-        `create unique index if not exists "${name}" on ${cols}`,
-      ),
-      `no ${name}`,
-    )
-  }
+  ) assert(platform.includes(`unique ${want}`), `no ${want}`)
   // An app's own store declares none of them — they are the directory's words.
   // Its one unique is a tool's name, which is the tool's identity.
   assertEquals(
-    text(schema(appVocab())).filter((s) => s.includes('unique index')),
-    ['create unique index if not exists "tool_name" on "tool" ("name")'],
+    indexes(schema(appVocab())).filter((i) => i.startsWith('unique')),
+    ['unique tool_name tool name'],
   )
   // And an address is no longer one of them (T-34657): `former` is history, so
   // two apps may hold one address a year apart. Which app answers at an address
   // now is the tools' word, not an index's.
-  assert(!sql.some((s) => s.includes('on "former"')))
+  assert(!platform.some((i) => i.split(' ')[2] == 'former'))
 })
 
 Deno.test('none of the fleet vocabulary comes with it', () => {

@@ -25,6 +25,7 @@ import { KERNEL, metaOf, minted } from './meta.ts'
 import { mint, personOf, spend } from './signin.ts'
 import { type Door, PLATFORM_STORE } from './door.ts'
 import { noted } from './unseen.ts'
+import { named } from './testing.ts'
 
 let state = () => {
   let live: Wire[] = []
@@ -398,10 +399,7 @@ Deno.test('the directory plants the platform, and not one app word', async () =>
       headers: { 'x-store': PLATFORM_STORE },
     }),
   )
-  let tables = ctx.storage.sql
-    .exec("select name from sqlite_master where type = 'table'")
-    .toArray()
-    .map((r) => String((r as { name: unknown }).name))
+  let tables = named(ctx, { type: 'table' })
     .filter((n) => !n.startsWith('doc_fts') && !n.startsWith('sqlite_'))
   // @yaks/member's document is not loaded here: the platform declares the two
   // rungs of its own ladder — `member`, with three seats instead of two, and
@@ -430,10 +428,7 @@ Deno.test('the directory plants the platform, and not one app word', async () =>
     ]
   ) assert(tables.includes(name), `no ${name} table`)
   // And the uniques the directory's races are decided by.
-  let uniques = ctx.storage.sql
-    .exec("select name from sqlite_master where type = 'index'")
-    .toArray()
-    .map((r) => String((r as { name: unknown }).name))
+  let uniques = named(ctx, { type: 'index' })
   assert(uniques.includes('space_slug'))
   assert(uniques.includes('hostname_name'))
 })
