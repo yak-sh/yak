@@ -359,8 +359,8 @@ lose everything?"), say which of these covers them. They are usually weighing a
 risk that is not there.
 
 The one thing with no way back is what somebody explicitly asked to erase:
-`app_delete(forever: true)` skips the trash, and a secret removed with
-`app_secret_remove` was never readable to put back.
+`app_delete(forever: true)` skips the trash, and a connection the person
+disconnected takes its key with it: they connect it again.
 
 ## feedback
 

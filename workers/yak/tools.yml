@@ -344,38 +344,32 @@ app_set:
     'public', allows anyone to read and only members with write permission
     to change data. Returns the current URL and a summary of the changes.
     Documentation: https://yaks.app/docs/home.
-app_secret_set:
-  title: Set a worker secret
+connection_need:
+  title: Say an app needs a key or a sign-in
   description: >-
-    Give the app's worker a secret for an outside service (an API key, a
-    token) without the page ever holding it. The value is stored on the
-    app's worker script and nowhere else: not in the app's data, not in its
-    history, and no tool, this one included, can read it back. Only the
-    worker can, as env.NAME, so name it the way its code will refer to it:
-    app_secret_set(app, name: 'WEATHER_KEY', value) and then `fetch(url,
-    {headers: {authorization: env.WEATHER_KEY}})` in worker.js. The value is
-    whatever the outside service issued; this tool stores it and does not
-    check it. Setting a name that already exists replaces its value. The app
-    needs a worker.js (uploaded by app_deploy) for the secret to reach any
-    code. Returns the secret name and a confirmation, never the value. There
-    is no undo for a replaced value: set it again from the outside service,
-    or app_secret_remove a name set by mistake. Documentation:
-    https://yaks.app/docs/code.
-app_secret_list:
-  title: List worker secrets
-  description: >-
-    The names of the secrets the app's worker can read. Values are never
-    returned, by this tool or any other. Use it to see what a worker.js may
-    read as env.NAME. Documentation: https://yaks.app/docs/code.
-app_secret_remove:
-  title: Remove a worker secret
-  description: >-
-    Remove a secret from the app's worker. Its code stops seeing env.NAME at
-    the next request; nothing else about the app changes. To undo:
-    app_secret_set with the value again. A secret is never readable once
-    set, so this is the one thing here that nothing can restore for you.
-    Pass the secret name, not its value. Returns a removal confirmation.
+    Say that an app's worker calls an outside service with a key or a
+    sign-in (an API key, a Google account): it makes a connection for the
+    person to connect on the space's connections page, and no key ever
+    passes through this tool or this chat. Name a built integration, or any
+    name of your own with the hosts its key may be sent to
+    (integration: 'weather', hosts: ['api.weatherapi.com']). worker.js reads
+    it as env.NAME (binding; default the name in capitals), and puts it
+    wherever the service wants its key, a header, the query or the body:
+    `fetch('https://api.weatherapi.com/v1/current.json?key=' +
+    env.WEATHER)`. What it holds is a sentinel, which yaks.app swaps for the
+    key on the way out, only to those hosts; direct: true hands it the key
+    itself instead, for a key it must sign with. Until the person connects
+    it, env.NAME is not there. Asking again renames or changes it. Returns
+    the name worker.js reads and the page the person connects it at.
     Documentation: https://yaks.app/docs/code.
+connection_list:
+  title: List connections
+  description: >-
+    The space's connections to outside services: each one's service, whether
+    it is connected, and which apps use it by which env.NAME. A key is never
+    shown, by this tool or any other. Use it before connection_need to see
+    what the person has already connected. Documentation:
+    https://yaks.app/docs/code.
 app_delete:
   title: Delete an app
   description: >-

@@ -96,8 +96,8 @@ address, grant returns the one line to paste. Hand those over as they come
 back. Erasing with forever, forgetting an old address, submitting an app to
 the gallery, and sending an email from an app are the person's decisions;
 read an email back to them before it goes, since nothing recalls it. A
-secret's value (app_secret_set) comes from the person or the outside
-service, never from you.
+key comes from the person, on their connections page after connection_need,
+never through you.
 
 An app is readable by anyone with the link and writable by its members. When
 it is for other people too, say so: app_new (or app_set) accepts access 'open',
@@ -204,9 +204,9 @@ An app can carry its own code too: a worker.js beside index.html handles
 every request that is not under /api/ before the files do, and any request it
 answers with 404 falls through to them, so it owns the routes it names and
 nothing else. It reads the app's store as the person viewing it (env.STORE),
-its files (env.FILES), and any key you set with app_secret_set as env.NAME —
-which is what a page must not hold and nothing can read back. Call guide with
-page code for a whole one.
+its files (env.FILES), and each key the person connected (connection_need)
+as env.NAME — a sentinel yaks.app swaps for the key on the way out, which is
+what a page must not hold. Call guide with page code for a whole one.
 
 An app may carry wrangler.jsonc or wrangler.json beside worker.js. Its supported
 keys are main (the app-relative server source path, worker.js by default;

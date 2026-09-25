@@ -6,10 +6,9 @@
 // sugar: space_new, app_new,
 // app_files, app_deploy, app_versions and app_rollback — the deploys an app
 // keeps and the word that puts one back (versions.ts, T-32886) — app_set,
-// app_delete, app_errors, app_list, the three
-// that give an app's own worker a key it alone can read — app_secret_set,
-// app_secret_list, app_secret_remove, whose values never enter this graph
-// (T-32779) — the three that make an app a plugin: app_publish offers it to
+// app_delete, app_errors, app_list — the keys an app's worker reads are
+// connections now, whose two tools are connections.ts's — the three that
+// make an app a plugin: app_publish offers it to
 // every space by a platform-wide name, app_unpublish withdraws the offer
 // without touching anyone who took it, and app_published is what is on offer
 // (T-32888), and the two that take one: app_install copies a published
@@ -115,7 +114,6 @@ import {
   untrashSpace,
   went,
 } from './erase.ts'
-import { dropSecret, SECRET_NAME, secrets, setSecret } from './dispatch.ts'
 import {
   apex,
   customOf,
@@ -537,34 +535,6 @@ let titled = (v: unknown) => {
     )
   }
   return s
-}
-
-// A secret's name is a binding, which the app's own code writes as
-// `env.NAME` — so it must be a JavaScript name (dispatch.ts).
-let secretName = (v: unknown) => {
-  let s = text(v, 'name')
-  if (!SECRET_NAME.test(s)) {
-    throw refuse(
-      'arguments',
-      'name: the app reads it as env.NAME, so letters, digits and ' +
-        'underscores, not starting with a digit — WEATHER_KEY',
-    )
-  }
-  return s
-}
-
-// Every secret door needs the platform's Cloudflare token, because a secret
-// lives on the app's script and nowhere the platform itself keeps anything.
-// Without it there is no half-measure to take, so this is a refusal and not
-// a warning the way a deploy's is (dispatch.ts NEEDS_TOKEN).
-let needsToken = (ctx: Ctx) => {
-  if (!ctx.env.CF_WORKERS_TOKEN) {
-    throw new Error(
-      'the platform has no Cloudflare token to reach app workers with ' +
-        "(CF_WORKERS_TOKEN) — secrets live on the app's own script, so " +
-        'there is nowhere to put one until it is set',
-    )
-  }
 }
 
 // The caller as the space's owner: who belongs is the owner's to say. An
@@ -3128,85 +3098,6 @@ let OURS: Row[] = [
         }`,
         space,
       }
-    },
-  },
-  {
-    name: 'app_secret_set',
-    // The value it replaces can never be read back.
-    destructive: true,
-    idempotent: true,
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        app: APP,
-        name: str(
-          'the name worker.js reads as env.NAME, e.g. WEATHER_KEY; letters, ' +
-            'digits and underscores, not starting with a digit',
-        ),
-        value: str('the secret itself; it is never returned by any tool'),
-      },
-      required: ['app', 'name', 'value'],
-    },
-    run: async (ctx, args) => {
-      let { space, app } = await inApp(ctx, args, true)
-      let name = secretName(args.name)
-      // The value is read and never held anywhere else: no `text(...)` echo
-      // in a refusal, and nothing about it in the answer.
-      if (typeof args.value != 'string' || !args.value) {
-        throw refuse('arguments', 'value is required')
-      }
-      needsToken(ctx)
-      await setSecret(ctx.env, storeName(space, app), name, args.value)
-      return {
-        text: `${space.slug}/${app.slug}: ${name} is set — worker.js reads ` +
-          `it as env.${name}, and nothing can read it back`,
-        space,
-      }
-    },
-  },
-  {
-    name: 'app_secret_list',
-    readOnly: true,
-    input: {
-      type: 'object',
-      properties: { space: SPACE, app: APP },
-      required: ['app'],
-    },
-    run: async (ctx, args) => {
-      let { space, app } = await inApp(ctx, args)
-      needsToken(ctx)
-      let names = await secrets(ctx.env, storeName(space, app))
-      return {
-        text: names.length
-          ? `${space.slug}/${app.slug}: ${
-            names.join(', ')
-          } — worker.js reads ` +
-            'each as env.NAME; no value is ever answered'
-          : `${space.slug}/${app.slug} has no secrets`,
-        space,
-      }
-    },
-  },
-  {
-    name: 'app_secret_remove',
-    destructive: true,
-    idempotent: true,
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        app: APP,
-        name: str('the secret name to remove, e.g. WEATHER_KEY; not its value'),
-      },
-      required: ['app', 'name'],
-    },
-    run: async (ctx, args) => {
-      let { space, app } = await inApp(ctx, args, true)
-      let name = secretName(args.name)
-      needsToken(ctx)
-      await dropSecret(ctx.env, storeName(space, app), name)
-      return { text: `${space.slug}/${app.slug}: ${name} removed`, space }
     },
   },
   {

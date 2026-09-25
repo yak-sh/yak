@@ -10,7 +10,7 @@
 
 import type { Frame } from './build.ts'
 import type { Agent } from './connected.ts'
-import type { Connections, Shown } from './connections.ts'
+import type { Connections, Shown, Using } from './connections.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icon, type IconName } from './icons.ts'
 import { esc } from './html.ts'
@@ -899,6 +899,27 @@ let STATUS = {
 // only the ask: nothing here connects it, and it stays while the app asks.
 let connection = (c: Shown, on: boolean) => {
   let ask = c.each && !c.own
+  // An app that uses it: what its code reads and, for one it shares, who may
+  // call out through it there, which the person opens to anyone or closes to
+  // members. A person's own is only ever theirs to call out through.
+  let using = (a: Using) =>
+    `<p class="Connection_App">${esc(a.title)} reads it as <code>env.${
+      esc(a.binding)
+    }</code>${a.direct ? ', the key itself' : ''}.${
+      c.each
+        ? ''
+        : a.anyone
+        ? ' Anyone using the app may call out through it.'
+        : ' Only its members may call out through it.'
+    }</p>${
+      c.each ? '' : form(
+        `<input type="hidden" name="app" value="${
+          esc(a.app)
+        }"><button class="Button Bill_Go-quiet" type="submit" name="do" value="${
+          a.anyone ? 'close' : 'open'
+        }">${a.anyone ? 'Members only' : 'Open to anyone'}</button>`,
+      )
+    }`
   let form = (inner: string) =>
     `<form class="Connection_Do" method="post" action="${
       managePath('connections')
@@ -935,7 +956,7 @@ let connection = (c: Shown, on: boolean) => {
       c.status == 'needed' ? 'Remove' : 'Disconnect'
     }</button>`,
   )
-  let apps = c.apps.map(esc).join(', ')
+  let apps = c.apps.map((a) => esc(a.title)).join(', ')
   return `<section class="Card Connection"><header class="Connection_Head"><h2>${
     esc(c.integration)
   }</h2><span class="Connection_Status Connection_Status-${c.status}">${
@@ -948,14 +969,14 @@ let connection = (c: Shown, on: boolean) => {
       ? 'No app uses it yet.'
       : ask
       ? `Each person who uses ${apps} connects their own account, from the app.`
-      : `Used by ${apps}.`
+      : ''
   }${
     c.hosts.length
       ? ` Its key is only ever sent to ${
         c.hosts.map((h) => `<code>${esc(h)}</code>`).join(', ')
       }.`
       : ''
-  }</p>${
+  }</p>${ask ? '' : c.apps.map(using).join('')}${
     c.failed
       ? `<p class="Say Say-no" role="status">${esc(sentence(c.failed))}</p>`
       : c.saving

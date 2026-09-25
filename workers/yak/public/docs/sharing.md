@@ -296,9 +296,9 @@ What travels is the app's own files — the pages, the stylesheets, the
   data, not its code, and stay behind.
 - **Version history.** The copy earns its own from the release the install
   makes.
-- **Secrets.** They live on the script, and the copy's script is new. An app
-  that needs a key should say so in its `about`, and the installer sets their
-  own with `app_secret_set`.
+- **Keys.** A connection is the space's, and the copy is in another space. An
+  app that needs a key should say so in its `about`, and the installer connects
+  their own after `connection_need`.
 - **Members.** The copy belongs to the installer's space and its guest list.
 
 ## How an installed app runs

@@ -69,7 +69,7 @@ let REFUSED: Record<string, string> = {
   // it would spend our bill on every visit (T-37894). Refused rather than
   // metered: the builder is the one thing here that runs a model, and it is.
   ai:
-    "Workers AI is not available to apps: a model's cost is the platform's and is not metered per space; call a model's own API with a key you set with app_secret_set",
+    "Workers AI is not available to apps: a model's cost is the platform's and is not metered per space; call a model's own API with a key the person connects (connection_need)",
   crons:
     "user workers in a dispatch namespace receive no cron triggers; a wake{at, every} on a row in the app's store is the schedule, and a rule on `fired` is what it does (https://yaks.app/docs/wakes.md)",
 }

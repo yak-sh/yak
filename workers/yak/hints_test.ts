@@ -24,12 +24,12 @@ let READS = [
   'about',
   'app_list',
   'app_published',
-  'app_secret_list',
   'app_versions',
   'app_stats',
   // What the apps in reach can be asked to do (declared.ts): a listing, and
   // the same one however often it is asked.
   'commands',
+  'connection_list',
   'domain_status',
   'gallery_search',
   'guide',
@@ -47,7 +47,6 @@ let DESTROYS = [
   'command',
   'app_files',
   'app_rollback',
-  'app_secret_remove',
   'app_unpublish',
   'app_update',
   'member_remove',
@@ -62,8 +61,6 @@ let DESTROYS = [
   'store_restore',
   // Rows already there are patched in place, deletes included.
   'store_load',
-  // The value it replaces can never be read back.
-  'app_secret_set',
 ]
 
 // It reaches past yaks.app: a letter to somebody's inbox, a page the whole web

@@ -63,7 +63,7 @@ about the app has to change when they finish; the same page starts working.
 
 What the seller keeps: their account, their money, their customer relationship,
 their refunds. What they never do: paste a secret key anywhere. There is no
-`app_secret_set` in this recipe.
+`connection_need` in this recipe.
 
 ## What the app sells
 

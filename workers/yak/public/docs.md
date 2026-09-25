@@ -136,11 +136,11 @@ is for, and how a recall is ranked.
 An app is pages until you give it a `worker.js`, and then it has a server. Every
 request that is not `/api/...` reaches it first, and anything it answers with a
 404 falls through to the files. `env.STORE` is the app's own store as the person
-looking, and a secret set with `app_secret_set` arrives as `env.NAME`, which is
-the reason to write a worker at all.
+looking, and a key the person connected (`connection_need`) arrives as
+`env.NAME`, which is the reason to write a worker at all.
 
-Deeper: <https://yaks.app/docs/code.md> — env, routes, secrets, limits, and
-whole workers to copy.
+Deeper: <https://yaks.app/docs/code.md> — env, routes, keys, limits, and whole
+workers to copy.
 
 ## Home
 

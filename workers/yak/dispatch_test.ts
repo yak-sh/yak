@@ -28,7 +28,6 @@ import {
   granting,
   itsApp,
   moduleType,
-  NO_WORKER,
   owning,
   ran,
   scriptName,
@@ -151,6 +150,21 @@ Deno.test('the worker is handed who is looking, and never the cookie', async () 
   // The session cookie is a credential for every space this person belongs
   // to; the app is owed this visit and no more. Its own cookies survive.
   assertEquals(sent.headers.get('cookie'), 'theme=dark')
+})
+
+Deno.test('what the worker sends out is said to be the app’s, for this visitor', async () => {
+  let asked: unknown[] = []
+  let m = mirror()
+  await ran(
+    envOf((...args: unknown[]) => (asked = args, m.get())),
+    space,
+    app,
+    visit(),
+    who,
+  )
+  assertEquals(asked, ['jeff_recipes', {}, {
+    outbound: { CALLER: { app: 'a1', level: 'editor' } },
+  }])
 })
 
 Deno.test('an app sets cookies for its own host, and none for the zone', async () => {
@@ -516,8 +530,8 @@ Deno.test('an upload sends the shim, the app, and one way home', async () => {
     name: 'KERNEL',
     service: 'yak',
   }])
-  // A deploy replaces the binding list whole, so this is what carries the
-  // app's secrets across one.
+  // A deploy replaces the binding list whole, so this is what carries what
+  // the app's connections bound across one (connections.ts `rebind`).
   assertEquals(meta.keep_bindings, ['secret_text'])
   assertEquals(meta.limits, { cpu_ms: 50, subrequests: 50 })
 })
@@ -554,42 +568,18 @@ Deno.test('a list is names, whatever the API sends', async () => {
   assert(!JSON.stringify(out).includes('leaked?'))
 })
 
-Deno.test('no script yet is no secrets, and a removal names one', async () => {
+Deno.test('no script yet is nowhere to bind, and a removal names one', async () => {
   let { out } = await recorded(
     () => new Response('nope', { status: 404 }),
     () => secrets(api, 'jeff/recipes'),
   )
-  assertEquals(out, [])
+  assertEquals(out, null)
   let { calls } = await recorded(
     () => ok(null),
     () => dropSecret(api, 'jeff/recipes', 'WEATHER_KEY'),
   )
   assertEquals(calls[0].method, 'DELETE')
   assertEquals(calls[0].url, `${AT}/jeff_recipes/secrets/WEATHER_KEY`)
-})
-
-// A secret before the worker that would read it is the natural order, and
-// Cloudflare's own words for it name nothing anyone can do (C-32869 item 1).
-Deno.test('a secret before any worker says to deploy one', async () => {
-  for (
-    let call of [
-      () => setSecret(api, 'jeff/recipes', 'WEATHER_KEY', 'k'),
-      () => dropSecret(api, 'jeff/recipes', 'WEATHER_KEY'),
-    ]
-  ) {
-    await recorded(
-      () =>
-        Response.json({
-          success: false,
-          errors: [{
-            code: 10007,
-            message: 'This Worker does not exist on your account.',
-          }],
-          result: null,
-        }, { status: 404 }),
-      () => assertRejects(call, Error, NO_WORKER),
-    )
-  }
 })
 
 Deno.test("cloudflare's refusal is what the agent is told", async () => {

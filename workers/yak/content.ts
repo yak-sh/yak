@@ -24,7 +24,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'code',
     'title': 'Code of your own',
     'description':
-      "worker.js in front of an app's files: which routes are yours, what env holds (STORE, FILES, and the secrets you set), what the request reports about who is asking, the CPU and subrequest limits, and whole workers to copy.",
+      "worker.js in front of an app's files: which routes are yours, what env holds (STORE, FILES, and the keys the person connected), what the request reports about who is asking, the CPU and subrequest limits, and whole workers to copy.",
     'brief': "worker.js in front of an app's files",
   },
   'components': {
@@ -313,20 +313,15 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Rename an app, move it to another address, or change who may use it. The title is its name; the slug is its address, so changing the slug moves the app to <space>.yaks.app/<new>/. Its files and everything it has saved move with it, and the old address redirects to the new one, so an existing link still works. access is the same choice app_new offers: 'open' when they want everyone with the link to be able to write to the app, 'private' to close it to everyone but its members. home makes this app the space's front page: what <space>.yaks.app/ opens, the app someone lands on when given the space address itself. No app becomes the front page just by being created. home: false removes this app as the front page if it currently is one; it does not unset another app. With no front page, the space address lists apps the visitor can open. Only the space owner may change it. first is the front page's own routing: the paths its worker.js handles before the app whose name owns them, as globs; [\"/recipes/*\"] sends every address under /recipes/ to the front page instead of the recipes app. It matters only when the front page is meant to route the whole space; an empty list puts every path back where it was. gallery is whether a published app is submitted for https://yaks.app/gallery, the public page of yaks apps: true submits it, false withdraws it at once. Pass forget with a slug this app has already left to drop it: it stops redirecting and another app can be created there, so every link still aimed at it finds nothing. Only the space owner may do that, and it is final for that address. sandboxed is for an app installed from someone else's release, which runs like the space's own apps: true runs it in a browser origin of its own, where it reaches only its own data and the platform supplies its localStorage; false lets it out again. Only the space owner may set it. The default access, 'public', allows anyone to read and only members with write permission to change data. Returns the current URL and a summary of the changes. Documentation: https://yaks.app/docs/home.",
   },
-  'app_secret_set': {
-    'title': 'Set a worker secret',
+  'connection_need': {
+    'title': 'Say an app needs a key or a sign-in',
     'description':
-      "Give the app's worker a secret for an outside service (an API key, a token) without the page ever holding it. The value is stored on the app's worker script and nowhere else: not in the app's data, not in its history, and no tool, this one included, can read it back. Only the worker can, as env.NAME, so name it the way its code will refer to it: app_secret_set(app, name: 'WEATHER_KEY', value) and then `fetch(url, {headers: {authorization: env.WEATHER_KEY}})` in worker.js. The value is whatever the outside service issued; this tool stores it and does not check it. Setting a name that already exists replaces its value. The app needs a worker.js (uploaded by app_deploy) for the secret to reach any code. Returns the secret name and a confirmation, never the value. There is no undo for a replaced value: set it again from the outside service, or app_secret_remove a name set by mistake. Documentation: https://yaks.app/docs/code.",
+      "Say that an app's worker calls an outside service with a key or a sign-in (an API key, a Google account): it makes a connection for the person to connect on the space's connections page, and no key ever passes through this tool or this chat. Name a built integration, or any name of your own with the hosts its key may be sent to (integration: 'weather', hosts: ['api.weatherapi.com']). worker.js reads it as env.NAME (binding; default the name in capitals), and puts it wherever the service wants its key, a header, the query or the body: `fetch('https://api.weatherapi.com/v1/current.json?key=' + env.WEATHER)`. What it holds is a sentinel, which yaks.app swaps for the key on the way out, only to those hosts; direct: true hands it the key itself instead, for a key it must sign with. Until the person connects it, env.NAME is not there. Asking again renames or changes it. Returns the name worker.js reads and the page the person connects it at. Documentation: https://yaks.app/docs/code.",
   },
-  'app_secret_list': {
-    'title': 'List worker secrets',
+  'connection_list': {
+    'title': 'List connections',
     'description':
-      "The names of the secrets the app's worker can read. Values are never returned, by this tool or any other. Use it to see what a worker.js may read as env.NAME. Documentation: https://yaks.app/docs/code.",
-  },
-  'app_secret_remove': {
-    'title': 'Remove a worker secret',
-    'description':
-      "Remove a secret from the app's worker. Its code stops seeing env.NAME at the next request; nothing else about the app changes. To undo: app_secret_set with the value again. A secret is never readable once set, so this is the one thing here that nothing can restore for you. Pass the secret name, not its value. Returns a removal confirmation. Documentation: https://yaks.app/docs/code.",
+      "The space's connections to outside services: each one's service, whether it is connected, and which apps use it by which env.NAME. A key is never shown, by this tool or any other. Use it before connection_need to see what the person has already connected. Documentation: https://yaks.app/docs/code.",
   },
   'app_delete': {
     'title': 'Delete an app',

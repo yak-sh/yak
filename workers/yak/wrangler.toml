@@ -149,9 +149,18 @@ binding = "CF_VERSION_METADATA"
 # — so under `wrangler dev` the binding is undefined and an app serves its
 # files. `remote = true` here would point local dev at the deployed namespace;
 # it is left off, because a test must not need the account.
+#
+# Every fetch an app's worker makes leaves through this same Worker (outbound.ts,
+# T-33447): the outbound service is `yak` itself, handed `CALLER` — the app and
+# what its visitor holds on it — by dispatch.ts for each request, and that is
+# the whole difference between a call an app makes and a request anybody sent.
 [[dispatch_namespaces]]
 binding = "DISPATCH"
 namespace = "yak-apps"
+
+  [dispatch_namespaces.outbound]
+  service = "yak"
+  parameters = ["CALLER"]
 
 # The apex's static files: the home page, the store client an app's pages
 # import (served back to them at <space>.yaks.app/<app>/api/client.js), and
@@ -536,6 +545,10 @@ binding = "CF_VERSION_METADATA"
 [[env.staging.dispatch_namespaces]]
 binding = "DISPATCH"
 namespace = "yak-apps-staging"
+
+  [env.staging.dispatch_namespaces.outbound]
+  service = "yak-staging"
+  parameters = ["CALLER"]
 
 [env.staging.assets]
 directory = "./public"

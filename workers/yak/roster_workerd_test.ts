@@ -109,13 +109,6 @@ let refused = async (
   }
 }
 
-// Some tools need something of the account's that a probe must not hold — a
-// container engine, a Cloudflare token that can write app workers — and each
-// says so in a sentence rather than failing. Under workerd that sentence is
-// the answer; a deployed kernel does the thing. Both are the tool working, so
-// a call holds whichever it got.
-let ABSENT = /No sandbox is running here|has no Cloudflare token/
-
 slow(
   'every tool the connector lists is called, and one with no call fails this',
   async () => {
@@ -301,22 +294,21 @@ slow(
         await tool('app_set', { space: mine, app, title: 'Notebook' }),
         'Notebook',
       )
-      // A secret lives on the app's own worker, which is written with the
-      // platform's Cloudflare token — something a probe must not hold, so
-      // under workerd each of the three says so instead.
-      let kept = async (name: string, args: Record<string, unknown>) => {
-        let out = await refused(tool, name, { space: mine, app, ...args })
-        assert(
-          out.includes('ROSTER_TOKEN') || ABSENT.test(out),
-          `${name}: ${out}`,
-        )
-      }
-      await kept('app_secret_set', {
-        name: 'ROSTER_TOKEN',
-        value: 'nothing here is real',
-      })
-      await kept('app_secret_list', {})
-      await kept('app_secret_remove', { name: 'ROSTER_TOKEN' })
+      // A key the app's worker calls out with is a connection the person
+      // connects on their own page; the agent only says one is needed.
+      assertStringIncludes(
+        await tool('connection_need', {
+          space: mine,
+          app,
+          integration: 'roster',
+          hosts: ['api.roster.example'],
+        }),
+        'env.ROSTER',
+      )
+      assertStringIncludes(
+        await tool('connection_list', { space: mine }),
+        'roster: needed',
+      )
       assert((await tool('app_errors', { space: mine, app })).length > 0)
       assertStringIncludes(await tool('app_list', { space: mine }), app)
       assert(

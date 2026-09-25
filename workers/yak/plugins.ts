@@ -15,6 +15,7 @@ import { connectionsPlugin } from './connections.ts'
 import { gitPlugin } from './git.ts'
 import { memoryPlugin } from './memory.ts'
 import { meterPlugin } from './meter.ts'
+import { outboundPlugin } from './outbound.ts'
 import { outboxPlugin } from './outbox.ts'
 import type { Plugin } from './plugin.ts'
 import { seoPlugin } from './seo_door.ts'
@@ -30,4 +31,5 @@ export let PLUGINS: Plugin[] = [
   seoPlugin,
   gitPlugin,
   connectionsPlugin,
+  outboundPlugin,
 ]

@@ -88,8 +88,10 @@ the app's files.
 
 App code never receives your yaks.app sign-in session. The platform uses a token
 valid for sixty seconds and scoped to one app database and one visitor. It
-removes the token before app code receives the request. App secrets are stored
-separately and do not appear in app files.
+removes the token before app code receives the request. An app's keys are kept
+in the platform's vault and never reach app code: the worker holds a sentinel,
+and its fetches leave through yaks.app, which puts the key in the sentinel's
+place for the hosts the connection names.
 
 ## Connectors and MCP
 

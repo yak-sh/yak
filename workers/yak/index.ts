@@ -122,6 +122,8 @@ import * as sell from './sell.ts'
 import { slid } from './session.ts'
 import { fault, refusal } from './unseen.ts'
 import { egress } from './sandbox.ts'
+import { outbound } from './outbound.ts'
+import { moved } from './moved.ts'
 
 // The Store, at every address the binding names — the directory at
 // `yak/platform` and every app's own beside it (T-33815). It carries the DO's
@@ -255,6 +257,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // this is not a tool — the connector's roster is fixed and public (T-34541),
   // and a rate is the owner's own door, not a thing an agent may move.
   if (path == '/api/fee') return sell.fees(req, env)
+  // TODO(T-38030): the one pass moving app secrets into connections, the same
+  // owner's gate; deleted with moved.ts once it has run.
+  if (path == '/api/moved') return moved(req, env)
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp, env).fetch(req)
   }
@@ -670,10 +675,17 @@ let router = {
 // Wrapped for Sentry (sentry.ts), so an exception that escapes the router's
 // catch, or the letter door's, is a defect we hear about. The queue is Workers
 // Builds telling us a build of this Worker failed (builds.ts).
+//
+// An app's own fetch arrives here too, as the namespace's outbound Worker
+// (outbound.ts): one on its way out goes out, and one for the platform's own
+// zone is answered here as it always was, since a Worker's fetch to its own
+// routes never reaches it.
 let worker = withSentry(options, {
   ...router,
   fetch: async (req: Request, env: Env): Promise<Response> =>
-    slid(req, env, await router.fetch(req, env)),
+    env.CALLER && foreign(hostOf(req), env)
+      ? outbound(req, env)
+      : slid(req, env, await router.fetch(req, env)),
   queue: builds,
 })
 

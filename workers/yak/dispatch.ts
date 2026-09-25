@@ -34,6 +34,12 @@
 // headers and never the cookie), because it is a credential for every space
 // this person belongs to and the app is owed only this visit.
 //
+// And what the app's code sends out comes back through us. The namespace's
+// outbound Worker is this Worker (wrangler.toml, outbound.ts), and every
+// `get` below names the app and its visitor's role for it, so a fetch carrying
+// a connection's sentinel goes out with the key in its place, for that app
+// and that visitor alone (@yaks/egress).
+//
 // Local development has no dispatch namespace: it is remote-only
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/local-development/),
 // so under `wrangler dev` there is no worker to reach and every app serves its
@@ -42,6 +48,7 @@
 // that throws `needs to be run remotely`, which `nowhere` reads as the same
 // fact. `remote = true` in wrangler.toml would point local dev at the deployed
 // namespace; we do not set it, because a test must not need the account.
+import type { Caller } from '@yaks/egress'
 import { COOKIE, opened, seal } from './lib/token.ts'
 import type { App, Role, Space } from './directory.ts'
 import { storeName } from './directory.ts'
@@ -342,7 +349,13 @@ let called = async (
   let store = storeName(space, app)
   let worker
   try {
-    worker = env.DISPATCH.get(scriptName(store))
+    // Who every fetch this request makes is on behalf of, said to the
+    // outbound Worker (outbound.ts): the app, from the directory's row, and
+    // the visitor's role on it, from the kernel's own vouch.
+    let caller: Caller = { app: app.eid, level: who.role }
+    worker = env.DISPATCH.get(scriptName(store), {}, {
+      outbound: { CALLER: caller },
+    })
   } catch (e) {
     // Not the app's code — the namespace refusing to hand it over is ours.
     if (nowhere(e)) return null
@@ -732,42 +745,18 @@ export let drop = async (env: Env, store: string, forever = false) => {
   await answered(r)
 }
 
-// ── Secrets (T-32779) ──────────────────────────────────────────────────────
+// ── What the app's code reads as env.NAME (T-33446) ────────────────────────
 //
-// The first thing an app's own code is for: calling an outside service
-// without the page holding the key. A secret lives on the script and nowhere
-// else — never in the app's store, never in the journal, never in a tool's
-// answer — and the app's worker reads it as `env.NAME`, since the shim hands
-// its own env through. Cloudflare's own list answers names and types without
-// values, and the get door says the value is omitted
-// (https://developers.cloudflare.com/api/resources/workers_for_platforms/subresources/dispatch/subresources/namespaces/subresources/scripts/subresources/secrets/methods/list/).
-//
-// A later deploy re-uploads the script with its binding list, which would
-// otherwise replace the secrets whole; `keep_bindings: ['secret_text']` in
-// `upload` above is what carries them across
+// Each connection an app uses is a binding on its script, by the name its
+// `uses` link gives (connections.ts `rebind`): the connection's sentinel, or
+// the key itself for a direct link. They are `secret_text` bindings so that a
+// direct key can never be read back, and so that a deploy carries them across:
+// a later upload replaces the binding list whole, and `keep_bindings:
+// ['secret_text']` in `upload` above is what keeps them
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/bindings/).
-
-// A binding is a JavaScript name in the app's own code, so it must be one.
-export let SECRET_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
-
-// A secret before any code, which is the natural order — a person hands over
-// their key and then asks for the thing that uses it. There is no script to
-// hold it yet, and the account API says so in its own words, `This Worker
-// does not exist on your account.`, which names nothing anyone can do about
-// it (C-32869 item 1). So the platform says what is missing and what fixes
-// it, and the raw sentence stays for every other Cloudflare refusal.
-export let NO_WORKER =
-  'this app has no worker yet, and a secret lives on the worker: write a ' +
-  'worker.js beside index.html (app_files) and app_deploy it, then set the ' +
-  'secret'
-
-let noScript = (e: unknown) =>
-  e instanceof Error && /does not exist on your account/i.test(e.message)
-
-let onScript = <T>(work: Promise<T>) =>
-  work.catch((e) => {
-    throw noScript(e) ? refuse('missing', NO_WORKER) : e
-  })
+// Nothing but `rebind` writes one. Cloudflare's own list answers names and
+// types without values
+// (https://developers.cloudflare.com/api/resources/workers_for_platforms/subresources/dispatch/subresources/namespaces/subresources/scripts/subresources/secrets/methods/list/).
 
 export let setSecret = (
   env: Env,
@@ -775,32 +764,30 @@ export let setSecret = (
   name: string,
   value: string,
 ) =>
-  onScript(
-    sent(env, `/${scriptName(store)}/secrets`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, text: value, type: 'secret_text' }),
-    }).then(answered),
-  )
+  sent(env, `/${scriptName(store)}/secrets`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name, text: value, type: 'secret_text' }),
+  }).then(answered)
 
 // The names, and only the names: whatever the API hands back, this reads the
 // name off each row and drops the rest, so no value can leave here even if a
-// later API decides to echo one.
-export let secrets = async (env: Env, store: string): Promise<string[]> => {
+// later API decides to echo one. Null is no script: an app with no worker has
+// nowhere to bind anything.
+export let secrets = async (
+  env: Env,
+  store: string,
+): Promise<string[] | null> => {
   let r = await sent(env, `/${scriptName(store)}/secrets`, {})
-  // No script yet is no secrets, not a failure: an app may be given its key
-  // before it is given its code.
   if (r.status == 404) {
     await r.body?.cancel()
-    return []
+    return null
   }
   let got = await answered(r) as { name?: unknown }[] | null
   return (got ?? []).map((s) => String(s.name ?? '')).filter(Boolean)
 }
 
 export let dropSecret = (env: Env, store: string, name: string) =>
-  onScript(
-    sent(env, `/${scriptName(store)}/secrets/${encodeURIComponent(name)}`, {
-      method: 'DELETE',
-    }).then(answered),
-  )
+  sent(env, `/${scriptName(store)}/secrets/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+  }).then(answered)

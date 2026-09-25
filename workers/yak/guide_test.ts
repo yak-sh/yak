@@ -187,8 +187,8 @@ let stored = () => {
 // an app to break at the first request (T-32780).
 Deno.test('the code page names the doors a worker is actually given', () => {
   let section = pageText('code')
-  // Every `env.NAME` the section names, minus the secrets, which are the
-  // app's own names and not the platform's.
+  // Every `env.NAME` the section names, minus the keys the person connected,
+  // which are the app's own names and not the platform's.
   let named = new Set(
     [...section.matchAll(/env\.([A-Z_]+)/g)].map((m) => m[1]),
   )
@@ -198,9 +198,9 @@ Deno.test('the code page names the doors a worker is actually given', () => {
   }
   for (let door of named) {
     if (door == 'STORE' || door == 'FILES') continue
-    // Anything else must read as a secret the person set, not a door.
+    // Anything else must read as a key the person connected, not a door.
     assert(
-      /app_secret_set|WEATHER_KEY/.test(section),
+      /connection_need/.test(section),
       `the code page shows env.${door} and never says where it came from`,
     )
   }

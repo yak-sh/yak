@@ -6,7 +6,7 @@ guide:
   brief: worker.js in front of an app's files
   description: >-
     worker.js in front of an app's files: which routes are yours, what env
-    holds (STORE, FILES, and the secrets you set), what the request reports
+    holds (STORE, FILES, and the keys the person connected), what the request reports
     about who is asking, the CPU and subrequest limits, and whole workers to
     copy.
 ---
@@ -27,8 +27,9 @@ Write one when the app has to do something a page cannot be trusted with, or
 cannot do at all:
 
 - **A key.** An API key in a page is a key you have given away — anyone with the
-  link can read it out of the source. `app_secret_set` puts one on the app's
-  script, where only the worker sees it. This is the reason most workers exist.
+  link can read it out of the source. `connection_need` asks the person for one,
+  and the worker calls out with it without ever holding it. This is the reason
+  most workers exist.
 - **A machine calling in.** A webhook, a form post from somewhere else, a cron
   on another service: none of them run your page, so none of them can use the
   client.
@@ -56,8 +57,9 @@ write is what runs:
     }
 
 `req` is the visitor's own request, `env` holds the bindings for the app's store
-and files along with any secrets you have set, and `ctx` is the runtime's. There
-is no build step: the file is uploaded as-is at `app_deploy` and run as-is.
+and files along with every key the person has connected, and `ctx` is the
+runtime's. There is no build step: the file is uploaded as-is at `app_deploy`
+and run as-is.
 
 To use a different server output, put `wrangler.jsonc` (or `wrangler.json`) at
 the app root with `{"main":"dist/server.mjs"}`. `main` is the app-relative
@@ -312,11 +314,11 @@ A request from your worker never re-enters your worker, so
 
 ## The rest of env
 
-Every secret you set is on `env` under the name you gave it — `env.WEATHER_KEY`,
-`env.STRIPE`. The service binding the platform uses to build `STORE`, `APP` and
-`FILES` is there too, as `env.KERNEL`; it is plumbing — it wants absolute URLs
-and a grant header it will not hand you — and those three bindings are what it
-is for. Reach for those.
+Every connection the app uses is on `env` under its name — `env.WEATHER`,
+`env.OPENAI` (below). The service binding the platform uses to build `STORE`,
+`APP` and `FILES` is there too, as `env.KERNEL`; it is plumbing — it wants
+absolute URLs and a grant header it will not hand you — and those three bindings
+are what it is for. Reach for those.
 
 An app may carry `wrangler.jsonc` or `wrangler.json` beside `worker.js`. The
 supported keys are `main` (the app-relative server source path, `worker.js` by
@@ -333,7 +335,7 @@ permanently deleted; the app's 30 days in the trash keep them too. A declared
 binding keeps its name, including `STORE`, `FILES` or `APP`; otherwise those
 names are the convenience bindings described above.
 
-### Taking money is not one of your secrets
+### Taking money is not one of your keys
 
 A worker that charges somebody does **not** hold a Stripe key. Selling is a
 platform endpoint — `POST ./api/pay/checkout`, which your worker calls through
@@ -377,41 +379,57 @@ What they do not prove:
   belongs to. Other cookies are left alone, so a cookie your own page set is
   still there.
 
-## Secrets
+## Keys
 
-    app_secret_set(app, name: 'WEATHER_KEY', value: '<the key>')
-    app_secret_list(app)      → the names, never a value
-    app_secret_remove(app, name: 'WEATHER_KEY')
+    connection_need(app, integration: 'weather', hosts: ['api.weatherapi.com'])
+    connection_list()          → what is connected, and which app reads which
 
-The value goes onto the app's own script and nowhere else. It is not in the
-app's data, not in its history, not in any version, and **no tool can read it
-back** — `app_secret_list` returns names only, and does so by reading the name
-off each row and dropping everything else, so no future API that decided to echo
-a value could leak one through it. Ask the person for the value. Never invent
-one.
+An app never holds a key. `connection_need` says what it needs — a built
+integration by name, or a name of your own with the hosts its key may be sent to
+— and the person pastes the key, or signs in, on the space's connections page
+(`<space>.yaks.app/_yaks/connections`). It goes from there to the vault; it is
+never in this chat, the app's data, its history or any tool's answer. Never ask
+the person to paste a key to you, and never invent one.
 
-The name is a binding your code writes as `env.NAME`, so it must be a JavaScript
-identifier: letters, digits and underscores, not starting with a digit, up to 64
-characters. Setting a name that is already there replaces it.
+What the worker reads, as `env.WEATHER` (the integration's name in capitals, or
+the `binding` you give), is a **sentinel**: a string that stands for the key.
+Put it wherever the service wants its key — a header, the query, the body:
 
-Order matters a little. A secret lives on the script, so there must be a script:
-set one before the app has ever deployed a `worker.js` and the refusal explains
-that and tells you to write one first. `app_secret_list` on an app with no
-script reports that it has no secrets rather than failing. Secrets survive later
-deploys — the upload keeps them explicitly — so you set a key once and redeploy
-as often as you like.
+    let got = await fetch(
+      'https://api.weatherapi.com/v1/current.json?q=Paris&key=' + env.WEATHER,
+    )
 
-Two things secrets are not:
+Every fetch the worker makes leaves through yaks.app, which sends it on with the
+key in the sentinel's place — only to the hosts the connection names, and only
+over https. A sentinel is useless anywhere else, so one that leaks is nothing to
+worry about. Until the person connects it, `env.WEATHER` is not there; say so
+rather than failing.
 
-- Not copied by an install. An installed copy is a new script; its own owner
-  sets their own keys. A published app that needs a key should say so in its
-  `about` line.
-- Not readable by the page. That is the point. If the page needs the answer, the
-  worker fetches it and hands back only the part the page needs.
+Only someone with a role on the app may call out through it. A worker that
+answers everybody (a public page's weather) needs the person to open the
+connection to anyone, on the same page; until then a signed-out visitor's call
+comes back `403` from yaks.app, saying so.
 
-Without the platform's Cloudflare token configured, the three secret tools
-refuse outright — there is nowhere to put a value — while a deploy still puts
-the app's files out and reports that the worker was not uploaded.
+A key the service wants transformed before it is sent — a request signature, AWS
+SigV4, Basic auth's base64 — never appears verbatim, so it cannot be swapped.
+`direct: true` hands the worker the key itself instead. Use it only for that.
+
+A page's own fetches never pass through yaks.app, so a sentinel in one goes out
+as it is. An app with no worker sends the call through the platform instead:
+`./api/env` answers the sentinels this visitor may call out with, by name, and
+`./api/fetch?url=` sends a call on to that address with the key in the
+sentinel's place, answering what the service answered:
+
+    let env = await (await fetch('./api/env')).json()
+    let got = await fetch('./api/fetch?url=' + encodeURIComponent(
+      'https://api.weatherapi.com/v1/current.json?q=Paris&key=' + env.WEATHER,
+    ))
+
+It sends only a call carrying a sentinel, and a direct key never reaches a page.
+
+Keys are not copied by an install. An installed copy is a new app; its own
+person connects their own. A published app that needs a key should say so in its
+`about` line.
 
 ## The limits
 

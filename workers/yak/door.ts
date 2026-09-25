@@ -17,15 +17,23 @@ import { hop } from './lib/hops.ts'
 export type Fetcher = { fetch(req: Request): Promise<Response> }
 
 // The dispatch namespace binding, the slice we ask of it (env.ts): a name in,
-// a fetcher out. `get` throws for a script that is not there, and the docs
-// give only the message's prefix to know it by
+// a fetcher out, and what its outbound Worker is handed for every fetch that
+// script makes (wrangler.toml `outbound.parameters`). `get` throws for a
+// script that is not there, and the docs give only the message's prefix to
+// know it by
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/dynamic-dispatch/).
 //
 // Here rather than in dispatch.ts, which is what uses it: a binding's slice is
 // what env.ts is made of, and naming this one from dispatch.ts made the whole
 // of that module — and everything it reaches — part of the type graph of
 // anything that reads `Env`. That is the same reason `Fetcher` is here.
-export type Dispatch = { get(name: string): Fetcher }
+export type Dispatch = {
+  get(
+    name: string,
+    args?: Record<string, unknown>,
+    options?: { outbound?: Record<string, unknown> },
+  ): Fetcher
+}
 
 /** The store the directory lives in, named the way every app's store is. Its
  * slugs are the platform's own and never move, so the name is a constant.

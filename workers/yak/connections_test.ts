@@ -1,9 +1,10 @@
 // The connections page's verbs and the webhook door, over the in-process
 // platform with the D1 stand-in as its vault: a pasted key ends up in the
-// vault and nowhere else, a seal's state reaches the page, and a webhook lands
-// in the app's store only when its signature holds.
+// vault and nowhere else, a seal's state reaches the page, an app calls out
+// with it only as its link allows, and a webhook lands in the app's store only
+// when its signature holds.
 import { assert, assertEquals } from '@std/assert'
-import { integrationEid, need } from '@yaks/connections'
+import { envOf, integrationEid, need } from '@yaks/connections'
 import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
 import { isHandle } from '@yaks/secrets'
@@ -20,6 +21,7 @@ import { directory, over, storeName } from './directory.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { platform } from './harness.ts'
 import { KERNEL, meta } from './meta.ts'
+import { outbound, outboundPlugin } from './outbound.ts'
 import { answered, routed } from './plugin.ts'
 import { minted, type Who } from './session.ts'
 import { vaultOf } from './vault.ts'
@@ -307,6 +309,132 @@ slow(
     }
     let [mine] = await his()
     assertEquals([mine.integration, mine.status], ['Cal', 'connected'])
+  },
+)
+
+// Every request the kernel sends out while `fn` runs, answered by `answer`.
+let wired = async (
+  answer: (r: Request) => Response,
+  fn: (sent: Request[]) => Promise<void>,
+) => {
+  let sent: Request[] = []
+  let was = globalThis.fetch
+  globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    let r = new Request(input, init)
+    sent.push(r)
+    return Promise.resolve(answer(r))
+  }
+  try {
+    await fn(sent)
+  } finally {
+    globalThis.fetch = was
+  }
+}
+
+slow(
+  'an app calls out with the key in its sentinel’s place, for whom its link allows, and its worker is bound to it',
+  async () => {
+    let s = await setup()
+    s.p.env.CF_WORKERS_TOKEN = 'cf'
+    s.p.env.CF_ACCOUNT = 'acct'
+    await s.at.apply([{
+      entity: { eid: '$app' },
+      doc: { title: 'Notes' },
+      app: {
+        slug: 'notes',
+        space: s.space.eid,
+        version: 0,
+        access: 'public',
+        store: 'ada/notes.a1',
+      },
+    }], KERNEL)
+    let app = (await s.dir.app(s.space, 'notes'))!
+    let c = ctxOf(s.p.env)
+    let made = await c.graph.apply(
+      await need(c.graph.read, {
+        owner: s.space.eid,
+        app: app.eid,
+        integration: 'Hub',
+        hosts: ['api.hub.test'],
+      }),
+    )
+    let eid = made.find((b) => b.connection)!.entity.eid
+    let bound: Request[] = []
+    await wired(
+      (r) =>
+        Response.json({ success: true, result: r.method == 'GET' ? [] : {} }),
+      async (sent) => {
+        await s.post({ do: 'key', connection: eid, key: 'sk-hub' })
+        bound = sent
+      },
+    )
+    let { HUB } = await envOf(ctxOf(s.p.env), app.eid)
+    assert(HUB.startsWith('yak_sentinel_'))
+    // Kept, the key's sentinel is bound as the name the app's code reads.
+    let put = bound.find((r) => r.method == 'PUT')!
+    assertEquals(put.url.split('/scripts/')[1], 'ada_notes_a1/secrets')
+    assertEquals(await put.json(), {
+      name: 'HUB',
+      text: HUB,
+      type: 'secret_text',
+    })
+    let call = (to = 'https://api.hub.test/v1') =>
+      new Request(`${to}?key=${HUB}`, { headers: { 'x-api-key': HUB } })
+    let page = async (path: string, req: Request, role: 'viewer' | null) =>
+      (await answered([outboundPlugin], {
+        env: s.p.env,
+        req,
+        path,
+        space: s.space,
+        app,
+        who: { person: null, role },
+        refuse: () => new Response(null, { status: 403 }),
+        json: (status) => new Response(null, { status }),
+      }))!
+    await wired((r) => new Response(r.url), async (sent) => {
+      let out = (level: 'viewer' | null, to?: string) =>
+        outbound(call(to), {
+          ...s.p.env,
+          CALLER: { app: app.eid, level },
+        })
+      assertEquals(await (await out('viewer')).text(), sent[0].url)
+      assertEquals(
+        [sent[0].url, sent[0].headers.get('x-api-key')],
+        ['https://api.hub.test/v1?key=sk-hub', 'sk-hub'],
+      )
+      // A stranger, or another host, is refused before anything is sent.
+      assertEquals((await out(null)).status, 403)
+      assertEquals((await out('viewer', 'https://evil.test/')).status, 403)
+      assertEquals(sent.length, 1)
+      // A page asks for its sentinels, and sends the call through the door.
+      assertEquals(
+        await (await page('/env', new Request('https://x/'), null)).json(),
+        {},
+      )
+      assertEquals(
+        await (await page('/env', new Request('https://x/'), 'viewer')).json(),
+        { HUB },
+      )
+      let door = (to: string) =>
+        new Request(
+          `https://ada.yaks.app/notes/api/fetch?url=${encodeURIComponent(to)}`,
+          { headers: { cookie: 'yak_session=mine' } },
+        )
+      assertEquals(
+        (await page('/fetch', door('https://api.hub.test/'), 'viewer')).status,
+        400,
+      )
+      let res = await page(
+        '/fetch',
+        door(`https://api.hub.test/v2?key=${HUB}`),
+        'viewer',
+      )
+      assertEquals(await res.text(), 'https://api.hub.test/v2?key=sk-hub')
+      assertEquals(sent[1].headers.get('cookie'), null)
+      // Opened to anyone, a stranger calls out through it too.
+      await s.post({ do: 'open', connection: eid, app: app.eid })
+      assertEquals((await out(null)).status, 200)
+    })
   },
 )
 

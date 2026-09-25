@@ -100,9 +100,6 @@ slow(
         // puts the files back, this puts the store back.
         'store_restore',
         'app_set',
-        'app_secret_set',
-        'app_secret_list',
-        'app_secret_remove',
         'app_delete',
         'app_restore',
         'app_errors',
@@ -139,6 +136,10 @@ slow(
         'memory_save',
         'memory_recall',
         'app_stats',
+        // Then what an app's worker calls out with: a connection the person
+        // connects, which the agent only says is needed (connections.ts).
+        'connection_need',
+        'connection_list',
         // And the post room's own two (letters.ts, T-34149), a plugin of
         // their own because they answer bundles rather than a sentence.
         'mail_list',

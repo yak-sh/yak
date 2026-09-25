@@ -37,6 +37,8 @@ import {
   connectionsDoc,
   type Ctx,
   disconnect,
+  envOf,
+  INTEGRATION,
   keyed,
   known,
   list,
@@ -46,6 +48,7 @@ import {
   USES,
   using,
 } from '@yaks/connections'
+import { edgeEid } from '@yaks/edge'
 import { PROVISIONAL, provisionalDoc } from '@yaks/effects'
 import type { Bundle, Comp } from '@yaks/graph'
 import { hooked, refusal } from '@yaks/hook'
@@ -53,7 +56,13 @@ import { mode, reads } from '@yaks/member'
 import { reveal, SECRET, secretsDoc } from '@yaks/secrets'
 import { toolsDoc } from '@yaks/tools'
 import type { Service } from './connected.ts'
-import { type App, appStore, directory, type Space } from './directory.ts'
+import {
+  type App,
+  appStore,
+  directory,
+  type Space,
+  storeName,
+} from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { apex, url } from './host.ts'
@@ -63,6 +72,17 @@ import type { Answer, Door, Plugin } from './plugin.ts'
 import { MANAGE, managePath, signInAt } from './route.ts'
 import { caught } from './sentry.ts'
 import { domainOf, vouched, type Who, whoIs } from './session.ts'
+import {
+  APP,
+  inApp,
+  inSpace,
+  refuse,
+  type Row,
+  SPACE,
+  str,
+  text,
+  worded,
+} from './tool.ts'
 import { vaulted, vaultOf } from './vault.ts'
 
 /** Where a service sends a person back after they sign in there. */
@@ -98,13 +118,26 @@ export type Shown = {
   keyed: boolean
   /** the hosts its key may be sent to */
   hosts: string[]
-  /** the apps that call out through it, by title */
-  apps: string[]
+  /** the apps that call out through it */
+  apps: Using[]
   /** why it is not finished yet: the note on its `provisional` mark */
   saving: string
   /** why its key could not be saved: the text beside its `error` or
    * `exception` */
   failed: string
+}
+
+/** One app calling out through a connection, as the page shows it. */
+export type Using = {
+  /** the app's eid */
+  app: string
+  title: string
+  /** what its code reads it as, env.NAME */
+  binding: string
+  /** handed the key itself rather than a sentinel */
+  direct: boolean
+  /** anyone using the app may call out through it, not only its members */
+  anyone: boolean
 }
 
 /** What the connections page is drawn from. */
@@ -132,16 +165,66 @@ let clients = (env: Env): Record<string, { id: string; secret?: string }> => {
 let readOf = (env: Env): Read => (q) =>
   typeof q == 'string' ? meta(env).query(q) : []
 
-/** The verbs' context: the directory, the vault, and the person acting. */
-export let ctxOf = (env: Env, who: Who): Ctx => {
+/** The verbs' context: the directory, the vault, and the person acting — or
+ * the kernel, for what nobody in particular does (a token refreshed on the way
+ * out, an app's bindings brought up to date). */
+export let ctxOf = (env: Env, who?: Who): Ctx => {
   return {
     graph: {
       read: readOf(env),
-      apply: (bundles) => meta(env).apply(bundles, vouched(who)),
+      apply: (bundles) => meta(env).apply(bundles, who ? vouched(who) : KERNEL),
     },
     vault: vaultOf(env),
     client: (i) => clients(env)[i.name],
     redirect: url(env, CALLBACK),
+  }
+}
+
+/**
+ * An app's worker brought up to date with the connections it uses
+ * (dispatch.ts): each `uses` link's binding set to the connection's sentinel,
+ * or to its key for a direct link, and a binding whose connection holds no
+ * credential any more taken off. A name no link gives is not this function's
+ * to touch. An app with no worker has nothing to bind — its first deploy calls
+ * this again — and neither has a deploy with no vault or no Cloudflare token.
+ */
+export let rebind = async (env: Env, store: string, app: string) => {
+  if (!env.CF_WORKERS_TOKEN || !vaulted(env)) return
+  // Asked for when it is used: dispatch.ts reaches plugins.ts through the
+  // pages it answers with, and plugins.ts is what names this module.
+  let { dropSecret, secrets, setSecret } = await import('./dispatch.ts')
+  let had = await secrets(env, store)
+  if (!had) return
+  let want = await envOf(ctxOf(env), app)
+  let links = await readOf(env)(`.edge.from=${app}&.${USES}!&*`)
+  let owned = links.map((l) => comp(l, USES).binding)
+  for (let [name, value] of Object.entries(want)) {
+    await setSecret(env, store, name, value)
+  }
+  for (let name of had) {
+    if (owned.includes(name) && !(name in want)) {
+      await dropSecret(env, store, name)
+    }
+  }
+}
+
+// The apps that use a connection, asked before it changes: a connection ended
+// takes its links with it, and its apps are linked to a new one.
+let usersOf = async (env: Env, connection: string): Promise<string[]> =>
+  (await readOf(env)(`.edge.to=${connection}&.${USES}!&*`))
+    .map((l) => String(comp(l, 'edge').from))
+
+// The same for each of those apps: after a key is kept, a sign-in finished,
+// or a connection ended. The person's act is done either way, so a worker
+// that could not be brought up to date is ours to hear about, not theirs.
+let rebound = async (env: Env, apps: string[]) => {
+  let dir = dirOf(env)
+  for (let eid of apps) {
+    let at = await dir.appAt(eid)
+    if (!at) continue
+    await rebind(env, storeName(at.space, at.app), eid).catch((e) =>
+      caught(e, { request: 'rebind', app: at.app.slug })
+    )
   }
 }
 
@@ -184,9 +267,17 @@ export let connectionsOf = async (
         account: String(c.account ?? ''),
         keyed: !i || keyed(i),
         hosts: i?.hosts ?? [],
-        apps: to.map((l) =>
-          named.get(String(comp(l, 'edge').from)) ?? 'another app'
-        ),
+        apps: to.map((l): Using => {
+          let app = String(comp(l, 'edge').from)
+          let u = comp(l, USES)
+          return {
+            app,
+            title: named.get(app) ?? 'another app',
+            binding: String(u.binding ?? ''),
+            direct: u.direct == true,
+            anyone: u.anyone == true,
+          }
+        }),
         saving: String(comp(b, PROVISIONAL).note ?? ''),
         failed: failed
           ? String(comp(b, 'content').body ?? 'the key could not be saved')
@@ -323,8 +414,27 @@ export let connecting = async (
     if (!b || (owner != space.eid && owner != who.person)) {
       return no('That connection is not here any more.')
     }
+    let apps = await usersOf(env, eid)
+    // Opening a connection to anyone using an app, or closing it to its
+    // members again, is the person's act on one link (@yaks/member
+    // `callsOut`); what the app's code reads does not move.
+    if (act == 'open' || act == 'close') {
+      let app = field('app')
+      if (!apps.includes(app)) return no('That app does not use it any more.')
+      await c.graph.apply([{
+        entity: { eid: edgeEid(app, USES, eid) },
+        [USES]: { anyone: act == 'open' },
+      }])
+      return {
+        say: act == 'open'
+          ? 'Anyone using the app may call out through it now.'
+          : 'Only its members may call out through it now.',
+        no: false,
+      }
+    }
     if (act == 'disconnect') {
       await disconnect(c, eid)
+      await rebound(env, apps)
       return { say: 'Disconnected.', no: false }
     }
     if (owner == space.eid && await asking(c.graph.read, eid)) {
@@ -333,6 +443,7 @@ export let connecting = async (
     if (act == 'signin') return signingIn(req, env, c, space, who, eid)
     if (!key) return no('Paste the key first.')
     await connect(c, eid, { key })
+    await rebound(env, apps)
     let [now] = await c.graph.read(`.eid=${eid}&.${CONNECTION}&*`)
     return now?.error || now?.exception
       ? no(String(comp(now, 'content').body ?? 'The key could not be saved.'))
@@ -382,6 +493,7 @@ let callback: Door = async ({ env, req, path, space }) => {
       attempt: held.attempt,
       callback: req.url,
     })
+    await rebound(env, await usersOf(env, held.connection))
     return answer(told(back, 'connected'))
   } catch (e) {
     caught(e, { request: `GET ${CALLBACK}` })
@@ -532,12 +644,149 @@ let hook: Door = async ({ env, req, path, space: slug }) => {
   return new Response(null, { status: 204 })
 }
 
+// ---- the tools (T-38030) ---------------------------------------------------
+
+// Where the person connects what an app needs.
+let page = (env: Env, space: Space) =>
+  `https://${space.slug}.${apex(env)}${managePath('connections')}`
+
+// One app's use of a connection, as an agent reads it.
+let said = (u: Comp, title: string) =>
+  `${title} reads it as env.${u.binding}${
+    u.direct ? ' (the key itself)' : ' (a sentinel)'
+  }${u.anyone ? ', open to anyone using it' : ''}`
+
+// @yaks/connections' two tools, as rows of this roster: the space and app are
+// named the way every platform tool names them, and the directory is where a
+// connection lives. What a key is and where it goes are the person's, on the
+// connections page; no row here ever carries one.
+let CONNECTIONS: Row[] = [
+  {
+    name: 'connection_need',
+    destructive: false,
+    idempotent: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        integration: str(
+          'the outside service: a built integration by name, or a name of ' +
+            'your own for any other key (then give hosts)',
+        ),
+        hosts: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'for a key of your own naming: the API hosts it may ' +
+            'be sent to, e.g. ["api.weatherapi.com"]',
+        },
+        scopes: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'what the app asks for, for a service signed in to; ' +
+            "omit for the integration's own",
+        },
+        binding: str(
+          "the name worker.js reads it as, env.NAME; omit for the service's " +
+            'name in capitals',
+        ),
+        direct: {
+          type: 'boolean',
+          description: 'hand worker.js the key itself rather than a ' +
+            'sentinel, only for a key it must sign with before sending',
+        },
+      },
+      required: ['app', 'integration'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, who } = await inApp(ctx, args, true)
+      let c = ctxOf(ctx.env, who)
+      let strs = (v: unknown) => Array.isArray(v) ? v.map(String) : []
+      let made = await c.graph.apply(
+        await need(c.graph.read, {
+          owner: space.eid,
+          app: app.eid,
+          integration: text(args.integration, 'integration'),
+          hosts: strs(args.hosts),
+          scopes: strs(args.scopes),
+          binding: args.binding == null ? undefined : String(args.binding),
+          direct: args.direct == null ? undefined : args.direct == true,
+        }).catch((e) => {
+          throw refuse('arguments', e instanceof Error ? e.message : String(e))
+        }),
+      )
+      // The connection: made now, or the one the app already used.
+      let eid = made.find((b) => !b.edge && !b[INTEGRATION])!.entity.eid
+      let [b] = await c.graph.read(`.eid=${eid}&.${CONNECTION}&*`)
+      let [l] = await c.graph.read(
+        `.eid=${edgeEid(app.eid, USES, eid)}&.${USES}!&*`,
+      )
+      let status = comp(b, CONNECTION).status
+      let u = comp(l, USES)
+      if (status == 'connected') {
+        await rebind(ctx.env, storeName(space, app), app.eid)
+      }
+      return {
+        space,
+        text: `${space.slug}/${app.slug} ${said(u, 'worker.js')}. ` +
+          (status == 'connected'
+            ? `It is connected, and env.${u.binding} answers now.`
+            : `It is not connected yet: the person pastes the key or signs ` +
+              `in at ${page(ctx.env, space)} — never in this chat — and ` +
+              `env.${u.binding} answers from then on.`) +
+          (u.direct ? '' : ` Send env.${u.binding} wherever the service ` +
+            'wants its key (a header, the query, the body); it is swapped for ' +
+            'the key on the way out, only to the hosts the connection names.') +
+          (u.anyone ? '' : ' Only a member of the app may call out ' +
+            'through it until the person opens it to anyone on that page.'),
+      }
+    },
+  },
+  {
+    name: 'connection_list',
+    readOnly: true,
+    input: {
+      type: 'object',
+      properties: { space: SPACE },
+    },
+    run: async (ctx, args) => {
+      let { space } = await inSpace(ctx, args)
+      let read = readOf(ctx.env)
+      let all = await list(read, space.eid)
+      let titles = new Map(
+        (await ctx.dir.apps(space)).map((a) => [a.eid, a.slug]),
+      )
+      let rows = all.filter((b) => b[CONNECTION]).map((b) => {
+        let c = comp(b, CONNECTION)
+        let uses = all.filter((l) => comp(l, 'edge').to == b.entity.eid)
+          .map((l) =>
+            said(
+              comp(l, USES),
+              titles.get(String(comp(l, 'edge').from)) ?? 'another app',
+            )
+          )
+        return `${c.integration}: ${c.status}${
+          c.account ? ` as ${c.account}` : ''
+        }${uses.length ? `; ${uses.join('; ')}` : ''}`
+      })
+      return {
+        space,
+        text: rows.length
+          ? `${rows.join('\n')}\n\nThe person connects each at ` +
+            `${page(ctx.env, space)}. No key is ever shown.`
+          : `${space.slug} has no connections. connection_need says what ` +
+            'an app needs.',
+      }
+    },
+  },
+]
+
 /**
  * Connections, as what they contribute (plugin.ts): the words the directory
  * keeps them in — the connection and its integration, the secret its
  * credential is, the mark it wears while that is saved, and the text a
- * failure is said in beside `error` — the two doors, and the Connect button
- * at an app's address.
+ * failure is said in beside `error` — the two tools, the two doors, and the
+ * Connect button at an app's address.
  */
 export let connectionsPlugin: Plugin = {
   name: 'connections',
@@ -547,6 +796,7 @@ export let connectionsPlugin: Plugin = {
     provisionalDoc,
     { title: 'content', $defs: { content: toolsDoc.$defs!.content } },
   ],
+  tools: CONNECTIONS.map(worded),
   routes: [callback, hook],
   answers: [own],
 }

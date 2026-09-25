@@ -15,6 +15,7 @@ import { idReport, parse } from './wrangler_app.ts'
 import { meta } from './meta.ts'
 import { refuse } from './tool.ts'
 import { caught } from './sentry.ts'
+import { rebind } from './connections.ts'
 
 type Read = (path: string) => Promise<Uint8Array<ArrayBuffer> | null>
 
@@ -98,6 +99,12 @@ export let deployWorker = async (
     }
   }
   worker = await upload(env, store, modules, config, bound)
+  // What its code reads as env.NAME: a first upload is the first script there
+  // is to bind the app's connections to (connections.ts). The worker is up
+  // either way, so a binding that did not take is ours to hear about.
+  await rebind(env, store, app.eid).catch((e) =>
+    caught(e, { request: 'rebind', app: app.slug })
+  )
   // An upload can finish after permanent deletion's script DELETE. Reconcile
   // that late effect while its ids are still in hand, before recording a release.
   if (!(await meta(env).query(`.eid=${app.eid}&.app!`)).length) {
