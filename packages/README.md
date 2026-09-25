@@ -356,10 +356,11 @@ grouped approximately by function, **not** by dependency order.
   what is running in it, and the target string tmux itself accepts. Components
   only — the session is the transcript, the process is the pid, and the terminal
   is the third, separate fact.
-- **[@yaks/tunnel](./tunnel)** — a machine linked to a hosted space without an
+- **[@yaks/tunnel](./tunnel)** — a hosted space's tunnel to a machine without an
   open port: the Cloudflare Tunnel and Workers VPC Service that carry a Worker's
   requests to one service on the machine, the account calls that make and remove
-  them, and `./service`, which keeps `cloudflared` running there.
+  them, `./routes`, which keeps what comes through the link to the paths the
+  machine opened, and `./service`, which keeps `cloudflared` running there.
 - **[@yaks/platform](./platform)** — what a hosting platform keeps about the
   apps it serves: `space`, `app`, `deploy`, `published`, `hostname`,
   `installed`, `plan`, `meter`, `signin` and `report`. Membership of a space is

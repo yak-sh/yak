@@ -4,7 +4,8 @@
 // A host does not serve requests because it was composed. It serves them
 // because its config names this package among its plugins, and this is the one
 // module that turns routes into a handler: every listed plugin's own routes
-// (`host.routes`), with `/apply`, `/query` and `/ws` behind them. A config
+// (`host.routes`), with `/apply`, `/query` and `/ws` behind them, and every
+// plugin's filter (`host.filters`) in front of all of it. A config
 // that does not name this package composes a host with no handler, no `serve`
 // verb, and no reason to ask the other plugins for routes nobody would answer.
 //
@@ -13,15 +14,24 @@
 
 import type { Graph } from '@yaks/graph'
 import type { Authenticate } from './actor.ts'
-import { api, DOORS, type Handler, type Route, routed } from './route.ts'
+import {
+  api,
+  DOORS,
+  type Filter,
+  type Handler,
+  type Route,
+  routed,
+} from './route.ts'
+import { refuse } from './refuse.ts'
 
 /** What this facet reads off the host it is composing into: the graph its
- * endpoints answer over, who that host says is calling, and every route the
- * listed plugins contributed. */
+ * endpoints answer over, who that host says is calling, every route the
+ * listed plugins contributed, and every filter they put in front. */
 export type Hosting = {
   graph: Graph
   who: Authenticate
   routes: Route[]
+  filters?: Filter[]
 }
 
 // How closely a route names a path: an exact path over any prefix, and a
@@ -31,7 +41,8 @@ let reach = (r: Route) => exact(r) ? Infinity : r.path.length
 
 /**
  * The host's one request handler: each plugin's route, and this package's
- * three endpoints.
+ * three endpoints, behind every plugin's filter. A filter that throws answers
+ * the request with that refusal, and nothing past it runs.
  *
  * The route that names the path most closely wins, whichever plugin listed it:
  * an exact path over a prefix, a longer prefix over a shorter, and plugin order
@@ -42,7 +53,7 @@ let reach = (r: Route) => exact(r) ? Infinity : r.path.length
 export let handler = (host: Hosting): Handler => {
   let routes = host.routes
   let door = api({ graph: host.graph, authenticate: host.who })
-  return (request) => {
+  let answer: Handler = (request) => {
     let path = new URL(request.url).pathname
     let route = routes.filter((r) => routed(r, request.method, path))
       .reduce<Route | undefined>(
@@ -52,5 +63,14 @@ export let handler = (host: Hosting): Handler => {
     return route && (exact(route) || !DOORS.includes(path))
       ? route.handle(request)
       : door(request)
+  }
+  let filters = host.filters ?? []
+  return filters.length == 0 ? answer : async (request) => {
+    try {
+      for (let f of filters) await f(request)
+    } catch (err) {
+      return refuse(err, request)
+    }
+    return answer(request)
   }
 }

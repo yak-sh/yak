@@ -117,8 +117,8 @@ export type Stripe = {
   detailsSubmitted: boolean
 }
 
-/** The machine a space is linked to (tunnel.ts, @yaks/tunnel): the tunnel it
- * dials out on, the Workers VPC Service the link's gateway is bound to, and
+/** The tunnel a space has to a machine (tunnel.ts, @yaks/tunnel): the tunnel
+ * it dials out on, the Workers VPC Service the tunnel's gateway is bound to, and
  * whether the platform made the pair or only records one made elsewhere. */
 export type Tunnel = { id: string; service: string; adopted: boolean }
 
@@ -157,9 +157,9 @@ export type Space = {
   // never moved, which is almost all of them; each entry redirects to the
   // address it lives at now, and stays reserved until somebody forgets it.
   slugs: string[]
-  // The machine this space is linked to, whose opened paths an app's worker
-  // reaches through a `vpc_services` door (tunnel.ts `reach`). Null for a
-  // space with no linked machine, which is almost all of them.
+  // The tunnel this space has to a machine, whose opened paths an app's
+  // worker reaches through a `vpc_services` door (tunnel.ts `reach`). Null for
+  // a space with no tunnel, which is almost all of them.
   tunnel: Tunnel | null
 }
 export type App = {
@@ -635,7 +635,7 @@ let stripeOf = (r: Row): Stripe | null =>
     }
     : null
 
-// The link, or null where no machine is: a row missing either id links
+// The tunnel, or null where no machine is: a row missing either id names
 // nothing a worker could bind to.
 let tunnelOf = (r: Row): Tunnel | null =>
   r.tunnel?.id && r.tunnel.service

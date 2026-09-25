@@ -193,7 +193,7 @@ contributes nothing to that process.
 | `./rules`   | `graph`    | `rules?: (host, options) => Plugin[]`, query `extend?`, and at most one `authenticate?` |
 | `./tools`   | `graph`    | `runs?: (host, options) => Runs`, keyed by declared tool name                           |
 | `./effects` | `effects`  | `effects?: (host, options) => Handlers`, keyed by declared effect name                  |
-| `./routes`  | `web`      | `routes?: (host, options) => Route[]`, and at most one `handler?`                       |
+| `./routes`  | `web`      | `routes?: (host, options) => Route[]`, `filter?`, and at most one `handler?`            |
 | `./service` | its plugin | `service?: (host, options, signal)` for a duty                                          |
 | `.`         |            | Public types and library functions; not loaded by `compose`                             |
 

@@ -72,6 +72,7 @@ All exports are available from `@yaks/api`:
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `api`, `Options`, `Handler`                                     | Build and type the request handler                                                    |
 | `Route`, `routed`                                               | Describe and match application routes by method and exact path or trailing `*` prefix |
+| `Filter`                                                        | A check a plugin puts in front of every route, refusing a request by throwing         |
 | `Authenticate`, `signed`                                        | Identify a caller and replace client-supplied write attribution                       |
 | `ask`, `write`, `pour`, `CHUNK`                                 | Query, JSON write, and streaming import handlers; import chunk size                   |
 | `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`                 | Manage subscriptions and their messages                                               |
@@ -243,11 +244,13 @@ back is those routes beside `/apply`, `/query` and `/ws`, and it becomes
 `host.handler`. The route that names a path most closely answers it: an exact
 path over a prefix, a longer prefix over a shorter, and plugin order between
 equals. The three doors are exact paths, so a plugin's catch-all (`/*`) answers
-only what nothing else claims. A config that does not list this package composes
-a host with no handler, and the routes the other plugins would have added are
-never asked for ([@yaks/cli](../cli/README.md)). `/mcp` is one of those routes,
-contributed by [@yaks/mcp](../mcp/README.md) when a config lists that package
-too.
+only what nothing else claims. In front of all of it stand the plugins' filters
+(`host.filters`): each sees every request first, and one that throws answers the
+request with that refusal, so nothing behind it runs. A config that does not
+list this package composes a host with no handler, and the routes the other
+plugins would have added are never asked for ([@yaks/cli](../cli/README.md)).
+`/mcp` is one of those routes, contributed by [@yaks/mcp](../mcp/README.md) when
+a config lists that package too.
 
 [`vocab.json`](./vocab.json) declares one tool, `serve`, and
 [`tools.ts`](./tools.ts) implements it: it binds a TCP port and answers with

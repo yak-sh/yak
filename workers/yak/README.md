@@ -160,7 +160,7 @@ it. Values never appear here or in the repo.
 | `SESSION_SECRET`                                                                               | yes      | any long random string                                                                                     | no session verifies, no sign-in code is issued                                                |
 | `MAIL_TOKEN`, `MAIL_ACCOUNT`                                                                   | yes      | Cloudflare Email Sending API token and the account tag                                                     | sign-in code letters do not send                                                              |
 | `CF_ANALYTICS_TOKEN`                                                                           | yes      | API token, **Account · Account Analytics · Read** (see Analytics)                                          | the meter and Visits report counts are off                                                    |
-| `CF_WORKERS_TOKEN`                                                                             | yes      | API token, **Workers Scripts, D1, R2, Vectorize · Edit; Connectivity Directory · Bind** (see App bindings) | an app's files deploy, its `worker.js` does not; no space links a machine                     |
+| `CF_WORKERS_TOKEN`                                                                             | yes      | API token, **Workers Scripts, D1, R2, Vectorize · Edit; Connectivity Directory · Bind** (see App bindings) | an app's files deploy, its `worker.js` does not; no space gets a tunnel                       |
 | `BUILD_HOOK`                                                                                   | prod     | deploy hook URL for `main` (Workers & Pages → `yak` → Settings → Builds)                                   | a failed push build is filed, never built again                                               |
 | `CF_TUNNEL_TOKEN`                                                                              | tunnels  | API token, **Cloudflare Tunnel · Edit; Connectivity Directory · Admin**                                    | connect answers 503, and so do rotate and disconnect on a pair the platform made; adopt works |
 | `CF_HOSTNAMES_TOKEN`                                                                           | domains  | API token, **Zone · SSL and Certificates · Edit** on the zone in `CF_ZONE`                                 | `domain_attach` refuses, saying so                                                            |
@@ -260,11 +260,11 @@ potential boundary, because another Store may have completed it.
 Apps may request D1, R2 and Vectorize resources in `wrangler.jsonc` or
 `wrangler.json`. `CF_WORKERS_TOKEN` needs these account permissions: **Workers
 Scripts · Edit; D1 · Edit; Workers R2 Storage · Edit; Vectorize · Edit;
-Connectivity Directory · Bind**, the last for the gateway in front of a linked
-space's machine (tunnel.ts), which is the only script bound to its VPC Service.
-The token stays a Worker secret. Resources follow the app's immutable store
-handle through renames; config removal unbinds them and permanent app erasure
-deletes them. The ordinary 30-day trash keeps them for restoration.
+Connectivity Directory · Bind**, the last for the gateway of a space's tunnel to
+a machine (tunnel.ts), which is the only script bound to its VPC Service. The
+token stays a Worker secret. Resources follow the app's immutable store handle
+through renames; config removal unbinds them and permanent app erasure deletes
+them. The ordinary 30-day trash keeps them for restoration.
 
 Vectorize creation takes `dimensions` and `metric`, or `preset`, on its binding
 entry; these extend Wrangler's binding configuration because a new index needs

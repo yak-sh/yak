@@ -142,7 +142,7 @@ export type Env = {
   // has no local implementation — it is remote-only — so under `wrangler dev`
   // the binding is undefined and every app serves its files. The token is the
   // owner's (T-32781); without it an app with a worker deploys its files and
-  // is told so. The same token uploads each linked space's gateway
+  // is told so. The same token uploads the gateway of each space's tunnel
   // (tunnel.ts), which binds a VPC Service, so it also holds the Connectivity
   // Directory Bind role.
   DISPATCH?: Dispatch

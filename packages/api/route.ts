@@ -30,6 +30,12 @@ export type Route = {
   handle: Handler
 }
 
+/** A check every request passes before any route or door answers it: a
+ * plugin's own word on which requests it lets in. It refuses one by throwing
+ * (a `Denied`, say, which answers 403), and anything it does not throw at goes
+ * on. */
+export type Filter = (request: Request) => void | Promise<void>
+
 /** Whether a route matches this request's method and path. */
 export let routed = (route: Route, method: string, path: string): boolean =>
   (route.method == '*' || route.method == method) &&

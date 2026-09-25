@@ -1021,7 +1021,7 @@ export let platformDoc: VocabDoc = {
  * the same words, and a mark declared here and nowhere else would make the
  * directory the one store those doors cannot answer for.
  *
- * `tunnelDoc` is the `tunnel` a space wears when a machine is linked to it
+ * `tunnelDoc` is the `tunnel` a space wears when it has a tunnel to a machine
  * (tunnel.ts): the directory is the only store that holds one.
  *
  * A plugin's words land between the core documents and the platform's own

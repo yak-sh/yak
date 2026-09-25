@@ -186,27 +186,28 @@ export let feeNow = (session: string): Promise<Fee> =>
 export let setFee = (session: string, bps: number): Promise<Fee> =>
   said(posted(apex(FEE), { bps: String(bps) }, session))
 
-/** The machine a space is linked to (workers/yak/tunnel.ts), and, answered
- * once by the change that made them, the token its `cloudflared` runs with and
- * the secret the link's gateway adds to every request. */
-export type Linked = {
+/** The tunnel a space has to a machine (workers/yak/tunnel.ts), and, answered
+ * once by the change that made it, the token its `cloudflared` runs with. */
+export type SpaceTunnel = {
   space: string
   tunnel: { id: string; service: string; adopted: boolean } | null
   token?: string
-  secret?: string
 }
 
 export let TUNNEL = '/api/tunnel'
 
-/** The link as it stands; the space's owner or the platform's may ask. */
-export let linkNow = (session: string, space: string): Promise<Linked> =>
+/** The tunnel as it stands; the space's owner or the platform's may ask. */
+export let tunnelNow = (
+  session: string,
+  space: string,
+): Promise<SpaceTunnel> =>
   said(sent(apex(`${TUNNEL}?space=${encodeURIComponent(space)}`), session))
 
 /** A change to it: `do` is connect, rotate, disconnect or adopt. */
-export let relink = (
+export let setTunnel = (
   session: string,
   fields: Record<string, string>,
-): Promise<Linked> => said(posted(apex(TUNNEL), fields, session))
+): Promise<SpaceTunnel> => said(posted(apex(TUNNEL), fields, session))
 
 // The doors answer JSON both ways: a refusal says why in the same shape every
 // other door here refuses in (identity.ts `unauthorized`). The path is read

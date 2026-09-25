@@ -30,17 +30,17 @@ export let configured = async (read: Read) => {
   return parsed
 }
 
-// Why a `vpc_services` door cannot reach the machine linked to the app's
-// space, or null when it can; tunnel.ts `reach` asks again on every request.
-// Only an app built in the space reaches it: an installed copy's code was
-// written elsewhere, and a link reaches into the owner's own machine.
+// Why a `vpc_services` door cannot reach the machine the app's space has a
+// tunnel to, or null when it can; tunnel.ts `reach` asks again on every
+// request. Only an app built in the space reaches it: an installed copy's code
+// was written elsewhere, and a tunnel reaches into the owner's own machine.
 let unreached = (space: Space, app: App, config: Config) =>
   !config.vpc_services?.length
     ? null
     : app.installed
-    ? `refused vpc_services: ${app.slug} is an installed copy, and only an app built in ${space.slug} reaches the machine linked to it`
+    ? `refused vpc_services: ${app.slug} is an installed copy, and only an app built in ${space.slug} reaches the machine its tunnel goes to`
     : !space.tunnel
-    ? `refused vpc_services: no machine is linked to ${space.slug}; its owner links one first`
+    ? `refused vpc_services: ${space.slug} has no tunnel to a machine; its owner makes one first`
     : null
 
 export let deployWorker = async (

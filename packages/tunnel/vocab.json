@@ -8,7 +8,7 @@
       "component": true,
       "type": "object",
       "wire": false,
-      "description": "the Cloudflare Tunnel that links a machine to this entity, and the Workers VPC Service the link's gateway reaches it through",
+      "description": "the Cloudflare Tunnel that reaches a machine from this entity, and the Workers VPC Service the tunnel's gateway reaches it through",
       "properties": {
         "id": {
           "type": "string",
@@ -18,12 +18,12 @@
         "service": {
           "type": "string",
           "stamped": true,
-          "description": "the VPC Service's id, which the link's gateway is bound to"
+          "description": "the VPC Service's id, which the tunnel's gateway is bound to"
         },
         "adopted": {
           "type": "boolean",
           "stamped": true,
-          "description": "made outside whatever keeps this record, which only records it: unlinking forgets the two ids and never removes or rotates what they name"
+          "description": "made outside whatever keeps this record, which only records it: removing the record forgets the two ids and never removes or rotates what they name"
         }
       }
     }

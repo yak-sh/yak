@@ -236,12 +236,12 @@ Deno.test('app bindings survive redeploy, removal and trash until permanent dele
   }
 })
 
-Deno.test('a vpc_services door needs a linked machine, and the script never holds it', async () => {
+Deno.test('a vpc_services door needs a tunnel, and the script never holds it', async () => {
   let k = await fixture()
   try {
     let service = '66666666-7777-4888-8999-aaaaaaaaaaaa'
     await k.write({ vpc_services: [{ binding: 'BOX', service_id: 'theirs' }] })
-    assertStringIncludes(await k.tool('app_deploy'), 'no machine is linked')
+    assertStringIncludes(await k.tool('app_deploy'), 'has no tunnel')
     assertEquals(k.uploads.length, 0)
     let space = (await k.dir.space('ada'))!
     await stamp(k.env, {

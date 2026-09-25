@@ -77,7 +77,7 @@ let spaces = async (vars: Partial<Env> = TOKENS) => {
       },
     }],
   })
-  let gateway = `/workers/dispatch/namespaces/yak-apps/scripts/link-${
+  let gateway = `/workers/dispatch/namespaces/yak-apps/scripts/tunnel-${
     (await dir.space('ada'))!.eid
   }`
   let door = async (who: string | null, fields: Record<string, string>) => {
@@ -110,7 +110,6 @@ Deno.test('only the platform adopts a pair, since its ids name the platform’s 
   assertEquals((await door(JEFF, { ...adopt, service: 'x' })).status, 400)
   let adopted = await door(JEFF, adopt)
   assertEquals(adopted.body.tunnel, { id: T, service: S, adopted: true })
-  assertEquals(typeof adopted.body.secret, 'string')
   assertEquals((await door(ADA, { space: 'ada' })).body, {
     space: 'ada',
     tunnel: { id: T, service: S, adopted: true },
@@ -118,14 +117,13 @@ Deno.test('only the platform adopts a pair, since its ids name the platform’s 
   assertEquals(cf.made, [`PUT ${gateway}`])
 })
 
-Deno.test('an adopted pair rotates only its secret, and unlinking leaves the tunnel alone', async () => {
+Deno.test('an adopted pair rotates only its gateway, and disconnecting leaves the tunnel alone', async () => {
   using cf = account()
   let { scenario, door, gateway } = await spaces()
   using _ = scenario
-  let first = (await door(JEFF, adopt)).body.secret
+  await door(JEFF, adopt)
   let rotated = (await door(ADA, { space: 'ada', do: 'rotate' })).body
   assertEquals(rotated.token, undefined)
-  assertEquals(rotated.secret == first, false)
   assertEquals((await door(ADA, { space: 'ada', do: 'disconnect' })).body, {
     space: 'ada',
     tunnel: null,
@@ -137,24 +135,23 @@ Deno.test('an adopted pair rotates only its secret, and unlinking leaves the tun
   ])
 })
 
-Deno.test('no gateway can be uploaded without the workers token, so nothing links', async () => {
+Deno.test('no gateway can be uploaded without the workers token, so no tunnel is made', async () => {
   let { scenario, door } = await spaces({ CF_ACCOUNT: 'acct' })
   using _ = scenario
   assertEquals((await door(JEFF, adopt)).body.error.code, 'no_token')
   assertEquals((await door(ADA, { space: 'ada' })).body.tunnel, null)
 })
 
-Deno.test('connect makes a pair and its gateway, answering the token and secret once', async () => {
+Deno.test('connect makes a pair and its gateway, answering the token once', async () => {
   using cf = account()
   let { scenario, door, gateway } = await spaces()
   using _ = scenario
-  let connect = { space: 'ada', do: 'connect', port: '5174' }
+  let connect = { space: 'ada', do: 'connect', port: '5173' }
   let made = (await door(ADA, connect)).body
   assertEquals(made.tunnel, { id: T, service: S, adopted: false })
   assertEquals(made.token, 'the-token')
-  assertEquals(typeof made.secret, 'string')
   let read = (await door(ADA, { space: 'ada' })).body
-  assertEquals([read.token, read.secret], [undefined, undefined])
+  assertEquals(read.token, undefined)
   assertEquals((await door(ADA, connect)).status, 409)
   let rotated = (await door(ADA, { space: 'ada', do: 'rotate' })).body
   assertEquals(rotated.token, 'a-new-token')
@@ -173,7 +170,7 @@ Deno.test('connect makes a pair and its gateway, answering the token and secret 
 
 // ── The door an app's worker reaches the machine through ────────────────────
 
-let linked: Space = {
+let tunneled: Space = {
   eid: 's1',
   slug: 'jeff',
   title: 'jeff',
@@ -209,7 +206,7 @@ let mail: App = {
 let itself: Who = { person: mail.eid, role: 'editor' }
 
 // The request an app's worker sends back through its binding, and what the
-// gateway it lands at was handed; `gone` is a link with no gateway yet. The
+// gateway it lands at was handed; `gone` is a tunnel with no gateway yet. The
 // namespace refuses a `get` without the caller its outbound Worker declares,
 // the way Cloudflare's does.
 let reach = async (
@@ -239,19 +236,22 @@ let reach = async (
     env: {
       DISPATCH: { get },
     } as unknown as Env,
-    req: new Request('https://jeff.yaks.app/mail/api/link/mail/inbound?to=a', {
-      method: 'POST',
-      headers: {
-        'x-yak-grant': 'the-app-grant',
-        'x-yak-person': 'a-liar',
-        [HEADER]: 'forged',
-        cookie: 'theme=dark',
-        'content-type': 'text/plain',
+    req: new Request(
+      'https://jeff.yaks.app/mail/api/tunneled/mail/inbound?to=a',
+      {
+        method: 'POST',
+        headers: {
+          'x-yak-grant': 'the-app-grant',
+          'x-yak-person': 'a-liar',
+          [HEADER]: 'forged',
+          cookie: 'theme=dark',
+          'content-type': 'text/plain',
+        },
+        body: 'a letter',
       },
-      body: 'a letter',
-    }),
-    path: '/link/mail/inbound',
-    space: over.space ?? linked,
+    ),
+    path: '/tunneled/mail/inbound',
+    space: over.space ?? tunneled,
     app: over.app ?? mail,
     who: over.who ?? itself,
     refuse: () => new Response(null, { status: 403 }),
@@ -267,16 +267,16 @@ Deno.test('only the app itself reaches the machine, and only an app built in the
   assertEquals(await code((await reach({ who: visitor })).res), 'not_the_app')
   let copy = { ...mail, installed: { from: 'x' } } as unknown as App
   assertEquals(await code((await reach({ app: copy })).res), 'installed')
-  let alone = { ...linked, tunnel: null }
-  assertEquals(await code((await reach({ space: alone })).res), 'unlinked')
+  let alone = { ...tunneled, tunnel: null }
+  assertEquals(await code((await reach({ space: alone })).res), 'no_tunnel')
 })
 
 Deno.test('the app’s request goes to its space’s gateway with the platform’s words taken off', async () => {
   let { res, handed, named } = await reach()
   assertEquals(await res.text(), 'from the machine')
-  assertEquals(named, ['link-s1'])
+  assertEquals(named, ['tunnel-s1'])
   let [r] = handed
-  assertEquals(r.url, 'http://link/mail/inbound?to=a')
+  assertEquals(r.url, 'http://machine/mail/inbound?to=a')
   assertEquals(r.method, 'POST')
   assertEquals(await r.text(), 'a letter')
   assertEquals(r.headers.get('content-type'), 'text/plain')
@@ -285,7 +285,7 @@ Deno.test('the app’s request goes to its space’s gateway with the platform�
   }
 })
 
-Deno.test('a link with no gateway yet says so', async () => {
+Deno.test('a tunnel with no gateway yet says so', async () => {
   let { res } = await reach({}, true)
   assertEquals(res.status, 503)
   assertEquals(await code(res), 'no_gateway')

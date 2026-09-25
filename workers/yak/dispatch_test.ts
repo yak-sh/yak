@@ -495,8 +495,8 @@ Deno.test('a vpc_services name is a door to the kernel as the app, never a bindi
       {},
     )
     assertEquals(asked.map((r) => r.url), [
-      'https://jeff.yaks.app/mail/api/link/mail/inbound?to=a',
-      'https://jeff.yaks.app/mail/api/link/hooks/y',
+      'https://jeff.yaks.app/mail/api/tunneled/mail/inbound?to=a',
+      'https://jeff.yaks.app/mail/api/tunneled/hooks/y',
     ])
     assertEquals(asked[0].method, 'POST')
     assertEquals(await asked[0].text(), 'a letter')

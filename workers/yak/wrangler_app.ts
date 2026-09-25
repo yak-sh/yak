@@ -33,7 +33,7 @@ export type Config = {
   durable_objects?: { bindings: { name: string; class_name: string }[] }
   migrations?: Record<string, unknown>[]
   vectorize?: Index[]
-  // The machine linked to the app's space (@yaks/tunnel, tunnel.ts), under
+  // The machine the app's space has a tunnel to (@yaks/tunnel, tunnel.ts), under
   // each name its worker reaches it by: a door the shim hands over
   // (dispatch.ts `shim`), never a Cloudflare binding. The service is the
   // space's, never the app's: a config names the door and nothing else.
@@ -275,7 +275,7 @@ export let allowlist = (value: unknown): Parsed => {
       if (!name(row.binding, path + 'binding')) continue
       if ('service_id' in row) {
         report.push(
-          `ignored ${path}service_id: ${row.binding} reaches the machine linked to this space`,
+          `ignored ${path}service_id: ${row.binding} reaches the machine this space's tunnel goes to`,
         )
       }
       found.push({ binding: row.binding })

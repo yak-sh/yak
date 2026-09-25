@@ -124,20 +124,20 @@ export let scriptName = (store: string) =>
 // It is deliberately tiny and deliberately first: it is the only thing
 // between the app's code and the grant.
 //
-// `links` are the names the app's config gives the machine linked to its space
-// (`vpc_services`, tunnel.ts). Each is a door like the others, and never a
-// binding: `env.BOX.fetch('http://localhost/mail/inbound')` is the app itself
-// asking the kernel for `/api/link/mail/inbound`, and the kernel decides
-// whether it goes on to the machine. A Cloudflare binding on the app's script
-// would hand its code the machine whole, since a module reaches every binding
-// its script holds whatever the shim passes it.
-export let shim = (main = WORKER, links: string[] = []) =>
+// `tunneled` are the names the app's config gives the machine its space's
+// tunnel reaches (`vpc_services`, tunnel.ts). Each is a door like the others,
+// and never a binding: `env.BOX.fetch('http://localhost/mail/inbound')` is the
+// app itself asking the kernel for `/api/tunneled/mail/inbound`, and the
+// kernel decides whether it goes on to the machine. A Cloudflare binding on the
+// app's script would hand its code the machine whole, since a module reaches
+// every binding its script holds whatever the shim passes it.
+export let shim = (main = WORKER, tunneled: string[] = []) =>
   `import app from ${JSON.stringify('./' + main)}
 export * from ${JSON.stringify('./' + main)}
 
 let GRANT = '${GRANT}'
 let SELF = '${SELF}'
-let LINKS = ${JSON.stringify(links)}
+let TUNNELED = ${JSON.stringify(tunneled)}
 
 export default {
   fetch(req, env, ctx) {
@@ -162,12 +162,12 @@ export default {
     let api = '/' + slug + '/api/'
     // The machine: a URL as a binding to it takes one, or a path, and only
     // its path and query go on.
-    let link = {
+    let machine = {
       fetch: (input, init) => {
         let asked = input instanceof Request ? input : null
-        let at = new URL(asked ? asked.url : String(input), 'http://link')
+        let at = new URL(asked ? asked.url : String(input), 'http://machine')
         let out = new Request(
-          origin + api + 'link' + at.pathname + at.search,
+          origin + api + 'tunneled' + at.pathname + at.search,
           asked ?? init,
         )
         if (asked && init) out = new Request(out, init)
@@ -182,7 +182,7 @@ export default {
       // An explicitly requested binding keeps its name, even when it names
       // one of the convenience doors supplied to apps without that binding.
       ...env,
-      ...Object.fromEntries(LINKS.map((name) => [name, link])),
+      ...Object.fromEntries(TUNNELED.map((name) => [name, machine])),
     }, ctx)
   },
 }
@@ -739,8 +739,8 @@ export let upload = async (
     bytes: string | Uint8Array<ArrayBuffer>,
     type: string,
   ) => body.append(name, new Blob([bytes], { type }), name)
-  let links = (config.vpc_services ?? []).map((v) => v.binding)
-  part(WRAPPER, shim(config.main, links), ESM)
+  let tunneled = (config.vpc_services ?? []).map((v) => v.binding)
+  part(WRAPPER, shim(config.main, tunneled), ESM)
   for (let m of modules) part(m.name, m.bytes, moduleType(m.name))
   return named(
     await answered(

@@ -77,7 +77,7 @@ import { open } from '@yaks/sqlite/db'
 // names the shape of what it passes through without importing a line of HTTP:
 // the package that answers requests is a plugin a config lists, never a
 // dependency of this one.
-import type { Authenticate, Handler, Route } from '@yaks/api'
+import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
 import { adopt, fields as searched, find, search } from '@yaks/fts'
 import {
   type Effects,
@@ -150,6 +150,9 @@ export type Host = {
    * names them. Gathered only by a process serving `web` where a plugin
    * hosts them: nothing else here answers a request. */
   routes: Route[]
+  /** every filter the listed plugins put in front of those routes
+   * ({@link RoutesFacet.filter}), gathered where the routes are. */
+  filters: Filter[]
   /** every tool declared across the plugins, joined to the code behind it,
    * with this graph's own generic tier (@yaks/graph `tier`) first. One list: a
    * command line runs it, and a transport that lists tools lists it. */
@@ -298,6 +301,9 @@ let undeclared = (plugin: string, name: string) =>
  * answers no request and never asks the others for routes. */
 export type RoutesFacet = {
   routes?: (host: Host, options: Options) => Route[]
+  /** a check every request passes before any route answers it; a plugin's
+   * word on which requests reach this host at all (@yaks/tunnel's link) */
+  filter?: (host: Host, options: Options) => Filter
   handler?: (host: Host, options: Options) => Handler
 }
 
@@ -664,6 +670,7 @@ export let compose = async (
     // it is being assembled.
     let answering: Handler | undefined
     let paths: Route[] = []
+    let filters: Filter[] = []
     let made: NamedTool[] | undefined
     let ranked: Search | undefined
     let calls: Runner | undefined
@@ -703,6 +710,9 @@ export let compose = async (
       },
       get routes(): Route[] {
         return paths
+      },
+      get filters(): Filter[] {
+        return filters
       },
       get tools(): NamedTool[] {
         if (!made) throw new Error('the tools are not built yet')
@@ -870,6 +880,7 @@ export let compose = async (
     let [mod, options] = hosts[0] ?? []
     if (mod?.handler) {
       paths = served.flatMap(([r, o]) => r.routes?.(host, o) ?? [])
+      filters = served.flatMap(([r, o]) => r.filter ? [r.filter(host, o)] : [])
       answering = mod.handler(host, options ?? {})
     }
     // The duties: work that is nobody's request and everybody's to do. The
