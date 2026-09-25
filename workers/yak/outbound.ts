@@ -7,8 +7,9 @@
 // of the kernel (wrangler.toml `outbound.service`); what makes a request one
 // of these is `env.CALLER`, which only an outbound call carries — dispatch.ts
 // sets it per request from the directory's row and the kernel's own vouch, and
-// no request anybody sends can. A fetch to the platform's own zone is not one
-// of these: index.ts answers it in-process, as the router always has.
+// no request anybody sends can. A fetch to the platform's own zone goes out
+// and comes back in like anybody's (wrangler.toml
+// `global_fetch_strictly_public`).
 //
 // The fetch door (T-33450): a page's own fetch never passes through us, so an
 // app with no worker asks `./api/env` for its sentinels and sends the call to
@@ -75,15 +76,18 @@ let OURS =
   /^(cookie|host|origin|referer|content-length|connection|x-real-ip|true-client-ip|(x-yak|cf|x-forwarded|sec)-)/i
 
 // `./api/env`: the sentinel for each connected connection the app uses, by the
-// name its code reads it by, where this visitor may call out through it. A
-// direct link's key is for a worker's code and never a page's.
+// name its code reads it by, where this visitor may call out through it: a
+// shared one as its link allows, and their own where the app asks each person.
+// A direct link's key is for a worker's code and never a page's.
 let envDoor: Answer = async ({ env, path, app, who }) => {
   if (path != '/env') return null
   let out: Record<string, string> = {}
-  for (let r of await used(ctxOf(env), app.eid)) {
+  for (let r of await used(ctxOf(env), app.eid, who.person)) {
     let u = (r.link[USES] ?? {}) as Comp
     if (u.direct || typeof u.binding != 'string') continue
-    if (callsOut(u.anyone == true, who.role)) out[u.binding] = r.sentinel
+    if (u.each || callsOut(u.anyone == true, who.role)) {
+      out[u.binding] = r.sentinel
+    }
   }
   return Response.json(out)
 }
@@ -112,7 +116,7 @@ let fetchDoor: Answer = async ({ env, req, path, app, who, json }) => {
   }
   let res = await sent(
     env,
-    { app: app.eid, level: who.role },
+    { app: app.eid, level: who.role, person: who.person },
     new Request(to, { method: req.method, headers, body }),
   ).catch(() => json(502, 'unanswered', `${new URL(to).host} did not answer`))
   // A cookie from somebody else's service would be set on this app's origin.

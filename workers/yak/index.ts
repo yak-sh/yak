@@ -677,13 +677,12 @@ let router = {
 // Builds telling us a build of this Worker failed (builds.ts).
 //
 // An app's own fetch arrives here too, as the namespace's outbound Worker
-// (outbound.ts): one on its way out goes out, and one for the platform's own
-// zone is answered here as it always was, since a Worker's fetch to its own
-// routes never reaches it.
+// (outbound.ts), and goes out: one for the platform's own zone comes back in
+// from the internet like anybody's (global_fetch_strictly_public).
 let worker = withSentry(options, {
   ...router,
   fetch: async (req: Request, env: Env): Promise<Response> =>
-    env.CALLER && foreign(hostOf(req), env)
+    env.CALLER
       ? outbound(req, env)
       : slid(req, env, await router.fetch(req, env)),
   queue: builds,

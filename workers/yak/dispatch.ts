@@ -351,8 +351,8 @@ let called = async (
   try {
     // Who every fetch this request makes is on behalf of, said to the
     // outbound Worker (outbound.ts): the app, from the directory's row, and
-    // the visitor's role on it, from the kernel's own vouch.
-    let caller: Caller = { app: app.eid, level: who.role }
+    // the visitor and their role on it, from the kernel's own vouch.
+    let caller: Caller = { app: app.eid, level: who.role, person: who.person }
     worker = env.DISPATCH.get(scriptName(store), {}, {
       outbound: { CALLER: caller },
     })

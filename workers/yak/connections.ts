@@ -556,6 +556,11 @@ let own: Answer = async ({ env, req, path, space, app, who, refuse }) => {
   }
   if (keyed(i) && !key) return page(no('Paste the key first.'))
   try {
+    // Their own is read by the name the app's ask gives it.
+    let [ask] = await c.graph.read(
+      `.eid=${edgeEid(app.eid, USES, asked.entity.eid)}&.${USES}`,
+    )
+    let binding = comp(ask, USES).binding
     let [made] = await c.graph.apply(
       await need(c.graph.read, {
         owner: who.person,
@@ -563,6 +568,7 @@ let own: Answer = async ({ env, req, path, space, app, who, refuse }) => {
         integration,
         scopes: (comp(asked, CONNECTION).scopes ?? []) as string[],
         each: true,
+        binding: typeof binding == 'string' ? binding : undefined,
       }),
     )
     let eid = made.entity.eid
@@ -651,6 +657,9 @@ let page = (env: Env, space: Space) =>
   `https://${space.slug}.${apex(env)}${managePath('connections')}`
 
 // One app's use of a connection, as an agent reads it.
+let integrationOf = (b: Bundle | undefined) =>
+  String(comp(b, CONNECTION).integration)
+
 let said = (u: Comp, title: string) =>
   `${title} reads it as env.${u.binding}${
     u.direct ? ' (the key itself)' : ' (a sentinel)'
@@ -695,6 +704,12 @@ let CONNECTIONS: Row[] = [
           description: 'hand worker.js the key itself rather than a ' +
             'sentinel, only for a key it must sign with before sending',
         },
+        each: {
+          type: 'boolean',
+          description: 'each person who uses the app connects their own ' +
+            'account (their calendar, their inbox), rather than the owner ' +
+            'connecting one for everyone; only they call out through it',
+        },
       },
       required: ['app', 'integration'],
     },
@@ -711,6 +726,7 @@ let CONNECTIONS: Row[] = [
           scopes: strs(args.scopes),
           binding: args.binding == null ? undefined : String(args.binding),
           direct: args.direct == null ? undefined : args.direct == true,
+          each: args.each == true,
         }).catch((e) => {
           throw refuse('arguments', e instanceof Error ? e.message : String(e))
         }),
@@ -723,6 +739,18 @@ let CONNECTIONS: Row[] = [
       )
       let status = comp(b, CONNECTION).status
       let u = comp(l, USES)
+      if (u.each) {
+        let at = `https://${space.slug}.${apex(ctx.env)}/${app.slug}`
+        return {
+          space,
+          text: `${space.slug}/${app.slug} asks each person to connect their ` +
+            `own ${integrationOf(b)}: link them to ${at}/api/connections/` +
+            `${encodeURIComponent(integrationOf(b))}, where the platform ` +
+            `draws the Connect button. The page reads their sentinel as ` +
+            `${u.binding} from ./api/env and sends the call through ` +
+            './api/fetch?url=…; only they call out through it.',
+        }
+      }
       if (status == 'connected') {
         await rebind(ctx.env, storeName(space, app), app.eid)
       }

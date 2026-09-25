@@ -163,7 +163,7 @@ Deno.test('what the worker sends out is said to be the app’s, for this visitor
     who,
   )
   assertEquals(asked, ['jeff_recipes', {}, {
-    outbound: { CALLER: { app: 'a1', level: 'editor' } },
+    outbound: { CALLER: { app: 'a1', level: 'editor', person: 'p1' } },
   }])
 })
 

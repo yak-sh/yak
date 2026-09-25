@@ -419,6 +419,11 @@ sentinel's place, answering what the service answered:
 
 It sends only a call carrying a sentinel, and a direct key never reaches a page.
 
+An app that reads each person's own account — their calendar, their inbox — asks
+with `each: true`. Link each person to the app's
+`./api/connections/<integration>`, where yaks.app draws the Connect button;
+`./api/env` then answers their own sentinel, and only they call out through it.
+
 Keys are not copied by an install. An installed copy is a new app; its own
 person connects their own. A published app that needs a key should say so in its
 `about` line.

@@ -111,7 +111,13 @@ Deno.test('connections: the space’s ask of each person offers nothing to conne
           account: '',
           keyed: true,
           hosts: [],
-          apps: ['Notes'],
+          apps: [{
+            app: 'n',
+            title: 'Notes',
+            binding: 'WEATHER',
+            direct: false,
+            anyone: false,
+          }],
           saving: '',
           failed: '',
         }],
@@ -126,6 +132,8 @@ Deno.test('connections: the space’s ask of each person offers nothing to conne
   let own = await drawn(true)
   assertStringIncludes(own, 'Paste the key for Weather')
   assertStringIncludes(own, 'value="disconnect">Remove')
+  assertStringIncludes(own, 'Notes reads it as <code>env.WEATHER</code>.')
+  assertEquals(own.includes('Open to anyone'), false)
 })
 
 Deno.test('askConnect: the app, the service, the one form, and the way back', async () => {

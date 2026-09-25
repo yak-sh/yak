@@ -201,6 +201,7 @@ let asks = async (
       integration,
       hosts,
       each: true,
+      binding: 'SKY',
     }),
   )
   let bob = crypto.randomUUID()
@@ -211,7 +212,7 @@ let asks = async (
     path = `/connections/${integration}`,
     host = 'ada.yaks.app',
   ) =>
-    (await answered([connectionsPlugin], {
+    (await answered([connectionsPlugin, outboundPlugin], {
       env: s.p.env,
       req: new Request(`https://${host}/notes/api${path}`, init),
       path,
@@ -254,10 +255,17 @@ slow(
     )
     let [mine] = await his()
     assertEquals(
-      [mine.integration, mine.status, mine.each, mine.apps],
+      [mine.integration, mine.status, mine.each, mine.apps.map((a) => a.title)],
       ['Weather', 'connected', true, ['Notes']],
     )
     assertEquals((await vaultOf(s.p.env).read(mine.eid))?.value, 'bob-key')
+    // His own is read by the name the app asks by, and handed to him alone.
+    let env = async (who: Who) =>
+      Object.keys(await (await door(who, undefined, '/env')).json())
+    assertEquals(
+      [await env(him), await env({ person: null, role: 'owner' })],
+      [['SKY'], []],
+    )
     let [asked] = (await s.shown()).list
     assertEquals([asked.each, asked.own, asked.status], [true, false, 'needed'])
     assertEquals(
@@ -395,7 +403,7 @@ slow(
       let out = (level: 'viewer' | null, to?: string) =>
         outbound(call(to), {
           ...s.p.env,
-          CALLER: { app: app.eid, level },
+          CALLER: { app: app.eid, level, person: null },
         })
       assertEquals(await (await out('viewer')).text(), sent[0].url)
       assertEquals(

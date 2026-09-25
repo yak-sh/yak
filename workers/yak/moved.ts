@@ -64,7 +64,7 @@ export default {
   // A new upload serves within a moment; until then the app answers as it did.
   for (let tries = 0; tries < 20; tries++) {
     let r = await env.DISPATCH!.get(scriptName(store), {}, {
-      outbound: { CALLER: { app: app.eid, level: null } },
+      outbound: { CALLER: { app: app.eid, level: null, person: null } },
     }).fetch(
       new Request('https://moved.invalid/', {
         headers: { 'x-yak-moved': word },
