@@ -30,3 +30,31 @@ Deno.test('a file opens in WAL with NORMAL sync and a busy timeout', () => {
     Deno.removeSync(dir, { recursive: true })
   }
 })
+
+Deno.test('a string of several statements runs every one', () => {
+  using sql = scratch()
+  sql.query('create table t (x); insert into t values (1), (2)', [])
+  assertEquals(sql.query('select x from t order by x', []), [{ x: 1 }, {
+    x: 2,
+  }])
+  assertThrows(
+    () => sql.query('insert into t values (?); insert into t values (?)', [3]),
+    Error,
+    'one statement',
+  )
+  assertEquals(sql.query('select count(*) as n from t', []), [{ n: 2 }])
+})
+
+Deno.test('a kept statement answers with the columns the schema now has', () => {
+  using sql = scratch()
+  sql.query('create table t (x)', [])
+  sql.query('insert into t values (1)', [])
+  assertEquals(sql.query('select * from t', []), [{ x: 1 }])
+  sql.query('alter table t add column y default 5', [])
+  assertEquals(sql.query('select * from t', []), [{ x: 1, y: 5 }])
+})
+
+let scratch = () => {
+  let sql = open(':memory:')
+  return { ...sql, [Symbol.dispose]: sql.close }
+}

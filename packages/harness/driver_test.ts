@@ -15,10 +15,7 @@ Deno.test('blob-backed graph remains writable after SQL failure and rolls back t
     } catch (caught) {
       error = caught
     }
-    // sqlite3_finalize reports the prior step failure too; both errors stay
-    // inspectable rather than a cleanup error replacing the original.
-    assertEquals(error instanceof AggregateError, true)
-    assertEquals((error as AggregateError).errors[0].message, 'test refusal')
+    assertEquals((error as Error).message, 'test refusal')
     assertEquals(h.sql.query('select * from blob_text', []), [])
     assertEquals(await h.g.read('.doc&*'), [])
     h.sql.exec('drop trigger refuse_doc')

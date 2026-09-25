@@ -1,6 +1,6 @@
 // The stand-in (not part of the published package — see deno.json): a Durable
-// Object's storage surface over jsr:@db/sqlite, so the adapter can be tested
-// without Cloudflare. The surface is small enough to imitate exactly — one
+// Object's storage surface over @yaks/sqlite's `open()`, so the adapter can be
+// tested without Cloudflare. The surface is small enough to imitate exactly — one
 // `exec`, one `transactionSync` — and imitating it exactly is the point:
 //
 //   it takes only SqlStorageValues     a boolean, a bigint or a byte array
@@ -17,12 +17,7 @@
 // so a bug this stand-in cannot see is a bug the runtime would not have shown
 // either.
 
-// The engine itself rather than @yaks/sqlite/db `open`: workerd runs every
-// statement of a script and refreshes a statement's columns after DDL, and a
-// Driver's `query` does neither. TODO(T-39499): test the adapter in workerd
-// and delete this stand-in.
-import '../sqlite/sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { open } from '@yaks/sqlite/db'
 import type { Vocab } from '@yaks/vocab'
 import { shop } from '../sqlite/testing.ts'
 import { type DurableStorage, prohibited, type SqlValue } from './sql.ts'
@@ -38,7 +33,7 @@ let REFUSED =
 // workerd's SQL authorizer, at the one place it bites an object that reads its
 // own schema: a statement that names a table Cloudflare owns is refused — read,
 // write or drop alike — while `sqlite_master` still lists it. There is no
-// authorizer callback to hang off @db/sqlite, so the identifiers a statement
+// authorizer callback to hang off the engine, so the identifiers a statement
 // mentions are what is checked; the runtime names the column too, which nothing
 // here can know.
 let WORD = /[A-Za-z_][A-Za-z0-9_$]*/g
@@ -89,71 +84,23 @@ export let durable = (): DurableStorage & {
   // The one alarm, as the runtime holds it: an instant or nothing, cleared by
   // the delivery that fires it.
   let alarm: number | null = null
-  let db = new Database(':memory:')
-  // sql.exec consumes/reset every row before returning; no cursor escapes.
-  // Bound native statements rather than waiting for JS GC to notice their
-  // off-heap cost (hundreds of Store requests share this connection).
-  let statements = new Map<string, ReturnType<typeof db.prepare>>()
-  // @db/sqlite caches column names on a prepared statement. SQLite recompiles
-  // its VM after DDL, but cannot refresh that JS metadata: discard the cache
-  // when either schema changes (including a transaction rolling DDL back).
-  let mainVersion = db.prepare('pragma main.schema_version')
-  let tempVersion = db.prepare('pragma temp.schema_version')
-  let schema = ''
-  let clear = () => {
-    for (let stmt of statements.values()) stmt.finalize()
-    statements.clear()
-  }
+  let db = open(':memory:')
+  let closed = false
   let depth = 0
+  // The runtime takes an ArrayBuffer; the engine underneath takes bytes.
   let run = (query: string, bindings: SqlValue[]) => {
-    if (!db.open) throw new Error('storage is disposed')
-    let version = `${mainVersion.value()}|${tempVersion.value()}`
-    if (version !== schema) {
-      clear()
-      schema = version
-    }
-    // The runtime takes an ArrayBuffer; the library underneath takes bytes.
-    let binds = bindings.map((b) =>
-      b instanceof ArrayBuffer ? new Uint8Array(b) : b
+    if (closed) throw new Error('storage is disposed')
+    return db.query(
+      query,
+      bindings.map((b) => b instanceof ArrayBuffer ? new Uint8Array(b) : b),
     )
-    try {
-      let stmt = statements.get(query)
-      if (!stmt) {
-        stmt = db.prepare(query)
-        if (!bindings.length && stmt.sql.trim().length < query.trim().length) {
-          stmt.finalize()
-          db.exec(query)
-          return []
-        }
-        if (statements.size >= 256) {
-          let key = statements.keys().next().value!
-          statements.get(key)!.finalize()
-          statements.delete(key)
-        }
-        statements.set(query, stmt)
-      }
-      return stmt.all(...binds) as Record<string, unknown>[]
-    } catch (e) {
-      // A statement SQLite will not prepare (a pragma script, a trigger body)
-      // still runs; it just has no rows. With bindings there is nothing to fall
-      // back to.
-      let failed = statements.get(query)
-      if (failed) {
-        statements.delete(query)
-        try {
-          failed.finalize()
-        } catch { /* preserve the step error */ }
-      }
-      if (bindings.length) throw e
-      db.exec(query)
-      return []
-    }
   }
   return {
     // Native SQLite allocations are invisible to the JS heap's GC pressure.
     // A scenario that owns this storage can release it at the end of the test.
     [Symbol.dispose]: () => {
-      if (db.open) db.close()
+      if (!closed) db.close()
+      closed = true
     },
     sql: {
       exec: (query, ...bindings) => {
@@ -189,12 +136,10 @@ export let durable = (): DurableStorage & {
         "select type, name from sqlite_master where name not like 'sqlite_%'",
         [],
       ) as { type: string; name: string }[]
-      clear()
-      db.exec('pragma writable_schema = off')
       for (let kind of ['trigger', 'view', 'index', 'table']) {
         for (let it of names.filter((n) => n.type == kind)) {
           try {
-            db.exec(`drop ${kind} if exists "${it.name}"`)
+            run(`drop ${kind} if exists "${it.name}"`, [])
           } catch { /* a shadow table its virtual table already took */ }
         }
       }
@@ -212,14 +157,14 @@ export let durable = (): DurableStorage & {
     // inner throw rolls back only the inner run.
     transactionSync: (body) => {
       let name = `do_tx_${depth++}`
-      db.exec(`savepoint ${name}`)
+      run(`savepoint ${name}`, [])
       try {
         let value = body()
-        db.exec(`release ${name}`)
+        run(`release ${name}`, [])
         return value
       } catch (e) {
-        db.exec(`rollback to ${name}`)
-        db.exec(`release ${name}`)
+        run(`rollback to ${name}`, [])
+        run(`release ${name}`, [])
         throw e
       } finally {
         depth--
