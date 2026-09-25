@@ -4,9 +4,9 @@
 // Three facts hold it up, and two of them belong to other packages.
 //
 // 1. The child outlives US. @yaks/process owns that: a launcher that exits
-//    immediately, a `setsid` wrapper inside its own `systemd-run --user
-//    --scope` unit, a pidfile, and a file holding the exit code — enough to
-//    pick the run back up later. The `process` component is stored on the
+//    immediately, a wrapper in a session of its own beyond the server's
+//    service manager, a pidfile, and a file holding the exit code — enough
+//    to pick the run back up later. The `process` component is stored on the
 //    session's own entity: one entity, one run. Nothing here reaps child
 //    processes.
 // 2. The file is the log. The child's stdout is written to @yaks/process's

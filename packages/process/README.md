@@ -63,14 +63,23 @@ await watch(processes)
 start. `watch()` resumes monitoring every stored process without an `exit`.
 `launch()` passes only the environment supplied in its specification.
 
-Launched processes run through a short-lived launcher and a `setsid` wrapper in
-a `systemd-run --user --scope` unit. The wrapper writes pid, exit-code, start,
-and end files. Its pidfile contains the wrapper's process-group ID and the
-child's PID. Monitoring uses signals and the files because the tracked program
-is not a direct child; this package does not call `waitpid` or reap children.
-This allows a child to outlive the process that opened the graph and be
-monitored again after restart. The implementation requires Linux, `setsid`, and
-a systemd user manager.
+Launched processes run through a short-lived launcher and a wrapper in a session
+and process group of its own. The wrapper writes a pidfile and an exit-code
+file; the launch writes a start file. The pidfile contains the wrapper's
+process-group ID and the child's PID. Monitoring uses signals and the files
+because the tracked program is not a direct child; this package does not call
+`waitpid` or reap children. This allows a child to outlive the process that
+opened the graph and be monitored again after restart.
+
+Only the detaching differs by operating system:
+
+| OS    | Detached by                                         | Needs                              |
+| ----- | --------------------------------------------------- | ---------------------------------- |
+| Linux | `systemd-run --user --scope`, then `setsid`         | util-linux, a systemd user manager |
+| macOS | perl's `setsid()`; launchd stops only a job's group | `/usr/bin/perl`                    |
+
+Any other OS is refused at launch. `opts.os` picks another OS's launcher, which
+is how a Linux machine tests the macOS one.
 
 The process that opens a graph is the **host**. `started()` returns the bundle
 that records the host's process entity, `ended()` records its exit, and

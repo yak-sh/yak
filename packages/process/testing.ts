@@ -19,6 +19,10 @@ import { processes } from './plugin.ts'
  * uses. */
 export let host: Vocab = loadVocab([processDoc, sessionDoc, toolsDoc, modelDoc])
 
+/** The launchers this machine can run: its own, and the macOS one, which
+ * needs only sh and perl. */
+export let launchers: string[] = [...new Set([Deno.build.os, 'darwin'])]
+
 /** A graph over an empty store, with the process plugin on it. */
 export let tracked = (): Graph =>
   graph({ storage: ram(host), vocab: host, plugins: [processes()] })

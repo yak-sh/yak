@@ -8,7 +8,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { EXIT, PROCESS, SERVICE } from './comp.ts'
-import { tracked, until } from './testing.ts'
+import { launchers, tracked, until } from './testing.ts'
 import { supervise } from './run.ts'
 import { store } from './store.ts'
 
@@ -66,26 +66,30 @@ Deno.test('restart never leaves the ending standing', async () => {
   assertEquals(comp(row, SERVICE)?.attempts, undefined)
 })
 
-Deno.test('a stop ends an always service, and nothing respawns after it', async () => {
-  let g = tracked()
-  let pass = supervise(store(g), care())
-  await g.apply([{
-    entity: { eid: 'c' },
-    [SERVICE]: { command: 'sleep 5', restart: 'always' },
-  }])
-  let run = (await pass())[0]
-  assert(run.pid > 0)
+// The TERM goes to the wrapper's process group, which exists only if the
+// launcher gave the wrapper a session of its own.
+for (let os of launchers) {
+  Deno.test(`${os}: a stop ends an always service, and nothing respawns after it`, async () => {
+    let g = tracked()
+    let pass = supervise(store(g), { ...care(), os })
+    await g.apply([{
+      entity: { eid: 'c' },
+      [SERVICE]: { command: 'sleep 5', restart: 'always' },
+    }])
+    let run = (await pass())[0]
+    assert(run.pid > 0)
 
-  await g.apply([{ entity: { eid: 'c' }, stop: {} }])
-  await pass() // TERM the group
-  await until(
-    async () => !(await living(run.pid)),
-    'the child to take the TERM',
-  )
-  await run.done
-  assertEquals(await pass(), [])
-  assert(comp((await g.read(`.${SERVICE}&*`))[0], EXIT) != null)
-})
+    await g.apply([{ entity: { eid: 'c' }, stop: {} }])
+    await pass() // TERM the group
+    await until(
+      async () => !(await living(run.pid)),
+      'the child to take the TERM',
+    )
+    await run.done
+    assertEquals(await pass(), [])
+    assert(comp((await g.read(`.${SERVICE}&*`))[0], EXIT) != null)
+  })
+}
 
 Deno.test('deleting the service row takes its process down', async () => {
   let g = tracked()

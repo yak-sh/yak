@@ -14,7 +14,7 @@
  *   line of its output into the components of a transcript entry
  *   ({@link adapters}).
  * - **the run** — {@link start} launches it through @yaks/process (a launcher
- *   that exits immediately, a `setsid` wrapper in its own systemd user scope),
+ *   that exits immediately, a wrapper in a session of its own),
  *   so the agent outlives the server that started it; {@link follow} reads its
  *   log into the transcript; {@link down} kills it.
  * - **restart** — {@link resume} picks up every child still running after a

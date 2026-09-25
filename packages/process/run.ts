@@ -12,24 +12,24 @@
 // a restart and never a downed web server — every child outlives us (below),
 // so this process dying leaves everything it started running.
 //
-// The child outlives US, through two layers, because the process supervising
-// another process must be restartable without taking that process with it. The
-// technique is the fleet's (src/sessions.ts, T-7127/T-9261), reused rather than
-// reinvented: our direct child is a launcher that backgrounds the rest and
-// exits immediately, so a supervisor that kills the pids it tracks finds
-// nothing to kill; `setsid` moves the wrapper into a session and process group
-// of its own; and `systemd-run --user --scope` lifts the whole thing out of
-// our cgroup, which is what survives a full restart of our systemd unit. The
-// wrapper starts ignoring INT and TERM strictly after forking the child — so
-// the child does not inherit them ignored — writes "$$ $!" (the group to
-// signal, and the child to watch) to the pidfile, and writes the exit code
-// when the child ends. That pidfile and those two output files are enough to
-// adopt the run back, which is why nothing here calls waitpid or reaps child
-// processes.
+// The child outlives US, because the process supervising another process
+// must be restartable without taking that process with it. The technique is
+// the fleet's (src/sessions.ts, T-7127/T-9261), reused rather than reinvented:
+// our direct child is a launcher that backgrounds the rest and exits
+// immediately, so a supervisor that kills the pids it tracks finds nothing to
+// kill; the wrapper starts in a session and process group of its own; and on a
+// machine whose service manager stops more than our process group, the run is
+// lifted out of its reach too, which is what survives a full restart of the
+// unit we run in. The wrapper starts ignoring INT and TERM strictly after
+// forking the child — so the child does not inherit them ignored — writes
+// "$$ $!" (the group to signal, and the child to watch) to the pidfile, and
+// writes the exit code when the child ends. That pidfile and those two output
+// files are enough to adopt the run back, which is why nothing here calls
+// waitpid or reaps child processes.
 //
-// It is Linux-specific for exactly that reason: `setsid` and a systemd user
-// manager are what buy those two layers. A machine without them needs a
-// different launcher, not a weaker one.
+// Only the detaching differs from one machine to the next, and `platforms`
+// below is the whole difference, as data. Everything else here is POSIX: sh,
+// kill(1), and files.
 //
 // What the loop does not do yet: resume reading a launched process's output
 // files after a restart. `watch` adopts the process again and records its exit
@@ -91,6 +91,9 @@ export type Opts = {
    * wanted it. The previous attempt's `exit` is deleted by the same
    * transaction, so nothing ever reads a fresh pid beside a stale exit code. */
   eid?: string
+  /** which machine's launcher to use (default this one's, `Deno.build.os`);
+   * the macOS one runs anywhere perl does, which is how Linux tests it */
+  os?: string
 }
 
 /** What a caller holds of a tracked process. */
@@ -142,13 +145,12 @@ let files = (dir: string, eid: string) => ({
   pid: `${dir}/${eid}.pid`,
   code: `${dir}/${eid}.code`,
   started: `${dir}/${eid}.started`,
-  ended: `${dir}/${eid}.ended`,
 })
 
 /**
  * The files one run keeps, named after the entity it is recorded on: its
- * stdout and stderr files, the pidfile the wrapper writes its pid to, and the
- * file it writes the exit code to.
+ * stdout and stderr files, the pidfile the wrapper writes its pid to, the
+ * file it writes the exit code to, and the file holding when it started.
  *
  * ```ts
  * import { paths } from '@yaks/process'
@@ -164,16 +166,24 @@ let files = (dir: string, eid: string) => ({
 export let paths = (
   eid: string,
   o: Opts = {},
-): Record<'out' | 'err' | 'pid' | 'code' | 'started' | 'ended', string> =>
+): Record<'out' | 'err' | 'pid' | 'code' | 'started', string> =>
   files(dirOf(o), eid)
 
-// The wrapper script, run inside the scope by `setsid sh <this file>`. It is
-// kept in a file, not passed as `sh -c '<script>'`, because systemd-run
-// applies systemd's own $-expansion to the command line it launches and `$$`
-// is its escape for a literal `$` — a bare path has nothing in it for systemd
-// to expand.
+// The wrapper script, run detached as `sh <this file> <argv…>`. It is kept in
+// a file, not passed as `sh -c '<script>'`, because a detaching command may
+// expand its own command line (systemd-run does; see `literal`), and a bare
+// path gives it nothing to expand. When the child ended is the exit-code
+// file's mtime, not a date(1) the wrapper runs: date's sub-second format is
+// not POSIX, macOS prints `%N` as a letter, and shell arithmetic on that
+// would end the wrapper before it wrote the code.
 let WRAPPER = '"$@" >> "$TASKS_OUT" 2>> "$TASKS_ERR" & trap "" INT TERM; ' +
-  'echo "$$ $!" > "$TASKS_PID"; wait $!; code=$?; ns=$(date +%s%N); echo $((ns / 1000000)) > "$TASKS_ENDED"; echo $code > "$TASKS_CODE"'
+  'echo "$$ $!" > "$TASKS_PID"; wait $!; echo $? > "$TASKS_CODE"'
+
+// The launcher, our direct child: it backgrounds the detaching command and
+// exits at once. The whole command line arrives as its arguments, so nothing
+// in it is parsed as shell, and a detaching command that fails says why in
+// the stderr file.
+let LAUNCHER = '"$@" 2>> "$TASKS_ERR" &'
 
 // A transient scope name, unique per launch: systemd refuses a name whose
 // previous unit is still loaded, and --collect frees a finished scope but not
@@ -182,18 +192,6 @@ let WRAPPER = '"$@" >> "$TASKS_OUT" 2>> "$TASKS_ERR" & trap "" INT TERM; ' +
 let launches = 0
 let unit = (eid: string) =>
   `process-${eid}-${Date.now().toString(36)}${++launches}`
-
-// The two environment variables systemd-run needs in order to reach the
-// --user manager's D-Bus socket. That socket exists only while user@<uid> is
-// active, so a missing one fails loudly into the stderr file rather than
-// silently running the child in our own cgroup.
-let userBus = () => {
-  let uid = Deno.uid() ?? 0
-  return {
-    XDG_RUNTIME_DIR: `/run/user/${uid}`,
-    DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${uid}/bus`,
-  }
-}
 
 // systemd expands `$VAR` and `${VAR}` in the command line it launches, so an
 // argv element containing a shell variable, a template literal or a heredoc
@@ -205,12 +203,72 @@ let userBus = () => {
 // whole quoting rule.
 export let literal = (arg: string): string => arg.replaceAll('$', '$$$$')
 
+/** How one machine detaches a run, given this launch's name and the user it
+ * runs as. */
+type Platform = (launch: { unit: string; uid: number }) => {
+  /** the command that starts the wrapper in a session and process group of
+   * its own, beyond whatever stops the host */
+  detach: string[]
+  /** what that command needs in its environment */
+  env: Record<string, string>
+  /** one word of the wrapper's command line, written so the detaching
+   * command passes it on unchanged */
+  word: (arg: string) => string
+}
+
+let platforms: Record<string, Platform> = {
+  // `systemd-run --user --scope` lifts the run out of our cgroup, which
+  // systemd stops whole with our unit, and `setsid` gives it its session. The
+  // two variables are how systemd-run reaches the --user manager's D-Bus
+  // socket; that socket exists only while user@<uid> is active, so a missing
+  // one fails loudly into the stderr file rather than silently running the
+  // child in our own cgroup.
+  linux: ({ unit, uid }) => ({
+    detach: [
+      'systemd-run',
+      '--user',
+      '--scope',
+      '--collect',
+      '--quiet',
+      `--unit=${unit}`,
+      'setsid',
+    ],
+    env: {
+      XDG_RUNTIME_DIR: `/run/user/${uid}`,
+      DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${uid}/bus`,
+    },
+    word: literal,
+  }),
+  // launchd stops a job by signalling its process group (launchd.plist(5),
+  // AbandonProcessGroup), so a session of its own is the whole lift. macOS
+  // ships no setsid(1); its perl makes the setsid(2) call and execs the rest,
+  // with no shell and no expansion between.
+  darwin: () => ({
+    detach: [
+      'perl',
+      '-MPOSIX=setsid',
+      '-e',
+      'setsid or die "setsid: $!\\n"; exec { $ARGV[0] } @ARGV or die "exec: $!\\n"',
+    ],
+    env: {},
+    word: (arg) => arg,
+  }),
+}
+
+let platformOf = (o: Opts): Platform => {
+  let os = o.os ?? Deno.build.os
+  let platform = platforms[os]
+  if (!platform) throw new Error(`@yaks/process cannot launch on ${os}`)
+  return platform
+}
+
 let spawn = (
   eid: string,
   argv: string[],
   cwd: string,
   env: Record<string, string>,
   dir: string,
+  platform: Platform,
 ) => {
   let f = files(dir, eid)
   let wrapper = `${dir}/wrapper.sh`
@@ -220,25 +278,24 @@ let spawn = (
   // old one keeps reading all of it.
   Deno.writeTextFileSync(`${wrapper}.${eid}`, WRAPPER)
   Deno.renameSync(`${wrapper}.${eid}`, wrapper)
+  let p = platform({ unit: unit(eid), uid: Deno.uid() ?? 0 })
   let child = new Deno.Command('sh', {
     args: [
       '-c',
-      `systemd-run --user --scope --collect --quiet --unit="${unit(eid)}" ` +
-      `setsid sh "$WRAPPER_SH" "$@" 2>> "$TASKS_ERR" &`,
+      LAUNCHER,
       'sh',
-      ...argv.map(literal),
+      ...p.detach,
+      ...['sh', wrapper, ...argv].map(p.word),
     ],
     cwd,
     clearEnv: true,
     env: {
       ...env,
-      ...userBus(),
-      WRAPPER_SH: wrapper,
+      ...p.env,
       TASKS_OUT: f.out,
       TASKS_ERR: f.err,
       TASKS_PID: f.pid,
       TASKS_CODE: f.code,
-      TASKS_ENDED: f.ended,
     },
     stdin: 'null',
     stdout: 'null',
@@ -299,19 +356,21 @@ let exitIn = (path: string) => {
   return text.endsWith('\n') ? numberIn(text) : null
 }
 
+let mtimeOf = (path: string) => {
+  try {
+    return Deno.statSync(path).mtime?.getTime() ?? null
+  } catch {
+    return null // not written yet
+  }
+}
+
 // The start and end times are kept in files, so a process picked back up
 // after a restart reports its whole running time and not just the last wait.
+// The end is when the wrapper wrote the exit code.
 let elapsedOf = (dir: string, eid: string) => {
   let f = files(dir, eid)
   let start = codeOf(f.started) ?? Date.now()
-  return () => {
-    let end = codeOf(f.ended) ?? Date.now()
-    // Some implementations of date(1) ignore %3N's width. Handle the
-    // nanosecond timestamps those older wrappers wrote; the current wrapper
-    // divides to milliseconds itself.
-    if (end > 1e16) end = Math.floor(end / 1e6)
-    return Math.max(0, end - start)
-  }
+  return () => Math.max(0, (mtimeOf(f.code) ?? Date.now()) - start)
 }
 
 // The process we track is never our direct child, so waitpid is unavailable
@@ -497,6 +556,7 @@ export let launch = async (
   spec: Spec,
   o: Opts = {},
 ): Promise<Run> => {
+  let platform = platformOf(o)
   let eid = o.eid ?? (o.mint ?? uuid)()
   let dir = dirOf(o)
   Deno.mkdirSync(dir, { recursive: true })
@@ -511,9 +571,8 @@ export let launch = async (
   let tails = o.stream === false ? [] : [tail(f.out), tail(f.err)]
   clear(f.pid)
   clear(f.code)
-  clear(f.ended)
   Deno.writeTextFileSync(f.started, String(Date.now()))
-  spawn(eid, argv, cwd, spec.env ?? {}, dir)
+  spawn(eid, argv, cwd, spec.env ?? {}, dir, platform)
   let pid = 0
   for (let end = Date.now() + (o.birth ?? 10_000); !pid && Date.now() < end;) {
     pid = pidOf(f.pid)

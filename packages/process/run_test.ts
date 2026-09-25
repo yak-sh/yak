@@ -1,12 +1,13 @@
 // Real children, because a supervisor that only ever watched a fake one would
 // prove nothing: the two escapes, the pidfile, the code file and the stream
 // files are the thing under test. They are short-lived and the poll is 5ms, so
-// the whole file runs in well under a second.
+// the whole file runs in well under a second. A launch runs under every
+// launcher this machine has, so Linux runs the macOS one too.
 
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { EXIT, PROCESS } from './comp.ts'
-import { gone, tracked } from './testing.ts'
+import { gone, launchers, tracked, until } from './testing.ts'
 import { adopt, launch, watch } from './run.ts'
 import { store } from './store.ts'
 
@@ -14,26 +15,66 @@ let dir = () => Deno.makeTempDirSync({ prefix: 'yaks-process-' })
 let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? undefined) as Comp | undefined
 
-Deno.test('a launched child streams both its streams and stamps its exit', async () => {
-  let g = tracked()
-  let run = await launch(store(g), {
-    command: 'sh',
-    args: ['-c', 'echo out; echo err >&2; exit 3'],
-  }, { dir: dir(), poll: 5 })
-  assertEquals(await run.done, 3)
+for (let os of launchers) {
+  Deno.test(`${os}: a launched child streams both its streams and stamps its exit`, async () => {
+    let g = tracked()
+    let run = await launch(store(g), {
+      command: 'sh',
+      args: ['-c', 'echo out; echo err >&2; exit 3'],
+    }, { dir: dir(), poll: 5, os })
+    assertEquals(await run.done, 3)
 
-  let said = (await g.read(`.output.source=${run.eid}&*`))
-    .map((b) => String(comp(b, 'content')?.body)).sort()
-  assertEquals(said, ['err', 'out'])
+    let said = (await g.read(`.output.source=${run.eid}&*`))
+      .map((b) => String(comp(b, 'content')?.body)).sort()
+    assertEquals(said, ['err', 'out'])
 
-  let row = (await g.read(`.${PROCESS}&*`))[0]
-  assertEquals(row.entity.eid, run.eid)
-  assertEquals(
-    comp(row, PROCESS)?.command,
-    'sh -c echo out; echo err >&2; exit 3',
+    let row = (await g.read(`.${PROCESS}&*`))[0]
+    assertEquals(row.entity.eid, run.eid)
+    assertEquals(
+      comp(row, PROCESS)?.command,
+      'sh -c echo out; echo err >&2; exit 3',
+    )
+    assert(Number(comp(row, PROCESS)?.pid) > 0)
+    assertEquals(comp(row, EXIT)?.code, 3)
+  })
+
+  // systemd expands the command line it launches, so an unescaped `$` reaches
+  // the program as an empty string — a hosted shell wrote a heredoc with
+  // every `${…}` deleted before anyone noticed (T-37332).
+  Deno.test(`${os}: a command keeps every dollar the caller wrote`, async () => {
+    let g = tracked()
+    let run = await launch(store(g), {
+      command: 'sh',
+      args: ['-c', 'printf %s "$1"', 'sh', '${backend} $defs $$ $'],
+    }, { dir: dir(), poll: 5, os })
+    assertEquals(await run.done, 0)
+    assertEquals(
+      (await g.read(`.output.source=${run.eid}&*`))
+        .map((b) => String(comp(b, 'content')?.body)),
+      ['${backend} $defs $$ $'],
+    )
+  })
+
+  Deno.test(`${os}: a finished run's running time stops at its end`, async () => {
+    let run = await launch(store(tracked()), {
+      command: 'sleep',
+      args: ['0.05'],
+    }, { dir: dir(), poll: 5, os })
+    await run.done
+    let took = run.elapsed()
+    assert(took >= 50, `${took}ms`)
+    let now = Date.now()
+    await until(() => Date.now() > now + 5, 'the clock to move')
+    assertEquals(run.elapsed(), took)
+  })
+}
+
+Deno.test('a machine with no launcher is refused before anything starts', async () => {
+  let d = dir()
+  await assertRejects(() =>
+    launch(store(tracked()), { command: 'true' }, { dir: d, os: 'plan9' })
   )
-  assert(Number(comp(row, PROCESS)?.pid) > 0)
-  assertEquals(comp(row, EXIT)?.code, 3)
+  assertEquals([...Deno.readDirSync(d)], [])
 })
 
 Deno.test('adopting a pid that is already gone stamps the ending, code unknown', async () => {
@@ -83,21 +124,4 @@ Deno.test('a wrapper slow to write the code is waited for while it lives', async
   let [run] = await watch(store(g), { dir: d, poll: 5 })
   assertEquals(await run.done, 3)
   await wrapper.status
-})
-
-// systemd expands the command line it launches, so an unescaped `$` reaches
-// the program as an empty string — a hosted shell wrote a heredoc with every
-// `${…}` deleted before anyone noticed (T-37332).
-Deno.test('a command keeps every dollar the caller wrote', async () => {
-  let g = tracked()
-  let run = await launch(store(g), {
-    command: 'sh',
-    args: ['-c', 'printf %s "$1"', 'sh', '${backend} $defs $$ $'],
-  }, { dir: dir(), poll: 5 })
-  assertEquals(await run.done, 0)
-  assertEquals(
-    (await g.read(`.output.source=${run.eid}&*`))
-      .map((b) => String(comp(b, 'content')?.body)),
-    ['${backend} $defs $$ $'],
-  )
 })

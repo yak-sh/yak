@@ -28,14 +28,15 @@
  * ```
  *
  * Four entry points over one loop: {@link launch} starts a process detached
- * (a setsid wrapper in its own systemd user scope, a pidfile, a stdout file
- * and a stderr file), {@link adopt} tracks one nobody here started,
- * {@link watch} adopts every row with no `exit` again at start-up and records
- * an exit code for the ones already gone, and {@link supervise} makes the
- * machine match the `service` rows — start, start again with a bounded
- * backoff, stop. The server can restart without taking any of those processes
- * with it, which is the only reason the launcher is shaped the way it is, and
- * exactly one supervisor sits above it (see ./run.ts).
+ * (a wrapper in a session of its own, beyond the host's service manager, a
+ * pidfile, a stdout file and a stderr file), {@link adopt} tracks one nobody
+ * here started, {@link watch} adopts every row with no `exit` again at
+ * start-up and records an exit code for the ones already gone, and
+ * {@link supervise} makes the machine match the `service` rows — start, start
+ * again with a bounded backoff, stop. The server can restart without taking
+ * any of those processes with it, which is the only reason the launcher is
+ * shaped the way it is, and exactly one supervisor sits above it (see
+ * ./run.ts).
  *
  * @module
  */
