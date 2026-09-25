@@ -207,7 +207,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
         seen.add(id)
         plans.unshift(
           '.entry.session=' + id +
-            (limit == null ? '' : '&.entry.seq<=' + limit),
+            (limit == null ? '' : '&.entry.seq<=' + limit) + '&*',
         )
         let [row] = await a.h.g.storage.tx((tx) => tx.get([id]))
         let from = (row?.fork as { from?: string })?.from

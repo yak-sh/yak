@@ -75,7 +75,7 @@ export let daemon = (
       do {
         if (stopping) return
         again = false
-        let rows = await g.read('.dispatch')
+        let rows = await g.read('.dispatch&.spawned?')
         if (!recovered) {
           recovered = true
           for (let b of rows) {
@@ -343,7 +343,7 @@ export let daemon = (
       // task claims in that case, rather than miss a newly unblocked task.
       let candidates =
         e.kind == 'removed' && ['edge', 'contains', 'requires'].includes(e.name)
-          ? await g.read('.task .claim.session!')
+          ? await g.read('.task .claim.session! *')
           : await g.storage.tx((tx) => tx.get([...ids]))
       for (let task of candidates) {
         let child = (task.claim as Comp | undefined)?.session

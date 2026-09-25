@@ -605,7 +605,7 @@ Deno.test('receipt fast-path refreshes its tail when a child finishes between re
   }) as typeof h.g.read
   try {
     await deliverChild(h.g, 'c')
-    let rows = await read('.entry.session=p')
+    let rows = await read('.entry.session=p&*')
     assertEquals(rows.length, 2)
     assertEquals(rows[1].entity.eid, 'delivery:c:final')
     assert(textOf(rows[1]).includes('final answer'))

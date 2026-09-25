@@ -490,7 +490,7 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
   let entries: Bundle[] | undefined
   if (!tail) entries = await transcript(g, child)
   let tasks = g.vocab.comps.includes('task')
-    ? await g.read(`.task .claim.session=${child}`)
+    ? await g.read(`.task .claim.session=${child} *`)
     : []
   let task = tasks.find((b) => b.task)
   let ready = task &&

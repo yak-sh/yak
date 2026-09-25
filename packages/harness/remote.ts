@@ -158,8 +158,8 @@ export let remote = async (
   // painted empty. The picker is the recent ones; anything older is reached by
   // asking for it.
   try {
-    await listen('sessions', `.session&.order=-created.at&.limit=${LISTED}`)
-    await listen('tasks', `.task&.order=-created.at&.limit=${LISTED}`)
+    await listen('sessions', `.session&.order=-created.at&.limit=${LISTED}&*`)
+    await listen('tasks', `.task&.order=-created.at&.limit=${LISTED}&*`)
   } catch (error) {
     detachDiagnostics()
     link.close()
