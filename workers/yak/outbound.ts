@@ -3,12 +3,11 @@
 // held by the app. Two ways in, one way out.
 //
 // The namespace's outbound Worker (T-33447): every fetch an app's own worker
-// makes arrives here instead of leaving. This is the same Worker as the rest
-// of the kernel (wrangler.toml `outbound.service`); what makes a request one
-// of these is `env.CALLER`, which only an outbound call carries — dispatch.ts
-// sets it per request from the directory's row and the kernel's own vouch, and
-// no request anybody sends can. A fetch to the platform's own zone goes out
-// and comes back in like anybody's (wrangler.toml
+// makes arrives here instead of leaving, by way of yak-out (outbound/), which
+// hands it to the kernel's `Outbound` entrypoint with the caller dispatch.ts
+// said for that request — from the directory's row and the kernel's own vouch.
+// Nothing else reaches that entrypoint. A fetch to the platform's own zone goes
+// out and comes back in like anybody's (wrangler.toml
 // `global_fetch_strictly_public`).
 //
 // The fetch door (T-33450): a page's own fetch never passes through us, so an
@@ -66,9 +65,13 @@ let sent = async (env: Env, caller: Caller, req: Request) => {
   }
 }
 
-/** An app's worker calling out: the request as its code made it. */
-export let outbound = (req: Request, env: Env): Promise<Response> =>
-  sent(env, env.CALLER!, req)
+/** An app's worker calling out: the request as its code made it, for the
+ * caller dispatch.ts said. */
+export let outbound = (
+  req: Request,
+  env: Env,
+  caller: Caller,
+): Promise<Response> => sent(env, caller, req)
 
 // What a page's request says about the page and the platform, none of which
 // the outside service is owed.

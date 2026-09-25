@@ -78,6 +78,7 @@
 //                             (T-33040)
 import { waitUntil, WorkerEntrypoint } from 'cloudflare:workers'
 import { Sandbox as Workbench } from '@cloudflare/sandbox'
+import type { Caller } from '@yaks/egress'
 // @ts-types="./sentry.d.ts"
 import {
   instrumentDurableObjectWithSentry,
@@ -186,6 +187,20 @@ class Filed extends WorkerEntrypoint {
   }
 }
 export let Files = withSentry(options, Filed)
+
+// An app's worker calling out (outbound.ts): the namespace's outbound Worker,
+// yak-out (outbound/), hands each fetch back here with the CALLER dispatch.ts
+// said. Reached only through that service binding, as `Files` is through its
+// own; the routes name the default entrypoint. It answers RPC and no fetch, so
+// the cache (wrangler.toml `[cache]`) has nothing of it to hold.
+class Sending extends WorkerEntrypoint {
+  declare env: Env
+
+  send(req: Request, caller: Caller): Promise<Response> {
+    return outbound(req, this.env, caller)
+  }
+}
+export let Outbound = withSentry(options, Sending)
 
 // Doors loaded when a request first reaches one (T-37977). What they import —
 // the MCP SDK and zod, the OAuth provider — was evaluated by every cold start,
@@ -676,15 +691,10 @@ let router = {
 // catch, or the letter door's, is a defect we hear about. The queue is Workers
 // Builds telling us a build of this Worker failed (builds.ts).
 //
-// An app's own fetch arrives here too, as the namespace's outbound Worker
-// (outbound.ts), and goes out: one for the platform's own zone comes back in
-// from the internet like anybody's (global_fetch_strictly_public).
 let worker = withSentry(options, {
   ...router,
   fetch: async (req: Request, env: Env): Promise<Response> =>
-    env.CALLER
-      ? outbound(req, env)
-      : slid(req, env, await router.fetch(req, env)),
+    slid(req, env, await router.fetch(req, env)),
   queue: builds,
 })
 

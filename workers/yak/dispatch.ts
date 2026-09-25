@@ -35,10 +35,10 @@
 // this person belongs to and the app is owed only this visit.
 //
 // And what the app's code sends out comes back through us. The namespace's
-// outbound Worker is this Worker (wrangler.toml, outbound.ts), and every
-// `get` below names the app and its visitor's role for it, so a fetch carrying
-// a connection's sentinel goes out with the key in its place, for that app
-// and that visitor alone (@yaks/egress).
+// outbound Worker hands it to this one (wrangler.toml, outbound.ts), and every
+// `get` below names the app, its visitor and their role for it, so a fetch
+// carrying a connection's sentinel goes out with the key in its place, for
+// that app and that visitor alone (@yaks/egress).
 //
 // Local development has no dispatch namespace: it is remote-only
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/local-development/),

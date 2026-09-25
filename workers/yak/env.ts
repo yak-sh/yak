@@ -12,7 +12,6 @@
 // handler, and none keeps state another reads.
 import type { Bucket } from '@yaks/blob'
 import type { D1Like } from '@yaks/d1'
-import type { Caller } from '@yaks/egress'
 import type { Binding } from './post.ts'
 import type { Dispatch, Fetcher, Namespace } from './door.ts'
 import type { Meta } from './meta.ts'
@@ -156,11 +155,6 @@ export type Env = {
   // Worker's production branch and able to do nothing but start a build.
   // Production's alone, like the queue that uses it.
   BUILD_HOOK?: string
-  // Set only when this Worker is running as the namespace's outbound Worker
-  // (outbound.ts): the app whose worker made the fetch, and the visitor it was
-  // answering and what they hold on that app. dispatch.ts says it for every
-  // call into an app's worker; no request anybody sends can.
-  CALLER?: Caller
   // A person's own domain (domains.ts, T-33038): the yaks.app zone the
   // Cloudflare for SaaS custom hostnames are created on — not a secret, it
   // rides wrangler.toml's `[vars]` beside the account tag — and a token that

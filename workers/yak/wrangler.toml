@@ -150,16 +150,18 @@ binding = "CF_VERSION_METADATA"
 # files. `remote = true` here would point local dev at the deployed namespace;
 # it is left off, because a test must not need the account.
 #
-# Every fetch an app's worker makes leaves through this same Worker (outbound.ts,
-# T-33447): the outbound service is `yak` itself, handed `CALLER` — the app and
-# what its visitor holds on it — by dispatch.ts for each request, and that is
-# the whole difference between a call an app makes and a request anybody sent.
+# Every fetch an app's worker makes leaves through the namespace's outbound
+# Worker (outbound.ts, T-33447), handed `CALLER` — the app, its visitor and
+# what they hold on it — by dispatch.ts for each request. A Worker cannot be
+# its own namespace's outbound (Cloudflare refuses the upload), so it is
+# `yak-out` (outbound/), which hands each call straight back to this Worker's
+# `Outbound` entrypoint.
 [[dispatch_namespaces]]
 binding = "DISPATCH"
 namespace = "yak-apps"
 
   [dispatch_namespaces.outbound]
-  service = "yak"
+  service = "yak-out"
   parameters = ["CALLER"]
 
 # The apex's static files: the home page, the store client an app's pages
@@ -547,7 +549,7 @@ binding = "DISPATCH"
 namespace = "yak-apps-staging"
 
   [env.staging.dispatch_namespaces.outbound]
-  service = "yak-staging"
+  service = "yak-out-staging"
   parameters = ["CALLER"]
 
 [env.staging.assets]

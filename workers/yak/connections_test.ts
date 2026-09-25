@@ -401,10 +401,7 @@ slow(
       }))!
     await wired((r) => new Response(r.url), async (sent) => {
       let out = (level: 'viewer' | null, to?: string) =>
-        outbound(call(to), {
-          ...s.p.env,
-          CALLER: { app: app.eid, level, person: null },
-        })
+        outbound(call(to), s.p.env, { app: app.eid, level, person: null })
       assertEquals(await (await out('viewer')).text(), sent[0].url)
       assertEquals(
         [sent[0].url, sent[0].headers.get('x-api-key')],
