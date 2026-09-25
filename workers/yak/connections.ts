@@ -73,7 +73,7 @@ import { apex, url } from './host.ts'
 import { cookieValue, opened, seal } from './lib/token.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import type { Answer, Door, Plugin } from './plugin.ts'
-import { MANAGE, manageAt, OURS, signInAt } from './route.ts'
+import { enabling, MANAGE, manageAt, OURS, signInAt } from './route.ts'
 import { caught } from './sentry.ts'
 import { domainOf, vouched, type Who, whoIs } from './session.ts'
 import {
@@ -176,6 +176,9 @@ export type Connections = {
    * can connect: one reached by OAuth needs the client it names kept in the
    * vault (@yaks/connections `registration`) */
   built: { name: string; keyed: boolean; face: Face }[]
+  /** the testing integrations the page was opened for (`enabled`), which its
+   * forms carry */
+  enable?: string[]
 }
 
 // A read of the directory. Every read the verbs make is a filter line.
@@ -331,6 +334,7 @@ export let connectionsOf = async (
     list: shown.sort((a, b) => a.integration.localeCompare(b.integration)),
     services,
     built,
+    enable,
   }
 }
 
@@ -377,7 +381,7 @@ let signingIn = async (
   space: Space,
   who: Who,
   eid: string,
-  back = pageOf(env, space.slug),
+  back = enabling(pageOf(env, space.slug), enabled(req)),
 ): Promise<Response> => {
   let { url: to, attempt } = await begin(c, eid)
   let held: Held = {

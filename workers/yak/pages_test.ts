@@ -172,22 +172,24 @@ Deno.test('connections: the person’s own, then this space with what it could a
     saving: '',
     failed: '',
   })
-  let html = await desk({
-    ...page,
-    pick: 'ada',
-    view: 'connections',
-    connections: {
-      on: true,
-      list: [
-        shown('Mail', null),
-        shown('Weather', 'ada'),
-        shown('Maps', 'bob'),
-      ],
-      services: [],
-      built: [{ name: 'openrouter', keyed: true, face: named('OpenRouter') }],
-    },
-  }, env).text()
-  let { document } = parseHTML(html)
+  let drawn = (enable?: string[]) =>
+    desk({
+      ...page,
+      pick: 'ada',
+      view: 'connections',
+      connections: {
+        on: true,
+        list: [
+          shown('Mail', null),
+          shown('Weather', 'ada'),
+          shown('Maps', 'bob'),
+        ],
+        services: [],
+        built: [{ name: 'openrouter', keyed: true, face: named('OpenRouter') }],
+        enable,
+      },
+    }, env).text()
+  let { document } = parseHTML(await drawn())
   let groups = [...document.querySelectorAll('.Desk_Group')]
   assertEquals(groups.map((g) => g.textContent), [
     'Yours',
@@ -216,6 +218,17 @@ Deno.test('connections: the person’s own, then this space with what it could a
       '/manage/connections?space=ada',
       '/manage/connections?space=bob',
     ]),
+  )
+  // A page opened with `?enable=` posts every form with it, so the page a
+  // post draws again still offers the testing integration.
+  let kept = parseHTML(await drawn(['google-calendar'])).document
+  let posts = [...kept.querySelectorAll('form')].map((f) =>
+    new URL(f.getAttribute('action')!, 'https://yaks.fyi')
+  ).filter((to) => to.pathname == '/manage/connections')
+  assertEquals(posts.length, 8)
+  assertEquals(
+    new Set(posts.map((to) => to.searchParams.get('enable'))),
+    new Set(['google-calendar']),
   )
 })
 

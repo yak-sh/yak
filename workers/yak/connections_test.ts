@@ -23,6 +23,7 @@ import { platform } from './harness.ts'
 import { KERNEL, meta } from './meta.ts'
 import { outbound, outboundPlugin } from './outbound.ts'
 import { answered, routed } from './plugin.ts'
+import { opened } from './lib/token.ts'
 import { minted, type Who } from './session.ts'
 import { vaultOf } from './vault.ts'
 import { slow } from '../../bin/testing.ts'
@@ -54,11 +55,11 @@ let setup = async (vault = true) => {
   ], as)
   let space = (await dir.space('ada'))!
   let who: Who = { person, role: 'owner' }
-  let post = (fields: Record<string, string>) => {
+  let post = (fields: Record<string, string>, search = '?space=ada') => {
     let form = new FormData()
     for (let [k, v] of Object.entries(fields)) form.set(k, v)
     return connecting(
-      new Request('https://yaks.app/manage/connections?space=ada'),
+      new Request(`https://yaks.app/manage/connections${search}`),
       p.env,
       space,
       who,
@@ -148,6 +149,32 @@ slow(
     assertEquals(
       [calendar.face.title, calendar.face.site],
       ['Google Calendar', 'https://calendar.google.com'],
+    )
+  },
+)
+
+slow(
+  'a sign-in begun on a page opened with ?enable= comes back to that page',
+  async () => {
+    let s = await setup()
+    await s.at.apply(
+      [registration('google', { id: 'yaks', secret: 's' })],
+      KERNEL,
+    )
+    let went = await s.post(
+      { do: 'add', integration: 'google-calendar' },
+      '?space=ada&enable=google-calendar',
+    )
+    assert(went instanceof Response)
+    let pair = went.headers.get('set-cookie')!.split(';')[0]
+    let held = await opened<{ back: string }>(
+      'connect',
+      pair.slice(pair.indexOf('=') + 1),
+      SECRET,
+    )
+    assertEquals(
+      new URL(held!.back).searchParams.get('enable'),
+      'google-calendar',
     )
   },
 )

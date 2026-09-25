@@ -16,7 +16,13 @@ import { icon, type IconName } from './icons.ts'
 import { esc } from './html.ts'
 import { tile } from './render/mod.ts'
 export { esc } from './html.ts'
-import { MANAGE, managePath, type ManageView, OAUTH } from './route.ts'
+import {
+  enabling,
+  MANAGE,
+  managePath,
+  type ManageView,
+  OAUTH,
+} from './route.ts'
 import { CONNECTOR } from './seo.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
 import { CURRENCY, FREE, PLUS, PRICE, size } from './meter.ts'
@@ -969,7 +975,12 @@ let about = (f: Face) => {
 // side of an app that asks each person to connect their own is only the ask:
 // nothing here connects it, and it stays while the app asks. Its buttons post
 // for the space that keeps it, or for the page's own when it is the person's.
-let connection = (c: Shown, on: boolean, pick?: string) => {
+let connection = (
+  c: Shown,
+  on: boolean,
+  pick?: string,
+  enable?: string[],
+) => {
   let ask = c.each && !c.own
   // An app that uses it: what its code reads and, for one it shares, who may
   // call out through it there, which the person opens to anyone or closes to
@@ -994,7 +1005,7 @@ let connection = (c: Shown, on: boolean, pick?: string) => {
     }`
   let form = (inner: string) =>
     `<form class="Connection_Do" method="post" action="${
-      managePath('connections', c.space ?? pick)
+      esc(enabling(managePath('connections', c.space ?? pick), enable))
     }"><input type="hidden" name="connection" value="${
       esc(c.eid)
     }">${inner}</form>`
@@ -1067,7 +1078,7 @@ let connections = (at: DeskPage, env: Host) => {
     Number(a.status == 'connected' && !a.failed) -
     Number(b.status == 'connected' && !b.failed)
   )
-  let action = managePath('connections', at.pick)
+  let action = esc(enabling(managePath('connections', at.pick), c.enable))
   let offer = (i: Connections['built'][number]) =>
     `<form class="Card Connection" method="post" action="${action}"><header class="Connection_Head">${
       logo(i.face)
@@ -1092,7 +1103,7 @@ let connections = (at: DeskPage, env: Host) => {
   let group = (title: string, cards: string) =>
     cards ? `<h2 class="Desk_Group">${esc(title)}</h2>${cards}` : ''
   let yours = first.filter((one) => one.own)
-    .map((one) => connection(one, c.on, at.pick)).join('') +
+    .map((one) => connection(one, c.on, at.pick, c.enable)).join('') +
     c.services.map((s) =>
       `<section class="Card Connection"><header class="Connection_Head"><h2>${
         esc(s.name)
@@ -1116,7 +1127,7 @@ let connections = (at: DeskPage, env: Host) => {
       group(
         spaceHost(env, space),
         first.filter((one) => one.space == space)
-          .map((one) => connection(one, c.on)).join('') +
+          .map((one) => connection(one, c.on, undefined, c.enable)).join('') +
           (space == at.space
             ? c.built.map(offer).join('') + (c.on ? add : '')
             : ''),

@@ -50,6 +50,15 @@ export let manageAt = (
   view: ManageView = 'apps',
   env: Host = {},
 ) => url(env, managePath(view, space))
+/** A connections page's address, still naming the testing integrations it
+ * was opened for (connections.ts `enabled`), so its forms and a sign-in begun
+ * there come back to the page as it was. */
+export let enabling = (to: string, enable: string[] = []) =>
+  enable.length
+    ? `${to}${to.includes('?') ? '&' : '?'}enable=${
+      enable.map(encodeURIComponent).join(',')
+    }`
+    : to
 
 // The path the platform keeps on every space's hostname, outside the
 // app-slug namespace: a service's webhooks arrive under it (connections.ts
