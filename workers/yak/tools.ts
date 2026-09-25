@@ -1091,9 +1091,12 @@ let released = async (
           kept.join(', ')
         } — name it in ${vocabFile} again to keep writing it, or move its ` +
           'rows to the new word yourself, a row at a time with graph_query ' +
-          'then graph_apply. Nothing is migrated behind you.'
+          'then graph_apply. Nothing is migrated behind you; once no row ' +
+          'holds a value under it, the next deploy drops it.'
         : '') +
-      (dropped.length ? `\ndropped (no rows): ${dropped.join(', ')}` : ''),
+      (dropped.length
+        ? `\ndropped (nothing stored in it): ${dropped.join(', ')}`
+        : ''),
   }
 }
 

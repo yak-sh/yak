@@ -200,6 +200,7 @@ import {
   sent,
   served,
   SERVES,
+  shed,
   type Slots,
   slugged,
   stale,
@@ -603,10 +604,11 @@ export class Store {
 
   // Waking on whatever this object holds. Everything above the storage is
   // rebuilt from the remembered vocabulary, which is why a deploy is a write
-  // and a reboot rather than a migration: the schema is additive — a table the
-  // store has never seen is created, a column a word grew is added — and what
-  // changed is which words the graph admits. Nothing is ever dropped or
-  // retyped; T-33809 owns moving rows that a changed column would need.
+  // and a reboot rather than a migration: a table the store has never seen is
+  // created, a column a word grew is added, and what changed is which words the
+  // graph admits. Nothing is retyped, and only a word that holds nothing is
+  // dropped, by `prepare` (the vocab door); T-33809 owns moving rows that a
+  // changed column would need.
   #boot(prepare = () => {}) {
     try {
       this.#ctx.storage.transactionSync(() => {
@@ -2275,9 +2277,9 @@ export class Store {
   //
   // The answer is what this app now says and what moved, which naming the
   // components does not tell whoever deployed it (C-32652 item 4): a renamed
-  // property arrives beside the old one, and `added` is how they see that.
-  // Nothing ever leaves — the DDL is additive and a property's rows are already
-  // written — so `dropped` is empty and stays that way.
+  // property arrives beside the old one, and `added` is how they see that. A
+  // word leaves only once nothing is stored under it (vocab.ts `grew`), so
+  // each of `dropped` is a table or a column that held nothing.
   //
   // What is written, kept and answered is one thing: the document (T-37546).
   // A manifest is a JSON Schema document and nothing else — a keyword is the
@@ -2303,16 +2305,20 @@ export class Store {
         let { doc, dropped, added, kept } = grew(
           was,
           next,
-          (name) => this.#rows(name),
+          (name, prop) => this.#rows(name, prop),
         )
         appVocab(doc)
         // The declaration and its DDL must roll back together on boot failure.
         this.#boot(() => {
           this.#put('vocab', JSON.stringify(doc))
           for (let name of dropped) {
-            this.#ctx.storage.sql.exec(
-              `drop table if exists "${name.replaceAll('"', '""')}"`,
-            )
+            let [comp, prop] = name.split('.')
+            if (prop) shed(driver(this.#ctx.storage), comp, prop)
+            else {
+              this.#ctx.storage.sql.exec(
+                `drop table if exists "${comp.replaceAll('"', '""')}"`,
+              )
+            }
           }
         })
         if (this.#refused) return this.#stalled()
@@ -2335,13 +2341,16 @@ export class Store {
     })
   }
 
-  // How many rows one component holds — the question only a store can answer,
-  // and what decides whether a word the manifest stopped naming may leave. A
-  // table that is not there holds nothing.
-  #rows(name: string): number {
+  // How many rows one component holds, or with a property, how many hold a
+  // value there — the question only a store can answer, and what decides
+  // whether a word the manifest stopped naming may leave. A table or a column
+  // that is not there holds nothing.
+  #rows(name: string, prop?: string): number {
+    let q = (s: string) => `"${s.replaceAll('"', '""')}"`
     try {
       let [row] = [...this.#ctx.storage.sql.exec(
-        `select count(*) as n from "${name.replaceAll('"', '""')}"`,
+        `select count(*) as n from ${q(name)}` +
+          (prop ? ` where ${q(prop)} is not null` : ''),
       )] as { n: number }[]
       return Number(row?.n ?? 0)
     } catch {

@@ -506,6 +506,24 @@ export let recut = (d: Drive) => {
   for (let f of shadowed(d)) d.exec(`drop table if exists ${q(f)}`)
 }
 
+/**
+ * A column its vocabulary stopped naming, dropped (vocab.ts `grew`). SQLite
+ * refuses to drop a column an index, a trigger or a view names, so `recut()`
+ * runs first and every index of the table goes with it; `install()` raises
+ * again the ones the vocabulary still declares, in the same transaction.
+ */
+export let shed = (d: Drive, table: string, prop: string) => {
+  if (!columns(d, table).includes(prop)) return
+  recut(d)
+  let indexes = d.query(
+    `select name from sqlite_master where type = 'index' and tbl_name = ? ` +
+      'and sql is not null',
+    [table],
+  )
+  for (let i of indexes) d.exec(`drop index if exists ${q(String(i.name))}`)
+  d.exec(`alter table ${q(table)} drop column ${q(prop)}`)
+}
+
 /** Every full-text index refilled from the content it mirrors — what a freshly
  * raised external-content index needs, because the rows it indexes were written
  * before it existed. */

@@ -291,9 +291,6 @@ The root export provides these document checks:
   `via` must mark each property `stamped: true` so clients cannot supply that
   provenance.
 - `reserved(doc, names)` rejects entries that reuse a reserved name.
-- `grow(was, next)` reports added properties and rejects removed properties or
-  changes to their category, scalar type or reference target. Enum members can
-  be added.
 
 These functions return errors; they do not migrate or write storage. Reference
 `death` values specify what the graph does when the target is deleted: `cascade`
@@ -440,10 +437,10 @@ documents.
 ## Exports
 
 The root export includes `loadVocab`, `Vocab`, schema and property types,
-`Unknown` and `Ambiguous` lookup errors, `storable`, `reserved`, `grow`,
-`kindOrder`, `composite`, state-lifetime helpers, `rulesIn`, and `RuleDecl`.
-`CORE_URI`, `coreVocabulary` and `metaSchema` expose the bundled schema
-documents; `Keywords`, `JsonSchema` and `extendMeta` support extensions.
+`Unknown` and `Ambiguous` lookup errors, `storable`, `reserved`, `kindOrder`,
+`composite`, state-lifetime helpers, `rulesIn`, and `RuleDecl`. `CORE_URI`,
+`coreVocabulary` and `metaSchema` expose the bundled schema documents;
+`Keywords`, `JsonSchema` and `extendMeta` support extensions.
 
 The `@yaks/vocab/tools` sub-module exports `ToolDefinition`, `toolDefinition`,
 `toolDefinitionSchema`, `toolsIn`, `toolsSaid`, `validateToolInput`,

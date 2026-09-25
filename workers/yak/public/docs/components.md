@@ -414,30 +414,32 @@ declares the same name, which is the next page.
 
 ## How a vocabulary evolves
 
-The rule is short: **properties only ever arrive.**
+The rule is short: **a word leaves when nothing is stored under it.**
 
 - **Adding a property** is a deploy. It reports `added: recipe.source`.
 - **A property that already exists is never retyped.** Declare `pages` as `text`
   where it was `number` and the deploy is refused:
   `vocab.json: book.pages is
   already number — a property keeps the type its rows were written under`.
-- **A property the new manifest stops naming does not go away.** Its rows are
-  still there, and the deploy reports it:
+- **A property the new manifest stops naming stays while any row holds a value
+  under it.** The deploy reports it:
 
       kept, not in vocab.json (the rows are there): note.text — name it in
       vocab.json again to keep writing it, or move its rows to the new word
       yourself, a row at a time with graph_query then graph_apply. Nothing is
-      migrated behind you.
+      migrated behind you; once no row holds a value under it, the next deploy
+      drops it.
 
   That line is what makes a rename visible. Change `minutes` to `mins` and you
   have two properties: the new one arrives empty, the old one keeps every row
   already written, and rows read back as `"minutes": 46, "mins": null` until you
-  move them yourself.
+  move them yourself. Clear the old values as you move them, deploy again, and
+  `minutes` is gone.
 
-- **A whole component the manifest stops naming is dropped if it holds no rows
-  and kept if it holds any.** `dropped (no rows): jot` — the table goes with the
-  component, so a name you tried once does not stay in the app forever. A
-  component with rows stays declared and stays writable.
+- **A component or a property the manifest stops naming is dropped once it holds
+  nothing.** `dropped (nothing stored in it): jot, recipe.title`: the table or
+  the column goes, so a name you tried once or renamed away does not stay in the
+  app forever. A component with rows stays declared and stays writable.
 
 - **The whole manifest is read before anything is planted.** A refusal names
   every collision at once and leaves the store as it was, so probing for a free

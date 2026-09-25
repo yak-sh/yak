@@ -1171,26 +1171,26 @@ export let wordsOf = (doc: VocabDoc): Record<string, Record<string, string>> =>
   )
 
 /**
- * The manifest a store keeps after a deploy: properties only ever arrive. A
- * property the new manifest stopped naming stays declared — its rows are still
- * there — and one whose type changed is refused, because the values already
- * stored were written under the old word.
+ * The manifest a store keeps after a deploy. A word the new manifest stopped
+ * naming — a whole component, or one property of a component it still names —
+ * leaves when nothing is stored under it, so the store holds one shape and not
+ * the old one beside the new (M-17871); a word something is stored under stays
+ * declared, because those values are the record of what it is. A property
+ * whose type changed is refused, because the values already stored were
+ * written under the old word. `rows` counts what a component holds, or with a
+ * property, how many of its rows hold a value there — the store's question,
+ * since only it has the tables.
  *
- * A whole component the manifest stopped naming is the one thing that may
- * leave, and only when it holds nothing: a name tried once and abandoned is a
- * probe's leftover, not data (C-32624 item 1). `rows` counts what a component
- * holds — the store's question, since only it has the tables.
- *
- * It also says what moved, because additive growth is silent where it matters
- * most: rename a property and the manifest reads as one word while the store
- * holds two, the old one still under every row already written (C-32652 item
- * 4). `added` is every property this manifest planted; `kept` is every property
- * the store still declares that this manifest did not name.
+ * It also says what moved, because a rename is otherwise silent: the manifest
+ * reads as one word while the store holds two until the old one's values have
+ * moved (C-32652 item 4). `added` is every property this manifest planted;
+ * `kept` is every property the store still declares that this manifest did not
+ * name; `dropped` is every component and `comp.prop` that left.
  */
 export let grew = (
   was: VocabDoc,
   next: VocabDoc,
-  rows: (name: string) => number = () => 1,
+  rows: (name: string, prop?: string) => number = () => 1,
 ): {
   doc: VocabDoc
   dropped: string[]
@@ -1205,6 +1205,11 @@ export let grew = (
   for (let name of dropped) delete defs[name]
   for (let [name, schema] of Object.entries(theirs)) {
     let props: Record<string, PropSchema> = { ...mine[name]?.properties }
+    for (let prop of Object.keys(props)) {
+      if (prop in (schema.properties ?? {}) || rows(name, prop)) continue
+      delete props[prop]
+      dropped.push(`${name}.${prop}`)
+    }
     for (let [prop, s] of Object.entries(schema.properties ?? {})) {
       let had = props[prop]
       if (had && (had.type != s.type || had.format != s.format)) {

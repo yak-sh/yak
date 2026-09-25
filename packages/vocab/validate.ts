@@ -1,19 +1,20 @@
 // Validating a vocabulary document — ordinary well-formedness, the checks a
 // store runs over a hand-written app manifest, expressed over JSON Schema.
-// Three kinds of error, each naming the offending entry and the fix, because
+// Two kinds of error, each naming the offending entry and the fix, because
 // the agent reading it has no other source:
 //   storable  the shape a table can lower — a top-level object of typed
 //             scalar / ref / enum / JSON properties, no recursive $ref
 //   reserved  a name the base vocabulary already owns is rejected
-//   grow      evolution is additive forever — never drop or retype a property,
-//             the rows are already written under the old type
+// How a store's vocabulary may change from one deploy to the next is the
+// store's to say, since only it knows what its rows hold (yaks.app's
+// workers/yak/vocab.ts `grew`).
 //
 // This is not a new security story: a hosted store only creates tables for
 // components it declares, and these errors are what a person's agent reads
 // when a deploy is rejected.
 
 import type { Composite, PropSchema, VocabDoc } from './types.ts'
-import { composite, jsonb, TYPES, typesOf, type Vocab } from './vocab.ts'
+import { composite, jsonb, TYPES, typesOf } from './vocab.ts'
 import { lives, SYNC, type Sync } from './lifetime.ts'
 
 let NAME = /^[a-z][a-z0-9_]{0,39}$/
@@ -249,50 +250,4 @@ export let reserved = (doc: VocabDoc, base: Iterable<string>): string[] => {
     .map((name) =>
       `'${name}' is a word the platform already owns — pick another name`
     )
-}
-
-// A property's storage identity: what a retype would change under it. Enum
-// values may grow (widening a closed set is additive); category, scalar and ref
-// kind may not move, because the rows were written under the old type.
-let identity = (v: Vocab, comp: string, prop: string): string => {
-  let c = v.prop(comp, prop)!
-  return `${c.category}:${c.scalar ?? ''}:${c.ref ?? ''}`
-}
-
-// Additive evolution: `was` → `next`. A property that changed its storage
-// identity is rejected; a property `next` no longer declares is rejected (its
-// rows are still there); everything genuinely new is reported in `added`.
-export let grow = (
-  was: Vocab,
-  next: Vocab,
-): { added: string[]; errors: string[] } => {
-  let added: string[] = []
-  let errors: string[] = []
-  for (let comp of next.all) {
-    let hadComp = was.all.includes(comp)
-    for (let prop of next.props(comp)) {
-      if (hadComp && was.prop(comp, prop)) {
-        let before = identity(was, comp, prop)
-        let after = identity(next, comp, prop)
-        if (before != after) {
-          errors.push(
-            `${comp}.${prop} was ${before}, now ${after} — a property keeps the type its rows were written under`,
-          )
-        }
-      } else {
-        added.push(`${comp}.${prop}`)
-      }
-    }
-  }
-  for (let comp of was.all) {
-    let dropped = next.all.includes(comp)
-      ? was.props(comp).filter((p) => !next.prop(comp, p))
-      : was.props(comp)
-    for (let p of dropped) {
-      errors.push(
-        `${comp}.${p} was dropped — a property only ever arrives, never leaves`,
-      )
-    }
-  }
-  return { added, errors }
 }

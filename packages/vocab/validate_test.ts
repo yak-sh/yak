@@ -1,8 +1,8 @@
-// Document validation: the storable profile, reserved names, and the
-// additive-forever evolution rule. Each refusal names the fix.
+// Document validation: the storable profile and reserved names. Each refusal
+// names the fix.
 
 import { assert, assertEquals } from '@std/assert'
-import { grow, loadVocab, reserved, storable } from './mod.ts'
+import { loadVocab, reserved, storable } from './mod.ts'
 import type { PropSchema, VocabDoc } from './mod.ts'
 import slice from './fleet/slice.schema.json' with { type: 'json' }
 
@@ -177,68 +177,6 @@ Deno.test('reserved names refuse against a base vocabulary', () => {
     "'doc' is a word the platform already owns — pick another name",
   ])
   assertEquals(reserved(doc({ recipe: { type: 'object' } }), base.all), [])
-})
-
-Deno.test('evolution is additive forever', () => {
-  let was = loadVocab(doc({
-    recipe: {
-      type: 'object',
-      properties: {
-        title: { type: 'string' },
-        serves: { type: 'number' },
-        state: { type: 'string', enum: ['draft'] },
-      },
-    },
-  }))
-  // adding a property and widening an enum are additive
-  let grown = loadVocab(doc({
-    recipe: {
-      type: 'object',
-      properties: {
-        title: { type: 'string' },
-        serves: { type: 'number' },
-        state: { type: 'string', enum: ['draft', 'published'] },
-        mins: { type: 'number' },
-      },
-    },
-  }))
-  assertEquals(grow(was, grown), { added: ['recipe.mins'], errors: [] })
-  // retyping refuses
-  let retyped = loadVocab(doc({
-    recipe: {
-      type: 'object',
-      properties: {
-        title: { type: 'string' },
-        serves: { type: 'string' },
-        state: { type: 'string', enum: ['draft'] },
-      },
-    },
-  }))
-  assert(grow(was, retyped).errors[0].includes('recipe.serves was'))
-  // dropping refuses — the rows are still there
-  let dropped = loadVocab(doc({
-    recipe: { type: 'object', properties: { title: { type: 'string' } } },
-  }))
-  let errs = grow(was, dropped).errors.join('\n')
-  assert(errs.includes('recipe.serves was dropped'))
-  assert(errs.includes('recipe.state was dropped'))
-})
-
-Deno.test('text cannot become JSON after rows were written', () => {
-  let vocab = (format?: string) =>
-    loadVocab(doc({
-      config: {
-        type: 'object',
-        properties: { value: { type: 'string', format } },
-      },
-    }))
-  assertEquals(grow(vocab(), vocab('json')), {
-    added: [],
-    errors: [
-      'config.value was scalar:text:, now scalar:json: — a property keeps the type its rows were written under',
-    ],
-  })
-  assertEquals(grow(vocab('json'), vocab('json')), { added: [], errors: [] })
 })
 
 Deno.test('storable refuses a required or present property that is not there', () => {

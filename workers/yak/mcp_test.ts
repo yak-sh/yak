@@ -972,7 +972,7 @@ slow(
       )
       await manifest(vocabFile({ note: { text: txt } }))
       let shed = await agent.tool('app_deploy', app)
-      assertStringIncludes(shed, 'dropped (no rows): jot')
+      assertStringIncludes(shed, 'dropped (nothing stored in it): jot')
       // The deploy says what it planted, and what the store still has that
       // this manifest did not name (C-32652 item 4).
       assertStringIncludes(shed, 'added: note.text')
@@ -1024,17 +1024,37 @@ slow(
       // And says what to DO about it, since the two names are a rename
       // half done and nobody else will finish it (C-32730 item 4).
       assertStringIncludes(renamed, 'name it in vocab.json again')
-      assertStringIncludes(renamed, 'Nothing is migrated behind you.')
+      assertStringIncludes(renamed, 'Nothing is migrated behind you')
       await agent.tool('graph_apply', {
         change: [{ entity: { eid: '$n2' }, note: { body: 'said it' } }],
       })
       let notes = JSON.parse(
         await agent.tool('graph_query', { q: '.note!' }),
-      ) as { note: { text: string | null; body: string | null } }[]
+      ) as {
+        entity: { eid: string }
+        note: { text: string | null; body: string | null }
+      }[]
       assertEquals(notes.map((n) => n.note), [
         { text: 'wrote it', body: null },
         { text: null, body: 'said it' },
       ])
+      // Once the old name holds nothing, the next deploy drops it: the rename
+      // is finished and the store answers one word (T-38052).
+      await agent.tool('graph_apply', {
+        change: [{
+          entity: notes[0].entity,
+          note: { text: null, body: 'wrote it' },
+        }],
+      })
+      assertStringIncludes(
+        await agent.tool('app_deploy', app),
+        'dropped (nothing stored in it): note.text',
+      )
+      assertEquals(
+        JSON.parse(await agent.tool('graph_query', { q: '.note!' }))
+          .map((n: { note: unknown }) => n.note),
+        [{ body: 'wrote it' }, { body: 'said it' }],
+      )
 
       // And the same manifest written the other way (M-34605): a `vocab.yml`
       // beside index.html is the app's words in the warm format, read
@@ -1180,11 +1200,12 @@ slow(
           'page /recipes/ — sift is not a function',
         ],
       )
-      // v7: two files, a vocabulary, the word it dropped, the property it
-      // renamed, the same words written again as YAML — every deploy above
-      // bumped it, and a break wears the version it happened on.
+      // v8: two files, a vocabulary, the word it dropped, the property it
+      // renamed, the old name dropped once empty, the same words written
+      // again as YAML — every deploy above bumped it, and a break wears the
+      // version it happened on.
       assert(
-        breaks.every((l) => l.includes(' recipes v7: ')),
+        breaks.every((l) => l.includes(' recipes v8: ')),
         'the app and the deploy it happened on',
       )
 

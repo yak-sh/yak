@@ -15,6 +15,7 @@ import {
   appVocab,
   EXAMPLE,
   gitVocab,
+  grew,
   homed,
   livesIn,
   meant,
@@ -437,6 +438,23 @@ Deno.test('a word the space already has is a use, not a home', () => {
 
 // The `search` keyword is the property's, and a property the platform refuses
 // to index says so at the deploy, in @yaks/vocab's own words.
+Deno.test('a word the manifest stopped naming leaves once it holds nothing', () => {
+  let was = says({ recipe: { title: txt, serves: num, notes: txt }, jot: {} })
+  let next = says({ recipe: { serves: num } })
+  // `recipe.notes` still has values; `recipe.title` and `jot` hold nothing.
+  let held = (name: string, prop?: string) =>
+    name == 'recipe' && (!prop || prop == 'notes') ? 3 : 0
+  let r = grew(was, next, held)
+  assertEquals(r.dropped, ['jot', 'recipe.title'])
+  assertEquals(r.kept, ['recipe.notes'])
+  assertEquals(Object.keys(r.doc.$defs!.recipe.properties!), [
+    'serves',
+    'notes',
+  ])
+  // Asked nothing, a store keeps every word: nothing may leave unseen.
+  assertEquals(grew(was, next).dropped, [])
+})
+
 Deno.test('a searched property that holds no prose is refused', () => {
   assertThrows(
     () =>

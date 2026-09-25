@@ -209,11 +209,12 @@ app_deploy:
     called an entity; vocab.json is the schema defining those groups and
     fields. A component name the platform already uses is refused, and the
     whole manifest is refused with it before anything is created; a
-    component this manifest no longer names, and that holds no rows, is
-    dropped. It reports the properties it added and the properties the store
-    still has that this manifest did not name: a property is never renamed
-    or retyped, so a new name is added beside the old one, which keeps every
-    row already written under it. A seed.json beside index.html (a list of
+    component or a property this manifest no longer names, and that holds
+    nothing, is dropped. It reports the properties it added and the
+    properties the store still has values under that this manifest did not
+    name: a property is never renamed or retyped, so a new name is added
+    beside the old one, which keeps every row already written under it until
+    those values move. A seed.json beside index.html (a list of
     bundles, each a JSON object holding an entity id and its components, or
     a seed/ folder of *.json files when there are many) is written into the
     app's store here, once per store and after the components, so the app
