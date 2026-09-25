@@ -50,7 +50,24 @@
 
 import type { Vocab } from '@yaks/vocab'
 import { type Bundle, comps, dead, type Eid } from '@yaks/graph'
-import type { Driver, Param } from './driver.ts'
+import {
+  among,
+  as,
+  call,
+  col,
+  type Cte,
+  type Driver,
+  each,
+  fn,
+  lit,
+  not,
+  type Param,
+  type Query,
+  select,
+  table,
+  unionAll,
+  val,
+} from '@yaks/sql'
 import { isJsonb, jsonIn, jsonOut } from './jsonb.ts'
 
 /** What an overlaid component's CTE is called. */
@@ -59,17 +76,15 @@ export let OVER = '_over_'
 export let GONE = '_gone_'
 
 /**
- * A batch, made readable. `with` is the prefix a statement carries, `params`
- * the parameters it binds first, and `at` names the source each component reads
- * from — the overlay's where there is one, the committed table where the batch
- * touched nothing.
+ * A batch, made readable. `with` is the common table expressions a statement
+ * carries, and `at` names the source each component reads from — the
+ * overlay's where there is one, the committed table where the batch touched
+ * nothing.
  */
 export type Overlay = {
-  /** the `with` prefix, ready to put in front of a select (`''` when the
-   * batch moved nothing the caller asked about) */
-  with: string
-  /** the parameters the prefix binds, before the statement's own */
-  params: Param[]
+  /** the CTEs, ready to put on a select (none when the batch moved nothing
+   * the caller asked about) */
+  with: Cte[]
   /** the name of the source a component reads from */
   at: (comp: string) => string
   /** the name of the list of entities this batch removed a component from —
@@ -81,12 +96,10 @@ export type Overlay = {
   ids: Map<Eid, number>
 }
 
-let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
-
-// A list the batch supplies, as one bound JSON array rather than a parameter
-// per item: a Durable Object binds at most 100 per statement, and a batch is
-// as long as its writer made it. The batch's own rows ride the same way.
-let EACH = '(select value from json_each(?))'
+// A list the batch supplies rides as one bound JSON array rather than a
+// parameter per item (@yaks/sql `each`): a Durable Object binds at most 100 per
+// statement, and a batch is as long as its writer made it. The batch's own
+// rows ride the same way.
 
 // A component's stored columns, in the order the table carries them.
 let stored = (v: Vocab, comp: string): string[] =>
@@ -142,7 +155,7 @@ let named = (v: Vocab, bundles: Bundle[]): Eid[] => {
  *
  * ```ts
  * let over = overlay(driver, vocab, batch, ['product'])
- * driver.query(over.with + sql, [...over.params, ...params])
+ * driver.query({ ...statement, with: over.with })
  * ```
  */
 export let overlay = (
@@ -186,10 +199,11 @@ export let overlay = (
   let ids = new Map<Eid, number>()
   let eids = named(vocab, bundles)
   for (
-    let row of driver.query(
-      `select id, eid from entity where eid in ${EACH}`,
-      [JSON.stringify(eids)],
-    )
+    let row of driver.query(select({
+      cols: [col('id'), col('eid')],
+      from: table('entity'),
+      where: among(col('eid'), each(eids)),
+    }))
   ) ids.set(String(row.eid), Number(row.id))
   let next = 0
   let fresh: Eid[] = []
@@ -199,8 +213,7 @@ export let overlay = (
     if (about.has(eid)) fresh.push(eid)
   }
 
-  let parts: string[] = []
-  let params: Param[] = []
+  let parts: Cte[] = []
   let covers: string[] = []
   // One component's arm: the committed rows it did not touch, then its own.
   let arm = (
@@ -211,21 +224,24 @@ export let overlay = (
     out: number[],
     rows: Param[][],
   ) => {
-    let list = [key, ...cols].map(q).join(', ')
-    let sql = `select ${list} from ${from}`
-    if (out.length) {
-      sql += ` where ${q(key)} not in ${EACH}`
-      params.push(JSON.stringify(out))
-    }
+    let names = [key, ...cols]
+    let q: Query = select({
+      cols: names.map((c) => col(c)),
+      from: table(from),
+      where: out.length ? not(among(col(key), each(out))) : undefined,
+    })
     if (rows.length) {
-      sql += ` union all select ${
-        [key, ...cols].map((_, i) => `json_extract(value, '$[${i}]')`).join(
-          ', ',
-        )
-      } from json_each(?)`
-      params.push(JSON.stringify(rows))
+      q = unionAll(
+        q,
+        select({
+          cols: names.map((_, i) =>
+            fn('json_extract', col('value'), lit(`$[${i}]`))
+          ),
+          from: call('json_each', [val(JSON.stringify(rows))]),
+        }),
+      )
     }
-    parts.push(`${q(OVER + comp)} as (${sql})`)
+    parts.push({ name: OVER + comp, q })
     covers.push(comp)
   }
 
@@ -237,21 +253,21 @@ export let overlay = (
     if (owners.length) {
       // A JSON value is read as its text, to ride in the rows' JSON array.
       let read = cols.map((c) =>
-        isJsonb(vocab, comp, c) ? `${jsonOut(q(c))} as ${q(c)}` : q(c)
+        isJsonb(vocab, comp, c) ? as(jsonOut(col(c)), c) : col(c)
       )
       for (
-        let row of driver.query(
-          `select entity, ${read.join(', ')} from ${q(comp)} ` +
-            `where entity in ${EACH}`,
-          [JSON.stringify(owners)],
-        )
+        let row of driver.query(select({
+          cols: [col('entity'), ...read],
+          from: table(comp),
+          where: among(col('entity'), each(owners)),
+        }))
       ) held.set(Number(row.entity), row)
     }
     arm(
       comp,
       cols,
       'entity',
-      q(comp),
+      comp,
       [...rows.keys()].map((e) => ids.get(e)!),
       [...rows].flatMap(([eid, patch]) => {
         if (!patch) return []
@@ -277,7 +293,7 @@ export let overlay = (
       'entity',
       cols,
       'id',
-      q('entity'),
+      'entity',
       [...killed].map((e) => ids.get(e)!),
       fresh.map((
         eid,
@@ -292,15 +308,13 @@ export let overlay = (
   for (let [comp, eids] of dropped) {
     let rows = [...eids].map((e) => ids.get(e)!).filter((id) => id != null)
     if (!rows.length) continue
-    parts.push(`${q(GONE + comp)}("entity") as ${EACH}`)
-    params.push(JSON.stringify(rows))
+    parts.push({ name: GONE + comp, cols: ['entity'], q: each(rows) })
     took.add(comp)
   }
 
   let over = new Set(covers)
   return {
-    with: parts.length ? `with ${parts.join(', ')} ` : '',
-    params,
+    with: parts,
     at: (comp) => over.has(comp) ? OVER + comp : comp,
     gone: (comp) => took.has(comp) ? GONE + comp : null,
     covers,

@@ -11,7 +11,7 @@ import { open } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph } from '@yaks/graph'
 import { storage, type Store } from '@yaks/sqlite'
-import type { Driver } from './driver.ts'
+import type { Driver } from '@yaks/sql'
 import { blobKeywords } from './keywords.ts'
 import { blobRead, blobSchema, sqliteBlobs } from './sqlite.ts'
 import { blobs } from './plugin.ts'
@@ -69,7 +69,7 @@ export let fixture = (
   let driver = mem()
   let bytes = store ?? sqliteBlobs(driver)
   let db = storage(driver, blog, { derived: blobRead(blog) })
-  for (let stmt of [...db.ddl(), ...blobSchema()]) driver.exec(stmt)
+  for (let stmt of [...db.ddl(), ...blobSchema()]) driver.query(stmt)
   return {
     driver,
     db,

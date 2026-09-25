@@ -67,7 +67,15 @@ import type {
 } from '@yaks/graph'
 import { comps, tombstoned } from '@yaks/graph'
 import { matcher } from '@yaks/match'
-import { type BindOpts, DEEP, doomSql, looseSql, narrow } from '@yaks/sql'
+import {
+  type BindOpts,
+  DEEP,
+  doomSql,
+  looseSql,
+  narrow,
+  render,
+  type Stmt,
+} from '@yaks/sql'
 import {
   minted,
   mintSql,
@@ -79,14 +87,7 @@ import {
   touched,
 } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
-import {
-  bind,
-  type D1Like,
-  type Row,
-  type Sql,
-  type Stmt,
-  unbind,
-} from './d1.ts'
+import { bind, type D1Like, type Prepared, type Row, unbind } from './d1.ts'
 import { bundles, gatherSql, type Query, sql, whole, wholeSql } from './read.ts'
 
 export type { Query }
@@ -100,7 +101,7 @@ export type { Query }
  */
 export type Store = {
   /** the schema statements the bound vocabulary implies */
-  ddl: () => string[]
+  ddl: () => Stmt[]
   /** run them — create the tables, indexes and triggers the vocabulary needs */
   install: () => Promise<void>
   /** a query → the matching entities as whole bundles */
@@ -167,7 +168,7 @@ export type Opts = BindOpts & {
   number?: boolean | { except: readonly string[] }
 }
 
-export let storage = <S extends Stmt<S>>(
+export let storage = <S extends Prepared<S>>(
   db: D1Like<S>,
   vocab: Vocab,
   base: Opts = {},
@@ -176,15 +177,18 @@ export let storage = <S extends Stmt<S>>(
   // `bind` at the boundary, so a statement may be built from the plain SQLite
   // values @yaks/sqlite's shared write path uses (a bigint, a byte array) and
   // D1's narrower set of types is satisfied in exactly one place.
-  let prep = (s: Sql): S => db.prepare(s.sql).bind(...s.params.map(bind))
+  let prep = (s: Stmt): S => {
+    let r = render(s)
+    return db.prepare(r.sql).bind(...r.params.map(bind))
+  }
 
   // One statement, one round trip.
-  let one = async (s: Sql): Promise<Row[]> =>
+  let one = async (s: Stmt): Promise<Row[]> =>
     (await prep(s).all<Row>()).results.map(unbind)
 
   // Many statements, still one round trip — and, when they are writes, one
   // transaction. The answers come back per statement, in order.
-  let send = async (stmts: Sql[]): Promise<Row[][]> =>
+  let send = async (stmts: Stmt[]): Promise<Row[][]> =>
     stmts.length
       ? (await db.batch(stmts.map(prep))).map((r) => r.results.map(unbind))
       : []
@@ -232,7 +236,7 @@ export let storage = <S extends Stmt<S>>(
   // One transaction: the deferred write log, the read cache, and the overlay of
   // what this transaction has written. See the header for what that buys.
   let open = () => {
-    let pending: Sql[] = []
+    let pending: Stmt[] = []
     // Entities this transaction wrote, as they will be once the batch lands.
     let dirty = new Map<Eid, Bundle>()
     // Entities it merely read, faithful to the database. Kept apart from the
@@ -488,7 +492,7 @@ export let storage = <S extends Stmt<S>>(
   return {
     ddl: () => schema(vocab),
     install: async () => {
-      await send(schema(vocab).map((s) => ({ sql: s, params: [] })))
+      await send(schema(vocab))
     },
     read,
     rows,

@@ -337,7 +337,6 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
     remove: nope('transaction'),
   }
   self = {
-    ddl: () => [],
     install: () => {},
     read: bundles,
     rows,
@@ -521,7 +520,6 @@ export let reaching = async (
     storage,
     plugins,
     use: (p) => (plugins.push(p), self),
-    ddl: () => [],
     install: () => {},
     read: (q) => storage.read(q),
     rows: (q) => storage.rows(q),

@@ -24,13 +24,23 @@
 // could break a tie differently each time.
 
 import { type And, parse } from '@yaks/query'
-import type { BindOpts } from '@yaks/sql'
-import { compile } from '@yaks/sql'
-import { compSql, decoded, OWNER, setSql } from '@yaks/sqlite'
+import {
+  among,
+  type BindOpts,
+  col,
+  compile,
+  eq,
+  from,
+  type Raw,
+  select,
+  type Stmt,
+  val,
+} from '@yaks/sql'
+import { compSql, decoded, OWNER, setSql, spine } from '@yaks/sqlite'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { tombstoned } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import type { Row, Sql } from './d1.ts'
+import type { Row } from './d1.ts'
 
 /** A query, as text or as an already-built AST. Text is parsed; an AST passes
  * through, so a caller may hand-build one with @yaks/query's builders. */
@@ -38,28 +48,20 @@ export type Query = string | And
 
 let ast = (q: Query): And => typeof q == 'string' ? parse(q) : q
 
-/** The compiled statement for a query: SQL and its bound parameters. */
-export let sql = (v: Vocab, query: Query, opts: BindOpts = {}): Sql => {
-  let { sql, params } = compile(ast(query), v, opts)
-  return { sql, params: params as Sql['params'] }
-}
+/** The compiled statement for a query. */
+export let sql = (v: Vocab, query: Query, opts: BindOpts = {}): Raw =>
+  compile(ast(query), v, opts)
 
 /** The identity of an eid, as stored: its `num`, and whether it is buried. One
  * statement, so a gather of many entities is one batch. */
-export let spineSql = (eid: string): Sql => ({
-  sql: `select e.num as num, t.entity as dead from entity e
-          left join tombstone t on t.entity = e.id where e.eid = ?`,
-  params: [eid],
-})
+export let spineSql = (v: Vocab, eid: string): Stmt =>
+  spine(v, eq(col('eid', 'e'), val(eid)))
 
 /** What a gather asks about one entity: its spine, then one read per component
  * the vocabulary declares. The order is what {@link bundles} reads back. */
-export let gatherSql = (v: Vocab, eid: string, opts: BindOpts = {}): Sql[] => [
-  spineSql(eid),
-  ...comps(v).map((comp) => ({
-    sql: compSql(v, comp, opts.derived),
-    params: [eid],
-  })),
+export let gatherSql = (v: Vocab, eid: string, opts: BindOpts = {}): Stmt[] => [
+  spineSql(v, eid),
+  ...comps(v).map((comp) => compSql(v, comp, eid, opts.derived)),
 ]
 
 /** The components a gather reads, in the vocabulary's order — the spine is the
@@ -114,20 +116,12 @@ export let bundles = (v: Vocab, eids: string[], answers: Row[][]): Bundle[] => {
  * statement repeats the query as a subquery, which is what lets the whole read
  * come back in a single round trip. {@link whole} reads it back.
  */
-export let wholeSql = (v: Vocab, q: Sql, opts: BindOpts = {}): Sql[] => {
-  let sub = `select "eid" from (${q.sql})`
+export let wholeSql = (v: Vocab, q: Raw, opts: BindOpts = {}): Stmt[] => {
+  let hits = select({ cols: [col('eid')], from: from(q) })
   return [
     q,
-    {
-      sql: `select e.eid as eid, e.num as num, t.entity as dead from entity e
-              left join tombstone t on t.entity = e.id
-              where e.eid in (${sub})`,
-      params: q.params,
-    },
-    ...comps(v).map((comp) => ({
-      sql: setSql(v, comp, sub, opts.derived),
-      params: q.params,
-    })),
+    spine(v, among(col('eid', 'e'), hits)),
+    ...comps(v).map((comp) => setSql(v, comp, hits, opts.derived)),
   ]
 }
 

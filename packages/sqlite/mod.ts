@@ -40,7 +40,13 @@
 // handle for a server — so nothing here names a concrete SQLite library.
 
 import type { Vocab } from '@yaks/vocab'
-import type { BindOpts } from '@yaks/sql'
+import {
+  type BindOpts,
+  type Driver,
+  render,
+  type Row,
+  type Stmt,
+} from '@yaks/sql'
 import type {
   Binding,
   Bundle,
@@ -50,17 +56,8 @@ import type {
   ReadOpts,
 } from '@yaks/graph'
 import { sha256 } from '@yaks/graph'
-import type { Driver, Row } from './driver.ts'
 import type { Query } from './read.ts'
-import {
-  analyzed,
-  grown,
-  indexed,
-  refit,
-  schema,
-  tabled,
-  type Text,
-} from './ddl.ts'
+import { analyzed, grown, indexed, refit, schema, tabled } from './ddl.ts'
 import { epoch, installed, meta, SCHEMA } from './meta.ts'
 import { doom, read, rows } from './read.ts'
 import { keyed } from './keyed.ts'
@@ -77,16 +74,7 @@ export { fold, pointers } from './fold.ts'
 export { GONE, OVER, type Overlay, overlay } from './overlay.ts'
 export { bindings, matched } from './rules.ts'
 export * from './bundle.ts'
-export {
-  analyzed,
-  grown,
-  indexed,
-  META,
-  refit,
-  schema,
-  tabled,
-  type Text,
-} from './ddl.ts'
+export { analyzed, grown, indexed, META, refit, schema, tabled } from './ddl.ts'
 export { EPOCH, epoch, type Meta, meta } from './meta.ts'
 export { decoded, isJsonb, jsonIn, jsonOut, projected } from './jsonb.ts'
 export {
@@ -98,6 +86,7 @@ export {
   read,
   rows,
   setSql,
+  spine,
 } from './read.ts'
 export {
   buried,
@@ -111,7 +100,6 @@ export {
   removeSql,
   type Spine,
   spines,
-  type Sql,
   touched,
   upsertSql,
 } from './write.ts'
@@ -163,13 +151,13 @@ export type Tx = {
 // wanted.
 export type Store = {
   /** the schema statements the bound vocabulary implies */
-  ddl: () => string[]
+  ddl: () => Stmt[]
   /**
    * the `add column` statements the live tables are missing — what `ddl()`
    * cannot emit, since `create table if not exists` does nothing to a table
    * that already exists (ddl.ts `grown`). Read after `ddl()` has run.
    */
-  grown: () => string[]
+  grown: () => Stmt[]
   /** run them — create the tables and indexes the vocabulary needs, and
    * classify what the archetype backfill finds unclassified; nothing, where
    * the file's schema is as this vocabulary last installed it */
@@ -184,14 +172,12 @@ export type Store = {
 
 /**
  * What `storage()` is bound with: @yaks/sql's read options (a derived-property
- * registry, a fixed `now` for time phrases), plus `text` — how a property whose
- * stored value is not the text itself reads as text through `doc_value`,
- * rather than returning, for example, a blob's address (`blobText(vocab)` from
- * @yaks/blob is one). The read options apply to every read; `text` applies to
- * the schema.
+ * registry, a fixed `now` for time phrases). They apply to every read, and the
+ * registry's `text` expressions to the schema too: a property whose stored
+ * value is not the text itself (a blob's address, @yaks/blob `blobRead`) reads
+ * as text through `doc_value`.
  */
 export type Opts = BindOpts & {
-  text?: Text
   /** Give new spines a human-readable number. Opt-IN: left out, an entity is
    * its eid and nothing else, which is what a store whose entities nobody ever
    * types the number of wants. Identity, and reporting which entities were
@@ -228,10 +214,10 @@ export let storage = (
     remove: (entities) => remove(driver, vocab, entities),
   }
   return {
-    ddl: () => schema(vocab, base.text),
+    ddl: () => schema(vocab, base.derived),
     grown: () => grown(driver, vocab),
     install: () => {
-      let tables = tabled(vocab, base.text)
+      let tables = tabled(vocab, base.derived)
       let indexes = indexed(vocab)
       // A file whose schema nothing has touched since this vocabulary
       // installed it is left as it is. Every statement below is a no-op there
@@ -241,15 +227,17 @@ export let storage = (
       // file's own schema shape (physical.ts `shape`), so a vocabulary that
       // says anything new installs, and so does a file whose tables or
       // indexes another hand changed.
-      let print = sha256([...tables, ...indexes].join(';\n'))
+      let print = sha256(
+        [...tables, ...indexes].map((s) => render(s).sql).join(';\n'),
+      )
       let mark = () => `${print} ${shape(driver)}`
       if (installed(driver) != mark()) {
-        for (let stmt of tables) driver.exec(stmt)
+        for (let stmt of tables) driver.query(stmt)
         // Then the columns a component gained since its table was created —
         // the half `create table if not exists` cannot add (ddl.ts `grown`),
         // read after the creates so a brand-new table is already there to
         // inspect.
-        for (let stmt of grown(driver, vocab)) driver.exec(stmt)
+        for (let stmt of grown(driver, vocab)) driver.query(stmt)
         // Then the tables whose foreign keys the vocabulary has since changed
         // its mind about (ddl.ts `refit`). A rebuild drops the table, so it
         // runs outside the enforcement — a copy that re-checks every key it is
@@ -257,15 +245,20 @@ export let storage = (
         // indexes, which the drop took with the old table.
         let rebuilt = refit(driver, vocab)
         if (rebuilt.length) {
-          driver.exec('pragma foreign_keys = off')
+          let keys = (value: string): Stmt => ({
+            t: 'pragma',
+            name: 'foreign_keys',
+            value,
+          })
+          driver.query(keys('off'))
           try {
-            for (let stmt of rebuilt) driver.exec(stmt)
+            for (let stmt of rebuilt) driver.query(stmt)
           } finally {
-            driver.exec('pragma foreign_keys = on')
+            driver.query(keys('on'))
           }
         }
         // The indexes last: one may name a column this boot just added.
-        for (let stmt of indexes) driver.exec(stmt)
+        for (let stmt of indexes) driver.query(stmt)
         // The store's lineage identity, minted on the first install (meta.ts
         // `epoch`).
         epoch(driver)

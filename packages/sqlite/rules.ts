@@ -9,8 +9,14 @@
 
 import type { Vocab } from '@yaks/vocab'
 import type { Binding, Bundle, Match } from '@yaks/graph'
-import { type BindOpts, type On, render, rule } from '@yaks/sql'
-import type { Driver, Param, Row } from './driver.ts'
+import {
+  type BindOpts,
+  type Cte,
+  type Driver,
+  type On,
+  type Row,
+  rule,
+} from '@yaks/sql'
 import { overlay } from './overlay.ts'
 
 /**
@@ -24,13 +30,9 @@ export let matched = (
   vocab: Vocab,
   opts: BindOpts = {},
   on: On = {},
-  prefix: { with: string; params: Param[] } = { with: '', params: [] },
+  over: Cte[] = [],
 ): Binding[] => {
-  let s = render(rule(m, vocab, opts, on))
-  return driver.query(prefix.with + s.sql, [
-    ...prefix.params,
-    ...s.params,
-  ] as (string | number)[]).map((
+  return driver.query({ ...rule(m, vocab, opts, on), with: over }).map((
     row: Row,
   ) => ({
     entities: m.patterns.map((p, i) => p.makes ? null : String(row[`e${i}`])),
@@ -67,5 +69,5 @@ export let bindings = (
       .filter((id) => id !== undefined)
     : undefined
   let on = { at: over.at, gone: over.gone, touched }
-  return matches.map((m) => matched(driver, m, vocab, opts, on, over))
+  return matches.map((m) => matched(driver, m, vocab, opts, on, over.with))
 }

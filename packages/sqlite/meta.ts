@@ -12,7 +12,7 @@
 // The table is `server_meta` (ddl.ts {@link META}), created by `schema()` with
 // the rest of the spine, so a store that has installed already has it.
 
-import { type Driver, effect } from './driver.ts'
+import { col, type Driver, effect, eq, select, table, val } from '@yaks/sql'
 import { META } from './ddl.ts'
 
 /** Read, write, clear — the whole interface. Values are text; an application
@@ -27,17 +27,23 @@ export type Meta = {
 /** Bind the key/value interface to a driver. */
 export let meta = (driver: Driver): Meta => ({
   get: (k) => {
-    let row = driver.query(`select v from "${META}" where k = ?`, [k])[0]
+    let row = driver.query(select({
+      cols: [col('v')],
+      from: table(META),
+      where: eq(col('k'), val(k)),
+    }))[0]
     return row ? String(row.v) : undefined
   },
   set: (k, v) =>
-    effect(
-      driver,
-      `insert into "${META}" (k, v) values (?, ?)
-       on conflict(k) do update set v = excluded.v`,
-      [k, v],
-    ),
-  del: (k) => effect(driver, `delete from "${META}" where k = ?`, [k]),
+    effect(driver, {
+      t: 'insert',
+      into: META,
+      cols: ['k', 'v'],
+      rows: [[val(k), val(v)]],
+      upsert: [{ on: [col('k')], set: { v: col('v', 'excluded') } }],
+    }),
+  del: (k) =>
+    effect(driver, { t: 'delete', from: META, where: eq(col('k'), val(k)) }),
 })
 
 /** The key the epoch is kept under. */
@@ -51,7 +57,11 @@ export let SCHEMA = 'schema'
  * for a file no install has finished in — one that may not have this table
  * yet. */
 export let installed = (driver: Driver): string | undefined =>
-  driver.query(`select 1 from sqlite_schema where name = ?`, [META]).length
+  driver.query(select({
+      cols: [col('name')],
+      from: table('sqlite_schema'),
+      where: eq(col('name'), val(META)),
+    })).length
     ? meta(driver).get(SCHEMA)
     : undefined
 
@@ -68,10 +78,12 @@ export let installed = (driver: Driver): string | undefined =>
  * store no cursor can be trusted against.
  */
 export let epoch = (driver: Driver): string => {
-  effect(
-    driver,
-    `insert or ignore into "${META}" (k, v) values (?, ?)`,
-    [EPOCH, crypto.randomUUID()],
-  )
+  effect(driver, {
+    t: 'insert',
+    or: 'ignore',
+    into: META,
+    cols: ['k', 'v'],
+    rows: [[val(EPOCH), val(crypto.randomUUID())]],
+  })
   return meta(driver).get(EPOCH)!
 }

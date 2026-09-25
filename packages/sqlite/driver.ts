@@ -1,79 +1,9 @@
-// The small interface @yaks/sqlite needs from a SQLite connection, and nothing
-// more. Naming just these two methods keeps the adapter explicit about what it
-// touches and lets it sit over any driver: an embedded in-process SQLite, a
-// pooled server handle, a remote HTTP-backed database. A driver is data-last
-// config passed to `storage()` — the adapter never constructs one.
+// The connection this adapter runs on is @yaks/sql's `Driver`: a statement in,
+// rows out. It is data-last config passed to `storage()`; the adapter never
+// constructs one (./db.ts `open()` is the door to an embedded one).
 //
-// The interface is deliberately synchronous: SQLite is a synchronous engine,
-// the compiled statements are single round trips, and a synchronous interface
-// keeps the read and write code free of promise plumbing. A driver whose engine
-// is async wraps it at its own boundary.
+// TODO(T-39499): re-exported while the packages that import it from here move
+// to @yaks/sql.
 
-// One row, a bag of column values keyed by name — exactly what a SELECT yields.
-export type Row = Record<string, unknown>
-
-// A bound parameter. The compiled SQL is always parameterized (values ride as
-// binds, never as concatenated literals), so a driver only ever sees scalars.
-export type Param = string | number | bigint | boolean | null | Uint8Array
-
-// The connection, reduced to what the adapter calls:
-//   query  run a parameterized statement and return every row
-//   exec   run one or more statements for effect (DDL, writes) — no rows back
-//   tx     optional: the engine's own transaction, when SQL cannot open one
-export type Driver = {
-  query: (sql: string, params: Param[]) => Row[]
-  /** Run a write without materializing rows and return its affected-row count
-   * (excluding triggers). Optional for query-only drivers. */
-  run?: (sql: string, params: Param[]) => number
-  exec: (sql: string) => void
-  /**
-   * Run `body` as one all-or-nothing unit — commit when it returns, roll back
-   * when it throws — for an engine that owns transactions itself. Most drivers
-   * omit this and the store opens a SAVEPOINT with plain SQL; a Cloudflare
-   * Durable Object rejects `savepoint` as a statement and provides
-   * `transactionSync` instead, which is what this method is for. It must nest,
-   * and it is synchronous: a body that returns a promise commits when the body
-   * returns, not when the promise settles.
-   */
-  tx?: <R>(body: () => R) => R
-  /**
-   * This driver owns a whole SQLite file, which other processes may have open
-   * at the same time. The outermost unit then takes the write lock up front
-   * (`begin immediate`) instead of letting a deferred transaction try to
-   * upgrade: a transaction that read first and writes second cannot upgrade
-   * once another connection has committed, and SQLite reports that as a
-   * `SQLITE_BUSY` the busy handler is NOT allowed to retry — "database is
-   * locked", instantly, however long `busy_timeout` was set to. Taking the
-   * lock first turns that refusal into the bounded wait the timeout is for,
-   * which is what lets many `yak` commands write one graph at once. A driver
-   * over a private or in-memory database omits this and nests savepoints as
-   * before.
-   */
-  file?: boolean
-  /**
-   * How many terms one compound SELECT may carry on this engine. Workerd — the
-   * SQLite under a Durable Object — is built with SQLITE_MAX_COMPOUND_SELECT =
-   * 5 and rejects a sixth term with `too many terms in compound SELECT`, where
-   * an embedded SQLite carries the stock 500. The adapter cuts its
-   * vocabulary-wide probes to this, and the default is workerd's (@yaks/sql
-   * `ARMS`), so a driver that omits it runs more statements rather than one the
-   * engine rejects. A driver over an embedded SQLite sets @yaks/sql `STOCK` and
-   * gets its whole vocabulary in one probe.
-   */
-  arms?: number
-}
-
-/**
- * Run a parameterized statement for effect over either driver shape: `run`
- * where the driver has one, otherwise `query` with the rows thrown away.
- * `exec` cannot serve here — it takes no parameters, and a value always rides
- * as a bind.
- */
-export let effect = (
-  driver: Driver,
-  sql: string,
-  params: Param[] = [],
-): void => {
-  if (driver.run) driver.run(sql, params)
-  else driver.query(sql, params)
-}
+export { type Driver, effect, type Row } from '@yaks/sql'
+export type { Param } from '@yaks/sql'

@@ -196,7 +196,6 @@ export let memory = (): Storage => {
     )
 
   return {
-    ddl: () => [],
     install: () => {},
     read: (query) => tx.read(query),
     rows: (query) =>
@@ -220,7 +219,6 @@ export let memory = (): Storage => {
 /** The same adapter, asynchronous: every method answers with a promise. What
  * proves the pipeline's sync pass-through actually passes async through. */
 export let slow = (base: Storage): Storage => ({
-  ddl: () => base.ddl(),
   install: () => Promise.resolve(base.install()),
   read: (query, opts) => Promise.resolve(base.read(query, opts)),
   rows: (query, opts) => Promise.resolve(base.rows(query, opts)),

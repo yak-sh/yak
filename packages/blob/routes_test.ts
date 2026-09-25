@@ -3,8 +3,8 @@ import { type Graph, graph } from '@yaks/graph'
 import { type Authenticate, type Route, routed } from '@yaks/api'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
+import type { Driver } from '@yaks/sql'
 import { addressOf, type Artifact, artifactDoc } from './artifact.ts'
-import type { Driver } from './driver.ts'
 import { mem } from './testing.ts'
 import type { Bucket } from './object.ts'
 import { type Backend, type Options, PREFIX, routes } from './routes.ts'
@@ -49,7 +49,7 @@ let vocab = loadVocab([spine, artifactDoc])
 let host = (): { sql: Driver; graph: Graph } => {
   let sql = mem()
   let db = storage(sql, vocab)
-  for (let stmt of [...db.ddl(), ...blobSchema()]) sql.exec(stmt)
+  for (let stmt of [...db.ddl(), ...blobSchema()]) sql.query(stmt)
   return { sql, graph: graph({ storage: db, vocab, plugins: [] }) }
 }
 

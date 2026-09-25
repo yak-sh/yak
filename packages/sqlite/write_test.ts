@@ -5,8 +5,7 @@
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Comp } from './bundle.ts'
-import type { Driver } from './driver.ts'
-import { mem, shop, store } from './testing.ts'
+import { mem, shop, spy, store } from './testing.ts'
 import { storage } from './mod.ts'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -165,14 +164,7 @@ Deno.test('a composite unique refuses only the whole pair', () => {
 // multiply with the batch.
 Deno.test('a patch asks once about identity, whatever the batch is', () => {
   let seen: string[] = []
-  let base = mem()
-  let driver: Driver = {
-    query: (sql, params) => {
-      seen.push(sql)
-      return base.query(sql, params)
-    },
-    exec: (sql) => base.exec(sql),
-  }
+  let driver = spy(mem(), (sql) => void seen.push(sql))
   let s = storage(driver, shop)
   s.install()
   let asked = () => {
@@ -269,14 +261,9 @@ Deno.test('partial updates and bare tags respect required columns and SQL defaul
 // A Durable Object's SQLite binds at most 100 parameters per statement, so a
 // write whose statements grow a parameter per entity fails at the 101st.
 Deno.test('a batch past 100 entities binds under the Durable Object limit', async () => {
-  let d = mem()
-  let capped: Driver = {
-    ...d,
-    query: (sql, params) => {
-      if (params.length > 100) throw new Error('too many SQL variables')
-      return d.query(sql, params)
-    },
-  }
+  let capped = spy(mem(), (_, params) => {
+    if (params.length > 100) throw new Error('too many SQL variables')
+  })
   // A declared rule over what the batch writes, so the batch is read as an
   // overlay (overlay.ts) as well as written.
   let ruled = loadVocab([...shop.docs, {

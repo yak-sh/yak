@@ -111,9 +111,8 @@ export type Tx = {
  * promise.
  */
 export type Storage = {
-  /** the schema statements the bound vocabulary implies */
-  ddl: () => string[]
-  /** run them — create the tables and indexes the vocabulary needs */
+  /** make the store ready for the bound vocabulary: its schema, where it has
+   * one */
   install: () => void | Promise<void>
   /** a query → the matching entities as whole bundles */
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>

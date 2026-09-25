@@ -61,9 +61,8 @@ export {
   type D1Result,
   type D1Stmt,
   type D1Value,
+  type Prepared,
   type Row,
-  type Sql,
-  type Stmt,
   unbind,
 } from './d1.ts'
 export { bundles, comps, gatherSql, type Query, spineSql, sql } from './read.ts'

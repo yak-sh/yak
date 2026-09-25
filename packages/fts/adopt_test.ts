@@ -4,9 +4,9 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
-import type { Driver } from './driver.ts'
-import { adopt, fields, find, heal, schema, type Text } from './mod.ts'
-import { mem, shelf, shop } from './testing.ts'
+import type { Driver } from '@yaks/sql'
+import { adopt, fields, find, heal, schema } from './mod.ts'
+import { mem, shelf, shop, stash } from './testing.ts'
 
 // A vocabulary shaped like a mailbox: a document whose body is filed under an
 // address, a log entry whose body is inline, and a letter's envelope.
@@ -43,10 +43,7 @@ let post = loadVocab({
   },
 })
 
-let stashed: Text = {
-  'doc.body': (key) =>
-    `(select __s."words" from "stash" __s where __s."key" = ${key})`,
-}
+let stashed = { 'doc.body': stash('doc', 'body') }
 
 // The search objects an application once wrote by hand: one document index
 // carrying the envelope as a third column read through a joined view, six

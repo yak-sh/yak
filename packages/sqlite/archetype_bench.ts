@@ -8,8 +8,8 @@ import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
-import { backfill, type Driver, storage } from './mod.ts'
-import { location } from './fixtures/bench.ts'
+import { backfill, storage } from './mod.ts'
+import { location, perCall } from './fixtures/bench.ts'
 import { vocab as corpus, workload } from './fixtures/fleet.ts'
 
 let loc = location()
@@ -21,17 +21,7 @@ addEventListener('unload', () => {
 db.exec(
   'pragma foreign_keys=on; pragma journal_mode=wal; pragma synchronous=normal',
 )
-let driver: Driver = {
-  query: (sql, params) => {
-    let stmt = db.prepare(sql)
-    try {
-      return stmt.all(...params)
-    } finally {
-      stmt.finalize()
-    }
-  },
-  exec: (sql) => db.exec(sql),
-}
+let driver = perCall(db)
 let vocab = loadVocab([...corpus.docs, archetypeDoc], [edgeKeywords])
 let store = storage(driver, vocab)
 store.install()

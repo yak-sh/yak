@@ -114,8 +114,8 @@ each adapter supports. An empty query does not mean "dump the database".
 `apply(change, { check: true })` runs the write phases and rolls back instead of
 committing; it returns the proposed patches, runs audit hooks, and skips
 effects. `g.rows(query)` returns adapter-specific rows for aggregates and other
-raw query results. `g.ddl()` returns schema statements and `g.install()`
-installs the adapter schema.
+raw query results. `g.install()` makes the adapter ready for the vocabulary (its
+schema, where it has one).
 
 Both methods work with synchronous and asynchronous adapters. Using `await` is
 safe either way; a synchronous adapter can also return values directly.

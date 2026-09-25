@@ -20,7 +20,7 @@
 // ./d1.ts makes it a type parameter — the binding's own statement type is used
 // as itself, and the assignment below is what proves the parameter binds.
 
-import type { D1Like, D1Result, D1Value, Row, Stmt } from './d1.ts'
+import type { D1Like, D1Result, D1Value, Prepared, Row } from './d1.ts'
 import { d1Vault, type D1Vault, storage } from './mod.ts'
 import type { Vocab } from '@yaks/vocab'
 import type { Storage } from '@yaks/graph'
@@ -31,7 +31,7 @@ let db = null as unknown as D1Database
 // bound to the parameter.
 let _db: D1Like<D1PreparedStatement> = db
 // A runtime statement is the statement shape this adapter uses.
-let _stmt: Stmt<D1PreparedStatement> = db.prepare('select 1')
+let _stmt: Prepared<D1PreparedStatement> = db.prepare('select 1')
 // Every value the adapter binds is one the engine takes.
 let _value: D1Value = null as unknown as ArrayBuffer | string | number | boolean
 // A result carries its rows where the adapter reads them.

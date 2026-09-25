@@ -25,7 +25,18 @@
 // selects.
 
 import type { Bundle } from '@yaks/graph'
-import type { DerivedProp } from '@yaks/sql'
+import {
+  col,
+  type DerivedProp,
+  eq,
+  exists,
+  type Expr,
+  isNull,
+  lit,
+  select,
+  table,
+  when,
+} from '@yaks/sql'
 import { type Mark, MARKS, OPEN, type Status, statuses } from './words.ts'
 import { TASK } from './comp.ts'
 
@@ -109,11 +120,19 @@ export let derived = (marks: Mark[] = MARKS): Record<string, DerivedProp> => ({
     tag: 'enum',
     values: statuses(marks),
     expr: (owner) =>
-      `(case when ${owner} is null then null` +
-      marks.map((m) =>
-        ` when exists(select 1 from "${m.comp}" __s` +
-        ` where __s."entity" = ${owner}) then '${m.status}'`
-      ).join('') +
-      ` else '${OPEN}' end)`,
+      when(
+        [
+          [isNull(owner), lit(null)],
+          ...marks.map((m): [Expr, Expr] => [
+            exists(select({
+              cols: [lit(1)],
+              from: table(m.comp, '__s'),
+              where: eq(col('entity', '__s'), owner),
+            })),
+            lit(m.status),
+          ]),
+        ],
+        lit(OPEN),
+      ),
   },
 })

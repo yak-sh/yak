@@ -4,7 +4,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { Watch } from '@yaks/effects'
 import { effects } from './effects.ts'
 import { TABLE } from './ddl.ts'
-import type { Driver } from './driver.ts'
+import type { Driver } from '@yaks/sql'
 import { shelf, shop } from './testing.ts'
 
 let now = { embedder: { via: 'hash' }, after: 0 } as const

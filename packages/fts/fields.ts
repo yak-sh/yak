@@ -52,18 +52,6 @@ export let fields = (vocab: Vocab, pick: Pick = searched): Field[] => [
   ),
 ]
 
-// How a stored property is turned into the text to index, keyed `comp.prop`:
-// given a SQL expression for the stored value, the entry returns a SQL
-// expression for the text that value stands for. A property with no entry
-// is indexed as stored, which covers every ordinary text property.
-//
-// It exists because a stored value is not always its own text: @yaks/blob
-// stores a body's SHA-256 and keeps the prose in a separate table, so a trigger
-// reading the column would index the hash. `blobText(vocab)` returns a map of
-// this shape; the type is declared structurally here so that accepting one adds
-// no dependency.
-export type Text = Record<string, (stored: string) => string>
-
 // One search index: its name (the component its entities are found through —
 // `on` where there is one, else the text's own), the component whose table
 // holds the text, and the properties it covers, in the order they are declared
@@ -87,7 +75,8 @@ export let indexName = (name: string): string => `${name}_fts`
 
 // The name of the view that presents an index's columns as text: `doc` →
 // `doc_text`. It is created for an index where at least one column has to be
-// resolved (see {@link Text}), and for every index read on behalf of another
-// component, which reads its text through a join; an index whose columns hold
-// their own text mirrors the component table itself.
+// resolved (a `text` expression in the store's @yaks/sql `Derived`: @yaks/blob
+// keeps a body's address, not its prose), and for every index read on behalf
+// of another component, which reads its text through a join; an index whose
+// columns hold their own text mirrors the component table itself.
 export let textName = (name: string): string => `${name}_text`

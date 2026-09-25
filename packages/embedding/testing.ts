@@ -7,7 +7,7 @@
 
 import { open } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import type { Driver } from './driver.ts'
+import type { Driver } from '@yaks/sql'
 import { fields, schema, sweep } from './mod.ts'
 import { hashEmbedder } from './embedder.ts'
 

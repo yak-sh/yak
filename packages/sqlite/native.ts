@@ -3,8 +3,22 @@
 
 import './sqlitepath.ts'
 import type { Database } from '@db/sqlite'
-import { STOCK } from '@yaks/sql'
-import type { Driver } from './driver.ts'
+import {
+  call,
+  col,
+  type Driver,
+  eq,
+  type Param,
+  render,
+  select,
+  type Stmt,
+  STOCK,
+  val,
+} from '@yaks/sql'
+
+// A statement as the text the engine prepares and what it binds.
+let text = (s: Stmt | string, params: Param[] = []) =>
+  typeof s == 'string' ? { sql: s, params } : render(s)
 
 /*
  * The {@link Driver} over one open embedded database.
@@ -32,10 +46,17 @@ export let driver = (db: Database): Driver => {
   // Whether this is a file other processes may have open, asked of SQLite
   // itself rather than of the string somebody passed: `main` has a path on
   // disk, and an in-memory or temporary database has none.
-  let file = !!(db.prepare(
-    `select file from pragma_database_list where name = 'main'`,
-  ).all()[0] as { file?: string } | undefined)?.file
-  let schema = db.prepare('pragma main.schema_version')
+  let main = render(select({
+    cols: [col('file')],
+    from: call('pragma_database_list', []),
+    where: eq(col('name'), val('main')),
+  }))
+  let file = !!(db.prepare(main.sql).all(...main.params)[0] as
+    | { file?: string }
+    | undefined)?.file
+  let schema = db.prepare(
+    render({ t: 'pragma', schema: 'main', name: 'schema_version' }).sql,
+  )
   let version: unknown
   let live = () => {
     // @db/sqlite closes and finalizes its native handles without invalidating
@@ -48,46 +69,49 @@ export let driver = (db: Database): Driver => {
     cache.clear()
     version = now
   }
-  return {
-    query: (sql, params) => {
-      live()
-      let statement = cache.get(sql)
-      if (!statement) {
-        statement = db.prepare(sql)
-        if (sql.slice(statement.sql.length).trim()) {
-          statement.finalize()
-          if (params.length) {
-            throw new Error(`parameters bind to one statement, not several`)
-          }
-          db.exec(sql)
-          return []
+  let query: Driver['query'] = (s, bound) => {
+    let { sql, params } = text(s, bound)
+    live()
+    let statement = cache.get(sql)
+    if (!statement) {
+      statement = db.prepare(sql)
+      if (sql.slice(statement.sql.length).trim()) {
+        statement.finalize()
+        if (params.length) {
+          throw new Error(`parameters bind to one statement, not several`)
         }
-        if (cache.size >= 256) {
-          let oldest = cache.keys().next().value!
-          cache.get(oldest)!.finalize()
-          cache.delete(oldest)
-        }
-        cache.set(sql, statement)
+        db.exec(sql)
+        return []
       }
+      if (cache.size >= 256) {
+        let oldest = cache.keys().next().value!
+        cache.get(oldest)!.finalize()
+        cache.delete(oldest)
+      }
+      cache.set(sql, statement)
+    }
+    try {
+      return statement.all(...params)
+    } catch (error) {
+      // @db/sqlite resets all() on success, but an exception while decoding
+      // a row can leave a RETURNING statement at SQLITE_ROW. Retaining it
+      // then prevents every later SAVEPOINT on this connection. Evict only
+      // the failed statement; never retry SQL with possible side effects.
+      // Finalizing a statement whose step failed reports that same failure
+      // again, so the step's error is the one thrown.
+      cache.delete(sql)
       try {
-        return statement.all(...params)
-      } catch (error) {
-        // @db/sqlite resets all() on success, but an exception while decoding
-        // a row can leave a RETURNING statement at SQLITE_ROW. Retaining it
-        // then prevents every later SAVEPOINT on this connection. Evict only
-        // the failed statement; never retry SQL with possible side effects.
-        // Finalizing a statement whose step failed reports that same failure
-        // again, so the step's error is the one thrown.
-        cache.delete(sql)
-        try {
-          statement.finalize()
-        } catch { /* the step's error, repeated */ }
-        throw error
-      }
-    },
-    exec: (sql) => {
+        statement.finalize()
+      } catch { /* the step's error, repeated */ }
+      throw error
+    }
+  }
+  return {
+    query,
+    exec: (s) => {
+      if (typeof s != 'string') return void query(s)
       live()
-      db.exec(sql)
+      db.exec(s)
     },
     file,
     arms: STOCK,

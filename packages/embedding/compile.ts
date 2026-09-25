@@ -43,7 +43,7 @@ import {
   val,
   when,
 } from '@yaks/sql'
-import type { Driver } from './driver.ts'
+import type { Driver } from '@yaks/sql'
 import { type Near, nearest, type Rank, vectorOf } from './near.ts'
 
 /** The `.order=` value that means "nearest first". */

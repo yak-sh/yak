@@ -33,7 +33,7 @@ export type Opened = Driver & { close: () => void }
  * import { open } from '@yaks/sqlite/db'
  *
  * let sql = open(':memory:')
- * sql.exec('create table t (x)')
+ * sql.query({ t: 'create table', name: 't', cols: [{ name: 'x' }] })
  * sql.close()
  * ```
  */
@@ -43,11 +43,14 @@ export let open = (path: string): Opened => {
     if (dir) Deno.mkdirSync(dir, { recursive: true })
   }
   let db = new Database(path)
-  db.exec('pragma foreign_keys = on')
+  let d = driver(db)
+  let set = (name: string, value: string | number) =>
+    d.query({ t: 'pragma', name, value })
+  set('foreign_keys', 'on')
   if (path != ':memory:') {
-    db.exec('pragma journal_mode = wal')
-    db.exec('pragma synchronous = normal')
-    db.exec('pragma busy_timeout = 5000')
+    set('journal_mode', 'wal')
+    set('synchronous', 'normal')
+    set('busy_timeout', 5000)
   }
-  return { ...driver(db), close: () => db.close() }
+  return { ...d, close: () => db.close() }
 }

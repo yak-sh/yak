@@ -82,7 +82,8 @@ import {
   subscriptions,
   Unauthorized,
 } from '@yaks/api'
-import { blobRead, blobs, blobSchema, blobText, sqliteBlobs } from '@yaks/blob'
+import { blobRead, blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
+import { type Driver, render } from '@yaks/sql'
 import {
   driver,
   type DurableSql,
@@ -98,13 +99,7 @@ import { sealing, SECRET, secrets } from '@yaks/secrets'
 import { edges } from '@yaks/edge'
 import { keys } from '@yaks/key'
 import { aliases } from '@yaks/alias'
-import {
-  type Driver,
-  fields,
-  find,
-  schema as ftsSchema,
-  search,
-} from '@yaks/fts'
+import { fields, find, schema as ftsSchema, search } from '@yaks/fts'
 import {
   type ApplyOpts,
   type Bundle,
@@ -649,11 +644,11 @@ export class Store {
       // minted and never by a number, so nothing mints one for them.
       number: numbered(vocab),
       extend: [search(searchable)],
-      derived: { ...blobRead(vocab), ...(own ? {} : appDerived()) },
       // A body is stored as its address (@yaks/blob `store: "blob"`), so the
-      // read view resolves it as prose. The FTS schema below receives the
-      // same resolution, keeping hashes out of the index (T-33978).
-      text: blobText(vocab),
+      // reads and the `doc_value` view resolve it as prose. The FTS schema
+      // below receives the same resolution, keeping hashes out of the index
+      // (T-33978).
+      derived: { ...blobRead(vocab), ...(own ? {} : appDerived()) },
     })
     // Every index the vocabulary declares is already in `store.ddl()` — the
     // directory's uniques included, since they are words of `platformDoc`.
@@ -662,7 +657,7 @@ export class Store {
     let ddl = [
       ...blobSchema(),
       ...store.ddl(),
-      ...ftsSchema(searchable, blobText(vocab)),
+      ...ftsSchema(searchable, blobRead(vocab)),
     ]
     // The schema this object stands at, as one word: a wake under the same
     // vocabulary runs no DDL at all, and a deploy that added a component
@@ -674,7 +669,7 @@ export class Store {
     // vocabulary names. `#learn` reboots the moment the name arrives, and every
     // door runs after it.
     let named = !!this.#get('name') || !!this.#get('schema')
-    let stamp = sha256(ddl.join('\n'))
+    let stamp = sha256(ddl.map((s) => render(s).sql).join('\n'))
     let held = this.#get('schema')
     if (named && held != stamp) {
       // A definition cannot be altered by replaying it. `create ... if not
@@ -687,11 +682,11 @@ export class Store {
       // index is then rebuilt off the content it mirrors. Nothing to do the
       // first time: there is no older shape to be wearing.
       if (held) recut(drive)
-      for (let stmt of blobSchema()) drive.exec(stmt)
+      for (let stmt of blobSchema()) drive.query(stmt)
       install(
         ctx.storage,
         vocab,
-        blobText(vocab),
+        blobRead(vocab),
         this.#get('migrated') ?? null,
         !this.#pending,
       )

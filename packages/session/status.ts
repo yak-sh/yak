@@ -39,6 +39,28 @@
 
 import type { Bundle, Comp } from '@yaks/graph'
 import {
+  among,
+  and,
+  col,
+  count,
+  desc,
+  eq,
+  exists,
+  type Expr,
+  fn,
+  gt,
+  iff,
+  join,
+  lit,
+  not,
+  op,
+  or,
+  select,
+  sub,
+  table,
+  when,
+} from '@yaks/sql'
+import {
   ASK,
   CALL,
   CONTENT,
@@ -219,73 +241,170 @@ export let sessionStatus = {
     'failed',
   ],
   deps: [] as string[],
-  expr: (owner: string): string => {
+  expr: (owner: Expr): Expr => {
+    // Whether the entity `of` wears `comp` (and `also` holds of that row, `k`).
+    let has = (comp: string, of: Expr, also?: Expr) =>
+      exists(select({
+        cols: [lit(1)],
+        from: table(comp, 'k'),
+        where: and(eq(col('entity', 'k'), of), ...(also ? [also] : [])),
+      }))
+    let lacks = (comp: string, of: Expr) => not(has(comp, of))
     // The newest entry is the row this scalar subquery reads, `n`, so each
     // branch looks at it without finding it again.
-    let wears = (comp: string, and = '') =>
-      `exists (select 1 from "${comp}" k where k.entity = n.entity${and})`
-    let allErrors = `(select count(*) from "entry" e2
-      where e2."session" = ${owner} and e2.seq > n.seq - ${RETRIES}
-        and exists (select 1 from "error" x where x.entity = e2.entity)) = ${RETRIES}`
+    let n = col('entity', 'n')
+    let wears = (comp: string, also?: Expr) => has(comp, n, also)
+    let mine = (e: string) => eq(col('session', e), owner)
+    let allErrors = eq(
+      sub(select({
+        cols: [count()],
+        from: table('entry', 'e2'),
+        where: and(
+          mine('e2'),
+          gt(col('seq', 'e2'), op('-', col('seq', 'n'), lit(RETRIES))),
+          has('error', col('entity', 'e2')),
+        ),
+      })),
+      lit(RETRIES),
+    )
     // The sessions with an attempt in flight: the few such attempts, found
     // once for the whole statement by their index, where a test per session
     // would scan all of its entries.
-    let inflight = `${owner} in (select e."session" from "attempt" a
-      join "entry" e on e.entity = a.entity where a.state = 'inflight')`
+    let inflight = among(
+      owner,
+      select({
+        cols: [col('session', 'e')],
+        from: table('attempt', 'a'),
+        joins: [
+          join(table('entry', 'e'), eq(col('entity', 'e'), col('entity', 'a'))),
+        ],
+        where: eq(col('state', 'a'), lit('inflight')),
+      }),
+    )
     // A call no result answers — the openCalls rule above, expressed in SQL.
     // Per session, so reading one costs its own entries, never every call.
-    let open = `exists (select 1 from "${CALL}" c
-      join "entry" e on e.entity = c.entity
-      where e."session" = ${owner}
-        and not exists (select 1 from "${RESULT}" r where r."call" = c.entity))`
+    let open = exists(select({
+      cols: [lit(1)],
+      from: table(CALL, 'c'),
+      joins: [
+        join(table('entry', 'e'), eq(col('entity', 'e'), col('entity', 'c'))),
+      ],
+      where: and(
+        mine('e'),
+        not(exists(select({
+          cols: [lit(1)],
+          from: table(RESULT, 'r'),
+          where: eq(col('call', 'r'), col('entity', 'c')),
+        }))),
+      ),
+    }))
     // The newest ask.
-    let ask = `(select e.entity from "entry" e where e."session" = ${owner}
-      and exists (select 1 from "${ASK}" a where a.entity = e.entity)
-      order by e.seq desc limit 1)`
+    let ask = sub(select({
+      cols: [col('entity', 'e')],
+      from: table('entry', 'e'),
+      where: and(mine('e'), has(ASK, col('entity', 'e'))),
+      order: [desc(col('seq', 'e'))],
+      limit: lit(1),
+    }))
     // An input entry after `seq`: prose that is none of the other kinds.
-    let input = (seq: string) =>
-      `exists (select 1 from "entry" u
-      join "content" uc on uc.entity = u.entity
-      where u."session" = ${owner} and u.seq > ${seq}
-        and not exists (select 1 from "output" x where x.entity = u.entity)
-        and not exists (select 1 from "notice" x where x.entity = u.entity)
-        and not exists (select 1 from "result" x where x.entity = u.entity)
-        and not exists (select 1 from "error" x where x.entity = u.entity)
-        and not exists (select 1 from "exception" x where x.entity = u.entity)
-        and not exists (select 1 from "ask" x where x.entity = u.entity)
-        and not exists (select 1 from "call" x where x.entity = u.entity)
-        and not exists (select 1 from "stop" x where x.entity = u.entity))`
-    let unread = input(`(select boundary.seq from "ask" a
-      join "entry" boundary on boundary.entity = a."through"
-      where a.entity = ${ask})`)
+    let input = (seq: Expr) =>
+      exists(select({
+        cols: [lit(1)],
+        from: table('entry', 'u'),
+        joins: [
+          join(
+            table('content', 'uc'),
+            eq(col('entity', 'uc'), col('entity', 'u')),
+          ),
+        ],
+        where: and(
+          mine('u'),
+          gt(col('seq', 'u'), seq),
+          ...[
+            'output',
+            'notice',
+            'result',
+            'error',
+            'exception',
+            'ask',
+            'call',
+            'stop',
+          ].map((c) => lacks(c, col('entity', 'u'))),
+        ),
+      }))
+    let unread = input(sub(select({
+      cols: [col('seq', 'boundary')],
+      from: table('ask', 'a'),
+      joins: [
+        join(
+          table('entry', 'boundary'),
+          eq(col('entity', 'boundary'), col('through', 'a')),
+        ),
+      ],
+      where: eq(col('entity', 'a'), ask),
+    })))
     // `served` above: the transcript asked the daemon, by a request or a turn
     // it took.
-    let served = `exists (select 1 from "entry" s where s."session" = ${owner}
-      and not exists (select 1 from "notice" x where x.entity = s.entity)
-      and (exists (select 1 from "${USING}" u where u.entity = s.entity)
-        or exists (select 1 from "${ASK}" a where a.entity = s.entity)))`
-    let owed = `case when ${served} then 'pending' else 'running' end`
-    return `coalesce((select case
-      when ${wears(STOP_ENTRY)} then 'stopped'
-      when ${wears(EXCEPTION)} then 'failed'
-      when ${inflight} then 'running'
-      when exists (select 1 from dispatch d where d.entity = ${owner} and d.state = 'queued') then 'queued'
-      when ${wears(ERROR, " and k.code = 'interrupted'")} then
-        case when ${input(`(select seq from "entry" where entity = ${ask})`)}
-        then 'pending' else 'failed' end
-      when ${wears(ERROR)} then
-        case when ${allErrors} then 'failed' else 'pending' end
-      when ${open} then 'running'
-      when ${wears(ASK)} and exists (select 1 from "attempt" a
-        where a.entity = n.entity and a.state = 'completed') then 'settled'
-      when ${wears(ASK)} or ${wears(CALL)} then 'running'
-      when ${wears(RESULT)} then ${owed}
-      when ${wears(OUTPUT)} then
-        case when ${unread} then 'pending' else 'settled' end
-      else ${owed} end
-    from "entry" n where n."session" = ${owner}
-      and not exists (select 1 from "notice" x where x.entity = n.entity)
-    order by n.seq desc limit 1), 'empty')`
+    let served = exists(select({
+      cols: [lit(1)],
+      from: table('entry', 's'),
+      where: and(
+        mine('s'),
+        lacks('notice', col('entity', 's')),
+        or(has(USING, col('entity', 's')), has(ASK, col('entity', 's'))),
+      ),
+    }))
+    let owed = iff(served, lit('pending'), lit('running'))
+    let queued = exists(select({
+      cols: [lit(1)],
+      from: table('dispatch', 'd'),
+      where: and(
+        eq(col('entity', 'd'), owner),
+        eq(col('state', 'd'), lit('queued')),
+      ),
+    }))
+    let settled = exists(select({
+      cols: [lit(1)],
+      from: table('attempt', 'a'),
+      where: and(
+        eq(col('entity', 'a'), n),
+        eq(col('state', 'a'), lit('completed')),
+      ),
+    }))
+    let asked = sub(select({
+      cols: [col('seq')],
+      from: table('entry'),
+      where: eq(col('entity'), ask),
+    }))
+    return fn(
+      'coalesce',
+      sub(select({
+        cols: [when(
+          [
+            [wears(STOP_ENTRY), lit('stopped')],
+            [wears(EXCEPTION), lit('failed')],
+            [inflight, lit('running')],
+            [queued, lit('queued')],
+            [
+              wears(ERROR, eq(col('code', 'k'), lit('interrupted'))),
+              iff(input(asked), lit('pending'), lit('failed')),
+            ],
+            [wears(ERROR), iff(allErrors, lit('failed'), lit('pending'))],
+            [open, lit('running')],
+            [and(wears(ASK), settled), lit('settled')],
+            [or(wears(ASK), wears(CALL)), lit('running')],
+            [wears(RESULT), owed],
+            [wears(OUTPUT), iff(unread, lit('pending'), lit('settled'))],
+          ],
+          owed,
+        )],
+        from: table('entry', 'n'),
+        where: and(mine('n'), lacks('notice', n)),
+        order: [desc(col('seq', 'n'))],
+        limit: lit(1),
+      })),
+      lit('empty'),
+    )
   },
 }
 

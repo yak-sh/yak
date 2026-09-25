@@ -28,6 +28,7 @@
 import {
   among,
   col,
+  type Driver,
   type Extension,
   FALSE,
   lit,
@@ -40,7 +41,6 @@ import {
   val,
   when,
 } from '@yaks/sql'
-import type { Driver } from './driver.ts'
 import { ranked } from './search.ts'
 import { type Field, indexes, indexName } from './fields.ts'
 import { term } from './term.ts'
@@ -69,9 +69,7 @@ export let search = (fields: Field[], db?: Driver): Extension => {
       screen: asked?.() ?? undefined,
       limit: RANKED,
     })
-    held = stmt
-      ? db!.query(stmt.sql, stmt.params).map((r) => Number(r.owner))
-      : []
+    held = stmt ? db!.query(stmt).map((r) => Number(r.owner)) : []
     return held
   }
   return {

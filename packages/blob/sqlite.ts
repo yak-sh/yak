@@ -7,10 +7,10 @@
 // It also gives the read side something no other store can: the resolution is a
 // SQL expression, so a query and a whole-entity read both get text without a
 // second round trip. {@link blobRead} builds that expression as an @yaks/sql
-// read override, one per content-addressed property; {@link blobText} builds
-// its smaller half — an address resolved to its text — for the places that
-// already hold an address, chiefly a full-text index's triggers and the view it
-// reads back through.
+// read override, one per content-addressed property, with its smaller half —
+// an address resolved to its text — for the places that already hold an
+// address, chiefly a full-text index's triggers and the view it reads back
+// through.
 //
 // The table holds text, not bytes — which is what lets the read be an ordinary
 // string expression — so this store is for prose. Binary content belongs in the
@@ -21,8 +21,18 @@
 // readable as they stand.
 
 import type { Vocab } from '@yaks/vocab'
-import type { Derived } from '@yaks/sql'
-import type { Driver } from './driver.ts'
+import {
+  col,
+  type Derived,
+  type Driver,
+  eq,
+  type Expr,
+  select,
+  type Stmt,
+  sub,
+  table,
+  val,
+} from '@yaks/sql'
 import { bodies } from './props.ts'
 import { type Blobs, encode } from './store.ts'
 
@@ -48,8 +58,6 @@ let named = (l: Layout = {}): Named => ({
   value: l.value ?? 'value',
 })
 
-let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
-
 // This table's column is text, so bytes that are not valid UTF-8 have no
 // representation in it. Refusing them here is the difference between a store
 // that cannot hold an object and one that holds a mangled copy: the address
@@ -71,14 +79,17 @@ let asText = (bytes: Uint8Array): string => {
  * The statement creating the blob table: an address, and the text stored under
  * it. Run it beside a storage adapter's own schema.
  */
-export let blobSchema = (layout: Layout = {}): string[] => {
+export let blobSchema = (layout: Layout = {}): Stmt[] => {
   let l = named(layout)
-  return [
-    `create table if not exists ${q(l.table)} (
-    ${q(l.key)} text primary key,
-    ${q(l.value)} text not null
-  )`,
-  ]
+  return [{
+    t: 'create table',
+    name: l.table,
+    ifNot: true,
+    cols: [
+      { name: l.key, type: 'text', pk: true },
+      { name: l.value, type: 'text', notNull: true },
+    ],
+  }]
 }
 
 /**
@@ -89,85 +100,58 @@ export let blobSchema = (layout: Layout = {}): string[] => {
 export let sqliteBlobs = (driver: Driver, layout: Layout = {}): Blobs => {
   let l = named(layout)
   let row = (sha: string) =>
-    driver.query(
-      `select ${q(l.value)} as value from ${q(l.table)} where ${q(l.key)} = ?`,
-      [sha],
-    )[0]
+    driver.query(select({
+      cols: [col(l.value)],
+      from: table(l.table),
+      where: eq(col(l.key), val(sha)),
+    }))[0]?.[l.value]
   return {
     has: (sha) => row(sha) != null,
     get: (sha) => {
       let found = row(sha)
-      return found == null ? undefined : encode(String(found.value))
+      return found == null ? undefined : encode(String(found))
     },
     put: (sha, bytes) => {
-      driver.query(
-        `insert or ignore into ${q(l.table)} (${q(l.key)}, ${q(l.value)})
-           values (?, ?)`,
-        [sha, asText(bytes)],
-      )
+      driver.query({
+        t: 'insert',
+        or: 'ignore',
+        into: l.table,
+        cols: [l.key, l.value],
+        rows: [[val(sha), val(asText(bytes))]],
+      })
     },
   }
 }
 
-/**
- * How a stored address reads as its text, keyed `comp.prop`: given SQL naming
- * the address, each entry returns SQL naming the text it stands for. It is the
- * smaller half of a read override — no entity, no join, just the value — which
- * is the form needed wherever the address is already in hand: an FTS5 trigger
- * (`new."body"`), a view column, a report.
- *
- * @yaks/fts and @yaks/sqlite accept a map of this shape so their indexes hold
- * words rather than addresses; both declare the type structurally, so neither
- * has to depend on this package to be handed one.
- */
-export type Text = Record<string, (address: string) => string>
-
 // The text an address stands for: one row of the blob table, found by its key.
-let textExpr = (l: Named) => (address: string) =>
-  `(select __b.${q(l.value)} from ${q(l.table)} __b` +
-  ` where __b.${q(l.key)} = ${address})`
-
-/**
- * The resolution for every content-addressed property in a vocabulary, as
- * {@link Text}. Pass it to `@yaks/sqlite`'s `storage()` (or to @yaks/fts's
- * `schema()`) and a full-text index over a body property holds the prose
- * instead of the hash that stands for it:
- *
- * ```ts
- * import { storage } from '@yaks/sqlite'
- * import { blobText } from '@yaks/blob'
- *
- * let store = storage(driver, vocab, { text: blobText(vocab) })
- * ```
- *
- * A blob is immutable and content-addressed, so resolving one in a trigger is
- * sound: the text an address stands for is the same before and after the row
- * that names it moves, which is exactly what an external-content index needs
- * from a delete.
- */
-export let blobText = (vocab: Vocab, layout: Layout = {}): Text => {
-  let text = textExpr(named(layout))
-  return Object.fromEntries(
-    bodies(vocab).map(({ comp, prop }) => [`${comp}.${prop}`, text]),
-  )
-}
+let textExpr = (l: Named) => (address: Expr): Expr =>
+  sub(select({
+    cols: [col(l.value, '__b')],
+    from: table(l.table, '__b'),
+    where: eq(col(l.key, '__b'), address),
+  }))
 
 // The read expression for one property: the stored text, found by joining the
 // address its column holds to the blob table. It is written self-contained — it
 // names its own component table rather than assuming the query already joined
 // one — so the same expression serves a filter predicate, a dereferenced path,
 // and a whole-entity read.
-let readExpr = (l: Named, comp: string, prop: string) => (owner: string) =>
-  textExpr(l)(
-    `(select __c.${q(prop)} from ${q(comp)} __c where __c."entity" = ${owner})`,
-  )
+let readExpr = (l: Named, comp: string, prop: string) => (owner: Expr) =>
+  textExpr(l)(sub(select({
+    cols: [col(prop, '__c')],
+    from: table(comp, '__c'),
+    where: eq(col('entity', '__c'), owner),
+  })))
 
 /**
  * The read side, as @yaks/sql read overrides: one entry per content-addressed
  * property, each resolving the stored address to its text in the statement
- * itself. Pass them to a compile (or to `@yaks/sqlite`'s `storage()`, which
- * passes them on to both the query and the whole-entity read) and a body
- * property reads as text everywhere:
+ * itself (`expr`), and resolving an address already in hand (`text`: an FTS5
+ * trigger's `new."body"`, a view column). Pass them to a compile (or to
+ * `@yaks/sqlite`'s `storage()`, which passes them on to the query, the
+ * whole-entity read and the `doc_value` view; and to @yaks/fts `schema()`, so
+ * a search index holds words rather than addresses) and a body property reads
+ * as text everywhere:
  *
  * ```ts
  * import { storage } from '@yaks/sqlite'

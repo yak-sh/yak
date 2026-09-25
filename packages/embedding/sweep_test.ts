@@ -2,6 +2,7 @@
 // queue the database's triggers keep, whoever wrote.
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
+import { type Expr, fn } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { fields, searched } from './fields.ts'
 import { sources, sweep } from './sweep.ts'
@@ -44,7 +45,7 @@ Deno.test('a review is its own entity, not part of the book it is about', () => 
 
 Deno.test('a field read through an override is read as what it stands for', () => {
   let loud = text.map((f) =>
-    f.prop == 'blurb' ? { ...f, text: (s: string) => `upper(${s})` } : f
+    f.prop == 'blurb' ? { ...f, text: (s: Expr) => fn('upper', s) } : f
   )
   let one = sources(shelf(), loud).find((s) => s.entity == 'book-1')!
   assert(one.text.endsWith('MEETS A DRAGON.'), one.text)

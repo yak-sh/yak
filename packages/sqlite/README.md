@@ -157,26 +157,16 @@ the write lock before reads. A driver supplying its own `tx` controls
 transaction behavior; Durable Object callbacks must remain synchronous.
 
 `base` includes `@yaks/sql` bind options (`derived`, `extend`, `now`, and a
-custom dialect), merged with per-read options. `text` supplies expressions for
-the `doc_value` view. `number` controls human numbering, and `adopt: true`
-accepts numbers supplied in patches when mirroring another store.
+custom dialect), merged with per-read options. A `derived` entry's `text`
+expression also resolves its column in the `doc_value` view. `number` controls
+human numbering, and `adopt: true` accepts numbers supplied in patches when
+mirroring another store.
 
 ### The driver
 
-The root package does not open connections. Its synchronous driver interface is:
-
-```ts
-import type { Param, Row } from '@yaks/sqlite'
-
-type Driver = {
-  query: (sql: string, params: Param[]) => Row[]
-  exec: (sql: string) => void
-  run?: (sql: string, params: Param[]) => number
-  tx?: <R>(body: () => R) => R
-  file?: boolean
-  arms?: number
-}
-```
+The root package does not open connections. It runs on `@yaks/sql`'s synchronous
+`Driver`, which takes a statement as a node of `@yaks/sql`'s AST, renders it and
+returns the rows. Every statement this package sends is built as a node.
 
 `run` optionally executes writes without materializing rows. `tx` is for engines
 such as a Durable Object that provide a transaction API instead of accepting

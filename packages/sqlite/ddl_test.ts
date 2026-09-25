@@ -4,15 +4,26 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
-import { compile } from '@yaks/sql'
+import {
+  col,
+  compile,
+  type Driver,
+  eq,
+  type Expr,
+  render,
+  select,
+  type Stmt,
+  sub,
+  table,
+} from '@yaks/sql'
 import memberDoc from '../member/vocab.json' with { type: 'json' }
 import { schema } from './ddl.ts'
 import { open } from './db.ts'
 import { storage } from './mod.ts'
-import type { Driver } from './driver.ts'
-import { mem, shop } from './testing.ts'
+import { mem, shop, spy } from './testing.ts'
 
-let all = schema(shop).join('\n')
+let text = (stmts: Stmt[]) => stmts.map((s) => render(s).sql)
+let all = text(schema(shop)).join('\n')
 
 // The live shape of a table, in declaration order.
 let cols = (d: Driver, table: string) =>
@@ -26,8 +37,8 @@ Deno.test('the shop vocabulary loads with its kinds and death words', () => {
 })
 
 Deno.test('the spine and the graveyard are always present', () => {
-  assert(/create table if not exists entity \(/.test(all), all)
-  assert(all.includes('create table if not exists tombstone'), all)
+  assert(all.includes('create table if not exists "entity" ('), all)
+  assert(all.includes('create table if not exists "tombstone"'), all)
 })
 
 Deno.test('every component gets a table keyed by an entity owner', () => {
@@ -38,12 +49,12 @@ Deno.test('every component gets a table keyed by an entity owner', () => {
     )
   }
   // The spine component is the identity table, not a component table.
-  assert(!all.includes('create table if not exists "entity"'), all)
+  assert(!all.includes('"entity" ("entity" integer'), all)
 })
 
 Deno.test('a reference column stores an integer with a foreign key', () => {
   // product.maker is a reference — an integer id pointing at the spine.
-  assert(/"maker" integer references entity\(id\)/.test(all), all)
+  assert(all.includes('"maker" integer references "entity"("id")'), all)
 })
 
 Deno.test('a boolean column takes integer affinity, a text column text', () => {
@@ -53,16 +64,21 @@ Deno.test('a boolean column takes integer affinity, a text column text', () => {
 })
 
 Deno.test('a doc vocabulary gets a read view but no implicit search index', () => {
-  assert(all.includes('create view if not exists doc_value'), all)
+  assert(all.includes('create view if not exists "doc_value"'), all)
   assert(!all.includes('fts5'), all)
-  assert(!all.includes('create trigger if not exists doc'), all)
+  assert(!all.includes('create trigger if not exists "doc'), all)
 })
 
 Deno.test('a resolved doc column is read as text by the view', () => {
-  let resolved = schema(shop, {
-    'doc.body': (stored) =>
-      `(select "words" from "stash" where "k" = ${stored})`,
-  }).join('\n')
+  let words = (stored: Expr) =>
+    sub(select({
+      cols: [col('words')],
+      from: table('stash'),
+      where: eq(col('k'), stored),
+    }))
+  let resolved = text(schema(shop, {
+    'doc.body': { tag: 'text', expr: words, text: words },
+  })).join('\n')
   assert(resolved.includes(`"k" = "body") as "body"`), resolved)
   // The view still publishes every stored column for whole-document reads.
   for (let col of ['"entity"', '"title" as "title"', 'as "body"']) {
@@ -71,14 +87,14 @@ Deno.test('a resolved doc column is read as text by the view', () => {
 })
 
 Deno.test('the statements list in dependency order — spine first', () => {
-  let stmts = schema(shop)
-  assertEquals(stmts[0].includes('create table if not exists entity ('), true)
+  let stmts = text(schema(shop))
+  assertEquals(stmts[0].includes('create table if not exists "entity" ('), true)
 })
 
 Deno.test('a property marked unique gets a unique index named after it', () => {
   assert(
     all.includes(
-      'create unique index if not exists product_sku on "product" ("sku")',
+      'create unique index if not exists "product_sku" on "product" ("sku")',
     ),
     all,
   )
@@ -87,14 +103,14 @@ Deno.test('a property marked unique gets a unique index named after it', () => {
 Deno.test('a component declares its composite unique and its index', () => {
   assert(
     all.includes(
-      'create unique index if not exists shelf_aisle_slot ' +
+      'create unique index if not exists "shelf_aisle_slot" ' +
         'on "shelf" ("aisle", "slot")',
     ),
     all,
   )
   assert(
     all.includes(
-      'create index if not exists shelf_aisle_height ' +
+      'create index if not exists "shelf_aisle_height" ' +
         'on "shelf" ("aisle", "height")',
     ),
     all,
@@ -102,7 +118,7 @@ Deno.test('a component declares its composite unique and its index', () => {
 })
 
 Deno.test('an index comes after the table it covers', () => {
-  let stmts = schema(shop)
+  let stmts = text(schema(shop))
   let table = stmts.findIndex((s) => s.includes('exists "shelf"'))
   let index = stmts.findIndex((s) => s.includes('shelf_aisle_slot'))
   assert(table >= 0 && index > table, `${table} ${index}`)
@@ -274,29 +290,6 @@ let strict = loadVocab({
   },
 })
 
-Deno.test('constraints emit as the vocabulary said them', () => {
-  let ddl = schema(strict).join('\n')
-  assert(
-    ddl.includes(
-      `"at" text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
-    ),
-    ddl,
-  )
-  assert(ddl.includes(`"base" text not null default 'main'`), ddl)
-  assert(ddl.includes(`"push" integer not null default 0`), ddl)
-  assert(ddl.includes(`"seq" integer,`), ddl)
-  assert(
-    ddl.includes(`"state" text check("state" in ('stopped', 'running', 'on'))`),
-    ddl,
-  )
-  assert(
-    ddl.includes(
-      `create unique index if not exists output_key on "output" ("key") where "key" is not null`,
-    ),
-    ddl,
-  )
-})
-
 Deno.test('the engine holds what the vocabulary said', () => {
   let d = mem()
   storage(d, strict).install()
@@ -349,7 +342,7 @@ Deno.test('a grown column keeps a literal default, takes the clock only ahead', 
   d.exec(`insert into repo (entity) values (1)`)
   d.exec(`insert into created (entity) values (1)`)
   let grew = storage(d, strict)
-  let stmts = grew.grown()
+  let stmts = text(grew.grown())
   // A NOT NULL with a literal default is added as such (the literal fills the
   // rows already there); the clock is not a constant SQLite can add, so that
   // column arrives nullable and unstamped for the rows already written.
@@ -431,8 +424,9 @@ Deno.test('a store over a file installs the sizes its planner reads it by', () =
 
 Deno.test('a store that is not a file is left unmeasured', () => {
   let said: string[] = []
-  let d = mem()
-  storage({ ...d, exec: (sql) => (said.push(sql), d.exec(sql)) }, shop)
-    .install()
-  assertEquals(said.filter((s) => s.startsWith('pragma')), [])
+  storage(spy(mem(), (sql) => void said.push(sql)), shop).install()
+  assertEquals(
+    said.filter((s) => /analysis_limit|optimize|analyze/.test(s)),
+    [],
+  )
 })

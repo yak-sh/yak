@@ -1,8 +1,9 @@
 import { assert, assertEquals } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
+import { col, fn, lit } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
-import { mem, shop } from './testing.ts'
+import { mem, shop, spy, unit } from './testing.ts'
 import { get, storage } from './mod.ts'
 import { get as census } from './fixtures/census.ts'
 
@@ -37,7 +38,7 @@ Deno.test('archetype gather golden: nulls, tags, refs, derived, stubs, graves, o
     derived: {
       'doc.title': {
         tag: 'text' as const,
-        expr: () => "coalesce(doc.title, 'derived')",
+        expr: () => fn('coalesce', col('title', 'doc'), lit('derived')),
       },
     },
   }
@@ -83,15 +84,11 @@ Deno.test('archetype gather golden: wide sparse sets, chunks and a smaller reade
 })
 
 Deno.test('classified gathers select only present tables and only their owners', () => {
-  let db = mem()
   let asked: { sql: string; params: unknown[] }[] = []
-  let driver = {
-    ...db,
-    query: (sql: string, params: Parameters<typeof db.query>[1]) => {
-      asked.push({ sql, params })
-      return db.query(sql, params)
-    },
-  }
+  let driver = spy(
+    mem(),
+    (sql, params) => void (unit(sql) || asked.push({ sql, params })),
+  )
   let s = storage(driver, vocab)
   s.install()
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
@@ -125,5 +122,5 @@ Deno.test('classified gathers select only present tables and only their owners',
   asked = []
   s.rows('.doc .marker')
   assertEquals(asked.length, 3) // the version proves the snapshot; no re-read
-  assert(!asked.some((q) => q.sql == 'select entity, tables from archetype'))
+  assert(!asked.some((q) => q.sql.startsWith('select "entity", "tables" from')))
 })

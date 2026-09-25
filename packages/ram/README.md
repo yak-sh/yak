@@ -68,7 +68,6 @@ interface:
 
 | Method               | Result                                                                                   |
 | -------------------- | ---------------------------------------------------------------------------------------- |
-| `ddl()`              | An empty array; there is no database schema to create.                                   |
 | `install()`          | Does nothing.                                                                            |
 | `read(query, opts?)` | Matching bundles, ordered and paginated as requested.                                    |
 | `rows(query, opts?)` | One `{ eid }` row per match, or the rows of `.count`, `.distinct` or `.tally`.           |

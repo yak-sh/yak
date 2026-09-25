@@ -6,7 +6,19 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { absent, and, eq, parse, present, text } from '@yaks/query'
 import { loadVocab, Unknown } from '@yaks/vocab'
 import type { VocabDoc } from '@yaks/vocab'
-import { ARMS, compile, type Derived, gt, Unsupported, val } from './mod.ts'
+import {
+  ARMS,
+  col,
+  compile,
+  type Derived,
+  fn,
+  gt,
+  isNull,
+  lit,
+  Unsupported,
+  val,
+  when,
+} from './mod.ts'
 
 // The spine, a doc, and a task with a stored priority and a computed status
 // (computed: true) — the smallest vocab that exercises routing, a scalar, and
@@ -58,7 +70,7 @@ let status: Derived = {
   'task.status': {
     tag: 'enum',
     values: ['open', 'wip', 'done'],
-    expr: (owner) => `(case when ${owner} is null then null else 'open' end)`,
+    expr: (owner) => when([[isNull(owner), lit(null)]], lit('open')),
   },
 }
 
@@ -116,7 +128,7 @@ Deno.test('a derived read is NULL where the component is not worn', () => {
     'task.status': {
       tag: 'enum',
       values: ['open', 'empty'],
-      expr: () => `'x'`,
+      expr: () => lit('x'),
     },
   }
   let { sql } = compile(parse('.status=empty'), v, { derived: blind })
@@ -147,7 +159,7 @@ Deno.test('a read marked worn: false keeps its value without the component', () 
       tag: 'enum',
       values: ['open'],
       worn: false,
-      expr: () => `coalesce("task"."priority", 'open')`,
+      expr: () => fn('coalesce', col('priority', 'task'), lit('open')),
     },
   }
   let { sql } = compile(parse('.status=open'), v, { derived: fallback })
@@ -333,9 +345,9 @@ Deno.test('.after over a derived order reads the anchor through the hook', () =>
   let { sql } = compile(parse('.order=status&.after=7'), v, { derived: status })
   // the derived expression is written twice: once over the row, once over the
   // anchor's own owner id
-  assert(sql.includes(`(case when "task"."entity" is null`), sql)
+  assert(sql.includes(`case when "task"."entity" is null`), sql)
   assert(
-    sql.includes('(case when (select "__cur"."id" from "entity" as "__cur"'),
+    sql.includes('case when ((select "__cur"."id" from "entity" as "__cur"'),
     sql,
   )
 })
@@ -532,7 +544,7 @@ Deno.test('reference equality compares indexed keys, not projected eids', () => 
   // A derived override is authoritative even if the property is stored, and it
   // reads through the guard that says the component is worn.
   let { sql } = compile(parse('.note.about=target'), v, {
-    derived: { 'note.about': { tag: 'eid', expr: () => "'override'" } },
+    derived: { 'note.about': { tag: 'eid', expr: () => lit('override') } },
   })
   assert(
     sql.includes(

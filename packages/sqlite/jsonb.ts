@@ -20,7 +20,7 @@
 // comes back as one type whichever door asked for it.
 
 import type { Vocab } from '@yaks/vocab'
-import type { Param } from './driver.ts'
+import { type Expr, fn, lit, op, type Param } from '@yaks/sql'
 
 /** Whether `comp.prop` holds a JSON value. */
 export let isJsonb = (v: Vocab, comp: string, prop: string): boolean =>
@@ -30,8 +30,11 @@ export let isJsonb = (v: Vocab, comp: string, prop: string): boolean =>
 export let jsonIn = (value: unknown): Param =>
   value == null ? null : JSON.stringify(value)
 
-/** The SQL reading a stored JSON value back as its JSON text. */
-export let jsonOut = (expr: string): string => `(json(${expr}) || '')`
+/** A stored JSON value read back as its JSON text. */
+export let jsonOut = (e: Expr): Expr => op('||', fn('json', e), lit(''))
+
+/** A JSON value's text as what a JSON column stores. */
+export let jsonb = (e: Expr): Expr => fn('jsonb', e)
 
 // One value as read: a JSON column's text parsed back into its value, a
 // boolean's 0/1 as `false`/`true`, anything else as stored.

@@ -8,8 +8,7 @@ import { and, eq, or } from '@yaks/query'
 import { ARMS, Unsupported } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
-import type { Driver } from './driver.ts'
-import { mem, seed, shop as vocab, store } from './testing.ts'
+import { mem, seed, shop as vocab, spy, store } from './testing.ts'
 
 import { storage } from './mod.ts'
 
@@ -95,15 +94,8 @@ Deno.test('a gathered bundle carries the entity number storage minted', () => {
 })
 
 Deno.test('whole-set gathers are bounded by vocabulary, not the 1000 entities; get preserves identity order', () => {
-  let driver = mem()
   let queries = 0
-  let s = storage({
-    ...driver,
-    query: (sql, params) => {
-      queries++
-      return driver.query(sql, params)
-    },
-  }, vocab)
+  let s = storage(spy(mem(), () => void queries++), vocab)
   s.install()
   seed(
     s,
@@ -238,12 +230,8 @@ Deno.test("a driver that declares no compound width is probed within workerd's",
   // select`, which is what stopped every yaks.app space. A driver says what its
   // engine carries (`Driver.arms`); one that says nothing is cut to ARMS, so a
   // vocabulary wider than the cap is more statements and never a refused one.
-  let raw = mem()
   let asked: string[] = []
-  let driver: Driver = {
-    query: (sql, params) => (asked.push(sql), raw.query(sql, params)),
-    exec: (sql) => raw.exec(sql),
-  }
+  let driver = spy({ ...mem(), arms: undefined }, (sql) => void asked.push(sql))
   let vocab = loadVocab({
     $defs: {
       entity: {
@@ -297,15 +285,15 @@ Deno.test('a reverse read binds one value per property, however many it asks abo
   // A Durable Object's SQLite binds 100 values a statement and refuses the
   // 101st, which is what erasing a space met: the gather's read of everything
   // pointing at what a delete took bound one per property per entity.
-  let raw = mem()
   let cap = Infinity
-  let s = storage({
-    ...raw,
-    query: (sql, params) => {
-      assert(params.length <= cap, `${params.length} values bound:\n${sql}`)
-      return raw.query(sql, params)
-    },
-  }, vocab)
+  let s = storage(
+    spy(
+      mem(),
+      (sql, params) =>
+        assert(params.length <= cap, `${params.length} values bound:\n${sql}`),
+    ),
+    vocab,
+  )
   s.install()
   let makers = Array.from({ length: 21 }, (_, i) => `m${i}`)
   seed(s, [

@@ -94,6 +94,7 @@ export {
   neg,
   not,
   notNull,
+  NOW,
   type Op,
   op,
   or,
@@ -122,6 +123,7 @@ export {
   type Write,
 } from './ast.ts'
 export { render } from './render.ts'
+export { type Driver, effect, type Row } from './driver.ts'
 export { type Tag, tagOf } from './sqlite.ts'
 export * from './cascade.ts'
 export * from './compound.ts'

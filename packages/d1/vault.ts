@@ -19,7 +19,7 @@
 // flag the Workers runtime puts on its own and @yaks/secrets tries a seal again
 // for. Every statement here is safe to run twice: an upsert, a delete, a read.
 
-import type { D1Like, Stmt } from './d1.ts'
+import type { D1Like, Prepared } from './d1.ts'
 
 /** What a vault keeps for one secret — @yaks/secrets' `Sealed`, by shape. */
 export type Sealed = {
@@ -110,7 +110,7 @@ let queue = () => {
  * // graph({ storage, vocab, plugins: [secrets(vault)] }) // @yaks/secrets
  * ```
  */
-export let d1Vault = <S extends Stmt<S>>(
+export let d1Vault = <S extends Prepared<S>>(
   db: D1Like<S>,
   key: CryptoKey | Promise<CryptoKey>,
 ): D1Vault => {

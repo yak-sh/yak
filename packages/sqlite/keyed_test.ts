@@ -1,13 +1,13 @@
 import { assert, assertEquals } from '@std/assert'
-import type { BindOpts } from '@yaks/sql'
+import { type BindOpts, lit } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
-import { mem, seed, shop } from './testing.ts'
+import { mem, seed, shop, spy, unit } from './testing.ts'
 import { get, storage } from './mod.ts'
 
 Deno.test('transaction keyed gather shares whole-set projections, observes writes and rollback', () => {
   let driver = mem()
   let opts: BindOpts = {
-    derived: { 'doc.body': { tag: 'text', expr: () => "'hydrated body'" } },
+    derived: { 'doc.body': { tag: 'text', expr: () => lit('hydrated body') } },
   }
   let s = storage(driver, shop, opts)
   s.install()
@@ -60,16 +60,9 @@ Deno.test('singleton gather probes indexed owners, bounds wide vocab and retains
       ])),
     },
   })
-  let driver = mem()
   let queries: string[] = []
   let s = storage(
-    {
-      ...driver,
-      query: (sql, params) => {
-        queries.push(sql)
-        return driver.query(sql, params)
-      },
-    },
+    spy(mem(), (sql) => void (unit(sql) || queries.push(sql))),
     vocab,
     { number: false },
   )
@@ -103,16 +96,10 @@ Deno.test('projected identities read only named facets and preserve projection/r
   let driver = mem()
   let queries: string[] = []
   let opts: BindOpts = {
-    derived: { 'doc.body': { tag: 'text', expr: () => "'hydrated'" } },
+    derived: { 'doc.body': { tag: 'text', expr: () => lit('hydrated') } },
   }
   let s = storage(
-    {
-      ...driver,
-      query: (sql, params) => {
-        queries.push(sql)
-        return driver.query(sql, params)
-      },
-    },
+    spy(driver, (sql) => void (unit(sql) || queries.push(sql))),
     shop,
     opts,
   )

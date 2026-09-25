@@ -406,9 +406,11 @@ export let render = (node: Stmt | Expr): Raw => {
   return raw(sql, c.params)
 }
 
-/** An expression written with every value as a literal: what an ORDER BY term
- * or a stored expression is spliced into a larger text as. */
-export let inline = (e: Expr): string => expr(e, { params: [], inline: true })
+/** An expression written with every value as a literal, parenthesized where an
+ * operator around it would take it apart: what an ORDER BY term or a derived
+ * read is spliced into the binder's text as. */
+export let inline = (e: Expr): string =>
+  operand(e, { params: [], inline: true })
 
 let EXPRS = new Set([
   'col',

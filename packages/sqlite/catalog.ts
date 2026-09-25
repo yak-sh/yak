@@ -1,8 +1,20 @@
 // Only immutable table sets are cached. Read the catalog's current ids on each
 // plan: an uncommitted descriptor may disappear and its rowid may be reused.
 import { type Archetype, Archetypes, tablesOf } from '@yaks/archetype'
-import { type ArchetypeSet, archetypeSet } from '@yaks/sql'
-import type { Driver } from './driver.ts'
+import {
+  type ArchetypeSet,
+  archetypeSet,
+  as,
+  col,
+  count,
+  type Driver,
+  fn,
+  isNull,
+  lit,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
 
 let caches = new WeakMap<Driver, {
   sets: Archetypes
@@ -28,10 +40,14 @@ let cacheFor = (driver: Driver) => {
 // ~8 ms of a 55-subscription boot burst (T-37445).
 let version = (driver: Driver) =>
   JSON.stringify(
-    driver.query(
-      'select count(*) n, max(entity) m, total(length(tables)) t from archetype',
-      [],
-    )[0],
+    driver.query(select({
+      cols: [
+        as(count(), 'n'),
+        as(fn('max', col('entity')), 'm'),
+        as(fn('total', fn('length', col('tables'))), 't'),
+      ],
+      from: table('archetype'),
+    }))[0],
   )
 
 /** Decode a descriptor once, independent of its transaction-local row id. */
@@ -50,8 +66,12 @@ function snapshot(driver: Driver): ArchetypeSet | undefined {
   // or boot backfill classifies its rows. Such a file still needs the legacy
   // predicates; a partial catalog must never silently hide unclassified rows.
   if (
-    driver.query('select 1 from entity where archetype is null limit 1', [])
-      .length
+    driver.query(select({
+      cols: [lit(1)],
+      from: table('entity'),
+      where: isNull(col('archetype')),
+      limit: val(1),
+    })).length
   ) {
     return undefined
   }
@@ -59,7 +79,11 @@ function snapshot(driver: Driver): ArchetypeSet | undefined {
   let v = version(driver)
   if (cache.set && cache.version == v) return cache.set
   let ids = new Map<string, number>()
-  for (let row of driver.query('select entity, tables from archetype', [])) {
+  let all = select({
+    cols: [col('entity'), col('tables')],
+    from: table('archetype'),
+  })
+  for (let row of driver.query(all)) {
     let a = descriptor(driver, String(row.tables))
     ids.set(a.eid, Number(row.entity))
   }

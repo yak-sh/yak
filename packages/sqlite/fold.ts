@@ -8,20 +8,19 @@
 // points at the one that stays, and its spine row is deleted.
 
 import type { Vocab } from '@yaks/vocab'
-import type { Driver } from './driver.ts'
-import { componentTables } from './physical.ts'
-
-let q = (name: string) => '"' + name.replaceAll('"', '""') + '"'
+import { col, type Driver, eq, fn, lit, select, table, val } from '@yaks/sql'
+import { componentTables, tables as listed } from './physical.ts'
 
 // A Durable Object lists its runtime's own tables (`_cf_KV`) and then refuses
 // to read them, so they are left out as componentTables leaves them out.
 let tables = (sql: Driver): string[] =>
-  sql.query("select name from sqlite_schema where type = 'table'", [])
-    .map((r) => String(r.name))
-    .filter((name) => !name.startsWith('sqlite_') && !/^_+cf_/i.test(name))
+  listed(sql).filter((name) =>
+    !name.startsWith('sqlite_') && !/^_+cf_/i.test(name)
+  )
 
-let columns = (sql: Driver, table: string): string[] =>
-  sql.query(`pragma table_info(${q(table)})`, []).map((c) => String(c.name))
+let columns = (sql: Driver, name: string): string[] =>
+  sql.query({ t: 'pragma', name: 'table_info', arg: name })
+    .map((c) => String(c.name))
 
 /** Every column that holds an entity's integer id: the vocabulary's reference
  * columns, and every foreign key onto `entity` (a journal's among them). */
@@ -34,7 +33,9 @@ export let pointers = (sql: Driver, vocab: Vocab): [string, string][] => {
     }
   }
   for (let t of all) {
-    for (let fk of sql.query(`pragma foreign_key_list(${q(t)})`, [])) {
+    for (
+      let fk of sql.query({ t: 'pragma', name: 'foreign_key_list', arg: t })
+    ) {
       if (fk.table == 'entity') out.add(JSON.stringify([t, String(fk.from)]))
     }
   }
@@ -53,33 +54,48 @@ export let fold = (
 ): (gone: number, keep: number) => void => {
   let owned = componentTables(sql)
   return (gone: number, keep: number) => {
+    let of = (id: number) => eq(col('entity'), val(id))
     for (let t of owned) {
-      let [row] = sql.query(`select * from ${q(t)} where entity = ?`, [gone])
+      let [row] = sql.query(select({ from: table(t), where: of(gone) }))
       if (!row) continue
-      if (!sql.query(`select 1 from ${q(t)} where entity = ?`, [keep]).length) {
-        sql.query(`update ${q(t)} set entity = ? where entity = ?`, [
-          keep,
-          gone,
-        ])
+      let held = sql.query(select({
+        cols: [lit(1)],
+        from: table(t),
+        where: of(keep),
+      }))
+      if (!held.length) {
+        sql.query({
+          t: 'update',
+          table: t,
+          set: { entity: val(keep) },
+          where: of(gone),
+        })
         continue
       }
       let cols = Object.keys(row).filter((c) => c != 'entity')
       if (cols.length) {
-        sql.query(
-          `update ${q(t)} set ${
-            cols.map((c) => `${q(c)} = coalesce(${q(c)}, ?)`).join(', ')
-          } where entity = ?`,
-          [...cols.map((c) => row[c] as string | number | null), keep],
-        )
+        sql.query({
+          t: 'update',
+          table: t,
+          set: Object.fromEntries(
+            cols.map((c) => [
+              c,
+              fn('coalesce', col(c), val(row[c] as string | number | null)),
+            ]),
+          ),
+          where: of(keep),
+        })
       }
-      sql.query(`delete from ${q(t)} where entity = ?`, [gone])
+      sql.query({ t: 'delete', from: t, where: of(gone) })
     }
     for (let [t, c] of refs) {
-      sql.query(`update ${q(t)} set ${q(c)} = ? where ${q(c)} = ?`, [
-        keep,
-        gone,
-      ])
+      sql.query({
+        t: 'update',
+        table: t,
+        set: { [c]: val(keep) },
+        where: eq(col(c), val(gone)),
+      })
     }
-    sql.query('delete from entity where id = ?', [gone])
+    sql.query({ t: 'delete', from: 'entity', where: eq(col('id'), val(gone)) })
   }
 }

@@ -8,6 +8,7 @@ import {
   assertThrows,
 } from '@std/assert'
 import { schema } from '@yaks/sqlite'
+import { render, type Stmt } from '@yaks/sql'
 import { fields } from '@yaks/fts'
 import { PAGES } from './guide.ts'
 import {
@@ -199,10 +200,10 @@ Deno.test('a manifest is refused in the words that fix it', () => {
   }
 })
 
-let tablesOf = (sql: string[]) =>
-  sql.flatMap((s) =>
-    [...s.matchAll(/create table if not exists "?(\w+)"?/g)].map((m) => m[1])
-  ).sort()
+let tablesOf = (stmts: Stmt[]) =>
+  stmts.flatMap((s) => s.t == 'create table' ? [s.name] : []).sort()
+
+let text = (stmts: Stmt[]) => stmts.map((s) => render(s).sql)
 
 // What the load implies: one app's schema. The fleet's store plants 83 tables
 // into every customer's Durable Object today; this is the whole of what a
@@ -289,9 +290,7 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
     ].sort(),
   )
   // Search is installed by the app, not by the storage vocabulary.
-  assert(
-    !sql.some((s) => s.includes('using fts5')),
-  )
+  assert(!sql.some((s) => s.t == 'create virtual table'))
 })
 
 Deno.test('the directory and an app spell one word apart: member.role', () => {
@@ -310,7 +309,7 @@ Deno.test('the directory and an app spell one word apart: member.role', () => {
 })
 
 Deno.test('the platform declares the uniques its races are decided by', () => {
-  let sql = schema(platformVocab())
+  let sql = text(schema(platformVocab()))
   for (
     let [name, cols] of [
       ['space_slug', '"space" ("slug")'],
@@ -324,7 +323,7 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
   ) {
     assert(
       sql.includes(
-        `create unique index if not exists ${name} on ${cols}`,
+        `create unique index if not exists "${name}" on ${cols}`,
       ),
       `no ${name}`,
     )
@@ -332,8 +331,8 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
   // An app's own store declares none of them — they are the directory's words.
   // Its one unique is a tool's name, which is the tool's identity.
   assertEquals(
-    schema(appVocab()).filter((s) => s.includes('unique index')),
-    ['create unique index if not exists tool_name on "tool" ("name")'],
+    text(schema(appVocab())).filter((s) => s.includes('unique index')),
+    ['create unique index if not exists "tool_name" on "tool" ("name")'],
   )
   // And an address is no longer one of them (T-34657): `former` is history, so
   // two apps may hold one address a year apart. Which app answers at an address

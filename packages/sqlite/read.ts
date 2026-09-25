@@ -13,17 +13,38 @@
 import { type And, parse } from '@yaks/query'
 import type { Prop, Vocab } from '@yaks/vocab'
 import {
+  among,
+  and,
   ARMS,
+  as,
   type BindOpts,
+  col,
   compile,
+  type Compound,
+  cross,
   DEEP,
   type Derived,
   doomSql,
+  type Driver,
+  each,
+  eq,
+  exists,
+  type Expr,
+  type Join,
+  join,
+  left,
+  lit,
   looseSql,
   narrow,
+  type Query as Sub,
   type Raw,
+  type Row,
+  type Select,
+  select,
+  table,
+  unionAll,
+  val,
 } from '@yaks/sql'
-import type { Driver, Row } from './driver.ts'
 import type { Bundle, Comp } from './bundle.ts'
 import type { Doom, Gone } from '@yaks/graph'
 import { tombstoned } from '@yaks/graph'
@@ -49,12 +70,11 @@ export let rows = (
 ): Row[] => {
   let indexed = !!vocab.comp('archetype')
   let ask = () => {
-    let { sql, params } = compile(ast(query), vocab, {
+    let s = compile(ast(query), vocab, {
       ...opts,
       archetypes: opts.archetypes ?? (indexed ? catalog(driver) : undefined),
     })
-    return driver.query(sql, params as (string | number)[])
-      .map((r) => projected(vocab, r))
+    return driver.query(s).map((r) => projected(vocab, r))
   }
   // The catalog and entity statement must see the same commit. Otherwise a
   // concurrent writer could introduce a new matching set between the two.
@@ -91,60 +111,67 @@ let project = (
   v: Vocab,
   comp: string,
   derived: Derived,
-): { sel: string[]; joins: string[] } => {
-  let self = `"${comp}"`
-  let sel: string[] = []
-  let joins: string[] = []
+): { sel: Expr[]; joins: Join[] } => {
+  let own = (prop: string) => col(prop, comp)
+  let sel: Expr[] = []
+  let joins: Join[] = []
   let deps = new Set<string>()
   for (let c of read1(v, comp, derived)) {
-    let own = derived[`${comp}.${c.prop}`]
-    if (own) {
-      for (let d of own.deps ?? []) deps.add(d)
-      sel.push(`${own.expr(`${self}."entity"`)} as "${c.prop}"`)
+    let over = derived[`${comp}.${c.prop}`]
+    if (over) {
+      for (let d of over.deps ?? []) deps.add(d)
+      sel.push(as(over.expr(own('entity')), c.prop))
     } else if (c.category == 'ref') {
       let a = `r_${c.prop.replaceAll(/[^A-Za-z0-9]/g, '_')}`
-      joins.push(`left join entity "${a}" on "${a}".id = ${self}."${c.prop}"`)
-      sel.push(`"${a}".eid as "${c.prop}"`)
+      joins.push(left(table('entity', a), eq(col('id', a), own(c.prop))))
+      sel.push(as(col('eid', a), c.prop))
     } else if (c.scalar == 'jsonb') {
-      sel.push(`${jsonOut(`${self}."${c.prop}"`)} as "${c.prop}"`)
+      sel.push(as(jsonOut(own(c.prop)), c.prop))
     } else {
-      sel.push(`${self}."${c.prop}" as "${c.prop}"`)
+      sel.push(as(own(c.prop), c.prop))
     }
   }
   for (let d of deps) {
     if (d == comp) continue
-    joins.push(`left join "${d}" on "${d}"."entity" = ${self}."entity"`)
+    joins.push(left(table(d), eq(col('entity', d), own('entity'))))
   }
   return { sel, joins }
 }
 
 // One component's read, whatever names its owners: `lead` is what is selected
-// before the component's own columns, `owner` the predicate over `o.eid`.
+// before the component's own columns, `owner` the condition on `o`, the
+// owner's spine row.
 let selectComp = (
   v: Vocab,
   comp: string,
   derived: Derived,
-  lead: string[],
-  owner: string,
-): string => {
+  lead: Expr[],
+  owner: Expr,
+): Select => {
   let { sel, joins } = project(v, comp, derived)
-  let cols = [...lead, ...(sel.length ? sel : ['1 as present'])]
-  return `select ${cols.join(', ')} ` +
-    `from "${comp}" join entity o on o.id = "${comp}"."entity" ` +
-    `${joins.join(' ')} where ${owner}`
+  return select({
+    cols: [...lead, ...(sel.length ? sel : [as(lit(1), 'present')])],
+    from: table(comp),
+    joins: [
+      join(table('entity', 'o'), eq(col('id', 'o'), col('entity', comp))),
+      ...joins,
+    ],
+    where: owner,
+  })
 }
 
 /**
- * The SELECT that reads one component of one entity — one `?`, the owner's
- * eid. Exported because gathering a bundle is every SQLite-shaped adapter's
- * job, and they must all read a property the same way: @yaks/d1 sends these
+ * The SELECT that reads one component of one entity, named by its eid.
+ * Exported because gathering a bundle is every SQLite-shaped adapter's job,
+ * and they must all read a property the same way: @yaks/d1 sends these
  * statements as one batch instead of one at a time, and nothing else differs.
  */
 export let compSql = (
   v: Vocab,
   comp: string,
+  eid: string,
   derived: Derived = {},
-): string => selectComp(v, comp, derived, [], 'o.eid = ?')
+): Select => selectComp(v, comp, derived, [], eq(col('eid', 'o'), val(eid)))
 
 /**
  * The column a set-shaped read keys its rows by. Not a component prop — a prop
@@ -153,9 +180,9 @@ export let compSql = (
 export let OWNER = '@eid'
 
 /**
- * The same read widened from one entity to a set: every entity `sub` names,
- * each row carrying its owner's eid under {@link OWNER}. `sub` is a subquery
- * selecting one `eid` column, and its params bind first.
+ * The same read widened from one entity to a set: every entity `owners` names,
+ * each row carrying its owner's eid under {@link OWNER}. `owners` is a query
+ * selecting one `eid` column.
  *
  * This is what makes a whole read one round trip over a remote database
  * (@yaks/d1 `wholeSql`): the hits are named by the query that found them
@@ -164,10 +191,78 @@ export let OWNER = '@eid'
 export let setSql = (
   v: Vocab,
   comp: string,
-  sub: string,
+  owners: Sub,
   derived: Derived = {},
-): string =>
-  selectComp(v, comp, derived, [`o.eid as "${OWNER}"`], `o.eid in (${sub})`)
+): Select =>
+  selectComp(
+    v,
+    comp,
+    derived,
+    [as(col('eid', 'o'), OWNER)],
+    among(col('eid', 'o'), owners),
+  )
+
+/**
+ * The spine rows of the entities `which` names, as `e`: each one's id, eid,
+ * number and grave, and its archetype's eid and table set where the store
+ * keeps archetypes. What every whole read starts from.
+ */
+export let spine = (vocab: Vocab, which: Expr): Select => {
+  let typed = !!vocab.comp('archetype')
+  return select({
+    cols: [
+      col('id', 'e'),
+      col('eid', 'e'),
+      col('num', 'e'),
+      as(col('entity', 't'), 'dead'),
+      ...(typed
+        ? [
+          as(col('eid', 'a'), 'archetype'),
+          as(col('tables', 'shape'), '@tables'),
+        ]
+        : []),
+    ],
+    from: table('entity', 'e'),
+    joins: [
+      ...(typed
+        ? [
+          left(table('entity', 'a'), eq(col('id', 'a'), col('archetype', 'e'))),
+          left(
+            table('archetype', 'shape'),
+            eq(col('entity', 'shape'), col('archetype', 'e')),
+          ),
+        ]
+        : []),
+      left(table('tombstone', 't'), eq(col('entity', 't'), col('id', 'e'))),
+    ],
+    where: which,
+  })
+}
+
+// Which of `names` hold a row for any of `owners`: one arm per table, each
+// answering its own name. Globally empty tables short-circuit before the
+// owners are walked, where there is more than one to walk.
+let probe = (names: string[], owners: number[]): Compound => ({
+  ...unionAll(
+    ...names.map((c) =>
+      select({
+        cols: [as(lit(c), 'name')],
+        where: and(
+          ...(owners.length > 1
+            ? [exists(select({ cols: [lit(1)], from: table(c) }))]
+            : []),
+          exists(select({
+            cols: [lit(1)],
+            from: table('owners'),
+            joins: [cross(table(c))],
+            where: eq(col('entity', c), col('value', 'owners')),
+          })),
+        ),
+      })
+    ),
+  ),
+  with: [{ name: 'owners', q: each(owners), materialized: true }],
+})
 
 /**
  * Identity, not search: these entities as they stand, whole. A tombstoned one
@@ -198,25 +293,11 @@ export let get = (
   // Keep caller order and duplicate semantics.
   for (let i = 0; i < eids.length; i += 4096) {
     let ids = eids.slice(i, i + 4096)
-    let params = [JSON.stringify(ids)]
-    let sub = 'select value from json_each(?)'
     let owners: number[] = []
     let byId = new Map<number, Bundle>()
     let groups = new Map<string, number[]>()
     for (
-      let row of driver.query(
-        `select e.id, e.eid, e.num, t.entity as dead${
-          vocab.comp('archetype')
-            ? ', a.eid as archetype, shape.tables as "@tables"'
-            : ''
-        } from entity e${
-          vocab.comp('archetype')
-            ? ' left join entity a on a.id = e.archetype left join archetype shape on shape.entity = e.archetype'
-            : ''
-        }
-       left join tombstone t on t.entity = e.id where e.eid in (${sub})`,
-        params,
-      )
+      let row of driver.query(spine(vocab, among(col('eid', 'e'), each(ids))))
     ) {
       let eid = String(row.eid)
       let entity = {
@@ -248,8 +329,6 @@ export let get = (
         else compOwners.set(comp, [...group])
       }
     }
-    let unclassifiedParams = [JSON.stringify(owners)]
-    params = unclassifiedParams
     // Compatibility only: non-opt-in stores and raw, not-yet-backfilled rows
     // have no descriptor. A wide vocabulary is usually sparse. Ask which tables
     // have rows in
@@ -271,16 +350,8 @@ export let get = (
     let wide = driver.arms ?? ARMS
     for (let j = 0; owners.length && j < names.length; j += wide) {
       present.push(
-        ...driver.query(
-          `with owners as materialized (select value from json_each(?)) ` +
-            names.slice(j, j + wide).map((c) =>
-              `select '${c}' as name where ${
-                owners.length > 1 ? `exists (select 1 from "${c}") and ` : ''
-              }exists (select 1 from owners
-            cross join "${c}" where "${c}".entity = owners.value)`
-            ).join(' union all '),
-          params,
-        ).map((r) => String(r.name)),
+        ...driver.query(probe(names.slice(j, j + wide), owners))
+          .map((r) => String(r.name)),
       )
     }
     for (let comp of present) {
@@ -289,18 +360,17 @@ export let get = (
       else compOwners.set(comp, owners)
     }
     for (let [comp, ids] of compOwners) {
-      params = ids == owners ? unclassifiedParams : [JSON.stringify(ids)]
       // The spine pass already resolved every owner's storage id. Do not join
       // it again for each component just to recover the eid we already hold.
       // References still use project()'s joins; only ownership stays numeric.
       let { sel, joins } = project(vocab, comp, opts.derived ?? {})
       for (
-        let row of driver.query(
-          `select ${[`"${comp}".entity as "@id"`, ...sel].join(', ')} ` +
-            `from "${comp}" ${joins.join(' ')} ` +
-            `where "${comp}".entity in (${sub})`,
-          params,
-        )
+        let row of driver.query(select({
+          cols: [as(col('entity', comp), '@id'), ...sel],
+          from: table(comp),
+          joins,
+          where: among(col('entity', comp), each(ids)),
+        }))
       ) {
         let { '@id': owner, ...value } = row
         let b = byId.get(Number(owner))!
@@ -329,7 +399,7 @@ export let get = (
  * as the batch leaves the graph.
  */
 export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
-  let ask = (s: Raw) => driver.query(s.sql, s.params)
+  let ask = (s: Raw) => driver.query(s)
   let depth = new Map<string, number>()
   let gone: Gone[] = []
   let seed = eids

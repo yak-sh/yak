@@ -11,7 +11,7 @@ import {
   schema,
   storage,
 } from './mod.ts'
-import { mem } from './testing.ts'
+import { mem, spy } from './testing.ts'
 
 let domain = {
   $defs: {
@@ -253,15 +253,12 @@ Deno.test('archetype: stamps join the final set and value-only writes do not ass
       },
     },
   }])
-  let d = mem()
   let updates = 0
-  let query = d.query
-  d.query = (sql, params) => {
-    if (sql.startsWith('update entity set archetype') && params.at(-1) == 'a') {
-      updates++
-    }
-    return query(sql, params)
-  }
+  let d = spy(mem(), (sql, params) => {
+    if (
+      sql.startsWith('update "entity" set "archetype"') && params.at(-1) == 'a'
+    ) updates++
+  })
   let s = storage(d, v)
   s.install()
   let g = graph({ storage: s, vocab: v, plugins: [archetypes()] })
@@ -340,17 +337,15 @@ Deno.test('archetype: boot respects number exclusions and the persistent high-wa
 })
 
 Deno.test('physical archetype discovery never inspects provider-owned SQLite tables', () => {
-  let d = mem()
-  d.exec('create table _cf_KV (entity integer primary key, value text)')
-  d.exec('create table __cf_METADATA (entity integer primary key)')
-  d.exec('create table ordinary (entity integer primary key)')
-  const query = d.query.bind(d)
-  d.query = (sql, args) => {
-    if (/pragma table_info.*_cf_/i.test(sql)) {
+  let base = mem()
+  base.exec('create table _cf_KV (entity integer primary key, value text)')
+  base.exec('create table __cf_METADATA (entity integer primary key)')
+  base.exec('create table ordinary (entity integer primary key)')
+  let d = spy(base, (sql) => {
+    if (/pragma.*table_info.*_cf_/i.test(sql)) {
       throw new Error('provider table access prohibited')
     }
-    return query(sql, args)
-  }
+  })
   assertEquals(componentTables(d), ['ordinary'])
 })
 

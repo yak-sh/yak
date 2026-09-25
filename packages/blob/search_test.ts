@@ -1,8 +1,8 @@
 // A body that lives in the store is still findable by its words. The row holds
 // an address, so an index built straight over the property would hold hashes
-// and a search would match titles alone; `blobText` is what a full-text index
-// is handed so both its triggers and the view it reads back through resolve the
-// address first.
+// and a search would match titles alone; `blobRead`'s `text` expressions are
+// what a full-text index is handed so both its triggers and the view it reads
+// back through resolve the address first.
 //
 // This is the composition an application makes — @yaks/blob's plugin over
 // @yaks/sqlite's rows, @yaks/fts's index over the same tables — driven the way
@@ -11,14 +11,14 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { fields, find, schema } from '@yaks/fts'
-import { blobRead, blobText } from './sqlite.ts'
+import { blobRead } from './sqlite.ts'
 import { blog, fixture } from './testing.ts'
 
 let text = fields(blog)
 
 let shelf = () => {
   let f = fixture()
-  for (let stmt of schema(text, blobRead(blog))) f.driver.exec(stmt)
+  for (let stmt of schema(text, blobRead(blog))) f.driver.query(stmt)
   return f
 }
 
@@ -72,8 +72,4 @@ Deno.test('the words are indexed on every write path, not just the plugin', () =
   ])
   driver.query(`insert into post (entity, body) values (1, 'k1')`, [])
   assertEquals(find(driver, text, 'nights').map((h) => h.entity), ['p1'])
-})
-
-Deno.test('the shared read registry and address-only resolver imply the same FTS schema', () => {
-  assertEquals(schema(text, blobRead(blog)), schema(text, blobText(blog)))
 })

@@ -159,9 +159,7 @@ export type Graph = {
   plugins: Plugin[]
   /** register another plugin (its hooks join the ones already there) */
   use: (plugin: Plugin) => Graph
-  /** the schema statements this graph's vocabulary implies */
-  ddl: () => string[]
-  /** create the tables and indexes it needs */
+  /** make the storage ready for this graph's vocabulary */
   install: () => void | Promise<void>
   /** a query → the matching entities, each carrying the components the query
    * names (`*` for every one, ./projection.ts) */
@@ -657,7 +655,6 @@ export let graph = (opts: Options): Graph => {
       plugins.push(plugin)
       return g
     },
-    ddl: () => storage.ddl(),
     install: () => storage.install(),
     // The rows carry what the query names (./projection.ts), the same answer
     // at every door.

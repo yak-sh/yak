@@ -10,7 +10,7 @@
 import { open } from './db.ts'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
-import type { Driver } from './driver.ts'
+import { type Driver, type Param, render, type Row, type Stmt } from '@yaks/sql'
 import { storage, type Store } from './mod.ts'
 
 // A Driver over a fresh in-memory database, foreign keys enforced so a dangling
@@ -169,3 +169,32 @@ export let seed = (s: Store, bundles: Bundle[]): void => {
 // A @yaks/graph over that store: the whole stack, which is how an application
 // uses this package (the adapter owns the bytes, the graph owns the rules).
 export let shopGraph = (): Graph => graph({ storage: store(), vocab: shop })
+
+// A statement as SQLite receives it: its text and the values it binds.
+let said = (s: Stmt | string, params: Param[] = []) =>
+  typeof s == 'string' ? { sql: s, params } : render(s)
+
+/** Whether a statement opens, closes or marks a unit (unit.ts) rather than
+ * reading or writing. */
+export let unit = (sql: string): boolean =>
+  /^(begin|savepoint|release|rollback|commit)\b/.test(sql)
+
+/**
+ * `d`, showing `saw` the text and bound values of each statement before it
+ * runs. Rows `saw` returns answer in the statement's place, and whatever it
+ * throws refuses the statement.
+ */
+export let spy = (
+  d: Driver,
+  saw: (sql: string, params: Param[]) => Row[] | void,
+): Driver => ({
+  ...d,
+  query: (s, params) => {
+    let r = said(s, params)
+    return saw(r.sql, r.params) ?? d.query(s, params)
+  },
+  exec: (s) => {
+    let r = said(s)
+    if (!saw(r.sql, r.params)) d.exec(s)
+  },
+})

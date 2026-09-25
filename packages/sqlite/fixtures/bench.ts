@@ -3,10 +3,10 @@ import type { Comp } from '@yaks/graph'
 import { assertEquals } from '@std/assert'
 import '../sqlitepath.ts'
 import { Database } from '@db/sqlite'
-import { compile } from '@yaks/sql'
+import { compile, type Driver, render } from '@yaks/sql'
 import { parse } from '@yaks/query'
 import { schema as ftsSchema } from '@yaks/fts'
-import { type Driver, get, storage } from '@yaks/sqlite'
+import { get, storage } from '@yaks/sqlite'
 import { options, textFields, vocab, workload } from './fleet.ts'
 
 export function location() {
@@ -26,6 +26,23 @@ export function location() {
   }
 }
 
+/** A driver that prepares every statement afresh: no layer gets a private
+ * cache. */
+export let perCall = (db: Database): Driver => ({
+  query: (s, bound) => {
+    let { sql, params } = typeof s == 'string'
+      ? { sql: s, params: bound ?? [] }
+      : render(s)
+    let stmt = db.prepare(sql)
+    try {
+      return stmt.all(...params)
+    } finally {
+      stmt.finalize()
+    }
+  },
+  exec: (s) => db.exec(typeof s == 'string' ? s : render(s).sql),
+})
+
 export function packageBenches(layer: 'sqlite' | 'sql' | 'query') {
   let loc = location()
   let db = new Database(loc.path)
@@ -36,18 +53,7 @@ export function packageBenches(layer: 'sqlite' | 'sql' | 'query') {
   db.exec(
     'pragma foreign_keys=on; pragma journal_mode=wal; pragma synchronous=normal',
   )
-  // Prepare per call at every package layer; no layer gets a private cache.
-  let driver: Driver = {
-    query: (sql, params) => {
-      let stmt = db.prepare(sql)
-      try {
-        return stmt.all(...params)
-      } finally {
-        stmt.finalize()
-      }
-    },
-    exec: (sql) => db.exec(sql),
-  }
+  let driver = perCall(db)
   let store = storage(driver, vocab, options)
   store.install()
   for (let sql of ftsSchema(textFields)) driver.exec(sql)

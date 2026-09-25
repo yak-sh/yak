@@ -97,7 +97,7 @@ Deno.test('the same statement reads a batch that has not landed', () => {
   ]
   let over = overlay(driver, shop, batch, reads(m, shop))
   assertEquals(
-    matched(driver, m, shop, {}, { at: over.at }, over)
+    matched(driver, m, shop, {}, { at: over.at }, over.with)
       .map((h) => h.entities).sort(),
     [['p1', 'r1'], ['p2', 'r2']],
   )
@@ -120,7 +120,10 @@ Deno.test('a gate over a batch sees what the batch will add', () => {
   // The batch shelves both, so the rule that fires on "a product not on a
   // shelf" has nothing left to fire on — which is exactly what makes a gated
   // rule fire once and no more.
-  assertEquals(matched(driver, m, shop, {}, { at: over.at }, over).length, 0)
+  assertEquals(
+    matched(driver, m, shop, {}, { at: over.at }, over.with).length,
+    0,
+  )
   // …and without it, both are still unshelved.
   assertEquals(matched(driver, m, shop).length, 2)
 })
@@ -133,7 +136,7 @@ Deno.test('a removal is a clause, and only a batch answers it', () => {
   let batch = [{ entity: { eid: 'p1' }, product: null }]
   let over = overlay(driver, shop, batch, reads(m, shop))
   assertEquals(
-    matched(driver, m, shop, {}, { at: over.at, gone: over.gone }, over)
+    matched(driver, m, shop, {}, { at: over.at, gone: over.gone }, over.with)
       .map((h) => h.entities),
     [['p1']],
   )
@@ -146,7 +149,7 @@ Deno.test('a removal is a clause, and only a batch answers it', () => {
     'review',
   ])
   assertEquals(
-    matched(driver, m, shop, {}, { at: other.at, gone: other.gone }, other)
+    matched(driver, m, shop, {}, { at: other.at, gone: other.gone }, other.with)
       .length,
     0,
   )
@@ -161,7 +164,8 @@ Deno.test('a component removed and written again in one batch is not gone', () =
   ]
   let over = overlay(driver, shop, batch, reads(m, shop))
   assertEquals(
-    matched(driver, m, shop, {}, { at: over.at, gone: over.gone }, over).length,
+    matched(driver, m, shop, {}, { at: over.at, gone: over.gone }, over.with)
+      .length,
     0,
   )
 })

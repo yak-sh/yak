@@ -1,7 +1,12 @@
 // Frozen pre-archetype gather oracle (T-37056). Test-only; do not modernize it.
 import type { Prop, Vocab } from '@yaks/vocab'
-import type { BindOpts, Derived } from '@yaks/sql'
-import type { Driver } from '../driver.ts'
+import {
+  type BindOpts,
+  col,
+  type Derived,
+  type Driver,
+  render,
+} from '@yaks/sql'
 import type { Bundle, Comp } from '../bundle.ts'
 import { tombstoned } from '@yaks/graph'
 
@@ -37,7 +42,9 @@ let project = (
     let own = derived[`${comp}.${c.prop}`]
     if (own) {
       for (let d of own.deps ?? []) deps.add(d)
-      sel.push(`${own.expr(`${self}."entity"`)} as "${c.prop}"`)
+      // TODO(T-39499): the oracle still writes text; an expression it reads
+      // binds no values.
+      sel.push(`${render(own.expr(col('entity', comp))).sql} as "${c.prop}"`)
     } else if (c.category == 'ref') {
       let a = `r_${c.prop.replaceAll(/[^A-Za-z0-9]/g, '_')}`
       joins.push(`left join entity "${a}" on "${a}".id = ${self}."${c.prop}"`)

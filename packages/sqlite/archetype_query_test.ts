@@ -1,11 +1,11 @@
 import { assertEquals } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
-import { compile } from '@yaks/sql'
+import { compile, type Driver, render } from '@yaks/sql'
 import { absent, and, or, parse, present } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { mem, shop } from './testing.ts'
-import { backfill, type Driver, rows, storage } from './mod.ts'
+import { backfill, rows, storage } from './mod.ts'
 import { open, type Opened } from './db.ts'
 
 let vocab = loadVocab([...shop.docs, archetypeDoc, {
@@ -97,11 +97,12 @@ Deno.test('archetype plans and gathers observe commits from another SQLite handl
     // Deferred units, so the commit staged below can land while the reader's
     // unit is open rather than wait on the write lock it would take up front.
     file: false,
-    query: (sql, params) => {
-      let result = db.query(sql, params)
+    query: (s, params) => {
+      let result = db.query(s, params)
       // The planner consults the catalog through its version probe; a
       // commit landing right after it is the race this test stages.
-      if (db == first && sql.startsWith('select count(*) n, max(entity) m')) {
+      let sql = typeof s == 'string' ? s : render(s).sql
+      if (db == first && sql.startsWith('select count(*) as "n", max(')) {
         let hook = afterCatalog
         afterCatalog = undefined
         hook?.()

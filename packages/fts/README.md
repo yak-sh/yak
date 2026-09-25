@@ -120,14 +120,14 @@ Renderers must escape the text and add their own highlighting.
 ## Text stored outside the component row
 
 A blob-backed property stores an address in its component table. Supply
-`blobText(vocab)` or `blobRead(vocab)` from `@yaks/blob` as `schema()`'s second
-argument to index the resolved text:
+`blobRead(vocab)` from `@yaks/blob` as `schema()`'s second argument to index the
+resolved text:
 
 ```ts
-import { blobText } from '@yaks/blob'
+import { blobRead } from '@yaks/blob'
 import { adopt } from '@yaks/fts'
 
-adopt(db, text, blobText(vocab))
+adopt(db, text, blobRead(vocab))
 ```
 
 The generated `<comp>_text` view resolves content for snippets and rebuilds. The
@@ -170,7 +170,8 @@ The root module is the only export path. It exports field selection (`fields`,
 `searched`, `indexes`, `indexName`, `textName`), DDL and maintenance (`schema`,
 `heal`, `adopt`), query integration (`search`), ranked search (`find`, `hits`),
 text conversion (`term`, `match`, `OPEN`, `CLOSE`), and their supporting types,
-including `Driver`, `Field`, `Text`, `Hit` and `SearchOpts`.
+including `Field`, `Hit` and `SearchOpts`. The `Driver` it runs on is
+`@yaks/sql`'s.
 
 ## Compatibility
 

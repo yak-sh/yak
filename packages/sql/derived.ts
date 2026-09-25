@@ -18,29 +18,33 @@
 //     tag: 'number',
 //     deps: [], // extra component tables the expression reads
 //     expr: (owner) =>
-//       `(select coalesce(sum("line"."amount"), 0) from "line"` +
-//       ` where "line"."order" = ${owner})`,
+//       sub(select({
+//         cols: [fn('coalesce', fn('sum', col('amount', 'line')), lit(0))],
+//         from: table('line'),
+//         where: eq(col('order', 'line'), owner),
+//       })),
 //   }
 //   compile(ast, vocab, { derived: { 'order.total': total } })
 
+import type { Expr } from './ast.ts'
 import type { Tag } from './sqlite.ts'
 
-// One derived property. `expr(owner)` builds the read expression, given the SQL
-// that names this entity's integer id (the row being selected, or the integer
-// id a path dereferenced to); `tag` is the type a value is coerced to before it
-// is compared; `values` optionally lists the enum members; `deps` names extra
-// component tables the expression reads, which the binder must therefore left
-// join.
+// One derived property. `expr(owner)` builds the read expression, given the
+// expression naming this entity's integer id (the row being selected, or the
+// integer id a path dereferenced to); `tag` is the type a value is coerced to
+// before it is compared; `values` optionally lists the enum members; `deps`
+// names extra component tables the expression reads, which the binder must
+// therefore left join.
 export type DerivedProp = {
   tag: Tag
   values?: string[]
   deps?: string[]
-  expr: (owner: string) => string
+  expr: (owner: Expr) => Expr
   // Reads a value that is being replaced, without looking up the owner row.
   // Full-text-search triggers have to read the old and new values, and by then
   // the owner row may already have changed or been deleted, so an expression
   // that starts from the owner cannot safely maintain their index.
-  text?: (stored: string) => string
+  text?: (stored: Expr) => Expr
   // Whether the entity must have the component for this expression to return a
   // value. A qualified path names its component as much as its property, so by
   // default the binder reads this property as NULL for an entity without the

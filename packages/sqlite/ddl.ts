@@ -25,6 +25,8 @@
 //                 knows about itself (its epoch, a sweep's mark), never about
 //                 an entity. ./meta.ts reads and writes it.
 //
+// Every statement is a node of @yaks/sql's AST; nothing here writes SQL text.
+//
 // Columns are nullable by default: a patch may create a row from any subset of
 // its properties (that is what PATCH means), so a column requires a value only
 // where the vocabulary declares one — a `required` property is NOT NULL, and
@@ -35,7 +37,26 @@
 // and stays key-free.
 
 import type { Index, Prop, Vocab } from '@yaks/vocab'
-import type { Driver } from './driver.ts'
+import {
+  among,
+  and,
+  as,
+  col,
+  type Column,
+  type CreateIndex,
+  type CreateTable,
+  type Derived,
+  type Driver,
+  eq,
+  type Expr,
+  fn,
+  lit,
+  notNull,
+  NOW,
+  select,
+  type Stmt,
+  table,
+} from '@yaks/sql'
 
 /**
  * The key/value table's name. Named `server_meta`, not `meta`, because a
@@ -45,103 +66,142 @@ import type { Driver } from './driver.ts'
  */
 export let META = 'server_meta'
 
+// A column that holds an entity's integer id, keyed to the spine.
+let ENTITY = { table: 'entity', cols: ['id'] }
+
+// The high-water mark a new number is taken past, raised by whatever wrote one.
+let raise: Stmt = {
+  t: 'update',
+  table: 'entity_sequence',
+  set: { high: fn('max', col('high'), col('num', 'new')) },
+  where: eq(col('singleton'), lit(1)),
+}
+
 // The identity table, the tombstones, and the store's own key/value. Fixed
 // shape — every layout has exactly this spine, whatever components sit on
 // it.
-let SPINE = [
-  `create table if not exists entity (
-    id   integer primary key,
-    eid  text not null unique,
-    num  integer unique,
-    archetype integer references entity(id)
-  )`,
-  `create table if not exists entity_sequence (singleton integer primary key check(singleton = 1), high integer not null)`,
-  `insert into entity_sequence (singleton, high) select 1, coalesce(max(num), 0) from entity where true
-    on conflict(singleton) do update set high = max(high, excluded.high)`,
-  `create trigger if not exists entity_number_insert after insert on entity when new.num is not null
-    begin update entity_sequence set high = max(high, new.num) where singleton = 1; end`,
-  `create trigger if not exists entity_number_update after update of num on entity when new.num is not null
-    begin update entity_sequence set high = max(high, new.num) where singleton = 1; end`,
-  `create table if not exists tombstone (
-    entity     integer primary key references entity(id),
-    deleted_at text not null
-  )`,
+let SPINE: Stmt[] = [
+  {
+    t: 'create table',
+    name: 'entity',
+    ifNot: true,
+    cols: [
+      { name: 'id', type: 'integer', pk: true },
+      { name: 'eid', type: 'text', notNull: true, unique: true },
+      { name: 'num', type: 'integer', unique: true },
+      { name: 'archetype', type: 'integer', ref: ENTITY },
+    ],
+  },
+  {
+    t: 'create table',
+    name: 'entity_sequence',
+    ifNot: true,
+    cols: [
+      {
+        name: 'singleton',
+        type: 'integer',
+        pk: true,
+        check: eq(col('singleton'), lit(1)),
+      },
+      { name: 'high', type: 'integer', notNull: true },
+    ],
+  },
+  {
+    t: 'insert',
+    into: 'entity_sequence',
+    cols: ['singleton', 'high'],
+    q: select({
+      cols: [lit(1), fn('coalesce', fn('max', col('num')), lit(0))],
+      from: table('entity'),
+    }),
+    upsert: [{
+      on: [col('singleton')],
+      set: { high: fn('max', col('high'), col('high', 'excluded')) },
+    }],
+  },
+  {
+    t: 'create trigger',
+    name: 'entity_number_insert',
+    ifNot: true,
+    timing: 'after',
+    event: 'insert',
+    on: 'entity',
+    when: notNull(col('num', 'new')),
+    body: [raise],
+  },
+  {
+    t: 'create trigger',
+    name: 'entity_number_update',
+    ifNot: true,
+    timing: 'after',
+    event: 'update',
+    of: ['num'],
+    on: 'entity',
+    when: notNull(col('num', 'new')),
+    body: [raise],
+  },
+  {
+    t: 'create table',
+    name: 'tombstone',
+    ifNot: true,
+    cols: [
+      { name: 'entity', type: 'integer', pk: true, ref: ENTITY },
+      { name: 'deleted_at', type: 'text', notNull: true },
+    ],
+  },
   // Keyed by `k`, valued by `v`, and nothing else: whatever an application
   // keeps here it keeps as text under a name it chose (./meta.ts).
-  `create table if not exists ${META} (
-    k text primary key,
-    v text not null
-  )`,
+  {
+    t: 'create table',
+    name: META,
+    ifNot: true,
+    cols: [
+      { name: 'k', type: 'text', pk: true },
+      { name: 'v', type: 'text', notNull: true },
+    ],
+  },
 ]
 
-let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
-let lit = (s: string): string => `'${s.replaceAll("'", "''")}'`
-
-// The current time, as SQLite formats the instant a row is written — the same
-// ISO form every `at` property carries, so a defaulted timestamp reads like a
-// server-written one.
-export let NOW = `(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`
-
-// A property's default as SQL: the current time, or a literal a row takes when
-// the writer supplied no value. A boolean stores as the integer it reads back
-// as.
-let defaultSql = (c: Prop): string | undefined => {
+// A property's default: the current time, or a literal a row takes when the
+// writer supplied no value. A boolean stores as the integer it reads back as.
+let fallback = (c: Prop): Expr | undefined => {
   let d = c.default
-  if (!d) return undefined
-  if ('now' in d) return NOW
-  let v = d.value
-  return typeof v == 'string'
-    ? lit(v)
-    : typeof v == 'boolean'
-    ? (v ? '1' : '0')
-    : String(v)
+  return !d ? undefined : 'now' in d ? NOW : lit(d.value)
 }
 
 // A closed set's check. Every value the vocabulary admits on the way in is
 // admitted here too (an alias is an accepted input value), so the engine never
 // rejects what the loader accepted.
-let checkSql = (c: Prop): string | undefined =>
+let closed = (c: Prop): Expr | undefined =>
   c.category == 'enum'
-    ? `check(${q(c.prop)} in (${
-      [...c.values!, ...Object.keys(c.aliases ?? {})].map(lit).join(', ')
-    }))`
+    ? among(
+      col(c.prop),
+      [...c.values!, ...Object.keys(c.aliases ?? {})].map(lit),
+    )
     : undefined
 
-// A stored property's column definition. Affinity comes straight off the
-// property as the vocabulary describes it; a reference carries a foreign key
-// unless it is a `keep` reference, which must survive its target's tombstone
-// and so carries none. `required` becomes NOT NULL; `default` and `enum` are
-// emitted as above.
-let colDdl = (c: Prop): string => {
-  let d = defaultSql(c)
-  let parts = [
-    q(c.prop),
-    c.affinity,
-    c.required ? 'not null' : '',
-    d ? `default ${d}` : '',
-    checkSql(c) ?? '',
-    c.category == 'ref' && c.fk ? 'references entity(id)' : '',
-  ]
-  return parts.filter(Boolean).join(' ')
-}
+// A stored property's column. Affinity comes straight off the property as the
+// vocabulary describes it; a reference carries a foreign key unless it is a
+// `keep` reference, which must survive its target's tombstone and so carries
+// none. `required` becomes NOT NULL; `default` and `enum` are emitted as above.
+let column = (c: Prop): Column => ({
+  name: c.prop,
+  type: c.affinity || undefined,
+  notNull: c.required,
+  default: fallback(c),
+  check: closed(c),
+  ref: c.category == 'ref' && c.fk ? ENTITY : undefined,
+})
 
 // The same column added to a standing table. SQLite refuses `add column` a
 // NOT NULL without a constant default and any default that is an expression,
 // so a grown column keeps its literal default and its CHECK, arrives NOT NULL
 // only when a literal fills the rows already there, and takes the clock only
-// on rows written from now on (the writer stamps them; ddl.ts NOW is for the
-// row that omits it).
-let grownDdl = (c: Prop): string => {
-  let d = c.default && 'value' in c.default ? defaultSql(c) : undefined
-  let parts = [
-    q(c.prop),
-    c.affinity,
-    c.required && d ? 'not null' : '',
-    d ? `default ${d}` : '',
-    checkSql(c) ?? '',
-    c.category == 'ref' && c.fk ? 'references entity(id)' : '',
-  ]
-  return parts.filter(Boolean).join(' ')
+// on rows written from now on (the writer stamps them; NOW is for the row that
+// omits it).
+let grownColumn = (c: Prop): Column => {
+  let d = c.default && 'value' in c.default ? lit(c.default.value) : undefined
+  return { ...column(c), notNull: c.required && !!d, default: d }
 }
 
 // Which of a component's declared properties are stored: everything the
@@ -158,46 +218,42 @@ let stored = (v: Vocab, comp: string): Prop[] =>
 let tableDdl = (
   v: Vocab,
   comp: string,
-  as = comp,
-  extra: string[] = [],
-): string => {
-  let cols = stored(v, comp).map(colDdl)
-  let body = [
-    'entity integer primary key references entity(id)',
-    ...cols,
+  name = comp,
+  extra: Column[] = [],
+): CreateTable => ({
+  t: 'create table',
+  name,
+  ifNot: true,
+  cols: [
+    { name: 'entity', type: 'integer', pk: true, ref: ENTITY },
+    ...stored(v, comp).map(column),
     ...extra,
-  ]
-  return `create table if not exists ${q(as)} (\n    ${
-    body.join(',\n    ')
-  }\n  )`
-}
+  ],
+})
 
 // One declared index, named `<comp>_<props>` — derived from what it covers, so
-// the name is the same in every store that loads the vocabulary and a second
-// install finds its own index already there. `if not exists` is what makes a
-// re-install a no-op; a unique one is the constraint a race is decided by (the
-// loser's insert is rejected, and it re-reads to find the winner).
-// A partial one covers only the rows that hold its `present` properties: the
-// rows without them are as many as they like, the rows with them are one.
-let indexDdl = (comp: string, i: Index): string =>
-  `create ${i.unique ? 'unique ' : ''}index if not exists ` +
-  `${comp}_${i.props.join('_')} on ${q(comp)} (${i.props.map(q).join(', ')})` +
-  (i.present
-    ? ` where ${i.present.map((p) => `${q(p)} is not null`).join(' and ')}`
-    : '')
+// the same declaration always names the same index and a second install is a
+// no-op. A partial one covers only the rows that hold its `present`
+// properties: the rows without them are as many as they like, the rows with
+// them are one.
+let indexDdl = (comp: string, i: Index): CreateIndex => ({
+  t: 'create index',
+  name: `${comp}_${i.props.join('_')}`,
+  on: comp,
+  cols: i.props.map((p) => col(p)),
+  unique: i.unique,
+  ifNot: true,
+  where: i.present ? and(...i.present.map((p) => notNull(col(p)))) : undefined,
+})
 
-// How a stored document property reads as text. @yaks/blob replaces a body with
-// its address; the doc_value view resolves it back for ordinary document
-// reads.
-// Search indexes are composed separately by the application using @yaks/fts.
-export type Text = Record<string, (stored: string) => string>
-
-let docDdl = (v: Vocab, text: Text): string[] => {
+// The `doc` view: each property read as text — through its registered `text`
+// expression where the stored value is not the text itself (@yaks/blob keeps
+// an address) — plus a `rowid` alias. Search indexes are composed separately
+// by the application using @yaks/fts.
+let docDdl = (v: Vocab, derived: Derived): Stmt[] => {
   if (!v.all.includes('doc')) return []
-  // How one `doc` property reads as text, given SQL naming its stored value.
-  // Absent a resolution the value is the text, which is every ordinary
-  // property.
-  let read = (prop: string, s: string) => text[`doc.${prop}`]?.(s) ?? s
+  let read = (prop: string) =>
+    derived[`doc.${prop}`]?.text?.(col(prop)) ?? col(prop)
   let props = stored(v, 'doc').map((c) => c.prop)
   // The view names its columns rather than selecting `*`, because `*` cannot
   // replace one with the expression that resolves it. `*` did have one virtue —
@@ -206,11 +262,20 @@ let docDdl = (v: Vocab, text: Text): string[] => {
   // costs nothing, and a view that lags its table is a read that fails at the
   // engine.
   return [
-    `drop view if exists doc_value`,
-    `create view if not exists doc_value as
-    select "entity", ${
-      props.map((p) => `${read(p, q(p))} as ${q(p)}`).join(', ')
-    }, "entity" as rowid from doc`,
+    { t: 'drop', kind: 'view', name: 'doc_value', ifExists: true },
+    {
+      t: 'create view',
+      name: 'doc_value',
+      ifNot: true,
+      q: select({
+        cols: [
+          col('entity'),
+          ...props.map((p) => as(read(p), p)),
+          as(col('entity'), 'rowid'),
+        ],
+        from: table('doc'),
+      }),
+    },
   ]
 }
 
@@ -218,40 +283,45 @@ let docDdl = (v: Vocab, text: Text): string[] => {
 // per component (the `entity` spine component is the identity table above, not
 // a component table), the doc view, and the indexes those tables declare.
 // `install()` in ./mod.ts runs them; a caller may also read them to inspect or
-// migrate by hand.
-export let schema = (vocab: Vocab, text: Text = {}): string[] => [
-  ...tabled(vocab, text),
+// migrate by hand. `derived` is the store's read overrides: a property whose
+// stored value is not its text reads through its `text` expression.
+export let schema = (vocab: Vocab, derived: Derived = {}): Stmt[] => [
+  ...tabled(vocab, derived),
   // After every table: an index names a column the create above just raised.
   ...indexed(vocab),
 ]
 
 // The spine and one table per component, with the doc view. Everything an
 // index may need to already exist.
-export let tabled = (vocab: Vocab, text: Text = {}): string[] => {
-  let comps = vocab.all.filter((name) => name != 'entity')
-  return [
-    ...SPINE,
-    ...comps.map((name) => tableDdl(vocab, name)),
-    ...docDdl(vocab, text),
-  ]
-}
+export let tabled = (vocab: Vocab, derived: Derived = {}): Stmt[] => [
+  ...SPINE,
+  ...vocab.all.filter((name) => name != 'entity')
+    .map((name) => tableDdl(vocab, name)),
+  ...docDdl(vocab, derived),
+]
 
 // Declared and automatic reference indexes. Created last, after `grown()`: an
 // index may name a column its table only gained on this boot, and SQLite
 // rejects one over a column that is not there yet.
-export let indexed = (vocab: Vocab): string[] => [
+export let indexed = (vocab: Vocab): Stmt[] => [
   // Adapters that only replay schema() may still have the old spine. Until
   // they opt into archetypes/migration, do not index a column they lack.
   ...(vocab.comp('archetype')
     ? [
-      `create index if not exists entity_archetype on entity(archetype)`,
-      `create index if not exists entity_archetype_num on entity(archetype, num)`,
+      indexDdl('entity', { props: ['archetype'], unique: false }),
+      indexDdl('entity', { props: ['archetype', 'num'], unique: false }),
     ]
     : []),
   ...vocab.all
     .filter((name) => name != 'entity')
     .flatMap((name) => vocab.indexes(name).map((i) => indexDdl(name, i))),
 ]
+
+// A table's columns and its foreign keys, as the file holds them.
+let info = (driver: Driver, name: string) =>
+  driver.query({ t: 'pragma', name: 'table_info', arg: name })
+let keys = (driver: Driver, name: string) =>
+  driver.query({ t: 'pragma', name: 'foreign_key_list', arg: name })
 
 // The reference columns a component's table carries a foreign key for: the
 // stored references the vocabulary declares as constrained (a `keep` reference
@@ -277,44 +347,43 @@ let bound = (v: Vocab, comp: string): Set<string> =>
  * a no-op on every boot but the one after the vocabulary changed. It must run
  * before `indexed()`, which recreates the indexes the drop took with it.
  */
-export let refit = (driver: Driver, vocab: Vocab): string[] =>
-  vocab.all.filter((name) => name != 'entity').flatMap((comp) => {
+export let refit = (driver: Driver, vocab: Vocab): Stmt[] =>
+  vocab.all.filter((name) => name != 'entity').flatMap((comp): Stmt[] => {
     let want = bound(vocab, comp)
-    let has = new Set(
-      driver.query(`pragma foreign_key_list(${q(comp)})`, [])
-        .map((r) => String(r.from)),
-    )
+    let has = new Set(keys(driver, comp).map((r) => String(r.from)))
     if (want.size == has.size && [...want].every((c) => has.has(c))) return []
-    let held = driver.query(`pragma table_info(${q(comp)})`, [])
+    let held = info(driver, comp)
     if (!held.length) return []
     // Every column the table has comes across, not every property the
     // vocabulary declares: a property the vocabulary has since dropped is still
     // a column this table's rows were written under, and a constraint change is
-    // no reason to remove one. Its declaration is copied off the existing
-    // table, minus whatever key it carried.
+    // no reason to remove one. It keeps its type and nothing else: nothing
+    // writes a column the vocabulary no longer declares, so it is neither
+    // required nor filled.
     let said = new Set(stored(vocab, comp).map((c) => c.prop))
     let extra = held.filter((r) =>
       r.name != 'entity' && !said.has(String(r.name))
     )
     let fresh = `${comp}__refit`
-    let cols = held.map((r) => q(String(r.name))).join(', ')
+    let cols = held.map((r) => String(r.name))
     return [
       tableDdl(
         vocab,
         comp,
         fresh,
-        extra.map((r) =>
-          [
-            q(String(r.name)),
-            String(r.type || ''),
-            r.notnull ? 'not null' : '',
-            r.dflt_value == null ? '' : `default ${r.dflt_value}`,
-          ].filter(Boolean).join(' ')
-        ),
+        extra.map((r) => ({
+          name: String(r.name),
+          type: String(r.type ?? '') || undefined,
+        })),
       ),
-      `insert into ${q(fresh)} (${cols}) select ${cols} from ${q(comp)}`,
-      `drop table ${q(comp)}`,
-      `alter table ${q(fresh)} rename to ${q(comp)}`,
+      {
+        t: 'insert',
+        into: fresh,
+        cols,
+        q: select({ cols: cols.map((c) => col(c)), from: table(comp) }),
+      },
+      { t: 'drop', kind: 'table', name: comp },
+      { t: 'alter table', table: fresh, rename: comp },
     ]
   })
 
@@ -328,25 +397,24 @@ export let refit = (driver: Driver, vocab: Vocab): string[] =>
 //
 // Additive only, and deliberately: nothing is dropped and nothing is retyped,
 // because rows are already written under the columns the table has. A column
-// is emitted in the form SQLite accepts in an `add column` (grownDdl above).
-export let grown = (driver: Driver, vocab: Vocab): string[] => [
-  ...(driver.query('pragma table_info(entity)', []).some((r) =>
-      r.name == 'archetype'
-    )
-    ? []
-    : [
-      'alter table entity add column archetype integer references entity(id)',
-    ]),
+// is emitted in the form SQLite accepts in an `add column` (grownColumn above).
+export let grown = (driver: Driver, vocab: Vocab): Stmt[] => [
+  ...(info(driver, 'entity').some((r) => r.name == 'archetype') ? [] : [{
+    t: 'alter table' as const,
+    table: 'entity',
+    add: { name: 'archetype', type: 'integer', ref: ENTITY },
+  }]),
   ...vocab.all
     .filter((name) => name != 'entity')
     .flatMap((comp) => {
-      let has = new Set(
-        driver.query(`pragma table_info(${q(comp)})`, [])
-          .map((r) => String(r.name)),
-      )
+      let has = new Set(info(driver, comp).map((r) => String(r.name)))
       return stored(vocab, comp)
         .filter((c) => !has.has(c.prop))
-        .map((c) => `alter table ${q(comp)} add column ${grownDdl(c)}`)
+        .map((c) => ({
+          t: 'alter table' as const,
+          table: comp,
+          add: grownColumn(c),
+        }))
     }),
 ]
 
@@ -373,9 +441,9 @@ export let SAMPLE = 400
  * `PRAGMA optimize` is what SQLite offers for exactly this: it re-analyzes a
  * table whose size has drifted from what was recorded and does nothing at all
  * otherwise, so this runs on every install and writes only when the numbers
- * have moved. The mask asks after every table rather than only the ones this
- * connection has already read — at install it has read none — and an older
- * SQLite that does not know that bit ignores it.
+ * have moved. The mask (0x10002) asks after every table rather than only the
+ * ones this connection has already read — at install it has read none — and an
+ * older SQLite that does not know that bit ignores it.
  *
  * Only for a driver over a file: an engine that hands out storage rather than a
  * database (a Durable Object's SQLite) refuses the pragma, and a scratch
@@ -383,6 +451,6 @@ export let SAMPLE = 400
  */
 export let analyzed = (driver: Driver): void => {
   if (!driver.file) return
-  driver.exec(`pragma analysis_limit = ${SAMPLE}`)
-  driver.exec('pragma optimize = 0x10002')
+  driver.query({ t: 'pragma', name: 'analysis_limit', value: SAMPLE })
+  driver.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
 }

@@ -30,7 +30,7 @@
 
 import type { Watch } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
-import type { Driver } from './driver.ts'
+import type { Derived, Driver } from '@yaks/sql'
 import { type Field, resolved } from './fields.ts'
 import { type Options, ready } from './options.ts'
 import { sweep } from './sweep.ts'
@@ -114,7 +114,7 @@ export let effects = (
     vocab: Vocab
     sql: Driver
     stopping?: AbortSignal
-    derived?: Record<string, { text?: (stored: string) => string }>
+    derived?: Derived
   },
   options: Options = {},
 ): Watch[] => {

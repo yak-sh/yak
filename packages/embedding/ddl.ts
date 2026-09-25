@@ -22,10 +22,10 @@ import {
   col,
   type CreateTrigger,
   eq,
-  fn,
   lit,
-  render,
+  NOW,
   type Stmt,
+  type Update,
 } from '@yaks/sql'
 
 /** The vector table's name. */
@@ -38,7 +38,13 @@ export let MARK = 'embedding_index'
  * queued it since it was last settled. */
 export let OWED = 'embedding_owed'
 
-let NOW = fn('strftime', lit('%Y-%m-%dT%H:%M:%fZ'), lit('now'))
+/** The flag set to `dirty`. */
+export let flag = (dirty: number): Update => ({
+  t: 'update',
+  table: MARK,
+  set: { dirty: lit(dirty) },
+  where: eq(col('id'), lit(1)),
+})
 
 // One trigger per kind of write; an index rebuilt after a write that set no
 // flag would answer from vectors that no longer exist.
@@ -51,15 +57,15 @@ let triggers = (['insert', 'update', 'delete'] as const).map((
   timing: 'after',
   event,
   on: TABLE,
-  body: [{
-    t: 'update',
-    table: MARK,
-    set: { dirty: lit(1) },
-    where: eq(col('id'), lit(1)),
-  }],
+  body: [flag(1)],
 }))
 
-let statements: Stmt[] = [
+/**
+ * The schema the vectors need, as ordered statements. Run them after the
+ * component tables exist — the table references the entity spine. Every
+ * statement is idempotent, so a table that already exists is left as it is.
+ */
+export let schema = (): Stmt[] => [
   {
     t: 'create table',
     name: TABLE,
@@ -112,10 +118,3 @@ let statements: Stmt[] = [
     ],
   },
 ]
-
-/**
- * The schema the vectors need, as ordered statements. Run them after the
- * component tables exist — the table references the entity spine. Every
- * statement is idempotent, so a table that already exists is left as it is.
- */
-export let schema = (): string[] => statements.map((st) => render(st).sql)

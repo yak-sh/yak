@@ -29,7 +29,7 @@
 
 import type { Runs } from '@yaks/graph/tools'
 import { checked, type Finding } from '@yaks/tools'
-import type { Driver } from './driver.ts'
+import type { Driver } from '@yaks/sql'
 import { state } from './mark.ts'
 import { embedderOf, type Options } from './options.ts'
 

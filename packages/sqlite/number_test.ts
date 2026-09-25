@@ -109,11 +109,9 @@ Deno.test('a mint may state the number it is adopting', () => {
   let s = storage(d, vocab, { number: true })
   s.install()
   for (let [eid, n] of [['old', 37574], ['older', 12]] as const) {
-    let m = mintSql(eid, n)
-    d.query(m.sql, m.params)
+    d.query(mintSql(eid, n))
   }
-  let none = mintSql('nameless', false)
-  d.query(none.sql, none.params)
+  d.query(mintSql('nameless', false))
   s.tx((tx) => {
     tx.patch([{ entity: { eid: 'fresh' }, task: {} }])
     assertEquals(tx.get(['old'])[0].entity.num, 37574)

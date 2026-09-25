@@ -1,7 +1,16 @@
 /** Cooperative, preannounced SQLite migrations. Not a distributed lock service. */
-import type { Driver } from './driver.ts'
+import {
+  col,
+  type Driver,
+  eq,
+  type Expr,
+  lit,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
 
-const table = '_yaks_migration'
+const CONTROL = '_yaks_migration'
 export type MigrationState = {
   generation: number
   migration: string
@@ -37,13 +46,31 @@ export class MigrationPending extends Error {
 /** Open at top level, before application schema installation. All peers must
  * deploy this control table before relying on announcement protection. */
 export function migrations(db: Driver): MigrationControl {
-  db.exec(`create table if not exists ${table} (
-    singleton integer primary key check(singleton = 1),
-    generation integer not null, migration text not null,
-    state text not null, announced real not null, not_before real not null,
-    finished real, error text)`)
+  db.query({
+    t: 'create table',
+    name: CONTROL,
+    ifNot: true,
+    cols: [
+      {
+        name: 'singleton',
+        type: 'integer',
+        pk: true,
+        check: eq(col('singleton'), lit(1)),
+      },
+      { name: 'generation', type: 'integer', notNull: true },
+      { name: 'migration', type: 'text', notNull: true },
+      { name: 'state', type: 'text', notNull: true },
+      { name: 'announced', type: 'real', notNull: true },
+      { name: 'not_before', type: 'real', notNull: true },
+      { name: 'finished', type: 'real' },
+      { name: 'error', type: 'text' },
+    ],
+  })
+  const one = eq(col('singleton'), lit(1))
+  const set = (set: Record<string, Expr>) =>
+    db.query({ t: 'update', table: CONTROL, set, where: one })
   const read = (): MigrationState | undefined => {
-    const r = db.query(`select * from ${table} where singleton = 1`, [])[0]
+    const r = db.query(select({ from: table(CONTROL), where: one }))[0]
     return r && {
       generation: Number(r.generation),
       migration: String(r.migration),
@@ -57,13 +84,13 @@ export function migrations(db: Driver): MigrationControl {
   // BEGIN IMMEDIATE serializes claims across connections. These APIs must not
   // run inside a caller's transaction: the announcement must become visible.
   const transaction = <T>(body: () => T): T => {
-    db.exec('begin immediate')
+    db.query({ t: 'begin', mode: 'immediate' })
     try {
       const value = body()
-      db.exec('commit')
+      db.query({ t: 'commit' })
       return value
     } catch (error) {
-      db.exec('rollback')
+      db.query({ t: 'rollback' })
       throw error
     }
   }
@@ -79,14 +106,29 @@ export function migrations(db: Driver): MigrationControl {
     return transaction(() => {
       const generation = ready() + 1
       const now = Date.now()
-      db.query(
-        `insert into ${table} values (1, ?, ?, 'pending', ?, ?, null, null)
-        on conflict(singleton) do update set generation=excluded.generation,
-        migration=excluded.migration, state=excluded.state,
-        announced=excluded.announced, not_before=excluded.not_before,
-        finished=null, error=null`,
-        [generation, migration, now, now + graceMs],
-      )
+      const row: Record<string, Expr> = {
+        singleton: lit(1),
+        generation: val(generation),
+        migration: val(migration),
+        state: val('pending'),
+        announced: val(now),
+        not_before: val(now + graceMs),
+        finished: lit(null),
+        error: lit(null),
+      }
+      db.query({
+        t: 'insert',
+        into: CONTROL,
+        cols: Object.keys(row),
+        rows: [Object.values(row)],
+        upsert: [{
+          on: [col('singleton')],
+          set: Object.fromEntries(
+            Object.keys(row).filter((k) => k != 'singleton')
+              .map((k) => [k, col(k, 'excluded')]),
+          ),
+        }],
+      })
       return read()!
     })
   }
@@ -103,10 +145,11 @@ export function migrations(db: Driver): MigrationControl {
   const fail = (claim: MigrationState, reason: string) =>
     transaction(() => {
       owned(claim)
-      db.query(
-        `update ${table} set state='failed', finished=?, error=? where singleton=1`,
-        [Date.now(), reason],
-      )
+      set({
+        state: val('failed'),
+        finished: val(Date.now()),
+        error: val(reason),
+      })
     })
   const apply = (claim: MigrationState, change: (db: Driver) => void) => {
     try {
@@ -119,10 +162,11 @@ export function migrations(db: Driver): MigrationControl {
         if (result && typeof (result as Promise<unknown>).then == 'function') {
           throw new TypeError('Migration callback must be synchronous')
         }
-        db.query(
-          `update ${table} set state='applied', finished=?, error=null where singleton=1`,
-          [Date.now()],
-        )
+        set({
+          state: val('applied'),
+          finished: val(Date.now()),
+          error: lit(null),
+        })
       })
     } catch (error) {
       // Do not mutate a superseded claim or mark an early apply as a failure.
@@ -148,10 +192,7 @@ export function migrations(db: Driver): MigrationControl {
         if (!current || current.generation != generation) {
           throw new Error('Migration generation changed')
         }
-        db.query(
-          `update ${table} set state='applied', finished=? where singleton=1`,
-          [Date.now()],
-        )
+        set({ state: val('applied'), finished: val(Date.now()) })
       }),
     /** Publish first, then wait with no write transaction held. Peers must poll
      * no slower than intervalMs; margin is scheduling slack, not an ACK. */

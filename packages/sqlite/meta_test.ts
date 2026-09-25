@@ -4,7 +4,7 @@ import { assert, assertEquals, assertNotEquals } from '@std/assert'
 import { META, schema } from './ddl.ts'
 import { EPOCH, epoch, meta } from './meta.ts'
 import { storage } from './mod.ts'
-import type { Driver } from './driver.ts'
+import { type Driver, render } from '@yaks/sql'
 import { mem, shop } from './testing.ts'
 
 // A store over a fresh database, installed — what a host has after boot.
@@ -21,7 +21,9 @@ let master = (d: Driver) =>
 
 Deno.test('the meta table is raised with the spine', () => {
   assert(
-    schema(shop).some((s) => s.includes(`create table if not exists ${META}`)),
+    schema(shop).some((s) =>
+      render(s).sql.includes(`create table if not exists "${META}"`)
+    ),
     'no meta table in the schema',
   )
   assert(master(installed()), 'the installed database has no meta table')

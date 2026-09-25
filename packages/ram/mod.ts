@@ -20,8 +20,8 @@
  * // g.read('.kind=doc') // → the bundles, no await
  * ```
  *
- * {@link ram} binds a {@link Store} to a vocabulary. `ddl()` returns `[]` and
- * `install()` does nothing — a Map has no schema. `tx()` commits when its body
+ * {@link ram} binds a {@link Store} to a vocabulary. `install()` does
+ * nothing — a Map has no schema. `tx()` commits when its body
  * returns and rolls back when it throws, so a rejected write leaves the map
  * exactly as it was.
  *

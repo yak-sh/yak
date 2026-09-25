@@ -13,27 +13,43 @@
 // vocabulary the same way and then do different things with it, and neither
 // should have to depend on the other in order to search.
 
-import { col, eq, join, type Query, select, table, union } from '@yaks/sql'
+import {
+  among,
+  and,
+  as,
+  col,
+  type Derived,
+  each,
+  eq,
+  type Expr,
+  fn,
+  join,
+  lit,
+  ne,
+  type Query,
+  select,
+  table,
+  union,
+  unionAll,
+  val,
+} from '@yaks/sql'
 import type { Prop, Vocab } from '@yaks/vocab'
 
 /** A `comp.prop` pair naming one embedded text property; for text an entity
  * is found by through another of its components, that component (`on`: an
  * `entry` is found by `content.body`); and — for a property that does not hold
- * its own text, like a @yaks/blob body holding an address — the SQL that reads
- * the text a stored value stands for. */
+ * its own text, like a @yaks/blob body holding an address — the expression that
+ * reads the text a stored value stands for. */
 export type Field = {
   comp: string
   prop: string
   on?: string
-  text?: (stored: string) => string
+  text?: (stored: Expr) => Expr
 }
 
 /** Fields read through a host's derived columns (@yaks/sql `Derived`), so a
  * content-addressed body is embedded as its prose, never as its hash. */
-export let resolved = (
-  fields: Field[],
-  derived: Record<string, { text?: (stored: string) => string }> = {},
-): Field[] =>
+export let resolved = (fields: Field[], derived: Derived = {}): Field[] =>
   fields.map((f) => {
     let text = derived[`${f.comp}.${f.prop}`]?.text
     return text ? { ...f, text } : f
@@ -87,11 +103,11 @@ export let fields = (vocab: Vocab, pick: Pick = textual): Field[] => [
 // it holds something other than these characters.
 let WS = ' \t\n\r\v\f'
 
-/** A statement and the params it binds, in order. */
-export type Stmt = { sql: string; params: (string | number)[] }
-
-/** An identifier, quoted for SQL. */
-export let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
+// The join that scopes a field to the entities wearing `on`.
+let scope = (f: Field) =>
+  f.on
+    ? [join(table(f.on, 'o'), eq(col('entity', 'o'), col('entity', 'c')))]
+    : []
 
 /**
  * Every embeddable piece of text in the graph, as one row per (entity, field):
@@ -100,28 +116,26 @@ export let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
  * when it has something to embed. `owners` narrows it to those entities, which
  * is how the sweep reads only what it owes. Returns null for a vocabulary with
  * no text properties at all: there is no statement to write.
- *
- * Text, not an @yaks/sql node, because a field's `text` is a derived read
- * (@yaks/sql `DerivedProp.text`), which is SQL text.
  */
-export let pieces = (fields: Field[], owners?: number[]): Stmt | null =>
+export let pieces = (fields: Field[], owners?: number[]): Query | null =>
   fields.length
-    ? {
-      sql: fields.map((f, i) => {
-        let stored = `"c".${q(f.prop)}`
-        let col = f.text ? f.text(stored) : stored
-        return `select "c"."entity" as owner, ${i} as ord,` +
-          ` ${col} as t from ${q(f.comp)} "c"` +
-          (f.on ? ` join ${q(f.on)} "o" on "o"."entity" = "c"."entity"` : '') +
-          ` where trim(coalesce(${col}, ''), ?) != ''` +
-          (owners
-            ? ` and "c"."entity" in (select value from json_each(?))`
-            : '')
-      }).join(' union all '),
-      params: fields.flatMap(() =>
-        owners ? [WS, JSON.stringify(owners)] : [WS]
-      ),
-    }
+    ? unionAll(...fields.map((f, i) => {
+      let stored = col(f.prop, 'c')
+      let text = f.text ? f.text(stored) : stored
+      let some = ne(fn('trim', fn('coalesce', text, lit('')), val(WS)), lit(''))
+      return select({
+        cols: [
+          as(col('entity', 'c'), 'owner'),
+          as(lit(i), 'ord'),
+          as(text, 't'),
+        ],
+        from: table(f.comp, 'c'),
+        joins: scope(f),
+        where: owners
+          ? and(some, among(col('entity', 'c'), each(owners)))
+          : some,
+      })
+    }))
     : null
 
 /**
@@ -135,9 +149,7 @@ export let wearers = (fields: Field[]): Query | null =>
       select({
         cols: [col('entity', 'c')],
         from: table(f.comp, 'c'),
-        joins: f.on
-          ? [join(table(f.on, 'o'), eq(col('entity', 'o'), col('entity', 'c')))]
-          : [],
+        joins: scope(f),
       })
     ))
     : null

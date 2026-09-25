@@ -25,13 +25,11 @@
  * import { parse } from '@yaks/query'
  *
  * let text = fields(shop) // the properties the vocabulary marks searchable
- * for (let stmt of schema(text)) db.exec(stmt)
+ * for (let stmt of schema(text)) db.query(stmt)
  *
  * // which books match, with the rest of the query still filtering
- * let { sql, params } = compile(
- *   parse('hobbit .price<20'),
- *   shop,
- *   { extend: [search(text)] },
+ * let matched = db.query(
+ *   compile(parse('hobbit .price<20'), shop, { extend: [search(text)] }),
  * )
  *
  * // and which come first, with a snippet marking each match
@@ -52,4 +50,3 @@ export * from './term.ts'
 export * from './ddl.ts'
 export * from './compile.ts'
 export * from './search.ts'
-export * from './driver.ts'

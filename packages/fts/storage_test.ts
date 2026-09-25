@@ -1,6 +1,7 @@
 // The application composes the two packages. SQLite builds no hidden index;
 // FTS owns the schema and the text predicate, including reads inside a tx.
 import { assert, assertEquals, assertThrows } from '@std/assert'
+import { render } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
@@ -56,7 +57,7 @@ Deno.test('storage composes FTS explicitly for document and non-document prose',
   })
   assertEquals(found('ceramic'), [])
   assertEquals(found('enamel'), ['a'])
-  assert(!store.ddl().some((s) => s.includes('fts5')))
+  assert(!store.ddl().some((s) => render(s).sql.includes('fts5')))
 })
 
 Deno.test('.order=search puts the closest match first', () => {

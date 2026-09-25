@@ -5,18 +5,18 @@
 
 import { assertEquals } from '@std/assert'
 import { match } from '@yaks/graph'
-import { mem, shop } from './testing.ts'
+import { mem, shop, spy } from './testing.ts'
 import { type Overlay, overlay } from './overlay.ts'
 import { matched } from './rules.ts'
 import { read } from './read.ts'
 import { storage } from './mod.ts'
-import type { Driver } from './driver.ts'
+import type { Driver } from '@yaks/sql'
 import type { Bundle } from '@yaks/graph'
 
 // One query, asked of the graph with the batch standing in it. No anchor: the
 // caller is asking the match outright, which is what these tests want to see.
 let seen = (driver: Driver, over: Overlay, source: string): string[] =>
-  matched(driver, match(source), shop, {}, { at: over.at }, over)
+  matched(driver, match(source), shop, {}, { at: over.at }, over.with)
     .map((b) => String(b.entities[0])).sort()
 
 let titles = (rows: Bundle[]): string[] =>
@@ -108,17 +108,7 @@ Deno.test('the overlay costs the batch, never the database', () => {
       { entity: { eid: 'p1' }, product: { price: 100042 } },
     ]
     let statements = 0
-    let counted = {
-      ...driver,
-      query: (sql: string, params: Parameters<typeof driver.query>[1]) => {
-        statements++
-        return driver.query(sql, params)
-      },
-      exec: (sql: string) => {
-        statements++
-        return driver.exec(sql)
-      },
-    }
+    let counted = spy(driver, () => void statements++)
     let over = overlay(counted, shop, batch)
     assertEquals(seen(counted, over, '.product.price>=100000').length, 21)
     return statements
@@ -151,6 +141,6 @@ Deno.test('a batch that mints nothing leaves the identity table alone', () => {
     { entity: { eid: 'p1' }, product: { price: 99 } },
   ])
   assertEquals(over.covers, ['product'])
-  assertEquals(over.with.includes('_over_entity'), false)
+  assertEquals(over.with.some((c) => c.name == '_over_entity'), false)
   assertEquals(seen(driver, over, '.product.price=99'), ['p1'])
 })

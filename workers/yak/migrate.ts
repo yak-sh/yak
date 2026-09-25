@@ -71,15 +71,8 @@ import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
 import { edgeEid } from '@yaks/edge'
 import { entryEid, TREE_ENTRY } from '@yaks/git'
 import { identityEid, sha256 } from '@yaks/graph'
-import {
-  backfill,
-  fold,
-  grown,
-  indexed,
-  pointers,
-  tabled,
-  type Text,
-} from '@yaks/sqlite'
+import type { Derived } from '@yaks/sql'
+import { backfill, fold, grown, indexed, pointers, tabled } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { handle } from './directory.ts'
 
@@ -523,13 +516,13 @@ let stands = (d: Drive, table: string): boolean =>
 export let install = (
   storage: DurableStorage,
   vocab: Vocab,
-  text: Text = {},
+  derived: Derived = {},
   migrated: string | null = null,
   classify = true,
 ) => {
   let d = driver(storage)
-  for (let stmt of tabled(vocab, text)) d.exec(stmt)
-  for (let stmt of grown(d, vocab)) d.exec(stmt)
+  for (let stmt of tabled(vocab, derived)) d.query(stmt)
+  for (let stmt of grown(d, vocab)) d.query(stmt)
   let held = new Set(named(d, 'index').map((i) => i.name))
   // HANDLED assigns and reconciles handles before it raises `app_store`;
   // TOOLED moves and merges tools before it raises `tool_name`.
@@ -555,9 +548,9 @@ export let install = (
         )
       }),
   }
-  for (let stmt of indexed(ready)) d.exec(stmt)
+  for (let stmt of indexed(ready)) d.query(stmt)
   // Search is app composition, after all indexed columns have been raised.
-  for (let stmt of ftsSchema(fields(vocab), text)) d.exec(stmt)
+  for (let stmt of ftsSchema(fields(vocab), derived)) d.query(stmt)
   if (classify && vocab.comp('archetype')) backfill(d, false)
 }
 

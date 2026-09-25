@@ -7,11 +7,11 @@
 //   a component set to null is dropped  the row goes, the entity stays
 //   a tombstoned entity takes no patch  deletion is final; ids never recycle
 //
-// Every write here is a statement, built before it is sent, and every statement
-// is self-sufficient: an owner id is a subquery (`select id from entity where
-// eid = ?`) rather than a value looked up first, and an insert whose owner does
-// not exist writes nothing instead of inventing a row. Nothing is read between
-// two writes.
+// Every write here is a statement (an @yaks/sql `Write`), built before it is
+// sent, and every statement is self-sufficient: an owner id is a subquery
+// (`select id from entity where eid = ?`) rather than a value looked up first,
+// and an insert whose owner does not exist writes nothing instead of inventing
+// a row. Nothing is read between two writes.
 //
 // That is what lets one write path serve every SQLite-shaped adapter. An
 // embedded engine could afford to query mid-write — look up an id, insert a
@@ -44,22 +44,55 @@
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps } from '@yaks/graph'
-import { type Driver, effect, type Param, type Row } from './driver.ts'
+import {
+  among,
+  and,
+  as,
+  col,
+  type Delete,
+  type Driver,
+  each,
+  effect,
+  eq,
+  exists,
+  type Expr,
+  type Insert,
+  isNull,
+  join,
+  left,
+  lit,
+  not,
+  notNull,
+  op,
+  type Param,
+  type Row,
+  select,
+  type Stmt,
+  sub,
+  table,
+  type Update,
+  val,
+  type Write,
+} from '@yaks/sql'
 import { componentTables } from './physical.ts'
-import { isJsonb, jsonIn } from './jsonb.ts'
+import { isJsonb, jsonb, jsonIn } from './jsonb.ts'
 import { keyed } from './keyed.ts'
-
-/** One statement of a write: the SQL, and the parameters it binds. This file
- * builds them; an adapter runs them — one at a time over an embedded engine,
- * gathered into a single batch over a remote one. */
-export type Sql = { sql: string; params: Param[] }
 
 // The owner's integer id, as a subquery. Every write keys to it, so an entity
 // minted earlier in the same unit of work resolves without a second question.
-let OWNER = '(select id from entity where eid = ?)'
+let owner = (eid: string): Expr =>
+  sub(select({
+    cols: [col('id')],
+    from: table('entity'),
+    where: eq(col('eid'), val(eid)),
+  }))
 
-// Run a built statement for effect, discarding any rows.
-let run = (driver: Driver, s: Sql): void => effect(driver, s.sql, s.params)
+// The next number, past the sequence's high-water mark.
+let next: Expr = sub(select({
+  cols: [op('+', col('high'), lit(1))],
+  from: table('entity_sequence'),
+  where: eq(col('singleton'), lit(1)),
+}))
 
 // The value a column stores, coerced to what SQLite holds: a boolean becomes
 // 0/1 (a bool column has integer affinity), everything else passes through. A
@@ -72,20 +105,15 @@ let scalar = (value: unknown): Param =>
 let isRef = (v: Vocab, comp: string, prop: string): boolean =>
   v.prop(comp, prop)?.category == 'ref'
 
-// One property's value as the SQL that writes it and the parameter it binds: a
-// reference names its target's eid and the statement looks up the id, a JSON
-// value goes in through `jsonb()` (./jsonb.ts), and a scalar is bound as it is.
-let slot = (
-  v: Vocab,
-  comp: string,
-  prop: string,
-  raw: unknown,
-): { sql: string; param: Param } =>
+// One property's value as what writes it: a reference names its target's eid
+// and the statement looks up the id, a JSON value goes in through `jsonb()`
+// (./jsonb.ts), and a scalar is bound as it is.
+let slot = (v: Vocab, comp: string, prop: string, raw: unknown): Expr =>
   raw != null && isRef(v, comp, prop)
-    ? { sql: OWNER, param: String(raw) }
+    ? owner(String(raw))
     : isJsonb(v, comp, prop)
-    ? { sql: 'jsonb(?)', param: jsonIn(raw) }
-    : { sql: '?', param: scalar(raw) }
+    ? jsonb(val(jsonIn(raw)))
+    : val(scalar(raw))
 
 /** What the store already knows about an eid: its number, and whether that
  * identity is tombstoned. An eid with no entry has no entity yet. */
@@ -102,12 +130,14 @@ export let spines = (
 ): Map<string, Spine> => {
   if (!eids.length) return new Map()
   return new Map(
-    driver.query(
-      `select e.eid as eid, e.num as num, t.entity as dead from entity e
-        left join tombstone t on t.entity = e.id
-        where e.eid in (select value from json_each(?))`,
-      [JSON.stringify(eids)],
-    ).map((r) => [String(r.eid), {
+    driver.query(select({
+      cols: [col('eid', 'e'), col('num', 'e'), as(col('entity', 't'), 'dead')],
+      from: table('entity', 'e'),
+      joins: [
+        left(table('tombstone', 't'), eq(col('entity', 't'), col('id', 'e'))),
+      ],
+      where: among(col('eid', 'e'), each(eids)),
+    })).map((r) => [String(r.eid), {
       num: r.num == null ? null : Number(r.num),
       dead: r.dead != null,
     }]),
@@ -121,6 +151,9 @@ export let buried = (driver: Driver, eids: string[]): Set<string> =>
       .filter(([, spine]) => spine.dead)
       .map(([eid]) => eid),
   )
+
+// What a mint or a numbering reports: the identity it wrote.
+let IDENTITY = [col('eid'), col('num')]
 
 /**
  * The statement that mints an identity, and returns what it minted. SQLite
@@ -139,29 +172,30 @@ export let buried = (driver: Driver, eids: string[]): Set<string> =>
  * everywhere. The sequence follows — `entity_number_insert` raises its high
  * water mark — so the next minted number is still past every given one.
  */
-export let mintSql = (eid: string, number: boolean | number = false): Sql => ({
-  sql: `insert into entity (eid, num)
-          values (?, ${
-    typeof number == 'number'
-      ? '?'
-      : number
-      ? '(select high + 1 from entity_sequence where singleton = 1)'
-      : 'null'
-  })
-          on conflict(eid) do nothing returning eid, num`,
-  params: typeof number == 'number' ? [eid, number] : [eid],
+export let mintSql = (
+  eid: string,
+  number: boolean | number = false,
+): Insert => ({
+  t: 'insert',
+  into: 'entity',
+  cols: ['eid', 'num'],
+  rows: [[
+    val(eid),
+    typeof number == 'number' ? val(number) : number ? next : lit(null),
+  ]],
+  upsert: [{ on: [col('eid')] }],
+  returning: IDENTITY,
 })
 
 /** The statement that numbers a spine a reference minted, once a bundle of its
  * own arrives: the next number, or the one stated. It returns what
  * {@link mintSql} does, and nothing where the spine already has a number. */
-export let numberSql = (eid: string, number: true | number): Sql => ({
-  sql: `update entity set num = ${
-    number === true
-      ? '(select high + 1 from entity_sequence where singleton = 1)'
-      : '?'
-  } where eid = ? and num is null returning eid, num`,
-  params: number === true ? [eid] : [number, eid],
+export let numberSql = (eid: string, number: true | number): Update => ({
+  t: 'update',
+  table: 'entity',
+  set: { num: number === true ? next : val(number) },
+  where: and(eq(col('eid'), val(eid)), isNull(col('num'))),
+  returning: IDENTITY,
 })
 
 /** The identity a {@link mintSql} statement reported — the rows it returned —
@@ -174,6 +208,14 @@ export let minted = (rows: Row[]): Entity | undefined =>
     }
     : undefined
 
+// Whether the entity `e` has no row in `comp` yet.
+let lacks = (comp: string): Expr =>
+  not(exists(select({
+    cols: [lit(1)],
+    from: table(comp),
+    where: eq(col('entity', comp), col('id', 'e')),
+  })))
+
 /**
  * The statement that patches one component onto one entity: insert the sent
  * columns, or update just them on conflict, so an omitted property keeps what
@@ -182,7 +224,7 @@ export let minted = (rows: Row[]): Entity | undefined =>
  * property is a tag — its row's existence is the whole fact.
  *
  * An INSERT…select is what makes the owner a subquery: no owner row, no
- * inserted row. Its WHERE is also what lets SQLite parse the upsert clause.
+ * inserted row.
  *
  * A tag insert is `or ignore` in both forms: existence is the whole fact it
  * asserts, so a component whose table requires a column the tag cannot supply
@@ -197,55 +239,56 @@ export let upsertSql = (
   comp: string,
   patch: Comp,
   absent = false,
-): Sql => {
+): Insert => {
   let cols = Object.keys(patch).filter((c) =>
     v.prop(comp, c)?.computed === false
   )
+  let where = and(
+    eq(col('eid', 'e'), val(eid)),
+    ...(absent ? [lacks(comp)] : []),
+  )
   if (!cols.length) {
     return {
-      sql: `insert or ignore into "${comp}" (entity)
-              select id from entity e where eid = ?${
-        absent
-          ? ` and not exists (select 1 from "${comp}" where entity = e.id)`
-          : ''
-      }`,
-      params: [eid],
+      t: 'insert',
+      or: 'ignore',
+      into: comp,
+      cols: ['entity'],
+      q: select({ cols: [col('id', 'e')], from: table('entity', 'e'), where }),
     }
   }
   // The value each column takes, as a select item beside the owner id: a
   // reference is another subquery, a scalar is a bound parameter.
-  let params: Param[] = []
-  let items = cols.map((c) => {
-    let s = slot(v, comp, c, patch[c])
-    params.push(s.param)
-    return s.sql
-  })
-  let names = cols.map((c) => `"${c}"`).join(', ')
-  let sets = cols.map((c) => `"${c}" = excluded."${c}"`).join(', ')
   return {
-    sql: `insert into "${comp}" (entity, ${names})
-            select e.id, ${items.join(', ')} from entity e where e.eid = ?
-            ${
-      absent
-        ? `and not exists (select 1 from "${comp}" where entity = e.id)`
-        : `on conflict(entity) do update set ${sets}`
-    }`,
-    params: [...params, eid],
+    t: 'insert',
+    into: comp,
+    cols: ['entity', ...cols],
+    q: select({
+      cols: [col('id', 'e'), ...cols.map((c) => slot(v, comp, c, patch[c]))],
+      from: table('entity', 'e'),
+      where,
+    }),
+    upsert: absent ? undefined : [{
+      on: [col('entity')],
+      set: Object.fromEntries(cols.map((c) => [c, col(c, 'excluded')])),
+    }],
   }
 }
 
 /** The statement that drops one component from one entity — the row goes, the
  * entity stays. */
-export let dropSql = (eid: string, comp: string): Sql => ({
-  sql: `delete from "${comp}" where entity = ${OWNER}`,
-  params: [eid],
+export let dropSql = (eid: string, comp: string): Delete => ({
+  t: 'delete',
+  from: comp,
+  where: eq(col('entity'), owner(eid)),
 })
 
 /** The identity metadata write, using the portable eid as an integer lookup. */
-export let archetypeSql = (b: Bundle): Sql[] =>
+export let archetypeSql = (b: Bundle): Update[] =>
   b.entity.archetype === undefined ? [] : [{
-    sql: `update entity set archetype = ${OWNER} where eid = ?`,
-    params: [b.entity.archetype, b.entity.eid],
+    t: 'update',
+    table: 'entity',
+    set: { archetype: owner(b.entity.archetype) },
+    where: eq(col('eid'), val(b.entity.eid)),
   }]
 
 /**
@@ -254,7 +297,7 @@ export let archetypeSql = (b: Bundle): Sql[] =>
  * because a batch mints every eid it touches or points at before it writes
  * anything.
  */
-export let patchSql = (v: Vocab, b: Bundle): Sql[] => [
+export let patchSql = (v: Vocab, b: Bundle): Write[] => [
   ...archetypeSql(b),
   ...comps(b).flatMap(([name, comp]) => {
     let { first, fallback } = patchOne(v, b.entity.eid, name, comp)
@@ -270,7 +313,7 @@ let patchOne = (
   eid: string,
   name: string,
   comp: Comp | null,
-): { first: Sql; fallback?: () => Sql } => {
+): { first: Insert | Update | Delete; fallback?: () => Insert } => {
   if (comp == null) return { first: dropSql(eid, name) }
   // Insert checks NOT NULL before ON CONFLICT. Update existing rows first,
   // then insert only absent ones: partial patches need no invented defaults
@@ -278,18 +321,16 @@ let patchOne = (
   let cols = Object.keys(comp).filter((c) =>
     v.prop(name, c)?.computed === false
   )
-  let params: Param[] = []
-  let sets = cols.map((c) => {
-    let s = slot(v, name, c, comp[c])
-    params.push(s.param)
-    return `"${c}" = ${s.sql}`
-  })
   let fallback = () => upsertSql(v, eid, name, comp, true)
   return cols.length
     ? {
       first: {
-        sql: `update "${name}" set ${sets.join(', ')} where entity = ${OWNER}`,
-        params: [...params, eid],
+        t: 'update',
+        table: name,
+        set: Object.fromEntries(
+          cols.map((c) => [c, slot(v, name, c, comp[c])]),
+        ),
+        where: eq(col('entity'), owner(eid)),
       },
       fallback,
     }
@@ -303,16 +344,25 @@ let patchOne = (
  * foreign key blocks the delete. The tombstone is an INSERT…select, so an eid
  * no entity uses tombstones nothing.
  */
-export let removeSql = (v: Vocab, entity: Entity, at: string): Sql[] => [
+export let removeSql = (v: Vocab, entity: Entity, at: string): Write[] => [
   ...[...v.all].reverse()
     .filter((comp) => comp != 'entity')
     .map((comp) => dropSql(entity.eid, comp)),
-  {
-    sql: `insert or ignore into tombstone (entity, deleted_at)
-            select id, ? from entity where eid = ?`,
-    params: [at, entity.eid],
-  },
+  bury(entity.eid, at),
 ]
+
+// The tombstone an entity's removal ends with.
+let bury = (eid: string, at: string): Insert => ({
+  t: 'insert',
+  or: 'ignore',
+  into: 'tombstone',
+  cols: ['entity', 'deleted_at'],
+  q: select({
+    cols: [col('id'), val(at)],
+    from: table('entity'),
+    where: eq(col('eid'), val(eid)),
+  }),
+})
 
 /** Every eid these bundles touch or point at, in first-touch order — each
  * bundle's own entity, then the targets of its reference properties. This is
@@ -327,6 +377,15 @@ export let touched = (v: Vocab, bundles: Bundle[]): string[] =>
         .map(([, val]) => String(val))
     ),
   ])
+
+// Whether an entity already wears a component, asked of its row.
+let wears = (driver: Driver, comp: string, eid: string): boolean =>
+  driver.query(select({
+    cols: [lit(1)],
+    from: table(comp, 'c'),
+    joins: [join(table('entity', 'e'), eq(col('id', 'e'), col('entity', 'c')))],
+    where: eq(col('eid', 'e'), val(eid)),
+  })).length > 0
 
 /**
  * Patch a batch of bundles in, in order, and return the spines this patch
@@ -359,25 +418,20 @@ export let patch = (
   let excluded = new Set<string>()
   if (typeof number == 'object') {
     for (let name of number.except) {
-      let table = '"' + name.replaceAll('"', '""') + '"'
       for (let b of alive) {
         if (!known.has(b.entity.eid)) continue
-        if (
-          driver.query(
-            'select 1 from ' + table +
-              ' c join entity e on e.id = c.entity where e.eid = ?',
-            [b.entity.eid],
-          ).length
-        ) excluded.add(b.entity.eid)
+        if (wears(driver, name, b.entity.eid)) excluded.add(b.entity.eid)
       }
       for (let b of alive) if (b[name] != null) excluded.add(b.entity.eid)
     }
     for (let eid of excluded) {
       if (!known.has(eid)) continue
-      driver.query(
-        'update entity set num = null where eid = ? and num is not null',
-        [eid],
-      )
+      driver.query({
+        t: 'update',
+        table: 'entity',
+        set: { num: lit(null) },
+        where: and(eq(col('eid'), val(eid)), notNull(col('num'))),
+      })
     }
   }
   // What each bundle states its entity's number to be, where the store is
@@ -411,8 +465,7 @@ export let patch = (
   for (let eid of touched(vocab, alive)) {
     if (seen.has(eid)) continue
     seen.add(eid)
-    let s = mintSql(eid, own.has(eid) && take(eid))
-    let e = minted(driver.query(s.sql, s.params))
+    let e = minted(driver.query(mintSql(eid, own.has(eid) && take(eid))))
     if (e) born.push(e)
   }
   // A spine an earlier reference minted is numbered now, if it still carries
@@ -426,8 +479,7 @@ export let patch = (
     for (let b of keyed(driver, vocab, {})(pointed)) {
       let n = take(b.entity.eid)
       if (n === false || comps(b).length) continue
-      let s = numberSql(b.entity.eid, n)
-      let e = minted(driver.query(s.sql, s.params))
+      let e = minted(driver.query(numberSql(b.entity.eid, n)))
       if (e) born.push(e)
     }
   }
@@ -435,23 +487,20 @@ export let patch = (
   for (let b of alive) {
     for (let [name, comp] of comps(b)) {
       let { first, fallback } = patchOne(vocab, b.entity.eid, name, comp)
-      let changes = driver.run?.(first.sql, first.params)
+      let changes = driver.run?.(first)
       if (changes === undefined) {
         changes = driver.query(
-          first.sql + (fallback ? ' returning entity' : ''),
-          first.params,
+          fallback ? { ...first, returning: [col('entity')] } : first,
         ).length
       }
       // A write's own result avoids the absent INSERT when UPDATE hit. D1
       // still sends the complete plan atomically via patchSql; no read/merge.
-      if (fallback && !changes) {
-        run(driver, fallback())
-      }
+      if (fallback && !changes) effect(driver, fallback())
     }
   }
 
   // Metadata can classify a tombstone too; it does not resurrect components.
-  for (let b of bundles) for (let s of archetypeSql(b)) run(driver, s)
+  for (let b of bundles) for (let s of archetypeSql(b)) effect(driver, s)
   return born
 }
 
@@ -470,18 +519,14 @@ export let remove = (
   // physical set even when this writer has a narrower vocabulary.
   let physical = vocab.comp('archetype') ? componentTables(driver) : undefined
   for (let e of entities) {
-    let statements = removeSql(vocab, e, now)
-    if (physical) {
-      statements = [
-        ...physical.filter((n) => n != 'tombstone').map((n) => ({
-          sql: `delete from "${
-            n.replaceAll('"', '""')
-          }" where entity = ${OWNER}`,
-          params: [e.eid],
-        })),
-        statements.at(-1)!,
+    let statements: Stmt[] = physical
+      ? [
+        ...physical.filter((n) => n != 'tombstone').map((n) =>
+          dropSql(e.eid, n)
+        ),
+        bury(e.eid, now),
       ]
-    }
-    for (let s of statements) run(driver, s)
+      : removeSql(vocab, e, now)
+    for (let s of statements) effect(driver, s)
   }
 }

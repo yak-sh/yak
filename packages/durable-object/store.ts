@@ -19,9 +19,9 @@ export type { Opts, Store }
  *
  * `install()` it once (create-if-not-exists, so a constructor may call it every
  * time the object wakes). `base` options — a derived-property registry, a fixed
- * `now` for time phrases — are applied to every read; its `text` (how a
- * property whose stored value is not text is converted to text) is applied to
- * the schema.
+ * `now` for time phrases — are applied to every read, and the registry's
+ * `text` expressions (how a property whose stored value is not its text reads
+ * as text) to the schema.
  *
  * ```ts
  * // let store = storage(ctx.storage, vocab)

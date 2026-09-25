@@ -35,7 +35,7 @@ export type D1Result<T> = { results: T[] }
  * slice — a statement appears both as a return and as an argument, and a
  * narrowed slice cannot be both.
  */
-export type Stmt<S> = {
+export type Prepared<S> = {
   /** bind positional parameters, returning the bound statement */
   bind: (...values: D1Value[]) => S
   /** run the statement and resolve its result rows */
@@ -56,18 +56,12 @@ export type D1Stmt = {
  * statement, and send a list of them as one atomic batch. A Cloudflare
  * `D1Database` satisfies it — see ./conform.ts.
  */
-export type D1Like<S extends Stmt<S> = D1Stmt> = {
+export type D1Like<S extends Prepared<S> = D1Stmt> = {
   /** prepare a parameterized statement for binding and running */
   prepare: (sql: string) => S
   /** run these statements sequentially, as one all-or-nothing transaction */
   batch: (statements: S[]) => Promise<D1Result<Row>[]>
 }
-
-/** One statement: the SQL, and the values it binds. A read builds these here, a
- * write builds them in @yaks/sqlite; ./store.ts prepares and sends them
- * together, putting every value through {@link bind} on the way — which is why
- * the values are unnarrowed until then. */
-export type Sql = { sql: string; params: readonly unknown[] }
 
 /**
  * A value as D1 takes it. `undefined` and `null` are the same absence; a bigint

@@ -69,7 +69,6 @@
 export * from './keywords.ts'
 export * from './props.ts'
 export * from './store.ts'
-export * from './driver.ts'
 export * from './plugin.ts'
 export * from './sqlite.ts'
 export * from './hydrate.ts'

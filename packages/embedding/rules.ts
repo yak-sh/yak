@@ -20,7 +20,7 @@
 import type { Plugin } from '@yaks/graph'
 import type { Extension } from '@yaks/sql'
 import { semantic } from './compile.ts'
-import type { Driver } from './driver.ts'
+import type { Driver } from '@yaks/sql'
 import { schema } from './ddl.ts'
 import { embedderOf, type Options } from './options.ts'
 
@@ -29,7 +29,7 @@ import { embedderOf, type Options } from './options.ts'
  * what keeps the vectors in step with the text is the sweep (`./effects`), off
  * the write path. */
 export let rules = (host: { sql: Driver }): Plugin[] => {
-  for (let statement of schema()) host.sql.exec(statement)
+  for (let statement of schema()) host.sql.query(statement)
   return []
 }
 

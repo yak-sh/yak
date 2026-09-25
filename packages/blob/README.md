@@ -80,7 +80,7 @@ import {
 let vocab = loadVocab([blog], [blobKeywords])
 let bytes = sqliteBlobs(driver)
 let store = storage(driver, vocab, { derived: blobRead(vocab) })
-for (let statement of [...store.ddl(), ...blobSchema()]) driver.exec(statement)
+for (let statement of [...store.ddl(), ...blobSchema()]) driver.query(statement)
 let g = graph({ storage: store, vocab, plugins: [blobs(vocab, bytes)] })
 
 g.apply([{ entity: { eid: 'p1' }, post: { body: 'A long essay.' } }])
@@ -167,22 +167,20 @@ Supply text-resolution expressions when creating the index:
 
 ```ts
 import { fields, schema } from '@yaks/fts'
-import { blobText } from '@yaks/blob'
+import { blobRead } from '@yaks/blob'
 
-for (let statement of schema(fields(vocab), blobText(vocab))) {
-  driver.exec(statement)
+for (let statement of schema(fields(vocab), blobRead(vocab))) {
+  driver.query(statement)
 }
 ```
 
-`blobText()` maps `component.property` to a function that turns a stored-address
-SQL expression into a text expression. The same map is accepted as
-`@yaks/sqlite`'s `text` option for its document index.
-
-`blobRead()` is also accepted by `@yaks/fts`'s `schema()`. Its `text(stored)`
-expression resolves the old value in delete/update triggers, while `expr(owner)`
-handles ordinary reads. Triggers and the FTS content view resolve the same text,
-so graph writes, direct SQL writes and index rebuilds use consistent content.
-Store the content before inserting a referencing component row. For existing
+`blobRead()` maps `component.property` to two @yaks/sql expressions:
+`expr(owner)` reads the text through the owner's row, for ordinary reads, and
+`text(stored)` turns an address already in hand into its text, for the
+delete/update triggers that must read the old value and for `@yaks/sqlite`'s
+`doc_value` view. Triggers and the FTS content view resolve the same text, so
+graph writes, direct SQL writes and index rebuilds use consistent content. Store
+the content before inserting a referencing component row. For existing
 rows/indexes, use `@yaks/fts`'s `heal()` or `adopt()` as appropriate.
 
 ## Binary files
@@ -311,10 +309,10 @@ format remains accessible to application code.
 | `bodies`, `isBody`                                                   | Select marked properties                                 |
 | `blobs`, `BlobOpts`, `Reference`                                     | Graph write plugin and optional stored-reference mapping |
 | `Blobs`, `address`, `encode`, `decode`                               | Store interface and text addressing                      |
-| `Driver`, `sqliteBlobs`, `blobSchema`, `Layout`                      | SQLite text storage                                      |
+| `sqliteBlobs`, `blobSchema`, `Layout`                                | SQLite text storage                                      |
 | `fileBlobs`, `objectBlobs`, `Bucket`                                 | Filesystem and object storage                            |
 | `Objects`, `bucketObjects`                                           | A bucket keyed by name: read, delete, list               |
-| `blobRead`, `blobText`, `hydrate`                                    | SQL and post-read text resolution                        |
+| `blobRead`, `hydrate`                                                | SQL and post-read text resolution                        |
 | `addressOf`, `keep`, `artifactStore`, `artifactBytes`, `artifactDoc` | Artifact storage, verified reads and declarations        |
 | `sizeOf`, `mediaTypeOf`, `served`                                    | Image dimensions and formats, and HTTP responses         |
 | `valueTools`, `VALUE_LIMIT`, `ValueTool`                             | Bounded text-inspection tools                            |

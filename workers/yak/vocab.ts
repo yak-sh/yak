@@ -1,4 +1,15 @@
 import { archetypeDoc } from '@yaks/archetype'
+import {
+  col,
+  type Derived,
+  eq,
+  exists,
+  isNull,
+  lit,
+  select,
+  table,
+  when,
+} from '@yaks/sql'
 import { refuse } from './tool.ts'
 // The vocabulary one app speaks (T-33811): the core documents every store on
 // the platform shares, plus the words that app declared for itself, loaded
@@ -462,10 +473,7 @@ export let appsDoc: VocabDoc = {
  * the word is declared because the platform's status grammar is one grammar,
  * and a filter that names it must still parse.
  */
-export let appDerived = (): Record<
-  string,
-  { tag: 'text'; values: string[]; expr: (owner: string) => string }
-> => ({
+export let appDerived = (): Derived => ({
   'task.status': {
     tag: 'text',
     values: ['open', 'wip', 'done', 'cancelled'],
@@ -473,12 +481,22 @@ export let appDerived = (): Record<
     // the component table on the left so absence is askable — and a status is
     // a fact about a task, so there it is null rather than `open`. Without that
     // first arm every entity in the store answers `.task.status=open`.
-    expr: (owner) =>
-      `(case when ${owner} is null then null ` +
-      `when exists (select 1 from "cancelled" where ` +
-      `"cancelled"."entity" = ${owner}) then 'cancelled' ` +
-      `when exists (select 1 from "completed" where ` +
-      `"completed"."entity" = ${owner}) then 'done' else 'open' end)`,
+    expr: (owner) => {
+      let wears = (comp: string) =>
+        exists(select({
+          cols: [lit(1)],
+          from: table(comp),
+          where: eq(col('entity', comp), owner),
+        }))
+      return when(
+        [
+          [isNull(owner), lit(null)],
+          [wears('cancelled'), lit('cancelled')],
+          [wears('completed'), lit('done')],
+        ],
+        lit('open'),
+      )
+    },
   },
 })
 

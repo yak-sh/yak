@@ -32,7 +32,7 @@ import type { Runs } from '@yaks/graph/tools'
 import { checked, type Finding } from '@yaks/tools'
 import { drift } from './archetype.ts'
 import { componentTables } from './physical.ts'
-import type { Driver, Row } from './driver.ts'
+import type { Driver, Row } from '@yaks/sql'
 
 /** What configuration this package's checks accept. */
 export type Options = {
@@ -66,7 +66,7 @@ export let runs = (
     // Enforcement first: every finding below is only as reliable as this
     // pragma, and a file written with it off is how a broken key gets in at
     // all.
-    let on = host.sql.query('pragma foreign_keys', [])[0]
+    let on = host.sql.query({ t: 'pragma', name: 'foreign_keys' })[0]
     if (!Number(Object.values(on ?? {})[0] ?? 0)) {
       found.push({
         level: 'warn',
@@ -76,7 +76,9 @@ export let runs = (
       })
     }
     for (
-      let [said, n] of tally(host.sql.query('pragma foreign_key_check', []))
+      let [said, n] of tally(
+        host.sql.query({ t: 'pragma', name: 'foreign_key_check' }),
+      )
     ) {
       found.push({
         level: 'fail',
@@ -84,7 +86,7 @@ export let runs = (
           `a component row with no spine, or a reference to a deleted entity`,
       })
     }
-    let verdict = host.sql.query('pragma integrity_check', [])[0]
+    let verdict = host.sql.query({ t: 'pragma', name: 'integrity_check' })[0]
     let said = String(Object.values(verdict ?? {})[0] ?? 'unknown')
     if (said != 'ok') {
       found.push({

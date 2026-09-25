@@ -256,8 +256,8 @@ exact scans are configured.
 
 The root exports field selection, `Embedder`, `hashEmbedder`, `remote`, vector
 math/packing helpers, schema and dirty-state helpers, sweep operations,
-`vectorOf`, `nearest`, `semantic` and supporting types such as `Driver` and
-`Rank`.
+`vectorOf`, `nearest`, `semantic` and supporting types such as `Rank`. The
+`Driver` it runs on is `@yaks/sql`'s.
 
 | Sub-module export         | Purpose                                                                                   |
 | ------------------------- | ----------------------------------------------------------------------------------------- |

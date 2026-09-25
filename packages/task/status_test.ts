@@ -3,6 +3,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
+import { col, render } from '@yaks/sql'
 import { compute, derived, statusOf } from './status.ts'
 import { MARKS, OPEN, settled, statuses } from './words.ts'
 
@@ -66,17 +67,17 @@ Deno.test('derived writes the ladder as SQL, guarded by the owner null', () => {
   let prop = derived()['task.status']
   assertEquals(prop.tag, 'enum')
   assertEquals(prop.values, ['cancelled', 'done', OPEN])
-  let sql = prop.expr('"task"."entity"')
+  let { sql } = render(prop.expr(col('entity', 'task')))
   // the null guard leads, so a non-task reads NULL rather than 'open'
-  assert(sql.startsWith('(case when "task"."entity" is null then null'))
+  assert(sql.startsWith('case when "task"."entity" is null then null'), sql)
   // one exists per mark, in ladder order, and open is the fallthrough
   assert(sql.indexOf('"cancelled"') < sql.indexOf('"completed"'))
-  assert(sql.endsWith(`else '${OPEN}' end)`))
+  assert(sql.endsWith(`else '${OPEN}' end`), sql)
 })
 
 Deno.test('derived widens its members with the ladder', () => {
   let marks = [...MARKS, { status: 'wip', comp: 'claim', settled: false }]
   let prop = derived(marks)['task.status']
   assertEquals(prop.values, ['cancelled', 'done', 'wip', OPEN])
-  assert(prop.expr('o').includes(`from "claim"`))
+  assert(render(prop.expr(col('o'))).sql.includes(`from "claim"`))
 })

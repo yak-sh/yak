@@ -4,6 +4,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { type Graph, graph } from '@yaks/graph'
+import { col, count, eq, select, sub, table } from '@yaks/sql'
 import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { loadVocab } from '@yaks/vocab'
@@ -184,7 +185,11 @@ let rated = (): Graph => {
         'book.reviewed': {
           tag: 'number',
           expr: (o) =>
-            `(select count(*) from "review" r where r."book" = ${o})`,
+            sub(select({
+              cols: [count()],
+              from: table('review', 'r'),
+              where: eq(col('book', 'r'), o),
+            })),
         },
       },
     },

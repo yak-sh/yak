@@ -239,6 +239,11 @@ let opOf = (p: Pred): string =>
 // component; `worn: false` marks the read that returns a value without it —
 // `updated.at` falling back to `created.at`, because being created is the last
 // time an untouched row changed.
+// A registered expression, written into the binder's text around the SQL that
+// names its owner.
+let derive = (dc: DerivedProp, owner: string): string =>
+  inline(dc.expr(raw(owner)))
+
 let guarded = (dc: DerivedProp, present: string, expr: string): string =>
   dc.worn === false ? expr : `(case when ${present} then ${expr} end)`
 
@@ -256,7 +261,7 @@ let readProp = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
   if (dc) {
     for (let dep of dc.deps ?? []) ctx.tables.add(dep)
     return {
-      expr: guarded(dc, `${owner} is not null`, dc.expr(owner)),
+      expr: guarded(dc, `${owner} is not null`, derive(dc, owner)),
       tag: dc.tag,
     }
   }
@@ -535,7 +540,7 @@ let leafRead = (ctx: Ctx, leaf: Hop, target: string): Read => {
     let present = leaf.comp == 'entity' ? `${target} is not null` : `exists ` +
       `(select 1 from ${source(ctx, leaf.comp)} as "__pw"` +
       ` where "__pw"."entity" = ${target})`
-    return { expr: guarded(dc, present, dc.expr(target)), tag: dc.tag }
+    return { expr: guarded(dc, present, derive(dc, target)), tag: dc.tag }
   }
   let def = ctx.v.prop(leaf.comp, leaf.prop)
   if (def?.computed) return null

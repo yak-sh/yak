@@ -14,19 +14,23 @@
 import type { Eid } from '@yaks/graph'
 import {
   as,
+  at,
   col,
+  type Driver,
   eq,
+  exists,
   fn,
-  render,
+  from,
+  join,
+  lit,
+  not,
   select,
-  type Stmt,
   sub,
   table,
   val,
 } from '@yaks/sql'
-import type { Driver } from './driver.ts'
 import { type Embedder, hash, Refused } from './embedder.ts'
-import { type Field, pieces, q } from './fields.ts'
+import { type Field, pieces } from './fields.ts'
 import { TABLE } from './ddl.ts'
 import { due, left, owe, paid, watch } from './owed.ts'
 import { pack, unit } from './vector.ts'
@@ -62,16 +66,10 @@ let assemble = (
   return [...by.values()]
 }
 
-let run = (db: Driver, stmt: Stmt) => {
-  let r = render(stmt)
-  return db.query(r.sql, r.params)
-}
-
 /**
  * Every entity that still exists and has text to embed — or those of `owners`
  * that do — its text assembled and its stored hash beside it. Deleted entities
  * are left out, so an entity stops being a neighbour as soon as it is deleted.
- * Text around ./fields.ts `pieces`, for the reason given there.
  */
 export let sources = (
   db: Driver,
@@ -80,16 +78,33 @@ export let sources = (
 ): Source[] => {
   let text = pieces(fields, owners)
   if (!text) return []
-  let rows = db.query(
-    `select o.id as owner, o.eid as eid, e.hash as had, s.ord as ord, s.t as t` +
-      ` from (${text.sql}) s` +
-      ` join entity o on o.id = s.owner` +
-      ` left join ${q(TABLE)} e on e.entity = s.owner` +
-      ` where not exists (select 1 from tombstone t where t.entity = s.owner)` +
-      ` order by o.id, s.ord`,
-    text.params,
-  ) as unknown as { owner: number; eid: Eid; had: string | null; t: string }[]
-  return assemble(rows)
+  let s = at('s'), o = at('o'), e = at('e')
+  let rows = db.query(select({
+    cols: [
+      as(o('id'), 'owner'),
+      as(o('eid'), 'eid'),
+      as(e('hash'), 'had'),
+      as(s('ord'), 'ord'),
+      as(s('t'), 't'),
+    ],
+    from: from(text, 's'),
+    joins: [
+      join(table('entity', 'o'), eq(o('id'), s('owner'))),
+      { how: 'left', src: table(TABLE, 'e'), on: eq(e('entity'), s('owner')) },
+    ],
+    where: not(exists(select({
+      cols: [lit(1)],
+      from: table('tombstone', 't'),
+      where: eq(col('entity', 't'), s('owner')),
+    }))),
+    order: [o('id'), s('ord')],
+  }))
+  return assemble(rows.map((r) => ({
+    owner: Number(r.owner),
+    eid: String(r.eid),
+    had: r.had == null ? null : String(r.had),
+    t: String(r.t),
+  })))
 }
 
 /** Store one entity's vector, replacing whatever it had. */
@@ -101,7 +116,7 @@ export let put = (
   vec: Float32Array,
 ): void => {
   let fresh = (k: string) => col(k, 'excluded')
-  run(db, {
+  db.query({
     t: 'insert',
     into: TABLE,
     cols: ['entity', 'model', 'hash', 'vec'],
@@ -126,7 +141,7 @@ export let put = (
 // Delete one entity's vector: it has no text to make one from, or its text
 // was refused.
 let drop = (db: Driver, owner: number): void =>
-  void run(db, {
+  void db.query({
     t: 'delete',
     from: TABLE,
     where: eq(col('entity'), val(owner)),
@@ -139,8 +154,7 @@ let drop = (db: Driver, owner: number): void =>
 let moved = (db: Driver, model: string): boolean => {
   let edge = (f: string) =>
     sub(select({ cols: [fn(f, col('model'))], from: table(TABLE) }))
-  let [r] = run(
-    db,
+  let [r] = db.query(
     select({ cols: [as(edge('min'), 'lo'), as(edge('max'), 'hi')] }),
   )
   return r.lo != null && (r.lo != model || r.hi != model)

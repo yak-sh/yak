@@ -11,9 +11,7 @@ let text = fields(shop)
 let sql = (line: string) =>
   compile(parse(line), shop, { extend: [search(text)] })
 let found = (line: string) => {
-  let db = shelf()
-  let { sql: s, params } = sql(line)
-  return db.query(s, params).map((r) => String(r.eid)).sort()
+  return shelf().query(sql(line)).map((r) => String(r.eid)).sort()
 }
 
 Deno.test('a word matches every index, and its term rides as a param', () => {

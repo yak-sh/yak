@@ -25,7 +25,7 @@ import { slow } from '../../bin/testing.ts'
 import { blobSchema } from '@yaks/blob'
 import { type Bundle, derivedEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { type Wire } from '@yaks/durable-object'
+import { driver, type Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { edgeEid } from '@yaks/edge'
 import { entryEid, objects } from '@yaks/git'
@@ -1212,7 +1212,7 @@ Deno.test('a raw index creation failure still refuses an empty store', async () 
   let ctx = state()
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
   ctx.storage.sql.exec = (query, ...params) => {
-    if (query.startsWith('create unique index if not exists space_slug')) {
+    if (query.startsWith('create unique index if not exists "space_slug"')) {
       throw new Error('index creation failed')
     }
     return exec(query, ...params)
@@ -1392,9 +1392,8 @@ slow('counts that do not reconcile refuse the pass', async () => {
         app: APP,
         vocab,
         plant: () => {
-          for (let stmt of [...schema(vocab), ...blobSchema()]) {
-            ctx.storage.sql.exec(stmt)
-          }
+          let d = driver(ctx.storage)
+          for (let stmt of [...schema(vocab), ...blobSchema()]) d.query(stmt)
           ctx.storage.sql.exec(
             'insert into person (entity) select id from entity ' +
               'where id not in (select entity from yak_old_person) limit 1',

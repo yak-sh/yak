@@ -19,6 +19,7 @@ import {
   as,
   at,
   col,
+  type Driver,
   eq,
   exists,
   fn,
@@ -38,7 +39,6 @@ import {
 } from '@yaks/sql'
 import { type Field, indexes, indexName } from './fields.ts'
 import { CLOSE, match, OPEN } from './term.ts'
-import type { Driver } from './driver.ts'
 
 // One search hit: the entity, its rank, and a snippet marking the matches.
 export type Hit = {
@@ -201,7 +201,7 @@ export let find = (
 ): Hit[] => {
   let stmt = hits(fields, text, opts)
   if (!stmt) return []
-  return db.query(stmt.sql, stmt.params).map((r) => ({
+  return db.query(stmt).map((r) => ({
     entity: String(r.entity),
     rank: Number(r.rank),
     snippet: String(r.snippet ?? ''),

@@ -16,7 +16,7 @@
 //   refused as statements; `transactionSync` is the transaction, and it nests.
 //   That is what `Driver.tx` exists for.
 
-import type { Driver, Param, Row } from '@yaks/sqlite'
+import { type Driver, type Param, render, type Row, type Stmt } from '@yaks/sql'
 
 /** A value the engine will bind: everything else is converted first. */
 export type SqlValue = ArrayBuffer | string | number | null
@@ -109,14 +109,19 @@ let unbind = (row: Row): Row => {
  * ```
  */
 export let driver = (durable: DurableStorage): Driver => {
-  let query = (sql: string, params: Param[]): Row[] =>
-    durable.sql.exec(sql, ...params.map(bind)).toArray().map(unbind)
-  query('pragma foreign_keys = on', [])
+  let query = (s: Stmt | string, bound: Param[] = []): Row[] => {
+    let { sql, params } = typeof s == 'string'
+      ? { sql: s, params: bound }
+      : render(s)
+    return durable.sql.exec(sql, ...params.map(bind)).toArray().map(unbind)
+  }
+  query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
   return {
     query,
     // The cursor is lazy: draining it is what runs the statement.
-    exec: (sql) => {
-      durable.sql.exec(sql).toArray()
+    exec: (s) => {
+      if (typeof s == 'string') durable.sql.exec(s).toArray()
+      else query(s)
     },
     tx: (body) => durable.transactionSync(body),
   }

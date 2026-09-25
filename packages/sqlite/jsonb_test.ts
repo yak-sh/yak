@@ -8,6 +8,8 @@ import { type Bundle, graph } from '@yaks/graph'
 import { kitchen, mem, PROJECTED, PROJECTED_ROW, RECIPE } from './testing.ts'
 import { storage } from './mod.ts'
 import { overlay } from './overlay.ts'
+import { jsonOut } from './jsonb.ts'
+import { as, col, desc, select, table } from '@yaks/sql'
 
 let recipe = (b: Bundle) => b.recipe as Record<string, unknown>
 
@@ -76,13 +78,18 @@ Deno.test('a batch reads its JSON values the way the store will', () => {
     { entity: { eid: 'r1' }, recipe: { title: 'Pie' } },
     { entity: { eid: 'r2' }, recipe: { tags: ['new'] } },
   ])
-  let rows = driver.query(
-    `${over.with}select entity, (json(tags) || '') as tags, ` +
-      `(json("any") || '') as "any" from ${
-        over.at('recipe')
-      } order by entity desc`,
-    over.params,
-  )
+  let rows = driver.query({
+    ...select({
+      cols: [
+        col('entity'),
+        as(jsonOut(col('tags')), 'tags'),
+        as(jsonOut(col('any')), 'any'),
+      ],
+      from: table(over.at('recipe')),
+      order: [desc(col('entity'))],
+    }),
+    with: over.with,
+  })
   assertEquals(rows.map((r) => [JSON.parse(String(r.tags)), r.any]), [
     [RECIPE.tags, JSON.stringify(RECIPE.any)],
     [['new'], null],

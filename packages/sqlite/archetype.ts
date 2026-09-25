@@ -1,18 +1,54 @@
 import { type Bundle, sha256 } from '@yaks/graph'
 import { Archetypes, tablesOf } from '@yaks/archetype'
-import type { Driver } from './driver.ts'
-import { componentTables } from './physical.ts'
+import {
+  among,
+  and,
+  as,
+  col,
+  type Driver,
+  each,
+  eq,
+  type Expr,
+  fn,
+  gt,
+  isNull,
+  type Join,
+  join,
+  le,
+  left,
+  type Row,
+  select,
+  type Stmt,
+  table,
+  val,
+} from '@yaks/sql'
+import { componentTables, tables as listed } from './physical.ts'
 import { mintSql } from './write.ts'
 import { unit } from './unit.ts'
 
 export { componentTables } from './physical.ts'
 
-let quote = (name: string) => `"${name.replaceAll('"', '""')}"`
+type Run = (s: Stmt) => Row[]
 
-type Run = (
-  sql: string,
-  params?: (string | number)[],
-) => Record<string, unknown>[]
+// The entity an eid names, and the one an id does.
+let byEid = (eid: string) => eq(col('eid'), val(eid))
+let byId = (id: number) => eq(col('id'), val(id))
+
+// Whether `t` holds a row for this owner.
+let holds = (run: Run, t: string, owner: number) =>
+  run(select({
+    cols: [col('entity')],
+    from: table(t),
+    where: eq(col('entity'), val(owner)),
+  })).length > 0
+
+// Point entities at an archetype.
+let point = (target: number | null, which: Expr): Stmt => ({
+  t: 'update',
+  table: 'entity',
+  set: { archetype: val(target) },
+  where: which,
+})
 
 /** Counts from a boot: existing assignments stay untouched on a repeated run. */
 export type Backfill = { entities: number; archetypes: number; retired: number }
@@ -23,7 +59,7 @@ export type Backfill = { entities: number; archetypes: number; retired: number }
 let facetsHeld = new WeakMap<Driver, { version: number; tables: string[] }>()
 let facets = (driver: Driver): string[] => {
   let version = Number(
-    driver.query('pragma schema_version', [])[0].schema_version,
+    driver.query({ t: 'pragma', name: 'schema_version' })[0].schema_version,
   )
   let held = facetsHeld.get(driver)
   if (held?.version == version) return held.tables
@@ -37,14 +73,19 @@ let presence = (
   run: Run,
   tables: string[],
   owners: Map<number, string[]>,
-  where: string,
-  params: (string | number)[],
+  which: (c: Expr) => { joins?: Join[]; where: Expr },
 ) => {
-  for (let table of tables) {
+  for (let name of tables) {
+    let w = which(col('entity', 'c'))
     for (
-      let row of run(`select c.entity from ${quote(table)} c ${where}`, params)
+      let row of run(select({
+        cols: [col('entity', 'c')],
+        from: table(name, 'c'),
+        joins: w.joins,
+        where: w.where,
+      }))
     ) {
-      owners.get(Number(row.entity))?.push(table)
+      owners.get(Number(row.entity))?.push(name)
     }
   }
   return owners
@@ -68,38 +109,42 @@ let minter = (
   let mint = (eid: string): number => {
     let id = ids.get(eid)
     if (id != null) return id
-    let existing = run(
-      'select e.id, a.entity as descriptor from entity e left join archetype a on a.entity = e.id where e.eid = ?',
-      [eid],
-    )[0]
+    let existing = run(select({
+      cols: [col('id', 'e'), as(col('entity', 'a'), 'descriptor')],
+      from: table('entity', 'e'),
+      joins: [
+        left(table('archetype', 'a'), eq(col('entity', 'a'), col('id', 'e'))),
+      ],
+      where: eq(col('eid', 'e'), val(eid)),
+    }))[0]
     if (existing?.descriptor != null) {
       ids.set(eid, id = Number(existing.id))
       return id
     }
-    if (
-      existing &&
-      tables.some((t) =>
-        run(`select entity from ${quote(t)} where entity = ?`, [
-          Number(existing.id),
-        ]).length
-      )
-    ) {
+    if (existing && tables.some((t) => holds(run, t, Number(existing.id)))) {
       throw new Error(`Archetype identity is occupied: ${eid}`)
     }
-    let statement = mintSql(eid, number)
-    driver.query(statement.sql, statement.params)
-    id = Number(run('select id from entity where eid = ?', [eid])[0].id)
-    let list = JSON.stringify(cache.get(eid)!.tables)
-    run(
-      'insert into archetype(entity, tables) values (?, ?) on conflict(entity) do nothing',
-      [id, list],
+    driver.query(mintSql(eid, number))
+    id = Number(
+      run(
+        select({ cols: [col('id')], from: table('entity'), where: byEid(eid) }),
+      )[0]
+        .id,
     )
+    let list = JSON.stringify(cache.get(eid)!.tables)
+    run({
+      t: 'insert',
+      into: 'archetype',
+      cols: ['entity', 'tables'],
+      rows: [[val(id), val(list)]],
+      upsert: [{ on: [col('entity')] }],
+    })
     ids.set(eid, id)
     made.add(id)
     counts.archetypes++
     // Register first, then recurse: meta points to itself.
     let target = eid == meta.eid ? id : mint(meta.eid)
-    run('update entity set archetype = ? where id = ?', [target, id])
+    run(point(target, byId(id)))
     born.push({
       entity: { eid, archetype: meta.eid },
       archetype: { tables: list },
@@ -123,10 +168,7 @@ let minter = (
     for (let [owners, id] of targets) {
       let pending = owners.filter((owner) => !made.has(owner))
       for (let i = 0; i < pending.length; i += 2048) {
-        run(
-          'update entity set archetype = ? where id in (select value from json_each(?))',
-          [id, JSON.stringify(pending.slice(i, i + 2048))],
-        )
+        run(point(id, among(col('id'), each(pending.slice(i, i + 2048)))))
       }
       counts.entities += owners.length
     }
@@ -142,22 +184,31 @@ let minter = (
  * plus null assignments, in table-sized scans. No per-owner component census.
  */
 export function backfill(driver: Driver, number = false): Backfill {
-  let run: Run = (sql, params = []) => driver.query(sql, params)
+  let run: Run = (s) => driver.query(s)
   let counts: Backfill = { entities: 0, archetypes: 0, retired: 0 }
   return unit(driver, () => {
     let cache = new Archetypes()
     let tables = componentTables(driver)
-    let present = new Set(
-      run("select name from sqlite_schema where type = 'table'").map((r) =>
-        String(r.name)
-      ),
-    )
+    let present = new Set(listed(driver))
     let ids = new Map<string, number>()
     let stale: number[] = []
     for (
-      let row of run(
-        'select a.entity, e.eid, a.tables, r.entity as retired from archetype a join entity e on e.id = a.entity left join retired r on r.entity = a.entity',
-      )
+      let row of run(select({
+        cols: [
+          col('entity', 'a'),
+          col('eid', 'e'),
+          col('tables', 'a'),
+          as(col('entity', 'r'), 'retired'),
+        ],
+        from: table('archetype', 'a'),
+        joins: [
+          join(table('entity', 'e'), eq(col('id', 'e'), col('entity', 'a'))),
+          left(
+            table('retired', 'r'),
+            eq(col('entity', 'r'), col('entity', 'a')),
+          ),
+        ],
+      }))
     ) {
       let a = cache.intern(tablesOf(row.tables))
       if (a.eid != row.eid) {
@@ -177,61 +228,83 @@ export function backfill(driver: Driver, number = false): Backfill {
         if (
           tables.some((t) =>
             t != 'archetype' && t != 'retired' &&
-            run(`select entity from ${quote(t)} where entity = ?`, [
-              Number(row.entity),
-            ]).length
+            holds(run, t, Number(row.entity))
           )
         ) {
           throw new Error(
             `Legacy archetype identity has extra facets: ${row.eid}`,
           )
         }
-        if (run('select id from entity where eid = ?', [a.eid]).length) {
+        let taken = select({
+          cols: [col('id')],
+          from: table('entity'),
+          where: byEid(a.eid),
+        })
+        if (run(taken).length) {
           throw new Error(`Archetype identity is occupied: ${a.eid}`)
         }
-        run('update entity set eid = ? where id = ?', [
-          a.eid,
-          Number(row.entity),
-        ])
+        run({
+          t: 'update',
+          table: 'entity',
+          set: { eid: val(a.eid) },
+          where: byId(Number(row.entity)),
+        })
       }
       let id = Number(row.entity)
       ids.set(a.eid, id)
       if (a.tables.some((t) => !present.has(t))) {
         stale.push(id)
         if (row.retired == null) {
-          run('insert into retired(entity) values (?)', [id])
-          run('update entity set archetype = null where id = ?', [id])
+          run({
+            t: 'insert',
+            into: 'retired',
+            cols: ['entity'],
+            rows: [[val(id)]],
+          })
+          run(point(null, byId(id)))
           counts.retired++
         }
       }
     }
-    if (stale.length) {
-      run(
-        'update entity set archetype = null where archetype in (select value from json_each(?))',
-        [JSON.stringify(stale)],
-      )
-    }
+    if (stale.length) run(point(null, among(col('archetype'), each(stale))))
 
     // Snapshot the incomplete owners before minting descriptors. New descriptors
     // are classified directly below; they never need another whole-file pass.
     let owners = new Map<number, string[]>(
-      run('select id from entity where archetype is null').map((
-        r,
-      ) => [Number(r.id), []]),
+      run(select({
+        cols: [col('id')],
+        from: table('entity'),
+        where: isNull(col('archetype')),
+      })).map((r) => [Number(r.id), []]),
     )
     if (owners.size) {
-      presence(
-        run,
-        tables,
-        owners,
-        'join entity e on e.id = c.entity where e.archetype is null',
-        [],
-      )
+      presence(run, tables, owners, (c) => ({
+        joins: [join(table('entity', 'e'), eq(col('id', 'e'), c))],
+        where: isNull(col('archetype', 'e')),
+      }))
     }
     minter(run, driver, cache, tables, ids, number, counts).assign(owners)
     return counts
   })
 }
+
+// The entities `which` names that are not descriptors themselves, with the
+// eid of the archetype each one points at.
+let owned = (which: Expr) =>
+  select({
+    cols: [
+      col('id', 'e'),
+      col('eid', 'e'),
+      col('archetype', 'e'),
+      as(col('eid', 'd'), 'assigned'),
+    ],
+    from: table('entity', 'e'),
+    joins: [
+      left(table('entity', 'd'), eq(col('id', 'd'), col('archetype', 'e'))),
+      left(table('archetype', 'a'), eq(col('entity', 'a'), col('id', 'e'))),
+    ],
+    where: and(isNull(col('entity', 'a')), which),
+  })
 
 /** An audit's tally: owners read, pointers that disagree, and a few names. */
 export type Drift = { checked: number; drifted: number; sample: string[] }
@@ -251,7 +324,7 @@ let WINDOW = 20_000
  * are left out, exactly as `reclassify` leaves them out.
  */
 export function drift(driver: Driver, sample = 12): Drift {
-  let run: Run = (sql, params = []) => driver.query(sql, params)
+  let run: Run = (s) => driver.query(s)
   let tables = facets(driver)
   let cache = new Archetypes()
   // Presence set (as the joined table names) → the descriptor it interns to.
@@ -259,23 +332,26 @@ export function drift(driver: Driver, sample = 12): Drift {
   // window's worth of owners would be the audit's dominant cost.
   let known = new Map<string, string>()
   let out: Drift = { checked: 0, drifted: 0, sample: [] }
-  let top = Number(run('select max(id) as top from entity')[0]?.top ?? 0)
+  let top = Number(
+    run(
+      select({
+        cols: [as(fn('max', col('id')), 'top')],
+        from: table('entity'),
+      }),
+    )[0]
+      ?.top ?? 0,
+  )
   for (let lo = 0; lo < top; lo += WINDOW) {
     let hi = lo + WINDOW
     let rows = run(
-      `select e.id, e.eid, d.eid as assigned from entity e
-         left join entity d on d.id = e.archetype
-         left join archetype a on a.entity = e.id
-        where a.entity is null and e.id > ? and e.id <= ?`,
-      [lo, hi],
+      owned(and(gt(col('id', 'e'), val(lo)), le(col('id', 'e'), val(hi)))),
     )
     if (!rows.length) continue
     let owners = presence(
       run,
       tables,
       new Map(rows.map((r) => [Number(r.id), [] as string[]])),
-      'where c.entity > ? and c.entity <= ?',
-      [lo, hi],
+      (c) => ({ where: and(gt(c, val(lo)), le(c, val(hi))) }),
     )
     for (let r of rows) {
       let names = owners.get(Number(r.id))!
@@ -304,30 +380,17 @@ export function reclassify(
   number = false,
 ): Bundle[] {
   if (!eids.length) return []
-  let run: Run = (sql, params = []) => driver.query(sql, params)
+  let run: Run = (s) => driver.query(s)
   return unit(driver, () => {
     let cache = new Archetypes()
     let tables = facets(driver)
-    let rows = run(
-      `select e.id, e.eid, e.archetype, d.eid as assigned from entity e
-        left join entity d on d.id = e.archetype
-        left join archetype a on a.entity = e.id
-        where a.entity is null and e.eid in (select value from json_each(?))`,
-      [JSON.stringify([...new Set(eids)])],
-    )
+    let rows = run(owned(among(col('eid', 'e'), each([...new Set(eids)]))))
     if (!rows.length) return []
     let owners = new Map<number, string[]>(
       rows.map((r) => [Number(r.id), []]),
     )
-    presence(
-      run,
-      tables,
-      owners,
-      'where c.entity in (select value from json_each(?))',
-      [
-        JSON.stringify([...owners.keys()]),
-      ],
-    )
+    let ids = [...owners.keys()]
+    presence(run, tables, owners, (c) => ({ where: among(c, each(ids)) }))
     let moved = new Map<number, string>()
     for (let r of rows) {
       let set = cache.intern(owners.get(Number(r.id))!)
@@ -348,7 +411,14 @@ export function reclassify(
     let echoes: Bundle[] = []
     for (let [group, id] of assign(owners)) {
       let archetype = String(
-        run('select eid from entity where id = ?', [id])[0].eid,
+        run(
+          select({
+            cols: [col('eid')],
+            from: table('entity'),
+            where: byId(id),
+          }),
+        )[0]
+          .eid,
       )
       for (let owner of group) {
         echoes.push({ entity: { eid: moved.get(owner)!, archetype } })

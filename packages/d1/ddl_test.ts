@@ -2,7 +2,7 @@
 // same statements, constraints included, and a store over the stand-in holds
 // what the vocabulary said the way the reference adapter does.
 
-import { assert, assertEquals, assertRejects } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { schema } from '@yaks/sqlite'
 import { d1 } from './testing.ts'
@@ -32,7 +32,6 @@ let strict = loadVocab({
 Deno.test('the d1 schema is the sqlite schema, constraints included', async () => {
   let s = storage(d1(), strict)
   assertEquals(s.ddl(), schema(strict))
-  assert(s.ddl().join('\n').includes(`"base" text not null default 'main'`))
   await s.install()
   await s.install() // a second install finds everything standing
 })

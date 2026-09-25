@@ -24,7 +24,7 @@
 
 import { type Authenticate, json, refuse, type Route, signed } from '@yaks/api'
 import type { Graph } from '@yaks/graph'
-import type { Driver } from '@yaks/sqlite'
+import type { Driver } from '@yaks/sql'
 import { addressOf, type Artifact, keep } from './artifact.ts'
 import { fileBlobs } from './file.ts'
 import { type Bucket, objectBlobs } from './object.ts'

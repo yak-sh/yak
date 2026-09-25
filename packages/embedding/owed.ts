@@ -35,15 +35,13 @@ import {
   lit,
   not,
   op,
-  type Query,
   render,
   select,
-  type Stmt,
   table,
   union,
   val,
 } from '@yaks/sql'
-import type { Driver } from './driver.ts'
+import type { Driver } from '@yaks/sql'
 import { type Field, wearers } from './fields.ts'
 import { OWED, TABLE } from './ddl.ts'
 
@@ -138,25 +136,14 @@ export let triggers = (fields: Field[]): CreateTrigger[] => {
 let body = (sql: string, name: string): string =>
   sql.slice(sql.indexOf(`"${name}"`)).trim()
 
-let rows = (db: Driver, q: Query) => {
-  let s = render(q)
-  return db.query(s.sql, s.params)
-}
-
-let run = (db: Driver, stmt: Stmt): void => {
-  let s = render(stmt)
-  db.query(s.sql, s.params)
-}
-
 /**
  * Make the database's queue triggers the ones {@link triggers} says, and
  * queue everything when that changed anything. Returns whether it did. A
  * second call with the same fields reads the schema and writes nothing.
  */
 export let watch = (db: Driver, fields: Field[]): boolean => {
-  let want = new Map(triggers(fields).map((t) => [t.name, render(t).sql]))
-  let have = rows(
-    db,
+  let want = new Map(triggers(fields).map((t) => [t.name, t]))
+  let have = db.query(
     select({
       cols: [col('name'), col('sql')],
       from: table('sqlite_master'),
@@ -170,14 +157,14 @@ export let watch = (db: Driver, fields: Field[]): boolean => {
   for (let r of have) {
     let name = String(r.name)
     let now = want.get(name)
-    if (now && body(String(r.sql), name) == body(now, name)) {
+    if (now && body(String(r.sql), name) == body(render(now).sql, name)) {
       want.delete(name)
       continue
     }
-    run(db, { t: 'drop', kind: 'trigger', name, ifExists: true })
+    db.query({ t: 'drop', kind: 'trigger', name, ifExists: true })
     moved = true
   }
-  for (let sql of want.values()) db.exec(sql)
+  for (let t of want.values()) db.query(t)
   if (moved || want.size) owe(db, fields)
   return moved || want.size > 0
 }
@@ -186,8 +173,7 @@ export let watch = (db: Driver, fields: Field[]): boolean => {
 export let owe = (db: Driver, fields: Field[]): void => {
   let worn = wearers(fields)
   let vectors = select({ cols: [col('entity')], from: table(TABLE) })
-  run(
-    db,
+  db.query(
     queue({
       q: select({
         cols: [col('entity'), lit(1)],
@@ -203,8 +189,7 @@ export type Due = { owner: number; n: number }
 /** The newest `limit` queued entities, newest first: what was just said is
  * what someone is about to look for. */
 export let due = (db: Driver, limit: number): Due[] =>
-  rows(
-    db,
+  db.query(
     select({
       cols: [as(col('entity'), 'owner'), col('n')],
       from: table(OWED),
@@ -215,7 +200,7 @@ export let due = (db: Driver, limit: number): Due[] =>
 
 /** Settle a queued entity, unless a write queued it again since it was read. */
 export let paid = (db: Driver, d: Due): void =>
-  run(db, {
+  void db.query({
     t: 'delete',
     from: OWED,
     where: and(eq(col('entity'), val(d.owner)), eq(col('n'), val(d.n))),
@@ -223,4 +208,4 @@ export let paid = (db: Driver, d: Due): void =>
 
 /** How many entities are queued. */
 export let left = (db: Driver): number =>
-  Number(rows(db, select({ cols: [as(count(), 'n')], from: table(OWED) }))[0].n)
+  Number(db.query(select({ cols: [as(count(), 'n')], from: table(OWED) }))[0].n)

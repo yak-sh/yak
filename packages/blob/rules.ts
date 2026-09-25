@@ -5,7 +5,7 @@
 // where a browser can load them without this file's SQL coming with them.
 
 import type { Plugin } from '@yaks/graph'
-import type { Driver } from '@yaks/sqlite'
+import type { Driver } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { blobs } from './plugin.ts'
 import { blobSchema, sqliteBlobs } from './sqlite.ts'
@@ -14,6 +14,6 @@ import { blobSchema, sqliteBlobs } from './sqlite.ts'
  * storing each distinct value once in the server's own SQLite file however
  * many rows hold the same text. */
 export let rules = (host: { vocab: Vocab; sql: Driver }): Plugin[] => {
-  for (let statement of blobSchema()) host.sql.exec(statement)
+  for (let statement of blobSchema()) host.sql.query(statement)
   return [blobs(host.vocab, sqliteBlobs(host.sql))]
 }

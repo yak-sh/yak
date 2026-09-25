@@ -72,9 +72,7 @@ export type Tx = {
  * a row.
  */
 export type Store = {
-  /** no schema to state: a map needs none */
-  ddl: () => string[]
-  /** nothing to create either — installing a map is a no-op */
+  /** nothing to create — installing a map is a no-op */
   install: () => void
   /** a query → the matching entities as whole bundles */
   read: (query: Query, opts?: ReadOpts) => Bundle[]
@@ -276,7 +274,6 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   }
 
   return {
-    ddl: () => [],
     install: () => {},
     read,
     rows: raw,

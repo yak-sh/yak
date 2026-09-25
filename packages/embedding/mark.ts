@@ -10,22 +10,34 @@
 // never touch it: a query that arrives while the flag is set answers from the
 // last build — staler neighbours, never a failed write.
 
-import type { Driver } from './driver.ts'
-import { MARK, TABLE } from './ddl.ts'
+import {
+  as,
+  col,
+  count,
+  type Driver,
+  eq,
+  fn,
+  lit,
+  select,
+  table,
+} from '@yaks/sql'
+import { flag, MARK, TABLE } from './ddl.ts'
 
 /** Whether the vectors have changed since the index was last rebuilt. */
 export let dirty = (db: Driver): boolean =>
-  !!db.query(`select dirty from "${MARK}" where id = 1`, [])[0]?.dirty
+  !!db.query(select({
+    cols: [col('dirty')],
+    from: table(MARK),
+    where: eq(col('id'), lit(1)),
+  }))[0]?.dirty
 
 /** Set the flag by hand — after rebuilding the vector table from somewhere
  * else. */
-export let mark = (db: Driver): void =>
-  db.exec(`update "${MARK}" set dirty = 1 where id = 1`)
+export let mark = (db: Driver): void => void db.query(flag(1))
 
 /** Clear the flag: the index now matches the vectors. Only a finished rebuild
  * clears it. */
-export let clean = (db: Driver): void =>
-  db.exec(`update "${MARK}" set dirty = 0 where id = 1`)
+export let clean = (db: Driver): void => void db.query(flag(0))
 
 /** What a health check reads: the flag, and how many vectors it covers. */
 export type State = { dirty: boolean; rows: number; newest: string | null }
@@ -36,10 +48,10 @@ export type State = { dirty: boolean; rows: number; newest: string | null }
  * nothing is rebuilding the index.
  */
 export let state = (db: Driver): State => {
-  let head = db.query(
-    `select count(*) as n, max(at) as newest from "${TABLE}"`,
-    [],
-  )[0]
+  let head = db.query(select({
+    cols: [as(count(), 'n'), as(fn('max', col('at')), 'newest')],
+    from: table(TABLE),
+  }))[0]
   return {
     dirty: dirty(db),
     rows: Number(head?.n ?? 0),

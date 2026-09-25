@@ -7,8 +7,18 @@
 
 import { open } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import type { Driver } from './driver.ts'
-import { fields, schema, type Text } from './mod.ts'
+import {
+  col,
+  type Derived,
+  type DerivedProp,
+  type Driver,
+  eq,
+  type Expr,
+  select,
+  sub,
+  table,
+} from '@yaks/sql'
+import { fields, schema } from './mod.ts'
 
 // A Driver over a fresh in-memory database.
 export let mem = (): Driver => open(':memory:')
@@ -54,10 +64,25 @@ export let shop: Vocab = loadVocab(doc)
 // uses, reproduced here without depending on it, so the tests exercise only
 // this package's side of it.
 export let STASH = `create table stash (key text primary key, words text)`
-export let stashed: Text = {
-  'book.blurb': (address) =>
-    `(select __s."words" from "stash" __s where __s."key" = ${address})`,
-}
+let words = (key: Expr): Expr =>
+  sub(select({
+    cols: [col('words', '__s')],
+    from: table('stash', '__s'),
+    where: eq(col('key', '__s'), key),
+  }))
+/** A property read through `stash`: its column holds the key, and the words
+ * are the stash row under it. */
+export let stash = (comp: string, prop: string): DerivedProp => ({
+  tag: 'text',
+  expr: (owner) =>
+    words(sub(select({
+      cols: [col(prop, '__c')],
+      from: table(comp, '__c'),
+      where: eq(col('entity', '__c'), owner),
+    }))),
+  text: words,
+})
+export let stashed: Derived = { 'book.blurb': stash('book', 'blurb') }
 
 // The `entity` table and the two component tables, written out by hand: this
 // package indexes tables, it does not create them (that is a storage adapter's
@@ -72,7 +97,7 @@ let TABLES = [
 // A stocked shop: the tables, the indexes, and a few rows to find. Pass `text`
 // and the blurbs are stored in `stash` under a key instead of in the row
 // itself, which is the same data seen through a content-addressed property.
-export let shelf = (text: Text = {}): Driver => {
+export let shelf = (text: Derived = {}): Driver => {
   let db = mem()
   let away = !!text['book.blurb']
   for (

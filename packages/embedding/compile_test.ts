@@ -7,7 +7,7 @@ import { parse } from '@yaks/query'
 import { compile, Unsupported } from '@yaks/sql'
 import type { Bundle } from '@yaks/graph'
 import { semantic } from './compile.ts'
-import type { Driver } from './driver.ts'
+import type { Driver } from '@yaks/sql'
 import { embedder, shop, stocked } from './testing.ts'
 
 // The eids a query selects, in the order the statement yields them.

@@ -26,18 +26,17 @@ import {
   as,
   at,
   col,
+  type Driver,
   eq,
   exists,
   join,
   lit,
   not,
   type Raw,
-  render,
   select,
   table,
   val,
 } from '@yaks/sql'
-import type { Driver } from './driver.ts'
 import { TABLE } from './ddl.ts'
 import { cosine, unpack } from './vector.ts'
 
@@ -72,7 +71,7 @@ export type Rank = (
 let e = at('e')
 let o = at('o')
 let vectors = (db: Driver, model: string, within?: Screen) => {
-  let s = render(select({
+  let rows = db.query(select({
     cols: [as(e('entity'), 'owner'), as(o('eid'), 'eid'), as(e('vec'), 'vec')],
     from: table(TABLE, 'e'),
     joins: [join(table('entity', 'o'), eq(o('id'), e('entity')))],
@@ -86,11 +85,11 @@ let vectors = (db: Driver, model: string, within?: Screen) => {
       ...(within ? [among(o('eid'), within)] : []),
     ),
   }))
-  return db.query(s.sql, s.params) as unknown as {
-    owner: number
-    eid: Eid
-    vec: Uint8Array
-  }[]
+  return rows.map((r) => ({
+    owner: Number(r.owner),
+    eid: String(r.eid),
+    vec: r.vec as Uint8Array,
+  }))
 }
 
 /**
@@ -103,13 +102,12 @@ export let vectorOf = (
   entity: Eid,
   model: string,
 ): Float32Array | null => {
-  let s = render(select({
+  let row = db.query(select({
     cols: [as(e('vec'), 'vec')],
     from: table(TABLE, 'e'),
     joins: [join(table('entity', 'o'), eq(o('id'), e('entity')))],
     where: and(eq(o('eid'), val(entity)), eq(e('model'), val(model))),
-  }))
-  let row = db.query(s.sql, s.params)[0]
+  }))[0]
   return row ? unpack(row.vec as Uint8Array) : null
 }
 

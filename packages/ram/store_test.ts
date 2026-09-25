@@ -163,10 +163,9 @@ Deno.test('a store nobody mirrors keeps its own numbering', () => {
   assertEquals(at(s, 'p1').entity.num, 1)
 })
 
-Deno.test('a map has no schema: ddl is empty and install does nothing', () => {
+Deno.test('a map has no schema: install does nothing', () => {
   // and a Store is a Storage — the seam @yaks/graph applies changes through
   let s: Storage = shopRam()
-  assertEquals(s.ddl(), [])
   assertEquals(s.install(), undefined)
 })
 

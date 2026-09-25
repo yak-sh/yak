@@ -3,15 +3,20 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { type Driver, storage, type Store } from './mod.ts'
+import { type Driver, render } from '@yaks/sql'
+import { storage, type Store } from './mod.ts'
 import { open } from './db.ts'
-import { mem, shop } from './testing.ts'
+import { mem, shop, spy } from './testing.ts'
 
 Deno.test('ddl() lists the statements install() runs', () => {
   let s = storage(mem(), shop)
   let ddl = s.ddl()
   assert(ddl.length > 0)
-  assert(ddl.some((stmt) => stmt.includes('create table if not exists entity')))
+  assert(
+    ddl.some((s) =>
+      render(s).sql.includes('create table if not exists "entity"')
+    ),
+  )
 })
 
 Deno.test('install() is idempotent', () => {
@@ -35,11 +40,7 @@ Deno.test('a driver that owns transactions is asked for them', () => {
   let seen: string[] = []
   let depth = 0
   let s = storage({
-    ...base,
-    exec: (sql) => {
-      seen.push(sql)
-      base.exec(sql)
-    },
+    ...spy(base, (sql) => void seen.push(sql)),
     // Stands in for an engine whose transactions are not SQL (a Durable
     // Object's `transactionSync`): the store must call this and emit no
     // savepoint of its own.
@@ -88,13 +89,8 @@ Deno.test('a driver over a FILE takes the write lock up front', () => {
   // timeout has something to wait on. Everything inside it is a savepoint, as
   // ever: one connection has one transaction whatever the nesting says.
   let said: string[] = []
-  let watched = (over: Driver): Driver => ({
-    ...over,
-    exec: (sql) => {
-      said.push(sql)
-      over.exec(sql)
-    },
-  })
+  let watched = (over: Driver): Driver =>
+    spy(over, (sql) => void said.push(sql))
   let write = (s: Store) =>
     s.tx((tx) => {
       tx.read('.doc')
@@ -119,7 +115,7 @@ Deno.test('a driver over a FILE takes the write lock up front', () => {
       said.filter((sql) => /^(begin|savepoint)/.test(sql)).map((sql) =>
         sql.split('_')[0]
       ),
-      ['begin immediate', 'savepoint yaks'],
+      ['begin immediate', 'savepoint "yaks'],
     )
   } finally {
     db.close()

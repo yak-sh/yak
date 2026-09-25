@@ -363,6 +363,11 @@ export let le = (a: Expr, b: Expr): Expr => op('<=', a, b)
 export let gt = (a: Expr, b: Expr): Expr => op('>', a, b)
 export let ge = (a: Expr, b: Expr): Expr => op('>=', a, b)
 
+/** The current instant, as SQLite formats it: the ISO form every `at`
+ * property carries, so a time the engine writes reads like one a server
+ * wrote. */
+export let NOW: Expr = fn('strftime', lit('%Y-%m-%dT%H:%M:%fZ'), lit('now'))
+
 export let TRUE: Expr = lit(true)
 export let FALSE: Expr = lit(false)
 let truth = (e: Expr): boolean | null => e.t == 'lit' ? !!e.v : null

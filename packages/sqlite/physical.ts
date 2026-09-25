@@ -1,6 +1,23 @@
-import type { Driver } from './driver.ts'
+import {
+  as,
+  col,
+  count,
+  type Driver,
+  eq,
+  fn,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
 
-let quote = (name: string) => `"${name.replaceAll('"', '""')}"`
+/** Every table the file's schema lists, by name. */
+export let tables = (driver: Driver): string[] =>
+  driver.query(select({
+    cols: [col('name')],
+    from: table('sqlite_schema'),
+    where: eq(col('type'), val('table')),
+    order: [col('name')],
+  })).map((r) => String(r.name))
 
 /**
  * Component tables actually in the file, irrespective of the loaded vocabulary.
@@ -11,21 +28,17 @@ let quote = (name: string) => `"${name.replaceAll('"', '""')}"`
  */
 export function componentTables(driver: Driver): string[] {
   let ordinary = new Set(
-    driver.query('pragma table_list', [])
+    driver.query({ t: 'pragma', name: 'table_list' })
       .filter((r) => r.schema == 'main' && r.type == 'table')
       .map((r) => String(r.name)),
   )
-  return driver.query(
-    "select name from sqlite_schema where type = 'table' order by name collate binary",
-    [],
-  )
-    .map((r) => String(r.name))
+  return tables(driver)
     .filter((name) =>
       ordinary.has(name) && !['entity', 'journal', 'hit'].includes(name) &&
       !name.startsWith('sqlite_') && !/^_+cf_/i.test(name)
     )
     .filter((name) =>
-      driver.query(`pragma table_info(${quote(name)})`, [])
+      driver.query({ t: 'pragma', name: 'table_info', arg: name })
         .some((r) =>
           r.name == 'entity' && Number(r.pk) == 1 &&
           String(r.type).toLowerCase() == 'integer'
@@ -40,9 +53,12 @@ export function componentTables(driver: Driver): string[] {
  * Durable Object's SQLite refuses `pragma schema_version`.
  */
 export let shape = (driver: Driver): string => {
-  let [row] = driver.query(
-    'select count(*) as n, total(length(sql)) as bytes from sqlite_schema',
-    [],
-  )
+  let [row] = driver.query(select({
+    cols: [
+      as(count(), 'n'),
+      as(fn('total', fn('length', col('sql'))), 'bytes'),
+    ],
+    from: table('sqlite_schema'),
+  }))
   return `${row.n}/${row.bytes}`
 }

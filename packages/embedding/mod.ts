@@ -69,7 +69,6 @@
  * @module
  */
 
-export * from './driver.ts'
 export * from './vector.ts'
 export * from './embedder.ts'
 export * from './remote.ts'

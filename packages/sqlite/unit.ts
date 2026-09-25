@@ -1,4 +1,4 @@
-import type { Driver } from './driver.ts'
+import type { Driver, Stmt } from '@yaks/sql'
 
 // SQLite has one transaction per connection, so nesting is done with
 // SAVEPOINTs: a store used inside a transaction the caller already opened (an
@@ -23,18 +23,21 @@ export let unit = <R>(driver: Driver, body: () => R): R => {
   let held = depth.get(driver) ?? 0
   let outer = !!driver.file && held == 0
   let name = `yaks_tx_${seq++}`
-  driver.exec(outer ? 'begin immediate' : `savepoint ${name}`)
+  driver.query(
+    outer ? { t: 'begin', mode: 'immediate' } : { t: 'savepoint', name },
+  )
   depth.set(driver, held + 1)
-  let close = (sql: string) => {
+  let close = (...stmts: Stmt[]) => {
     depth.set(driver, (depth.get(driver) ?? 1) - 1)
-    driver.exec(sql)
+    for (let s of stmts) driver.query(s)
   }
   let undo = (e: unknown): never => {
-    close(outer ? 'rollback' : `rollback to ${name}; release ${name}`)
+    if (outer) close({ t: 'rollback' })
+    else close({ t: 'rollback', to: name }, { t: 'release', name })
     throw e
   }
   let done = <T>(out: T): T => {
-    close(outer ? 'commit' : `release ${name}`)
+    close(outer ? { t: 'commit' } : { t: 'release', name })
     return out
   }
   try {

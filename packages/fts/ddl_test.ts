@@ -1,13 +1,15 @@
 // The index a set of fields implies, and that it stays true to its table.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
+import { lit, render, type Stmt } from '@yaks/sql'
 import { fields, indexName } from './fields.ts'
 import { heal, schema } from './ddl.ts'
 import { find } from './search.ts'
 import { shelf, shop, stashed } from './testing.ts'
 
-let all = schema(fields(shop)).join('\n')
-let away = schema(fields(shop), stashed).join('\n')
+let text = (stmts: Stmt[]) => stmts.map((s) => render(s).sql).join('\n')
+let all = text(schema(fields(shop)))
+let away = text(schema(fields(shop), stashed))
 
 Deno.test('one external-content index per component, over its text properties', () => {
   assert(
@@ -26,8 +28,8 @@ Deno.test('three triggers follow each table, delete mirroring insert', () => {
     assert(all.includes(`create trigger if not exists "${t}"`), t)
   }
   // Both sides read the same way, or the index keeps words no row says.
-  assert(all.includes(`coalesce(new."title", '')`), all)
-  assert(all.includes(`coalesce(old."title", '')`), all)
+  assert(all.includes(`coalesce("new"."title", '')`), all)
+  assert(all.includes(`coalesce("old"."title", '')`), all)
 })
 
 Deno.test('a component with no text gets no index', () => {
@@ -80,11 +82,11 @@ Deno.test('a resolved property indexes its words on both sides of the mirror', (
   // FTS5 reads a column back out of for `snippet()` and `rebuild`.
   assert(away.includes(`create view if not exists "book_text" as`), away)
   assert(away.includes(`content='book_text'`), away)
-  assert(away.includes(`__s."key" = new."blurb"`), away)
-  assert(away.includes(`__s."key" = old."blurb"`), away)
+  assert(away.includes(`"__s"."key" = "new"."blurb"`), away)
+  assert(away.includes(`"__s"."key" = "old"."blurb"`), away)
   // The property that is its own text is left alone, and so is a component
   // with no resolved property at all.
-  assert(away.includes(`coalesce(new."title", '')`), away)
+  assert(away.includes(`coalesce("new"."title", '')`), away)
   assert(away.includes(`"prose", content='review'`), away)
   assert(!away.includes('review_text'), away)
 })
@@ -143,7 +145,7 @@ Deno.test('an owner-only read override cannot silently index the stored address'
   assertThrows(
     () =>
       schema(fields(shop), {
-        'book.blurb': { tag: 'text', expr: () => "'resolved'" },
+        'book.blurb': { tag: 'text', expr: () => lit('resolved') },
       }),
     Error,
     'read override needs a stored-value text expression',

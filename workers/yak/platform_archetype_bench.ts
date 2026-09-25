@@ -3,7 +3,8 @@ import { archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
 import { driver } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
-import { backfill, type Param, storage } from '@yaks/sqlite'
+import { backfill, storage } from '@yaks/sqlite'
+import type { Driver } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { gitDocs, platformDocs } from './vocab.ts'
 
@@ -16,9 +17,9 @@ for (
     const data = durable()
     const base = driver(data)
     let statements = 0
-    const sql = {
+    const sql: Driver = {
       ...base,
-      query: (s: string, p: Param[]) => {
+      query: (s, p) => {
         statements++
         return base.query(s, p)
       },
