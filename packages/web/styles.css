@@ -4563,3 +4563,14 @@ a[data-ref]:hover {
 .Quarantine_Reveal {
   color: var(--text);
 }
+
+.Fault {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  color: var(--red);
+}
+
+.Fault_Retry {
+  color: var(--text);
+}

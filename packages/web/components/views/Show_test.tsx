@@ -2,13 +2,22 @@
 // where an absent field must paint nothing. A renderer is a component: every
 // case mounts it through Preact (mount.ts) and asserts on the resulting DOM,
 // never on a bare call's vnode tree.
-import '../../testing.ts'
+import { tick } from '../../testing.ts'
 import { h } from 'preact'
 import { assertEquals, assertExists } from '@std/assert'
-import { cache, config, deps, dropAgg, ent, useRoute } from '../../live.ts'
-import { resolve } from '../registry.ts'
+import {
+  cache,
+  config,
+  deps,
+  dropAgg,
+  ent,
+  problem,
+  useRoute,
+} from '../../live.ts'
+import { parse } from '@yaks/query'
+import { extend, resolve } from '../registry.ts'
 import { mount } from '../mount.ts'
-import '../Entity.tsx'
+import { Entity } from '../Entity.tsx'
 
 // A mounted view holds subscriptions. In a test there is no server to hold
 // them against, so control frames go nowhere through live.ts's transport
@@ -452,6 +461,66 @@ Deno.test('the full face paints the body for a viewer with no actor', () => {
     assertEquals(root.textContent?.includes('The body text'), true)
   } finally {
     free()
+    cache.value = {}
+  }
+})
+
+Deno.test('a view that throws fails in its own slot, and the page paints', async () => {
+  extend([{
+    view: 'Body',
+    match: parse('.doc.title=Throws'),
+    Render: () => {
+      throw new Error('boom')
+    },
+  }])
+  cache.value = {
+    doc: {
+      entity: { eid: 'doc', num: 1 },
+      doc: { eid: 'doc', title: 'Throws', body: 'unseen' },
+      accept: { eid: 'doc', body: '- still here' },
+    },
+  }
+  let quiet = console.error
+  console.error = () => {}
+  let { root, free } = mount(h(Entity, { eid: 'doc', view: 'Full' }))
+  try {
+    // The boundary paints its failure on the render after the throw.
+    await tick()
+    assertEquals(
+      root.querySelector('.Fault')?.textContent?.includes('boom'),
+      true,
+    )
+    assertEquals(root.textContent?.includes('still here'), true)
+  } finally {
+    free()
+    console.error = quiet
+    problem.value = ''
+    cache.value = {}
+  }
+})
+
+Deno.test('a board whose saved query cannot be read shows why', () => {
+  cache.value = {
+    b: {
+      entity: { eid: 'b', num: 1 },
+      doc: { eid: 'b', title: 'Old board' },
+      board: { eid: 'b', query: '.task!' },
+    },
+  }
+  let quiet = console.error
+  console.error = () => {}
+  let { root, free } = mount(h(Entity, { eid: 'b', view: 'List' }))
+  try {
+    assertEquals(root.querySelector('.Fault'), null)
+    assertEquals(
+      root.querySelector('.SubscriptionFailure')?.textContent
+        ?.includes('.task! is written .task'),
+      true,
+    )
+  } finally {
+    free()
+    console.error = quiet
+    problem.value = ''
     cache.value = {}
   }
 })

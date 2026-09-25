@@ -22,6 +22,7 @@ import {
   linksVia,
   loaded,
   localEids,
+  problem,
   queryEids,
   querySubscription,
   type References,
@@ -30,12 +31,43 @@ import {
   resultSub,
   type SubscriptionRead,
 } from '../live.ts'
-import { parseQuery, resolveRefs } from '../query.ts'
+import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { type ResultComp } from '../route.ts'
 import type { Ent } from '../types.ts'
 import { dotFields } from '../tray_query.ts'
 
-let resolve = (query: string) => resolveRefs(parseQuery(query), findEid)
+// A query that does not parse fails where it was asked, never in the render
+// around it: the hook reports it once and answers a failed read, so the view
+// that asked paints its own failure and the rest of the page paints whole. A
+// refused `.chat.actor=` in the chat once blanked every entity page, and a
+// board's saved query is typed by a person.
+let resolve = (query: string): Pred[] | Error => {
+  try {
+    return resolveRefs(parseQuery(query), findEid)
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error))
+  }
+}
+
+let usePreds = (query: string) => {
+  let preds = useMemo(() => resolve(query), [query])
+  useLayoutEffect(() => {
+    if (!(preds instanceof Error)) return
+    console.error(`query ${JSON.stringify(query)}:`, preds)
+    problem.value = `query could not be read: ${preds.message}`
+  }, [preds])
+  return preds
+}
+
+let refused = (query: string, error: Error): QueryResult => ({
+  eids: [],
+  subscription: {
+    sub: '',
+    state: { status: 'failed', reason: error.message, reference: query },
+  },
+  ready: true,
+  loaded,
+})
 
 export type QueryResult = {
   eids: string[]
@@ -55,13 +87,14 @@ export let useQueryResult = (
   enabled = true,
   direct = false,
 ): QueryResult => {
-  let preds = useMemo(() => resolve(query), [query])
+  let preds = usePreds(query)
   let source = direct ? query : undefined
   useLayoutEffect(() => {
-    if (!enabled) return
+    if (!enabled || preds instanceof Error) return
     holdQuery(preds, source)
     return () => dropQuery(preds)
   }, [preds, enabled, source])
+  if (preds instanceof Error) return refused(query, preds)
   let subscription = enabled ? querySubscription(preds, source) : undefined
   return {
     eids: enabled ? queryEids(preds, source).value : [],
@@ -75,12 +108,13 @@ export let useQueryResult = (
 // evaluated PER RENDERED ROW whose defining sub the surface holds once (the
 // tray's session dots, live.ts holdLocal).
 export let useLocalEids = (query: string): string[] => {
-  let preds = useMemo(() => resolve(query), [query])
+  let preds = usePreds(query)
   useLayoutEffect(() => {
+    if (preds instanceof Error) return
     holdLocal(preds)
     return () => dropLocal(preds)
   }, [preds])
-  return localEids(preds).value
+  return preds instanceof Error ? [] : localEids(preds).value
 }
 
 // The matching eids, as a live array. Prefer this when the caller only needs

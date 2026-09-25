@@ -1,8 +1,19 @@
-// The curated views and verbs, with the app's quarantine and memo boundary.
+// The curated views and verbs, with the app's quarantine, failure and memo
+// boundaries.
 // @yaks/render selects them; @yaks/preact mounts the selected component.
 import { and, or, parse, present } from '@yaks/query'
 import { statusChanges, subChanges } from '../client.ts'
-import { ent, mutate, myActor, myMode, reveal, rows, shown } from '../live.ts'
+import { useErrorBoundary } from 'preact/hooks'
+import {
+  ent,
+  mutate,
+  myActor,
+  myMode,
+  problem,
+  reveal,
+  rows,
+  shown,
+} from '../live.ts'
 import { type Ent, statusOf } from '../types.ts'
 import {
   type Action,
@@ -444,7 +455,15 @@ defineActions([
 
 // The one front door: render an entity (straight out of the live cache)
 // through a view. Extra props flow through to the renderer.
+//
+// Every `<Entity>` is a slot, and a view that throws while it draws fails in
+// its own slot: it is reported and painted as its failure, and the views
+// beside it and the page around it paint. One bad view costs one slot, never
+// the page.
 let Veil = block('section', 'Quarantine', { Reveal: 'button' })
+let Fault = block('section', 'Fault', { Retry: 'button' })
+let said = (error: unknown) =>
+  error instanceof Error ? error.message : String(error)
 let EntityFace = (
   { eid, view, ...rest }: {
     eid: string
@@ -452,6 +471,18 @@ let EntityFace = (
     [x: string]: unknown
   },
 ) => {
+  let [error, retry] = useErrorBoundary((error) => {
+    console.error(`the ${view ?? 'default'} view of ${eid}:`, error)
+    problem.value = `a view could not be drawn: ${said(error)}`
+  })
+  if (error) {
+    return (
+      <Fault>
+        This {view ?? ''} view could not be drawn: {said(error)}
+        <Fault.Retry type='button' onClick={retry}>retry</Fault.Retry>
+      </Fault>
+    )
+  }
   let e = ent(eid)
   if (!shown(eid)) {
     return (
