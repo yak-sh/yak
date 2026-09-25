@@ -13,7 +13,6 @@ import {
   link,
   moves,
   natureOf,
-  natures,
   typeOf,
   unlink,
 } from './edge.ts'
@@ -74,7 +73,7 @@ Deno.test('natureOf: every edge type, present tense but the event, each a comp',
   assertEquals(natureOf.requires, 'requires')
   // The one nature that is an event, so the one that stays past tense.
   assertEquals(natureOf.recalled, 'recalled')
-  for (let n of natures) {
+  for (let n of Object.values(natureOf)) {
     assertEquals(n in comps, true, `${n} is not a comp`)
     assertEquals(natureOf[typeOf[n]], n)
   }
