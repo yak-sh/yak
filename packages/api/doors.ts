@@ -10,10 +10,15 @@
 // changes is that neither the request body nor the response body is ever
 // whole in memory.
 
-import { type Bundle, type Graph, Refused } from '@yaks/graph'
+import {
+  aggregate,
+  type Bundle,
+  type Graph,
+  reduced,
+  Refused,
+} from '@yaks/graph'
 import type { Actor } from '@yaks/graph'
 import { parse } from '@yaks/query'
-import { aggregate, reduced } from './aggregate.ts'
 import { signed } from './actor.ts'
 import { fault, json, refusal } from './refuse.ts'
 

@@ -34,11 +34,18 @@ import {
   transient,
   type TransientFrame,
 } from '@yaks/graph'
-import { comps, only, wanted } from '@yaks/graph'
+import {
+  type Agg,
+  aggregate,
+  comps,
+  only,
+  type Reduced,
+  reduced,
+  wanted,
+} from '@yaks/graph'
 import { type Filter, filter } from '@yaks/match'
 import { bare, type Clause, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import { type Agg, aggregate, type Reduced, reduced } from './aggregate.ts'
 import { fault, type Refusal, refusal } from './refuse.ts'
 import { type Relay, relay as relaying, type Timer } from './relay.ts'
 

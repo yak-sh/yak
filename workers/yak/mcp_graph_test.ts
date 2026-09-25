@@ -51,6 +51,42 @@ slow(
   },
 )
 
+// A reduction asks about the selection, not its members, and is answered with
+// its value, as `/query` answers it — one app's or the whole reach's.
+slow('graph_query answers a count and a tally as their value', async () => {
+  let k = await kernel()
+  try {
+    let agent = connector(k, (await signIn(k)).cookie)
+    await agent.tool('app_new', { slug: 'recipes', title: 'recipes' })
+    await agent.tool('app_files', {
+      app: 'recipes',
+      files: [{
+        path: 'vocab.json',
+        content: vocabFile({ recipe: { cuisine: txt } }),
+      }],
+    })
+    await agent.tool('app_deploy', { app: 'recipes' })
+    await agent.tool('graph_apply', {
+      app: 'recipes',
+      entities: ['thai', 'thai', 'greek'].map((cuisine, i) => ({
+        entity: { eid: `$r${i}` },
+        recipe: { cuisine },
+      })),
+    })
+    let said = async (filter: string, app?: string) =>
+      JSON.parse(
+        await agent.tool('graph_query', { filter, ...(app ? { app } : {}) }),
+      )
+    assertEquals(await said('.recipe&.count', 'recipes'), { count: 3 })
+    assertEquals(await said('.recipe&.tally=recipe.cuisine', 'recipes'), {
+      tally: { greek: 1, thai: 2 },
+    })
+    assertEquals(await said('.recipe&.count'), { count: 3 })
+  } finally {
+    await k.stop()
+  }
+})
+
 // An entity spans apps (T-32699): a read that names no app asks every store
 // the caller can reach and answers one bundle per eid — and only the stores
 // they can reach.

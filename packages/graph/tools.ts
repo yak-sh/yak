@@ -28,8 +28,10 @@
 // declaration means validating it, which means a JSON Schema validator, which
 // has no business in a browser tab that only wants the graph. Import `@yaks/graph/tools` to get it.
 
+import { parse } from '@yaks/query'
 import { toolsIn, toolsSaid } from '@yaks/vocab/tools'
 import { extendMeta, type Keywords, type VocabDoc } from '@yaks/vocab'
+import { aggregate, reduced } from './aggregate.ts'
 import type { Bundle } from './bundle.ts'
 import type { Graph } from './graph.ts'
 import type { Tool } from './plugin.ts'
@@ -162,7 +164,10 @@ export let runs = (seams: Seams = {}): Runs => {
     graph_apply: (call) => batch(argsOf(call).change),
     // The one concession to typing by hand is the query line: `.status=shelved`
     // is the grammar @yaks/query owns, so this takes it as a string and the
-    // optional `filters` list is joined onto it with `&`.
+    // optional `filters` list is joined onto it with `&`. A line that asks for
+    // a reduction (`.count`, `.tally=`, `.distinct=`) asks about the selection,
+    // not its members, and is answered as `/query` answers it: the value, said
+    // the way graph_schema says its answer.
     graph_query: async (call, graph) => {
       let args = argsOf(call)
       let line = [str(args.q), ...strings(args.filters)]
@@ -170,7 +175,15 @@ export let runs = (seams: Seams = {}): Runs => {
       let n = num(args.limit)
       if (n) line.push(`.limit=${n}`)
       if (!line.length) throw new Refused('graph_query needs a query line')
-      return await graph.read(line.join('&'))
+      let q = line.join('&')
+      let op = aggregate(parse(q))
+      if (!op) return await graph.read(q)
+      let value = reduced(op, await graph.rows(q))
+      return [{
+        entity: { eid: '$said' },
+        content: { body: JSON.stringify(value) },
+        output: { source: call.entity.eid, value },
+      }]
     },
     graph_show: async (call, graph) => {
       let args = argsOf(call)

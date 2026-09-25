@@ -29,12 +29,14 @@ import type {
   Eid,
   Graph,
   Plugin,
+  Reduced,
   Row,
   Storage,
   Tool,
   Tx,
 } from '@yaks/graph'
-import { argsOf, composed as perEntity, detached } from '@yaks/graph'
+import { aggregate, argsOf, composed as perEntity, detached } from '@yaks/graph'
+import { parse } from '@yaks/query'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
 import type { Search } from '@yaks/mcp'
@@ -288,22 +290,47 @@ let nope = (what: string) => (): never => {
   throw new Error(`the reach is composed, not stored — no ${what}`)
 }
 
+// A reduction comes back from the reach already reduced: a store's `/query`
+// door, or the composing read's own `.count`, answers `{count: n}`. `rows` is
+// what a reduction is made from (@yaks/graph `reduced` reads them), so the
+// value goes back as the rows that make it, and `graph_query` answers a count
+// the same way whichever graph is behind it.
+let unreduced = (value: Reduced): Row[] =>
+  'count' in value
+    ? [{ n: value.count }]
+    : 'tally' in value
+    ? Object.entries(value.tally).map(([v, n]) => ({ value: v, n }))
+    : value.distinct.map((v) => ({ value: v }))
+
 // The one read `graph_show` makes, and the only reason this Graph carries a
 // storage at all: these eids, whole, out of every store that holds a piece of
 // one (reach.ts `composed`).
 let held = (ctx: Ctx, reach: Reach[]): Storage => {
   let self: Storage
-  let rows = async (q: unknown) => {
+  // The reach's answer to a line, and whether the line asked for a reduction.
+  let asked = async (q: unknown) => {
     let { said, line } = scope(String(q))
     let where = said ? [await named(ctx, said)] : reach
     // An agent's grammar is the page's (guide.md): `id=`, `limit=` and `after=`
     // where the store writes `.eid=`, `.limit=` and `.after=`, and a value
     // written as it reads rather than as a store would parse it. One
     // translation for every door a person's own line arrives at (wire.ts).
-    return await read(ctx.env, where, await byName(self, lined(line))) as Row[]
+    let one = await byName(self, lined(line))
+    let answer = await read(ctx.env, where, one)
+    return { answer, reduced: !!aggregate(parse(one)) }
+  }
+  let rows = async (q: unknown): Promise<Row[]> => {
+    let { answer, reduced } = await asked(q)
+    return reduced ? unreduced(answer as Reduced) : answer as Row[]
+  }
+  // A reduction has no members to list, so a read of one lists none, as a
+  // store's own read of it does.
+  let bundles = async (q: unknown): Promise<Bundle[]> => {
+    let { answer, reduced } = await asked(q)
+    return reduced ? [] : answer as Bundle[]
   }
   let tx: Tx = {
-    read: (q) => rows(q) as Promise<Bundle[]>,
+    read: bundles,
     get: (eids) =>
       composed(ctx.env, reach, eids) as unknown as Promise<Bundle[]>,
     patch: nope('transaction'),
@@ -312,7 +339,7 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
   self = {
     ddl: () => [],
     install: () => {},
-    read: (q) => rows(q) as Promise<Bundle[]>,
+    read: bundles,
     rows,
     tx: (body) => body(tx) as never,
   }

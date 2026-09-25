@@ -1,9 +1,11 @@
 // The three query clauses that reduce a selection to a value instead of
 // naming its members, and that value in the one shape every door answers
-// with: `/query` as its response body, a subscription as its frame.
+// with: `/query` as its response body, a subscription as its frame, the
+// `graph_query` tool as its `$said` bundle. It sits beside `Graph.rows`,
+// whose rows it reduces.
 
-import type { Row } from '@yaks/graph'
 import type { Query } from '@yaks/query'
+import type { Row } from './storage.ts'
 
 /** A reduction a query can ask for. */
 export type Agg = 'count' | 'distinct' | 'tally'

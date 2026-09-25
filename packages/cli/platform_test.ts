@@ -102,6 +102,19 @@ Deno.test('a lone entity is shown whole, as its page', async () => {
   })
 })
 
+Deno.test('a count is answered as its value', async () => {
+  await asking(async (_c, call) => {
+    assertEquals(
+      await call('graph_query', { q: '.task&.count' }),
+      '{"count":2}',
+    )
+    assertEquals(
+      await call('graph_query', { q: '.task', filters: ['.completed&.count'] }),
+      '{"count":1}',
+    )
+  })
+})
+
 Deno.test('an answer that is not entities prints as the text it came as', async () => {
   await asking(async (_c, call) => {
     let schema = await call('graph_schema')
