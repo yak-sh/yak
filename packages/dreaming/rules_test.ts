@@ -69,13 +69,13 @@ Deno.test('.order=hot: recent and often-recalled first, a retired project sunk',
     ])
   )
   let found = (line: string) => store.read(line).map((b) => b.entity.eid)
-  assertEquals(found('.doc! .order=hot'), [
+  assertEquals(found('.doc .order=hot'), [
     'fresh',
     'recalled',
     'sunk',
     'cold',
     'never',
   ])
-  assertEquals(found('.doc! .order=hot .limit=2'), ['fresh', 'recalled'])
-  assertEquals(found('.doc! .order=-hot').at(-1), 'fresh')
+  assertEquals(found('.doc .order=hot .limit=2'), ['fresh', 'recalled'])
+  assertEquals(found('.doc .order=-hot').at(-1), 'fresh')
 })

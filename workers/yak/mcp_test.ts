@@ -248,7 +248,7 @@ slow(
           'app_deploy',
           "import { apply, query, search, subscribe } from './api/client.js'",
           'vocab.json',
-          "subscribe('.doc!', draw)",
+          "subscribe('.doc', draw)",
           'not localStorage',
           // Who an app is for is part of making it (T-32504).
           "access 'open'",
@@ -256,7 +256,7 @@ slow(
           // An entity spans apps, and the person's agent is told so before
           // it builds the second one (T-32701).
           'the same thing in every app',
-          "'.book!&.loan?'",
+          "'.book&?loan'",
           "store('/lending/api/')",
           // An app is a plugin: publishable, installable, pinned (T-32890).
           'app_publish',
@@ -266,7 +266,7 @@ slow(
           // A row carries the components its filter names (T-32699), which is
           // what a page draws from — the one thing that silently emptied a
           // working page's titles (T-32953).
-          "query('.recipe!&.doc?')",
+          "query('.recipe&?doc')",
         ]
       ) assertStringIncludes(init.instructions, said)
       let says = (name: string) =>
@@ -330,7 +330,7 @@ slow(
       // (T-32701).
       assertStringIncludes(read.contents[0].text, '## An entity spans apps')
       let spans = await agent.call('resources/read', { uri: uriOf('entities') })
-      assertStringIncludes(spans.contents[0].text, '.book!&.loan?')
+      assertStringIncludes(spans.contents[0].text, '.book&?loan')
       assertStringIncludes(spans.contents[0].text, "store('/lending/api/')")
       // The map still names each page, so a person reading only the guide
       // knows the depth is there (T-32982).
@@ -344,7 +344,7 @@ slow(
       assertEquals(deep.contents[0].uri, uriOf('querying'))
       assertEquals(deep.contents[0].mimeType, 'text/markdown')
       assertStringIncludes(deep.contents[0].text, '# Querying')
-      assertStringIncludes(deep.contents[0].text, '.doc!')
+      assertStringIncludes(deep.contents[0].text, '.doc')
       let got = await k.at('yaks.app', '/docs/querying.md')
       assertEquals(got.status, 200)
       assertEquals(await got.text(), deep.contents[0].text)
@@ -512,7 +512,7 @@ slow(
       // The generic tier reads the caller's whole reach and names no app, so
       // a person with nothing saved anywhere reads nothing (T-33812).
       assertEquals(
-        JSON.parse(await agent.tool('graph_query', { q: '.doc!' })),
+        JSON.parse(await agent.tool('graph_query', { q: '.doc' })),
         [],
       )
       // Two spaces holding the slug is the one question worth asking, and
@@ -782,7 +782,7 @@ slow(
       // it are not in the answer unless the filter names one.
       assert(!('created' in hit), 'no stamp rides an unasked-for listing')
       let stamped = JSON.parse(
-        await agent.tool('graph_query', { q: '.doc!&.created!' }),
+        await agent.tool('graph_query', { q: '.doc&.created' }),
       )
       assertEquals(stamped.length, 1)
       assert(stamped[0].created, 'naming a stamp asks for it back')
@@ -802,7 +802,7 @@ slow(
         '$old',
       )
       let [aged] = JSON.parse(
-        await agent.tool('graph_query', { q: `id=${old}&.created!` }),
+        await agent.tool('graph_query', { q: `id=${old}&.created` }),
       ) as { created: { at: string } }[]
       assertEquals(
         aged.created.at.slice(0, 4),
@@ -874,7 +874,7 @@ slow(
                 recipe: { serves: 4 },
               }],
             }),
-          () => agent.tool('graph_query', { q: '.recipe!' }),
+          () => agent.tool('graph_query', { q: '.recipe' }),
         ]
       ) {
         let why = (await assertRejects(ask, Error)).message
@@ -1030,7 +1030,7 @@ slow(
         change: [{ entity: { eid: '$n2' }, note: { body: 'said it' } }],
       })
       let notes = JSON.parse(
-        await agent.tool('graph_query', { q: '.note!' }),
+        await agent.tool('graph_query', { q: '.note' }),
       ) as {
         entity: { eid: string }
         note: { text: string | null; body: string | null }
@@ -1052,7 +1052,7 @@ slow(
         'dropped (nothing stored in it): note.text',
       )
       assertEquals(
-        JSON.parse(await agent.tool('graph_query', { q: '.note!' }))
+        JSON.parse(await agent.tool('graph_query', { q: '.note' }))
           .map((n: { note: unknown }) => n.note),
         [{ body: 'wrote it' }, { body: 'said it' }],
       )
@@ -1119,11 +1119,11 @@ slow(
         told,
         /## unseen errors\n- \S+ \S+ exception recipes v\d+: page \/recipes\/ — sift is not a function/,
       )
-      // A crash is the platform's row, not the person's: `.doc!` — the query
+      // A crash is the platform's row, not the person's: `.doc` — the query
       // the instructions teach as everything they saved — has only the cake
       // (T-32533, C-32531 item 1).
       assertEquals(
-        JSON.parse(await agent.tool('graph_query', { q: '.doc!' }))
+        JSON.parse(await agent.tool('graph_query', { q: '.doc' }))
           .map((r: { doc: { title: string } }) => r.doc.title),
         ["Grandma's lemon cake", 'Pancakes'],
       )
@@ -1143,13 +1143,13 @@ slow(
       // saved: asking for the stamps does not drag it in, and naming the
       // component is how it is asked for (C-32607 item 4).
       let stamps = JSON.parse(
-        await agent.tool('graph_query', { q: '.created!' }),
+        await agent.tool('graph_query', { q: '.created' }),
       ) as { exception?: unknown }[]
       assert(stamps.length > 0, 'the person has rows')
       assert(stamps.every((r) => !r.exception), 'no break rides a stamps list')
       assertEquals(
         JSON.parse(
-          await agent.tool('graph_query', { q: '.exception!' }),
+          await agent.tool('graph_query', { q: '.exception' }),
         ).length,
         2,
       )
@@ -1436,7 +1436,7 @@ slow(
       // And the generic tier is his reach and nobody else's: jeff's rows are
       // not in it, whatever he asks for.
       assertEquals(
-        JSON.parse(await stranger.tool('graph_query', { q: '.doc!' })),
+        JSON.parse(await stranger.tool('graph_query', { q: '.doc' })),
         [],
       )
       assertMatch(

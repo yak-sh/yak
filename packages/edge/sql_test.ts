@@ -74,13 +74,13 @@ Deno.test('.edges rides a query without narrowing it', () => {
   // The rider asks for the links to be delivered, so it must not change which
   // entities the query selects.
   let s = chain()
-  assertEquals(found(s, '.post!&.edges!'), found(s, '.post!'))
-  assertEquals(sql('.post!&.edges!').sql, sql('.post!').sql)
+  assertEquals(found(s, '.post&.edges'), found(s, '.post'))
+  assertEquals(sql('.post&.edges').sql, sql('.post').sql)
 })
 
 Deno.test('a relation nothing declares is refused, not answered', () => {
   assertThrows(() => sql('.admires[<=2]->p1'), Unsupported)
-  assertThrows(() => sql('.edges[admires]!'), Unsupported)
+  assertThrows(() => sql('.edges[admires]'), Unsupported)
 })
 
 Deno.test('the walk seeks the edge table, never scans it', () => {

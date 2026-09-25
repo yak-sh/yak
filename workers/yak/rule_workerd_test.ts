@@ -56,7 +56,7 @@ slow(
         plant: { name: 'cactus' },
       }])
       assertEquals(r.status, 200, await r.text())
-      assertEquals(((await app.get('.watered!')) as Bundle[]).length, 0)
+      assertEquals(((await app.get('.watered')) as Bundle[]).length, 0)
 
       // A plant that asks to be come back to, a second from now. Nobody polls
       // for it: the store arms its object, the runtime delivers the alarm, the
@@ -72,7 +72,7 @@ slow(
       }])
       let watered = await until(
         async () => {
-          let rows = (await app.get('.watered!&.wake?&.fired?')) as Bundle[]
+          let rows = (await app.get('.watered&?wake&?fired')) as Bundle[]
           return rows.length ? rows : undefined
         },
         { timeout: 20_000, poll: 250, label: 'the fern to be watered' },
@@ -95,12 +95,12 @@ slow(
       let first = (watered[0].fired as { at: string }).at
       await until(
         async () => {
-          let [row] = (await app.get('.fired!&.plant?')) as Bundle[]
+          let [row] = (await app.get('.fired&?plant')) as Bundle[]
           return (row?.fired as { at: string } | undefined)?.at != first
         },
         { timeout: 20_000, poll: 250, label: 'the second firing' },
       )
-      let again = (await app.get('.watered!')) as Bundle[]
+      let again = (await app.get('.watered')) as Bundle[]
       assertEquals(again.length, 1)
       assertEquals((again[0].watered as { by: string }).by, 'wake')
     } finally {

@@ -42,7 +42,7 @@ slow('account pages remain reachable behind a custom home app', async () => {
         body: new URLSearchParams(fields),
       })
     let title = async () => {
-      let [person] = await dir.query(`.eid=${them.person}&.doc?`)
+      let [person] = await dir.query(`.eid=${them.person}&?doc`)
       return (person.doc as { title: string }).title
     }
 

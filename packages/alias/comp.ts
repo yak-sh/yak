@@ -39,7 +39,7 @@ export let ALIAS = 'alias'
  * `alias: {name: 'lemon-cake'}`. */
 export let NAME = 'name'
 
-/** The path a query uses to match a name: `.key.value=lemon-cake&.alias!`. */
+/** The path a query uses to match a name: `.key.value=lemon-cake&.alias`. */
 export let PATH = 'key.value'
 
 /**

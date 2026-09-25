@@ -32,7 +32,7 @@ let denied = (fn: () => unknown) => assertThrows(fn, Denied)
 Deno.test('an owner writes', () => {
   let s = store()
   writing(s, ids.list, ids.dana)
-  assertEquals((s.read('.pick!') as Bundle[]).length, 1)
+  assertEquals((s.read('.pick') as Bundle[]).length, 1)
 })
 
 Deno.test('an editor writes, a viewer does not', () => {
@@ -45,7 +45,7 @@ Deno.test('a stranger is refused on a private thing', () => {
   let s = store()
   setMode(s, ids.list, 'private')
   denied(() => writing(s, ids.list, ids.kim))
-  assertEquals((s.read('.pick!') as Bundle[]).length, 0)
+  assertEquals((s.read('.pick') as Bundle[]).length, 0)
 })
 
 Deno.test('a stranger is refused on a public thing too — public is a read', () => {
@@ -59,7 +59,7 @@ Deno.test('anyone writes an open thing, as an anonymous actor', () => {
   setMode(s, ids.list, 'open')
   writing(s, ids.list, ids.kim, 'pick1')
   writing(s, ids.list, null, 'pick2')
-  assertEquals((s.read('.pick!') as Bundle[]).length, 2)
+  assertEquals((s.read('.pick') as Bundle[]).length, 2)
 })
 
 Deno.test('a grant admits a non-member to write', () => {
@@ -68,7 +68,7 @@ Deno.test('a grant admits a non-member to write', () => {
   denied(() => writing(s, ids.notes, ids.kim))
   grant(s, 'g3', { app: ids.notes, person: ids.kim, access: 'editor' })
   writing(s, ids.notes, ids.kim, 'pick2')
-  assertEquals((s.read('.pick!') as Bundle[]).length, 1)
+  assertEquals((s.read('.pick') as Bundle[]).length, 1)
 })
 
 Deno.test('a share link’s bearer writes when the link says editor', () => {
@@ -76,7 +76,7 @@ Deno.test('a share link’s bearer writes when the link says editor', () => {
   setMode(s, ids.notes, 'private')
   grant(s, 'share', { app: ids.notes, token: 'x7v2', access: 'editor' })
   writing(s, ids.notes, 'share')
-  assertEquals((s.read('.pick!') as Bundle[]).length, 1)
+  assertEquals((s.read('.pick') as Bundle[]).length, 1)
 })
 
 Deno.test('the refusal names who, what, and what would have been enough', () => {
@@ -106,7 +106,7 @@ Deno.test('a refused batch lands nothing at all', () => {
       ]),
     )
   )
-  assertEquals((s.read('.pick!') as Bundle[]).length, 0)
+  assertEquals((s.read('.pick') as Bundle[]).length, 0)
 })
 
 Deno.test('only an owner writes the roster', () => {
@@ -122,7 +122,7 @@ Deno.test('only an owner writes the roster', () => {
   // Raj may edit the list; he may not hand out keys.
   denied(() => seat(ids.raj))
   seat(ids.dana)
-  assertEquals((s.read('.member!') as Bundle[]).length, 4)
+  assertEquals((s.read('.member') as Bundle[]).length, 4)
 })
 
 Deno.test('an open thing does not open its own roster', () => {

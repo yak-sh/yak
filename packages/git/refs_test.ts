@@ -63,7 +63,7 @@ Deno.test('a manifest lands as a commit and the branch follows it', async () => 
     landing(repo, { 'a.txt': file(bytes, X) }, 'two\n'),
   )
   assertEquals(await refAt(g, APP), two.oid)
-  let follows = await g.read(`.parent!&.edge.from=${two.oid}`)
+  let follows = await g.read(`.parent&.edge.from=${two.oid}`)
   assertEquals(follows.map((e) => String(comp(e, 'edge').to)), [one.oid])
 
   // One row per branch, patched — not a second row nobody notices is stale.
@@ -112,12 +112,12 @@ Deno.test('the plugin commits a release, and commits it once', async () => {
   await g.apply([{ entity: { eid: release }, release: { files: '{}' } }])
   let head = await refAt(g, APP)
   assert(head, 'the branch stands at a commit')
-  assertEquals((await g.read('.made!')).map((r) => r.entity.eid), [head])
+  assertEquals((await g.read('.made')).map((r) => r.entity.eid), [head])
 
   // A second touch of the same release makes no second commit: the plugin
   // asked, and the host said there was nothing to commit.
   await g.apply([{ entity: { eid: release }, release: { files: '{}' } }])
   assertEquals(await refAt(g, APP), head)
-  assertEquals((await g.read('.made!')).length, 1)
+  assertEquals((await g.read('.made')).length, 1)
   assert(seen.length > 1, 'the second write reached the plugin')
 })

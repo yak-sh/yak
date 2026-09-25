@@ -174,7 +174,7 @@ type Person = { entity: { eid: string }; doc?: { title?: string } }
 
 let personAt = async (store: Meta, email: string) =>
   (await store.query(
-    `.person!&.email.address=${canon(email)}&.doc?`,
+    `.person&.email.address=${canon(email)}&?doc`,
   ))[0] as Person | undefined
 
 // An address is not a name. A person minted before anyone was asked wears

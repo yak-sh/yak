@@ -223,7 +223,7 @@ export let codeMirror = async (
     let wasSyms = (await g.read('.symbol')).filter((b) =>
       mods.has(str(comp(b, 'symbol')?.module))
     )
-    let wasLinks = (await g.read('.imports&.edge?')).filter((b) =>
+    let wasLinks = (await g.read('.imports&?edge')).filter((b) =>
       mods.has(str(comp(b, 'edge')?.from))
     )
     let keep = new Set<Eid>()
@@ -299,7 +299,7 @@ export let codeMirror = async (
     read,
     agreed: async () => {
       known.clear()
-      for (let b of await g.read(`.file.repository=${repository}&.module?`)) {
+      for (let b of await g.read(`.file.repository=${repository}&?module`)) {
         let path = str(comp(b, 'file')?.path)
         if (path && comp(b, 'module')) known.set(path, b)
       }

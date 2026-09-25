@@ -88,17 +88,18 @@ the operator is part of the value (`.title~=x[1]`).
 
 ### Operators
 
-| written                       | meaning                                                                    |
-| ----------------------------- | -------------------------------------------------------------------------- |
-| `.p=v`                        | equals                                                                     |
-| `.p=a,b,c`                    | equals any one of them                                                     |
-| `.p=1..5`                     | in the range, inclusive; `1...5` excludes the end                          |
-| `.p=`                         | absent (the same clause as `!p`)                                           |
-| `.p!`                         | present (the same clause as `.p`; value semantics depend on the evaluator) |
-| `.p!=v`                       | not equal                                                                  |
-| `.p~=v`                       | contains — a literal substring, never a pattern                            |
-| `.p<v` `.p<=v` `.p>v` `.p>=v` | comparisons                                                                |
-| `.p?`                         | request this field in the result without filtering on it                   |
+| written                       | meaning                                           |
+| ----------------------------- | ------------------------------------------------- |
+| `.p=v`                        | equals                                            |
+| `.p=a,b,c`                    | equals any one of them                            |
+| `.p=1..5`                     | in the range, inclusive; `1...5` excludes the end |
+| `.p!=v`                       | not equal                                         |
+| `.p~=v`                       | contains — a literal substring, never a pattern   |
+| `.p<v` `.p<=v` `.p>v` `.p>=v` | comparisons                                       |
+
+Presence, absence and a request are prefixes, not operators: `.p`, `!p` and `?p`
+(below). A path takes them just as a component does: `.recipe.cuisine` has a
+cuisine, `!recipe.cuisine` has none.
 
 ### Component prefixes
 
@@ -187,19 +188,19 @@ component `env`, where `env` searches for the word.
 Reserved directives appear beside component predicates. Most control ordering,
 projection, aggregation or pagination; `.refs` filters by references:
 
-| written                | meaning                                                                                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `.order=hot`           | the order the answer comes back in                                                                                                         |
-| `.near=42`             | rank by similarity to this entity                                                                                                          |
-| `.refs=42`             | everything that references entity 42; `.refs!` references anything, `.refs=` references nothing                                            |
-| `.count!`              | how many rows match, instead of the rows                                                                                                   |
-| `.distinct=prop`       | the distinct values of one property                                                                                                        |
-| `.tally=prop`          | each value of one property with its count                                                                                                  |
-| `.fields=pin.x,pin.z~` | the properties each row carries; a trailing `~` excludes changes to that property from subscription notifications                          |
-| `*`                    | every component of each selected entity                                                                                                    |
-| `.limit=200`           | at most this many rows                                                                                                                     |
-| `.after=13882`         | continue past this entity                                                                                                                  |
-| `.edges!`              | the edges touching the answer; `.edges.peers=status,title` projects the far endpoint; `.edges[watches,author.team]!` selects one edge type |
+| written                | meaning                                                                                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `.order=hot`           | the order the answer comes back in                                                                                                        |
+| `.near=42`             | rank by similarity to this entity                                                                                                         |
+| `.refs=42`             | everything that references entity 42; `.refs` references anything, `!refs` references nothing                                             |
+| `.count`               | how many rows match, instead of the rows                                                                                                  |
+| `.distinct=prop`       | the distinct values of one property                                                                                                       |
+| `.tally=prop`          | each value of one property with its count                                                                                                 |
+| `.fields=pin.x,pin.z~` | the properties each row carries; a trailing `~` excludes changes to that property from subscription notifications                         |
+| `*`                    | every component of each selected entity                                                                                                   |
+| `.limit=200`           | at most this many rows                                                                                                                    |
+| `.after=13882`         | continue past this entity                                                                                                                 |
+| `.edges`               | the edges touching the answer; `.edges.peers=status,title` projects the far endpoint; `.edges[watches,author.team]` selects one edge type |
 
 `.after=<num>` is the paging cursor: the entity number to continue past, and the
 only cursor form there is (`.after=T-13882` is the same number written with its
@@ -211,9 +212,9 @@ evaluation (`@yaks/sql`, `@yaks/match`).
 
 ### Two more rules
 
-- `.p!` (present) and `.p=` (absent) are the older ways of writing `.p` and
-  `!p`, and still parse to the same nodes, so saved queries keep working. So
-  does `.comp?`, the older suffix form of `?comp`.
+- Each clause has one spelling. The suffix forms `.p!`, `.p=` (with no value)
+  and `.p?` still parse, to the same nodes as `.p`, `!p` and `?p`, only until
+  stored queries have moved to the prefix forms (T-39341).
 - `parse(q, { text: false })` refuses bare-word text terms, so a rule or a saved
   filter fails on a stray word instead of quietly gaining a search term. A
   quoted term is still allowed — quoting is how a strict query asks for a word.

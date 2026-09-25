@@ -36,29 +36,29 @@ let readIds = (bundles: Bundle[]) => bundles.map((b) => b.entity.eid)
 
 Deno.test('inactive LRU is bounded, reads touch without changing query order', () => {
   let { c, frame } = fixture({ retention: 2 })
-  let w = c.watch('.doc!')
+  let w = c.watch('.doc')
   frame('s1', [row('a'), row('b')])
   w.close()
   assertEquals(c.cache.size(), 2)
   c.ent('a') // b is now the least recently used; query order stays a,b
-  assertEquals(readIds(c.store.read('.doc!')), ['a', 'b'])
+  assertEquals(readIds(c.store.read('.doc')), ['a', 'b'])
   let z = c.watch('.title=c')
   frame('s2', [row('c')])
   z.close()
   assertEquals(c.ent('b'), undefined)
-  assertEquals(readIds(c.store.read('.doc!')), ['a', 'c'])
+  assertEquals(readIds(c.store.read('.doc')), ['a', 'c'])
   assertEquals(c.cache.size(), 2)
   c.close()
 })
 
 Deno.test('active/shared owners exceed the inactive bound and gone is per answer', () => {
   let { c, frame } = fixture({ retention: 0 })
-  let a = c.watch('.doc!')
+  let a = c.watch('.doc')
   let b = c.watch('.title=a')
   frame('s1', [row('a'), row('b')])
   frame('s2', [row('a')])
   assertEquals(c.cache.size(), 0)
-  assertEquals(c.read('.doc!').length, 2)
+  assertEquals(c.read('.doc').length, 2)
   let notified = 0
   b.subscribe(() => notified++)
   frame('s2', [], ['a'])
@@ -75,10 +75,10 @@ Deno.test('active/shared owners exceed the inactive bound and gone is per answer
 
 Deno.test('reopen before first frame pins retained hits; empty frame reconciles stale floor', () => {
   let { c, frame } = fixture({ retention: 1 })
-  let old = c.watch('.doc!')
+  let old = c.watch('.doc')
   frame('s1', [row('a')])
   old.close()
-  let again = c.watch('.doc!')
+  let again = c.watch('.doc')
   assertEquals(readIds(again.value), ['a'])
   assertEquals(again.ready, false)
   let other = c.watch('.title=b')
@@ -103,7 +103,7 @@ Deno.test('snapshots replace absent wire fields and preserve local/none on gone'
   let vault = stash()
   let { c, frame } = fixture({ vault, retention: 0 })
   await c.ready
-  let w = c.watch('.doc!')
+  let w = c.watch('.doc')
   frame('s1', [{
     ...row('a'),
     doc: { title: 'a', body: 'obsolete' },
@@ -129,12 +129,12 @@ Deno.test('snapshots replace absent wire fields and preserve local/none on gone'
 
 Deno.test('eviction physically drops payloads and restore keeps identity, not a tombstone', () => {
   let { c, frame } = fixture({ retention: 0 })
-  let w = c.watch('.doc!')
+  let w = c.watch('.doc')
   frame('s1', [row('a', 75)])
   w.close()
   assertEquals(c.ent('a'), undefined)
   assertEquals(c.store.read(''), [])
-  let again = c.watch('.doc!')
+  let again = c.watch('.doc')
   frame('s2', [{ entity: { eid: 'a' }, doc: { title: 'back' } }])
   assertEquals(c.ent('a')?.entity.num, 75)
   assertEquals(readIds(again.value), ['a'])
@@ -144,7 +144,7 @@ Deno.test('eviction physically drops payloads and restore keeps identity, not a 
 Deno.test('pending optimistic writes survive pressure, gone and stale socket snapshots', async () => {
   let answer = Promise.withResolvers<Response>()
   let { c, frame } = fixture({ retention: 0, fetch: () => answer.promise })
-  let w = c.watch('.doc!')
+  let w = c.watch('.doc')
   frame('s1', [row('a')])
   c.mutate([{ entity: { eid: 'a' }, doc: { title: 'optimistic' } }])
   frame('s1', [row('a')])
@@ -183,8 +183,8 @@ Deno.test('overlapping pending writes release only their own pins; uncertain tra
 
 Deno.test('eviction invalidates local watches without sending deletes', () => {
   let { c, frame, sockets } = fixture({ retention: 0 })
-  let local = c.watch('.doc!', { remote: false })
-  let remote = c.watch('.doc!')
+  let local = c.watch('.doc', { remote: false })
+  let remote = c.watch('.doc')
   frame('s1', [row('a')])
   assertEquals(readIds(local.value), ['a'])
   remote.close()
@@ -228,7 +228,7 @@ Deno.test('wire disk paint is bounded, unready, and same-epoch reopen reconciles
   await vault.load('one', 100)
   await vault.save('one', ['a', 'b', 'c'].map(saved), 100)
   let { c, frame } = fixture({ epoch: 'one', wireVault: vault, retention: 2 })
-  let w = c.watch('.doc!')
+  let w = c.watch('.doc')
   await c.ready
   assertEquals(readIds(w.value), ['b', 'c'])
   assertEquals(w.ready, false)
@@ -246,7 +246,7 @@ Deno.test('epoch mismatch invalidates only server tier, including ready state', 
   let wireVault = wireIdb({ indexedDB: db })
   let { c, frame } = fixture({ vault, wireVault, epoch: 'one' })
   await c.ready
-  let w = c.watch('.doc!')
+  let w = c.watch('.doc')
   frame('s1', [row('a')])
   await c.mutate([{ entity: { eid: 'a' }, draft: { text: 'keep' } }])
   await c.wire!.idle()
@@ -272,7 +272,7 @@ Deno.test('a burst of frames is one vault write, flushed by idle', async () => {
   }
   let { c, frame } = fixture({ epoch: 'one', wireVault: vault })
   await c.ready
-  c.watch('.doc!')
+  c.watch('.doc')
   frame('s1', [row('a')])
   frame('s1', [row('b'), {
     entity: { eid: 'a', num: 10 },
@@ -299,7 +299,7 @@ Deno.test('late wire hydration cannot overwrite local writes, socket rows, or an
   for (let mode of ['local', 'socket', 'empty']) {
     let { read, vault } = deferredVault()
     let { c, frame } = fixture({ epoch: 'one', wireVault: vault })
-    let w = c.watch('.doc!')
+    let w = c.watch('.doc')
     if (mode === 'local') {
       await c.mutate([{ entity: { eid: 'a' }, doc: { title: 'newer' } }])
     }
@@ -342,10 +342,10 @@ Deno.test('retention validates bounds and never defaults to an unbounded disk re
 
 Deno.test('storage enumeration and reactive refresh do not touch LRU', async () => {
   let { c, frame } = fixture({ retention: 2 })
-  let w = c.watch('.doc!')
+  let w = c.watch('.doc')
   frame('s1', [row('a'), row('b')])
   w.close()
-  c.store.read('.doc!')
+  c.store.read('.doc')
   await c.graph.apply(echo([row('c')]))
   await Promise.resolve()
   assertEquals(c.ent('a'), undefined)
@@ -357,7 +357,7 @@ Deno.test('storage enumeration and reactive refresh do not touch LRU', async () 
 Deno.test('a render can close its watch during an optimistic write without evicting it', async () => {
   let answer = Promise.withResolvers<Response>()
   let { c, frame } = fixture({ retention: 0, fetch: () => answer.promise })
-  let w = c.watch('.doc!')
+  let w = c.watch('.doc')
   frame('s1', [row('a')])
   w.subscribe(() => {
     if (comp(w.value[0], 'doc').title === 'edited') w.close()
@@ -378,7 +378,7 @@ Deno.test('same epoch validation never overwrites an already newer RAM row', asy
   await vault.load('one', 10)
   await vault.save('one', [saved('a'), saved('b')], 10)
   let { c, frame } = fixture({ wireVault: vault })
-  c.watch('.doc!')
+  c.watch('.doc')
   frame('s1', [{ entity: { eid: 'a' }, doc: { title: 'newer than disk' } }])
   await c.setEpoch('one')
   assertEquals(comp(c.ent('a'), 'doc').title, 'newer than disk')
@@ -389,7 +389,7 @@ Deno.test('same epoch validation never overwrites an already newer RAM row', asy
 Deno.test('close cancels an outstanding disk restore', async () => {
   let { read, vault } = deferredVault()
   let { c } = fixture({ epoch: 'one', wireVault: vault })
-  c.watch('.doc!')
+  c.watch('.doc')
   c.close()
   read.resolve([saved('a')])
   await c.ready
@@ -420,7 +420,7 @@ Deno.test('refusal releases pending protection after restoring the old image', a
     fetch: () => response.promise,
     report: () => {},
   })
-  let w = c.watch('.doc!')
+  let w = c.watch('.doc')
   frame('s1', [row('a')])
   c.mutate([{ entity: { eid: 'a' }, doc: { title: 'edited' } }])
   w.close()
@@ -437,14 +437,14 @@ Deno.test('local-only graphs do not evict their sole copy of wire-default data',
   let c = client(box, [], { vault: false, retention: 0 })
   await c.mutate([row('a'), row('b')])
   await Promise.resolve()
-  assertEquals(readIds(c.read('.doc!')), ['a', 'b'])
+  assertEquals(readIds(c.read('.doc')), ['a', 'b'])
   assertEquals(c.cache.size(), 0)
   c.close()
 })
 
 Deno.test('a synchronous first frame filters stale shared hits before watch returns', () => {
   let { c, frame, sockets } = fixture()
-  let a = c.watch('.doc!')
+  let a = c.watch('.doc')
   sockets[0].emit('open')
   frame('s1', [row('a')])
   let send = sockets[0].send

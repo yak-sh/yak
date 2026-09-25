@@ -4,7 +4,7 @@
 //
 //   `.cites[<=3]->p1`   the posts that reach p1 through at most 3 cites
 //   `.cites<-p1`        what p1 reaches: everything it cites, transitively
-//   `.edges[cites]!`    return each result's links along with it
+//   `.edges[cites]`    return each result's links along with it
 //
 // The walk is a filter, and @yaks/sql compiles it — one recursive CTE, seeded
 // at the target and stepped along the arrow (`walkSql`). What that package

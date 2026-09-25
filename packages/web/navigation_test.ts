@@ -23,7 +23,7 @@ let entity = (favorite = false): Ent => ({
 Deno.test('navigation uses one facet query and reversible favorite write', () => {
   let plain = entity()
   let favorite = entity(true)
-  assertEquals(navigationQuery, '.favorite!')
+  assertEquals(navigationQuery, '.favorite')
   assertEquals(navigationView, 'Navigation.List.Tile')
   assertEquals(favoriteLabel(plain), 'show in navigation')
   assertEquals(favoriteChange(plain), {

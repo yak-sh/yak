@@ -105,8 +105,8 @@ let find = (kind: string, at: string, schema: PropSchema): ToolDef => {
       'the title and body; leave out any filter you do not have',
     input: { words: TEXT, ...props, limit: { type: 'number' } },
     query: [
-      `.${kind}!`,
-      '.doc?',
+      `.${kind}`,
+      '?doc',
       '$words',
       ...Object.keys(props).map((prop) => `.${kind}.${prop}=$${prop}`),
       'limit=$limit',

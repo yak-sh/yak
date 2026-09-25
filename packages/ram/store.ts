@@ -134,7 +134,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let read = (query: Query, opts: ReadOpts = {}): Bundle[] =>
     matcher(query, vocab, { now: opts.now ?? base.now })(all())
 
-  // The raw-rows path: one `{ eid }` per match, or for `.count!` the one
+  // The raw-rows path: one `{ eid }` per match, or for `.count` the one
   // `{ value: '', n }` row @yaks/sql returns, so a caller counting a set reads
   // the same shape from either storage. Match declines aggregates, so the count
   // clause is lifted out and the rest of the query selects what to count.

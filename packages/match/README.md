@@ -117,12 +117,12 @@ rows. `opts.computed` is described under
 | `.status=draft,sold` | any of the listed values                                  |
 | `.price=7.5..12`     | an inclusive range                                        |
 | `.price=0...12`      | a range that excludes its upper bound                     |
-| `.author=`           | the property is absent or empty                           |
-| `.author!`           | the property has a value                                  |
+| `!author`            | the property is absent or empty                           |
+| `.author`            | the property has a value                                  |
 | `.status!=sold`      | not equal, including entities with no `status` at all     |
 | `.title~=spring`     | contains, case-insensitive                                |
 | `.price<20`          | less than; also `<=`, `>`, `>=`                           |
-| `.price?`            | a request for the property in the result; filters nothing |
+| `?price`             | a request for the property in the result; filters nothing |
 
 An absent property never compares true under `<`, `<=`, `>` or `>=`, and `~=`
 with an empty operand (`.title~=`) asks for presence rather than selecting
@@ -154,16 +154,16 @@ timestamp range do not match time comparisons.
 
 ### Components
 
-`.signed!` selects the entities that have the `signed` component, and `.signed=`
+`.signed` selects the entities that have the `signed` component, and `!signed`
 the ones that do not. This works for a component with no properties at all — a
 tag that records a boolean property through its presence — as well as for one
 with properties.
 
 A trailing `!` on a bare name is resolved as a component before it is resolved
-as a property. In the bookshop `.book!` selects the four books (the entities
-with a `book` component), while `.book=b1` still resolves to `review.book`, the
+as a property. In the bookshop `.book` selects the four books (the entities with
+a `book` component), while `.book=b1` still resolves to `review.book`, the
 reference property of that name, and selects the two reviews of `b1`. Use the
-qualified property name to avoid this ambiguity: `.review.book!` selects the
+qualified property name to avoid this ambiguity: `.review.book` selects the
 reviews that name a book.
 
 ### Kinds
@@ -193,7 +193,7 @@ entity missing from it reads as absent.
 For the operators only a present value can satisfy — `!`, the four comparisons,
 and `=` or `~=` with a non-empty operand — the entity must also have the root
 component of the path. The absent forms do not require it, so
-`.author.doc.title=` selects entities with no author at all as well as books
+`!author.doc.title` selects entities with no author at all as well as books
 whose author has no title: a missing entity anywhere along the path reads as an
 absent value. @yaks/sql emits the same narrowing, which also lets its query
 planner start from the root component's table.
@@ -203,8 +203,8 @@ planner start from the root component's table.
 A vocabulary derives a reverse association for a reference: because
 `review.book` points at a book, a book can be asked about its `reviews`.
 
-- `.reviews!` — has at least one review
-- `.reviews=` — has none
+- `.reviews` — has at least one review
+- `!reviews` — has none
 - `.reviews>=2` — a count, with any of `=`, `!=`, `<`, `<=`, `>`, `>=`
 - `.reviews.stars=5` — at least one review matching that predicate
 
@@ -219,7 +219,7 @@ because this form is unsupported.
 `.refs=b1` selects every entity holding a reference to `b1`, across every
 reference property the vocabulary declares — in the bookshop, the two reviews of
 that book. Only a nonempty `=` operand is supported here. The parser accepts
-`.refs!` and `.refs=`, but this evaluator rejects both.
+`.refs` and `!refs`, but this evaluator rejects both.
 
 ### Identity
 
@@ -326,17 +326,17 @@ used by @yaks/sql, with `by` set to `@yaks/match`. A caller using both therefore
 has one error type to catch. Every refusal happens when the query is compiled,
 before any bundle is read.
 
-- **`.near=`** — nearest-neighbour search needs vectors, and **`.edges!`** asks
+- **`.near=`** — nearest-neighbour search needs vectors, and **`.edges`** asks
   for links to be returned alongside the result. This evaluator does not
   implement either directive. Walks are supported using the supplied entities;
   see above.
-- **`.count!`, `.distinct=`, `.tally=`** — these return aggregate rows rather
+- **`.count`, `.distinct=`, `.tally=`** — these return aggregate rows rather
   than entities. Count what comes back instead.
 - **A computed property nobody registered** — no function was supplied to
   calculate it. Register it through `opts.computed` and it is answered;
   @yaks/sql refuses the same property for the same reason when its `derived`
   hook has no entry.
-- **`.refs!` and `.refs=`** — only `.refs=<id>` is a question about backlinks.
+- **`.refs` and `!refs`** — only `.refs=<id>` is a question about backlinks.
 - **A predicate the property's type cannot answer** (`.price>cheap`), **a path
   whose root is not a reference property**, and **a reverse hop that is neither
   a count nor a child filter**.

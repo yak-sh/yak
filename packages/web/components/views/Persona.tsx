@@ -48,7 +48,7 @@ export let Persona = ({ e }: { e: Ent }) => {
     | undefined
   let scoped = new Set(materialized?.scoped ?? [])
   let scopedRows = useQuery(
-    e.persona?.home ? `.memory.scope=${e.persona.home}` : '.memory.scope=',
+    e.persona?.home ? `.memory.scope=${e.persona.home}` : '!memory.scope',
   )
   let loose = scopedRows.filter((r) => scoped.has(r.eid))
     .filter((r) => r.memory && r.doc && !tiered.has(r.eid))

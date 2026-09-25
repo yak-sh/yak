@@ -62,7 +62,7 @@ let doc: VocabDoc = {
     },
     // A tag: a component with no properties at all, where having it is the
     // whole fact. It records that the shop signed this copy; there is nothing
-    // else to record about it, so `.signed!` and `.signed=` are the only
+    // else to record about it, so `.signed` and `!signed` are the only
     // questions it answers.
     signed: {
       component: true,

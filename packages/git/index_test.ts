@@ -49,7 +49,7 @@ Deno.test('an object row is its type, its size and its bytes', async () => {
 Deno.test('the SHA-256 name is a key off the SHA-1 one', async () => {
   let { g, git, bytes } = fixture()
   await git.files(deployed(bytes))
-  let [key] = await g.read(`.compat!&.key.of=${HELLO_OID}`)
+  let [key] = await g.read(`.compat&.key.of=${HELLO_OID}`)
   assertEquals(key.entity.eid, keyEid(COMPAT, HELLO_OID256))
   assertEquals(comp(key, 'key'), { of: HELLO_OID, value: HELLO_OID256 })
 })
@@ -57,7 +57,7 @@ Deno.test('the SHA-256 name is a key off the SHA-1 one', async () => {
 Deno.test('a tree links to each child under the name it holds it by', async () => {
   let { g, git, bytes } = fixture()
   await git.files(deployed(bytes))
-  let rows = await g.read(`.tree_entry!&.edge.from=${ROOT_OID}&.order=ord`)
+  let rows = await g.read(`.tree_entry&.edge.from=${ROOT_OID}&.order=ord`)
   assertEquals(
     rows.map((
       r,
@@ -75,7 +75,7 @@ Deno.test('one blob under two names is two entries', async () => {
   let { g, git, bytes } = fixture()
   let sha = file(bytes, HELLO)
   let root = await git.files({ 'a.txt': sha, 'b.txt': sha })
-  let rows = await g.read(`.tree_entry!&.edge.from=${root.oid}`)
+  let rows = await g.read(`.tree_entry&.edge.from=${root.oid}`)
   assertEquals(rows.map((r) => comp(r, 'tree_entry').name).sort(), [
     'a.txt',
     'b.txt',
@@ -90,10 +90,10 @@ Deno.test('a manifest written twice writes one graph and reads no bytes again', 
   let { g, git, bytes } = fixture()
   let manifest = deployed(bytes)
   await git.files(manifest)
-  let once = (await g.read('.gitobj!')).length
+  let once = (await g.read('.gitobj')).length
   let reads = bytes.reads()
   await git.files(manifest)
-  assertEquals((await g.read('.gitobj!')).length, once)
+  assertEquals((await g.read('.gitobj')).length, once)
   assertEquals(bytes.reads(), reads)
 })
 
@@ -125,7 +125,7 @@ Deno.test('a commit chain is the ids git takes, and a parent walk', async () => 
     message: 'deploy 2',
   })
   assertEquals(two.oid, TWO_OID)
-  let [edge] = await g.read(`.parent!&.edge.from=${two.oid}`)
+  let [edge] = await g.read(`.parent&.edge.from=${two.oid}`)
   assertEquals(comp(edge, 'edge').to, one.oid)
   assertEquals(comp(edge, 'edge').ord, 0)
 })
@@ -139,7 +139,7 @@ Deno.test('a commit body is in the store, verbatim', async () => {
     committer: COMMITTER,
     message: 'deploy 1',
   })
-  let [row] = await g.read(`.gitobj.type=commit&.blob?`)
+  let [row] = await g.read(`.gitobj.type=commit&?blob`)
   let body = await bytes.get(String(comp(row, 'blob').sha))
   assertEquals(row.entity.eid, one.oid)
   assertEquals(comp(row, 'gitobj').size, body!.length)

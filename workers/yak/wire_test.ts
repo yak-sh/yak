@@ -8,10 +8,10 @@ import { batched, lined, receipt } from './wire.ts'
 let cases: [string, string][] = [
   // The riders the page writes bare
   ['id=abc', '.eid=abc'],
-  ['.doc!&limit=10&after=3', '.doc!&.limit=10&.after=3'],
+  ['.doc&limit=10&after=3', '.doc&.limit=10&.after=3'],
   // Everything else is already the same grammar
   ['.doc.title~=cake&.recipe.serves<=4', '.doc.title~=cake&.recipe.serves<=4'],
-  ['.doc?&.recipe!', '.doc?&.recipe!'],
+  ['?doc&.recipe', '?doc&.recipe'],
   // A value the page escaped, so the whole line can be escaped once on the way
   // out: a space, and an `&` that is part of a title rather than a separator
   ['.doc.title~=lemon%20cake', '.doc.title~=lemon cake'],
@@ -23,11 +23,11 @@ let cases: [string, string][] = [
   ['.doc.title~=a%20.b', '.doc.title~="a .b"'],
   // A bare word is a full-text term and carries no operator
   ['lemon%20drizzle', 'lemon drizzle'],
-  ['cake&.doc?', 'cake&.doc?'],
+  ['cake&?doc', 'cake&?doc'],
   // A stray `%` is a value with a `%` in it, not an escape
   ['.doc.title~=100%', '.doc.title~=100%'],
   // The leading `?` a search string arrives with, and nothing at all
-  ['?.doc!', '.doc!'],
+  ['?.doc', '.doc'],
   ['', ''],
 ]
 

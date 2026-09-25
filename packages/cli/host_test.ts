@@ -369,7 +369,7 @@ Deno.test('a process writes itself in, signs with that row, and stamps its exit'
   try {
     assertEquals(host.me, me)
     assertEquals(writer(host.vocab)?.via, me)
-    let [row] = await host.graph.read(`.process&.created?&.exit?`)
+    let [row] = await host.graph.read(`.process&?created&?exit`)
     assertEquals(row.entity.eid, me)
     assertEquals((row.process as Comp).pid, Deno.pid)
     // …and the row is its own author: a process signs everything it writes,
@@ -584,13 +584,13 @@ Deno.test('the door calls the tool, and the call is the transcript', async () =>
 
     // What was asked, and what came back, both written down — and the book
     // the tool answered is signed as the person who asked, not the server.
-    let [call] = await host.graph.read('.call&.created?&.execution?')
+    let [call] = await host.graph.read('.call&?created&?execution')
     assertEquals((call.call as Comp).to, toolEid('book_add'))
     assertEquals((call.created as Comp).by, me)
     assertEquals((call.execution as Comp).state, 'done')
     let [result] = await host.graph.read('.result')
     assertEquals((result.result as Comp).call, call.entity.eid)
-    let [book] = await host.graph.read('.book&.created?')
+    let [book] = await host.graph.read('.book&?created')
     assertEquals((book.created as Comp).by, me)
   } finally {
     host.close()
@@ -688,7 +688,7 @@ Deno.test('an effect that said what pending looks like is re-driven at boot', as
         comp: 'book',
         // Declaring a sweep promises an idempotent handler: what it re-drives
         // may well have run already.
-        sweep: { pending: '.book.price=' },
+        sweep: { pending: '!book.price' },
         // It reads the row it is handed, as a handler on a commit does.
         created: async (event, tx) => {
           let [book] = await tx.get([event.entity.eid])
@@ -749,7 +749,7 @@ Deno.test('the sweep a one-shot line makes runs the retries that are due', async
     await host.graph.apply([{ entity: { eid: 'b1' }, book: { title: 'One' } }])
     assertEquals(ran, ['b1'])
     // The run, written down and marked — no handler asked for any of this.
-    let rows = await host.graph.read('.effect!')
+    let rows = await host.graph.read('.effect')
     assertEquals(
       rows.map((b) => (b.effect as Comp).state),
       ['done'],

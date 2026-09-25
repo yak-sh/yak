@@ -13,7 +13,7 @@
 // script's uploaded entry module (`SHIM`) takes that header off before the
 // app's own code ever sees it and holds it in a closure, handing the app
 // `env.STORE` and `env.FILES` — fetchers onto the app's own doors that add
-// the grant on the way out. So `env.STORE.fetch('/query?.doc!')` works, and
+// the grant on the way out. So `env.STORE.fetch('/query?.doc')` works, and
 // an app that tries to reach another app's store through the same service
 // binding has no grant that names it. Nothing durable is handed to app code:
 // the grant dies in a minute and belongs to one request.

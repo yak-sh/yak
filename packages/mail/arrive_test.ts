@@ -140,7 +140,7 @@ Deno.test('arrived: what it records is what an arrival is — no ask to send', a
     got({ from: 'ana@books.example', subject: 'hi' }, 'ana@books.example'),
   )
   await g.apply(batch)
-  let letter = ((await g.read('.mail.message_id=')) as Bundle[])
+  let letter = ((await g.read('!mail.message_id')) as Bundle[])
     .find((b) => comp(b, 'doc')?.title == 'hi')
   assert(letter)
   assertEquals(letter.deliver, undefined)

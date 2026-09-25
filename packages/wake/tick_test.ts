@@ -44,7 +44,7 @@ Deno.test('tick commits one wake per batch and leaves a refusal due', async () =
   assertEquals(batches, [['no'], ['once'], ['again']])
   assertEquals(ran, ['once', 'again'])
   assertEquals(ids(await due(s, T0 + 6 * HOUR)), ['no'])
-  let rows = await s.read('.wake!')
+  let rows = await s.read('.wake')
   assertEquals(
     wakeOf(rows.find((b) => b.entity.eid == 'again')!)?.at,
     iso(T0 + 8 * HOUR),

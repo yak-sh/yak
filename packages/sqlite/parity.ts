@@ -168,8 +168,8 @@ let READS = [
   '.kind=doc&.order=title',
   '.price>0',
   '.available=1',
-  '.status=',
-  '.maker!',
+  '!status',
+  '.maker',
   '.title~=mug',
 ]
 

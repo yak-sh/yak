@@ -68,7 +68,7 @@ Deno.test('rows() hands back an aggregate shape verbatim', () => {
     { entity: { eid: 'p2' }, product: { status: 'live' } },
     { entity: { eid: 'p3' }, product: { status: 'draft' } },
   ])
-  assertEquals(Number(s.rows('.status=live&.count!')[0].n), 2)
+  assertEquals(Number(s.rows('.status=live&.count')[0].n), 2)
 })
 
 Deno.test('the newest-first window pages a prefix', () => {

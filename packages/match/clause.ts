@@ -96,7 +96,7 @@ let scalar = (ctx: Ctx, hop: Hop, p: Pred): (b?: Bundle) => boolean => {
     throw new Unsupported(
       'a filter on it',
       `.${hop.comp}.${hop.prop} holds a JSON value — only its presence ` +
-        `(.${hop.comp}.${hop.prop}!) can be asked of it yet`,
+        `(.${hop.comp}.${hop.prop}) can be asked of it yet`,
       BY,
     )
   }
@@ -112,7 +112,7 @@ let scalar = (ctx: Ctx, hop: Hop, p: Pred): (b?: Bundle) => boolean => {
 }
 
 // A single-hop predicate: a direct property, or a test for the component itself
-// (an empty leaf prop, which is the presence form). `.review!` and `.review~=`
+// (an empty leaf prop, which is the presence form). `.review` and `.review~=`
 // ask for entities that have the component, everything else for those that do
 // not.
 let single = (ctx: Ctx, hop: Hop, p: Pred): Test => {
@@ -181,7 +181,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Test => {
   let hit = scalar(ctx, leaf, p)
   // For the operators only a present value can satisfy, the entity must also
   // have the path's root component. The absent forms skip that check on
-  // purpose, so `.maker.title=` selects rows with no maker as well as rows
+  // purpose, so `!maker.title` selects rows with no maker as well as rows
   // whose maker has no title. @yaks/sql narrows the same predicates the same
   // way (bind.ts, `needsRoot`).
   let rooted = op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
@@ -353,7 +353,7 @@ let counted = (n: number, op: string, m: number): boolean =>
 
 // A reverse hop: the entities whose child rows point back at them, named by the
 // vocabulary's derived association (`.reviews` = the reviews whose `product` is
-// this entity). `.reviews!` tests for at least one, `.reviews=` for none,
+// this entity). `.reviews` tests for at least one, `!reviews` for none,
 // `.reviews>=5` counts them, and `.reviews.stars=5` asks whether any child
 // matches. A child predicate goes through the same clause compiler, over the
 // child bundle, so anything refused there refuses the whole hop.

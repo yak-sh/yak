@@ -50,7 +50,7 @@ their returned order.
   from a row whose values are all NULL.
 - **Reference column:** stores another entity's integer `id`. Comparing it to a
   public `eid` resolves that string through the entity table.
-- **Presence test:** asks whether a component exists, such as `.task`, `.doc!`,
+- **Presence test:** asks whether a component exists, such as `.task`, `.doc`,
   or `!.claim`, without comparing a stored value.
 
 Deleted entities retain their identity rows and appear in `tombstone`. Compiled
@@ -240,8 +240,8 @@ a reverse association. Compilation uses correlated `EXISTS` or `count`
 subqueries, avoiding duplicate outer rows:
 
 ```text
-.reviews!         books with a review
-.reviews=         books without reviews
+.reviews         books with a review
+!reviews         books without reviews
 .reviews>=5       books with at least five reviews
 .reviews.stars=5  books with a five-star review
 ```

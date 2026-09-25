@@ -42,7 +42,7 @@ Deno.test('doc predicates, paths, projections and bundles resolve the same blob'
   assertEquals(store.rows('.doc.body~=prose'), [{ eid: 'd' }])
   assertEquals(store.rows('.note.target.doc.body~=prose'), [{ eid: 'n' }])
   assertEquals(store.rows('.doc.body~=address'), [])
-  assertEquals(store.rows('.doc! .fields=doc.body'), [{
+  assertEquals(store.rows('.doc .fields=doc.body'), [{
     eid: 'd',
     'doc.body': 'resolved prose',
   }])

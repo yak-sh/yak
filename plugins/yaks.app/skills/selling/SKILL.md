@@ -95,7 +95,7 @@ The page draws them out of the store like anything else:
 
     import { subscribe } from './api/client.js'
 
-    subscribe('.product!&.doc?', draw)
+    subscribe('.product&?doc', draw)
 
 ## The checkout endpoint
 
@@ -170,7 +170,7 @@ It is a row, so the seller's own view is a query:
     import { me, query } from './api/client.js'
 
     let mine = await me()
-    if (mine.writes) draw(await query('.order!&.doc?'))
+    if (mine.writes) draw(await query('.order&?doc'))
 
 `.order.status=paid`, `.order.total_cents>=5000`, a bare word for full text —
 the whole filter grammar works on them (<https://yaks.app/docs/querying.md>).

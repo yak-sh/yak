@@ -43,7 +43,7 @@ Deno.test('a one-shot, rung, is stamped and never due again', () => {
   g.apply([ring(first, T0)])
   assertEquals(eids(due(s, T0) as Bundle[]), ['now'])
   // it is still there, wearing when it went off
-  let [kept] = s.read('.wake!&.fired.at!') as Bundle[]
+  let [kept] = s.read('.wake&.fired.at') as Bundle[]
   assertEquals(kept.entity.eid, 'past')
   assertEquals((kept.fired as { at: string }).at, iso(T0))
   // and never becomes due again, however long the host waits
@@ -60,7 +60,7 @@ Deno.test('a recurring wake, rung, moves on instead of stopping', () => {
   let [owed] = due(s, T0) as Bundle[]
   g.apply([ring(owed, T0)])
   assertEquals(eids(due(s, T0) as Bundle[]), [])
-  let [w] = s.read('.wake!') as Bundle[]
+  let [w] = s.read('.wake') as Bundle[]
   assertEquals(wakeOf(w)?.at, '2026-01-04T09:17:00.000Z')
   assertEquals((w.fired as { at: string }).at, iso(T0))
   // and it is owed again when that instant arrives
@@ -92,7 +92,7 @@ Deno.test('next is the recurrence rule, and null for a one-shot', () => {
 Deno.test('a bare cadence is given its first instant on the way in', () => {
   let s = store()
   woken(s).apply([{ entity: { eid: 'daily' }, wake: { every: '@daily' } }])
-  let [w] = s.read('.wake!') as Bundle[]
+  let [w] = s.read('.wake') as Bundle[]
   assertEquals(wakeOf(w)?.at, '2026-01-02T00:00:00.000Z')
 })
 
@@ -104,7 +104,7 @@ Deno.test('an explicitly cleared at keeps a recurring wake paused', () => {
     wake: { every: '@daily', at: null },
   }])
   assertEquals(due(s, T0 + HOUR), [])
-  let [w] = s.read('.wake!') as Bundle[]
+  let [w] = s.read('.wake') as Bundle[]
   assertEquals(wakeOf(w)?.at ?? null, null)
   g.apply([w])
   assertEquals(soonest(s, T0), null)

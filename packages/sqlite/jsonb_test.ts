@@ -25,7 +25,7 @@ Deno.test('an object and an array are written and read back as values', () => {
     driver.query('select typeof(meta) as t from recipe', []),
     [{ t: 'blob' }],
   )
-  assertEquals(recipe((s.read('.recipe!') as Bundle[])[0]), RECIPE)
+  assertEquals(recipe((s.read('.recipe') as Bundle[])[0]), RECIPE)
   assertEquals(recipe(s.tx((tx) => tx.get(['r1']))[0]), RECIPE)
   // A patch replaces a value whole, and a null clears it.
   s.tx((tx) =>
@@ -51,7 +51,7 @@ Deno.test('a string property holds what it was sent as a string', () => {
     recipe: { title: 5 },
   }]) as Bundle[]
   assertEquals(recipe(out).title, '5')
-  assertEquals(recipe((g.read('.recipe!') as Bundle[])[0]).title, '5')
+  assertEquals(recipe((g.read('.recipe') as Bundle[])[0]).title, '5')
   // A JSON property is held to the types it declares.
   assertThrows(
     () => g.apply([{ entity: { eid: 'r1' }, recipe: { tags: { a: 1 } } }]),
@@ -63,7 +63,7 @@ Deno.test('a string property holds what it was sent as a string', () => {
 Deno.test('a JSON property answers presence, and refuses a filter by name', () => {
   let { s } = kitchenStore()
   s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
-  assertEquals((s.read('.recipe.tags!') as Bundle[]).length, 1)
+  assertEquals((s.read('.recipe.tags') as Bundle[]).length, 1)
   for (let q of ['.recipe.tags=sweet', '.order=recipe.meta', '.tally=tags']) {
     assertThrows(() => s.read(q), Error, 'holds a JSON value')
   }

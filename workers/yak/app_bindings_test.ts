@@ -215,7 +215,7 @@ Deno.test('app bindings survive redeploy, removal and trash until permanent dele
     assertStringIncludes(removed, 'MEDIA')
     assertStringIncludes(removed, 'kept')
     assertEquals(k.calls.filter((c) => c.method == 'DELETE').length, 0)
-    assertEquals((await k.rows('.binding!')).length, 3)
+    assertEquals((await k.rows('.binding')).length, 3)
 
     await k.tool('app_delete')
     assertEquals(k.calls.filter((c) => c.method == 'DELETE').length, 0)
@@ -230,7 +230,7 @@ Deno.test('app bindings survive redeploy, removal and trash until permanent dele
     ) {
       assert(deleted.some((c) => c.path.startsWith(path)), path)
     }
-    assertEquals((await k.rows('.binding!')).length, 0)
+    assertEquals((await k.rows('.binding')).length, 0)
   } finally {
     k.done()
   }
@@ -269,8 +269,8 @@ for (let phase of ['beforeCreate', 'beforeUploadReply'] as const) {
       await k.write(configuration)
       k.state[phase] = () => k.tool('app_delete', { forever: true })
       await assertRejects(() => k.tool('app_deploy'))
-      assertEquals(await k.rows(`.eid=${k.app.eid}&.app!`), [])
-      assertEquals(await k.rows('.binding!'), [])
+      assertEquals(await k.rows(`.eid=${k.app.eid}&.app`), [])
+      assertEquals(await k.rows('.binding'), [])
       assertEquals(k.resources.size, 0)
       assertEquals(k.state.scripts.size, 0)
     } finally {
@@ -338,7 +338,7 @@ Deno.test('a missing explicit main refuses before resource creation, upload or d
     assertStringIncludes(result, 'upload the server source at that path')
     assertEquals(k.calls, [])
     assertEquals(k.uploads, [])
-    assertEquals(await k.rows('.binding!'), [])
+    assertEquals(await k.rows('.binding'), [])
   } finally {
     k.done()
   }
@@ -408,7 +408,7 @@ Deno.test('malformed JSONC keeps the prior worker and never falls back to JSON',
     assertStringIncludes(result, 'the worker is unchanged')
     assertEquals(k.calls.length, calls)
     assertEquals(k.uploads.length, 1)
-    assertEquals((await k.rows('.binding!')).length, 3)
+    assertEquals((await k.rows('.binding')).length, 3)
   } finally {
     k.done()
   }
@@ -421,7 +421,7 @@ Deno.test('a partial resource creation is recorded and reused on retry', async (
     await k.write(configuration)
     assertStringIncludes(await k.tool('app_deploy'), 'R2 Edit')
     assertEquals(k.uploads.length, 0)
-    assertEquals((await k.rows('.binding!')).length, 2)
+    assertEquals((await k.rows('.binding')).length, 2)
     k.state.fail = ''
     await k.tool('app_deploy')
     assertEquals(k.uploads.length, 1)
@@ -430,7 +430,7 @@ Deno.test('a partial resource creation is recorded and reused on retry', async (
         .length,
       1,
     )
-    assertEquals((await k.rows('.binding!')).length, 3)
+    assertEquals((await k.rows('.binding')).length, 3)
   } finally {
     k.done()
   }
@@ -449,15 +449,15 @@ Deno.test('permanent deletion empties R2 and keeps ownership through a failed re
       'R2 Edit',
     )
     assertEquals([...k.state.objects], ['folder/second file.txt'])
-    assertEquals((await k.rows('.binding!')).length, 2)
+    assertEquals((await k.rows('.binding')).length, 2)
     assertEquals(
-      (await k.rows(`.app!&.entity.eid=${k.app.eid}`)).length,
+      (await k.rows(`.app&.entity.eid=${k.app.eid}`)).length,
       1,
     )
     k.state.fail = ''
     await k.tool('app_delete', { forever: true })
     assertEquals(k.state.objects.size, 0)
-    assertEquals((await k.rows('.binding!')).length, 0)
+    assertEquals((await k.rows('.binding')).length, 0)
     assertEquals(
       k.calls.filter((c) =>
         c.method == 'DELETE' && c.path == '/d1/database/owned-database-id'

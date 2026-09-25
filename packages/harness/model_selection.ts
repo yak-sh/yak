@@ -38,7 +38,7 @@ export const selectedUsing = async (
   if (seen.has(session)) throw new Error('Cyclic session ancestry')
   seen.add(session)
   const rows = await g.read(
-    '.entry.session=' + session + '&.using&.ask=' +
+    '.entry.session=' + session + '&.using&!ask' +
       (before == null ? '' : '&.entry.seq<=' + before) +
       '&.order=-entry.seq&.limit=1&.fields=using.model,using.provider,using.effort,using.instructions',
   )
@@ -66,7 +66,7 @@ export const modelSelection = async (
       b,
     ]),
   )
-  const choices = (await g.read('.serves&.edge?')).flatMap((b): Bundle[] => {
+  const choices = (await g.read('.serves&?edge')).flatMap((b): Bundle[] => {
     const { from, to } = b.edge as Comp
     const model = named.get(String(to))?.model
     const provider = named.get(String(from))?.provider

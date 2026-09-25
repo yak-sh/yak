@@ -354,7 +354,7 @@ slow('a space erased: the letter, the act, and the name back', async () => {
     await shop.applied({
       entities: [{ doc: { title: 'a note only this space has' } }],
     })
-    assertEquals((await shop.get('.doc!')).length, 1)
+    assertEquals((await shop.get('.doc')).length, 1)
     assertEquals((await k.at('shoplab.yaks.app', '/shop/')).status, 200)
 
     // The agent asks. It deletes nothing: it mails the owner, and says so.
@@ -441,7 +441,7 @@ slow('a space erased: the letter, the act, and the name back', async () => {
     // proof that matters for releasing a slug at all.
     let next = await seed(k, [{ slug: 'shoplab', apps: ['shop'] }])
     let theirs = client(k, 'shoplab.yaks.app', 'shop', next.cookie)
-    assertEquals(await theirs.get('.doc!'), [])
+    assertEquals(await theirs.get('.doc'), [])
     assertEquals((await k.at('shoplab.yaks.app', '/shop/')).status, 404)
   } finally {
     await k.stop()
@@ -622,7 +622,7 @@ slow('a space with a domain attached refuses to die quietly', async () => {
     assertStringIncludes(said, 'CF_HOSTNAMES_TOKEN')
     // Nothing went: the space, its app and its hostname all still stand.
     assertEquals((await dir.query(`id=${them.eids.domainlab}`)).length, 1)
-    assertEquals((await dir.query('.hostname!')).length, 1)
+    assertEquals((await dir.query('.hostname')).length, 1)
     assertEquals(
       (await dir.query(`.app.space=${them.eids.domainlab}`)).length,
       1,

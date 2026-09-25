@@ -156,7 +156,7 @@ Deno.test('a batch applied comes back as it landed, and reads back', async () =>
 
   let found = bundles(result(
     await called(client, 'graph_query', {
-      q: '.price<20&.doc?',
+      q: '.price<20&?doc',
     }),
   ))
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
@@ -204,7 +204,7 @@ Deno.test('filters and limit join the query line', async () => {
   })
   let found = bundles(result(
     await called(client, 'graph_query', {
-      q: '.price!',
+      q: '.price',
       filters: ['.price<20'],
       limit: 5,
     }),
@@ -523,7 +523,7 @@ Deno.test('a session that connected against another roster is told, once', async
       return line
     },
   })
-  let out = await called(client, 'graph_query', { q: '.price!' })
+  let out = await called(client, 'graph_query', { q: '.price' })
   let blocks = out.content as { text: string }[]
   assertEquals(blocks.length, 2)
   assertEquals(
@@ -534,7 +534,7 @@ Deno.test('a session that connected against another roster is told, once', async
   // The answer itself is untouched — a described value stays parsable.
   assertEquals(JSON.parse(blocks[0].text), [])
   // Once per changed set: the next reply is quiet again.
-  let quiet = await called(client, 'graph_query', { q: '.price!' })
+  let quiet = await called(client, 'graph_query', { q: '.price' })
   assertEquals((quiet.content as { text: string }[]).length, 1)
   assertEquals(told, 1)
   await client.close()

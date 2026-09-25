@@ -5,7 +5,7 @@
 // string, so the warm statement is the served one.
 import type { Field } from './query.ts'
 
-// The session chrome, projected (D-22567 §3). `.session!` is the one UNBOUNDED
+// The session chrome, projected (D-22567 §3). `.session` is the one UNBOUNDED
 // kind — thousands of rows — and unprojected it put 6.22 MB on the wire for
 // every tab, because a session entity's eager bag is its whole history: the
 // final_text and usage_json and stderr of every run that ever finished, plus
@@ -31,7 +31,7 @@ export let dotFields: Field[] = [
 // sessions. One query says that union with `|` (query.ts OR), so a tab holds
 // ONE sub and lands ONE frame for the strip where seven separate selections
 // cost seven serves and seven render flushes (T-37445).
-export let traySessionQuery = '.session!&(' + [
+export let traySessionQuery = '.session&(' + [
   '.session.status=pending,running',
   '.created.at>=6-hours-ago',
 ].join('|') + ')&.fields=' +

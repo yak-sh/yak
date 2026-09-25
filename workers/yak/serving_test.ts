@@ -407,7 +407,7 @@ Deno.test('the page wire: apply, query and search round-trip', async () => {
 
   // The filter grammar is the page's: the query string itself, and a row
   // carries the components the filter names, under the word it is called by.
-  let [row] = await page.query('.doc!')
+  let [row] = await page.query('.doc')
   assertEquals(row.kind, 'doc')
   assertEquals((row.entity as { eid: string }).eid, eid)
   assertEquals((row.doc as { title: string }).title, 'Lemon drizzle')
@@ -434,10 +434,10 @@ Deno.test('the page wire: apply, query and search round-trip', async () => {
   )
   // The store minted a `person` row for the writer, and it is the platform's
   // bookkeeping rather than anything anyone saved: it stays out of a question
-  // that did not name it (C-32607 item 4 — `.created!` dragged every one in),
+  // that did not name it (C-32607 item 4 — `.created` dragged every one in),
   // and comes back when one does.
-  assertEquals((await page.query('.created!')).length, 1)
-  assertEquals((await page.query('.person!')).length, 1)
+  assertEquals((await page.query('.created')).length, 1)
+  assertEquals((await page.query('.person')).length, 1)
 })
 
 Deno.test('a store tells the directory what it holds once a write moves it', async () => {
@@ -497,7 +497,7 @@ Deno.test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () =
   let saved = await lines(wrote)
   assertEquals(saved.length, 3)
   assertEquals(saved[0].doc.title, 'Recipe 0')
-  assertEquals((await page.query('.doc!')).length, 3)
+  assertEquals((await page.query('.doc')).length, 3)
 
   // A bad line is the last line of the answer, and it says which line it was.
   let no = await lines(
@@ -514,7 +514,7 @@ Deno.test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () =
   assertEquals(no[0].line, 2)
   assertEquals(no[0].committed, 0)
   // Its chunk rolled back whole: the good line beside it landed nothing.
-  assertEquals((await page.query('.doc!')).length, 3)
+  assertEquals((await page.query('.doc')).length, 3)
 })
 
 Deno.test('a subscription is that query still answering', async () => {
@@ -533,18 +533,18 @@ Deno.test('a subscription is that query still answering', async () => {
   // The object plants its tables when the kernel first names it, so the store
   // is reached the way every store is reached first: through a request.
   let page = client(env, await as(ADA))
-  assertEquals(await page.query('.doc!'), [])
+  assertEquals(await page.query('.doc'), [])
   sockets.get(name)!.push(ws)
   object(name).webSocketMessage(
     ws,
-    JSON.stringify({ subscribe: '.doc!&.person=', id: '1:.doc!' }),
+    JSON.stringify({ subscribe: '.doc&!person', id: '1:.doc' }),
   )
-  assertEquals(sent, [{ id: '1:.doc!', bundles: [], transientReset: [] }])
+  assertEquals(sent, [{ id: '1:.doc', bundles: [], transientReset: [] }])
 
   await page.apply([{ entity: { eid: CAKE }, doc: { title: 'Lemon drizzle' } }])
   assertEquals(sent.length, 2)
   let frame = sent[1] as { id: string; bundles: Record<string, unknown>[] }
-  assertEquals(frame.id, '1:.doc!')
+  assertEquals(frame.id, '1:.doc')
   // The same row `query()` answers with, kind and all — a page swaps one for
   // the other and nothing else changes.
   assertEquals(frame.bundles[0].kind, 'doc')
@@ -560,7 +560,7 @@ Deno.test('an open app takes a write from nobody, and a public one does not', as
   ])
   assertEquals(wrote.ok, true)
   // Unattributed: nobody signed it, so nothing claims they did.
-  let [row] = await stranger.query('.doc!&.created?')
+  let [row] = await stranger.query('.doc&?created')
   assertEquals((row.created as { by: string | null }).by, null)
 
   // The same write on a `public` app is the member guard's no, said in the
@@ -663,7 +663,7 @@ Deno.test('DELETE / empties the app store and bears it again', async () => {
   let { space, app } = await seeded(env)
   let page = client(env, await as(ADA))
   await page.apply([{ entity: { eid: CAKE }, doc: { title: 'Lemon drizzle' } }])
-  assertEquals((await page.query('.doc!')).length, 1)
+  assertEquals((await page.query('.doc')).length, 1)
   files.held.set('ada/cookbook/index.html', new Uint8Array([1]))
 
   await emptied(env, space, app, { person: ADA, role: 'owner' })
@@ -671,7 +671,7 @@ Deno.test('DELETE / empties the app store and bears it again', async () => {
   // The bytes went with it, and the store is a planted, empty graph — not one
   // with no tables at all, which is what an app made later here would wake in.
   assertEquals(files.held.size, 0)
-  assertEquals((await page.query('.doc!')).length, 0)
+  assertEquals((await page.query('.doc')).length, 0)
   assertEquals(
     (await object(storeName(space, app)).fetch(
       new Request('http://store/graph', {
@@ -1008,7 +1008,7 @@ Deno.test('rung 1½: a glob over a store door never takes it', async () => {
 Deno.test('rung 1½: the router acts as the caller, not as the app it fronts', async () => {
   let env: Env
   using k = await fronted(async () => {
-    let asked = await apps.fetch(visit('/garden/api/query?.doc!'), env)
+    let asked = await apps.fetch(visit('/garden/api/query?.doc'), env)
     return new Response(String(asked.status))
   })
   env = k.env
@@ -1227,14 +1227,14 @@ Deno.test('env.APP: a private app is written by its own worker, and by nobody el
   assertEquals((await k.at('/index.html')).status, 303)
   // And the store door is still shut: `env.APP` is a door on the worker's own
   // path, never a hole in the app's mode.
-  assertEquals((await k.at('/api/query?.doc!')).status, 401)
+  assertEquals((await k.at('/api/query?.doc')).status, 401)
 
   // One household row, signed by the app — not by a guest, and not by Ada.
   let cookie = await as(ADA)
   let asAda = (path: string) =>
     apps.fetch(visit(path, { headers: { cookie } }), env)
   let rows = await (await asAda(
-    '/api/query?.doc.title="The Okonkwos"&.created?',
+    '/api/query?.doc.title="The Okonkwos"&?created',
   )).json()
   assertEquals(rows.length, 1)
   // A bare eid, because the app is not a person and has no name in this store
@@ -1242,7 +1242,7 @@ Deno.test('env.APP: a private app is written by its own worker, and by nobody el
   // so `.created.by=<the app>` finds everything the worker wrote.
   assertEquals(rows[0].created.by, k.app.eid)
   // And the app is not a person for having written (graph.ts `#vouching`).
-  assertEquals((await (await asAda('/api/query?.person!')).json()).length, 0)
+  assertEquals((await (await asAda('/api/query?.person')).json()).length, 0)
 })
 
 // ---- the shop example, deployed and shopped in (T-34517) --------------------
@@ -1320,7 +1320,7 @@ let shopping = async () => {
     return (await call(ctx, 'app_deploy', { space: 'ada', app: 'shop' })).text
   }
   let shirts = async () =>
-    await (await apps.fetch(visit('/shop/api/query?.product!&.doc?'), env))
+    await (await apps.fetch(visit('/shop/api/query?.product&?doc'), env))
       .json() as {
         entity: { eid: string }
         doc: { title: string }
@@ -1597,7 +1597,7 @@ slow('a cart is priced at Stripe, paid, refunded and disputed', async () => {
 
   let orders = async () =>
     await (await apps.fetch(
-      visit('/shop/api/query?.order!&.doc?', { headers: { cookie } }),
+      visit('/shop/api/query?.order&?doc', { headers: { cookie } }),
       k.env,
     )).json() as {
       entity: { eid: string }
@@ -1620,7 +1620,7 @@ slow('a cart is priced at Stripe, paid, refunded and disputed', async () => {
   // The buyer's letter, in the same batch, aimed at the address they typed
   // and carrying what they bought.
   let post = await (await apps.fetch(
-    visit('/shop/api/query?.mail!&.doc?&.deliver?', {
+    visit('/shop/api/query?.mail&?doc&?deliver', {
       headers: { cookie },
     }),
     k.env,

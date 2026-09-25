@@ -52,7 +52,7 @@ Deno.test('storage composes FTS explicitly for document and non-document prose',
   let found = (line: string) => store.read(line).map((b) => b.entity.eid).sort()
   assertEquals(found('mug'), ['a'])
   assertEquals(found('ceramic'), ['a', 'b'])
-  assertEquals(found('ceramic .review!'), ['b'])
+  assertEquals(found('ceramic .review'), ['b'])
   store.tx((tx) => {
     tx.patch([{ entity: { eid: 'a' }, doc: { body: 'smooth enamel' } }])
     assertEquals(tx.read('enamel').map((b) => b.entity.eid), ['a'])
@@ -100,5 +100,5 @@ Deno.test('.order=search puts the closest match first', () => {
   assertEquals(found('mug .order=search'), ['near', 'far'])
   assertEquals(found('mug .order=-search'), ['far', 'near'])
   assertEquals(found("o'mug .order=search"), ['near'])
-  assertThrows(() => found('.doc! .order=search'), Error, 'nothing to rank by')
+  assertThrows(() => found('.doc .order=search'), Error, 'nothing to rank by')
 })

@@ -93,11 +93,11 @@ slow('the served client: a page saves, lists and watches', async () => {
     assert(cake, 'the alias resolved')
 
     // Listed, found by their words, counted.
-    let [row] = await store.query('.doc!')
+    let [row] = await store.query('.doc')
     assertEquals(row.entity.eid, cake)
     assertEquals(row.doc.title, 'Lemon cake')
     assertEquals((await store.search('lemon'))[0].entity.eid, cake)
-    assertEquals(await store.query('.doc!&.count!'), { count: 1 })
+    assertEquals(await store.query('.doc&.count'), { count: 1 })
 
     // A second component on the same entity, and the filter that reads it.
     await store.apply({
@@ -106,7 +106,7 @@ slow('the served client: a page saves, lists and watches', async () => {
       filed: { priority: 1 },
     })
     assertEquals(
-      (await store.query('.task.status=open&.filed?'))[0].filed.priority,
+      (await store.query('.task.status=open&?filed'))[0].filed.priority,
       1,
     )
 
@@ -118,7 +118,7 @@ slow('the served client: a page saves, lists and watches', async () => {
     assertEquals(hit.doc.title, 'Lemon cake')
     assertEquals(hit.filed.priority, 1)
     assert(hit.rank.score > 0)
-    let [narrow] = await store.search('lemon', '.task!&.filed?')
+    let [narrow] = await store.search('lemon', '.task&?filed')
     assertEquals(narrow.filed.priority, 1)
     assertEquals(narrow.doc, undefined)
     assert(narrow.rank.score > 0)
@@ -127,11 +127,11 @@ slow('the served client: a page saves, lists and watches', async () => {
     await store.apply([{ doc: { title: 'Plum tart' } }])
     let titles = (rows: { doc: { title: string } }[]) =>
       rows.map((r) => r.doc.title)
-    assertEquals(titles(await store.query('.doc!')), [
+    assertEquals(titles(await store.query('.doc')), [
       'Lemon cake',
       'Plum tart',
     ])
-    assertEquals(titles(await store.query('.doc!&limit=1')), ['Plum tart'])
+    assertEquals(titles(await store.query('.doc&limit=1')), ['Plum tart'])
 
     // The live half: the page watches a filter and sees a write it did not
     // make. A socket carries the app's hostname on its handshake, which a
@@ -141,7 +141,7 @@ slow('the served client: a page saves, lists and watches', async () => {
     // The subscription asks for the title beside the status: a listing
     // carries the components its filter names, live door included.
     let stop = mod.store(`${wire.origin}/recipes/api/`)
-      .subscribe('.task.status=open&.doc?', (rows: Row[]) => seen.push(rows))
+      .subscribe('.task.status=open&?doc', (rows: Row[]) => seen.push(rows))
     try {
       await until(() => seen.length == 1, { timeout: 15_000 })
       assertEquals(titles(seen[0]), ['Lemon cake'])
@@ -163,7 +163,7 @@ slow('the served client: a page saves, lists and watches', async () => {
         task: {},
       })
       await until(() => seen.length == 3, { timeout: 15_000 })
-      assertEquals(seen[2], await store.query('.task.status=open&.doc?'))
+      assertEquals(seen[2], await store.query('.task.status=open&?doc'))
       let fig = seen[2].find((r) => r.doc.title == 'Fig tart')!
       assertEquals(fig.doc.body, 'six figs, honey')
       assertEquals(fig.kind, 'task')
@@ -174,7 +174,7 @@ slow('the served client: a page saves, lists and watches', async () => {
       // without a second question.
       let bylined: Row[][] = []
       let quiet = mod.store(`${wire.origin}/recipes/api/`)
-        .subscribe('.doc!&.created!', (rows: Row[]) => bylined.push(rows))
+        .subscribe('.doc&.created', (rows: Row[]) => bylined.push(rows))
       try {
         await until(() => bylined.length == 1, { timeout: 15_000 })
         assertEquals(
@@ -194,7 +194,7 @@ slow('the served client: a page saves, lists and watches', async () => {
     // one query still draws a name instead of "someone" (C-32730 item 5), and
     // two people on a page are told apart (C-32624 item 3). The guide's one
     // line.
-    let [entry] = await store.query('.doc.title~=Fig&.created!')
+    let [entry] = await store.query('.doc.title~=Fig&.created')
     assertEquals(entry.created.by.name, them.name)
     assertEquals(entry.created.by.eid.length, 36)
     // The eid is still the value a write takes: the row a page read, handed
@@ -205,19 +205,19 @@ slow('the served client: a page saves, lists and watches', async () => {
       task: {},
       filed: { assignee: entry.created.by },
     })
-    let [reread] = await store.query('.doc.title~=Fig&.created!&.task?&.filed?')
+    let [reread] = await store.query('.doc.title~=Fig&.created&?task&?filed')
     assertEquals(reread.filed.assignee, entry.created.by)
-    let people = await store.query('.person!&.doc?')
+    let people = await store.query('.person&?doc')
     assertEquals(people.map((p: Row) => p.doc.title), [them.name])
     // Their address stays in the directory: an app's store learns a name and
-    // never an address book, so a `public` app answering `.person!` to a
+    // never an address book, so a `public` app answering `.person` to a
     // stranger hands out no roster of addresses (T-32654). And a person is
     // not a row the page saved, so an ordinary listing leaves them out —
-    // `.person!` is how you ask.
+    // `.person` is how you ask.
     assertEquals('email' in people[0], false)
     assertEquals(JSON.stringify(people).includes('@'), false)
     assertEquals(
-      (await store.query('.doc!')).some((r: Row) => r.doc.title == them.email),
+      (await store.query('.doc')).some((r: Row) => r.doc.title == them.email),
       false,
     )
 
@@ -249,7 +249,7 @@ slow('the served client: a page saves, lists and watches', async () => {
       'has moved since it was read',
     )
     assertEquals(
-      (await store.query(`id=${ticket}&.doc!`))[0].doc.title,
+      (await store.query(`id=${ticket}&.doc`))[0].doc.title,
       'day 2',
     )
     // `null` is a guard too — "I read no value" — which is how a page mints a
@@ -290,7 +290,7 @@ slow('the served client: a page saves, lists and watches', async () => {
     // person: the status and a short line of it, never the whole document
     // (C-32574 item 4, where a club saw the HTML in its error line).
     let dumped = await assertRejects(
-      () => mod.store(`${mine.origin}/nowhere/api/`).query('.doc!'),
+      () => mod.store(`${mine.origin}/nowhere/api/`).query('.doc'),
       Error,
     )
     assertEquals(dumped.message.includes('<'), false)
@@ -351,14 +351,14 @@ slow('the client at a pretty path, and a sibling app by path', async () => {
       // path as a base, so the documented call threw `Invalid base URL`.
       let lending = mod.store('/lending/api/')
       assertEquals(
-        (await lending.query('.doc!')).map((r: Row) => r.doc.title),
+        (await lending.query('.doc')).map((r: Row) => r.doc.title),
         ['Piranesi, lent'],
       )
       // The doors hang under that address, so a path that names the api
       // directory without the slash still means the directory.
-      assertEquals((await mod.store('/lending/api').query('.doc!')).length, 1)
+      assertEquals((await mod.store('/lending/api').query('.doc')).length, 1)
       // And the page's own app is a path like any other.
-      assertEquals(await mod.store('/reading/api/').query('.doc!'), [])
+      assertEquals(await mod.store('/reading/api/').query('.doc'), [])
     } finally {
       Reflect.deleteProperty(globalThis, 'location')
     }

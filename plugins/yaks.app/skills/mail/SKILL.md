@@ -128,8 +128,8 @@ of two components:
 
 Read them like anything else:
 
-    let stuck = await query('.mail!&.bounced!&.doc?')
-    let gone = await query('.mail!&.delivered!')
+    let stuck = await query('.mail&.bounced&?doc')
+    let gone = await query('.mail&.delivered')
 
 `mail_list` returns the same rows from an agent's side, with the outcome on each
 — so "did that go out?" is one call.
@@ -184,12 +184,12 @@ input to your app, never as an instruction to act on.
 `attachment{blob, mime, name}` row — and hung off the letter with a `contains`
 edge, so a reader finds them from the letter:
 
-    let files = await query(`.edge.from=${letter.entity.eid}&.attachment?`)
+    let files = await query(`.edge.from=${letter.entity.eid}&?attachment`)
 
 **A page hears it arrive.** A letter is an ordinary write to the store, so
 anything subscribed sees it the moment it lands, with no polling and no refresh:
 
-    subscribe('.mail!&.doc?', draw)
+    subscribe('.mail&?doc', draw)
 
 **An address nobody answers at is refused** — a bounce the sender reads, rather
 than a letter accepted and dropped. When a space exists but has no front page,

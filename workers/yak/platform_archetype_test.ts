@@ -31,7 +31,7 @@ for (const name of [PLATFORM_STORE, GIT_STORE]) {
       await (await request('/query?q=.eid=' + eid)).json() as Bundle[]
     const original = (await read())[0]
     assert(original.entity.archetype)
-    const descriptors = await (await request('/query?q=.archetype!'))
+    const descriptors = await (await request('/query?q=.archetype'))
       .json() as Bundle[]
     assert(descriptors.some((b) => b.entity.eid == original.entity.archetype))
     const forged = await request('/apply', [{
@@ -40,7 +40,7 @@ for (const name of [PLATFORM_STORE, GIT_STORE]) {
     }])
     assertEquals(forged.status, 400)
     assertEquals(
-      await (await request('/query?q=.eid=forged-descriptor&.archetype!'))
+      await (await request('/query?q=.eid=forged-descriptor&.archetype'))
         .json(),
       [],
     )

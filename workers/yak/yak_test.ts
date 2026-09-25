@@ -176,7 +176,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       headers: { cookie },
     })).json()
     let [app] = await meta(k, cookie).query(
-      `.eid=${eids['jeff/recipes']}&.app?`,
+      `.eid=${eids['jeff/recipes']}&?app`,
     )
     let store = (app.app as { store: string }).store
     assert(store, 'the app has a store handle')
@@ -241,13 +241,13 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       ],
     )
     assert(
-      (await owner.get('.created.at!')).every((r) => !r.blob),
+      (await owner.get('.created.at')).every((r) => !r.blob),
       'a filter answers the graph, never the store rows behind it',
     )
     // A body is content-addressed but it is not a row: the text is kept once
     // beside the graph (@yaks/blob), not as a second entity wearing `blob`, so
     // there is nothing here to leave out of a listing in the first place.
-    assertEquals(await owner.get('.blob!'), [])
+    assertEquals(await owner.get('.blob'), [])
     assertEquals(
       await client(k, 'jeff.yaks.app', 'garden').get(`id=${cake}`),
       [],
@@ -282,7 +282,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
         // with no front page lists its apps, and this is nobody's space.
         '/',
         '/platform/',
-        '/platform/api/query?.signin!',
+        '/platform/api/query?.signin',
         '/platform/api/apply',
         '/platform/api/ws',
         '/platform/api/graph',
@@ -308,7 +308,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     let broke = await k.at('jeff.yaks.app', '/recipes/%E0%A4%A')
     assertEquals(broke.status, 500)
     assertMatch(await broke.text(), /Something went wrong/)
-    assertEquals(await owner.get('.exception!'), [])
+    assertEquals(await owner.get('.exception'), [])
 
     // What the app's own page threw, at the app's own door: an exception
     // entity naming the request and carrying the message and stack; nothing
@@ -324,7 +324,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       }),
     })
     assertEquals(filed.status, 204)
-    let [broken] = await owner.get('.exception!&.created!')
+    let [broken] = await owner.get('.exception&.created')
     assert(broken, 'an exception entity')
     let ex = broken.exception as {
       message: string
@@ -332,25 +332,25 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       request: string
     }
     assertEquals(ex.request, 'page /recipes/')
-    // The platform's own row wears no doc, so a person's `.doc!` is theirs
+    // The platform's own row wears no doc, so a person's `.doc` is theirs
     // alone (T-32533).
     assertEquals(broken.doc, undefined)
     assertEquals(ex.message, 'whisk is not a function')
     assertMatch(ex.stack, /index\.html:42/)
-    assertEquals(await owner.get('.error!'), [])
+    assertEquals(await owner.get('.error'), [])
     // A signed-in page's write says who saved it: the kernel vouches for the
     // person, the store learns them as a row of its own, and `created.by` is
     // theirs (T-32534). A break the kernel reported names nobody. The stamp
     // comes back because the filter named it — a listing that did not ask
     // carries the rows a person saved and no bookkeeping, at this door and at
     // the tools' alike (listing.ts, C-32574 item 5).
-    let [mine] = await owner.get('.doc!&.created!')
+    let [mine] = await owner.get('.doc&.created')
     // A reference to a person answers `{eid, name}` (T-32733), so the byline
     // is on the row and the eid is still what a write takes.
     assertEquals((mine.created as { by: { eid: string } }).by.eid, jeff)
-    assertEquals((await owner.get('.doc!'))[0].created, undefined)
+    assertEquals((await owner.get('.doc'))[0].created, undefined)
     assertEquals(
-      ((await owner.get('.person!'))[0].entity as { eid: string }).eid,
+      ((await owner.get('.person'))[0].entity as { eid: string }).eid,
       jeff,
     )
     assertEquals((broken.created as { by: string | null }).by, null)
@@ -366,7 +366,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       }]),
     })
     assertEquals(forgedFlag.status, 200)
-    assertEquals((await owner.get('.exception!')).length, 1)
+    assertEquals((await owner.get('.exception')).length, 1)
   } finally {
     await k.stop()
   }
@@ -419,14 +419,14 @@ slow('an app says who may read it and who may write it', async () => {
 
     // public, the default: anyone with the link reads, and a stranger's write
     // is refused — 401, because nobody signed in.
-    assertEquals((await anyone('list').get('.doc!')).length, 1)
+    assertEquals((await anyone('list').get('.doc')).length, 1)
     let refused = await anyone('list').post(line('not mine to add'))
     assertEquals(refused.status, 401)
     assertEquals((await refused.json()).error.code, 'not_a_writer')
 
     // open: the vote page. Anyone with the link writes, without signing in.
     await anyone('vote').applied(line('my vote'))
-    assertEquals((await anyone('vote').get('.doc!')).length, 2)
+    assertEquals((await anyone('vote').get('.doc')).length, 2)
     // Which the page can know on load (T-32679): `/api/me` says a stranger
     // writes here, and that their write will carry no `created.by` — so a
     // page wanting a byline asks them their name itself (C-32675 item 5).
@@ -519,11 +519,11 @@ slow('an app says who may read it and who may write it', async () => {
     assertEquals(seen.headers.get('cache-control'), 'public, no-cache')
     await seen.body?.cancel()
 
-    let shut = await k.at('club.yaks.app', '/diary/api/query?.doc!')
+    let shut = await k.at('club.yaks.app', '/diary/api/query?.doc')
     assertEquals(shut.status, 401)
     assertEquals((await shut.json()).error.code, 'not_a_reader')
     assertEquals((await anyone('diary').post(line('no'))).status, 401)
-    assertEquals((await owner('diary').get('.doc!')).length, 1)
+    assertEquals((await owner('diary').get('.doc')).length, 1)
 
     // The guest list: an invitation is an address, and the person behind it is
     // minted here so their sign-in later finds this same row.
@@ -556,7 +556,7 @@ slow('an app says who may read it and who may write it', async () => {
     // And the name the invitation gave is hers until she says otherwise, so
     // an app she writes in names her (T-32654).
     let [named] = await meta(k, cookie).query(
-      '.person!&.email.address=maya@example.com&.doc?',
+      '.person&.email.address=maya@example.com&?doc',
     )
     assertEquals((named.doc as { title: string }).title, 'Maya')
     // An invitation with nothing added is the letter above, unchanged; with a
@@ -620,11 +620,11 @@ slow('an app says who may read it and who may write it', async () => {
     // else's: a signed-in stranger at a public list, who reads it and does
     // not write it.
     assertEquals((await editor('list').post(line('her line'))).status, 403)
-    assertEquals((await anyone('list').get('.doc!')).length, 1)
+    assertEquals((await anyone('list').get('.doc')).length, 1)
     // The private app she was invited to is hers to read and to write — its
     // page included.
     await editor('diary').applied(line('her secret'))
-    assertEquals((await editor('diary').get('.doc!')).length, 2)
+    assertEquals((await editor('diary').get('.doc')).length, 2)
     assertEquals(
       (await k.at('club.yaks.app', '/diary/', { headers: { cookie: mayaIn } }))
         .status,
@@ -652,7 +652,7 @@ slow('an app says who may read it and who may write it', async () => {
       'maya@example.com no longer holds club/diary',
     )
     assertEquals((await editor('list').post(line('again'))).status, 403)
-    let out = await k.at('club.yaks.app', '/diary/api/query?.doc!', {
+    let out = await k.at('club.yaks.app', '/diary/api/query?.doc', {
       headers: { cookie: mayaIn },
     })
     assertEquals(out.status, 403)
@@ -693,14 +693,14 @@ slow('an app says who may read it and who may write it', async () => {
       'anyone with the link can use it',
     )
     await anyone('list').applied(line('everyone can now'))
-    assertEquals((await anyone('list').get('.doc!')).length, 2)
+    assertEquals((await anyone('list').get('.doc')).length, 2)
     await agent.tool('app_set', {
       space: 'club',
       app: 'list',
       access: 'private',
     })
     assertEquals(
-      (await k.at('club.yaks.app', '/list/api/query?.doc!')).status,
+      (await k.at('club.yaks.app', '/list/api/query?.doc')).status,
       401,
     )
   } finally {

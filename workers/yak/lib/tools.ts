@@ -21,7 +21,7 @@
 //         "tool": true,
 //         "description": "This month's runs",
 //         "input": { "since": { "type": "string" } },
-//         "query": ".run!&.created.at>=$since" } } }
+//         "query": ".run&.created.at>=$since" } } }
 //
 // `input` is one JSON Schema per argument and `required` names the ones a
 // caller must send, as a package writes them. The act is what an app adds: a
@@ -262,7 +262,7 @@ export let parseTools = (
       }
     }
     if (entry.query != null && typeof entry.query != 'string') {
-      wrong.push(`${name}.query is a filter line, like ".run!"`)
+      wrong.push(`${name}.query is a filter line, like ".run"`)
     }
     if (
       entry.apply != null && !object(entry.apply) && !Array.isArray(entry.apply)

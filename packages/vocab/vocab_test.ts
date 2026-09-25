@@ -133,7 +133,7 @@ Deno.test('a bare bang aims at the component a property shadows', () => {
   // `project` is both a component and task's reference property. Every form but
   // the bare bang keeps the property — `.project=P-3` must not change meaning.
   assertEquals(v.aim('project'), [{ comp: 'task', prop: 'project' }])
-  // `.project!` completes the component sentence: the facet has no other
+  // `.project` completes the component sentence: the facet has no other
   // form, while the property keeps its qualified one.
   assertEquals(v.aim('project', true), [{ comp: 'project', prop: '' }])
   assertEquals(v.aim('task.project', true), [{ comp: 'task', prop: 'project' }])

@@ -129,7 +129,7 @@ export let index = (g: Writes, store: Blobs): Index => {
   let named = async (sha: string): Promise<Oids | undefined> => {
     let [obj] = await g.read(`.gitobj.type=blob&.blob.sha=${sha}`)
     if (!obj) return
-    let [key] = await g.read(`.${COMPAT}!&.key.of=${obj.entity.eid}`)
+    let [key] = await g.read(`.${COMPAT}&.key.of=${obj.entity.eid}`)
     let name = key && valueOf(key)
     return name ? { oid: obj.entity.eid, oid256: name } : undefined
   }

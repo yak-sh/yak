@@ -60,7 +60,7 @@ Deno.test('archetype groups, missing/unknown descriptors, moves and value condit
     match: and(or(present('doc'), present('task'))),
   }
   let value = r('value', '.doc.title=yes')
-  let absent = r('absent', '.task=')
+  let absent = r('absent', '!task')
   let reg = define([value, group, absent, r('any', true)], { archetypes })
   let b = { entity: { eid: 'a', archetype: 'shape' }, doc: { title: 'yes' } }
   assertStrictEquals(resolve(reg, b, undefined, vocab), value)

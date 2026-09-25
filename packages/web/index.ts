@@ -160,7 +160,7 @@ export let indexAll = (ix: Index, graph: Record<string, Row>, deps: Dep[]) => {
 // backends (the IDB resolver, T-17125) make the SAME presence decision this
 // in-memory anchor does — one anchoring predicate, every store.
 export let implies = (p: Pred): boolean => {
-  if (!p.prop) return p.op == EXISTS || p.op == '~' // .comp! / .comp~ present
+  if (!p.prop) return p.op == EXISTS || p.op == '~' // .comp / .comp~ present
   switch (p.op) {
     case '!':
       return false // `!=` matches an absent column too
@@ -205,7 +205,7 @@ export let anchor = (ix: Index, preds: Pred[]): Set<string> | undefined => {
     if (p.refs) {
       // The multi-column reverse-union: the referrers of `value` are the union
       // of every reverse map's set for it — O(referrers), never a graph scan.
-      // Presence/absence (`.refs!`, `.refs=`) admit rows with no reference at
+      // Presence/absence (`.refs`, `!refs`) admit rows with no reference at
       // all, not in any reverse map, so they anchor nothing.
       if (p.op == '' && p.value) {
         let out = new Set<string>()

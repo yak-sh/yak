@@ -144,7 +144,7 @@ let statement = compile(parse('.cites[<=3]->p2'), vocab, {
   entity IDs, excludes the starting entity, and limits the result to 10,000 IDs
   (`WALK_LIMIT`). An explicit depth bounds recursion by hops and can include the
   start when a cycle returns to it.
-- `.edges[cites]!` requests links alongside selected entities. The extension
+- `.edges[cites]` requests links alongside selected entities. The extension
   accepts this clause without filtering the selection; fetching those links is
   the caller's responsibility. It does not itself add links to returned rows.
 - A reference-property traversal such as `.fork.from->S-7` remains the SQL

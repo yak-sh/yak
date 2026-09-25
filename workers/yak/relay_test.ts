@@ -98,7 +98,7 @@ let watching = async (ctx = state()) => {
     ctx.live.push(ws)
     store.webSocketMessage(
       ws,
-      JSON.stringify({ subscribe: '.recipe!', id: 'r' }),
+      JSON.stringify({ subscribe: '.recipe', id: 'r' }),
     )
     ws.sent.length = 0
     return ws
@@ -124,7 +124,7 @@ Deno.test('a finger moves, and only the other cooks hear it', async () => {
   assertEquals(ada.sent, []) // its own graph already has it
 
   // And the shop kept none of it: the row reads as it was written.
-  let [b] = await (await get(store, '/query?q=.recipe!')).json() as Bundle[]
+  let [b] = await (await get(store, '/query?q=.recipe')).json() as Bundle[]
   assertEquals(b.presence, undefined)
 })
 
@@ -141,7 +141,7 @@ Deno.test('a cook who arrives late sees the fingers already on the page', async 
   let cleo = wire()
   store.webSocketMessage(
     cleo,
-    JSON.stringify({ subscribe: '.recipe!', id: 'r' }),
+    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
   )
   let [first] = cleo.sent
   assertEquals(first.relay, says(CAKE, { x: 3, y: 9, name: 'Ada' }))
@@ -186,7 +186,7 @@ Deno.test('a finger lost to an eviction is still taken away', async () => {
   let late = wire()
   woken.webSocketMessage(
     late,
-    JSON.stringify({ subscribe: '.recipe!', id: 'r' }),
+    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
   )
   assert(!late.sent[0].relay)
 
@@ -208,6 +208,6 @@ Deno.test('a durable component sent to the relay door is not stored by it', asyn
     }),
   )
   assertEquals(bert.sent, [])
-  let [b] = await (await get(store, '/query?q=.recipe!')).json() as Bundle[]
+  let [b] = await (await get(store, '/query?q=.recipe')).json() as Bundle[]
   assertEquals((b.recipe as { serves: number }).serves, 8)
 })

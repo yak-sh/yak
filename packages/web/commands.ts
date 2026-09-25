@@ -102,7 +102,7 @@ export type Reader = {
   session: (sid: string) => Row | undefined
   // The entities a delete would tombstone alongside `eid` (deaths('cascade')).
   cascade: (eid: string) => Row[]
-  // Every entity a filter matches — the kind/component enumerations (`.repo!`,
+  // Every entity a filter matches — the kind/component enumerations (`.repo`,
   // busy desk sessions, an existing dream cursor).
   select: (filter: string) => Row[]
   // The edges touching these entities — persona ownership at spawn.
@@ -499,7 +499,7 @@ export let commands: Record<string, Command> = {
         let tasks = g.find('tasks')
         if (tasks?.comps.project) filed.project = tasks.eid
         else {
-          let repos = g.select('.repo! .project!')
+          let repos = g.select('.repo .project')
           if (repos.length == 1) filed.project = repos[0].eid
         }
       }
@@ -648,7 +648,7 @@ export let commands: Record<string, Command> = {
       // The newest prose entry of my session — the transcript position the
       // memo anchors to. The db reader answers entries in seq order already;
       // the sort makes the cache reader agree, so .at(-1) is newest either way.
-      let anchor = g.select(`.entry.session=${me.eid} .content!`)
+      let anchor = g.select(`.entry.session=${me.eid} .content`)
         .sort((a, b) =>
           Number(a.comps.entry?.seq ?? 0) - Number(b.comps.entry?.seq ?? 0)
         )

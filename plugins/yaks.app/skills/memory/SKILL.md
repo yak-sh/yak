@@ -139,7 +139,7 @@ store, which is what `doc` is for.
 moment it is written — by anyone, in any conversation, including you next week:
 
     search({ text: 'a swing resolves' })
-    graph_query({ app: 'idler-rpg', query: '.note!&.doc?' })
+    graph_query({ app: 'idler-rpg', query: '.note&?doc' })
     graph_show({ ids: ['combat'] })
 
 Give `search` the words that are in the document, not the question you want
@@ -150,7 +150,7 @@ Two small things make that work, and both are ordinary:
 
 - **A component of its own.** `note: {}` — declared in the app's `vocab.json`
   with no properties at all — is what separates your documents from the app's
-  own data, which has `doc` on it too. Then `.note!` is the whole reading list.
+  own data, which has `doc` on it too. Then `.note` is the whole reading list.
 - **A name.** `alias: {name: 'combat'}` makes the write idempotent: writing
   "combat" again patches the document that already holds that name instead of
   leaving two, and a name can be used wherever an eid can, so `graph_show` reads

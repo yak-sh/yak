@@ -62,25 +62,25 @@ Deno.test('the context is two lines, and never the summary', () => {
 Deno.test('the filter line names what a row must carry', () => {
   assertEquals(
     line({ space: 's1', limit: 8 }),
-    '.memory.space=s1&.doc?&.created?&.order=-entity.num&.limit=8',
+    '.memory.space=s1&?doc&?created&.order=-entity.num&.limit=8',
   )
   // Words select; a query line carries no bm25, so the newest still lead.
   assertEquals(
     line({ space: 's1', limit: 3, said: 'measurements' }),
-    'measurements&.memory.space=s1&.doc?&.created?' +
+    'measurements&.memory.space=s1&?doc&?created' +
       '&.order=-entity.num&.limit=3',
   )
   // The line's own punctuation cannot ride in on a person's words.
   assertEquals(
-    line({ space: 's1', limit: 3, said: '.doc!&how do they  like it?' }),
-    'doc how do they like it&.memory.space=s1&.doc?&.created?' +
+    line({ space: 's1', limit: 3, said: '.doc&how do they  like it?' }),
+    'doc how do they like it&.memory.space=s1&?doc&?created' +
       '&.order=-entity.num&.limit=3',
   )
   // A ranker answered with ids: the store is asked for those, and the space
   // still bounds it, so one space cannot rank another's memories in.
   assertEquals(
     line({ space: 's1', limit: 2, eids: ['a', 'b'] }),
-    '.eid=a,b&.memory.space=s1&.doc?&.created?&.limit=2',
+    '.eid=a,b&.memory.space=s1&?doc&?created&.limit=2',
   )
 })
 

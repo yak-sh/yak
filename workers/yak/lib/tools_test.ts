@@ -35,7 +35,7 @@ let club = {
     description: "This month's runs",
     input: { since: TEXT },
     required: ['since'],
-    query: '.jog!&.created.at>=$since',
+    query: '.jog&.created.at>=$since',
   },
 }
 
@@ -46,10 +46,10 @@ Deno.test('a tool entry: a sentence, its arguments, and one act', () => {
   let tools = parsed(club)
   assertEquals(Object.keys(tools), ['log_run', 'leaderboard'])
   assertEquals(tools.log_run.input, { who: TEXT, miles: NUMBER })
-  assertEquals(tools.leaderboard.query, '.jog!&.created.at>=$since')
+  assertEquals(tools.leaderboard.query, '.jog&.created.at>=$since')
   // A tool with no arguments is a tool, and a component is not one.
   assertEquals(
-    parsed({ all: { description: 'Everything', query: '.jog!' } }).all.input,
+    parsed({ all: { description: 'Everything', query: '.jog' } }).all.input,
     {},
   )
   assertEquals(parseTools({ $defs: { jog: {} } }), {})
@@ -93,12 +93,12 @@ Deno.test('a manifest: one refusal names every problem', () => {
     let bad of ['/leaderboard.html', '../other/index.html', 'board', 5]
   ) {
     assertStringIncludes(
-      why({ x: { description: 'x', query: '.doc!', view: bad } }),
+      why({ x: { description: 'x', query: '.doc', view: bad } }),
       "x.view is a page in this app's files",
     )
   }
   assertEquals(
-    parsed({ x: { description: 'x', query: '.doc!', view: 'board.html' } }).x
+    parsed({ x: { description: 'x', query: '.doc', view: 'board.html' } }).x
       .view,
     'board.html',
   )
@@ -111,7 +111,7 @@ Deno.test('a manifest: one refusal names every problem', () => {
   assertEquals(viewsOf('not json'), [])
   // An argument is a JSON Schema; the word it once was is refused by name.
   assertStringIncludes(
-    why({ x: { description: 'x', input: { n: 'number' }, query: '.doc!' } }),
+    why({ x: { description: 'x', input: { n: 'number' }, query: '.doc' } }),
     'x.input.n is "number" — an argument is a JSON Schema',
   )
   assertStringIncludes(
@@ -120,17 +120,17 @@ Deno.test('a manifest: one refusal names every problem', () => {
         description: 'x',
         input: { n: NUMBER },
         required: ['m'],
-        query: '.doc!',
+        query: '.doc',
       },
     }),
     'x.required: m is no input of x',
   )
   assertStringIncludes(
-    why({ x: { query: '.doc!' } }),
+    why({ x: { query: '.doc' } }),
     'x.description says what the tool does',
   )
   assertStringIncludes(
-    why({ x: { description: 'x', apply: {}, query: '.doc!' } }),
+    why({ x: { description: 'x', apply: {}, query: '.doc' } }),
     'x does one thing',
   )
 })
@@ -156,7 +156,7 @@ Deno.test('the call fills the template, typed by the input', () => {
   // an `&` in a value would read as the next filter.
   assertEquals(
     filled(tools.leaderboard, { since: '2026-09-01 10:00' }).query,
-    '.jog!&.created.at>=2026-09-01%2010%3A00',
+    '.jog&.created.at>=2026-09-01%2010%3A00',
   )
   // A variable inside a sentence is spliced in as text.
   let hello = parsed({

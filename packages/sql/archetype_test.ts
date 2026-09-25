@@ -37,7 +37,7 @@ Deno.test('archetype plans: facets/kinds use the spine, only values add joins', 
   for (
     let [query, expected] of [
       ['.task', [12, 13]],
-      ['.doc!', [11, 12]],
+      ['.doc', [11, 12]],
       ['!.claim', [10, 11, 12]],
       ['.kind=doc', [11]],
       ['.kind=tasks', [12, 13]],
@@ -49,12 +49,12 @@ Deno.test('archetype plans: facets/kinds use the spine, only values add joins', 
     assert(sql.sql.includes('"entity"."archetype" in ('), sql.sql)
     assertEquals(sql.params, [...expected], query)
   }
-  let r = bind(parse('.task .doc! !.claim .title=hello'), v, { archetypes })
+  let r = bind(parse('.task .doc !.claim .title=hello'), v, { archetypes })
   assertEquals(r.joins.map((j) => j.source), ['"doc"'])
   assertEquals(bind(parse('?doc'), v, { archetypes }).joins, [])
   let empty = archetypeSet(new Archetypes(), new Map())
-  assertEquals(compile(parse('.doc!'), v, { archetypes: empty }).params, [])
-  assert(compile(parse('.doc!'), v, { archetypes: empty }).sql.includes('0'))
+  assertEquals(compile(parse('.doc'), v, { archetypes: empty }).params, [])
+  assert(compile(parse('.doc'), v, { archetypes: empty }).sql.includes('0'))
 })
 
 Deno.test('archetype matching caches content, not a rolled-back id assignment', () => {
@@ -81,15 +81,15 @@ Deno.test('boolean presence trees retain their composition without component joi
 // spread and SQLite's variable ceiling (T-37437).
 Deno.test('an AND of facets binds one archetype list, not one per facet', () => {
   let ids = (q: string) => compile(parse(q), v, { archetypes }).params
-  let sql = compile(parse('.task .doc! !.claim'), v, { archetypes })
+  let sql = compile(parse('.task .doc !.claim'), v, { archetypes })
   assertEquals(
     sql.params,
     ids('.task').filter((x) =>
-      ids('.doc!').includes(x) && ids('!.claim').includes(x)
+      ids('.doc').includes(x) && ids('!.claim').includes(x)
     ),
   )
   assertEquals(sql.sql.split('"entity"."archetype" in (').length - 1, 1)
-  assertEquals(bind(parse('.task .doc! !.claim'), v, { archetypes }).joins, [])
+  assertEquals(bind(parse('.task .doc !.claim'), v, { archetypes }).joins, [])
   // A facet beside a value keeps the value's own join and its parameter.
   let mixed = compile(parse('.task !.claim .title=hello'), v, { archetypes })
   assertEquals(mixed.params, [12, 'hello'])

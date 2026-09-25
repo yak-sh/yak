@@ -102,7 +102,7 @@ export let Card = (
   // preseeded whatever it pointed at — a whole-graph read on every join, for
   // rows a client might not even be showing. A route sub is the scoped form:
   // the entity streams in with the card, stays live, carries its edges (the
-  // `.edges!` rider), and is evicted when the last card on it closes.
+  // `.edges` rider), and is evicted when the last card on it closes.
   // Collection faces render the board header, not its incident history.
   // Switching to Full/Debug acquires the ordinary route (and its edges).
   let collection = p.view == 'Board' ||

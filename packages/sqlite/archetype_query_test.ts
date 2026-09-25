@@ -35,25 +35,25 @@ Deno.test('archetype query golden: presence/kind, value joins, boolean, paths, r
   for (
     let q of [
       '.doc',
-      '.doc!',
+      '.doc',
       '!doc',
       '!.doc',
-      '.doc=',
+      '!doc',
       '?doc',
-      '.marker!',
-      '.doc! !product',
+      '.marker',
+      '.doc !product',
       '.kind=doc',
       '.kind=products',
       '.kind=review',
-      '.doc! .price>=4',
-      '.doc.title=',
-      '.doc! .doc.title=',
-      '.doc! .count!',
-      '.product! .tally=product.status',
-      '.doc! .order=title .limit=1',
-      '.product.maker.marker!',
-      '.product.maker.marker=',
-      '.reviews.marker!',
+      '.doc .price>=4',
+      '!doc.title',
+      '.doc !doc.title',
+      '.doc .count',
+      '.product .tally=product.status',
+      '.doc .order=title .limit=1',
+      '.product.maker.marker',
+      '!product.maker.marker',
+      '.reviews.marker',
       '.reviews!.marker!',
     ]
   ) {
@@ -71,23 +71,23 @@ Deno.test('archetype query/gather see new sets, rollback and reused descriptor i
   s.install()
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
   let ids = (q: string) => s.read(q).map((b) => b.entity.eid)
-  assertEquals(ids('.marker!'), [])
+  assertEquals(ids('.marker'), [])
   driver.exec('savepoint outer')
   g.apply([{ entity: { eid: 'rolled-back' }, marker: {} }])
-  assertEquals(ids('.marker!'), ['rolled-back'])
+  assertEquals(ids('.marker'), ['rolled-back'])
   driver.exec('rollback to outer; release outer')
   // A fresh writer learns a different set at the rolled-back descriptor's id.
   let other = graph({ storage: s, vocab, plugins: [archetypes()] })
   other.apply([{ entity: { eid: 'doc' }, doc: {} }])
-  assertEquals(ids('.marker!'), [])
-  assertEquals(ids('.doc!'), ['doc'])
+  assertEquals(ids('.marker'), [])
+  assertEquals(ids('.doc'), ['doc'])
   other.apply([{ entity: { eid: 'doc' }, marker: {} }])
-  assertEquals(ids('.marker!'), ['doc'])
+  assertEquals(ids('.marker'), ['doc'])
   driver.exec('savepoint remove')
   other.apply([{ entity: { eid: 'doc' }, marker: null }])
-  assertEquals(ids('.marker!'), [])
+  assertEquals(ids('.marker'), [])
   driver.exec('rollback to remove; release remove')
-  assertEquals(ids('.marker!'), ['doc'])
+  assertEquals(ids('.marker'), ['doc'])
 })
 
 Deno.test('archetype plans and gathers observe commits from another SQLite handle', () => {
@@ -127,17 +127,17 @@ Deno.test('archetype plans and gathers observe commits from another SQLite handl
     let writer = storage(d2, vocab)
     writer.install()
     let g = graph({ storage: writer, vocab, plugins: [archetypes()] })
-    assertEquals(reader.read('.marker!'), [])
+    assertEquals(reader.read('.marker'), [])
     g.apply([{ entity: { eid: 'new' }, marker: {} }])
-    assertEquals(reader.read('.marker!').map((b) => b.entity.eid), ['new'])
+    assertEquals(reader.read('.marker').map((b) => b.entity.eid), ['new'])
     g.apply([{ entity: { eid: 'new' }, marker: null, doc: {} }])
-    assertEquals(reader.read('.marker!'), [])
-    assertEquals(reader.read('.doc!').map((b) => b.entity.eid), ['new'])
+    assertEquals(reader.read('.marker'), [])
+    assertEquals(reader.read('.doc').map((b) => b.entity.eid), ['new'])
     // A raw writer has not yet classified its row: fallback remains exact.
     writer.tx((tx) => tx.patch([{ entity: { eid: 'raw' }, marker: {} }]))
-    assertEquals(reader.read('.marker!').map((b) => b.entity.eid), ['raw'])
+    assertEquals(reader.read('.marker').map((b) => b.entity.eid), ['raw'])
     reader.install()
-    assertEquals(reader.read('.marker!').map((b) => b.entity.eid), ['raw'])
+    assertEquals(reader.read('.marker').map((b) => b.entity.eid), ['raw'])
     // A writer adds one owner of an existing shape and one of a new shape
     // after planning. A stale catalog with a fresh entity scan would return
     // two matches: neither the old (one) nor the new (three) snapshot.
@@ -153,8 +153,8 @@ Deno.test('archetype plans and gathers observe commits from another SQLite handl
         g.apply([{ entity: { eid: 'new-set' }, marker: {}, product: {} }])
       })
     }
-    assertEquals(reader.rows('.marker! .count!'), [{ value: '', n: 1 }])
-    assertEquals(reader.rows('.marker! .count!'), [{ value: '', n: 3 }])
+    assertEquals(reader.rows('.marker .count'), [{ value: '', n: 1 }])
+    assertEquals(reader.rows('.marker .count'), [{ value: '', n: 3 }])
     first.exec('drop table marker')
     let smaller = loadVocab([...shop.docs, archetypeDoc])
     storage(d1, smaller).install()

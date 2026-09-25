@@ -311,25 +311,25 @@ one created:
     "board": {
       "tool": true,
       "description": "The leaderboard: every run, with who logged it",
-      "query": ".jog!&.created!" },
+      "query": ".jog&.created" },
     "since": {
       "tool": true,
       "description": "Runs logged since a date, or every run",
       "input": { "since": { "type": "string",
                             "description": "a date, like 2026-09-01" } },
-      "query": ".jog!&.doc?&.created.at>=$since" },
+      "query": ".jog&?doc&.created.at>=$since" },
     "longest": {
       "tool": true,
       "description": "Runs over a distance",
       "input": { "miles": { "type": "number" } },
       "required": ["miles"],
-      "query": ".jog.miles>=$miles&.doc?&limit=20" }
+      "query": ".jog.miles>=$miles&?doc&limit=20" }
 
 A row carries only the components its filter names, so name everything the
-answer must show — `.jog!` alone returns no titles, and `&.doc?` asks for one
-beside it. `.created!` is how the board gets its bylines: a reference to
-somebody the store knows returns `{eid, name}`, so the answer names who ran
-rather than "someone". The answer counts the rows and returns them:
+answer must show — `.jog` alone returns no titles, and `&?doc` asks for one
+beside it. `.created` is how the board gets its bylines: a reference to somebody
+the store knows returns `{eid, name}`, so the answer names who ran rather than
+"someone". The answer counts the rows and returns them:
 
     leaderboard: 12 rows in yourname/runs
     { "rows": [ { "kind": "jog", "entity": { "eid": "4f3c…" },
@@ -348,8 +348,8 @@ follow — the whole of the security model:
   or editor of the space; an `open` one from anyone who can reach it. A viewer
   running a write command gets the same message the page would have shown them:
   "you can read this app but not change it — its owner can make you an editor".
-- **`created.by` names them**, so `.created!` on the rows a command wrote
-  reports who ran it.
+- **`created.by` names them**, so `.created` on the rows a command wrote reports
+  who ran it.
 - **Nobody gets more through a command than they have on the page.**
 
 Code that actually does something — calls an outside API, uses a secret,
@@ -399,7 +399,7 @@ page, deploy it with the rest, and name it beside the action:
 
     "leaderboard": { "tool": true,
                      "description": "Every run so far",
-                     "query": ".jog!&.created!",
+                     "query": ".jog&.created",
                      "view": "leaderboard.html" }
 
 Over the MCP connector the page is a resource at `ui://<space>/<app>/<file>`,
@@ -528,7 +528,7 @@ The run club: the component it keeps and the commands it offers, in one file.
         "leaderboard": {
           "tool": true,
           "description": "Every run logged so far, with who logged it",
-          "query": ".jog!&.created!",
+          "query": ".jog&.created",
           "view": "leaderboard.html" },
         "since": {
           "tool": true,
@@ -536,7 +536,7 @@ The run club: the component it keeps and the commands it offers, in one file.
           "input": { "since": { "type": "string",
                                 "description": "a date, like 2026-09-01" } },
           "required": ["since"],
-          "query": ".jog!&.created!&.created.at>=$since",
+          "query": ".jog&.created&.created.at>=$since",
           "view": "leaderboard.html" } } }
 
 Two commands share one view — the connector lists the page once, and each draws

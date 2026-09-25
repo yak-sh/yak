@@ -7,7 +7,7 @@
 // owns which stores are in reach.
 //
 // The split is here and not in a store: a store refuses a word it never
-// planted ("unknown prop: .book"), so `.recipe!&.book!` cannot be asked of
+// planted ("unknown prop: .book"), so `.recipe&.book` cannot be asked of
 // either store whole. The line is cut on its own `&` seams — one part per
 // component named — each part asked of every store, and the eids in common
 // are the answer. The grammar itself is untouched: every part is an ordinary
@@ -26,7 +26,8 @@
 // about each other. And the space's vocabulary is the union of what its apps
 // declare — the language a merged bundle is written in, and the one @yaks/match
 // reads an order out of.
-import { asking, listed, PLATFORM, type Row, STAMPS } from './listing.ts'
+import { asking, listed, names, PLATFORM, type Row, STAMPS } from './listing.ts'
+import { bare } from './wire.ts'
 import { archetypes } from '@yaks/archetype'
 import { edges } from '@yaks/edge'
 import {
@@ -101,7 +102,7 @@ export let at = (r: Reach) => `${r.space.slug}/${r.app.slug}`
 // `said` is the line the caller asked, which the listing rule reads and the
 // store need not: a composed read asks each store a part of the line and
 // then gathers the bundle by `id=`, and the listing rule applied to those
-// words hid the stamps the caller had named — `.book!&.created!` came back
+// words hid the stamps the caller had named — `.book&.created` came back
 // with no `created` at all, while the same filter naming one app kept it
 // (C-32800 item 4). The words a listing is cut by are the caller's, wherever
 // the rows were fetched from.
@@ -109,11 +110,11 @@ export let at = (r: Reach) => `${r.space.slug}/${r.app.slug}`
 // The question carries the same door's screen an app's page asks with
 // (listing.ts `asking`), because an app's store keeps person rows as its own
 // bookkeeping — one per writer, so a byline has a name (graph.ts `#vouching`) —
-// and a person titled with what to call them matches `.doc!` like any row.
+// and a person titled with what to call them matches `.doc` like any row.
 // The directory's own store is the exception: there people are the data, and
 // its reads are its own (identity.ts).
 let doorOf = (env: Env, r: Reach, said?: string) => async (line: string) => {
-  let asked = line.replace(/^[?&]+/, '')
+  let asked = bare(line)
   let mine = at(r) == META_STORE ? asked : asking(asked, SCREEN)
   let door = appStore(env.STORE, r.space, r.app, env)
   let res = await door(
@@ -135,7 +136,7 @@ let doorOf = (env: Env, r: Reach, said?: string) => async (line: string) => {
 let RIDERS = ['order', 'near', 'limit', 'after', 'edges', 'kind']
 let AGGS = ['count', 'distinct', 'tally']
 
-let firstWord = (seg: string) => /^\.([a-z0-9_]+)/i.exec(seg)?.[1] ?? ''
+let firstWord = (seg: string) => /^[.!?]([a-z0-9_]+)/i.exec(seg)?.[1] ?? ''
 
 // The part a segment belongs to: the component it names, or '' for a segment
 // that is the whole line's business — `id=`, `limit=`, a bare word, a rider.
@@ -143,13 +144,12 @@ let firstWord = (seg: string) => /^\.([a-z0-9_]+)/i.exec(seg)?.[1] ?? ''
 // part of its own, since the store that knows the prop is the store that
 // knows the component behind it.
 let partOf = (seg: string) => {
-  if (!seg.startsWith('.')) return ''
+  if (!/^[.!?]/.test(seg)) return ''
   let word = firstWord(seg)
   return RIDERS.includes(word) || AGGS.includes(word) ? '' : word
 }
 
-let segsOf = (line: string) =>
-  line.replace(/^[?&]+/, '').split('&').filter(Boolean)
+let segsOf = (line: string) => bare(line).split('&').filter(Boolean)
 
 let aggOf = (line: string) =>
   segsOf(line).map(firstWord).find((w) => AGGS.includes(w))
@@ -227,7 +227,7 @@ let orderedBy = (
 // not name at all (listing.ts `listed`).
 let unasked = (comp: string, want: Set<string> | null, line: string) => {
   let kept = (want ? want.has(comp) : true) &&
-    (!STAMPS.includes(comp) || line.includes(`.${comp}`))
+    (!STAMPS.includes(comp) || names(line, comp))
   return (b: Bundle): Bundle => {
     if (kept) return b
     let out: Bundle = { ...b }
@@ -244,7 +244,7 @@ let unasked = (comp: string, want: Set<string> | null, line: string) => {
 
 // A filter line cut into parts: the segments that name each component, and
 // the ones that ride with every part. A part whose every segment is a request
-// (`.loan?`) narrows nothing — it asks for the component, so it is fetched
+// (`?loan`) narrows nothing — it asks for the component, so it is fetched
 // and never intersected.
 export let split = (line: string) => {
   let parts = new Map<string, { segs: string[]; asks: boolean }>()
@@ -255,7 +255,7 @@ export let split = (line: string) => {
     else {
       let one = parts.get(key) ?? { segs: [], asks: true }
       one.segs.push(seg)
-      one.asks &&= seg.endsWith('?')
+      one.asks &&= seg.startsWith('?') || seg.endsWith('?')
       parts.set(key, one)
     }
   }
@@ -330,8 +330,8 @@ let ordered = (heard: Heard[]) => {
 // platform kind from another store, and the union decides the rest.
 //
 // Between two app words the filter itself decides, and `must` names the
-// components it required: `.loan?&.book!` asks for books, so a book is what
-// each answer is, and `.book!&.loan?` must not call the same row something
+// components it required: `?loan&.book` asks for books, so a book is what
+// each answer is, and `.book&?loan` must not call the same row something
 // else. Clause order used to decide it, which made one entity a book or a
 // loan by where the caller happened to type the word (C-32800 item 3).
 // The answer also speaks as that store: `at` is the one whose own word won,
@@ -623,7 +623,7 @@ export let read = async (
   if (!orders.order && limit != null && eids.length > limit) {
     eids = eids.slice(0, limit)
   }
-  // `.count!` over a fan-out is how many entities the filter selects, which
+  // `.count` over a fan-out is how many entities the filter selects, which
   // is the size of the composed set — summing each store's own count would
   // count an entity that lives in two of them twice.
   if (agg == 'count') return { count: eids.length }
@@ -648,7 +648,7 @@ export let read = async (
     {
       want: want && by ? new Set([...want, by]) : want,
       apart,
-      said: by ? `${line}&.${by}?` : line,
+      said: by ? `${line}&?${by}` : line,
       must: need.map(([name]) => name),
     },
   )

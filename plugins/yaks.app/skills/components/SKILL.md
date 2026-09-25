@@ -52,7 +52,7 @@ nothing to draw.
 
 A body is stored content-addressed: the row keeps the SHA-256 of the text and
 the text itself is kept once, however many rows quote it. None of that is a row
-of the graph — there is no second entity beside your doc — so `.doc!` returns
+of the graph — there is no second entity beside your doc — so `.doc` returns
 your docs and a body reads back as the text you wrote.
 
 **`filed`** — `priority` (number), `project` (eid), `assignee` (eid), `domain`
@@ -71,7 +71,7 @@ else `done` if it has `completed`, else `wip` if it has a live `claim`, else
     await apply({ entity: { eid: '$t' },
       doc: { title: 'Water the plants' }, task: {}, filed: { priority: 1 } })
 
-    let todo = await query('.task.status=open&.doc?')
+    let todo = await query('.task.status=open&?doc')
 
 **`completed`** — no writable properties; the store sets `at` (time), `by` (eid)
 and `via` (eid). The mark that makes a task `done`. The store fills all three —
@@ -105,7 +105,7 @@ with its target, so a deleted recipe takes its thread with it.
     await apply({ entity: { eid: '$n' },
       doc: { body: 'Halve the sugar.' }, comment: { target: recipe } })
 
-    let thread = await query(`.comment.target=${recipe}&.doc?`)
+    let thread = await query(`.comment.target=${recipe}&?doc`)
 
 **`alias`** — no properties of its own; `alias: { name }` is the shorthand. A
 name of your own for an entity, worth as much as its eid. Write it beside a `$`
@@ -126,21 +126,21 @@ A name stands wherever an eid does — in a reference property, as a bundle's ow
 the same entity. One name, one entity: a second entity claiming a name somebody
 holds is refused, naming the holder. Delete the entity and the name is free
 again. An entity may answer to as many names as you give it; each is a row of
-its own (`key{of, value}` with `alias`), which is what `.alias!` lists.
+its own (`key{of, value}` with `alias`), which is what `.alias` lists.
 
 **`person`** — no properties. Whoever wrote a row. The store mints one for each
 writer it meets, titled with what to call them, so `person` rows have a `doc`
 too. You read them for a byline. They are screened out of an ordinary listing,
-so ask for them by name: `query('.person!&.doc?')` lists everyone this store has
+so ask for them by name: `query('.person&?doc')` lists everyone this store has
 met.
 
 **`archived`** — no writable properties; the store sets `at` (time), `by` (eid)
 and `via` (eid). The stamp that takes something out of the open list. Reach for
 it rather than a `hidden` property of your own — every part of the platform
-knows it, and `.archived=` is "everything not archived".
+knows it, and `!archived` is "everything not archived".
 
     await apply({ entity: { eid }, archived: {} })
-    let open = await query('.recipe!&.archived=')
+    let open = await query('.recipe&!archived')
 
 **`favorite`** — no writable properties; the store sets `at` (time). A plain
 star, one stamp per entity rather than one per person: it means "this app has
@@ -169,7 +169,7 @@ and `via` (eid). **`updated`** — the same three. The byline and the clock. You
 rarely write either: the store stamps the writer and the moment on its own, and
 a listing leaves them out unless the filter asks for them.
 
-    for (let e of await query('.doc!&.created!')) draw(e, e.created.by?.name)
+    for (let e of await query('.doc&.created')) draw(e, e.created.by?.name)
 
 `created.at` is **when this store first saw the row**, and it cannot be given a
 past moment — not by a page, not by `graph_apply`. So a row with a date of its
@@ -192,7 +192,7 @@ today is when you wrote them. Draw `jotting.written`.
 **`exception`** — `at`, `message`, `stack`, `request`, `version`, all
 server-set. **`failed`** — `at`, `message`, server-set. The platform's own rows
 about your app: what a route threw, what a page reported. Nothing you write.
-They stay out of every listing unless the filter names one (`.exception!`), and
+They stay out of every listing unless the filter names one (`.exception`), and
 `app_errors` is the tool meant for them.
 
 Not listed: `edge`, which is a relation between two entities rather than a
@@ -308,7 +308,7 @@ read them back on the row, filter on them, name them in a command.
     await apply({ entity: { eid: '$c' }, doc: { title: 'Chana masala' },
       recipe: { serves: 4, minutes: 35 } })
 
-    let quick = await query('.recipe.minutes<=30&.doc?')
+    let quick = await query('.recipe.minutes<=30&?doc')
 
 Write it as `vocab.yml` instead if you would rather read it — YAML is the same
 manifest with fewer braces and quotes, and an app that has both is deployed from
@@ -346,7 +346,7 @@ platform has no component for:
       task: {}, filed: { priority: 2 } })
 
     await apply({ entity: { eid }, completed: {} })
-    let left = await query('.chore!&.task.status=open&.doc?')
+    let left = await query('.chore&.task.status=open&?doc')
 
 **A reading list.** Two components, because a book and your reading of it are
 two aspects — one is true of the book forever, the other is yours and changes:
@@ -367,9 +367,9 @@ two aspects — one is true of the book forever, the other is yours and changes:
     await apply({ entity: { eid },
       reading: { started: new Date().toISOString() } })
 
-    let unread = await query('.book!&.reading=&.doc?')
+    let unread = await query('.book&!reading&?doc')
 
-`.reading=` asks for the component's absence — every book you have not begun.
+`!reading` asks for the component's absence — every book you have not begun.
 
 **A recipe box with pictures.** A component of your own points at the
 platform's:
@@ -507,7 +507,7 @@ by a different act, at a different time, that is two components.
 The reading list above is the case. `book` is what the book IS — it never
 changes, and two people would agree on it. `reading` is what happened between
 you and it: it arrives later, changes often, and might never arrive. Splitting
-them buys `.book!&.reading=` for the unread, spares an unstarted book a row of
+them buys `.book&!reading` for the unread, spares an unstarted book a row of
 nulls, and leaves room for a lending app to add a third component.
 
 Split when either half can be true without the other. Keep one component when

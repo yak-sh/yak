@@ -266,7 +266,7 @@ Deno.test('the platform store is queried through its graph-tier door', async () 
         let answer = await ask('admin_query', {
           admin: true,
           where: 'yak/platform',
-          filters: ['.exception!'],
+          filters: ['.exception'],
         }, { at })
         assertEquals(JSON.parse(body(answer)), rows)
         assertEquals(hit, ['https://yaks.app/mcp'])
@@ -278,7 +278,7 @@ Deno.test('the platform store is queried through its graph-tier door', async () 
             name: 'graph_query',
             arguments: {
               app: 'yak/platform',
-              query: '.exception!',
+              query: '.exception',
             },
           },
         })

@@ -171,12 +171,17 @@ let cap = (word: string, quals: Qual[]): number => {
 
 let path = (raw: string): string[] => raw.split('.')
 
-// The reserved names whose whole meaning is presence, so the dotted form means
-// the same as the older `!` form (`.count` = `.count!`).
+// The reserved names whose whole meaning is presence: `.count` counts, `.edges`
+// carries edges back, `.refs` references anything.
 let PRESENCE: Record<string, Clause> = {
   count: { kind: 'count' },
   edges: { kind: 'edges', peers: [] },
   refs: { kind: 'refs', op: '!', value: '' },
+}
+// And the one whose absence means something of its own: `!refs` references
+// nothing.
+let ABSENCE: Record<string, Clause> = {
+  refs: { kind: 'refs', op: '=', value: '' },
 }
 
 // The entity a cursor names, read from its number or its human id (the same
@@ -208,7 +213,10 @@ let sigil = (token: string): Clause[] | null => {
   if (!m) return null
   let [, mark, word] = m
   if (mark == '!') {
-    return [{ kind: 'pred', path: path(word), op: '=', value: scalar('') }]
+    return [
+      ABSENCE[word] ??
+        { kind: 'pred', path: path(word), op: '=', value: scalar('') },
+    ]
   }
   if (mark == '?') {
     return [{ kind: 'pred', path: path(word), op: '?', value: null }]
@@ -228,15 +236,15 @@ let pres = (word: string): Clause => ({
   value: null,
 })
 
-// `.edges[referenced,entry.session]!` — one stored edge type and an optional
+// `.edges[referenced,entry.session]` — one stored edge type and an optional
 // endpoint reference: two bare qualifiers, read through the same bracket as
-// everything else. `.edges!` alone carries edges back with nothing selected.
+// everything else. `.edges` alone carries edges back with nothing selected.
 let edgeSelect = (quals: Qual[]): Clause => {
   let [type, via, ...more] = quals
   if (!type || more.length || quals.some((q) => q.op || q.key)) {
     throw new SyntaxError(
       '.edges selects one edge type and an optional endpoint reference: ' +
-        '.edges[referenced,entry.session]!',
+        '.edges[referenced,entry.session]',
     )
   }
   return {

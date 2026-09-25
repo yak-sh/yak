@@ -10,7 +10,7 @@
 // The rule itself is T-32506's (C-32498 item 10): a listing answers the rows
 // a person saved, without the bookkeeping the store keeps about saving them,
 // and without a row that is nothing but bookkeeping. Naming a stamp in the
-// filter (`.created!`, `.created.by=…`) asks for it back — a door never hides
+// filter (`.created`, `.created.by=…`) asks for it back — a door never hides
 // what was asked for. Anything that is not a row listing (an aggregate, a
 // count) passes through as it came.
 
@@ -24,7 +24,7 @@ export let STAMPS = ['created', 'updated', 'notified', 'opened', 'quarantined']
 // read through `app_errors`, not through a listing, so a listing leaves them
 // out unless the filter names one — the deliberate opt-in src/query.ts
 // `selected()` asks for the store's blob rows. Asking for the stamps is not
-// asking for these: `.created!` alone dragged every exception into a person's
+// asking for these: `.created` alone dragged every exception into a person's
 // list of their own rows (C-32607 item 4).
 export let KERNEL = ['exception', 'error']
 
@@ -37,10 +37,15 @@ export let PLATFORM = [...KERNEL, 'person']
 
 export type Row = Record<string, unknown>
 
+/** Whether a filter line names a component, in any of the three ways a clause
+ * can: present (`.created`), absent (`!created`) or wanted (`?created`). */
+export let names = (line: string, word: string) =>
+  ['.', '!', '?'].some((mark) => line.includes(mark + word))
+
 // The same rule, asked instead of answered: the platform's own rows left out
-// of the question. A listing can only screen an answer's rows, so a `.count!`
+// of the question. A listing can only screen an answer's rows, so a `.count`
 // over one filter still counted what the list beside it did not show — a
-// person row wears a `doc` title now, so it matches `.doc!` (T-32627).
+// person row wears a `doc` title now, so it matches `.doc` (T-32627).
 // Screening the ask is what makes an aggregate, a search and a list agree, and
 // every door that serves a page asks this way. Naming one asks for it back,
 // and an address asks for its row whatever kind of row it is.
@@ -51,18 +56,17 @@ export type Row = Record<string, unknown>
 // every platform word.
 export let asking = (line: string, words: string[] = PLATFORM) => {
   if (!line.replace(/^[?&]+/, '') || line.includes('id=')) return line
-  let screen = words.filter((k) => !line.includes(`.${k}`))
-    .map((k) => `.${k}=`)
+  let screen = words.filter((k) => !names(line, k)).map((k) => `!${k}`)
   return screen.length ? `${line}&${screen.join('&')}` : line
 }
 
 // The rule itself, over rows: what this filter line's answer carries.
 export let listed = (rows: Row[], asked: string): Row[] => {
-  let hidden = STAMPS.filter((s) => !asked.includes(`.${s}`))
+  let hidden = STAMPS.filter((s) => !names(asked, s))
   let out: Row[] = []
   for (let row of rows) {
     let kernel = KERNEL.filter((k) => k in row)
-    if (kernel.length && !kernel.some((k) => asked.includes(`.${k}`))) continue
+    if (kernel.length && !kernel.some((k) => names(asked, k))) continue
     let kept = Object.fromEntries(
       Object.entries(row).filter(([k]) => !hidden.includes(k)),
     )

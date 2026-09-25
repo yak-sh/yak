@@ -1764,7 +1764,7 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
     value,
     refs: true,
   })
-  assertEquals(predsToQuery([has('project')]), '.project!')
+  assertEquals(predsToQuery([has('project')]), '.project')
   assertEquals(
     predsToQuery([eq('comment', 'target', E)]),
     `.comment.target=${E}`,
@@ -1777,8 +1777,8 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
   assertEquals(predsToQuery(parseQuery('widget')), 'widget')
   assertEquals(predsToQuery(parseQuery('wid*')), 'wid*')
   assertEquals(
-    predsToQuery(parseQuery('"widget alpha" .task!')),
-    '"widget alpha"&.task!',
+    predsToQuery(parseQuery('"widget alpha" .task')),
+    '"widget alpha"&.task',
   )
   assertEquals(
     predsToQuery([
@@ -1837,7 +1837,7 @@ Deno.test('a hand-built query and its parsed spelling are one server set', () =>
       ],
     },
   ]
-  let line = `.pin.canvas=${C}&.card!&.fields=pin.x,pin.z~,card.target`
+  let line = `.pin.canvas=${C}&.card&.fields=pin.x,pin.z~,card.target`
   config.host = 'browser.test'
   try {
     cache.value = {}
@@ -1869,7 +1869,7 @@ Deno.test('a hand-built query and its parsed spelling are one server set', () =>
 Deno.test('an unspellable query is a miss, and resolves when its rows land', () => {
   let prior = config.host
   let T = 'eeee0000-0000-4000-8000-000000000001'
-  let preds = resolveRefs(parseQuery('.task!|.board!'), findEid)
+  let preds = resolveRefs(parseQuery('.task|.board'), findEid)
   config.host = 'browser.test'
   try {
     cache.value = {}
@@ -1919,7 +1919,7 @@ Deno.test('serverQuery: a held membership query tracks its subscription', () => 
     cache.value = {
       [P1]: { entity: { eid: P1, num: 1 }, project: { eid: P1 } },
     }
-    let preds = resolveRefs(parseQuery('.project!'), findEid)
+    let preds = resolveRefs(parseQuery('.project'), findEid)
     let sub = `q:${JSON.stringify(preds)}`
     let sig = holdQuery(preds)
     // Primed synchronously from the in-memory cache (one project) — no flash.
@@ -1986,7 +1986,7 @@ Deno.test('commentCount shares one aggregate sub across targets (T-21283)', () =
     assertEquals(sent, 0)
     assertEquals(probe.subN(), n0)
     // A defining presence query DOES open its (bounded) server sub.
-    let preds = resolveRefs(parseQuery('.canvas!'), findEid)
+    let preds = resolveRefs(parseQuery('.canvas'), findEid)
     holdQuery(preds)
     assertEquals(probe.subN(), n0 + 1)
     dropQuery(preds)
@@ -2240,7 +2240,7 @@ Deno.test('no location, no host: nothing dials a server we never named', () => {
   }
   try {
     assertThrows(() => base(), Error, 'no server host')
-    subscribe('probe', '.task!')
+    subscribe('probe', '.task')
     unsubscribe('probe')
     assertEquals(dialed, [])
   } finally {
@@ -2360,7 +2360,7 @@ Deno.test('server-resolve: a reconnect reseed clears the sidecar', async () => {
 // signal wakes ONLY when this session's wake membership changes.
 let SOON = '2026-09-25T12:00:00Z', NOW = '2026-09-25T12:00:01Z'
 let pendingWakeQ = (session: string) =>
-  resolveRefs(parseQuery(`.wake.target=${session} .fired=`), findEid)
+  resolveRefs(parseQuery(`.wake.target=${session} !fired`), findEid)
 
 Deno.test('queryEids resolves pending wakes off the reverse index, narrowly', () => {
   cache.value = {
@@ -2552,7 +2552,7 @@ Deno.test('a board cache prime opens no second unwindowed subscription', () => {
   cache.value = {
     board_prime: {
       entity: { eid: 'board_prime', num: 1 },
-      board: { eid: 'board_prime', query: '.task!' },
+      board: { eid: 'board_prime', query: '.task' },
     },
     task_prime: {
       entity: { eid: 'task_prime', num: 2 },
@@ -2570,7 +2570,7 @@ Deno.test('a board cache prime opens no second unwindowed subscription', () => {
       'task_prime',
     ])
     assertEquals(sent.flatMap((f) => f.subscribe ?? []), [
-      '.task!&.limit=400&*',
+      '.task&.limit=400&*',
     ])
   } finally {
     drop()

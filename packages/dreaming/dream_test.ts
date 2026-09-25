@@ -19,7 +19,7 @@ Deno.test('a dream is a builder: it builds on its schedule, and reads as a dream
     builder: {},
     doc: { title: 'Write up', body: 'Write up what is waiting.' },
   }])
-  let [line] = (await g.read('.entry&.content?')) as Bundle[]
+  let [line] = (await g.read('.entry&?content')) as Bundle[]
   assertEquals(comp(line, 'content')?.body, 'Write up what is waiting.')
   let [dream] = (await g.read('.eid=z-writeup')) as Bundle[]
   assertEquals(vocab.kindOf(dream), 'dream')

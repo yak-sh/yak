@@ -18,16 +18,16 @@ let { tick } = await import('../../testing.ts')
 let { drop } = await import('../drafts.ts')
 
 Deno.test('board columns request a projected, priority-ordered screenful', () => {
-  let q = columnLine('.task!', 'open', 8)
+  let q = columnLine('.task', 'open', 8)
   assertEquals(windowOf(parseQuery(q)), { limit: 8 })
   assertEquals(orderOf(parseQuery(q)), 'priority')
   assertEquals(edgeRider(parseQuery(q))?.limit, 32)
   assertEquals(fieldsOf(parseQuery(q))?.some((f) => f.prop == 'body'), false)
-  assertEquals(windowOf(parseQuery(columnLine('.limit=3 .task!', 'open', 8))), {
+  assertEquals(windowOf(parseQuery(columnLine('.limit=3 .task', 'open', 8))), {
     limit: 3,
   })
   assertEquals(
-    orderOf(parseQuery(columnLine('.task! .order=hot', 'wip', 8))),
+    orderOf(parseQuery(columnLine('.task .order=hot', 'wip', 8))),
     'hot',
   )
   assertEquals(columnLine('', 'open', 8), '')

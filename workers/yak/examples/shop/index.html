@@ -365,7 +365,7 @@ $('pay').onclick = async () => {
   }
 }
 
-subscribe('.product!&.doc?', (rows) => {
+subscribe('.product&?doc', (rows) => {
   shelf = new Map(rows.map((row) => [row.entity.eid, row]))
   $('grid').replaceChildren(...rows.map(card))
   draw()
@@ -383,7 +383,7 @@ let mine = await me()
 if (mine.name) $('who').replaceChildren(text(mine.name))
 if (mine.writes) {
   $('orders').hidden = false
-  let sold = await query('.order!&.doc?')
+  let sold = await query('.order&?doc')
   $('rows').replaceChildren(
     ...sold.reverse().map((row) => {
       let tr = document.createElement('tr')

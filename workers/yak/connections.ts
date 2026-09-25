@@ -190,7 +190,7 @@ export let rebind = async (env: Env, store: string, app: string) => {
   let had = await secrets(env, store)
   if (!had) return
   let want = await envOf(ctxOf(env), app)
-  let links = await readOf(env)(`.edge.from=${app}&.${USES}!&*`)
+  let links = await readOf(env)(`.edge.from=${app}&.${USES}&*`)
   let owned = links.map((l) => comp(l, USES).binding)
   for (let [name, value] of Object.entries(want)) {
     await setSecret(env, store, name, value)
@@ -205,7 +205,7 @@ export let rebind = async (env: Env, store: string, app: string) => {
 // The apps that use a connection, asked before it changes: a connection ended
 // takes its links with it, and its apps are linked to a new one.
 let usersOf = async (env: Env, connection: string): Promise<string[]> =>
-  (await readOf(env)(`.edge.to=${connection}&.${USES}!&*`))
+  (await readOf(env)(`.edge.to=${connection}&.${USES}&*`))
     .map((l) => String(comp(l, 'edge').from))
 
 // The same for each of those apps: after a key is kept, a sign-in finished,
@@ -337,7 +337,7 @@ let told = (page: string, how: 'connected' | 'refused') => {
 // Whether a connection is an app's ask that each person answers with their
 // own, which is nobody's to connect.
 let asking = async (read: Read, eid: string) =>
-  (await read(`.edge.to=${eid}&.${USES}!&*`)).some((l) => comp(l, USES).each)
+  (await read(`.edge.to=${eid}&.${USES}&*`)).some((l) => comp(l, USES).each)
 
 // Send the person to the service, the attempt riding a cookie to the return.
 let signingIn = async (
@@ -604,7 +604,7 @@ let hookable = async (env: Env, space: Space, app: App, eid: string) => {
   let read = readOf(env)
   let [b] = await read(`.eid=${eid}&.${CONNECTION}&*`)
   if (!b || comp(b, CONNECTION).owner != space.eid) return null
-  let used = await read(`.edge.from=${app.eid}&.edge.to=${eid}&.${USES}!`)
+  let used = await read(`.edge.from=${app.eid}&.edge.to=${eid}&.${USES}`)
   return used.length ? b : null
 }
 
@@ -746,7 +746,7 @@ let CONNECTIONS: Row[] = [
       let eid = made.find((b) => !b.edge && !b[INTEGRATION])!.entity.eid
       let [b] = await c.graph.read(`.eid=${eid}&.${CONNECTION}&*`)
       let [l] = await c.graph.read(
-        `.eid=${edgeEid(app.eid, USES, eid)}&.${USES}!&*`,
+        `.eid=${edgeEid(app.eid, USES, eid)}&.${USES}&*`,
       )
       let status = comp(b, CONNECTION).status
       let u = comp(l, USES)

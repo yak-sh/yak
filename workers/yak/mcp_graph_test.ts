@@ -142,23 +142,23 @@ slow('a read with no app composes every app the caller can reach', async () => {
     // A filter naming two apps' words is intersected at the door: the cake
     // wears both, the pancakes and the zester wear one each.
     assertEquals(
-      (await rows('.recipe!&.loan!')).map((r) => r.entity.eid),
+      (await rows('.recipe&.loan')).map((r) => r.entity.eid),
       [cake],
     )
     // An answer carries the components the filter names and no more, so the
     // title is asked for beside the recipe.
     assertEquals(
-      (await rows('.recipe!&.doc?')).map((r) => r.doc!.title),
+      (await rows('.recipe&?doc')).map((r) => r.doc!.title),
       ['Lemon cake', 'Pancakes'],
     )
-    assertEquals((await rows('.recipe!')).map((r) => r.doc), [
+    assertEquals((await rows('.recipe')).map((r) => r.doc), [
       undefined,
       undefined,
     ])
-    // `.recipe!&.loan?` is the composition asked for by name: every recipe,
+    // `.recipe&?loan` is the composition asked for by name: every recipe,
     // wearing the lending app's loan where it has one.
     assertEquals(
-      (await rows('.recipe!&.loan?')).map((r) => r.loan?.to),
+      (await rows('.recipe&?loan')).map((r) => r.loan?.to),
       ['Maya', undefined],
     )
     // The fan-out answers what a single store answers (C-32800 items 2-4).
@@ -166,9 +166,9 @@ slow('a read with no app composes every app the caller can reach', async () => {
     // component beside the filter and narrows nothing, so a store that never
     // planted the word answers the same rows without it — which is what the
     // guide's own example asks of the app the person names.
-    assertEquals(await rows('.recipe!&.loan?'), await rows('.loan?&.recipe!'))
+    assertEquals(await rows('.recipe&?loan'), await rows('?loan&.recipe'))
     assertEquals(
-      (await rows('.recipe!&.loan?', agent, 'recipes')).map((r) =>
+      (await rows('.recipe&?loan', agent, 'recipes')).map((r) =>
         r.recipe!.serves
       ),
       [4, 2],
@@ -177,26 +177,26 @@ slow('a read with no app composes every app the caller can reach', async () => {
     // clause the caller happened to type first: a recipe is a recipe either
     // way round, exactly as the recipes store alone calls it.
     assertEquals(
-      (await rows('.loan?&.recipe!')).map((r) => r.kind),
-      (await rows('.recipe!', agent, 'recipes')).map((r) => r.kind),
+      (await rows('?loan&.recipe')).map((r) => r.kind),
+      (await rows('.recipe', agent, 'recipes')).map((r) => r.kind),
     )
     // A stamp named in the filter comes back from the fan-out too: the
     // listing rule is cut by the caller's own line, not by the `id=` the
     // composition gathers with, which dropped every byline (item 4).
     assertEquals(
-      await rows('.recipe!&.created!'),
-      await rows('.recipe!&.created!', agent, 'recipes'),
+      await rows('.recipe&.created'),
+      await rows('.recipe&.created', agent, 'recipes'),
     )
     assertEquals(
-      (await rows('.recipe!&.created!')).map((r) => !!r.created?.at),
+      (await rows('.recipe&.created')).map((r) => !!r.created?.at),
       [true, true],
     )
-    // `.doc!` is a platform word both stores speak, so the answer is both
+    // `.doc` is a platform word both stores speak, so the answer is both
     // apps' rows — and the cake is one row, not two. The person row each
     // store mints for its writer wears a title too (graph.ts `#vouching`), and
     // is the platform's bookkeeping, never a row in the person's own list.
     assertEquals(
-      (await rows('.doc!')).map((r) => r.doc!.title),
+      (await rows('.doc')).map((r) => r.doc!.title),
       ['Lemon cake', 'Pancakes', 'Lemon zester'],
     )
     // `*` is the debugging form: every component, wherever it lives.
@@ -206,7 +206,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
     // A word nobody planted is nobody's, and the store's own sentence says so
     // rather than an empty answer.
     await assertRejects(
-      () => agent.tool('graph_query', { filter: '.sandwich!' }),
+      () => agent.tool('graph_query', { filter: '.sandwich' }),
       Error,
       'unknown prop',
     )
@@ -249,7 +249,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
     // is graph_query with the words in the line — and the ordinary rule about
     // which components an answer carries is back with it.
     let narrowed = JSON.parse(
-      await agent.tool('graph_query', { q: 'lemon&.recipe!' }),
+      await agent.tool('graph_query', { q: 'lemon&.recipe' }),
     ) as { doc?: { title: string }; recipe: { serves: number } }[]
     assertEquals(narrowed.map((r) => r.recipe.serves), [4])
     assertEquals(narrowed.map((r) => r.doc), [undefined])
@@ -272,7 +272,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
     // store's vocabulary, in whichever order the isolate happened to plant
     // them (T-32814).
     assertStringIncludes(
-      await rows('.recipe!', hers).then(() => '', (e: Error) => e.message),
+      await rows('.recipe', hers).then(() => '', (e: Error) => e.message),
       'unknown prop: .recipe',
     )
     assertEquals((await rows(`id=${cake}`, hers))[0].entity.eid, cake)
@@ -329,10 +329,10 @@ slow('a write with no app routes each component to its own app', async () => {
       }],
     })
     let cake = minted(said, '$cake')
-    assertEquals((await rows('.doc!', 'recipes')).map((r) => r.entity.eid), [
+    assertEquals((await rows('.doc', 'recipes')).map((r) => r.entity.eid), [
       cake,
     ])
-    assertEquals((await rows('.doc!', 'lending')).length, 0)
+    assertEquals((await rows('.doc', 'lending')).length, 0)
 
     // A rehearsal answers what the kept write would have, name resolved, and
     // keeps none of it: not in the app's store, not anywhere.
@@ -348,7 +348,7 @@ slow('a write with no app routes each component to its own app', async () => {
       '$pie',
     )
     assert(pie != '$pie')
-    assertEquals((await rows('.doc!', 'recipes')).map((r) => r.entity.eid), [
+    assertEquals((await rows('.doc', 'recipes')).map((r) => r.entity.eid), [
       cake,
     ])
 
@@ -393,8 +393,8 @@ slow('a write with no app routes each component to its own app', async () => {
     // lending store, and the fan-out says the same (C-32800 item 5).
     for (
       let by of [
-        (await rows('.loan!&.created!', 'lending'))[0].created!.by,
-        (await rows('.loan!&.created!'))[0].created!.by,
+        (await rows('.loan&.created', 'lending'))[0].created!.by,
+        (await rows('.loan&.created'))[0].created!.by,
       ]
     ) {
       assertEquals(typeof by == 'string' ? by : by.name, jeff.name)
@@ -680,7 +680,7 @@ slow('a word the space already has is used where it lives', async () => {
         book?: { title?: string } & Record<string, unknown>
       }[]
     assertEquals(
-      (await rows('.book!', 'reading-list')).map((r) => r.entity.eid),
+      (await rows('.book', 'reading-list')).map((r) => r.entity.eid),
       [piranesi],
     )
     // And there is no second copy: the fan-out answers one bundle, while each
@@ -696,11 +696,11 @@ slow('a word the space already has is used where it lives', async () => {
         (e: Error) => e.message,
       )
     assertStringIncludes(
-      await refused('.book!', 'lending'),
+      await refused('.book', 'lending'),
       'unknown prop: .book',
     )
     assertStringIncludes(
-      await refused('.loan!', 'reading-list'),
+      await refused('.loan', 'reading-list'),
       'unknown prop: .loan',
     )
 
@@ -729,7 +729,7 @@ slow('a word the space already has is used where it lives', async () => {
       required: ['title'],
       apply: { book: { title } },
     })
-    let every = { description: 'Every book', query: '.book!' }
+    let every = { description: 'Every book', query: '.book' }
     await agent.tool('app_files', {
       app: 'lending',
       op: 'write',
@@ -744,7 +744,7 @@ slow('a word the space already has is used where it lives', async () => {
     })
     // One store holds both books: the reading list's, where `book` lives.
     assertEquals(
-      (await rows('.book!', 'reading-list')).map((r) => r.book!.title).sort(),
+      (await rows('.book', 'reading-list')).map((r) => r.book!.title).sort(),
       ['Piranesi', 'Solenoid'],
     )
     // And the lending app's own read command answers from there too.
@@ -778,7 +778,7 @@ slow('a word the space already has is used where it lives', async () => {
       app: 'lending',
       op: 'write',
       path: 'tools.json',
-      content: JSON.stringify({ shelf: { description: 'x', query: '.book!' } }),
+      content: JSON.stringify({ shelf: { description: 'x', query: '.book' } }),
     })
     let stray = await assertRejects(() =>
       agent.tool('app_deploy', { app: 'lending' })
@@ -1109,7 +1109,7 @@ slow(
         'player.claimed',
       )
       let [row] = JSON.parse(
-        await agent.tool('graph_query', { app: 'idler', query: '.player!' }),
+        await agent.tool('graph_query', { app: 'idler', query: '.player' }),
       ) as { player: { gold: number } }[]
       assertEquals(row.player.gold, 50)
     } finally {

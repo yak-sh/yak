@@ -214,7 +214,7 @@ Deno.test('native number and query editors retain their existing elements', () =
   for (
     let [comp, prop, value, selector] of [
       ['filed', 'priority', 2, 'input.Prop_Num'],
-      ['board', 'query', '.task!', '.Prop_Query input.Prop_Find'],
+      ['board', 'query', '.task', '.Prop_Query input.Prop_Find'],
     ] as const
   ) {
     let { root, free } = mount(h(ColumnEdit, {

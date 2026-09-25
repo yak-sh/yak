@@ -11,12 +11,13 @@
 //   .prop=a,b,c      any of
 //   .prop=1..5       range, inclusive (1...5 excludes the end; ISO dates
 //                    compare fine lexicographically)
-//   .prop=           null / absent
-//   .prop!            present (including an empty string)
+//   !prop            null / absent
+//   .prop            present (including an empty string)
+//   ?prop            carried beside the filter, never filtered on
 //   .prop!=v         not — negates any value form above
 //   .prop~=v         contains, case-insensitive
 //   .prop~=          present — an empty needle asks for the COLUMN, the same
-//                    thing `.prop!` asks (never "every row contains ''")
+//                    thing `.prop` asks (never "every row contains ''")
 //   .prop<v <=v >v >=v   comparisons — a number column compares numerically,
 //                    everything else as text (an ISO stamp compares right as
 //                    text); an operand the column's type cannot hold selects
@@ -46,7 +47,7 @@
 //
 // Unqualified props route by component, same rule as writes; `.task.status`
 // is the explicit spelling. A component name by itself tests the facet:
-// `.proposed=` means absent, `.proposed!` present. `.num` routes to the entity
+// `!proposed` means absent, `.proposed` present. `.num` routes to the entity
 // spine; `at`/`by` are shared by the stamps — created, updated, decided,
 // proposed, archived — so spell those out (`.created.at`, `.archived.at`).
 //
@@ -152,7 +153,7 @@ export type Pred = {
   // The EDGES RIDER's peer projection: `.edges.peers=status,title` names the
   // columns the FAR endpoint of each incident edge carries into the reply, so a
   // requires-tree renders (id, status) without subscribing every blocker row.
-  // Empty for a bare `.edges!`. op is EDGES; edgeRider() reads the directive.
+  // Empty for a bare `.edges`. op is EDGES; edgeRider() reads the directive.
   peers?: Hop[]
   edge?: EdgeSelector
   // The EDGES RIDER's BOUND — `.edges.limit=200`. A hub's incident set is not
@@ -230,9 +231,9 @@ export type Comps = Record<string, Record<string, unknown> | undefined>
 // One token — '.priority<=1', '.domain=Ops,Eng' — to a Pred; null if the
 // string isn't a dot-param at all.
 export let EXISTS = 'exists'
-// `.loan?` asks for a component WITHOUT filtering on it: an optional
-// presence, requested. It selects nothing and screens nothing — `.book!` says
-// which entities the answer is about, `.book!&.loan?` says the answer should
+// `?loan` asks for a component WITHOUT filtering on it: an optional
+// presence, requested. It selects nothing and screens nothing — `.book` says
+// which entities the answer is about, `.book&?loan` says the answer should
 // carry their loans too, where they have one. A door that projects reads it
 // (workers/yak/graph.ts); every evaluator lets it through like a ranking.
 export let WANT = 'want'
@@ -263,7 +264,7 @@ export let NEAR = 'near'
 export let nearOf = (preds: Pred[]) => preds.find((p) => p.op == NEAR)?.value
 
 // An AGGREGATE directive rides the pred list like ORDER — `.distinct=domain`,
-// `.tally=domain`, `.count!`. matchQuery passes AGG through (true), so the OTHER
+// `.tally=domain`, `.count`. matchQuery passes AGG through (true), so the OTHER
 // preds select the universe the aggregate reduces; a reader pulls the projection
 // with aggOf() and computes it with tally() (or aggregateSql server-side).
 export let AGG = 'agg'
@@ -323,7 +324,7 @@ export let predComps = (preds: Pred[]): Set<string> | null => {
       p.op == NEVER || p.op == ORDER || p.op == NEAR || p.op == PROJECT
     ) continue
     if (p.op == WINDOW) continue
-    // `.count!` aggregates the selection, naming no column of its own.
+    // `.count` aggregates the selection, naming no column of its own.
     if (p.op == AGG && !p.comp) continue
     if (!p.comp) return null
     // task.status is virtual: a filter/window/aggregate over it reads all four
@@ -374,8 +375,8 @@ export let PROJECT = 'project'
 export let fieldsOf = (preds: Pred[]): Field[] | undefined =>
   preds.find((p) => p.op == PROJECT)?.fields
 
-// The EDGES RIDER — `.edges!`, optionally `.edges.peers=status,title`. A typed
-// form (`.edges[referenced,entry.session]!`) selects stored sentences after
+// The EDGES RIDER — `.edges`, optionally `.edges.peers=status,title`. A typed
+// form (`.edges[referenced,entry.session]`) selects stored sentences after
 // projecting endpoints through one reference column. It rides the pred list
 // like AGG/PROJECT and delivers triples INCIDENT to its result set — the scoped
 // replacement for shipping every edge at boot. `peers` names far-end columns.
@@ -485,7 +486,7 @@ export let listed = (comps: Comps, preds: Pred[]) =>
 // `image` names them too: dimensions belong to the content (its row keys on
 // artifact), so a filter that asks for one can be asking for nothing else,
 // and a photo wall reading what its pictures measure should not have to say
-// `.artifact!` to be allowed the answer (C-32706 item 1).
+// `.artifact` to be allowed the answer (C-32706 item 1).
 let ON_BLOB = ['artifact', 'image']
 
 export let namesBlobs = (preds: Pred[]) =>
@@ -525,7 +526,7 @@ export let screened = (preds: Pred[], entries: boolean): Pred[] => [
 // a lone kind= otherwise built the whole 27 MB snapshot to screen it in JS.
 // The absence clauses are what make it EXACT: an entity wearing both `memory`
 // and `comment` is a comment (comment is earlier), so kind=memory must skip
-// it — presence (`.memory!`) cannot, and overcounts. null for a word naming
+// it — presence (`.memory`) cannot, and overcounts. null for a word naming
 // no kind (kind=entity, a typo): the derived `entity` fallback is every
 // kindOrder comp absent, and its only reader is the JS screen that stays.
 export let kindPreds = (kind: string): Pred[] | null => {
@@ -810,9 +811,9 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
       segs.length != 1 || value || (owned(segs[0]) && !routed(segs[0], vocab))
     ) {
       throw new Error(
-        `.${
+        `?${
           segs.join('.')
-        }? asks for a whole component beside the filter: .book!&.loan?`,
+        }: ? asks for a whole component beside the filter, as .book&?loan does`,
       )
     }
     return [{ comp: segs[0], prop: '', op: WANT, value: '' }]
@@ -839,7 +840,7 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
   if (!p.prop) {
     if (p.value || (p.op != '' && p.op != '~' && p.op != EXISTS)) {
       throw new Error(
-        `component filters are presence tests: .${p.comp}= is absent, .${p.comp}! is present`,
+        `component filters are presence tests: !${p.comp} is absent, .${p.comp} is present`,
       )
     }
     return [p]
@@ -1026,7 +1027,7 @@ export let resolveRefs = (
 // hand the matcher a later moment (see the subscription sweep).
 // A bare component name (empty prop) is a presence test: `!`/`~=` hold when the
 // bag wears the component, `=` when it does not — the same rule at depth 0 and
-// at a path leaf (`.blocked!` and `.filed.project.archived!` mean the same thing
+// at a path leaf (`.blocked` and `.filed.project.archived` mean the same thing
 // one hop apart). A broken link hands in an undefined bag, which reads as absent.
 let present = (bag: Comps | undefined, comp: string, op: string): boolean =>
   op == '~' || op == EXISTS ? !!bag?.[comp] : !bag?.[comp]
@@ -1115,8 +1116,8 @@ export let matchQuery = (
     }
     if (p.refs) {
       // The multi-column reverse-union: read every {eid} column this bag
-      // carries. `.refs=X` holds when any equals X; `.refs!` when any is set;
-      // `.refs=` when none is — the same tri-state a reverse association marks.
+      // carries. `.refs=X` holds when any equals X; `.refs` when any is set;
+      // `!refs` when none is — the same tri-state a reverse association marks.
       let vals = refCols
         .map(([comp, prop]) => c[comp]?.[prop])
         .filter((v) => v != null)

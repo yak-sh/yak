@@ -126,7 +126,7 @@ slow('a hostname finds its app, and only one app', async () => {
       headers: { cookie },
     })
     assertEquals(wrote.status, 200)
-    let back = await (await k.at('herbusiness.com', '/api/query?.doc!', {
+    let back = await (await k.at('herbusiness.com', '/api/query?.doc', {
       headers: { cookie },
     })).json()
     assertEquals(back.length, 1)

@@ -236,7 +236,7 @@ Deno.test('a directory job reads and writes the directory in-process, never thro
     }
     await store.tick(at('05:00'))
     assertEquals(knocks.filter((k) => k.startsWith(PLATFORM_STORE)), [])
-    let [space] = await meta(p.env).query('.space.slug=ada&.meter?')
+    let [space] = await meta(p.env).query('.space.slug=ada&?meter')
     assertEquals((space.meter as { month: string }).month, '2026-09')
   } finally {
     globalThis.fetch = fetch
@@ -308,7 +308,7 @@ Deno.test('a write arms the object for the wake it just heard, and the alarm fir
   }])
   assertEquals(await storage.getAlarm(), now)
   await ring(p)
-  let [fired] = await meta(p.env).query('.fired&.wake?&.doc.title~=already')
+  let [fired] = await meta(p.env).query('.fired&?wake&.doc.title~=already')
   assert(fired, 'the overdue wake fired')
   assertEquals((fired.wake as { at: string | null }).at, null)
   // And it re-armed for the one still ahead.
@@ -326,7 +326,7 @@ Deno.test('an app store keeps its own schedule, with no platform in the middle',
   }], KERNEL)
   assertEquals(await p.states.get('ada/app')!.storage.getAlarm(), now)
   await ring(p, 'ada/app')
-  let [row] = await door.query('.fired&.wake?') as unknown as {
+  let [row] = await door.query('.fired&?wake') as unknown as {
     wake: { at: string }
   }[]
   assert(row, 'the app store fired its own wake')
@@ -339,7 +339,7 @@ Deno.test('an app store keeps its own schedule, with no platform in the middle',
 
 Deno.test('the git object store keeps a clock too, with nothing owed', async () => {
   let p = platform('git wake')
-  await metaOf(storeOf(p.env.STORE, GIT_STORE)).query('.gitobj!')
+  await metaOf(storeOf(p.env.STORE, GIT_STORE)).query('.gitobj')
   assertEquals(await p.object(GIT_STORE).tick(Date.now()), {
     fired: [],
     refused: [],
@@ -397,7 +397,7 @@ Deno.test("an app's rule on `fired` advances the row its wake was about", async 
   await ctx.storage.deleteAlarm()
   await store.alarm()
   let [row] =
-    await (await ask(`/query?q=${encodeURIComponent('.watered!&.wake?')}`))
+    await (await ask(`/query?q=${encodeURIComponent('.watered&?wake')}`))
       .json() as {
         watered: { by: string }
         wake: { at: string | null }
@@ -508,7 +508,7 @@ Deno.test('a recurring call is one invocation per firing, never a re-run', async
   assertEquals((await a.rows('.call.source=daily')).length, 1)
   assertEquals((await a.rows('.chore')).length, 1)
   // The next occurrence, a day on, is its own invocation and its own answer.
-  let [row] = await a.rows('.eid=daily&.wake?')
+  let [row] = await a.rows('.eid=daily&?wake')
   await a.ctx.storage.setAlarm(Date.parse((row.wake as { at: string }).at))
   await a.store.tick(Date.parse((row.wake as { at: string }).at))
   assertEquals((await a.rows('.call.source=daily')).length, 2)
@@ -553,12 +553,12 @@ Deno.test('an idle world advances offline, a missed stretch in one firing', asyn
     200,
   )
   let world = async () =>
-    (await a.rows('.eid=world&.wake?&.fired?'))[0] as unknown as {
+    (await a.rows('.eid=world&?wake&?fired'))[0] as unknown as {
       wake: { at: string; every: string }
       fired: { at: string }
     }
   await a.store.tick(at('09:05'))
-  assertEquals((await a.rows('.tick!')).length, 1)
+  assertEquals((await a.rows('.tick')).length, 1)
   assertEquals((await a.rows('.call.source=world')).length, 1)
   assertEquals((await world()).fired.at, iso('09:05'))
   assertEquals((await world()).wake.at, iso('09:10'))
@@ -566,8 +566,8 @@ Deno.test('an idle world advances offline, a missed stretch in one firing', asyn
   // between are one firing, so the command runs once more and not seven
   // times, and the cadence carries on from where the catch-up left it.
   await a.store.tick(at('09:40'))
-  assertEquals((await a.rows('.tick!')).length, 2)
-  let calls = await a.rows('.call.source=world&.created?')
+  assertEquals((await a.rows('.tick')).length, 2)
+  let calls = await a.rows('.call.source=world&?created')
   assertEquals(calls.length, 2)
   // Each invocation says when it was asked for, so the stretch a firing
   // covered is the gap between the last two — what an idle world advances by.

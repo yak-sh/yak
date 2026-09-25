@@ -103,15 +103,15 @@ Deno.test('find is a filter line, one clause per argument given', () => {
   assertEquals(schemaOf(find).required, [])
   assertEquals(
     filled(find, { words: 'lemon', serves: 8, limit: 5 }).query,
-    '.recipe!&.doc?&lemon&.recipe.serves=8&limit=5',
+    '.recipe&?doc&lemon&.recipe.serves=8&limit=5',
   )
   // A clause whose argument nobody sent drops out, and the rest still reads.
   assertEquals(
     filled(find, { cuisine: 'thai & lao' }).query,
-    '.recipe!&.doc?&.recipe.cuisine=thai%20%26%20lao',
+    '.recipe&?doc&.recipe.cuisine=thai%20%26%20lao',
   )
   // Nothing at all is every recipe there is.
-  assertEquals(filled(find, {}).query, '.recipe!&.doc?')
+  assertEquals(filled(find, {}).query, '.recipe&?doc')
 })
 
 Deno.test('an app declines them, or declares one itself', () => {

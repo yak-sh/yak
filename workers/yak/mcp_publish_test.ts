@@ -81,13 +81,13 @@ slow('a word two spaces spell differently stays two words', async () => {
         note?: { body?: unknown }
       }[]
     // The shapes agree, so the name is one word and the answer is one bundle.
-    let agreed = await rows('.book!')
+    let agreed = await rows('.book')
     assertEquals(agreed.length, 1)
     assertEquals(agreed[0].space, undefined)
     assertEquals(agreed[0].book!.pages, 245)
     // They do not agree, so the rows stay apart, each saying which space it
     // is answering for.
-    let apart = await rows('.note!')
+    let apart = await rows('.note')
     assertEquals(apart.length, 2)
     assertEquals(apart.map((r) => r.space!).sort(), [shelf, stall].sort())
     assertEquals(
@@ -473,7 +473,7 @@ slow('an installed app is the installer own copy, data and all', async () => {
     await his.tool('app_publish', { app: 'tally', about: 'Count the votes' })
     let votes = (agent: ReturnType<typeof connector>) => async () =>
       (JSON.parse(
-        await agent.tool('graph_query', { app: 'tally', filter: '.vote!' }),
+        await agent.tool('graph_query', { app: 'tally', filter: '.vote' }),
       ) as { vote: { who: string; pick?: string } }[])
         .map((r) => r.vote.who).sort()
     let cast = (agent: ReturnType<typeof connector>, who: string) =>

@@ -65,8 +65,8 @@ let QUERIES = [
   '.status=shelved',
   '.status=shelved,sold',
   '.status!=sold',
-  '.status=',
-  '.status!',
+  '!status',
+  '.status',
   '.stars=3,5',
   '.price=12',
   '.price=7.5',
@@ -80,18 +80,18 @@ let QUERIES = [
   '.stars>3',
   '.stars<=3',
   // a tag: a component with no properties, where presence is the whole fact
-  '.signed!',
-  '.signed=',
+  '.signed',
+  '!signed',
   '.signed~=',
   // a bare bang completes a component sentence even where a property of the
-  // same name claims the bare name: `.book!` is the books, `.book=b1` is
-  // still review.book, and `.review.book!` still reaches the property.
-  '.book!',
-  '.review.book!',
+  // same name claims the bare name: `.book` is the books, `.book=b1` is
+  // still review.book, and `.review.book` still reaches the property.
+  '.book',
+  '.review.book',
   // booleans and enums
   '.available=1',
   '.available=0',
-  '.available!',
+  '.available',
   // contains
   '.title~=spring',
   '.title~=SPRING',
@@ -104,8 +104,8 @@ let QUERIES = [
   '.released!=today',
   '.released<2024-01-01',
   '.released>=2024-06-15',
-  '.released=',
-  '.released!',
+  '!released',
+  '.released',
   '.joined=today',
   // the kind scope, singular and plural
   '.kind=book',
@@ -115,19 +115,19 @@ let QUERIES = [
   '.kind=member',
   // references, forward and followed
   '.author=a1',
-  '.author=',
-  '.author!',
+  '!author',
+  '.author',
   '.book=b1',
   '.book.author.doc.title~=vale',
   '.book.author.doc.title=Ursula Vale',
-  '.book.author.member!',
-  '.book.author.member=',
+  '.book.author.member',
+  '!book.author.member',
   // identity: naming entities instead of filtering them — an eid, a list of
   // them, a spine number, a human id (`B-3` is the entity numbered 3), a mixed
   // list, and a name nothing wears
   '.eid=b1',
   '.eid=b1,b2',
-  '.eid=',
+  '!eid',
   '.entity.eid=b1',
   '.num=3',
   '.num=3,4',
@@ -139,13 +139,13 @@ let QUERIES = [
   // backlinks and reverse hops
   '.refs=a1',
   '.refs=b1',
-  '.reviews!',
-  '.reviews=',
+  '.reviews',
+  '!reviews',
   '.reviews>=2',
   '.reviews=1',
   '.reviews.stars=5',
   '.reviews.stars>=4',
-  '.books!',
+  '.books',
   // bare words
   'spring',
   'fables',
@@ -224,7 +224,7 @@ Deno.test('every query selects the same entities', () => {
 
 Deno.test('a query neither side can answer is declined by both', () => {
   let s = sql()
-  for (let q of ['.near=b1', '.edges!', '.refs!', '.reviews~=deep']) {
+  for (let q of ['.near=b1', '.edges', '.refs', '.reviews~=deep']) {
     assertThrows(() => s.read(q), Error, 'cannot compile', q)
     assertThrows(() => matcher(q, shop), Error, 'cannot compile', q)
   }
@@ -462,17 +462,17 @@ let STATUS = [
   '.status!=done',
   '.status~=cancel',
   // absence and presence: a non-task has no status to read
-  '.status=',
-  '.status!',
+  '!status',
+  '.status',
   // beside an ordinary property, the way a board actually reads
   '.status=open&.priority=1',
   '.status!=cancelled&.priority>=2',
   '.kind=task&.status=done',
   // and ordered by the computed property itself, windowed as a page would ask
-  '.status!&.order=status',
-  '.status!&.order=-status',
-  '.status!&.order=status&.limit=2',
-  '.status!&.order=status&.after=2',
+  '.status&.order=status',
+  '.status&.order=-status',
+  '.status&.order=status&.limit=2',
+  '.status&.order=status&.after=2',
 ]
 
 Deno.test('a computed property agrees when both sides are given the rule', () => {
@@ -498,7 +498,7 @@ Deno.test('a computed property nobody registered still declines', () => {
   ) as Unsupported
   assertEquals(e.by, '@yaks/match')
   // ordering by one declines the same way
-  assertThrows(() => matcher('.task!&.order=status', todo), Unsupported)
+  assertThrows(() => matcher('.task&.order=status', todo), Unsupported)
 })
 
 // An order names a property. A whole component in its place is refused by

@@ -174,7 +174,7 @@ let readExpr = (l: Named, comp: string, prop: string) => (owner: string) =>
  * import { blobRead } from '@yaks/blob'
  *
  * let store = storage(driver, vocab, { derived: blobRead(vocab) })
- * // store.read('.post!')[0].post.body === 'a long essay…'
+ * // store.read('.post')[0].post.body === 'a long essay…'
  * ```
  *
  * Merge them with any overrides of your own — the registry is a plain object

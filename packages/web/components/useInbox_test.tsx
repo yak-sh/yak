@@ -54,7 +54,7 @@ Deno.test('inbox count waits for authority, shares holds, and switches to watch/
       id: profile.id,
       bundles: [{ entity: { eid: actor }, project: {} }],
     })
-    let counts = asks().filter((a) => a.subscribe.endsWith('.count!'))
+    let counts = asks().filter((a) => a.subscribe.endsWith('.count'))
     assertEquals(counts.length, 4)
     assertEquals(root.textContent, '??')
     for (let a of counts) await say({ id: a.id, count: 2 })
@@ -72,7 +72,7 @@ Deno.test('inbox count waits for authority, shares holds, and switches to watch/
     assertEquals(root.textContent, '??')
     assertEquals(counts.every((a) => gone().includes(a.id)), true)
     let candidates = asks().filter((a) =>
-      a.subscribe.includes('.archived=') && !a.subscribe.endsWith('.count!')
+      a.subscribe.includes('!archived') && !a.subscribe.endsWith('.count')
     )
     assertEquals(candidates.length > 0, true)
     let item = uuid()

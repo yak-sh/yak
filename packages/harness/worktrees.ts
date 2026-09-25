@@ -55,8 +55,8 @@ export let over = (b: Bundle): boolean =>
  * with no entries in it at all, is one of these: nothing is pending in it yet,
  * but nothing has ended either. */
 export let going = async (g: Graph): Promise<Bundle[]> => [
-  ...await g.read(`.session&.session.status!=${ENDED.join(',')}&.home?`),
-  ...await g.read('.session&.process&.exit=&.home?'),
+  ...await g.read(`.session&.session.status!=${ENDED.join(',')}&?home`),
+  ...await g.read('.session&.process&!exit&?home'),
 ]
 
 /** Remove one worktree, bringing its row up to date first: where it is checked

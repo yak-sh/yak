@@ -389,7 +389,7 @@ Deno.test('the shim gives the app its doors and keeps the grant', async () => {
       `${dir}/worker.js`,
       `export default {
         async fetch(req, env) {
-          let rows = await env.STORE.fetch('/query?.doc!')
+          let rows = await env.STORE.fetch('/query?.doc')
           let page = await env.FILES.fetch('style.css')
           let mine = await env.APP.fetch('/apply', { method: 'POST' })
           return Response.json({
@@ -446,7 +446,7 @@ Deno.test('the shim gives the app its doors and keeps the grant', async () => {
     )
     assertEquals(
       asked[0].url,
-      'https://jeff.yaks.app/recipes/api/query?.doc!',
+      'https://jeff.yaks.app/recipes/api/query?.doc',
     )
   } finally {
     Deno.removeSync(dir, { recursive: true })

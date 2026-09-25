@@ -24,7 +24,7 @@ export type Store = {
 }
 
 /** The query {@link store} runs: every process with no `exit` yet, whole. */
-export let RUNNING = `.${PROCESS}&.${EXIT}=&*`
+export let RUNNING = `.${PROCESS}&!${EXIT}&*`
 
 /** The query {@link store} runs for what is wanted: every service row. */
 export let SERVICES = `.${SERVICE}&*`

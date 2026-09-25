@@ -61,7 +61,7 @@ let row = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
 
 /** What a process printed, its last `n` lines. */
 let tailOf = async (g: Graph, eid: string, n: number) => {
-  let said = (await g.read(`.${OUTPUT}.source=${eid}&.${CONTENT}?`))
+  let said = (await g.read(`.${OUTPUT}.source=${eid}&?${CONTENT}`))
     .map((b) => String(comp(b, CONTENT)?.body ?? ''))
   return said.slice(-n)
 }

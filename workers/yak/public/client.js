@@ -109,7 +109,7 @@ let based = (base) => {
 // must still be empty. The hash is the store's own (@yaks/graph `token`), so a
 // page and a tool guard the same value alike.
 //
-//     let [me] = await query(`id=${eid}&.player!`)
+//     let [me] = await query(`id=${eid}&.player`)
 //     await apply({
 //       entity: { eid },
 //       player: { gold: me.player.gold + 10, claimed: today },
@@ -142,17 +142,17 @@ export let store = (base) => {
   // order.
   //
   // A row carries only the components the filter names, so name the ones the
-  // page will draw: '.recipe!' answers recipes with no titles, and
-  // '.recipe!&.doc?' answers both — '&' joins filters and '?' asks for a
+  // page will draw: '.recipe' answers recipes with no titles, and
+  // '.recipe&?doc' answers both — '&' joins filters and '?' asks for a
   // component without filtering on it. A dotted word addresses that
   // component's own property ('.recipe.minutes<=30'), never a second
-  // component; '&.doc?' is the way to ask for one of those.
+  // component; '&?doc' is the way to ask for one of those.
   let query = (filter = '') => ask(`query?${filter}`)
   // Full-text over the docs, ranked. A word names no component to leave out,
   // the way `id=` does not, so a search with no filter answers whole entities
   // — the app's own components included, which is what a page drawing cards
   // from a search needs. Pass a filter and the ordinary rule is back:
-  // `search('lemon', '.recipe!&.doc?')` is recipes with their titles.
+  // `search('lemon', '.recipe&?doc')` is recipes with their titles.
   let search = (text, filter = '') =>
     query(`${encodeURIComponent(text)}${filter ? `&${filter}` : ''}`)
 
@@ -229,7 +229,7 @@ export let store = (base) => {
   // The filter's matches now, and again on every change — a write from
   // another device, another tab, or an agent. `cb` is handed the same rows
   // `query()` answers with — the components the filter names and no others,
-  // so '.recipe!&.doc?' where the page draws titles — and a page swaps one
+  // so '.recipe&?doc' where the page draws titles — and a page swaps one
   // for the other and nothing else changes; the returned function ends the
   // subscription.
   let subscribe = (filter, cb) => {
@@ -292,8 +292,12 @@ let glued = (v, term) =>
     ? `"${v}"`
     : v
 
+// The line without the `?` a query string opens with. A `?` before a word is
+// the grammar's own (`?doc` asks for a component), so it stays.
+let bare = (filter) => filter.replace(/^\?(?![A-Za-z_])/, '').replace(/^&+/, '')
+
 let asked = (filter = '') => {
-  let line = filter.replace(/^[?&]+/, '').split('&').filter(Boolean)
+  let line = bare(filter).split('&').filter(Boolean)
     .map((seg) => {
       let m = OPERATOR.exec(seg)
       if (!m) return glued(plain(seg), true)
@@ -301,9 +305,9 @@ let asked = (filter = '') => {
       return `${RIDERS[m[1]] ?? m[1]}${m[2]}${v}`
     }).join('&')
   if (!line || line.includes('id=')) return line
-  let screen = SCREEN.filter((k) => !line.includes(`.${k}`)).map((k) =>
-    `.${k}=`
-  )
+  let screen = SCREEN.filter((k) =>
+    !['.', '!', '?'].some((mark) => line.includes(mark + k))
+  ).map((k) => `!${k}`)
   return [line, ...screen].join('&')
 }
 

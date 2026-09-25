@@ -539,7 +539,7 @@ Deno.test('Runs and Tasks ask only their typed memberships, not every reverse re
       h(resolve(e, 'Tasks').Render, { e }),
     ])))
     assertEquals(sent.flatMap((f) => f.subscribe ?? []), [
-      `.filed.project=${target}&.task!&.task.status=open,wip&*`,
+      `.filed.project=${target}&.task&.task.status=open,wip&*`,
     ])
     free()
     free = () => {}

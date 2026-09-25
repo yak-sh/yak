@@ -68,8 +68,8 @@ Deno.test('the backlink, the walk and the neighbour name entities too', () => {
 Deno.test('a scalar, an enum and an absence name nobody', () => {
   assertEquals(asked('.person.name=jeff'), [])
   assertEquals(asked('.decided.how=yes'), [])
-  assertEquals(asked('.decided.by='), [])
-  assertEquals(asked('.decided!'), [])
+  assertEquals(asked('!decided.by'), [])
+  assertEquals(asked('.decided'), [])
   assertEquals(asked('jeff'), [])
 })
 

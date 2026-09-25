@@ -52,7 +52,7 @@ export let routes: Record<string, readonly string[]> = Object.fromEntries(
 
 // An APP's own components (store/vocab.ts), declared by its vocab.json and
 // planted in its own store. They route QUALIFIED only — `.recipe.serves`,
-// `.recipe!` — never bare: a store's new word must not make `.title`
+// `.recipe` — never bare: a store's new word must not make `.title`
 // ambiguous for every reader of every graph.
 //
 // GIVEN to the parse, never registered. One Worker isolate holds many stores,
@@ -204,9 +204,9 @@ export let EDGE_HOP = (word: string) =>
 // `.body` to the shipped doc-body filter; an edge's endpoints (D-23820) yield
 // `.from` and `.to` the same way — `.edge.from=X` is the reverse-index read.
 // A membership's `person` yields bare `.person` to the person COMPONENT: a
-// presence test already routes there (`.person!` IS a person), so the column
+// presence test already routes there (`.person` IS a person), so the column
 // owning the absent half made one bare word name two things — and an app's
-// page, which asks for people with `.person!` and for everything else with
+// page, which asks for people with `.person` and for everything else with
 // `.person=`, could spell only half of that (T-32627). `.member.person=`
 // still reads the membership. A catalog model's `provider` and `effort`
 // (T-35023) yield both bare words to the SPAWN spelling every board and CLI
@@ -215,7 +215,7 @@ export let EDGE_HOP = (word: string) =>
 // A tracked process (T-35323) yields all three of its bare words the same way:
 // `.pid` and `.cwd` already mean the SESSION's — the reading every board and
 // CLI filter has — and `.command` means the bash entry's. `.process.pid=`
-// reaches the newcomer, and `.process!` still asks which entities are one.
+// reaches the newcomer, and `.process` still asks which entities are one.
 // The service that wants one (T-35328) yields its two namesakes for the same
 // reason; `.restart` and `.attempts` are its own words, so they stay bare.
 let bareShy = new Set([
@@ -283,7 +283,7 @@ export let route = (
   // A real component is never edge vocabulary, though — `blocked` merely
   // CONTAINS `block`, so the broad net would swallow a genuine facet. Guard
   // it: a registered component keeps its owners and reaches the presence
-  // grammar below, so `.blocked!` filters what is stuck rather than teaching
+  // grammar below, so `.blocked` filters what is stuck rather than teaching
   // the edge door. Only NON-components fall to the door.
   if (edgeish.test(prop) && !(prop in comps)) own = []
   if (own.length == 1) return { comp: own[0], prop }

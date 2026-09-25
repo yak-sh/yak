@@ -2,7 +2,7 @@
 // facet so marking a task never changes its kind, id, or renderer.
 import type { Change, Ent } from './types.ts'
 
-export let navigationQuery = '.favorite!'
+export let navigationQuery = '.favorite'
 export let navigationView = 'Navigation.List.Tile'
 
 export let favoriteChange = (e: Ent): Change => ({

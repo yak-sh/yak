@@ -107,7 +107,7 @@ export let refAt = async (
 /** An object already written, with both its ids: its SHA-1 id is the row's own
  * eid, and its SHA-256 id is in the @yaks/key beside it. */
 let named = async (g: Writes, oid: string): Promise<Oids | null> => {
-  let [key] = await g.read(`.${COMPAT}!&.key.of=${oid}`)
+  let [key] = await g.read(`.${COMPAT}&.key.of=${oid}`)
   let value = key && valueOf(key)
   return value ? { oid, oid256: value } : null
 }

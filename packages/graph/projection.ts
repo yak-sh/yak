@@ -1,9 +1,9 @@
 // What a read answers, beside what it selects: the query grammar's projection
-// (@yaks/query `*`, `.comp?`). Jeff, 2026-09-03: "we should query for the
-// exact components we want: `.book!&.recipe?` = must be book, recipe is
+// (@yaks/query `*`, `?comp`). Jeff, 2026-09-03: "we should query for the
+// exact components we want: `.book&?recipe` = must be book, recipe is
 // optional but requested. asking for all comps is i imagine most useful for
 // debugging". So a row carries the components the filter names — by presence
-// (`.book!`), by request (`.loan?`), or by a predicate of its own — and nothing
+// (`.book`), by request (`?loan`), or by a predicate of its own — and nothing
 // else. A filter that names none (an `.eid=` fetch, a bare search term) left
 // nothing out and answers the whole bundle, which is also the only useful
 // answer to someone who does not yet know what they found; `*` asks for
@@ -22,7 +22,7 @@ import type { Query } from './storage.ts'
 import { meaning } from './meant.ts'
 
 /** The components a meant query's rows carry, or `null` for every one of
- * them. A component asserted absent (`.archived=`) names nothing the answer
+ * them. A component asserted absent (`!archived`) names nothing the answer
  * could carry, and a word the vocabulary does not know asks for nothing. */
 export let named = (vocab: Vocab, query: Query): Set<string> | null => {
   let { clauses } = typeof query == 'string' ? parse(query) : query

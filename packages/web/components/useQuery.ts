@@ -147,7 +147,7 @@ export let REFERENCE_PEERS = [
   'spawn.persona',
   ...dotFields.map((f) => `${f.comp}.${f.prop}`),
 ]
-let REFERENCED = '.edges[referenced,entry.session]!&.edges.peers=' +
+let REFERENCED = '.edges[referenced,entry.session]&.edges.peers=' +
   REFERENCE_PEERS.join(',')
 
 // Citations are a typed edge rider over one addressed entity. The server

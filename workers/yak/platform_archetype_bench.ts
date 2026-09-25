@@ -65,7 +65,7 @@ for (
     for (let i = 0; i < 50; i++) {
       statements = 0
       count =
-        (await g.read((kind == 'git' ? '.gitobj!' : '.person!') + '&.limit=25'))
+        (await g.read((kind == 'git' ? '.gitobj' : '.person') + '&.limit=25'))
           .length
     }
     console.log(

@@ -33,7 +33,7 @@ Deno.test('install is idempotent, and a bundle survives the round trip', () => {
 Deno.test('an object and an array come back as the values written', () => {
   let s = store(kitchen)
   s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
-  let [read] = s.read('.recipe!') as Bundle[]
+  let [read] = s.read('.recipe') as Bundle[]
   let [got] = s.tx((tx) => tx.get(['r1']))
   assertEquals([read.recipe, got.recipe], [RECIPE, RECIPE])
 })

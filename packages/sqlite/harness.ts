@@ -153,7 +153,7 @@ export let RECIPE = {
 // {@link RECIPE}'s booleans asked for as a `.fields` projection, and the row
 // every SQLite-shaped adapter's `rows()` answers with once r1 holds it: the
 // same `true`/`false` a component read returns, never the 0/1 stored.
-export let PROJECTED = '.recipe!&.fields=recipe.baked,recipe.vegan'
+export let PROJECTED = '.recipe&.fields=recipe.baked,recipe.vegan'
 export let PROJECTED_ROW = {
   eid: 'r1',
   'recipe.baked': true,

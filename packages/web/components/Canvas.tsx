@@ -243,7 +243,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
     // that raced the status row's own assertion.
     let bind = new AbortController()
     if (!cache.value[id]?.client?.actor) {
-      hits('.person!', 2, bind.signal)
+      hits('.person', 2, bind.signal)
         .then((people) => {
           if (people.length == 1 && !cache.value[id]?.client?.actor) {
             mutate({

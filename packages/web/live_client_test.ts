@@ -47,8 +47,8 @@ let row = (eid: string, title: string) => ({
 
 Deno.test('two names on one line share one subscription on the wire', () => {
   let { c, sent } = replica()
-  c.open('a', '.doc!')
-  c.open('b', '.doc!')
+  c.open('a', '.doc')
+  c.open('b', '.doc')
   assertEquals(sent.filter((m) => 'subscribe' in m).length, 1)
   c.close('a')
   assertEquals(sent.filter((m) => 'unsubscribe' in m).length, 0)
@@ -58,8 +58,8 @@ Deno.test('two names on one line share one subscription on the wire', () => {
 
 Deno.test('a frame lands in the box and is reported to every name, first as a reset', async () => {
   let { c, frames, sent, say } = replica()
-  c.open('a', '.doc!')
-  c.open('b', '.doc!')
+  c.open('a', '.doc')
+  c.open('b', '.doc')
   let id = String(sent[0].id)
   await say({ id, bundles: [row('x', 'One')] })
   assertEquals(c.members('a'), ['x'])
@@ -75,7 +75,7 @@ Deno.test('a frame lands in the box and is reported to every name, first as a re
 
 Deno.test('a derived value wider than its enum still lands', async () => {
   let { c, sent, say } = replica()
-  c.open('a', '.task!')
+  c.open('a', '.task')
   await say({
     id: String(sent[0].id),
     bundles: [{ entity: { eid: 'x', num: 1 }, task: { status: 'wip' } }],
@@ -85,7 +85,7 @@ Deno.test('a derived value wider than its enum still lands', async () => {
 
 Deno.test('a refusal is reported, and lands no rows', async () => {
   let { c, frames, sent, say } = replica()
-  c.open('a', '.nope!')
+  c.open('a', '.nope')
   await say({
     id: String(sent[0].id),
     refused: { error: 'Refused', message: 'no' },
@@ -97,7 +97,7 @@ Deno.test('a refusal is reported, and lands no rows', async () => {
 
 Deno.test('a test server speaks through receive, as changes', () => {
   let { c, frames } = replica()
-  c.open('a', '.doc!')
+  c.open('a', '.doc')
   c.receive({
     sub: 'a',
     replace: true,

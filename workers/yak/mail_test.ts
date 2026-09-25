@@ -238,7 +238,7 @@ let platform = async (meter?: Record<string, unknown>) => {
   }], KERNEL)
   // What the space has spent this month, as the directory holds it.
   let spent = async () => {
-    let [row] = await store.query(`.eid=${SPACE}&.meter?`)
+    let [row] = await store.query(`.eid=${SPACE}&?meter`)
     return (row?.meter ?? {}) as { emails?: number }
   }
   return { ns, spent }
@@ -323,7 +323,7 @@ Deno.test('a page watching the letter is told it left', async () => {
   // And the page-shaped ask: the letters that have left.
   store.webSocketMessage(
     ws,
-    JSON.stringify({ subscribe: '.delivered!', id: 'note' }),
+    JSON.stringify({ subscribe: '.delivered', id: 'note' }),
   )
   assertEquals(ws.sent.length, 1) // the raw feed opens with no set at all
   assertEquals((ws.sent[0] as { id: string }).id, 'note')
@@ -509,7 +509,7 @@ slow("an app's letter leaves through the runtime's own binding", async () => {
     await app.applied(letter())
     let settled = await until(async () => {
       let [one] = await app.get(
-        `.entity.eid=${NOTE}&.mail?&.delivered?&.bounced?`,
+        `.entity.eid=${NOTE}&?mail&?delivered&?bounced`,
       ) as unknown as Bundle[]
       return one?.delivered || one?.bounced ? one : null
     }, { timeout: 30_000, poll: 250, label: 'the letter to come to rest' })

@@ -61,6 +61,12 @@ let glued = (value: string, term = false) =>
     ? `"${value}"`
     : value
 
+/** A line without the `?` a query string opens with, and any `&` after it. A
+ * `?` before a word is the grammar's own (`?doc` asks for a component), so it
+ * stays. */
+export let bare = (line: string) =>
+  line.replace(/^\?(?![A-Za-z_])/, '').replace(/^&+/, '')
+
 /**
  * A page's filter line, off the search string it arrived as: the riders
  * rewritten and every value decoded, so the whole line can be escaped once
@@ -72,7 +78,7 @@ let glued = (value: string, term = false) =>
  * would.
  */
 export let lined = (search: string): string =>
-  search.replace(/^[?&]+/, '').split('&').filter(Boolean).map((seg) => {
+  bare(search).split('&').filter(Boolean).map((seg) => {
     let m = OPERATOR.exec(seg)
     if (!m) return glued(plain(seg), true)
     return `${RIDERS[m[1]] ?? m[1]}${m[2]}${

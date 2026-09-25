@@ -213,7 +213,7 @@ let lineOf = (body: unknown): string | null => {
  * `GET /query?q=…` or `POST /query` — a query string in, the bundles it
  * selects out.
  *
- * Unless the query asks for a reduction. `.count!`, `.distinct=prop` and
+ * Unless the query asks for a reduction. `.count`, `.distinct=prop` and
  * `.tally=prop` are questions about the selection rather than about its
  * members, and the store answers each with one SQL statement (`rows()` rather
  * than `read()`); the response body is then `{"count":n}`, `{"distinct":[…]}`

@@ -159,10 +159,10 @@ likeliest moment for a break is right after a deploy, and it must name the
 release it happened on and not the one before.
 
 An exception has no `doc` component, and a listing leaves `exception` and
-`error` rows out unless the filter names one — `.doc!` is the person's own rows
+`error` rows out unless the filter names one — `.doc` is the person's own rows
 and never the platform's crashes. Asking for the stamps is not asking for these:
-`.created!` alone does not drag them in. When you want them from a query rather
-than from `app_errors`, name them: `.exception!`.
+`.created` alone does not drag them in. When you want them from a query rather
+than from `app_errors`, name them: `.exception`.
 
 ## Hearing about it once
 

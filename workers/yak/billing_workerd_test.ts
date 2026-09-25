@@ -162,7 +162,7 @@ slow('an unsigned webhook is refused, and so is a foreign Origin', async () => {
     let broke = await connector(k, cookie).tool('graph_query', {
       space: 'yak',
       app: 'platform',
-      query: '.exception!',
+      query: '.exception',
     })
     assert(broke.includes('the signature does not match'), broke.slice(0, 400))
   } finally {

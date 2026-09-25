@@ -28,7 +28,7 @@ import { CLAIM, SESSION } from './comp.ts'
  * you want the release journaled and its effects fired.
  */
 export let staleLeases = (tx: Tx): Bundle[] | Promise<Bundle[]> =>
-  then(tx.read(`.${CLAIM}.session!`), (locked) => {
+  then(tx.read(`.${CLAIM}.session`), (locked) => {
     if (!locked.length) return []
     let holder = (b: Bundle) => String((b[CLAIM] as Comp).session)
     let runs = [...new Set(locked.map(holder))]

@@ -102,7 +102,7 @@ export let Dashboard = ({ e }: { e: Ent }) => {
   let boards = useQueryResult(`.board.query~=${e.eid}`)
   let sessions = useQueryResult(sessionDetail)
   let claims = useQueryResult(
-    '.claim!&.fields=task.status,claim.session,claim.at,filed.project',
+    '.claim&.fields=task.status,claim.session,claim.at,filed.project',
   )
   let roles = useQueryResult(`.role.scope=${e.eid}`)
   // This facet paints eight rows, so stream only its eight warmest. Fetching

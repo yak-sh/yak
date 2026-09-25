@@ -140,7 +140,7 @@ let Index = (
   let filter = `admin:${kind}${query ? `:${query}` : ''}`
   let pass = usePassOf(filter, query)
   // The census is a DB renderer: each section FETCHES its rows from /query
-  // with an explicit selection — `.{kind}!`, presence of the component —
+  // with an explicit selection — `.{kind}`, presence of the component —
   // newest-first, bounded to the page. The partial client cache is only a
   // freshness overlay (a fetched row that is also live renders its live bag);
   // before this the section listed whatever the cache happened to hold, which
@@ -150,7 +150,7 @@ let Index = (
   useEffect(() => {
     let dead = false
     setFetched([]) // never show the previous section's rows under this head
-    fetch(`/query?q=${encodeURIComponent(`.${kind}!&.limit=${CAP}`)}`)
+    fetch(`/query?q=${encodeURIComponent(`.${kind}&.limit=${CAP}`)}`)
       .then((r) => r.json())
       .then(
         (
@@ -444,7 +444,7 @@ export let Admin = (
   let query = url.searchParams.get('q') ?? ''
   let total = aggValue(
     `admin:count:${kind}`,
-    `.${kind}!&.count!`,
+    `.${kind}&.count`,
   )
   let link = (k: string) => (
     <Kind
@@ -486,7 +486,7 @@ export let Admin = (
 // is neither enumerated nor treated as the graph.
 let CompCount = ({ comp }: { comp: string }) => {
   let name = `admin:count:${comp}`
-  let line = `.${comp}!&.count!`
+  let line = `.${comp}&.count`
   useEffect(() => {
     holdAgg(name, line)
     return () => dropAgg(name)

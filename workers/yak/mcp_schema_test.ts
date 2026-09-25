@@ -51,7 +51,7 @@ slow('an app declares its own commands, and command runs them', async () => {
             },
             leaderboard: {
               description: 'Every run so far',
-              query: '.jog!&.created!',
+              query: '.jog&.created',
               // The page the answer draws itself in (T-32687).
               view: 'leaderboard.html',
             },
@@ -151,7 +151,7 @@ slow('an app declares its own commands, and command runs them', async () => {
       created: { by: { eid: string; name: string } }
     }
     let rows = JSON.parse(
-      await agent.tool('graph_query', { q: '.jog!&.created!' }),
+      await agent.tool('graph_query', { q: '.jog&.created' }),
     ) as Run[]
     assertEquals(rows.length, 1)
     assertEquals(rows[0].jog, { who: 'Ada', miles: 5 })
@@ -258,7 +258,7 @@ slow('an app declares its own commands, and command runs them', async () => {
       op: 'write',
       path: 'vocab.json',
       content: vocabFile(jogs, {
-        board: { description: 'x', query: '.jog!', view: 'gone.html' },
+        board: { description: 'x', query: '.jog', view: 'gone.html' },
       }),
     })
     assertStringIncludes(
@@ -539,7 +539,7 @@ slow(
             required: ['text'],
             apply: { jog: { text: '$text' } },
           },
-          jogs: { description: 'Every jog', query: '.jog!' },
+          jogs: { description: 'Every jog', query: '.jog' },
         }),
       })
       let grew = await club.agent.tool('app_deploy', {

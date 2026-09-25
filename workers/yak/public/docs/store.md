@@ -48,7 +48,7 @@ trailing slash, and answering by its own `access`, whoever is asking:
     import { store } from './api/client.js'
 
     let lending = store('/lending/api/')
-    let loans = await lending.query('.loan!')
+    let loans = await lending.query('.loan')
 
 ## The six functions
 
@@ -75,18 +75,18 @@ Don't send the write again.
 
 ### query(filter)
 
-    let recipes = await query('.recipe!&.doc?')
+    let recipes = await query('.recipe&?doc')
 
 A GET of `./api/query?<filter>`, returning an array of rows — oldest first, in
 the order they were written. An aggregate filter returns an object instead
-(`query('.doc!&.count!')` → `{count: 12}`). The filter goes into the URL as you
+(`query('.doc&.count')` → `{count: 12}`). The filter goes into the URL as you
 wrote it, so a value carrying `&` or `#` needs `encodeURIComponent` around it;
 `#` would otherwise start a fragment and take the rest of the filter with it.
 
 ### search(text, filter?)
 
     let lemony = await search('lemon')
-    let quick = await search('lemon', '.recipe!&.doc?')
+    let quick = await search('lemon', '.recipe&?doc')
 
 Full text over the app's `doc` rows — title and body, title weighted heavier —
 in relevance order rather than creation order. The text is percent-encoded for
@@ -102,8 +102,8 @@ from the recipe by the components it has.
 Pass a filter and the ordinary rule is back — the answer is cut to the
 components the filter names, so name the ones you will draw:
 
-    await search('lemon', '.recipe!')        // recipes, no titles
-    await search('lemon', '.recipe!&.doc?')  // recipes with their titles
+    await search('lemon', '.recipe')        // recipes, no titles
+    await search('lemon', '.recipe&?doc')  // recipes with their titles
 
 Either way a `rank` component rides along, which the store adds to the answer
 only — never stored, never writable. `rank.snip` is a body snippet with each hit
@@ -212,7 +212,7 @@ exported beside `apply`:
     import { apply, query, was } from './api/client.js'
 
     let claim = async (eid) => {
-      let [me] = await query(`id=${eid}&.player!`)
+      let [me] = await query(`id=${eid}&.player`)
       // Already collected today: nothing to write, and nothing to race.
       if (me.player.claimed == today()) return 'already claimed'
       await apply({
@@ -253,8 +253,8 @@ beside the components, and refuses with the same message.
       recipe: { serves: 8, minutes: 45 } }
 
 `entity` and `kind` name the row. Everything else is exactly the components the
-filter named — by presence (`.recipe!`), by request (`.doc?`), or by a predicate
-of its own (`.recipe.minutes<=30`). A component asserted _absent_ (`.archived=`)
+filter named — by presence (`.recipe`), by request (`?doc`), or by a predicate
+of its own (`.recipe.minutes<=30`). A component asserted _absent_ (`!archived`)
 filters without asking for anything back. `*` asks for every component, which is
 what you want when you are looking rather than drawing.
 
@@ -265,16 +265,15 @@ exception: `doc.title` comes back null too, and `doc.body` — a content-address
 blob — comes back null when there is none.
 
 Three things a listing leaves out unless you name them: the platform's stamps
-(`created`, `updated`, `notified`, `opened`, `quarantined` — `.created!` asks
-for them back); the platform's own rows about the app (`exception` and `error`,
-what the platform recorded when something broke — `.exception!` asks for those,
-and asking for the stamps is _not_ asking for these); and `person` rows, which
-the store mints for whoever writes to it and `query('.person!&.doc?')` lists by
-name.
+(`created`, `updated`, `notified`, `opened`, `quarantined` — `.created` asks for
+them back); the platform's own rows about the app (`exception` and `error`, what
+the platform recorded when something broke — `.exception` asks for those, and
+asking for the stamps is _not_ asking for these); and `person` rows, which the
+store mints for whoever writes to it and `query('.person&?doc')` lists by name.
 
 ## subscribe in practice
 
-    let stop = subscribe('.task.status=open&.doc?', (rows) => draw(rows))
+    let stop = subscribe('.task.status=open&?doc', (rows) => draw(rows))
     // …later
     stop()
 
@@ -295,8 +294,8 @@ arrives; never append to what you drew last time.
   set the callback gets. Nothing else changes.
 - `stop()` removes that one subscription; the last one to leave closes the
   socket. Call it on `beforeunload`, or when the view it feeds is torn down.
-- Subscribe to rows. An aggregate filter like `.count!` has no rows to hand
-  back, so the callback keeps being handed an empty array. Poll it with `query`
+- Subscribe to rows. An aggregate filter like `.count` has no rows to hand back,
+  so the callback keeps being handed an empty array. Poll it with `query`
   instead.
 - Keep the count small. A socket carries its declarations in about 2 KB of state
   so it survives hibernation, and past that a declaration is refused — quietly,
@@ -311,8 +310,8 @@ arrives; never append to what you drew last time.
   arrives fills the page. So `query` first for what you can draw now, then
   `subscribe` to keep it true; the first callback replaces the rows you drew.
 
-      draw(await query('.task.status=open&.doc?'))
-      let stop = subscribe('.task.status=open&.doc?', draw)
+      draw(await query('.task.status=open&?doc'))
+      let stop = subscribe('.task.status=open&?doc', draw)
 
 ## Who may read, who may write
 
@@ -359,7 +358,7 @@ What `me()` returns:
 The store stamps every row with who saved it, and a stamp is a component like
 any other: it comes back when the filter names it.
 
-    for (let e of await query('.doc!&.created!')) draw(e, e.created.by?.name)
+    for (let e of await query('.doc&.created')) draw(e, e.created.by?.name)
 
 `created.at` is when. `created.by` is who — and where this store knows the
 person, it returns `{eid, name}` rather than a bare eid, so _one_ query draws a
@@ -371,12 +370,12 @@ a person, a property of your own included.
 
 The name is the one they chose at sign-in, or the front of their address if they
 skipped the question. An address is never in the answer: an app's store learns
-names and keeps no address book, so a `public` app answering `.person!` to a
+names and keeps no address book, so a `public` app answering `.person` to a
 stranger hands out no roster. Anything the store cannot name stays the bare eid
 it always was — and a write still accepts that eid, so a row read and handed
 straight back means the entity it named:
 
-    let [entry] = await query('.doc.title~=Fig&.created!')
+    let [entry] = await query('.doc.title~=Fig&.created')
     await apply({
       entity: { eid: entry.entity.eid },
       task: {}, filed: { assignee: entry.created.by },   // {eid, name} writes as the eid
@@ -493,11 +492,11 @@ directly from `curl`, from another page, or from your own `worker.js` through
     → {"entity": {"eid": "4f3c…"}, "doc": {"title": "Lemon cake"}}
       {"entity": {"eid": "8b91…"}, "doc": {"title": "Fig tart"}}
 
-    GET ./api/query?.doc!
+    GET ./api/query?.doc
     → [ {"kind": "doc", "entity": {"eid": "4f3c…"},
          "doc": {"title": "Lemon cake"}} ]
 
-    GET ./api/query?.doc!&.count!
+    GET ./api/query?.doc&.count
     → {"count": 12}
 
     GET ./api/me
@@ -579,9 +578,9 @@ Catch what you want to show.
 ## The mistakes
 
 **Asking for the wrong components.** A row carries only the components its
-filter named. `query('.recipe!')` returns recipes with no titles, and a page
+filter named. `query('.recipe')` returns recipes with no titles, and a page
 drawing `row.doc.title` prints `undefined` for every one of them. Ask for the
-title beside it: `query('.recipe!&.doc?')`. `&.doc?` is the way to ask for a
+title beside it: `query('.recipe&?doc')`. `&?doc` is the way to ask for a
 _second_ component — `.recipe.doc` addresses a _property_ of `recipe`, a
 different question and one `recipe` has no answer to. `subscribe` returns the
 same components a query does, so it is the same mistake there.

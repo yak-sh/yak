@@ -58,7 +58,7 @@ let tally = async (agg: Record<string, number>) => {
 }
 
 Deno.test('board tile counts come from the tally sub, not the members', async () => {
-  await onTile('.task!', async (root) => {
+  await onTile('.task', async (root) => {
     assertEquals(resolve(ent('board'), 'List.Tile').Render, BoardTile)
     assertEquals(root.querySelector('.Tile_Title')?.textContent, 'Work')
     // Before the server answers there is nothing to claim, so no stats paint —

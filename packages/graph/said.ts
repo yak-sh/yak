@@ -55,7 +55,7 @@ let refs = (vocab: Vocab, c: Clause & { kind: 'pred' }): boolean => {
 
 /** A value's id-shaped leaves, mapped. A list means any-of, so each item names
  * an entity; a range and a relative time expression name none. An empty scalar
- * is the "property is absent" form (`.decided.by=`) and names nothing either.
+ * is the "property is absent" form (`!decided.by`) and names nothing either.
  */
 let value = (v: Value, f: Says): Value =>
   v.kind == 'scalar'

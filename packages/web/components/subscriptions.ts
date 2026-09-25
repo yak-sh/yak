@@ -50,7 +50,7 @@ export let useBoardTally = (e?: Ent) => {
 // the view's life (T-22371). The working-set boot used to walk one hop from
 // every card and preseed whatever it pointed at, which is how a pinned card had
 // a row to render; that hop is gone, so whatever paints another entity by eid
-// SAYS so, and the row — with the `.edges!` rider's edges and their far
+// SAYS so, and the row — with the `.edges` rider's edges and their far
 // endpoints — streams in on mount and is evicted with the last view of it.
 export let useEntity = (eid?: string | null, fields?: string) => {
   useLayoutEffect(() => eid ? routeSub(eid, fields) : undefined, [eid, fields])

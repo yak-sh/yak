@@ -64,7 +64,7 @@ slow('a letter lands in the app its address named', async () => {
     let mod = await import(`file://${dir}/client.js`)
     let seen: Row[][] = []
     stop = mod.store(`${wire.origin}/recipes/api/`)
-      .subscribe('.mail!&.doc?', (rows: Row[]) => seen.push(rows))
+      .subscribe('.mail&?doc', (rows: Row[]) => seen.push(rows))
     await until(() => seen.length == 1, { timeout: 15_000 })
     assertEquals(seen[0], [])
 
@@ -99,13 +99,13 @@ slow('a letter lands in the app its address named', async () => {
     // Nobody wrote it: the sender is a property and never an actor, so a letter
     // cannot put words in a member's mouth.
     let [byline] = await client(k, 'jeff.yaks.app', 'recipes', them.cookie)
-      .get('.mail!&.created!') as unknown as { created: { by: unknown } }[]
+      .get('.mail&.created') as unknown as { created: { by: unknown } }[]
     assertEquals(byline.created.by, null)
 
     // The other app in the space has its own address and its own store: the
     // letter above is nowhere in it.
     let garden = client(k, 'jeff.yaks.app', 'garden', them.cookie)
-    assertEquals(await garden.get('.mail!'), [])
+    assertEquals(await garden.get('.mail'), [])
     assertEquals(
       (await arrives(k, {
         from: 'ana@books.example',
@@ -114,7 +114,7 @@ slow('a letter lands in the app its address named', async () => {
       })).status,
       200,
     )
-    let [tomatoes] = await garden.get('.mail!&.doc?') as unknown as Row[]
+    let [tomatoes] = await garden.get('.mail&?doc') as unknown as Row[]
     assertEquals(tomatoes.doc.title, 'Tomatoes are in')
     // No `Authentication-Results` at all: nobody checked, which is not the
     // same as a check that failed, so the property is left unwritten — null on
@@ -137,7 +137,7 @@ slow('a letter lands in the app its address named', async () => {
     let recipes = client(k, 'jeff.yaks.app', 'recipes', them.cookie)
     await until(
       async () =>
-        titles(await recipes.get('.mail!&.doc?') as unknown as Row[]).includes(
+        titles(await recipes.get('.mail&?doc') as unknown as Row[]).includes(
           'To the front page',
         ),
       { timeout: 15_000 },
@@ -158,7 +158,7 @@ slow('a letter lands in the app its address named', async () => {
       200,
     )
     let unsigned = await recipes
-      .get('.mail.verified=0&.doc?') as unknown as Row[]
+      .get('.mail.verified=0&?doc') as unknown as Row[]
     assertEquals(titles(unsigned), ['Nobody signed for this'])
 
     // An attachment is filed where a page's upload is (apps.ts `filed`) and
@@ -191,13 +191,13 @@ slow('a letter lands in the app its address named', async () => {
       200,
     )
     let file = await until(async () => {
-      let [row] = await recipes.get('.attachment!') as unknown as Row[]
+      let [row] = await recipes.get('.attachment') as unknown as Row[]
       return row
     }, { timeout: 15_000 })
     assertEquals(file.attachment.name, 'list.csv')
     assertEquals(file.attachment.mime, 'text/csv')
     let [held] = await recipes
-      .get('.doc.title="The list"&.doc!') as unknown as Row[]
+      .get('.doc.title="The list"&.doc') as unknown as Row[]
     assertEquals(held.doc.body, 'It is attached.')
     let links = await recipes.get(
       '.edge.from=' + held.entity.eid,
@@ -229,7 +229,7 @@ slow("a letter to an app's former address follows the rename", async () => {
     // The store is named at birth, so the letter is in the app it named — now
     // answering at its new address, with the envelope it arrived under.
     let [letter] = await client(k, 'jeff.yaks.app', 'cookbook', them.cookie)
-      .get('.mail!&.doc?') as unknown as Row[]
+      .get('.mail&?doc') as unknown as Row[]
     assertEquals(letter.doc.title, 'Still find you')
     assertEquals(letter.mail.to, 'jeff.recipes@yaks.app')
     // A slug nobody here has ever had is no move to follow: still refused.
@@ -269,7 +269,7 @@ slow("a letter to a space's former subdomain follows the rename", async () => {
       'recipes',
       them.cookie,
     )
-      .get('.mail!&.doc?') as unknown as Row[]
+      .get('.mail&?doc') as unknown as Row[]
     assertEquals(letter.doc.title, 'Still find you')
     assertEquals(letter.mail.to, 'jeff.recipes@yaks.app')
   } finally {
@@ -306,7 +306,7 @@ slow(
       assertStringIncludes(bare, 'no front page')
       assertStringIncludes(bare, 'bare.<app>@yaks.app')
       // Nothing landed anywhere: a refusal writes no row.
-      let rows = await client(k, 'jeff.yaks.app', 'recipes').get('.mail!')
+      let rows = await client(k, 'jeff.yaks.app', 'recipes').get('.mail')
       assertEquals(rows, [])
       // An app in the trash has no mailbox either (erase.ts, T-34430), and it
       // bounces as the same nothing: the sender is not told that an app was
@@ -371,7 +371,7 @@ slow(
       let agent = connector(k, them.cookie)
       let dir = meta(k, them.cookie)
       let spent = async () => {
-        let [row] = await dir.query(`.eid=${them.eids.jeff}&.meter?`)
+        let [row] = await dir.query(`.eid=${them.eids.jeff}&?meter`)
         return ((row?.meter ?? {}) as { emails?: number }).emails ?? 0
       }
       let write = async (subject: string) =>
@@ -406,7 +406,7 @@ slow(
         ])
         let rest = await until(async () => {
           let [row] = await page.get(
-            `.entity.eid=${eid}&.delivered?&.bounced?`,
+            `.entity.eid=${eid}&?delivered&?bounced`,
           ) as unknown as {
             delivered?: unknown
             bounced?: { reason: string }
@@ -430,7 +430,7 @@ slow(
       await write('The hundred and first')
       assertEquals(await spent(), 101)
       assertEquals(
-        (await page.get('.doc.title="The hundred and first"&.doc!')).length,
+        (await page.get('.doc.title="The hundred and first"&.doc')).length,
         1,
       )
       // And the send door, past the same allowance, says so on the letter.

@@ -44,7 +44,7 @@ export let SUNK = 0.1
 // grammar. `.archived.at` is the canonical presence spelling: the column is
 // not-null. The self arm (this row IS
 // an archived project) has no ref to deref, so it stays a direct test.
-let SUNK_PROJECT = parseQuery('.filed.project.archived.at!')
+let SUNK_PROJECT = parseQuery('.filed.project.archived.at')
 export let sunk = (
   c: Comps,
   ent?: (eid: string) => Comps | undefined,

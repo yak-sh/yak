@@ -142,13 +142,13 @@ Deno.test('a spanning read merges the two stores into one bundle per eid', async
   ])
 
   // Each word went to the app that declared it…
-  let onlyBooks = bundles(await read(env, [reach[0]], '.book!'))
+  let onlyBooks = bundles(await read(env, [reach[0]], '.book'))
   assertEquals(onlyBooks.length, 1)
   assertEquals(onlyBooks[0].loan, undefined)
 
   // …and the read that names no app answers one bundle wearing both, saying
   // which store holds which component.
-  let both = bundles(await read(env, reach, '.book!&.loan?'))
+  let both = bundles(await read(env, reach, '.book&?loan'))
   assertEquals(both.length, 1)
   assertEquals(both[0].entity.eid, dune)
   assertEquals(comp(both[0], 'book').pages, 412)
@@ -179,12 +179,12 @@ Deno.test('an order holds across the merge, and its window cuts after it', async
     read(env, reach, line).then((out) =>
       bundles(out).map((b) => comp(b, 'book').pages)
     )
-  assertEquals(await by('.book!&.loan?&.book.pages>0&.order=book.pages'), [
+  assertEquals(await by('.book&?loan&.book.pages>0&.order=book.pages'), [
     100,
     200,
     300,
   ])
-  assertEquals(await by('.book!&.loan?&.book.pages>0&.order=-book.pages'), [
+  assertEquals(await by('.book&?loan&.book.pages>0&.order=-book.pages'), [
     300,
     200,
     100,
@@ -192,12 +192,12 @@ Deno.test('an order holds across the merge, and its window cuts after it', async
   // The window is of the order, not of what each store happened to answer
   // first: the two smallest, not the two oldest.
   assertEquals(
-    await by('.book!&.loan?&.book.pages>0&.order=book.pages&.limit=2'),
+    await by('.book&?loan&.book.pages>0&.order=book.pages&.limit=2'),
     [100, 200],
   )
   // An order by a word the line never names, kept in the other store, is
   // gathered to sort by and left off the answer, as one store leaves it.
-  let ordered = await read(env, reach, '.book!&.order=loan.to')
+  let ordered = await read(env, reach, '.book&.order=loan.to')
   assertEquals(bundles(ordered).map((b) => comp(b, 'book').pages), [
     300,
     100,
@@ -207,7 +207,7 @@ Deno.test('an order holds across the merge, and its window cuts after it', async
   // An order the space's words cannot settle is the caller's line refused,
   // as one store refuses it, and never a failure of ours.
   await assertRejects(
-    () => read(env, reach, '.book!&.loan?&.order=created'),
+    () => read(env, reach, '.book&?loan&.order=created'),
     CallError,
     'a component where a property belongs: created — try created.at',
   )
@@ -231,7 +231,7 @@ Deno.test('a batch refused by one store lands in neither', async () => {
     }])
   )
 
-  let [now] = bundles(await read(env, reach, '.book!&.loan?'))
+  let [now] = bundles(await read(env, reach, '.book&?loan'))
   assertEquals(comp(now, 'book').pages, 412)
   assertEquals(comp(now, 'loan').to, 'Ada')
 })
@@ -252,7 +252,7 @@ Deno.test('a name written twice through the door is one entity', async () => {
   }
   let once = await seed(412)
   assertEquals(await seed(500), once)
-  let all = bundles(await read(env, reach, '.book!'))
+  let all = bundles(await read(env, reach, '.book'))
   assertEquals(all.map((b) => b.entity.eid), [once])
   assertEquals(comp(all[0], 'book').pages, 500)
 })
@@ -284,7 +284,7 @@ Deno.test('the space speaks one vocabulary, and a word nobody declares is the pl
   assertEquals(out.where, 'nora/reading and nora/lending')
   assert(out.aliases.$borrowed)
   assertEquals(
-    bundles(await read(env, [reach[0]], '.doc!&.book?')).length,
+    bundles(await read(env, [reach[0]], '.doc&?book')).length,
     1,
   )
 })

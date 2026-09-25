@@ -1054,7 +1054,7 @@ export class Store {
         // The app writing as itself (dispatch.ts `owning`, `env.APP`) is the
         // one actor that is not a person: it is already a row here, carrying
         // this store's `access`, and calling it a person would put the app in
-        // its own `.person!` listing. Its grant is still written — that is
+        // its own `.person` listing. Its grant is still written — that is
         // what @yaks/member's guard reads to admit the write.
         let out: Bundle[] = who == app ? [] : [{
           entity: { eid: who },
@@ -1888,7 +1888,7 @@ export class Store {
       let line = url.searchParams.get('q') ?? ''
       let no = unserved(line)
       if (no) return refuse(new Refused(no))
-      // An aggregate is not a listing — `.count!` answers one number — and
+      // An aggregate is not a listing — `.count` answers one number — and
       // @yaks/api's read door answers bundles, which is the wrong half of the
       // compiled statement. So it is answered here, off the raw rows, in the
       // shape every door on this platform says it in. A line that does not

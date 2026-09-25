@@ -285,7 +285,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     // Signing in is having a space (T-32482): one named for their address,
     // with them as its owner, so nothing ever asks them for a name.
     let [them] = await dir.query(
-      `.person!&.email.address=${encodeURIComponent(email)}&.doc?`,
+      `.person&.email.address=${encodeURIComponent(email)}&?doc`,
     )
     // And nothing asked what to call them, so the front of their address is
     // what they are called — written, so a member row names a person and not
@@ -360,7 +360,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     // The person the address minted, and their ownership of the meta space —
     // the first sign-in ever is the platform's owner.
     let [person] = await dir.query(
-      `.person!&.email.address=${encodeURIComponent(email)}`,
+      `.person&.email.address=${encodeURIComponent(email)}`,
     )
     assert(person, 'a person for ' + email)
     let me = person.entity.eid
@@ -973,14 +973,14 @@ slow('account settings save the name and address', async () => {
       named.headers.get('location'),
       `https://${slug}.yaks.app${managePath('settings')}?saved=1`,
     )
-    let [them] = await dir.query(`.eid=${person}&.doc?`)
+    let [them] = await dir.query(`.eid=${person}&?doc`)
     assertEquals((them.doc as { title: string }).title, 'Dana')
 
     // Cleared, the front of their address comes back: a person is always
     // called something, or a member row reads back as an eid (T-32733).
     await (await post(`${slug}.yaks.app`, { name: '  ' }, cookie)).body
       ?.cancel()
-    let [quiet] = await dir.query(`.eid=${person}&.doc?`)
+    let [quiet] = await dir.query(`.eid=${person}&?doc`)
     assertEquals((quiet.doc as { title: string }).title, slug)
 
     // A taken address is refused in the sentence `/connect` says, and the page
@@ -1119,7 +1119,7 @@ slow('the connector page, and the address chosen on it', async () => {
       200,
       { address: `${want}.yaks.app`, slug: want },
     ])
-    let [theirs] = await dir.query(`.space.slug=${want}&.doc?`)
+    let [theirs] = await dir.query(`.space.slug=${want}&?doc`)
     assert(theirs, `a space at ${want}`)
     assertEquals((theirs.doc as { title: string }).title, want)
     assertEquals(await dir.query(`.space.slug=${derived}`), [])
@@ -1370,7 +1370,7 @@ slow('a link signs a person in, once or until it is revoked', async () => {
     // says whether a standing link was ever used at all.
     let dir = meta(k, cookie)
     let [them] = await dir.query(
-      `.person!&.email.address=${encodeURIComponent(email)}&.signed_in?`,
+      `.person&.email.address=${encodeURIComponent(email)}&?signed_in`,
     )
     assertEquals((them.signed_in as { via: string }).via, 'link')
 

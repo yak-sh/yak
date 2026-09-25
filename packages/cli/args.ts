@@ -58,8 +58,8 @@ export type Said = {
  * value that itself starts with `--`.
  *
  * ```ts
- * saidIn(['--q', '.recipe!', '--json'])
- * // { opts: [['q', '.recipe!'], ['json', true]], words: [] }
+ * saidIn(['--q', '.recipe', '--json'])
+ * // { opts: [['q', '.recipe'], ['json', true]], words: [] }
  * ```
  */
 export let saidIn = (argv: string[]): Said => {

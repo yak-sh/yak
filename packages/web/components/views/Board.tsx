@@ -65,7 +65,7 @@ export let columnLine = (q: string, status: string, limit: number): string => {
     'proposed.at',
     'decided.verdict',
   ].join(',')
-  return q + '&.task!&.task.status=' + status +
+  return q + '&.task&.task.status=' + status +
     (orderOf(preds) ? '' : '&.order=priority') +
     '&.limit=' + Math.min(bound ?? Infinity, limit) + fields +
     '&.edges.peers=task.status,doc.title&.edges.limit=' + limit * 4

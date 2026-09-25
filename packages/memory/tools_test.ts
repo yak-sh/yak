@@ -156,17 +156,17 @@ Deno.test('a recall asks the store for the ranking it has', () => {
   // what they selected lead — there is no bm25 on a query line.
   assertEquals(
     line({ limit: 8, said: 'how do they like it?' }),
-    'how do they like it&.memory&.doc?&.created?&.order=-entity.num&.limit=8',
+    'how do they like it&.memory&?doc&?created&.order=-entity.num&.limit=8',
   )
   // An anchor: the vectors rank them, where the host keeps any.
   assertEquals(
     line({ limit: 3, near: 'T-1' }),
-    '.near=T-1&.memory&.doc?&.created?&.order=similar&.limit=3',
+    '.near=T-1&.memory&?doc&?created&.order=similar&.limit=3',
   )
   // Neither: the newest, screened by where they belong.
   assertEquals(
     line({ limit: 2, scope: 'p19', feedback: true }),
-    '.memory&.memory.scope=p19&.feedback&.doc?&.created?' +
+    '.memory&.memory.scope=p19&.feedback&?doc&?created' +
       '&.order=-entity.num&.limit=2',
   )
 })

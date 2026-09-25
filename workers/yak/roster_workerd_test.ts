@@ -88,7 +88,7 @@ let VOCAB = vocabFile({ note: { body: txt, pages: num } }, {
       note: { body: '$body', pages: '$pages' },
     },
   },
-  jotted: { description: 'Every note so far', query: '.note!' },
+  jotted: { description: 'Every note so far', query: '.note' },
 })
 let SHEET = 'body,pages\nfrom a sheet,3\nand another,5\n'
 // A secret lives on the app's own worker, so the app has one: the least worker
@@ -246,7 +246,7 @@ slow(
       let noted = (JSON.parse(wrote) as { entity: { eid: string } }[])[0].entity
         .eid
       assert(noted, wrote)
-      assertStringIncludes(await tool('graph_query', { q: '.note!' }), 'note')
+      assertStringIncludes(await tool('graph_query', { q: '.note' }), 'note')
       assertStringIncludes(await tool('graph_show', { ids: [noted] }), noted)
       assertStringIncludes(
         await tool('graph_schema', { component: 'note' }),

@@ -81,7 +81,7 @@ export type Frame = {
   relay?: Bundle[]
   /** why the subscription was refused, when it was */
   refused?: { error: string; message: string; [k: string]: unknown }
-  /** an aggregate query's answer, in place of bundles: `.count!`,
+  /** an aggregate query's answer, in place of bundles: `.count`,
    * `.distinct=prop` and `.tally=prop` (@yaks/api) */
   count?: number
   distinct?: string[]

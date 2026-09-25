@@ -362,7 +362,7 @@ slow('deleting the front page puts the space back to the default', async () => {
       false,
     )
     assertEquals(
-      (await meta(k, them.cookie).query('.home!&.trashed=')).length,
+      (await meta(k, them.cookie).query('.home&!trashed')).length,
       0,
     )
     // Its own address is nobody's now — not a redirect to a former slug, and
@@ -645,7 +645,7 @@ slow('the front page says which paths it answers first', async () => {
     let at = { space: 'route', app: 'site' }
     // The rows carrying the component, whatever else is in the store.
     let stored = async () =>
-      (await graph.query('.home!'))
+      (await graph.query('.home'))
         .map((r) => (r.home as { first: string | null }).first)
 
     // The globs are properties of the word that says which app is home, so an
@@ -715,7 +715,7 @@ slow('the front page says which paths it answers first', async () => {
     })
     assertEquals(await stored(), [null])
     assertEquals(
-      (await graph.query('.home!&.app!'))
+      (await graph.query('.home&.app'))
         .map((r) => (r.app as { slug: string }).slug),
       ['recipes'],
     )

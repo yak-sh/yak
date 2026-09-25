@@ -229,11 +229,11 @@ slow(
       // the vocabulary was planted — and the comment points at the entity the
       // other file minted.
       let [soup] = JSON.parse(
-        await agent.tool('graph_query', { q: '.recipe!&.doc?' }),
+        await agent.tool('graph_query', { q: '.recipe&?doc' }),
       ) as { entity: { eid: string }; doc: { title: string } }[]
       assertEquals(soup.doc.title, 'Lentil soup')
       let [note] = JSON.parse(
-        await agent.tool('graph_query', { q: '.comment!' }),
+        await agent.tool('graph_query', { q: '.comment' }),
       ) as { comment: { target: { eid: string } | string } }[]
       let target = note.comment.target
       assertEquals(
@@ -249,7 +249,7 @@ slow(
       let again = await agent.tool('app_deploy', app)
       assertEquals(again.includes('seeded'), false)
       let all = JSON.parse(
-        await agent.tool('graph_query', { q: '.recipe!&.doc?' }),
+        await agent.tool('graph_query', { q: '.recipe&?doc' }),
       ) as { doc: { title: string } }[]
       assertEquals(all.map((r) => r.doc.title), ['Dal'])
 
@@ -289,7 +289,7 @@ slow(
         'seeded 2 entities',
       )
       let theirs = JSON.parse(
-        await hers.tool('graph_query', { q: '.recipe!&.doc?' }),
+        await hers.tool('graph_query', { q: '.recipe&?doc' }),
       ) as { doc: { title: string } }[]
       assertEquals(theirs.map((r) => r.doc.title), ['Lentil soup'])
     } finally {

@@ -31,7 +31,7 @@ let DUNE = '9780441013593'
 Deno.test('a key states itself and is stored', () => {
   let g = books(libraryGraph())
   sync(g.apply([keyed('isbn', 'b1', DUNE)]))
-  assertEquals(read(g, '.isbn!'), [keyEid('isbn', DUNE)])
+  assertEquals(read(g, '.isbn'), [keyEid('isbn', DUNE)])
   assertEquals(read(g, '.key.value=' + DUNE), [keyEid('isbn', DUNE)])
 })
 
@@ -39,7 +39,7 @@ Deno.test('the same value stated twice is one entity', () => {
   let g = books(libraryGraph())
   sync(g.apply([keyed('isbn', 'b1', DUNE)]))
   sync(g.apply([keyed('isbn', 'b1', DUNE)]))
-  assertEquals(read(g, '.isbn!').length, 1)
+  assertEquals(read(g, '.isbn').length, 1)
 })
 
 Deno.test('an aliased key mints at the pair it states', () => {
@@ -59,7 +59,7 @@ Deno.test('a kind read under another name derives from its tag', () => {
   let g = libraryGraph()
   sync(g.apply([{ entity: { eid: 'p1' }, person: {} }]))
   sync(g.apply([keyed('email', 'p1', 'ada@example.com')]))
-  assertEquals(read(g, '.email!'), [keyEid('email', 'ada@example.com')])
+  assertEquals(read(g, '.email'), [keyEid('email', 'ada@example.com')])
 })
 
 Deno.test('a key with no kind, no value or no `of` is refused by name', () => {
@@ -109,7 +109,7 @@ Deno.test('a held value takes the batch onto its holder', () => {
     { entity: { eid: '$k' }, key: { of: '$b', value: DUNE }, isbn: {} },
   ]))
   assertEquals(out.find((b) => b.$alias == '$b')!.entity.eid, 'b1')
-  assertEquals(read(g, '.book!'), ['b1', 'b2'])
+  assertEquals(read(g, '.book'), ['b1', 'b2'])
   assertEquals(
     (g.read('.eid=b1') as Bundle[])[0].doc,
     undefined,
@@ -150,7 +150,7 @@ Deno.test('a value is free again once what it named is gone', () => {
   let g = books(libraryGraph())
   sync(g.apply([keyed('isbn', 'b1', DUNE)]))
   sync(g.apply([{ entity: { eid: 'b1' }, $delete: true }]))
-  assertEquals(read(g, '.isbn!'), [])
+  assertEquals(read(g, '.isbn'), [])
   sync(g.apply([keyed('isbn', 'b2', DUNE)]))
   assertEquals(read(g, '.key.of=b2'), [keyEid('isbn', DUNE)])
 })
@@ -159,7 +159,7 @@ Deno.test('a retired value can be claimed again', () => {
   let g = books(libraryGraph())
   sync(g.apply([keyed('isbn', 'b1', DUNE)]))
   sync(g.apply([unkeyed('isbn', DUNE)]))
-  assertEquals(read(g, '.isbn!'), [])
+  assertEquals(read(g, '.isbn'), [])
   sync(g.apply([keyed('isbn', 'b2', DUNE)]))
   assertEquals(read(g, '.key.of=b2'), [keyEid('isbn', DUNE)])
 })

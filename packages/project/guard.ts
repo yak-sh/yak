@@ -76,7 +76,7 @@ export let unroutable = (
       let hops = vocab.aim(c.path.join('.'), c.op == '!' && c.path.length == 1)
       let last = hops[hops.length - 1]
       if (!last || last.comp != TASK || last.prop != 'status') continue
-      // An empty value is the absence form (`.status=`), which names nothing.
+      // An empty value is the absence form (`!status`), which names nothing.
       for (let t of tokens(c.value).filter(Boolean)) {
         if (!known.includes(t)) {
           return `no such status: ${t} — this board knows ${known.join(', ')}`

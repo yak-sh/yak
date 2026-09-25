@@ -78,11 +78,11 @@ Deno.test('anchor picks the reverse-index set for an eid-ref equality', () => {
     w3: { wake: {}, deliver: { to: 's1' }, delivered: {} },
   }, [])
   // .deliver.to=s1 anchors on the reverse set {w1,w3}, smaller than byComp[wake]
-  let a = anchor(ix, parseQuery('.wake! .deliver.to=s1 .delivered='))
+  let a = anchor(ix, parseQuery('.wake .deliver.to=s1 !delivered'))
   assertEquals(a, new Set(['w1', 'w3']))
   // nothing points at s9, and no row carries mail: empty, never a whole scan
-  assertEquals(anchor(ix, parseQuery('.wake! .deliver.to=s9')), new Set())
-  assertEquals(anchor(ix, parseQuery('.mail!')), new Set())
+  assertEquals(anchor(ix, parseQuery('.wake .deliver.to=s9')), new Set())
+  assertEquals(anchor(ix, parseQuery('.mail')), new Set())
 })
 
 Deno.test('anchor falls back to component presence, and to nothing', () => {
@@ -95,7 +95,7 @@ Deno.test('anchor falls back to component presence, and to nothing', () => {
   // a scalar pred requires its component present -> byComp[task]
   assertEquals(anchor(ix, parseQuery('.status=open')), new Set(['t1', 't2']))
   // a pure absence pred implies no presence -> whole-cache fallback
-  assertEquals(anchor(ix, parseQuery('.delivered=')), undefined)
+  assertEquals(anchor(ix, parseQuery('!delivered')), undefined)
 })
 
 Deno.test('anchor unions the reverse index for a .refs= backlink lookup', () => {
@@ -114,8 +114,8 @@ Deno.test('anchor unions the reverse index for a .refs= backlink lookup', () => 
     new Set(['c1', 'c2', 't2']),
   )
   // presence/absence admit rows in no reverse map, so they anchor nothing
-  assertEquals(anchor(ix, parseQuery('.refs=')), undefined)
-  assertEquals(anchor(ix, parseQuery('.refs!')), undefined)
+  assertEquals(anchor(ix, parseQuery('!refs')), undefined)
+  assertEquals(anchor(ix, parseQuery('.refs')), undefined)
 })
 
 Deno.test('anchor narrows a multi-hop path to its NEAR component', () => {

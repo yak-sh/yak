@@ -110,7 +110,7 @@ export let resumed = async (
   born: number,
   report: (job: string, error: Error) => Promise<unknown>,
 ): Promise<void> => {
-  for (let row of await graph.read('.sweep&.wake?')) {
+  for (let row of await graph.read('.sweep&?wake')) {
     let began = (row.sweep as { began?: string | null }).began
     if (!began || Date.parse(began) >= born) continue
     let job = jobOf(row as Fired)

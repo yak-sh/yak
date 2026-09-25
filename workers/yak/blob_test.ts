@@ -108,7 +108,7 @@ slow('the file door: a page uploads bytes and gets an address', async () => {
     // And it is a row: the app's own store knows what the file is called, and
     // an ordinary listing shows the file and not the bytes behind it — a
     // doc's body is a blob row too, and nobody saved that.
-    let files: Row[] = await store.query('.attachment!')
+    let files: Row[] = await store.query('.attachment')
     assertEquals(files.length, 1)
     assertEquals(files[0].attachment?.blob, file.eid)
     assertEquals(files[0].attachment?.mime, 'image/png')
@@ -120,7 +120,7 @@ slow('the file door: a page uploads bytes and gets an address', async () => {
       new File([png], 'the cake.png', { type: 'image/png' }),
     )
     assertEquals(again.eid, file.eid)
-    let one: Row[] = await store.query('.attachment!')
+    let one: Row[] = await store.query('.attachment')
     assertEquals(one.length, 1)
     assertEquals(one[0].entity.eid, files[0].entity.eid)
     assertEquals(one[0].attachment?.name, 'the cake.png')
@@ -128,7 +128,7 @@ slow('the file door: a page uploads bytes and gets an address', async () => {
     // …and a third that names nothing keeps the name it had: the same file is
     // the same file, whatever a canvas had to call it.
     await store.upload(new Blob([png], { type: 'image/png' }))
-    let still: Row[] = await store.query('.attachment!')
+    let still: Row[] = await store.query('.attachment')
     assertEquals(still.length, 1)
     assertEquals(still[0].attachment?.name, 'the cake.png')
 
@@ -148,7 +148,7 @@ slow('the file door: a page uploads bytes and gets an address', async () => {
     // The size sits on the content row, at the sha a photo row points at, so
     // a wall reads it by the eid it already holds.
     let sizes = new Map(
-      (await store.query('.image!') as Row[]).map((
+      (await store.query('.image') as Row[]).map((
         r,
       ) => [r.entity.eid, r.image]),
     )
@@ -159,7 +159,7 @@ slow('the file door: a page uploads bytes and gets an address', async () => {
 
     // A row of the app's own that points at the bytes — the guide's photo.
     await store.apply({ comment: { target: file.eid } })
-    let [aimed] = await store.query('.comment!')
+    let [aimed] = await store.query('.comment')
     assertEquals(aimed.comment.target, file.eid)
     // …and the guide's look-before-you-write: a row already aimed at these
     // bytes, so a second send does not put the same photo on the wall twice.

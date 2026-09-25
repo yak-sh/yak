@@ -46,9 +46,9 @@ export let quiet = (): Socket => ({
 // matches on any of them), so every line it watches asks for all of them: `*`,
 // the query grammar's widest projection (@yaks/graph `wanted`). A line that
 // already says what it answers keeps it: `.fields=` names each row's columns,
-// and a `.count!` answers no rows.
+// and a `.count` answers no rows.
 export let entire = (line: string): string =>
-  /(^|&)(\*|\.count!|\.fields=[^&]*)(&|$)/.test(line)
+  /(^|&)(\*|\.count|\.fields=[^&]*)(&|$)/.test(line)
     ? line
     : line
     ? `${line}&*`

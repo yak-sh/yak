@@ -15,8 +15,8 @@ Deno.test('a body goes in as text and comes back as text', () => {
   // what apply() returns is what the caller wrote — the swap is undone
   assertEquals(post(out[0]).body, 'a long essay')
   // and so is what a read gathers
-  assertEquals(post(db.read('.post!')[0]).body, 'a long essay')
-  assertEquals(post(db.read('.post!')[0]).title, 'one')
+  assertEquals(post(db.read('.post')[0]).body, 'a long essay')
+  assertEquals(post(db.read('.post')[0]).title, 'one')
 })
 
 Deno.test('the row holds the address and the store holds the bytes', () => {
@@ -109,7 +109,7 @@ Deno.test('interned references do not survive a rolled-back batch', () => {
   }])
   fail = false
   g.apply(rows())
-  assertEquals(db.read('.post!').map((b) => post(b).body), ['shared', 'shared'])
+  assertEquals(db.read('.post').map((b) => post(b).body), ['shared', 'shared'])
   assertEquals(driver.query('select count(*) as n from blob_text', []), [{
     n: 1,
   }])
@@ -123,9 +123,9 @@ Deno.test('a bundle that names no body property is untouched', () => {
   ])
   // a patch that touches only the title leaves the body where it was
   g.apply([{ entity: { eid: 'p1' }, post: { title: 'two' } }])
-  let one = db.read('.post!')[0]
+  let one = db.read('.post')[0]
   assertEquals([post(one).title, post(one).body], ['two', 'first'])
-  assertEquals(db.read('.tag!').length, 1)
+  assertEquals(db.read('.tag').length, 1)
 })
 
 Deno.test('a body reads back through a query predicate too', () => {
@@ -168,7 +168,7 @@ Deno.test('clearing a body clears the property, not the store', () => {
   let { g, db, driver } = fixture()
   g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay' } }])
   g.apply([{ entity: { eid: 'p1' }, post: { body: null } }])
-  assertEquals(post(db.read('.post!')[0]).body, null)
+  assertEquals(post(db.read('.post')[0]).body, null)
   // the bytes stay: another row may address them, and they cost one row
   assertEquals(driver.query('select count(*) as n from blob_text', []), [{
     n: 1,

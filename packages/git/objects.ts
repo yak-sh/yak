@@ -72,27 +72,27 @@ export let objects = (g: Reads, store: Blobs): Objects => {
   // The type of each of these objects — and, by absence, which we never had.
   let kinds = async (oids: string[]): Promise<Map<string, Kind>> =>
     new Map(
-      (await some((l) => `.${GITOBJ}!&.entity.eid=${l}`, oids))
+      (await some((l) => `.${GITOBJ}&.entity.eid=${l}`, oids))
         .map((r) => [r.entity.eid, comp(r, GITOBJ).type as Kind]),
     )
 
   // The far end of every edge of one relation leaving these objects.
   let out = async (relation: string, from: string[]): Promise<string[]> =>
     (await some(
-      (l) => `.${relation}!&.edge.from=${l}&.order=ord`,
+      (l) => `.${relation}&.edge.from=${l}&.order=ord`,
       from,
     )).map((r) => String(comp(r, 'edge').to))
 
   let read = async function* (oids: string[]): AsyncIterable<Obj> {
     for (let i = 0; i < oids.length; i += BITE) {
       let bite = oids.slice(i, i + BITE)
-      // `.blob?` is not decoration: a query returns the components it names,
+      // `?blob` is not decoration: a query returns the components it names,
       // and a graph reached over @yaks/api's read endpoint returns exactly
-      // those — so a read that asked only for `.gitobj!` came back with rows
+      // those — so a read that asked only for `.gitobj` came back with rows
       // that did not include where the bytes were, and every object was
       // reported missing.
       let rows = new Map(
-        (await some((l) => `.${GITOBJ}!&.${BLOB}?&.entity.eid=${l}`, bite))
+        (await some((l) => `.${GITOBJ}&?${BLOB}&.entity.eid=${l}`, bite))
           .map((r) => [r.entity.eid, r]),
       )
       for (let oid of bite) {

@@ -18,29 +18,18 @@ export let OPERATORS: Taught[] = [
     spell: '=',
     word: 'equals',
     means: '.p=v equals; .p=a,b,c any of; .p=1..5 a range, inclusive ' +
-      '(.p=1...5 excludes the end); .p= absent',
-  },
-  {
-    spell: '!',
-    word: 'exists',
-    means: '.p! present (including an empty value)',
+      '(.p=1...5 excludes the end)',
   },
   { spell: '!=', word: 'not', means: 'negates any = form' },
   {
     spell: '~=',
     word: 'contains',
-    means: 'literal, case-insensitive; .p~= is present, the same as .p!',
+    means: 'literal, case-insensitive; .p~= is present, the same as .p',
   },
   { spell: '<', word: 'before', means: 'strictly less' },
   { spell: '<=', word: 'until', means: 'at most' },
   { spell: '>', word: 'after', means: 'strictly more' },
   { spell: '>=', word: 'since', means: 'at least' },
-  {
-    spell: '?',
-    word: 'wanted',
-    means: '.comp? carries the component beside the filter without ' +
-      'filtering on it; ?comp is the same request',
-  },
 ]
 
 // The reserved names that sit in a clause list and rank, project, aggregate or
@@ -51,10 +40,10 @@ export let DIRECTIVES: Taught[] = [
   {
     spell: '.refs=',
     word: 'backlinks',
-    means: '.refs=X everything referencing X; .refs! references anything; ' +
-      '.refs= references nothing',
+    means: '.refs=X everything referencing X; .refs references anything; ' +
+      '!refs references nothing',
   },
-  { spell: '.count!', word: 'aggregate', means: 'how many match' },
+  { spell: '.count', word: 'aggregate', means: 'how many match' },
   { spell: '.tally=', word: 'aggregate', means: "each value's count" },
   { spell: '.distinct=', word: 'aggregate', means: 'the values themselves' },
   {
@@ -72,10 +61,10 @@ export let DIRECTIVES: Taught[] = [
     means: 'continue past one entity, by number or id (.after=T-13882)',
   },
   {
-    spell: '.edges!',
+    spell: '.edges',
     word: 'rider',
     means: 'the edges incident to the answer; .edges.peers=status,title ' +
-      'projects the far endpoint; .edges[type,via]! selects one type',
+      'projects the far endpoint; .edges[type,via] selects one type',
   },
   {
     spell: '->',
@@ -99,8 +88,9 @@ this|last|next minute|hour|day|week|month|year, '5 minutes ago', 'in 2 days'
 tomorrow'), a date, and a full stamp ('2026-07-25T09:00'). A phrase is a
 RANGE: = within it, >= from its start, <= to its end
 ('.updated.at>="1 hour ago"'; glue with - where quoting is hard: 1-hour-ago).
-A component name alone tests presence: '.comp' or '.comp!' wears it, '!comp'
-or '.comp=' does not; '?comp' selects it when worn without filtering on it.
+A component name alone tests presence: '.comp' wears it, '!comp' does not,
+and '?comp' selects it when worn without filtering on it. A path takes the same
+three: '.recipe.cuisine' has one, '!recipe.cuisine' has none.
 Whitespace separates terms; every term stands alone. Between terms '&' and
 ',' are aliases for whitespace ('&' is the same query as a URL string); '|'
 between terms is OR and binds looser than the AND of adjacent terms
@@ -115,8 +105,8 @@ a trailing * matches a prefix).
 A DOTTED path walks a reference: '.author.title~=j' tests the target's title;
 a first segment naming a component is the explicit form ('.pin.x=12') and
 never dereferences. A reverse association, named by the schema, walks the other
-way: '.comments.author=jeff' keeps what has ANY such child; '.comments!' has
-any, '.comments=' none, '.comments>=5' counts, and '!' on the association
+way: '.comments.author=jeff' keeps what has ANY such child; '.comments' has
+any, '!comments' none, '.comments>=5' counts, and '!' on the association
 negates ('.comments!.author=jeff' has NONE by jeff; '.comments!.author!=jeff'
 has EVERY comment by jeff, by De Morgan).
 Directives ride beside the filters — ${DIRECTIVES.map(row).join('; ')}.

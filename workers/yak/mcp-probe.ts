@@ -78,7 +78,7 @@ export let hearing = (res: Response) => {
 }
 
 // An app's own mailbox at the agent door (T-34149). Mail already rode the
-// generic tier — a letter is `doc` + `mail` + `deliver` and `.mail!` reads one
+// generic tier — a letter is `doc` + `mail` + `deliver` and `.mail` reads one
 // back — so what is held here is the two things the tools add: the scope, said
 // where a model chooses (the block above), and the two verbs answering bundles
 // through the doors graph_apply and graph_query already use, guard and all.

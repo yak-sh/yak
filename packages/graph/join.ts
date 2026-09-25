@@ -302,7 +302,7 @@ export let asked = (m: Match, v: Vocab): Match | null => {
       return false
     }
   }
-  // Both `!comp` and `.prop=`: the value-less `=` the grammar reads as "this is
+  // `!comp` and `!comp.prop`: the value-less `=` the grammar reads as "this is
   // absent".
   let absent = (c: Pred): boolean =>
     c.op == '=' && c.value?.kind == 'scalar' && c.value.raw === ''

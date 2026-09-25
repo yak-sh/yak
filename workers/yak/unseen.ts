@@ -128,7 +128,7 @@ let hushed = (space: Space, app: App) => {
 // the app's minute ceiling, is telemetry — the entity is already written.
 //
 // It wore a `doc` until T-32533, and that put the platform's own crashes in
-// `.doc!` — the query a person's agent is taught as "everything you saved" —
+// `.doc` — the query a person's agent is taught as "everything you saved" —
 // where one showed up in a recipe box as a recipe (C-32531 item 1).
 // Where a break is written: one bundle, under the kernel flag, because an
 // `exception` is wholly server-owned. The platform's own breaks go to the meta
@@ -311,12 +311,12 @@ export let openIn = async (
   who: Who,
   all = false,
 ) => {
-  let seen = all ? '' : '&.notified='
+  let seen = all ? '' : '&!notified'
   let at = graphAt(env, space, app, who)
   try {
     let found = await Promise.all(
       ['exception', 'error'].map(async (facet) =>
-        (await at.query(`.${facet}!&.doc?&.archived=${seen}`))
+        (await at.query(`.${facet}&?doc&!archived${seen}`))
           .map((b) => ({ kind: facet, ...b }) as unknown as Hit)
       ),
     )

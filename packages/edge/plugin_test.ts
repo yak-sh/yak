@@ -28,7 +28,7 @@ let read = (g: ReturnType<typeof blogGraph>, q: string) =>
 Deno.test('a link states itself and is stored', () => {
   let g = posts(blogGraph())
   sync(g.apply([link('p1', 'cites', 'p2')]))
-  assertEquals(read(g, '.cites!'), [edgeEid('p1', 'cites', 'p2')])
+  assertEquals(read(g, '.cites'), [edgeEid('p1', 'cites', 'p2')])
   assertEquals(read(g, '.edge.from=p1'), [edgeEid('p1', 'cites', 'p2')])
 })
 
@@ -36,7 +36,7 @@ Deno.test('the same link stated twice is one entity', () => {
   let g = posts(blogGraph())
   sync(g.apply([link('p1', 'cites', 'p2')]))
   sync(g.apply([link('p1', 'cites', 'p2', 3)]))
-  assertEquals(read(g, '.cites!').length, 1)
+  assertEquals(read(g, '.cites').length, 1)
 })
 
 Deno.test('an aliased link mints at the sentence it states', () => {
@@ -66,18 +66,18 @@ Deno.test('unlinking drops the sentence and keeps the identity', () => {
   let g = posts(blogGraph())
   sync(g.apply([link('p1', 'cites', 'p2')]))
   sync(g.apply([unlink('p1', 'cites', 'p2')]))
-  assertEquals(read(g, '.cites!'), [])
+  assertEquals(read(g, '.cites'), [])
   // and it can be said again — the id was never tombstoned
   sync(g.apply([link('p1', 'cites', 'p2')]))
-  assertEquals(read(g, '.cites!'), [edgeEid('p1', 'cites', 'p2')])
+  assertEquals(read(g, '.cites'), [edgeEid('p1', 'cites', 'p2')])
 })
 
 Deno.test('a link dies with either end', () => {
   let g = posts(blogGraph())
   sync(g.apply([link('p1', 'cites', 'p2'), link('p2', 'links', 'p1')]))
-  assertEquals(read(g, '.edge!').length, 2)
+  assertEquals(read(g, '.edge').length, 2)
   sync(g.apply([{ entity: { eid: 'p2' }, $delete: true }]))
-  assertEquals(read(g, '.edge!'), [])
+  assertEquals(read(g, '.edge'), [])
 })
 
 Deno.test('an edge with no relation is refused, and says so', () => {
@@ -112,7 +112,7 @@ Deno.test('a sentence spread over two bundles is one sentence', () => {
     { entity: { eid }, edge: { from: 'p1', to: 'p2' } },
     { entity: { eid }, cites: {} },
   ]))
-  assertEquals(read(g, '.cites!'), [eid])
+  assertEquals(read(g, '.cites'), [eid])
 })
 
 Deno.test('a patch that states no ends is left alone', () => {
@@ -122,6 +122,6 @@ Deno.test('a patch that states no ends is left alone', () => {
     entity: { eid: edgeEid('p1', 'cites', 'p2') },
     edge: { ord: 2 },
   }]))
-  let [edge] = g.read('.cites!&.edge?') as Bundle[]
+  let [edge] = g.read('.cites&?edge') as Bundle[]
   assertEquals((edge.edge as Record<string, unknown>).ord, 2)
 })

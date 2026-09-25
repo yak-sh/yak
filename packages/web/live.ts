@@ -379,16 +379,16 @@ let predLine = (p: Pred): string | undefined => {
     : p.op === '!'
     ? '!='
     : p.op === EXISTS
-    ? '!'
+    ? ''
     : ['<', '<=', '>', '>='].includes(p.op)
     ? p.op
     : undefined
   if (p.op === TEXT) return value
   if (p.refs) {
     return p.op === EXISTS
-      ? '.refs!'
+      ? '.refs'
       : p.op === ''
-      ? `.refs=${value}`
+      ? value ? `.refs=${value}` : '!refs'
       : undefined
   }
   if (p.win) {
@@ -408,7 +408,7 @@ let predLine = (p: Pred): string | undefined => {
       : '.fields=eid'
   }
   if (p.agg) {
-    return p.agg === 'count' ? '.count!' : `.${p.agg}=${p.comp}.${p.prop}`
+    return p.agg === 'count' ? '.count' : `.${p.agg}=${p.comp}.${p.prop}`
   }
   if (p.reach) {
     let r = p.reach
@@ -421,12 +421,12 @@ let predLine = (p: Pred): string | undefined => {
     if (p.edge) {
       return `.edges[${p.edge.type}${
         p.edge.via ? `,${p.edge.via.comp}.${p.edge.via.prop}` : ''
-      }]!`
+      }]`
     }
     if (p.limit != null) return `.edges.limit=${p.limit}`
     return p.peers?.length
       ? `.edges.peers=${p.peers.map((f) => `${f.comp}.${f.prop}`).join(',')}`
-      : '.edges!'
+      : '.edges'
   }
   if (p.rev) {
     let r = p.rev
@@ -435,7 +435,7 @@ let predLine = (p: Pred): string | undefined => {
     )?.[0]
     if (!assoc) return undefined
     if (r.count) return op ? `.${assoc}${op}${value}` : undefined
-    if (!r.preds.length) return `.${assoc}${r.not ? '=' : '!'}`
+    if (!r.preds.length) return r.not ? `!${assoc}` : `.${assoc}`
     // A simple reverse path has one leaf. Compound/grouped predicates require
     // their original source line rather than a guessed alternate spelling.
     if (r.preds.length !== 1) return undefined
@@ -446,11 +446,14 @@ let predLine = (p: Pred): string | undefined => {
   }
   if (p.op === ORDER || p.op === NEAR) return `.${p.op}=${value}`
   if (p.op === WANT) return `?${p.comp}`
-  if (!op) return undefined
+  if (op == undefined) return undefined
   let path = [p, ...p.at ?? []].map((h) =>
     [h.comp, h.prop].filter(Boolean).join('.')
   ).join('.')
-  return path ? `.${path}${op}${p.op === EXISTS ? '' : value}` : undefined
+  if (!path) return undefined
+  // Presence and absence are prefixes: `.path` and `!path`.
+  if (p.op === EXISTS) return `.${path}`
+  return p.op === '' && !value ? `!${path}` : `.${path}${op}${value}`
 }
 export let predsToQuery = (preds: Pred[]): string | undefined => {
   if (!preds.length) return undefined
@@ -1085,7 +1088,7 @@ let publishLocal = (
   // but the edge TABLE this client renders from is keyed by the sentence, so
   // read the sentences out first, while the cache still holds what an unlink
   // is about to take away. This is the FULL-BROADCAST arm; a filtered client
-  // hears its edges through the `.edges!` rider instead, so the stream itself
+  // hears its edges through the `.edges` rider instead, so the stream itself
   // is the holder, and a rider holding the same triple keeps it when the
   // stream lets go.
   let said = moves(changes, (e) => depOf(graph[e]))
@@ -2143,7 +2146,7 @@ export let resultSub = (eid: string, name: ResultComp) => {
   let sub = resultKey(eid, name)
   let n = resultUses.get(sub) ?? 0
   resultUses.set(sub, n + 1)
-  if (!n) ownBoard(sub, `id=${eid}&.${name}!`)
+  if (!n) ownBoard(sub, `id=${eid}&.${name}`)
   return () => {
     let held = (resultUses.get(sub) ?? 1) - 1
     if (held > 0) return void resultUses.set(sub, held)
@@ -2154,7 +2157,7 @@ export let resultSub = (eid: string, name: ResultComp) => {
 }
 
 // A fullscreen board opens a WINDOW over its membership, not the whole of it
-// (D-22567 §4). A board is a saved query, and the Everything board's `.task!`
+// (D-22567 §4). A board is a saved query, and the Everything board's `.task`
 // is ~24k rows — 4.7 MB onto one socket so a view can paint a page. The exact
 // per-status numbers still come from the tally sub beside it (T-22509), so the
 // face can say what it is showing of what rather than passing a page off as the
@@ -2795,7 +2798,7 @@ export let rows = (): Row[] =>
 
 // The distinct domain census as an AGGREGATE sub (T-17504, then D-22567 §1):
 // the well asks the server for the VALUES, so the client never holds the tasks
-// they came from. This used to be a `.task!` membership sub carrying a
+// they came from. This used to be a `.task` membership sub carrying a
 // wake-projected `filed.domain` — which streamed EVERY task into the cache
 // (23,992 change records, 4.7 MB measured on the live graph) so a render could
 // reduce them to a dozen strings. `.distinct=filed.domain` answers those strings
@@ -2807,7 +2810,7 @@ export let rows = (): Row[] =>
 // which is why this one may read locally where a board's membership may not.
 export let domains = {
   get value() {
-    let t = aggQuery('agg:domains', '.task!&.distinct=filed.domain')
+    let t = aggQuery('agg:domains', '.task&.distinct=filed.domain')
     return t.live.value ? Object.keys(t.map.value).sort() : distinctValues(
       localEids([has('task')]).value.map((eid) => paint.peek()[eid] ?? {}),
       { comp: 'filed', prop: 'domain' },
@@ -2830,11 +2833,11 @@ export let projects = (): Ent[] =>
 // What a face that RENDERS a session row needs on top of the dot's columns —
 // the identity, model and effort SessionRow shows. Held only while such a face
 // is mounted (the Tray's panel while it is open, a project's Dashboard), so the
-// columns nobody is looking at stay off the wire. Same `.session!` query as
+// columns nobody is looking at stay off the wire. Same `.session` query as
 // above under a DIFFERENT projection, which makes it a different SUB with its
 // own member set: that is what "projection is part of sub identity" buys, and
 // the cache merges the two because the fuller one is a superset.
-export let sessionDetail = '.session!&.fields=' + [
+export let sessionDetail = '.session&.fields=' + [
   ...dotFields.map((f) => `${f.comp}.${f.prop}`),
   'using.model',
   'using.effort',
@@ -2942,7 +2945,7 @@ let aggQuery = (name: string, line: string, keep = false): AggSet => {
   return found
 }
 let COMMENTS = 'agg:comments'
-let COMMENT_TALLY = '.comment!&.tally=comment.target'
+let COMMENT_TALLY = '.comment&.tally=comment.target'
 let commentTargets = new Map<string, number>()
 let commentScheduled = false
 let scheduleCommentTally = () => {
@@ -3073,7 +3076,7 @@ export let foldFor = (client: string, board: string): Folded | undefined => {
 }
 
 // The root canvas: the first canvas-tagged entity by num, read through the
-// query door (`.canvas!`) rather than a whole-cache scan, so a partial cache
+// query door (`.canvas`) rather than a whole-cache scan, so a partial cache
 // resolves the same first canvas the complete graph would (T-18094). Membership
 // wakes it when a canvas is minted or dies; `canvasVersion` when a num arrives —
 // a canvas whose num hasn't landed yet can't be "first", or sorting the unknown

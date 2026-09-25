@@ -27,8 +27,8 @@ let tool: Tool = {
 let args = (argv: string[]) => argsFor(tool, argv, reads)
 
 Deno.test('a line splits into options, values and bare words', () => {
-  assertEquals(saidIn(['--q', '.recipe!']), {
-    opts: [['q', '.recipe!']],
+  assertEquals(saidIn(['--q', '.recipe']), {
+    opts: [['q', '.recipe']],
     words: [],
   })
   // A flag is a name with nothing after it, or a name followed by another
@@ -52,7 +52,7 @@ Deno.test('a value is what its property says it is', () => {
   assertEquals(valueOf('a', '["x"]', { type: 'array' }), ['x'])
   // One item for an array is the item, wrapped — repeating the option is how
   // a list is typed without quoting brackets past a shell.
-  assertEquals(valueOf('a', '.doc!', { type: 'array' }), ['.doc!'])
+  assertEquals(valueOf('a', '.doc', { type: 'array' }), ['.doc'])
   // A union with null reads by the type that is not null.
   assertEquals(valueOf('a', '7', { type: ['number', 'null'] }), 7)
   assertThrows(() => valueOf('a', 'lots', { type: 'number' }), Usage)

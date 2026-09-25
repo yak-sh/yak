@@ -9,7 +9,7 @@
 // omitted property is untouched, a null property is cleared, a null component
 // is dropped, and `tombstone: {}` is death. An eid the batch mints is a
 // `$alias`, and the applied bundle says what it became. A filter line is the
-// dot-param grammar @yaks/query parses — `.space.slug=ada&.doc?` — with values
+// dot-param grammar @yaks/query parses — `.space.slug=ada&?doc` — with values
 // written RAW: this door does the escaping, so no caller reaches for
 // encodeURIComponent again.
 //

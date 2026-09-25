@@ -250,7 +250,7 @@ Deno.test('a write the admin makes is the admin’s', async () => {
     'x-yak-person': admin,
     'x-yak-role': 'owner',
   })
-  let [row] = await at.query('.doc.title=note&.created!')
+  let [row] = await at.query('.doc.title=note&.created')
   assertEquals((row.created as { by: string }).by, admin)
 })
 
@@ -297,7 +297,7 @@ Deno.test("a break the platform noted about itself is the meta store's", async (
     message: 'signature refused',
     stack: 'at verify',
   })
-  let [broke] = await at.query('.exception!')
+  let [broke] = await at.query('.exception')
   let e = broke.exception as { request: string; message: string }
   assertEquals(e.request, 'billing POST /stripe')
   assertEquals(e.message, 'signature refused')
@@ -372,7 +372,7 @@ Deno.test('erasing a space buries everything that named it', async () => {
       deploy: { app, version: 1, files: '{}', worker: '' },
     },
   ], as(ada))
-  assertEquals((await at.query('.app!')).length, 2) // ada's, and the platform's
+  assertEquals((await at.query('.app')).length, 2) // ada's, and the platform's
 
   // The one tombstone erase.ts writes. Death cascades in the store to every
   // app, deploy, hostname and membership that named the space.
@@ -383,7 +383,7 @@ Deno.test('erasing a space buries everything that named it', async () => {
   assertEquals(await dir.space('ada'), null)
   assertEquals((await at.query(`.app.space=${s.eid}`)).length, 0)
   assertEquals((await at.query(`.deploy.app=${app}`)).length, 0)
-  assertEquals((await at.query('.hostname!')).length, 0)
+  assertEquals((await at.query('.hostname')).length, 0)
   assertEquals((await at.query(`.member.space=${s.eid}`)).length, 0)
   // The slug is free for somebody else to take.
   let other = crypto.randomUUID()
@@ -394,7 +394,7 @@ Deno.test('the directory plants the platform, and not one app word', async () =>
   let ctx = state()
   let store = new Store(ctx)
   await store.fetch(
-    new Request('http://store/query?q=.space!', {
+    new Request('http://store/query?q=.space', {
       headers: { 'x-store': PLATFORM_STORE },
     }),
   )

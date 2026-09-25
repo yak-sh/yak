@@ -65,7 +65,7 @@ let at = async (
 // A memory as it stands right now, for a patch to be judged against: the
 // entity the caller named, or nothing where it names no memory of this graph.
 let held = async (graph: Graph, eid: string): Promise<Bundle | undefined> =>
-  (await graph.read(`.eid=${eid}&.${MEMORY}&.doc?`))[0]
+  (await graph.read(`.eid=${eid}&.${MEMORY}&?doc`))[0]
 
 /** One memory as it is returned: whole, carrying the token a save will ask
  * for. Absent words read back as `null`, which is how the precondition check

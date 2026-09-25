@@ -29,7 +29,7 @@ Deno.test('the sugar becomes a key entity of its own', () => {
   let g = cookbookGraph()
   let out = sync(g.apply(seed('Lemon cakes')))
   let r = out.find((b) => b.$alias == '$r')!.entity.eid
-  assertEquals(read(g, '.alias!'), [aliasEid(CAKE)])
+  assertEquals(read(g, '.alias'), [aliasEid(CAKE)])
   assertEquals(
     (g.read(`.eid=${aliasEid(CAKE)}`) as Bundle[])[0].key,
     { of: r, value: CAKE },
@@ -44,7 +44,7 @@ Deno.test('the same seed loaded twice writes one entity', () => {
   let r = first.find((b) => b.$alias == '$r')!.entity.eid
   let again = sync(g.apply(seed('Lemon cakes (better)')))
   assertEquals(again.find((b) => b.$alias == '$r')!.entity.eid, r)
-  assertEquals(read(g, '.recipe!'), [r])
+  assertEquals(read(g, '.recipe'), [r])
   assertEquals(
     ((g.read(`.eid=${r}`) as Bundle[])[0].doc as { title: string }).title,
     'Lemon cakes (better)',
@@ -75,7 +75,7 @@ Deno.test('a bundle addressed by name patches that entity', () => {
     ((g.read(`.eid=${r}`) as Bundle[])[0].recipe as { serves: number }).serves,
     12,
   )
-  assertEquals(read(g, '.recipe!'), [r])
+  assertEquals(read(g, '.recipe'), [r])
 })
 
 Deno.test('an eid wins over a name that spells it', () => {
@@ -117,11 +117,11 @@ Deno.test('a name is free again once the entity it named is deleted', () => {
   let r = sync(g.apply(seed('Lemon cakes')))
     .find((b) => b.$alias == '$r')!.entity.eid
   sync(g.apply([{ entity: { eid: r }, $delete: true }]))
-  assertEquals(read(g, '.alias!'), [])
+  assertEquals(read(g, '.alias'), [])
   let next = sync(g.apply(seed('Lemon cakes, again')))
     .find((b) => b.$alias == '$r')!.entity.eid
   assert(next != r, 'a re-seeded name mints a new entity')
-  assertEquals(read(g, '.recipe!'), [next])
+  assertEquals(read(g, '.recipe'), [next])
 })
 
 Deno.test('a door reads ids and names through the same address()', () => {

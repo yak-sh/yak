@@ -106,7 +106,7 @@ Deno.test('replacement preserves server ranking; content deltas do not reorder',
   assertEquals(ids(w.value), ['a', 'z'])
   frame({ id: 's1', bundles: [row('a')] })
   assertEquals(ids(w.value), ['a', 'z'])
-  let other = c.watch('.doc!', server)
+  let other = c.watch('.doc', server)
   frame({ id: 's2', bundles: [row('z')] })
   frame({ id: 's1', gone: ['z'] })
   assertEquals(ids(w.value), ['a'])
@@ -117,13 +117,13 @@ Deno.test('replacement preserves server ranking; content deltas do not reorder',
 
 Deno.test('server watches dedupe and dispose independently from locally evaluated watches', () => {
   let { c, frame, sockets } = fixture()
-  let a = c.watch('.doc!', server)
-  let b = c.watch('.doc!', { ...server, remote: true })
-  let local = c.watch('.doc!')
+  let a = c.watch('.doc', server)
+  let b = c.watch('.doc', { ...server, remote: true })
+  let local = c.watch('.doc')
   sockets[0].emit('open')
   assertEquals(sockets[0].sent, [
-    { subscribe: '.doc!', id: 's1' },
-    { subscribe: '.doc!', id: 's2' },
+    { subscribe: '.doc', id: 's1' },
+    { subscribe: '.doc', id: 's2' },
   ])
   let heard = 0
   let same = () => heard++
@@ -226,11 +226,11 @@ Deno.test('cache observers also see local-only commits and stop on client close'
 
 Deno.test('server evaluation cannot silently become a local watch', () => {
   let local = client(box, [], { vault: false })
-  assertThrows(() => local.watch('.doc!', server), Error, 'requires a remote')
+  assertThrows(() => local.watch('.doc', server), Error, 'requires a remote')
   local.close()
   let { c } = fixture()
   assertThrows(
-    () => c.watch('.doc!', { ...server, remote: false }),
+    () => c.watch('.doc', { ...server, remote: false }),
     Error,
     'requires a remote',
   )

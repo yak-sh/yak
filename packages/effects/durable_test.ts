@@ -33,7 +33,7 @@ let fixture = (owner = 'worker-1', now = clock()) => {
   })
   let g = blogGraph([fx], durableBlog)
   let tx: Tx = detached(g.storage)
-  let rows = () => (g.read('.effect!') as Bundle[]).map((b) => b.effect as Comp)
+  let rows = () => (g.read('.effect') as Bundle[]).map((b) => b.effect as Comp)
   let row = (eid: string) => sync(tx.get([eid]))[0][EFFECT] as Comp
   return { fx, g, log, tx, seen, oops, rows, row, now }
 }

@@ -23,7 +23,7 @@ useRoute(() => {})
 let stubFetch = () => {
   let real = globalThis.fetch
   globalThis.fetch = ((input: RequestInfo | URL) => {
-    let m = String(input).match(/\/query\?q=\.(\w+)!/)
+    let m = String(input).match(/\/query\?q=\.(\w+)(?![\w.])/)
     if (!m) return real(input)
     let kind = m[1]
     let out = Object.values(cache.peek())

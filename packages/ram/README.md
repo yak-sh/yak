@@ -71,7 +71,7 @@ interface:
 | `ddl()`              | An empty array; there is no database schema to create.                                   |
 | `install()`          | Does nothing.                                                                            |
 | `read(query, opts?)` | Matching bundles, ordered and paginated as requested.                                    |
-| `rows(query, opts?)` | One `{ eid }` row per match, or a single `{ value: '', n }` row for `.count!`.           |
+| `rows(query, opts?)` | One `{ eid }` row per match, or a single `{ value: '', n }` row for `.count`.            |
 | `tx(body)`           | The callback's result; commits on success and rolls back on a throw or rejected promise. |
 
 A transaction provides `read`, `get(eids)`, `patch(bundles)`, `evict(eids)`, and
@@ -131,7 +131,7 @@ values have the same meaning in query matching. RAM also preserves JavaScript
 value types; a SQL adapter may return an integer for a stored boolean.
 
 Unsupported queries throw `Unsupported` from `@yaks/match`. Examples include
-`.tally`, `.distinct`, `.near`, `.edges!`, and computed properties. Count is
+`.tally`, `.distinct`, `.near`, `.edges`, and computed properties. Count is
 available through `rows()`, not `read()`. See the
 [matcher documentation](../match/README.md) for the supported subset. Text
 search matches tokens in stored text without a full-text index or relevance

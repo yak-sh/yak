@@ -118,9 +118,9 @@ The page gets it in one line, from the app's own address:
 
   await apply({ entity: { eid: '$r' },
                 doc: { title: 'Lemon cake', body: '3 lemons...' } })
-  let all = await query('.doc!')       // everything, oldest first
+  let all = await query('.doc')       // everything, oldest first
   let some = await search('lemon')     // full-text search, ranked
-  subscribe('.doc!', draw)             // and again whenever it changes,
+  subscribe('.doc', draw)             // and again whenever it changes,
                                        // including on their other device
 
 An entity is {entity: {eid}, ...components}: '$name' creates a new one (the
@@ -128,8 +128,8 @@ reply is one bundle per entity — an object holding that entity's id and its
 components — carrying the eid the server picked and the '$alias' you asked
 under), and a filter string reads them back. A row carries
 only the components its filter names — presence filters end at ! and join
-with &, and '?' asks for one without filtering on it — so query('.recipe!')
-returns recipes with no titles and query('.recipe!&.doc?') returns both. Ask
+with &, and '?' asks for one without filtering on it — so query('.recipe')
+returns recipes with no titles and query('.recipe&?doc') returns both. Ask
 for what the page will draw. Call guide for the map of all of this, and guide
 with a page name for one subject — querying, components, files, commands of
 your own, code of your own — so read the one the work calls for rather than
@@ -163,8 +163,8 @@ An eid is the same thing in every app. Two apps can write about one entity —
 a reading list app saves the book, a lending app saves the loan — and each
 component lives with the app that declares it, so nothing is copied and
 nothing is synced. graph_query reads every app you can reach at once and
-returns one bundle per entity: '.book!&.loan?' is every book with its loan
-where it has one, and '.loan?' asks for a component without filtering on it.
+returns one bundle per entity: '.book&?loan' is every book with its loan
+where it has one, and '?loan' asks for a component without filtering on it.
 graph_apply writes each component to the app that declares it, and where a
 brand-new entity carries only shared components — a doc and nothing else —
 name the app on the bundle: {"entity": {"eid": "$r"}, "$app": "recipes",

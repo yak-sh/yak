@@ -145,7 +145,7 @@ its own, in the app's `vocab.json`:
 
 Two properties, because they are two facts: the address the text came from, and
 when this app made its copy. `source.url` is what tells a page where to send
-somebody who wants the original, and `.source!` is the filter for everything
+somebody who wants the original, and `.source` is the filter for everything
 clipped rather than typed.
 
 **The same address clipped twice should be one row.** The cheapest way is to

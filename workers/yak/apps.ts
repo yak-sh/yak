@@ -748,7 +748,7 @@ export let filed = async (
 
 // A page hands the app bytes and gets back an address (T-32677). The rows are
 // the uploader's, written through the app's own /apply with them vouched for,
-// so `.created!` says who put it there.
+// so `.created` says who put it there.
 let took = async (
   req: Request,
   env: Env,
@@ -1072,14 +1072,14 @@ let api = async (
     // the whole line as one parameter (wire.ts `lined`). The ask then carries
     // the listing's own screen (listing.ts `asking`), so what a count counts is
     // what a list lists.
-    let asked = asking(lined(new URL(req.url).search))
+    let asked = asking(lined(new URL(req.url).search.slice(1)))
     try {
       let rows = await metaOf((at, init, sent) =>
         store(at, init, { ...headers, ...sent })
       ).query(asked)
       // The same rule the person's agent reads a listing by (listing.ts): one
       // filter line, one answer, whichever door asked it. An aggregate is not
-      // a listing — `.count!` answers one number — so it passes through whole.
+      // a listing — `.count` answers one number — so it passes through whole.
       return Response.json(
         Array.isArray(rows) ? listed(rows as Row[], asked) : rows,
       )

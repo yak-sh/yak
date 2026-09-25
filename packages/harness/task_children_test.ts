@@ -120,7 +120,7 @@ Deno.test('independent tasks spawn concurrently with ordinary child caps', async
     ),
   )
   assertEquals(new Set(out).size, 2)
-  assertEquals((await h.g.read('.task .claim.session!&*')).length, 2)
+  assertEquals((await h.g.read('.task .claim.session&*')).length, 2)
   await assertRejects(() => Promise.resolve(spawn.run({ task: 'work' }, ctx)))
   h.close()
 })

@@ -53,7 +53,7 @@ import {
 } from './tools.ts'
 import { ceiling, serve, unseenBlock } from './unseen.ts'
 import { appVocab, meant, PLATFORM_APART, wordOf } from './vocab.ts'
-import { lined } from './wire.ts'
+import { bare, lined } from './wire.ts'
 import { type Host, hosted } from './host.ts'
 import { refuse } from './tool.ts'
 
@@ -249,7 +249,7 @@ export let named = (ctx: Ctx, said: string, write = false): Promise<Reach> => {
 // a store knows about components, and which of several stores to ask is a
 // question only this side of the hop can answer.
 let scope = (line: string) => {
-  let segs = line.replace(/^[?&]+/, '').split('&')
+  let segs = bare(line).split('&')
   let said = segs.find((s) => /^\.in=/.test(s))?.slice(4)
   return { said, line: segs.filter((s) => !/^\.in=/.test(s)).join('&') }
 }

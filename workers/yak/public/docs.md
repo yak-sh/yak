@@ -33,7 +33,7 @@ address, so the same files work wherever the app is served or installed.
 
     await apply({ entity: { eid: '$cake' },
                   doc: { title: 'Lemon cake', body: '3 lemons...' } })
-    let recipes = await query('.doc!')
+    let recipes = await query('.doc')
 
 An entity is a bundle, `{entity: {eid}, ...components}`; a `$alias` in place of
 the eid creates one. Who may read and write is the app's `access`: `public`,
@@ -207,7 +207,7 @@ state means.
 
 ## The filter grammar
 
-One grammar everywhere: `.doc!` selects rows that have a component, `.doc?` asks
+One grammar everywhere: `.doc` selects rows that have a component, `?doc` asks
 for one beside the rows selected, `.recipe.minutes<=30` filters a property, `&`
 joins, `id=<eid>` fetches one entity whole, `limit=` windows the answer, and a
 bare word is a full-text search. A row comes back with the components the filter

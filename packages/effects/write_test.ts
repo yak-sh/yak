@@ -46,7 +46,7 @@ Deno.test('an effect writes through apply(), so the write is stamped', () => {
       write([{ entity: { eid: 's1' }, subscriber: { email: 'ana@blog' } }]),
   )
   apply([post('p1')])
-  let [sub] = g.read('.subscriber!&.created?') as Bundle[]
+  let [sub] = g.read('.subscriber&?created') as Bundle[]
   assertEquals((sub.subscriber as Record<string, unknown>).email, 'ana@blog')
   // `created` is @yaks/graph's own stamp: a `tx.patch` write would carry none.
   assert(sub.created, 'the write-back went through the whole pipeline')
@@ -62,7 +62,7 @@ Deno.test('an effect with no write door is reported, never written past', () => 
       write([{ entity: { eid: 's1' }, subscriber: { email: 'ana@blog' } }]),
   )
   sync(g.apply([post('p1')]))
-  assertEquals((g.read('.subscriber!') as Bundle[]).length, 0)
+  assertEquals((g.read('.subscriber') as Bundle[]).length, 0)
   assertEquals(oops.length, 1)
   assert(String(oops[0]).includes('no write door'))
 })
@@ -94,7 +94,7 @@ Deno.test('a writing effect that triggers itself is stopped by the marker', () =
   // and fires; generation 2 wakes nobody. The rows are all there — the batch
   // committed like any other, it simply woke no handler.
   assertEquals(n, 2)
-  assertEquals((g.read('.post!') as Bundle[]).length, 3)
+  assertEquals((g.read('.post') as Bundle[]).length, 3)
 })
 
 Deno.test('depth 0 lets an effect write without waking anything', () => {
@@ -112,7 +112,7 @@ Deno.test('depth 0 lets an effect write without waking anything', () => {
   })
   sync(g.apply([post('p1')]))
   assertEquals(n, 1)
-  assertEquals((g.read('.post!') as Bundle[]).length, 2)
+  assertEquals((g.read('.post') as Bundle[]).length, 2)
   assertEquals(oops, [])
 })
 
@@ -125,7 +125,7 @@ Deno.test('the generation marker never reaches the caller, or a property', () =>
   )
   let out = apply([post('p1')])
   assertEquals(generation(out), 0)
-  for (let b of [...out, ...(g.read('.subscriber!') as Bundle[])]) {
+  for (let b of [...out, ...(g.read('.subscriber') as Bundle[])]) {
     assert(!(ORIGIN in b), `${ORIGIN} escaped onto a bundle`)
   }
 })
@@ -237,5 +237,5 @@ Deno.test('the attempt count holds when the effect writes through the door', asy
   assertEquals(runs, ['p1', 'p1', 'p1'])
   // Three runs, three write-backs, one row: the writes were idempotent by eid,
   // and the attempts are spent rather than looping.
-  assertEquals((g.read('.subscriber!') as Bundle[]).length, 1)
+  assertEquals((g.read('.subscriber') as Bundle[]).length, 1)
 })

@@ -502,7 +502,7 @@ export let sessionTitle = async (
   return titleOf(
     await g.read(
       '.entry.session=' + session.entity.eid +
-        '&.content&.prompt=&.notice=&.order=entry.seq&.limit=1',
+        '&.content&!prompt&!notice&.order=entry.seq&.limit=1',
     ),
   )
 }

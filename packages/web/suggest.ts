@@ -27,10 +27,8 @@ import {
 // editor, and every filter bar, and a table test can pin each segment.
 export type Cand = { text: string; kind: string }
 
-// op → its one-word meaning, the package's own table (a request `?` completes
-// through presenceOps, not here).
-let OP_WORDS: [string, string][] = OPERATORS.filter((o) => o.spell != '?')
-  .map((o) => [o.spell, o.word])
+// op → its one-word meaning, the package's own table.
+let OP_WORDS: [string, string][] = OPERATORS.map((o) => [o.spell, o.word])
 
 // a taste of the time grammar for *_at columns — hyphen-glued so a
 // candidate stays one token in a whitespace-split line
@@ -98,10 +96,11 @@ let opsFor = (base: string): Cand[] => [
   { text: base + '=..', kind: 'range' },
 ]
 
+// A component alone is its own presence test, so what it completes to is the
+// other questions about it, each a prefix form: absent and wanted.
 let presenceOps = (base: string): Cand[] => [
-  { text: base + '=', kind: 'absent' },
-  { text: base + '!', kind: 'present' },
-  { text: base + '?', kind: 'wanted' },
+  { text: '!' + base.slice(1), kind: 'absent' },
+  { text: '?' + base.slice(1), kind: 'wanted' },
   { text: base + '~=', kind: 'present' },
 ]
 

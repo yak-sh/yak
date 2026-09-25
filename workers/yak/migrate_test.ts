@@ -173,7 +173,7 @@ let count = (ctx: State, table: string): number =>
 
 // Why a store refused its pass, in the words its door says to every caller.
 let why = async (now: ReturnType<typeof newer>, app?: string) => {
-  let r = await now.door('/query?q=.doc!', {}, app)
+  let r = await now.door('/query?q=.doc', {}, app)
   assertEquals(r.status, 503)
   return (await r.json() as { message: string }).message
 }
@@ -221,7 +221,7 @@ slow('an app store carries every row across, and reconciles', async () => {
   let said = await seedApp(ctx)
 
   let now = newer(ctx, 'ada/cookbook')
-  let docs = await now.query(`.doc.title="Lemon cake"&.doc?`, APP)
+  let docs = await now.query(`.doc.title="Lemon cake"&?doc`, APP)
   assertEquals(docs.length, 1)
 
   // The prose came across the blob move: the column holds the address now, and
@@ -242,16 +242,16 @@ slow('an app store carries every row across, and reconciles', async () => {
   assertEquals((cakes[0].recipe as { title: string }).title, 'Lemon cake')
 
   // The task, the comment and the person.
-  assertEquals((await now.query('.task!', APP)).length, 1)
+  assertEquals((await now.query('.task', APP)).length, 1)
   assertEquals((await now.query('.comment.target=' + ONE, APP)).length, 1)
-  assertEquals((await now.query('.person!', APP)).length, 1)
+  assertEquals((await now.query('.person', APP)).length, 1)
 
   // The edge said under the old name wears the new tag and the address that
   // name derives; the one whose word never moved kept its own.
-  let kept = await now.query('.requires!&.edge?', APP)
+  let kept = await now.query('.requires&?edge', APP)
   assertEquals(kept.length, 1)
   assertEquals(kept[0].entity.eid, said.requires)
-  let moved = await now.query('.referenced!&.edge?', APP)
+  let moved = await now.query('.referenced&?edge', APP)
   assertEquals(moved.length, 1)
   assertEquals(moved[0].entity.eid, edgeEid(TWO, 'referenced', ADA))
   assert(moved[0].entity.eid != said.refs, 'the address moved with the word')
@@ -288,7 +288,7 @@ slow("the runtime's own table is not the object's to move", async () => {
   )
 
   let now = newer(ctx, 'ada/cookbook')
-  assertEquals((await now.query('.doc!', APP)).length, 3)
+  assertEquals((await now.query('.doc', APP)).length, 3)
   assertEquals(marker(ctx), LATEST)
 
   // And it is standing where the runtime left it, with its row — proof the pass
@@ -477,13 +477,13 @@ slow('the second boot is a no-op', async () => {
   let ctx = state()
   await seedApp(ctx)
   let first = newer(ctx, 'ada/cookbook')
-  assertEquals((await first.query('.doc!', APP)).length, 3)
+  assertEquals((await first.query('.doc', APP)).length, 3)
   assertEquals(marker(ctx), LATEST)
 
   // A fresh incarnation over the same storage: the marker is written, the
   // journal is gone, so nothing runs a second time.
   let again = newer(ctx, 'ada/cookbook')
-  assertEquals((await again.query('.doc!', APP)).length, 3)
+  assertEquals((await again.query('.doc', APP)).length, 3)
 
   // And a write still lands, which is the proof the schema the second boot
   // raised is the one the rows are in.
@@ -495,7 +495,7 @@ slow('the second boot is a no-op', async () => {
     ]),
   }, APP)
   assertEquals(r.status, 200)
-  assertEquals((await again.query('.doc!', APP)).length, 4)
+  assertEquals((await again.query('.doc', APP)).length, 4)
 })
 
 // ---- the directory ---------------------------------------------------------
@@ -521,7 +521,7 @@ slow('the directory keeps its three seats', async () => {
 
   // Three seats, unsplit: the platform's own `member` declares them, so an
   // editor is still an editor.
-  let seats = await now.query('.member!')
+  let seats = await now.query('.member')
   assertEquals(seats.length, 2)
   assertEquals(
     seats.map((s) => (s.member as { role: string }).role).sort(),
@@ -531,7 +531,7 @@ slow('the directory keeps its three seats', async () => {
   // the other rung of its ladder, one app rather than a space (T-37615) — but
   // it is written by an invitation that names an app and never minted out of a
   // roster, so the table crosses empty.
-  assertEquals((await now.query('.grant!')).length, 0)
+  assertEquals((await now.query('.grant')).length, 0)
   assertEquals((await now.query('.space.slug=ada')).length, 1)
   assertEquals((await now.query('.app.slug=cookbook')).length, 1)
 })
@@ -554,13 +554,13 @@ slow('an app store splits the seat from the level', async () => {
   ])
   let now = newer(ctx, 'ada/cookbook')
   // The app is named on the request, which is what a grant is on.
-  let seats = await now.query('.member!', APP)
+  let seats = await now.query('.member', APP)
   assertEquals(seats.length, 2)
   assertEquals(
     seats.map((s) => (s.member as { role: string }).role).sort(),
     ['member', 'owner'],
   )
-  let grants = await now.query('.grant!', APP)
+  let grants = await now.query('.grant', APP)
   assertEquals(grants.length, 1)
   assertEquals((grants[0].grant as { access: string }).access, 'editor')
   assertEquals((grants[0].grant as { person: string }).person, BEN)
@@ -590,7 +590,7 @@ let seedHomes = async (ctx: State) => {
 
 // Which apps wear `home`, by slug, read through the store's own door.
 let wearing = async (now: ReturnType<typeof newer>) =>
-  (await now.query('.home!&.app!'))
+  (await now.query('.home&.app'))
     .map((r) => (r.app as { slug: string }).slug)
 
 // The version marker this object stands at (migrate.ts `MARKS`), out of its
@@ -714,7 +714,7 @@ let seedFormer = async (ctx: State) => {
 
 // Every address the directory holds, by the app that answers at it.
 let answering = async (now: ReturnType<typeof newer>) =>
-  (await now.query('.former!&.app!'))
+  (await now.query('.former&.app'))
     .map((r) => [
       (r.app as { slug: string }).slug,
       (r.former as { slug: string; slugs?: string }).slug,
@@ -839,7 +839,7 @@ slow('a domain aimed by the old column is aimed by the new one', async () => {
   // A fresh incarnation over the same object — a deploy — and the first
   // request carries it the rest of the way.
   let now = newer(ctx, PLATFORM_STORE)
-  let [row] = await now.query('.hostname!')
+  let [row] = await now.query('.hostname')
   assertEquals(
     (row.hostname as { name: string; serves: { eid: string } }).name,
     'herbusiness.com',
@@ -896,7 +896,7 @@ let carriedFour = async (ctx: State) => {
 
 // Every app, by the handle it is stored under and the addresses it answers at.
 let handling = async (now: ReturnType<typeof newer>) =>
-  (await now.query('.app!&.former?'))
+  (await now.query('.app&?former'))
     .map((r) => [
       (r.app as { slug: string; store?: string }).slug,
       (r.app as { store?: string }).store ?? '',
@@ -1093,7 +1093,7 @@ for (let conflict of ['suffix', 'index']) {
       }
 
       let now = newer(ctx, PLATFORM_STORE)
-      let read = await now.door('/query?q=.app!')
+      let read = await now.door('/query?q=.app')
       assertEquals(read.status, 503)
       assertEquals(read.headers.get('x-yak-migration'), 'refused')
       assertEquals((await read.json()).error, 'Refused')
@@ -1109,7 +1109,7 @@ for (let conflict of ['suffix', 'index']) {
 let refused = async (now: ReturnType<typeof newer>, message: string) => {
   for (
     let path of [
-      '/query?q=.app!',
+      '/query?q=.app',
       '/apply',
       '/ws',
       '/vocab',
@@ -1181,7 +1181,7 @@ Deno.test('boot leaves a populated table constraint for its preparing pass', asy
   }
   let now = newer(ctx, PLATFORM_STORE)
   assertEquals(created, false)
-  assertEquals((await now.door('/query?q=.app!')).status, 200)
+  assertEquals((await now.door('/query?q=.app')).status, 200)
   assertEquals(created, true)
   assertEquals(marker(ctx), LATEST)
   assertThrows(() => exec("update app set store = 'same'"), Error, 'UNIQUE')
@@ -1333,7 +1333,7 @@ slow('a re-addressing that collides rolls the whole pass back', async () => {
 
   // The rows are exactly what they were: the pass ran in one transaction and it
   // unwound. The object says so rather than serving half a graph.
-  let read = await now.door('/query?q=.doc!', {}, APP)
+  let read = await now.door('/query?q=.doc', {}, APP)
   assertEquals(read.status, 503)
   assertEquals(count(ctx, 'doc'), 3)
   assertEquals(count(ctx, 'references'), 1)
@@ -1551,7 +1551,7 @@ Deno.test('app filing preserves every value and never resurrects a cleared filin
   let ctx = state()
   await beforeFiling(ctx)
   let now = newer(ctx, 'ada/cookbook')
-  let [row] = await now.query('.task!&.filed?')
+  let [row] = await now.query('.task&?filed')
   assertEquals(row.task, { status: 'open' })
   let filing = row.filed as Record<string, unknown>
   assertEquals(filing.priority, 2)
@@ -1566,7 +1566,7 @@ Deno.test('app filing preserves every value and never resurrects a cleared filin
     body: JSON.stringify([{ entity: { eid: ONE }, filed: null }]),
   })
   assert(r.ok, await r.text())
-  assertEquals(await newer(ctx, 'ada/cookbook').query('.filed!'), [])
+  assertEquals(await newer(ctx, 'ada/cookbook').query('.filed'), [])
 })
 
 Deno.test('app filing rolls back a conflicting destination', async () => {
@@ -1607,7 +1607,7 @@ slow(
     ctx.storage.sql.exec('alter table task add column domain text')
     ctx.storage.sql.exec("update task set priority = 2, domain = 'Garden'")
     let now = newer(ctx, 'ada/cookbook')
-    let [row] = await now.query('.task!&.filed?')
+    let [row] = await now.query('.task&?filed')
     assertEquals((row.filed as { priority: number }).priority, 2)
     assertEquals((row.filed as { domain: string }).domain, 'Garden')
     assertEquals(marker(ctx), LATEST)
@@ -1621,7 +1621,7 @@ slow(
 // newer one at the derived id, which a planting over the unindexed table
 // writes — and a call aimed at each row.
 let toolsOld = async (ctx: State, names: string[], twins: string[] = []) => {
-  await newer(ctx, 'ada/cookbook').query('.tool!')
+  await newer(ctx, 'ada/cookbook').query('.tool')
   let sql = ctx.storage.sql
   sql.exec('drop index tool_name')
   let tool = (eid: string, name: string, call: string) => {
@@ -1654,7 +1654,7 @@ Deno.test('a store with tools at old ids and twins boots, merges and indexes', a
   let ctx = state()
   await toolsOld(ctx, ['add_chore', 'find_chore'], ['add_chore'])
   let now = newer(ctx, 'ada/cookbook')
-  let calls = await now.query('.call!')
+  let calls = await now.query('.call')
   assertEquals(calls.length, 3)
   assertEquals(
     calls.map((c) => (c.call as { to: string }).to).sort(),
@@ -1696,7 +1696,7 @@ Deno.test('a copy the build before would sandbox is stamped trusted', async () =
       'on conflict(k) do update set v = excluded.v',
     TOOLED,
   )
-  await newer(ctx, PLATFORM_STORE).query('.installed!')
+  await newer(ctx, PLATFORM_STORE).query('.installed')
   let [one, two, three] = ctx.storage.sql.exec(
     'select i.sandboxed, i.trusted from installed i' +
       ' join entity e on e.id = i.entity order by e.eid',
@@ -1752,7 +1752,7 @@ Deno.test("a sent letter's Message-ID moves onto the letter", async () => {
       'on conflict(k) do update set v = excluded.v',
     SANDBOXED,
   )
-  await newer(ctx, 'ada/cookbook').query('.mail!', APP)
+  await newer(ctx, 'ada/cookbook').query('.mail', APP)
   let ids = sql.exec(
     'select m.message_id from mail m join entity e on e.id = m.entity ' +
       'order by e.eid',
@@ -1829,7 +1829,7 @@ Deno.test("a tree's links under the old tag are reached again", async () => {
     WORDS,
   ])
   assertEquals(
-    (await now.query(`.tree_entry!&.edge.from=${OLD},${BOTH}`))
+    (await now.query(`.tree_entry&.edge.from=${OLD},${BOTH}`))
       .map((l) => l.entity.eid).sort(),
     [
       entryEid(OLD, 'index.html'),
@@ -1870,7 +1870,7 @@ Deno.test("a call's arguments become the object they spell", async () => {
       'on conflict(k) do update set v = excluded.v',
     ENTERED,
   )
-  let calls = await newer(ctx, 'ada/cookbook').query('.call!', APP)
+  let calls = await newer(ctx, 'ada/cookbook').query('.call', APP)
   let args = new Map(
     calls.map((c) => [c.entity.eid, (c.call as { args: unknown }).args]),
   )

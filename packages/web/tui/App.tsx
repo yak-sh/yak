@@ -65,7 +65,7 @@ let priority = propAt('filed', 'priority')!
 // The first board is the one we browse — v0 has exactly one. Membership reads
 // the query door (T-17064); the num sort peeks rows without re-subscribing.
 let boardEid = () =>
-  queryEids(parseQuery('.board!'))
+  queryEids(parseQuery('.board'))
     .value
     .toSorted((a, b) =>
       (cache.peek()[a]?.entity?.num ?? 0) - (cache.peek()[b]?.entity?.num ?? 0)

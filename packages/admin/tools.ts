@@ -6,7 +6,7 @@
 //   yak admin whoami               the account, its spaces, and its role in each
 //   yak admin link                 a standing sign-in link for that account
 //   yak admin tool app_list        any connector tool, as that account
-//   yak admin query jeff/recipes .doc!    an app's store, through the filter grammar
+//   yak admin query jeff/recipes .doc    an app's store, through the filter grammar
 //   yak admin client google <id> <secret> --admin   keep an OAuth client, from 1Password
 //
 // The one rule these verbs are shaped around: A TEST ACCOUNT IS THE DEFAULT AND

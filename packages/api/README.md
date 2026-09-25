@@ -60,7 +60,7 @@ do not run. This reserves nothing, and a later write can still fail. It does not
 provide a transaction across multiple graphs.
 
 Queries use [@yaks/query](../query/README.md). Aggregate queries return values
-instead of bundles: `.count!` returns `{"count":n}`, `.distinct=prop` returns
+instead of bundles: `.count` returns `{"count":n}`, `.distinct=prop` returns
 `{"distinct":[…]}`, and `.tally=prop` returns `{"tally":{…}}`. The storage
 adapter must support the requested query.
 
@@ -167,7 +167,7 @@ socket.send(
 
 Query updates contain current bundles for matching entities and `gone` IDs for
 entities that were deleted or stopped matching. A refreshed query can return its
-whole current set. An aggregate query (`.count!`, `.distinct=prop`,
+whole current set. An aggregate query (`.count`, `.distinct=prop`,
 `.tally=prop`) is answered with its value in the shape `/query` answers it,
 first when it opens and again after a commit that changes it; it carries no
 bundles. `subscribe: true` selects the committed-change feed, with no initial

@@ -275,7 +275,7 @@ export type Vocab = {
   identity: (comp: string) => Identity
   route: (prop: string) => { comp: string; prop: string }
   /** A dotted path → the hops it names. Pass `facet` when the predicate is the
-   * bare presence test (`.name!`): a single segment naming a component is then
+   * bare presence test (`.name`): a single segment naming a component is then
    * a test for that component, even if a property of the same name would
    * otherwise claim the bare name. A name no property claims is read as a
    * component too, since a presence test needs no property schema. */
@@ -557,7 +557,7 @@ export let loadVocab = (
   }
 
   // The readable routing table: every component to its readable properties. A
-  // component with no properties routes with an empty list (`.about!` is then a
+  // component with no properties routes with an empty list (`.about` is then a
   // presence test).
   let routes = new Map<string, string[]>()
   for (let name of names) routes.set(name, Object.keys(props(name)))
@@ -648,11 +648,11 @@ export let loadVocab = (
     // dereference to stand.
     //
     // `facet` is the one exception, and it belongs to the presence test alone
-    // (`.name!`): a trailing `!` tests for a component, so the component wins
+    // (`.name`): a name alone tests for a component, so the component wins
     // over a property of the same name. It has to — a presence test has no
     // other form, while the property keeps its qualified one
-    // (`.camera.canvas!`).
-    // Without it, `.canvas!` would test camera's canvas reference and return
+    // (`.camera.canvas`).
+    // Without it, `.canvas` would test camera's canvas reference and return
     // the wrong entities, or none. A name no property claims is read as a
     // component too: bundles can carry plugin components before their schemas
     // are loaded. A store still decides whether it has a table for that

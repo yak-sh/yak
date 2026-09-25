@@ -59,7 +59,7 @@ slow(
           ]
         ) await denied(c, b)
       }
-      let [held] = await owner.get('.eid=mug,entry&.product!')
+      let [held] = await owner.get('.eid=mug,entry&.product')
       assertEquals((held.product as { price_cents: number }).price_cents, 2800)
       assertEquals((await owner.get('.eid=entry')).length, 1)
 

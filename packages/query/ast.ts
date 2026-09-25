@@ -63,7 +63,7 @@ export type Never = { kind: 'never' }
 // predicate's.
 export type Order = { kind: 'order'; value: string }
 export type Near = { kind: 'near'; value: string }
-// `.refs=X` backlinks of X, `.refs!` references anything, `.refs=` references
+// `.refs=X` backlinks of X, `.refs` references anything, `!refs` references
 // nothing (op '=' with an empty value).
 export type Refs = { kind: 'refs'; op: '=' | '!'; value: string }
 export type Count = { kind: 'count' }
@@ -263,8 +263,8 @@ export let pred = (field: string, o: Op, value: Value | null): Pred => ({
 })
 
 /**
- * Is this the bare presence form — one segment, a trailing `!`, no value?
- * `.canvas!` names a component, so an evaluator resolves it to that component
+ * Is this the bare presence form — one segment, no operator, no value?
+ * `.canvas` names a component, so an evaluator resolves it to that component
  * even where a property of the same name would otherwise win the bare form
  * (@yaks/vocab's `aim(path, facet)`).
  */

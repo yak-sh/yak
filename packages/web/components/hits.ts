@@ -35,15 +35,15 @@ export let hits = async (
 // still resolves a typed human id (T-3) — FTS already returns only documented
 // entities, so the doc filter would be redundant AND would disable that path.
 //
-// The typed text leads and the presence filter trails ('ali .person!', never
-// '.person! ali'): parseQuery reads an &-segment that STARTS with a dot-param
-// as one token, so a term after it lands inside the value and '.person!' with
+// The typed text leads and the presence filter trails ('ali .person', never
+// '.person ali'): parseQuery reads an &-segment that STARTS with a dot-param
+// as one token, so a term after it lands inside the value and '.person' with
 // a trailing value is a parse error — a leading term instead puts a ' .' in
 // the segment, the boundary that makes it split into a text pred plus the
 // presence pred (query.ts). An empty line is the bare filter, which parses alone.
 export let pickLine = (q: string, comp = '') => {
   q = q.trim()
-  return comp ? [q, `.${comp}!`].filter(Boolean).join(' ') : q || '.doc!'
+  return comp ? [q, `.${comp}`].filter(Boolean).join(' ') : q || '.doc'
 }
 
 // A live picker's hits: refetch as the line settles (150ms, the palette's own

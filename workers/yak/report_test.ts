@@ -478,7 +478,7 @@ slow("the platform's own break is ours, not the app's", async () => {
     )
 
     // And it is ours, in the meta store, where we read it and they cannot.
-    let ours = await meta(k, cookie).query('.exception!')
+    let ours = await meta(k, cookie).query('.exception')
     let said = ours.map((r) => JSON.stringify(r.exception)).join('\n')
     assertEquals(ours.length, 1, `one break of ours: ${said}`)
     assertStringIncludes(said, 'GET acme.yaks.app/shop/%E0%A4%A')

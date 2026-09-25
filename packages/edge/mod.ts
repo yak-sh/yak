@@ -39,7 +39,7 @@
  *   interface, and {@link traverse} adds to
  *   {@link https://jsr.io/@yaks/sql | @yaks/sql} the two clauses it cannot
  *   compile on its own — `.cites[<=3]->p1`, a recursive walk over one relation,
- *   and `.edges[cites]!`, which returns a result's links alongside it.
+ *   and `.edges[cites]`, which returns a result's links alongside it.
  *
  * It imports no platform API, so the same code runs on a server, in a worker,
  * and in a browser tab.

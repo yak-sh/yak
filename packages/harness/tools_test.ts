@@ -46,7 +46,7 @@ Deno.test('a graph tool writes and reads the harness graph', async () => {
   await by('graph_apply').run({
     change: [{ entity: { eid: 't1' }, doc: { title: 'a task' }, task: {} }],
   })
-  let out = await by('graph_query').run({ q: '.task&.doc?' })
+  let out = await by('graph_query').run({ q: '.task&?doc' })
   assert(out.includes('a task'), out)
   h.close()
 })

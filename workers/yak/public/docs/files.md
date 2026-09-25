@@ -181,7 +181,7 @@ every byte to hash them, so re-uploading a 4 MB photo costs 4 MB every time.
 ## The two rows one upload writes
 
 The upload endpoint writes two entities through the app's own `/apply` endpoint,
-recorded as written by the person who uploaded — so `.created!` names them the
+recorded as written by the person who uploaded — so `.created` names them the
 way it names any other row. The **content** row sits at the bytes' own eid and
 records what is true of the bytes; the **use** row records the name this app
 gives them:
@@ -203,14 +203,14 @@ The rename is a patch: an upload that names nothing keeps the name it had. Send
 `cake.png`, then the same bytes as `the cake.png`, then a third time off a
 canvas with no name at all, and the row's name is `the cake.png`.
 
-**List the use, not the content.** `query('.attachment!')` is every file the app
+**List the use, not the content.** `query('.attachment')` is every file the app
 holds:
 
-    for (let f of await query('.attachment!')) {
+    for (let f of await query('.attachment')) {
       draw(`./api/blob/${f.attachment.blob}`, f.attachment.name)
     }
 
-`.blob!` is not that list — a long `doc.body` is a blob row too.
+`.blob` is not that list — a long `doc.body` is a blob row too.
 
 ## A picture's width and height
 
@@ -225,7 +225,7 @@ none either.
 
 So a wall holds each photo's space open before a single byte of it arrives:
 
-    let size = new Map((await query('.image!'))
+    let size = new Map((await query('.image'))
       .map((i) => [i.entity.eid, i.image]))
     let box = size.get(p.photo.blob)              // the eid the row holds
     if (box) { img.width = box.w; img.height = box.h }
@@ -417,12 +417,12 @@ picture's space held open — the entire page.
       })
 
       // Each picture's size, by the eid the rows already hold.
-      let size = new Map((await query('.image!'))
+      let size = new Map((await query('.image'))
         .map((i) => [i.entity.eid, i.image]))
 
       // And the wall, redrawn on every change — including one made on
       // their phone while this page is open.
-      subscribe('.photo!', (photos) => {
+      subscribe('.photo', (photos) => {
         wall.replaceChildren(...photos.map((p) => {
           let img = document.createElement('img')
           img.src = `./api/blob/${p.photo.blob}`
@@ -437,15 +437,15 @@ picture's space held open — the entire page.
 The line worth keeping is the check before the write: two visitors sending the
 identical picture are one blob and one `attachment` row for free, but a `photo`
 row of your own is a separate row, and two of them are two pictures on the wall.
-On a wall left open for hours, read `.image!` inside the subscription, so a
-photo added later gets its box too.
+On a wall left open for hours, read `.image` inside the subscription, so a photo
+added later gets its box too.
 
 ## What files do not do
 
 - **No server-side resizing and no thumbnails.** What you upload is what is
   served, at one size. The page downscales.
 - **No listing of the bucket** and **no deleting bytes** short of deleting the
-  app. `.attachment!` is the listing; bytes nobody wrote a row about are
+  app. `.attachment` is the listing; bytes nobody wrote a row about are
   reachable only by their address.
 - **No `image` for anything but png, jpeg, gif and webp** — a pdf, an svg or a
   heic uploads fine and simply carries no size.

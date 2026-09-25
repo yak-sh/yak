@@ -30,7 +30,7 @@
  * // let g = graph({ storage: db, vocab, plugins: [blobs(vocab, store)] })
  * //
  * // g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay…' } }])
- * // db.read('.post!')[0].post.body // 'a long essay…'
+ * // db.read('.post')[0].post.body // 'a long essay…'
  * ```
  *
  * Nothing between those two lines mentions blobs. The write went in as text and

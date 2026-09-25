@@ -83,10 +83,10 @@ manifest naming it is a use, not a second declaration. The deploy reports that:
 `loan`. Its store never plants a `book` table, so asking that store for one is a
 refusal, and the rows are all in one place:
 
-    graph_query { app: 'lending', filter: '.book!' }
+    graph_query { app: 'lending', filter: '.book' }
     → unknown prop: .book
 
-    graph_query { app: 'reading-list', filter: '.book!' }
+    graph_query { app: 'reading-list', filter: '.book' }
     → both books, however they were written
 
 A property the borrower adds grows the home's table, additively, and is then
@@ -135,7 +135,7 @@ only ever grows.
 another — the rows stay apart. The same eid comes back as two bundles, each
 naming the space it is answering for:
 
-    graph_query { filter: '.note!' }
+    graph_query { filter: '.note' }
     → [ { kind: 'note', space: 'shelf', entity: {…}, note: { body: 'lovely' } },
         { kind: 'note', space: 'stall', entity: {…}, note: { body: 3 } } ]
 
@@ -157,7 +157,7 @@ address you name:
     import { query, store } from './api/client.js'
 
     let lending = store('/lending/api/')
-    let loans = await lending.query('.loan!&.doc?')
+    let loans = await lending.query('.loan&?doc')
 
 Every app in a space shares one hostname, so the address is a path, not a URL —
 `/lending/api/`. It resolves against the page's own origin, and the trailing
@@ -176,22 +176,22 @@ Name an app and you get that app's own answer, untouched. Leave `app` out and
 the question is asked of every app in reach — every app the person may read, in
 every space they belong to — and answered as one bundle per entity.
 
-    graph_query { filter: '.book!&.loan?' }
+    graph_query { filter: '.book&?loan' }
     → [ { kind: 'book', entity: { eid: '…' },
           book: { pages: 245 }, loan: { to: 'Maya' },
           _stores: { book: 'yourname/reading-list', loan: 'yourname/lending' } } ]
 
 - `!` names which entities the answer is _about_; `?` asks for a component
-  beside them without filtering on it. So `.book!&.loan?` is every book, with
-  its loan where it has one, and `.book!&.loan!` is only the books that are out
-  — `&` is an intersection across apps exactly as within one.
+  beside them without filtering on it. So `.book&?loan` is every book, with its
+  loan where it has one, and `.book&.loan` is only the books that are out — `&`
+  is an intersection across apps exactly as within one.
 - `_stores` names which app holds which component. It appears only on a bundle
   that actually spans two apps, which is where you need it: to write one
   component back, you need to know whose it is.
 - `kind` is one of the app's own components, never a platform one — and when a
   row carries components from two apps, the one the filter required wins, so
-  `.book!&.loan?` and `.loan?&.book!` both return books.
-- `.count!` counts _entities_, not rows: summing each store's own count would
+  `.book&?loan` and `?loan&.book` both return books.
+- `.count` counts _entities_, not rows: summing each store's own count would
   count a spanning entity twice.
 - `limit=` bounds each part before the parts are combined, so a mixed filter's
   window is the newest of each side, then the newest of what they had in common.
@@ -234,19 +234,19 @@ Now one call writes both halves:
 
 `doc` and `book` land in the reading list; `loan` lands in lending; the alias is
 minted once, so both are the same entity. Each app's own page draws its own half
-— the reading list's `query('.book!&.doc?')` never mentions loans — and either
+— the reading list's `query('.book&?doc')` never mentions loans — and either
 page can borrow the other's view when it wants it:
 
-    let out = await store('/lending/api/').query('.loan!')
+    let out = await store('/lending/api/').query('.loan')
     let due = new Map(out.map((r) => [r.entity.eid, r.loan.due]))
 
-    for (let b of await query('.book!&.doc?')) {
+    for (let b of await query('.book&?doc')) {
       draw(b.doc.title, due.get(b.entity.eid))
     }
 
 And the person's agent sees the whole thing at once, without naming an app:
 
-    graph_query { filter: '.book!&.loan!&.doc?' }
+    graph_query { filter: '.book&.loan&?doc' }
     → every book that is out, with its title and who has it
 
 Neither app knows the other's schema. Delete the lending app and the books are

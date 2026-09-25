@@ -128,7 +128,7 @@ for (let aggregate of [false, true]) {
     using logged = stub(console, 'error')
     let response = await get(
       store,
-      `/query?q=${aggregate ? '.count!' : '.recipe!'}`,
+      `/query?q=${aggregate ? '.count' : '.recipe'}`,
       owner,
     )
     assertEquals(response.status, 500)
@@ -269,7 +269,7 @@ Deno.test('a property says its type, and a JSON value waits a release', async ()
     // is asked for beside the recipe (@yaks/graph `wanted`).
     let read = await (await get(
       store,
-      `/query?q=${encodeURIComponent('.recipe!&.doc?')}`,
+      `/query?q=${encodeURIComponent('.recipe&?doc')}`,
       owner,
     )).json()
     assertEquals(read.length, 1)
@@ -289,7 +289,7 @@ Deno.test('the writer the kernel vouched for is a person here, by name', async (
   }], owner)
   let [ada] = await (await get(
     store,
-    `/query?q=${encodeURIComponent('.person!&.doc?')}`,
+    `/query?q=${encodeURIComponent('.person&?doc')}`,
     owner,
   )).json()
   assertEquals(ada.entity.eid, ADA)
@@ -306,7 +306,7 @@ Deno.test('an edge is a sentence, and the relation is a word the store knows', a
   assertEquals(wrote.status, 200)
   let links = await (await get(
     store,
-    `/query?q=${encodeURIComponent('.contains!&.edge?')}`,
+    `/query?q=${encodeURIComponent('.contains&?edge')}`,
     owner,
   ))
     .json()
@@ -328,7 +328,7 @@ Deno.test('a subscription is answered, and a commit reaches the socket', async (
 
   store.webSocketMessage(
     ws,
-    JSON.stringify({ subscribe: '.recipe!', id: 'r' }),
+    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
   )
   assertEquals(ws.sent, [{ id: 'r', bundles: [], transientReset: [] }])
 
@@ -355,7 +355,7 @@ Deno.test('a subscription asking `*` answers what /query answers', async () => {
   let store = await cookbook(ctx)
   let ws = wire()
   ctx.live.push(ws)
-  let line = '.recipe!&*'
+  let line = '.recipe&*'
 
   store.webSocketMessage(ws, JSON.stringify({ subscribe: line, id: 'r' }))
   assertEquals(ws.sent, [{ id: 'r', bundles: [], transientReset: [] }])
@@ -395,11 +395,11 @@ Deno.test('a woken object serves the same app, and the same sockets', async () =
   }], owner)
   let ws = wire()
   ctx.live.push(ws)
-  store.webSocketMessage(ws, JSON.stringify({ subscribe: '.recipe!', id: 'r' }))
+  store.webSocketMessage(ws, JSON.stringify({ subscribe: '.recipe', id: 'r' }))
 
   // The object is evicted; its storage and its sockets are not.
   let woken = new Store(ctx)
-  let read = await (await get(woken, '/query?q=.recipe!', owner)).json()
+  let read = await (await get(woken, '/query?q=.recipe', owner)).json()
   assertEquals(read.length, 1)
   assertEquals(read[0].recipe.serves, 8)
   // The wake re-opened what the socket held, and answered it with the set.
@@ -429,7 +429,7 @@ Deno.test('a stranger is refused on a private app', async () => {
   assertEquals(no.status, 401)
   assertEquals((await no.json()).error, 'Unauthorized')
   // And nothing landed.
-  let [cake] = await (await get(store, '/query?q=.recipe!', mine)).json()
+  let [cake] = await (await get(store, '/query?q=.recipe', mine)).json()
   assertEquals(cake.recipe.serves, 8)
 })
 
@@ -530,7 +530,7 @@ Deno.test('a named row written twice is one entity, and answers to its name', as
   }
   let once = await seed('Lemon cakes')
   assertEquals(await seed('Lemon cakes, better'), once)
-  let all = await (await get(store, '/query?q=.recipe!', owner))
+  let all = await (await get(store, '/query?q=.recipe', owner))
     .json() as Bundle[]
   assertEquals(all.map((b) => b.entity.eid), [once])
   // and a reference written by name lands on that entity
@@ -691,7 +691,7 @@ Deno.test("a plugin's rule reaches the store the host built", async () => {
     assertEquals(wrote.status, 200)
     let read = await (await get(
       store,
-      `/query?q=${encodeURIComponent('.recipe!&.doc?')}`,
+      `/query?q=${encodeURIComponent('.recipe&?doc')}`,
       owner,
     )).json()
     assertEquals(read[0].doc.title, 'named by a rule')
@@ -715,7 +715,7 @@ Deno.test('a rule writing outside its *write set takes the batch with it', async
     assertEquals(no.status, 202)
     assertStringIncludes((await no.json()).message, 'write set')
     // The refusal is a rollback: the batch it fired on is not in the store.
-    let read = await (await get(store, '/query?q=.recipe!', owner)).json()
+    let read = await (await get(store, '/query?q=.recipe', owner)).json()
     assertEquals(read.length, 0)
   })
 })
@@ -747,7 +747,7 @@ Deno.test('the store dates the trash mark, and signs it', async () => {
   assertEquals(again.status, 200)
   let [row] = await (await store.fetch(
     new Request(
-      `http://store/query?q=${encodeURIComponent('.trashed!')}`,
+      `http://store/query?q=${encodeURIComponent('.trashed')}`,
       { headers: { 'x-store': PLATFORM_STORE, 'x-yak-person': ADA } },
     ),
   )).json()
@@ -766,7 +766,7 @@ Deno.test('app archetypes classify writes and migrate old rows only on schema ch
   let rows = await read(store)
   let original = rows[0].entity.archetype
   assert(typeof original == 'string')
-  let descriptors = await (await get(store, '/query?q=.archetype!', owner))
+  let descriptors = await (await get(store, '/query?q=.archetype', owner))
     .json() as Bundle[]
   assert(descriptors.some((b) => b.entity.eid == original))
   // A returned pointer is not a writable classification.
@@ -813,7 +813,7 @@ Deno.test('app archetypes classify writes and migrate old rows only on schema ch
   )
   await post(store, '/apply', [{ entity: { eid: CAKE }, recipe: null }], owner)
   assertEquals((await read(store)).length, 0)
-  let without = await (await get(store, '/query?q=.doc!', owner))
+  let without = await (await get(store, '/query?q=.doc', owner))
     .json() as Bundle[]
   assert(
     without.find((b) => b.entity.eid == CAKE)?.entity.archetype != original,
@@ -833,7 +833,7 @@ Deno.test('app archetype descriptors are read-only and vocabulary extension trac
     entity: { eid: CAKE },
     recipe: { serves: 2 },
   }], owner)
-  let descriptors = await (await get(store, '/query?q=.archetype!', owner))
+  let descriptors = await (await get(store, '/query?q=.archetype', owner))
     .json() as Bundle[]
   let before = JSON.stringify(descriptors)
   await post(store, '/apply', [{
@@ -842,7 +842,7 @@ Deno.test('app archetype descriptors are read-only and vocabulary extension trac
   }], owner)
   assertEquals(
     JSON.stringify(
-      await (await get(store, '/query?q=.archetype!', owner)).json(),
+      await (await get(store, '/query?q=.archetype', owner)).json(),
     ),
     before,
   )

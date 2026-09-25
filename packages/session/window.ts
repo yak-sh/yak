@@ -138,7 +138,7 @@ export let transcriptPlan = async (
   // Count metadata, not bodies. Fork segments are disjoint logical ranges.
   const counts = await Promise.all(
     segments.map(async (s) =>
-      Number((await g.rows(base(s) + '&.count!'))[0]?.n ?? 0)
+      Number((await g.rows(base(s) + '&.count'))[0]?.n ?? 0)
     ),
   )
   let offset = 0
@@ -149,7 +149,7 @@ export let transcriptPlan = async (
       if (segment.session == first.entry.session) {
         offset += Number(
           (await g.rows(
-            base(segment) + '&.entry.seq<' + first.entry.seq + '&.count!',
+            base(segment) + '&.entry.seq<' + first.entry.seq + '&.count',
           ))[0]?.n ?? 0,
         )
         break

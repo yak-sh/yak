@@ -59,7 +59,7 @@ slow('a refused seed bundle names its file and index', async () => {
     assertStringIncludes(why, 'bottle.vintage')
     // Nothing was written: the batch is atomic and the mark is only made when
     // it lands, so fixing the file and deploying again seeds the whole thing.
-    assertEquals(await agent.tool('graph_query', { q: '.bottle!' }), '[]')
+    assertEquals(await agent.tool('graph_query', { q: '.bottle' }), '[]')
     await agent.tool('app_files', {
       ...app,
       op: 'write',
@@ -132,7 +132,7 @@ slow('store_load writes a file already in the app into its store', async () => {
       await agent.tool('graph_query', { q: '.doc.title=Reykjavik' }),
     ) as { entity: { eid: string } }[]
     let [note] = JSON.parse(
-      await agent.tool('graph_query', { q: '.comment!' }),
+      await agent.tool('graph_query', { q: '.comment' }),
     ) as { comment: { target: { eid: string } | string } }[]
     let target = note.comment.target
     assertEquals(
@@ -145,7 +145,7 @@ slow('store_load writes a file already in the app into its store', async () => {
       'loaded 1 entity into',
     )
     let titles = async () =>
-      (JSON.parse(await agent.tool('graph_query', { q: '.doc.title!' })) as {
+      (JSON.parse(await agent.tool('graph_query', { q: '.doc.title' })) as {
         doc: { title: string }
       }[]).map((r) => r.doc.title).sort()
     assertEquals(await titles(), ['Akureyri', 'Reykjavik'])
@@ -289,7 +289,7 @@ slow('store_load reads a CSV as rows of one component', async () => {
       })
     assertStringIncludes(await load(), 'loaded 2 entities into')
     let recipes = async () =>
-      (JSON.parse(await agent.tool('graph_query', { q: '.recipe!' })) as {
+      (JSON.parse(await agent.tool('graph_query', { q: '.recipe' })) as {
         entity: { eid: string }
         recipe: { name: string; serves: number; vegan: boolean }
       }[]).sort((a, b) => a.recipe.serves - b.recipe.serves)
@@ -299,7 +299,7 @@ slow('store_load reads a CSV as rows of one component', async () => {
     assertEquals(tart.recipe.vegan, false)
     // The `title` header is the row's doc, not the recipe's own word.
     assertEquals(
-      (JSON.parse(await agent.tool('graph_query', { q: '.doc.title!' })) as {
+      (JSON.parse(await agent.tool('graph_query', { q: '.doc.title' })) as {
         doc: { title: string }
       }[]).map((r) => r.doc.title).sort(),
       ['Fig tart', 'Lentil soup'],

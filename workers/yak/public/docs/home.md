@@ -222,7 +222,7 @@ one land, and the front page's own code decides what happens next — file it,
 answer it, turn it into a row of the app's own. There is no mail router and no
 hook to register; the letters are simply in a store you can read.
 
-    subscribe('.mail!&.doc?', triage)
+    subscribe('.mail&?doc', triage)
 
 Nothing about the mailbox itself changes with a front page. `mail_list` reads
 the same rows back from an agent's side, `mail_send` sends from the same

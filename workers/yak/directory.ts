@@ -429,7 +429,7 @@ let seeded = new WeakMap<Meta, Promise<void>>()
 let seed = async (store: Meta) => {
   let [[space], [admin]] = await Promise.all([
     store.query(`.space.slug=${META.space}`),
-    store.query(`.person!&.email.address=${ADMIN}`),
+    store.query(`.person&.email.address=${ADMIN}`),
   ])
   let batch: Bundle[] = []
   if (!space) {
@@ -577,13 +577,11 @@ export let stamp = async (
 // What every read of an app asks for beside the app row itself, in one place
 // because `appOf` reads all of it and a filter that forgets one answers null
 // where there is a value.
-let ABOUT =
-  '.doc?&.former?&.home?&.meter?&.published?&.installed?&.gallery?&.seeded?' +
-  '&.trashed?&.theme?'
+let ABOUT = '?doc&?former&?home&?meter&?published&?installed&?gallery&?seeded' +
+  '&?trashed&?theme'
 
 // And what every read of a space asks for, for the same reason.
-let SPACE_ABOUT =
-  '.doc?&.plan?&.meter?&.notified?&.trashed?&.stripe?&.fee?&.former?'
+let SPACE_ABOUT = '?doc&?plan&?meter&?notified&?trashed&?stripe&?fee&?former'
 
 // The plan as a whole row, however little of it is written: a property nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests
@@ -893,7 +891,7 @@ export let directory = (via: Fetcher, now = false) => {
     // and this is only the second. One query over the spaces that have ever
     // moved, which is a handful of rows and never grows with the platform.
     formerly: async (slug: string) => {
-      let space = (await query(`.former!&.space!&${SPACE_ABOUT}`))
+      let space = (await query(`.former&.space&${SPACE_ABOUT}`))
         .map(spaceOf)
         .find((s) => s.slug != slug && s.slugs.includes(slug))
       return space ?? null
@@ -933,7 +931,7 @@ export let directory = (via: Fetcher, now = false) => {
     // or nobody.
     payer: async (customer: string) => {
       let row = await one(
-        `.plan.customer=${customer}&.space!&${SPACE_ABOUT}`,
+        `.plan.customer=${customer}&.space&${SPACE_ABOUT}`,
       )
       return row?.space ? spaceOf(row) : null
     },
@@ -945,7 +943,7 @@ export let directory = (via: Fetcher, now = false) => {
     // for a space that has since disconnected.
     seller: async (account: string) => {
       let row = await one(
-        `.stripe.account=${account}&.space!&${SPACE_ABOUT}`,
+        `.stripe.account=${account}&.space&${SPACE_ABOUT}`,
       )
       return row?.space ? spaceOf(row) : null
     },
@@ -992,18 +990,18 @@ export let directory = (via: Fetcher, now = false) => {
         space.eid,
         ...(await self.apps(space)).map((a) => a.eid),
       ])
-      return (await query('.hostname!')).map(hostOf)
+      return (await query('.hostname')).map(hostOf)
         .filter((h) => mine.has(h.serves))
     },
     // The app offered under a platform-wide name (T-32888), with the space it
     // came from — an offer is an app, so this is one row read two ways.
     offered: async (name: string) => {
-      let row = await one(`.published.name=${name}&.app!`)
+      let row = await one(`.published.name=${name}&.app`)
       return row?.app ? await self.appAt(row.entity.eid) : null
     },
     // Every offer standing, newest first — what a person's agent browses.
     offers: async (): Promise<{ space: Space; app: App }[]> => {
-      let rows = (await query(`.published!&.app!&${ABOUT}`)).map(appOf)
+      let rows = (await query(`.published&.app&${ABOUT}`)).map(appOf)
         .filter((a) => a.published)
         .sort((a, b) => b.published!.at.localeCompare(a.published!.at))
       let out: { space: Space; app: App }[] = []
@@ -1020,7 +1018,7 @@ export let directory = (via: Fetcher, now = false) => {
     // from them (D-34942). Never cached: a deploy reads its own versions back
     // the moment it writes one.
     deploys: async (app: App) =>
-      (await query(`.deploy.app=${app.eid}&.created?`, true))
+      (await query(`.deploy.app=${app.eid}&?created`, true))
         .map(deployOf)
         .sort((a, b) => b.version - a.version),
     // Every time this app's store was put back to a moment, newest first
@@ -1033,7 +1031,7 @@ export let directory = (via: Fetcher, now = false) => {
     // Every space there is. Only the meter asks this (usage.ts): a tool
     // always works in one space, and a person only ever sees their own.
     all: async (): Promise<Space[]> =>
-      (await query(`.space!&${SPACE_ABOUT}`)).map(spaceOf),
+      (await query(`.space&${SPACE_ABOUT}`)).map(spaceOf),
     // The app that answers the space's bare hostname, if it has one: the one
     // in this space wearing `home` (T-34227). At most one does — `homing`
     // below is the rule — so the first row is the answer.
@@ -1042,7 +1040,7 @@ export let directory = (via: Fetcher, now = false) => {
     // until then the space is one with no front page — which is the ordinary
     // state and already has an answer everywhere.
     home: async (space: Space) => {
-      let rows = await query(`.app.space=${space.eid}&.home!&${ABOUT}`)
+      let rows = await query(`.app.space=${space.eid}&.home&${ABOUT}`)
       return rows.filter((r) => r.app).map(appOf).find((a) => !a.trashed) ??
         null
     },
@@ -1118,7 +1116,7 @@ export let directory = (via: Fetcher, now = false) => {
     // nobody, which is how an invited person's later sign-in finds the row
     // the invite made.
     personAt: async (email: string) =>
-      (await one(`.person!&.email.address=${email}`))
+      (await one(`.person&.email.address=${email}`))
         ?.entity.eid ?? null,
     // The same question the other way: where the platform writes to this
     // person — the letter's envelope, and nothing else (T-32629).

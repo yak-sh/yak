@@ -23,24 +23,24 @@ export let inboxQueries = (who: Reader, unreadOnly = false): string[] => {
   let select = (prop: string, items: (string | undefined)[], extra = '') => {
     let got = values(items)
     return got
-      ? `.${prop}=${JSON.stringify(got)}&.archived=${extra}${
-        unreadOnly ? '&.opened=' : ''
+      ? `.${prop}=${JSON.stringify(got)}&!archived${extra}${
+        unreadOnly ? '&!opened' : ''
       }&.fields=${POLICY}${unreadOnly ? '' : ',doc.title,created.at'}`
       : ''
   }
   return [
     select('comment.target', targets),
-    select('deliver.to', [who.actor], '&.knock!'),
+    select('deliver.to', [who.actor], '&.knock'),
     select('knock.target', watched, exclude('deliver.to', [who.actor])),
     select(
       'mail.target',
       watched.includes(who.scope!) ? [] : [who.scope],
-      '&.mail.message_id!',
+      '&.mail.message_id',
     ),
     select(
       'mail.to',
       [...who.addrs ?? []],
-      '&.mail.message_id!' + exclude('mail.target', mailTargets),
+      '&.mail.message_id' + exclude('mail.target', mailTargets),
     ),
     // Watching overrides direct-address policy, including outbound letters.
     select('mail.target', watched),
@@ -56,13 +56,13 @@ export let inboxCountQueries = (who: Reader): string[] => {
   let select = (prop: string, items: (string | undefined)[], extra = '') => {
     let got = values(items)
     return got
-      ? `.${prop}=${JSON.stringify(got)}&.archived=&.opened=${extra}&.count!`
+      ? `.${prop}=${JSON.stringify(got)}&!archived&!opened${extra}&.count`
       : ''
   }
-  let mail = '&.comment=&.knock=&.mail.message_id!='
+  let mail = '&!comment&!knock&.mail.message_id!='
   return [
     select('comment.target', [who.actor]),
-    select('deliver.to', [who.actor], '&.knock!&.comment='),
+    select('deliver.to', [who.actor], '&.knock&!comment'),
     select('mail.target', [who.scope], mail),
     select(
       'mail.to',

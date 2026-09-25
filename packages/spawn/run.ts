@@ -416,7 +416,7 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
   // child processes stay the shell's to watch.
   let mine = {
     ...store(g),
-    running: () => g.read(`.${SESSION}&.${PROCESS}&.${EXIT}=&*`),
+    running: () => g.read(`.${SESSION}&.${PROCESS}&!${EXIT}&*`),
   }
   let runs = await watch(mine, o)
   for (let run of runs) {

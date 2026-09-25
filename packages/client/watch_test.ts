@@ -18,7 +18,7 @@ Deno.test('a watch answers now, and again on a local apply', () => {
   let c = boxClient()
   c.mutate([dal()])
 
-  let dinners = c.watch('.course=dinner&.doc?')
+  let dinners = c.watch('.course=dinner&?doc')
   assertEquals(titles(dinners.value), ['Dal'])
 
   let heard: string[][] = []
@@ -70,7 +70,7 @@ Deno.test('an ordered query re-reads, and comes back in order', () => {
   let c = boxClient()
   c.mutate([dal('r1', 4), { ...dal('r2', 9), doc: { title: 'Pie' } }])
 
-  let most = c.watch('.course=dinner&.order=-serves&.doc?')
+  let most = c.watch('.course=dinner&.order=-serves&?doc')
   assertEquals(titles(most.value), ['Pie', 'Dal'])
 
   c.mutate([{ entity: { eid: 'r1' }, recipe: { serves: 20 } }])
@@ -110,7 +110,7 @@ Deno.test('a watch hears a frame the server pushed', async () => {
   let a = boxClient(srv)
   let b = boxClient(srv)
 
-  let dinners = b.watch('.course=dinner&.doc?')
+  let dinners = b.watch('.course=dinner&?doc')
   let heard: string[][] = []
   dinners.subscribe((bundles) => heard.push(titles(bundles)))
   await b.idle()
@@ -272,7 +272,7 @@ Deno.test('cached results do not make a new or disconnected remote watch ready',
   let c = boxClient(srv)
   c.mutate([dal()])
   await c.idle()
-  let w = c.watch('.recipe&.doc?')
+  let w = c.watch('.recipe&?doc')
   assertEquals(titles(w.value), ['Dal'])
   assertEquals(w.ready, false)
   await c.idle()
@@ -340,7 +340,7 @@ Deno.test('closing one watch does not disconnect other transient observers', asy
   )
   try {
     c.mutate([{ entity: { eid: 'd' }, text: { body: '' } }])
-    const first = c.watch('.text'), second = c.watch('.text.body=')
+    const first = c.watch('.text'), second = c.watch('!text.body')
     first.close()
     const live = await transient(c.graph).begin('d', 'text', 'body', 's')
     live.append('visible')

@@ -20,7 +20,7 @@ Deno.test('a query that routes is fine', () => {
       '.status=done,cancelled',
       '.status!=done',
       '.priority<3',
-      '.task!',
+      '.task',
       '.filed.project=p1',
       '.project=p1',
       '.filed.priority<3',
@@ -68,11 +68,11 @@ Deno.test('the graph refuses the bad board and keeps the good one', () => {
   let { g } = teamGraph()
   g.install()
   g.apply(board('.status=open'))
-  assertEquals((g.read('.board!&*') as unknown[]).length, 1)
+  assertEquals((g.read('.board&*') as unknown[]).length, 1)
 
   assertThrows(() => g.apply(board('.status=complete')), Refused)
   // refused whole: the doc patch in the same batch did not land either
-  let after = g.read('.board!&*') as { board?: { query?: string } }[]
+  let after = g.read('.board&*') as { board?: { query?: string } }[]
   assertEquals(after[0].board?.query, '.status=open')
 })
 
@@ -81,7 +81,7 @@ Deno.test('dropping a board states no query and is never refused', () => {
   g.install()
   g.apply(board('.status=open'))
   g.apply([{ entity: { eid: 'b1' }, board: null }])
-  assertEquals((g.read('.board!&*') as unknown[]).length, 0)
+  assertEquals((g.read('.board&*') as unknown[]).length, 0)
 })
 
 Deno.test('qualified filing properties no longer belong to task', () => {
@@ -99,7 +99,7 @@ Deno.test('a bare microtask stores presence, never a supplied status', () => {
     task: {},
   }])
   g.apply([{ entity: { eid: 'micro' }, task: { status: 'done' } }])
-  let [b] = g.read('.task!&*') as import('@yaks/graph').Bundle[]
+  let [b] = g.read('.task&*') as import('@yaks/graph').Bundle[]
   assertEquals(b.task, {})
   assertEquals(b.filed, undefined)
 })
@@ -117,7 +117,7 @@ Deno.test('filing stores separately and a bare priority query orders filed tasks
     { entity: { eid: 'micro' }, task: {} },
   ])
   let rows = g.read(
-    '.priority>=0 .order=filed.priority .task?',
+    '.priority>=0 .order=filed.priority ?task',
   ) as import('@yaks/graph').Bundle[]
   assertEquals(rows.map((b) => b.entity.eid), ['first', 'later'])
   assertEquals(rows[1].task, {})

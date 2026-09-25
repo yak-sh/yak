@@ -46,11 +46,11 @@ Deno.test('a batch reads as rows before it is written', () => {
     // a component dropped
     { entity: { eid: 'p2' }, product: null },
   ])
-  assertEquals(seen(driver, over, '.product!'), ['p1', 'p3'])
+  assertEquals(seen(driver, over, '.product'), ['p1', 'p3'])
   // The patch folded into the committed row: the title it never mentioned is
   // still there, and the price it did mention moved.
   assertEquals(seen(driver, over, '.product.price>10, .doc.title=Dune'), ['p1'])
-  assertEquals(seen(driver, over, '.doc!'), ['p1', 'p2', 'p3'])
+  assertEquals(seen(driver, over, '.doc'), ['p1', 'p2', 'p3'])
   // The fresh entity is a first-class row: it joins, it filters, it reads back
   // by its own eid.
   assertEquals(seen(driver, over, '.product.price=7'), ['p3'])
@@ -58,15 +58,15 @@ Deno.test('a batch reads as rows before it is written', () => {
   // And nothing of it is anywhere but in that statement: the committed graph
   // is exactly as it was, and always was — the overlay is a `with` prefix, so
   // there is nothing to take down.
-  assertEquals(titles(read(driver, shop, '.product!')), ['Dune', 'Ubik'])
+  assertEquals(titles(read(driver, shop, '.product')), ['Dune', 'Ubik'])
   assertEquals(read(driver, shop, '.product.price>10').length, 0)
 })
 
 Deno.test('a deleted entity leaves every membership while the overlay stands', () => {
   let { driver } = shopFloor()
   let over = overlay(driver, shop, [{ entity: { eid: 'p2' }, $delete: true }])
-  assertEquals(seen(driver, over, '.doc!'), ['p1'])
-  assertEquals(titles(read(driver, shop, '.doc!')), ['Dune', 'Ubik'])
+  assertEquals(seen(driver, over, '.doc'), ['p1'])
+  assertEquals(titles(read(driver, shop, '.doc')), ['Dune', 'Ubik'])
 })
 
 Deno.test('a reference to an entity the same batch mints resolves', () => {

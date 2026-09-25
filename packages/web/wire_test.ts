@@ -45,7 +45,7 @@ Deno.test('a line asks the host by .eid and leaves riders and projections out', 
     '.eid=a',
   )
   assertEquals(
-    yakLine('.task!&.fields=doc.title&.edges[requires]!&.limit=5'),
-    '.task!&.limit=5',
+    yakLine('.task&.fields=doc.title&.edges[requires]&.limit=5'),
+    '.task&.limit=5',
   )
 })

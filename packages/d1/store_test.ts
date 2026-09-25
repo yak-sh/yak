@@ -25,9 +25,9 @@ Deno.test('a store reads back what it wrote', async () => {
 Deno.test('an object and an array come back as the values written', async () => {
   let s = await store(kitchen)
   await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
-  let [read] = await s.read('.recipe!')
+  let [read] = await s.read('.recipe')
   let [got] = await s.tx((tx) => tx.get(['r1']))
-  let [whole] = await s.tx((tx) => tx.whole!('.recipe!')) as Bundle[]
+  let [whole] = await s.tx((tx) => tx.whole!('.recipe')) as Bundle[]
   assertEquals([read.recipe, got.recipe, whole.recipe], [
     RECIPE,
     RECIPE,

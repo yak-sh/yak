@@ -277,7 +277,7 @@ export let releases = (env: Bound, dir: Held): Releases => ({
  * for tomorrow: one app's bucket is never another app's problem.
  */
 export let backfilled = async (env: Bound, dir: Held): Promise<number> => {
-  let deploys = (await dir.read('.deploy!&.created?'))
+  let deploys = (await dir.read('.deploy&?created'))
     .map(deployOf)
     .filter((d): d is Deploy => !!d)
   let apps = new Map<Eid, Deploy[]>()

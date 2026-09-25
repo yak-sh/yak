@@ -216,7 +216,7 @@ let held = () => {
   let answer = (search: string) => {
     // The graph's own read door: the whole filter line as one parameter.
     let line = new URLSearchParams(search).get('q') ?? ''
-    let terms = line.split('&').filter((t) => t && !t.endsWith('?'))
+    let terms = line.split('&').filter((t) => t && !t.startsWith('?'))
     return rows.filter((row) =>
       terms.every((t) => {
         let [key, want] = t.split('=')

@@ -148,7 +148,7 @@ Deno.test("a handler's write-back commits and is visible", () => {
   })
   apply([post('p1')])
   apply([post('p1', { published: true })])
-  let [sub] = g.read('.subscriber!') as Bundle[]
+  let [sub] = g.read('.subscriber') as Bundle[]
   assertEquals((sub.subscriber as Record<string, unknown>).email, 'p1')
 })
 
@@ -160,7 +160,7 @@ Deno.test('a handler may write back through the graph itself', () => {
       subscriber: { email: `${e.entity.eid}@blog` },
     }])))
   apply([post('p1')])
-  assertEquals((g.read('.subscriber!') as Bundle[]).length, 1)
+  assertEquals((g.read('.subscriber') as Bundle[]).length, 1)
 })
 
 Deno.test('nothing fires when the batch is refused', () => {

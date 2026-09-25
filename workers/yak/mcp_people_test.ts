@@ -51,7 +51,7 @@ slow('what the person said is kept, and read back whole', async () => {
 
     // The row, in the space's own store: the words verbatim in doc.body,
     // where the store's search index reads them, and the byline nobody typed.
-    let rows = await meta(k, them.cookie).query('.memory!&.doc?&.created?')
+    let rows = await meta(k, them.cookie).query('.memory&?doc&?created')
     assertEquals(rows.length, 1)
     let one = rows[0] as unknown as {
       doc: { body: string }
@@ -164,7 +164,7 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
     // The row, in the meta store: the words, who said them, and where they
     // were standing — the app, the deploy it was serving, and the platform's
     // own release, none of which anyone was asked for.
-    let rows = await meta(k, them.cookie).query('.report!&.doc?&.created?')
+    let rows = await meta(k, them.cookie).query('.report&?doc&?created')
     assertEquals(rows.length, 1)
     let one = rows[0] as unknown as {
       doc: { title: string; body: string }
@@ -197,7 +197,7 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
     let second = await letter(k, 'hello@yaks.app', 'four minutes')
     assertEquals(second.body.includes('/recipes/'), false)
     let [, noApp] = await meta(k, them.cookie).query(
-      '.report!&.doc?',
+      '.report&?doc',
     ) as unknown as { report: { app: unknown; version: unknown } }[]
     assertEquals(noApp.report.app, null)
     assertEquals(noApp.report.version, null)
@@ -212,7 +212,7 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
     assertStringIncludes(stopped.message, 'kept and will be read')
     assertStringIncludes(stopped.message, 'hello@yaks.app')
     // Nothing was written for the one that was held.
-    assertEquals((await meta(k, them.cookie).query('.report!')).length, 3)
+    assertEquals((await meta(k, them.cookie).query('.report')).length, 3)
   } finally {
     await k.stop()
   }
@@ -318,7 +318,7 @@ slow(
       )
       let arena = client(k, host, 'arena', hers.cookie)
       await arena.applied({ entities: [{ doc: { title: 'her hero' } }] })
-      assertEquals((await arena.get('.doc!')).length, 1)
+      assertEquals((await arena.get('.doc')).length, 1)
 
       // The app beside it is not hers, page or data: to her it is an address
       // with nothing at it, which is what private means to everybody else.
@@ -330,7 +330,7 @@ slow(
         `ledger page: ${page.status}`,
       )
       await page.body?.cancel()
-      let read = await k.at(host, '/ledger/api/query?.doc!', {
+      let read = await k.at(host, '/ledger/api/query?.doc', {
         headers: { cookie: hers.cookie },
       })
       assertEquals(read.status, 403)
@@ -349,7 +349,7 @@ slow(
 
       // Taken back, one app at a time.
       await his.tool('member_remove', { email: ana, app: 'arena' })
-      let after = await k.at(host, '/arena/api/query?.doc!', {
+      let after = await k.at(host, '/arena/api/query?.doc', {
         headers: { cookie: hers.cookie },
       })
       assertEquals(after.status, 403)
@@ -421,7 +421,7 @@ slow('a project document is an entity, and search finds it', async () => {
     let listed = JSON.parse(
       await agent.tool('graph_query', {
         app: 'idler-rpg',
-        query: '.note!&.doc?',
+        query: '.note&?doc',
       }),
     ) as { doc: { title: string } }[]
     assertEquals(listed.map((l) => l.doc.title), ['Combat'])
@@ -434,7 +434,7 @@ slow('a project document is an entity, and search finds it', async () => {
     let again = JSON.parse(
       await agent.tool('graph_query', {
         app: 'idler-rpg',
-        query: '.note!&.doc?',
+        query: '.note&?doc',
       }),
     ) as { doc: { body: string } }[]
     assertEquals(again.length, 1)
@@ -496,7 +496,7 @@ slow('the answers four builders had to guess at', async () => {
       }],
     })
     let entry = minted(written, '$e')
-    let [one] = await rows('.dayline!')
+    let [one] = await rows('.dayline')
     assertEquals(one.dayline!.written, '2026-04-11T12:00:00Z')
     assertEquals(
       new Date(one.dayline!.written).toISOString().slice(0, 10),
@@ -524,7 +524,7 @@ slow('the answers four builders had to guess at', async () => {
         doc: { body: 'Rain again.' },
       }],
     })
-    let [untitled] = await rows('.dayline.mood=grey&.doc?')
+    let [untitled] = await rows('.dayline.mood=grey&?doc')
     assertEquals(untitled.doc!.title, null)
     assertEquals(untitled.dayline!.written, null)
 
@@ -548,7 +548,7 @@ slow('the answers four builders had to guess at', async () => {
       app: 'diary',
       entities: [{ entity: { eid: entry }, task: {}, filed: { priority: 2 } }],
     })
-    let [chore] = await rows('.task!')
+    let [chore] = await rows('.task')
     assertEquals(chore.task!.status, 'open')
     assertEquals((await rows('.task.status=open')).length, 1)
   } finally {

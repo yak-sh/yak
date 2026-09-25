@@ -24,7 +24,7 @@ import { type Blobs, decode } from './store.ts'
  * import { fileBlobs, hydrate } from '@yaks/blob'
  *
  * let store = fileBlobs('./blobs')
- * let posts = await hydrate(vocab, store, storage.read('.post!'))
+ * let posts = await hydrate(vocab, store, storage.read('.post'))
  * ```
  *
  * Asynchronous only when the store is: over a synchronous backend this returns

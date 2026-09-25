@@ -116,7 +116,7 @@ to it; the graph determines the full cascade.
 store.read('.published=1')
 store.read('.kind=post&.limit=10')
 store.read('.post.author.doc.title~=kate')
-store.rows('.published=1&.count!') // aggregate rows with value and n fields
+store.rows('.published=1&.count') // aggregate rows with value and n fields
 ```
 
 `read` accepts a query string or `@yaks/query` AST and returns whole bundles,

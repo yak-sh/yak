@@ -100,9 +100,9 @@ Deno.test('the kernel vouched, so the batch is signed by that person', async () 
 
   // And the store wrote down what it was told about them: a person to resolve
   // a byline to, and the level the platform vouched, as a grant of its own.
-  let [person] = await (await get(store, '/query?q=.person!', head)).json()
+  let [person] = await (await get(store, '/query?q=.person', head)).json()
   assertEquals(person.entity.eid, ADA)
-  let [grant] = await (await get(store, '/query?q=.grant!', head)).json()
+  let [grant] = await (await get(store, '/query?q=.grant', head)).json()
   assertEquals(idOf(grant.grant.person), ADA)
   assertEquals(grant.grant.access, 'owner')
 })
@@ -301,11 +301,11 @@ Deno.test('an app writing as itself is signed by the app, and is not a person', 
 
   // The grant is written down — it is what @yaks/member's guard reads — and
   // the app is not called a person for it.
-  let [grant] = await (await get(store, '/query?q=.grant!', head)).json()
+  let [grant] = await (await get(store, '/query?q=.grant', head)).json()
   assertEquals(idOf(grant.grant.person), APP)
   assertEquals(grant.grant.access, 'editor')
   assertEquals(
-    (await (await get(store, '/query?q=.person!', head)).json())
+    (await (await get(store, '/query?q=.person', head)).json())
       .length,
     0,
   )
@@ -371,7 +371,7 @@ Deno.test('the agent door refuses what the page door refuses', async () => {
   let out = await call(
     mcp(store.door),
     'graph_query',
-    { q: '.doc!' },
+    { q: '.doc' },
     vouch({ person: null, role: null }),
   )
   assertEquals(out.status, 401)

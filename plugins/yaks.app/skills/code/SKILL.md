@@ -129,7 +129,7 @@ and a member reads them back through `app_files` read. Nothing you write in
 
 ## env.STORE — the app's graph, as the person looking
 
-    let r = await env.STORE.fetch('/query?.recipe!&.doc?')
+    let r = await env.STORE.fetch('/query?.recipe&?doc')
     let rows = await r.json()
 
 `env.STORE.fetch(path, init)` reaches the same HTTP endpoints `client.js` wraps,
@@ -163,8 +163,8 @@ with a 401 or 403 — so passing it straight through gives the page a message it
 already knows how to show.
 
 The whole filter grammar works in a worker, because these are the same
-endpoints: `.doc!`, `.recipe.minutes<=30`, `id=<eid>`, `limit=`, `.count!`, a
-bare word for full text. Ask for the components you will use.
+endpoints: `.doc`, `.recipe.minutes<=30`, `id=<eid>`, `limit=`, `.count`, a bare
+word for full text. Ask for the components you will use.
 
 ## env.APP — the app's graph, as the app itself
 
@@ -241,7 +241,7 @@ touches only that row:
         // The check comes first. Nothing below it may run without it.
         if (!code) return new Response('no code', { status: 403 })
         let r = await env.APP.fetch(
-          '/query?.household.code=' + await hashed(code) + '&.doc?&limit=1',
+          '/query?.household.code=' + await hashed(code) + '&?doc&limit=1',
         )
         let [found] = await r.json()
         // A wrong code and a missing household are the same answer: 403, and
@@ -472,7 +472,7 @@ something better than a stack: catch it, and return a 4xx with a message.
         if (!url.pathname.endsWith('/titles')) {
           return new Response('not found', { status: 404 })
         }
-        let r = await env.STORE.fetch('/query?.recipe!&.doc?')
+        let r = await env.STORE.fetch('/query?.recipe&?doc')
         if (!r.ok) return new Response(await r.text(), { status: r.status })
         let rows = await r.json()
         return Response.json(rows.map((row) => row.doc.title))
@@ -612,7 +612,7 @@ environment, and the `yak` CLI is installed:
 So a build script reaches the same tools your agent has, as you:
 
     yak app_list
-    yak graph query '.recipe!'
+    yak graph query '.recipe'
     yak apply @rows.ndjson
 
 `yak <tool>` runs any tool this connector lists — it reads the list at run time,

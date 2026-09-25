@@ -48,7 +48,7 @@ slow(
         apps: ['coaches'],
       }])
       let app = client(k, 'jill.yaks.app', 'coaches', cookie)
-      assertEquals(await app.get('.tool!'), [])
+      assertEquals(await app.get('.tool'), [])
       let store = handle({ slug: 'jill' }, 'coaches', eids['jill/coaches'])
       await sql(k, store, [
         ['drop index tool_name'],
@@ -58,7 +58,7 @@ slow(
         ["update yak_kv set v = 'older schema' where k = 'schema'"],
         ["update yak_kv set v = 'yak/store/filed/6' where k = 'migrated'"],
       ])
-      let calls = await app.get('.call!')
+      let calls = await app.get('.call')
       assertEquals(
         calls.map((c) => (c.call as { to: string }).to).sort(),
         [
@@ -89,7 +89,7 @@ slow(
         [{ name: 'tool_name' }],
       )
       // The woken store still answers.
-      assertEquals((await app.get('.tool!')).length, 2)
+      assertEquals((await app.get('.tool')).length, 2)
     } finally {
       await k.stop()
     }

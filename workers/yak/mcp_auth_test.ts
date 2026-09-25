@@ -214,7 +214,7 @@ slow('the door before anyone signs in', async () => {
           content: vocabFile({ jog: { miles: num } }, {
             leaderboard: {
               description: 'Every run so far',
-              query: '.jog!',
+              query: '.jog',
               view: 'leaderboard.html',
             },
           }),
@@ -541,13 +541,13 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
       await anon.tool('graph_query', {
         space: 'ada',
         app: 'runs',
-        q: '.jog!&.doc?',
+        q: '.jog&?doc',
       }),
     ) as { entity: { eid: string }; doc: { title: string } }[]
     assertEquals(rows.length, 1)
     assertEquals(rows[0].entity.eid, run)
     assertEquals(rows[0].doc.title, 'Morning loop')
-    let page = await client(k, 'ada.yaks.app', 'runs').get('.jog!')
+    let page = await client(k, 'ada.yaks.app', 'runs').get('.jog')
     assertEquals(page.map((r) => r.entity.eid), [run])
     // Whole, by id, and by its words.
     let shown = JSON.parse(
@@ -581,7 +581,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
         anon.tool('graph_query', {
           space: 'ada',
           app: 'diary',
-          q: '.confession!',
+          q: '.confession',
         }),
       Error,
     )
@@ -589,7 +589,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
     // A read that names no app says the app is what is missing, and where the
     // apps to read are listed.
     let bare = await assertRejects(
-      () => anon.tool('graph_query', { q: '.jog!' }),
+      () => anon.tool('graph_query', { q: '.jog' }),
       Error,
     )
     assertStringIncludes(bare.message, 'signed out, a read answers for ONE app')
@@ -597,7 +597,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
     // Naming an app on the query line is not a way around it either: `.in=`
     // asks about a membership, and a stranger holds none.
     let inLine = await assertRejects(
-      () => anon.tool('graph_query', { q: '.in=ada/diary&.confession!' }),
+      () => anon.tool('graph_query', { q: '.in=ada/diary&.confession' }),
       Error,
     )
     assertStringIncludes(inLine.message, 'signed out')

@@ -2,7 +2,7 @@
 // `mail_send`.
 //
 // They exist for the scoping sentence. A letter is `doc` + `mail` + `deliver`
-// and nothing else, so `graph_apply` could always send one and `.mail!` read
+// and nothing else, so `graph_apply` could always send one and `.mail` read
 // one back — these add no power. What the generic tier cannot say is which
 // mailbox is meant: an agent holding a mail connector beside this one hears
 // "check my email" as the person's own account, and a bundle wire has nowhere
@@ -47,7 +47,7 @@ export let SCOPE = scope()
 // The components a letter is made of, asked for by name: a row carries only
 // what its filter names (listing.ts), and what a reader wants off a letter is
 // the words, the envelope, who it was for, and what became of it.
-let LETTER = '.mail!&.doc?&.deliver?&.delivered?&.bounced?'
+let LETTER = '.mail&?doc&?deliver&?delivered&?bounced'
 
 // Which side of the mailbox, given the app's own address.
 //
@@ -61,9 +61,9 @@ let side = (said: string, mine: string): string | null =>
   said == 'all'
     ? ''
     : said == 'sent'
-    ? '&.deliver!'
+    ? '&.deliver'
     : said == 'received'
-    ? `&.deliver.to=&.mail.from!=${mine}`
+    ? `&!deliver.to&.mail.from!=${mine}`
     : null
 
 let str = (v: unknown, what: string): string => {

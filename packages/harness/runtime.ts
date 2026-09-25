@@ -18,7 +18,7 @@ export let runtimeRows = async (
         '&.attempt.state=inflight&.order=-entry.seq&.limit=1&*',
     )
     let [tail] = await g.read(
-      '.entry.session=' + id + '&.notice=&.order=-entry.seq&.limit=1&*',
+      '.entry.session=' + id + '&!notice&.order=-entry.seq&.limit=1&*',
     )
     let [call] = await g.read(
       '.entry.session=' + id + '&.call&.order=-entry.seq&.limit=1',
@@ -57,7 +57,7 @@ export let runtimeAction = async (
   if (action == 'cancel-queued') {
     return a.d.enqueue(session, async () => {
       let [row] = await a.h.g.read(
-        '.session&.entity.eid=' + session + '&.dispatch?',
+        '.session&.entity.eid=' + session + '&?dispatch',
       )
       if (!row) throw new Error('Session not found')
       if ((row.dispatch as Comp | undefined)?.state != 'queued') {
@@ -82,7 +82,7 @@ export let runtimeAction = async (
   }
   if (action != 'resume') throw new Error('Unknown runtime action')
   let [tail] = await a.h.g.read(
-    '.entry.session=' + session + '&.notice=&.order=-entry.seq&.limit=1&*',
+    '.entry.session=' + session + '&!notice&.order=-entry.seq&.limit=1&*',
   )
   let interrupted = (tail?.error as Comp | undefined)?.code == 'interrupted'
   if ((row.session as Comp).status != 'settled' && !interrupted) {

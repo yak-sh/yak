@@ -105,7 +105,7 @@ export type Asked = {
  *
  * ```ts
  * line({ space: 's1', limit: 8 })
- * // '.memory.space=s1&.doc?&.created?&.order=-entity.num&.limit=8'
+ * // '.memory.space=s1&?doc&?created&.order=-entity.num&.limit=8'
  * ```
  */
 export let line = (asked: Asked): string => {
@@ -120,8 +120,8 @@ export let line = (asked: Asked): string => {
     asked.space ? `.${MEMORY}.space=${asked.space}` : `.${MEMORY}`,
     ...(asked.scope ? [`.${MEMORY}.scope=${asked.scope}`] : []),
     ...(asked.feedback ? ['.feedback'] : []),
-    '.doc?',
-    '.created?',
+    '?doc',
+    '?created',
     ...(asked.near ? ['.order=similar'] : ranked ? [] : ['.order=-entity.num']),
     `.limit=${asked.limit}`,
   ].join('&')

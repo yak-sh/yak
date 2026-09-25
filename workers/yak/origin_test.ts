@@ -68,7 +68,7 @@ slow('a page at another address reaches no door here', async () => {
     assertEquals((await forged.json()).error.code, 'foreign_origin')
     // And it wrote nothing: the refusal is the batch never running, not a
     // response the attacker could not read.
-    assertEquals(titles(await owner.get('.doc!')), ['Lemon cake'])
+    assertEquals(titles(await owner.get('.doc')), ['Lemon cake'])
 
     // Every other door in the same breath — the store's identity, the file
     // door a deploy writes through, and the bytes door a page's uploads go to.
@@ -107,14 +107,14 @@ slow('a page at another address reaches no door here', async () => {
       body: JSON.stringify({ entities: [{ doc: { title: 'Plum tart' } }] }),
     })
     assertEquals(mine.status, 200)
-    assertEquals(titles(await owner.get('.doc!')), ['Lemon cake', 'Plum tart'])
+    assertEquals(titles(await owner.get('.doc')), ['Lemon cake', 'Plum tart'])
 
     // A sibling app in the same space, at this app's door: same hostname, so
     // same origin. App isolation is a different question and deliberately not
     // this one — borrowed words are written exactly this way.
     let sibling = await page(
       'https://jeff.yaks.app',
-      '/recipes/api/query?.doc!',
+      '/recipes/api/query?.doc',
     )
     assertEquals(sibling.status, 200)
     assertEquals(titles(await sibling.json()), ['Lemon cake', 'Plum tart'])
@@ -148,7 +148,7 @@ slow('a page at another address reaches no door here', async () => {
         stage: 'active',
       },
     }])
-    let hers = await k.at('herbusiness.com', '/api/query?.doc!', {
+    let hers = await k.at('herbusiness.com', '/api/query?.doc', {
       headers: { cookie, origin: 'https://herbusiness.com' },
     })
     assertEquals(hers.status, 200)
@@ -237,7 +237,7 @@ slow(
 
       // A page anywhere, reading the public app — carrying the owner's own
       // cookie, which is the case that has to be got right.
-      let read = await page(AWAY, '/recipes/api/query?.doc!', {
+      let read = await page(AWAY, '/recipes/api/query?.doc', {
         headers: { cookie },
       })
       assertEquals(read.status, 200)
@@ -249,20 +249,20 @@ slow(
 
       // The same request with no cookie on it answers the same thing, which is
       // what "the door ignores the cookie" means.
-      let cold = await page(AWAY, '/recipes/api/query?.doc!')
+      let cold = await page(AWAY, '/recipes/api/query?.doc')
       assertEquals(cold.status, 200)
       assertEquals(titles(await cold.json()), ['Lemon cake'])
 
       // Ignored, not merely absent: the owner's own cookie opens the private
       // app from the owner's own page and opens nothing from anyone else's.
-      let shut = await page(AWAY, '/garden/api/query?.doc!', {
+      let shut = await page(AWAY, '/garden/api/query?.doc', {
         headers: { cookie },
       })
       assertEquals(shut.status, 401)
       assertEquals((await shut.json()).error.code, 'not_a_reader')
       let hers = await page(
         'https://jeff.yaks.app',
-        '/garden/api/query?.doc!',
+        '/garden/api/query?.doc',
         {
           headers: { cookie },
         },
@@ -284,11 +284,11 @@ slow(
       })
       assertEquals(forged.status, 403)
       assertEquals((await forged.json()).error.code, 'foreign_origin')
-      assertEquals(titles(await owner.get('.doc!')), ['Lemon cake'])
+      assertEquals(titles(await owner.get('.doc')), ['Lemon cake'])
 
       // And it still reads to that page, the way a public one does: what a
       // stranger may read is the app's own `access`, unchanged by any of this.
-      let open = await page(AWAY, '/recipes/api/query?.doc!')
+      let open = await page(AWAY, '/recipes/api/query?.doc')
       assertEquals(open.status, 200)
       assertEquals(open.headers.get('access-control-allow-origin'), '*')
     } finally {

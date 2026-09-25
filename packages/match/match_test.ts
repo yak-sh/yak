@@ -15,7 +15,7 @@ Deno.test('a scalar filter selects, and an absent property is a value', () => {
   assertEquals(sel('.price>=12'), ['b1', 'b2'])
   assertEquals(sel('.status=shelved,sold'), ['b1', 'b2', 'b4'])
   // every entity with no released stamp, book or not
-  assertEquals(sel('.released='), [
+  assertEquals(sel('!released'), [
     'a1',
     'a2',
     'b4',
@@ -29,13 +29,13 @@ Deno.test('a scalar filter selects, and an absent property is a value', () => {
 })
 
 Deno.test('a component is worn or it is not', () => {
-  assertEquals(sel('.review!'), ['r1', 'r2', 'r3'])
-  assertEquals(sel('.member!'), ['m1'])
+  assertEquals(sel('.review'), ['r1', 'r2', 'r3'])
+  assertEquals(sel('.member'), ['m1'])
   // a tag — no properties at all, so wearing it is the whole fact
-  assertEquals(sel('.signed!'), ['b4'])
+  assertEquals(sel('.signed'), ['b4'])
   assertEquals(sel('.signed~='), ['b4'])
-  assertFalse(sel('.signed=').includes('b4'))
-  assert(sel('.signed=').includes('b1'))
+  assertFalse(sel('!signed').includes('b4'))
+  assert(sel('!signed').includes('b1'))
 })
 
 Deno.test('presence reads plugin components without a declared schema', () => {
@@ -47,11 +47,11 @@ Deno.test('presence reads plugin components without a declared schema', () => {
   assert(hit(e))
   assertFalse(hit({ ...e, invoice: null }))
   assertFalse(hit({ entity: e.entity, doc: e.doc }))
-  assertFalse(filter('.missing!', shop)(e))
-  assert(filter('.entity!', shop)(e))
-  assert(filter('.eid!', shop)(e))
-  assert(filter('.title!', shop)(e))
-  assertFalse(filter('.title!', shop)({ ...e, doc: {} }))
+  assertFalse(filter('.missing', shop)(e))
+  assert(filter('.entity', shop)(e))
+  assert(filter('.eid', shop)(e))
+  assert(filter('.title', shop)(e))
+  assertFalse(filter('.title', shop)({ ...e, doc: {} }))
   assertThrows(() => filter('.invoice=1', shop), Error, 'unknown prop')
 })
 
@@ -59,9 +59,9 @@ Deno.test('a bare bang names the component, not the property beside it', () => {
   // `book` is both a component and review's reference property. The bang
   // completes the component sentence; every other form keeps the property, and
   // the property's qualified form still reaches it.
-  assertEquals(sel('.book!'), ['b1', 'b2', 'b3', 'b4'])
+  assertEquals(sel('.book'), ['b1', 'b2', 'b3', 'b4'])
   assertEquals(sel('.book=b1'), ['r1', 'r2'])
-  assertEquals(sel('.review.book!'), ['r1', 'r2', 'r3'])
+  assertEquals(sel('.review.book'), ['r1', 'r2', 'r3'])
 })
 
 Deno.test('the kind scope names the most specific kind', () => {
@@ -75,14 +75,14 @@ Deno.test('a reference is followed through the set it was given', () => {
   assertEquals(sel('.author=a1'), ['b1', 'b4'])
   assertEquals(sel('.book.author.doc.title~=vale'), ['b1', 'b4'])
   assertEquals(sel('.book.author.doc.body~=manuals'), ['b2'])
-  assertEquals(sel('.book.author.member!'), [])
+  assertEquals(sel('.book.author.member'), [])
 })
 
 Deno.test('a reverse hop reads the children pointing back', () => {
-  assertEquals(sel('.reviews!'), ['b1', 'b2'])
+  assertEquals(sel('.reviews'), ['b1', 'b2'])
   assertEquals(sel('.reviews>=2'), ['b1'])
   assertEquals(sel('.reviews.stars=5'), ['b1'])
-  assertEquals(sel('.books!'), ['a1', 'a2'])
+  assertEquals(sel('.books'), ['a1', 'a2'])
 })
 
 Deno.test('.refs= gathers the backlinks of an entity', () => {
@@ -130,7 +130,7 @@ Deno.test('a window pages WITHIN the order it was asked for', () => {
 
 Deno.test('a deleted entity is never selected', () => {
   assertEquals(sel('.stars=1'), [])
-  assertEquals(sel('.stars!'), ['r1', 'r2', 'r3'])
+  assertEquals(sel('.stars'), ['r1', 'r2', 'r3'])
 })
 
 Deno.test('the filter door judges one bundle at a time', () => {
@@ -145,7 +145,7 @@ Deno.test('the filter door judges one bundle at a time', () => {
 })
 
 Deno.test('what it cannot answer exactly, it declines', () => {
-  for (let q of ['.near=b1', '.count!', '.distinct=status', '.edges!']) {
+  for (let q of ['.near=b1', '.count', '.distinct=status', '.edges']) {
     let e = assertThrows(() => matcher(q, shop), Unsupported) as Unsupported
     assertEquals(e.by, '@yaks/match', q)
   }

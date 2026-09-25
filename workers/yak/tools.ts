@@ -1611,7 +1611,7 @@ let HOURLY = 3
 let recently = async (ctx: Ctx) => {
   try {
     return (await meta(ctx.env).query(
-      `.report!&.created.by=${ctx.person}&.report.at>=1-hour-ago`,
+      `.report&.created.by=${ctx.person}&.report.at>=1-hour-ago`,
     )).length
   } catch (e) {
     caught(e, { tool: 'feedback' })

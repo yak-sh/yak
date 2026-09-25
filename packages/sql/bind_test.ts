@@ -163,13 +163,13 @@ Deno.test('the .kind scope expands to present-and-earlier-absent', () => {
 })
 
 Deno.test('a reverse hop compiles to a correlated EXISTS', () => {
-  let { sql, params } = compile(parse('.notes!'), v)
+  let { sql, params } = compile(parse('.notes'), v)
   assert(
     sql.includes('exists (select 1 from "note" where "note"."about" ='),
     sql,
   )
   assertEquals(params, [])
-  assert(compile(parse('.notes='), v).sql.includes('not exists'), 'absence')
+  assert(compile(parse('!notes'), v).sql.includes('not exists'), 'absence')
 })
 
 // The step relation a chained walk composes: the hops joined on each other, so
@@ -404,7 +404,7 @@ Deno.test('a wide OR is cut into compounds workerd will take', () => {
 Deno.test('a spine value that is no operand list keeps the column road', () => {
   // an empty value is still absence grammar, and a range is a comparison the
   // spine's untyped column declines exactly as it did before
-  assert(compile(parse('.eid='), v).sql.includes('is null'), 'absence')
+  assert(compile(parse('!eid'), v).sql.includes('is null'), 'absence')
   assertThrows(() => compile(parse('.num=3..5'), v), Unsupported)
 })
 
@@ -479,21 +479,21 @@ Deno.test('.refs= over a vocabulary that references nothing selects nothing', ()
 })
 
 Deno.test('a request for a word this vocabulary never planted asks, and passes', () => {
-  // `.loan?` names a component nobody here declares. Asking is not asserting:
+  // `?loan` names a component nobody here declares. Asking is not asserting:
   // it narrows nothing, so the statement stands and the row simply carries no
   // loan — which is what lets one line be asked of every store in a fan-out.
-  let { sql } = compile(parse('.task!&.loan?'), v)
+  let { sql } = compile(parse('.task&?loan'), v)
   assert(!sql.includes('loan'), sql)
   // The assertion form still refuses: an empty answer would say there are none.
   // The refusal is the vocabulary's own sentence, so a door prints one line
   // whether the word was routed away or bound away.
   assertThrows(
-    () => compile(parse('.loan!'), v),
+    () => compile(parse('.loan'), v),
     Unknown,
     'unknown prop: .loan',
   )
   // And so does a request that is not a bare component name.
-  assertThrows(() => compile(parse('.loan.to?'), v))
+  assertThrows(() => compile(parse('?loan.to'), v))
 })
 
 Deno.test('reference equality compares indexed keys, not projected eids', () => {
@@ -521,7 +521,7 @@ Deno.test('reference equality compares indexed keys, not projected eids', () => 
   // matching; these must not be mistaken for a list of literal reference ids.
   for (
     let query of [
-      '.note.about=',
+      '!note.about',
       '.note.about=a..z',
       '.note.about~=target',
     ]
@@ -624,7 +624,7 @@ Deno.test('a shared reference equality unions its owners, other shapes decline',
     ),
     sql,
   )
-  for (let line of ['.client!', '.client=', '.client~=c1', '.client=c1,c2']) {
+  for (let line of ['.client', '!client', '.client~=c1', '.client=c1,c2']) {
     let e = assertThrows(() => compile(parse(line), shared), Unsupported)
     assertEquals(e.feature, 'a shared reference')
   }
@@ -634,7 +634,7 @@ Deno.test('a property test says its component is present, so the planner drives 
   // `.board.query~=<id>` scanned the spine through a left join (243 ms on
   // the live graph) where the boards were 22 rows: a value test cannot hold
   // on a row without the component, and saying so lets SQLite start there.
-  let guarded = ['.priority=1', '.priority~=1', '.priority>1', '.priority!']
+  let guarded = ['.priority=1', '.priority~=1', '.priority>1', '.priority']
   for (let line of guarded) {
     let { sql } = compile(parse(line), v)
     assert(sql.includes('("task"."entity" is not null and '), `${line}: ${sql}`)
@@ -647,7 +647,7 @@ Deno.test('a property test says its component is present, so the planner drives 
     assert(sql.includes('("note"."entity" is not null and '), `${line}: ${sql}`)
   }
   // An absence or a not-equals must still see the rows without the component.
-  for (let line of ['.priority=', '.priority!=1']) {
+  for (let line of ['!priority', '.priority!=1']) {
     let { sql } = compile(parse(line), v)
     assert(!sql.includes('"task"."entity" is not null'), `${line}: ${sql}`)
   }

@@ -83,7 +83,7 @@ slow('an invitation reaches nobody until its person accepts it', async () => {
 
     // The letter counted against his space's month.
     let [row] = await meta(k, jeff.cookie).query(
-      `.space.slug=${mine}&.meter?`,
+      `.space.slug=${mine}&?meter`,
     ) as { meter?: { emails?: number } }[]
     assertEquals(row.meter?.emails, 1)
 

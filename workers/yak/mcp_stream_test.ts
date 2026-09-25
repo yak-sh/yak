@@ -44,7 +44,7 @@ slow('the stream names its session and replays a missed line', async () => {
       .exec(await agent.tool('app_new', { slug: 'walks', title: 'Walks' }))![1]
     let tools = (view: string) =>
       vocabFile({ walk: { text: txt } }, {
-        log_walk: { description: 'Every walk so far', query: '.walk!', view },
+        log_walk: { description: 'Every walk so far', query: '.walk', view },
       })
     await agent.tool('app_files', {
       space,

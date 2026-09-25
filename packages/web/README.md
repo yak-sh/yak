@@ -39,9 +39,9 @@ routes still reach their own handlers.
 - **Reads.** Each named subscription in live.ts is a server-evaluated watch on a
   @yaks/client box (live_client.ts) over @yaks/api's `/ws`. @yaks/sync owns the
   socket, its reconnect and the resubscribe after it. Aggregates (`.tally=`,
-  `.count!`, `.distinct=`) arrive as their value and again when it moves.
-  wire.ts turns a query line into the host's grammar and bundles into the
-  cache's changes.
+  `.count`, `.distinct=`) arrive as their value and again when it moves. wire.ts
+  turns a query line into the host's grammar and bundles into the cache's
+  changes.
 - **Writes.** A change is applied locally, kept in a durable outbox, and POSTed
   to `/apply` (live.ts `post`). A refusal is recorded in the refusal ledger and
   the rows it touched are read again; a network error or a 5xx is redelivered.

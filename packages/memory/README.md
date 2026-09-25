@@ -36,7 +36,7 @@ await g.apply(saved({
   context: 'looking at the recipe app',
 }))
 
-console.log(await g.read('.memory .doc?'))
+console.log(await g.read('.memory ?doc'))
 // For persistent storage, replace ram with a database adapter. For full-text
 // queries, configure @yaks/fts on a compatible SQL adapter.
 ```

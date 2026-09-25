@@ -54,7 +54,7 @@ let read = async (q: string) =>
 export let load = async () => {
   try {
     let found = await Promise.all(
-      ['.provider!', '.model!', '.serves!'].map(read),
+      ['.provider', '.model', '.serves'].map(read),
     )
     providers.value = tableOf(found.flat())
   } catch { /* no table, no form — the verb simply does nothing yet */ }

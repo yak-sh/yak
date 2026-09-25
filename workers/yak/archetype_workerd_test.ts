@@ -19,7 +19,7 @@ slow(
     try {
       let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
       // The directory shares classification but retains its own vocabulary.
-      const directoryRows = await meta(k, cookie).query('.archetype!&.limit=2')
+      const directoryRows = await meta(k, cookie).query('.archetype&.limit=2')
       assert(directoryRows.length > 0)
       assert(
         directoryRows.every((b) =>
@@ -43,16 +43,16 @@ slow(
       }])
       assertEquals(wrote.status, 200)
       assertEquals(planted.status, 200)
-      let rows = await app.get('.recipe!') as Bundle[]
+      let rows = await app.get('.recipe') as Bundle[]
       assertEquals(rows.length, 1)
       assert(typeof rows[0].entity.archetype == 'string')
       let prior = rows[0].entity.archetype
       await app.post([{ entity: { eid: 'cake' }, specialty: {} }])
-      rows = await app.get('.recipe!&.specialty!') as Bundle[]
+      rows = await app.get('.recipe&.specialty') as Bundle[]
       assertEquals(rows.length, 1)
       assert(rows[0].entity.archetype != prior)
       await app.post([{ entity: { eid: 'cake' }, specialty: null }])
-      assertEquals((await app.get('.recipe!&.specialty!')).length, 0)
+      assertEquals((await app.get('.recipe&.specialty')).length, 0)
       // A deploy also writes the separate Git object store; cloning traverses it.
       const refs = await k.at(
         'jeff.yaks.app',
@@ -100,7 +100,7 @@ slow(
       assertEquals(packed.status, 200)
       assert((await packed.text()).includes('PACK'))
 
-      let definitions = await app.get('.archetype!')
+      let definitions = await app.get('.archetype')
       assert(definitions.length > 0)
       assert(definitions.some((b) => b.entity.eid == prior))
     } finally {

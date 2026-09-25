@@ -17,7 +17,7 @@
 //
 // Scope. The common query path is here and exact: predicates (every operator),
 // any-of lists, ranges, time phrases, boolean composition, paths that
-// dereference a reference property, reverse hops (`.reviews!`, `.reviews>=5`,
+// dereference a reference property, reverse hops (`.reviews`, `.reviews>=5`,
 // `.reviews.stars=5`), full-text terms, the `.kind` scope, presence and
 // absence, ordering, `.limit`/`.after` windows (which page within a requested
 // `.order`, by a keyset condition on the anchor entity's own place in it), the
@@ -272,12 +272,12 @@ let readProp = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
 
 // A property holding a JSON value (type object, array or a union) is read whole
 // by a gather, and nothing here compares, orders or projects one yet: its
-// presence (`.path!`) is the one question a query may ask of it.
+// presence (`.path`) is the one question a query may ask of it.
 let opaque = (tag: Tag, what: string, path: string): void => {
   if (tag != 'jsonb') return
   throw new Unsupported(
     what,
-    `.${path} holds a JSON value — only its presence (.${path}!) can be ` +
+    `.${path} holds a JSON value — only its presence (.${path}) can be ` +
       'asked of it yet',
   )
 }
@@ -328,7 +328,7 @@ let inSet = (ctx: Ctx, set: Identity): Frag => {
 }
 
 // A predicate one hop long: either a property of a component, or a presence
-// test on the component itself (the leaf has no property name). `.task!` and
+// test on the component itself (the leaf has no property name). `.task` and
 // `.task~=` test for presence; every other operator tests for absence.
 let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   let op = opOf(p)
@@ -685,7 +685,7 @@ let COUNT_OPS: Record<string, string> = {
 
 // A reverse hop: the entities that child rows point back at, named by the
 // association @yaks/vocab derives (`.reviews` is the reviews whose `book` is
-// this row). `.reviews!` tests presence, `.reviews=` absence, `.reviews>=5`
+// this row). `.reviews` tests presence, `!reviews` absence, `.reviews>=5`
 // counts, and `.reviews.stars=5` tests that a matching child exists.
 //
 // Each compiles to a correlated EXISTS (or count) over the child's reference
@@ -851,9 +851,9 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
       return kindScope(ctx, flat(c.value))
     }
     // A request to project a component this vocabulary does not declare is a
-    // question, not an assertion: `.loan!` over an unknown component name must
+    // question, not an assertion: `.loan` over an unknown component name must
     // be refused, because an empty result would state that there are none.
-    // `.loan?` only asks for the component to be returned beside the filtered
+    // `?loan` only asks for the component to be returned beside the filtered
     // rows — a database that has none returns none, and reports that by leaving
     // it off the row. That is what lets one query be sent to every database in
     // a fan-out (workers/yak/reach.ts) instead of writing one query per
@@ -986,7 +986,7 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
   let distinct = find<Distinct>(cs, 'distinct')
   let tally = find<Tally>(cs, 'tally')
 
-  // `.count!`: how many entities the filter selects, returned under an empty
+  // `.count`: how many entities the filter selects, returned under an empty
   // key so that every aggregate comes back in the same value-and-count shape.
   if (count) {
     return rel(ctx.d.spine, {
@@ -1080,7 +1080,7 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
   // one sequence a caller can predict — a list reads down in the order it was
   // made. Either way the order is stated, never left to the query planner: two
   // engines, or one engine with a different index, must not return a bare
-  // `.doc!` in two different orders.
+  // `.doc` in two different orders.
   //
   // The number says it where a store has one (@yaks/id is opt in, and one that
   // adopted its numbers from an export may hold them out of insert order), and

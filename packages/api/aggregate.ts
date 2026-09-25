@@ -24,7 +24,7 @@ export let aggregate = (ast: Query): Agg | undefined =>
   ast.clauses.find((c) => AGGS.has(c.kind))?.kind as Agg | undefined
 
 /** A reduction's rows as its answer. The compiled statement returns one
- * `{value, n}` row per value (`.count!` under the empty key, since no tally
+ * `{value, n}` row per value (`.count` under the empty key, since no tally
  * keeps an empty one). Sorted by value, so two stores answering the same
  * question answer in the same order. */
 export let reduced = (op: Agg, rows: Row[]): Reduced => {

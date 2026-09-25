@@ -272,7 +272,7 @@ v.prop('task', 'project')
 v.route('title') // { comp: 'doc', prop: 'title' }   bare prop → its component
 v.route('eid') // { comp: 'entity', prop: 'eid' }  the entity identity
 v.aim('comment.target.doc.title') // [{comment,target}, {doc,title}]  path → hops
-v.aim('project', true) // [{project,''}]  the presence form: `.project!` asks
+v.aim('project', true) // [{project,''}]  the presence form: `.project` asks
 // whether the entity has the `project` component, even where `task.project`
 // claims the bare name
 

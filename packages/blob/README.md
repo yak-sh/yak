@@ -84,7 +84,7 @@ for (let statement of [...store.ddl(), ...blobSchema()]) driver.exec(statement)
 let g = graph({ storage: store, vocab, plugins: [blobs(vocab, bytes)] })
 
 g.apply([{ entity: { eid: 'p1' }, post: { body: 'A long essay.' } }])
-let [post] = store.read('.post!')
+let [post] = store.read('.post')
 console.log(post.post) // { body: 'A long essay.' }
 ```
 

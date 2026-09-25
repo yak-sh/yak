@@ -14,7 +14,7 @@ Deno.test('low-level snapshots clear covered whole components, not other tiers o
   await snapshot(g, [{ entity: { eid: 'a' } }], {
     coverage: { a: { recipe: true } },
   })
-  assertEquals((await g.read('.recipe!')).length, 0)
+  assertEquals((await g.read('.recipe')).length, 0)
 })
 
 Deno.test('unowned land/standalone sync reject projected and rider shapes rather than lose payloads', () => {

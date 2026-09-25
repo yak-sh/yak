@@ -131,7 +131,7 @@ Deno.test('a deploy mints one commit whose tree is the manifest', async () => {
   let { row, body } = await bodyOf(env, git, head)
   assertEquals((row.gitobj as { type: string }).type, 'commit')
   assert(row.entity.archetype, 'Git objects carry derived classification')
-  const shapes = await git.query('.archetype!')
+  const shapes = await git.query('.archetype')
   assert(shapes.some((b) => b.entity.eid == row.entity.archetype))
   const [ref] = await meta(env).query(`.ref.app=${app.eid}`)
   assert(ref.entity.archetype, 'directory refs carry derived classification')
@@ -144,7 +144,7 @@ Deno.test('a deploy mints one commit whose tree is the manifest', async () => {
   // The tree is the manifest: one entry per top-level name, the blob under
   // `index.html` named by the very bytes the deploy pinned.
   let tree = body.match(/^tree ([0-9a-f]{40})$/m)![1]
-  let entries = await git.query(`.tree_entry!&.edge.from=${tree}`)
+  let entries = await git.query(`.tree_entry&.edge.from=${tree}`)
   assertEquals(
     entries.map((e) => (e.tree_entry as { name: string }).name).sort(),
     ['index.html', 'lib'],

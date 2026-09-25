@@ -60,7 +60,7 @@ first-paint data was capped or discarded.
   instructions, and an explicit project/email profile read is ready. Five
   disjoint count queries preserve the shared `addressed()` policy's component
   precedence (comment, notice, knock, mail), inbound message-ID truthiness and
-  target/address de-duplication. They use ordinary indexed `.count!` answers.
+  target/address de-duplication. They use ordinary indexed `.count` answers.
 - **Any watch/mute instruction:** keep the existing authoritative candidate
   queries plus `inboxItem`/`isUnread` policy. A loading/refused profile,
   instruction read, count, or fallback candidate read is not a confident zero.

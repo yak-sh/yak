@@ -67,7 +67,7 @@ for (let indexed of [false, true]) {
   let count = 0, perRead = 0
   for (let i = 0; i < 50; i++) {
     statements = []
-    count = (await g.read('.fieldaa!&.limit=25')).length
+    count = (await g.read('.fieldaa&.limit=25')).length
     perRead = statements.length
   }
   console.log(

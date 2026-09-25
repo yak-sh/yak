@@ -56,8 +56,8 @@ Deno.test('an aggregate is answered with its value, and again when it moves', ()
   graph.apply([{ entity: { eid: 'b1' }, book: { status: 'shelved' } }])
   let subs = subscriptions(graph)
   let { to, take } = ear()
-  subs.open(to, 'n', '.book!&.count!')
-  subs.open(to, 'by', '.book!&.tally=status')
+  subs.open(to, 'n', '.book&.count')
+  subs.open(to, 'by', '.book&.tally=status')
   assertEquals(take(), [
     { id: 'n', count: 1 },
     { id: 'by', tally: { shelved: 1 } },
