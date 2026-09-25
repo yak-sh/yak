@@ -1126,15 +1126,19 @@ Deno.test('a space in the trash serves nothing, and its owner restores it', asyn
   assertEquals((await k.at('/')).status, 200)
 
   await trashSpace(k.env, k.dir, k.space, { person: ADA, role: 'owner' })
-  // Every address under it, whichever rung would have answered: the front
-  // page, an app of its own, a file, and an app's store door.
-  for (
-    let path of ['/', '/garden/', '/cookbook/index.html', '/garden/api/query']
-  ) {
+  // Every page address under it, whichever rung would have answered: the
+  // front page, an app of its own, and a file.
+  for (let path of ['/', '/garden/', '/cookbook/index.html']) {
     let out = await k.at(path)
     assertEquals(out.status, 404, path)
     assertStringIncludes(await out.text(), 'Nothing here yet')
   }
+  // Its store door is machine-facing even when the space is unavailable.
+  let missing = await k.at('/garden/api/query')
+  assertEquals(missing.status, 404)
+  assertEquals(await missing.json(), {
+    error: { code: 'not_found', message: 'no app at that address' },
+  })
 
   // The owner, and only them: the page says where the space went, how long
   // they have, and it says it at every address rather than only at `/`.

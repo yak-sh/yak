@@ -102,6 +102,28 @@ slow('a space with no front page lists what you may open', async () => {
       'href="https://yaks.app/manage?space=bare"',
     )
 
+    // An API address is still a machine door when no app answers there: a
+    // missing space, a bare space with no front app, and a missing named app
+    // all refuse in JSON. Returning the human 404 page here made clients
+    // parse an entire HTML document as an unexpected defect.
+    for (
+      let [host, path] of [
+        ['nowhere.yaks.app', '/api/query'],
+        ['bare.yaks.app', '/api/query'],
+        ['jeff.yaks.app', '/missing/api/query'],
+      ]
+    ) {
+      let missing = await k.at(host, path)
+      assertEquals(missing.status, 404, `${host}${path}`)
+      assertStringIncludes(
+        missing.headers.get('content-type') ?? '',
+        'application/json',
+      )
+      assertEquals(await missing.json(), {
+        error: { code: 'not_found', message: 'no app at that address' },
+      })
+    }
+
     // Only the bare address lists. A path under a space with no front page
     // names nothing, and says so.
     let deep = await k.at('jeff.yaks.app', '/nothing/at/all')
@@ -517,7 +539,11 @@ slow('the front page is served at the space root', async () => {
     assertStringIncludes((await rows.json()).db, 'do:jeff/site.')
     // But `/<x>/api/…` named an app that is not here: a page asking a store
     // at a wrong address hears a 404, never HTML it cannot parse.
-    assertEquals((await k.at('jeff.yaks.app', '/gone/api/query')).status, 404)
+    let missing = await k.at('jeff.yaks.app', '/gone/api/query')
+    assertEquals(missing.status, 404)
+    assertEquals(await missing.json(), {
+      error: { code: 'not_found', message: 'no app at that address' },
+    })
 
     // Its own `/<app>/` forwards here rather than serving the same page at a
     // second address, and takes the query string with it.

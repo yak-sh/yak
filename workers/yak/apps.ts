@@ -181,6 +181,18 @@ let json = (
     { status },
   )
 
+// An app's API is a machine door even when the address names no app. Keep
+// its missing answer in the same JSON envelope as every refusal below; the
+// human-facing HTML 404 belongs only to pages. The raw pathname is used
+// because `/api/query` is parsed as an app called `api`, while
+// `/<app>/api/query` carries `/api/query` as that app's path.
+let appApi = (pathname: string) => /^(?:\/[^/]+)?\/api\//.test(pathname)
+
+let nothingAt = (pathname: string, env: Env) =>
+  appApi(pathname)
+    ? json(404, 'not_found', 'no app at that address')
+    : nothingHere(env)
+
 // Where a refusal sends someone who has not signed in (route.ts `signInAt`).
 // At the file door the page to return to is the request itself; at an `/api/`
 // door — nowhere to return to — it is the Referer, and the request's own
@@ -1655,7 +1667,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   if (r.space == null) {
     return url.pathname == MANAGE || url.pathname.startsWith(`${MANAGE}/`)
       ? manage(req, env)
-      : nothingHere(env)
+      : nothingAt(url.pathname, env)
   }
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let space = await c.time('space', () => dir.space(r.space!))
@@ -1671,13 +1683,17 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
         req,
         `https://${was.slug}.${apex(env)}${url.pathname}${url.search}`,
       )
-      : nothingHere(env)
+      : nothingAt(url.pathname, env)
   }
-  if (kernels(space, r.app)) return nothingHere(env)
+  if (kernels(space, r.app)) return nothingAt(url.pathname, env)
   // The whole space in the trash, before any rung of the order below: every
   // hostname of it answers nothing, and its owner is answered the page that
   // brings it back (`closed` above, T-34431).
-  if (space.trashed) return closed(req, env, dir, space)
+  if (space.trashed) {
+    return appApi(url.pathname)
+      ? nothingAt(url.pathname, env)
+      : closed(req, env, dir, space)
+  }
   // Where the dashboard was before it moved to the apex (T-39354): letters
   // and answers still carry these addresses, so each view is sent on to its
   // new one, query and all. A form posted from a page left open since has
@@ -1742,6 +1758,9 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // stranger learning that an app was deleted here learns something that is
   // not theirs.
   if (app?.trashed) {
+    if (appApi(url.pathname)) {
+      return nothingAt(url.pathname, env)
+    }
     let who = await c.time(
       'who',
       () => whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
@@ -1785,13 +1804,15 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     // address, rung 5's 404 anywhere else: there is no home worker to be the
     // fall-through, so a path under such a space names nothing and says so.
     if (!home || kernels(space, home.slug)) {
-      if (url.pathname != '/') return nothingHere(env)
+      if (url.pathname != '/') return nothingAt(url.pathname, env)
       return await index(req, env, dir, space)
     }
     // `/<x>/api/…` named an app that is not here. That is a wrong address,
     // not one of the front page's own paths: a page asking a store there has
     // to hear a 404, never a page of HTML it cannot parse (C-32574 item 4).
-    if (r.app && r.path.startsWith('/api/')) return nothingHere(env)
+    if (r.app && r.path.startsWith('/api/')) {
+      return nothingAt(url.pathname, env)
+    }
     app = home
     front = true
     path = url.pathname
