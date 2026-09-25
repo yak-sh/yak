@@ -12,7 +12,8 @@
 import { type Graph, graph, isPromise, type Options } from '@yaks/graph'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { mem } from '../sqlite/testing.ts'
-import { type Driver, storage } from '../sqlite/mod.ts'
+import { storage } from '../sqlite/mod.ts'
+import { type Driver, lit } from '@yaks/sql'
 import { ddl, journal, type Log, log } from './log.ts'
 
 let doc: VocabDoc = {
@@ -86,16 +87,14 @@ export let wikiLog = (): {
   let db = mem()
   let store = storage(db, wiki)
   store.install()
-  db.exec(ddl())
-  db.exec(
-    `insert into entity (eid) values ${
-      ACTORS.map((a) => `('${a}')`).join(', ')
-    }`,
-  )
-  let j = log({
-    rows: (sql, params) =>
-      db.query(sql, params as never[]) as Record<string, unknown>[],
+  for (let s of ddl()) db.query(s)
+  db.query({
+    t: 'insert',
+    into: 'entity',
+    cols: ['eid'],
+    rows: ACTORS.map((a) => [lit(a)]),
   })
+  let j = log({ rows: (s) => db.query(s) })
   return {
     g: (plugins = []) =>
       graph({

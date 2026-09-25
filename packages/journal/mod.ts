@@ -37,8 +37,8 @@
  * import { storage } from '@yaks/sqlite'
  * import { ddl, journal, log, undo } from '@yaks/journal'
  *
- * db.exec(ddl())
- * let j = log({ rows: (sql, p) => db.query(sql, p) })
+ * for (let s of ddl()) db.query(s)
+ * let j = log({ rows: (s) => db.query(s) })
  * let g = graph({ storage: store, vocab, plugins: [journal(j)] })
  *
  * g.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' },

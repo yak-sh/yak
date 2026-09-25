@@ -8,19 +8,16 @@
 // same way: one server, one log, bound in one place.
 
 import type { Plugin } from '@yaks/graph'
-import type { Driver } from '@yaks/sqlite'
+import type { Driver } from '@yaks/sql'
 import { ddl, journal, type Log, log } from './mod.ts'
 
 /** The log bound to a server: the three tables, read and written over that
  * server's own connection. */
 export let logFor = (host: { sql: Driver }): Log =>
-  log({
-    rows: (sql, params) =>
-      host.sql.query(sql, params as Parameters<typeof host.sql.query>[1]),
-  })
+  log({ rows: (s) => host.sql.query(s) })
 
 /** Record who wrote what, inside the transaction that wrote it. */
 export let rules = (host: { sql: Driver }): Plugin[] => {
-  host.sql.exec(ddl())
+  for (let s of ddl()) host.sql.query(s)
   return [journal(logFor(host))]
 }

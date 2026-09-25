@@ -195,7 +195,7 @@ Deno.test('a content-addressed property is recorded by its address', () => {
   let db = mem()
   let store = storage(db, wiki)
   store.install()
-  db.exec(ddl())
+  for (let s of ddl()) db.query(s)
   db.exec(`create table if not exists body (
     id integer primary key, text text not null unique)`)
   let put = (text: string) =>
@@ -207,8 +207,7 @@ Deno.test('a content-addressed property is recorded by its address', () => {
       )[0] as { id: number }).id,
     )
   let j = log({
-    rows: (sql, params) =>
-      db.query(sql, params as never[]) as Record<string, unknown>[],
+    rows: (s) => db.query(s),
     cas: {
       at: (comp, prop) => comp == 'page' && prop == 'text',
       put,

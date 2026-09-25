@@ -153,10 +153,8 @@ Deno.test('archetype: the journal sees a descriptor creation, once', () => {
   let d = mem()
   let s = storage(d, v)
   s.install()
-  d.exec(ddl())
-  let j = log({
-    rows: (sql, params) => d.query(sql, params as never[]),
-  })
+  for (let s of ddl()) d.query(s)
+  let j = log({ rows: (s) => d.query(s) })
   let g = graph({ storage: s, vocab: v, plugins: [journal(j), archetypes()] })
   g.apply([{ entity: { eid: 'a' }, task: {} }])
   assertEquals(

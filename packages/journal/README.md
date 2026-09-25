@@ -46,10 +46,10 @@ explicit redaction methods can modify stored history.
 
 The plugin skips a transaction with no recorded component changes. Its `journal`
 hook runs inside the graph's transaction. It opens no transaction and uses the
-synchronous `rows(sql, params)` callback supplied to `log()`. Atomic recording
-requires that callback to use the graph's active transaction on the same
-connection. A separate unrelated database connection does not provide that
-guarantee.
+synchronous `rows(statement)` callback supplied to `log()`, which runs a
+@yaks/sql statement and returns its rows. Atomic recording requires that
+callback to use the graph's active transaction on the same connection. A
+separate unrelated database connection does not provide that guarantee.
 
 ## Who a recorded write is attributed to
 
@@ -104,7 +104,7 @@ import { logFor } from '@yaks/journal/rules'
 
 let store = storage(driver, vocab)
 store.install()
-driver.exec(ddl())
+for (let s of ddl()) driver.query(s)
 let j = logFor({ sql: driver })
 let g = graph({ storage: store, vocab, plugins: [journal(j)] })
 
@@ -201,6 +201,7 @@ value encoding helpers, and types including `Log`, `LogOpts`, `Batch`, `Entry`,
 
 ## Compatibility
 
-The journal requires synchronous SQLite-compatible SQL over the graph's entity
-table. It imports no platform-specific storage API, so a suitable
-caller-supplied binding can run it in Deno, Node or a browser.
+The journal builds its statements as @yaks/sql nodes over the graph's entity
+table and needs a synchronous runner for them. It imports no platform-specific
+storage API, so a suitable caller-supplied binding can run it in Deno, Node or a
+browser.

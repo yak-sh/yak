@@ -165,11 +165,8 @@ let logged = (): {
   let db = mem()
   let store = storage(db, vocab)
   store.install()
-  db.exec(ddl())
-  let j = log({
-    rows: (sql, params) =>
-      db.query(sql, params as never[]) as Record<string, unknown>[],
-  })
+  for (let s of ddl()) db.query(s)
+  let j = log({ rows: (s) => db.query(s) })
   let g = graph({ storage: store, vocab, plugins: [journal(j), fx] })
   return { g, fx, j }
 }

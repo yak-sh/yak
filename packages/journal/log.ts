@@ -20,22 +20,44 @@
 // what was applied, inside the caller's own transaction. A refused transaction
 // leaves no trace; a committed one always has a row.
 //
-// The caller supplies one function: `rows(sql, params)`. No platform API, no
-// driver object, and no transaction of its own — the caller owns the
-// transaction.
+// The caller supplies one function: `rows(statement)`, a @yaks/sql node in
+// and its rows out. No platform API, no driver object, and no transaction of
+// its own — the caller owns the transaction.
 
 import type { Bundle, Comp, Eid, Plugin, Tx } from '@yaks/graph'
 import { actorOf, comps, dead } from '@yaks/graph'
+import {
+  and,
+  as,
+  col,
+  type CreateTable,
+  desc,
+  eq,
+  type Expr,
+  fn,
+  gt,
+  type Join,
+  join,
+  left,
+  lit,
+  lt,
+  notNull,
+  or,
+  over,
+  type Row,
+  type Select,
+  select,
+  type Stmt,
+  sub,
+  table,
+  val,
+} from '@yaks/sql'
 import type { Batch, Delta, Entry, Patch } from './batch.ts'
 import { dec, enc } from './value.ts'
 
-/** A parameterized statement, run for its rows: the whole of what the caller
- * has to supply. A write goes through it too — `insert … returning id` returns
- * a row. */
-export type Rows = (
-  sql: string,
-  params: unknown[],
-) => Record<string, unknown>[]
+/** A statement, run for its rows: the whole of what the caller has to supply.
+ * A write goes through it too — `insert … returning id` returns a row. */
+export type Rows = (s: Stmt) => Row[]
 
 /**
  * A property whose text the graph already stores once, under a content address.
@@ -104,39 +126,64 @@ export type LogOpts = {
 // property history, before-value lookup and undo self-contained and stops a
 // value leaking across a removal and a later recreation. `ref` names content-
 // addressed bytes the graph already holds, and then `value` stays null.
-export let ddl = (spine = 'entity'): string => `
-  create table if not exists journal_tx (
-    id    integer primary key,
-    ts    text not null,
-    actor integer references ${spine}(id),
-    via   integer references ${spine}(id),
-    trace text
-  );
-  create table if not exists journal_change (
-    id        integer primary key,
-    tx        integer not null references journal_tx(id),
-    ordinal   integer not null,
-    entity    integer not null references ${spine}(id),
-    component text not null,
-    operation text not null
-  );
-  create table if not exists journal_field (
-    id       integer primary key,
-    change   integer not null references journal_change(id),
-    ordinal  integer not null,
-    field    text not null,
-    present  integer not null,
-    value    text,
-    ref      integer references ${spine}(id)
-  );
-  create index if not exists journal_change_tx on journal_change(tx, ordinal);
-  create index if not exists journal_change_ent
-    on journal_change(entity, component);
-  create index if not exists journal_field_change
-    on journal_field(change, ordinal);
-  create index if not exists journal_field_ref
-    on journal_field(ref) where ref is not null;
-`
+export let ddl = (spine = 'entity'): Stmt[] => {
+  let id = { name: 'id', type: 'integer', pk: true }
+  let to = (t: string, required = false) => ({
+    type: 'integer',
+    notNull: required,
+    ref: { table: t, cols: ['id'] },
+  })
+  let text = (name: string, required = false) => ({
+    name,
+    type: 'text',
+    notNull: required,
+  })
+  let int = (name: string) => ({ name, type: 'integer', notNull: true })
+  let created = (name: string, cols: CreateTable['cols']): CreateTable => ({
+    t: 'create table',
+    name,
+    ifNot: true,
+    cols,
+  })
+  let index = (name: string, on: string, cols: string[], where?: Expr) => ({
+    t: 'create index' as const,
+    name,
+    on,
+    cols: cols.map((c) => col(c)),
+    ifNot: true,
+    where,
+  })
+  return [
+    created('journal_tx', [
+      id,
+      text('ts', true),
+      { name: 'actor', ...to(spine) },
+      { name: 'via', ...to(spine) },
+      text('trace'),
+    ]),
+    created('journal_change', [
+      id,
+      { name: 'tx', ...to('journal_tx', true) },
+      int('ordinal'),
+      { name: 'entity', ...to(spine, true) },
+      text('component', true),
+      text('operation', true),
+    ]),
+    created('journal_field', [
+      id,
+      { name: 'change', ...to('journal_change', true) },
+      int('ordinal'),
+      text('field', true),
+      int('present'),
+      text('value'),
+      { name: 'ref', ...to(spine) },
+    ]),
+    index('journal_change_tx', 'journal_change', ['tx', 'ordinal']),
+    index('journal_change_ent', 'journal_change', ['entity', 'component']),
+    index('journal_field_change', 'journal_field', ['change', 'ordinal']),
+    index('journal_field_ref', 'journal_field', ['ref'], notNull(col('ref'))),
+  ]
+}
 
 // The properties an after-image records: everything but `eid`, which is the
 // row's own identity and already the change's entity.
@@ -149,7 +196,12 @@ export type Log = {
   /** write one transaction down inside the caller's own transaction; returns
    * its seq */
   write: (
-    meta: { at: string; by?: Eid | null; via?: Eid | null; note?: unknown },
+    meta: {
+      at: string
+      by?: Eid | null
+      via?: Eid | null
+      note?: string | null
+    },
     applied: Patch[],
   ) => number
   /** one transaction's operations, whole or cut to one entity, in applied
@@ -186,16 +238,13 @@ export type Log = {
   scrubValue: (field: number, value: string) => void
   /** point one recorded content-addressed value at different content */
   scrubRef: (field: number, ref: number) => void
-  /** the SQL fragment turning an eid into the entity table's integer id, for a
-   * caller that has to reach the same rows */
-  spineId: string
 }
 
 /**
  * Bind the log to a store.
  *
  * ```ts
- * let j = log({ rows: (sql, p) => db.prepare(sql).all(...p) })
+ * let j = log({ rows: (s) => db.query(s) })
  * j.write({ at, by, via, note }, patches) // inside the caller's transaction
  * j.history('T-1')                        // Batch[], oldest first
  * j.since(cursor)                         // Entry[], the feed
@@ -203,44 +252,79 @@ export type Log = {
  */
 export let log = (opts: LogOpts): Log => {
   let rows = opts.rows
-  let table = opts.spine?.table ?? 'entity'
+  let spine = opts.spine?.table ?? 'entity'
   let idCol = opts.spine?.id ?? 'id'
   let eidCol = opts.spine?.eid ?? 'eid'
   let cas = opts.cas
+  let jt = (c: string) => col(c, 'jt')
+  let jc = (c: string) => col(c, 'jc')
+  let jf = (c: string) => col(c, 'jf')
   // An eid bound where a column holds an entity-table id, and the lookup back
   // the other way.
-  let spineId = `(select ${idCol} from ${table} where ${eidCol} = ?)`
-  let eidOf = (col: string) =>
-    `(select ${eidCol} from ${table} where ${idCol} = ${col})`
-  let one = (sql: string, params: unknown[] = []) => rows(sql, params)[0]
+  let idOf = (eid: Eid | null | undefined): Expr =>
+    sub(select({
+      cols: [col(idCol, 's')],
+      from: table(spine, 's'),
+      where: eq(col(eidCol, 's'), val(eid ?? null)),
+    }))
+  let eidOf = (id: Expr): Expr =>
+    sub(select({
+      cols: [col(eidCol, 's')],
+      from: table(spine, 's'),
+      where: eq(col(idCol, 's'), id),
+    }))
+  let one = (s: Stmt) => rows(s)[0]
   let num = (v: unknown) => Number(v ?? 0)
   let str = (v: unknown) => (v == null ? null : String(v))
+  // The joins from a field to its change, and from a change to its
+  // transaction.
+  let ofChange = join(table('journal_change', 'jc'), eq(jc('id'), jf('change')))
+  let ofTx = join(table('journal_tx', 'jt'), eq(jt('id'), jc('tx')))
+  // A property recorded by address reads its text back through the content
+  // it names.
+  let content: Join[] = cas
+    ? [left(table(cas.table, 'c'), eq(col(cas.key, 'c'), jf('ref')))]
+    : []
+  let resolved = cas ? col(cas.value, 'c') : lit(null)
 
-  // Every change of a transaction, optionally cut to one entity, in applied
-  // order. A change whose entity has no row in the entity table is not read —
-  // once that row is purged there is no eid left to report.
-  let changeRows = `select jc.id as id, e.${eidCol} as eid,
-      jc.component as component, jc.operation as operation
-    from journal_change jc join ${table} e on e.${idCol} = jc.entity`
+  // Every change matching `where`, in `order`. A change whose entity has no
+  // row in the entity table is not read — once that row is purged there is no
+  // eid left to report.
+  let changes = (where: Expr, order: Expr[]): Select =>
+    select({
+      cols: [
+        as(jc('id'), 'id'),
+        as(col(eidCol, 'e'), 'eid'),
+        as(jc('component'), 'component'),
+        as(jc('operation'), 'operation'),
+      ],
+      from: table('journal_change', 'jc'),
+      joins: [join(table(spine, 'e'), eq(col(idCol, 'e'), jc('entity')))],
+      where,
+      order,
+    })
 
-  // A property recorded by address reads its text back through the content it
-  // names.
-  let fieldsSql = cas
-    ? `select jf.field as field, jf.value as value, c.${cas.value} as text
-       from journal_field jf
-       left join ${cas.table} c on c.${cas.key} = jf.ref
-       where jf.change = ? and jf.present = 1 order by jf.ordinal`
-    : `select jf.field as field, jf.value as value, null as text
-       from journal_field jf
-       where jf.change = ? and jf.present = 1 order by jf.ordinal`
+  // One change's present after-images, in the order they were written.
+  let fieldsOf = (change: unknown): Select =>
+    select({
+      cols: [
+        as(jf('field'), 'field'),
+        as(jf('value'), 'value'),
+        as(resolved, 'text'),
+      ],
+      from: table('journal_field', 'jf'),
+      joins: content,
+      where: and(eq(jf('change'), val(num(change))), eq(jf('present'), lit(1))),
+      order: [jf('ordinal')],
+    })
 
-  let rebuild = (found: Record<string, unknown>[]): Patch[] =>
+  let rebuild = (found: Row[]): Patch[] =>
     found.map((ch) => {
       let target = String(ch.eid)
       let comp = String(ch.component)
       if (ch.operation == 'remove') return { target, comp, value: null }
       let value: Comp = {}
-      for (let f of rows(fieldsSql, [ch.id])) {
+      for (let f of rows(fieldsOf(ch.id))) {
         value[String(f.field)] = f.text ?? dec(f.value)
       }
       return { target, comp, value }
@@ -249,17 +333,14 @@ export let log = (opts: LogOpts): Log => {
   /** One transaction's operations, whole or cut to one entity, in applied
    * order. */
   let patches = (seq: number, target?: Eid): Patch[] =>
-    rebuild(
+    rebuild(rows(changes(
       target == null
-        ? rows(`${changeRows} where jc.tx = ? order by jc.ordinal`, [seq])
-        : rows(
-          `${changeRows} where jc.tx = ? and e.${eidCol} = ?
-           order by jc.ordinal`,
-          [seq, target],
-        ),
-    )
+        ? eq(jc('tx'), val(seq))
+        : and(eq(jc('tx'), val(seq)), eq(col(eidCol, 'e'), val(target))),
+      [jc('ordinal')],
+    )))
 
-  let entryOf = (r: Record<string, unknown>, target?: Eid): Entry => ({
+  let entryOf = (r: Row, target?: Eid): Entry => ({
     seq: num(r.id),
     at: String(r.ts),
     by: str(r.actor),
@@ -275,46 +356,96 @@ export let log = (opts: LogOpts): Log => {
    * of what it wrote.
    */
   let write = (
-    meta: { at: string; by?: Eid | null; via?: Eid | null; note?: unknown },
+    meta: {
+      at: string
+      by?: Eid | null
+      via?: Eid | null
+      note?: string | null
+    },
     applied: Patch[],
   ): number => {
     let seq = num(
-      one(
-        `insert into journal_tx (ts, actor, via, trace)
-         values (?, ${spineId}, ${spineId}, ?) returning id`,
-        [meta.at, meta.by ?? null, meta.via ?? null, meta.note ?? null],
-      )?.id,
+      one({
+        t: 'insert',
+        into: 'journal_tx',
+        cols: ['ts', 'actor', 'via', 'trace'],
+        rows: [[
+          val(meta.at),
+          idOf(meta.by),
+          idOf(meta.via),
+          val(meta.note ?? null),
+        ]],
+        returning: [col('id')],
+      })?.id,
     )
     // The properties a component still holds, newest after-image per property:
     // the field id is monotonic, so the highest-id row per property is the
     // latest in total order — and it reads this transaction's earlier upserts,
     // which are uncommitted but visible on the same connection.
-    let held = `select field from (
-        select jf.field as field, jf.present as present,
-               row_number() over (
-                 partition by jf.field order by jf.id desc) as rn
-        from journal_field jf join journal_change jc on jc.id = jf.change
-        where jc.entity = ${spineId} and jc.component = ?
-      ) where rn = 1 and present = 1`
+    let held = (target: Eid, comp: string): Select =>
+      select({
+        cols: [col('field')],
+        from: {
+          t: 'from',
+          q: select({
+            cols: [
+              as(jf('field'), 'field'),
+              as(jf('present'), 'present'),
+              as(
+                over(fn('row_number'), [jf('field')], [desc(jf('id'))]),
+                'rn',
+              ),
+            ],
+            from: table('journal_field', 'jf'),
+            joins: [ofChange],
+            where: and(
+              eq(jc('entity'), idOf(target)),
+              eq(jc('component'), val(comp)),
+            ),
+          }),
+        },
+        where: and(eq(col('rn'), lit(1)), eq(col('present'), lit(1))),
+      })
     applied.forEach(({ target, comp, value }, ordinal) => {
       let change = num(
-        one(
-          `insert into journal_change (tx, ordinal, entity, component,
-             operation) values (?, ?, ${spineId}, ?, ?) returning id`,
-          [seq, ordinal, target, comp, value == null ? 'remove' : 'upsert'],
-        )?.id,
+        one({
+          t: 'insert',
+          into: 'journal_change',
+          cols: ['tx', 'ordinal', 'entity', 'component', 'operation'],
+          rows: [[
+            val(seq),
+            val(ordinal),
+            idOf(target),
+            val(comp),
+            val(value == null ? 'remove' : 'upsert'),
+          ]],
+          returning: [col('id')],
+        })?.id,
       )
-      let field = (i: number, name: string, v: string | null, ref: unknown) =>
-        rows(
-          `insert into journal_field (change, ordinal, field, present, value,
-             ref) values (?, ?, ?, ?, ?, ?)`,
-          [change, i, name, v == null && ref == null ? 0 : 1, v, ref ?? null],
-        )
+      let field = (
+        i: number,
+        name: string,
+        v: string | null,
+        ref: number | null,
+      ) =>
+        rows({
+          t: 'insert',
+          into: 'journal_field',
+          cols: ['change', 'ordinal', 'field', 'present', 'value', 'ref'],
+          rows: [[
+            val(change),
+            val(i),
+            val(name),
+            val(v == null && ref == null ? 0 : 1),
+            val(v),
+            val(ref),
+          ]],
+        })
       if (value == null) {
         // A removal tombstones every property the component still had, so
         // property history stays self-contained across a removal and a later
         // recreation.
-        rows(held, [target, comp]).forEach((f, i) =>
+        rows(held(target, comp)).forEach((f, i) =>
           field(i, String(f.field), null, null)
         )
         return
@@ -340,11 +471,10 @@ export let log = (opts: LogOpts): Log => {
   let before = (target: Eid, seq: number): Record<string, Comp> => {
     let state: Record<string, Comp> = {}
     for (
-      let p of rebuild(rows(
-        `${changeRows} where jc.entity = ${spineId} and jc.tx < ?
-         order by jc.tx, jc.ordinal`,
-        [target, seq],
-      ))
+      let p of rebuild(rows(changes(
+        and(eq(jc('entity'), idOf(target)), lt(jc('tx'), val(seq))),
+        [jc('tx'), jc('ordinal')],
+      )))
     ) {
       // A deletion partway through cannot precede a live target, but resetting
       // keeps the reconstruction correct if one turns up.
@@ -430,37 +560,59 @@ export let log = (opts: LogOpts): Log => {
     deltas: deltasOf(e),
   })
 
-  let txRows = `select id, ts, ${eidOf('actor')} as actor,
-      ${eidOf('via')} as via, trace from journal_tx`
+  // Transactions: their seq, when, who and through what, and the note.
+  let txs = (s: Omit<Select, 't' | 'cols' | 'from'>): Select =>
+    select({
+      cols: [
+        as(jt('id'), 'id'),
+        as(jt('ts'), 'ts'),
+        as(eidOf(jt('actor')), 'actor'),
+        as(eidOf(jt('via')), 'via'),
+        as(jt('trace'), 'trace'),
+      ],
+      from: table('journal_tx', 'jt'),
+      ...s,
+    })
 
   /** Every transaction that touched one entity, newest first, cut to that
    * entity. */
   let entries = (target: Eid, n = 50): Entry[] =>
-    rows(
-      `select jc.tx as id, jt.ts as ts, ${eidOf('jt.actor')} as actor,
-              ${eidOf('jt.via')} as via, jt.trace as trace
-       from journal_change jc join journal_tx jt on jt.id = jc.tx
-       where jc.entity = ${spineId}
-       group by jc.tx order by jc.tx desc limit ?`,
-      [target, n],
-    ).map((r) => entryOf(r, target))
+    rows(select({
+      cols: [
+        as(jc('tx'), 'id'),
+        as(jt('ts'), 'ts'),
+        as(eidOf(jt('actor')), 'actor'),
+        as(eidOf(jt('via')), 'via'),
+        as(jt('trace'), 'trace'),
+      ],
+      from: table('journal_change', 'jc'),
+      joins: [ofTx],
+      where: eq(jc('entity'), idOf(target)),
+      group: [jc('tx')],
+      order: [desc(jc('tx'))],
+      limit: val(n),
+    })).map((r) => entryOf(r, target))
 
   /** Every transaction one instrument wrote, newest first, whole — a ledger
    * wants everything a transaction did, not one entity's part of it. */
   let by = (via: Eid, n = 500): Entry[] =>
-    rows(`${txRows} where via = ${spineId} order by id desc limit ?`, [via, n])
-      .map((r) => entryOf(r))
+    rows(txs({
+      where: eq(jt('via'), idOf(via)),
+      order: [desc(jt('id'))],
+      limit: val(n),
+    })).map((r) => entryOf(r))
 
   /** The transactions after a cursor, oldest first — the feed. The before-side
    * is not derived here: a feed replays what was written, and deriving it would
    * turn one range read into a walk of the log per entity. */
   let since = (cursor = 0): Entry[] =>
-    rows(`${txRows} where id > ? order by id`, [cursor]).map((r) => entryOf(r))
+    rows(txs({ where: gt(jt('id'), val(cursor)), order: [jt('id')] }))
+      .map((r) => entryOf(r))
 
   /** One transaction, whole, as a Batch — both sides of every movement, which
    * is what `undone()` reverses and `applied()` replays. */
   let at = (seq: number): Batch | undefined => {
-    let found = one(`${txRows} where id = ?`, [seq])
+    let found = one(txs({ where: eq(jt('id'), val(seq)) }))
     if (!found) return undefined
     let e = entryOf(found)
     return e.patches.length ? batchOf(e) : undefined
@@ -475,10 +627,11 @@ export let log = (opts: LogOpts): Log => {
    * seq reverses. */
   let latest = (target: Eid): number =>
     num(
-      one(
-        `select max(tx) as id from journal_change where entity = ${spineId}`,
-        [target],
-      )?.id,
+      one(select({
+        cols: [as(fn('max', jc('tx')), 'id')],
+        from: table('journal_change', 'jc'),
+        where: eq(jc('entity'), idOf(target)),
+      }))?.id,
     )
 
   /**
@@ -491,31 +644,49 @@ export let log = (opts: LogOpts): Log => {
     comp: string,
     prop: string,
   ): { target: Eid; value: unknown; seq: number }[] =>
-    rows(
-      `select ${eidOf('jc.entity')} as target, jf.value as value, jc.tx as seq
-         from journal_field jf join journal_change jc on jc.id = jf.change
-        where jc.component = ? and jf.field = ? and jf.present = 1
-          and jc.operation = 'upsert'
-        order by jc.tx, jf.id`,
-      [comp, prop],
-    ).flatMap((r) =>
+    rows(select({
+      cols: [
+        as(eidOf(jc('entity')), 'target'),
+        as(jf('value'), 'value'),
+        as(jc('tx'), 'seq'),
+      ],
+      from: table('journal_field', 'jf'),
+      joins: [ofChange],
+      where: and(
+        eq(jc('component'), val(comp)),
+        eq(jf('field'), val(prop)),
+        eq(jf('present'), lit(1)),
+        eq(jc('operation'), lit('upsert')),
+      ),
+      order: [jc('tx'), jf('id')],
+    })).flatMap((r) =>
       r.target == null
         ? []
         : [{ target: String(r.target), value: dec(r.value), seq: num(r.seq) }]
     )
 
   /** The highest seq the log holds, or 0 — the cursor a reader starts from. */
-  let tip = (): number => num(one(`select max(id) as m from journal_tx`)?.m)
+  let tip = (): number =>
+    num(
+      one(
+        select({
+          cols: [as(fn('max', col('id')), 'm')],
+          from: table('journal_tx'),
+        }),
+      )
+        ?.m,
+    )
 
   /** Has anything touched this entity since `seq`? The coarse "something
    * changed" question an undo asks where there is no property to put a
    * precondition on. */
   let touchedSince = (target: Eid, seq: number): boolean =>
-    !!one(
-      `select 1 from journal_change where entity = ${spineId} and tx > ?
-       limit 1`,
-      [target, seq],
-    )
+    !!one(select({
+      cols: [lit(1)],
+      from: table('journal_change', 'jc'),
+      where: and(eq(jc('entity'), idOf(target)), gt(jc('tx'), val(seq))),
+      limit: lit(1),
+    }))
 
   /**
    * Every recorded value that contains this text, oldest first — the scan a
@@ -526,22 +697,29 @@ export let log = (opts: LogOpts): Log => {
    */
   let seek = (text: string): Hit[] => {
     let encoded = JSON.stringify(text).slice(1, -1)
-    return rows(
-      `select jf.id as id, jf.value as value, jf.field as field,
-              ${cas ? 'c.' + cas.value : 'null'} as text,
-              ${eidOf('jc.entity')} as target, jc.component as comp,
-              ${eidOf('jf.ref')} as content, jt.id as seq, jt.ts as at
-         from journal_field jf
-         join journal_change jc on jc.id = jf.change
-         join journal_tx jt on jt.id = jc.tx
-         ${cas ? `left join ${cas.table} c on c.${cas.key} = jf.ref` : ''}
-        where jf.present = 1
-          and (instr(jf.value, ?) > 0${
-        cas ? ` or instr(c.${cas.value}, ?) > 0` : ''
-      })
-        order by jf.id`,
-      cas ? [encoded, text] : [encoded],
-    ).map((r) => ({
+    let within = (e: Expr, s: string) => gt(fn('instr', e, val(s)), lit(0))
+    return rows(select({
+      cols: [
+        as(jf('id'), 'id'),
+        as(jf('value'), 'value'),
+        as(jf('field'), 'field'),
+        as(resolved, 'text'),
+        as(eidOf(jc('entity')), 'target'),
+        as(jc('component'), 'comp'),
+        as(eidOf(jf('ref')), 'content'),
+        as(jt('id'), 'seq'),
+        as(jt('ts'), 'at'),
+      ],
+      from: table('journal_field', 'jf'),
+      joins: [ofChange, ofTx, ...content],
+      where: and(
+        eq(jf('present'), lit(1)),
+        cas
+          ? or(within(jf('value'), encoded), within(col(cas.value, 'c'), text))
+          : within(jf('value'), encoded),
+      ),
+      order: [jf('id')],
+    })).map((r) => ({
       field: num(r.id),
       target: str(r.target),
       comp: String(r.comp),
@@ -557,22 +735,32 @@ export let log = (opts: LogOpts): Log => {
    * the graph row that first wrote them, and this reports whether the log is
    * one of the things still holding a reference. */
   let holds = (ref: number): boolean =>
-    !!one(`select 1 from journal_field where ref = ? limit 1`, [ref])
+    !!one(select({
+      cols: [lit(1)],
+      from: table('journal_field'),
+      where: eq(col('ref'), val(ref)),
+      limit: lit(1),
+    }))
 
   // Rewrite one recorded value in place — the one write here that is not an
   // append. A value deliberately forgotten has to leave the log too, or it
   // survives in the very thing that keeps history; the row itself stays, so the
   // chain of changes stays navigable and reads back as whatever replaced it.
 
+  let scrub = (field: number, set: Record<string, Expr>) =>
+    void rows({
+      t: 'update',
+      table: 'journal_field',
+      set,
+      where: eq(col('id'), val(field)),
+    })
+
   /** Scrub an inline value, JSON-encoded as the log stores it. */
-  let scrubValue = (field: number, value: string) => {
-    rows(`update journal_field set value = ? where id = ?`, [value, field])
-  }
+  let scrubValue = (field: number, value: string) =>
+    scrub(field, { value: val(value) })
 
   /** Point a content-addressed value at clean content instead. */
-  let scrubRef = (field: number, ref: number) => {
-    rows(`update journal_field set ref = ? where id = ?`, [ref, field])
-  }
+  let scrubRef = (field: number, ref: number) => scrub(field, { ref: val(ref) })
 
   return {
     write,
@@ -591,9 +779,6 @@ export let log = (opts: LogOpts): Log => {
     seek,
     scrubValue,
     scrubRef,
-    /** the SQL fragment turning an eid into the entity table's integer id,
-     * for a caller that has to reach the same rows */
-    spineId,
   }
 }
 
