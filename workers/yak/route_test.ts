@@ -233,7 +233,9 @@ Deno.test('sameOrigin: the page that asked, at the host it asked', () => {
     // A dev host talks http on a port, and neither is what isolates a space.
     ['jeff.yaks.app', 'http://jeff.yaks.app:8787', true],
     ['jeff.yaks.app', 'https://evil.yaks.app', false],
-    ['jeff.yaks.app', 'https://yaks.app', false],
+    // The platform's own pages, the dashboard's drop zone among them.
+    ['jeff.yaks.app', 'https://yaks.app', true],
+    ['jeff.yaks.app', 'https://www.yaks.app', false],
     ['jeff.yaks.app', 'https://jeff.yaks.app.example.com', false],
     ['jeff.yaks.app', 'https://example.com', false],
     // A sandboxed frame's opaque origin is a stranger, not an absence.

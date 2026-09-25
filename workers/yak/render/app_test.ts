@@ -7,7 +7,7 @@ import { parseHTML } from 'linkedom'
 import { entity } from '@yaks/preact'
 import { resolve } from '@yaks/render'
 import { mount } from '../../../packages/preact/harness.ts'
-import { spaceIndex } from '../pages.ts'
+import { desk } from '../pages.ts'
 import { app } from './app.ts'
 import { registry, tile, vocab } from './mod.ts'
 
@@ -39,9 +39,8 @@ Deno.test('app Tile resolves by component and keeps the library card DOM', async
     ),
     undefined,
   )
-  let html = await spaceIndex({
+  let html = await desk({
     space: 'ada',
-    title: 'Ada',
     apps: [{
       eid: 'app-1',
       slug: 'recipes',
@@ -50,15 +49,11 @@ Deno.test('app Tile resolves by component and keeps the library card DOM', async
       access: 'private',
       gallery: 'gallery: waiting',
     }],
-    hidden: 0,
-    role: 'owner',
-    person: true,
-    signIn: '/login',
     view: 'apps',
   }).text()
   let expected = card(
-    `<a class="Apps_Item" href="/recipes/" target="_blank" rel="noopener">
-<img src="/recipes/icon.png" width="44" height="44" alt="">
+    `<a class="Apps_Item" href="https://ada.yaks.app/recipes/" target="_blank" rel="noopener">
+<img src="https://ada.yaks.app/recipes/icon.png" width="44" height="44" alt="">
 <strong>Recipes</strong><span class="Apps_Path">/recipes</span>
 <span class="Apps_Tags"><span class="Apps_Tag">Homepage</span><span class="Apps_Tag">private</span><span class="Apps_Tag">gallery: waiting</span></span></a>`,
   )
@@ -69,6 +64,7 @@ Deno.test('app Tile resolves by component and keeps the library card DOM', async
     eid: 'app-1',
     view: 'List.Tile',
     gallery: 'gallery: waiting',
+    at: 'https://ada.yaks.app',
   }))
   try {
     assertEquals(

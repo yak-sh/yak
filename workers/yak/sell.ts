@@ -50,8 +50,8 @@ import {
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { managePath } from './route.ts'
-import { apex, type Host, url as hostUrl } from './host.ts'
+import { manageAt } from './route.ts'
+import { type Host, url as hostUrl } from './host.ts'
 import { whoIs } from './session.ts'
 import { refuse } from './tool.ts'
 import { caught } from './sentry.ts'
@@ -191,7 +191,7 @@ export let account = (space: Space, email: string) => ({
  * currently — Stripe returns the browser the moment the form is submitted,
  * which is before `account.updated` has necessarily arrived. */
 export let backTo = (space: Space, env: Host = {}) =>
-  `https://${space.slug}.${apex(env)}${managePath('selling')}`
+  manageAt(space.slug, 'selling', env)
 
 /** The onboarding link, as the form fields of `POST /v1/account_links`.
  *

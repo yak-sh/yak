@@ -39,7 +39,7 @@
 //   yaks.app (and any dev host)
 //     /                       the home page, from ./public
 //     /login, /login/code     identity.ts: the email-code sign-in
-//     /manage                 identity.ts: the owner's app library
+//     /manage, /manage/*      apps.ts: the dashboard, one space's at a time
 //     /invite                 identity.ts: an invitation's one click (invite.ts)
 //     /connect                identity.ts: the connector page, signed in, and
 //                             the address a person's apps live at
@@ -57,7 +57,9 @@
 //     anything else           ./public, else a soft 404
 //   <space>.yaks.app          apps.ts, the plugin root doors ahead of it, and
 //                             one door of its own:
-//     /_yaks, /_yaks/*        apps.ts: management, beside any custom homepage
+//     /_yaks/hooks/*          connections.ts: a service's webhooks
+//     /_yaks, /_yaks/*        apps.ts: the dashboard's old addresses, moved
+//                             to the apex
 //     POST /deploy            drop.ts: a zip of files, or one index.html,
 //                             dropped on the space's page — an app made or
 //                             updated, by the member who dropped it
@@ -111,6 +113,7 @@ import {
   foreign,
   guarded,
   hostOf,
+  MANAGE,
   MOUNT,
   paged,
   platform,
@@ -238,9 +241,13 @@ let serve = async (req: Request, env: Env, r: Route) => {
       },
     })
   }
+  // The dashboard (apps.ts `manage`): the part that draws a space's pages.
+  if (path == MANAGE || path.startsWith(`${MANAGE}/`)) {
+    return bound(env.APPS, apps.fetch, env).fetch(req)
+  }
   if (
     path == '/login' || path.startsWith('/login/') || path == '/connect' ||
-    path == '/manage' || path == '/invite' ||
+    path == '/invite' ||
     // Closing a space (identity.ts `closing`, T-33166): a signed-in page and
     // its form, so it belongs with the rest of the cookie's surface rather
     // than at the connector door an agent speaks to.
@@ -611,7 +618,7 @@ let router = {
         anyone = true
       } else if (
         guarded(req.method, asked) &&
-        !sameOrigin(host, req.headers.get('origin'))
+        !sameOrigin(host, req.headers.get('origin'), env)
       ) {
         if (!shared(req.method, asked)) return stranger()
         req = uncredentialed(req)

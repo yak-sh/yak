@@ -14,7 +14,7 @@
 // store, no directory — so it is the same rule in a test, in `app_set`, and in
 // the router.
 
-import { MANAGE } from './route.ts'
+import { OURS } from './route.ts'
 import { refuse } from './tool.ts'
 
 // Everything between the wildcards, as itself: a glob's own `.` is a dot and
@@ -44,8 +44,8 @@ export let PLATFORM_PATHS = [
   '/mcp',
   '/api/*',
   '/*/api/*',
-  MANAGE,
-  `${MANAGE}/*`,
+  OURS,
+  `${OURS}/*`,
 ]
 
 // A glob's witness: the pattern with its wildcards filled by a character no

@@ -30,7 +30,7 @@ import {
 } from './probe.ts'
 import { COOKIE, sign } from './lib/token.ts'
 import { SENDS } from './signin.ts'
-import { MANAGE, managePath } from './route.ts'
+import { managePath } from './route.ts'
 import type { Agent } from './connected.ts'
 
 // Styling and attribute order do not change the sign-in form's contract.
@@ -70,27 +70,18 @@ slow(
     let k = await kernel()
     try {
       let owner = await signIn(k)
-      let host = `${owner.name}.yaks.app`
       let at = (
         host: string,
         path: string,
         headers: Record<string, string> = {},
       ) => k.at(host, path, { headers })
-      let snapshots = async () => {
-        let found: Agent[][] = []
-        for (
-          let [hostname, path] of [
-            ['yaks.app', '/oauth/agents'],
-            [host, `${MANAGE}/agents`],
-          ]
-        ) {
-          let res = await at(hostname, path, { cookie: owner.cookie })
-          assertEquals(res.status, 200)
-          assertEquals(res.headers.get('cache-control'), 'private, no-store')
-          found.push((await res.json()).agents)
-        }
-        assertEquals(found[0], found[1])
-        return found[0]
+      let snapshots = async (): Promise<Agent[]> => {
+        let res = await at('yaks.app', '/oauth/agents', {
+          cookie: owner.cookie,
+        })
+        assertEquals(res.status, 200)
+        assertEquals(res.headers.get('cache-control'), 'private, no-store')
+        return (await res.json()).agents
       }
       assertEquals(await snapshots(), [])
 
@@ -167,26 +158,13 @@ slow(
         {},
         { authorization: `Bearer ${chatgpt.access_token}` },
       ]
-      for (
-        let [hostname, path] of [
-          ['yaks.app', '/oauth/agents'],
-          [host, `${MANAGE}/agents`],
-        ]
-      ) {
-        for (let headers of credentials) {
-          let res = await at(hostname, path, headers)
-          assertEquals(res.status, 401)
-          assertEquals(res.headers.get('cache-control'), 'private, no-store')
-          assertEquals((await res.json()).agents, undefined)
-        }
+      for (let headers of credentials) {
+        let res = await at('yaks.app', '/oauth/agents', headers)
+        assertEquals(res.status, 401)
+        assertEquals(res.headers.get('cache-control'), 'private, no-store')
+        assertEquals((await res.json()).agents, undefined)
       }
       let other = await signIn(k)
-      let denied = await at(host, `${MANAGE}/agents`, {
-        cookie: other.cookie,
-      })
-      assertEquals(denied.status, 403)
-      assertEquals(denied.headers.get('cache-control'), 'private, no-store')
-      assertEquals((await denied.json()).agents, undefined)
       let own = await at('yaks.app', '/oauth/agents', {
         cookie: other.cookie,
       })
@@ -270,7 +248,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     // the platform, where attaching an assistant is one link away (T-34233).
     assertEquals(
       inn.headers.get('location'),
-      `https://${email.split('@')[0]}.yaks.app${MANAGE}`,
+      'https://yaks.app/manage',
     )
     let set = inn.headers.get('set-cookie') ?? ''
     assertMatch(set, /^yak_session=/)
@@ -346,7 +324,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
       assertEquals(r.status, 303)
       return {
         to: r.headers.get('location'),
-        home: `https://${addr.split('@')[0]}.yaks.app${MANAGE}`,
+        home: 'https://yaks.app/manage',
       }
     }
     let notes = 'https://someone.yaks.app/notes/'
@@ -489,7 +467,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     )
 
     let theirPage = () =>
-      k.at(`${email.split('@')[0]}.yaks.app`, managePath('connect'), {
+      k.at('yaks.app', managePath('connect'), {
         headers: { cookie },
       }).then((r) => r.text())
     assertStringIncludes(
@@ -645,7 +623,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertEquals(over.status, 303)
     assertEquals(
       over.headers.get('location'),
-      `https://${email.split('@')[0]}.yaks.app${MANAGE}`,
+      'https://yaks.app/manage',
     )
     await over.body?.cancel()
 
@@ -819,8 +797,8 @@ slow('/login never draws the box for a browser already signed in', async () => {
       return r.headers.get('location')
     }
     let aimed = (back: string) => `/login?return=${encodeURIComponent(back)}`
-    let { cookie, email } = await signIn(k)
-    let home = `https://${email.split('@')[0]}.yaks.app${MANAGE}`
+    let { cookie } = await signIn(k)
+    let home = 'https://yaks.app/manage'
 
     // Aimed nowhere: their own space, which is where a fresh sign-in with no
     // return goes too.
@@ -895,7 +873,7 @@ slow(
       assertEquals(inn.status, 303)
       assertEquals(
         inn.headers.get('location'),
-        `https://${slug}.yaks.app${MANAGE}`,
+        'https://yaks.app/manage',
       )
       let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
 
@@ -936,8 +914,12 @@ slow(
 slow('account settings save the name and address', async () => {
   let k = await kernel()
   let uniq = () => crypto.randomUUID().slice(0, 8)
-  let post = (host: string, fields: Record<string, string>, cookie?: string) =>
-    k.at(host, managePath('settings'), {
+  let post = (
+    space: string,
+    fields: Record<string, string>,
+    cookie?: string,
+  ) =>
+    k.at('yaks.app', managePath('settings', space), {
       method: 'POST',
       redirect: 'manual',
       headers: {
@@ -953,7 +935,7 @@ slow('account settings save the name and address', async () => {
 
     // The block, as its owner reads it: their address and the name signing in
     // derived for them, both filled in and both theirs to change.
-    let page = await (await k.at(`${slug}.yaks.app`, managePath('settings'), {
+    let page = await (await k.at('yaks.app', managePath('settings'), {
       headers: { cookie },
     })).text()
     assertMatch(page, new RegExp(`name="space"[^>]*value="${slug}"`))
@@ -966,19 +948,19 @@ slow('account settings save the name and address', async () => {
 
     // Naming themselves: written on their own person row, so every byline an
     // app writes says it (T-32654).
-    let named = await post(`${slug}.yaks.app`, { name: 'Dana' }, cookie)
+    let named = await post(slug, { name: 'Dana' }, cookie)
     assertEquals(named.status, 303)
     await named.body?.cancel()
     assertEquals(
       named.headers.get('location'),
-      `https://${slug}.yaks.app${managePath('settings')}?saved=1`,
+      `https://yaks.app${managePath('settings', slug)}&saved=1`,
     )
     let [them] = await dir.query(`.eid=${person}&?doc`)
     assertEquals((them.doc as { title: string }).title, 'Dana')
 
     // Cleared, the front of their address comes back: a person is always
     // called something, or a member row reads back as an eid (T-32733).
-    await (await post(`${slug}.yaks.app`, { name: '  ' }, cookie)).body
+    await (await post(slug, { name: '  ' }, cookie)).body
       ?.cancel()
     let [quiet] = await dir.query(`.eid=${person}&?doc`)
     assertEquals((quiet.doc as { title: string }).title, slug)
@@ -987,7 +969,7 @@ slow('account settings save the name and address', async () => {
     // comes back around it — nothing has moved.
     let theirs = await signIn(k, `rex-${uniq()}@yaks.app`)
     let taken = await post(
-      `${slug}.yaks.app`,
+      slug,
       { space: theirs.email.split('@')[0] },
       cookie,
     )
@@ -995,23 +977,19 @@ slow('account settings save the name and address', async () => {
     assertMatch(await taken.text(), /is taken/)
 
     // A badly shaped one says what an address is.
-    let bad = await post(
-      `${slug}.yaks.app`,
-      { space: 'Not An Address' },
-      cookie,
-    )
+    let bad = await post(slug, { space: 'Not An Address' }, cookie)
     assertEquals(bad.status, 400)
     assertMatch(await bad.text(), /lowercase letters, numbers and dashes/)
 
-    // And a free one moves the space — which is to say it moves this page, so
-    // the answer is the address it now lives at.
+    // And a free one moves the space — and the page that named it by its old
+    // address names it by the new one.
     let want = `dana-${uniq()}`
-    let moved = await post(`${slug}.yaks.app`, { space: want }, cookie)
+    let moved = await post(slug, { space: want }, cookie)
     assertEquals(moved.status, 303)
     await moved.body?.cancel()
     assertEquals(
       moved.headers.get('location'),
-      `https://${want}.yaks.app${managePath('settings')}?saved=1`,
+      `https://yaks.app${managePath('settings', want)}&saved=1`,
     )
     assert(
       (await dir.query(`.space.slug=${want}`)).length,
@@ -1019,18 +997,27 @@ slow('account settings save the name and address', async () => {
     )
     assertEquals(await dir.query(`.space.slug=${slug}`), [])
 
-    // Nobody but the owner may write it: a stranger's POST is told what a
-    // wrong address is told, and nothing moves.
-    let no = await post(`${want}.yaks.app`, { space: `nope-${uniq()}` })
-    assertEquals(no.status, 404)
+    // Nobody but the owner may write it: a stranger's POST is sent to sign
+    // in, somebody else's is told what a wrong address is told, and nothing
+    // moves.
+    let no = await post(want, { space: `nope-${uniq()}` })
+    assertEquals(no.status, 303)
+    assertStringIncludes(no.headers.get('location')!, '/login')
     await no.body?.cancel()
+    let nobody = await post(
+      want,
+      { space: `nope-${uniq()}` },
+      (await signIn(k, `rex-${uniq()}@yaks.app`)).cookie,
+    )
+    assertEquals(nobody.status, 404)
+    await nobody.body?.cancel()
     assert((await dir.query(`.space.slug=${want}`)).length, 'still theirs')
 
-    // And nor may their own cookie, carried by somebody else's page. Sibling
-    // spaces are same-site, so `SameSite=Lax` lets the session ride a form one
-    // space's page posts at another's — the origin check is what does not
-    // (route.ts `guarded`).
-    let forged = await k.at(`${want}.yaks.app`, managePath('settings'), {
+    // And nor may their own cookie, carried by somebody else's page. Every
+    // space is same-site with the apex, so `SameSite=Lax` lets the session
+    // ride a form a space's page posts at the dashboard — the origin check is
+    // what does not (route.ts `guarded`).
+    let forged = await k.at('yaks.app', managePath('settings', want), {
       method: 'POST',
       redirect: 'manual',
       headers: {
@@ -1091,7 +1078,7 @@ slow('the connector page, and the address chosen on it', async () => {
     assertEquals(inn.status, 303)
     assertEquals(
       inn.headers.get('location'),
-      `https://${email.split('@')[0]}.yaks.app${MANAGE}`,
+      'https://yaks.app/manage',
     )
     await inn.body?.cancel()
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
@@ -1353,7 +1340,7 @@ slow('a link signs a person in, once or until it is revoked', async () => {
     await inn.body?.cancel()
     assertEquals(
       inn.headers.get('location'),
-      `https://${email.split('@')[0]}.yaks.app${MANAGE}`,
+      'https://yaks.app/manage',
     )
     assertEquals(inn.headers.get('referrer-policy'), 'no-referrer')
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]

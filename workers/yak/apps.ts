@@ -25,7 +25,7 @@
 // per app: a page in a loop is a bug to see once, not a write flood. What the
 // door refused on purpose never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
-import { apex } from './host.ts'
+import { apex, spaceHost, url as hostUrl } from './host.ts'
 import { r2Objects } from './lib/objects.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
 import { at as cachedAt } from './cache.ts'
@@ -63,6 +63,7 @@ import { Pending } from './writes.ts'
 import { batched, lined, receipt } from './wire.ts'
 import {
   binned,
+  desk as deskPage,
   nothingHere,
   spaceBinned,
   spaceIndex,
@@ -72,10 +73,11 @@ import { daysLeft, untrash, untrashSpace } from './erase.ts'
 import {
   hostOf,
   MANAGE,
-  managePath,
+  manageAt,
   type ManageView,
   manageView,
   MOUNT,
+  OURS,
   route,
   signInAt,
 } from './route.ts'
@@ -1271,49 +1273,37 @@ let returned = (q: URLSearchParams) =>
     ? { say: "The sign-in didn't finish. Try connecting again.", no: true }
     : null
 
-// The public app list and the owner's account share the same visibility
-// rules. Account sections stay independent of whichever app serves `/`.
+// A space's apps, the ones in the trash left in (only its owner is shown
+// those), and the ones whoever is asking may open.
+let shelf = async (
+  dir: ReturnType<typeof directory>,
+  space: Space,
+  who: Who,
+) => {
+  let here = (await dir.apps(space)).filter((a) => !kernels(space, a.slug))
+  let all = here.filter((a) => !a.trashed)
+  let mine = all.filter((a) => reads(mode(a.access), who.role))
+  return { here, all, mine }
+}
+
+// A space's front door at `/`, when no app answers there (rung 4): its apps,
+// as whoever is asking may see them, and to its owner the way to its
+// dashboard.
 let index = async (
   req: Request,
   env: Env,
   dir: ReturnType<typeof directory>,
   space: Space,
-  said?: { say: string; no: boolean },
-  view: ManageView = 'apps',
 ): Promise<Response> => {
   // The directory's own space is nobody's space: nothing answers at its
   // address, to anyone (T-32585), so it does not get a door either.
   if (space.slug == META.space) return nothingHere(env)
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
-  if (new URL(req.url).pathname.startsWith(MANAGE)) {
-    if (!who.person) {
-      return redirect(
-        signInAt(`https://${space.slug}.${apex(env)}${managePath(view)}`, env),
-        303,
-      )
-    }
-    if (who.role != 'owner') return nothingHere(env)
-  }
-  let here = (await dir.apps(space)).filter((a) => !kernels(space, a.slug))
-  // Trashed apps appear only in the owner's Trash section.
-  let all = here.filter((a) => !a.trashed)
-  let mine = all.filter((a) => reads(mode(a.access), who.role))
-  // Account details are the owner's alone; the connected agents come from the
-  // OAuth provider rather than a second record of the same state.
-  let owner = who.role == 'owner' && who.person ? who.person : null
+  let { all, mine } = await shelf(dir, space, who)
+  let owner = who.role == 'owner'
   return spaceIndex({
-    // Who visited, the owner's alone (views.ts, T-34497). `undefined` is
-    // everybody else, `null` is the platform with no analytics token set, and
-    // a read that fails is `null` too: this page is the space's front door,
-    // and it does not go down because Cloudflare's analytics did.
-    views: owner && view == 'visits' && all.length
-      ? await visits(env, all)
-      : undefined,
-    viewDays: DAYS,
-    viewsOff: NOT_ON,
     space: space.slug,
     title: space.title,
-    view,
     // What the pill says about the gallery (gallery.ts, T-34476). Listed is
     // said to anybody — it is a public page — and waiting only to the owner,
     // who is the one it is news for.
@@ -1329,37 +1319,118 @@ let index = async (
     role: who.role,
     person: !!who.person,
     signIn: signInAt(req.url, env),
-    trash: owner
-      ? here.filter((a) => a.trashed).map((a) => ({
-        slug: a.slug,
-        title: a.title,
-        days: daysLeft(a.trashed!),
-      }))
-      : [],
-    // Where the space stands with selling (sell.ts, T-34524), the owner's
-    // alone — and only where the platform has a Stripe key at all, since a
-    // button that cannot work is worse than no block.
-    sell: owner && env.STRIPE_KEY ? selling(space) : undefined,
-    plus: owner ? space.tier == 'plus' : undefined,
-    plan: owner
-      ? {
-        plus: space.tier == 'plus',
-        ends: space.plan?.ending ?? '',
-        known: !!space.plan?.customer,
-      }
-      : undefined,
-    paid: new URL(req.url).searchParams.get('paid') == '1',
+    manage: owner ? manageAt(space.slug, 'apps', env) : undefined,
+  }, env)
+}
+
+// The dashboard, at the apex (T-39354): one space's pages, the person's own
+// unless `?space=` names another. A space's owner is the one person shown
+// it; anybody else is answered what a wrong address is.
+let manage = async (req: Request, env: Env): Promise<Response> => {
+  let url = new URL(req.url)
+  let view = manageView(url.pathname)
+  if (!view) return nothingHere(env)
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let { person, until } = await whoIs(
+    req,
+    env.SESSION_SECRET,
+    () => Promise.resolve(null),
+  )
+  if (!person) return redirect(signInAt(sentFrom(req, env).href, env), 303)
+  let slug = url.searchParams.get('space')
+  let space = slug ? await dir.space(slug) : await dir.own(person)
+  if (!space && slug) {
+    // A link written before the space moved to another name (T-34658).
+    let was = await dir.formerly(slug)
+    if (!was) return nothingHere(env)
+    let to = sentFrom(req, env)
+    to.searchParams.set('space', was.slug)
+    return moved(req, to.href)
+  }
+  if (!space || space.slug == META.space) return nothingHere(env)
+  let who: Owner = { person, role: await dir.role(space, person), until }
+  if (who.role != 'owner') return nothingHere(env)
+  // A space in the trash is brought back from its own address (`closed`).
+  if (space.trashed) {
+    return redirect(`https://${spaceHost(env, space.slug)}/`, 303)
+  }
+  if (req.method == 'POST') return saved(req, env, dir, space, who)
+  if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
+  return desk(req, env, dir, space, who, view)
+}
+
+// Who a dashboard page is drawn for: a person signed in, who owns the space.
+type Owner = Who & { person: string }
+
+// Where a dashboard form lands back: the page that sent it, at the apex.
+let sentFrom = (req: Request, env: Env) => {
+  let at = new URL(req.url)
+  return new URL(at.pathname + at.search, hostUrl(env))
+}
+
+// One page of the dashboard (pages.ts `desk`), for the space's owner.
+let desk = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  space: Space,
+  who: Owner,
+  view: ManageView,
+  said?: { say: string; no: boolean },
+): Promise<Response> => {
+  let owner = who.person
+  let { here, all } = await shelf(dir, space, who)
+  let q = new URL(req.url).searchParams
+  return deskPage({
+    // Who visited (views.ts, T-34497). `null` is the platform with no
+    // analytics token set, and a read that fails is `null` too: the page
+    // does not go down because Cloudflare's analytics did.
+    views: view == 'visits' && all.length ? await visits(env, all) : undefined,
+    viewDays: DAYS,
+    viewsOff: NOT_ON,
+    space: space.slug,
+    pick: q.get('space') ?? undefined,
+    view,
+    apps: all.map((a) => ({
+      eid: a.eid,
+      slug: a.slug,
+      title: a.title,
+      home: a.home,
+      access: a.access,
+      gallery: pilled(standing(a)),
+    })),
+    trash: here.filter((a) => a.trashed).map((a) => ({
+      slug: a.slug,
+      title: a.title,
+      days: daysLeft(a.trashed!),
+    })),
+    // Where the space stands with selling (sell.ts, T-34524), and only where
+    // the platform has a Stripe key at all, since a button that cannot work
+    // is worse than no block.
+    sell: env.STRIPE_KEY ? selling(space) : undefined,
+    plus: space.tier == 'plus',
+    plan: {
+      plus: space.tier == 'plus',
+      ends: space.plan?.ending ?? '',
+      known: !!space.plan?.customer,
+    },
+    paid: q.get('paid') == '1',
     fee: rate(await feeOf(dir)),
-    name: owner ? await dir.nameAt(owner) ?? '' : '',
-    agents: owner ? await (await identity()).agents(env, owner) : [],
-    // What the space's apps call out through, and what the owner connected
-    // for themselves (connections.ts), read only for the page that shows it.
-    connections: owner && view == 'connections'
+    name: await dir.nameAt(owner) ?? '',
+    agents: await (await identity()).agents(env, owner),
+    // What the person connected for themselves and what each space of
+    // theirs calls out through (connections.ts), read only for the page that
+    // shows it: this space first, which a new connection is made for.
+    connections: view == 'connections'
       ? await connectionsOf(
         env,
-        space,
+        [
+          space,
+          ...(await dir.spaces(owner, 'owner')).filter((s) =>
+            s.eid != space.eid
+          ),
+        ],
         owner,
-        all,
         await (await identity()).services(env, owner),
         enabled(req),
       )
@@ -1368,8 +1439,8 @@ let index = async (
     // named for this address and its files live under it, so the address
     // stays put until the trash is empty (T-32576).
     fixed: !!here.length,
-    say: said?.say ?? returned(new URL(req.url).searchParams)?.say ?? '',
-    no: said?.no ?? returned(new URL(req.url).searchParams)?.no,
+    say: said?.say ?? returned(q)?.say ?? '',
+    no: said?.no ?? returned(q)?.no,
   }, env)
 }
 
@@ -1380,9 +1451,9 @@ let index = async (
 // space went and given the button back, because they are the only person the
 // news belongs to.
 //
-// The restore button lands on the account's platform address: a custom domain of a space
-// that was in the trash a second ago is a hostname that has to warm up again,
-// where the space's own address is serving the moment the word comes off.
+// The restore button lands on the space's dashboard, at the apex: a custom
+// domain of a space that was in the trash a second ago is a hostname that has
+// to warm up again.
 let closed = async (
   req: Request,
   env: Env,
@@ -1402,33 +1473,21 @@ let closed = async (
   if (String(form.get('restore-space') ?? '').trim() == space.slug) {
     await untrashSpace(env, dir, space, who)
   }
-  return redirect(`https://${space.slug}.${apex(env)}${MANAGE}`, 303)
+  return redirect(manageAt(space.slug, 'apps', env), 303)
 }
-
-// The default front page still opens the app library. Account forms keep
-// their own stable address even when a custom app takes over the front page.
-let root = (
-  req: Request,
-  env: Env,
-  dir: ReturnType<typeof directory>,
-  space: Space,
-) =>
-  req.method == 'POST'
-    ? saved(req, env, dir, space)
-    : index(req, env, dir, space)
 
 // Account forms return to the section that submitted them. Settings fields
 // are independent; changing an address cannot overwrite an omitted name.
-// Sibling spaces share the cookie's site, so ownership alone is insufficient:
-// a page at another address never gets here (route.ts `guarded`).
+// Every space's page shares the cookie's site, so ownership alone is
+// insufficient: a page at another address never gets here (route.ts
+// `guarded`).
 let saved = async (
   req: Request,
   env: Env,
   dir: ReturnType<typeof directory>,
   space: Space,
+  who: Owner,
 ): Promise<Response> => {
-  let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
-  if (who.role != 'owner' || !who.person) return nothingHere(env)
   let form = await req.formData().catch(() => new FormData())
   // The connections page's buttons (connections.ts): each is one form with a
   // `do`, answered with the page saying what came of it, or sent on to a
@@ -1437,7 +1496,7 @@ let saved = async (
     let said = await connecting(req, env, space, who, form)
     return said instanceof Response
       ? said
-      : index(req, env, dir, space, said, 'connections')
+      : desk(req, env, dir, space, who, 'connections', said)
   }
   if (form.get('billing') == 'checkout') return checkout(env, req, space)
   if (form.get('billing') == 'portal') return portal(env, req, space)
@@ -1449,10 +1508,7 @@ let saved = async (
   if (back) {
     let app = await dir.app(space, back)
     if (app?.trashed) await untrash(env, dir, space, app, who)
-    return redirect(
-      `https://${space.slug}.${apex(env)}${managePath('trash')}`,
-      303,
-    )
+    return redirect(sentFrom(req, env).href, 303)
   }
   // The selling block's button (sell.ts, T-34524). Its own form and its own
   // POST, like the restore button above — and `start` answers a redirect to
@@ -1462,23 +1518,22 @@ let saved = async (
   let till = String(form.get('sell') ?? '').trim()
   if (till == 'stop') {
     if (space.stripe?.account) await disconnect(env, space)
-    return redirect(
-      `https://${space.slug}.${apex(env)}${managePath('selling')}`,
-      303,
-    )
+    return redirect(sentFrom(req, env).href, 303)
   }
   if (till == 'start') {
     let no = refusedSell(space, env)
-    if (no) return index(req, env, dir, space, { say: no, no: true }, 'selling')
+    if (no) {
+      return desk(req, env, dir, space, who, 'selling', { say: no, no: true })
+    }
     try {
       let made = await connect(env, space, await dir.emailAt(who.person) ?? '')
       return redirect(made.url, 303)
     } catch (e) {
-      await fault(env, 'POST / (sell)', e)
-      return index(req, env, dir, space, {
+      await fault(env, 'POST /manage/selling', e)
+      return desk(req, env, dir, space, who, 'selling', {
         say: "we couldn't reach Stripe just now — try again in a minute",
         no: true,
-      }, 'selling')
+      })
     }
   }
   let name = String(form.get('name') ?? '').trim().slice(0, 60)
@@ -1487,14 +1542,10 @@ let saved = async (
     ? await (await identity()).choose(env, who.person, want, space)
     : null
   if (moved?.error) {
-    return index(
-      req,
-      env,
-      dir,
-      space,
-      { say: moved.error, no: true },
-      'settings',
-    )
+    return desk(req, env, dir, space, who, 'settings', {
+      say: moved.error,
+      no: true,
+    })
   }
   // Cleared, the front of their address comes back — a person always has a
   // title, because a member row names them by it and a titleless one reads
@@ -1510,12 +1561,13 @@ let saved = async (
       }],
     }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
   }
-  return redirect(
-    `https://${moved?.slug ?? space.slug}.${apex(env)}${
-      managePath('settings')
-    }?saved=1`,
-    303,
-  )
+  // A page that named the space by its old address names it by its new one.
+  let to = sentFrom(req, env)
+  if (moved?.slug && to.searchParams.has('space')) {
+    to.searchParams.set('space', moved.slug)
+  }
+  to.searchParams.set('saved', '1')
+  return redirect(to.href, 303)
 }
 
 // Rung 1½ (D-34197): the home app is the space's router, and `home.first`
@@ -1600,7 +1652,11 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
 let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   let url = new URL(req.url)
   let r = route(hostOf(req), url.pathname, env)
-  if (r.space == null) return nothingHere(env)
+  if (r.space == null) {
+    return url.pathname == MANAGE || url.pathname.startsWith(`${MANAGE}/`)
+      ? manage(req, env)
+      : nothingHere(env)
+  }
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let space = await c.time('space', () => dir.space(r.space!))
   // Not a space here — but it may be where one used to be (T-34658): a rename
@@ -1622,27 +1678,18 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // hostname of it answers nothing, and its owner is answered the page that
   // brings it back (`closed` above, T-34431).
   if (space.trashed) return closed(req, env, dir, space)
-  if (url.pathname == `${MANAGE}/agents` && req.method == 'GET') {
-    let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
-    let allowed = who.person && who.role == 'owner'
-    return Response.json(
-      allowed
-        ? {
-          agents: await (await identity()).agents(env, who.person!),
-        }
-        : { error: who.person ? 'not_an_owner' : 'not_signed_in' },
-      {
-        status: allowed ? 200 : who.person ? 403 : 401,
-        headers: { 'cache-control': 'private, no-store' },
-      },
-    )
-  }
-  if (url.pathname == MANAGE || url.pathname.startsWith(`${MANAGE}/`)) {
-    let view = manageView(url.pathname)
+  // Where the dashboard was before it moved to the apex (T-39354): letters
+  // and answers still carry these addresses, so each view is sent on to its
+  // new one, query and all. A form posted from a page left open since has
+  // nothing to land on and is sent to the page instead.
+  if (url.pathname == OURS || url.pathname.startsWith(`${OURS}/`)) {
+    let view = manageView(MANAGE + url.pathname.slice(OURS.length))
     if (!view) return nothingHere(env)
-    if (req.method == 'POST') return saved(req, env, dir, space)
-    if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
-    return index(req, env, dir, space, undefined, view)
+    let to = new URL(manageAt(space.slug, view, env))
+    for (let [k, v] of url.searchParams) to.searchParams.append(k, v)
+    return req.method == 'GET' || req.method == 'HEAD'
+      ? moved(req, to.href)
+      : redirect(to.href, 303)
   }
   // The builder's socket (build.ts, T-34240). A space's door, not an app's:
   // the person it is for has no app yet, so it is answered here — before the
@@ -1700,10 +1747,11 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       () => whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
     )
     return who.role == 'owner'
-      ? binned(
-        { title: app.title || app.slug, days: daysLeft(app.trashed) },
-        env,
-      )
+      ? binned({
+        space: space.slug,
+        title: app.title || app.slug,
+        days: daysLeft(app.trashed),
+      }, env)
       : nothingHere(env)
   }
   if (r.app && !app) {
@@ -1738,7 +1786,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     // fall-through, so a path under such a space names nothing and says so.
     if (!home || kernels(space, home.slug)) {
       if (url.pathname != '/') return nothingHere(env)
-      return await root(req, env, dir, space)
+      return await index(req, env, dir, space)
     }
     // `/<x>/api/…` named an app that is not here. That is a wrong address,
     // not one of the front page's own paths: a page asking a store there has

@@ -45,7 +45,7 @@ let google: Provider = {
 let calendar = client(google, {
   store, // an AuthorizationStore<Tokens>, such as @yaks/secrets records()
   key: connectionEid, // where this grant is kept in the store
-  redirect: 'https://yourname.yaks.app/_yaks/connections/back',
+  redirect: 'https://yaks.app/connections/callback',
 })
 
 // Request one: send the person to the link, and hold the attempt.

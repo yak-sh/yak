@@ -386,7 +386,7 @@ slow('app_stats answers counts, and never a visitor', async () => {
       assertStringIncludes(q, 'sum(_sample_interval)')
       assertStringIncludes(q, 'FROM yak_views')
     }
-    let dashboard = await k.at('watch.yaks.app', '/_yaks/visits', {
+    let dashboard = await k.at('yaks.app', '/manage/visits?space=watch', {
       headers: { cookie },
     })
     assertEquals(dashboard.status, 200)

@@ -58,7 +58,7 @@ let setup = async (vault = true) => {
     let form = new FormData()
     for (let [k, v] of Object.entries(fields)) form.set(k, v)
     return connecting(
-      new Request('https://ada.yaks.app/_yaks/connections'),
+      new Request('https://yaks.app/manage/connections?space=ada'),
       p.env,
       space,
       who,
@@ -66,7 +66,7 @@ let setup = async (vault = true) => {
     )
   }
   let shown = (enable?: string[]) =>
-    connectionsOf(p.env, space, person, [], [], enable)
+    connectionsOf(p.env, [space], person, [], enable)
   // Every row the directory's SQLite holds, as text.
   let dump = () => {
     let sql = p.states.get(PLATFORM_STORE)!.storage.sql
@@ -270,7 +270,7 @@ let asks = async (
       json: (status) => new Response(null, { status }),
     }))!
   let his = async () =>
-    (await connectionsOf(s.p.env, s.space, bob, [])).list.filter((c) => c.own)
+    (await connectionsOf(s.p.env, [s.space], bob)).list.filter((c) => c.own)
   return { bob, door, his }
 }
 

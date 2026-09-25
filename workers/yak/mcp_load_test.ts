@@ -517,9 +517,9 @@ slow('space_sell connects an account and hands back one link', async () => {
     let agent = connector(k, cookie)
     // Selling has its own account page; the library links to it. The form's
     // action and next step must follow the account through all three states.
-    let path = managePath('selling')
+    let path = managePath('selling', 'ada')
     let page = async (button: string, value = 'start') => {
-      let r = await k.at('ada.yaks.app', path, { headers: { cookie } })
+      let r = await k.at('yaks.app', path, { headers: { cookie } })
       assertEquals(r.status, 200)
       let { document } = parseHTML(await r.text())
       let form = document.querySelector(`form[action="${path}"]`)
@@ -534,10 +534,12 @@ slow('space_sell connects an account and hands back one link', async () => {
         button,
       )
     }
-    let library = await k.at('ada.yaks.app', '/', { headers: { cookie } })
+    let library = await k.at('yaks.app', managePath('apps', 'ada'), {
+      headers: { cookie },
+    })
     assertStringIncludes(await library.text(), `href="${path}"`)
     let freePage = async () => {
-      let r = await k.at('ada.yaks.app', path, { headers: { cookie } })
+      let r = await k.at('yaks.app', path, { headers: { cookie } })
       let { document } = parseHTML(await r.text())
       assert(!document.querySelector('[name="sell"][value="start"]'))
       assertEquals(
@@ -553,9 +555,9 @@ slow('space_sell connects an account and hands back one link', async () => {
       Error,
       'Plus',
     )
-    let denied = await k.at('ada.yaks.app', path, {
+    let denied = await k.at('yaks.app', path, {
       method: 'POST',
-      headers: { cookie, origin: 'https://ada.yaks.app' },
+      headers: { cookie, origin: 'https://yaks.app' },
       body: new URLSearchParams({ sell: 'start' }),
     })
     assertEquals(denied.status, 400)
@@ -566,17 +568,18 @@ slow('space_sell connects an account and hands back one link', async () => {
     )
     // The subscription button uses this space's guarded form door, then the
     // existing billing checkout. A sibling page cannot start it.
-    let subscribe = (origin = 'https://ada.yaks.app', session = cookie) =>
-      k.at('ada.yaks.app', path, {
+    let subscribe = (origin = 'https://yaks.app', session = cookie) =>
+      k.at('yaks.app', path, {
         method: 'POST',
+        redirect: 'manual',
         headers: { cookie: session, origin },
         body: new URLSearchParams({ billing: 'checkout' }),
       })
     for (
       let [origin, session, status] of [
         ['https://other.yaks.app', cookie, 403],
-        ['https://ada.yaks.app', '', 404],
-        ['https://ada.yaks.app', (await signIn(k)).cookie, 404],
+        ['https://yaks.app', '', 303],
+        ['https://yaks.app', (await signIn(k)).cookie, 404],
       ] as const
     ) {
       let r = await subscribe(origin, session)
@@ -600,15 +603,15 @@ slow('space_sell connects an account and hands back one link', async () => {
     }
     assertEquals(purchase.metadata.space, eids.ada)
     assertEquals(purchase.line_items.data[0].price.id, price)
-    // Checkout started from a space's own page hands the person back to that
+    // Checkout started from a space's page hands the person back to that
     // space's plan settings, not to the apex connector (billing.ts `checkout`).
     assertEquals(
       purchase.success_url,
-      `https://ada.yaks.app${managePath('billing')}?paid=1`,
+      `https://yaks.app${managePath('billing', 'ada')}&paid=1`,
     )
     assertEquals(
       purchase.cancel_url,
-      `https://ada.yaks.app${managePath('billing')}?paid=0`,
+      `https://yaks.app${managePath('billing', 'ada')}&paid=0`,
     )
     let sub = await plus(k, 'whsec_plan_probe', eids.ada)
     await page('Connect Stripe')

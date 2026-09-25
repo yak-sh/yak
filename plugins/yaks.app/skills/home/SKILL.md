@@ -28,9 +28,10 @@ space has none, and its bare address lists the apps a visitor may open;
 since everyone handed the space itself lands there.
 
 **Managing your apps.** <https://yaks.app/manage> opens your account's app
-library. Each space's management pages live at `<space>.yaks.app/_yaks`,
-including assistant setup, settings, and trash. These stay available when a
-custom app becomes your homepage; that app cannot replace them.
+library, and its pages beside it: assistant setup, connections, settings,
+billing, and trash. It shows your own space; `?space=<space>` names another you
+own. It lives at the platform's address, not a space's, so no app, homepage or
+not, can replace it.
 
 Being the front page is a component stored on the app, `home`, and at most one
 app in a space has it. Moving it takes effect on the next request: nothing is

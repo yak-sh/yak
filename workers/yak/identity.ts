@@ -269,17 +269,15 @@ let redirect = (to: string, set?: string, status = 302) =>
 // Where a signed-in person lands: the page they came from, when it is on our
 // own zone — an off-zone address is ignored and never followed, the field
 // being a stranger's to fill in (route.ts `onZone`). Sent nowhere in
-// particular, they land on their account page. It stays reachable when a
-// custom app serves their space's root.
+// particular, they land on their dashboard, which shows their own space
+// (apps.ts `manage`).
 //
 // Several spaces, and the one they came in on wins — but that is the return
 // address doing it, not a rule of its own: a space's index sends someone here
 // with `return=https://<space>.yaks.app/` (apps.ts `signInAt`), and that
-// address is on our zone, so it is followed. `mine` is what is left when
-// nobody was aiming them anywhere, and `own()` names it: the space their own
-// address names, else the first they own.
-let backTo = (mine: string, back: string, env: Host) =>
-  (back && onZone(back, env)) || `https://${mine}.${apex(env)}${MANAGE}`
+// address is on our zone, so it is followed.
+let backTo = (back: string, env: Host) =>
+  (back && onZone(back, env)) || hostUrl(env, MANAGE)
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
@@ -587,8 +585,8 @@ let landed = async (
   // Signing in is having a space (T-32482): theirs already, or minted here at
   // the front of their address — so no agent ever has to ask them for a name,
   // and the card asks nothing but the address and the code (T-34236). It is
-  // also where they land when nothing else aims them (`backTo`).
-  let mine = await dir.own(person)
+  // also what their dashboard shows when nothing else aims them (`backTo`).
+  await dir.own(person)
   let space = await dir.space(META.space)
   if (space && await dir.memberless(space)) {
     await store.apply([{
@@ -611,7 +609,7 @@ let landed = async (
   let hand = back
     ? await handoffTo(secret(env), dir, person, back, Date.now(), env)
     : null
-  return redirect(hand ?? backTo(mine.slug, back, env), set, 303)
+  return redirect(hand ?? backTo(back, env), set, 303)
 }
 
 // A letter's one click, spent: the very code the form would have spent
@@ -751,13 +749,6 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     )
   }
 
-  if (path == '/manage' && req.method == 'GET') {
-    let person = await browser(env, req)
-    if (!person) return redirect('/login?return=%2Fmanage', undefined, 303)
-    let space = await dirOf(env).own(person)
-    return redirect(backTo(space.slug, '', env), undefined, 303)
-  }
-
   // An invitation's one click (invite.ts, T-37880): accepted for the person
   // it names, signed in on this browser, and nobody else.
   if (path == INVITE && req.method == 'GET') {
@@ -804,7 +795,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // going, which is `landed`'s one landing rule — a return on a customer's
     // own hostname becomes a handoff, one on our zone is followed, a
     // stranger's is refused and aimed nowhere in particular they land where a
-    // fresh sign-in lands them (`backTo`: their own space's root). It matches
+    // fresh sign-in lands them (`backTo`: their dashboard). It matches
     // the consent page, which hands an already-signed-in browser one Allow
     // rather than a fresh sign-in.
     let who = await withAuth(env, req)

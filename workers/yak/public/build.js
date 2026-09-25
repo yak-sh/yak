@@ -1,5 +1,6 @@
 // The builder's chat, live (T-34242): the script half of the form on a space's
-// own page (pages.ts `chat`). It opens the socket at `/api/build`, draws the
+// page or the dashboard's (pages.ts `chat`). It opens the socket where the form
+// posts, the space's `/api/build`, draws the
 // conversation the object replays, and then draws each frame of a build as it
 // happens — the words, each tool as it starts and as it answers, the address
 // at the end.
@@ -117,7 +118,9 @@ let draw = (f) => {
 let live = null
 
 let open = () => {
-  let at = new URL('/api/build', location.href)
+  // Wherever the form posts: the space's own door, from its page or from the
+  // dashboard at the apex.
+  let at = new URL(ask.action)
   at.protocol = at.protocol == 'http:' ? 'ws:' : 'wss:'
   let ws = new WebSocket(at.href)
   ws.addEventListener('open', () => {

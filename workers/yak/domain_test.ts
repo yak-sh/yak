@@ -432,16 +432,13 @@ slow('plan settings preserves its destination through sign-in', async () => {
   const k = await kernel()
   try {
     const { cookie } = await seed(k, [{ slug: 'plans', apps: [] }])
-    const path = '/_yaks/billing'
-    const anonymous = await k.at('plans.yaks.app', path, { redirect: 'manual' })
+    const path = '/manage/billing?space=plans'
+    const anonymous = await k.at('yaks.app', path, { redirect: 'manual' })
     assertEquals(anonymous.status, 303)
     const location = new URL(anonymous.headers.get('location')!)
     assertEquals(location.origin + location.pathname, 'https://yaks.app/login')
-    assertEquals(
-      location.searchParams.get('return'),
-      'https://plans.yaks.app' + path,
-    )
-    const signedIn = await k.at('plans.yaks.app', path, { headers: { cookie } })
+    assertEquals(location.searchParams.get('return'), 'https://yaks.app' + path)
+    const signedIn = await k.at('yaks.app', path, { headers: { cookie } })
     assertEquals(signedIn.status, 200)
     const html = await signedIn.text()
     assertStringIncludes(html, 'Plus')

@@ -22,7 +22,9 @@ slow(
       let page = await k.at('ada.yaks.fyi', '/recipes/')
       assertEquals(page.status, 200)
       assertStringIncludes(await page.text(), 'Staging recipes')
-      let desk = await k.at('ada.yaks.fyi', '/_yaks', { headers: { cookie } })
+      let desk = await k.at(k.host, '/manage?space=ada', {
+        headers: { cookie },
+      })
       assertEquals(desk.status, 200)
       let html = await desk.text()
       assertStringIncludes(html, 'ada.yaks.fyi')
@@ -59,7 +61,7 @@ slow(
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           email,
-          return: 'https://ada.yaks.fyi/_yaks',
+          return: 'https://yaks.fyi/manage?space=ada',
         }),
       })
       assertEquals(asked.status, 200)
@@ -72,7 +74,10 @@ slow(
         redirect: 'manual',
       })
       assertEquals(signed.status, 303)
-      assertEquals(signed.headers.get('location'), 'https://ada.yaks.fyi/_yaks')
+      assertEquals(
+        signed.headers.get('location'),
+        'https://yaks.fyi/manage?space=ada',
+      )
       assertStringIncludes(
         signed.headers.get('set-cookie') ?? '',
         'Domain=yaks.fyi',

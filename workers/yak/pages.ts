@@ -16,7 +16,7 @@ import { icon, type IconName } from './icons.ts'
 import { esc } from './html.ts'
 import { tile } from './render/mod.ts'
 export { esc } from './html.ts'
-import { managePath, type ManageView, OAUTH } from './route.ts'
+import { MANAGE, managePath, type ManageView, OAUTH } from './route.ts'
 import { CONNECTOR } from './seo.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
 import { CURRENCY, FREE, PLUS, PRICE, size } from './meter.ts'
@@ -173,7 +173,10 @@ export let nothingHere = (env: Host = {}) =>
 // address: nothing serves here, and it is theirs to take back from the page
 // their apps are listed on. A 404 with words in it, because the address
 // really is answering nothing.
-export let binned = (at: { title: string; days: number }, env: Host = {}) =>
+export let binned = (
+  at: { space: string; title: string; days: number },
+  env: Host = {},
+) =>
   shell(
     env,
     `${esc(at.title)} is in the trash.`,
@@ -182,7 +185,7 @@ export let binned = (at: { title: string; days: number }, env: Host = {}) =>
     }, then erased for good.`,
     404,
     `<p><a class="Button" href="${
-      managePath('trash')
+      url(env, managePath('trash', at.space))
     }">Restore it from your apps</a></p>`,
   )
 
@@ -190,9 +193,9 @@ export let binned = (at: { title: string; days: number }, env: Host = {}) =>
 // Everyone else gets `nothingHere` at every one of them — a deleted space is
 // not a stranger's news — so this is its owner, told where their space went,
 // how long they have, and given the one button that brings it back. A form
-// POSTing to `/`, the same door the space page's own forms use (apps.ts
-// `saved`), so a restore needs no assistant and no script. A 404 with words
-// in it, because the address really is answering nothing.
+// POSTing to `/`, which every address of a space in the trash answers with
+// this (apps.ts `closed`), so a restore needs no assistant and no script. A
+// 404 with words in it, because the address really is answering nothing.
 export let spaceBinned = (at: {
   slug: string
   title: string
@@ -226,9 +229,12 @@ exactly as they were.</p>${home(env)}`,
 // label; nothing it does is required for the form to work.
 //
 // `slug` given is an app's own page, where the name is not a question: the
-// drop goes to that app and nowhere else.
-let dropZone = (slug?: string) =>
-  `<form class="Drop" method="post" action="/deploy" enctype="multipart/form-data">
+// drop goes to that app and nowhere else. `to` is the space's door, whole,
+// on a page that is not at the space's own address (the dashboard's).
+let dropZone = (slug?: string, to = '/deploy') =>
+  `<form class="Drop" method="post" action="${
+    esc(to)
+  }" enctype="multipart/form-data">
 <label class="Drop_Zone">
 <input class="Drop_File" type="file" name="file" required aria-label="Website files">
 <span class="Drop_Say">A .zip of your website files, or a single index.html</span>
@@ -362,23 +368,27 @@ let transcript = (frames: Frame[]) => {
 
 // The line a person types. `required` is the browser's own guard; the door
 // keeps the same one, for whoever posts without it.
-let chatAsk = () =>
-  `<form class="Chat_Ask" method="post" action="/api/build">
+let chatAsk = (to = '/api/build') =>
+  `<form class="Chat_Ask" method="post" action="${esc(to)}">
 <p><textarea class="Field" name="say" rows="3" required placeholder="A recipe box I can share with my sister" aria-label="What do you want to build?"></textarea></p>
 <button class="Button" type="submit">Build it</button>
 </form>`
 
-// The optional built-in builder, reached from New app.
-let chat = () =>
+// The optional built-in builder, reached from New app: the dashboard's page
+// is at the apex, so its form names the space's door whole, and the script
+// opens its socket wherever the form points.
+let chat = (to: string) =>
   `<section class="Card Chat">
 <h2>Build an app here</h2>
-${transcript([])}${chatAsk()}
+${transcript([])}${chatAsk(to)}
 </section>`
 
-// The live half (public/build.js), at the builder's own address so a space's
-// hostname needs no asset of the apex (apps.ts serves it there). A module,
-// because it is one, and nothing on the page waits for it.
-let chatLive = '<script type="module" src="/api/build.js"></script>'
+// The live half (public/build.js), served at the address of the page it is
+// on: the builder's own on a space's hostname (apps.ts serves it there), so a
+// space's page needs no asset of the apex, and the public file at the apex.
+// A module, because it is one, and nothing on the page waits for it.
+let chatLive = (src = '/api/build.js') =>
+  `<script type="module" src="${src}"></script>`
 
 /**
  * What a posted line answers (T-34242), and it is a page for the same reason a
@@ -399,8 +409,10 @@ export let building = (at: {
     `<section class="Card Chat">
 ${transcript(at.frames ?? [])}${chatAsk()}
 </section>
-<p><a class="Away" href="${managePath()}">Back to your apps</a></p>
-${chatLive}`,
+<p><a class="Away" href="${
+      url(env, managePath('apps', at.space))
+    }">Back to your apps</a></p>
+${chatLive()}`,
   )
 
 // What a drop answers, either way it went (T-34230), and it is a page because
@@ -450,7 +462,9 @@ ${
     }</p>
 ${dropZone(at.slug)}
 </div>
-<p><a class="Away" href="${managePath()}">Back to your apps</a></p>
+<p><a class="Away" href="${
+      url(env, managePath('apps', at.space))
+    }">Back to your apps</a></p>
 ${dropping}`,
   )
 
@@ -561,13 +575,13 @@ export type Visits = {
   }
 }
 
-let visits = (v: Visits) =>
+let visits = (v: Visits, site: string) =>
   `<article class="Stats" aria-labelledby="visits-${esc(v.slug)}">
 <header class="Stats_Head"><h2 class="Stats_Title" id="visits-${
     esc(v.slug)
-  }"><a href="/${encodeURIComponent(v.slug)}/" target="_blank" rel="noopener">${
-    esc(v.title || v.slug)
-  }</a></h2>
+  }"><a href="${site}/${
+    encodeURIComponent(v.slug)
+  }/" target="_blank" rel="noopener">${esc(v.title || v.slug)}</a></h2>
 <p class="Stats_Total">${count(v.stats.total)} <span class="Stats_Unit">${
     v.stats.total == 1 ? 'visit' : 'visits'
   }</span></p></header>${
@@ -580,27 +594,42 @@ let visits = (v: Visits) =>
       : ''
   }</article>`
 
-let visited = (apps: Visits[] | null, off: string) =>
-  apps == null ? `<p class="Note">${esc(off)}</p>` : apps.map(visits).join('')
+let visited = (apps: Visits[] | null, off: string, site: string) =>
+  apps == null
+    ? `<p class="Note">${esc(off)}</p>`
+    : apps.map((v) => visits(v, site)).join('')
 
-// Owners get an app library and separate management pages. Visitors only see
-// apps they may open; account controls never enter their response.
+// A space's front door shows the apps whoever is asking may open, and to
+// its owner the way to the dashboard; account controls never enter it. The
+// dashboard (`desk`) is the owner's alone, at the apex.
 export type SpacePage = {
   space: string
   title: string
-  apps: {
-    eid: string
-    slug: string
-    title: string
-    gallery?: string
-    home?: boolean
-    access?: string | null
-  }[]
-  trash?: { slug: string; title: string; days: number }[]
+  apps: Listed[]
   hidden: number
   role: string | null
   person: boolean
   signIn: string
+  /** the dashboard's address, shown to the space's owner */
+  manage?: string
+}
+
+type Listed = {
+  eid: string
+  slug: string
+  title: string
+  gallery?: string
+  home?: boolean
+  access?: string | null
+}
+
+export type DeskPage = {
+  space: string
+  /** the space the address named (`?space=`), carried by every link on the
+   * page; none is the person's own */
+  pick?: string
+  apps: Listed[]
+  trash?: { slug: string; title: string; days: number }[]
   name?: string
   agents?: Agent[]
   fixed?: boolean
@@ -672,6 +701,8 @@ let deskCss = `
 .Desk_Trash p { color: var(--ink) }
 .Desk_Trash small { display: block; color: var(--soft-ink) }
 .Desk .Desk_Trash { max-width: none; margin: 0 }
+.Desk_Group { margin: 2rem 0 .75rem; font-size: .95rem; color: var(--soft-ink) }
+.Desk_Content > .Desk_Group:first-child { margin-top: 0 }
 .Connection_Head { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; margin: 0 0 .5rem }
 .Connection_Head h2 { margin: 0 }
 .Connection_Logo { flex: none; width: 28px; height: 28px }
@@ -717,9 +748,9 @@ let navIcons = {
   trash: 'trash-2',
 } satisfies Record<string, IconName>
 
-let navigation = (at: SpacePage, view: ManageView, env: Host) => {
+let navigation = (at: DeskPage, view: ManageView, env: Host) => {
   let link = (key: keyof typeof navIcons, label: string) =>
-    `<a href="${managePath(key)}"${
+    `<a href="${managePath(key, at.pick)}"${
       view == key || (view == 'new' && key == 'apps')
         ? ' aria-current="page"'
         : ''
@@ -743,7 +774,9 @@ ${link('billing', 'Billing')}${link('settings', 'Settings')}${
     link('trash', 'Trash')
   }
 </nav>
-<div class="Desk_Foot"><a href="/" target="_blank" rel="noopener">View homepage ${
+<div class="Desk_Foot"><a href="https://${
+    esc(spaceHost(env, at.space))
+  }/" target="_blank" rel="noopener">View homepage ${
     icon('external-link')
   }</a><a href="${
     url(env, '/help')
@@ -754,15 +787,20 @@ ${link('billing', 'Billing')}${link('settings', 'Settings')}${
 let state = (connected: boolean, show: boolean) =>
   `data-${connected ? 'connected' : 'disconnected'}${show ? '' : ' hidden'}`
 
-let connectCard = (at: SpacePage) =>
+let connectCard = (at: DeskPage) =>
   `<section class="Desk_Connect" ${state(false, !at.agents?.length)}>
 <div><h2>Connect your agent</h2><p>Build and improve your apps in the conversations you already have with Claude or ChatGPT.</p></div>
-<a class="Button" href="${managePath('connect')}">Connect agent</a></section>`
+<a class="Button" href="${
+    managePath('connect', at.pick)
+  }">Connect agent</a></section>`
 
-let library = (at: SpacePage) =>
+let library = (at: DeskPage, env: Host) =>
   `${connectCard(at)}${
     at.apps.length
-      ? `<div class="Apps">${at.apps.map(tile).join('')}</div>`
+      ? `<div class="Apps">${
+        at.apps.map((a) => tile(a, `https://${spaceHost(env, at.space)}`))
+          .join('')
+      }</div>`
       : `<section class="Desk_Empty"><h2>Your apps will live here</h2>
 <div ${
         state(true, !!at.agents?.length)
@@ -775,13 +813,15 @@ let library = (at: SpacePage) =>
 <div ${
         state(false, !at.agents?.length)
       }><p>A recipe box, a book club page, a tool for your day. Start with an idea.</p>
-<a href="${managePath('new')}">More ways to make an app</a></div></section>`
+<a href="${
+        managePath('new', at.pick)
+      }">More ways to make an app</a></div></section>`
   }`
 
-let preferences = (at: SpacePage, env: Host) => {
+let preferences = (at: DeskPage, env: Host) => {
   let home = at.apps.find((a) => a.home)
   return `<form class="Card Card-sectioned" method="post" action="${
-    managePath('settings')
+    managePath('settings', at.pick)
   }">
 <header class="Card_Header"><h2>Profile</h2></header>
 <div class="Card_Body"><div class="Desk_Profile"><label for="your-name">Your name</label>
@@ -798,7 +838,7 @@ let preferences = (at: SpacePage, env: Host) => {
       }</strong>.${
         esc(apex(env))
       }</a></p><p class="Note">The address is fixed once you've created an app.</p>`
-      : `<form method="post" action="${managePath('settings')}">
+      : `<form method="post" action="${managePath('settings', at.pick)}">
 <label for="your-address">Your address</label>
 <span class="At"><input class="Field" id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
         esc(at.space)
@@ -810,11 +850,11 @@ let preferences = (at: SpacePage, env: Host) => {
       ? `${esc(home.title || home.slug)} opens at your address.`
       : 'Your address opens your app library.'
   }</p><p class="Note">Ask your assistant to make any app your homepage. Manage your apps anytime at <a href="${
-    url(env, '/manage')
-  }">${apex(env)}/manage</a>.</p></section>`
+    url(env, MANAGE)
+  }">${apex(env)}${MANAGE}</a>.</p></section>`
 }
 
-let selling = (at: SpacePage, env: Host) => {
+let selling = (at: DeskPage, env: Host) => {
   if (!at.sell) return '<p>Selling is not available here yet.</p>'
   let ready = at.sell == 'ready'
   let connected = at.sell != 'none'
@@ -853,13 +893,13 @@ let selling = (at: SpacePage, env: Host) => {
         billButton(
           'checkout',
           `Subscribe — ${plusPrice()} a month`,
-          managePath('selling'),
+          managePath('selling', at.pick),
         )
       }</p><p class="Say Bill_Say" role="status"></p>`
   }${
     at.plus || connected
       ? `<form method="post" action="${
-        managePath('selling')
+        managePath('selling', at.pick)
       }"><input type="hidden" name="sell" value="${
         stop ? 'stop' : 'start'
       }"><button type="submit" class="Button${stop ? ' Bill_Go-quiet' : ''}">${
@@ -873,11 +913,13 @@ let selling = (at: SpacePage, env: Host) => {
   }</section>${at.plus ? '' : billing}`
 }
 
-let trash = (at: SpacePage) =>
+let trash = (at: DeskPage) =>
   at.trash?.length
     ? `<section class="Card"><p>Deleted apps can be restored for 30 days.</p>${
       at.trash.map((a) =>
-        `<form class="Desk_Trash" method="post" action="${managePath('trash')}">
+        `<form class="Desk_Trash" method="post" action="${
+          managePath('trash', at.pick)
+        }">
 <input type="hidden" name="restore" value="${esc(a.slug)}">
 <p>${esc(a.title || a.slug)}<small>${a.days} ${
           a.days == 1 ? 'day' : 'days'
@@ -922,11 +964,12 @@ let about = (f: Face) => {
     : ''
 }
 
-// One connection: whose it is, which apps use it and where its key may go,
-// whether its key is still being saved or could not be, and what to do next.
-// The space's side of an app that asks each person to connect their own is
-// only the ask: nothing here connects it, and it stays while the app asks.
-let connection = (c: Shown, on: boolean) => {
+// One connection: which apps use it and where its key may go, whether its
+// key is still being saved or could not be, and what to do next. The space's
+// side of an app that asks each person to connect their own is only the ask:
+// nothing here connects it, and it stays while the app asks. Its buttons post
+// for the space that keeps it, or for the page's own when it is the person's.
+let connection = (c: Shown, on: boolean, pick?: string) => {
   let ask = c.each && !c.own
   // An app that uses it: what its code reads and, for one it shares, who may
   // call out through it there, which the person opens to anyone or closes to
@@ -951,7 +994,7 @@ let connection = (c: Shown, on: boolean) => {
     }`
   let form = (inner: string) =>
     `<form class="Connection_Do" method="post" action="${
-      managePath('connections')
+      managePath('connections', c.space ?? pick)
     }"><input type="hidden" name="connection" value="${
       esc(c.eid)
     }">${inner}</form>`
@@ -992,9 +1035,7 @@ let connection = (c: Shown, on: boolean) => {
     esc(c.face.title)
   }</h2><span class="Connection_Status Connection_Status-${c.status}">${
     ask ? 'Each person connects their own' : STATUS[c.status]
-  }${c.account ? ` as ${esc(c.account)}` : ''}</span><span class="Apps_Tag">${
-    c.own ? 'Yours' : 'This space'
-  }</span></header>${about(c.face)}
+  }${c.account ? ` as ${esc(c.account)}` : ''}</span></header>${about(c.face)}
 <p>${
     !c.apps.length
       ? 'No app uses it yet.'
@@ -1016,23 +1057,52 @@ let connection = (c: Shown, on: boolean) => {
   }${act}${drop}</section>`
 }
 
-// The page: what the apps asked for and what is connected, the services that
-// hold a grant, and a box for a key no app asked for yet.
-let connections = (at: SpacePage) => {
+// The page: the person's own connections and the services that hold a
+// grant, then each of their spaces' — what its apps asked for and what is
+// connected — with, under the space the page is for, what it could connect
+// next and a box for a key no app asked for yet.
+let connections = (at: DeskPage, env: Host) => {
   let c = at.connections ?? { on: false, list: [], services: [], built: [] }
   let first = [...c.list].sort((a, b) =>
     Number(a.status == 'connected' && !a.failed) -
     Number(b.status == 'connected' && !b.failed)
   )
-  let add = `<form class="Card Card-sectioned" method="post" action="${
-    managePath('connections')
-  }">
+  let action = managePath('connections', at.pick)
+  let offer = (i: Connections['built'][number]) =>
+    `<form class="Card Connection" method="post" action="${action}"><header class="Connection_Head">${
+      logo(i.face)
+    }<h2>${esc(i.face.title)}</h2></header>${
+      about(i.face)
+    }<input type="hidden" name="integration" value="${
+      esc(i.name)
+    }"><div class="Connection_Do">${
+      i.keyed
+        ? `<input class="Field" name="key" type="password" autocomplete="off" aria-label="Key for ${
+          esc(i.face.title)
+        }" placeholder="Paste the key" required><button class="Button" type="submit" name="do" value="add">Save key</button>`
+        : '<button class="Button" type="submit" name="do" value="add">Connect</button>'
+    }</div></form>`
+  let add = `<form class="Card Card-sectioned" method="post" action="${action}">
 <header class="Card_Header"><h2>Add a key</h2></header>
 <div class="Card_Body Desk_Profile"><p>For a service your apps call that isn't listed above. Your apps use it through yaks.app, which keeps the key and sends it only to the addresses you list.</p>
 <label for="new-name">Service</label><input class="Field" id="new-name" name="integration" maxlength="60" placeholder="Weather API" required>
 <label for="new-hosts">Where it may be sent</label><input class="Field" id="new-hosts" name="hosts" autocomplete="off" spellcheck="false" placeholder="api.example.com" required>
 <label for="new-key">Key</label><input class="Field" id="new-key" name="key" type="password" autocomplete="off" spellcheck="false" required>
 </div><footer class="Card_Footer"><button class="Button" type="submit" name="do" value="add">Save key</button></footer></form>`
+  let group = (title: string, cards: string) =>
+    cards ? `<h2 class="Desk_Group">${esc(title)}</h2>${cards}` : ''
+  let yours = first.filter((one) => one.own)
+    .map((one) => connection(one, c.on, at.pick)).join('') +
+    c.services.map((s) =>
+      `<section class="Card Connection"><header class="Connection_Head"><h2>${
+        esc(s.name)
+      }</h2><span class="Connection_Status Connection_Status-connected">Connected</span></header><p>Signed in with your yaks.app account on ${
+        esc(day(new Date(s.connectedAt * 1000).toISOString()))
+      }.</p></section>`
+    ).join('')
+  let spaces = [
+    ...new Set([at.space, ...first.flatMap((one) => one.space ?? [])]),
+  ]
   return `${
     c.on
       ? ''
@@ -1041,37 +1111,26 @@ let connections = (at: SpacePage) => {
     c.list.length || c.services.length
       ? ''
       : `<section class="Desk_Empty"><h2>No connections yet</h2><p>When an app needs an outside service, like a calendar or an API key, it shows up here for you to connect.</p></section>`
-  }${first.map((one) => connection(one, c.on)).join('')}${
-    c.services.map((s) =>
-      `<section class="Card Connection"><header class="Connection_Head"><h2>${
-        esc(s.name)
-      }</h2><span class="Connection_Status Connection_Status-connected">Connected</span></header><p>Signed in with your yaks.app account on ${
-        esc(day(new Date(s.connectedAt * 1000).toISOString()))
-      }.</p></section>`
+  }${group('Yours', yours)}${
+    spaces.map((space) =>
+      group(
+        spaceHost(env, space),
+        first.filter((one) => one.space == space)
+          .map((one) => connection(one, c.on)).join('') +
+          (space == at.space
+            ? c.built.map(offer).join('') + (c.on ? add : '')
+            : ''),
+      )
     ).join('')
-  }${
-    c.built.map((i) =>
-      `<form class="Card Connection" method="post" action="${
-        managePath('connections')
-      }"><header class="Connection_Head">${logo(i.face)}<h2>${
-        esc(i.face.title)
-      }</h2></header>${
-        about(i.face)
-      }<input type="hidden" name="integration" value="${
-        esc(i.name)
-      }"><div class="Connection_Do">${
-        i.keyed
-          ? `<input class="Field" name="key" type="password" autocomplete="off" aria-label="Key for ${
-            esc(i.face.title)
-          }" placeholder="Paste the key" required><button class="Button" type="submit" name="do" value="add">Save key</button>`
-          : '<button class="Button" type="submit" name="do" value="add">Connect</button>'
-      }</div></form>`
-    ).join('')
-  }${c.on ? add : ''}`
+  }`
 }
 
-let desk = (at: SpacePage, env: Host) => {
+// The dashboard's page for one space, at the apex (apps.ts `manage`). What
+// it aims at the space itself — an app, the drop zone, the builder — it names
+// by the space's own address.
+export let desk = (at: DeskPage, env: Host = {}) => {
   let view = at.view ?? 'apps'
+  let site = `https://${spaceHost(env, at.space)}`
   let titles = {
     apps: 'Your apps',
     connect: 'Your agents',
@@ -1084,7 +1143,7 @@ let desk = (at: SpacePage, env: Host) => {
     trash: 'Trash',
   }
   let body = ''
-  if (view == 'apps') body = library(at)
+  if (view == 'apps') body = library(at, env)
   if (view == 'connect') {
     body = `${agentSetup(at.agents ?? [], env)}${copying}${tabbing}`
   }
@@ -1093,12 +1152,14 @@ let desk = (at: SpacePage, env: Host) => {
 <h2>Ask your agent for a new yaks.app</h2>${
       agentList(at.agents ?? [], 'links')
     }</section>${connectCard(at)}
-<div class="Desk_Options">${chat()}
-<section class="Card"><h2>Upload your website</h2>${dropZone()}</section></div>${chatLive}${dropping}`
+<div class="Desk_Options">${chat(`${site}/api/build`)}
+<section class="Card"><h2>Upload your website</h2>${
+      dropZone(undefined, `${site}/deploy`)
+    }</section></div>${chatLive('/build.js')}${dropping}`
   }
   if (view == 'visits') {
     body = at.apps.length
-      ? visited(at.views ?? null, at.viewsOff ?? '')
+      ? visited(at.views ?? null, at.viewsOff ?? '', site)
       : '<section class="Desk_Empty"><h2>No visits yet</h2><p>Your app visits will appear here once you have an app.</p></section>'
   }
   if (view == 'selling') body = selling(at, env)
@@ -1111,11 +1172,11 @@ let desk = (at: SpacePage, env: Host) => {
         paid: at.paid,
       },
       env,
-      managePath('billing'),
+      managePath('billing', at.pick),
     ) + billing
   }
   if (view == 'trash') body = trash(at)
-  if (view == 'connections') body = connections(at)
+  if (view == 'connections') body = connections(at, env)
   return shell(
     env,
     `${titles[view]} · ${esc(at.space)}`,
@@ -1124,7 +1185,7 @@ let desk = (at: SpacePage, env: Host) => {
     `${
       navigation(at, view, env)
     }<div class="Desk_Body"><header class="Desk_Head"><div>
-<a class="Desk_Address" href="/" target="_blank" rel="noopener">${
+<a class="Desk_Address" href="${site}/" target="_blank" rel="noopener">${
       esc(spaceHost(env, at.space))
     } ↗</a><h1>${titles[view]}</h1>${
       view == 'visits'
@@ -1132,7 +1193,7 @@ let desk = (at: SpacePage, env: Host) => {
         : ''
     }</div>${
       view == 'apps'
-        ? `<a class="Button" href="${managePath('new')}">+ New app</a>`
+        ? `<a class="Button" href="${managePath('new', at.pick)}">+ New app</a>`
         : ''
     }</header><div class="Desk_Content" id="content" tabindex="-1">${
       at.say
@@ -1142,7 +1203,7 @@ let desk = (at: SpacePage, env: Host) => {
         : ''
     }${body}</div></div>${view == 'apps' ? copying : ''}${
       ['apps', 'new', 'connect'].includes(view)
-        ? agentLive(managePath() + '/agents')
+        ? agentLive('/oauth/agents')
         : ''
     }`,
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
@@ -1151,7 +1212,6 @@ let desk = (at: SpacePage, env: Host) => {
 }
 
 export let spaceIndex = (at: SpacePage, env: Host = {}) => {
-  if (at.role == 'owner') return desk(at, env)
   let mine = at.apps.length
     ? `<nav class="Pills" aria-label="Apps here">${
       at.apps.map((a) =>
@@ -1166,7 +1226,9 @@ export let spaceIndex = (at: SpacePage, env: Host = {}) => {
       at.hidden == 1 ? 'One app here is' : `${at.hidden} apps here are`
     } private. Ask whoever runs this space to let you in.</p>`
     : ''
-  let pitch = at.person
+  let pitch = at.manage
+    ? `<p><a class="Button" href="${esc(at.manage)}">Manage your apps</a></p>`
+    : at.person
     ? home(env)
     : `<p><a class="Button" href="${esc(at.signIn)}">Sign in</a></p>
 <div class="Card"><h2>What is yaks.app?</h2><p>Ask an assistant like Claude or ChatGPT for an app, and it builds one here — a page of your own you can send to anyone.</p><a href="${
@@ -1234,6 +1296,15 @@ export let soon = (what: string, env: Host = {}) =>
 let held = (name: string, value?: string | null) =>
   value ? `<input type="hidden" name="${name}" value="${esc(value)}">` : ''
 
+// The path of an address, whole or bare; nothing, for one that is neither.
+let pathOf = (href: string) => {
+  try {
+    return new URL(href, 'https://x').pathname
+  } catch {
+    return ''
+  }
+}
+
 // What each card carries forward: the authorize request's own query string,
 // so the code form lands back where it started, and the page the person was
 // on before they were asked to sign in, so the code hands them back to it
@@ -1241,7 +1312,7 @@ let held = (name: string, value?: string | null) =>
 // decide, never this page's.
 let carried = (q: string | null, back?: string | null) =>
   held('q', q) + held('return', back) +
-  (back == '/connect' || back?.endsWith(managePath('connect'))
+  (back && ['/connect', managePath('connect')].includes(pathOf(back))
     ? `<script>if (location.hash) document.currentScript.previousElementSibling.value += location.hash</script>`
     : '')
 
@@ -1960,9 +2031,7 @@ export let connect = (yours: Yours, status = 200, env: Host = {}) =>
 <summary>Your address and plan</summary>
 ${mine(yours, env)}${plan(yours, env)}
 </details>
-<p class="Note"><a href="https://${
-      esc(spaceHost(env, yours.slug))
-    }${managePath()}">Your apps and settings</a></p>
+<p class="Note"><a href="${url(env, MANAGE)}">Your apps and settings</a></p>
 <p class="Note"><a href="${url(env, '/help')}">Need help?</a></p>
 ${home(env)}${copying}${tabbing}${inline}${billing}${
       agentLive('/oauth/agents')

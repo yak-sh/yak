@@ -20,7 +20,7 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../bin/testing.ts'
 import { parseHTML } from 'linkedom'
-import { spaceIndex } from './pages.ts'
+import { desk, spaceIndex } from './pages.ts'
 import { managePath } from './route.ts'
 import { client, connector, kernel, seed, signIn } from './probe.ts'
 
@@ -68,12 +68,12 @@ slow('a space with no front page lists what you may open', async () => {
     // block is about rather than the sentence it says it in.
     assert(!cold.includes('front page'), cold)
 
-    // The owner: both apps, the block offering the front-page choice, and no
+    // The owner: both apps, the way to their dashboard at the apex, and no
     // pitch or sign-in — they are home.
     let mine = await (await at(them.cookie)).text()
     assertStringIncludes(mine, 'href="/recipes/"')
     assertStringIncludes(mine, 'href="/garden/"')
-    assertStringIncludes(mine, `href="${managePath('settings')}"`)
+    assertStringIncludes(mine, 'href="https://yaks.app/manage?space=jeff"')
     assert(!mine.includes('name="name"'), mine)
     assert(!mine.includes('What is yaks.app?'), mine)
     assert(!mine.includes('login?return='), mine)
@@ -97,7 +97,10 @@ slow('a space with no front page lists what you may open', async () => {
     let ready = await k.at('bare.yaks.app', '/', {
       headers: { cookie: them.cookie },
     })
-    assertStringIncludes(await ready.text(), `href="${managePath('connect')}"`)
+    assertStringIncludes(
+      await ready.text(),
+      'href="https://yaks.app/manage?space=bare"',
+    )
 
     // Only the bare address lists. A path under a space with no front page
     // names nothing, and says so.
@@ -118,15 +121,17 @@ slow('management separates app creation from agent setup', async () => {
   try {
     let { cookie } = await seed(k, [{ slug: 'bare', apps: [] }])
     let at = (view: Parameters<typeof managePath>[0]) =>
-      k.at('bare.yaks.app', managePath(view), { headers: { cookie } })
+      k.at('yaks.app', managePath(view, 'bare'), { headers: { cookie } })
     let library = await (await at('apps')).text()
     assert(!library.includes('<textarea'), library)
     assert(!library.includes('type="file"'), library)
+    // The page is the apex's, and its forms aim at the space's own doors.
     let fresh = await (await at('new')).text()
-    assertStringIncludes(fresh, 'action="/api/build"')
-    assertStringIncludes(fresh, 'action="/deploy"')
-    assertStringIncludes(fresh, 'src="/api/build.js"')
+    assertStringIncludes(fresh, 'action="https://bare.yaks.app/api/build"')
+    assertStringIncludes(fresh, 'action="https://bare.yaks.app/deploy"')
+    assertStringIncludes(fresh, 'src="/build.js"')
     assert(!fresh.includes('name="agent"'), fresh)
+    assertEquals((await k.at('yaks.app', '/build.js')).status, 200)
     assertEquals((await k.at('bare.yaks.app', '/api/build.js')).status, 200)
     let setup = await (await at('connect')).text()
     assertStringIncludes(setup, 'Your agents')
@@ -138,32 +143,34 @@ slow('management separates app creation from agent setup', async () => {
   }
 })
 
-// The owner block itself, drawn straight (pages.ts `spaceIndex` is pure): the
-// order it puts its blocks in, and what stands where the connect steps were.
-// Every state a person passes through is one call here — landed, connected,
+// The dashboard itself, drawn straight (pages.ts `desk` is pure): the order
+// it puts its blocks in, and what stands where the connect steps were. Every
+// state a person passes through is one call here — landed, connected,
 // something built — where reaching each through workerd is a sign-in, an
 // OAuth grant and an app apiece (identity_test.ts holds those ends).
 let block = (
-  at: Partial<Parameters<typeof spaceIndex>[0]> = {},
-  env: Parameters<typeof spaceIndex>[1] = {},
-) =>
+  at: Partial<Parameters<typeof desk>[0]> = {},
+  env: Parameters<typeof desk>[1] = {},
+) => desk({ space: 'dana', apps: [], name: 'dana', ...at }, env).text()
+
+// The space's front door, which anybody may be shown.
+let face = (at: Partial<Parameters<typeof spaceIndex>[0]> = {}) =>
   spaceIndex({
     space: 'dana',
     title: 'dana',
     apps: [],
     hidden: 0,
-    role: 'owner',
-    person: true,
+    role: null,
+    person: false,
     signIn: 'https://yaks.app/login',
-    name: 'dana',
     ...at,
-  }, env).text()
+  }).text()
 
 Deno.test('the app library has navigation, not account forms', async () => {
   let page = await block({
     apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
   })
-  assertStringIncludes(page, 'href="/recipes/"')
+  assertStringIncludes(page, 'href="https://dana.yaks.app/recipes/"')
   for (let view of ['connect', 'new', 'settings', 'visits', 'trash'] as const) {
     assertStringIncludes(page, `href="${managePath(view)}"`)
   }
@@ -203,8 +210,14 @@ Deno.test('new app exposes separate build and upload forms below the agent route
     assert(field.hasAttribute('required'))
     assert(field.closest('section')?.querySelector('h2'))
   }
-  assertEquals(build.closest('form')?.getAttribute('action'), '/api/build')
-  assertEquals(upload.closest('form')?.getAttribute('action'), '/deploy')
+  assertEquals(
+    build.closest('form')?.getAttribute('action'),
+    'https://dana.yaks.app/api/build',
+  )
+  assertEquals(
+    upload.closest('form')?.getAttribute('action'),
+    'https://dana.yaks.app/deploy',
+  )
   assertEquals(
     upload.closest('form')?.getAttribute('enctype'),
     'multipart/form-data',
@@ -342,11 +355,9 @@ Deno.test('who visited: a bar per day and three lists, no script', async () => {
   // Nothing here runs: the chart is markup, not a canvas somebody paints.
   assertStringIncludes(page, '<svg class="Stats_Chart"')
 
-  // Not the owner's, not their business.
-  let theirs = await block({
-    role: null,
+  // Not the owner's, not their business: the front door has no such block.
+  let theirs = await face({
     apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
-    views: [VISITS],
   })
   assert(!parseHTML(theirs).document.querySelector('.Stats'))
 })
@@ -392,28 +403,18 @@ Deno.test('trash has restore forms only on its own page', async () => {
   assertStringIncludes(page, `action="${managePath('trash')}"`)
   assertStringIncludes(page, 'name="restore" value="notes"')
   assertStringIncludes(page, '12 days left')
-  for (
-    let at of [{ trash }, { role: 'editor', view: 'trash' as const, trash }]
-  ) {
-    let other = await block(at)
-    assert(!other.includes('name="restore"'), other)
-    assert(!other.includes('Notes'), other)
-  }
+  let other = await block({ trash })
+  assert(!other.includes('name="restore"'), other)
+  assert(!other.includes('Notes'), other)
 })
 
-Deno.test("none of the owner block is anybody else's", async () => {
-  let page = await block({
-    role: null,
-    person: false,
-    agents: [{
-      id: 'chatgpt',
-      brand: 'chatgpt',
-      name: 'ChatGPT',
-      connectedAt: 1,
-    }],
-  })
-  assert(!page.includes('name="name"'), page)
-  assert(!/class="[^"]*\bCopy_Go\b/.test(page), page)
+Deno.test("none of the dashboard is anybody else's", async () => {
+  for (let role of [null, 'editor', 'owner']) {
+    let page = await face({ role, person: !!role })
+    assert(!page.includes('name="name"'), page)
+    assert(!/class="[^"]*\bCopy_Go\b/.test(page), page)
+    assert(!page.includes('class="SideNav"'), page)
+  }
 })
 
 slow('the front page is served at the space root', async () => {
@@ -595,8 +596,8 @@ Deno.test('Billing is a management page beside Settings with space checkout and 
       [...document.querySelectorAll('.SideNav a')].map((a) =>
         a.getAttribute('href')
       ).slice(-4),
-      ['visits', 'billing', 'settings', 'trash'].map((view) =>
-        `/_yaks/${view}`
+      (['visits', 'billing', 'settings', 'trash'] as const).map((view) =>
+        managePath(view)
       ),
     )
     if (plus) assertStringIncludes(page, 'stops renewing')

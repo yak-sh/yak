@@ -35,11 +35,11 @@
 // the vocabulary, so `admitted()` drops them off any write that does not carry
 // the kernel flag. `tier` is what usage.ts `ceilings()` reads, and a tier a
 // person could write is a person who can lift their own ceilings.
-import { managePath } from './route.ts'
+import { planSettings } from './route.ts'
 import * as dirPart from './directory.ts'
 import { directory, type Plan, type Space, stamp } from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { apex, type Host, spaceHost } from './host.ts'
+import { apex, type Host } from './host.ts'
 
 import { cookieValue, verify } from './lib/token.ts'
 import { refusal } from '@yaks/hook'
@@ -364,10 +364,10 @@ export let checkout = async (env: Env, req: Request, at?: Space) => {
       customer,
       line_items: { 0: { price: env.STRIPE_PRICE, quantity: 1 } },
       success_url: at
-        ? `https://${spaceHost(env, at.slug)}${managePath('billing')}?paid=1`
+        ? `${planSettings(at.slug, env)}&paid=1`
         : backTo(true, env),
       cancel_url: at
-        ? `https://${spaceHost(env, at.slug)}${managePath('billing')}?paid=0`
+        ? `${planSettings(at.slug, env)}&paid=0`
         : backTo(false, env),
       client_reference_id: space.eid,
       metadata: metaOf(env, space),
@@ -419,7 +419,7 @@ export let portal = async (env: Env, req: Request, at?: Space) => {
     let made = await ask(env, '/v1/billing_portal/sessions', {
       customer,
       return_url: at
-        ? `https://${spaceHost(env, at.slug)}${managePath('billing')}`
+        ? planSettings(at.slug, env)
         : `https://${apex(env)}/connect`,
     })
     let url = String(made.url ?? '')

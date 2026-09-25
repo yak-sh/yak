@@ -379,9 +379,9 @@ What they do not prove:
 An app never holds a key. `connection_need` says what it needs — a built
 integration by name, or a name of your own with the hosts its key may be sent to
 — and the person pastes the key, or signs in, on the space's connections page
-(`<space>.yaks.app/_yaks/connections`). It goes from there to the vault; it is
-never in this chat, the app's data, its history or any tool's answer. Never ask
-the person to paste a key to you, and never invent one.
+(`yaks.app/manage/connections`). It goes from there to the vault; it is never in
+this chat, the app's data, its history or any tool's answer. Never ask the
+person to paste a key to you, and never invent one.
 
 What the worker reads, as `env.WEATHER` (the integration's name in capitals, or
 the `binding` you give), is a **sentinel**: a string that stands for the key.

@@ -591,7 +591,7 @@ slow('the free tier: a warning once, then the refusals', async () => {
     await assertRejects(
       () => agent.tool('app_new', { space: 'brim', slug: 'a6', title: 'A6' }),
       Error,
-      'Compare paid plans in settings: https://brim.yaks.app/_yaks/billing',
+      'Compare paid plans in settings: https://yaks.app/manage/billing?space=brim',
     )
 
     // Data past the ceiling is refused at the app's own door, in the
@@ -615,7 +615,9 @@ slow('the free tier: a warning once, then the refusals', async () => {
     let over = await k.at('brim.yaks.app', '/one/')
     assertEquals(over.status, 429)
     assertStringIncludes(await over.text(), '50,000 monthly visits')
-    let manage = await k.at('brim.yaks.app', '/_yaks', { headers: { cookie } })
+    let manage = await k.at('yaks.app', '/manage?space=brim', {
+      headers: { cookie },
+    })
     assertEquals(manage.status, 200)
     await manage.body?.cancel()
     // MCP management still works, and raising the allowance reopens serving.

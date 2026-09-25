@@ -355,7 +355,7 @@ Deno.test('a refusal names the ceiling and where the plans are written', () => {
   for (let what of ['apps', 'bytes', 'emails'] as const) {
     let said = atCeiling(space(), what)
     assertStringIncludes(said, 'free tier')
-    assertStringIncludes(said, 'https://jeff.yaks.app/_yaks/billing')
+    assertStringIncludes(said, 'https://yaks.app/manage/billing?space=jeff')
     assert(!/checkout|subscribe/i.test(said), said)
   }
   assertStringIncludes(atCeiling(space(), 'apps'), '5 apps')
@@ -420,7 +420,7 @@ Deno.test('a free space gets five builds each month regardless of lifetime use',
   let after = space({ builds: 5, tokens: 1_000, built: 45 })
   let no = (await refusedBuild(after, NOW))!
   assert(no)
-  assertStringIncludes(no, 'https://jeff.yaks.app/_yaks/billing')
+  assertStringIncludes(no, 'https://yaks.app/manage/billing?space=jeff')
   assert(!/checkout|subscribe/i.test(no), no)
   assert(await refusedBuild(space({ builds: 6 }), NOW))
 
@@ -443,7 +443,7 @@ Deno.test('a paid space counts its builds down, and the month gives them back', 
   let no = (await refusedBuild(plus(BUILDS.plus), NOW))!
   assertStringIncludes(no, `${BUILDS.plus} built-in builds a month`)
   assertStringIncludes(no, 'build again on the 1st')
-  assertStringIncludes(no, 'https://jeff.yaks.app/_yaks/billing')
+  assertStringIncludes(no, 'https://yaks.app/manage/billing?space=jeff')
   // Last month's builds are not this month's.
   assertEquals(await refusedBuild(plus(BUILDS.plus, '2026-08'), NOW), null)
 
@@ -648,7 +648,7 @@ Deno.test('R2 accounting sweeps without analytics, follows deletion and survives
 Deno.test('all quota guidance uses space plan settings without promising a Plus upgrade', () => {
   for (const what of ['apps', 'bytes', 'files', 'emails', 'builds'] as const) {
     const free = atCeiling(space(), what, { APEX: 'yaks.fyi' })
-    assertStringIncludes(free, 'https://jeff.yaks.fyi/_yaks/billing')
+    assertStringIncludes(free, 'https://yaks.fyi/manage/billing?space=jeff')
     assertStringIncludes(free, 'Compare paid plans')
     assert(!free.includes('checkout'))
     if (what != 'apps') {

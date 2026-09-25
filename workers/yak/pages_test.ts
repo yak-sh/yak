@@ -1,13 +1,15 @@
 import { assertEquals, assertStringIncludes } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import {
   askCode,
   askConnect,
   askEmail,
   connect,
+  desk,
+  type DeskPage,
   lost,
   spaceBinned,
   spaceIndex,
-  type SpacePage,
 } from './pages.ts'
 
 let env = { APEX: 'yaks.fyi' }
@@ -27,16 +29,7 @@ let drawn = [
   }"`,
   'Your calendar. <a href="https://cal.test/">cal.test</a>',
 ]
-let page: SpacePage = {
-  space: 'ada',
-  title: 'Ada',
-  apps: [],
-  hidden: 0,
-  role: 'owner',
-  person: true,
-  signIn: 'https://yaks.fyi/login',
-  sell: 'none',
-}
+let page: DeskPage = { space: 'ada', apps: [], sell: 'none' }
 
 let staged = async (response: Response, contains: string[]) => {
   let html = await response.text()
@@ -63,14 +56,23 @@ Deno.test('pages: staging sign-in and error pages link to their own apex', async
 
 Deno.test('pages: staging space management and connector forms keep their host', async () => {
   for (let view of ['apps', 'settings', 'connect', 'selling'] as const) {
-    await staged(spaceIndex({ ...page, view }, env), [
+    await staged(desk({ ...page, view }, env), [
       'ada.yaks.fyi',
       'https://yaks.fyi/help',
     ])
   }
-  await staged(spaceIndex({ ...page, role: null, person: false }, env), [
-    'https://yaks.fyi/login',
-  ])
+  await staged(
+    spaceIndex({
+      space: 'ada',
+      title: 'Ada',
+      apps: [],
+      hidden: 0,
+      role: null,
+      person: false,
+      signIn: 'https://yaks.fyi/login',
+    }, env),
+    ['https://yaks.fyi/login'],
+  )
   await staged(
     connect(
       {
@@ -113,7 +115,7 @@ Deno.test('pages: only production offers its repository marketplace shortcut', a
 
 Deno.test('connections: the space’s ask of each person offers nothing to connect, and a person’s own is theirs to remove', async () => {
   let drawn = async (own: boolean) =>
-    await spaceIndex({
+    await desk({
       ...page,
       view: 'connections',
       connections: {
@@ -123,6 +125,7 @@ Deno.test('connections: the space’s ask of each person offers nothing to conne
           integration: 'Weather',
           face: named('Weather'),
           own,
+          space: own ? null : 'ada',
           each: true,
           status: 'needed',
           account: '',
@@ -153,6 +156,69 @@ Deno.test('connections: the space’s ask of each person offers nothing to conne
   assertEquals(own.includes('Open to anyone'), false)
 })
 
+Deno.test('connections: the person’s own, then this space with what it could add, then each other space', async () => {
+  let shown = (integration: string, space: string | null) => ({
+    eid: integration,
+    integration,
+    face: named(integration),
+    own: space == null,
+    space,
+    each: false,
+    status: 'connected' as const,
+    account: '',
+    keyed: true,
+    hosts: [],
+    apps: [],
+    saving: '',
+    failed: '',
+  })
+  let html = await desk({
+    ...page,
+    pick: 'ada',
+    view: 'connections',
+    connections: {
+      on: true,
+      list: [
+        shown('Mail', null),
+        shown('Weather', 'ada'),
+        shown('Maps', 'bob'),
+      ],
+      services: [],
+      built: [{ name: 'openrouter', keyed: true, face: named('OpenRouter') }],
+    },
+  }, env).text()
+  let { document } = parseHTML(html)
+  let groups = [...document.querySelectorAll('.Desk_Group')]
+  assertEquals(groups.map((g) => g.textContent), [
+    'Yours',
+    'ada.yaks.fyi',
+    'bob.yaks.fyi',
+  ])
+  let under = (i: number) => {
+    let names = []
+    for (
+      let at = groups[i].nextElementSibling;
+      at && !at.classList.contains('Desk_Group');
+      at = at.nextElementSibling
+    ) names.push(at.querySelector('h2')?.textContent)
+    return names
+  }
+  assertEquals(under(0), ['Mail'])
+  assertEquals(under(1), ['Weather', 'OpenRouter', 'Add a key'])
+  assertEquals(under(2), ['Maps'])
+  // Each posts for the space that keeps it; the person's own, for the page's.
+  let actions = [...document.querySelectorAll('form.Connection_Do')].map((f) =>
+    f.getAttribute('action')
+  )
+  assertEquals(
+    new Set(actions),
+    new Set([
+      '/manage/connections?space=ada',
+      '/manage/connections?space=bob',
+    ]),
+  )
+})
+
 Deno.test('askConnect: the app, the service, the one form, and the way back', async () => {
   let html = await askConnect({
     app: 'Notes',
@@ -175,7 +241,7 @@ Deno.test('askConnect: the app, the service, the one form, and the way back', as
 
 Deno.test('connections: a built integration is offered by its face, and a site is linked only at https', async () => {
   let offered = async (site: string) =>
-    await spaceIndex({
+    await desk({
       ...page,
       view: 'connections',
       connections: {
@@ -191,7 +257,7 @@ Deno.test('connections: a built integration is offered by its face, and a site i
 })
 
 Deno.test('paid plan settings describe unlimited apps', async () => {
-  const html = await spaceIndex({
+  const html = await desk({
     ...page,
     view: 'billing',
     plan: { plus: true, ends: '', known: true },

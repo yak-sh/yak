@@ -808,9 +808,13 @@ Deno.test('monthly visit quota stops all app serving before dispatch or files', 
     )
     assertEquals(await mine.text(), 'the router')
     calls--
+    // The dashboard's old address still moves to the apex, over quota.
     let manage = await k.at('/_yaks')
-    assertEquals(manage.status, 303)
-    assertStringIncludes(manage.headers.get('location')!, '/login')
+    assertEquals(manage.status, 301)
+    assertStringIncludes(
+      manage.headers.get('location')!,
+      'https://yaks.app/manage?space=',
+    )
     await manage.body?.cancel()
     // A prior month's count cannot keep serving blocked before the next sweep.
     await meter(limit, '2020-01')
@@ -1088,20 +1092,19 @@ Deno.test("a trashed front page is nobody's, and the owner restores it there", a
   // And a visitor is told nothing about what was deleted.
   assertEquals(listed.includes('In the trash'), false)
 
-  // What the owner sees on that page instead — the trash under the pills, with
-  // its restore button — is pages.ts's own, drawn straight in home_test.ts:
-  // reaching the owner block through this stand-in would ask the OAuth
+  // Where the owner restores it is the dashboard's trash page, drawn straight
+  // in home_test.ts: reaching it through this stand-in would ask the OAuth
   // provider whether an agent has ever connected, and that is workerd's.
   //
   // The button itself is this door. One POST to the page it is on, and the
   // app is back — front page and all, because the word was never taken off it.
   let cookie = await as(ADA)
   let back = await apps.fetch(
-    visit('/', {
+    new Request('https://yaks.app/manage/trash?space=ada', {
       method: 'POST',
       headers: {
         cookie,
-        origin: 'https://ada.yaks.app',
+        origin: 'https://yaks.app',
         'content-type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({ restore: 'cookbook' }).toString(),
@@ -1766,11 +1769,11 @@ let sold = async (env: Env) =>
 // a runtime.
 let pressed = async (env: Env, sell: string) =>
   await apps.fetch(
-    new Request('https://ada.yaks.app/_yaks/selling', {
+    new Request('https://yaks.app/manage/selling?space=ada', {
       method: 'POST',
       headers: {
         cookie: await as(ADA),
-        origin: 'https://ada.yaks.app',
+        origin: 'https://yaks.app',
         'content-type': 'application/x-www-form-urlencoded',
       },
       body: `sell=${sell}`,

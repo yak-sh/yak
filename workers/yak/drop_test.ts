@@ -20,6 +20,7 @@ let drops = (
   file: File,
   slug?: string,
   cookie?: string,
+  origin?: string,
 ) => {
   let form = new FormData()
   form.set('file', file)
@@ -27,7 +28,7 @@ let drops = (
   return k.at(host, '/deploy', {
     method: 'POST',
     body: form,
-    headers: cookie ? { cookie } : {},
+    headers: { ...(cookie ? { cookie } : {}), ...(origin ? { origin } : {}) },
   })
 }
 
@@ -217,23 +218,46 @@ slow('what the door will not take, it says in a sentence', async () => {
 
 // The app library leads to the New app page, where uploading lives alongside
 // building. A stranger must not be offered a form that will only refuse them.
+// The page is the dashboard's, at the apex, and its form posts to the space's
+// own door, which takes it from there and from nowhere else but the space.
 slow("the drop zone is on the owner's New app page", async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
-    let path = managePath('new')
-    let library = await k.at('jeff.yaks.app', '/', {
+    let path = managePath('new', 'jeff')
+    let library = await k.at('yaks.app', managePath('apps', 'jeff'), {
       headers: { cookie: them.cookie },
     })
     assertStringIncludes(await library.text(), `href="${path}"`)
-    let mine = await (await k.at('jeff.yaks.app', path, {
+    let mine = await (await k.at('yaks.app', path, {
       headers: { cookie: them.cookie },
     })).text()
-    assertStringIncludes(mine, 'action="/deploy"')
+    assertStringIncludes(mine, 'action="https://jeff.yaks.app/deploy"')
     assertStringIncludes(mine, 'type="file"')
+    let file = new File(['<h1>Hi</h1>'], 'index.html', { type: 'text/html' })
+    let sent = await drops(
+      k,
+      'jeff.yaks.app',
+      file,
+      'greeting',
+      them.cookie,
+      'https://yaks.app',
+    )
+    assertEquals(sent.status, 200)
+    await sent.body?.cancel()
+    let forged = await drops(
+      k,
+      'jeff.yaks.app',
+      file,
+      'greeting',
+      them.cookie,
+      'https://evil.yaks.app',
+    )
+    assertEquals(forged.status, 403)
+    await forged.body?.cancel()
     let cold = await (await k.at('jeff.yaks.app', '/')).text()
     assert(!cold.includes('/deploy'), cold)
-    let shut = await k.at('jeff.yaks.app', path, { redirect: 'manual' })
+    let shut = await k.at('yaks.app', path, { redirect: 'manual' })
     assertEquals(shut.status, 303)
     assertStringIncludes(shut.headers.get('location') ?? '', '/login?return=')
     await shut.body?.cancel()

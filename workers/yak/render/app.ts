@@ -1,5 +1,6 @@
 // The app library's Tile: the worker owns its markup, and each host supplies h.
-// Gallery wording is page context because its visibility depends on the viewer.
+// Gallery wording is page context because its visibility depends on the viewer,
+// and so is `at`, the space's own address, on a page that is not there.
 
 import { parse } from '@yaks/query'
 import type { Renderer } from '@yaks/render'
@@ -15,12 +16,17 @@ export let app: Renderer = {
       'a',
       {
         class: 'Apps_Item',
-        href: `/${a.slug}/`,
+        href: `${ctx.at ?? ''}/${a.slug}/`,
         target: '_blank',
         rel: 'noopener',
       },
       '\n',
-      h('img', { src: `/${a.slug}/icon.png`, width: 44, height: 44, alt: '' }),
+      h('img', {
+        src: `${ctx.at ?? ''}/${a.slug}/icon.png`,
+        width: 44,
+        height: 44,
+        alt: '',
+      }),
       '\n',
       h('strong', null, doc?.title || a.slug),
       h('span', { class: 'Apps_Path' }, `/${a.slug}`),

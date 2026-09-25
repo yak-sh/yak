@@ -464,9 +464,9 @@ slow(
         let key = stripeKey()
         // Checkout is a page, not a call: the door mints the session and a
         // browser finishes it with the card Stripe documents for exactly this.
-        let door = await k.at(`${mine}.yaks.app`, managePath('billing'), {
+        let door = await k.at('yaks.app', managePath('billing', mine), {
           method: 'POST',
-          headers: { cookie, origin: `https://${mine}.yaks.app` },
+          headers: { cookie, origin: 'https://yaks.app' },
           // The object, not its text: a form body is what the door reads,
           // and fetch writes the content type for one.
           body: new URLSearchParams({ billing: 'checkout' }),

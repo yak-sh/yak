@@ -12,7 +12,7 @@
 //
 // A service sends a person back to one address, the one registered for
 // yaks.app, so the return is a door at the apex and the attempt rides a cookie
-// there from the space's page: sealed for this use alone (lib/token.ts
+// there from the page it was begun on: sealed for this use alone (lib/token.ts
 // `connect`), naming the person, the space and the connection it was begun
 // for, and the page to bring them back to.
 //
@@ -73,7 +73,7 @@ import { apex, url } from './host.ts'
 import { cookieValue, opened, seal } from './lib/token.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import type { Answer, Door, Plugin } from './plugin.ts'
-import { MANAGE, managePath, signInAt } from './route.ts'
+import { MANAGE, manageAt, OURS, signInAt } from './route.ts'
 import { caught } from './sentry.ts'
 import { domainOf, vouched, type Who, whoIs } from './session.ts'
 import {
@@ -92,7 +92,7 @@ import { vaulted, vaultOf } from './vault.ts'
 /** Where a service sends a person back after they sign in there. */
 export let CALLBACK = '/connections/callback'
 /** Where a service's webhooks for one app and connection arrive. */
-export let HOOKS = `${MANAGE}/hooks/`
+export let HOOKS = `${OURS}/hooks/`
 
 // The cookie an attempt rides, and how long it may: the attempt's own ten
 // minutes (@yaks/oauth `attempt`).
@@ -130,8 +130,10 @@ export type Shown = {
   eid: string
   integration: string
   face: Face
-  /** the signed-in person's own, rather than the space's */
+  /** the signed-in person's own, rather than a space's */
   own: boolean
+  /** the space it is kept for, or null for the person's own */
+  space: string | null
   /** each person who uses its apps connects their own; the space's is only
    * the ask */
   each: boolean
@@ -247,26 +249,27 @@ let rebound = async (env: Env, apps: string[]) => {
 export let enabled = (req: Request): string[] =>
   new URL(req.url).searchParams.getAll('enable').flatMap((n) => n.split(','))
 
-/** Everything the page shows a space's owner: the space's connections and
- * their own, with the apps that use each — the space's by the titles given,
- * and another space's app they connected their own account for by its own.
- * A testing integration is offered only when `enable` names it. */
+/** Everything the page shows a person: their own connections and each of
+ * their spaces', with the apps that use each. The first space is the one the
+ * page is for, and what nothing there is connected to yet is offered to it —
+ * a testing integration only when `enable` names it. */
 export let connectionsOf = async (
   env: Env,
-  space: Space,
+  spaces: Space[],
   person: string,
-  apps: { eid: string; title: string; slug: string }[],
   services: Service[] = [],
   enable: string[] = [],
 ): Promise<Connections> => {
   let read = readOf(env)
-  let all = [...await list(read, space.eid), ...await list(read, person)]
+  let slugs = new Map(spaces.map((s) => [s.eid, s.slug]))
+  let all = (await Promise.all(
+    [person, ...slugs.keys()].map((owner) => list(read, owner)),
+  )).flat()
   let links = all.filter((b) => b[USES])
-  let named = new Map(apps.map((a) => [a.eid, a.title || a.slug]))
-  let elsewhere = [...new Set(links.map((l) => String(comp(l, 'edge').from)))]
-    .filter((eid) => !named.has(eid))
-  if (elsewhere.length) {
-    for (let b of await read(`.eid=${elsewhere.join(',')}&.app&*`)) {
+  let named = new Map<string, string>()
+  let apps = [...new Set(links.map((l) => String(comp(l, 'edge').from)))]
+  if (apps.length) {
+    for (let b of await read(`.eid=${apps.join(',')}&.app&*`)) {
       named.set(
         b.entity.eid,
         String(comp(b, 'doc').title || comp(b, 'app').slug),
@@ -284,6 +287,7 @@ export let connectionsOf = async (
         integration: String(c.integration),
         face: faceOf(String(c.integration), i),
         own: c.owner == person,
+        space: slugs.get(String(c.owner)) ?? null,
         each: to.some((l) => comp(l, USES).each),
         status: (c.status ?? 'needed') as Status,
         account: String(c.account ?? ''),
@@ -307,7 +311,10 @@ export let connectionsOf = async (
       }
     }),
   )
-  let taken = new Set(shown.map((s) => s.integration))
+  let here = spaces[0]?.slug
+  let taken = new Set(
+    shown.filter((s) => s.own || s.space == here).map((s) => s.integration),
+  )
   // A client is kept in the vault, so a deploy with none has no client either.
   let offered = async (i: Integration) =>
     !taken.has(i.name) && (!i.testing || enable.includes(i.name)) &&
@@ -348,8 +355,7 @@ type Held = {
 }
 
 // The connections page of a space, where a sign-in begun there comes back to.
-let pageOf = (env: Env, space: string) =>
-  `https://${space}.${apex(env)}${managePath('connections')}`
+let pageOf = (env: Env, space: string) => manageAt(space, 'connections', env)
 
 // A page, told how a sign-in went.
 let told = (page: string, how: 'connected' | 'refused') => {
@@ -480,7 +486,7 @@ export let connecting = async (
       ? no(String(comp(now, 'content').body ?? 'The key could not be saved.'))
       : { say: 'Saved. The key is kept safe and never shown again.', no: false }
   } catch (e) {
-    caught(e, { request: 'POST /_yaks/connections' })
+    caught(e, { request: 'POST /manage/connections' })
     return no(e instanceof Error ? e.message : "That didn't work.")
   }
 }
@@ -515,7 +521,7 @@ let callback: Door = async ({ env, req, path, space }) => {
     !held || !at || !who || !b ||
     owner != who.person && !(owner == at.eid && who.role == 'owner')
   ) {
-    return answer(url(env, '/manage'))
+    return answer(url(env, MANAGE))
   }
   // An attempt begun before its cookie named a page came from the space's.
   let back = held.back ?? pageOf(env, at.slug)
@@ -688,8 +694,7 @@ let hook: Door = async ({ env, req, path, space: slug }) => {
 // ---- the tools (T-38030) ---------------------------------------------------
 
 // Where the person connects what an app needs.
-let page = (env: Env, space: Space) =>
-  `https://${space.slug}.${apex(env)}${managePath('connections')}`
+let page = (env: Env, space: Space) => pageOf(env, space.slug)
 
 // One app's use of a connection, as an agent reads it.
 let integrationOf = (b: Bundle | undefined) =>

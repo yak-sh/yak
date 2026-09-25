@@ -10,7 +10,7 @@ import { app } from './app.ts'
 export let registry = define([app])
 export let vocab = platformVocab()
 
-export let tile = (a: SpacePage['apps'][number]) =>
+export let tile = (a: SpacePage['apps'][number], at?: string) =>
   render(
     registry,
     {
@@ -21,5 +21,5 @@ export let tile = (a: SpacePage['apps'][number]) =>
     },
     'List.Tile',
     vocab,
-    { gallery: a.gallery },
+    { gallery: a.gallery, at },
   )

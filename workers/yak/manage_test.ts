@@ -1,6 +1,7 @@
-// Account navigation stays available when an app owns the front page. These
-// requests use the browser's cookie and form paths, including the boundaries
-// that keep another space's page from changing this account.
+// The dashboard, at the apex (T-39354): reachable whatever app owns a space's
+// front page, and the old addresses on the space moving there. These requests
+// use the browser's cookie and form paths, including the boundaries that keep
+// another person, and another page, from changing this account.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../bin/testing.ts'
 import {
@@ -15,7 +16,7 @@ import {
 } from './probe.ts'
 import { MANAGE, managePath } from './route.ts'
 
-slow('account pages remain reachable behind a custom home app', async () => {
+slow('the dashboard is at the apex, whatever serves the space', async () => {
   let k = await kernel()
   try {
     let them = await signIn(k)
@@ -24,14 +25,14 @@ slow('account pages remain reachable behind a custom home app', async () => {
     let agent = connector(k, them.cookie)
     let dir = meta(k, them.cookie)
     let get = (path: string, cookie = them.cookie) =>
-      k.at(host, path, { redirect: 'manual', headers: { cookie } })
+      k.at('yaks.app', path, { redirect: 'manual', headers: { cookie } })
     let post = (
       path: string,
       fields: Record<string, string>,
       cookie = them.cookie,
-      origin = `https://${host}`,
+      origin = 'https://yaks.app',
     ) =>
-      k.at(host, path, {
+      k.at('yaks.app', path, {
         method: 'POST',
         redirect: 'manual',
         headers: {
@@ -75,31 +76,46 @@ slow('account pages remain reachable behind a custom home app', async () => {
     ))
       .body?.cancel()
 
+    // The space's own address is its apps', all of it.
+    let at = (path: string) =>
+      k.at(host, path, { headers: { cookie: them.cookie } })
+    assertStringIncludes(await (await at('/')).text(), '<h1>My front page</h1>')
     assertStringIncludes(
-      await (await get('/')).text(),
-      '<h1>My front page</h1>',
-    )
-    assertStringIncludes(
-      await (await get('/manage/')).text(),
+      await (await at('/manage/')).text(),
       '<h1>My manage app</h1>',
     )
     let library = await get(MANAGE)
     assertEquals(library.status, 200)
-    assertStringIncludes(await library.text(), 'href="/private-notes/"')
+    assertStringIncludes(
+      await library.text(),
+      `href="https://${host}/private-notes/"`,
+    )
     assertEquals((await get(`${MANAGE}/missing`)).status, 404)
-
-    // The apex can always find this account without going through its app.
-    let apex = await k.at('yaks.app', '/manage', {
-      redirect: 'manual',
-      headers: { cookie: them.cookie },
-    })
-    assertEquals(apex.status, 303)
-    assertEquals(apex.headers.get('location'), `https://${host}${MANAGE}`)
-    let login = await k.at('yaks.app', '/manage', { redirect: 'manual' })
+    let login = await k.at('yaks.app', MANAGE, { redirect: 'manual' })
     assertEquals(login.status, 303)
-    assertEquals(login.headers.get('location'), '/login?return=%2Fmanage')
+    assertEquals(
+      new URL(login.headers.get('location')!).searchParams.get('return'),
+      'https://yaks.app/manage',
+    )
+    await login.body?.cancel()
 
-    // An icon linked from a space's setup page still downloads from the apex.
+    // Where the dashboard was, letters and answers still send people: each
+    // view moves to its own at the apex, query and all.
+    for (
+      let [was, now] of [
+        ['/_yaks', `/manage?space=${slug}`],
+        ['/_yaks/', `/manage?space=${slug}`],
+        ['/_yaks/billing?paid=1', `/manage/billing?space=${slug}&paid=1`],
+      ]
+    ) {
+      let moved = await k.at(host, was, { redirect: 'manual' })
+      assertEquals(moved.status, 301, was)
+      assertEquals(moved.headers.get('location'), `https://yaks.app${now}`)
+      await moved.body?.cancel()
+    }
+    assertEquals((await k.at(host, '/_yaks/missing')).status, 404)
+
+    // An icon linked from the setup page still downloads from the apex.
     let setup = await (await get(managePath('connect'))).text()
     let icon = new URL(/href="([^"]+)" download="yaks-app.png"/.exec(setup)![1])
     let download = await k.at(icon.hostname, icon.pathname)
@@ -116,7 +132,7 @@ slow('account pages remain reachable behind a custom home app', async () => {
     assertEquals(saved.status, 303)
     assertEquals(
       saved.headers.get('location'),
-      `https://${host}${settings}?saved=1`,
+      `https://yaks.app${settings}?saved=1`,
     )
     assertEquals(await title(), 'Dana')
     let confirmed = await (await get(`${settings}?saved=1`)).text()
@@ -125,6 +141,13 @@ slow('account pages remain reachable behind a custom home app', async () => {
     // An address-only submission must not overwrite the independently saved name.
     assertEquals((await post(settings, { space: slug })).status, 303)
     assertEquals(await title(), 'Dana')
+    // A page that names the space carries it through every link and form.
+    let named = await (await get(managePath('settings', slug))).text()
+    assertStringIncludes(
+      named,
+      `action="${managePath('settings', slug).replace('&', '&amp;')}"`,
+    )
+    assertStringIncludes(named, `href="${managePath('trash', slug)}"`)
 
     await agent.tool('app_delete', { space: slug, app: 'discarded' })
     let trash = managePath('trash')
@@ -134,30 +157,44 @@ slow('account pages remain reachable behind a custom home app', async () => {
     )
     let restored = await post(trash, { restore: 'discarded' })
     assertEquals(restored.status, 303)
-    assertEquals(restored.headers.get('location'), `https://${host}${trash}`)
-    assertStringIncludes(await (await get(MANAGE)).text(), 'href="/discarded/"')
+    assertEquals(restored.headers.get('location'), `https://yaks.app${trash}`)
+    assertStringIncludes(
+      await (await get(MANAGE)).text(),
+      `href="https://${host}/discarded/"`,
+    )
     let stopped = await post(managePath('selling'), { sell: 'stop' })
     assertEquals(
       stopped.headers.get('location'),
-      `https://${host}${managePath('selling')}`,
+      `https://yaks.app${managePath('selling')}`,
     )
 
     let signedOut = await get(settings, '')
     assertEquals(signedOut.status, 303)
     let to = new URL(signedOut.headers.get('location')!)
-    assertEquals(to.searchParams.get('return'), `https://${host}${settings}`)
+    assertEquals(to.searchParams.get('return'), `https://yaks.app${settings}`)
+    // Somebody else, naming this space, is shown nothing of it; without a
+    // name, they are shown their own.
     let other = await signIn(k)
-    for (let path of [MANAGE, settings, trash]) {
-      let hidden = await get(path, other.cookie)
+    for (let view of ['apps', 'settings', 'trash'] as const) {
+      let hidden = await get(managePath(view, slug), other.cookie)
       assertEquals(hidden.status, 404)
       assert(!(await hidden.text()).includes('private-notes'))
     }
-    for (let cookie of ['', other.cookie]) {
-      assertEquals(
-        (await post(settings, { name: 'Changed' }, cookie)).status,
-        404,
-      )
-    }
+    let theirs = await (await get(MANAGE, other.cookie)).text()
+    assert(!theirs.includes('private-notes'), theirs)
+    assertEquals(
+      (await post(managePath('settings', slug), { name: 'Changed' }, ''))
+        .status,
+      303,
+    )
+    assertEquals(
+      (await post(
+        managePath('settings', slug),
+        { name: 'Changed' },
+        other.cookie,
+      )).status,
+      404,
+    )
     assertEquals(
       (await post(
         settings,
@@ -168,10 +205,7 @@ slow('account pages remain reachable behind a custom home app', async () => {
       403,
     )
     assertEquals(await title(), 'Dana')
-    assertStringIncludes(
-      await (await get('/')).text(),
-      '<h1>My front page</h1>',
-    )
+    assertStringIncludes(await (await at('/')).text(), '<h1>My front page</h1>')
   } finally {
     await k.stop()
   }
@@ -187,15 +221,15 @@ slow(
     })
     try {
       let them = await signIn(k)
-      let host = `${them.email.split('@')[0]}.yaks.app`
-      let path = managePath('billing')
-      let headers = { cookie: them.cookie, origin: `https://${host}` }
-      let page = await (await k.at(host, path, { headers })).text()
+      let slug = them.email.split('@')[0]
+      let path = managePath('billing', slug)
+      let headers = { cookie: them.cookie, origin: 'https://yaks.app' }
+      let page = await (await k.at('yaks.app', path, { headers })).text()
       assertStringIncludes(page, 'Billing')
       assertStringIncludes(page, 'data-door="checkout"')
       let url: Record<string, string> = {}
       for (let door of ['checkout', 'portal']) {
-        let response = await k.at(host, path, {
+        let response = await k.at('yaks.app', path, {
           method: 'POST',
           headers,
           body: new URLSearchParams({ billing: door }),
@@ -208,13 +242,13 @@ slow(
       let id = /cs_test_[A-Za-z0-9]+/.exec(url.checkout)?.[0]
       assert(id, `no checkout session in ${url.checkout}`)
       let made = await charged(key, `/v1/checkout/sessions/${id}`)
-      assertEquals(made.success_url, `https://${host}${path}?paid=1`)
-      assertEquals(made.cancel_url, `https://${host}${path}?paid=0`)
+      assertEquals(made.success_url, `https://yaks.app${path}&paid=1`)
+      assertEquals(made.cancel_url, `https://yaks.app${path}&paid=0`)
       // The portal is Stripe's own page, for the customer checkout made.
       assertStringIncludes(url.portal, 'https://billing.stripe.com/')
-      page = await (await k.at(host, path, { headers })).text()
+      page = await (await k.at('yaks.app', path, { headers })).text()
       assertStringIncludes(page, 'data-door="portal"')
-      let denied = await k.at(host, path, {
+      let denied = await k.at('yaks.app', path, {
         method: 'POST',
         headers: { ...headers, origin: 'https://evil.example' },
         body: new URLSearchParams({ billing: 'portal' }),

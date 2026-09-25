@@ -9,9 +9,11 @@ import { apex, type Host, spaceHost, url } from './host.ts'
 
 export let PLATFORM = apex()
 
-// Account pages have their own path, outside the app-slug namespace, so a
-// custom front page never replaces the place its owner manages their apps.
-export let MANAGE = '/_yaks'
+// The dashboard: a person's account pages, at the apex rather than on any
+// space's hostname, so no app sharing a space's origin can reach them. One
+// space's at a time: `?space=<slug>` names one they own, and without it
+// they see their own (directory.ts `own`).
+export let MANAGE = '/manage'
 export type ManageView =
   | 'apps'
   | 'connect'
@@ -22,8 +24,9 @@ export type ManageView =
   | 'settings'
   | 'billing'
   | 'trash'
-export let managePath = (view: ManageView = 'apps') =>
-  MANAGE + (view == 'apps' ? '' : `/${view}`)
+export let managePath = (view: ManageView = 'apps', space?: string) =>
+  MANAGE + (view == 'apps' ? '' : `/${view}`) +
+  (space ? `?space=${encodeURIComponent(space)}` : '')
 export let manageView = (path: string): ManageView | null => {
   let views: ManageView[] = [
     'apps',
@@ -40,6 +43,19 @@ export let manageView = (path: string): ManageView | null => {
     path == managePath(view) || path == `${managePath(view)}/`
   ) ?? null
 }
+/** One space's dashboard page, as an address to put in a letter or an
+ * answer. */
+export let manageAt = (
+  space: string,
+  view: ManageView = 'apps',
+  env: Host = {},
+) => url(env, managePath(view, space))
+
+// The path the platform keeps on every space's hostname, outside the
+// app-slug namespace: a service's webhooks arrive under it (connections.ts
+// `HOOKS`), and the dashboard's addresses from when it lived there move to
+// the apex.
+export let OURS = '/_yaks'
 
 // What the plans cost, as a page (public/pricing.html, D-32751). It lives here
 // — beside the platform's own name, in the module with no dependencies —
@@ -56,7 +72,7 @@ export let PRICING = url({}, '/pricing')
 
 /** Signed-in plan settings; login preserves this destination. Never checkout. */
 export let planSettings = (slug: string, env: Host = {}) =>
-  `https://${spaceHost(env, slug)}${managePath('billing')}`
+  manageAt(slug, 'billing', env)
 
 // The agent door, as an address a person types into a connector form: two
 // addresses for one resource (mcp.ts). `MCP` is lazy — it tells a stranger
@@ -421,10 +437,21 @@ export let guarded = (method: string, pathname: string) =>
 //
 // Hostname only: scheme and port differ between a dev host and the platform,
 // and neither is what a space is isolated by.
-export let sameOrigin = (host: string, origin: string | null) => {
+//
+// The apex is no sibling: it is the platform's own pages, with no app's code
+// in them, and the dashboard there aims at a space's doors (pages.ts `desk`:
+// the drop zone, the builder's socket). A page that could forge a request
+// from the apex could already consent to an agent or close a space there, so
+// admitting it here gives nothing away.
+export let sameOrigin = (
+  host: string,
+  origin: string | null,
+  env: Host = {},
+) => {
   if (!origin) return true
   try {
-    return new URL(origin).hostname.toLowerCase() == host.toLowerCase()
+    let from = new URL(origin).hostname.toLowerCase()
+    return from == host.toLowerCase() || from == apex(env)
   } catch {
     // `Origin: null` — a sandboxed frame, an opaque origin — is a stranger.
     return false

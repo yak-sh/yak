@@ -199,6 +199,16 @@ slow('a space moves, and the subdomain it leaves points at it', async () => {
       write.headers.get('location'),
       'https://ada-cooks.yaks.app/cookbook/api/apply',
     )
+    // A dashboard link naming the space by the old name follows it.
+    let desk = await k.at('yaks.app', '/manage/settings?space=ada&saved=1', {
+      redirect: 'manual',
+      headers: { cookie: them.cookie },
+    })
+    assertEquals(desk.status, 301)
+    assertEquals(
+      desk.headers.get('location'),
+      'https://yaks.app/manage/settings?space=ada-cooks&saved=1',
+    )
     // And the address is not free just because the space left it.
     await assertRejects(
       () => agent.tool('space_new', { slug: 'ada', title: 'Ada again' }),

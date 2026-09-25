@@ -507,7 +507,10 @@ Deno.test('free custom domains return plan settings before provisioning', async 
       ...args,
     })
     assertStringIncludes(result.text, 'Custom domains require Plus')
-    assertStringIncludes(result.text, 'https://ada.yaks.fyi/_yaks/billing')
+    assertStringIncludes(
+      result.text,
+      'https://yaks.fyi/manage/billing?space=ada',
+    )
     assertStringIncludes(result.text, 'Sign in if asked')
     assertEquals(result.text.includes('checkout'), false)
     assertEquals(await dir.serves('recipes.example.com'), null)
