@@ -19,6 +19,7 @@ let req: Request = {
   ],
   tools: [{ name: 'echo', description: 'd', parameters: { type: 'object' } }],
   anchor: 'r0',
+  tokens: 64,
 }
 
 Deno.test('a request is shaped the way the API wants', () => {
@@ -46,8 +47,15 @@ Deno.test('a request is shaped the way the API wants', () => {
     parameters: { type: 'object' },
   }])
   assertEquals(
-    [b.reasoning, b.previous_response_id, b.store, b.stream, b.instructions],
-    [{ effort: 'low' }, 'r0', true, true, 'be terse'],
+    [
+      b.reasoning,
+      b.previous_response_id,
+      b.store,
+      b.stream,
+      b.instructions,
+      b.max_output_tokens,
+    ],
+    [{ effort: 'low' }, 'r0', true, true, 'be terse', 64],
   )
   assertEquals(
     body({ ...req, anchor: undefined }).previous_response_id,

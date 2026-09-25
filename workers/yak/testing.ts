@@ -132,9 +132,9 @@ export type Turn = {
 /**
  * Workers AI, scripted: the `AI` binding answering the turns it was given, in
  * the binding's own shape (`{response, tool_calls, usage}`), so a test drives
- * builder.ts's whole provider — the messages it writes, the tool calls it
- * reads back — and not just its loop. Past the end of the script it says
- * nothing, which ends the loop.
+ * the whole provider (@yaks/workers-ai, as builder.ts hands it the loop) — the
+ * messages it writes, the tool calls it reads back — and not just the loop.
+ * Past the end of the script it says nothing, which ends the loop.
  */
 export let ai = (script: Turn[]) => {
   let asked: { model: string; input: Record<string, unknown> }[] = []

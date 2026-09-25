@@ -287,6 +287,9 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/openrouter](./openrouter)** — Implement the model interface over
   OpenRouter's Responses API, with response metadata schemas and optional PKCE
   authorization. The application supplies credentials or a private store.
+- **[@yaks/workers-ai](./workers-ai)** — Implement the model interface over
+  Cloudflare Workers AI through the `AI` binding a Worker is given, with no key:
+  chat messages out, either of the catalog's answer shapes back.
 - **[@yaks/kernel](./kernel)** — Shared identity, provenance and metadata
   schemas: `entity`, `created`, `updated`, `decided`, `quarantined`, `comment`,
   `image`, `favorite` and relationship tags. It also defines schema keywords

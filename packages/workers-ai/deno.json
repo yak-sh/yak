@@ -1,0 +1,16 @@
+{
+  "name": "@yaks/workers-ai",
+  "version": "0.2.1",
+  "description": "Implements the model interface over Cloudflare Workers AI, through the AI binding a Worker is given: chat messages out, either answer shape back, no key.",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "browser.json"
+    ]
+  }
+}

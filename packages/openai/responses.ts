@@ -115,6 +115,7 @@ export let body = (
       ...web ? [{ type: 'web_search' }] : [],
     ],
     ...req.effort ? { reasoning: { effort: req.effort } } : {},
+    ...req.tokens ? { max_output_tokens: req.tokens } : {},
     ...req.anchor ? { previous_response_id: req.anchor } : {},
   }, store)
 

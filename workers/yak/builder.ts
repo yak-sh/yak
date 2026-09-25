@@ -12,11 +12,11 @@
 //
 // Two providers, one seam. A `Model` answers one turn: what it said, which
 // tools it wants, what it spent. Workers AI needs no key — the `AI` binding is
-// the authorization — and OpenAI through the AI Gateway is the other. Neither
-// shape is pretended to be the other: Workers AI takes `messages` and answers
-// a flat `tool_calls`, OpenAI's Responses API takes `input` items and answers
-// `function_call` items, and each provider shapes {@link Line} in its own
-// words. The id says which: a Workers AI model is always `@cf/…`.
+// the authorization — and is spoken by @yaks/workers-ai, which the loop's
+// lines are handed to as @yaks/model items. OpenAI through the AI Gateway is
+// the other: its Responses API takes `input` items and answers
+// `function_call` items, shaped from {@link Line} here. The id says which: a
+// Workers AI model is always `@cf/…`.
 //
 // Both tiers run on the binding today. Owner, 2026-09-05: "can't we use
 // workers AI instead of AI Gateway to start now without purchasing anything?
@@ -40,7 +40,9 @@
 // month's tokens are asked before every round, since a conversation that
 // never deploys spends them all the same. What the meter is holding is meter.ts's (T-34241); the page is
 // somebody else's (T-34242).
+import { type Item, ModelError, type Reply } from '@yaks/model'
 import { worded } from '@yaks/tools'
+import { workersAi } from '@yaks/workers-ai'
 import { running } from './agent.ts'
 import { directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -55,15 +57,9 @@ import { type Ctx, TOOLS } from './tools.ts'
 import { standing } from './standing.ts'
 import { caught } from './sentry.ts'
 
-/** What one response cost, in the words both providers can be read into.
- * `neurons` is Workers AI's own billing unit and rides only where it is
- * answered — the meter is read in tokens (meter.ts `Usage`). */
-export type Usage = {
-  input: number
-  output: number
-  cached: number
-  neurons?: number
-}
+/** What one response cost, in the tokens the meter is read in (meter.ts
+ * `Usage`). */
+export type Usage = { input: number; output: number; cached: number }
 
 /** One tool the model asked for, with its arguments still as the JSON text
  * the model wrote — parsed once, where it is called. */
@@ -190,12 +186,9 @@ export let BUSY =
   'Every builder is busy for a moment — ask me again in a few seconds and I ' +
   'will pick this up where it is.'
 
-// What a rate limit looks like from either provider: the binding throws with
-// its own words and the gateway answers 429.
-let busy = (e: unknown) =>
-  /\b429\b|too many requests|rate.?limit|capacity/i.test(
-    e instanceof Error ? e.message : String(e),
-  )
+// A rate limit, from either provider: @yaks/workers-ai reads the binding's
+// own words for it, and the gateway answers 429.
+let busy = (e: unknown) => e instanceof ModelError && e.code == 'busy'
 
 /** No Workers AI binding — a local run, or a probe. Both tiers run on it, so
  * this is every build on a runtime that has none. */
@@ -285,91 +278,54 @@ export let prompt = async (env: Env, ctx?: Ctx): Promise<string> => {
 
 // ---- the providers ---------------------------------------------------------
 
-// The tool calls off a response, however the provider shaped them. Workers AI
-// answers a flat `{name, arguments}` with no id of its own, and an
-// OpenAI-compatible model answers `{id, function: {name, arguments}}` — both
-// read here, and an id is minted where there is none, because the loop
-// matches a result to its call by id.
-let calls = (raw: unknown): Call[] =>
-  (Array.isArray(raw) ? raw : []).map((one, i) => {
-    let c = (one ?? {}) as {
-      id?: unknown
-      name?: unknown
-      arguments?: unknown
-      function?: { name?: unknown; arguments?: unknown }
-    }
-    let fn = c.function ?? c
-    return {
-      id: typeof c.id == 'string' && c.id ? c.id : `c${i + 1}`,
-      name: String(fn.name ?? ''),
-      args: typeof fn.arguments == 'string'
-        ? fn.arguments
-        : JSON.stringify(fn.arguments ?? {}),
-    }
-  })
-
 let n = (v: unknown): number => typeof v == 'number' && v > 0 ? v : 0
+
+// The loop's lines as @yaks/model items, and a reply back as the loop's
+// answer: @yaks/workers-ai speaks Workers AI, and the loop still speaks `Line`.
+// A builder turn that said nothing but its calls sends only the calls.
+let items = (said: Line[]): Item[] =>
+  said.flatMap((l): Item[] =>
+    l.said == 'person'
+      ? [{ kind: 'user', text: l.text }]
+      : l.said == 'tool'
+      ? [{ kind: 'result', id: l.call, output: l.text }]
+      : [
+        { kind: 'assistant', text: l.text },
+        ...(l.calls ?? []).map((c): Item => ({ kind: 'call', ...c })),
+      ]
+  ).filter((i) => i.kind != 'assistant' || i.text)
+
+let answer = (reply: Reply): Answer => ({
+  text: reply.items.flatMap((i) => i.kind == 'assistant' ? [i.text] : [])
+    .join('\n'),
+  calls: reply.items.flatMap((i) =>
+    i.kind == 'call' ? [{ id: i.id, name: i.name, args: i.args }] : []
+  ),
+  usage: {
+    input: reply.usage?.input_tokens ?? 0,
+    output: reply.usage?.output_tokens ?? 0,
+    cached: reply.usage?.cached_tokens ?? 0,
+  },
+})
 
 /**
  * The free build: a Workers AI model through the `AI` binding. No key, no
  * gateway, nothing to mint — the binding is the authorization.
  */
-export let workersAi = (env: Env, id: string): Model => ({
+let binding = (env: Env, id: string): Model => ({
   id,
   ask: async ({ system, said, fns, tokens }) => {
     if (!env.AI) throw new Error(NO_AI)
-    let messages: Record<string, unknown>[] = [
-      { role: 'system', content: system },
-    ]
-    for (let l of said) {
-      if (l.said == 'person') messages.push({ role: 'user', content: l.text })
-      else if (l.said == 'builder') {
-        messages.push({
-          role: 'assistant',
-          content: l.text,
-          ...(l.calls?.length
-            ? {
-              tool_calls: l.calls.map((c) => ({
-                id: c.id,
-                name: c.name,
-                arguments: c.args,
-              })),
-            }
-            : {}),
-        })
-      } else {
-        messages.push({
-          role: 'tool',
-          name: l.name,
-          tool_call_id: l.call,
-          content: l.text,
-        })
-      }
-    }
-    let out = await env.AI.run(id, {
-      messages,
-      tools: fns.map((f) => ({ type: 'function', function: f })),
-      max_tokens: tokens,
-    }) as {
-      response?: unknown
-      tool_calls?: unknown
-      usage?: Record<string, unknown>
-      choices?: { message?: { content?: unknown; tool_calls?: unknown } }[]
-    }
-    // Some models in the catalog answer the binding's own shape and some
-    // answer OpenAI's; both are read, so a change of model is a change of id.
-    let said0 = out.choices?.[0]?.message
-    let u = out.usage ?? {}
-    return {
-      text: String(out.response ?? said0?.content ?? ''),
-      calls: calls(out.tool_calls ?? said0?.tool_calls),
-      usage: {
-        input: n(u.prompt_tokens),
-        output: n(u.completion_tokens),
-        cached: n(u.cached_tokens),
-        ...(n(u.neurons) ? { neurons: n(u.neurons) } : {}),
-      },
-    }
+    let model = workersAi(env.AI)
+    return answer(
+      await model({
+        model: id,
+        instructions: system,
+        items: items(said),
+        tools: fns,
+        tokens,
+      }),
+    )
   },
 })
 
@@ -442,7 +398,7 @@ export let openai = (env: Env, id: string): Model => ({
         store: false,
       }),
     })
-    if (res.status == 429) throw new Error('429 from the model')
+    if (res.status == 429) throw new ModelError('busy', '429 from the model')
     if (!res.ok) throw new Error(`the model answered ${res.status}`)
     let body = await res.json() as {
       output?: {
@@ -467,13 +423,11 @@ export let openai = (env: Env, id: string): Model => ({
         .filter((c) => c.type == 'output_text')
         .map((c) => c.text ?? '')
         .join('\n'),
-      calls: calls(
-        out.filter((i) => i.type == 'function_call').map((i) => ({
-          id: i.call_id,
-          name: i.name,
-          arguments: i.arguments,
-        })),
-      ),
+      calls: out.filter((i) => i.type == 'function_call').map((i) => ({
+        id: i.call_id ?? '',
+        name: i.name ?? '',
+        args: i.arguments ?? '{}',
+      })),
       usage: {
         input: n(u.input_tokens),
         output: n(u.output_tokens),
@@ -491,7 +445,7 @@ export let idOf = (env: Env, space: Space): string =>
 
 /** The provider an id names: a Workers AI model is always `@cf/…`. */
 export let modelOf = (env: Env, id: string): Model =>
-  id.startsWith('@cf/') ? workersAi(env, id) : openai(env, id)
+  id.startsWith('@cf/') ? binding(env, id) : openai(env, id)
 
 /**
  * A scripted model, for the stand-in: it answers the turns it was given, in
@@ -624,9 +578,6 @@ export let build = async (
     usage.input += answer.usage.input
     usage.output += answer.usage.output
     usage.cached += answer.usage.cached
-    if (answer.usage.neurons) {
-      usage.neurons = (usage.neurons ?? 0) + answer.usage.neurons
-    }
     lines.push({
       said: 'builder',
       text: answer.text,

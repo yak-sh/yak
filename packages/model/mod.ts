@@ -4,10 +4,10 @@
  * stores about serving — `provider` and `model`. It implements no transport,
  * and it declares no component another package owns: `tool` belongs to
  * @yaks/tools and `artifact` to @yaks/blob, each composed beside this one.
- * A provider package ({@link https://jsr.io/@yaks/openai | @yaks/openai}, or an
- * Ollama or Workers AI equivalent) implements {@link Model}; a conversation
- * package (`@yaks/session`) turns its stored transcript into {@link Item}s and
- * calls it. Neither needs the other.
+ * A provider package ({@link https://jsr.io/@yaks/openai | @yaks/openai},
+ * {@link https://jsr.io/@yaks/workers-ai | @yaks/workers-ai}) implements
+ * {@link Model}; a conversation package (`@yaks/session`) turns its stored
+ * transcript into {@link Item}s and calls it. Neither needs the other.
  *
  * ```ts
  * import { type Model, ModelError } from '@yaks/model'
@@ -126,6 +126,9 @@ export type Request = {
   instructions?: string
   items: Item[]
   tools: Tool[]
+  /** the most tokens the reply may write; the provider's own limit where
+   * absent */
+  tokens?: number
   /** an anchor to continue from, in which case `items` holds only what
    * followed it: whatever the same model's {@link Model.anchor} returned for an
    * earlier reply. Opaque to the caller. */

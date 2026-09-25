@@ -2236,6 +2236,11 @@
           "jsr:@std/assert@1"
         ]
       },
+      "packages/workers-ai": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/yaml": {
         "dependencies": [
           "jsr:@std/assert@1",

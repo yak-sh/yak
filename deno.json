@@ -150,6 +150,7 @@
     "./packages/model",
     "./packages/openai",
     "./packages/openrouter",
+    "./packages/workers-ai",
     "./packages/oauth",
     "./packages/wake",
     "./packages/canvas",

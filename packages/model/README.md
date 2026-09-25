@@ -17,8 +17,9 @@ Three things, and no transport:
 - **`Item`** — one conversation item sent to or returned by a model: a user
   turn, an assistant turn, a call the model asked for, the result it was given.
 - **`Model`** — `(Request) => Promise<Reply>`. A request is a model name, the
-  items, the tools, and an optional provider response reference (an **anchor**)
-  to continue from; a reply is an id, the model that served it, and the items it
+  items, the tools, an optional ceiling on the tokens the reply may write
+  (`tokens`), and an optional provider response reference (an **anchor**) to
+  continue from; a reply is an id, the model that served it, and the items it
   produced. A provider that stores its replies adds three optional members:
   `mark` (the component to write on the record of a reply), `anchor` (reads an
   anchor back off that record, or returns nothing) and `vocab` (the component
@@ -36,9 +37,10 @@ Three things, and no transport:
   callable tool description.
 
 A provider package implements `Model`: [@yaks/openai](../openai) does it over
-the Responses API; an Ollama or a Workers AI package would sit beside it. A
-conversation package ([@yaks/session](../session)) turns its stored transcript
-into items and calls the model. Neither imports the other.
+the Responses API, and [@yaks/workers-ai](../workers-ai) over the Workers AI
+binding; an Ollama package would sit beside them. A conversation package
+([@yaks/session](../session)) turns its stored transcript into items and calls
+the model. Neither imports the other.
 
 The root module exports these types, `ModelError`, `modelDoc`, the `models()`
 graph plugin, and the `PROVIDER`, `MODEL`, and `TOOL` component-name constants.
