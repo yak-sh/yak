@@ -6,7 +6,20 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
-import { compile, type Extension, raw, Unsupported } from './mod.ts'
+import {
+  among,
+  col,
+  compile,
+  eq,
+  type Extension,
+  lit,
+  notNull,
+  select,
+  table,
+  Unsupported,
+  val,
+  when,
+} from './mod.ts'
 
 // A tiny bookshop: a doc, and a shelf a book sits on.
 let doc: VocabDoc = {
@@ -38,10 +51,14 @@ let shelves: Extension = {
   compile: {
     text: (c, site) =>
       c.kind == 'text'
-        ? raw({
-          sql: `${site.owner} in (select entity from "shelf" where label = ?)`,
-          params: [c.value],
-        })
+        ? among(
+          site.owner,
+          select({
+            cols: [col('entity')],
+            from: table('shelf'),
+            where: eq(col('label'), val(c.value)),
+          }),
+        )
         : null,
   },
 }
@@ -52,16 +69,16 @@ Deno.test('an extension compiles a clause the binder would decline', () => {
     compile: {
       near: (c, site) =>
         c.kind == 'near'
-          ? raw({
-            sql: `${site.owner} in (select entity from "vec")`,
-            params: [],
-          })
+          ? among(
+            site.owner,
+            select({ cols: [col('entity')], from: table('vec') }),
+          )
           : null,
     },
   }
   assertThrows(() => compile(parse('.near=x'), v), Unsupported)
   let { sql } = compile(parse('.near=x'), v, { extend: [near] })
-  assert(sql.includes('select entity from "vec"'), sql)
+  assert(sql.includes('select "entity" from "vec"'), sql)
 })
 
 Deno.test('an extension supplies text compilation', () => {
@@ -84,8 +101,7 @@ Deno.test('site.join pulls a component table into the statement', () => {
   let joins: Extension = {
     name: 'joins',
     compile: {
-      text: (_, site) =>
-        raw({ sql: `${site.join('shelf')} is not null`, params: [] }),
+      text: (_, site) => notNull(site.join('shelf')),
     },
   }
   let { sql } = compile(parse('poetry'), v, { extend: [joins] })
@@ -98,7 +114,7 @@ Deno.test('an extension supplies an order value that names no property', () => {
     name: 'ranks',
     compile: {},
     order: (value, site) =>
-      value == 'similar' ? `case ${site.owner} when 7 then 0 else 1 end` : null,
+      value == 'similar' ? when([[lit(7), lit(0)]], lit(1), site.owner) : null,
   }
   // with nothing to claim it, `similar` routes to a property and names none
   assertThrows(() => compile(parse('.order=similar'), v))
@@ -128,7 +144,7 @@ Deno.test('a cursor pages within an extension ranking', () => {
     name: 'ranks',
     compile: {},
     order: (value, site) =>
-      value == 'similar' ? `case ${site.owner} when 7 then 0 else 1 end` : null,
+      value == 'similar' ? when([[lit(7), lit(0)]], lit(1), site.owner) : null,
   }
   let { sql } = compile(parse('.order=similar&.after=3'), v, {
     extend: [ranks],
@@ -157,10 +173,10 @@ Deno.test('an extension is handed the screen for the rest of the line', () => {
     compile: {
       near: (c, site) =>
         c.kind == 'near'
-          ? raw({
-            sql: `${site.owner} in (select entity from "vec")`,
-            params: [],
-          })
+          ? among(
+            site.owner,
+            select({ cols: [col('entity')], from: table('vec') }),
+          )
           : null,
     },
   }
@@ -178,7 +194,7 @@ Deno.test('extensions run in registration order, first answer wins', () => {
   let second: Extension = {
     name: 'second',
     compile: {
-      text: () => raw({ sql: '1 = 2', params: [] }),
+      text: () => eq(lit(1), lit(2)),
     },
   }
   let { params } = compile(parse('poetry'), v, { extend: [shelves, second] })

@@ -6,7 +6,8 @@ import { match } from '@yaks/graph'
 import { mem, shop } from './testing.ts'
 import { storage } from './mod.ts'
 import { overlay } from './overlay.ts'
-import { matched, statement } from './rules.ts'
+import { matched } from './rules.ts'
+import { render, rule } from '@yaks/sql'
 import { reads } from '@yaks/graph'
 
 // A shop with a maker, two of their products, and one review.
@@ -49,7 +50,7 @@ Deno.test('a gate is a left join that found nothing', () => {
     'p1',
     'p2',
   ])
-  assert(statement(m, shop).sql.includes('is null'))
+  assert(render(rule(m, shop)).sql.includes('is null'))
   s.tx((tx) => tx.patch([{ entity: { eid: 'p1' }, shelf: { aisle: 'a' } }]))
   assertEquals(matched(driver, m, shop).map((h) => h.entities[0]), ['p2'])
 })
@@ -64,8 +65,8 @@ Deno.test('two patterns share a variable, and that is the join', () => {
   assertEquals(hits.map((h) => h.entities), [['p1', 'r1']])
   assertEquals(hits[0].vars, { p: 'p1' })
   // One statement, not one per pattern.
-  assertEquals(statement(m, shop).sql.split('select').length - 1 > 0, true)
-  assert(!statement(m, shop).sql.includes(';'))
+  assertEquals(render(rule(m, shop)).sql.split('select').length - 1 > 0, true)
+  assert(!render(rule(m, shop)).sql.includes(';'))
 })
 
 Deno.test('a variable can tie two plain properties together', () => {
@@ -80,7 +81,7 @@ Deno.test('a variable can tie two plain properties together', () => {
 
 Deno.test('an entity variable and a plain value are not the same slot', () => {
   assertThrows(
-    () => statement(match('$x .product; .doc.title=$x'), shop),
+    () => render(rule(match('$x .product; .doc.title=$x'), shop)),
     Error,
     'entity in one place',
   )

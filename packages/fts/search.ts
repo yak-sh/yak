@@ -13,6 +13,26 @@
 // back.
 
 import type { Eid } from '@yaks/graph'
+import {
+  among,
+  and,
+  as,
+  at,
+  col,
+  eq,
+  exists,
+  fn,
+  join,
+  lit,
+  not,
+  op,
+  type Raw,
+  render,
+  select,
+  table,
+  unionAll,
+  val,
+} from '@yaks/sql'
 import { type Field, indexes, indexName } from './fields.ts'
 import { CLOSE, match, OPEN } from './term.ts'
 import type { Driver } from './driver.ts'
@@ -27,22 +47,16 @@ export type Hit = {
   snippet: string
 }
 
-// A statement and the params it binds, in order — the shape @yaks/sql compiles
-// to, so a filter compiled there can be passed straight in as a `screen`.
-export type Stmt = { sql: string; params: (string | number)[] }
-
 export type SearchOpts = {
   // how many hits at most (default 20)
   limit?: number
   // a statement selecting the `eid`s a hit must be among — pass what @yaks/sql
   // compiled for the rest of the query, and only rows the filters already allow
   // are ranked
-  screen?: Stmt
+  screen?: Raw
   // how many words of context a snippet carries (default 10)
   context?: number
 }
-
-let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
 // The ranked statement for a search, or null when the text contains no word.
 // The words are ANDed terms (./term.ts) and bm25 orders the results, so a
@@ -58,7 +72,7 @@ export let hits = (
   fields: Field[],
   text: string,
   opts: SearchOpts = {},
-): Stmt | null => ranked(fields, match(text), opts)
+): Raw | null => ranked(fields, match(text), opts)
 
 // The same statement over a match expression already built from the words
 // (term.ts) — what `.order=search` ranks by (./compile.ts). Each row also
@@ -67,21 +81,12 @@ export let ranked = (
   fields: Field[],
   t: string,
   opts: SearchOpts = {},
-): Stmt | null => {
+): Raw | null => {
   let arms = indexes(fields)
   if (!t || !arms.length) return null
   let context = opts.context ?? 10
-  let params: (string | number)[] = []
-  let union = arms.map(({ comp }) => {
-    let fts = q(indexName(comp))
-    params.push(OPEN, CLOSE, t)
-    return `select rowid as owner, bm25(${fts}) as rank,` +
-      ` snippet(${fts}, -1, ?, ?, '…', ${context}) as snippet` +
-      ` from ${fts} where ${fts} match ?`
-  }).join(' union all ')
-  let screen = opts.screen ? ` and "entity"."eid" in (${opts.screen.sql})` : ''
-  if (opts.screen) params.push(...opts.screen.params)
-  params.push(opts.limit ?? 20)
+  let e = at('entity')
+  let hit = at('hit')
   // Materialized, and it is not decoration: FTS5's `bm25` and `snippet` may
   // only be used in a statement that matches the index, and SQLite's query
   // flattener would fold a plain subquery into the join above it, moving them
@@ -89,17 +94,50 @@ export let ranked = (
   // requested context". Two or more indexes produce a `union all`, which is
   // never flattened, so the error only ever appeared for a vocabulary with one
   // indexed component.
-  return {
-    sql: `with "hit" as materialized (${union})` +
-      ` select "entity"."eid" as entity, "hit"."owner" as owner,` +
-      ` min("hit"."rank") as rank,` +
-      ` "hit"."snippet" as snippet from "hit"` +
-      ` join "entity" on "entity"."id" = "hit"."owner"` +
-      ` where not exists (select 1 from "tombstone" "t"` +
-      ` where "t"."entity" = "entity"."id")${screen}` +
-      ` group by "hit"."owner" order by rank limit ?`,
-    params,
-  }
+  let hits = unionAll(...arms.map(({ comp }) => {
+    let fts = indexName(comp)
+    return select({
+      cols: [
+        as(col('rowid'), 'owner'),
+        as(fn('bm25', col(fts)), 'rank'),
+        as(
+          fn(
+            'snippet',
+            col(fts),
+            lit(-1),
+            val(OPEN),
+            val(CLOSE),
+            lit('…'),
+            lit(context),
+          ),
+          'snippet',
+        ),
+      ],
+      from: table(fts),
+      where: op('match', col(fts), val(t)),
+    })
+  }))
+  let alive = not(exists(select({
+    cols: [lit(1)],
+    from: table('tombstone', 't'),
+    where: eq(col('entity', 't'), e('id')),
+  })))
+  return render({
+    t: 'select',
+    with: [{ name: 'hit', q: hits, materialized: true }],
+    cols: [
+      as(e('eid'), 'entity'),
+      as(hit('owner'), 'owner'),
+      as(fn('min', hit('rank')), 'rank'),
+      as(hit('snippet'), 'snippet'),
+    ],
+    from: table('hit'),
+    joins: [join(table('entity'), eq(e('id'), hit('owner')))],
+    where: opts.screen ? and(alive, among(e('eid'), opts.screen)) : alive,
+    group: [hit('owner')],
+    order: [col('rank')],
+    limit: val(opts.limit ?? 20),
+  })
 }
 
 // The hits for a search, closest first. Returns [] for text containing no word

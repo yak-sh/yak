@@ -18,7 +18,8 @@
 //   <-  the target reaches the candidate: seed the target, follow `from` → `to`
 
 import { type Walk, WALK_LIMIT } from '@yaks/query'
-import { type Cond, type Frag, raw } from './ir.ts'
+import { type Expr, type Frag, type Query, raw } from './ast.ts'
+import { render } from './render.ts'
 import { identity } from './ident.ts'
 
 // The seed: the target's row in the entity table, named by eid or by a
@@ -34,14 +35,10 @@ let seed = (target: string): Frag => {
   return { sql: arms.join(' or '), params: [...id.eids, ...id.nums] }
 }
 
-/**
- * The set of reachable entities as a relation of one `id` column. Callers that
- * need the reached ids and callers that need a membership condition share this
- * one statement, including how the seed is resolved, how cycles are handled,
- * the explicit hop cap and the default row limit. `step` must project
- * `"from"`/`"to"` integer owner ids.
- */
-export let walkRows = (c: Walk, step: string): Frag => {
+// The set of reachable entities as a relation of one `id` column, with the
+// seed resolved, cycles handled, the explicit hop cap and the default row
+// limit. `step` projects `"from"`/`"to"` integer owner ids.
+let reached = (c: Walk, step: Frag): Frag => {
   let [here, there] = c.dir == '->' ? ['to', 'from'] : ['from', 'to']
   let s = seed(c.target)
   let bounded = c.depth != null
@@ -49,7 +46,7 @@ export let walkRows = (c: Walk, step: string): Frag => {
     sql: `with recursive __walk(id${bounded ? ', depth' : ''}) as (` +
       ` select id${bounded ? ', 0' : ''} from entity where ${s.sql}` +
       ` union select d."${there}"${bounded ? ', __walk.depth + 1' : ''}` +
-      ` from (${step}) d` +
+      ` from (${step.sql}) d` +
       ` join __walk on d."${here}" = __walk.id` +
       (bounded ? ` where __walk.depth < ?` : '') +
       `) select id from __walk where ` +
@@ -57,16 +54,19 @@ export let walkRows = (c: Walk, step: string): Frag => {
         ? `depth > 0`
         : `id != (select id from entity where ${s.sql}) limit ?`),
     params: c.depth != null
-      ? [...s.params, c.depth]
-      : [...s.params, ...s.params, WALK_LIMIT],
+      ? [...s.params, ...step.params, c.depth]
+      : [...s.params, ...step.params, ...s.params, WALK_LIMIT],
   }
 }
 
 /**
- * The membership condition a walk compiles to: `owner in (<reachable ids>)`,
- * where `owner` is the SQL naming the candidate row's integer id.
+ * A walk as a condition on `owner`, the candidate row's integer id: it holds
+ * for the rows `step` reaches from the walk's target. `step` selects one hop
+ * as `"from"` and `"to"` integer ids — the edge table narrowed to one
+ * relation, or a component's owner beside its reference column.
  */
-export let walkSql = (owner: string, c: Walk, step: string): Cond => {
-  let rows = walkRows(c, step)
-  return raw({ sql: `${owner} in (${rows.sql})`, params: rows.params })
+export let walk = (owner: Expr, c: Walk, step: Query): Expr => {
+  let o = render(owner)
+  let rows = reached(c, render(step))
+  return raw(`${o.sql} in (${rows.sql})`, [...o.params, ...rows.params])
 }

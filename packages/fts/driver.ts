@@ -10,9 +10,10 @@
 // `heal`, `adopt`) take one.
 
 import type { Row } from '@yaks/graph'
+import type { Param } from '@yaks/sql'
 
 // Runs a statement with its bound params and returns the rows.
-export type Rows = (sql: string, params: (string | number)[]) => Row[]
+export type Rows = (sql: string, params: Param[]) => Row[]
 
 // Runs a statement for its effect.
 export type Exec = (sql: string) => void

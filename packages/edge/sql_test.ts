@@ -86,6 +86,6 @@ Deno.test('a relation nothing declares is refused, not answered', () => {
 Deno.test('the walk seeks the edge table, never scans it', () => {
   let { sql: s, params } = sql('.cites[<=3]->p1')
   assert(s.includes('with recursive'), s)
-  assert(s.includes('join "cites" t on t.entity = l.entity'), s)
+  assert(s.includes('join "cites" as "t" on "t"."entity" = "l"."entity"'), s)
   assertEquals(params, ['p1', 3])
 })

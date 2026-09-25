@@ -64,25 +64,25 @@ import { Unknown } from '@yaks/vocab'
 import {
   and,
   type Bind,
-  type Cond,
+  cond,
+  type Expr as Cond,
   FALSE,
   type Frag,
   type Join,
-  joined,
   or,
+  type Raw,
   raw,
-  type Rel,
-  rel,
-  render,
-  renderCond,
+  type Select,
   TRUE,
-} from './ir.ts'
+  val,
+} from './ast.ts'
+import { inline, render } from './render.ts'
 import { type Arm, ARMS, arms, cut } from './compound.ts'
 import { type Dialect, sqlite, type Tag, tagOf } from './sqlite.ts'
 import type { Derived, DerivedProp } from './derived.ts'
 import type { Extension, Site } from './extend.ts'
 import { type Identity, identity } from './ident.ts'
-import { walkSql } from './walk.ts'
+import { walk as walked } from './walk.ts'
 import type { ArchetypeSet } from './archetype.ts'
 
 // Thrown for a clause the binder cannot express exactly. A caller catches it to
@@ -118,7 +118,6 @@ export let whole = (
 }
 
 export type BindOpts = {
-  dialect?: Dialect
   derived?: Derived
   extend?: Extension[]
   now?: number
@@ -160,7 +159,7 @@ let byArchetype = (
   // the absence of one succeeds. An ordinary owner — the row being selected, or
   // a child row — always exists.
   if (missing) sql = `(${key} is null or ${sql})`
-  return raw({ sql, params: [...ids] })
+  return cond({ sql, params: [...ids] })
 }
 
 // The two halves of the extension point. `claims` reports whether any
@@ -177,19 +176,20 @@ let claims = (ctx: Ctx, kind: Clause['kind']): boolean =>
 // is a pure function of the owner, so paging into one needs no second API.
 let site = (ctx: Ctx, owner = ctx.owner ?? ctx.d.ownerKey('entity')): Site => ({
   vocab: ctx.v,
-  dialect: ctx.d,
   now: ctx.now,
-  owner,
+  owner: raw(owner),
   join: (comp) => {
     ctx.tables.add(comp)
-    return ctx.d.ownerKey(comp)
+    return raw(ctx.d.ownerKey(comp))
   },
+  from: (comp, as) =>
+    raw(`${source(ctx, comp)} as "${as.replaceAll('"', '""')}"`),
 })
 
 let extended = (ctx: Ctx, c: Clause): Cond | null => {
   for (let e of ctx.ext) {
-    let cond = e.compile[c.kind]?.(c, site(ctx))
-    if (cond) return cond
+    let out = e.compile[c.kind]?.(c, site(ctx))
+    if (out) return out
   }
   return null
 }
@@ -349,7 +349,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     if (shape) return shape
     ctx.tables.add(hop.comp)
     let eid = ctx.d.col(hop.comp, 'eid', ctx.v)!
-    return raw({ sql: `${eid} is ${present ? 'not ' : ''}null`, params: [] })
+    return cond({ sql: `${eid} is ${present ? 'not ' : ''}null`, params: [] })
   }
   // A reference property that several components share (`.client=<eid>` is a
   // property of `cursor`, of `camera` and of `fold`) routes with no owning
@@ -373,7 +373,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   // On the entity table, `=` names entities instead of comparing a column.
   if (hop.comp == 'entity' && op == '') {
     let set = identity(hop.prop, flat(p.value))
-    if (set) return raw(inSet(ctx, set))
+    if (set) return cond(inSet(ctx, set))
   }
   let read = readProp(ctx, hop.comp, hop.prop, ctx.d.ownerKey(hop.comp))
   if (!read) {
@@ -414,9 +414,9 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
       op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
       ((op == '' || op == '~') && flat(p.value) != '')
     )
-  if (!needsComp) return raw(frag)
+  if (!needsComp) return cond(frag)
   let owner = ctx.d.col(hop.comp, 'eid', ctx.v)!
-  return raw({
+  return cond({
     sql: `(${owner} is not null and ${frag.sql})`,
     params: frag.params,
   })
@@ -490,7 +490,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
     let owner = leaf.comp == 'entity' ? `"__pl"."id"` : `"__pl"."entity"`
     let hit = `(select ${owner} from ${source(ctx, leaf.comp)} as "__pl"` +
       ` where ${owner} = ${target})`
-    return raw({ sql: `${hit} is ${present ? 'not ' : ''}null`, params: [] })
+    return cond({ sql: `${hit} is ${present ? 'not ' : ''}null`, params: [] })
   }
   // The leaf property, read from the entity the path reached. Derived reads
   // (status, updated.at) are built on `target` as their owner; a leaf that is
@@ -516,11 +516,11 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   let needsRoot = op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
     ((op == '' || op == '~') && flat(p.value) != '')
   return needsRoot
-    ? raw({
+    ? cond({
       sql: `(${ctx.d.presence(root.comp).sql} and ${frag.sql})`,
       params: frag.params,
     })
-    : raw(frag)
+    : cond(frag)
 }
 
 // A path leaf's read expression, correlated on the integer id the path
@@ -580,10 +580,10 @@ let kindScope = (ctx: Ctx, value: string): Cond => {
   let shape = byArchetype(ctx, { all: [k], none: kinds.slice(0, i) })
   if (shape) return shape
   ctx.tables.add(k)
-  let parts: Cond[] = [raw(ctx.d.presence(k))]
+  let parts: Cond[] = [cond(ctx.d.presence(k))]
   for (let earlier of kinds.slice(0, i)) {
     ctx.tables.add(earlier)
-    parts.push(raw({ sql: `"${earlier}"."entity" is null`, params: [] }))
+    parts.push(cond({ sql: `"${earlier}"."entity" is null`, params: [] }))
   }
   return and(...parts)
 }
@@ -618,7 +618,7 @@ let inRefs = (ctx: Ctx, refs: [string, string][], value: string): Cond => {
     props.map((p) => `${refKey(ctx, c, p)} = ${at}`).join(' or ')
   return or(
     ...cut(arms(refs), ARMS).map((group) =>
-      raw({
+      cond({
         sql: `${ctx.d.ownerKey('entity')} in (${
           group.map(sub).join(' union ')
         })`,
@@ -654,7 +654,7 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
   )
   return or(
     ...cut(picks, ARMS).map((group) =>
-      raw({
+      cond({
         sql: `${ctx.d.ownerKey('entity')} in (${
           group.map((a) => a.sql).join(' union ')
         })`,
@@ -667,11 +667,40 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
 // The left JOINs for the tables this bind touched, keyed on the row they hang
 // off: the entity table for an ordinary query, or the child table inside a
 // reverse hop's subquery (which is the from there, so it is never joined to
-// itself).
-let joinsOf = (ctx: Ctx, base = 'entity'): Join[] =>
+// itself). Each is the dialect's joined source and its on condition.
+type Link = { source: string; on: string }
+let joinsOf = (ctx: Ctx, base = 'entity'): Link[] =>
   [...ctx.tables]
     .filter((t) => t != 'entity' && t != base)
     .map((t) => ({ source: ctx.d.table(t), on: ctx.d.joinOn(t, base) }))
+
+// The joins written out as they appear after the from.
+let joined = (links: Link[]): string =>
+  links.map((j) => ` left join ${j.source} on ${j.on}`).join('')
+
+// A statement over one source, from the dialect's own lowerings: the relation
+// every query here compiles to.
+let rel = (from: string, o: {
+  cols: string[]
+  joins: Link[]
+  where: Cond
+  uniq?: boolean
+  group?: string
+  order?: string[]
+}): Select => ({
+  t: 'select',
+  distinct: o.uniq,
+  cols: o.cols.map((c) => raw(c)),
+  from: raw(from),
+  joins: o.joins.map((j): Join => ({
+    how: 'left',
+    src: raw(j.source),
+    on: raw(j.on),
+  })),
+  where: o.where,
+  group: o.group ? [raw(o.group)] : undefined,
+  order: (o.order ?? []).map((x) => raw(x)),
+})
 
 // The operators a count test may use.
 let COUNT_OPS: Record<string, string> = {
@@ -704,13 +733,13 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
   let value = flat(p.value)
   if (!rest.length && !p.where) {
     if (p.op == '!' || (p.op == '~=' && !value)) {
-      return raw({
+      return cond({
         sql: `exists (select 1 from ${child} where ${corr})`,
         params: [],
       })
     }
     if (p.op == '=' && !value) {
-      return raw({
+      return cond({
         sql: `not exists (select 1 from ${child} where ${corr})`,
         params: [],
       })
@@ -722,7 +751,7 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
         `.${name}${p.op}${value} is neither a count nor a child filter`,
       )
     }
-    return raw({
+    return cond({
       sql: `(select count(*) from ${child} where ${corr}) ${op} ?`,
       params: [Number(value)],
     })
@@ -736,10 +765,10 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
     )
   }
   let sub: Ctx = { ...ctx, tables: new Set(), owner: ctx.d.ownerKey(a.comp) }
-  let inner = renderCond(
+  let inner = render(
     clause(sub, p.where ?? { ...p, path: rest, not: undefined }),
   )
-  return raw({
+  return cond({
     sql:
       `${p.not ? 'not ' : ''}exists (select 1 from ${child}${
         joined(joinsOf(sub, a.comp))
@@ -781,7 +810,7 @@ let walk = (ctx: Ctx, c: Walk): Cond => {
   })
   let step = `select ${ctx.d.ownerKey(root.comp)} as "from", ${to} as "to"` +
     ` from ${from}`
-  return walkSql(ctx.d.ownerKey('entity'), c, step)
+  return walked(raw(ctx.d.ownerKey('entity')), c, raw(step))
 }
 
 // A presence test the archetype column can answer, or null for every other
@@ -923,8 +952,9 @@ let screen = (
   ast: And,
   vocab: Vocab,
   opts: BindOpts,
+  d: Dialect,
   e: Extension,
-): Frag | null => {
+): Raw | null => {
   let mine = new Set(Object.keys(e.compile))
   let rest = ast.clauses.filter((c) =>
     !mine.has(c.kind) && !DIRECTIVES.has(c.kind)
@@ -932,7 +962,7 @@ let screen = (
   if (!rest.length) return null
   let quiet = (opts.extend ?? []).map(({ begin: _begin, ...rest }) => rest)
   return render(
-    bind({ ...ast, clauses: rest }, vocab, { ...opts, extend: quiet }),
+    bound({ ...ast, clauses: rest }, vocab, { ...opts, extend: quiet }, d),
   )
 }
 
@@ -955,12 +985,22 @@ let resolveField = (
   return { expr: read.expr, comp: h.comp }
 }
 
-// AST to relational representation. This is the one function `compile`
-// renders.
-export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
+/** A query as the statement that answers it: the one function `compile`
+ * renders. */
+export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Select =>
+  bound(ast, vocab, opts, sqlite)
+
+// The same, through a dialect of this package's own — the renamed one a rule's
+// patterns are bound through (./match.ts).
+export let bound = (
+  ast: And,
+  vocab: Vocab,
+  opts: BindOpts,
+  d: Dialect,
+): Select => {
   let ctx: Ctx = {
     v: vocab,
-    d: opts.dialect ?? sqlite,
+    d,
     derived: opts.derived ?? {},
     ext: opts.extend ?? [],
     now: opts.now ?? Date.now(),
@@ -972,7 +1012,7 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
   // that what a long-lived extension remembers is always this query's; one that
   // ranks asks for the screen and ranks among the rows the other clauses admit
   // (./extend.ts `Begin`, `Screen`).
-  for (let e of ctx.ext) e.begin?.(() => screen(ast, vocab, opts, e))
+  for (let e of ctx.ext) e.begin?.(() => screen(ast, vocab, opts, d, e))
   let cs = ast.clauses
   for (let c of cs) {
     if (UNREACHED.has(c.kind) && !claims(ctx, c.kind)) {
@@ -980,7 +1020,7 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
     }
   }
   let filters = cs.filter((c) => !DIRECTIVES.has(c.kind) || claims(ctx, c.kind))
-  let where = and(...conjuncts(ctx, filters), raw(ctx.d.live()))
+  let where = and(...conjuncts(ctx, filters), cond(ctx.d.live()))
 
   let count = find<Count>(cs, 'count')
   let distinct = find<Distinct>(cs, 'distinct')
@@ -1015,8 +1055,8 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
     }
     let value = `cast(${expr} as text) as value`
     let nonEmpty = and(
-      raw({ sql: `${expr} is not null`, params: [] }),
-      raw({ sql: `cast(${expr} as text) != ''`, params: [] }),
+      cond({ sql: `${expr} is not null`, params: [] }),
+      cond({ sql: `cast(${expr} as text) != ''`, params: [] }),
       where,
     )
     return tally
@@ -1068,12 +1108,7 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
   if (after && !numbered) {
     throw new Unsupported('.after', 'this store does not number its entities')
   }
-  let out = rel(ctx.d.spine, {
-    cols,
-    joins: joinsOf(ctx),
-    where: after ? and(where, raw(keyset(ctx, sort, after.n))) : where,
-  })
-  if (sort) out.order.push(`${sort.row}${sort.desc ? ' desc' : ''}`)
+  let ordered = sort ? [`${sort.row}${sort.desc ? ' desc' : ''}`] : []
   // A window is newest first, which is what makes taking a prefix meaningful
   // and lets a `.after` cursor continue it. A complete result is oldest first:
   // it is not a page of anything, and the order the rows were written in is the
@@ -1089,10 +1124,17 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
   // store that mints none would be ordering by the same NULL in every row,
   // which is to say by whatever the planner chose.
   let down = sort || limit || after ? ' desc' : ''
-  if (numbered) out.order.push(`"entity"."num"${down}`)
-  out.order.push(`"entity"."id"${down}`)
-  if (limit) out.limit = limit.n
-  return out
+  if (numbered) ordered.push(`"entity"."num"${down}`)
+  ordered.push(`"entity"."id"${down}`)
+  return {
+    ...rel(ctx.d.spine, {
+      cols,
+      joins: joinsOf(ctx),
+      where: after ? and(where, cond(keyset(ctx, sort, after.n))) : where,
+      order: ordered,
+    }),
+    limit: limit ? val(limit.n) : undefined,
+  }
 }
 
 // One `.order=` value, read two ways: over the selected row (through the joins
@@ -1127,7 +1169,7 @@ let sortOf = (ctx: Ctx, value: string): Sort => {
 let ranked = (ctx: Ctx, field: string, owner?: string): string | null => {
   for (let e of ctx.ext) {
     let expr = e.order?.(field, site(ctx, owner))
-    if (expr) return expr
+    if (expr) return inline(expr)
   }
   return null
 }

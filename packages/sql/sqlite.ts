@@ -20,7 +20,8 @@
 
 import type { Prop, Scalar, Vocab } from '@yaks/vocab'
 import { type Span as QSpan, timeSpan } from '@yaks/query'
-import { type Frag, nest } from './ir.ts'
+import type { Frag } from './ast.ts'
+import { nest } from './render.ts'
 
 // The type a value is coerced to before comparison — the vocabulary's property
 // category flattened to the one name the lowerings switch on.

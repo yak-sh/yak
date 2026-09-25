@@ -11,10 +11,30 @@
 //
 // The expression reads one owner through one correlated subquery, so the row
 // being ordered and a `.after` cursor's anchor rank the same way. A component
-// the vocabulary lacks is read as absent. `now` is written in as a number,
-// since an ORDER BY binds no parameters.
+// the vocabulary lacks is read as absent.
 
-import type { Extension, Site } from '@yaks/sql'
+import {
+  and,
+  col,
+  eq,
+  exists,
+  type Expr,
+  type Extension,
+  FALSE,
+  fn,
+  gt,
+  iff,
+  type Join,
+  left,
+  lit,
+  neg,
+  notNull,
+  op,
+  or,
+  select,
+  type Site,
+  sub,
+} from '@yaks/sql'
 
 /** The ranking `.order=` names. */
 export let HOT = 'hot'
@@ -27,48 +47,59 @@ let DAY = 86_400_000
 // The Julian day an instant falls on, the unit SQLite's `julianday` reads.
 let julian = (ms: number) => ms / DAY + 2440587.5
 
-let warmth = (site: Site): string => {
-  let { dialect: d, vocab: v } = site
-  let src = (comp: string) => d.source?.(comp) ?? d.table(comp)
-  let joins: string[] = []
+let warmth = (site: Site): Expr => {
+  let v = site.vocab
+  let joins: Join[] = []
   // One component joined by alias, or every column of it read as null.
-  let col = (comp: string, alias: string) => {
-    if (!v.comp(comp)) return () => 'null'
+  let read = (comp: string, alias: string) => {
+    if (!v.comp(comp)) return () => lit(null)
     joins.push(
-      `left join ${src(comp)} "${alias}" on "${alias}"."entity" = "__e"."id"`,
+      left(site.from(comp, alias), eq(col('entity', alias), col('id', '__e'))),
     )
     return (prop: string) =>
-      prop == 'entity' || v.prop(comp, prop) ? `"${alias}"."${prop}"` : 'null'
+      prop == 'entity' || v.prop(comp, prop) ? col(prop, alias) : lit(null)
   }
-  let r = col('recall', '__r')
-  let u = col('updated', '__u')
-  let c = col('created', '__c')
-  let p = col('project', '__p')
-  let a = col('archived', '__a')
-  let f = col('filed', '__f')
-  let when = (cond: string, then: string, or: string) =>
-    `(case when ${cond} then ${then} else ${or} end)`
+  let r = read('recall', '__r')
+  let u = read('updated', '__u')
+  let c = read('created', '__c')
+  let p = read('project', '__p')
+  let a = read('archived', '__a')
+  let f = read('filed', '__f')
+  let day = (e: Expr) => fn('julianday', e)
   let count = r('count')
   let lastAt = r('last_at')
-  let recalled = `(coalesce(${count}, 0) > 0 and ${lastAt} is not null)`
-  let last = when(recalled, lastAt, `coalesce(${u('at')}, ${c('at')})`)
-  let n = when(recalled, count, '1')
-  let first = when(recalled, `coalesce(${r('first_at')}, ${lastAt})`, last)
-  let span = `max(0, julianday(${last}) - julianday(${first}))`
-  let mean = when(`${n} > 1`, `${span} / (${n} - 1)`, '0')
-  let age = `max(0, ${julian(site.now)} - julianday(${last}))`
-  let score = `coalesce(exp(-${age} / (${n} * (1 + ${mean} / 7))), 0)`
+  let recalled = and(gt(fn('coalesce', count, lit(0)), lit(0)), notNull(lastAt))
+  let last = iff(recalled, lastAt, fn('coalesce', u('at'), c('at')))
+  let n = iff(recalled, count, lit(1))
+  let first = iff(recalled, fn('coalesce', r('first_at'), lastAt), last)
+  let span = fn('max', lit(0), op('-', day(last), day(first)))
+  let mean = iff(gt(n, lit(1)), op('/', span, op('-', n, lit(1))), lit(0))
+  let age = fn('max', lit(0), op('-', lit(julian(site.now)), day(last)))
+  let score = fn(
+    'coalesce',
+    fn(
+      'exp',
+      op('/', neg(age), op('*', n, op('+', lit(1), op('/', mean, lit(7))))),
+    ),
+    lit(0),
+  )
   let under = v.comp('archived')
-    ? `exists (select 1 from ${src('archived')} "__x" ` +
-      `where "__x"."entity" = ${f('project')})`
-    : 'false'
-  let retired = `(${p('entity')} is not null and ${a('entity')} is not null)`
-  let sunk = when(`${retired} or ${under}`, String(SUNK), '1')
+    ? exists(select({
+      cols: [lit(1)],
+      from: site.from('archived', '__x'),
+      where: eq(col('entity', '__x'), f('project')),
+    }))
+    : FALSE
+  let retired = and(notNull(p('entity')), notNull(a('entity')))
+  let sunk = iff(or(retired, under), lit(SUNK), lit(1))
   // Warmest first: the ranking is negated, so a plain order ascends through
   // it and `.order=-hot` reads coldest first.
-  return `-(select ${score} * ${sunk} from ${d.spine} "__e" ${
-    joins.join(' ')
-  } where "__e"."id" = ${site.owner})`
+  return neg(sub(select({
+    cols: [op('*', score, sunk)],
+    from: site.from('entity', '__e'),
+    joins,
+    where: eq(col('id', '__e'), site.owner),
+  })))
 }
 
 /** The `.order=hot` compiler. It claims no clause: a ranking only orders what

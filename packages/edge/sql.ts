@@ -7,7 +7,7 @@
 //   `.edges[cites]`    return each result's links along with it
 //
 // The walk is a filter, and @yaks/sql compiles it — one recursive CTE, seeded
-// at the target and stepped along the arrow (`walkSql`). What that package
+// at the target and stepped along the arrow (`walk`). What that package
 // cannot know is the step for a relation: which rows of the edge table carry
 // the component a relation name refers to. Only the vocabulary knows that, so
 // this extension supplies the step when the walk's path names a relation and
@@ -26,18 +26,31 @@
 // component keyed by an `entity` owner column, and a reference column holding
 // the referenced entity's integer id.
 
-import { type Extension, TRUE, walkSql } from '@yaks/sql'
+import {
+  as,
+  at,
+  eq,
+  type Extension,
+  join,
+  type Query,
+  select,
+  table,
+  TRUE,
+  walk,
+} from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { EDGE, relations } from './relations.ts'
-
-let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
 // The links of one relation, as the pairs of integer ids they join. Joining
 // against the relation's own table is the filter, so there is no union and
 // nothing for the planner to prefer over the endpoint seek.
-let linked = (tag: string): string =>
-  `select l."from" as "from", l."to" as "to" from ${q(EDGE)} l` +
-  ` join ${q(tag)} t on t.entity = l.entity`
+let l = at('l')
+let linked = (tag: string): Query =>
+  select({
+    cols: [as(l('from'), 'from'), as(l('to'), 'to')],
+    from: table(EDGE, 'l'),
+    joins: [join(table(tag, 't'), eq(at('t')('entity'), l('entity')))],
+  })
 
 /**
  * The @yaks/sql extension that compiles the traversal clauses: `compile(ast,
@@ -55,7 +68,7 @@ export let traverse = (vocab: Vocab): Extension => {
       walk: (clause, site) => {
         if (clause.kind != 'walk' || clause.path.length != 1) return null
         let t = tag(clause.path[0])
-        return t ? walkSql(site.owner, clause, linked(t)) : null
+        return t ? walk(site.owner, clause, linked(t)) : null
       },
       edges: (clause) => {
         if (clause.kind != 'edges') return null

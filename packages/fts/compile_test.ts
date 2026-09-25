@@ -55,6 +55,6 @@ Deno.test('a search with no word in it finds nothing', () => {
 
 Deno.test('a matched entity is found by its spine id, needing no join', () => {
   let { sql: s } = sql('dragon')
-  assert(s.includes('"entity"."id" in (select rowid from "book_fts"'), s)
+  assert(s.includes('"entity"."id" in (select "rowid" from "book_fts"'), s)
   assert(!s.includes('left join "book"'), s)
 })

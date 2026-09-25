@@ -36,7 +36,7 @@
 
 import type { Vocab } from '@yaks/vocab'
 import { type Arm, ARMS, arms, cut } from './compound.ts'
-import type { Frag } from './ir.ts'
+import { type Frag, type Raw, raw } from './ast.ts'
 import { type Dialect, sqlite } from './sqlite.ts'
 
 /** How far a cascade's rungs are counted before the number stops climbing.
@@ -106,18 +106,17 @@ let named = (eids: string[]): Frag => ({
 export let doomSql = (
   v: Vocab,
   eids: string[],
-  d: Dialect = sqlite,
-): Frag[] =>
+): Raw[] =>
   cut(arms(v.deaths('cascade')), ARMS).map((group) => {
-    let head = closure(eids, group, d)
-    return {
-      sql: head.sql +
+    let head = closure(eids, group, sqlite)
+    return raw(
+      head.sql +
         `select ${E}."eid" as eid, ${E}."num" as num,` +
         ` min(${W}."depth") as depth` +
         ` from ${W} join "entity" ${E} on ${E}."id" = ${W}."id"` +
         ` group by ${W}."id" order by depth, ${W}."id"`,
-      params: head.params,
-    }
+      head.params,
+    )
   })
 
 /**
@@ -139,16 +138,16 @@ export let doomSql = (
 export let looseSql = (
   v: Vocab,
   eids: string[],
-  d: Dialect = sqlite,
-): Frag[] => {
+): Raw[] => {
+  let d = sqlite
   let soft = [...v.deaths('release'), ...v.deaths('detach')]
   if (!soft.length) return []
   let head = () =>
     narrow(v) ? closure(eids, arms(v.deaths('cascade')), d) : named(eids)
   return cut(soft, ARMS).map((group) => {
     let open = head()
-    return {
-      sql: open.sql + group.map(([comp, prop]) => {
+    return raw(
+      open.sql + group.map(([comp, prop]) => {
         let own = d.ownerKey(comp)
         return `select ? as comp, ? as prop, ${E}."eid" as eid,` +
           ` ${E}."id" as ord` +
@@ -156,7 +155,7 @@ export let looseSql = (
           ` where "${comp}"."${prop}" in (select "id" from ${W})` +
           ` and ${own} not in (select "id" from ${W}) and ${alive(own)}`
       }).join('\n union all ') + ` order by "ord"`,
-      params: [...open.params, ...group.flat()],
-    }
+      [...open.params, ...group.flat()],
+    )
   })
 }

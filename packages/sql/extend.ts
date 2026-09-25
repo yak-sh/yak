@@ -6,17 +6,17 @@
 // belongs elsewhere: a full-text term needs a search index, a nearest-neighbour
 // directive needs vectors, a graph walk needs a link table. Each of those is
 // its own package, with exactly one thing to contribute here — how its clause
-// becomes a condition over the same relational representation.
+// becomes a condition over the same statement.
 //
 // An `Extension` is that contribution, registered the way a plugin contributes
 // a vocabulary: a named object passed to
 // `compile(ast, vocab, { extend: [...] })`. It claims clause kinds by name and,
 // for each, is called with the clause and a `Site` — the vocabulary being
-// compiled against, the dialect, the moment relative time phrases resolve
-// against, the SQL naming the row's owner, and a `join` that pulls a component
-// table into the statement. It returns a `Cond` (built with `and`/`or`/`raw`
-// from ./ir.ts), or `null` to decline, which lets the binder fall back to its
-// own compilation or to `Unsupported`.
+// compiled against, the moment relative time phrases resolve against, the
+// expression naming the row's owner, and a `join` that pulls a component table
+// into the statement. It returns a condition built from ./ast.ts, or `null` to
+// decline, which lets the binder fall back to its own compilation or to
+// `Unsupported`.
 //
 // Extensions are consulted before the built-in compilation, so one may also
 // replace a built-in predicate. A text clause has no built-in lowering at all:
@@ -30,10 +30,11 @@
 //     compile: {
 //       text: (clause, site) =>
 //         clause.kind == 'text'
-//           ? raw({
-//             sql: `${site.owner} in (select entity from "shelf" where label = ?)`,
-//             params: [clause.value],
-//           })
+//           ? among(site.owner, select({
+//             cols: [col('entity')],
+//             from: table('shelf'),
+//             where: eq(col('label'), val(clause.value)),
+//           }))
 //           : null,
 //     },
 //   }
@@ -41,8 +42,7 @@
 
 import type { Clause } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import type { Cond, Frag } from './ir.ts'
-import type { Dialect } from './sqlite.ts'
+import type { Expr, Raw, Source } from './ast.ts'
 
 // What a contributed compiler is given besides the clause: everything the
 // binder itself works from, plus the one change it is allowed to make to the
@@ -51,20 +51,22 @@ export type Site = {
   // the vocabulary being compiled against, for routing a path or reading a
   // property
   vocab: Vocab
-  // the dialect, for its table names, value lowerings and join keys
-  dialect: Dialect
   // the moment a relative time phrase resolves against
   now: number
-  // the SQL naming this row's integer id in the entity table
-  owner: string
-  // pull a component's table into the statement as a LEFT JOIN; returns the
-  // SQL naming that table's owner column
-  join: (comp: string) => string
+  // this row's integer id in the entity table
+  owner: Expr
+  // pull a component's table into the statement as a LEFT JOIN; returns that
+  // table's owner column
+  join: (comp: string) => Expr
+  // where a component is read from, as a source of its own under `as` — its
+  // table, or whatever the statement reads it from instead (the batch a rule
+  // is evaluated against); `entity` names the spine
+  from: (comp: string, as: string) => Source
 }
 
 // One clause's compilation. Returning `null` declines — the binder then
 // compiles the clause itself, or refuses it by throwing `Unsupported`.
-export type Compile = (clause: Clause, site: Site) => Cond | null
+export type Compile = (clause: Clause, site: Site) => Expr | null
 
 // How an `.order=` value that names no property becomes an ORDER BY expression.
 // `.order=` normally routes to a property, but an extension that ranks — a
@@ -74,11 +76,10 @@ export type Compile = (clause: Clause, site: Site) => Cond | null
 // by expression, or `null` to decline so that the binder routes to a property
 // as usual.
 //
-// The expression carries no bound parameters, because the ORDER BY in this
-// representation holds none — an extension that ranks by data has to lower it
-// to an expression over values it can write into the SQL safely (integer ids,
-// a joined column).
-export type OrderBy = (value: string, site: Site) => string | null
+// The expression is written into the statement with its values as literals,
+// since the anchor a `.after` cursor pages from compares against it inside the
+// condition as well as the ordering.
+export type OrderBy = (value: string, site: Site) => Expr | null
 
 // A named contribution: which clause kinds it claims, how each of them
 // compiles, and optionally how it writes an ORDER BY. A kind that is not in the
@@ -116,4 +117,4 @@ export type Begin = (screen: Screen) => void
 // that does not rank should not have to pay, and it returns null when there is
 // nothing else in the query — there is nothing to narrow by, so every entity in
 // the database is a candidate.
-export type Screen = () => Frag | null
+export type Screen = () => Raw | null

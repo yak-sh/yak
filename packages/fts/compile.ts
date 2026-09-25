@@ -26,19 +26,24 @@
 // selects but does not rank.
 
 import {
+  among,
+  col,
   type Extension,
   FALSE,
+  lit,
+  op,
   or,
-  raw,
   type Screen,
+  select,
+  table,
   Unsupported,
+  val,
+  when,
 } from '@yaks/sql'
 import type { Driver } from './driver.ts'
 import { ranked } from './search.ts'
 import { type Field, indexes, indexName } from './fields.ts'
 import { term } from './term.ts'
-
-let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
 // The ranking `.order=` names.
 export let SEARCH = 'search'
@@ -88,12 +93,15 @@ export let search = (fields: Field[], db?: Driver): Extension => {
         if (!words.includes(t)) words.push(t)
         return or(
           ...indexes(fields).map(({ comp }) => {
-            let fts = q(indexName(comp))
-            return raw({
-              sql:
-                `${site.owner} in (select rowid from ${fts} where ${fts} match ?)`,
-              params: [t],
-            })
+            let fts = indexName(comp)
+            return among(
+              site.owner,
+              select({
+                cols: [col('rowid')],
+                from: table(fts),
+                where: op('match', col(fts), val(t)),
+              }),
+            )
           }),
         )
       },
@@ -111,9 +119,12 @@ export let search = (fields: Field[], db?: Driver): Extension => {
       }
       let ids = rank()
       // No match selects no rows, so there is nothing to put in order.
-      if (!ids.length) return 'null'
-      let arms = ids.map((id, i) => `when ${id} then ${i}`).join(' ')
-      return `case ${site.owner} ${arms} else ${ids.length} end`
+      if (!ids.length) return lit(null)
+      return when(
+        ids.map((id, i) => [lit(id), lit(i)]),
+        lit(ids.length),
+        site.owner,
+      )
     },
   }
 }

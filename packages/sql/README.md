@@ -1,10 +1,11 @@
 # @yaks/sql
 
-Compiles a [@yaks/query](../query/README.md) abstract syntax tree (AST) against
-a [@yaks/vocab](../vocab/README.md) component schema into SQL and bound
-parameters. It opens no database, executes no statements, and stores no data.
-The supplied SQLite dialect targets the layout maintained by
-[@yaks/sqlite](../sqlite/README.md).
+SQL, and the only place SQL text is written. Statements are values built from
+this package's nodes and turned into text and bound parameters by `render`. Its
+largest user compiles a [@yaks/query](../query/README.md) abstract syntax tree
+(AST) against a [@yaks/vocab](../vocab/README.md) component schema. It opens no
+database, executes no statements, and stores no data. The supplied SQLite
+dialect targets the layout maintained by [@yaks/sqlite](../sqlite/README.md).
 
 ```sh
 deno add jsr:@yaks/sql jsr:@yaks/query jsr:@yaks/vocab
@@ -35,15 +36,15 @@ let { sql, params } = compile(ast, vocab)
 ```
 
 `bind(ast, vocab, opts)` resolves paths, coerces values to their declared types,
-collects joins, and constructs a `Rel` describing the query. `render(rel)`
-returns `{ sql, params }`; `compile` calls both. Values belong in `params` in
+collects joins, and builds a `Select`. `render(select)` returns the statement as
+a `Raw`, `{ sql, params }`; `compile` calls both. Values belong in `params` in
 their returned order.
 
 ## Terms used here
 
 - **Entity table:** every entity has a row containing its integer primary key
   `id`, public string `eid`, optional human-readable number `num`, and
-  `archetype` pointer. `Dialect.spine` names this table in SQL.
+  `archetype` pointer.
 - **Component table:** a table named for a component, with an integer `entity`
   owner column and the component's declared columns. A LEFT JOIN returns NULL
   for an absent component's columns. Presence checks distinguish a missing row
@@ -61,11 +62,12 @@ queries exclude these entities.
 The package has one import path, `@yaks/sql`. It exports:
 
 - `compile`, `bind`, `BindOpts`, `Compiled`, and `Unsupported` for compilation;
-- `Rel`, `Cond`, `Frag`, `rel`, `render`, `renderCond`, `raw`, `and`, `or`,
-  `not`, `TRUE`, and `FALSE` for constructing and rendering relational
-  expressions;
-- `sqlite`, `Dialect`, and type/identity helpers for the supplied SQL layout;
+- the statement nodes (`Select`, `Insert`, `CreateTable`, `Stmt`, `Expr`, …),
+  their builders (`select`, `col`, `val`, `eq`, `and`, `among`, `when`, …), and
+  `render`;
+- `Tag`/`tagOf` for the supplied SQL layout;
 - `Derived`/`DerivedProp` and `Extension`/`Site` for application expressions;
+- `rule` and `Plan`/`On`/`At`/`Gone` for a rule's match as one statement;
 - `archetypeSet` and its types for component-presence optimization;
 - `doomSql`, `looseSql`, `narrow`, `DEEP`, and compound-query helpers including
   `ARMS` and `STOCK` for deletion planning;
@@ -74,17 +76,25 @@ The package has one import path, `@yaks/sql`. It exports:
 
 See [mod.ts](./mod.ts) for the complete re-export list.
 
-## The intermediate representation
+## The AST
 
-`Rel` contains the source, projected columns, joins, a boolean condition tree,
-grouping, ordering, and row limit. It is plain data; SQL fragments are already
-present in sources, column expressions, joins, and `raw` conditions. AND, OR,
-and not remain structured until rendering.
+[ast.ts](./ast.ts) holds the nodes: expressions (columns, bound values,
+literals, functions, operators, `in`, `exists`, `case`, subqueries), queries
+(`select` with CTEs and joins, compounds such as `union all`, `values`), writes
+with upserts and `returning`, and DDL (tables, indexes, views, virtual tables,
+triggers, `alter`, `drop`, pragmas, transactions). Every node is plain data.
 
-`Dialect` determines table and column expressions. The shipped renderer uses
-SQLite-compatible SQL and `?` placeholders. Supporting another SQL engine may
-require both a dialect and renderer changes; this package does not ship a
-PostgreSQL adapter.
+[render.ts](./render.ts) writes one as SQLite text with `?` placeholders.
+Identifiers are always quoted; function, type and pragma names are checked
+against their grammar; operators come from a fixed list. A value is a bound
+parameter, except where SQLite binds nothing (a trigger, a view, a default, a
+check, an index's `where`), where it is written as a literal. AND and OR nest in
+halves, so a long list never exceeds SQLite's depth limit.
+
+`Raw` is the one node that carries text. Only this package makes one, and
+`render` returns one, so a caller holds finished statements but cannot write
+text of its own. The query binder still assembles its storage layout from text
+behind the SQLite dialect ([sqlite.ts](./sqlite.ts)), which is internal.
 
 ## Matching on the archetype column
 
@@ -141,42 +151,46 @@ An `Extension` supplies compilation for clauses owned by another package, such
 as text search, vector search, or edges:
 
 ```ts
-import { type Extension, raw } from '@yaks/sql'
+import { among, col, eq, type Extension, select, table, val } from '@yaks/sql'
 
 let labels: Extension = {
   name: 'labels',
   compile: {
     text: (clause, site) =>
       clause.kind == 'text'
-        ? raw({
-          sql: `${site.owner} in (select entity from "label" where value = ?)`,
-          params: [clause.value],
-        })
+        ? among(
+          site.owner,
+          select({
+            cols: [col('entity')],
+            from: table('label'),
+            where: eq(col('value'), val(clause.value)),
+          }),
+        )
         : null,
   },
 }
 // After creating a label table, pass { extend: [labels] } to compile().
 ```
 
-Each clause compiler receives a `Site` containing the vocabulary, dialect,
-current time, and `owner` SQL expression for the current entity's integer id.
-`site.join(comp)` adds a LEFT JOIN and returns its owner column. The compiler
-returns a `Cond`, or `null` to decline. Extensions run in registration order
-before built-in compilation; the first non-null answer wins. Claiming an
+Each clause compiler receives a `Site` containing the vocabulary, the current
+time, and `owner`, the expression for the current entity's integer id.
+`site.join(comp)` adds a LEFT JOIN and returns its owner column, and
+`site.from(comp, as)` names a component's table as a source for a subquery. The
+compiler returns an `Expr`, or `null` to decline. Extensions run in registration
+order before built-in compilation; the first non-null answer wins. Claiming an
 otherwise unsupported directive such as `near`, `edges`, or `reaches` makes it a
 filter.
 
 An optional `order(value, site)` handles ordering by values that do not name a
-property. It receives the value without its leading `-` and returns an SQL
-expression or `null`. Order expressions have no bound parameters, so extensions
-must construct them from trusted SQL expressions or safely represented values.
-Pagination calls this hook again for the cursor entity.
+property. It receives the value without its leading `-` and returns an `Expr` or
+`null`. An order expression is written with its values as literals. Pagination
+calls this hook again for the cursor entity.
 
 `begin(screen)` runs once at the start of each `bind` call, allowing a reused
 extension to reset state shared by its clause and ordering hooks. Calling
-`screen()` lazily compiles the other filters into a statement selecting eids,
-excluding this extension's clauses and ordering, limits, and projections. It
-returns `null` when no other filters exist. Ranking extensions use this
+`screen()` lazily compiles the other filters into a `Raw` statement selecting
+eids, excluding this extension's clauses and ordering, limits, and projections.
+It returns `null` when no other filters exist. Ranking extensions use this
 candidate set before selecting the nearest or highest-ranked results; ranking
 all entities first and filtering afterward would return the wrong subset.
 

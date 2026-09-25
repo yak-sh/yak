@@ -2,6 +2,7 @@
 // a moved model does to it.
 
 import { assert, assertEquals } from '@std/assert'
+import { among, col, render, select, table, val } from '@yaks/sql'
 import { nearest, vectorOf } from './near.ts'
 import { TABLE } from './ddl.ts'
 import { embedder, stocked } from './testing.ts'
@@ -58,10 +59,11 @@ Deno.test('a grave stops being a neighbour before the sweep prunes it', async ()
 Deno.test('a screen decides what "nearest" is nearest among', async () => {
   let db = await stocked()
   let q = vectorOf(db, 'book-1', model)!
-  let within = {
-    sql: `select eid from entity where eid in (?, ?)`,
-    params: ['book-3', 'review-4'],
-  }
+  let within = render(select({
+    cols: [col('eid')],
+    from: table('entity'),
+    where: among(col('eid'), [val('book-3'), val('review-4')]),
+  }))
   assertEquals(
     nearest(db, q, { model, limit: 1, without: 'book-1', within })
       .map((h) => h.entity),

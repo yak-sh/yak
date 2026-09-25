@@ -5,16 +5,13 @@
 // that already has a database hands over the two methods it has.
 //
 // A vector rides as a BLOB, so a bound param may be bytes as well as a scalar.
-// That is the one way this driver is wider than a plain filter's.
+
+import type { Param } from '@yaks/sql'
+
+export type { Param }
 
 /** One row, a bag of column values keyed by name — what a SELECT yields. */
 export type Row = Record<string, unknown>
-
-/**
- * A bound parameter. Every value this package binds is a scalar or the raw
- * bytes of a vector; nothing is ever concatenated into the SQL text.
- */
-export type Param = string | number | Uint8Array
 
 /**
  * A database handle, reduced to what this package calls:

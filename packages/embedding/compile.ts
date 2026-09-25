@@ -13,8 +13,7 @@
 // returns the nearest entities; and that list becomes `owner in (?, ?, ?)` for
 // the WHERE and a `case … when … then` for the ORDER BY. So the
 // nearest-neighbor search itself runs where the vectors are — in this package —
-// and what reaches SQL is a handful of integer ids, which is why the ordering
-// needs no bound parameter (the IR's ORDER BY carries none) and why the rest of
+// and what reaches SQL is a handful of integer ids, which is why the rest of
 // the query still pages normally.
 //
 // Nearest among what the rest of the query selects. The ranking is cut down to
@@ -34,12 +33,15 @@
 
 import type { Bundle } from '@yaks/graph'
 import {
-  type Cond,
+  among,
+  type Expr,
   type Extension,
   FALSE,
-  raw,
+  lit,
   type Screen,
   Unsupported,
+  val,
+  when,
 } from '@yaks/sql'
 import type { Driver } from './driver.ts'
 import { type Near, nearest, type Rank, vectorOf } from './near.ts'
@@ -93,7 +95,7 @@ export let semantic = (
     ((query, limit, within) =>
       nearest(db, query, { model: space.model, limit, within }))
 
-  let near = (anchor: string, owner: string): Cond => {
+  let near = (anchor: string, owner: Expr): Expr => {
     let vec = vectorOf(db, anchor, space.model)
     let limit = opts.limit ?? 8
     let within = asked?.() ?? undefined
@@ -107,10 +109,7 @@ export let semantic = (
         .slice(0, limit)
       : []
     if (!held.length) return FALSE
-    return raw({
-      sql: `${owner} in (${held.map(() => '?').join(', ')})`,
-      params: held.map((n) => n.owner),
-    })
+    return among(owner, held.map((n) => val(n.owner)))
   }
 
   return {
@@ -134,12 +133,13 @@ export let semantic = (
       }
       // An empty neighbourhood selects no rows, so there is nothing to put in
       // order — and a case with no arms is not a statement.
-      if (!held.length) return 'null'
+      if (!held.length) return lit(null)
       // The neighbours are already in order, so their position is the sort key.
-      // Integer ids are the one value an ORDER BY can carry here, and they were
-      // assigned by the store rather than typed by anyone.
-      let arms = held.map((n, i) => `when ${n.owner} then ${i}`).join(' ')
-      return `case ${site.owner} ${arms} else ${held.length} end`
+      return when(
+        held.map((n, i) => [lit(n.owner), lit(i)]),
+        lit(held.length),
+        site.owner,
+      )
     },
     neighbours: () => held ?? [],
     rank: (bundles) => {

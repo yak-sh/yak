@@ -21,6 +21,7 @@ import {
   doomSql,
   looseSql,
   narrow,
+  type Raw,
 } from '@yaks/sql'
 import type { Driver, Row } from './driver.ts'
 import type { Bundle, Comp } from './bundle.ts'
@@ -328,8 +329,7 @@ export let get = (
  * as the batch leaves the graph.
  */
 export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
-  let ask = (s: { sql: string; params: (string | number)[] }) =>
-    driver.query(s.sql, s.params)
+  let ask = (s: Raw) => driver.query(s.sql, s.params)
   let depth = new Map<string, number>()
   let gone: Gone[] = []
   let seed = eids

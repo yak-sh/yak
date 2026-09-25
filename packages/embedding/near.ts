@@ -20,9 +20,25 @@
 // bound parameter.
 
 import type { Eid } from '@yaks/graph'
+import {
+  among,
+  and,
+  as,
+  at,
+  col,
+  eq,
+  exists,
+  join,
+  lit,
+  not,
+  type Raw,
+  render,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
 import type { Driver } from './driver.ts'
 import { TABLE } from './ddl.ts'
-import { q } from './fields.ts'
 import { cosine, unpack } from './vector.ts'
 
 /**
@@ -32,11 +48,11 @@ import { cosine, unpack } from './vector.ts'
 export type Near = { entity: Eid; owner: number; similarity: number }
 
 /**
- * A statement selecting the eids a neighbour must be among — in @yaks/sql's
- * own compiled form, so what it compiled for the rest of the query is passed
- * straight in (the same interface @yaks/fts's `find` takes as its `screen`).
+ * A statement selecting the eids a neighbour must be among — what @yaks/sql
+ * compiled for the rest of the query, passed straight in (the same interface
+ * @yaks/fts's `find` takes as its `screen`).
  */
-export type Screen = { sql: string; params: (string | number)[] }
+export type Screen = Raw
 
 /**
  * A ranking: the nearest `limit` entities to a query vector, most similar
@@ -53,15 +69,29 @@ export type Rank = (
 // Every vector in one model's space whose entity still exists. Deleted entities
 // are excluded here as well as pruned by the sweep: a delete between two sweeps
 // must not leave a neighbour that no longer exists.
-let vectors = (db: Driver, model: string, within?: Screen) =>
-  db.query(
-    `select e.entity as owner, o.eid as eid, e.vec as vec from ${q(TABLE)} e` +
-      ` join entity o on o.id = e.entity` +
-      ` where e.model = ?` +
-      ` and not exists (select 1 from tombstone t where t.entity = e.entity)` +
-      (within ? ` and o.eid in (${within.sql})` : ''),
-    [model, ...(within?.params ?? [])],
-  ) as unknown as { owner: number; eid: Eid; vec: Uint8Array }[]
+let e = at('e')
+let o = at('o')
+let vectors = (db: Driver, model: string, within?: Screen) => {
+  let s = render(select({
+    cols: [as(e('entity'), 'owner'), as(o('eid'), 'eid'), as(e('vec'), 'vec')],
+    from: table(TABLE, 'e'),
+    joins: [join(table('entity', 'o'), eq(o('id'), e('entity')))],
+    where: and(
+      eq(e('model'), val(model)),
+      not(exists(select({
+        cols: [lit(1)],
+        from: table('tombstone', 't'),
+        where: eq(col('entity', 't'), e('entity')),
+      }))),
+      ...(within ? [among(o('eid'), within)] : []),
+    ),
+  }))
+  return db.query(s.sql, s.params) as unknown as {
+    owner: number
+    eid: Eid
+    vec: Uint8Array
+  }[]
+}
 
 /**
  * The vector stored for an entity under a model, or null when it has none —
@@ -73,11 +103,13 @@ export let vectorOf = (
   entity: Eid,
   model: string,
 ): Float32Array | null => {
-  let row = db.query(
-    `select e.vec as vec from ${q(TABLE)} e join entity o on o.id = e.entity` +
-      ` where o.eid = ? and e.model = ?`,
-    [entity, model],
-  )[0]
+  let s = render(select({
+    cols: [as(e('vec'), 'vec')],
+    from: table(TABLE, 'e'),
+    joins: [join(table('entity', 'o'), eq(o('id'), e('entity')))],
+    where: and(eq(o('eid'), val(entity)), eq(e('model'), val(model))),
+  }))
+  let row = db.query(s.sql, s.params)[0]
   return row ? unpack(row.vec as Uint8Array) : null
 }
 

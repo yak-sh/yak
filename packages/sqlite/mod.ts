@@ -75,7 +75,7 @@ export * from './archetype.ts'
 export { catalog } from './catalog.ts'
 export { fold, pointers } from './fold.ts'
 export { GONE, OVER, type Overlay, overlay } from './overlay.ts'
-export { bindings, matched, prefixed, statement } from './rules.ts'
+export { bindings, matched } from './rules.ts'
 export * from './bundle.ts'
 export {
   analyzed,

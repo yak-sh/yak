@@ -70,10 +70,10 @@ export type Overlay = {
   with: string
   /** the parameters the prefix binds, before the statement's own */
   params: Param[]
-  /** the source a component reads from, quoted and ready to alias */
+  /** the name of the source a component reads from */
   at: (comp: string) => string
-  /** the entities this batch removed a component from, as a source to select
-   * an `entity` column from — `null` where the batch removed none */
+  /** the name of the list of entities this batch removed a component from —
+   * `null` where the batch removed none */
   gone: (comp: string) => string | null
   /** the components this overlay covers */
   covers: string[]
@@ -301,8 +301,8 @@ export let overlay = (
   return {
     with: parts.length ? `with ${parts.join(', ')} ` : '',
     params,
-    at: (comp) => over.has(comp) ? q(OVER + comp) : q(comp),
-    gone: (comp) => took.has(comp) ? q(GONE + comp) : null,
+    at: (comp) => over.has(comp) ? OVER + comp : comp,
+    gone: (comp) => took.has(comp) ? GONE + comp : null,
     covers,
     ids,
   }

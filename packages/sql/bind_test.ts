@@ -6,7 +6,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { absent, and, eq, parse, present, text } from '@yaks/query'
 import { loadVocab, Unknown } from '@yaks/vocab'
 import type { VocabDoc } from '@yaks/vocab'
-import { ARMS, compile, type Derived, raw, Unsupported } from './mod.ts'
+import { ARMS, compile, type Derived, gt, Unsupported, val } from './mod.ts'
 
 // The spine, a doc, and a task with a stored priority and a computed status
 // (computed: true) — the smallest vocab that exercises routing, a scalar, and
@@ -555,7 +555,7 @@ Deno.test('reverse NONE and compound child conditions bind without outer-owner l
     extend: [{
       name: 'test/text',
       compile: {
-        text: (_, site) => raw({ sql: `${site.owner} > ?`, params: [0] }),
+        text: (_, site) => gt(site.owner, val(0)),
       },
     }],
   })

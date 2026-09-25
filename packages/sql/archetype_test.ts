@@ -2,7 +2,7 @@ import { assert, assertEquals } from '@std/assert'
 import { Archetypes } from '@yaks/archetype'
 import { absent, and, or, parse, present } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
-import { archetypeSet, bind, compile } from './mod.ts'
+import { archetypeSet, bind, compile, isRaw } from './mod.ts'
 
 let v = loadVocab({
   $defs: {
@@ -50,7 +50,7 @@ Deno.test('archetype plans: facets/kinds use the spine, only values add joins', 
     assertEquals(sql.params, [...expected], query)
   }
   let r = bind(parse('.task .doc !claim .title=hello'), v, { archetypes })
-  assertEquals(r.joins.map((j) => j.source), ['"doc"'])
+  assertEquals(r.joins?.map((j) => isRaw(j.src) && j.src.sql), ['"doc"'])
   assertEquals(bind(parse('?doc'), v, { archetypes }).joins, [])
   let empty = archetypeSet(new Archetypes(), new Map())
   assertEquals(compile(parse('.doc'), v, { archetypes: empty }).params, [])
