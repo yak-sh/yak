@@ -445,7 +445,7 @@ export let Boards = ({ e }: { e: Ent }) => {
 // Open work only, board-ordered (status column, then rank): the project
 // page is a working view; the full history lives on its boards.
 export let Tasks = ({ e }: { e: Ent }) => {
-  let ids = useQueryEids(`.filed.project=${e.eid}&.task!&.status=open,wip`)
+  let ids = useQueryEids(`.filed.project=${e.eid}&.task!&.task.status=open,wip`)
     .map(ent)
     .sort((a, b) =>
       statuses.findIndex((s) => s == statusOf(a)) -
