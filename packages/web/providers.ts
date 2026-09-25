@@ -5,24 +5,90 @@
 // label of its own, so it appends to a model's transports instead of minting a
 // duplicate entry. This module is DOM- and signal-free so the server, CLI, and
 // browser all share the same rules.
+//
+// The table is the graph's: a `provider` entity, a `model` entity, and the
+// `serves` edge from one to the other (@yaks/model). tableOf() reads those
+// rows into the shape below, and usingOf() turns a pick back into the entity
+// references a session's `using` holds.
 
 export type Provider = {
   name: string
+  // The provider entity, and each model's entity by name: what `using` holds.
+  eid?: string
+  eids?: Record<string, string>
   models: string[]
   labels?: Record<string, string>
-  efforts?: string[]
+  // model → the efforts it accepts, keyed the way `labels` is.
+  efforts?: Record<string, string[]>
   // A CLI fallback transport: valid and directly requestable, but never a menu
   // entry of its own and always ranked behind the graph-native provider.
   fallback?: boolean
-  // Stamped by the server from account readiness; ready === false means the
-  // provider cannot run right now, so the default blocker routes around it.
-  ready?: boolean
-  // model → the effort to ask for when no tier named one (catalog.ts
-  // `model.effort`), keyed the way `labels` is.
+  // model → the effort to ask for when no tier named one (the model's
+  // `effort`), keyed the way `labels` is.
   defaults?: Record<string, string>
-  // False for a provider that stays callable by name but is never listed —
-  // the in-repo `fake` rig. The served catalog has already dropped these.
-  offered?: boolean
+}
+
+type Row = { entity: { eid: string } } & Record<string, unknown>
+type Comp = Record<string, unknown>
+let text = (v: unknown) => (typeof v == 'string' && v ? v : undefined)
+
+/** The providers the graph offers, from its `provider` and `model` rows and
+ * the `serves` edges between them. Only a provider marked `offered` is listed
+ * (never the in-repo `fake` rig), and a model gets a menu label only once it
+ * is offered too. */
+export let tableOf = (rows: Row[]): Provider[] => {
+  let byEid = new Map(rows.map((r) => [r.entity.eid, r]))
+  let out = new Map<string, Provider>()
+  for (let r of rows) {
+    let edge = r.edge as Comp | undefined
+    if (!r.serves || !edge) continue
+    let p = byEid.get(String(edge.from))?.provider as Comp | undefined
+    let target = byEid.get(String(edge.to))
+    let m = target?.model as Comp | undefined
+    let name = text(p?.name)
+    let model = text(m?.name)
+    if (!p || !m || !name || !model || p.offered !== true) continue
+    let row = out.get(name) ?? {
+      name,
+      eid: String(edge.from),
+      eids: {},
+      models: [],
+      labels: {},
+      efforts: {},
+      defaults: {},
+      ...(p.fallback ? { fallback: true } : {}),
+    }
+    out.set(name, row)
+    row.models.push(model)
+    row.eids![model] = target!.entity.eid
+    let label = text(m.label)
+    if (label && m.offered === true) row.labels![model] = label
+    let efforts = text(m.efforts)?.split(/\s+/) ?? []
+    if (efforts.length) row.efforts![model] = efforts
+    let effort = text(m.effort)
+    if (effort) row.defaults![model] = effort
+  }
+  return [...out.values()]
+}
+
+/** A pick as a session's `using`: the provider and model entities it names.
+ * Refused when the table has no such provider, or that provider does not
+ * serve the model, so nothing is written that the host would refuse. */
+export let usingOf = (
+  ps: Provider[],
+  pick: { provider: string; model?: string; effort?: string },
+): { provider: string; model?: string; effort?: string } => {
+  let p = ps.find((x) => x.name == pick.provider)
+  if (!p?.eid) throw new Error(`no provider: ${pick.provider}`)
+  let model = pick.model ? p.eids?.[pick.model] : undefined
+  if (pick.model && !model) {
+    throw new Error(`${pick.provider} does not serve ${pick.model}`)
+  }
+  return {
+    provider: p.eid,
+    ...(model ? { model } : {}),
+    ...(pick.effort ? { effort: pick.effort } : {}),
+  }
 }
 type Spawn = { provider?: string; model?: string }
 
@@ -50,11 +116,6 @@ let ranked = (ps: Provider[]) =>
 let transportsOf = (ps: Provider[], model: string) =>
   ranked(ps).filter((p) => p.models.includes(model)).map((p) => p.name)
 
-// The default blocker, read from the table itself: a provider the server
-// stamped not-ready cannot run, so a stamped /providers routes for free.
-let tableBlocked = (ps: Provider[]) => (name: string) =>
-  ps.find((p) => p.name == name)?.ready === false
-
 // The unified menu: each labeled model once, Sol first.
 export let catalog = (ps: Provider[]): Pick[] => {
   let picks = new Map<string, Pick>()
@@ -64,7 +125,7 @@ export let catalog = (ps: Provider[]): Pick[] => {
       picks.set(model, {
         model,
         label,
-        efforts: p.efforts ?? [],
+        efforts: p.efforts?.[model] ?? [],
         transports: transportsOf(ps, model),
       })
     }
@@ -100,7 +161,7 @@ export let transport = (
 export let spawnDefault = (
   ps: Provider[],
   want: Spawn = {},
-  blocked: (name: string) => boolean = tableBlocked(ps),
+  blocked: (name: string) => boolean = () => false,
 ): Spawn => {
   if (want.provider) {
     let p = ps.find((x) => x.name == want.provider)

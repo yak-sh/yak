@@ -2,9 +2,9 @@
 // actor's selected graph-native Session. The binding is graph data on the
 // session, so a reload or another browser finds the same transcript.
 import { useLayoutEffect, useRef, useState } from 'preact/hooks'
-import { sessionFrames } from '../client.ts'
-import { capable, ent, mutate, myActor, rowsSub, uuid } from '../live.ts'
-import { catalog, type Provider } from '../providers.ts'
+import { spawnFrames } from '../client.ts'
+import { mutate, myActor, rowsSub, uuid } from '../live.ts'
+import { catalog, type Provider, usingOf } from '../providers.ts'
 import type { Change, Ent } from '../types.ts'
 import { block } from './ui.tsx'
 import { ComposerInput } from './Comments.tsx'
@@ -24,13 +24,11 @@ let Frame = block('aside', 'Chat', {
 let { References, Label, Head, New, Start, State } = Frame
 
 export let chatPlan = (
-  operator: Ent,
   ps: Provider[],
   blocked: (name: string) => boolean,
 ) => {
   let ready = (name: string) =>
-    ['codex', 'ollama'].includes(name) && !blocked(name) &&
-    ps.find((p) => p.name == name)?.ready !== false
+    ['codex', 'ollama'].includes(name) && !blocked(name)
   let pick = catalog(ps).find((p) => p.transports.some(ready))
   let provider = pick?.transports.find(ready)
   if (!pick || !provider) {
@@ -43,7 +41,6 @@ export let chatPlan = (
     provider,
     model: pick.model,
     effort,
-    persona: operator.spawn?.persona ?? undefined,
   }
 }
 
@@ -83,21 +80,19 @@ export let ReferenceList = (
     : null
 }
 
+// A chat is a taskless spawn (spawnFrames) whose first words are the ask,
+// bound to this actor and document; a new one unbinds the old.
 export let chatChanges = (
   old: string | undefined,
   session: string,
   actor: string,
   target: string,
-  comp: Record<string, unknown>,
+  using: { provider: string; model?: string; effort?: string },
   body: string,
-  canonical = true,
 ): Change[] => [
   ...(old ? [{ eid: old, name: 'chat', comp: null } as Change] : []),
-  ...(canonical
-    ? sessionFrames(session, comp)
-    : [{ eid: session, name: 'session', comp }]),
+  ...spawnFrames(session, body, using),
   { eid: session, name: 'chat', comp: { actor, target } },
-  { eid: session, name: 'doc', comp: { title: '', body } },
 ]
 
 export let Starter = (
@@ -116,26 +111,14 @@ export let Starter = (
     setState('Starting chat…')
     try {
       if (!providers.value.length) await load()
-      let operator = ent(actor)
-      let blocked = await liveBlocked()
-      let plan = chatPlan(operator, providers.value, blocked)
-      let session = uuid()
-      let comp = {
-        id: uuid(),
-        provider: plan.provider,
-        model: plan.model,
-        actor,
-        ...(plan.effort ? { effort: plan.effort } : {}),
-        ...(plan.persona ? { persona: plan.persona } : {}),
-      }
+      let plan = chatPlan(providers.value, await liveBlocked())
       mutate(...chatChanges(
         old,
-        session,
+        uuid(),
         actor,
         e.eid,
-        comp,
+        usingOf(providers.value, plan),
         body,
-        capable('spawn'),
       ))
       done()
     } catch (error) {

@@ -84,9 +84,7 @@ export let sessionsOf = (
       let job = jobs.get(s.eid)
       return job?.filed?.project == e.eid
     })
-    .sort((a, b) =>
-      Number(awake(b.session!)) - Number(awake(a.session!)) || b.num - a.num
-    )
+    .sort((a, b) => Number(awake(b)) - Number(awake(a)) || b.num - a.num)
 }
 
 // The roles scoped here, running first.

@@ -126,18 +126,15 @@ export let edges: string[] = []
 // Durable work/knowledge facets governed by project-rooted edge paths.
 export let governed = ['task', 'architecture', 'memory', 'persona'] as const
 
-// A session is still going in exactly these statuses.
-export let sessionActive = ['pending', 'running']
-
-// The session facets a spawn door may write.
-export let sessionFacetNames = [
-  'spawn',
-  'worktree',
-  'runtime',
-  'run',
+// What the host derives a session's status as, and the ones still going.
+export let sessionStates = [
+  'pending',
+  'running',
   'settled',
-  'yield',
+  'stopped',
+  'failed',
 ] as const
+export let sessionActive = ['pending', 'running']
 
 // One property, in the words the views speak (PropType below).
 let typeOf = (v: Vocab, comp: string, prop: string): PropType => {
@@ -750,58 +747,30 @@ export type Setting = {
   value?: string | null
 }
 
-// An agent session's identity and the aspects whose later splits are owned by
-// T-16410/T-16411/T-16412. The launch/worktree/runtime fields at the tail are
-// rolling aliases: sessionOf() overlays their canonical facets for readers.
-//
-// Everything below is the LIFECYCLE of a session we spawned (origin
-// 'managed'; an 'external' session just announces itself and carries
-// none of it). Those columns are server-owned — absent from comps.session,
-// so no client can fake a status, a branch, or a final answer, same as
-// frozen_at/claim.at. They ride the snapshot (it selects whole rows), so
-// the live cache gets the summary for free. latest_seq is the log's latest
-// sequence: the file's line count for a process-backed session (the tailer,
-// src/sessions.ts), the top entry seq for a graph-native one (advanced in
-// db.ts apply() as entries append).
+// An agent session as yak keeps it. `session` is who it is and the status the
+// host derives from its transcript; the rest are components beside it: `using`
+// names the provider and model entities it runs on, `process` and `exit` the
+// process behind it when it has one, and `created.at` when it began.
 export type Session = {
   eid: string
   id: string
-  cwd?: string | null
-  pid?: number | null // the provider process it runs in (hook-stamped)
-  pane?: string | null // native terminal address, revalidated before use
-  turn?: string | null // idle|busy, announced by provider lifecycle hooks
-  signal_at?: string | null // server-submitted native-TUI wake-up
-  signal_accepted_at?: string | null // later busy hook accepted it
-  signal_token?: string | null // opaque attempt id, never message content
-  transcript?: string | null // provider-owned JSONL — an external log
-  agent_type?: string | null // set when launched `claude --agent <name>`
-  source?: string | null // boot mode: startup|resume|clear|compact|fork
+  actor?: string | null // who this run acts for
   operator?: boolean | null // receives project-wide attention
-  origin?: string // 'external' (announced) | 'managed' (we spawned it)
-  provider?: string | null // adapters.ts key
-  model?: string | null
+  standing?: string | null // log-derived: busy|terminal|idle
+  status?: typeof sessionStates[number] | null // derived by the host
+}
+export type Using = {
+  eid: string
+  provider?: string | null // a provider entity
+  model?: string | null // a model entity
   effort?: string | null
-  persona?: string | null
-  actor?: string | null // who this run acts for (comps comment)
-  requested_task?: string | null // provenance: what it was started on
-  role?: string | null // persistent role this run serves
-  parent?: string | null // the session that spawned this one
-  branch?: string | null
-  base_revision?: string | null
-  status?: string | null // starting|running|stopping|completed|failed|interrupted|lost
-  provider_session_id?: string | null // the provider's own id, from its init event
-  serving_model?: string | null // what the provider says it's actually serving
-  latest_seq?: number // lines of log so far
-  standing?: string | null // native log-derived standing: busy|terminal|idle
-  started_at?: string | null
-  stop_requested_at?: string | null
-  input_at?: string | null // a live managed turn is yielding to new words
-  finished_at?: string | null
-  exit_code?: number | null // null when the child outlived us — unknowable
-  stop_reason?: string | null
-  final_text?: string | null
-  usage_json?: string | null
-  stderr?: string | null // the process stderr tail, bounded — a graph facet now
+  instructions?: string | null
+}
+export type Process = {
+  eid: string
+  pid?: number | null
+  command?: string | null
+  cwd?: string | null
 }
 
 // Token counts a provider self-reported for a settled session, normalized to
@@ -818,45 +787,6 @@ export type Tokens = {
   cache_read?: number // input served from cache (Anthropic's discount tier)
   cache_creation?: number // input written to cache (Anthropic's premium tier)
   output?: number // generated tokens (reasoning included, as the bill counts it)
-}
-
-export type Worktree = {
-  eid: string
-  cwd?: string | null
-  branch?: string | null
-  base_revision?: string | null
-}
-
-export type Runtime = {
-  eid: string
-  pid?: number | null
-  pane?: string | null
-  transcript?: string | null
-  provider_session_id?: string | null
-  serving_model?: string | null
-}
-
-export type Run = {
-  eid: string
-  status?: 'starting' | 'running' | 'stopping' | null
-  started_at?: string | null
-  stop_requested_at?: string | null
-  input_at?: string | null
-}
-
-export type Settled = {
-  eid: string
-  at?: string | null
-  status?: 'completed' | 'failed' | 'interrupted' | 'lost' | null
-  exit_code?: number | null
-  stop_reason?: string | null
-}
-
-export type Yield = {
-  eid: string
-  final_text?: string | null
-  usage_json?: string | null
-  stderr?: string | null
 }
 
 // One ordered Session-log entity. Every other log shape is a facet on this
@@ -922,48 +852,6 @@ export type Usage = {
   reasoning: number
 }
 
-// A launch request on a session, or its reusable hint on a task.
-export type Spawn = {
-  eid: string
-  provider?: string | null // adapters.ts key
-  model?: string | null
-  effort?: string | null
-  persona?: string | null
-}
-
-// Rolling compatibility is a projection, never a second source of truth.
-// Start with legacy aliases, then spread each canonical component: presence
-// and explicit null both win, so a cleared canonical value cannot revive from
-// a stale session column.
-export let sessionOf = (e: {
-  session?: Session
-  spawn?: Spawn
-  worktree?: Worktree
-  runtime?: Runtime
-  run?: Run
-  settled?: Settled
-  yield?: Yield
-}): Session | undefined => {
-  if (!e.session) return
-  let settlement = e.settled && Object.fromEntries([
-    ['status', 'status'],
-    ['at', 'finished_at'],
-    ['exit_code', 'exit_code'],
-    ['stop_reason', 'stop_reason'],
-  ].flatMap(([source, target]) =>
-    source in e.settled! ? [[target, e.settled![source as keyof Settled]]] : []
-  ))
-  return {
-    ...e.session,
-    ...e.spawn,
-    ...e.worktree,
-    ...e.runtime,
-    ...e.run,
-    ...settlement,
-    ...e.yield,
-  }
-}
-
 // Desired fleet capacity. Runtime facts are server-stamped on the same row;
 // sessions point back through role instead of a mutable current pointer.
 export type Role = {
@@ -988,23 +876,28 @@ export type Role = {
   decided_at?: string | null
 }
 
-// Is anybody home? The client's half of door.ts `present()`, from
-// wire-visible columns alone: a session we spawned says it in its status,
-// and one that only announced itself is awake while it holds a provider
-// process the server hasn't watched shut (sessions.ts watched() stamps
-// finished_at the moment that door closes). Origin never enters it —
-// origin says who STARTED a session, never whether anybody is home, and
-// asking it here is what hid every operator's terminal from the tray.
-export let awake = (s: Session) =>
-  sessionActive.includes(String(s.status)) || (!!s.pid && !s.finished_at)
+// What a session's life is read from: its own row, and the process behind
+// it, which has an `exit` once it is gone.
+export type Life = {
+  session?: Session | null
+  process?: Process | null
+  exit?: Exit | null
+}
+
+// Is anybody home? A session whose transcript still asks for work is, and so
+// is one whose process has not exited — a harness session announces itself
+// with a pid and keeps no transcript for the host to read a status from.
+export let awake = (e: Life) =>
+  sessionActive.includes(String(e.session?.status)) ||
+  (!!e.process?.pid && !e.exit)
 
 // The word a session's pip and label wear. Between turns an awake session is
-// idle; otherwise a session we spawned says its lifecycle, while an external
-// one borrows `running` from its open door. A settled one keeps its ending.
-export let standing = (s: Session) =>
-  awake(s) && s.turn == 'idle'
+// idle; otherwise its status, or `running` while only its process says so. An
+// ended one keeps its ending.
+export let standing = (e: Life) =>
+  awake(e) && e.session?.standing == 'idle'
     ? 'idle'
-    : s.status || (awake(s) ? 'running' : '')
+    : e.session?.status || (awake(e) ? 'running' : '')
 
 // A session's lease on an entity — claims point at the session ENTITY.
 // One claim per entity; taking one over another session's is a CONFLICT
@@ -1385,9 +1278,9 @@ export type EntCore = {
   }
   chat?: { eid: string; actor?: string | null; target?: string | null }
   session?: Session
+  using?: Using
+  process?: Process
   brief?: Brief
-  worktree?: Worktree
-  runtime?: Runtime
   entry?: Entry
   imported?: Imported
   content?: Content
@@ -1417,7 +1310,6 @@ export type EntCore = {
   runner?: Runner
   lease?: Lease
   usage?: Usage
-  spawn?: Spawn
   claim?: Claim
   resume?: Resume
   stop_request?: StopRequest

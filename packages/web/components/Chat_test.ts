@@ -1,5 +1,5 @@
 // The chat's first write is one atomic move: retire the selected binding,
-// create the replacement Session, bind it, and preserve the first prompt.
+// spawn the replacement Session on the first prompt, and bind it.
 import '../testing.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 import { h } from 'preact'
@@ -12,62 +12,43 @@ import { chatChanges, chatPlan, ReferenceList, Starter } from './Chat.tsx'
 // seam — the cache here is only ever what the test seeds.
 useRoute(() => {})
 
-Deno.test('chatChanges replaces the binding without deleting its old session', () => {
+Deno.test('chatChanges spawns a taskless session and rebinds the chat', () => {
   let got = chatChanges(
     'old',
     'next',
     'actor',
     'target',
-    { id: 'provider-id', provider: 'codex', model: 'gpt' },
+    { provider: 'p', model: 'm' },
     'What changed?',
-    false,
   )
+  let entry = got.find((c) => c.name == 'entry')!.eid
   assertEquals(got, [
     { eid: 'old', name: 'chat', comp: null },
-    {
-      eid: 'next',
-      name: 'session',
-      comp: { id: 'provider-id', provider: 'codex', model: 'gpt' },
-    },
-    {
-      eid: 'next',
-      name: 'chat',
-      comp: { actor: 'actor', target: 'target' },
-    },
-    {
-      eid: 'next',
-      name: 'doc',
-      comp: { title: '', body: 'What changed?' },
-    },
+    { eid: 'next', name: 'session', comp: {} },
+    { eid: entry, name: 'entry', comp: { session: 'next' } },
+    { eid: entry, name: 'content', comp: { body: 'What changed?' } },
+    { eid: entry, name: 'using', comp: { provider: 'p', model: 'm' } },
+    { eid: 'next', name: 'chat', comp: { actor: 'actor', target: 'target' } },
   ])
 })
 
-Deno.test('chatPlan wears the operator persona on a graph-native provider', () => {
-  let operator = {
-    eid: 'actor',
-    num: 1,
-    kind: 'project',
-    spawn: { eid: 'actor', persona: 'operator-persona' },
-    refs: [],
-    kids: [],
-  }
+Deno.test('chatPlan picks a graph-native provider', () => {
   let ps = [
     {
       name: 'codex',
       models: ['gpt'],
       labels: { gpt: 'GPT' },
-      efforts: ['low', 'medium'],
+      efforts: { gpt: ['low', 'medium'] },
     },
     { name: 'codex-cli', models: ['gpt'], fallback: true },
   ]
-  assertEquals(chatPlan(operator, ps, () => false), {
+  assertEquals(chatPlan(ps, () => false), {
     provider: 'codex',
     model: 'gpt',
     effort: 'medium',
-    persona: 'operator-persona',
   })
   assertThrows(
-    () => chatPlan(operator, ps, (name) => name == 'codex'),
+    () => chatPlan(ps, (name) => name == 'codex'),
     Error,
     'No graph-native chat model is available',
   )

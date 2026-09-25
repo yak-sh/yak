@@ -18,6 +18,7 @@ import {
   type SubscriptionRead,
   subscriptionState,
 } from '../live.ts'
+import { useQueryResult } from './useQuery.ts'
 import { type Ent } from '../types.ts'
 
 export let useBoardSub = (e?: Ent): SubscriptionRead | undefined => {
@@ -79,11 +80,30 @@ export let useReference = (eid?: string | null) => {
   }
 }
 
+// The name of the model a session runs on: `using.model` points at a model
+// entity, so its name is one small held row away.
+// What a session runs on, in words: its model's name and its effort. An
+// adopted session carries its own `using`; a spawned one's is on its first
+// entry, where @yaks/spawn writes the ask.
+export let useModel = (e: Ent): { name?: string; effort?: string } => {
+  let first = useQueryResult(
+    `.entry.session=${e.eid}&.entry.seq=1&.fields=using.model,using.effort`,
+    !!e.session && !e.using,
+    true,
+  ).eids[0]
+  let using = e.using ?? (first ? ent(first).using : undefined)
+  let model = using?.model
+  useEntity(model, 'model.name')
+  return {
+    name: model ? ent(model).model?.name ?? undefined : undefined,
+    effort: using?.effort ?? undefined,
+  }
+}
+
 // Ownership is a changing path, not a cache assumption. Keep common hops
 // held while discovering the next ones, and release only hops no longer used.
 // Replacing the whole hold on each discovery would repeatedly unload its root.
-let repoFields =
-  'repo.url,filed.project,comment.target,session.requested_task,' +
+let repoFields = 'repo.url,filed.project,comment.target,' +
   'session.actor,role.scope,memory.scope,entry.session'
 export let useRepoUrl = (e: Ent): string | undefined => {
   let trace = repoTrace(ent(e.eid))

@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import {
   camera,
-  capable,
   clientId,
   ent,
   mode,
@@ -13,7 +12,6 @@ import {
   rows,
   uuid,
 } from '../live.ts'
-import { sessionFrames, spawnPlan } from '../client.ts'
 import { type Change, idOf } from '../types.ts'
 import {
   type Command,
@@ -28,8 +26,7 @@ import {
 import { num, slotsOf } from '../verb.ts'
 import { navigate, screenTarget } from './nav.tsx'
 import { drop, peek, save } from './drafts.ts'
-import { liveBlocked, load, providers } from './Run.tsx'
-import { catalog } from '../providers.ts'
+import { spawnOf } from './Run.tsx'
 import { Tray } from './Tray.tsx'
 import { shelve } from './shelf.ts'
 import { block } from './ui.tsx'
@@ -195,53 +192,16 @@ let scene = (task: string): Change[] => {
   ]
 }
 
-// The spawn intent (:fix): the default is the first model in the one unified
-// catalog, its transport chosen by readiness (graph-native → CLI fallback),
-// medium effort when the model has the axis — the same list and rule the Run
-// form shows. The session is one graph write on the same socket the task just
-// rode, so ordering is free. The bar narrates from the graph; anything it
-// can't honor lands as a failed Session.
+// The spawn intent (:fix, :chat): Run.tsx spawnOf, the one spawn every door
+// writes, on the same socket the task just rode, so ordering is free. The bar
+// narrates from the graph; anything the host can't honor shows on the session.
 let launch = async (intent: string | SpawnIntent) => {
-  if (!providers.value.length) await load()
-  let wanted = typeof intent == 'string' ? {} : intent
-  let task = spawnTask(intent)
-  // The one precedence every door shares (spawnPlan): explicit ask > the
-  // task's spawn hint > table default. No caller session on the web, so the
-  // hint is what lets a board :fix launch the right agent. Transports are
-  // judged by the live account readiness, exactly as the Run form's choose.
-  let plan = spawnPlan(rows(), providers.value, {
-    task,
-    ask: wanted,
-    blocked: await liveBlocked(),
+  let { session, changes } = await spawnOf({
+    ...(typeof intent == 'string' ? {} : intent),
+    task: spawnTask(intent),
   })
-  if (!plan.provider || !plan.model) {
-    throw new Error('no matching provider/model')
-  }
-  // Medium effort by default when the model has the axis — the Run form's rule.
-  let axis = catalog(providers.value).find((p) => p.model == plan.model)
-    ?.efforts ?? []
-  let effort = plan.effort ??
-    (axis.length ? (axis.includes('medium') ? 'medium' : axis[0]) : undefined)
-  let eid = uuid()
-  let comp = {
-    id: uuid(),
-    provider: plan.provider,
-    model: plan.model,
-    ...(effort ? { effort } : {}),
-    ...(task ? { requested_task: task } : {}),
-    ...(plan.persona ? { persona: plan.persona } : {}),
-  }
-  // Canonical `spawn` rides only when the server advertises it; otherwise the
-  // legacy session frame alone, which the server materializes into spawn.
-  mutate(
-    ...(capable('spawn')
-      ? sessionFrames(eid, comp)
-      : [{ eid, name: 'session', comp }]),
-    ...(wanted.prompt
-      ? [{ eid, name: 'doc', comp: { title: '', body: wanted.prompt } }]
-      : []),
-  )
-  return eid
+  mutate(...changes)
+  return session
 }
 
 // Run a line and spend its intent: writes go out through mutate like every

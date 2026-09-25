@@ -16,8 +16,6 @@ import {
   type Dep,
   type Hit,
   kindOf,
-  sessionFacetNames,
-  sessionOf,
   settled,
   shapeOf,
   type Snapshot,
@@ -35,7 +33,7 @@ import { nearest, offer } from './near.ts'
 import { matchQuery, parseQuery, type Pred } from './query.ts'
 import { hot } from './warmth.ts'
 import { route } from './route.ts'
-import { type Provider, spawnDefault } from './providers.ts'
+import { catalog, type Provider, spawnDefault } from './providers.ts'
 import { channelEvents, type Event as InboxEvent } from './channel.ts'
 export { idOf }
 
@@ -89,14 +87,6 @@ export let statusChanges = (
 // num/kind), instead of hand-rolling a second predicate that could drift.
 export type Scoped = { eid: string; comps: Row['comps'] }
 
-let projectSession = (
-  comps: Record<string, Record<string, unknown>>,
-) => {
-  let session = sessionOf(comps)
-  if (session) comps.session = session
-  return comps
-}
-
 export let rowOf = (r: Record<string, unknown>): Row => {
   let { kind, ...comps } = r
   let entity = comps.entity as Record<string, unknown>
@@ -104,7 +94,7 @@ export let rowOf = (r: Record<string, unknown>): Row => {
     eid: String(entity.eid),
     num: Number(entity.num ?? 0),
     kind: kind ? String(kind) : kindOf(comps),
-    comps: projectSession(comps as Record<string, Record<string, unknown>>),
+    comps: comps as Row['comps'],
   }
 }
 
@@ -126,10 +116,7 @@ export let rows = ({ changes }: { changes: Change[] }, quarantined = false) => {
       row.comps.entity = { ...row.comps.entity, ...comp }
     } else row.comps[name] = comp
   }
-  for (let r of out.values()) {
-    projectSession(r.comps)
-    r.kind = kindOf(r.comps)
-  }
+  for (let r of out.values()) r.kind = kindOf(r.comps)
   let rows = [...out.values()]
   return quarantined ? rows : rows.filter((r) => !r.comps.quarantined)
 }
@@ -349,12 +336,6 @@ export type ComponentPatches = Record<
   Record<string, unknown> | null
 >
 
-let legacySessionProp = (name: string) =>
-  name in comps.session &&
-    sessionFacetNames.some((facet) => name in comps[facet])
-    ? name
-    : undefined
-
 // '.title=Hello' | '.doc.title=Hello' → {comp, prop, value}; null if the
 // argument isn't a dot-param at all (a bare word). Bare props ride
 // query.ts route(), so '.assignee=jeff' patches filed.assignee and
@@ -391,10 +372,7 @@ export let param = (
     }
     p = { comp: a, prop: b, value: raw }
   } else {
-    // Bare split props keep speaking the legacy session frame until every
-    // writer is capability-gated. Canonical writes spell their component.
-    let legacy = legacySessionProp(a)
-    let r = legacy ? { comp: 'session', prop: legacy } : route(a)
+    let r = route(a)
     // route()'s any-of ('' comp) serves FILTERS; a write must aim at one
     // component, so demand the explicit spelling.
     if (!r.comp) {
@@ -672,37 +650,25 @@ export let byBoard = (a: Row, b: Row) =>
     Number(b.comps.filed?.priority ?? 0)) ||
   (a.num - b.num)
 
-// Which canonical session facets a server with THESE capabilities accepts.
-// `spawn` gates the spawn facet; `session-facets` gates worktree/runtime.
-// Absence of a token means "send legacy only, omit the unknown component"
-// (the stage-1 contract). Undefined caps mean we haven't asked — stay
-// optimistic and speak every facet, since the deployed server advertises
-// them and an old server silently drops what it doesn't know anyway.
-export let facetsFor = (caps?: string[]): string[] =>
-  caps === undefined
-    ? [...sessionFacetNames]
-    : sessionFacetNames.filter((f) =>
-      f == 'spawn' ? caps.includes('spawn') : caps.includes('session-facets')
-    )
-
-// A rolling client speaks both homes in one batch: an older server keeps the
-// session aliases, while a current server makes the canonical facet win. The
-// legacy `session` frame always rides; canonical facets ride only when the
-// server advertises them (default: all — see facetsFor).
-export let sessionFrames = (
-  eid: string,
-  comp: Record<string, unknown>,
-  facets: string[] = sessionFacetNames as unknown as string[],
-): Change[] => [
-  { eid, name: 'session', comp },
-  ...facets.flatMap((name) => {
-    let facet = Object.fromEntries(
-      Object.keys(comps[name]).filter((key) => key in comp)
-        .map((key) => [key, comp[key]]),
-    )
-    return Object.keys(facet).length ? [{ eid, name, comp: facet }] : []
-  }),
-]
+// A spawn as @yaks/spawn writes it (packages/spawn/tools.ts session_spawn):
+// the session, its first entry carrying the instruction and the `using` it
+// runs on, and the claim on the task it works. The host reads the entry and
+// starts the run; anything it cannot honor shows on the session itself.
+export let spawnFrames = (
+  session: string,
+  body: string,
+  using: { provider: string; model?: string; effort?: string },
+  task?: string,
+): Change[] => {
+  let entry = uuid()
+  return [
+    { eid: session, name: 'session', comp: {} },
+    { eid: entry, name: 'entry', comp: { session } },
+    { eid: entry, name: 'content', comp: { body } },
+    { eid: entry, name: 'using', comp: using },
+    ...(task ? [{ eid: task, name: 'claim', comp: { session } }] : []),
+  ]
+}
 
 // Find-or-mint the session entity for an external session id: its eid
 // plus the change that creates or refreshes it. cwd is where it runs; pid
@@ -763,7 +729,7 @@ export let sessionFor = (
     comp.parent = self.parent
   }
   let changes: Change[] = Object.keys(comp).length
-    ? sessionFrames(eid, comp)
+    ? [{ eid, name: 'session', comp }]
     : []
   return { eid, changes }
 }
@@ -799,175 +765,39 @@ export let subChanges = (
   }]
 }
 
-// One launch spec, however it is spelled: the four fields a spawn carries,
-// worn by an explicit ask, a task's hint, and a caller session alike.
+// One launch spec: a provider and model by name, and an effort.
 export type SpawnAsk = {
   provider?: string
   model?: string
   effort?: string
-  persona?: string
 }
 
-// What a spawn inherits when the caller doesn't say: the CALLING session's
-// own spec — all four fields, spawn-preferred (projectSession merged the
-// canonical facet over the legacy aliases). A managed caller always has a
-// provider/model; an external one has whatever it announced. The
-// provider-table default lives beyond this — spawnPlan folds it in.
-export let spawnDefaults = (all: Row[], session?: string): SpawnAsk => {
-  let s = session
-    ? all.find((r) => r.comps.session && String(r.comps.session.id) == session)
-      ?.comps.session
-    : undefined
-  return {
-    provider: s?.provider ? String(s.provider) : undefined,
-    model: s?.model ? String(s.model) : undefined,
-    effort: s?.effort ? String(s.effort) : undefined,
-    persona: s?.persona ? String(s.persona) : undefined,
-  }
-}
-
-// THE precedence helper every spawn door shares, so the CLI, MCP, :fix,
-// knock, browser, and TUI can never resolve a launch differently. Highest
-// precedence first: the explicit ask (a CLI flag, a :fix dot-param), the
-// target TASK's stored hint, then the CALLING session's own spec — each a
-// full SpawnAsk. What no tier names, the provider table defaults, model→
-// provider inference and readiness both. model and effort ride WITH their
-// provider: a lower tier's model is dropped when a higher tier pins a
-// DIFFERENT provider, unless the table says that provider can also run it —
-// so a codex caller's model never rides an explicit --provider=claude. An
-// explicit model without a provider leaves transport selection to readiness,
-// never to a lower tier's provider (even when several transports serve it).
+// THE precedence every spawn door shares, so the browser and the TUI never
+// resolve a launch differently: the explicit ask (a :fix dot-param, the Run
+// form), then the provider table's own default, model→provider inference and
+// readiness both. An explicit model without a provider leaves the transport
+// to readiness. Effort falls to the chosen model's own default, then medium
+// when the model has the axis at all.
 export let spawnPlan = (
-  all: Row[],
   ps: Provider[],
-  o: {
-    task?: string
-    session?: string
-    ask?: SpawnAsk
-    blocked?: (name: string) => boolean
-  },
+  ask: SpawnAsk = {},
+  blocked?: (name: string) => boolean,
 ): SpawnAsk => {
-  let asSpec = (x?: Record<string, unknown>): SpawnAsk =>
-    x
-      ? {
-        provider: x.provider ? String(x.provider) : undefined,
-        model: x.model ? String(x.model) : undefined,
-        effort: x.effort ? String(x.effort) : undefined,
-        persona: x.persona ? String(x.persona) : undefined,
-      }
-      : {}
-  // A model this provider can run — the tie-break's "advertises them".
-  let runs = (provider?: string, model?: string) =>
-    !!provider && !!model &&
-    ps.some((p) => p.name == provider && p.models.includes(model))
-  let hint = o.task ? find(all, o.task)?.comps.spawn : undefined
-  let tiers = [o.ask ?? {}, asSpec(hint), spawnDefaults(all, o.session)]
-  // Fold low→high: the higher tier's provider wins and carries its own
-  // model/effort; a lower tier's model/effort survive only when they still
-  // fit the winning provider (same provider, or one that advertises the model).
-  let spec = tiers.reduceRight<SpawnAsk>((lo, hi) => {
-    // A model-only tier clears the inherited provider so spawnDefault can
-    // route it across primary/fallback transports, or reject an unserved model.
-    let provider = hi.provider ?? (hi.model ? undefined : lo.provider)
-    let same = !hi.provider || !lo.provider || hi.provider == lo.provider
-    let keep = hi.model && !hi.provider
-      ? runs(lo.provider, hi.model)
-      : same || runs(provider, lo.model)
-    return {
-      provider,
-      model: hi.model ?? (keep ? lo.model : undefined),
-      effort: hi.effort ?? (keep ? lo.effort : undefined),
-      persona: hi.persona ?? lo.persona,
-    }
-  }, {})
-  // The last resort: the table's own default (model→provider inference and
-  // readiness), filling only what no tier named.
-  let d = spawnDefault(ps, {
-    provider: spec.provider,
-    model: spec.model,
-  }, o.blocked)
-  let provider = spec.provider ?? d.provider
-  let model = spec.model ?? d.model
+  let d = spawnDefault(ps, ask, blocked)
+  let provider = ask.provider ?? d.provider
+  let model = ask.model ?? d.model
+  let axis = catalog(ps).find((p) => p.model == model)?.efforts ?? []
   return {
-    ...spec,
     provider,
     model,
-    // The chosen model's own default effort, if it declares one and nothing
-    // above named an effort (catalog.ts `model.effort`).
-    effort: spec.effort ??
+    effort: ask.effort ??
       (model
         ? ps.find((p) => p.name == provider)?.defaults?.[model]
+        : undefined) ??
+      (axis.length
+        ? (axis.includes('medium') ? 'medium' : axis[0])
         : undefined),
   }
-}
-
-// The spawn batch: one session entity carrying the request columns —
-// the server's created(session) effect validates and launches it, and
-// every way it can fail lands as a failed Session on the board, not an
-// error here. The task (and persona) resolve through find(), so human
-// ids work everywhere. `caps` gates the canonical `spawn` frame: against an
-// old server (no `spawn` capability) only the legacy session request rides,
-// with no unknown component (facetsFor); the four fields still land as the
-// dormant legacy aliases. Omit caps to speak every facet (the default).
-export let spawnChanges = (
-  all: Row[],
-  s: {
-    task?: string
-    prompt?: string
-    provider: string
-    model: string
-    effort?: string
-    persona?: string
-    by?: string
-    deps?: Dep[]
-    // An existing git worktree to attach to (`task spawn --worktree`). It
-    // rides as worktree.cwd, which is where the server reads a tree the
-    // CALLER owns — one it must neither create nor sweep.
-    cwd?: string
-  },
-  caps?: string[],
-) => {
-  let task = s.task ? find(all, s.task) : undefined
-  if (s.task && !task?.comps.task) throw new Error(`no task: ${s.task}`)
-  let persona = s.persona ? find(all, s.persona) : undefined
-  if (s.persona && !persona) throw new Error(`no entity: ${s.persona}`)
-  // Behalf is a CHOICE, not plumbing: wearing a persona owned by an
-  // operator means acting AS that operator, so the spawn's actor is the
-  // persona's owner. Otherwise the run acts FOR the project whose task
-  // it works — the agent wrote the words, so the byline names the
-  // project, never the person who happened to press spawn (T-7081). The
-  // caller's actor is only the last resort, for a projectless task.
-  // Ownership is an edge in either spelling (persona about owner, or
-  // owner contains persona) to an entity that IS an actor (person or
-  // project).
-  let owner = persona &&
-    (s.deps ?? []).map((d) =>
-      d.type == 'about' && d.parent == persona.eid
-        ? d.child
-        : d.type == 'contains' && d.child == persona.eid
-        ? d.parent
-        : undefined
-    ).map((eid) => eid ? find(all, eid) : undefined)
-      .find((r) => r?.comps.person || r?.comps.project)
-  let caller = s.by
-    ? all.find((r) => String(r.comps.session?.id) == s.by)?.comps.session
-    : undefined
-  let actor = owner?.eid ?? task?.comps.filed?.project ?? caller?.actor
-  let eid = uuid()
-  let changes = sessionFrames(eid, {
-    id: uuid(),
-    provider: s.provider,
-    model: s.model,
-    ...(s.effort ? { effort: s.effort } : {}),
-    ...(task ? { requested_task: task.eid } : {}),
-    ...(persona ? { persona: persona.eid } : {}),
-    ...(actor ? { actor: actor } : {}),
-    ...(s.cwd ? { cwd: s.cwd } : {}),
-  }, caps === undefined ? undefined : facetsFor(caps))
-  if (s.prompt) {
-    changes.push({ eid, name: 'doc', comp: { title: '', body: s.prompt } })
-  }
-  return { eid, changes }
 }
 
 // A comment: a doc aimed at the target. The session reification lets the
@@ -2189,17 +2019,6 @@ export let notices = (all: Row[], who: Reader) => {
     return born > latest ? born : latest
   }, '')
   return { lines, eids, at }
-}
-
-// The scribe's desk: the cheap model wearing the scribe persona on the
-// standing task — the same spawn whether the sweep or :scribe summons it.
-// The alias, not a pin: what the desk wants is whatever the cheap one is
-// now, and the CLI resolves that at launch.
-export let DESK = {
-  task: 'scribe-desk',
-  provider: 'claude',
-  model: 'haiku',
-  persona: 'scribe',
 }
 
 // What an index line says about a memory before its title. The retired

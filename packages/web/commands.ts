@@ -25,7 +25,6 @@ import {
   commentChanges as agentCommentChanges,
   derefChanges,
   derefWith,
-  DESK,
   dreamChanges,
   find,
   mailChanges,
@@ -35,7 +34,6 @@ import {
   patches,
   replyChanges,
   type Row,
-  spawnChanges,
   spec,
   type Stdin,
   taskChanges,
@@ -141,24 +139,6 @@ let graphOf = (ctx: Ctx): Reader => ctx.graph ?? rowsReader(ctx.rows)
 let corpus = (...rows: (Row | undefined)[]): Row[] =>
   uniq(rows.filter((r): r is Row => !!r))
 
-// The scoped corpus a spawn's builders resolve ids against: the task, the
-// persona, the caller's session, and the persona's ownership endpoints — never
-// the whole graph. spawnPlan/spawnDefaults read the task hint and caller here;
-// spawnChanges reads the rest. Shared by every spawn door (obey, mcp) so the
-// scoping stays one rule.
-export let spawnCorpus = (
-  g: Reader,
-  want: { task?: string; persona?: string },
-  session?: string,
-  deps: Dep[] = [],
-): Row[] =>
-  corpus(
-    want.task ? g.find(want.task) : undefined,
-    want.persona ? g.find(want.persona) : undefined,
-    session ? g.session(session) : undefined,
-    ...deps.flatMap((d) => [g.find(d.parent), g.find(d.child)]),
-  )
-
 // The headless focus, resolved through a reader: a session's single claim is an
 // unambiguous "here". The db-backed twin of focusOf() — same rule, scoped
 // reads. undefined when the session holds no lease, or more than one.
@@ -183,7 +163,6 @@ export type SpawnIntent = {
   provider?: string
   model?: string
   effort?: string
-  persona?: string
 }
 
 export let spawnTask = (spawn: Result['spawn']) =>
@@ -551,17 +530,12 @@ export let commands: Record<string, Command> = {
         }
       }
       for (let name of Object.keys(grouped.session ?? {})) {
-        if (!['provider', 'model', 'effort', 'persona'].includes(name)) {
+        if (!['provider', 'model', 'effort'].includes(name)) {
           throw new Error(`chat: cannot set session.${name}`)
         }
       }
       let prompt = [title, body].filter(Boolean).join('\n')
       let launch: SpawnIntent = { ...grouped.session, ...grouped.spawn }
-      if (launch.persona) {
-        let persona = graphOf(ctx).find(launch.persona)
-        if (!persona) throw new Error(`no entity: ${launch.persona}`)
-        launch.persona = persona.eid
-      }
       return {
         spawn: {
           // A taskless run has no checkout for a process-backed fallback.
@@ -943,45 +917,6 @@ export let commands: Record<string, Command> = {
       return {
         changes: made.changes,
         msg: `${idOf(row)} ← reply → ${made.changes[1].comp?.to}`,
-      }
-    },
-  },
-  // :scribe summons the desk for the sessions a final message can't
-  // cover — a marathon spanning many tasks and ideas. The ask is a
-  // comment on the standing desk task (the desk boots claiming it, so
-  // the bus serves the ask); the spawn is the same pinned desk the
-  // sweep uses. A desk already at work just gets the ask queued.
-  scribe: {
-    args: [a('session', 'S-31', { kind: id, need: false })],
-    about: "have the scribe write that session's brief",
-    words: [0, 1],
-    run: (rest, ctx) => {
-      let g = graphOf(ctx)
-      let name = rest.trim().split(/\s+/).filter(Boolean)[0]
-      let target = name ? g.find(name) : here(ctx)
-      if (!target?.comps.session) {
-        throw new Error('scribe: name a session (:scribe S-31)')
-      }
-      let desk = g.find(DESK.task)
-      if (!desk?.comps.task) throw new Error('no scribe-desk task in the graph')
-      let busy = g.select(
-        `.session.requested_task=${desk.eid} .session.status=starting,running`,
-      ).length > 0
-      return {
-        changes: [
-          ...commentChanges(
-            corpus(desk, ctx.session ? g.session(ctx.session) : undefined),
-            desk.eid,
-            `brief ${idOf(target)} — write its session doc`,
-            ctx.session,
-          ),
-          ...(busy
-            ? []
-            : spawnChanges(corpus(desk, g.find(DESK.persona)), DESK).changes),
-        ],
-        msg: busy
-          ? `${idOf(target)} → scribe (desk busy, ask queued)`
-          : `${idOf(target)} → scribe`,
       }
     },
   },

@@ -24,7 +24,6 @@ import {
   boardTasks,
   byPriority,
   cache,
-  capable,
   crewed,
   ent,
   findEid,
@@ -38,7 +37,6 @@ import {
   rows as graph,
   send,
   statuses,
-  uuid,
 } from '../../packages/web/live.ts'
 import { parseQuery, resolveRefs } from '../../packages/web/query.ts'
 import {
@@ -49,7 +47,6 @@ import {
   type SpawnIntent,
   spawnTask,
 } from '../../packages/web/commands.ts'
-import { sessionFrames, spawnPlan } from '../../packages/web/client.ts'
 import { inflate } from '../client_host.ts'
 import {
   applicable,
@@ -79,12 +76,7 @@ import {
   catalog as settingCatalog,
   spec as settingSpec,
 } from '../../packages/web/config.ts'
-import { catalog } from '../../packages/web/providers.ts'
-import {
-  liveBlocked,
-  load,
-  providers,
-} from '../../packages/web/components/Run.tsx'
+import { spawnOf } from '../../packages/web/components/Run.tsx'
 import { useQuery } from '../../packages/web/components/useQuery.ts'
 import {
   navigationQuery,
@@ -420,49 +412,15 @@ let bye: Command = {
 }
 let local: Record<string, Command> = { q: bye, quit: bye }
 
-// :fix in the TUI spawns through the SAME unified catalog the web and CLI use:
-// the default model once, its transport chosen by readiness (graph-native Codex
-// when signed in, else the CLI fallback). No canvas here, so the session is a
-// lone graph write — created(session) validates and launches it.
-let spawn = async (intent: string | SpawnIntent) => {
-  if (!providers.value.length) await load()
-  let wanted = typeof intent == 'string' ? {} : intent
-  let task = spawnTask(intent)
-  // The one precedence every door shares (spawnPlan): explicit ask > the
-  // task's spawn hint > table default. Transports judged by live readiness.
-  let plan = spawnPlan(graph(), providers.value, {
-    task,
-    ask: wanted,
-    blocked: await liveBlocked(),
-  })
-  if (!plan.provider || !plan.model) {
-    throw new Error('no matching provider/model')
-  }
-  // Medium effort by default when the model has the axis — the Run form's rule.
-  let axis = catalog(providers.value).find((p) => p.model == plan.model)
-    ?.efforts ?? []
-  let effort = plan.effort ??
-    (axis.length ? (axis.includes('medium') ? 'medium' : axis[0]) : undefined)
-  let eid = uuid()
-  let comp = {
-    id: uuid(),
-    provider: plan.provider,
-    model: plan.model,
-    ...(effort ? { effort } : {}),
-    ...(task ? { requested_task: task } : {}),
-    ...(plan.persona ? { persona: plan.persona } : {}),
-  }
-  // Canonical `spawn` rides only when the server advertises it; otherwise the
-  // legacy session frame alone, which the server materializes into spawn.
+// :fix in the TUI is the web's spawn (Run.tsx spawnOf); no canvas here, so
+// the session is a lone graph write.
+let spawn = async (intent: string | SpawnIntent) =>
   mutate(
-    ...(capable('spawn')
-      ? sessionFrames(eid, comp)
-      : [{ eid, name: 'session', comp }]),
-    ...(wanted.prompt
-      ? [{ eid, name: 'doc', comp: { title: '', body: wanted.prompt } }]
-      : []),
+    ...(await spawnOf({
+      ...(typeof intent == 'string' ? {} : intent),
+      task: spawnTask(intent),
+    })).changes,
   )
-}
 
 let exec = (line: string) => {
   try {

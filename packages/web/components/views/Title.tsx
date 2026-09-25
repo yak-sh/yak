@@ -5,6 +5,7 @@ import { Pip } from './Show.tsx'
 import { Dot } from '../Dot.tsx'
 import { Id } from './Inline.tsx'
 import { SessionDot } from '../session_status.tsx'
+import { useModel } from '../subscriptions.ts'
 
 let Frame = block('div', 'CardTitle', { Text: 'span' })
 let { Text } = Frame
@@ -71,14 +72,14 @@ export let DocTitle = ({ e }: { e: Ent }) => (
 )
 
 export let SessionTitle = ({ e }: { e: Ent }) => {
-  let s = e.session!
+  let model = useModel(e)
   return (
     <Frame>
       <Id e={e} />
       <SessionDot e={e} />
       <Text>
-        {friendly(s.serving_model || s.model) ?? 'session'}
-        {s.effort && ` · ${s.effort}`}
+        {friendly(model.name) ?? 'session'}
+        {model.effort && ` · ${model.effort}`}
       </Text>
     </Frame>
   )

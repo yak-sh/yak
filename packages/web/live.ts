@@ -26,8 +26,6 @@ import {
   type EntCore,
   idOf,
   type Pinned,
-  type Session,
-  sessionOf,
   settled,
   shortParts,
   slugsOf,
@@ -565,7 +563,7 @@ let refreshServerSets = (eids: Set<string>) => {
 // Get-or-open the server set for a query. Opened ONCE on creation (a repeat
 // ownBoard would re-subscribe every render); the signal is primed from mem so
 // the first paint is populated, then landSub replaces it with the server's
-// answer. Unheld GLOBAL-shape readers (projects/sessionRows/…) keep it open —
+// answer. Unheld GLOBAL-shape readers (projects/…) keep it open —
 // bounded by the count of distinct shapes in the code. An EID-KEYED query
 // (comments-of X, refs-to X) has an unbounded key space, so its render path
 // must hold-and-release through the hook (useQueryEids/useCommentsOn/
@@ -1027,8 +1025,8 @@ let depOf = (row?: Comps): Dep | undefined => {
 // run still going, or an external door still open. The wip pip pulses
 // on this instead of sitting half-filled; a stale claim doesn't count.
 export let crewed = (e: Ent) => {
-  let s = e.claim && ent(e.claim.session).session
-  return !!s && awake(s)
+  let s = e.claim && ent(e.claim.session)
+  return !!s?.session && awake(s)
 } // A cache peek, exposed for eyes (a CDP probe, the console) to verify what
  // the DOM does not show. Not load-bearing.
 ;(globalThis as { __peek?: (eid: string) => unknown }).__peek = (eid) =>
@@ -2495,12 +2493,10 @@ probe.__probe = {
 export let ent = (eid: string): Ent => {
   let { entity, ...comps } = row(eid).value ?? {}
   if (comps.pin) comps.pin = { ...comps.pin, z: pinZ(eid, comps.pin.z).value }
-  let session = sessionOf(comps)
   let mine = relations(eid).value
   return {
     ...comps, // whatever components the entity carries, verbatim —
     // created/updated (provenance) ride here like any other component now
-    ...(session ? { session } : {}),
     eid,
     entity,
     num: entity?.num ?? 0,
@@ -2533,7 +2529,6 @@ export let repoTrace = (start: Ent): { eids: string[]; url?: string } => {
     let next = [
       e.filed?.project,
       e.comment?.target,
-      e.session?.requested_task,
       e.session?.actor,
       e.role?.scope,
       e.memory?.scope,
@@ -2825,11 +2820,6 @@ export let projects = (): Ent[] =>
       (paint.peek()[b]?.entity?.num ?? Infinity)
     )
     .map(ent)
-let sessionDots: Pred[] = [
-  has('session'),
-  { comp: '', prop: '', op: PROJECT, value: '', fields: dotFields },
-]
-
 // What a face that RENDERS a session row needs on top of the dot's columns —
 // the identity, model and effort SessionRow shows. Held only while such a face
 // is mounted (the Tray's panel while it is open, a project's Dashboard), so the
@@ -2844,11 +2834,6 @@ export let sessionDetail = '.session!&.fields=' + [
   'doc.title',
 ].join(',')
 
-export let sessionRows = (): [string, Session][] =>
-  queryEids(sessionDots).value.flatMap((eid) => {
-    let s = sessionOf(row(eid).value ?? {})
-    return s ? [[eid, s] as [string, Session]] : []
-  })
 export let shelfFor = (client: string): string | undefined => {
   ensureClientRows(client)
   return localEids([eq('shelf', 'client', client)]).value[0]
@@ -3172,7 +3157,7 @@ export let jobOf = (e: Ent): string | null => {
       String(g[b]?.claim?.at ?? '').localeCompare(
         String(g[a]?.claim?.at ?? ''),
       )
-    )[0] ?? e.session?.requested_task ?? null
+    )[0] ?? null
 }
 
 // The edges that hold an entity FROM ABOVE — every edge whose child

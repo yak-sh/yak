@@ -1,4 +1,4 @@
-import { useRepoUrl } from './subscriptions.ts'
+import { useModel, useRepoUrl } from './subscriptions.ts'
 import { useRef, useState } from 'preact/hooks'
 import { commands, orderIn, suggest } from '../commands.ts'
 import { slotsOf } from '../verb.ts'
@@ -108,16 +108,12 @@ export let Note = ({ c }: { c: Ent }) => {
 // The box that says more — Enter posts (Shift+Enter for a newline), and
 // the instrument is this browser's client entity.
 //
-// Process-backed sessions hear comments through their provider door. A
-// graph-native Session uses the ordered entry partition directly.
-export let prompt = (e: Ent, entry = false) => {
+// A session hears a comment on its next turn; a settled one is resumed by it.
+// Model nick, then graph chip: provider ids never face people.
+export let prompt = (e: Ent, entry = false, model?: string) => {
   let s = e.session
-  let settled = !!s && s.origin == 'managed' && !!s.provider_session_id &&
-    !sessionActive.includes(String(s.status))
-  // Persona, model nick, graph chip: provider ids never face people.
-  let who = s &&
-    ((s.persona && ent(s.persona).doc?.title) ||
-      nick(s.serving_model ?? s.model) || idOf(e))
+  let settled = !!s && !sessionActive.includes(String(s.status))
+  let who = s && (nick(model) || idOf(e))
   if (entry) return `send to ${who || idOf(e)}…`
   return settled
     ? `send to ${who}… (resumes the session)`
@@ -149,6 +145,7 @@ export let Composer = (
   { eid, entry = false }: { eid: string; entry?: boolean },
 ) => {
   let box = useRef<HTMLTextAreaElement>(null)
+  let model = useModel(ent(eid)).name
   let dkey = `${eid}.${entry ? 'input' : 'comment'}`
   // The typed line, mirrored for the hints (the DOM textarea stays the
   // owner, exactly as the palette does it) and which hint is picked.
@@ -244,7 +241,7 @@ export let Composer = (
           setLine(el.value)
           setPick(0)
         }}
-        placeholder={prompt(ent(eid), entry)}
+        placeholder={prompt(ent(eid), entry, model)}
         onKeyDown={key}
       />
     </Box>

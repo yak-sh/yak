@@ -1,4 +1,4 @@
-import { useReference, useRepoUrl } from '../subscriptions.ts'
+import { useModel, useReference, useRepoUrl } from '../subscriptions.ts'
 import {
   useEffect,
   useLayoutEffect,
@@ -14,15 +14,14 @@ import {
   kilo,
   type LogRow,
 } from '../../types.ts'
-import { ent, findEid, mutate, retryEntrySub, uuid } from '../../live.ts'
-import { contextOf, graphLog } from '../../entry_log.ts'
+import { ent, findEid, jobOf, mutate, retryEntrySub, uuid } from '../../live.ts'
+import { graphLog } from '../../entry_log.ts'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { linkProps } from '../nav.tsx'
 import { ago, block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Composer, Note } from '../Comments.tsx'
 import { Entity, resolve } from '../Entity.tsx'
-import { Markdown } from '../Markdown.tsx'
 import { mdMentions, type Mention } from '../../md.ts'
 import { useBacklinks, useCommentsOn, useReferences } from '../useQuery.ts'
 import { UrlVal } from '../editors.tsx'
@@ -67,7 +66,6 @@ let Frame = block('div', 'Session', {
   Key: 'span',
   Val: 'span',
   Think: 'div',
-  Final: 'div',
   Fault: 'p',
   EntryState: 'p',
   Retry: 'button',
@@ -99,7 +97,6 @@ let {
   Key,
   Val,
   Think,
-  Final,
   Fault,
   EntryState,
   Retry,
@@ -233,16 +230,12 @@ export let sessionMentions = (
 export let mentionSig = (a: {
   count: number
   seq: number
-  said: boolean
-  final: string
   heard: Ent[]
   repo?: string
 }): string =>
   [
     a.count,
     a.seq,
-    a.said ? 1 : 0,
-    a.final,
     a.heard.length,
     a.heard.reduce((m, c) => {
       let t = String(c.updated?.at ?? c.created?.at ?? '')
@@ -319,25 +312,17 @@ let Fact = ({ k, v }: { k: string; v?: string | null }) =>
 // what the session serves instead of reserving a header column of its own.
 export let SessionSummary = ({ e, gist }: { e: Ent; gist: string }) => {
   let s = e.session!
+  let job = jobOf(e)
   return (
     <Summary>
-      {s.requested_task && <Entity eid={s.requested_task} view='Inline' />}
-      {s.role && <Entity eid={s.role} view='Inline' />}
+      {job && <Entity eid={job} view='Inline' />}
       <Facts>
         <Gist>{gist}</Gist>
         <Kv>
           <Fact k='id' v={s.id} />
-          <Fact k='branch' v={s.branch} />
-          <Fact k='cwd' v={s.cwd} />
-          {
-            /* The one irreducible difference, said rather than left blank:
-            a session we watch is a pid, not a child — so no exit code. */
-          }
-          {s.origin != 'managed' && (
-            <Fact k='pid' v={s.pid ? `${s.pid}` : null} />
-          )}
-          <Fact k='started' v={when(s.started_at)} />
-          <Fact k='finished' v={when(s.finished_at)} />
+          <Fact k='cwd' v={e.process?.cwd} />
+          <Fact k='pid' v={e.process?.pid ? `${e.process.pid}` : null} />
+          <Fact k='started' v={when(e.created?.at)} />
         </Kv>
         <Stamp e={e} />
       </Facts>
@@ -555,9 +540,7 @@ export let Session = ({ e }: { e: Ent }) => {
   useEffect(() => {
     if (entries.status == 'ready') setRetried(false)
   }, [entries.status])
-  let native = s.origin == 'managed' && s.status == null &&
-    e.spawn?.provider == 'codex'
-  let live = native ? !s.base_revision || !!ready?.busy : awake(s)
+  let live = awake(e)
   let status = state.status
   let fault = e.exception?.message ?? e.failed?.message
   // One read path (T-16824): the transcript is the session's entry partition
@@ -566,27 +549,13 @@ export let Session = ({ e }: { e: Ent }) => {
   // internal derivations while the explicit read state paints below; it is
   // never presented as an authoritative empty transcript.
   let log = ready ?? graphLog([])
-  // Context: a graph-native run derives it from its usage ENTRIES (log.context);
-  // a process-backed run has none, so it derives from the session's usage_json
-  // facet, which the graph already holds (T-16798, contextOf) — no file-read.
+  // Context: derived from the transcript's usage entries.
   let context = log.context ??
-    log.entries.findLast((x) => x.row?.context)?.row?.context ??
-    contextOf(s.usage_json)
-  // The Final block IS the last agent say — don't print it twice. Only a
-  // session whose log grew no say row (an external one, a torn log) still
-  // leans on final_text.
-  let said = log.entries.some(
-    (x) => x.row?.kind == 'say' && x.row.role == 'agent',
-  )
+    log.entries.findLast((x) => x.row?.context)?.row?.context
   let rows = squeeze(mergeTools(log.entries.filter(entryVisible)))
   // The facts fold behind the one lifecycle fact worth keeping in the bar.
-  let gist = live
-    ? s.started_at ? `started ${ago(s.started_at)}` : 'starting'
-    : native && log.entries.length
-    ? 'idle'
-    : s.started_at
-    ? `started ${ago(s.started_at)}`
-    : 'not started'
+  let started = e.created?.at
+  let gist = started ? `started ${ago(started)}` : 'not started'
   // A comment joins the thread once the transcript cites it. A managed resume
   // prints `C-id: words` as its own user row, so that copy hides; graph-native
   // context/tool delivery has a reference without a duplicate say row.
@@ -623,36 +592,22 @@ export let Session = ({ e }: { e: Ent }) => {
   let sig = mentionSig({
     count: log.entries.length,
     seq: log.entries.at(-1)?.seq ?? 0,
-    said,
-    final: s.final_text ?? '',
     heard: heardCs,
     repo,
   })
   let raw = useMemo(
-    () =>
-      threadMentions([
-        ...(!said && s.final_text
-          ? [{
-            row: {
-              kind: 'say' as const,
-              role: 'agent' as const,
-              text: s.final_text,
-            },
-          }]
-          : []),
-        ...thread,
-      ], repo),
+    () => threadMentions(thread, repo),
     [sig],
   )
   let mentions = resolveMentions(raw)
-  let graphActivity = native ? ready?.activity : undefined
+  let graphActivity = ready?.activity
   let activity = graphActivity?.kind == 'tool'
     ? graphActivity.label
     : graphActivity?.label ??
       doing(
         rows.at(-1)?.row,
-        s.turn ?? (status == 'idle' ? 'idle' : undefined),
-        !s.started_at,
+        s.standing == 'idle' || status == 'idle' ? 'idle' : undefined,
+        !started,
       )
   let showActivity = live || status == 'idle'
   return (
@@ -661,22 +616,18 @@ export let Session = ({ e }: { e: Ent }) => {
         <Dot status={status} />
         <SessionSummary e={e} gist={gist} />
         <SessionContext tokens={context} />
-        {
-          /* No brake on a process we never forked — apply() refuses a
-            stop_request at anything but a managed run, and the button
-            shouldn't offer what the graph will bounce. */
-        }
-        {live && s.origin == 'managed' && (
+        {live && (
           <Stop
             type='button'
-            onClick={() =>
-              // The brake is data: a stop_request entity aimed here — the
-              // server's effect signals the group and stamps the ending.
-              mutate({
-                eid: uuid(),
-                name: 'stop_request',
-                comp: { target: e.eid },
-              })}
+            onClick={() => {
+              // The brake is data: a `stop` entry appended to the transcript,
+              // after which the host runs nothing more in it.
+              let stop = uuid()
+              mutate(
+                { eid: stop, name: 'entry', comp: { session: e.eid } },
+                { eid: stop, name: 'stop', comp: {} },
+              )
+            }}
           >
             ■ stop
           </Stop>
@@ -684,11 +635,7 @@ export let Session = ({ e }: { e: Ent }) => {
       </Head>
       <Panel elRef={frame}>
         {/* markdown, escaped of any markup by md.ts — as with a task body */}
-        {!said && s.final_text && (
-          <Markdown as={Final} text={s.final_text} repo={repo} />
-        )}
         {fault && <Fault mod='error'>{fault}</Fault>}
-        {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
         <Log>
           {entries.status == 'loading' && (
             <EntryState>Loading entries for {idOf(e)}…</EntryState>
@@ -726,17 +673,7 @@ export let Session = ({ e }: { e: Ent }) => {
           )}
           {showActivity && <Think>✳ {activity}</Think>}
         </Log>
-        {
-          /* stderr is durable evidence, not transcript: it has no seqs and
-            resumes append to it. A process-backed run's tail rides the session
-            as its own graph facet now (T-16798), not a /logs file-read. Routine
-            noise folds; failed runs show it. */
-        }
-        <SessionDiagnostics
-          stderr={s.stderr ?? undefined}
-          exit={s.exit_code}
-          open={status == 'failed'}
-        />
+        <SessionDiagnostics exit={e.exit?.code} open={status == 'failed'} />
         {unsent.length > 0 && (
           <Unsent>
             {unsent.map((c) => <Note key={c.eid} c={c} />)}
@@ -749,7 +686,7 @@ export let Session = ({ e }: { e: Ent }) => {
           TO it (Comments.tsx knows which sessions can take words) */
       }
       <Foot>
-        <Composer eid={e.eid} entry={native} />
+        <Composer eid={e.eid} entry />
       </Foot>
     </Frame>
   )
@@ -770,9 +707,9 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
   let s = e.session!
   let tasks = e.refs.filter((r) => r.type == 'worked').map((r) => ent(r.child))
     .filter((x) => x.task)
-  let face = useReference(s.persona ?? s.actor)
+  let face = useReference(s.actor)
   let identity = face.value
-  let model = s.serving_model || s.model
+  let model = useModel(e)
   return (
     <RowLine>
       <RowLine.Head {...tileLink(e, onOpen)}>
@@ -780,7 +717,7 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
         <SessionDot e={e} />
         {slots?.title != null ? <RowLine.Model {...tileTitle(slots, '')} /> : (
           <>
-            {(s.persona || s.actor) && (
+            {s.actor && (
               <RowLine.Identity>
                 {identity
                   ? identity.doc?.title || idOf(identity)
@@ -791,8 +728,9 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
                   : 'Loading…'}
               </RowLine.Identity>
             )}
-            {model && <RowLine.Model>{friendly(model)}</RowLine.Model>}
-            {s.effort && <RowLine.Effort>{s.effort}</RowLine.Effort>}
+            {model.name && <RowLine.Model>{friendly(model.name)}
+            </RowLine.Model>}
+            {model.effort && <RowLine.Effort>{model.effort}</RowLine.Effort>}
           </>
         )}
         {slot(slots, 'after')}

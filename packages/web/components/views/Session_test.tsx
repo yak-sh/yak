@@ -1,5 +1,6 @@
 // A session row keeps the actor it works for visible in every shared list.
 import '../../testing.ts'
+import { identityEid } from '@yaks/graph'
 import { h, render } from 'preact'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -46,15 +47,17 @@ Deno.test('session list Tile omits its chip and falls back to its actor', () => 
 })
 
 Deno.test('session title names model and effort', () => {
+  // A model's name is its identity: the eid is derived from it.
+  let gpt = identityEid('model', ['gpt-5.6'])
   cache.value = {
     session: {
       entity: { eid: 'session', num: 2 },
-      session: {
-        eid: 'session',
-        id: 'session-id',
-        model: 'gpt-5.6',
-        effort: 'high',
-      },
+      session: { eid: 'session', id: 'session-id' },
+      using: { eid: 'session', model: gpt, effort: 'high' },
+    },
+    [gpt]: {
+      entity: { eid: gpt, num: 3 },
+      model: { eid: gpt, name: 'gpt-5.6' },
     },
   }
 
@@ -235,12 +238,7 @@ Deno.test('session references link commits with actor repository context', () =>
     },
     session: {
       entity: { eid: 'session', num: 2 },
-      session: {
-        eid: 'session',
-        id: 'run',
-        requested_task: 'missing',
-        actor: 'project',
-      },
+      session: { eid: 'session', id: 'run', actor: 'project' },
     },
   }
   assertEquals(
@@ -339,8 +337,6 @@ Deno.test('mentionSig: stable on unchanged content, shifts on every input', () =
   let base = {
     count: 3,
     seq: 10,
-    said: false,
-    final: '',
     heard: [] as Ent[],
     repo: undefined as string | undefined,
   }
@@ -348,11 +344,6 @@ Deno.test('mentionSig: stable on unchanged content, shifts on every input', () =
   assertEquals(mentionSig({ ...base }), a) // unchanged → same key → no rescan
   assert(mentionSig({ ...base, seq: 11 }) != a, 'new log entry')
   assert(mentionSig({ ...base, count: 4 }) != a, 'entry count')
-  assert(
-    mentionSig({ ...base, said: true }) != a,
-    'said flips the final prepend',
-  )
-  assert(mentionSig({ ...base, final: 'done T-9' }) != a, 'final_text')
   assert(mentionSig({ ...base, repo: 'r' }) != a, 'repo scopes entity links')
   let c = {
     entity: { eid: 'c', num: 1 },

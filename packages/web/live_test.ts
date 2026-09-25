@@ -45,7 +45,6 @@ import {
   repoUrl,
   resetSignals,
   row,
-  sessionRows,
   setInbox,
   shelfFor,
   shown,
@@ -230,7 +229,7 @@ Deno.test('repoUrl follows task, comment, and session ownership', () => {
     },
     session: {
       entity: { eid: 'session', num: 3 },
-      session: { eid: 'session', id: 'run', requested_task: 'task' },
+      session: { eid: 'session', id: 'run', actor: 'project' },
     },
     comment: {
       entity: { eid: 'comment', num: 4 },
@@ -242,7 +241,7 @@ Deno.test('repoUrl follows task, comment, and session ownership', () => {
   }
 })
 
-Deno.test('repoUrl follows a session actor when its task is not loaded', () => {
+Deno.test('repoUrl follows a session actor', () => {
   cache.value = {
     project: {
       entity: { eid: 'project', num: 1 },
@@ -256,12 +255,7 @@ Deno.test('repoUrl follows a session actor when its task is not loaded', () => {
     },
     session: {
       entity: { eid: 'session', num: 2 },
-      session: {
-        eid: 'session',
-        id: 'run',
-        requested_task: 'missing',
-        actor: 'project',
-      },
+      session: { eid: 'session', id: 'run', actor: 'project' },
     },
   }
   assertEquals(repoUrl(ent('session')), 'https://github.com/acme/widget')
@@ -284,12 +278,7 @@ Deno.test('repoUrl follows an entry through its session', () => {
     },
     session: {
       entity: { eid: 'session', num: 2 },
-      session: { eid: 'session', id: 'run', requested_task: 'task' },
-    },
-    task: {
-      entity: { eid: 'task', num: 3 },
-      task: { eid: 'task' },
-      filed: { eid: 'task', priority: 1, project: 'project' },
+      session: { eid: 'session', id: 'run', actor: 'project' },
     },
     entry: {
       entity: { eid: 'entry', num: 4 },
@@ -297,19 +286,6 @@ Deno.test('repoUrl follows an entry through its session', () => {
     },
   }
   assertEquals(repoUrl(ent('entry')), 'https://github.com/acme/widget')
-})
-
-Deno.test('ent projects canonical Session facets over aliases', () => {
-  cache.value = {
-    session: {
-      entity: { eid: 'session', num: 1 },
-      session: { eid: 'session', id: 'run', cwd: '/stale', pid: 7 },
-      worktree: { eid: 'session', cwd: null },
-      runtime: { eid: 'session', pid: null },
-    },
-  }
-  assertEquals(ent('session').session?.cwd, null)
-  assertEquals(ent('session').session?.pid, null)
 })
 
 // A cache of task/project rows: `['T', 'Ops']` is a task in domain Ops
@@ -367,11 +343,11 @@ Deno.test('facets: byComp derivation matches the whole-cache scan', () => {
     // sessions + shelves + an unrelated doc that must touch no facet
     s1: {
       entity: { eid: 's1', num: 7 },
-      session: { eid: 's1', id: 'r1', cwd: '/a', pid: 1 },
+      session: { eid: 's1', id: 'r1' },
     },
     s2: {
       entity: { eid: 's2', num: 8 },
-      session: { eid: 's2', id: 'r2', cwd: '/b', pid: 2 },
+      session: { eid: 's2', id: 'r2' },
     },
     sh1: {
       entity: { eid: 'sh1', num: 10 },
@@ -391,15 +367,11 @@ Deno.test('facets: byComp derivation matches the whole-cache scan', () => {
     .sort(([, a], [, b]) =>
       (a.entity?.num ?? Infinity) - (b.entity?.num ?? Infinity)
     ).map(([eid]) => eid)
-  let refSessions = Object.entries(g).filter(([, r]) => r.session).map((
-    [eid],
-  ) => eid)
 
   assertEquals(domains.value, refDomains)
   assertEquals(domains.value, ['Eng', 'Ops'])
   assertEquals(projects().map((e) => e.eid), refProjects)
   assertEquals(projects().map((e) => e.eid), ['pA', 'pB'])
-  assertEquals(sessionRows().map(([eid]) => eid), refSessions)
   assertEquals(shelfFor('c1'), 'sh1')
   assertEquals(shelfFor('nope'), undefined)
 })
@@ -794,10 +766,9 @@ Deno.test('foldFor: query membership, live statuses off the row', () => {
   }
 })
 
-// The presence/reference facets (projects/sessionRows/shelfFor) ride the query
+// The presence/reference facets (projects/shelfFor) ride the query
 // door now (T-18099), so each wakes only when ITS membership changes — a project
-// born, a session born, a shelf claimed — never on a sibling facet or an
-// unrelated row.
+// born, a shelf claimed — never on a sibling facet or an unrelated row.
 Deno.test('facet reads wake only their own membership', () => {
   cache.value = {
     proj: {
@@ -815,15 +786,11 @@ Deno.test('facet reads wake only their own membership', () => {
   }
   deps.value = []
   resetSignals()
-  let runs = { projects: 0, sessions: 0, shelf: 0 }
+  let runs = { projects: 0, shelf: 0 }
   let stops = [
     effect(() => {
       projects()
       runs.projects++
-    }),
-    effect(() => {
-      sessionRows()
-      runs.sessions++
     }),
     effect(() => {
       shelfFor('client')
@@ -833,19 +800,19 @@ Deno.test('facet reads wake only their own membership', () => {
   try {
     // an unrelated doc edit touches no facet — all stay asleep
     applyLocal([{ eid: 'plain', name: 'doc', comp: { title: 'changed' } }])
-    assertEquals(runs, { projects: 1, sessions: 1, shelf: 1 })
+    assertEquals(runs, { projects: 1, shelf: 1 })
 
     // a project born wakes only the project census
     applyLocal([{ eid: 'proj2', name: 'project', comp: {} }])
-    assertEquals(runs, { projects: 2, sessions: 1, shelf: 1 })
+    assertEquals(runs, { projects: 2, shelf: 1 })
 
-    // a session born wakes only the session census
+    // a session born wakes neither
     applyLocal([{ eid: 'sess2', name: 'session', comp: { id: 'sess2' } }])
-    assertEquals(runs, { projects: 2, sessions: 2, shelf: 1 })
+    assertEquals(runs, { projects: 2, shelf: 1 })
 
     // the client's shelf appears — only shelfFor wakes
     applyLocal([{ eid: 'sh', name: 'shelf', comp: { client: 'client' } }])
-    assertEquals(runs, { projects: 2, sessions: 2, shelf: 2 })
+    assertEquals(runs, { projects: 2, shelf: 2 })
     assertEquals(shelfFor('client'), 'sh')
   } finally {
     for (let stop of stops) stop()

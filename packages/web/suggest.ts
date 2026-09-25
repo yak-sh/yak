@@ -14,7 +14,6 @@ import {
   NONE,
   route,
   routes,
-  sessionTwin,
   sharedRef,
   typed,
 } from './route.ts'
@@ -80,7 +79,7 @@ let bares = (): Cand[] => {
     let derived = cs.filter((c) => p in (derivedProps[c] ?? {}))
     let routed = writable.length ? writable : derived.length ? derived : cs
     if (
-      routed.length == 1 || sessionTwin(routed) || sharedRef(p, routed)
+      routed.length == 1 || sharedRef(p, routed)
     ) {
       out.push({
         text: `.${p}`,

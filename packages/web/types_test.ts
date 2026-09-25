@@ -5,6 +5,7 @@ import {
   comps,
   deaths,
   friendly,
+  type Life,
   nick,
   type Session,
   settled,
@@ -105,33 +106,37 @@ Deno.test('settled: done or cancelled, nothing else', () => {
   assertEquals(settled(undefined), false)
 })
 
-// The client's half of door.ts `present()` — one predicate every surface
-// shares (T-7461). Origin never enters it: an operator's own terminal is a
-// session somebody is home in, and a managed row that ended is not.
-let sess = (x: Partial<Session>): Session => ({ eid: 'e', id: 'i', ...x })
+// A session is awake while its transcript asks for work, or while a
+// harness session's process runs; standing is the word its pip wears.
+let sess = (x: Partial<Session> = {}, more: Omit<Life, 'session'> = {}) => ({
+  session: { eid: 'e', id: 'i', ...x },
+  ...more,
+})
+let pid = { process: { eid: 'e', pid: 9 } }
+let exited = { ...pid, exit: { eid: 'e', code: 0 } }
 
-Deno.test('awake: a status says it, else an open door does', () => {
+Deno.test('awake: a status says it, else a live process does', () => {
   assertEquals(awake(sess({ status: 'pending' })), true)
   assertEquals(awake(sess({ status: 'running' })), true)
   assertEquals(awake(sess({ status: 'settled' })), false)
-  assertEquals(awake(sess({ status: 'stopped', finished_at: 'x' })), false)
-  assertEquals(awake(sess({ pid: 9 })), true) // an operator at the keyboard
-  assertEquals(awake(sess({ pid: 9, finished_at: 'x' })), false) // a ghost
-  assertEquals(awake(sess({})), false) // no pid, no run: no door
+  assertEquals(awake(sess({ status: 'stopped' }, exited)), false)
+  assertEquals(awake(sess({}, pid)), true) // a harness session at work
+  assertEquals(awake(sess({}, exited)), false) // a ghost
+  assertEquals(awake(sess()), false)
 })
 
-Deno.test('standing: an external session borrows the word from its door', () => {
-  assertEquals(standing(sess({ status: 'completed' })), 'completed')
-  assertEquals(standing(sess({ pid: 9 })), 'running')
-  assertEquals(standing(sess({ pid: 9, finished_at: 'x' })), '') // dim again
-  assertEquals(standing(sess({})), '')
+Deno.test('standing: the status, else running while only a process says so', () => {
+  assertEquals(standing(sess({ status: 'failed' })), 'failed')
+  assertEquals(standing(sess({}, pid)), 'running')
+  assertEquals(standing(sess({}, exited)), '')
+  assertEquals(standing(sess()), '')
 })
 
 Deno.test('standing: an awake idle turn rests without hiding its ending', () => {
-  assertEquals(standing(sess({ status: 'running', turn: 'idle' })), 'idle')
-  assertEquals(standing(sess({ pid: 9, turn: 'idle' })), 'idle')
+  assertEquals(standing(sess({ status: 'running', standing: 'idle' })), 'idle')
+  assertEquals(standing(sess({ standing: 'idle' }, pid)), 'idle')
   assertEquals(
-    standing(sess({ status: 'completed', turn: 'idle', finished_at: 'x' })),
-    'completed',
+    standing(sess({ status: 'settled', standing: 'idle' })),
+    'settled',
   )
 })

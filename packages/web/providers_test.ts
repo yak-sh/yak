@@ -2,13 +2,15 @@
 // and route it graph-native → CLI fallback by readiness, independent of
 // provider-table order.
 import './testing.ts'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
 import {
   catalog,
   offer,
   type Provider,
   spawnDefault,
+  tableOf,
   transport,
+  usingOf,
 } from './providers.ts'
 
 // The shipped shape: graph-native `codex` carries the menu; the `codex-cli`
@@ -16,20 +18,18 @@ import {
 let codex: Provider = {
   name: 'codex',
   models: ['gpt-5.6-sol', 'gpt-5.6-terra'],
-  efforts: ['low', 'high'],
+  efforts: { 'gpt-5.6-sol': ['low', 'high'], 'gpt-5.6-terra': ['low', 'high'] },
   labels: { 'gpt-5.6-sol': 'GPT-5.6 Sol', 'gpt-5.6-terra': 'GPT-5.6 Terra' },
 }
 let codexCli: Provider = {
   name: 'codex-cli',
   models: ['gpt-5.6-sol', 'gpt-5.6-terra'],
-  efforts: ['low', 'high'],
   labels: {},
   fallback: true,
 }
 let claude: Provider = {
   name: 'claude',
   models: ['claude-opus-4-8', 'sonnet'],
-  efforts: [],
   labels: { 'claude-opus-4-8': 'Opus', sonnet: 'Sonnet' },
 }
 
@@ -112,19 +112,60 @@ Deno.test('spawnDefault routes the default model by readiness', () => {
   )
 })
 
-Deno.test('spawnDefault reads readiness off the table when no blocker is given', () => {
-  // The server stamps `ready`; the default blocker routes around a false one.
-  let unready: Provider[] = [{ ...codex, ready: false }, {
-    ...codexCli,
-    ready: true,
-  }]
-  assertEquals(spawnDefault(unready), {
-    provider: 'codex-cli',
-    model: 'gpt-5.6-sol',
+// Graph rows as @yaks/model writes them: a provider, a model, and the
+// `serves` edge from one to the other.
+let row = (eid: string, comps: Record<string, unknown>) => ({
+  entity: { eid },
+  ...comps,
+})
+let serves = (from: string, to: string) =>
+  row(`${from}>${to}`, { edge: { from, to }, serves: {} })
+let rows = [
+  row('p1', { provider: { name: 'codex', offered: true } }),
+  row('p2', { provider: { name: 'codex-cli', offered: true, fallback: true } }),
+  row('p3', { provider: { name: 'fake', offered: false } }),
+  row('m1', {
+    model: {
+      name: 'gpt-5.6-sol',
+      label: 'GPT-5.6 Sol',
+      offered: true,
+      efforts: 'low high',
+      effort: 'high',
+    },
+  }),
+  row('m2', { model: { name: 'fake-fast', label: 'Fake', offered: true } }),
+  row('m3', { model: { name: 'old', label: 'Old', offered: false } }),
+  serves('p1', 'm1'),
+  serves('p1', 'm3'),
+  serves('p2', 'm1'),
+  serves('p3', 'm2'),
+]
+
+Deno.test('tableOf reads the offered providers and the models they serve', () => {
+  let t = tableOf(rows)
+  assertEquals(t.map((p) => p.name), ['codex', 'codex-cli'])
+  assertEquals(t[0], {
+    name: 'codex',
+    eid: 'p1',
+    eids: { 'gpt-5.6-sol': 'm1', old: 'm3' },
+    models: ['gpt-5.6-sol', 'old'],
+    labels: { 'gpt-5.6-sol': 'GPT-5.6 Sol' },
+    efforts: { 'gpt-5.6-sol': ['low', 'high'] },
+    defaults: { 'gpt-5.6-sol': 'high' },
   })
-  let ready: Provider[] = [{ ...codex, ready: true }, {
-    ...codexCli,
-    ready: true,
-  }]
-  assertEquals(spawnDefault(ready), { provider: 'codex', model: 'gpt-5.6-sol' })
+  assertEquals(t[1].fallback, true)
+  assertEquals(catalog(t).map((c) => [c.model, c.transports]), [
+    ['gpt-5.6-sol', ['codex', 'codex-cli']],
+  ])
+})
+
+Deno.test('usingOf names the provider and model entities, or refuses', () => {
+  let t = tableOf(rows)
+  assertEquals(
+    usingOf(t, { provider: 'codex', model: 'gpt-5.6-sol', effort: 'low' }),
+    { provider: 'p1', model: 'm1', effort: 'low' },
+  )
+  assertEquals(usingOf(t, { provider: 'codex-cli' }), { provider: 'p2' })
+  assertThrows(() => usingOf(t, { provider: 'fake' }))
+  assertThrows(() => usingOf(t, { provider: 'codex-cli', model: 'old' }))
 })

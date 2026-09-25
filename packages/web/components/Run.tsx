@@ -2,21 +2,27 @@ import { entityPath } from '../url.ts'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import { base, ent, mutate, toPlane, topZ, uuid } from '../live.ts'
-import { catalog, type Pick, type Provider, transport } from '../providers.ts'
+import {
+  catalog,
+  type Pick,
+  type Provider,
+  tableOf,
+  transport,
+  usingOf,
+} from '../providers.ts'
+import { type SpawnAsk, spawnFrames, spawnPlan } from '../client.ts'
+import { type Change, idOf } from '../types.ts'
 import { block } from './ui.tsx'
 import { menu, navigate, screenTarget } from './nav.tsx'
 import { usePlaceAt } from './overlay.tsx'
 
 // The Run door: a task's "run session…" verb opens this over the point
 // the menu stood on — model, effort; the provider is never asked, it is
-// chosen for the pick by readiness — and writes ONE batch: a
-// session carrying the request columns (the server's created(session)
-// effect validates and launches it), plus its card and pin when we're
-// over a canvas, minted here like any other card the browser spawns.
-// The choices are the SERVER's table (GET /providers): adapters.ts is
-// server-only, so the form can only offer what will be accepted — and
-// anything that still can't be honored (a task with no repo) comes back
-// as a failed Session on the board, not a toast nobody kept.
+// chosen for the pick by readiness — and writes ONE batch: the spawn
+// (spawnOf), plus its card and pin when we're over a canvas, minted here
+// like any other card the browser spawns. The choices are the graph's own
+// provider and model entities, so the form offers only what the host can
+// run, and anything it still can't honor shows on the session itself.
 //
 // Off a canvas (or on the List door, which has no plane) there's nothing
 // to pin, so we navigate to the session instead.
@@ -40,12 +46,36 @@ let Frame = block('div', 'Run', {
 })
 let { Row, Name, Go } = Frame
 
-// The table, fetched once per page: it changes when the server changes.
+// The table, read once per page from the graph: the providers, their
+// models, and the `serves` edges between them (providers.ts tableOf).
 export let providers = signal<Provider[]>([])
+let read = async (q: string) =>
+  await (await fetch(`${base()}/query?q=${encodeURIComponent(q)}`)).json()
 export let load = async () => {
   try {
-    providers.value = await (await fetch(`${base()}/providers`)).json()
+    let found = await Promise.all(
+      ['.provider!', '.model!', '.serves!'].map(read),
+    )
+    providers.value = tableOf(found.flat())
   } catch { /* no table, no form — the verb simply does nothing yet */ }
+}
+
+// Every door's spawn (the Run form, :fix, :chat, the TUI): the plan
+// (spawnPlan), its names resolved to the entities the table holds, and the
+// write @yaks/spawn makes. The instruction is the prompt, else the task's id
+// and title, the way session_spawn words it.
+export let spawnOf = async (
+  ask: SpawnAsk & { task?: string; prompt?: string },
+): Promise<{ session: string; changes: Change[] }> => {
+  if (!providers.value.length) await load()
+  let plan = spawnPlan(providers.value, ask, await liveBlocked())
+  if (!plan.provider) throw new Error('no matching provider/model')
+  let task = ask.task ? ent(ask.task) : undefined
+  let body = ask.prompt ||
+    [task && idOf(task), task?.doc?.title].filter(Boolean).join(' — ')
+  let session = uuid()
+  let using = usingOf(providers.value, { ...plan, provider: plan.provider })
+  return { session, changes: spawnFrames(session, body, using, ask.task) }
 }
 
 export let run = signal<Ask | null>(null)
@@ -86,22 +116,16 @@ let Form = ({ a }: { a: Ask }) => {
 
   let go = async () => {
     if (!m) return
-    let provider = await choose(m)
     let at = spot(a)
-    let eid = uuid()
+    let { session: eid, changes } = await spawnOf({
+      task: a.eid,
+      provider: await choose(m),
+      model: m.model,
+      ...(ef ? { effort: ef } : {}),
+    })
     let card = uuid()
     mutate(
-      {
-        eid,
-        name: 'session',
-        comp: {
-          id: uuid(),
-          provider,
-          model: m.model,
-          ...(ef ? { effort: ef } : {}),
-          requested_task: a.eid,
-        },
-      },
+      ...changes,
       ...(at
         ? [
           {

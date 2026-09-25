@@ -2081,6 +2081,7 @@ html {
 }
 .Dot-wip,
 .Dot-idle,
+.Dot-settled,
 .Dot-pending {
   --dot: var(--wip);
   background: linear-gradient(90deg, var(--dot) 50%, transparent 0);
@@ -2088,8 +2089,7 @@ html {
 /* a live hand on it — the claim's session is awake (or the run is
    going): the pip fills and breathes instead of sitting half */
 .Dot-wip.Dot-live,
-.Dot-running,
-.Dot-stopping {
+.Dot-running {
   background: var(--dot);
   animation: DotPulse 2.2s ease-out infinite;
 }
@@ -2128,7 +2128,9 @@ html {
 .Dot-failed::before,
 .Dot-failed::after,
 .Dot-interrupted::before,
-.Dot-interrupted::after {
+.Dot-interrupted::after,
+.Dot-stopped::before,
+.Dot-stopped::after {
   content: '';
   left: 50%;
   top: 50%;
@@ -2139,12 +2141,14 @@ html {
 }
 .Dot-cancelled::before,
 .Dot-failed::before,
-.Dot-interrupted::before {
+.Dot-interrupted::before,
+.Dot-stopped::before {
   transform: translate(-50%, -50%) rotate(45deg);
 }
 .Dot-cancelled::after,
 .Dot-failed::after,
-.Dot-interrupted::after {
+.Dot-interrupted::after,
+.Dot-stopped::after {
   transform: translate(-50%, -50%) rotate(-45deg);
 }
 .Dot-gated {
@@ -2177,15 +2181,8 @@ html {
    lifecycle to wear: while its door is open it borrows `running`
    (types.ts `standing`), and once it shuts it keeps the full dim
    default. */
-.Dot-starting {
-  --dot: var(--open);
-  background: transparent;
-}
 .Dot-running {
   --dot: var(--wip);
-}
-.Dot-stopping {
-  --dot: var(--orange);
 }
 .Dot-completed {
   --dot: var(--done);
@@ -2193,7 +2190,8 @@ html {
 .Dot-failed {
   --dot: var(--red);
 }
-.Dot-interrupted {
+.Dot-interrupted,
+.Dot-stopped {
   --dot: var(--orange);
 }
 .Dot-lost {

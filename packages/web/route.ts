@@ -11,7 +11,6 @@ import {
   derivedProps,
   type PropType,
   sessionComps,
-  sessionFacetNames,
   shapeOf,
   spineProps,
   stamped,
@@ -199,12 +198,6 @@ export let EDGE_HOP = (word: string) =>
   'is not served; a column path derefs reference props ' +
   '(.comment.target.doc.title)'
 
-let sessionFacets = new Set<string>(sessionFacetNames)
-export let sessionTwin = (owners: string[]) =>
-  owners.includes('session') &&
-  owners.some((name) => sessionFacets.has(name)) &&
-  owners.every((name) => name == 'session' || sessionFacets.has(name))
-
 // Component columns that never claim their BARE prop spelling — an established
 // bare filter of a different concept already owns it, so the newcomer is
 // reached only through its component (`.fork.from`, `.accept.body`). The fork
@@ -295,9 +288,6 @@ export let route = (
   // the edge door. Only NON-components fall to the door.
   if (edgeish.test(prop) && !(prop in comps)) own = []
   if (own.length == 1) return { comp: own[0], prop }
-  // Spawn's legacy session aliases are one concept during the rolling
-  // window: filters read either home, while write routing chooses explicitly.
-  if (sessionTwin(own)) return { comp: '', prop }
   if (sharedRef(prop, own)) return { comp: '', prop }
   if (own.length > 1) {
     throw new Error(

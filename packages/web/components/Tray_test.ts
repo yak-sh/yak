@@ -3,7 +3,7 @@
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { mode } from '../live.ts'
-import { type Ent } from '../types.ts'
+import { type Ent, type Session } from '../types.ts'
 import { trayKey, trayOpen, trayRecent, traySessions } from './Tray.tsx'
 import { graphStanding } from './session_status.tsx'
 
@@ -22,138 +22,57 @@ Deno.test('t opens and closes the tray only from normal mode', () => {
   assertEquals(trayOpen.value, false)
 })
 
+// A session as ent() reads it: the row, when it was made, and what the host
+// derived about it.
+let run = (x: Partial<Ent> = {}, at?: string): Ent => ({
+  eid: 'session',
+  num: 1,
+  kind: 'session',
+  session: { eid: 'session', id: 'run' },
+  ...(at ? { created: { eid: 'session', at } } : {}),
+  refs: [],
+  kids: [],
+  ...x,
+})
+
 Deno.test('the tray keeps a newly started session visible', () => {
   let now = Date.parse('2026-08-12T00:30:00-04:00')
-  assertEquals(
-    trayRecent({
-      eid: 'session',
-      id: 'run',
-      started_at: '2026-08-12T00:20:00-04:00',
-    }, now),
-    true,
-  )
-  assertEquals(
-    trayRecent({
-      eid: 'session',
-      id: 'run',
-      started_at: '2026-08-11T12:00:00-04:00',
-    }, now),
-    false,
-  )
+  assertEquals(trayRecent(run({}, '2026-08-12T00:20:00-04:00'), now), true)
+  assertEquals(trayRecent(run({}, '2026-08-11T12:00:00-04:00'), now), false)
+  assertEquals(trayRecent(run(), now), false)
 })
 
 Deno.test('tray sessions put the newest start at the top', () => {
-  let older = {
-    eid: 'older',
-    id: 'older',
-    started_at: '2026-08-12T10:00:00Z',
-    finished_at: '2026-08-12T12:00:00Z',
-  }
-  let newer = {
-    eid: 'newer',
-    id: 'newer',
-    started_at: '2026-08-12T11:00:00Z',
-  }
   assertEquals(
     traySessions([
-      ['unstarted', { eid: 'unstarted', id: 'unstarted' }],
-      ['older', older],
-      ['newer', newer],
+      ['unstarted', run()],
+      ['older', run({}, '2026-08-12T10:00:00Z')],
+      ['newer', run({}, '2026-08-12T11:00:00Z')],
     ]).map(([eid]) => eid),
     ['newer', 'older', 'unstarted'],
   )
 })
 
-let session = (standing?: string): Ent => ({
-  eid: 'session',
-  num: 1,
-  kind: 'session',
-  session: {
-    eid: 'session',
-    id: 'run',
-    origin: 'managed',
-    standing,
-    // ent() merges the spawn facet over the session aliases (sessionOf), so the
-    // live Ent reads provider on session — spawn-preferred, legacy-fallback.
-    provider: 'codex',
-  },
-  spawn: { eid: 'session', provider: 'codex' },
-  refs: [],
-  kids: [],
+let status = (s: Session['status'], standing?: string) =>
+  run({ session: { eid: 'session', id: 'run', status: s, standing } })
+
+// The dot's word is the status the host derived, idle between turns.
+Deno.test('graph-native status follows the host', () => {
+  assertEquals(graphStanding(status('pending')), 'pending')
+  assertEquals(graphStanding(status('running')), 'running')
+  assertEquals(graphStanding(status('running', 'idle')), 'idle')
+  assertEquals(graphStanding(status('settled')), 'settled')
+  assertEquals(graphStanding(status('stopped')), 'stopped')
+  assertEquals(graphStanding(status('failed')), 'failed')
 })
 
-// graphStanding reads the server-maintained `standing` facet O(1) now (T-17855),
-// not a scanned log: busy → running, terminal → completed unless a wake is
-// pending, everything else idle.
-Deno.test('graph-native status follows work, final answers, and wakes', () => {
-  assertEquals(graphStanding(session('busy')), 'running')
-  assertEquals(graphStanding(session(undefined)), 'idle')
-  assertEquals(graphStanding(session('idle')), 'idle')
-  assertEquals(graphStanding(session('terminal')), 'completed')
-  // A pending wake overrides a terminal facet — a woken session reads idle.
-  assertEquals(graphStanding(session('terminal'), true), 'idle')
-})
-
-Deno.test('graph-native reads an OLD snapshot with no spawn facet', () => {
-  // The reader prefers spawn and falls back to the legacy session.provider —
-  // an old snapshot carries provider on session alone and must still read
-  // native, not lose its codex-ness.
-  let e = session('busy')
-  delete (e as { spawn?: unknown }).spawn
-  assertEquals(graphStanding(e), 'running')
-})
-
-// finished_at is authoritative — an ENDED native session reads completed (or
-// failed on error), NEVER idle, whatever the log-derived facet says. Guards the
-// regression the O(1) facet introduced: a finished session with a null/idle
-// `standing` (killed, log had no clean final answer, or the boot backfill hasn't
-// reached it) was misdisplaying as idle instead of completed, fleet-wide.
-let finished = (standing?: string, failure?: 'failed' | 'exception'): Ent => ({
-  eid: 'session',
-  num: 1,
-  kind: 'session',
-  session: {
-    eid: 'session',
-    id: 'run',
-    origin: 'managed',
-    standing,
-    finished_at: '2026-07-01T00:00:00Z',
-    provider: 'codex',
-  },
-  ...(failure == 'failed'
-    ? { failed: { eid: 'session', at: '2026-07-01T00:00:00Z', message: 'x' } }
-    : failure == 'exception'
-    ? {
-      exception: {
-        eid: 'session',
-        at: '2026-07-01T00:00:00Z',
-        message: 'x',
-      },
-    }
-    : {}),
-  spawn: { eid: 'session', provider: 'codex' },
-  refs: [],
-  kids: [],
-})
-
-Deno.test('a finished native session reads completed, never idle', () => {
-  assertEquals(graphStanding(finished(undefined)), 'completed') // null facet, still done
-  assertEquals(graphStanding(finished('idle')), 'completed') // killed / no final answer
-  assertEquals(graphStanding(finished('terminal')), 'completed')
-  assertEquals(graphStanding(finished('busy')), 'completed') // a stale busy facet on an ended session
-  assertEquals(graphStanding(finished(undefined, 'failed')), 'failed')
-  assertEquals(graphStanding(finished(undefined, 'exception')), 'failed')
-  // a pending wake cannot revive a finished session
-  assertEquals(graphStanding(finished(undefined), true), 'completed')
-})
-
+// A failure recorded on the session outranks whatever the transcript says.
 Deno.test('a session exception reads failed while the session rests', () => {
-  let e = session('idle')
+  let e = status('running', 'idle')
   e.exception = {
     eid: e.eid,
     at: '2026-07-01T00:00:00Z',
     message: 'responses: failed',
   }
   assertEquals(graphStanding(e), 'failed')
-  assertEquals(graphStanding(e, true), 'failed')
 })

@@ -8,7 +8,7 @@ import {
   sessionDetail,
   shelfFor,
 } from '../live.ts'
-import { awake, type Session } from '../types.ts'
+import { awake, type Ent } from '../types.ts'
 import { block } from './ui.tsx'
 import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
@@ -49,8 +49,8 @@ export let trayKey = (
 // A run stays worth showing for a while around its latest activity.
 let RECENT = 6 * 60 * 60 * 1000
 
-export let trayRecent = (s: Session, now = Date.now()) => {
-  let at = s.finished_at || s.started_at
+export let trayRecent = (e: Ent, now = Date.now()) => {
+  let at = e.created?.at
   return !!at && now - Date.parse(at) < RECENT
 }
 
@@ -69,21 +69,21 @@ let dismiss = (eid: string) => {
 // counts, which is the point of asking the door and never the origin), or
 // it moved recently and nobody has dismissed it. Graph-native sessions rest
 // between turns without a process status, so their start is activity too.
-let shown = (eid: string, s: Session) =>
-  awake(s) ||
-  (trayRecent(s) && !seen.value.includes(eid))
+let shown = (eid: string, e: Ent) =>
+  awake(e) ||
+  (trayRecent(e) && !seen.value.includes(eid))
 
 // LIVE: the digest a human wants without opening every session.
-let started = (s: Session) => Date.parse(s.started_at ?? '') || 0
+let started = (e: Ent) => Date.parse(e.created?.at ?? '') || 0
 
-export let traySessions = (rows: [string, Session][]) =>
+export let traySessions = (rows: [string, Ent][]) =>
   rows.toSorted(([, a], [, b]) => started(b) - started(a))
 
 let useLive = () => {
   let ids = useQueryEids(traySessionQuery, true)
   return traySessions(ids.flatMap((eid) => {
-    let s = ent(eid).session
-    return s && shown(eid, s) ? [[eid, s] as [string, Session]] : []
+    let e = ent(eid)
+    return e.session && shown(eid, e) ? [[eid, e] as [string, Ent]] : []
   }))
 }
 
@@ -139,7 +139,7 @@ let drop = (e: DragEvent) => {
 // fuller projection of the SAME query, which is a different sub (projection is
 // part of sub identity, D-22567 §3), and gives it back when it closes. A
 // collapsed tray — the default — never asks for those columns at all.
-let LiveRows = ({ ls }: { ls: [string, Session][] }) => {
+let LiveRows = ({ ls }: { ls: [string, Ent][] }) => {
   useQueryEids(
     `.eid=${ls.map(([eid]) => eid).join(',')}&` +
       sessionDetail.split('&')[1],
