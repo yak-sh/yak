@@ -287,7 +287,7 @@ slow(
 )
 
 slow(
-  "a fast-forward refused without the base moving surfaces git's error, never a rebase",
+  'local changes the landing would overwrite are a tool refusal, never an exception',
   async () => {
     let r = await setup()
     try {
@@ -297,12 +297,18 @@ slow(
       await command(r.tree, 'commit', '-am', 'rewrite base')
       Deno.writeTextFileSync(`${r.repo}/base.txt`, 'being edited\n')
       let before = await command(r.repo, 'rev-parse', 'main')
-      let out: string[] = []
-      await assertRejects(
-        () => land({ cwd: r.tree, write: (t) => out.push(t) }),
-        Error,
-        'git merge failed',
+      let call = {
+        entity: { eid: 'c1' },
+        call: { args: {} },
+        process: { cwd: r.tree },
+      }
+      let refused = await assertRejects(
+        () => Promise.resolve(runs().land(call, {} as Graph)),
+        CallError,
+        'shared checkout blocks landing',
       )
+      assertEquals(refused.code, 'land')
+      assert(refused.message.includes('base.txt'), refused.message)
       // The base is untouched, the local edit preserved, and no rebase
       // happened.
       assertEquals(await command(r.repo, 'rev-parse', 'main'), before)
@@ -310,7 +316,6 @@ slow(
         Deno.readTextFileSync(`${r.repo}/base.txt`),
         'being edited\n',
       )
-      assert(!out.join('\n').includes('moved'), out.join('\n'))
     } finally {
       Deno.removeSync(r.root, { recursive: true })
     }

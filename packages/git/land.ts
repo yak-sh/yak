@@ -51,8 +51,9 @@ export type Ran = { ok: boolean; code: number; out: string; err: string }
 export type Run = (args: string[], cwd: string) => Promise<Ran>
 
 /** A landing refused for the caller's own state: not in a linked worktree on
- * a branch, a dirty worktree, a revert the guard caught. A Git command that
- * fails is a plain `Error`, a fault somebody has to hear about. */
+ * a branch, a dirty worktree, local changes in the shared checkout that the
+ * landing would overwrite, or a revert the guard caught. An unexpected Git
+ * command failure is a plain `Error`, a fault somebody has to hear about. */
 export class LandError extends Error {
   constructor(message: string) {
     super(message)
@@ -385,10 +386,21 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     for (let r of found) {
       write(`land: --allow-revert — landing anyway:${why(r, base, '')}`, true)
     }
-    // The shared checkout is not checked for uncommitted changes: git refuses
-    // a merge that would overwrite someone's uncommitted work and names the
-    // files, and leaves alone any edit it would not touch. If it refuses for
-    // some other reason — a hook, a dirty checkout — surface git's own error.
+    // The shared checkout need not be spotless: Git leaves unrelated edits
+    // alone. `read-tree` runs the same two-tree/worktree safety check as the
+    // fast-forward, without changing the index or files. A refusal here is the
+    // checkout's state, while a merge that fails after it passed remains a
+    // fault (a hook, corruption, or a race somebody has to hear about).
+    let ready = await git(
+      root,
+      ['read-tree', '-n', '-m', '-u', 'HEAD', branch],
+      false,
+    )
+    if (ready.code) {
+      throw new LandError(
+        message('land: shared checkout blocks landing', ready),
+      )
+    }
     let merged = await git(root, ['merge', '--ff-only', branch])
     if (merged.code) throw new Error(message('git merge', merged))
     let sha = await need('read landed commit', root, ['rev-parse', 'HEAD'])

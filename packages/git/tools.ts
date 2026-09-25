@@ -9,11 +9,11 @@
 //
 // A landing refused for the caller's own state is an expected invocation
 // failure: a moved base is returned as a divergence, and a worktree that is
-// dirty, detached or on the base, or a revert the guard caught, is a
-// `LandError`. Both become a `CallError` carrying Git's whole account, which
-// the tool runner records as a failed call and a command line reports as exit
-// 1. A Git command that failed escapes as a plain error, for the runner to
-// report as the fault it is.
+// dirty, detached or on the base, shared-checkout changes overlap the landing,
+// or a revert the guard caught, is a `LandError`. Both become a `CallError`
+// carrying Git's whole account, which the tool runner records as a failed call
+// and a command line reports as exit 1. An unexpected Git command failure
+// escapes as a plain error, for the runner to report as the fault it is.
 //
 // `cites check` is a check — a tool whose verb is `check`, which is all a
 // doctor is (@yaks/tools ./check.ts) — so a citation that moved is a finding
