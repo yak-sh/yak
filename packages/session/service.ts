@@ -1,162 +1,153 @@
-// The turn spool, read into transcripts: the duty a host runs at
-// `@yaks/session/service` for as long as it is up, and once on the way into a
-// one-shot command.
+// The duty a host runs at `@yaks/session/service` for as long as it is up:
+// every session a harness ran on this machine, read into the graph from the
+// transcript file the harness keeps (./tail.ts).
 //
 // The duty opens by freeing the locks whose holder is gone (./reap.ts). Start-up
 // is the one moment that answer is fresh, and holding the duty is what makes
 // this process the one to give it: the lease is renewed for as long as the
 // process that stays up runs, so a command started beside it leaves the reap
-// to it rather than writing the same releases again.
+// to it rather than writing the same releases again. A one-shot command reaps
+// and reads nothing: its tails would outlive the lease it gives back.
 //
-// A harness hook appends each prompt and each final reply to the spool
-// (./turn.ts), because a hook has milliseconds and opening the graph takes a
-// second. This reads the lines back in the order they were written and appends
-// each to its session's transcript: a prompt is an input, `content` with no
-// `output` beside it, and a reply is `content` with `output`. A session the
-// graph has not met yet is created under the harness's id for it, and one that
-// a person typed into is marked `operator`, which is what tells the person's
-// words apart from an agent's brief.
+// Claude Code keeps each session as `<project>/<session>.jsonl` under its
+// projects directory, and appends to it as the session runs. A transcript
+// written to in the last `full` days is followed as it grows, at full depth:
+// what the person typed, what the harness put in front of the model, what the
+// model said and thought, and every tool call with its result. An older one is
+// read in lazily, one file per pass, and only its prose. A session the graph
+// has not met is created under the harness's id for it, and one a person typed
+// into is marked `operator`, which is what tells the person's words apart from
+// an agent's brief.
 //
-// Each entry's id is derived from its line, so reading a line twice writes the
-// same entry twice, which changes nothing. That is what lets the spool be
-// trimmed only after the entries are written: a crash in between repeats
-// lines and loses none. Each is stamped with the time the hook ran, not the
-// time it was read.
-//
-// A session that ran before the hooks were installed is read from Claude's own
-// transcript file instead (./past.ts), into the same turns, written the same
-// way: lazily, one file per pass of a long-running host.
+// A session whose transcript asks a provider for a run (`using{provider}` on
+// an entry nobody imported) is a managed run: @yaks/spawn launched it and reads
+// its stdout, and its transcript file is left alone. So are subagents'
+// transcripts, under `<session>/subagents/`, which are not sessions of their
+// own yet.
 
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import type { Eid, Graph } from '@yaks/graph'
 import { SESSION } from './comp.ts'
-import { CONTENT, ENTRY, OUTPUT } from './native.ts'
-import { claudeProjects, next, turnsOf, typedIn } from './past.ts'
+import { claude } from './readers.ts'
 import { reapLeases } from './reap.ts'
-import { spoolOf, taken, trim, type Turn } from './turn.ts'
+import { pull, type Tail, tail } from './tail.ts'
 import { sessionFor } from './who.ts'
 
 /** What a config file can set for this plugin's duty. */
 export type Options = {
-  /** the spool file (default `spool/turns.jsonl` beside the database) */
-  spool?: string
-  /** how often the spool is read, in milliseconds (default one second) */
+  /** how often transcripts are looked at, in milliseconds (default one
+   * second) */
   every?: number
-  /** the Claude projects directory past transcripts are read from (default
+  /** the Claude projects directory transcripts are read from (default
    * `~/.claude/projects`) */
   transcripts?: string
+  /** how long after it was last written a transcript is read at full depth,
+   * in milliseconds (default 14 days) */
+  full?: number
 }
 
-// How long a host waits to look for past transcripts again once none is left.
-let LOOK = 10 * 60 * 1000
+/** How long a transcript is read at full depth once it stops being written. */
+export let FULL = 14 * 24 * 60 * 60 * 1000
 
-let hex = (bytes: ArrayBuffer) =>
-  [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
+/** Where Claude keeps its transcripts on this machine. */
+export let claudeProjects = (): string | undefined => {
+  let env = globalThis.Deno?.env
+  let root = env?.get('CLAUDE_CONFIG_DIR') ??
+    (env?.get('HOME') ? `${env.get('HOME')}/.claude` : undefined)
+  return root && `${root}/projects`
+}
 
-// The entry a line becomes is named by the line itself.
-let idOf = async (t: Turn): Promise<string> =>
-  hex(
-    await crypto.subtle.digest(
-      'SHA-256',
-      new TextEncoder().encode(
-        JSON.stringify([t.sid, t.at, t.input ?? null, t.output ?? null]),
-      ),
-    ),
-  )
+/** One transcript on disk: the harness's id for the session, and the file. */
+export type Found = { id: string; path: string }
 
-// How long an input waits in the spool for its harness to write it down, so
-// the transcript can say whether a person typed it (./past.ts `typedIn`). Past
-// that it is written unsigned: who typed it stays unknown.
-export let WAIT = 30_000
+/** Every top-level transcript under a Claude projects directory. */
+export let transcripts = (dir: string): Found[] => {
+  let out: Found[] = []
+  let list = (d: string) => {
+    try {
+      return [...Deno.readDirSync(d)]
+    } catch {
+      return []
+    }
+  }
+  for (let project of list(dir)) {
+    if (!project.isDirectory) continue
+    for (let f of list(`${dir}/${project.name}`)) {
+      if (!f.isFile || !f.name.endsWith('.jsonl')) continue
+      out.push({
+        id: f.name.slice(0, -'.jsonl'.length),
+        path: `${dir}/${project.name}/${f.name}`,
+      })
+    }
+  }
+  return out
+}
 
-// Whether a person typed the input, as its transcript says: `undefined` while
-// the harness has not written it down.
-let typedOf = (t: Turn): boolean | undefined =>
-  t.transcript && t.promptId ? typedIn(t.transcript, t.promptId) : false
+/** What one process knows about the files it reads: the tail on each one it
+ * follows (`null` for a managed run's), and the older ones read to the end. */
+export type Seen = { tails: Map<string, Tail | null>; done: Set<string> }
+
+/** Whether a session is a managed run: its transcript asks a provider for
+ * one, which is the request @yaks/spawn answers. */
+export let managed = async (g: Graph, session: Eid): Promise<boolean> =>
+  (await g.read(
+    `.entry.session=${session}&.using.provider&!imported&.limit=1`,
+  )).length > 0
+
+// A tail on a transcript, or null where its session is a managed run.
+let opened = async (g: Graph, f: Found): Promise<Tail | null> => {
+  let s = await sessionFor(g, f.id)
+  if (s && await managed(g, s.entity.eid)) return null
+  return tail(g, f.path, {
+    ...(s ? { session: s.entity.eid } : {}),
+    id: f.id,
+    operator: !!(s?.[SESSION] as { operator?: boolean } | undefined)?.operator,
+  })
+}
+
+let stat = (path: string) => {
+  try {
+    return Deno.statSync(path)
+  } catch {
+    return undefined
+  }
+}
 
 /**
- * The bundles a spool line becomes: its session, created where the graph has
- * none and marked `operator` where a person typed into it, then its transcript
- * entry. An input marked `typed` is signed with `person`, through the session
- * where it already exists.
+ * One look at every transcript under `dir`: each written to in the last
+ * `full` milliseconds is read on to its end at full depth, and one older
+ * transcript not yet read to its end is read in, its prose only.
  */
-export let recorded = async (
-  g: Graph,
-  t: Turn,
-  person?: string,
-): Promise<Bundle[]> => {
-  let found = await sessionFor(g, t.sid)
-  let eid = found?.entity.eid ?? `$${t.sid}`
-  let own: Comp = found ? {} : { id: t.sid }
-  if (t.input != null && !(found?.[SESSION] as Comp | undefined)?.operator) {
-    own.operator = true
-  }
-  let by = t.input != null && t.typed ? person : undefined
-  return [
-    ...(Object.keys(own).length ? [{ entity: { eid }, [SESSION]: own }] : []),
-    {
-      entity: { eid: await idOf(t) },
-      [ENTRY]: { session: eid },
-      [CONTENT]: { body: t.input ?? t.output ?? '' },
-      ...(t.output != null ? { [OUTPUT]: { source: eid } } : {}),
-      ...(by ? { $actor: { by, ...(found ? { via: eid } : {}) } } : {}),
-    },
-  ]
-}
-
-/** Write turns into their transcripts, each stamped with the moment it
- * happened rather than the moment it was read, so a person's words sort by
- * when they were said. */
-export let record = async (
-  g: Graph,
-  turns: Turn[],
-  person?: string,
-): Promise<void> => {
-  for (let t of turns) {
-    await g.apply(await recorded(g, t, person), { now: t.at })
-  }
-}
-
-/** Read the spool into the graph once, then trim what was written. Where
- * there is a `person` to sign with, each input is asked of its transcript; one
- * the harness has not written down yet stops the read there, for up to
- * {@link WAIT}, so it and the lines after it wait for the next pass. Answers
- * how many lines it wrote. */
-export let drain = async (
-  g: Graph,
-  path: string,
-  person?: string,
-  now: number = Date.now(),
-): Promise<number> => {
-  let { turns, ends, bytes } = taken(path)
-  let ready: Turn[] = []
-  for (let t of turns) {
-    let typed = person && t.input != null ? typedOf(t) : false
-    if (typed === undefined && now - Date.parse(t.at) < WAIT) break
-    ready.push({ ...t, typed: !!typed })
-  }
-  let n = ready.length
-  await record(g, ready, person)
-  trim(path, n < turns.length ? ends[n - 1] ?? 0 : bytes)
-  return n
-}
-
-/** Read one past transcript into the graph, if one is waiting (./past.ts),
- * its typed prompts signed with `person`. Answers the session it read, or
- * nothing. */
-export let backfill = async (
+export let look = async (
   g: Graph,
   dir: string,
-  known: Set<string>,
-  person?: string,
-  now?: number,
-): Promise<string | undefined> => {
-  let past = await next(g, dir, known, now)
-  if (!past) return undefined
-  let lines = Deno.readTextFileSync(past.path).split('\n')
-  await record(g, turnsOf(past.sid, lines), person)
-  known.add(past.sid)
-  return past.sid
+  seen: Seen,
+  o: { person?: Eid; full?: number; now?: number } = {},
+): Promise<void> => {
+  let now = o.now ?? Date.now()
+  let old: Found | undefined
+  for (let f of transcripts(dir)) {
+    let st = stat(f.path)
+    let t = seen.tails.get(f.path)
+    if (!st || t === null || (t && t.at >= st.size)) continue
+    if (!t && now - (st.mtime?.getTime() ?? 0) >= (o.full ?? FULL)) {
+      if (!seen.done.has(f.path)) old ??= f
+      continue
+    }
+    t ??= await opened(g, f)
+    seen.tails.set(f.path, t)
+    // A tail a failure cut short is dropped, and the next look opens a new
+    // one where the transcript stands.
+    if (t) {
+      await pull(g, t, claude, { person: o.person }).catch((e) => {
+        seen.tails.delete(f.path)
+        throw e
+      })
+    }
+  }
+  if (!old) return
+  let t = await opened(g, old)
+  if (t) await pull(g, t, claude, { person: o.person, prose: true })
+  seen.done.add(old.path)
 }
 
 let sleep = (ms: number, signal: AbortSignal) =>
@@ -168,41 +159,29 @@ let sleep = (ms: number, signal: AbortSignal) =>
     }, { once: true })
   })
 
-/** Read the spool into transcripts until `signal` aborts; an aborted signal
- * gets one pass. A pass that fails is logged and tried again on the next, so
- * the lines wait in the spool rather than being lost. Between passes, a
- * long-running host reads in one past transcript; once none is waiting, it
- * looks again every ten minutes. What the config's `person` typed is signed
- * with them. */
+/** Free the locks whose holder is gone, then read transcripts in until
+ * `signal` aborts. A look that fails is logged and made again on the next
+ * pass, where the transcript stands. What the config's `person` typed is
+ * signed with them. */
 export let service = async (
-  host: { graph: Graph; config?: { db?: string; person?: string } },
+  host: { graph: Graph; config?: { person?: string } },
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
   await reapLeases(host.graph.storage)
-  let path = options.spool ?? spoolOf(host.config?.db)
-  if (!path) return
   let dir = options.transcripts ?? claudeProjects()
-  let known = new Set<string>()
-  let idle = 0
+  if (signal.aborted || !dir) return
   let said = host.config?.person
   let person = said && ((await host.graph.address([said])).get(said) ?? said)
-  for (;;) {
+  let seen: Seen = { tails: new Map(), done: new Set() }
+  while (!signal.aborted) {
     try {
-      await drain(host.graph, path, person)
+      await look(host.graph, dir, seen, {
+        ...(person ? { person: person as Eid } : {}),
+        full: options.full,
+      })
     } catch (e) {
-      console.error('turn spool —', e)
-    }
-    if (signal.aborted) return
-    if (dir && Date.now() >= idle) {
-      try {
-        if (!await backfill(host.graph, dir, known, person)) {
-          idle = Date.now() + LOOK
-        }
-      } catch (e) {
-        console.error('transcript backfill —', e)
-        idle = Date.now() + LOOK
-      }
+      console.error('transcripts —', e)
     }
     await sleep(options.every ?? 1000, signal)
   }

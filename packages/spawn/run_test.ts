@@ -63,7 +63,7 @@ Deno.test('the log becomes the transcript: one entry per line that says somethin
     { type: 'result', usage: { output_tokens: 3 } },
   ])
   try {
-    await follow(g, 'S1', claude, { dir })
+    await follow(g, 'S1', claude.read, { dir })
     let said = await entries(g)
     // The request, what it said, and the ending — the line that was not JSON
     // is left in the file.
@@ -81,7 +81,7 @@ Deno.test('the log becomes the transcript: one entry per line that says somethin
     assertEquals(comp(row, 'session').id, 'abc')
 
     // The stamp is the cursor: reading the same file again imports nothing.
-    await follow(g, 'S1', claude, { dir })
+    await follow(g, 'S1', claude.read, { dir })
     assertEquals((await entries(g)).length, 3)
   } finally {
     close()
@@ -93,14 +93,14 @@ Deno.test('a run that stopped talking is still over, and says so once', async ()
     { type: 'assistant', message: { content: [{ type: 'text', text: 'hi' }] } },
   ], 3)
   try {
-    await follow(g, 'S1', claude, { dir })
+    await follow(g, 'S1', claude.read, { dir })
     let said = await entries(g)
     let last = said.at(-1)!
     assertEquals(comp(last, 'stop'), {})
     assertEquals(comp(last, 'error').code, 'exit')
     assertEquals(comp(last, 'content').body, 'the provider exited 3')
     // And it is written once, however often the tail is run again.
-    await follow(g, 'S1', claude, { dir })
+    await follow(g, 'S1', claude.read, { dir })
     assertEquals((await entries(g)).length, said.length)
   } finally {
     close()

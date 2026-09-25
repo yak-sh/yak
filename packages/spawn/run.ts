@@ -11,11 +11,10 @@
 //    processes.
 // 2. The file is the log. The child's stdout is written to @yaks/process's
 //    `<eid>.out` by the wrapper, and survives every restart of the server. The
-//    graph stores the transcript read out of it: one entry per line the adapter
-//    recognizes, each with an `imported` component recording the source file
-//    and the line number. That also serves as the read position — the highest
-//    line number already imported is where a resume begins — so every line is
-//    imported exactly once, with no cursor property to keep up to date.
+//    graph stores the transcript read out of it by @yaks/session's importer,
+//    the same one that reads an interactive harness's own transcript file:
+//    each entry records the file and the line it came from, and the highest
+//    line already imported is where a resume begins.
 // 3. The request is an entry. A session asks for a provider, a model and an
 //    effort through the `using` component on its first entry, and the text next
 //    to it is the instruction. There is no HTTP endpoint that launches an agent
@@ -30,7 +29,8 @@
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
-import { SESSION } from '@yaks/session'
+import { type Reader, SESSION } from '@yaks/session'
+import { pull, tail } from '@yaks/session/tail'
 import {
   EXIT,
   launch,
@@ -174,126 +174,21 @@ export let asked = async (
 // A turn's ending carries what it cost, and says which ask it answers the way
 // a daemon's ask entry does, so whatever reads usage off `ask` rows
 // (@yaks/session `transcriptUsage`) reads a run's too.
-let answering = (adapter: Adapter, ask: Comp): Adapter => ({
-  ...adapter,
-  entry: (e) => {
-    let comps = adapter.entry(e)
-    return comps?.usage ? { ...comps, ask } : comps
-  },
-})
-
-// How far the transcript has already read its own log: the highest line
-// imported, which is where the next read starts. The stamp is the cursor, so
-// nothing has to be kept current for a resume to be exact.
-let consumed = async (g: Graph, session: string): Promise<number> => {
-  let [last] = await g.read(
-    `.imported&.entry.session=${session}&.order=-imported.line&.limit=1`,
-  )
-  return Number(comp(last, 'imported')?.line ?? 0)
-}
-
-// The byte the line after `lines` starts at. Read once, when a tail begins:
-// after that the tail walks forward and the count walks with it.
-let after = (path: string, lines: number): number => {
-  if (!lines) return 0
-  let text: Uint8Array
-  try {
-    text = Deno.readFileSync(path)
-  } catch {
-    return 0 // never written: there is nothing to skip
+let answering = (read: Reader, ask: Comp): Reader => (e) => {
+  let said = read(e)
+  return {
+    ...said,
+    entries: said.entries.map((c) => c.usage ? { ...c, ask } : c),
   }
-  let seen = 0
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] != 10) continue
-    if (++seen == lines) return i + 1
-  }
-  return text.length
-}
-
-// One stream, read forward from where it stands. The decoder streams, so a
-// multi-byte character split across two reads is reassembled correctly.
-type Tail = { path: string; at: number; rest: string; dec: TextDecoder }
-
-let sip = (t: Tail): string => {
-  let f
-  try {
-    f = Deno.openSync(t.path)
-  } catch {
-    return '' // never written: the stream has produced nothing yet
-  }
-  try {
-    f.seekSync(t.at, Deno.SeekMode.Start)
-    let buf = new Uint8Array(64 * 1024)
-    let text = ''
-    for (let n = f.readSync(buf); n; n = f.readSync(buf)) {
-      t.at += n
-      text += t.dec.decode(buf.subarray(0, n), { stream: true })
-    }
-    return text
-  } finally {
-    f.close()
-  }
-}
-
-// The complete lines since the last read. `final` flushes a last line the
-// process never terminated with a newline.
-let lines = (t: Tail, final: boolean): string[] => {
-  let parts = (t.rest + sip(t)).split('\n')
-  t.rest = final ? '' : parts.pop() ?? ''
-  if (final && parts.at(-1) === '') parts.pop()
-  return parts
-}
-
-/**
- * One line of a provider's log, as the bundles it becomes: the entry it turns
- * into, plus a patch to the session row when the line reports something about
- * the run itself.
- *
- * A line the adapter does not recognize — and a line that is not JSON at all,
- * which every CLI prints sooner or later — becomes nothing. The file keeps it.
- */
-export let imported = (
-  session: string,
-  source: string,
-  line: number,
-  text: string,
-  adapter: Adapter,
-  mint: () => string = uuid,
-): Bundle[] => {
-  let event
-  try {
-    event = JSON.parse(text)
-  } catch {
-    return [] // not JSON: diagnostics, not transcript
-  }
-  let bundles: Bundle[] = []
-  let comps = adapter.entry(event)
-  if (comps) {
-    bundles.push({
-      entity: { eid: mint() },
-      entry: { session },
-      imported: { source, line },
-      // Everything a provider prints is output: the run produced it, and the
-      // run is the session's own entity. Prose with no `output` beside it is
-      // an input, which is the one thing this stream never contains.
-      ...(comps.content && !comps.output
-        ? { output: { source: session } }
-        : {}),
-      ...comps,
-    })
-  }
-  let about = adapter.about?.(event)
-  if (about) bundles.push({ entity: { eid: session }, ...about })
-  return bundles
 }
 
 /**
  * Read a run's log into its transcript until the run is over.
  *
  * ```ts
- * import { follow } from '@yaks/spawn'
+ * import { adapters, follow } from '@yaks/spawn'
  *
- * // await follow(graph, session, adapter)
+ * // await follow(graph, session, adapters.claude.read)
  * ```
  *
  * It resumes where the transcript stands, so the same call serves a fresh
@@ -303,26 +198,13 @@ export let imported = (
 export let follow = async (
   g: Graph,
   session: string,
-  adapter: Adapter,
+  read: Reader,
   o: Opts = {},
 ): Promise<void> => {
-  let path = paths(session, o).out
-  let line = await consumed(g, session)
-  let tail: Tail = {
-    path,
-    at: after(path, line),
-    rest: '',
-    dec: new TextDecoder(),
-  }
-  let mint = o.mint ?? uuid
+  let t = await tail(g, paths(session, o).out, { session })
   while (true) {
     let over = comp(await one(g, session), EXIT) != null
-    let bundles = lines(tail, over)
-      .flatMap((text) => imported(session, path, ++line, text, adapter, mint))
-    // Trusted: `imported` is server-owned, and this is the server reading its
-    // own file. One apply per pass, so a run of lines lands in one
-    // transaction.
-    if (bundles.length) await g.apply(bundles, { trusted: true })
+    await pull(g, t, read, { final: over, report: told(o) })
     if (over) return ended(g, session, o)
     await sleep(o.poll ?? 250)
   }
@@ -394,7 +276,7 @@ export let start = async (
     eid: session, // one entity: the transcript is the thing running
     stream: false, // the lines are entries, not anonymous output
   })
-  follow(g, session, answering(adapter, job.ask), o).catch(told(o))
+  follow(g, session, answering(adapter.read, job.ask), o).catch(told(o))
   return run
 }
 
@@ -427,7 +309,7 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
     let job = await asked(g, run.eid).catch(() => null)
     let adapter = job && (o.adapters ?? known)[job.provider]
     if (job && adapter) {
-      follow(g, run.eid, answering(adapter, job.ask), o).catch(told(o))
+      follow(g, run.eid, answering(adapter.read, job.ask), o).catch(told(o))
     }
   }
   return runs

@@ -11,11 +11,8 @@
 // tool parses the payload, and nothing in between has to know the harness's
 // own JSON format.
 //
-// Between the edges are the turns: every prompt a person types and every reply
-// a turn ends on. Those run on every turn, so they are not `yak` subcommands,
-// which open the graph and take a second: they run ./turn.ts, which appends
-// the payload to a spool file in milliseconds, and the package's duty reads
-// the spool into the transcript (./service.ts).
+// Between the edges, nothing: the harness writes every turn to a transcript
+// file of its own, and the package's duty reads it from there (./service.ts).
 //
 // Nothing here may fail loudly. A hook that exits non-zero is a session that
 // will not start, so every entry ends `|| true`: a graph that is not there
@@ -48,55 +45,21 @@ let cmd = (command: string, timeout?: number): Hook => ({
   }],
 })
 
-// A word the shell reads as itself, whatever is in it.
-let quoted = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`
-
-/**
- * The command that appends a hook payload to the spool at `spool`: `deno`
- * running ./turn.ts, allowed to touch the spool's directory and nothing else.
- * `deno` is found on the harness's path, as `yak` is, rather than pinned to
- * the binary that installed the hooks, which an upgrade moves.
- */
-export let turning = (
-  spool: string,
-  deno = 'deno',
-  turn = new URL('./turn.ts', import.meta.url).href,
-): string => {
-  let dir = spool.slice(0, spool.lastIndexOf('/')) || '.'
-  return [
-    quoted(deno),
-    'run --no-config',
-    `--allow-read=${quoted(dir)}`,
-    `--allow-write=${quoted(dir)}`,
-    quoted(turn),
-    quoted(spool),
-  ].join(' ')
-}
-
 /**
  * The entries this package owns, keyed by the harness event each responds to.
  *
  * `yak` is the path to the command on this machine — a full path where it is
- * not on the harness's path. `turn` is the command that spools a turn
- * ({@link turning}); without one, the turns are not recorded.
+ * not on the harness's path.
  */
-export let lifecycle = (
-  yak = 'yak',
-  turn?: string,
-): Record<string, Hook[]> => ({
+export let lifecycle = (yak = 'yak'): Record<string, Hook[]> => ({
   SessionStart: [cmd(`${yak} session context --hook - || true`)],
   SubagentStart: [cmd(`${yak} session context --hook - || true`)],
-  ...(turn
-    ? {
-      UserPromptSubmit: [cmd(`${turn} || true`, 3)],
-      Stop: [cmd(`${turn} || true`, 3)],
-    }
-    : {}),
   SessionEnd: [cmd(`${yak} session wrap --hook - || true`, 5)],
 })
 
-// Ours, identified by the command it runs. A person's own entry never runs
-// either.
+// Ours, identified by the command it runs, including the turn hooks an older
+// install wrote (`session/turn.ts`), which an install now takes out. A
+// person's own entry never runs either.
 let MINE =
   /\byak\b.*\bsession (context|wrap) --hook\b|\bsession\b\S*\/turn\.ts\b/
 let mine = (h: unknown): boolean =>
@@ -129,7 +92,7 @@ export let merged = (
  * Answers the path written. */
 export let install = (
   path: string,
-  opts: { yak?: string; turn?: string; remove?: boolean } = {},
+  opts: { yak?: string; remove?: boolean } = {},
 ): string => {
   let settings: Record<string, unknown> = {}
   try {
@@ -139,7 +102,7 @@ export let install = (
   }
   let hooks = merged(
     settings.hooks as Record<string, unknown> | undefined,
-    lifecycle(opts.yak, opts.turn),
+    lifecycle(opts.yak),
     opts.remove,
   )
   let next: Record<string, unknown> = { ...settings, hooks }

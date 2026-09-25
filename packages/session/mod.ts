@@ -78,6 +78,7 @@ export * from './run.ts'
 export * from './providers.ts'
 export * from './daemon.ts'
 export * from './views.ts'
+export * from './readers.ts'
 
 export * from './children.ts'
 

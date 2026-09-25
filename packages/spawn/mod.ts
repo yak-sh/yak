@@ -10,9 +10,8 @@
  * This package connects the three:
  *
  * - **the command** — a `provider` entity whose transport is a command line,
- *   identified by name (`claude`, `codex`), plus the function that converts one
- *   line of its output into the components of a transcript entry
- *   ({@link adapters}).
+ *   identified by name (`claude`, `codex`), plus the @yaks/session reader that
+ *   says what each line of its output means ({@link adapters}).
  * - **the run** — {@link start} launches it through @yaks/process (a launcher
  *   that exits immediately, a wrapper in a session of its own),
  *   so the agent outlives the server that started it; {@link follow} reads its
@@ -21,10 +20,10 @@
  *   restart, watching the pid again and reading the log on from where the
  *   transcript left off. Nothing here reaps child processes.
  *
- * Each log line is imported exactly once. An entry read out of a log gets an
- * `imported` component recording the source file and line number, and the
- * highest line number already imported is where the next read begins, so there
- * is no cursor property to keep up to date.
+ * Each log line is imported exactly once, by @yaks/session's importer. An
+ * entry read out of a log gets an `imported` component recording the source
+ * file and line number, and the highest line number already imported is where
+ * the next read begins, so there is no cursor property to keep up to date.
  *
  * ```ts
  * import { start } from '@yaks/spawn'

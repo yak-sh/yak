@@ -202,33 +202,38 @@ on stdin.
 | Event                       | Command                        | Effect                                                        |
 | --------------------------- | ------------------------------ | ------------------------------------------------------------- |
 | SessionStart, SubagentStart | `yak session context --hook -` | creates the session under the harness's id; prints its claims |
-| UserPromptSubmit, Stop      | `turn.ts <spool>`              | appends the prompt or the final reply to the spool file       |
 | SessionEnd                  | `yak session wrap --hook -`    | releases the session's claims                                 |
 
-The turn hooks run on every turn, so they do not open the graph: `turn.ts`
-imports nothing and appends one line to a spool file, by default
-`spool/turns.jsonl` beside the database. The `@yaks/session/service` duty reads
-the spool into transcripts, in order, about once a second while a host is up and
-once per one-shot command. A prompt becomes an input entry and marks the session
-`operator`; a reply becomes an output entry. Each entry's ID is derived from its
-spool line, so a line read twice writes nothing new, and the spool is trimmed
-only after its entries are written. Each entry is dated when the hook ran, not
-when the duty read it.
+## Transcripts from outside
 
-A session that ran before the hooks were installed is read from Claude's own
-transcript file (`past.ts`) into the same entries, dated from the transcript:
-each prompt the person typed, and the text of each turn's last reply. It is
-lazy: a long-running host reads one transcript per pass, and a one-shot command
-reads none. A transcript is skipped when the graph already holds entries for its
-session, and until it has gone an hour without being written.
+A session a harness runs outside this package's daemon is read into the graph
+from the harness's own log, by one importer (`@yaks/session/tail`). A reader
+(`claude`, `codex`) says what each line of a format means, and `pull()` writes
+it: what a person typed (an input, signed by them, and the session marked
+`operator`), what the harness put in front of the model (`notice`), what the
+model said and thought, and each tool call with its result. A call arrives held
+by the session (`execution{state, by}`), so no tool runner here runs it again.
+Tool arguments and output pass through `scrub()`, which redacts the shapes a
+credential takes.
 
-| Option        | Default                       | Meaning                              |
-| ------------- | ----------------------------- | ------------------------------------ |
-| `spool`       | `spool/turns.jsonl` beside db | the file the hooks and duty share    |
-| `every`       | `1000`                        | milliseconds between reads           |
-| `transcripts` | `~/.claude/projects`          | where past transcripts are read from |
+Every entry carries `imported{source, line}`, and the highest line a session
+holds is where a resume starts. Entry IDs are derived from the session, the line
+and the place in it, so a line read twice writes nothing new. Each is dated when
+the harness wrote it.
 
-A graph held in memory has no spool, so an install there writes no turn hooks.
+`@yaks/spawn` follows a managed run's stdout with it. The
+`@yaks/session/service` duty follows Claude Code's transcript files,
+`<project>/<session>.jsonl` under its projects directory: one written to in the
+last `full` milliseconds is read as it grows, at full depth, and an older one is
+read in lazily, one per pass, its prose alone. It skips a managed run, whose
+transcript asks a provider for it (`using{provider}`), and subagents'
+transcripts.
+
+| Option        | Default              | Meaning                                    |
+| ------------- | -------------------- | ------------------------------------------ |
+| `every`       | `1000`               | milliseconds between looks                 |
+| `transcripts` | `~/.claude/projects` | where transcripts are read from            |
+| `full`        | 14 days              | how long a transcript keeps its full depth |
 
 ## Identity and HTTP attribution
 
@@ -263,11 +268,12 @@ The main module exports:
 - inspection: `statusOf()`, `kindOf()`, `textOf()`, `ordered()`,
   `sessionDerived`, and the bounded transcript functions;
 - identity and rendering: `sessionFor()`, `speaking()`, `where()`, and `views`;
+- harness readers: `claude`, `codex`, `readers`, and `scrub()`;
 - error types including `Bounced`, `Unnamed`, and `UnknownSession`.
 
 Additional entry points are `@yaks/session/vocab`, `/rules` (with
-`authenticate`), `/tools`, `/views`, `/service` (the turn spool duty), and
-`/turn` (the hook that writes the spool). A **host** is the process that opened
+`authenticate`), `/tools`, `/views`, `/service` (the duty that reads
+transcripts), and `/tail` (the importer). A **host** is the process that opened
 the graph; effects and tools receive its graph and, where needed, its process
 entity ID.
 

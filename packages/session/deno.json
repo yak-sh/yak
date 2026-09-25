@@ -8,7 +8,7 @@
     "./tools": "./tools.ts",
     "./views": "./views.ts",
     "./service": "./service.ts",
-    "./turn": "./turn.ts",
+    "./tail": "./tail.ts",
     "./status": "./status.ts"
   },
   "license": "Apache-2.0",

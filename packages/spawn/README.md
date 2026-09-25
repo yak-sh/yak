@@ -53,11 +53,12 @@ The package does not reap child processes.
 
 <a id="the-log-file-and-the-transcript"></a>
 
-Standard output is stored in the process directory as `<session-eid>.out`. Each
-recognized line becomes a transcript entry with `imported{source, line}`. The
-largest imported line number is the durable read position, so monitoring can
-resume after a restart without a separate cursor. Unrecognized and invalid JSON
-lines remain in the file and are not entries.
+Standard output is stored in the process directory as `<session-eid>.out`, and
+`@yaks/session`'s importer reads it into the transcript: each recognized line
+becomes entries with `imported{source, line}`, tool calls and their results
+included. The largest imported line number is the durable read position, so
+monitoring can resume after a restart without a separate cursor. Unrecognized
+and invalid JSON lines remain in the file and are not entries.
 
 When the process exits, the follower appends a transcript `stop` entry. A
 nonzero exit is recorded with that entry. Writing `stop` on the session entity
@@ -66,15 +67,15 @@ configured grace period. A `stop` on an entry only ends the transcript.
 
 <a id="stopping-a-run"></a>
 
-Adapters omit provider-side tool calls from the graph. Those calls have already
-run in the agent process; recording them as session `call` components would
-allow the host's tool runner to execute them again.
+A provider's tool calls arrive held by the session (`execution{state, by}`):
+they already ran in the agent process, and the host's tool runner leaves a call
+somebody else holds alone.
 
 <a id="what-an-adapter-is"></a>
 
-An adapter contains a provider command line and a parser that converts one
-output line into transcript components. Providers and the models they serve
-remain graph entities, so adding a model does not require a package release.
+An adapter contains a provider command line and the `@yaks/session` reader that
+says what each output line means. Providers and the models they serve remain
+graph entities, so adding a model does not require a package release.
 
 ## CLI and tool use
 
@@ -126,9 +127,8 @@ export const service = adopting({ adapters: { ...adapters, mine } })
 ## Exports
 
 The main module exports the built-in `claude` and `codex` adapters, the
-`adapters` table, adapter types, and the lower-level `asked()`, `imported()`,
-`follow()`, `start()`, `resume()`, and `down()` functions. Additional entry
-points are:
+`adapters` table, adapter types, and the lower-level `asked()`, `follow()`,
+`start()`, `resume()`, and `down()` functions. Additional entry points are:
 
 - `@yaks/spawn/vocab`: `spawnDoc` and `docs`;
 - `@yaks/spawn/effects`: `effects`, `spawning()`, and effect configuration;

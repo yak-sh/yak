@@ -1,5 +1,5 @@
 import { assert, assertEquals } from '@std/assert'
-import { install, lifecycle, merged, turning } from './hooks.ts'
+import { install, lifecycle, merged } from './hooks.ts'
 
 let theirs = { hooks: [{ type: 'command', command: 'say-hello' }] }
 
@@ -49,22 +49,18 @@ Deno.test('a settings file keeps the keys nobody asked about', async () => {
   }
 })
 
-Deno.test('the turn hooks spool, and a second install replaces them too', () => {
-  let turn = turning(
-    '/h/.yak/spool/turns.jsonl',
-    '/bin/deno',
-    'file:///p/session/turn.ts',
+Deno.test('an install takes out the turn hooks an older one wrote', () => {
+  let spooled = {
+    hooks: [{
+      type: 'command',
+      command:
+        "'deno' run --no-config 'file:///p/packages/session/turn.ts' 'turns.jsonl' || true",
+    }],
+  }
+  let out = merged(
+    { Stop: [spooled, theirs], UserPromptSubmit: [spooled] },
+    lifecycle(),
   )
-  assertEquals(
-    turn,
-    "'/bin/deno' run --no-config --allow-read='/h/.yak/spool' " +
-      "--allow-write='/h/.yak/spool' 'file:///p/session/turn.ts' " +
-      "'/h/.yak/spool/turns.jsonl'",
-  )
-  let once = merged({ Stop: [theirs] }, lifecycle('yak', turn))
-  let twice = merged(once, lifecycle('yak', turning('/other/turns.jsonl')))
-  assertEquals(twice.Stop.length, 2)
-  assertEquals(twice.UserPromptSubmit.length, 1)
-  assert(JSON.stringify(twice.Stop[0]).includes('/other/turns.jsonl'))
-  assertEquals(merged(twice, lifecycle(), true), { Stop: [theirs] })
+  assertEquals(out.Stop, [theirs])
+  assertEquals(out.UserPromptSubmit, undefined)
 })

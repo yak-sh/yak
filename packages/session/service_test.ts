@@ -1,34 +1,56 @@
 import { assertEquals } from '@std/assert'
-import type { Bundle, Comp } from '@yaks/graph'
+import type { Graph } from '@yaks/graph'
 import { ids, locked, lockOn, seed, store } from './testing.ts'
-import { drain, service, WAIT } from './service.ts'
-import { report } from './turn.ts'
+import { look, type Seen, service } from './service.ts'
 
-let say = (path: string, event: string, sid: string, text: string) =>
-  report({
-    hook_event_name: event,
-    session_id: sid,
-    prompt: text,
-    last_assistant_message: text,
-  }, path)
+let lines = (...texts: string[]) =>
+  texts.flatMap((text, i) => [
+    { type: 'user', origin: { kind: 'human' }, message: { content: text } },
+    {
+      type: 'assistant',
+      message: {
+        content: [{ type: 'thinking', thinking: `thought ${i}` }, {
+          type: 'text',
+          text: `said ${i}`,
+        }],
+      },
+    },
+  ]).map((l) => JSON.stringify(l)).join('\n') + '\n'
 
-let spooled = async (body: (path: string) => Promise<void>) => {
+// A Claude projects directory holding one transcript per session id, each
+// last written `ago` milliseconds before now.
+let projects = async (
+  files: Record<string, { text: string; ago?: number }>,
+  body: (dir: string) => Promise<void>,
+) => {
   let dir = Deno.makeTempDirSync()
+  Deno.mkdirSync(`${dir}/-home-me-code`)
+  Deno.mkdirSync(`${dir}/-home-me-code/one/subagents`, { recursive: true })
+  Deno.writeTextFileSync(
+    `${dir}/-home-me-code/one/subagents/a.jsonl`,
+    lines('no'),
+  )
+  for (let [id, f] of Object.entries(files)) {
+    let path = `${dir}/-home-me-code/${id}.jsonl`
+    Deno.writeTextFileSync(path, f.text)
+    let at = new Date(Date.now() - (f.ago ?? 0))
+    Deno.utimeSync(path, at, at)
+  }
   try {
-    await body(`${dir}/turns.jsonl`)
+    await body(dir)
   } finally {
     Deno.removeSync(dir, { recursive: true })
   }
 }
 
-let c = (b: Bundle, name: string) => b[name] as Comp | undefined
+let told = async (g: Graph, id: string) => {
+  let [s] = await g.read(`.session.id=${id}`)
+  if (!s) return undefined
+  return (await g.read(`.entry.session=${s.entity.eid}&.order=entry.seq&*`))
+    .map((b) => (b.content as { body: string }).body)
+}
 
-// A session's transcript as [side, text] pairs, in entry order.
-let told = async (g: ReturnType<typeof locked>, session: string) =>
-  (await g.read(`.entry.session=${session}&.order=entry.seq&*`)).map((b) => [
-    c(b, 'output') ? 'output' : 'input',
-    c(b, 'content')?.body,
-  ])
+let DAY = 24 * 60 * 60 * 1000
 
 Deno.test('the duty frees the locks whose holder is gone as it starts', async () => {
   let s = store()
@@ -37,71 +59,46 @@ Deno.test('the duty frees the locks whose holder is gone as it starts', async ()
   assertEquals(lockOn(s, ids.p2), undefined)
 })
 
-Deno.test('prompts and replies land in order, a new session under its own id', () =>
-  spooled(async (path) => {
+Deno.test('a recent transcript is followed in full; an old one is read in later, its prose alone', () =>
+  projects({
+    one: { text: lines('fix it') },
+    fresh: { text: lines('hello') },
+    old: { text: lines('long ago'), ago: 30 * DAY },
+  }, async (dir) => {
     let g = locked(store())
-    say(path, 'UserPromptSubmit', 'fresh', 'fix it')
-    say(path, 'Stop', 'fresh', 'fixed')
-    say(path, 'UserPromptSubmit', 'one', 'and this')
-    assertEquals(await drain(g, path), 3)
-    let [s] = await g.read('.session.id=fresh&*')
-    assertEquals(c(s, 'session')?.operator, true)
-    assertEquals(await told(g, s.entity.eid), [
-      ['input', 'fix it'],
-      ['output', 'fixed'],
+    let seen: Seen = { tails: new Map(), done: new Set() }
+    await look(g, dir, seen, { person: ids.ada })
+    assertEquals(await told(g, 'one'), ['fix it', 'thought 0', 'said 0'])
+    assertEquals(await told(g, 'fresh'), ['hello', 'thought 0', 'said 0'])
+    // One old transcript per look, and its prose alone.
+    assertEquals(await told(g, 'old'), ['long ago', 'said 0'])
+    // What a session says next is read on from where it stood.
+    Deno.writeTextFileSync(`${dir}/-home-me-code/one.jsonl`, lines('more'), {
+      append: true,
+    })
+    await look(g, dir, seen)
+    assertEquals(await told(g, 'one'), [
+      'fix it',
+      'thought 0',
+      'said 0',
+      'more',
+      'thought 0',
+      'said 0',
     ])
-    assertEquals(await told(g, ids.run1), [['input', 'and this']])
-    assertEquals(await drain(g, path), 0)
+    // The subagent's transcript is not a session of its own.
+    assertEquals((await g.read('.session')).length, 4)
   }))
 
-Deno.test('what a person typed is signed with them; a prompt not yet written down waits', () =>
-  spooled(async (path) => {
-    let g = locked(store())
-    let transcript = `${path}.transcript`
-    let written = (...kinds: string[]) =>
-      Deno.writeTextFileSync(
-        transcript,
-        kinds.map((kind, i) =>
-          JSON.stringify({ type: 'user', promptId: `p${i}`, origin: { kind } })
-        ).join('\n'),
-      )
-    let ask = (text: string, i: number) =>
-      report({
-        hook_event_name: 'UserPromptSubmit',
-        session_id: 'one',
-        prompt: text,
-        transcript_path: transcript,
-        prompt_id: `p${i}`,
-      }, path)
-    let signed = async () =>
-      (await g.read(`.entry.session=${ids.run1}&.order=entry.seq&*`)).map((
-        b,
-      ) => [c(b, 'content')?.body, c(b, 'created')?.by])
-    ask('typed', 0)
-    ask('notified', 1)
-    ask('typed too', 2)
-    written('human', 'task-notification')
-    assertEquals(await drain(g, path, ids.ada), 2)
-    written('human', 'task-notification', 'human')
-    assertEquals(await drain(g, path, ids.ada), 1)
-    ask('never written', 3)
-    assertEquals(await drain(g, path, ids.ada), 0)
-    assertEquals(await drain(g, path, ids.ada, Date.now() + WAIT), 1)
-    assertEquals(await signed(), [
-      ['typed', ids.ada],
-      ['notified', undefined],
-      ['typed too', ids.ada],
-      ['never written', undefined],
-    ])
-  }))
-
-Deno.test('a line read twice writes nothing new', () =>
-  spooled(async (path) => {
-    let g = locked(store())
-    say(path, 'UserPromptSubmit', 'one', 'once')
-    let line = Deno.readTextFileSync(path)
-    await drain(g, path)
-    Deno.writeTextFileSync(path, line) // as if the trim never happened
-    await drain(g, path)
-    assertEquals(await told(g, ids.run1), [['input', 'once']])
+Deno.test('a managed run is read from its own output, not its transcript file', () =>
+  projects({ run1: { text: lines('asked') } }, async (dir) => {
+    let s = store()
+    seed(s, {
+      entity: { eid: 'request' },
+      entry: { session: ids.run1 },
+      content: { body: 'do it' },
+      using: { provider: 'claude' },
+    })
+    let g = locked(s)
+    await look(g, dir, { tails: new Map(), done: new Set() })
+    assertEquals(await told(g, 'one'), ['do it'])
   }))

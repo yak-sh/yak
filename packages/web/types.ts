@@ -392,9 +392,9 @@ export let uuid = () => {
 }
 
 // One log line, in the vocabulary the RENDERER speaks — flat and small, the
-// same six shapes whatever provider wrote it. Adapters own the dialects
-// (adapters.ts, server-only) and normalize each event down to one of these
-// before it reaches a browser, so the Session view never learns a vendor:
+// same six shapes whatever provider wrote it. @yaks/session's readers own the
+// dialects and turn each line into transcript entries, and entry_log.ts turns
+// those into these, so the Session view never learns a vendor:
 //   say    what the agent (or the human, resuming) actually said
 //   reason the model thinking out loud — dim, skippable
 //   tool   a tool call as a chip: name + ok/✗, its detail, its error
