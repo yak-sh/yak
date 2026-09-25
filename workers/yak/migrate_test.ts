@@ -42,7 +42,6 @@ import {
   HOMED,
   MARK,
   MARKS,
-  merged,
   Refused as Unreconciled,
   type Report,
   SANDBOXED,
@@ -406,49 +405,6 @@ Deno.test('a tools slot, each argument the JSON Schema it meant', () => {
   assertEquals(unworded('{"a":{"input":{"n":{"type":"number"}}}}'), null)
   assertEquals(unworded('{}'), null)
   assertEquals(unworded('not json'), null)
-})
-
-Deno.test('a tools.json, merged into the manifest beside it', () => {
-  let tools = JSON.stringify({
-    log: {
-      description: 'Log one',
-      input: { miles: 'number' },
-      apply: { entity: { eid: '$r' }, run: { miles: '{{miles}}' } },
-    },
-    all: { description: 'All of them', input: {}, query: '.run!' },
-  })
-  let vocab = '{"$defs":{"run":{"properties":{"miles":{"type":"number"}}}}}'
-  assertEquals(JSON.parse(merged(vocab, 'vocab.json', tools, 'tools.json')!), {
-    $defs: {
-      run: { properties: { miles: { type: 'number' } } },
-      log: {
-        tool: true,
-        description: 'Log one',
-        input: { miles: { type: 'number' } },
-        required: ['miles'],
-        apply: { entity: { eid: '$r' }, run: { miles: '$miles' } },
-      },
-      all: { tool: true, description: 'All of them', query: '.run!' },
-    },
-  })
-  // No manifest yet is an empty one, and a `.yml` reads through the same door.
-  assertEquals(
-    Object.keys(
-      JSON.parse(
-        merged(null, 'vocab.json', 'all:\n  query: .x!\n', 'tools.yml')!,
-      )
-        .$defs,
-    ),
-    ['all'],
-  )
-  // Two that cannot be one document are left for a person.
-  let run = '{"run":{"description":"r","query":".run!"}}'
-  assertEquals(merged(vocab, 'vocab.json', run, 'tools.json'), null)
-  assertEquals(merged(vocab, 'vocab.json', 'not json {', 'tools.json'), null)
-  assertEquals(
-    merged('{"run":{"miles":"number"}}', 'vocab.json', '{}', 'tools.json'),
-    null,
-  )
 })
 
 Deno.test('the short type map, as the document it means', () => {

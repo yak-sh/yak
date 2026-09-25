@@ -81,7 +81,6 @@ import {
   type Text,
 } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
-import { read } from '@yaks/yaml'
 import { handle } from './directory.ts'
 
 /** The object's own key-value slots beside its SQL — where the old store kept
@@ -265,53 +264,6 @@ export let unworded = (held: string): string | null => {
       ) => [name, worded(t) ? schemed(t as Record<string, unknown>) : t]),
     ),
   )
-}
-
-/**
- * A `tools.json` merged into the manifest beside it (T-38021): each entry a
- * `$defs` entry marked `"tool": true`, its arguments JSON Schema and every one
- * of them required, as every argument a file declared was. `vocab` is the
- * manifest's text, or null where the app had none, and either file may be the
- * `.yml`; what comes back is JSON, which a `.yml` reads as well.
- *
- * `null` where the two cannot be one document — a file that does not parse, a
- * manifest that is not a document, a tool named like a component — for a
- * person to merge by hand.
- */
-export let merged = (
-  vocab: string | null,
-  vocabFile: string,
-  tools: string,
-  toolsFile: string,
-): string | null => {
-  let parsed = (text: string, file: string) => {
-    try {
-      let v = text.trim() ? read(text, file) : {}
-      return record(v) ? v : null
-    } catch {
-      return null
-    }
-  }
-  let doc = vocab == null ? {} : parsed(vocab, vocabFile)
-  let said = parsed(unholed(tools) ?? tools, toolsFile)
-  if (!doc || !said) return null
-  let keys = Object.keys(doc)
-  if (keys.some((k) => k != 'tools') && !keys.some((k) => k.startsWith('$'))) {
-    return null
-  }
-  let defs: Record<string, unknown> = record(doc.$defs) ? { ...doc.$defs } : {}
-  for (let [name, t] of Object.entries(said)) {
-    if (!record(t) || name in defs) return null
-    let { description, input, required, ...rest } = schemed(t)
-    defs[name] = {
-      tool: true,
-      description,
-      ...(record(input) && Object.keys(input).length ? { input } : {}),
-      ...(required ? { required } : {}),
-      ...rest,
-    }
-  }
-  return JSON.stringify({ ...doc, $defs: defs }, null, 2) + '\n'
 }
 
 /** The marker written when a pass reconciles, so it never runs twice. The
