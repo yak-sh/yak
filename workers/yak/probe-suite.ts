@@ -11,7 +11,7 @@
 //
 // What the run's tests share, it is handed in the environment:
 //
-//   YAK_PROBE          the kernel's address; a hostname rides `x-yak-host`,
+//   YAK_PROBE          the kernel's door; a hostname rides `x-yak-host`,
 //                      and `/__script/` is probe-scripts.js's (probe.ts `script`)
 //   YAK_PROBE_SECRET   the session secret, so a test can mint a cookie
 //   YAK_PROBE_MAIL     the letters MAIL_DEV printed, one `yak-mail` line each
@@ -67,12 +67,106 @@ export let config = (toml: string, vars: Record<string, string>): Config => {
 }
 
 type Log = { message: string }
+// The kernel's end of a socket it accepted (Miniflare's WebSocketPair).
+type Far = {
+  accept(): void
+  send(data: string | ArrayBuffer): void
+  close(code?: number, reason?: string): void
+  addEventListener(
+    type: 'message' | 'close',
+    f: (e: MessageEvent & CloseEvent) => void,
+  ): void
+}
 type Harness = {
   listen(): Promise<{ url: URL }>
+  getWorker(name?: string): {
+    fetch(
+      url: string,
+      init: RequestInit & { duplex: 'half' },
+    ): Promise<Response & { webSocket?: Far | null }>
+  }
   getLogs(): Log[]
   clearLogs(): void
   close(): Promise<void>
 }
+
+// What the door leaves off a request: the connection's own words, which the
+// next hop says for itself.
+let HOP = [
+  'host',
+  'connection',
+  'keep-alive',
+  'transfer-encoding',
+  'sec-websocket-key',
+  'sec-websocket-version',
+  'sec-websocket-extensions',
+]
+
+// A close code both ends accept from a script: 1000, or an application's own.
+let code = (c: number) => c == 1000 || (c >= 3000 && c <= 4999) ? c : 1000
+
+// A socket the kernel accepted, joined to the test's own, both ways.
+let bridge = (req: Request, far: Far, protocol?: string) => {
+  let { socket, response } = Deno.upgradeWebSocket(req, { protocol })
+  let open = new Promise((ok) => socket.onopen = ok)
+  far.accept()
+  far.addEventListener('message', async (e) => {
+    await open
+    socket.send(e.data)
+  })
+  far.addEventListener('close', async (e) => {
+    await open
+    socket.close(code(e.code), e.reason)
+  })
+  socket.onmessage = (e) => far.send(e.data)
+  socket.onclose = (e) => {
+    try {
+      far.close(code(e.code), e.reason)
+    } catch { /* the kernel closed it first */ }
+  }
+  return response
+}
+
+// The door the run's tests knock on. The harness's own address (`listen()`)
+// is wrangler's dev proxy, which pools its connections to the runtime; on a
+// loaded box a request it sends on a pooled connection the runtime is closing
+// is lost, and the proxy answers "Your worker restarted mid-request". Here
+// each request goes through the harness's own dispatch on a connection of its
+// own, so none rides a connection that is closing. `/__script/` reaches the
+// scripts `script()` loads, by the worker's name.
+let door = (server: Harness) =>
+  Deno.serve(
+    { hostname: '127.0.0.1', port: 0, onListen() {} },
+    async (req) => {
+      let path = new URL(req.url).pathname
+      let headers = new Headers(req.headers)
+      for (let h of HOP) headers.delete(h)
+      let upgrade = req.headers.get('upgrade') == 'websocket'
+      if (!upgrade) headers.set('connection', 'close')
+      // Undici would undo an encoding without taking its header off.
+      headers.set('accept-encoding', 'identity')
+      // Undici says a `sec-fetch-mode` of its own; Miniflare's entry Worker
+      // puts the caller's back from this header.
+      let mode = req.headers.get('sec-fetch-mode')
+      if (mode) headers.set('mf-sec-fetch-mode', mode)
+      let res = await server
+        .getWorker(path.startsWith('/__script/') ? 'probe-scripts' : undefined)
+        .fetch(req.url, {
+          method: req.method,
+          headers,
+          body: req.body,
+          redirect: 'manual',
+          duplex: 'half',
+        })
+      return res.webSocket
+        ? bridge(
+          req,
+          res.webSocket,
+          res.headers.get('sec-websocket-protocol') ?? undefined,
+        )
+        : new Response(res.body, res)
+    },
+  )
 
 /** The run's kernel, and how its tests reach it. `stripe` is the sandbox key
  * the money paths use, when the run has one. */
@@ -108,7 +202,6 @@ export let probeSuite = async (stripe?: string) => {
           name: 'probe-scripts',
           main: 'probe-scripts.js',
           compatibility_date: '2025-05-08',
-          routes: ['*/__script/*'],
           worker_loaders: [{ binding: 'LOADER' }],
         },
       },
@@ -119,9 +212,8 @@ export let probeSuite = async (stripe?: string) => {
   // built from there.
   let was = Deno.cwd()
   Deno.chdir(dir)
-  let url: URL
   try {
-    url = (await server.listen()).url
+    await server.listen()
   } catch (e) {
     await server.close()
     await cf.stop()
@@ -144,14 +236,16 @@ export let probeSuite = async (stripe?: string) => {
     }
   }
   let timer = setInterval(drain, 10)
+  let front = door(server)
   let stop = async () => {
     clearInterval(timer)
+    await front.shutdown()
     await server.close()
     await cf.stop()
     Deno.removeSync(mail)
   }
   try {
-    let base = url.origin
+    let base = `http://127.0.0.1:${front.addr.port}`
     let k = driven(base, secret, mail, apex())
     let owner = await signIn(k, `owner@${apex()}`)
     return {
