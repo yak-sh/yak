@@ -362,10 +362,16 @@ export let facet: Load = (plugin, name) => subpath(plugin, name)
 /** An assembled host: everything a plugin factory was given, plus what only
  * the caller of {@link compose} needs. */
 export type Served = Host & {
-  /** close the graph: every lease this process holds released and its `exit`
-   * stamped — with the code it is given, or with none where nobody knows how
-   * it ended. Await it when the process is about to end, or that last write
-   * races the exit and the row reads as still running forever. */
+  /** wind down, with the graph still open: {@link Host.stopping} aborts, so
+   * the duties stop and whatever hangs off it ends — a server stops taking
+   * requests and answers the ones in flight — and what is running can finish
+   * and be written before {@link close} */
+  stop: () => void
+  /** close the graph: every call this process's runner is still running ended
+   * as interrupted, every lease it holds released and its `exit` stamped —
+   * with the code it is given, or with none where nobody knows how it ended.
+   * Await it when the process is about to end, or that last write races the
+   * exit and the row reads as still running forever. */
   close: (code?: number) => void | Promise<void>
 }
 
@@ -950,7 +956,9 @@ export let compose = async (
       // effects this process started are let finish, and it leaves the pool,
       // so what its last transaction owes is left written down for another.
       // A host that joined another process stamps no ending: the process is
-      // not over when one of its threads is.
+      // not over when one of its threads is. The calls this process was still
+      // running are ended first, as interrupted, so none is left to lapse.
+      stop: () => stopping.abort(),
       close: async (code?: number) => {
         stopping.abort()
         await opts.thread?.close()
@@ -961,6 +969,15 @@ export let compose = async (
             sql.close()
           } catch { /* already closed */ }
         }
+        // A call whose tool has not returned by now never will in this
+        // process. Ended as interrupted, rather than left claimed for a sweep
+        // to run again in a process nobody asked — a server, a tail, a land in
+        // somebody else's checkout.
+        await calls?.interrupt(
+          `interrupted: this process ended${
+            code == null ? '' : ` with code ${code}`
+          } before the tool returned`,
+        ).catch((e) => console.error('interrupting its calls failed —', e))
         if (!self) return shut()
         try {
           let last = [

@@ -226,6 +226,24 @@ Deno.test('a claim whose holder has exited is free, and runs once', async () => 
   })
 })
 
+Deno.test('an interrupted call is answered as interrupted, and no sweep runs it again', async () => {
+  let hang = Promise.withResolvers<Bundle[]>()
+  let stuck: Tool = { ...echo, verb: 'wait', run: () => hang.promise }
+  let { g, r } = world([echo, stuck], 'host1')
+  await r.ensure()
+  let asked = r.call(called('example_wait', { value: 'forever' }))
+  await r.call(called('example_echo', { value: 'done' }))
+  let [ended] = (await r.interrupt('the process was stopped'))
+    .filter((b) => b.error)
+  assertEquals((ended.error as Comp).code, 'interrupted')
+  assertEquals((await g.read('.execution.state=failed&*')).length, 1)
+  // Its holder exiting now leaves nothing lapsed to take.
+  await g.apply([{ entity: { eid: 'host1' }, process: { pid: 1 }, exit: {} }])
+  assertEquals(await runner(g, { tools: [stuck], owner: 'host2' }).drive(), [])
+  hang.resolve([])
+  await assertRejects(() => asked)
+})
+
 Deno.test('a throw is an error entity, a result, and a failed execution', async () => {
   let { g, r } = world([{
     ...echo,

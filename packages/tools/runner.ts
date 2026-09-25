@@ -185,6 +185,11 @@ export type Runner = {
   /** run every call the rules select: one sweep, which is what a boot pass
    * does with `redrive` set, for the calls a crash left claimed */
   drive: (opts?: { redrive?: boolean }) => Promise<Bundle[]>
+  /** end every call this runner claimed and is still running, as
+   * `error{code: 'interrupted'}` saying `why`: what a process that is ending
+   * before its tools returned writes, so no claim of its own is left to lapse
+   * and run again somewhere it was never asked */
+  interrupt: (why: string) => Promise<Bundle[]>
 }
 
 // A tool's answer as text: the `content{body}` values its bundles carry, or
@@ -306,6 +311,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   let woken = plans.find((p) => p.rule.name == WOKEN)
   let inflight = running.get(g) ?? new Map<Eid, Promise<Bundle[]>>()
   running.set(g, inflight)
+  // The calls this runner claimed and whose tool has not returned, with when
+  // each started: what an interruption ends.
+  let held = new Map<Eid, { call: Bundle; started: number }>()
   // Whose claim a call carries, as this runner reads it. Unclaimed, or claimed
   // with no owner named, is `free`. This process's own claim is `mine`: one
   // this runner is not running is running in another thread of this process,
@@ -455,11 +463,32 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     return execute(call, tool)
   }
 
+  // What ends a claimed call: the result the rule names, worded from what it
+  // said, and the claim moved on from `running`, refused if another hand
+  // moved it first.
+  let ending = (
+    call: Bundle,
+    started: number,
+    state: string,
+    said: Bundle[],
+  ): Bundle[] => [
+    {
+      ...attached(call.entity.eid, Math.round(now() - started), !!call.wake),
+      content: { body: worded(said) },
+    },
+    {
+      entity: call.entity,
+      execution: { state },
+      $was: { execution: { state: token('running') } },
+    },
+  ]
+
   // Running a claimed call: the tool, its answer, and the record of both.
   let execute = async (call: Bundle, tool: NamedTool): Promise<Bundle[]> => {
     let id = call.entity.eid
     let c = call.call as Comp
     let started = now()
+    held.set(id, { call, started })
     // What a thrown error becomes: the fault as its own entity, recording
     // which call it came from. An expected refusal gets `error{code}`: a
     // `CallError` with its code, or an error the graph's `status` puts below
@@ -493,15 +522,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     ): Promise<Bundle[]> => {
       let landed = await g.apply([
         ...(keeps ? made : []),
-        {
-          ...attached(id, Math.round(now() - started), !!call.wake),
-          content: { body: worded(made) },
-        },
-        {
-          entity: call.entity,
-          execution: { state },
-          $was: { execution: { state: token('running') } },
-        },
+        ...ending(call, started, state, made),
       ])
       return keeps ? landed : [...made, ...landed]
     }
@@ -531,6 +552,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       // returned: a transaction the graph refuses is this call's failure,
       // rather than a call left claimed with nothing recorded about it.
       return await land(await faulted(error), 'failed')
+    } finally {
+      held.delete(id)
     }
   }
 
@@ -610,6 +633,30 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     run,
     due,
     drive,
+    // One write per call: a call whose tool returned meanwhile has moved its
+    // claim on, and its own answer stands.
+    interrupt: async (why) => {
+      let out: Bundle[] = []
+      for (let [id, { call, started }] of held) {
+        let fault: Bundle = {
+          entity: { eid: '$fault' },
+          content: { body: why },
+          output: { source: id },
+          error: { code: 'interrupted' },
+        }
+        try {
+          out.push(
+            ...await g.apply([
+              fault,
+              ...ending(call, started, 'failed', [fault]),
+            ]),
+          )
+        } catch (error) {
+          if (!(error instanceof Stale)) throw error
+        }
+      }
+      return out
+    },
   }
 }
 

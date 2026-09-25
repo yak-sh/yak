@@ -22,10 +22,11 @@
 // one that has stopped is its result, carrying the address it answered on and
 // how long it answered for. Two consequences worth knowing: nothing is printed
 // until it stops, which is why the address is reported on stderr as soon as
-// the port is bound; and a call this process was killed in the middle of stays
-// `running` with no `exit` on its process, which is exactly the state that
-// stops another runner from re-driving it — nobody wants a start-up sweep
-// launching a second server.
+// the port is bound; and a server is never run again by a sweep. Stopped by a
+// signal, it stops taking requests, answers the ones in flight and returns
+// (@yaks/cli signal.ts); closed before it could, its call is ended as
+// interrupted (@yaks/cli host.ts `close`); killed outright, it stays `running`
+// with no `exit` on its process, a claim nobody takes over.
 
 import { argsOf, type Bundle } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'

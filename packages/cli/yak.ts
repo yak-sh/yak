@@ -40,6 +40,7 @@ import { appStray, appTools } from './commands.ts'
 import { cli, type Command, type Ctx, helpTool, type Opts } from './run.ts'
 import { listed } from './platform.ts'
 import { forgetToken, saveToken } from './store.ts'
+import { listen, winding } from './signal.ts'
 
 /** The platform this command talks to when it opens no graph of its own. */
 export let HOST = 'yaks.app'
@@ -207,5 +208,13 @@ export let main = async (
 
 // Not a top-level await: this module is also `@yaks/cli` itself (./mod.ts), so
 // a plugin the command loads that imports the package would wait on this
-// module finishing, while this module waits on the command.
-if (import.meta.main) main(Deno.args).then(Deno.exit)
+// module finishing, while this module waits on the command. A signal winds
+// the command down rather than cutting it off (./signal.ts).
+if (import.meta.main) {
+  listen(winding({
+    stop: () => !!local?.stop(),
+    close: async (code) => await local?.close(code),
+    exit: Deno.exit,
+  }))
+  main(Deno.args).then(Deno.exit)
+}

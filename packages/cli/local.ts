@@ -156,14 +156,27 @@ export let opened = (
   return host
 }
 
+/** Ask every graph this process opened to wind down (host.ts `stop`), so the
+ * command in flight can finish and return on its own. False when it opened
+ * none, and there is nothing to wait for. */
+export let stop = (): boolean => {
+  for (let host of hosts.values()) host.then((h) => h.stop(), () => {})
+  return hosts.size > 0
+}
+
 /** Close every graph this process opened, stamping how the command ended on
  * the `process` row each of them holds. */
-export let close = async (code?: number): Promise<void> => {
-  // Awaited, because the last batch is a write: a command that closed the file
-  // without waiting would leave its own row saying it is still running.
-  for (let host of hosts.values()) await (await host).close(code)
-  hosts.clear()
-}
+export let close = (code?: number): Promise<void> =>
+  // One close at a time: a signal's (./signal.ts) and the command's own
+  // ending can arrive together, and the second waits on the first.
+  closing ??= (async () => {
+    // Awaited, because the last batch is a write: a command that closed the
+    // file without waiting would leave its own row saying it is still running.
+    for (let host of hosts.values()) await (await host).close(code)
+    hosts.clear()
+  })().finally(() => closing = undefined)
+
+let closing: Promise<void> | undefined
 
 /** Who a command line writes as: the answer the host's door gives a request
  * naming this line's session in `x-via`, exactly as it answers one arriving
