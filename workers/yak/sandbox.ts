@@ -9,8 +9,8 @@
 // the builder's conversation is held under (T-34240), so a person talking to
 // the builder and the same person's own agent over the connector reach one
 // workbench rather than two. It is a Cloudflare Container behind a Durable
-// Object (`@cloudflare/sandbox`), which the deploy provisions from the
-// Dockerfile beside this file: Cloudflare's own sandbox image plus pinned
+// Object (`@cloudflare/sandbox`), which the deploy provisions from
+// sandbox/Dockerfile and the base under it: Cloudflare's own sandbox image plus pinned
 // Rust, Python, Go and Zig toolchains — `zig cc` is the C and C++ path to
 // wasm — and `wasm-bindgen` and `wasm-opt` beside them. Nothing rarer than
 // those, because an image is disk, disk is money, and every megabyte of it is

@@ -68,6 +68,13 @@ build that fails is started once more through the `BUILD_HOOK` deploy hook
 (builds.ts), since most failures are the network's; the second build's failure
 stands.
 
+The sandbox image is two halves (sandbox/base.ts). `sandbox/base/Dockerfile` is
+the toolchain, pushed to the registry once per version of that file as
+`yak-sandbox:base-<its hash>`; `sandbox/Dockerfile` builds FROM that tag and
+adds the `yak` CLI, so a push to main pushes only the CLI's layers. To change a
+toolchain, edit the base file and set the FROM tag `sandbox_test.ts` names; the
+next deploy builds and pushes the base before its own image.
+
 Defects go to Sentry (org `yaks`, project `yaks-app`; sentry.ts): an exception
 nothing caught, a break the router or a job files, a Store's own, a connector
 tool's, any `console.error`, and a Workers Build that failed (builds.ts, fed by

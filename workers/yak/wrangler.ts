@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=npm,npx,git,pgrep,kill
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-run=npm,npx,git,pgrep,kill,docker
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak`, their `-staging` variants and the probe (probe.ts) all
 // come through here, so the pinned version is written once and `node_modules`
@@ -28,6 +28,7 @@
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import packages from './package.json' with { type: 'json' }
+import { based, envOf } from './sandbox/base.ts'
 
 export let WRANGLER = [
   'npx',
@@ -176,6 +177,15 @@ if (import.meta.main) {
     }).output()
     if (!commit.success) Deno.exit(commit.code)
     argv.push('--message', new TextDecoder().decode(commit.stdout).trim())
+    // The sandbox image builds FROM a base the registry must already hold
+    // (sandbox/base.ts), unless this deploy builds no image at all.
+    if (!/(^| )--containers-rollout[= ]none( |$)/.test(argv.join(' '))) {
+      await based({
+        wrangler: WRANGLER,
+        env: envOf(argv),
+        dry: argv.includes('--dry-run'),
+      })
+    }
   }
   let [cmd, ...args] = WRANGLER
   let child = new Deno.Command(cmd, {
@@ -188,7 +198,7 @@ if (import.meta.main) {
   // child is npx, which does not pass a signal to the wrangler it spawned, so
   // the whole subtree is signalled, deepest first. Through kill(1), not
   // Deno.kill: that needs the unrestricted run permission, and this door
-  // runs with an allowlist (npm, npx, git, pgrep, kill).
+  // runs with an allowlist (npm, npx, git, pgrep, kill, docker).
   for (let signal of ['SIGINT', 'SIGTERM'] as const) {
     Deno.addSignalListener(signal, () => {
       let pids = [...descendants(child.pid), child.pid].map(String)

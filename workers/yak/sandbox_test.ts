@@ -22,6 +22,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parse } from '@std/toml'
+import { based, envOf, pinned as from, repo, tag } from './sandbox/base.ts'
 import { build, fake } from './builder.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -108,7 +109,7 @@ let VERSIONS = /^ARG (\w+)_VERSION=(\S+)$/gm
 
 let pinned = async () =>
   new Map(
-    [...(await at('sandbox/Dockerfile')).matchAll(VERSIONS)]
+    [...(await at('sandbox/base/Dockerfile')).matchAll(VERSIONS)]
       .map(([, name, version]) => [name, version] as const),
   )
 
@@ -484,10 +485,11 @@ Deno.test('the deploy names the container, and the image is the SDK version', as
   let pinned = JSON.parse(await at('package.json')) as {
     dependencies: Record<string, string>
   }
-  let file = await at('sandbox/Dockerfile')
-  let tag = /^FROM docker\.io\/cloudflare\/sandbox:(\S+)$/m.exec(file)
-  assert(tag, 'the Dockerfile is FROM the sandbox image')
+  let base = await at('sandbox/base/Dockerfile')
+  let tag = /^FROM docker\.io\/cloudflare\/sandbox:(\S+)$/m.exec(base)
+  assert(tag, 'the base is FROM the sandbox image')
   assertEquals(tag[1], pinned.dependencies['@cloudflare/sandbox'])
+  let file = await at('sandbox/Dockerfile')
 
   // The CLI in the image (T-34387), installed inside the repo's Deno
   // workspace, since the sibling @yaks/* packages it imports resolve only
@@ -514,8 +516,65 @@ Deno.test('the deploy names the container, and the image is the SDK version', as
   assertEquals(ignore.find((l) => l && !l.startsWith('#')), '*')
   assert(ignore.includes('**/.env*'), 'no .env file reaches the image')
   // Pinned and checksummed like everything else it downloads.
-  assert(/^ARG DENO_VERSION=\d+\.\d+\.\d+$/m.test(file), 'deno is pinned')
-  assert(/^ARG DENO_SHA256=[0-9a-f]{64}$/m.test(file), 'and checksummed')
+  assert(/^ARG DENO_VERSION=\d+\.\d+\.\d+$/m.test(base), 'deno is pinned')
+  assert(/^ARG DENO_SHA256=[0-9a-f]{64}$/m.test(base), 'and checksummed')
+})
+
+// The image builds FROM the toolchain base (base.ts, T-38057), and the tag it
+// names is the base Dockerfile's own hash: edit the base and this names the
+// FROM line to write.
+Deno.test('the sandbox builds FROM the base its Dockerfile hashes to', async () => {
+  let want = await tag(await at('sandbox/base/Dockerfile'))
+  let image = from(await at('sandbox/Dockerfile'))
+  assertEquals(image?.split(':').at(-1), want, `FROM …/yak-sandbox:${want}`)
+  let toml = await at('wrangler.toml')
+  assertEquals(image?.split('/').at(-1), `${repo(toml)}:${want}`)
+  assertEquals(repo(toml, 'staging'), 'yak-staging-sandbox-staging')
+  for (
+    let [args, env] of [
+      [['deploy'], undefined],
+      [['deploy', '--env', 'staging'], 'staging'],
+      [['--env=staging', 'deploy'], 'staging'],
+      [['deploy', '-e', 'staging'], 'staging'],
+    ] as const
+  ) assertEquals(envOf([...args]), env)
+})
+
+// What `based()` asks docker to do, for each state the registry can be in.
+Deno.test('a deploy builds and pushes the base only where it is missing', async () => {
+  let image = from(await at('sandbox/Dockerfile'))!
+  let stage = image.replace('/yak-sandbox:', '/yak-staging-sandbox-staging:')
+  let calls = async (held: string[], env?: string, dry = false) => {
+    let ran: string[] = []
+    await based({
+      wrangler: ['wrangler'],
+      env,
+      dry,
+      has: (ref) => Promise.resolve(held.includes(ref)),
+      go: (cmd) => {
+        ran.push(cmd.slice(0, 2).join(' '))
+        let account = image.split('/')[1]
+        let creds = { username: 'v1', password: 'p', account_id: account }
+        return Promise.resolve({ ok: true, out: JSON.stringify(creds) })
+      },
+    })
+    return ran.filter((l) => !/^(wrangler|docker login)/.test(l))
+  }
+  assertEquals(await calls([image]), [])
+  assertEquals(await calls([]), ['docker build', 'docker push'])
+  assertEquals(await calls([], undefined, true), ['docker build'])
+  assertEquals(await calls([image, stage], 'staging'), [])
+  assertEquals(await calls([image], 'staging'), [
+    'docker pull',
+    'docker tag',
+    'docker push',
+  ])
+  assertEquals(await calls([], 'staging'), [
+    'docker build',
+    'docker push',
+    'docker tag',
+    'docker push',
+  ])
 })
 
 // The image is not Rust-specific (T-34516). What holds that is this list plus
@@ -523,7 +582,7 @@ Deno.test('the deploy names the container, and the image is the SDK version', as
 // check it against, because a floating toolchain is a build that worked
 // yesterday and there is nobody here to debug it.
 Deno.test('a toolchain apiece, pinned, and every download checksummed', async () => {
-  let file = await at('sandbox/Dockerfile')
+  let file = await at('sandbox/base/Dockerfile')
   let versions = await pinned()
   for (
     let want of [

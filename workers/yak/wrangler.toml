@@ -205,7 +205,9 @@ tag = "v4"
 new_sqlite_classes = ["Sandbox"]
 
 # The container behind that object. `image` is a path, so the deploy BUILDS
-# it, and wrangler needs a container engine to do that — EVEN FOR A DRY RUN.
+# it, FROM a toolchain base the deploy door first makes sure the registry
+# holds (sandbox/base.ts), and wrangler needs a container engine to do that —
+# EVEN FOR A DRY RUN.
 # Workers Builds has one and a developer box may not, so the gate here is
 # `deno task deploy:yak --dry-run --containers-rollout=none`: that flag skips
 # the image and the rollout, and the config is still parsed and the Worker
