@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang=en>
+  <meta charset=utf-8>
+  <meta name=viewport content="width=device-width,initial-scale=1">
+  <title>yak.sh — the yaks toolkit</title>
+  <meta name=description
+    content="One graph that people and agents work through the same doors: the @yaks packages, the yak CLI, sessions and tasks in the graph, on your machine or on Cloudflare, and yaks.app for hosting yaks apps.">
+  <link rel=icon href=icon.png>
+  <link rel=stylesheet href=style.css>
+
+  <header class=Top>
+    <a class=Top_Brand
+      href=./><img src=icon.png alt="" width=28 height=28> yak.sh</a>
+    <nav class=Top_Nav>
+      <a href=#model>Model</a>
+      <a href=#packages>Packages</a>
+      <a href=#cli>CLI</a>
+      <a href=#agents>Agents</a>
+      <a href=#where>Where it runs</a>
+      <a href=#yaks-app>yaks.app</a>
+      <a href="https://github.com/yak-sh/yak">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class=Hero>
+      <h1>One graph, worked by people and agents through the same doors.</h1>
+      <p class=Hero_Lead>
+    yaks is a toolkit of TypeScript packages for storing, querying and
+    rendering records as entities, plus the packages that run agent sessions,
+    tools and tasks over them. <code>yak</code> is its command line, and
+    <a href="https://yaks.app">yaks.app</a> hosts the apps built with it.
+    Every change is an entity patch, and every list is a query.
+  </p>
+      <pre class=Code><code>deno install -gAf jsr:@yaks/cli/yak</code></pre>
+      <p class=Hero_Links>
+        <a class=Button href="https://jsr.io/@yaks">@yaks on JSR</a>
+        <a class=Button
+          href="https://github.com/yak-sh/yak">Source on GitHub</a>
+        <a class="Button Button-quiet" href="https://yaks.app">yaks.app</a>
+      </p>
+    </section>
+
+    <section id=model class=Section>
+      <h2>The model</h2>
+      <p>
+    An <b>entity</b> is a record identified by <code>entity.eid</code>, a
+    uuid. Its <b>components</b> are named objects, each describing one aspect
+    of it. There is no kind column: an entity is what its components make it.
+    A task is <code>doc{title, body}</code> plus <code>task{}</code>; a
+    comment is <code>doc</code> plus <code>comment{target}</code>.
+  </p>
+      <dl class=Terms>
+        <dt>bundle</dt>
+        <dd>One entity's components as a JSON object: <code>{entity: {eid}, doc: {title}}</code>.</dd>
+        <dt>batch</dt>
+        <dd>A list of changes applied in one transaction. Each component in a bundle is a patch: an omitted property is unchanged, <code>null</code> clears it.</dd>
+        <dt>vocabulary</dt>
+        <dd>The schema a graph accepts: each package's <code>vocab.json</code>, JSON Schema 2020-12 plus a few keywords of its own.</dd>
+        <dt>query</dt>
+        <dd>One grammar for every list: <code>.task.status=open .priority&lt;=1</code>. A bare word is a text search over the properties marked <code>search: true</code>.</dd>
+      </dl>
+      <p>A whole graph in memory, from <a href="https://github.com/yak-sh/yak/tree/main/packages#start-here">the packages README</a>:</p>
+      <pre class=Code><code>import { docDoc } from '@yaks/doc'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+
+let vocab = loadVocab([docDoc])
+let g = graph({ storage: ram(vocab), vocab })
+await g.apply([{
+  entity: { eid: 'first-note' },
+  doc: { title: 'Getting started', body: 'A document stored as components.' },
+}])
+console.log(await g.read('.doc.title="Getting started"'))</code></pre>
+      <p>
+    Swap <code>ram</code> for <a href="https://jsr.io/@yaks/sqlite">@yaks/sqlite</a>
+    to keep it on disk, put <a href="https://jsr.io/@yaks/api">@yaks/api</a>
+    in front for HTTP, and use <a href="https://jsr.io/@yaks/client">@yaks/client</a>
+    for a browser graph that stays in sync.
+  </p>
+    </section>
+
+    <section id=packages class=Section>
+      <h2>The @yaks packages</h2>
+      <p>
+    About seventy packages, each with its own README and nearly all published
+    on <a href="https://jsr.io/@yaks">JSR</a>. Import only the ones you need.
+    Grouped here by what they are for, not by dependency.
+  </p>
+
+      <div class=Groups>
+        <article class=Group>
+          <h3>Graph</h3>
+          <ul class=Pkgs>
+            <li><a href="https://jsr.io/@yaks/graph">graph</a> entities, components and the phased <code>apply()</code>
+        <li><a href="https://jsr.io/@yaks/vocab">vocab</a> a vocabulary as JSON Schema, read at runtime
+        <li><a href="https://jsr.io/@yaks/query">query</a> the query grammar, parsed to an AST
+        <li><a href="https://jsr.io/@yaks/sql">sql</a> the SQL AST and its renderer
+        <li><a href="https://jsr.io/@yaks/match">match</a> the same queries over bundles in memory
+        <li><a href="https://jsr.io/@yaks/ram">ram</a> storage in a <code>Map</code>, for pages and tests
+        <li><a href="https://jsr.io/@yaks/sqlite">sqlite</a> storage in a SQLite file
+        <li><a href="https://jsr.io/@yaks/edge">edge</a> links between entities, and traversal
+        <li><a href="https://jsr.io/@yaks/fts">fts</a> full-text search over FTS5
+        <li><a href="https://jsr.io/@yaks/embedding">embedding</a> vectors and <code>.near=&lt;entity&gt;</code>
+        <li><a href="https://jsr.io/@yaks/blob">blob</a> long values stored by hash
+        <li><a href="https://jsr.io/@yaks/journal">journal</a> history, undo and a change feed
+        <li><a href="https://jsr.io/@yaks/effects">effects</a> work owed by a commit, run by a pool
+        <li><a href="https://jsr.io/@yaks/id">id</a> eids, and short ids like <code>T-7</code>
+        <li><a href="https://jsr.io/@yaks/key">key</a>, <a href="https://jsr.io/@yaks/alias">alias</a>, <a href="https://jsr.io/@yaks/names">names</a> other ways to address an entity
+        <li><a href="https://jsr.io/@yaks/archetype">archetype</a> each entity's set of component tables
+        <li><a href="https://jsr.io/@yaks/yaml">yaml</a> YAML and Markdown frontmatter as bundles
+      </ul>
+    </article>
+
+    <article class=Group>
+      <h3>Doors</h3>
+      <ul class=Pkgs>
+        <li><a href="https://jsr.io/@yaks/api">api</a> <code>/apply</code>, <code>/query</code> and <code>/ws</code> subscriptions
+        <li><a href="https://jsr.io/@yaks/mcp">mcp</a> the graph as an MCP server
+        <li><a href="https://jsr.io/@yaks/mcp-client">mcp-client</a> a remote MCP server's tools, used from here
+        <li><a href="https://jsr.io/@yaks/cli">cli</a> the <code>yak</code> command, and <code>compose</code>
+        <li><a href="https://jsr.io/@yaks/sync">sync</a> optimistic writes, reconciled with a server
+        <li><a href="https://jsr.io/@yaks/client">client</a> the browser graph, queries as live values
+        <li><a href="https://github.com/yak-sh/yak/tree/main/packages/web">web</a> a read-only browser door for <code>yak serve</code>
+        <li><a href="https://jsr.io/@yaks/workerd">workerd</a> the same handler as a Cloudflare Worker
+        <li><a href="https://jsr.io/@yaks/durable-object">durable-object</a> one Durable Object, one graph
+        <li><a href="https://jsr.io/@yaks/d1">d1</a> the same storage over D1
+      </ul>
+    </article>
+
+    <article class=Group>
+      <h3>Rendering</h3>
+      <ul class=Pkgs>
+        <li><a href="https://jsr.io/@yaks/render">render</a> pick a renderer by how specifically it matches
+        <li><a href="https://jsr.io/@yaks/preact">preact</a> that registry in Preact
+        <li><a href="https://jsr.io/@yaks/html">html</a> the same views as server-side HTML
+        <li><a href="https://jsr.io/@yaks/text">text</a> the same views as Markdown and plain text
+        <li><a href="https://jsr.io/@yaks/tui">tui</a> the same views in a terminal
+        <li><a href="https://jsr.io/@yaks/markdown">markdown</a> GitHub Flavored Markdown as nodes
+        <li><a href="https://jsr.io/@yaks/canvas">canvas</a> the interface itself stored as data
+      </ul>
+    </article>
+
+    <article class=Group>
+      <h3>Agents</h3>
+      <ul class=Pkgs>
+        <li><a href="https://jsr.io/@yaks/session">session</a> transcripts as entries, claims, model turns
+        <li><a href="https://jsr.io/@yaks/harness">harness</a> an agent runner and its terminal app
+        <li><a href="https://jsr.io/@yaks/spawn">spawn</a> <code>claude</code> and <code>codex</code> as sessions
+        <li><a href="https://jsr.io/@yaks/process">process</a> a running program as an entity
+        <li><a href="https://jsr.io/@yaks/tools">tools</a> calls and results, recorded in the graph
+        <li><a href="https://jsr.io/@yaks/model">model</a> one model interface; <a href="https://jsr.io/@yaks/openai">openai</a>, <a href="https://jsr.io/@yaks/openrouter">openrouter</a> and <a href="https://jsr.io/@yaks/workers-ai">workers-ai</a> implement it
+        <li><a href="https://jsr.io/@yaks/context">context</a> what a model was given, recorded
+        <li><a href="https://jsr.io/@yaks/builders">builders</a>, <a href="https://jsr.io/@yaks/dreaming">dreaming</a> outputs an agent builds from inputs
+        <li><a href="https://jsr.io/@yaks/heal">heal</a> an exception files a task about itself
+        <li><a href="https://jsr.io/@yaks/tmux">tmux</a> a terminal somebody can watch
+      </ul>
+    </article>
+
+    <article class=Group>
+      <h3>Work</h3>
+      <ul class=Pkgs>
+        <li><a href="https://jsr.io/@yaks/task">task</a> tasks, with status computed from marks
+        <li><a href="https://jsr.io/@yaks/project">project</a> projects, and boards as saved queries
+        <li><a href="https://jsr.io/@yaks/goal">goal</a> objectives that are never finished
+        <li><a href="https://jsr.io/@yaks/design">design</a> proposals and their decisions
+        <li><a href="https://jsr.io/@yaks/memory">memory</a> what a person said, in their words
+        <li><a href="https://jsr.io/@yaks/persona">persona</a> instruction sets, rendered to Markdown
+        <li><a href="https://jsr.io/@yaks/doc">doc</a> the <code>doc{title, body}</code> everything shares
+        <li><a href="https://jsr.io/@yaks/kernel">kernel</a> provenance: <code>created</code>, <code>updated</code>, <code>comment</code>
+        <li><a href="https://jsr.io/@yaks/wake">wake</a> coming back to something later
+        <li><a href="https://jsr.io/@yaks/notify">notify</a> watch, mute and notifications
+        <li><a href="https://jsr.io/@yaks/mail">mail</a> letters in and out
+        <li><a href="https://jsr.io/@yaks/hook">hook</a> stored webhook deliveries
+        <li><a href="https://jsr.io/@yaks/page">page</a> web pages, captured
+        <li><a href="https://jsr.io/@yaks/git">git</a>, <a href="https://jsr.io/@yaks/code">code</a>, <a href="https://jsr.io/@yaks/mirror">mirror</a> a repository and its files in the graph
+      </ul>
+    </article>
+
+    <article class=Group>
+      <h3>Access and hosting</h3>
+      <ul class=Pkgs>
+        <li><a href="https://jsr.io/@yaks/member">member</a> memberships, grants and app access
+        <li><a href="https://jsr.io/@yaks/secrets">secrets</a> written through the graph, kept in a vault
+        <li><a href="https://jsr.io/@yaks/connections">connections</a> outside services, their credentials as secrets
+        <li><a href="https://jsr.io/@yaks/oauth">oauth</a> one authorization-code client; providers are data
+        <li><a href="https://jsr.io/@yaks/egress">egress</a> calls out with a credential the caller never holds
+        <li><a href="https://jsr.io/@yaks/platform">platform</a> what a host keeps about its spaces and apps
+        <li><a href="https://jsr.io/@yaks/tunnel">tunnel</a> a space's tunnel to a machine with no open port
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section id=facets class=Section>
+  <h2>Facets: a plugin never says where it runs</h2>
+  <p>
+    A plugin is a package, and each kind of thing it contributes is a subpath
+    export. A process serves <b>roles</b> and imports only the facets of the
+    roles it serves, so a browser tab never loads a database driver and a
+    command line never loads a web server it will not start.
+  </p>
+  <div class=Scroll>
+    <table class=Table>
+      <thead><tr><th>Subpath<th>What it exports
+      <tbody>
+        <tr><td><code>./vocab</code><td>the package's words: components, tools, effects
+        <tr><td><code>./rules</code><td>graph plugins, query compilers, <code>authenticate</code>
+        <tr><td><code>./tools</code><td>the code behind its declared tools
+        <tr><td><code>./effects</code><td>the code behind what a commit owes
+        <tr><td><code>./routes</code><td>HTTP routes, hosted by @yaks/api
+        <tr><td><code>./service</code><td>work that keeps going: a clock, a poll, a sweep
+        <tr><td><code>./views</code><td>renderers, for a browser or a terminal
+        <tr><td><code>./tui</code><td>terminal views for <code>--tui</code>
+    </table>
+  </div>
+  <div class=Scroll>
+    <table class=Table>
+      <thead><tr><th>Role<th>Facets<th>What the process does
+      <tbody>
+        <tr><td><code>graph</code><td><code>./vocab</code>, <code>./rules</code>, <code>./tools</code><td>opens the file, admits writes, runs tool calls
+        <tr><td><code>web</code><td><code>./routes</code><td>answers HTTP with the routes @yaks/api hosts
+        <tr><td><code>effects</code><td><code>./effects</code><td>claims and runs what commits owe, in a pool
+        <tr><td>a plugin's name<td>its <code>./service</code><td>keeps that plugin's timer or poll running
+    </table>
+  </div>
+  <p>
+    Effects are a pool: a commit writes down the runs it owes, and any number
+    of processes claim them. Each service is a singleton, held under a lease
+    named for its package. See <a href="https://github.com/yak-sh/yak/tree/main/packages/cli#roles">@yaks/cli</a>.
+  </p>
+</section>
+
+<section id=cli class=Section>
+  <h2>The <code>yak</code> command</h2>
+  <p>
+    <code>yak</code> turns each tool a graph declares into a subcommand, with
+    arguments and help from the tool's input schema, so a new tool needs no new
+    CLI release. A config names the database and the plugins:
+  </p>
+  <pre class=Code><code>{
+  "db": "graph.db",
+  "plugins": ["@yaks/api", "@yaks/kernel", "@yaks/id",
+              "@yaks/doc", "@yaks/task", "@yaks/project"],
+  "numbers": true
+}</code></pre>
+  <pre class=Code><code>yak --config yak.json task new 'Buy the cake' --priority 1   # task T-1 open
+yak --config yak.json task list '.priority&lt;3'
+yak --config yak.json serve                                  # @yaks/api's serve tool: HTTP
+yak app_list                                                 # a tool on yaks.app's MCP server</code></pre>
+  <p>
+    Without <code>--config</code>, <code>yak</code> looks for
+    <code>$YAK_CONFIG</code>, then <code>~/.yak/yak.json</code>, and otherwise
+    talks to <code>https://yaks.app/mcp</code>; <code>--host</code> picks any
+    other MCP server. Local and remote calls both become call entities run
+    through @yaks/tools, so a person and an agent get the same validation,
+    rules, attribution and record. No server is required: SQLite runs in WAL
+    mode, so separate commands and a server share one file.
+  </p>
+</section>
+
+<section id=agents class=Section>
+  <h2>Sessions and tasks live in the graph</h2>
+  <div class=Cols>
+    <div>
+      <h3>Sessions</h3>
+      <p>
+        A session is an entity, and each transcript entry is an entity
+        beside it: input, a model request, output, a tool call, its result.
+        Status is derived from the entries, never stored. A session holds a
+        <b>claim</b> on the work it is doing, and a second claim on the same
+        entity is refused and recorded.
+      </p>
+      <pre class=Code><code>yak session new 'reply with the word pong'
+yak session send &lt;session&gt; 'and again'
+yak session peek &lt;session&gt;</code></pre>
+      <p>
+        <a href="https://jsr.io/@yaks/harness">@yaks/harness</a> runs native
+        sessions over any model the <a href="https://jsr.io/@yaks/model">@yaks/model</a>
+        interface covers. <a href="https://jsr.io/@yaks/spawn">@yaks/spawn</a>
+        starts <code>claude</code> or <code>codex</code> as a detached process
+        and reads its output back as the session's entries, so a run outlives
+        the process that started it.
+      </p>
+    </div>
+    <div>
+      <h3>Tasks</h3>
+      <p>
+        A task is <code>doc</code> plus <code>task</code>. Its status (open,
+        done, cancelled) is computed from its <code>completed</code> and
+        <code>cancelled</code> marks, by one rule both SQL and the in-memory
+        evaluator use. A board is a saved query, never a stored list, so a
+        task is on a board because it matches.
+      </p>
+      <pre class=Code><code>yak task new 'Buy the cake' --priority 1
+yak task update T-1 done
+yak task list '.task.status=done'</code></pre>
+      <p>
+        Goals, designs, memories and personas are entities too, linked by
+        edges, and every door, from the CLI to MCP to the browser, reads the
+        same vocabulary.
+      </p>
+    </div>
+  </div>
+
+  <h3 id=interop>Agents from outside</h3>
+  <ul class=List>
+    <li><b>MCP.</b> <a href="https://jsr.io/@yaks/mcp">@yaks/mcp</a> serves the
+      graph at <code>/mcp</code>: five generic tools that take and return
+      bundles, plus every plugin's own tools, each with one output schema, the
+      bundle answer. Claude Code, or any MCP agent, works the same graph a
+      person does.
+    <li><b>Hooks.</b> <code>yak hooks install</code> writes lifecycle hooks
+      into a Claude-compatible settings file: a starting session is created in
+      the graph under the harness's own id, and an ending one releases its
+      claims.
+    <li><b>Transcripts.</b> <code>@yaks/session/service</code> follows Claude
+      Code's transcript files and reads them in as sessions, each entry marked
+      with where it came from, so a line read twice writes nothing new.
+    <li><b>Outward.</b> <a href="https://jsr.io/@yaks/mcp-client">@yaks/mcp-client</a>
+      reaches a remote MCP server's tools and hands them to a native session
+      like its own.
+  </ul>
+</section>
+
+<section id=where class=Section>
+  <h2>On your machine, or on Cloudflare</h2>
+  <div class=Cols>
+    <div>
+      <h3>A box</h3>
+      <p>
+        <code>yak serve</code> answers HTTP and WebSocket subscriptions over a
+        SQLite file, and MCP at <code>/mcp</code> when the config lists
+        @yaks/mcp. <a href="https://jsr.io/@yaks/process">@yaks/process</a>
+        runs a program so it outlives the server that started it, on Linux and
+        macOS. Secrets live in a vault of private files beside the database.
+      </p>
+    </div>
+    <div>
+      <h3>Cloudflare</h3>
+      <p>
+        <a href="https://jsr.io/@yaks/workerd">@yaks/workerd</a> serves the same
+        handler from a Worker; <a href="https://jsr.io/@yaks/durable-object">@yaks/durable-object</a>
+        makes one Durable Object one graph, and <a href="https://jsr.io/@yaks/d1">@yaks/d1</a>
+        puts the same storage over D1. One <code>apply()</code>, with the same
+        phases and plugins, runs on all three. The harness's runner names no
+        machine: it runs on a box or in a Worker.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id=yaks-app class=Section>
+  <h2>yaks.app: build, host and share web apps</h2>
+  <p>
+    <a href="https://yaks.app">yaks.app</a> is where yaks apps live. A yaks app
+    is an <code>index.html</code> and whatever files sit beside it, served at
+    <code>&lt;space&gt;.yaks.app/&lt;app&gt;/</code>, with no build step. Every
+    app comes with its own store, a graph of entities, and a small client a
+    page imports from <code>./api/client.js</code>.
+  </p>
+  <pre class=Code><code>import { apply, query } from './api/client.js'
+
+await apply({ entity: { eid: '$cake' }, doc: { title: 'Lemon cake' } })
+let recipes = await query('.doc')</code></pre>
+  <ul class=List>
+    <li>People build them by asking Claude or ChatGPT: the connector at
+      <code>https://yaks.app/mcp</code> gives an assistant <code>app_new</code>,
+      <code>app_files</code> and <code>app_deploy</code>, and the same tools are
+      <code>yak</code> commands.
+    <li>A <code>vocab.json</code> beside the page declares the app's own
+      components, and each one gets commands any agent can find later.
+    <li>A <code>worker.js</code> gives an app server code; D1, R2 and
+      Vectorize bindings are created for it at deploy.
+    <li>A space can open a tunnel to your own machine: its apps reach only the
+      paths the machine opened, and the machine needs no open port.
+  </ul>
+  <p>
+    See them working in the demo space: <a href="https://yourname.yaks.app/recipes/">the recipe box</a>.
+    The guide is at <a href="https://yaks.app/docs.md">yaks.app/docs.md</a>.
+  </p>
+</section>
+
+</main>
+
+<footer class=Foot>
+  <p>
+    yaks is open source. <a href="https://github.com/yak-sh/yak">yak-sh/yak</a>
+    on GitHub, <a href="https://jsr.io/@yaks">@yaks</a> on JSR,
+    <a href="https://yaks.app">yaks.app</a> for hosting.
+  </p>
+</footer>
