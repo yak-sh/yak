@@ -191,19 +191,19 @@ decays with disuse and use bumps it.
 ## Run
 
 ```sh
-deno task dev      # server + web on http://localhost:5173
-deno task tui      # the terminal UI (needs dev running)
-deno task install  # global `task` CLI
+deno task dev      # yak serve over ~/.yak/yak.json: web, /mcp, /query on :5173
+deno task tui      # the terminal UI (needs a server running)
+deno task install  # global `yak` CLI, with `task` as its other name
 deno task check    # fmt + lint + typecheck
 deno task test     # the suite
 ```
 
-The db lives at `~/.tasks/tasks.db` — outside the repo; set `DB_PATH` to move
-it. First boot plants the schema. No bundler, no node_modules: the server serves
-`src/` as-is, translating TS/JSX per request (sucrase), and the browser resolves
-dependencies such as Preact, Lucide, marked, and highlight.js to vendored ESM
-through the import map in `index.html`. There is no auth — the server is built
-to live on a private tailnet.
+The graph is `~/.yak/yak.db`, and `~/.yak/yak.json` names it and the plugins
+composed over it — both outside the repo. On the box, `yak serve` runs as the
+`systemd --user` unit `yak.service` (`systemctl --user restart yak` after a
+landing). The page is `@yaks/web` (packages/web), built with `deno bundle` when
+the server starts. There is no auth — the server is built to live on a private
+tailnet.
 
 ## Pointers
 

@@ -7,8 +7,8 @@
 # login under $HOME, the way the box does by hand.
 #
 # Runs on THIS box, not GitHub's — we buy no Actions minutes (M-9560). The
-# runner is a `systemd --user` unit; its install, its PATH and the command that
-# removes it are all in etc/actions-runner.service. `runs-on` names the custom
+# runner is a `systemd --user` unit (~/.config/systemd/user/actions-runner.service
+# on the box, which says how it was installed). `runs-on` names the custom
 # label `yak`, so a workflow can never silently fall back to a hosted runner.
 #
 #   systemctl --user status actions-runner    # is it listening

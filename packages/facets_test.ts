@@ -18,7 +18,6 @@ import { idKeywords } from '@yaks/id'
 import { nameKeywords } from '@yaks/names'
 
 let here = new URL('./', import.meta.url)
-let root = new URL('../', here)
 
 type Pkg = { name: string; dir: string; exports: Record<string, string> }
 
@@ -175,24 +174,17 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
 })
 
 Deno.test('compose takes every facet of the plugins a config names', async () => {
-  // The fleet's own config when the transition has written one, and the
-  // harness beside the words it runs over otherwise — either way a config file
-  // naming packages, read the way `yak serve` reads it.
-  let path = new URL('etc/yak.json', root)
-  let plugins: string[]
-  try {
-    plugins = JSON.parse(Deno.readTextFileSync(path)).plugins as string[]
-  } catch {
-    plugins = [
-      '@yaks/kernel',
-      '@yaks/id',
-      '@yaks/edge',
-      '@yaks/doc',
-      '@yaks/task',
-      '@yaks/session',
-      '@yaks/harness',
-    ]
-  }
+  // The harness beside the words it runs over: a config naming packages, read
+  // the way `yak serve` reads it.
+  let plugins = [
+    '@yaks/kernel',
+    '@yaks/id',
+    '@yaks/edge',
+    '@yaks/doc',
+    '@yaks/task',
+    '@yaks/session',
+    '@yaks/harness',
+  ]
   let host = await compose({ db: ':memory:', plugins, numbers: false })
   try {
     // Every facet arrived: the words, a computed property only ./vocab

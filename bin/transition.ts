@@ -3,7 +3,7 @@
 //
 // The fleet server is dismantled, not migrated (D-37573, C#9faadb22f2): its
 // database is exported once into the package vocabulary and imported into a
-// fresh db that `yak serve` opens with the plugins in `etc/yak.json`. Every
+// fresh db that `yak serve` opens with the plugins its `--config` names. Every
 // adapter the fleet's shape needs lives here and nowhere else — no package
 // carries a property, a keyword or a branch for the fleet's sake.
 //
@@ -1178,7 +1178,7 @@ let root = new URL('../', import.meta.url)
 let main = async () => {
   let from = arg('from')
   let to = arg('to')
-  let config = arg('config', new URL('etc/yak.json', root).pathname)
+  let config = arg('config')
   let limit = Number(arg('limit', '0')) || 0
   let batchSize = Number(arg('batch', '4000'))
   let since = Deno.args.includes('--since') ? arg('since') : undefined
