@@ -322,7 +322,8 @@ Deno.test('archetype: boot respects number exclusions and the persistent high-wa
     let s = storage(d, vocab, {
       number: { except: numbered ? ['task'] : ['archetype'] },
     })
-    s.install()
+    // A file an older install wrote, holding an owner nothing classified.
+    for (let stmt of s.ddl()) d.exec(stmt)
     s.tx((tx) => tx.patch([{ entity: { eid: 'owner' }, doc: {} }]))
     d.exec(
       "update entity set num = 99 where eid = 'owner'; update entity set num = null where eid = 'owner'",

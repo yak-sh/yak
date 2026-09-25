@@ -22,6 +22,14 @@ Deno.test('install() is idempotent', () => {
   assertEquals((s.read('.title~=hi') as Bundle[])[0].entity.eid, 'x')
 })
 
+Deno.test('a second store over an installed file leaves its schema alone', () => {
+  let d = mem()
+  storage(d, shop).install()
+  let before = d.query('pragma schema_version', [])
+  storage(d, shop).install()
+  assertEquals(d.query('pragma schema_version', []), before)
+})
+
 Deno.test('a driver that owns transactions is asked for them', () => {
   let base = mem()
   let seen: string[] = []

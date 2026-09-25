@@ -32,3 +32,17 @@ export function componentTables(driver: Driver): string[] {
         )
     )
 }
+
+/**
+ * How many objects the file's schema holds and how long their definitions run
+ * together: what moves when any table, index, view or trigger is created,
+ * dropped or altered, by any connection. Read from `sqlite_schema`, since a
+ * Durable Object's SQLite refuses `pragma schema_version`.
+ */
+export let shape = (driver: Driver): string => {
+  let [row] = driver.query(
+    'select count(*) as n, total(length(sql)) as bytes from sqlite_schema',
+    [],
+  )
+  return `${row.n}/${row.bytes}`
+}

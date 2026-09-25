@@ -123,7 +123,7 @@ Deno.test('archetype: migrate legacy SHA descriptors in place, references and re
     { entity: { eid: 'reference' }, link: { to: eidOf([]) } },
     { entity: { eid: '$gone' }, archetype: { tables: '["gone"]' } },
   ])
-  s.install() // Retire the missing-table descriptor before migration.
+  backfill(d) // Retire the missing-table descriptor before migration.
   let rows = d.query(
     'select e.id, e.eid, e.num, a.tables from entity e join archetype a on a.entity = e.id',
     [],
@@ -134,7 +134,7 @@ Deno.test('archetype: migrate legacy SHA descriptors in place, references and re
       Number(r.id),
     ])
   }
-  s.install()
+  backfill(d)
   for (let r of rows) {
     assertEquals(
       d.query('select eid, num from entity where id = ?', [Number(r.id)]),
@@ -183,7 +183,7 @@ for (let fault of ['occupied', 'invalid']) {
     }
     let snapshot = d.query('select * from entity order by id', [])
     assertThrows(
-      () => s.install(),
+      () => backfill(d),
       Error,
       fault == 'occupied'
         ? 'Archetype identity is occupied'
@@ -213,7 +213,7 @@ Deno.test('archetype: migration never steals content from a shared legacy blob s
   s.tx((tx) => tx.patch([blob('')]))
   let before = d.query('select * from entity order by id', [])
   assertThrows(
-    () => s.install(),
+    () => backfill(d),
     Error,
     'Legacy archetype identity has extra facets',
   )

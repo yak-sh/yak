@@ -5,7 +5,7 @@ import { compile } from '@yaks/sql'
 import { absent, and, or, parse, present } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { mem, shop } from './testing.ts'
-import { type Driver, rows, storage } from './mod.ts'
+import { backfill, type Driver, rows, storage } from './mod.ts'
 import { open, type Opened } from './db.ts'
 
 let vocab = loadVocab([...shop.docs, archetypeDoc, {
@@ -126,7 +126,7 @@ Deno.test('archetype plans and gathers observe commits from another SQLite handl
     // A raw writer has not yet classified its row: fallback remains exact.
     writer.tx((tx) => tx.patch([{ entity: { eid: 'raw' }, marker: {} }]))
     assertEquals(reader.read('.marker').map((b) => b.entity.eid), ['raw'])
-    reader.install()
+    backfill(d1)
     assertEquals(reader.read('.marker').map((b) => b.entity.eid), ['raw'])
     // A writer adds one owner of an existing shape and one of a new shape
     // after planning. A stale catalog with a fresh entity scan would return

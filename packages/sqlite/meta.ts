@@ -43,6 +43,18 @@ export let meta = (driver: Driver): Meta => ({
 /** The key the epoch is kept under. */
 export let EPOCH = 'epoch'
 
+/** The key the fingerprint of the installed schema is kept under (mod.ts
+ * `install`). */
+export let SCHEMA = 'schema'
+
+/** The fingerprint of the schema this file last had installed, or undefined
+ * for a file no install has finished in — one that may not have this table
+ * yet. */
+export let installed = (driver: Driver): string | undefined =>
+  driver.query(`select 1 from sqlite_schema where name = ?`, [META]).length
+    ? meta(driver).get(SCHEMA)
+    : undefined
+
 /**
  * The store's lineage identity: a string minted once and persisted, so it
  * survives a restart, a deploy and a handover — a returning client whose cursor
