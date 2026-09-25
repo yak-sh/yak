@@ -49,10 +49,16 @@ export type Rpc = (
   params?: unknown,
 ) => Promise<Record<string, unknown>>
 
-/** `yaks.app` → `https://yaks.app/mcp`; a full origin is used as given, so a
- * test can point at `http://localhost:8787`. */
+// This machine's own server (`yak serve`) answers plain http, and nothing else
+// is reached without TLS unless the line names the scheme.
+let LOOPBACK = /^(localhost|127(\.\d{1,3}){3}|\[::1\])(:\d+)?(\/|$)/
+
+/** `yaks.app` → `https://yaks.app/mcp`, `localhost:5173` →
+ * `http://localhost:5173/mcp`; a full origin is used as given. */
 export let doorUrl = (host: string): string =>
-  (/^https?:\/\//.test(host) ? host : `https://${host}`)
+  (/^https?:\/\//.test(host)
+    ? host
+    : `${LOOPBACK.test(host) ? 'http' : 'https'}://${host}`)
     .replace(/\/+$/, '') + '/mcp'
 
 // A Streamable HTTP server may send its response as a server-sent event

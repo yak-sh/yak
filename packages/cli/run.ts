@@ -444,6 +444,10 @@ export let cli = async (
     let found = commandFor(tools, rest) ??
       commandFor(await fetched(), rest) ??
       await (async () => {
+        // A host whose list never came is the answer: past this point a line
+        // it would have understood reads as an app's stray, and its words as
+        // that app's arguments.
+        if (why) throw new Error(why)
         let hit = config
           ? undefined
           : await opts.stray?.(rest[0], rest.slice(1), c)

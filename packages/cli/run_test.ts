@@ -178,6 +178,19 @@ Deno.test('`yak <app> <command>` is the same call, the app named by the word', a
   }])
 })
 
+Deno.test('a host whose tool list fails says why, and reads no arguments', async () => {
+  let refused = () => Promise.reject(new Error('connection refused'))
+  assertEquals(
+    await ran(appTools, ['graph', 'show', 'M-4455'], {
+      stray: appStray,
+      more: refused,
+    }),
+    1,
+  )
+  assertEquals(printed, ['yak: connection refused'])
+  assertEquals(asked, [])
+})
+
 Deno.test('a stray needs a second word, and a tool of its own is never one', async () => {
   // One word alone names nothing: `yak recipes` is a typo, not a command.
   assertEquals(await ran(appTools, ['recipes'], { stray: appStray }), 2)

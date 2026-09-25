@@ -40,6 +40,13 @@ let listed = async (): Promise<Tool[]> => {
 Deno.test('a host becomes the /mcp door it names', () => {
   assertEquals(doorUrl('yaks.app'), 'https://yaks.app/mcp')
   assertEquals(doorUrl('http://localhost:8787/'), 'http://localhost:8787/mcp')
+  assertEquals(doorUrl('localhost:5173'), 'http://localhost:5173/mcp')
+  assertEquals(doorUrl('127.0.0.1:5173'), 'http://127.0.0.1:5173/mcp')
+  assertEquals(doorUrl('[::1]:5173'), 'http://[::1]:5173/mcp')
+  assertEquals(
+    doorUrl('localhost.example.com'),
+    'https://localhost.example.com/mcp',
+  )
 })
 
 Deno.test('a line says which run it speaks for, and nothing when it is nobody', async () => {
