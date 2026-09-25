@@ -16,6 +16,8 @@
 //   There is no interactive transaction — nothing holds a lock open while your
 //   code decides what to write next. ./store.ts is built around that.
 
+import { render, type Stmt } from '@yaks/sql'
+
 /** A value D1 binds: its documented type table, and nothing else. A boolean is
  * bound as the 0/1 an integer column holds; bytes are bound as an
  * ArrayBuffer. */
@@ -92,4 +94,13 @@ export let unbind = (row: Row): Row => {
     if (Array.isArray(value)) row[key] = Uint8Array.from(value as number[])
   }
   return row
+}
+
+/** A @yaks/sql statement prepared on D1: rendered, and every value put through
+ * {@link bind}, so a statement may carry the plain SQLite values @yaks/sqlite's
+ * shared write path uses (a bigint, a byte array) and D1's narrower set is
+ * satisfied in exactly one place. */
+export let prepare = <S extends Prepared<S>>(db: D1Like<S>, s: Stmt): S => {
+  let r = render(s)
+  return db.prepare(r.sql).bind(...r.params.map(bind))
 }

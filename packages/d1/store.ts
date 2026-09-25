@@ -73,7 +73,6 @@ import {
   doomSql,
   looseSql,
   narrow,
-  render,
   type Stmt,
 } from '@yaks/sql'
 import {
@@ -87,7 +86,7 @@ import {
   touched,
 } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
-import { bind, type D1Like, type Prepared, type Row, unbind } from './d1.ts'
+import { type D1Like, prepare, type Prepared, type Row, unbind } from './d1.ts'
 import { bundles, gatherSql, type Query, sql, whole, wholeSql } from './read.ts'
 
 export type { Query }
@@ -174,13 +173,7 @@ export let storage = <S extends Prepared<S>>(
   base: Opts = {},
 ): Store => {
   let bears = deadly(vocab)
-  // `bind` at the boundary, so a statement may be built from the plain SQLite
-  // values @yaks/sqlite's shared write path uses (a bigint, a byte array) and
-  // D1's narrower set of types is satisfied in exactly one place.
-  let prep = (s: Stmt): S => {
-    let r = render(s)
-    return db.prepare(r.sql).bind(...r.params.map(bind))
-  }
+  let prep = (s: Stmt): S => prepare(db, s)
 
   // One statement, one round trip.
   let one = async (s: Stmt): Promise<Row[]> =>

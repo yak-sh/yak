@@ -19,7 +19,19 @@
 // flag the Workers runtime puts on its own and @yaks/secrets tries a seal again
 // for. Every statement here is safe to run twice: an upsert, a delete, a read.
 
-import type { D1Like, Prepared } from './d1.ts'
+import {
+  and,
+  col,
+  type CreateTable,
+  eq,
+  lt,
+  ne,
+  select,
+  type Stmt,
+  table,
+  val,
+} from '@yaks/sql'
+import { type D1Like, prepare, type Prepared } from './d1.ts'
 
 /** What a vault keeps for one secret — @yaks/secrets' `Sealed`, by shape. */
 export type Sealed = {
@@ -45,15 +57,58 @@ let SALT = 'salt'
 // caller waits for one before giving up.
 let LEASE = 30_000
 
-let SCHEMA = [
-  'create table if not exists yak_vault (k text primary key, v text not null)',
-  'create table if not exists yak_vault_lock' +
-  ' (k text primary key, holder text not null, expires integer not null)',
+let VAULT = 'yak_vault'
+let LOCK = 'yak_vault_lock'
+
+let key = { name: 'k', type: 'text', pk: true }
+let SCHEMA: CreateTable[] = [
+  {
+    t: 'create table',
+    name: VAULT,
+    ifNot: true,
+    cols: [key, { name: 'v', type: 'text', notNull: true }],
+  },
+  {
+    t: 'create table',
+    name: LOCK,
+    ifNot: true,
+    cols: [
+      key,
+      { name: 'holder', type: 'text', notNull: true },
+      { name: 'expires', type: 'integer', notNull: true },
+    ],
+  },
 ]
-let TAKE = 'insert into yak_vault_lock (k, holder, expires) values (?, ?, ?)' +
-  ' on conflict (k) do update set holder = excluded.holder,' +
-  ' expires = excluded.expires where yak_vault_lock.expires < ?' +
-  ' returning holder'
+
+// The lease on `k` for `holder` until `expires`, taken only over one that ran
+// out before `now`; it returns a row when it was taken.
+let take = (k: string, holder: string, expires: number, now: number): Stmt => ({
+  t: 'insert',
+  into: LOCK,
+  cols: ['k', 'holder', 'expires'],
+  rows: [[val(k), val(holder), val(expires)]],
+  upsert: [{
+    on: [col('k')],
+    set: {
+      holder: col('holder', 'excluded'),
+      expires: col('expires', 'excluded'),
+    },
+    when: lt(col('expires', LOCK), val(now)),
+  }],
+  returning: [col('holder')],
+})
+
+// A secret's row written, and whether one already there is replaced.
+let put = (k: string, v: string, replace: boolean): Stmt => ({
+  t: 'insert',
+  into: VAULT,
+  cols: ['k', 'v'],
+  rows: [[val(k), val(v)]],
+  upsert: [replace ? { on: [col('k')], set: { v: col('v', 'excluded') } } : {}],
+})
+
+let get = (k: string): Stmt =>
+  select({ cols: [col('v')], from: table(VAULT), where: eq(col('k'), val(k)) })
 
 // The D1 errors whose recommended action is "Retry the operation", from the
 // List of D1_ERRORs in Cloudflare's docs
@@ -117,15 +172,15 @@ export let d1Vault = <S extends Prepared<S>>(
   // Made once per vault, and asked again after a failure rather than failing
   // every call after it.
   let ready: Promise<unknown> | undefined
-  let run = async (sql: string, ...params: (string | number)[]) => {
+  let run = async (s: Stmt) => {
     try {
-      await (ready ??= db.batch(SCHEMA.map((s) => db.prepare(s))).catch((e) => {
-        ready = undefined
-        throw e
-      }))
-      return (await db.prepare(sql).bind(...params).all<
-        Record<string, string>
-      >()).results
+      await (ready ??= db.batch(SCHEMA.map((s) => prepare(db, s))).catch(
+        (e) => {
+          ready = undefined
+          throw e
+        },
+      ))
+      return (await prepare(db, s).all<Record<string, string>>()).results
     } catch (e) {
       throw flagged(e)
     }
@@ -168,31 +223,26 @@ export let d1Vault = <S extends Prepared<S>>(
     salt: async () => {
       if (salt) return salt
       let offer = crypto.getRandomValues(new Uint8Array(32))
-      await run(
-        'insert into yak_vault (k, v) values (?, ?) on conflict do nothing',
-        SALT,
-        await seal(SALT, base64(offer)),
-      )
-      let [row] = await run('select v from yak_vault where k = ?', SALT)
+      await run(put(SALT, await seal(SALT, base64(offer)), false))
+      let [row] = await run(get(SALT))
       return salt = unbase64(await open(SALT, row.v))
     },
     read: async (eid) => {
-      let [row] = await run('select v from yak_vault where k = ?', eid)
+      let [row] = await run(get(eid))
       return row ? JSON.parse(await open(eid, row.v)) as Sealed : undefined
     },
     seal: async (eid, sealed) => {
-      await run(
-        'insert into yak_vault (k, v) values (?, ?)' +
-          ' on conflict (k) do update set v = excluded.v',
-        eid,
-        await seal(eid, JSON.stringify(sealed)),
-      )
+      await run(put(eid, await seal(eid, JSON.stringify(sealed)), true))
     },
     drop: async (eid) => {
-      await run('delete from yak_vault where k = ?', eid)
+      await run({ t: 'delete', from: VAULT, where: eq(col('k'), val(eid)) })
     },
     all: async () => {
-      let rows = await run('select k, v from yak_vault where k != ?', SALT)
+      let rows = await run(select({
+        cols: [col('k'), col('v')],
+        from: table(VAULT),
+        where: ne(col('k'), val(SALT)),
+      }))
       return Promise.all(
         rows.map(async (r) =>
           [r.k, JSON.parse(await open(r.k, r.v))] as [string, Sealed]
@@ -205,18 +255,18 @@ export let d1Vault = <S extends Prepared<S>>(
         let until = Date.now() + LEASE
         for (let wait = 5;; wait = Math.min(wait * 2, 500)) {
           let now = Date.now()
-          if ((await run(TAKE, eid, me, now + LEASE, now)).length) break
+          if ((await run(take(eid, me, now + LEASE, now))).length) break
           if (now > until) throw new Error(`${eid} is locked elsewhere`)
           await new Promise((r) => setTimeout(r, wait))
         }
         try {
           return await fn()
         } finally {
-          await run(
-            'delete from yak_vault_lock where k = ? and holder = ?',
-            eid,
-            me,
-          )
+          await run({
+            t: 'delete',
+            from: LOCK,
+            where: and(eq(col('k'), val(eid)), eq(col('holder'), val(me))),
+          })
         }
       }),
   }
