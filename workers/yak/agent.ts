@@ -44,6 +44,7 @@ import type { Prop, PropSchema, Vocab } from '@yaks/vocab'
 import { META } from './directory.ts'
 import { vocabIn } from './declared.ts'
 import { letters } from './letters.ts'
+import { PUBLISHED } from './published.ts'
 import { composed, type Reach, read, written } from './reach.ts'
 import { titling } from './session.ts'
 import {
@@ -205,11 +206,12 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
  * the call (anon.ts `barred`), rather than being dropped. One roster, in one
  * order, whoever is asking — which is what a directory that snapshots
  * `tools/list` at submission and serves it forever needs from us
- * (declared.ts).
+ * (declared.ts). The names a directory listed and no tool carries any more
+ * follow, as their translations (published.ts).
  */
 export let platform = (ctx: Ctx): Plugin => ({
   name: 'yak/platform',
-  tools: TOOLS.map((t) =>
+  tools: [...TOOLS, ...PUBLISHED].map((t) =>
     ctx.person || openly(t) ? sugared(ctx, t) : barred(sugared(ctx, t), ctx.env)
   ),
 })

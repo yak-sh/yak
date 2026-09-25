@@ -204,10 +204,16 @@ export let ctxOf = (env: Env, who?: Who): Ctx => {
  * (dispatch.ts): each `uses` link's binding set to the connection's sentinel,
  * or to its key for a direct link, and a binding whose connection holds no
  * credential any more taken off. A name no link gives is not this function's
- * to touch. An app with no worker has nothing to bind — its first deploy calls
- * this again — and neither has a deploy with no vault or no Cloudflare token.
+ * to touch, except one in `gone`: a name its link was just taken from. An app
+ * with no worker has nothing to bind — its first deploy calls this again — and
+ * neither has a deploy with no vault or no Cloudflare token.
  */
-export let rebind = async (env: Env, store: string, app: string) => {
+export let rebind = async (
+  env: Env,
+  store: string,
+  app: string,
+  gone: string[] = [],
+) => {
   if (!env.CF_WORKERS_TOKEN || !vaulted(env)) return
   // Asked for when it is used: dispatch.ts reaches plugins.ts through the
   // pages it answers with, and plugins.ts is what names this module.
@@ -216,7 +222,7 @@ export let rebind = async (env: Env, store: string, app: string) => {
   if (!had) return
   let want = await envOf(ctxOf(env), app)
   let links = await readOf(env)(`.edge.from=${app}&.${USES}&*`)
-  let owned = links.map((l) => comp(l, USES).binding)
+  let owned = [...links.map((l) => comp(l, USES).binding), ...gone]
   for (let [name, value] of Object.entries(want)) {
     await setSecret(env, store, name, value)
   }

@@ -453,4 +453,24 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Return page-view counts for an app: the total over the last 30 days by default, and counts by page, referring site and country. These count page loads, not distinct people. Pass days for a different window, up to 90 days; if analytics is not configured, returns that fact instead. Aggregate counts and nothing else: no visitor is identified, no address and no session is kept, so this can never say who someone was or what one person did. Only the app's own members may ask. Documentation: https://yaks.app/docs/stats.",
   },
+  'sandbox_exec': {
+    'title': 'Run a build command (listed name)',
+    'description':
+      "The name sandbox_shell was listed under: run cmd in this space's build sandbox, in cwd (default /workspace), for at most timeout seconds (default and maximum 240). Returns the exit code and the last lines the command printed. New work calls sandbox_shell, which can also leave a long command running. Documentation: https://yaks.app/docs/code.",
+  },
+  'app_secret_set': {
+    'title': 'Set a worker secret',
+    'description':
+      "Give the app's worker a key it reads as env.NAME. The value becomes a connection the app uses directly (connection_list shows it), kept in the vault, and no tool reads it back. Setting a name again replaces its value. New work uses connection_need, where the person pastes the key on their connections page rather than in this chat. Returns the name and a confirmation, never the value. Documentation: https://yaks.app/docs/code.",
+  },
+  'app_secret_list': {
+    'title': 'List worker secrets',
+    'description':
+      "The names the app's worker reads as env.NAME from a connected key. Values are never returned, by this tool or any other. connection_list says the same with each connection's service and status. Documentation: https://yaks.app/docs/code.",
+  },
+  'app_secret_remove': {
+    'title': 'Remove a worker secret',
+    'description':
+      "Stop the app's worker reading env.NAME. A key handed to the worker itself, as app_secret_set hands one, is forgotten once no other app reads it, and nothing can restore it: to undo, set it again with the value. Any other connection stays on the person's connections page. Pass the name, not its value. Returns a removal confirmation. Documentation: https://yaks.app/docs/code.",
+  },
 }

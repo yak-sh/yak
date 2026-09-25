@@ -14,6 +14,7 @@ import { annotated, core } from '@yaks/mcp'
 import { read } from '@yaks/yaml'
 import { WORDS } from './content.ts'
 import { UNDO } from './guide.ts'
+import { PUBLISHED } from './published.ts'
 import { TOOLS } from './tools.ts'
 import { platformVocab } from './vocab.ts'
 
@@ -23,6 +24,7 @@ import { platformVocab } from './vocab.ts'
 let READS = [
   'about',
   'app_list',
+  'app_secret_list',
   'app_published',
   'app_versions',
   'app_stats',
@@ -42,6 +44,7 @@ let READS = [
 // not here: it only adds, and the undo of a create is the delete that is.
 let DESTROYS = [
   'app_delete',
+  'app_secret_remove',
   // It runs an app's own command, and this side cannot know which: a template
   // carrying nulls drops a component. So it takes the safe default rather than
   // a promise that would be wrong for half the commands there are.
@@ -51,6 +54,7 @@ let DESTROYS = [
   'app_unpublish',
   'app_update',
   'member_remove',
+  'sandbox_exec',
   'sandbox_shell',
   'sandbox_ship',
   'sandbox_stop',
@@ -78,6 +82,7 @@ let OUTSIDE = [
   'domain_status',
   'feedback',
   'member_add',
+  'sandbox_exec',
   'sandbox_shell',
   'sandbox_ship',
   // It mints an account at Stripe and hands back a link onto Stripe's own
@@ -90,8 +95,12 @@ let OUTSIDE = [
 
 let sorted = (names: string[]) => [...names].sort()
 
-let picked = (has: (t: (typeof TOOLS)[number]) => boolean) =>
-  sorted(TOOLS.filter(has).map((t) => t.name))
+// The connector's roster: the platform's tools, and the names a directory
+// listed that they answer under still (published.ts).
+let ROSTER = [...TOOLS, ...PUBLISHED]
+
+let picked = (has: (t: (typeof ROSTER)[number]) => boolean) =>
+  sorted(ROSTER.filter(has).map((t) => t.name))
 
 // The words are the file's (tools.yml, M-34605), and this is the pair of
 // checks that keeps the file and the roster one list: a row whose name the
@@ -105,13 +114,13 @@ Deno.test('the tool words are the file, and the file is the roster', () => {
   assertEquals(sorted(Object.keys(yml)), sorted(Object.keys(WORDS)))
   assertEquals(
     sorted(Object.keys(yml)),
-    sorted(TOOLS.map((t) => t.name)),
+    sorted(ROSTER.map((t) => t.name)),
     'tools.yml and the roster name different tools',
   )
   // And what a row wears is what its entry says — the one row with a slot
   // (`guide`) says the pages there are, so its description grows from the
   // file rather than matching it.
-  for (let t of TOOLS) {
+  for (let t of ROSTER) {
     assertEquals(t.title, yml[t.name].title, t.name)
     let said = yml[t.name].description
     let hole = said.indexOf('{{')
@@ -125,14 +134,14 @@ Deno.test('the tool words are the file, and the file is the roster', () => {
 })
 
 Deno.test('every platform tool has a title', () => {
-  for (let t of TOOLS) {
+  for (let t of ROSTER) {
     assert(t.title, `${t.name} has no title`)
     assert(t.title.length <= 40, `${t.name}'s title is a sentence: ${t.title}`)
     assert(!t.title.endsWith('.'), `${t.name}'s title ends in a period`)
   }
   assertEquals(
-    new Set(TOOLS.map((t) => t.title)).size,
-    TOOLS.length,
+    new Set(ROSTER.map((t) => t.title)).size,
+    ROSTER.length,
     'two tools share a title',
   )
 })
@@ -146,7 +155,7 @@ Deno.test('the destructive tools are the pinned ones', () => {
   // `annotated` derives, and an unsaid `destructive` on a writer means true.
   assertEquals(
     sorted(
-      TOOLS.filter((t) => annotated(t).destructiveHint).map((t) => t.name),
+      ROSTER.filter((t) => annotated(t).destructiveHint).map((t) => t.name),
     ),
     sorted(DESTROYS),
   )
@@ -157,7 +166,7 @@ Deno.test('the open-world tools are the pinned ones', () => {
 })
 
 Deno.test('a read tool is never destructive, and every write says which', () => {
-  for (let t of TOOLS) {
+  for (let t of ROSTER) {
     let a = annotated(t)
     assert(
       !(a.readOnlyHint && a.destructiveHint),

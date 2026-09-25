@@ -81,11 +81,12 @@ caller to apply in its own name:
   makes a `needed` connection and the `uses` link from the app, read by
   `binding` (default: the integration's name in capitals, `bindingOf`). For a
   service with no integration, `hosts` makes a custom key integration, and hosts
-  that differ from an existing one's are refused. An app that already uses a
-  connection through that integration is answered with it, and with its link
-  renamed where `binding` or `direct` was given. `need` never links an app to a
-  connection that holds a credential: giving an app a person's account is the
-  person's act. With `each`, the owner is the space asking each person, or a
+  that differ from an existing one's are refused; a `direct` key, handed to the
+  app's code and never sent by anything here, may name none. An app that already
+  uses a connection through that integration is answered with it, and with its
+  link renamed where `binding` or `direct` was given. `need` never links an app
+  to a connection that holds a credential: giving an app a person's account is
+  the person's act. With `each`, the owner is the space asking each person, or a
   person making their own, and an app is answered with the one that owner holds.
   The connection comes first in what it returns.
 - `list(read, owner)` returns the owner's connections and the `uses` links to

@@ -49,6 +49,7 @@ import {
   spending,
 } from './sandbox.ts'
 import { type Ctx, TOOLS } from './tools.ts'
+import { PUBLISHED } from './published.ts'
 import type { Who } from './session.ts'
 import { SECONDS } from './meter.ts'
 
@@ -93,7 +94,7 @@ let ctxOf = (env: Env, spend = spending()): Ctx => ({
 })
 
 let tool = (name: string) => {
-  let t = TOOLS.find((one) => one.name == name)
+  let t = [...TOOLS, ...PUBLISHED].find((one) => one.name == name)
   if (!t) throw new Error(`no tool ${name}`)
   return t
 }
@@ -176,6 +177,20 @@ Deno.test('the machine tools write, run and read, and a ship copies out', async 
 
   // Every one of those touched the same container, under the space's own id.
   assertEquals([...box.alive], [`build-${space.eid}`])
+})
+
+Deno.test('sandbox_exec, as the directory listed it, runs its cmd and answers the code first', async () => {
+  let { ctx, box } = await bench(() => ({
+    stdout: 'Finished\n',
+    stderr: 'error: no main\n',
+    exitCode: 101,
+  }))
+  let ran = await tool('sandbox_exec').run(ctx, {
+    cmd: 'cargo build',
+    timeout: 30,
+  })
+  assertEquals(ran.text, 'code 101\n\nFinished\nerror: no main')
+  assertEquals(box.ran, ['cargo build'])
 })
 
 Deno.test('a ship that matches nothing says what to look at', async () => {

@@ -67,6 +67,7 @@ import { HELLO } from './mcp-probe.ts'
 import { BOT } from './lib/bots.ts'
 import { GRAPH } from './mail-config.ts'
 import { managePath } from './route.ts'
+import { LISTING } from './published.ts'
 
 let LIVE = Deno.env.get('YAK_PROBE_URL') ?? ''
 let TOKEN = Deno.env.get('YAK_PROBE_TOKEN') ?? ''
@@ -160,6 +161,10 @@ slow(
         name: string
       }[]
       assert(listed.length > 40, `a roster of ${listed.length}`)
+      // What a directory published is what a client installed from it calls
+      // (published.ts), so every name it listed is listed here still.
+      let names = listed.map((t) => t.name)
+      assertEquals(LISTING.tools.filter((n) => !names.includes(n)), [])
 
       // ---- what anybody may read ----------------------------------------
       assertStringIncludes(await tool('about'), 'yaks.app is a place')
@@ -309,6 +314,30 @@ slow(
         await tool('connection_list', { space: mine }),
         'roster: needed',
       )
+      // The secret tools the directory listed: a key the worker reads as
+      // itself, or the sentence a runtime with no vault says instead.
+      let kept = await refused(tool, 'app_secret_set', {
+        space: mine,
+        app,
+        name: 'ROSTER_KEY',
+        value: 'roster-value',
+      })
+      assert(
+        kept.includes('ROSTER_KEY is set') || kept.includes("can't be saved"),
+        kept,
+      )
+      assertStringIncludes(
+        await tool('app_secret_list', { space: mine, app }),
+        app,
+      )
+      assertStringIncludes(
+        await tool('app_secret_remove', {
+          space: mine,
+          app,
+          name: 'ROSTER_KEY',
+        }),
+        'ROSTER_KEY removed',
+      )
       assert((await tool('app_errors', { space: mine, app })).length > 0)
       assertStringIncludes(await tool('app_list', { space: mine }), app)
       assert(
@@ -417,6 +446,9 @@ slow(
         'from the roster suite',
       )
       await box('sandbox_shell', { command: 'echo hello' }, 'hello')
+      await box('sandbox_exec', { cmd: 'echo listed' }, 'listed')
+      await box('sandbox_wait', { process: 'none' }, 'no such process')
+      await box('sandbox_stop', { process: 'none' }, 'no such process')
       await box('sandbox_ship', { app, paths: ['hello.txt'] }, 'hello.txt')
 
       // ---- the trash, and back out of it -------------------------------------

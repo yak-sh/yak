@@ -251,6 +251,12 @@ slow(
         need(g.read, { owner: 'space', app: 'app', ...asked })
       )
     }
+    // A key handed to the app's code directly is never sent from here.
+    await needs({ integration: 'SIGNING', direct: true })
+    assertEquals(of(await at(g, integrationEid('SIGNING')), 'integration'), {
+      name: 'SIGNING',
+      hosts: [],
+    })
   },
 )
 

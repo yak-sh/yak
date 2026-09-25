@@ -3,7 +3,7 @@
 // vault and nowhere else, a seal's state reaches the page, an app calls out
 // with it only as its link allows, and a webhook lands in the app's store only
 // when its signature holds.
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { envOf, integrationEid, need, registration } from '@yaks/connections'
 import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
@@ -23,6 +23,7 @@ import { db, named, platform } from './testing.ts'
 import { scan } from '@yaks/sql'
 import { KERNEL, meta } from './meta.ts'
 import { outbound, outboundPlugin } from './outbound.ts'
+import { PUBLISHED } from './published.ts'
 import { answered, routed } from './plugin.ts'
 import { opened } from './lib/token.ts'
 import { minted, type Who } from './session.ts'
@@ -607,5 +608,51 @@ slow(
     )).json() as Bundle[]
     let { source, event, verified } = kept.hook as Record<string, unknown>
     assertEquals([source, event, verified], ['Hub', 'opened', true])
+  },
+)
+
+slow(
+  'the secret tools the directory listed keep a key the worker reads as itself, name it, and forget it',
+  async () => {
+    let s = await setup()
+    await s.at.apply([{
+      entity: { eid: '$app' },
+      doc: { title: 'Notes' },
+      app: {
+        slug: 'notes',
+        space: s.space.eid,
+        version: 0,
+        access: 'public',
+        store: 'ada/notes.a1',
+      },
+    }], KERNEL)
+    let app = (await s.dir.app(s.space, 'notes'))!
+    let ctx = { env: s.p.env, dir: s.dir, person: s.person }
+    let run = async (name: string, args: Record<string, unknown> = {}) =>
+      (await PUBLISHED.find((t) => t.name == name)!.run(ctx, {
+        space: 'ada',
+        app: 'notes',
+        ...args,
+      })).text
+    let env = () => envOf(ctxOf(s.p.env), app.eid)
+
+    assertStringIncludes(
+      await run('app_secret_set', { name: 'WEATHER_KEY', value: 'sk-w' }),
+      'WEATHER_KEY is set',
+    )
+    assertEquals(await env(), { WEATHER_KEY: 'sk-w' })
+    // Set again, the name keeps its one connection and takes the new value.
+    await run('app_secret_set', { name: 'WEATHER_KEY', value: 'sk-w2' })
+    assertEquals(await env(), { WEATHER_KEY: 'sk-w2' })
+    assertStringIncludes(await run('app_secret_list'), 'notes: WEATHER_KEY')
+
+    assertStringIncludes(
+      await run('app_secret_remove', { name: 'WEATHER_KEY' }),
+      'WEATHER_KEY removed',
+    )
+    assertEquals(await env(), {})
+    assertEquals(await run('app_secret_list'), 'ada/notes has no secrets')
+    // Read by no other app, the key is forgotten with its name.
+    assertEquals(await ctxOf(s.p.env).graph.read('.connection'), [])
   },
 )

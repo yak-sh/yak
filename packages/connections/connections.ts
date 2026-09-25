@@ -216,7 +216,9 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
       `${name} is built, and sends its credential to its own hosts`,
     )
   }
-  if (!i && !hosts.length) {
+  // A direct key is handed to the app's own code and never sent by anything
+  // here, so it has no hosts to name.
+  if (!i && !hosts.length && !a.direct) {
     throw new Error(
       `no integration is named ${name}; for a custom key, name the hosts it ` +
         `may be sent to`,
