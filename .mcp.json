@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "cloudflare-api": {
+    "cloudflare-api-yak": {
       "type": "http",
       "url": "https://mcp.cloudflare.com/mcp"
     }
