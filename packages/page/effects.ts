@@ -11,8 +11,8 @@
 // graph fed only by a browser extension wants, rather than every address
 // somebody records queuing up against a command nobody installed.
 
+import type { Blobs } from '@yaks/blob'
 import type { Watch } from '@yaks/effects'
-import type { Driver } from '@yaks/sqlite'
 import { WEB } from './comp.ts'
 import { freezing } from './freeze.ts'
 import { archiver, blobsOf, type Options } from './host.ts'
@@ -21,7 +21,7 @@ export type { Options }
 
 /** The capture handler: `created(web)`, when an archiver was configured. */
 export let effects = (
-  host: { sql: Driver },
+  host: { blobs: Blobs },
   options: Options = {},
 ): Watch[] =>
   options.archive

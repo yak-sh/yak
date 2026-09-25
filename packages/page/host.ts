@@ -17,8 +17,7 @@
 // a graph fed only by A browser wants, since those bytes arrive over
 // `POST /page` and were never going to be refetched.
 
-import type { Driver } from '@yaks/sqlite'
-import { type Blobs, blobSchema, fileBlobs, sqliteBlobs } from '@yaks/blob'
+import { type Blobs, fileBlobs } from '@yaks/blob'
 import type { Archive } from './freeze.ts'
 
 /** The configuration `@yaks/page` reads. */
@@ -84,19 +83,12 @@ export let archiver = ({ run, timeout = 60_000 }: Run): Archive => {
 /**
  * Where this server's archived documents are stored.
  *
- * The default is the blob table the server already has — the same one
- * @yaks/blob keeps its text properties in, so a page's bytes are not a second
- * store to configure, back up and serve, and `GET /blob/<sha>` serves them as
- * it does everything else. An archived page is one document with every asset
- * inlined and is therefore often megabytes, so a server that would rather not
- * carry that in its database names a directory instead.
- *
- * The table is created here as well as in `@yaks/blob/rules`, because a server
- * may load this plugin without that one; `create table if not exists` is what
- * makes running both statements harmless.
+ * The default is the host's own blob store — the same one @yaks/blob keeps
+ * its text properties in, so a page's bytes are not a second store to
+ * configure, back up and serve, and `GET /blob/<sha>` serves them as it does
+ * everything else. An archived page is one document with every asset inlined
+ * and is therefore often megabytes, so a server that would rather not carry
+ * that in its database names a directory instead.
  */
-export let blobsOf = (host: { sql: Driver }, options: Options = {}): Blobs => {
-  if (options.bytes) return fileBlobs(options.bytes)
-  for (let statement of blobSchema()) host.sql.exec(statement)
-  return sqliteBlobs(host.sql)
-}
+export let blobsOf = (host: { blobs: Blobs }, options: Options = {}): Blobs =>
+  options.bytes ? fileBlobs(options.bytes) : host.blobs

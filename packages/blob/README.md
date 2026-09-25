@@ -265,8 +265,9 @@ entity. Repeating a successful upload uses the same address and entity ID.
   code, not serializable JSON configuration.
 
 These route options choose the upload/download backend. The `rules` sub-module
-continues to use SQLite for marked graph text properties. Missing `dir`, missing
-`bucket` or an unknown backend logs a reason and returns no routes.
+keeps marked graph text properties in the host's blob store (`host.blobs`, a
+table in the server's database). Missing `dir`, missing `bucket` or an unknown
+backend logs a reason and returns no routes.
 
 ## Bounded text inspection for tools
 
@@ -317,11 +318,11 @@ format remains accessible to application code.
 | `sizeOf`, `mediaTypeOf`, `served`                                    | Image dimensions and formats, and HTTP responses         |
 | `valueTools`, `VALUE_LIMIT`, `ValueTool`                             | Bounded text-inspection tools                            |
 
-| Sub-module export   | Purpose                                                      |
-| ------------------- | ------------------------------------------------------------ |
-| `@yaks/blob/vocab`  | `docs`, `keywords`, `derived` and declaration/read helpers   |
-| `@yaks/blob/rules`  | `rules(host)` creates the SQLite text table and graph plugin |
-| `@yaks/blob/routes` | `routes(host, options)`, backend helpers and route settings  |
+| Sub-module export   | Purpose                                                     |
+| ------------------- | ----------------------------------------------------------- |
+| `@yaks/blob/vocab`  | `docs`, `keywords`, `derived` and declaration/read helpers  |
+| `@yaks/blob/rules`  | `rules(host)`: the graph plugin over the host's blob store  |
+| `@yaks/blob/routes` | `routes(host, options)`, backend helpers and route settings |
 
 ## Composition
 

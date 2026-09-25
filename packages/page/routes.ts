@@ -27,8 +27,7 @@
 import type { Route } from '@yaks/api'
 import type { Bundle, Comp, Graph, Storage } from '@yaks/graph'
 import { detached } from '@yaks/graph'
-import type { Driver } from '@yaks/sqlite'
-import { served } from '@yaks/blob'
+import { type Blobs, served } from '@yaks/blob'
 import { DOC, TITLE } from '@yaks/doc'
 import { WEB } from './comp.ts'
 import { froze } from './freeze.ts'
@@ -57,7 +56,7 @@ let gone = () => new Response('not found', { status: 404 })
 
 /** `POST /page` and `GET /page/<eid>`. */
 export let routes = (
-  host: { graph: Graph; storage: Storage; sql: Driver },
+  host: { graph: Graph; storage: Storage; blobs: Blobs },
   options: Options = {},
 ): Route[] => {
   let blobs = blobsOf(host, options)

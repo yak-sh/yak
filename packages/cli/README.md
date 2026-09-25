@@ -142,8 +142,8 @@ present.
 
 A plugin entry is either a package specifier or an object with `use` and `with`
 fields. Each exported plugin factory receives `(host, options)`. The host
-contains the config, vocabulary, database connection, secrets vault, store,
-graph, request handler, tool runner, duties, process entity, request
+contains the config, vocabulary, database connection, secrets vault, blob store,
+store, graph, request handler, tool runner, duties, process entity, request
 authentication function, and shutdown signal. An entry without `with` receives
 an empty object. Option keys belong to the plugin.
 

@@ -94,6 +94,7 @@ import {
   type Watch,
 } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
+import { type Blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
 import { type Config, given, type Options, subpath, used } from './config.ts'
 import { stateDir } from './store.ts'
 import { understood } from './keywords.ts'
@@ -129,6 +130,10 @@ export type Host = {
    * its database, or memory for a graph in memory — what @yaks/secrets seals
    * into and a config's `{"secret": "NAME"}` is read from */
   vault: Local
+  /** where this graph keeps content-addressed text and bytes (@yaks/blob): a
+   * table in its own database — what a `store: blob` property is written to,
+   * and where @yaks/page keeps an archived page unless it names a directory */
+  blobs: Blobs
   /** where this program keeps what it remembers between commands on this
    * machine (./store.ts `stateDir`): a plugin remembering something for the
    * next command keeps it there */
@@ -639,6 +644,7 @@ export let compose = async (
   let sql = open(path)
   try {
     migrations(sql).ready()
+    for (let statement of blobSchema()) sql.query(statement)
     let store: Store | undefined
     // Search is a property of the declaration: a property marked `search: true`
     // is indexed, whoever declared it, so wiring @yaks/fts here rather than in
@@ -678,6 +684,7 @@ export let compose = async (
       vocab,
       sql,
       vault,
+      blobs: sqliteBlobs(sql),
       state: stateDir(),
       derived,
       me: selfEid(),
