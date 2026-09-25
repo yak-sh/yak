@@ -1,6 +1,6 @@
 // The application composes the two packages. SQLite builds no hidden index;
 // FTS owns the schema and the text predicate, including reads inside a tx.
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { type Driver, storage } from '@yaks/sqlite'
 import { Database } from '@yaks/sqlite/db'
@@ -61,4 +61,44 @@ Deno.test('storage composes FTS explicitly for document and non-document prose',
   assertEquals(found('ceramic'), [])
   assertEquals(found('enamel'), ['a'])
   assert(!store.ddl().some((s) => s.includes('fts5')))
+})
+
+Deno.test('.order=search puts the closest match first', () => {
+  let vocab = loadVocab({
+    $defs: {
+      doc: {
+        component: true,
+        type: 'object',
+        properties: {
+          title: { type: 'string', search: true },
+          body: { type: 'string', search: true },
+        },
+      },
+    },
+  })
+  let sqlite = new Database(':memory:')
+  using _close = { [Symbol.dispose]: () => sqlite.close() }
+  let db: Driver = {
+    query: (sql, params) => sqlite.prepare(sql).all(...params),
+    exec: (sql) => sqlite.exec(sql),
+  }
+  let text = fields(vocab)
+  let store = storage(db, vocab, { extend: [search(text, db)] })
+  store.install()
+  for (let stmt of schema(text)) db.exec(stmt)
+  store.tx((tx) =>
+    tx.patch([
+      {
+        entity: { eid: 'far' },
+        doc: { title: 'notes', body: 'a mug, among many other things kept' },
+      },
+      { entity: { eid: 'near' }, doc: { title: 'mug', body: "mug o'mug" } },
+      { entity: { eid: 'none' }, doc: { title: 'plate', body: 'plate' } },
+    ])
+  )
+  let found = (line: string) => store.read(line).map((b) => b.entity.eid)
+  assertEquals(found('mug .order=search'), ['near', 'far'])
+  assertEquals(found('mug .order=-search'), ['far', 'near'])
+  assertEquals(found("o'mug .order=search"), ['near'])
+  assertThrows(() => found('.doc! .order=search'), Error, 'nothing to rank by')
 })

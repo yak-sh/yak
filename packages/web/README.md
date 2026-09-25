@@ -55,7 +55,4 @@ routes still reach their own handlers.
 
 ## Limits
 
-- Session views still read some of the fleet server's session columns; on a yak
-  store they show a session's status, actor and claims, not its provider run.
-- `.order=search` and `.order=hot` are not served by @yaks/api.
 - `/web/app.js` is built with `deno bundle`, which Deno marks experimental.

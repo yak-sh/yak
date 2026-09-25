@@ -75,9 +75,12 @@ The pieces can be used independently:
 - `schema(fields, reads?)` returns SQL statements to create the indexes and
   triggers. It does not populate indexes from existing rows; call `heal()` or
   use `adopt()` for an existing database.
-- `search(fields)` compiles text clauses into FTS5 membership conditions. It
-  does not rank results. Pass it through the adapter's `extend` option to enable
-  text clauses in ordinary storage reads.
+- `search(fields, db?)` compiles text clauses into FTS5 membership conditions.
+  Pass it through the adapter's `extend` option to enable text clauses in
+  ordinary storage reads. Given the database's driver it also orders by
+  relevance: `.order=search` puts the closest match first and `.order=-search`
+  the weakest, ranking once per query among the rows the rest of it admits. The
+  best `RANKED` (1000) are put in order and any past them follow.
 - `find(db, fields, text, options?)` executes a ranked search. `hits()` returns
   the same `{ sql, params }` statement without executing it, for use with an
   asynchronous database. It returns `null` when there are no search terms or

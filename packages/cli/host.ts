@@ -623,7 +623,7 @@ export let compose = async (
     )
     store = storage(sql, vocab, {
       derived,
-      extend: text.length ? [...extend, search(text)] : extend,
+      extend: text.length ? [...extend, search(text, sql)] : extend,
       number: config.numbers ?? false,
       adopt: config.adopt ?? false,
     })

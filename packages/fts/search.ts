@@ -58,8 +58,16 @@ export let hits = (
   fields: Field[],
   text: string,
   opts: SearchOpts = {},
+): Stmt | null => ranked(fields, match(text), opts)
+
+// The same statement over a match expression already built from the words
+// (term.ts) — what `.order=search` ranks by (./compile.ts). Each row also
+// carries the entity's integer `owner`.
+export let ranked = (
+  fields: Field[],
+  t: string,
+  opts: SearchOpts = {},
 ): Stmt | null => {
-  let t = match(text)
   let arms = indexes(fields)
   if (!t || !arms.length) return null
   let context = opts.context ?? 10
@@ -83,7 +91,8 @@ export let hits = (
   // indexed component.
   return {
     sql: `with "hit" as materialized (${union})` +
-      ` select "entity"."eid" as entity, min("hit"."rank") as rank,` +
+      ` select "entity"."eid" as entity, "hit"."owner" as owner,` +
+      ` min("hit"."rank") as rank,` +
       ` "hit"."snippet" as snippet from "hit"` +
       ` join "entity" on "entity"."id" = "hit"."owner"` +
       ` where not exists (select 1 from "tombstone" "t"` +

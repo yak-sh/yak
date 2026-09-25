@@ -15,6 +15,13 @@ deno add jsr:@yaks/dreaming
 - `meta` — marks text in a transcript as a note: it is never delivered to anyone
   live, and is read later by a dream.
 
+`@yaks/dreaming/rules` adds `.order=hot` to every query: warmest first, by the
+curve a recall decays along. Each recall earns a day of stability, spacing
+multiplies it (the mean interval, in weeks), and the score falls off
+exponentially past the last recall. An entity never recalled counts its own last
+touch as one recall. A retired project, and whatever is filed under one, ranks
+at a tenth.
+
 The memories themselves belong to [@yaks/memory](../memory). This package covers
 what happens to them between conversations.
 
