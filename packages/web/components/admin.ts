@@ -10,9 +10,9 @@ import { type Row } from '../client.ts'
 export let censusComps = () => Object.keys(comps).sort()
 
 // A section lists by component PRESENCE, not primary kind: an entity
-// appears under EVERY component it carries. A facet (alias, email) always
+// appears under EVERY component it carries. A facet (repo, email) always
 // rides a higher-ranked kind — kindOf picks one, so a kind filter empties
-// its section (P-19 is alias{slug} yet kindOf=project). Presence picks all.
+// its section (P-19 wears repo yet kindOf=project). Presence picks all.
 export let inSection = (rows: Row[], kind: string): Row[] =>
   rows.filter((r) => r.comps[kind])
 

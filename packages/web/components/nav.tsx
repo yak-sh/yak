@@ -129,10 +129,9 @@ export let openAt = (eid: string, ev: MouseEvent) => {
 }
 
 // An id in the wild — T-num, bare num, raw eid, a sigilled eid fragment, or
-// an alias slug — resolved in db.ts resolveId's order; undefined while unloaded
-// or dead. An ambiguous fragment is refused, never treated as a miss. The slug
-// fallback is what lets a URL name an entity by handle (/home), matching the
-// CLI and MCP id doors.
+// an alias — resolved in the host's order; undefined while unloaded or dead.
+// An ambiguous fragment is refused, never treated as a miss. An alias resolves
+// here as it does at the CLI and MCP id doors.
 // Cache misses fall to serverEid — live.ts's addressed-sub sidecar —
 // so a token naming a live-but-unloaded entity still navigates once the boot
 // flip (T-18059) serves a partial working set. The fallback is async: it

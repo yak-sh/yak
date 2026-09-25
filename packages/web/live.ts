@@ -17,6 +17,7 @@ import {
   untracked,
 } from '@preact/signals'
 import {
+  aliasOf,
   awake,
   type Change,
   checkPrefix,
@@ -28,7 +29,6 @@ import {
   type Pinned,
   settled,
   shortParts,
-  slugsOf,
   type Snapshot,
   statusOf,
   vocab,
@@ -689,7 +689,8 @@ let refsTo = (value: string): Pred => ({
 let indexId = (eid: string, r?: Comps) => {
   if (!r) return
   if (r.entity?.num) numEids.set(r.entity.num, eid)
-  for (let s of slugsOf(r.alias)) aliasEids.set(s, eid)
+  let a = aliasOf(r)
+  if (a) aliasEids.set(a.name, a.eid)
   let hex = eid.replaceAll('-', '').toLowerCase()
   for (let n = 6; n <= Math.min(10, hex.length); n++) {
     let key = hex.slice(0, n)
@@ -704,9 +705,8 @@ let unindexId = (eid: string, r?: Comps) => {
   if (r.entity && numEids.get(r.entity.num) == eid) {
     numEids.delete(r.entity.num)
   }
-  for (let s of slugsOf(r.alias)) {
-    if (aliasEids.get(s) == eid) aliasEids.delete(s)
-  }
+  let a = aliasOf(r)
+  if (a && aliasEids.get(a.name) == a.eid) aliasEids.delete(a.name)
   let hex = eid.replaceAll('-', '').toLowerCase()
   for (let n = 6; n <= Math.min(10, hex.length); n++) {
     let key = hex.slice(0, n)
@@ -2647,6 +2647,19 @@ let nameFor = (token: string): Named | null | undefined => {
 // cache-side vocabulary (eidOf/findEid) tries this only after it misses.
 export let serverEid = (token: string): string | undefined =>
   nameFor(token)?.eid
+
+// The same resolution awaited, for a caller that runs once rather than on
+// every render: the cache first, then the server. undefined when nothing
+// answers to the token.
+export let resolveEid = async (token: string): Promise<string | undefined> => {
+  try {
+    let eid = findEid(token)
+    if (eid) return eid
+  } catch {
+    return undefined
+  }
+  return (await kickResolve(token))?.eid
+}
 
 // Reverse: an unloaded eid's naming (num, kind) for a crumb chip — undefined
 // while resolving, null once the server says it's gone.

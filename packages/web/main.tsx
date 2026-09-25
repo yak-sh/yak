@@ -1,7 +1,14 @@
 import { entityPath } from './url.ts'
 import { render } from 'preact'
-import { agreementProbe, boot, cache, clientId, config, ent } from './live.ts'
-import { idOf, slugsOf } from './types.ts'
+import {
+  agreementProbe,
+  boot,
+  clientId,
+  config,
+  ent,
+  resolveEid,
+} from './live.ts'
+import { idOf } from './types.ts'
 import { restore, route } from './components/nav.tsx'
 import { App } from './components/App.tsx'
 
@@ -11,19 +18,15 @@ config.client = clientId()
 config.agreement = agreementProbe(location.search)
 await boot()
 
-// The grandfather door: tasks-v1 linked '?task=<slug>', and old guidance also
-// used human ids there. Resolve once the cache is full and
-// REPLACE the URL — a legacy address shouldn't linger in history. An
-// unknown slug just renders the root: a dead old link is not a crash.
+// The grandfather door: tasks-v1 linked '?task=<alias>', and old guidance also
+// used human ids there. Resolve it like any id and REPLACE the URL — a legacy
+// address shouldn't linger in history. An unknown one just renders the root:
+// a dead old link is not a crash.
 let legacy = new URLSearchParams(location.search).get('task')
-if (legacy) {
-  let hit = Object.entries(cache.value).find(([eid, c]) =>
-    slugsOf(c.alias).includes(legacy) || idOf(ent(eid)) == legacy
-  )
-  if (hit) {
-    history.replaceState(null, '', entityPath(idOf(ent(hit[0]))))
-    route.value = location.pathname + location.search
-  }
+let eid = legacy ? await resolveEid(legacy) : undefined
+if (eid) {
+  history.replaceState(null, '', entityPath(idOf(ent(eid))))
+  route.value = location.pathname + location.search
 }
 
 // A cold launch at `/` — the manifest's start_url, so every app launch —

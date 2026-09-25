@@ -25,7 +25,7 @@ import {
   uuid,
   verdictName,
 } from './types.ts'
-import { checkPrefix, idOf, shortId, shortParts, slugsOf } from './types.ts'
+import { aliasOf, checkPrefix, idOf, shortId, shortParts } from './types.ts'
 import { moves, typeOf } from './edge.ts'
 import { fieldOp, parseProp, propAt, refOf } from './props.ts'
 import { local } from './time.ts'
@@ -443,12 +443,13 @@ export let UUID =
 // ("Tasks: add cancelled state…") ahead of the project called Task Graph.
 // An alias always rides: it is a typed handle whatever wears it.
 export let nearby = (all: Row[]) => (v: string, comp = '') => {
+  let names = aliasNames(all)
   let hit = nearest(
     v,
     all.filter((r) => !comp || r.comps[comp]).map((r) => ({
       eid: r.eid,
       id: idOf(r),
-      alias: r.comps.alias?.slug as string | undefined,
+      alias: names.get(r.eid),
       title: r.comps.doc?.title as string | undefined,
       named: byName.has(r.kind),
     })),
@@ -610,9 +611,16 @@ export let taskChanges = (
     .map(([name, comp]) => ({ eid, name, comp })),
 ]
 
-// Resolve 'T-3' / a bare num / a full eid / a SHORT-eid handle / an alias slug
-// to a row — the cache-side twin of db.ts resolveId (T-3684). Num first, then
-// exact eid, then a sigilled hex prefix (unique or it throws), then slug.
+// Each entity's alias among these rows, from the alias keys that name it.
+export let aliasNames = (all: Row[]) =>
+  new Map(all.flatMap((r) => {
+    let a = aliasOf(r.comps)
+    return a ? [[a.eid, a.name] as const] : []
+  }))
+
+// Resolve 'T-3' / a bare num / a full eid / a SHORT-eid handle / an alias to a
+// row among these. Num first, then exact eid, then a sigilled hex prefix
+// (unique or it throws), then an alias key's name.
 export let find = (all: Row[], id: string) => {
   let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
   if (m) return all.find((r) => r.num == +m![1])
@@ -639,7 +647,8 @@ export let find = (all: Row[], id: string) => {
   if (id.includes('#')) {
     throw new IdError(`${id}: expected [kind]# followed by 6–64 hex characters`)
   }
-  return all.find((r) => slugsOf(r.comps.alias).includes(id))
+  let named = all.map((r) => aliasOf(r.comps)).find((a) => a?.name == id)
+  return named && all.find((r) => r.eid == named.eid)
 }
 
 // The board sort: status column order, then priority, then num.
@@ -1244,10 +1253,11 @@ let onMine = (
     claims.filter((r) => r.comps.claim?.session == sess.eid).map((r) => r.eid),
   )
   if (!mine.size) return []
+  let names = aliasNames([...byEid.values()])
   let name = (eid: unknown) => {
     let r = byEid.get(String(eid))
     return String(
-      r?.comps.alias?.slug ?? r?.comps.doc?.title ?? r?.comps.session?.id ??
+      names.get(String(eid)) ?? r?.comps.doc?.title ?? r?.comps.session?.id ??
         'someone',
     )
   }

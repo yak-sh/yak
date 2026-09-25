@@ -83,6 +83,21 @@ let mark = (status: string, eid: string): Record<string, unknown> =>
 // without a server existing.
 useRoute(() => {})
 
+Deno.test('findEid reads an alias off the key that names the entity', () => {
+  cache.value = {
+    t: { entity: { eid: 't', num: 7 } },
+    k: {
+      entity: { eid: 'k', num: 0 },
+      key: { eid: 'k', of: 't', value: 'desk' },
+    },
+  }
+  assertEquals(findEid('desk'), undefined) // a key of no kind is not a name
+  applyLocal([{ eid: 'k', name: 'alias', comp: {} }])
+  assertEquals(findEid('desk'), 't')
+  applyLocal([{ eid: 'k', name: 'entity', comp: null }])
+  assertEquals(findEid('desk'), undefined)
+})
+
 Deno.test('findEid does not scan or subscribe after indexing', () => {
   let scans = 0
   cache.value = new Proxy({
