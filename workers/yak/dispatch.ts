@@ -123,12 +123,21 @@ export let scriptName = (store: string) =>
 //
 // It is deliberately tiny and deliberately first: it is the only thing
 // between the app's code and the grant.
-export let shim = (main = WORKER) =>
+//
+// `links` are the names the app's config gives the machine linked to its space
+// (`vpc_services`, tunnel.ts). Each is a door like the others, and never a
+// binding: `env.BOX.fetch('http://localhost/mail/inbound')` is the app itself
+// asking the kernel for `/api/link/mail/inbound`, and the kernel decides
+// whether it goes on to the machine. A Cloudflare binding on the app's script
+// would hand its code the machine whole, since a module reaches every binding
+// its script holds whatever the shim passes it.
+export let shim = (main = WORKER, links: string[] = []) =>
   `import app from ${JSON.stringify('./' + main)}
 export * from ${JSON.stringify('./' + main)}
 
 let GRANT = '${GRANT}'
 let SELF = '${SELF}'
+let LINKS = ${JSON.stringify(links)}
 
 export default {
   fetch(req, env, ctx) {
@@ -151,6 +160,21 @@ export default {
       },
     })
     let api = '/' + slug + '/api/'
+    // The machine: a URL as a binding to it takes one, or a path, and only
+    // its path and query go on.
+    let link = {
+      fetch: (input, init) => {
+        let asked = input instanceof Request ? input : null
+        let at = new URL(asked ? asked.url : String(input), 'http://link')
+        let out = new Request(
+          origin + api + 'link' + at.pathname + at.search,
+          asked ?? init,
+        )
+        if (asked && init) out = new Request(out, init)
+        out.headers.set(GRANT, self)
+        return env.KERNEL.fetch(out)
+      },
+    }
     return app.fetch(new Request(req, { headers }), {
       STORE: door(api, grant),
       FILES: door('/' + slug + '/', grant),
@@ -158,6 +182,7 @@ export default {
       // An explicitly requested binding keeps its name, even when it names
       // one of the convenience doors supplied to apps without that binding.
       ...env,
+      ...Object.fromEntries(LINKS.map((name) => [name, link])),
     }, ctx)
   },
 }
@@ -269,7 +294,7 @@ let unreachable = (e: unknown) =>
   e instanceof Error && e.message.includes('needs to be run remotely')
 
 // Neither of those is a worker to serve from: the app's files answer instead.
-let nowhere = (e: unknown) => missing(e) || unreachable(e)
+export let nowhere = (e: unknown) => missing(e) || unreachable(e)
 
 // One break of the app's own making, where its agent reads it — the app's
 // store, its serving version, and the members told. Both ways the app's code
@@ -650,9 +675,6 @@ export let carried = async (
 // deploy. Only secret_text bindings are kept: retaining resources would keep
 // a removed binding attached, while secrets cannot be read back to resend
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/bindings/).
-// A `vpc_services` binding names `vpc`, the service of the machine linked to
-// the app's space; binding it asks the token for Connectivity Directory Bind.
-//
 // The limits are the platform's, per script and not per plan: an app's worker
 // answers a page, so 50ms of CPU and 50 subrequests is roomy for a store read
 // and an outside call and small enough that a loop is stopped rather than
@@ -672,7 +694,6 @@ export let upload = async (
   modules: Module[],
   config: Config = {},
   bound: Bound[] = [],
-  vpc?: string,
 ) => {
   let names = new Set(['metadata', WRAPPER])
   for (let { name } of modules) {
@@ -697,7 +718,7 @@ export let upload = async (
   body.append(
     'metadata',
     new Blob([
-      JSON.stringify(metadata(config, bound, tag, env.WORKER_NAME, vpc)),
+      JSON.stringify(metadata(config, bound, tag, env.WORKER_NAME)),
     ], { type: 'application/json' }),
   )
   // Each part is named by the module name that imports it, and typed by what
@@ -708,7 +729,8 @@ export let upload = async (
     bytes: string | Uint8Array<ArrayBuffer>,
     type: string,
   ) => body.append(name, new Blob([bytes], { type }), name)
-  part(WRAPPER, shim(config.main), ESM)
+  let links = (config.vpc_services ?? []).map((v) => v.binding)
+  part(WRAPPER, shim(config.main, links), ESM)
   for (let m of modules) part(m.name, m.bytes, moduleType(m.name))
   return named(
     await answered(

@@ -143,7 +143,7 @@
       "noun": "admin",
       "verb": "tunnel",
       "title": "Link a machine to a space",
-      "description": "The machine a space is linked to, whose one service the space's apps reach through a vpc_services binding. With no act, what the link is. connect makes a tunnel and its service to the port given, rotate gives the tunnel a new token, and either keeps the token in this graph's vault as TUNNEL_TOKEN without printing it, where @yaks/tunnel's service reads it. disconnect removes the link. adopt records a tunnel and service made elsewhere, and is the platform's act.\n\n  yak admin tunnel yak --admin\n  yak admin tunnel yak adopt --tunnel <id> --service <id> --admin\n  yak admin tunnel ada connect --port 5173",
+      "description": "The machine a space is linked to, whose door the space's apps reach through the link's gateway (a vpc_services door in their config). With no act, what the link is. connect makes a tunnel, its service to the door's port given, and the gateway; rotate gives the gateway a new secret, and the tunnel a new token where the platform made it; adopt records a tunnel and service made elsewhere with a gateway in front, and is the platform's act. Each keeps what it is answered in this graph's vault without printing it, the token as TUNNEL_TOKEN and the secret as LINK_SECRET, where @yaks/tunnel's service reads them. disconnect removes the link.\n\n  yak admin tunnel yak --admin\n  yak admin tunnel yak adopt --tunnel <id> --service <id> --admin\n  yak admin tunnel ada connect --port 5174",
       "input": {
         "space": { "type": "string", "description": "the space’s slug" },
         "act": {
@@ -153,7 +153,7 @@
         },
         "port": {
           "type": "string",
-          "description": "connect: the port the machine serves on"
+          "description": "connect: the port the machine's link door listens on"
         },
         "tunnel": {
           "type": "string",

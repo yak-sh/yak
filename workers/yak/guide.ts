@@ -219,8 +219,9 @@ are created at deploy; a new Vectorize index names dimensions and metric, or a
 preset. app_deploy reports unsupported settings and app_list names the
 bindings. Removing a binding keeps its resource and data until the app is
 permanently deleted, including its 30 days in the trash. vpc_services
-({binding}) reaches the one service on a machine the space owner linked to the
-space; an installed app, or a space with no linked machine, is refused it.
+({binding}) reaches the paths the space owner opened on a machine they linked
+to the space, as env.BINDING.fetch(url); an installed app, or a space with no
+linked machine, is refused it.
 Server sources must be JavaScript ES modules (.js or .mjs); compile TypeScript
 before uploading.
 

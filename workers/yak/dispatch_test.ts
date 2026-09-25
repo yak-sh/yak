@@ -34,7 +34,9 @@ import {
   secrets,
   setSecret,
   SHIM,
+  shim,
   upload,
+  WORKER,
 } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { script } from './probe.ts'
@@ -448,6 +450,59 @@ Deno.test('the shim gives the app its doors and keeps the grant', async () => {
     assertEquals(
       asked[0].url,
       'https://jeff.yaks.app/recipes/api/query?.doc',
+    )
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+Deno.test('a vpc_services name is a door to the kernel as the app, never a binding', async () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yak-shim-' })
+  try {
+    Deno.writeTextFileSync(`${dir}/entry.js`, shim(WORKER, ['BOX']))
+    Deno.writeTextFileSync(
+      `${dir}/worker.js`,
+      `export default {
+        async fetch(req, env) {
+          await env.BOX.fetch('http://localhost/mail/inbound?to=a', {
+            method: 'POST',
+            body: 'a letter',
+          })
+          await env.BOX.fetch(new Request('http://x/hooks/y'))
+          return new Response('ok')
+        },
+      }`,
+    )
+    let { default: entry } = await import(`file://${dir}/entry.js`)
+    let asked: Request[] = []
+    let env = {
+      KERNEL: {
+        fetch: (r: Request) => {
+          asked.push(r)
+          return Promise.resolve(new Response('reached'))
+        },
+      },
+    }
+    await entry.fetch(
+      new Request('https://jeff.yaks.app/mail/', {
+        headers: {
+          'x-yak-grant': 'the-grant',
+          'x-yak-app-grant': 'the-app-grant',
+          'x-yak-app': 'mail',
+        },
+      }),
+      env,
+      {},
+    )
+    assertEquals(asked.map((r) => r.url), [
+      'https://jeff.yaks.app/mail/api/link/mail/inbound?to=a',
+      'https://jeff.yaks.app/mail/api/link/hooks/y',
+    ])
+    assertEquals(asked[0].method, 'POST')
+    assertEquals(await asked[0].text(), 'a letter')
+    assertEquals(
+      asked.map((r) => r.headers.get('x-yak-grant')),
+      ['the-app-grant', 'the-app-grant'],
     )
   } finally {
     Deno.removeSync(dir, { recursive: true })

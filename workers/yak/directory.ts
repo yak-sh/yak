@@ -118,7 +118,7 @@ export type Stripe = {
 }
 
 /** The machine a space is linked to (tunnel.ts, @yaks/tunnel): the tunnel it
- * dials out on, the Workers VPC Service its apps' workers bind to reach it, and
+ * dials out on, the Workers VPC Service the link's gateway is bound to, and
  * whether the platform made the pair or only records one made elsewhere. */
 export type Tunnel = { id: string; service: string; adopted: boolean }
 
@@ -157,8 +157,8 @@ export type Space = {
   // never moved, which is almost all of them; each entry redirects to the
   // address it lives at now, and stays reserved until somebody forgets it.
   slugs: string[]
-  // The machine this space is linked to, whose one service an app's worker
-  // reaches through a `vpc_services` binding (deploy_worker.ts). Null for a
+  // The machine this space is linked to, whose opened paths an app's worker
+  // reaches through a `vpc_services` door (tunnel.ts `reach`). Null for a
   // space with no linked machine, which is almost all of them.
   tunnel: Tunnel | null
 }

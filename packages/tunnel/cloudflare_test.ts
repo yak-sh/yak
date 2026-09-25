@@ -1,5 +1,11 @@
-import { assertEquals, assertRejects } from '@std/assert'
-import { type Api, connect, disconnect, tunnels } from './cloudflare.ts'
+import { assertEquals, assertNotEquals, assertRejects } from '@std/assert'
+import {
+  type Api,
+  connect,
+  disconnect,
+  gateways,
+  tunnels,
+} from './cloudflare.ts'
 
 type Seen = { method: string; path: string; body?: unknown }
 
@@ -16,7 +22,11 @@ let account = (answers: Record<string, [number, unknown]>) => {
       seen.push({
         method: String(init.method),
         path,
-        ...init.body ? { body: JSON.parse(String(init.body)) } : {},
+        ...init.body instanceof FormData
+          ? { body: init.body }
+          : init.body
+          ? { body: JSON.parse(String(init.body)) }
+          : {},
       })
       let [status, result] = answers[key] ?? [404, null]
       return Promise.resolve(Response.json(
@@ -84,4 +94,28 @@ Deno.test('rotate answers the new token', async () => {
   assertEquals(await tunnels(api).rotate('44444444-dddd'), 'fresh')
   let body = seen[0].body as { tunnel_secret: string }
   assertEquals(atob(body.tunnel_secret).length, 32)
+})
+
+Deno.test('a gateway is bound to the link’s service, with a new secret each time', async () => {
+  let at = '/workers/dispatch/namespaces/ns/scripts/link-1'
+  let { api, seen } = account({
+    [`PUT ${at}`]: [200, {}],
+    [`DELETE ${at}`]: [404, 'This Worker does not exist'],
+  })
+  let g = gateways(api, 'ns')
+  let key = await g.put('link-1', 's-1')
+  let form = seen[0].body as FormData
+  let meta = JSON.parse(await (form.get('metadata') as File).text())
+  assertEquals(meta.bindings, [
+    { type: 'vpc_service', name: 'BOX', service_id: 's-1' },
+    { type: 'secret_text', name: 'SECRET', text: key },
+  ])
+  assertEquals(atob(key).length, 32)
+  assertNotEquals(await g.put('link-1', 's-1'), key)
+  await g.remove('link-1')
+  assertEquals(seen.map((s) => `${s.method} ${s.path}`), [
+    `PUT ${at}`,
+    `PUT ${at}`,
+    `DELETE ${at}`,
+  ])
 })

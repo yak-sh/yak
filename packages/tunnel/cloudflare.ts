@@ -8,13 +8,22 @@
 // exactly that service and nothing else on the network, whatever URL it
 // fetches (https://developers.cloudflare.com/workers-vpc/api/).
 //
-// The token is a credential: whoever holds it can run the tunnel. So this
-// module hands it back to its caller and never keeps or logs it; where it goes
-// next is the caller's business (a vault, a sealed secret).
+// A gateway is the third: the Worker in front of a link (./link.ts), and the
+// only thing bound to its VPC Service, so that nothing but the platform that
+// uploaded it reaches the machine, and every request it passes on carries the
+// link's secret.
 //
-// The API token these calls are made with needs Cloudflare Tunnel Write and
-// the Connectivity Directory Admin role
-// (https://developers.cloudflare.com/workers-vpc/configuration/vpc-services/).
+// The tunnel's token and the link's secret are credentials: whoever holds the
+// token can run the tunnel, and whoever holds the secret can speak as the
+// link. So this module hands each back to its caller and never keeps or logs
+// it; where it goes next is the caller's business (a vault, a sealed secret).
+//
+// The API token the tunnel and service calls are made with needs Cloudflare
+// Tunnel Write and the Connectivity Directory Admin role
+// (https://developers.cloudflare.com/workers-vpc/configuration/vpc-services/);
+// the one a gateway is uploaded with needs Workers Scripts Edit and the
+// Connectivity Directory Bind role.
+import { GATEWAY } from './link.ts'
 
 /** The account, and the token its calls are made with. */
 export type Api = {
@@ -42,22 +51,26 @@ type Envelope = {
 
 /** One call, and what it answered, or the sentence Cloudflare refused it
  * with. Every reply is wrapped `{success, errors, result}`, so a failure is
- * read out of the body and not only off the status. */
+ * read out of the body and not only off the status. A body is JSON, or a
+ * form sent as the multipart it is. */
 let call = async (
   api: Api,
   method: string,
   path: string,
   body?: unknown,
 ): Promise<unknown> => {
+  let json = body !== undefined && !(body instanceof FormData)
   let r = await (api.fetch ?? fetch)(
     `https://api.cloudflare.com/client/v4/accounts/${api.account}${path}`,
     {
       method,
       headers: {
         authorization: `Bearer ${api.token}`,
-        ...body === undefined ? {} : { 'content-type': 'application/json' },
+        ...json ? { 'content-type': 'application/json' } : {},
       },
-      ...body === undefined ? {} : { body: JSON.stringify(body) },
+      ...body === undefined
+        ? {}
+        : { body: json ? JSON.stringify(body) : body as FormData },
     },
   )
   let text = await r.text()
@@ -80,7 +93,8 @@ let field = (v: unknown, name: string): string => {
   return got
 }
 
-/** A tunnel secret: 32 random bytes, base64, the size Cloudflare asks for. */
+/** A secret: 32 random bytes, base64, the size Cloudflare asks of a
+ * tunnel's. */
 let secret = () =>
   btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
 
@@ -139,6 +153,57 @@ export let services = (api: Api) => ({
   remove: (id: string): Promise<void> =>
     gone(call(api, 'DELETE', `/connectivity/directory/services/${id}`)),
 })
+
+/** The module a gateway runs, by name, and the date its runtime is pinned
+ * to. */
+export let MODULE = 'gateway.js'
+let DATE = '2026-09-01'
+
+/** The gateways in one dispatch namespace. */
+export type Gateways = {
+  put: (name: string, service: string) => Promise<string>
+  remove: (name: string) => Promise<void>
+}
+
+/** The gateways in front of links: one Worker per link in a Workers for
+ * Platforms dispatch namespace, where only the platform that owns the
+ * namespace can call it (./link.ts). */
+export let gateways = (api: Api, namespace: string): Gateways => {
+  let at = (name: string) =>
+    `/workers/dispatch/namespaces/${namespace}/scripts/${name}`
+  return {
+    /** The gateway `name` in front of the VPC Service `service`, made or
+     * made again with a new secret; answers the secret. From then on the
+     * gateway sends only the new one, so the machine answers again once it
+     * holds it too. */
+    put: async (name: string, service: string): Promise<string> => {
+      let key = secret()
+      let body = new FormData()
+      let meta = {
+        main_module: MODULE,
+        compatibility_date: DATE,
+        bindings: [
+          { type: 'vpc_service', name: 'BOX', service_id: service },
+          { type: 'secret_text', name: 'SECRET', text: key },
+        ],
+      }
+      body.append(
+        'metadata',
+        new Blob([JSON.stringify(meta)], { type: 'application/json' }),
+      )
+      body.append(
+        MODULE,
+        new Blob([GATEWAY], { type: 'application/javascript+module' }),
+        MODULE,
+      )
+      await call(api, 'PUT', at(name), body)
+      return key
+    },
+    /** The gateway gone. One that is already gone is not a failure. */
+    remove: (name: string): Promise<void> =>
+      gone(call(api, 'DELETE', at(name))),
+  }
+}
 
 // A delete of something already deleted has done what was asked.
 let gone = async (p: Promise<unknown>): Promise<void> => {

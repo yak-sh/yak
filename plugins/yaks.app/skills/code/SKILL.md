@@ -329,11 +329,13 @@ names are the convenience bindings described above.
 
 `vpc_services` reaches a machine of the space owner's own, such as a server on
 their computer, without opening a port on it. The owner links the machine to the
-space first; then `"vpc_services": [{ "binding": "BOX" }]` gives the worker
-`env.BOX`, and `env.BOX.fetch('http://localhost/path')` is a request to the one
-service on the machine the link names. Any `service_id` in the config is
-ignored: the service is the space's. A space with no linked machine, or an app
-installed from somewhere else, is refused the binding.
+space first and opens the paths apps may reach; then
+`"vpc_services": [{ "binding": "BOX" }]` gives the worker `env.BOX`, and
+`env.BOX.fetch('http://localhost/mail/inbound', init)` is a request to that path
+on the machine, made as the app. Only the path and query go on, and a path the
+owner has not opened is answered 404. Any `service_id` in the config is ignored:
+the machine is the space's. A space with no linked machine, or an app installed
+from somewhere else, is refused it.
 
 ### Taking money is not one of your keys
 

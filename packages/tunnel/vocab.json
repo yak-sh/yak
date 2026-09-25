@@ -8,7 +8,7 @@
       "component": true,
       "type": "object",
       "wire": false,
-      "description": "the Cloudflare Tunnel that links a machine to this entity, and the Workers VPC Service a worker binds to reach it",
+      "description": "the Cloudflare Tunnel that links a machine to this entity, and the Workers VPC Service the link's gateway reaches it through",
       "properties": {
         "id": {
           "type": "string",
@@ -18,7 +18,7 @@
         "service": {
           "type": "string",
           "stamped": true,
-          "description": "the VPC Service's id, which a worker's binding names"
+          "description": "the VPC Service's id, which the link's gateway is bound to"
         },
         "adopted": {
           "type": "boolean",

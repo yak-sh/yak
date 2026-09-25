@@ -85,9 +85,10 @@ import { revert } from './revert.ts'
 
 type Args = Record<string, unknown>
 
-// The vault name a linked machine's tunnel token is kept under, which the
-// box's config names for @yaks/tunnel's service.
+// The vault names a linked machine's tunnel token and link secret are kept
+// under, which the box's config names for @yaks/tunnel's service.
 let TUNNEL_TOKEN = 'TUNNEL_TOKEN'
+let LINK_SECRET = 'LINK_SECRET'
 
 let word = (a: Args, name: string): string | undefined =>
   typeof a[name] == 'string' ? a[name] as string : undefined
@@ -377,10 +378,11 @@ export let runs = (host: { vault: Local; state: string }): Runs => {
       return [said(call, `${now.bps} bps — ${now.rate} of each sale`)]
     }),
 
-    // The machine a space is linked to (workers/yak/tunnel.ts). A token the
-    // platform answers goes straight into this graph's vault, where
-    // @yaks/tunnel's service reads it, and is never printed: whoever holds it
-    // can run the tunnel.
+    // The machine a space is linked to (workers/yak/tunnel.ts). A token or a
+    // secret the platform answers goes straight into this graph's vault,
+    // where @yaks/tunnel's service reads it, and is never printed: whoever
+    // holds the token can run the tunnel, and whoever holds the secret can
+    // speak as the link.
     admin_tunnel: verb(async (call, vault, keep) => {
       let a = argsOf(call)
       let space = String(a.space)
@@ -395,6 +397,7 @@ export let runs = (host: { vault: Local; state: string }): Runs => {
         ? await relink(at.session, fields)
         : await linkNow(at.session, space)
       if (got.token) keep.push(sealed(TUNNEL_TOKEN, got.token))
+      if (got.secret) keep.push(sealed(LINK_SECRET, got.secret))
       let t = got.tunnel
       return [
         said(call, [
@@ -405,6 +408,9 @@ export let runs = (host: { vault: Local; state: string }): Runs => {
             : `${got.space}  no machine linked`,
           ...got.token
             ? [`token     kept in the vault as ${TUNNEL_TOKEN}`]
+            : [],
+          ...got.secret
+            ? [`secret    kept in the vault as ${LINK_SECRET}`]
             : [],
         ]),
       ]

@@ -20,6 +20,7 @@ import { outboxPlugin } from './outbox.ts'
 import type { Plugin } from './plugin.ts'
 import { seoPlugin } from './seo_door.ts'
 import { trashPlugin } from './trash.ts'
+import { tunnelPlugin } from './tunnel_door.ts'
 import { viewsPlugin } from './views.ts'
 
 export let PLUGINS: Plugin[] = [
@@ -32,4 +33,5 @@ export let PLUGINS: Plugin[] = [
   gitPlugin,
   connectionsPlugin,
   outboundPlugin,
+  tunnelPlugin,
 ]

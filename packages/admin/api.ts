@@ -187,11 +187,13 @@ export let setFee = (session: string, bps: number): Promise<Fee> =>
   said(posted(apex(FEE), { bps: String(bps) }, session))
 
 /** The machine a space is linked to (workers/yak/tunnel.ts), and, answered
- * once by a connect or a rotate, the token its `cloudflared` runs with. */
+ * once by the change that made them, the token its `cloudflared` runs with and
+ * the secret the link's gateway adds to every request. */
 export type Linked = {
   space: string
   tunnel: { id: string; service: string; adopted: boolean } | null
   token?: string
+  secret?: string
 }
 
 export let TUNNEL = '/api/tunnel'

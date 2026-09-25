@@ -30,10 +30,10 @@ export let configured = async (read: Read) => {
   return parsed
 }
 
-// Why a `vpc_services` binding cannot reach the machine linked to the app's
-// space, or null when it can. Only an app built in the space reaches it: an
-// installed copy's code was written elsewhere, and a link reaches into the
-// owner's own machine.
+// Why a `vpc_services` door cannot reach the machine linked to the app's
+// space, or null when it can; tunnel.ts `reach` asks again on every request.
+// Only an app built in the space reaches it: an installed copy's code was
+// written elsewhere, and a link reaches into the owner's own machine.
 let unreached = (space: Space, app: App, config: Config) =>
   !config.vpc_services?.length
     ? null
@@ -114,14 +114,7 @@ export let deployWorker = async (
       ],
     }
   }
-  worker = await upload(
-    env,
-    store,
-    modules,
-    config,
-    bound,
-    space.tunnel?.service,
-  )
+  worker = await upload(env, store, modules, config, bound)
   // What its code reads as env.NAME: a first upload is the first script there
   // is to bind the app's connections to (connections.ts). The worker is up
   // either way, so a binding that did not take is ours to hear about.

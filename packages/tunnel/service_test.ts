@@ -61,3 +61,37 @@ Deno.test('a connector that exits is started again', async () => {
   stop.abort()
   await running
 })
+
+// A port nothing listens on, for as long as it takes to hand it over.
+let free = () => {
+  let l = Deno.listen({ hostname: '127.0.0.1', port: 0 })
+  let { port } = l.addr
+  l.close()
+  return port
+}
+
+Deno.test('the door listens on its port and passes the link on to the server', async () => {
+  let stop = new AbortController()
+  let server = Deno.serve(
+    { hostname: '127.0.0.1', port: 0, signal: stop.signal, onListen() {} },
+    (req) => new Response(`served ${new URL(req.url).pathname}`),
+  )
+  let port = free()
+  let options = { secret: 's', port, routes: ['/mail/inbound'] }
+  let running = service({ config: server.addr }, options, stop.signal)
+  let ask = async (path: string) => {
+    let r = await fetch(`http://127.0.0.1:${port}${path}`, {
+      headers: { 'x-yak-link': 's' },
+    })
+    return `${r.status} ${await r.text()}`
+  }
+  try {
+    await tick()
+    assertEquals(await ask('/mail/inbound'), '200 served /mail/inbound')
+    assertEquals((await ask('/apply')).slice(0, 3), '404')
+  } finally {
+    stop.abort()
+    await running
+    await server.finished
+  }
+})

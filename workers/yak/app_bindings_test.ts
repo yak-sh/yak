@@ -236,7 +236,7 @@ Deno.test('app bindings survive redeploy, removal and trash until permanent dele
   }
 })
 
-Deno.test('a vpc_services binding reaches the machine linked to the space, and nothing else', async () => {
+Deno.test('a vpc_services door needs a linked machine, and the script never holds it', async () => {
   let k = await fixture()
   try {
     let service = '66666666-7777-4888-8999-aaaaaaaaaaaa'
@@ -253,9 +253,7 @@ Deno.test('a vpc_services binding reaches the machine linked to the space, and n
     let deployed = await k.tool('app_deploy')
     assertStringIncludes(deployed, 'service_id: BOX reaches the machine')
     let bindings = k.uploads[0].bindings as Record<string, unknown>[]
-    assertEquals(bindings.filter((b) => b.type == 'vpc_service'), [
-      { type: 'vpc_service', name: 'BOX', service_id: service },
-    ])
+    assertEquals(bindings.filter((b) => b.type == 'vpc_service'), [])
   } finally {
     k.done()
   }
