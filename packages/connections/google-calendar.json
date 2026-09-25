@@ -2,6 +2,7 @@
   "name": "google-calendar",
   "authorize": "https://accounts.google.com/o/oauth2/v2/auth",
   "token": "https://oauth2.googleapis.com/token",
+  "client": "google",
   "scopes": [
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/calendar.calendarlist.readonly"

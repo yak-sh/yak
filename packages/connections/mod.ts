@@ -51,6 +51,12 @@ export {
   type Read,
 } from './integrations.ts'
 export {
+  clientOf,
+  type Registered,
+  registered,
+  registration,
+} from './clients.ts'
+export {
   begin,
   bindingOf,
   connect,

@@ -41,13 +41,7 @@
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { link } from '@yaks/edge'
-import {
-  type Attempt,
-  type Client,
-  client,
-  OAuthError,
-  type Provider,
-} from '@yaks/oauth'
+import { type Attempt, type Client, client, OAuthError } from '@yaks/oauth'
 import {
   records,
   reveal,
@@ -65,6 +59,7 @@ import {
   known,
   type Read,
 } from './integrations.ts'
+import { clientOf } from './clients.ts'
 
 export let CONNECTION = 'connection'
 export let USES = 'uses'
@@ -104,14 +99,6 @@ export type Ctx = {
   vault: Vault
   /** the built integrations (default {@link BUILT}) */
   built?: Record<string, Integration>
-  /** the OAuth client registered with an integration: for a built one, the
-   * host's own registration */
-  client?: (
-    i: Integration,
-  ) =>
-    | Provider['client']
-    | undefined
-    | Promise<Provider['client'] | undefined>
   /** where the service sends the person back after they sign in */
   redirect?: string
   fetch?: typeof fetch
@@ -365,7 +352,7 @@ let signIn = async (c: Ctx, b: Bundle): Promise<Client> => {
   if (!i?.authorize || !i.token) {
     throw new Error(`${name} is connected with a pasted key, not by signing in`)
   }
-  let registered = await c.client?.(i)
+  let registered = await clientOf(c.vault, i, c.built)
   if (!connectable(i, registered)) {
     throw new Error(`no OAuth client is registered for ${name}`)
   }

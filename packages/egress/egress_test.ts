@@ -17,6 +17,7 @@ import {
   type Ctx,
   type Integration,
   need,
+  registration,
   resolve,
   USES,
 } from '@yaks/connections'
@@ -41,6 +42,7 @@ let BUILT: Record<string, Integration> = {
     name: 'calendar',
     authorize: 'https://auth.example/authorize',
     token: 'https://auth.example/token',
+    client: 'example',
     hosts: ['api.example'],
   },
   texts: { name: 'texts', hosts: ['api.texts.example'] },
@@ -78,18 +80,16 @@ let c: Ctx = {
   graph: g,
   vault,
   built: BUILT,
-  client: (i) =>
-    i.name == 'google-calendar'
-      ? { id: 'yaks-google', secret: 'shh' }
-      : { id: 'yaks' },
   fetch: net,
 }
-await g.apply(
-  ['space', 'app', 'widget', 'other', 'ann', 'bob'].map((eid) => ({
+await g.apply([
+  ...['space', 'app', 'widget', 'other', 'ann', 'bob'].map((eid) => ({
     entity: { eid },
     [eid == 'space' ? 'space' : eid.length == 3 ? 'person' : 'app']: {},
   })),
-)
+  registration('google', { id: 'yaks-google', secret: 'shh' }),
+  registration('example', { id: 'yaks' }),
+])
 let needs = async (integration: string, owner = 'space', each = false) =>
   (await g.apply(
     await need(g.read, { owner, app: 'app', integration, each }, BUILT),

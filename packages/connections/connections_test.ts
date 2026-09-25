@@ -22,6 +22,7 @@ import { effects } from '@yaks/effects'
 import {
   begin,
   BUILT as SHIPPED,
+  clientOf,
   connect,
   connectionsDoc,
   credential,
@@ -33,6 +34,7 @@ import {
   list,
   need,
   refresh,
+  registration,
   resolve,
 } from './mod.ts'
 import { runs } from './tools.ts'
@@ -55,6 +57,7 @@ let CALENDAR: Integration = {
   authorize: 'https://auth.example/authorize',
   token: 'https://auth.example/token',
   scopes: ['events'],
+  client: 'example',
   hosts: ['api.example'],
 }
 let TEXTS: Integration = { name: 'texts', hosts: ['api.texts.example'] }
@@ -95,14 +98,13 @@ let setup = async (...replies: [number, unknown][]) => {
     { entity: { eid: 'other' }, app: {} },
     { entity: { eid: 'ann' }, space: {} },
     { entity: { eid: 'bob' }, space: {} },
+    registration('example', { id: 'yaks', secret: 's' }),
   ])
   let e = endpoint(...replies)
   let c: Ctx = {
     graph: g,
     vault,
     built: BUILT,
-    client: (i) =>
-      i.name == 'calendar' ? { id: 'yaks', secret: 's' } : undefined,
     redirect: REDIRECT,
     fetch: e.fetch,
     now: () => NOW,
@@ -131,6 +133,11 @@ let at = async (g: { read: Ctx['graph']['read'] }, eid: string) =>
   (await g.read(`.eid=${eid}`))[0] as Bundle | undefined
 
 let of = (b: Bundle | undefined, name: string) => (b?.[name] ?? {}) as Comp
+
+// The names a vault keeps secrets under; the setup's OAuth client is always one.
+let kept = (vault: ReturnType<typeof ramVault>) =>
+  vault.all().map(([, s]) => s.name)
+let CLIENTS = ['oauth_client example']
 
 // The first graph a process writes through these plugins, its first HMAC and
 // digest, and the first URL it parses cost their start-up once (about 10ms);
@@ -254,6 +261,20 @@ slow(
 )
 
 slow(
+  'an OAuth client is kept once, and a custom integration never signs in as a built one’s',
+  async () => {
+    let { vault } = await setup()
+    let mine = { ...CALENDAR, name: 'mine', token: 'https://evil.example/t' }
+    assertEquals(await clientOf(vault, CALENDAR, BUILT), {
+      id: 'yaks',
+      secret: 's',
+    })
+    assertEquals(await clientOf(vault, mine, BUILT), undefined)
+    assertEquals(await clientOf(vault, TEXTS, BUILT), undefined)
+  },
+)
+
+slow(
   'refresh: a new token behind the same handle; a refused grant is broken, a failed wire is not',
   async () => {
     let { g, c, needs } = await setup(
@@ -285,7 +306,7 @@ slow(
     await connect(c, used, { key: 'sk-live' })
     await disconnect(c, used)
     assertEquals(await at(g, used), undefined)
-    assertEquals(vault.all(), [])
+    assertEquals(kept(vault), CLIENTS)
     let [now] = await g.read('.connection')
     assertEquals(of(now, 'connection').status, 'needed')
     assertEquals(
@@ -391,7 +412,7 @@ Deno.test('a deleted owner takes its connections, and their credentials', async 
   await connect(c, await needs({ integration: 'texts' }), { key: 'sk-live' })
   await g.apply([{ entity: { eid: 'space' }, tombstone: {} }])
   assertEquals(await g.read('.connection'), [])
-  assertEquals(vault.all(), [])
+  assertEquals(kept(vault), CLIENTS)
 })
 
 slow(

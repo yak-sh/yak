@@ -187,6 +187,37 @@
       "readOnly": true,
       "openWorld": true
     },
+    "admin_client": {
+      "tool": true,
+      "surfaces": ["cli"],
+      "noun": "admin",
+      "verb": "client",
+      "title": "Keep an OAuth client",
+      "description": "Keep an OAuth client yaks.app signs in to a service as, sealed in the platform's vault under its name; every integration naming that client signs in as it. The id and the secret are op:// references, read here and never printed.\n\n  yak admin client google 'op://Yak Shaving LLC/googleapis oauth/client id' 'op://Yak Shaving LLC/googleapis oauth/client secret' --admin",
+      "input": {
+        "name": {
+          "type": "string",
+          "description": "the client's name, as an integration's `client` names it"
+        },
+        "id": {
+          "type": "string",
+          "description": "an op:// reference to the client id"
+        },
+        "secret": {
+          "type": "string",
+          "description": "an op:// reference to the client secret, for a confidential client"
+        },
+        "as": { "type": "string", "description": "act as this account" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "required": ["name", "id"],
+      "options": { "positional": ["name", "id", "secret"] },
+      "openWorld": true
+    },
     "admin_tool": {
       "tool": true,
       "noun": "admin",

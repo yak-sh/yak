@@ -25,8 +25,6 @@ export const signins = (h: Pick<Harness, 'g' | 'vault'>) => {
     graph: h.g,
     vault: h.vault,
     redirect,
-    // A client the harness registered is kept on the integration itself.
-    client: (i) => i.client ? { id: i.client } : undefined,
   })
   const pending = new Map<Eid, { attempt: Attempt; redirect: string }>()
   // The integration is compared after the read: its name may be a URL.

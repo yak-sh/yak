@@ -78,6 +78,24 @@ Deno.test('the fee is a named act, in whole basis points', async () => {
   }
 })
 
+// A client is the platform's, and its id and secret are never a call's
+// argument: this graph keeps the call as its text. Both refused before any
+// account is read or anything is fetched.
+Deno.test('a client is kept by --admin, from op:// references only', async () => {
+  let ref = 'op://vault/item/field'
+  await assertRejects(
+    () => ask('admin_client', { name: 'g', id: ref }),
+    Refused,
+  )
+  for (let args of [{ id: 'the-id' }, { id: ref, secret: 'the-secret' }]) {
+    await assertRejects(
+      () => ask('admin_client', { name: 'g', admin: true, ...args }),
+      CallError,
+      'op://',
+    )
+  }
+})
+
 // Signing in AS somebody is the same named act, refused before a letter goes
 // anywhere; a word that is not an address is the bearer `yak login` keeps.
 Deno.test('login refuses what the argv did not name', async () => {

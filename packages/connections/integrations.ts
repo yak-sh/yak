@@ -37,8 +37,8 @@ export type Integration = {
   resource?: string
   /** the issuer its returns name (RFC 9207), where it says it names one */
   issuer?: string
-  /** a public client registered with it for this host (RFC 7591), as an MCP
-   * server asks */
+  /** the OAuth client it signs in as, by name (./clients.ts): one registration
+   * several integrations can share */
   client?: string
   /** the API hosts its credential may be sent to, and no others */
   hosts: string[]
@@ -65,7 +65,7 @@ export let keyed = (i: Integration): boolean => !i.token
 
 /** Whether a person can connect it here: by pasting a key, through a sign-in
  * that answers a key to any caller (OpenRouter), or through the OAuth client
- * this host is registered as with it. */
+ * it names, once that client is kept (./clients.ts). */
 export let connectable = (i: Integration, client?: unknown): boolean =>
   keyed(i) || i.answers == 'key' || !!client
 

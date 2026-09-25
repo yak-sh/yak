@@ -32,6 +32,7 @@
 import {
   begin,
   BUILT,
+  clientOf,
   connect,
   connectable,
   CONNECTION,
@@ -40,6 +41,7 @@ import {
   disconnect,
   envOf,
   INTEGRATION,
+  type Integration,
   keyed,
   known,
   list,
@@ -149,18 +151,9 @@ export type Connections = {
   /** outside services holding a grant from the person (connected.ts) */
   services: Service[]
   /** the built integrations nothing here is connected to yet, and this deploy
-   * can connect: one reached by OAuth needs its client in `OAUTH_CLIENTS` */
+   * can connect: one reached by OAuth needs the client it names kept in the
+   * vault (@yaks/connections `registration`) */
   built: { name: string; keyed: boolean }[]
-}
-
-// The OAuth clients yaks.app is registered as, one per integration
-// (`OAUTH_CLIENTS`). A value that does not read is no clients at all.
-let clients = (env: Env): Record<string, { id: string; secret?: string }> => {
-  try {
-    return JSON.parse(env.OAUTH_CLIENTS ?? '{}')
-  } catch {
-    return {}
-  }
 }
 
 // A read of the directory. Every read the verbs make is a filter line.
@@ -177,7 +170,6 @@ export let ctxOf = (env: Env, who?: Who): Ctx => {
       apply: (bundles) => meta(env).apply(bundles, who ? vouched(who) : KERNEL),
     },
     vault: vaultOf(env),
-    client: (i) => clients(env)[i.name],
     redirect: url(env, CALLBACK),
   }
 }
@@ -295,16 +287,19 @@ export let connectionsOf = async (
     }),
   )
   let taken = new Set(shown.map((s) => s.integration))
+  // A client is kept in the vault, so a deploy with none has no client either.
+  let offered = async (i: Integration) =>
+    !taken.has(i.name) && (!i.testing || enable.includes(i.name)) &&
+    connectable(i, vaulted(env) && await clientOf(vaultOf(env), i))
+  let built = []
+  for (let i of Object.values(BUILT)) {
+    if (await offered(i)) built.push({ name: i.name, keyed: keyed(i) })
+  }
   return {
     on: vaulted(env),
     list: shown.sort((a, b) => a.integration.localeCompare(b.integration)),
     services,
-    built: Object.values(BUILT)
-      .filter((i) =>
-        !taken.has(i.name) && (!i.testing || enable.includes(i.name)) &&
-        connectable(i, clients(env)[i.name])
-      )
-      .map((i) => ({ name: i.name, keyed: keyed(i) })),
+    built,
   }
 }
 

@@ -459,10 +459,8 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # SENTRY_DSN is where defects are sent (sentry.ts); unset, nothing is sent.
 # VAULT_KEY is the key the vault above is encrypted under: 32 random bytes in
 # base64 (`openssl rand -base64 32`). Changing it strands every key already
-# kept. OAUTH_CLIENTS is the OAuth client yaks.app is registered as with each
-# integration a person connects by signing in, as JSON:
-# `{"<integration>": {"id": "…", "secret": "…"}}`. Unset, the connections page
-# says keys cannot be saved here, or offers no Connect button.
+# kept, and every OAuth client kept in it (`yak admin client`). Unset, the
+# connections page says keys cannot be saved here.
 # CIMD is not a secret but rides the same door, because that door needs no
 # code deploy: `printf off | wrangler secret put CIMD` stops the well-known
 # claiming Client ID Metadata Document support, `printf on | ...` restores it,

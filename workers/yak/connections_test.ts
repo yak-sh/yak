@@ -4,7 +4,7 @@
 // with it only as its link allows, and a webhook lands in the app's store only
 // when its signature holds.
 import { assert, assertEquals } from '@std/assert'
-import { envOf, integrationEid, need } from '@yaks/connections'
+import { envOf, integrationEid, need, registration } from '@yaks/connections'
 import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
 import { isHandle } from '@yaks/secrets'
@@ -137,9 +137,10 @@ slow(
       (await s.shown(enable)).built.map((b) => b.name)
     let google = ['google-calendar']
     assertEquals(await offered(google), ['openrouter'])
-    s.p.env.OAUTH_CLIENTS = JSON.stringify({
-      'google-calendar': { id: 'yaks', secret: 's' },
-    })
+    await s.at.apply(
+      [registration('google', { id: 'yaks', secret: 's' })],
+      KERNEL,
+    )
     // Still in Google's testing mode: offered only on `?enable=`.
     assertEquals(await offered(), ['openrouter'])
     assertEquals(await offered(google), ['google-calendar', 'openrouter'])
@@ -313,13 +314,13 @@ slow(
   'a person signs in for their own connection and comes back to the app',
   async () => {
     let s = await setup()
-    s.p.env.OAUTH_CLIENTS = JSON.stringify({ Cal: { id: 'yaks' } })
-    await s.at.apply([{
+    await s.at.apply([registration('cal', { id: 'yaks' }), {
       entity: { eid: integrationEid('Cal') },
       integration: {
         name: 'Cal',
         authorize: 'https://auth.test/authorize',
         token: 'https://auth.test/token',
+        client: 'cal',
         hosts: ['api.cal.test'],
       },
     }], KERNEL)

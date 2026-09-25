@@ -6,7 +6,12 @@ import { checkNamespaces, checkToolNames, type Server } from '@yaks/mcp-client'
 import type { Remote } from './mcp_auth.ts'
 import { graphToolName, serverOf } from '@yaks/mcp-client/graph'
 import { discover } from '@yaks/mcp-client/oauth'
-import { INTEGRATION, integrationEid, known } from '@yaks/connections'
+import {
+  INTEGRATION,
+  integrationEid,
+  registered,
+  registration,
+} from '@yaks/connections'
 import {
   authorizedMCP,
   type MCPAuthAction,
@@ -152,20 +157,23 @@ export const graphMCP = (h: Pick<Harness, 'g' | 'vault'>, signin: SignIns) => {
         return { message: 'Authorization cancelled.' }
       }
       if (action === 'begin') {
-        // Where the server signs in, kept as its integration with the client
-        // this harness registered there.
+        // Where the server signs in, kept as its integration, and the client
+        // this harness registered there, kept under the integration's name.
         const redirect = s.oauth?.redirectUrl ?? REDIRECT
         const { integration, register } = await discover(s.url, {
           ...await handle.challenge(s),
           ...s.oauth?.scope ? { scope: s.oauth.scope } : {},
         })
         const client = s.oauth?.clientId ?? s.oauth?.clientMetadataUrl ??
-          (await known(g.read, integration.name, {}))?.client ??
+          (await registered(h.vault, integration.name))?.id ??
           await register(redirect)
-        await g.apply([{
-          entity: { eid: integrationEid(integration.name) },
-          [INTEGRATION]: { ...integration, client },
-        }])
+        await g.apply([
+          registration(integration.name, { id: client }),
+          {
+            entity: { eid: integrationEid(integration.name) },
+            [INTEGRATION]: { ...integration, client: integration.name },
+          },
+        ])
         return await signin.begin(id, s.url, redirect)
       }
       if (action !== 'complete') throw new Error('Unknown authorization action')

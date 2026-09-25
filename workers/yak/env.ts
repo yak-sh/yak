@@ -73,11 +73,6 @@ export type Env = {
   // key cannot be saved and the connections page says so.
   VAULT?: D1Like
   VAULT_KEY?: string
-  // The OAuth clients yaks.app is registered as with the integrations a
-  // person connects by signing in (connections.ts): a secret holding
-  // `{"<integration>": {"id": "…", "secret": "…"}}`. Unset, there is no
-  // Connect button, only the box to paste a key into.
-  OAUTH_CLIENTS?: string
   // Whether we claim Client ID Metadata Documents (identity.ts `cimd`). On
   // unless it says `off`; read per request, so dropping the claim is one
   // `wrangler secret put` and no deploy of new code.

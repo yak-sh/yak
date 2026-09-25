@@ -53,10 +53,15 @@ Google's app is in testing mode, where only the people Google lists may sign in,
 so yaks.app offers it only on a connections page opened with
 `?enable=google-calendar`.
 
-An integration reached by OAuth is connected through the client the host is
-registered as with it (`client` in the context, `OAUTH_CLIENTS` on yaks.app,
-keyed by the integration's name); `connectable` says whether one can be
-connected there at all, and the page offers only those.
+An integration reached by OAuth signs in as the client it names
+(`client: 'google'`), registered once with the service and shared by every
+integration that names it: google-calendar names `google`, as a later
+google-drive would. The client is a secret, kept as `oauth_client <name>`:
+`registration(name, {id, secret})` is the bundle that seals it, so the graph
+holds its handle and the vault its id and secret, and `clientOf` reads it back
+at sign-in. A custom integration never signs in as a built one's client, whose
+secret would go to the custom one's token endpoint. `connectable` says whether
+an integration can be connected there at all, and the page offers only those.
 
 ## Verbs
 
@@ -83,8 +88,7 @@ uses through an integration: the shared one, or with `each`, the one the owner
 holds. A host reads the space's ask with it before a person connects their own.
 
 The rest are for trusted code, and act on the `Ctx` they are given (the graph,
-its vault, the built integrations, the OAuth client registered with each, and
-the redirect):
+its vault, the built integrations, and the redirect):
 
 - `begin(ctx, connection)` returns the sign-in link and the attempt to keep
   until the person returns.

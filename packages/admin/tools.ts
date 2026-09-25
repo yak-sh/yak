@@ -7,6 +7,7 @@
 //   yak admin link                 a standing sign-in link for that account
 //   yak admin tool app_list        any connector tool, as that account
 //   yak admin query jeff/recipes .doc!    an app's store, through the filter grammar
+//   yak admin client google <id> <secret> --admin   keep an OAuth client, from 1Password
 //
 // The one rule these verbs are shaped around: A TEST ACCOUNT IS THE DEFAULT AND
 // EVERY OTHER ACCOUNT IS A NAMED ACT. No chain of defaults arrives at one —
@@ -29,7 +30,7 @@
 import { fileURLToPath } from 'node:url'
 import { argsOf, type Bundle, type Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import { type Local, sealed, unsealed } from '@yaks/secrets'
+import { isOpRef, type Local, opRead, sealed, unsealed } from '@yaks/secrets'
 import { CallError } from '@yaks/tools'
 import { ADMIN, BOT, isTestAddress } from '../../workers/yak/lib/bots.ts'
 import {
@@ -55,6 +56,7 @@ import {
   codeFor,
   doomedIn,
   feeNow,
+  keepClient,
   linkFor,
   renewing,
   rpc,
@@ -382,6 +384,32 @@ export let runs = (host: { vault: Local; state?: string }): Runs => {
         (argsOf(call).filters ?? []) as string[],
       )
       return [said(call, json(rows))]
+    }),
+
+    // The id and the secret are named by their op:// references and read
+    // here, so neither is ever an argument: this graph keeps a call as its
+    // text. What is printed is the name the client is kept under, never it.
+    admin_client: verb(async (call, vault, keep) => {
+      let a = argsOf(call)
+      if (a.owner !== true && a.admin !== true) {
+        throw new Refused(
+          'a client is the platform’s: add --admin (an agent) or --owner (Jeff)',
+        )
+      }
+      let name = word(a, 'name') ?? ''
+      let refs = { id: word(a, 'id') ?? '', secret: word(a, 'secret') }
+      for (let [arg, ref] of Object.entries(refs)) {
+        if (ref != null && !isOpRef(ref)) {
+          throw new CallError(arg, 'an op:// reference, never the value itself')
+        }
+      }
+      let read = (ref: string) => opRead()(ref, AbortSignal.timeout(10_000))
+      let at = acting(vault, a, keep, host.state)
+      await keepClient(at.session, name, {
+        id: await read(refs.id),
+        ...refs.secret ? { secret: await read(refs.secret) } : {},
+      })
+      return [said(call, `kept the ${name} OAuth client on ${zone()}`)]
     }),
 
     admin_tool: verb(async (call, vault, keep) => {

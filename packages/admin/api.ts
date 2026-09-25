@@ -18,6 +18,7 @@
 // rather than a puzzling 401.
 import type { Bundle, Comp } from '@yaks/graph'
 import { timed } from '@yaks/cli'
+import { type Registered, registration } from '@yaks/connections'
 import { type And, and, eq, ge, limit, want } from '@yaks/query'
 import { CallError } from '@yaks/tools'
 import { LINK } from '../../workers/yak/link.ts'
@@ -340,6 +341,25 @@ export let storeQuery = async (
   if (!r.ok) throw new Error(`${at} refused the query: ${JSON.stringify(body)}`)
   return body
 }
+
+// Keep an OAuth client in the platform store, sealed (@yaks/connections
+// `registration`): its id and secret go to the platform's vault, and the store
+// holds the handle. The graph tier is the door, as for a query of it; it keeps
+// no call's text, and its write log skips a bundle that carries a secret.
+export let keepClient = async (
+  session: string,
+  name: string,
+  client: Registered,
+) =>
+  saidBy(
+    await rpc(session)('tools/call', {
+      name: 'graph_apply',
+      arguments: {
+        app: PLATFORM_STORE,
+        change: [registration(name, client)],
+      },
+    }),
+  )
 
 // An app's `/me` (workers/yak/apps.ts) is deliberately absent from this file.
 // It answers for ONE app's store, so asking it a question about the person —
