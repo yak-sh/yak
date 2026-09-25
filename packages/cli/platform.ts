@@ -26,14 +26,15 @@ import { cached, forget, remember, type Roster } from './store.ts'
 import { type Listed, spelling } from './tool.ts'
 
 /** The tool list for a host: the cached one, or an `initialize` handshake
- * followed by `tools/list`. The protocol version is negotiated on that same
- * path and cached beside the list. */
+ * followed by `tools/list` — always the latter when `fresh`. The protocol
+ * version is negotiated on that same path and cached beside the list. */
 export let rosterOf = async (
   host: string,
   ask: Rpc,
   state?: string,
+  fresh = false,
 ): Promise<Roster> => {
-  let kept = cached(host, state)
+  let kept = fresh ? null : cached(host, state)
   if (kept) return kept
   let hello = await initialize(ask)
   let listed = await ask('tools/list')
@@ -164,8 +165,11 @@ let toolOf = (roster: Roster, t: Listed): Command => ({
 
 /** Every tool this server lists, as a subcommand. This is the list that costs
  * a round trip (run.ts `more`), so a command that never needs it pays
- * nothing. */
-export let listed = async (c: Ctx): Promise<Command[]> => {
-  let roster = await rosterOf(c.host, c.ask, c.state)
+ * nothing, and `fresh` asks the server past the cache. */
+export let listed = async (
+  c: Ctx,
+  o: { fresh?: boolean } = {},
+): Promise<Command[]> => {
+  let roster = await rosterOf(c.host, c.ask, c.state, o.fresh)
   return roster.tools.map((t) => toolOf(roster, t))
 }

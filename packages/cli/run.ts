@@ -18,8 +18,11 @@
 // graph this command opens, or an MCP server's `tools/list` — asked for only
 // when the commands already in hand did not match the first word, so
 // `yak login` still works with no graph in sight, and printed on the usage
-// page as a reason when it cannot be had. `stray` is the other half: a first
-// word nothing claimed. `yak recipes add_recipe` is an app and one of its
+// page as a reason when it cannot be had. A list that came from a cache is
+// trusted for what it holds, never for what it lacks: a word it does not have
+// is asked of the source again (`fresh`) before anything else reads it, since
+// the server behind a cached address may list tools the cache never saw.
+// `stray` is the other half: a first word nothing claimed. `yak recipes add_recipe` is an app and one of its
 // commands, and only something that knows about apps can recognize that, so it
 // is asked last and only when nothing else matched.
 
@@ -116,8 +119,8 @@ export type Opts = {
    * host. */
   host?: string
   /** More commands, where gathering them costs a composition or a round
-   * trip. */
-  more?: (c: Ctx) => Command[] | Promise<Command[]>
+   * trip. `fresh` asks past any cache the list is kept in. */
+  more?: (c: Ctx, o?: { fresh?: boolean }) => Command[] | Promise<Command[]>
   /** A command for a first word nothing else claimed. */
   stray?: (
     word: string,
@@ -398,10 +401,13 @@ export let cli = async (
     // nothing works.
     let extra: Command[] | undefined
     let why: string | undefined
-    let fetched = async (): Promise<Command[]> => {
-      if (extra || !opts.more) return extra ?? []
+    let asked = false
+    let fetched = async (fresh = false): Promise<Command[]> => {
+      if (!opts.more || (extra && (!fresh || asked))) return extra ?? []
+      asked ||= fresh
       try {
-        extra = [...await opts.more(c)]
+        extra = [...await opts.more(c, { fresh })]
+        why = undefined
       } catch (e) {
         extra = []
         why = (e as Error).message
@@ -444,6 +450,7 @@ export let cli = async (
     // the graph lacks, not an app somewhere else.
     let found = commandFor(tools, rest) ??
       commandFor(await fetched(), rest) ??
+      commandFor(await fetched(true), rest) ??
       await (async () => {
         // A host whose list never came is the answer: past this point a line
         // it would have understood reads as an app's stray, and its words as

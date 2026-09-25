@@ -136,6 +136,21 @@ Deno.test('a table that costs a round trip is not asked on a line that misses it
   assertEquals(asks, 1)
 })
 
+Deno.test('a word a cached table lacks is asked past the cache before it is an app', async () => {
+  let fresh: boolean[] = []
+  let more: Opts['more'] = (_c, o) => {
+    fresh.push(!!o?.fresh)
+    return [
+      o?.fresh
+        ? { noun: 'task', verb: 'list', description: '', run: () => 7 }
+        : { name: 'task_list', description: '', run: () => 0 },
+    ]
+  }
+  assertEquals(await ran([], ['task', 'list'], { more, stray: appStray }), 7)
+  assertEquals(fresh, [false, true])
+  assertEquals(asked, [])
+})
+
 Deno.test('`yak command` builds the command call, with the app it was given', async () => {
   assertEquals(
     await ran(appTools, [

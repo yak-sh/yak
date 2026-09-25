@@ -106,8 +106,11 @@ let local: typeof import('./local.ts') | undefined
 
 // Where this command's tools come from: the graph a config names, opened here,
 // or the MCP server the command named.
-let table = async (c: Ctx): Promise<Command[]> =>
-  c.config ? (local ??= await import('./local.ts')).commands(c) : listed(c)
+let table = async (
+  c: Ctx,
+  o?: { fresh?: boolean },
+): Promise<Command[]> =>
+  c.config ? (local ??= await import('./local.ts')).commands(c) : listed(c, o)
 
 /** What `yak` itself is, besides the tools it lists. */
 export let YAK: Opts = {
