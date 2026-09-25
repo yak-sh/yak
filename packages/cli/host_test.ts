@@ -10,13 +10,16 @@ import { processDoc, selfEid } from '@yaks/process'
 import { effectDoc } from '@yaks/effects'
 import { runs as effectRuns } from '@yaks/effects/tools'
 import {
-  compose,
+  compose as composing,
+  type Config,
   dbOf,
+  every,
   facet,
-  FACETS,
   type Facets,
+  type Load,
   type Options,
   read,
+  type Role,
   writer,
 } from './host.ts'
 import { sealed } from '@yaks/secrets'
@@ -143,6 +146,11 @@ let serving = (host: { handler?: Handler }): Handler => {
   if (!host.handler) throw new Error('this host composed no handler')
   return host.handler
 }
+
+// Every role the config's graph has: what a test here assembles, unless it is
+// about which roles a process serves.
+let compose = (config: Config, load?: Load) =>
+  composing(config, every(config), load)
 
 let write = (path: string, body: unknown) =>
   Deno.writeTextFileSync(path, JSON.stringify(body))
@@ -313,7 +321,7 @@ Deno.test('a host that names itself writes as itself, and a plugin may say who e
   // nothing about the rest — which is the host's own writing.
   let ana = { by: 'ana', via: 'her-run' }
   let told: Plugged = {
-    routes: {
+    rules: {
       authenticate: () => (r) => r.headers.get('authorization') ? ana : null,
     },
   }
@@ -352,7 +360,7 @@ Deno.test('a command line writes as the session it names, through the same door 
   // The door knows one run by its `x-via`, as @yaks/session's does.
   let ana = { by: 'ana', via: 'her-run' }
   let told: Plugged = {
-    routes: {
+    rules: {
       authenticate: () => (r) =>
         r.headers.get('x-via') == 'her-run' ? ana : null,
     },
@@ -421,12 +429,12 @@ Deno.test('a graph with no `process` word signs nothing', async () => {
 })
 
 Deno.test('two plugins may not both say who is calling', async () => {
-  let who: Plugged = { routes: { authenticate: () => () => ({ by: 'a' }) } }
+  let who: Plugged = { rules: { authenticate: () => () => ({ by: 'a' }) } }
   await assertRejects(
     () =>
       compose(
         { db: ':memory:', plugins: ['a', 'b'] },
-        only({ a: who, b: { routes: { ...who.routes } } }),
+        only({ a: who, b: { rules: { ...who.rules } } }),
       ),
     Error,
     'a door has one',
@@ -479,11 +487,59 @@ Deno.test('two plugins may not both host the routes', async () => {
   )
 })
 
-Deno.test('a plugin that exports no facet is a typo, not a plugin', async () => {
+Deno.test('a process imports the facets of the roles it serves, and no others', async () => {
+  let ran: string[] = []
+  let busy: Plugged = {
+    effects: { effects: () => [] },
+    service: { service: () => void ran.push('busy') },
+  }
+  let asked = (roles: Role[]) => {
+    let seen: string[] = []
+    let load: Load = (spec, name) => {
+      seen.push(`${spec}/${name}`)
+      return only({ shop, busy })(spec, name)
+    }
+    return composing(
+      { db: ':memory:', plugins: ['shop', 'busy'] },
+      roles,
+      load,
+    ).then(async (host) => {
+      await host.duties(AbortSignal.abort())
+      await host.close()
+      return seen.sort()
+    })
+  }
+  // A plugin's `./tools` comes with the first call of one of its tools, and
+  // nothing here calls one.
+  let graph = ['rules', 'vocab']
+  let of = (spec: string, names: string[]) => names.map((n) => `${spec}/${n}`)
+  assertEquals(
+    await asked(['graph']),
+    [...of('busy', graph), ...of('shop', graph)],
+  )
+  assertEquals(ran, [], 'a process that does not serve a service ran it')
+  // A plugin's service is a role of its own, so serving it imports that one
+  // facet of that one plugin.
+  assertEquals(
+    await asked(['graph', 'effects', 'busy']),
+    [
+      ...of('busy', [...graph, 'effects', 'service']),
+      ...of('shop', ['effects', ...graph]),
+    ].sort(),
+  )
+  assertEquals(ran, ['busy'])
+})
+
+Deno.test('a service role names a plugin the config lists', async () => {
   await assertRejects(
-    () => compose({ db: ':memory:', plugins: ['nope'] }, only({})),
+    () =>
+      composing(
+        { db: ':memory:', plugins: ['shop'] },
+        ['graph', '@yaks/mial'],
+        only({ shop }),
+      ),
     Error,
-    'exports no facet',
+    'no plugin @yaks/mial',
   )
 })
 
@@ -503,7 +559,6 @@ Deno.test('a facet that fails to import is loud; one that is absent is skipped',
     SyntaxError,
     'broken',
   )
-  assertEquals(FACETS.includes('rules'), true)
 })
 
 Deno.test('a rule sees the graph it is part of, and an effect fires on a commit', async () => {

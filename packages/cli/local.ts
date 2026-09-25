@@ -9,29 +9,66 @@
 // start. `yak serve` is one more of those commands: a tool that stays up
 // answering HTTP over the same file (@yaks/api).
 //
+// Listing the commands opens nothing: the tools a graph offers are declared in
+// its plugins' `./vocab` (host.ts `words`), so the usage page, a help page and
+// a mistyped word cost no database. Running one opens the graph for the roles
+// that command's process serves (host.ts `compose`): the graph, and whatever
+// else its tool declares it needs — `serve` answers HTTP, so its process
+// serves `web`.
+//
 // A command line runs a tool exactly as the HTTP server does: it writes a
 // `call` row, the tool runner executes it, and what came back is shown through
-// the plugins' views (./answer.ts). So
-// the record of a tool a person typed and a tool an agent requested is
-// identical, and the rules, the post-commit effects and the attribution are
-// one set for both.
+// the plugins' views (./answer.ts). So the record of a tool a person typed and
+// a tool an agent requested is identical, and the rules, the post-commit
+// effects and the attribution are one set for both.
 //
 // This module is imported only by a command that named a config, because
-// importing it opens a database and pulls in every plugin the config names — a
-// cost `yak login` on a machine with no graph should not pay.
+// importing it pulls in the graph and every plugin's words — a cost `yak login`
+// on a machine with no graph should not pay.
 
 import { type Actor, offered } from '@yaks/graph'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools'
 import { registry, show, terminal } from './answer.ts'
-import { read, used } from './config.ts'
+import { type Config, read, used } from './config.ts'
 import { VIA } from './rpc.ts'
 import type { Command, Ctx } from './run.ts'
-import { compose, dbOf, type Served } from './host.ts'
+import {
+  compose,
+  dbOf,
+  type Declared,
+  every,
+  type Role,
+  type Served,
+  words,
+} from './host.ts'
 
-// One graph per config path, for the life of the process: listing the tools
-// and running one use the same assembled graph, and opening the file twice
-// would mean two writers in one process.
+// One graph per config path and set of roles, for the life of the process:
+// every call a command makes goes through the same assembled graph, and
+// opening the file twice for the same roles would mean two writers in one
+// process for no reason.
 let held = new Map<string, Promise<Served>>()
+
+/**
+ * The roles a command's process serves: the graph, the tool's own (`serve`
+ * serves `web`), and — until the effects role reads every commit from the
+ * journal, whoever wrote it — the effects and every plugin's service, one pass
+ * of each on the way in, so what a command writes has its effects run and a
+ * machine with no server still gets its duties done.
+ *
+ * TODO(T-39522): a command takes `effects` and the service roles only where no
+ * live process holds their lease, once effects are read from the journal; and
+ * a process that stays up takes the roles its config gives it rather than all
+ * of them.
+ */
+export let rolesOf = (
+  config: Config,
+  tool: Pick<Declared, 'roles'>,
+): Role[] => [
+  ...new Set([
+    ...every(config).filter((r) => r != 'web'),
+    ...tool.roles ?? [],
+  ]),
+]
 
 // On the way in, a command does whatever is overdue and nobody else is doing:
 // the effect sweep a crash interrupted, the scheduled wakes that came due
@@ -46,17 +83,25 @@ let drained = async (composing: Promise<Served>): Promise<Served> => {
   return host
 }
 
-/** The graph a config names, open — and whatever was overdue on it, done,
- * unless `duties` is false (`--no-duties`), which leaves every duty to
- * another process. Assembled once per config path;
- * {@link close} closes it when the command is done. */
-export let opened = (path: string, duties = true): Promise<Served> => {
-  let host = held.get(path)
+/** The graph a config names, open for the roles a command's process serves —
+ * and whatever was overdue on it, done, unless `duties` is false
+ * (`--no-duties`), which leaves every duty to another process. Assembled once
+ * per config path and roles; {@link close} closes it when the command is
+ * done. */
+export let opened = (
+  path: string,
+  roles: Role[],
+  duties = true,
+): Promise<Served> => {
+  let key = JSON.stringify([path, roles])
+  let host = held.get(key)
   if (!host) {
     let config = read(path)
     held.set(
-      path,
-      host = drained(compose(duties ? config : { ...config, duties: false })),
+      key,
+      host = drained(
+        compose(duties ? config : { ...config, duties: false }, roles),
+      ),
     )
   }
   return host
@@ -73,7 +118,7 @@ export let close = async (code?: number): Promise<void> => {
 
 /** Who a command line writes as: the answer the host's door gives a request
  * naming this line's session in `x-via`, exactly as it answers one arriving
- * over HTTP (@yaks/session/routes), so a session's writes are its own however
+ * over HTTP (@yaks/session/rules), so a session's writes are its own however
  * they reached the graph. A door that knows no such session answers this
  * process ({@link writer} in ./host.ts), and a line with no session, typed at a
  * terminal, writes as the config's `person` through it: an agent's shell always
@@ -96,14 +141,16 @@ export let signer = async (
 
 /** The tools of the graph a config names that are offered on a command line,
  * as subcommands a person types — the list `cli` gathers when the command
- * named a config (run.ts `more`). */
+ * named a config (run.ts `more`). Read off the plugins' words: nothing is
+ * opened until one of them runs. */
 export let commands = async (c: Ctx): Promise<Command[]> => {
-  let host = await opened(c.config!, c.duties)
+  let config = read(c.config!)
+  let said = await words(config)
   // The views are imported when an answer is first drawn, never to list.
-  let plugins = () => (read(c.config!).plugins ?? []).map(used)
+  let plugins = () => (config.plugins ?? []).map(used)
   let views: ReturnType<typeof registry> | undefined
   let drawn = () => views ??= registry(plugins())
-  return host.tools.filter(offered('cli')).map((declared) => ({
+  return said.tools().filter(offered('cli')).map((declared) => ({
     ...declared,
     // A tool arrives declaring its arguments as JSON Schema — the same
     // document `tools/list` sends — so a command typed against a local graph
@@ -111,6 +158,11 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
     // identically. Nothing is converted here: a transport that wants them in
     // another form restates them on its own side (@yaks/mcp `core`).
     run: async (args: Record<string, unknown>): Promise<number> => {
+      let host = await opened(
+        c.config!,
+        rolesOf(config, declared),
+        c.duties,
+      )
       // Write the `tool` rows a call's `to` points at first: a call naming an
       // entity nothing created would be a dangling reference. Done once per
       // process, by whichever caller gets there first (@yaks/tools `ensure`).

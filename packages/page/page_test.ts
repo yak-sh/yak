@@ -18,7 +18,7 @@ let host = async (): Promise<Served> =>
     db: ':memory:',
     plugins: ['@yaks/doc', '@yaks/blob', '@yaks/page', '@yaks/api'],
     numbers: false,
-  })
+  }, ['graph', 'web', 'effects'])
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined

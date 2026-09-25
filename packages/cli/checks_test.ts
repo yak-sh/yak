@@ -34,7 +34,7 @@ let host = () =>
     // A person reads these reports and types the ids back, so this host is
     // one that opts into the human number line.
     numbers: true,
-  })
+  }, ['graph'])
 
 // One check, asked the way a door asks: write the call, run it, read the prose.
 let ask = async (h: Served, name: string): Promise<string> => {

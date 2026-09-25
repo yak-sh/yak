@@ -38,7 +38,7 @@ export type Door = {
   /** the session this command line is part of, sent on the `x-via` header —
    * it records what wrote something, and is never a credential. A host that
    * stores transcripts resolves it to that session and attributes the writes
-   * to it (@yaks/session/routes); one that does not ignores the header. */
+   * to it (@yaks/session/rules); one that does not ignores the header. */
   via?: string | null
   fetch?: (request: Request) => Response | Promise<Response>
 }

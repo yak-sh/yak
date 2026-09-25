@@ -7,6 +7,7 @@
     "serve": {
       "tool": true,
       "surfaces": ["cli"],
+      "roles": ["web"],
       "title": "Answer HTTP for this graph",
       "description": "Listen on a TCP port and answer HTTP requests for this graph: POST /apply, GET or POST /query, the /ws subscription socket, POST /mcp, and every route the loaded plugins add. The port and network interface come from the configuration that opened the graph unless these arguments override them. This call does not return while the server is up. It returns when the server stops, and its result reports where it listened and for how long; while it runs, its execution state stays 'running', which is how the record of a server that is still up differs from one that has stopped.",
       "input": {

@@ -1,51 +1,46 @@
 /**
- * The host: the graph a config file names, opened and assembled — the step
- * every `yak` command shares.
+ * The graph a config file names, opened by a process for the roles it serves.
  *
- * A **host** here means whichever process opened the graph: a one-shot `yak`
- * command, or a process that stays up answering HTTP.
+ * A plugin says what it contributes, one facet per subpath: the components and
+ * tools it declares (`@yaks/mail/vocab`), what a write means (`/rules`), the
+ * functions behind its tools (`/tools`), what runs after a commit
+ * (`/effects`), the work it keeps doing while a process is up (`/service`), the
+ * HTTP it adds (`/routes`), and how its entities are drawn (`/views`, `/tui`).
+ * It never says where any of that runs. A process serves roles, and imports
+ * only the facets of the roles it serves:
  *
- * There is no server process to start. A config file names a graph, and
- * {@link compose} is what opens it: a command line calls it to run one tool in
- * its own process (local.ts) and exits. Listening on a port is one of those
- * tools — `serve`, declared and implemented by
- * {@link https://jsr.io/@yaks/api | @yaks/api}, which takes the
- * {@link Host.handler} assembled here and hands it to the runtime. One SQLite
- * file in WAL mode accepts both at once, so serving HTTP is one more process
- * rather than the process everything else waits on.
+ * ```
+ * graph       vocab, rules, tools   open the file, admit writes, run tool calls
+ * web         routes                the HTTP a listener answers with
+ * effects     effects               what runs after a commit, and the sweep
+ * @yaks/mail  that plugin's service the timer or poll one plugin keeps up
+ * ```
  *
- * A host is not written; it is assembled. This module reads a config naming
- * plugin packages and imports six modules from each, one per subpath: the
- * components and tools it declares (`@yaks/mail/vocab`), what a write means
- * (`/rules`), the functions behind the tools an agent may call (`/tools`),
- * what runs after a commit (`/effects`), the HTTP routes it adds (`/routes`)
- * and the work it keeps doing while the host is up (`/service`). This file
- * calls those six subpaths a plugin's {@link FACETS}. A subpath a package does
- * not export is skipped; a subpath that exists and fails to import is an
- * error, never a skip. Over the plugins it opens one SQLite file, and nothing
- * else is wired in: a running server is a config file, a list of packages, and
- * whichever of their tools somebody called.
+ * The first three are {@link ROLES}, which every graph has; a plugin with a
+ * `./service` brings a role of its own, named by its package. The config names
+ * the plugins; each process picks its roles. `yak serve` serves `web`, the
+ * role @yaks/api's `serve` declares. A `yak` command serves commands and
+ * rendering, which are its own (./run.ts, ./answer.ts), and reaches the graph
+ * either through a server or by composing the graph role here itself
+ * (local.ts). A role this process does not serve costs it nothing: its facets
+ * are never imported, so a command that opens the graph to read it never loads
+ * a line of HTTP, and a process that serves no `web` never asks a plugin for a
+ * route.
  *
- * Nothing here serves HTTP. A config that wants a listener names
- * {@link https://jsr.io/@yaks/api | @yaks/api}, the plugin that turns the
- * routes into {@link Host.handler} and brings the `serve` verb, and one that
- * wants an agent's door names {@link https://jsr.io/@yaks/mcp | @yaks/mcp},
- * whose `/mcp` is a route like any other. A config that names neither gets a
- * host that opens the graph and runs tools, and the `/routes` facets of the
- * plugins it did name are never asked for.
+ * {@link compose} is the one place a graph is assembled: it imports the facets,
+ * opens one SQLite file, builds the graph over the plugins' rules, and wires in
+ * what the other roles bring. A subpath a package does not export is skipped;
+ * one that exists and fails to import is an error, never a skip. Nothing here
+ * binds a port: `serve`, declared and implemented by
+ * {@link https://jsr.io/@yaks/api | @yaks/api}, listens with the
+ * {@link Host.handler} built here, and only a config naming @yaks/api has one.
  *
  * ```ts
  * import { compose } from '@yaks/cli/host'
  *
- * // let host = await compose({ db: 'graph.db', plugins: ['@yaks/session', '@yaks/harness'] })
- * // Deno.serve(host.handler)
+ * // let host = await compose({ db: 'graph.db', plugins: ['@yaks/task'] }, ['graph'])
+ * // console.log(await host.graph.read('.task'))
  * ```
- *
- * A plugin is a package — no registry, no manifest, no activation step, and
- * nothing to implement on its main entry point. Its `exports` map names the
- * subpaths it has, and each part of the system imports only the subpath it
- * needs, so a browser loading `@yaks/task/vocab` never reaches the SQL that
- * `@yaks/task/rules` would. See {@link FACETS} and the package README.
  *
  * @module
  */
@@ -62,9 +57,11 @@ import {
   type NamedTool,
   type Plugin,
   then,
+  toolName,
 } from '@yaks/graph'
 import { type Runner, runner, toolsDoc } from '@yaks/tools'
 import { loadTools, type Runs, type Search, tier } from '@yaks/graph/tools'
+import { toolsIn } from '@yaks/vocab/tools'
 import {
   type Keywords,
   loadVocab,
@@ -122,6 +119,9 @@ export {
  * them. */
 export type Host = {
   config: Config
+  /** the roles this process serves over the graph ({@link ROLES}): the
+   * facets it imported, and so what else is wired in below */
+  roles: readonly Role[]
   vocab: Vocab
   storage: Store
   sql: Driver
@@ -142,13 +142,13 @@ export type Host = {
    * that watches a component only while one of its tools runs */
   fx: Effects
   /** every route of this host as one request handler — built by the listed
-   * plugin that hosts routes ({@link RoutesFacet.handler}, @yaks/api), and
-   * absent where the config named no such plugin. Whether any process listens
-   * with it is the `serve` tool's business (@yaks/api). */
+   * plugin that hosts routes ({@link RoutesFacet.handler}, @yaks/api) in a
+   * process serving `web`, and absent anywhere else. Whether any process
+   * listens with it is the `serve` tool's business (@yaks/api). */
   handler?: Handler
   /** every HTTP route the listed plugins contributed, in the order the config
-   * names them. Gathered only where a plugin hosts them: nothing here answers
-   * a request, so a host with no such plugin never asks. */
+   * names them. Gathered only by a process serving `web` where a plugin
+   * hosts them: nothing else here answers a request. */
   routes: Route[]
   /** every tool declared across the plugins, joined to the code behind it,
    * with this graph's own generic tier (@yaks/graph `tier`) first. One list: a
@@ -162,11 +162,12 @@ export type Host = {
    * function and writes the result back, for a command line and an HTTP
    * request alike. */
   runner: Runner
-  /** Every duty this process may run: the effect sweep, and each
-   * plugin's `./service`. Each is taken under a lease named for the package
-   * that owns it (@yaks/effects `holding`), so of all the processes over one
-   * graph exactly one is running each — a second long-running process waits,
-   * and takes over when a killed holder's lease expires.
+  /** Every duty this process may run: the effect sweep where it serves
+   * `effects`, and each plugin's `./service` where it serves that plugin. Each
+   * is taken under a lease named for the package that owns it (@yaks/effects
+   * `holding`), so of all the processes over one graph exactly one is running
+   * each — a second long-running process waits, and takes over when a killed
+   * holder's lease expires.
    *
    * Runs until `signal` aborts; left out, that signal is this host's own, so
    * it stops with {@link Served.close}. Pass an already-aborted signal for one
@@ -179,10 +180,11 @@ export type Host = {
    * start-up effect compares against to tell its own creation from a child
    * process's. */
   me: Eid
-  /** who is calling — the same answer @yaks/api's own endpoints get, so a
-   * plugin's route can attribute what it writes (`signed` in @yaks/api)
-   * instead of writing as nobody. At most one plugin may answer it; where it
-   * names nobody, the answer is this host process itself ({@link writer}). */
+  /** who is calling — the answer every door over this graph gets, a command
+   * line and @yaks/api's endpoints alike, so what a caller writes is
+   * attributed to it (`signed` in @yaks/api) instead of to nobody. At most one
+   * plugin answers it ({@link RulesFacet.authenticate}); where it names
+   * nobody, the answer is this host process itself ({@link writer}). */
   who: Authenticate
   /** This host shutting down, as one fact: aborted by {@link Served.close}
    * before the last transaction and before the database is closed. A plugin
@@ -193,24 +195,33 @@ export type Host = {
   stopping: AbortSignal
 }
 
-/** The six modules a host imports from a plugin, one subpath each. `views` is
- * not among them: a renderer is the caller's to import — the web UI, or the
- * `yak` command showing a tool's answer (./answer.ts) — never a host's. */
-export let FACETS = [
-  'vocab',
-  'rules',
-  'tools',
-  'effects',
-  'routes',
-  'service',
-] as const
+/** The roles every graph has, and the facet each one imports from every
+ * plugin. A plugin with a `./service` brings one role more, named by its
+ * package, which imports that one facet of that one plugin. Rendering is not
+ * among them: drawing an entity is the caller's, the web UI's or the `yak`
+ * command's (./answer.ts), and needs no graph open. */
+export let ROLES = {
+  graph: ['vocab', 'rules', 'tools'],
+  web: ['routes'],
+  effects: ['effects'],
+} as const
 
-/** One of those six subpath names. */
-export type FacetName = typeof FACETS[number]
+/** A role: one of {@link ROLES}, or a plugin's package, for its service. */
+export type Role = string
 
-// The facets a host imports while it is assembled: every one but `./tools`,
-// which the first call of one of the plugin's tools imports.
-let FIRST = FACETS.filter((f) => f != 'tools')
+/** Every subpath a role imports. */
+export type FacetName = typeof ROLES[keyof typeof ROLES][number] | 'service'
+
+/** Every role a config's graph has: the three every graph has, and one per
+ * plugin for its service (a plugin with none brings nothing to it). */
+export let every = (config: Config): Role[] => [
+  ...Object.keys(ROLES),
+  ...(config.plugins ?? []).map(used),
+]
+
+// Whether a role is one every graph has, rather than a plugin's service.
+let common = (role: Role): role is keyof typeof ROLES =>
+  Object.hasOwn(ROLES, role)
 
 /** `<plugin>/vocab` — what the plugin declares, and nothing that could not
  * run in a browser tab: a page importing this must never reach SQL, a database
@@ -224,16 +235,25 @@ export type VocabFacet = {
   derived?: (vocab: Vocab) => Derived
 }
 
-/** `<plugin>/rules` — what a write means, and what a query may ask for.
- * `rules` runs while the host is being assembled and may create tables of its
- * own through `host.sql`; `extend` contributes the clause compilers every read
- * path consults (@yaks/sql `Extension`), which is how a package holding an
- * index of its own — a text search, a vector, a link table — can answer a
- * clause the compiler would otherwise reject. They share a subpath because
- * they share a reason: both are SQL over the host's own connection. */
+/** `<plugin>/rules` — what a write means, what a query may ask for, and who
+ * is writing. `rules` runs while the host is being assembled and may create
+ * tables of its own through `host.sql`; `extend` contributes the clause
+ * compilers every read path consults (@yaks/sql `Extension`), which is how a
+ * package holding an index of its own — a text search, a vector, a link table
+ * — can answer a clause the compiler would otherwise reject.
+ *
+ * `authenticate` names the caller behind a request, for every door over this
+ * graph: a command line asks it about the session it speaks for exactly as an
+ * HTTP request is asked (local.ts `signer`), so it belongs to the graph role
+ * rather than to the routes. It is a factory like every other plugin export,
+ * because naming a caller is a read: @yaks/session resolves a request to the
+ * session it claims to speak for, which it can only do through the host's own
+ * graph. It is handed the host with nothing open on it yet — keep the
+ * reference, do not call it. At most one plugin may export it. */
 export type RulesFacet = {
   rules?: (host: Host, options: Options) => Plugin[]
   extend?: (host: Host, options: Options) => Extension[]
+  authenticate?: (host: Host, options: Options) => Authenticate
 }
 
 /** `<plugin>/tools` — the functions behind its `tool: true` declarations,
@@ -254,23 +274,16 @@ export type EffectsFacet = {
   effects?: (host: Host, options: Options) => Watch[]
 }
 
-/** `<plugin>/routes` — the HTTP a plugin adds, who is calling, and, for the
- * one plugin that hosts them, what answers a request at all.
+/** `<plugin>/routes` — the HTTP a plugin adds, and, for the one plugin that
+ * hosts them, what answers a request at all.
  *
- * `authenticate` is a factory like every other plugin export, because naming a
- * caller is a read: @yaks/session resolves a request to the session it claims
- * to speak for, which it can only do through the host's own graph. It is
- * handed the host with nothing open on it yet — keep the reference, do not
- * call it.
- *
- * `handler` is the other way round: at most one plugin per host exports it, it
- * is called last, with the graph open and `host.routes` holding every listed
- * plugin's routes, and what it returns is {@link Host.handler}. @yaks/api is
- * that plugin, so a config naming it serves HTTP and a config leaving it out
- * has a host that answers no request and never asks the others for routes. */
+ * `handler` is exported by at most one plugin per host; it is called last,
+ * with the graph open and `host.routes` holding every listed plugin's routes,
+ * and what it returns is {@link Host.handler}. @yaks/api is that plugin, so a
+ * config naming it serves HTTP and a config leaving it out has a host that
+ * answers no request and never asks the others for routes. */
 export type RoutesFacet = {
   routes?: (host: Host, options: Options) => Route[]
-  authenticate?: (host: Host, options: Options) => Authenticate
   handler?: (host: Host, options: Options) => Handler
 }
 
@@ -290,18 +303,46 @@ export type Duty = {
   run: (signal: AbortSignal) => void | Promise<void>
 }
 
-/** `<plugin>/service` — the work this plugin keeps doing while the host is up:
- * a timer, a poll, a sweep. It is neither a request nor a post-commit
- * observation, which is why neither `routes` nor `effects` could hold it: a
- * scheduled wake coming due, and a mailbox that has to be polled, are things
- * nobody is calling about.
+// The effect sweep: the `effects` role's own duty.
+let sweep = (host: Host, fx: Effects, log?: Ledger): Duty => ({
+  name: SWEEP,
+  run: async (signal) => {
+    // The sweep's query is written in the graph's own query grammar, so the
+    // rows are read the way everything else here reads them — and a handler
+    // that declared a sweep promised to be idempotent, since this re-runs
+    // work that may well have run already. Each handler is handed the graph to
+    // read, as it is on a commit.
+    await fx.relay(unfinished(host.graph), detached(host.storage))
+    if (!log) return await until(signal)
+    // Then the ledger: what a crash left between a commit and its handler, and
+    // every failure whose retry backoff has elapsed. One pass, then a sleep
+    // until the soonest of them is due — so an already-aborted signal gets one
+    // pass including the retries that are owed, and a host that stays running
+    // finishes what its handlers could not.
+    for (;;) {
+      await log.reconcile(fx, detached(host.storage))
+      if (signal.aborted) return
+      let at = await log.due(detached(host.storage))
+      await sleep(
+        Math.min(CAP, Math.max(0, (at ?? Infinity) - Date.now())),
+        signal,
+      )
+    }
+  },
+})
+
+/** `<plugin>/service` — the work this plugin keeps doing while a process
+ * serving that plugin's role is up: a timer, a poll, a sweep. It is neither a request
+ * nor a post-commit observation, which is why neither `routes` nor `effects`
+ * could hold it: a scheduled wake coming due, and a mailbox that has to be
+ * polled, are things nobody is calling about.
  *
  * It does at least one pass and then keeps going until the signal aborts, so
- * one function serves a process of either shape: an HTTP server holds it open
- * for as long as it is up, and a one-shot command hands it a signal that has
- * already aborted and gets the single pass. Which process is doing it is
- * settled by a lease ({@link Served.duties}), never by which program was
- * started. */
+ * one function serves a process of either shape: a server holds it open for as
+ * long as it is up, and a one-shot command hands it a signal that has already
+ * aborted and gets the single pass. Of the processes serving that role over
+ * one graph, which one is doing it is settled by a lease
+ * ({@link Host.duties}). */
 export type ServiceFacet = {
   service?: (
     host: Host,
@@ -310,8 +351,8 @@ export type ServiceFacet = {
   ) => void | Promise<void>
 }
 
-/** What each subpath is expected to export. Every field is optional: a plugin
- * exports what it has, and the host uses what it finds. */
+/** What each subpath a role imports is expected to export. Every field is
+ * optional: a plugin exports what it has, and the host uses what it finds. */
 export type Facets = {
   vocab: VocabFacet
   rules: RulesFacet
@@ -444,11 +485,11 @@ export let writer = (vocab: Vocab): Actor | null =>
 // fallback: a request no plugin claimed is this machine's own writing, not
 // nobody's.
 let doorman = (
-  served: [RoutesFacet, Options, string][],
+  ruled: [RulesFacet, Options, string][],
   host: Host,
   self: Actor | null,
 ): Authenticate => {
-  let said = served.filter(([r]) => r.authenticate)
+  let said = ruled.filter(([r]) => r.authenticate)
   if (said.length > 1) {
     throw new Error(`${said.length} plugins authenticate — a door has one`)
   }
@@ -457,81 +498,49 @@ let doorman = (
   return ask ? async (request) => (await ask(request)) ?? self : () => self
 }
 
-/**
- * Assemble a host from a config: import the plugins, open the database, build
- * the graph, and return it with the request handler the HTTP endpoints are
- * mounted on.
- *
- * `load` is how one of a plugin's subpaths becomes a module ({@link facet}).
- * It is injectable, so a test can assemble a host from modules it wrote inline
- * rather than files on disk.
- */
-export let compose = async (
-  config: Config,
-  load: Load = facet,
-): Promise<Served> => {
-  let path = dbOf(config)
-  let plugins = config.plugins ?? []
-  // Where this graph's secrets are kept (./vault.ts), and each secret an
-  // option names read once now, so the option has it the first time a factory
-  // looks. Only those: a secret code reads at the moment it is used (`reveal`)
-  // is fetched then, and a command does not wait on 1Password for it.
-  let vault = vaultOf(path)
-  await warm(vault, plugins.flatMap((plug) => bound(given(plug))))
-  // Every facet but the tools, now: nothing is read or written without the
-  // vocabulary, the rules and the effects, and nobody is named without the
-  // routes. A plugin's `./tools` is imported by the first call of one of its
-  // tools, which its vocabulary declares: a command runs one tool, and most of
-  // the plugins' code is for tools it will not run.
-  let got = await Promise.all(
-    plugins.map(async (plug) =>
-      [
-        used(plug),
-        revealing(given(plug), vault) as Options,
-        await Promise.all(FIRST.map((name) => load(used(plug), name))),
-      ] as const
+// One facet of every plugin a config names, each beside the options it was
+// named with and the package it came from: what a process runs is one plugin's
+// module handed one plugin's config. The package comes third, because a duty's
+// lease is named after the package that owns the work — the lease `@yaks/wake`
+// holds is the one every process reaching for that timer reaches for.
+type Taken<F extends FacetName> = [Facets[F], Options, string][]
+
+let taking = async <F extends FacetName>(
+  plugins: [string, Options][],
+  name: F,
+  load: Load,
+): Promise<Taken<F>> =>
+  (await Promise.all(
+    plugins.map(async ([plugin, options]) =>
+      [await load(plugin, name), options, plugin] as const
     ),
-  )
-  // A plugin that exports none of these subpaths is a typo in the config, not
-  // a plugin: fail here rather than run a host quietly missing its components.
-  // Its tools do not count, since what declares them is its vocabulary.
-  for (let [plugin, , facets] of got) {
-    if (facets.every((f) => !f)) {
-      throw new Error(
-        `${plugin} exports no facet — a plugin has at least one of ` +
-          FIRST.map((f) => `./${f}`).join(', '),
-      )
-    }
-  }
-  // A module and the options it was named with travel together: what a host
-  // runs is one plugin's module handed one plugin's config. The package
-  // specifier comes third, because a duty's lease is named after the
-  // package that owns the work: the lease `@yaks/wake` holds is the one every
-  // process reaching for that timer reaches for.
-  let taken = <F extends typeof FIRST[number]>(
-    name: F,
-  ): [Facets[F], Options, string][] =>
-    got.map(([plugin, options, facets]) =>
-      [
-        facets[FIRST.indexOf(name)] as Facets[F] | null,
-        options,
-        plugin,
-      ] as const
-    ).filter((t): t is [Facets[F], Options, string] => !!t[0])
+  )).filter((t): t is [Facets[F], Options, string] => !!t[0])
 
-  let vocabs = taken('vocab')
-  let ruled = taken('rules')
-  let watched = taken('effects')
-  let served = taken('routes')
-  let running = taken('service')
+/** What a config's plugins declare, read without opening anything: their
+ * vocabulary documents (each written with the package that brought it), the
+ * vocabulary they load into, and the tools they declare. What a command line
+ * lists, and what a graph is then built over. */
+export type Words = {
+  docs: VocabDoc[]
+  vocab: Vocab
+  /** the properties the store computes rather than stores */
+  derived: Derived
+  /** the tools the graph these words describe offers, declared and not
+   * implemented: the generic tier where the vocabulary gives it one, then every
+   * plugin's */
+  tools: () => Declared[]
+}
 
+/** A tool as declared, without the code behind it. */
+export type Declared = Omit<NamedTool, 'run'>
+
+// The words, from the `./vocab` facets already imported.
+let wordsOf = (vocabs: Taken<'vocab'>): Words => {
   // The components a tool call is recorded in belong to the host, not to
   // whichever plugin happened to declare them: what was asked of this host is
   // its own record. A plugin that already declares them — a harness, whose
   // transcripts are calls — keeps its own definitions, so only the components
   // nobody supplied are added.
-  // Each document is written with the package that brought it, so a reader
-  // of the vocabulary can say where a component comes from.
   let docs = said(
     vocabs.flatMap(([v, , plugin]) =>
       (v.docs ?? []).map((d) => ({ ...d, package: plugin }))
@@ -541,14 +550,95 @@ export let compose = async (
     docs,
     understood(vocabs.flatMap(([v]) => v.keywords ?? [])),
   )
+  return {
+    docs,
+    vocab,
+    derived: Object.assign({}, ...vocabs.map(([v]) => v.derived?.(vocab))),
+    // The generic tier lists `search` only where a property is indexed, so its
+    // declarations are read off the tier the graph would build. Read on asking,
+    // since checking every declaration costs what a graph opened to answer one
+    // query should not pay twice.
+    tools: () => [
+      ...tier({
+        keywords: vocab.keywords,
+        ...(searched(vocab).length ? { search: () => [] } : {}),
+      }).map(({ run: _, ...decl }) => decl),
+      ...toolsIn(docs).map((decl) => ({
+        ...decl,
+        name: decl.name ?? toolName(decl),
+      })),
+    ],
+  }
+}
+
+// Each plugin a config names, with its options, a secret among them read when
+// accessed.
+let named = (config: Config, vault?: Local): [string, Options][] =>
+  (config.plugins ?? []).map((plug) => [
+    used(plug),
+    (vault ? revealing(given(plug), vault) : given(plug)) as Options,
+  ])
+
+/** The words a config's plugins declare: each one's `./vocab`, and nothing
+ * else — no database opened, no rule or tool imported. */
+export let words = async (
+  config: Config,
+  load: Load = facet,
+): Promise<Words> => wordsOf(await taking(named(config), 'vocab', load))
+
+/**
+ * Open the graph a config names, for the roles this process serves: import
+ * those roles' facets and nothing else, open the database, build the graph, and
+ * wire in what each role brings — the effects and their sweep for `effects`,
+ * the request handler for `web`, a plugin's service for the role named by its
+ * package. Every process serves `graph`, since the graph is what it opened.
+ *
+ * `load` is how one of a plugin's subpaths becomes a module ({@link facet}).
+ * It is injectable, so a test can assemble a host from modules it wrote inline
+ * rather than files on disk.
+ */
+export let compose = async (
+  config: Config,
+  roles: readonly Role[],
+  load: Load = facet,
+): Promise<Served> => {
+  if (!roles.includes('graph')) {
+    throw new Error('a host opens a graph — its roles include graph')
+  }
+  let path = dbOf(config)
+  // Where this graph's secrets are kept (./vault.ts), and each secret an
+  // option names read once now, so the option has it the first time a factory
+  // looks. Only those: a secret code reads at the moment it is used (`reveal`)
+  // is fetched then, and a command does not wait on 1Password for it.
+  let vault = vaultOf(path)
+  await warm(vault, (config.plugins ?? []).flatMap((p) => bound(given(p))))
+  let plugins = named(config, vault)
+  // A service role names a plugin, so it has to be one the config lists.
+  let services = roles.filter((r) => !common(r))
+  for (let r of services) {
+    if (!plugins.some(([p]) => p == r)) {
+      throw new Error(`no plugin ${r} in this config serves that role`)
+    }
+  }
+  // Only the facets of the roles served. A role not served is a facet never
+  // imported, so an empty list stands for it. The graph's `./tools` is not
+  // among them: a plugin's tools are declared by its vocabulary, and its code
+  // is imported by the first call of one of them — a command runs one tool,
+  // and most of the plugins' code is for tools it will not run.
+  let take = <F extends FacetName>(role: Role, name: F): Promise<Taken<F>> =>
+    roles.includes(role) ? taking(plugins, name, load) : Promise.resolve([])
+  let [vocabs, ruled, watched, served, running] = await Promise.all([
+    take('graph', 'vocab'),
+    take('graph', 'rules'),
+    take('effects', 'effects'),
+    take('web', 'routes'),
+    taking(plugins.filter(([p]) => services.includes(p)), 'service', load),
+  ])
+  let { vocab, derived } = wordsOf(vocabs)
 
   let sql = open(path)
   try {
     migrations(sql).ready()
-    let derived: Derived = Object.assign(
-      {},
-      ...vocabs.map(([v]) => v.derived?.(vocab) ?? {}),
-    )
     let store: Store | undefined
     // Search is a property of the declaration: a property marked `search: true`
     // is indexed, whoever declared it, so wiring @yaks/fts here rather than in
@@ -584,6 +674,7 @@ export let compose = async (
     let authenticate: Authenticate = () => self
     let host: Host = {
       config,
+      roles,
       vocab,
       sql,
       vault,
@@ -626,7 +717,7 @@ export let compose = async (
         return doing(signal)
       },
     }
-    authenticate = doorman(served, host, self)
+    authenticate = doorman(ruled, host, self)
     // The clause compilers belong to the store, so they are gathered before it
     // is built: what a query may ask for is settled once, while the host is
     // assembled, and every read path — `/query`, `/ws`, a tool, the command
@@ -671,6 +762,10 @@ export let compose = async (
         fx,
       ],
     })
+    // The plugins' effects, where this process serves `effects`: `watched` is
+    // empty anywhere else, since their facets were never imported. The
+    // registry itself is the graph's, in every process, for a tool that
+    // watches a component only while it runs.
     for (let [mod, options] of watched) {
       for (let { comp, ...watch } of mod.effects?.(host, options) ?? []) {
         fx.on(comp, watch)
@@ -712,14 +807,14 @@ export let compose = async (
       ),
     ]
     // The one tool runner over this graph. A caller runs a tool and the runner
-    // records the request and the result as it goes; what this registration
-    // adds is the calls nobody here is waiting on — one written by another
-    // process through `/apply`, or one whose scheduled wake has now fired.
-    // Each rule is one post-commit effect registration, and a call this graph
-    // has no tool for is left alone for whoever does have it. The `tool` rows
-    // a call points at are written on the first call and at start-up, never
-    // while assembling: a one-shot command opens a host to ask one question
-    // and should not write just to say hello.
+    // records the request and the result as it goes; what its rules add, in a
+    // process serving `effects`, is the calls nobody here is waiting on — one
+    // written by another process through `/apply`, or one whose scheduled wake
+    // has now fired. Each rule is one post-commit effect registration, and a
+    // call this graph has no tool for is left alone for whoever does have it.
+    // The `tool` rows a call points at are written on the first call and at
+    // start-up, never while assembling: a one-shot command opens a host to ask
+    // one question and should not write just to say hello.
     let run = calls = runner(g, {
       tools,
       // This host owns the calls it claims, so the start-up pass re-runs its
@@ -735,14 +830,18 @@ export let compose = async (
       process: started()[PROCESS] as Comp,
       report: (err) => console.error('tool failed —', err),
     })
-    for (let rule of run.rules) {
-      fx.on(rule.plan, (e) => run.run(e.entity.eid), { doc: rule.rule.name })
+    let effecting = roles.includes('effects')
+    if (effecting) {
+      for (let rule of run.rules) {
+        fx.on(rule.plan, (e) => run.run(e.entity.eid), { doc: rule.rule.name })
+      }
     }
     // Which listed plugin hosts the routes — turns them into the one handler
     // this host answers with (@yaks/api). Two would be two answers to one
     // request, which is not an answer. None means nothing here serves HTTP, so
     // the other plugins are never asked for routes: a facet whose whole
     // purpose is a listener that does not exist is a facet this host ignores.
+    // `served` is empty in a process that does not serve `web`.
     let hosts = served.filter(([r]) => r.handler)
     if (hosts.length > 1) {
       throw new Error(`${hosts.length} plugins host routes — a host has one`)
@@ -754,41 +853,16 @@ export let compose = async (
     }
     // The duties: work that is nobody's request and everybody's to
     // do, each leased under the name of the package that owns it. The SWEEP is
-    // this host's own — a crash between the commit and the handler, and a
-    // handler that threw, are exactly what the ledger and a registration's
-    // `sweep` are for — and the rest are the plugins' timers. One pass, then a
-    // wait, is the shape they share: do what is overdue, then hold the lease
-    // until this process ends, so no second process runs it at the same
-    // time.
+    // the `effects` role's own — a crash between the commit and the handler,
+    // and a handler that threw, are exactly what the ledger and a
+    // registration's `sweep` are for — and the rest are the plugins' timers,
+    // each the role named by its package (`running` holds only those served). One
+    // pass, then a wait, is the shape they share: do what is overdue, then hold
+    // the lease until this process ends, so no second process runs it at the
+    // same time.
     let hold = config.lease ?? HOLD
     let duties: Duty[] = [
-      {
-        name: SWEEP,
-        run: async (signal) => {
-          // The sweep's query is written in the graph's own query grammar, so
-          // the rows are read the way everything else here reads them — and a
-          // handler that declared a sweep promised to be idempotent, since
-          // this re-runs work that may well have run already. Each handler is
-          // handed the graph to read, as it is on a commit.
-          await fx.relay(unfinished(host.graph), detached(host.storage))
-          if (!log) return await until(signal)
-          // Then the ledger: what a crash left between a commit and its
-          // handler, and every failure whose retry backoff has elapsed. One
-          // pass, then a sleep until the soonest of them is due — so an
-          // already-aborted signal gets one pass including the retries that
-          // are owed, and a host that stays running finishes what its handlers
-          // could not.
-          for (;;) {
-            await log.reconcile(fx, detached(host.storage))
-            if (signal.aborted) return
-            let at = await log.due(detached(host.storage))
-            await sleep(
-              Math.min(CAP, Math.max(0, (at ?? Infinity) - Date.now())),
-              signal,
-            )
-          }
-        },
-      },
+      ...(effecting ? [sweep(host, fx, log)] : []),
       ...running.map(([mod, options, plugin]): Duty => ({
         name: plugin,
         run: (signal) => mod.service!(host, options, signal),

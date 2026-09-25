@@ -124,7 +124,14 @@ export type ToolDefinition = {
   openWorld?: boolean
   /** where it is offered — `cli`, `mcp`; every surface when absent */
   surfaces?: ('cli' | 'mcp')[]
+  /** the roles the process running it serves (@yaks/cli `ROLES`), where it
+   * needs more than the graph every tool runs over — `serve`, which answers
+   * HTTP, serves `web` */
+  roles?: Role[]
 }
+
+/** A role a process serves over a graph (@yaks/cli `ROLES`). */
+export type Role = 'graph' | 'web' | 'effects'
 
 // Where a tool is offered; the same list the meta-schema allows.
 let SURFACES = {
@@ -132,6 +139,14 @@ let SURFACES = {
   minItems: 1,
   uniqueItems: true,
   items: { enum: ['cli', 'mcp'] },
+}
+
+// The roles a tool's process serves; the same list the meta-schema allows.
+let ROLES = {
+  type: 'array',
+  minItems: 1,
+  uniqueItems: true,
+  items: { enum: ['graph', 'web', 'effects'] },
 }
 
 /** JSON Schema for tool declarations. Their location within vocab.json is not fixed. */
@@ -173,6 +188,7 @@ export const toolDefinitionSchema: Record<string, unknown> = {
     idempotent: { type: 'boolean' },
     openWorld: { type: 'boolean' },
     surfaces: SURFACES,
+    roles: ROLES,
   },
 }
 
@@ -221,6 +237,7 @@ let HINTS = [
   'openWorld',
   'outputSchema',
   'surfaces',
+  'roles',
 ] as const
 
 /**

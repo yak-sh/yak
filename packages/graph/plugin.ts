@@ -208,6 +208,10 @@ export type Tool<R = Bundle[]> = {
    * that keeps the process — a server, a stream that never returns — is
    * offered only where a person holds that process: `["cli"]`. */
   surfaces?: readonly Surface[]
+  /** the roles the process running it serves (@yaks/cli `ROLES`), where it
+   * needs more than the graph every tool runs over: `serve` answers HTTP, so
+   * its process serves `web`. */
+  roles?: readonly ('graph' | 'web' | 'effects')[]
   /** what the tool answers as data, as JSON Schema, when its answer is not
    * entities: it answers text for a person in `content{body}` and the value
    * in this shape in `output{value}` (@yaks/tools `structured`). A tool that

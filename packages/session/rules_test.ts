@@ -8,7 +8,7 @@ import { idKeywords } from '@yaks/id'
 import { ids } from '@yaks/id/rules'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { sessionDoc } from './comp.ts'
-import { authenticate, VIA } from './routes.ts'
+import { authenticate, VIA } from './rules.ts'
 
 let spine: VocabDoc = {
   $defs: {

@@ -22,7 +22,7 @@ let host = () =>
       '@yaks/session',
       '@yaks/harness',
     ],
-  })
+  }, ['graph'])
 
 Deno.test('the harness composes as a plugin, and its words reach a command line and MCP', async () => {
   let h = await host()

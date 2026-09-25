@@ -49,6 +49,32 @@ This diagram shows responsibilities, not a requirement that every request pass
 through every package. For example, `graph.read` can be called directly against
 RAM or SQLite without a client or transport.
 
+## Plugins, facets and roles
+
+A program built from these packages is a config file and a list of plugins,
+assembled by [@yaks/cli](../cli/README.md). A plugin is a package that says what
+it contributes, one facet per subpath, and never where it runs: its words
+(`./vocab`), what a write means (`./rules`), the code behind its tools
+(`./tools`), what runs after a commit (`./effects`), the HTTP it adds
+(`./routes`), the timer or poll it keeps up (`./service`), and how its entities
+are drawn (`./views`, `./tui`).
+
+A process serves roles, and imports only the facets of the roles it serves:
+
+| Role            | Facets                          | The process                                    |
+| --------------- | ------------------------------- | ---------------------------------------------- |
+| `graph`         | `./vocab`, `./rules`, `./tools` | opens the file, admits writes, runs tools      |
+| `web`           | `./routes`                      | answers HTTP (`yak serve`, @yaks/api)          |
+| `effects`       | `./effects`                     | runs what commits owe                          |
+| a plugin's name | that plugin's `./service`       | keeps that plugin's timer or poll running      |
+| rendering       | `./vocab`, `./views`, `./tui`   | draws entities: a browser tab, a `yak` command |
+
+The config names the plugins; each process picks its roles. A browser tab
+renders and reaches the graph through a server. A `yak` command renders, and
+opens the graph itself with the `graph` role. `yak serve` serves `web`. A role
+that one process at a time may hold, the effect sweep or a plugin's service, is
+held under a lease named for its package.
+
 ### Data definitions and execution
 
 | Package                                              | Responsibility                                                    |
@@ -90,24 +116,24 @@ explicit compatibility planning.
 
 ### Domain and external work
 
-| Package                                                      | Responsibility                                                         |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| [doc](../doc/README.md)                                      | Document title/body components.                                        |
-| [task](../task/README.md)                                    | Tasks, projects, dependencies, and completion/cancellation facts.      |
-| [member](../member/README.md)                                | Membership and assignment-related domain vocabulary.                   |
-| [mail](../mail/README.md)                                    | Email composition and delivery-related graph operations.               |
-| [memory](../memory/README.md)                                | Stored reusable guidance and recall data.                              |
-| [canvas](../canvas/README.md)                                | Spatial UI/domain data and operations.                                 |
-| [effects](../effects/README.md)                              | Observe committed changes and run side effects.                        |
-| [wake](../wake/README.md)                                    | Scheduling and wakeup behavior.                                        |
-| [fts](../fts/README.md), [embedding](../embedding/README.md) | Text and vector-search support.                                        |
-| [git](../git/README.md)                                      | Git object/reference data and host checkout integration.               |
-| [process](../process/README.md)                              | Host process execution and supervision.                                |
-| [context](../context/README.md)                              | Explicit instruction snapshots, provenance, and admission.             |
-| [model](../model/README.md)                                  | Provider-neutral model request/response contracts.                     |
-| [openai](../openai/README.md)                                | OpenAI request/response translation and provider integration.          |
-| [session](../session/README.md)                              | Transcripts, execution, delegation, and fork relationships.            |
-| [harness](../harness/README.md)                              | An application composing these packages into an agent runtime and TUI. |
+| Package                                                      | Responsibility                                                          |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| [doc](../doc/README.md)                                      | Document title/body components.                                         |
+| [task](../task/README.md)                                    | Tasks, projects, dependencies, and completion/cancellation facts.       |
+| [member](../member/README.md)                                | Membership and assignment-related domain vocabulary.                    |
+| [mail](../mail/README.md)                                    | Email composition and delivery-related graph operations.                |
+| [memory](../memory/README.md)                                | Stored reusable guidance and recall data.                               |
+| [canvas](../canvas/README.md)                                | Spatial UI/domain data and operations.                                  |
+| [effects](../effects/README.md)                              | Observe committed changes and run side effects.                         |
+| [wake](../wake/README.md)                                    | Scheduling and wakeup behavior.                                         |
+| [fts](../fts/README.md), [embedding](../embedding/README.md) | Text and vector-search support.                                         |
+| [git](../git/README.md)                                      | Git object/reference data and host checkout integration.                |
+| [process](../process/README.md)                              | Host process execution and supervision.                                 |
+| [context](../context/README.md)                              | Explicit instruction snapshots, provenance, and admission.              |
+| [model](../model/README.md)                                  | Provider-neutral model request/response contracts.                      |
+| [openai](../openai/README.md)                                | OpenAI request/response translation and provider integration.           |
+| [session](../session/README.md)                              | Transcripts, execution, delegation, and fork relationships.             |
+| [harness](../harness/README.md)                              | A plugin that runs agent sessions over a graph, and their terminal app. |
 
 A record of requested work is not the work itself. For example, a process entity
 can describe execution state, but host code launches and observes the process. A
@@ -205,9 +231,9 @@ files; it does not isolate a shared database or external services.
   deployment packages; review transaction and runtime constraints first.
 - **Query-selected UI:** render plus a host, with client subscriptions or your
   own state adapter.
-- **Agent application:** inspect harness for a composition of session, context,
-  model/provider, process, Git, and terminal packages. The other packages do not
-  require the harness.
+- **Agent application:** a config listing @yaks/harness beside the packages
+  whose words it runs over (session, context, model/provider, process, Git),
+  opened by `yak`. The other packages do not require the harness.
 
 The READMEs linked above describe package-specific APIs and limitations. The
 examples and architecture here are not a promise that all adapters support every

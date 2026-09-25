@@ -30,12 +30,33 @@ it, so a config listing that package is a config whose graph can be served.
 
 The package has two main responsibilities:
 
-- [`host.ts`](./host.ts) imports configured plugin modules, opens storage, and
-  assembles the graph. It serves no HTTP of its own: the request handler is
-  built by the listed plugin that hosts routes, which is @yaks/api.
+- [`host.ts`](./host.ts) opens the graph a config names for the roles a process
+  serves, importing only those roles' facets of the configured plugins. It
+  serves no HTTP of its own: the request handler is built by the listed plugin
+  that hosts routes, which is @yaks/api.
 - [`platform.ts`](./platform.ts) lists and calls tools on a remote MCP server.
   [`local.ts`](./local.ts) exposes the same command interface for a graph opened
   by the current process.
+
+## Roles
+
+A plugin says what it contributes, one facet per subpath, and never where it
+runs. A process serves roles, and imports only the facets of the roles it
+serves:
+
+| Role            | Facets                          | What the process does                          |
+| --------------- | ------------------------------- | ---------------------------------------------- |
+| `graph`         | `./vocab`, `./rules`, `./tools` | opens the file, admits writes, runs tool calls |
+| `web`           | `./routes`                      | answers HTTP with the routes @yaks/api hosts   |
+| `effects`       | `./effects`                     | runs what a commit owes, and the effect sweep  |
+| a plugin's name | that plugin's `./service`       | keeps that plugin's timer or poll running      |
+
+The `yak` command serves commands and rendering itself. Listing its commands
+reads only the plugins' `./vocab`, where the tools are declared, so the usage
+page opens nothing. Running one opens the graph for that command's roles: the
+graph, the roles the tool declares (`serve` declares `web`), and for now the
+effects and every plugin's service, one pass of each on the way in. The
+rendering role imports `./views`, and `./tui` under `--tui`.
 
 ## Where a command runs
 
@@ -146,11 +167,11 @@ does not impose a startup policy for missing plugin options.
 ## A plugin is a package, and each part of it is a subpath export
 
 A facet is a sub-module export: one optional plugin subpath that supplies a
-specific part of the running graph. `compose` looks for six facets in every
-configured package: `./vocab`, `./rules`, `./tools`, `./effects`, `./routes`,
-and `./service`. An unexported facet is skipped. An exported facet that fails to
-import causes composition to fail, as does a package that exports none of the
-six.
+specific part of the running graph. `compose(config, roles)` imports, from each
+configured package, the facets of the roles the process serves and no others. An
+unexported facet is skipped; an exported facet that fails to import causes
+composition to fail. A package that exports none of a process's facets
+contributes nothing to that process.
 
 ```json
 {
@@ -165,20 +186,21 @@ six.
 }
 ```
 
-| Subpath     | Expected exports                                                                              |
-| ----------- | --------------------------------------------------------------------------------------------- |
-| `./vocab`   | `docs?`, `keywords?`, and `derived?` declarations                                             |
-| `./rules`   | `rules?: (host, options) => Plugin[]` and query `extend?` functions                           |
-| `./tools`   | `runs?: (host, options) => Runs`, keyed by declared tool name                                 |
-| `./effects` | `effects?: (host, options) => Watch[]` for post-commit work                                   |
-| `./routes`  | `routes?: (host, options) => Route[]`, and at most one each of `authenticate?` and `handler?` |
-| `./service` | `service?: (host, options, signal)` for a duty                                                |
-| `.`         | Public types and library functions; not loaded by `compose`                                   |
+| Subpath     | Role       | Expected exports                                                                        |
+| ----------- | ---------- | --------------------------------------------------------------------------------------- |
+| `./vocab`   | `graph`    | `docs?`, `keywords?`, and `derived?` declarations                                       |
+| `./rules`   | `graph`    | `rules?: (host, options) => Plugin[]`, query `extend?`, and at most one `authenticate?` |
+| `./tools`   | `graph`    | `runs?: (host, options) => Runs`, keyed by declared tool name                           |
+| `./effects` | `effects`  | `effects?: (host, options) => Watch[]` for post-commit work                             |
+| `./routes`  | `web`      | `routes?: (host, options) => Route[]`, and at most one `handler?`                       |
+| `./service` | its plugin | `service?: (host, options, signal)` for a duty                                          |
+| `.`         |            | Public types and library functions; not loaded by `compose`                             |
 
 The web UI separately imports `./vocab` and `./views`, and `yak` imports
 `./views` to show a tool's answer. Those modules must work in a browser and must
 not import SQL, storage drivers, or server-only APIs. `deno task check:browser`
-verifies this constraint. `compose` does not load `./views`.
+verifies this constraint. `compose` does not load `./views`: drawing is the
+rendering role, which needs no graph open.
 
 ```ts
 // @yaks/mail/vocab
@@ -218,19 +240,21 @@ route is an `@yaks/api` `Route` with `method`, `path`, and a
 `(Request) => Response` handler. Paths are exact unless they end in `*`; `*`
 also matches any method.
 
-A host answers requests only where a listed plugin exports `handler` from
-`./routes`. @yaks/api is that plugin: it is handed the host once `host.routes`
-holds every listed plugin's routes, and returns them in front of `/apply`,
-`/query` and `/ws`, which answer whatever no route claimed. A config that does
-not list it composes a host with no `handler`, no `serve` tool, and no call to
-any plugin's `routes` factory — the routes are ignored rather than built for a
-listener that does not exist. `/mcp` is the same arrangement one level down:
-@yaks/mcp contributes it as a route, so a config that wants an agent's door
-lists that package too.
+A process serving `web` answers requests only where a listed plugin exports
+`handler` from `./routes`. @yaks/api is that plugin: it is handed the host once
+`host.routes` holds every listed plugin's routes, and returns them in front of
+`/apply`, `/query` and `/ws`, which answer whatever no route claimed. A config
+that does not list it composes a host with no `handler`, no `serve` tool, and no
+call to any plugin's `routes` factory — the routes are ignored rather than built
+for a listener that does not exist. `/mcp` is the same arrangement one level
+down: @yaks/mcp contributes it as a route, so a config that wants an agent's
+door lists that package too.
 
 Routes that write should use `host.who(request)` and `signed` from `@yaks/api`
-to attribute their changes. At most one plugin may export `authenticate`.
-Without an authenticated caller, writes are attributed to the host process.
+to attribute their changes. `authenticate` belongs to `./rules`, because every
+door asks it, a command line naming its session as much as an HTTP request, and
+at most one plugin may export it. Without an authenticated caller, writes are
+attributed to the host process.
 
 ## Who a process writes as, and what starting up IS
 
@@ -251,32 +275,37 @@ opening the same graph from performing the same startup work.
 
 ## What `compose` does
 
-[`compose(config)`](./host.ts) performs these steps:
+[`compose(config, roles)`](./host.ts) performs these steps:
 
-1. Imports every available server facet from each configured plugin.
+1. Imports, from each configured plugin, the facets of the roles given. Every
+   process serves `graph`.
 2. Combines vocabulary documents and keywords, rejecting duplicate component
    declarations.
 3. Opens SQLite, runs migrations, and builds storage with derived columns, query
    extensions, optional entity numbers, and full-text indexes for fields
    declared with `search: true`.
 4. Builds the graph from plugin rules and the post-commit effect registry.
-5. Registers plugin effects and joins tool declarations to their `runs`
-   implementations. A declared tool without an implementation is an error.
-6. Asks the plugin that hosts routes, if the config listed one, for the one
-   handler this host answers with.
+5. Joins tool declarations to their `runs` implementations; a declared tool
+   without an implementation is an error. Serving `effects`, it registers the
+   plugins' effects and the tool runner's rules for calls another process wrote.
+6. Serving `web`, asks the plugin that hosts routes, if the config listed one,
+   for the one handler this host answers with.
 7. Creates the current process entity after registrations are ready.
 
-It returns a `Served` object: the `Host` fields — which include `tools`,
-`routes`, `handler`, `runner`, and `duties` — plus `fx` and `close`. Nothing
-here binds a port. The `serve` tool does that, reading the handler off the host
-it was composed into, reconciling interrupted calls, and taking over the duties
-for as long as it listens.
+It returns a `Served` object: the `Host` fields — which include `roles`,
+`tools`, `routes`, `handler`, `runner`, and `duties` — plus `fx` and `close`.
+Nothing here binds a port. The `serve` tool does that, reading the handler off
+the host it was composed into, reconciling interrupted calls, and taking over
+the duties for as long as it listens. `words(config)` reads the plugins'
+`./vocab` alone: the vocabulary and the tools it declares, with nothing opened.
 
 ## Duties: the work nobody is asking for
 
-The effect sweep and each plugin's `./service` export are duties. Each duty runs
-under a lease named for its owning package, so only one process over a graph
-runs it at a time.
+The effect sweep and each plugin's `./service` export are duties: the sweep is
+the `effects` role's, and a service is the role named by its plugin. Each duty
+runs under a lease named for its owning package, so only one process over a
+graph runs it at a time, and a process takes only the leases of the roles it
+serves.
 
 ```ts
 await host.duties() // Run until the host shuts down.

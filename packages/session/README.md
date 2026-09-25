@@ -236,8 +236,9 @@ A graph held in memory has no spool, so an install there writes no turn hooks.
 
 `sessionFor()` resolves an entity ID, a human-readable session ID, or a harness
 session ID to the same entity. `speaking()` returns the actor a session writes
-as. The `@yaks/session/routes` entry point exports `authenticate()`, which reads
-the session from the `x-via` header. Writes use `session.actor` as `by` when
+as. The `@yaks/session/rules` entry point exports `authenticate()`, which reads
+the session from the `x-via` header, for every door over the graph: an HTTP
+request and a `yak` command alike. Writes use `session.actor` as `by` when
 present, otherwise the session itself; `via` identifies the session in either
 case. Applications enforce access separately.
 
@@ -264,10 +265,11 @@ The main module exports:
 - identity and rendering: `sessionFor()`, `speaking()`, `where()`, and `views`;
 - error types including `Bounced`, `Unnamed`, and `UnknownSession`.
 
-Additional entry points are `@yaks/session/vocab`, `/rules`, `/tools`,
-`/routes`, `/views`, `/service` (the turn spool duty), and `/turn` (the hook
-that writes the spool). A **host** is the process that opened the graph; effects
-and tools receive its graph and, where needed, its process entity ID.
+Additional entry points are `@yaks/session/vocab`, `/rules` (with
+`authenticate`), `/tools`, `/views`, `/service` (the turn spool duty), and
+`/turn` (the hook that writes the spool). A **host** is the process that opened
+the graph; effects and tools receive its graph and, where needed, its process
+entity ID.
 
 <a id="what-is-deliberately-not-here"></a>
 <a id="compatibility"></a>

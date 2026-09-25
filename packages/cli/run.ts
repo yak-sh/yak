@@ -359,7 +359,7 @@ export let aimed = (
  * made from any of them carries the transcript that produced it without
  * anybody passing a flag. It is sent in the `x-via` header, which the server
  * resolves to the session, and what the command writes is signed with it
- * (@yaks/session/routes). A graph this process opened itself is asked the
+ * (@yaks/session/rules). A graph this process opened itself is asked the
  * same way, through the same door (local.ts).
  *
  * The variable names are the harnesses' own, read most specific first: a

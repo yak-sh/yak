@@ -12,7 +12,7 @@
 // second TypeScript program is the only thing that can prove it.
 
 import { assert, assertEquals } from '@std/assert'
-import { compose, FACETS } from '@yaks/cli/host'
+import { compose, every, ROLES } from '@yaks/cli/host'
 import { type Keywords, loadVocab, type VocabDoc } from '@yaks/vocab'
 import { idKeywords } from '@yaks/id'
 import { nameKeywords } from '@yaks/names'
@@ -114,19 +114,21 @@ Deno.test("every package's words load beside every other package's", async () =>
 })
 
 Deno.test('every other facet a package exports is shaped the way a host reads it', async () => {
-  // What each facet's module has to say. `rules` has two, what a write means
-  // and what a query may ask for (@yaks/cli `RulesFacet`). `routes` has three,
-  // because it says three things: the HTTP a plugin adds, who is calling, and —
-  // for the one plugin in a host that hosts them — what answers a request at
-  // all (@yaks/api). A module with any of them is that facet.
+  // What each facet's module has to say. `rules` has three, what a write
+  // means, what a query may ask for and who is writing (@yaks/cli
+  // `RulesFacet`). `routes` has two: the HTTP a plugin adds, and — for the one
+  // plugin in a host that hosts them — what answers a request at all
+  // (@yaks/api). A module with any of them is that facet.
   let shapes: Record<string, string[]> = {
-    rules: ['rules', 'extend'],
+    rules: ['rules', 'extend', 'authenticate'],
     tools: ['runs'],
     effects: ['effects'],
-    routes: ['routes', 'authenticate', 'handler'],
+    routes: ['routes', 'handler'],
     service: ['service'],
     views: ['views'],
   }
+  // Every subpath a role imports.
+  let facets: string[] = [...Object.values(ROLES).flat(), 'service']
   let seen = new Set<string>()
   for (let p of packages) {
     // Words are not what makes a plugin: `@yaks/embedding` composes as one
@@ -159,7 +161,7 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
     // something else.
     for (let key of Object.keys(p.exports)) {
       let facet = key.slice(2)
-      if (key != '.' && FACETS.includes(facet as 'vocab')) {
+      if (key != '.' && facets.includes(facet)) {
         assert(facet in shapes || facet == 'vocab', `${p.name}: ${key}`)
       }
     }
@@ -174,7 +176,7 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
   ])
 })
 
-Deno.test('compose takes every facet of the plugins a config names', async () => {
+Deno.test('compose takes every facet of the plugins a config names, for every role', async () => {
   // The harness beside the words it runs over: a config naming packages, read
   // the way `yak serve` reads it.
   let plugins = [
@@ -186,7 +188,8 @@ Deno.test('compose takes every facet of the plugins a config names', async () =>
     '@yaks/session',
     '@yaks/harness',
   ]
-  let host = await compose({ db: ':memory:', plugins, numbers: false })
+  let config = { db: ':memory:', plugins, numbers: false }
+  let host = await compose(config, every(config))
   try {
     // Every facet arrived: the words, a computed property only ./vocab
     // declares, the rules, and a tool only ./tools implements.

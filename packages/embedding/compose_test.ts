@@ -57,7 +57,7 @@ let host = () =>
         },
       },
     ],
-  })
+  }, ['graph', 'web', 'effects'])
 
 Deno.test('a config composes the vectors, and asking the door ranks by them', async () => {
   let yak = await host()
@@ -117,7 +117,7 @@ Deno.test('a config with no key composes, and nothing about the boot is differen
         },
       },
     ],
-  })
+  }, ['graph', 'web', 'effects'])
   try {
     await yak.graph.apply(shelf)
     let res = await door(yak)(
@@ -156,7 +156,7 @@ Deno.test('a host that closes takes its pending sweep with it', async () => {
           with: { embedder: { via: 'hash' }, after: 30 },
         },
       ],
-    })
+    }, ['graph', 'effects'])
     await yak.graph.apply(shelf)
     await yak.close()
     await new Promise((go) => setTimeout(go, 80))

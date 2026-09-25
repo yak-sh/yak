@@ -47,7 +47,8 @@ slow(
         port,
       }),
     )
-    let host = await compose(read(`${dir}/yak.json`))
+    let config = read(`${dir}/yak.json`)
+    let host = await compose(config, ['graph', 'web'])
     // The config named the package that hosts routes, so there is one, and
     // the verb that serves them.
     assert(host.handler, 'a config naming @yaks/api composed no handler')

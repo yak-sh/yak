@@ -346,6 +346,19 @@
               "mcp"
             ]
           }
+        },
+        "roles": {
+          "description": "The roles the process running the tool serves, where it needs more than the graph every tool runs over: graph, web, effects.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "graph",
+              "web",
+              "effects"
+            ]
+          }
         }
       },
       "required": [

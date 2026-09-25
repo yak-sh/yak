@@ -444,25 +444,30 @@ that every package's words load beside every other's, and that a package's
 
 ## A plugin is a package; its parts are subpath exports
 
-A program does not import a plugin as a whole. It imports the specific subpath
-exports it needs, one per kind of contribution, and loads only the ones it runs
-(`@yaks/cli` `compose`, `packages/cli`):
+A program does not import a plugin as a whole. A plugin says what it
+contributes, one subpath per kind of contribution, and never where it runs. A
+process serves roles and imports only the subpaths of the roles it serves
+(`@yaks/cli` `compose`, `packages/cli`): `graph` takes `./vocab`, `./rules` and
+`./tools`; `web` takes `./routes`; `effects` takes `./effects`; a plugin's own
+role, named by its package, takes its `./service`; and rendering, a browser tab
+or the `yak` command, takes `./vocab`, `./views` and `./tui`.
 
 | subpath     | what it exports                                                                 | may import          |
 | ----------- | ------------------------------------------------------------------------------- | ------------------- |
 | `./vocab`   | `docs`, `keywords?`, `derived?`                                                 | nothing server-side |
-| `./rules`   | `rules: (host, options) => Plugin[]`, `extend?` (@yaks/sql)                     | anything            |
+| `./rules`   | `rules: (host, options) => Plugin[]`, `extend?` (@yaks/sql), `authenticate?`    | anything            |
 | `./tools`   | `runs: (host, options) => Runs` — the code behind its `tool: true` declarations | ajv, SQL, anything  |
 | `./effects` | `effects: (host, options) => Watch[]`                                           | anything            |
-| `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`, `handler?`               | anything            |
+| `./routes`  | `routes: (host, options) => Route[]`, `handler?`                                | anything            |
 | `./service` | `service: (host, options, signal) => void \| Promise<void>`                     | anything            |
 | `./views`   | `views` — `@yaks/render` renderers                                              | nothing server-side |
+| `./tui`     | `views` — Preact components a terminal holds an answer with                     | no graph facet      |
 | `.`         | the library API and types; runtime requirements vary by package                 |                     |
 
 Throughout this section, **host** means the process that opened the graph — a
-server, CLI command or Worker. The `host` argument is an object exposing that
-process's graph, vocabulary and other resources, not an operating-system process
-object. `options` contains the plugin configuration.
+server, CLI command or Worker — for the roles it serves. The `host` argument is
+an object exposing that process's graph, vocabulary and other resources, not an
+operating-system process object. `options` contains the plugin configuration.
 
 Server behavior exports (`rules`, `runs`, `effects` and `routes`) are factories
 taking `(host, options)`; `service` additionally takes an `AbortSignal`. Schema
@@ -616,13 +621,14 @@ distinguish implemented behavior from remaining proposals.
   has no handler and never calls the other plugins' `routes` factories: a route
   with nothing listening is a facet the host ignores.
 - **`authenticate` is access policy, not a route.** It is exported from
-  `./routes` because the HTTP server is where authentication happens, but it is
-  not an HTTP path, and at most one plugin in a program may define it.
-  Authentication identifies the caller; `@yaks/member` implements authorization
-  after that identification. Its `members(where)` needs an application-specific
-  `Guard`, so it exports `./vocab` but no `./rules`. Plugin options can describe
-  policy data, not executable guard functions. A config-expressible guard is a
-  remaining design question, not an implemented authentication service.
+  `./rules`, because every door over a graph asks it who is writing — a command
+  line naming its session as much as an HTTP request — and at most one plugin in
+  a program may define it. Authentication identifies the caller; `@yaks/member`
+  implements authorization after that identification. Its `members(where)` needs
+  an application-specific `Guard`, so it exports `./vocab` but no `./rules`.
+  Plugin options can describe policy data, not executable guard functions. A
+  config-expressible guard is a remaining design question, not an implemented
+  authentication service.
 - **Numbers and prefixes are one package, and they are opt in.**
   [@yaks/id](./id) declares the `num` property, ships `numbers(allocate)` for
   explicit `$num` requests and `ids(vocab)` for resolving what a person typed;

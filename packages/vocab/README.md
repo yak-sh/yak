@@ -364,6 +364,10 @@ on both. A tool that keeps its process, such as `serve` or a stream that never
 returns, is `["cli"]`. `offered(surface)` in `@yaks/graph` is the test each door
 applies.
 
+`roles` names the roles the process running a tool serves (@yaks/cli `ROLES`:
+`graph`, `web`, `effects`), for a tool that needs more than the graph every tool
+runs over. `serve` lists `web`: the process that answers HTTP serves the routes.
+
 `@yaks/vocab/tools` also validates a declaration written in code, independently
 of any document.
 
