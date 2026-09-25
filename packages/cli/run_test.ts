@@ -161,9 +161,14 @@ Deno.test('`yak command` builds the command call, with the app it was given', as
 
 Deno.test('`yak <app> <command>` is the same call, the app named by the word', async () => {
   assertEquals(
-    await ran(appTools, ['recipes', 'add_recipe', 'title=@page.md'], {
-      stray: appStray,
-    }),
+    // Aimed at a host: a machine with its own graph opens that instead.
+    await ran(appTools, [
+      '--host',
+      'yaks.test',
+      'recipes',
+      'add_recipe',
+      'title=@page.md',
+    ], { stray: appStray }),
     0,
   )
   assertEquals(asked, [{
@@ -191,6 +196,17 @@ Deno.test('a stray needs a second word, and a tool of its own is never one', asy
     2,
   )
   assertEquals(asked, [])
+})
+
+Deno.test('a line that opened a graph asks no host about a word the graph lacks', async () => {
+  assertEquals(
+    await ran(appTools, ['--config', 'here.json', 'show', 'T-1'], {
+      stray: appStray,
+    }),
+    2,
+  )
+  assertEquals(asked, [])
+  assert(printed.join('\n').includes('here.json has nothing called show'))
 })
 
 Deno.test('an argument that is not key=value is a usage error, not a round trip', async () => {

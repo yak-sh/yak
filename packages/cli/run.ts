@@ -402,10 +402,15 @@ export let cli = async (
       out(await c.page())
       return 0
     }
+    // A stray is asked of the host, so a line that opened a graph of its own
+    // has none: it names that graph, and a word the graph lacks is a word
+    // the graph lacks, not an app somewhere else.
     let found = commandFor(tools, rest) ??
       commandFor(await fetched(), rest) ??
       await (async () => {
-        let hit = await opts.stray?.(rest[0], rest.slice(1), c)
+        let hit = config
+          ? undefined
+          : await opts.stray?.(rest[0], rest.slice(1), c)
         return hit ? { verb: hit, args: rest.slice(1) } : undefined
       })()
     if (!found) {
