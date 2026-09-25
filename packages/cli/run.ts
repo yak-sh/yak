@@ -48,6 +48,9 @@ export type Ctx = {
    * printed — `--tui`. */
   tui: boolean
   help: boolean
+  /** The session this command line speaks for ({@link via}), named the same
+   * way to a host over HTTP and to a graph this process opened. */
+  via?: string
   ask: Rpc
   reads: Reads
   out: (line: string) => void
@@ -104,6 +107,8 @@ export type Opts = {
   /** How a JSON-RPC request is sent, where a program has a caller of its own
    * — a test passes a function that records what it was asked. */
   ask?: Rpc
+  /** The session this command line speaks for. Defaults to {@link via}. */
+  via?: string
   /** Where a value written `@path` or `-` is read from. */
   reads?: Reads
   out?: (line: string) => void
@@ -329,7 +334,8 @@ export let aimed = (
  * made from any of them carries the transcript that produced it without
  * anybody passing a flag. It is sent in the `x-via` header, which the server
  * resolves to the session, and what the command writes is signed with it
- * (@yaks/session/routes).
+ * (@yaks/session/routes). A graph this process opened itself is asked the
+ * same way, through the same door (local.ts).
  *
  * The variable names are the harnesses' own, read most specific first: a
  * subagent's own id before the tree it was spawned from.
@@ -377,6 +383,7 @@ export let cli = async (
       }
       return extra
     }
+    let speaks = opts.via ?? via()
     let c: Ctx = {
       host,
       config,
@@ -384,10 +391,11 @@ export let cli = async (
       json,
       tui,
       help,
+      via: speaks,
       ask: opts.ask ?? rpc({
         url: doorUrl(host),
         token: tokenFor(host),
-        via: via(),
+        via: speaks,
         fetch: timing ? timed(note) : undefined,
       }),
       reads: opts.reads ?? disk,

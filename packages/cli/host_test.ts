@@ -19,6 +19,7 @@ import {
   writer,
 } from './host.ts'
 import { sealed } from '@yaks/secrets'
+import { signer } from './local.ts'
 
 // The host of these tests, as its own writes are signed: this process, whose
 // row every composition here writes on the way in.
@@ -324,6 +325,36 @@ Deno.test('a host that names itself writes as itself, and a plugin may say who e
     // boot pass — is signed the same way.
     let [own] = await host.graph.apply([{ entity: { eid: 'b9' }, book: {} }])
     assertEquals((own.created as Comp).by, me)
+  } finally {
+    host.close()
+  }
+})
+
+Deno.test('a command line writes as the session it names, through the same door as HTTP', async () => {
+  // The door knows one run by its `x-via`, as @yaks/session's does.
+  let ana = { by: 'ana', via: 'her-run' }
+  let told: Plugged = {
+    routes: {
+      authenticate: () => (r) =>
+        r.headers.get('x-via') == 'her-run' ? ana : null,
+    },
+  }
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop', 'told'] },
+    only({ shop, told }),
+  )
+  try {
+    await host.runner.ensure()
+    let add = async (via?: string) =>
+      (await host.runner.call([{
+        entity: { eid: '$call' },
+        call: { to: toolEid('book_add'), args: { title: 'Dune' } },
+        ...await signer(host, via),
+      }])).find((b) => b.book)?.created as Comp
+    assertEquals((await add('her-run')).by, 'ana')
+    // A run the door does not know, or none at all, is this process's writing.
+    assertEquals((await add('nobody')).by, me)
+    assertEquals((await add()).by, me)
   } finally {
     host.close()
   }

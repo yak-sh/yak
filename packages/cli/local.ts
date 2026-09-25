@@ -20,10 +20,11 @@
 // importing it opens a database and pulls in every plugin the config names — a
 // cost `yak login` on a machine with no graph should not pay.
 
-import { offered } from '@yaks/graph'
+import { type Actor, offered } from '@yaks/graph'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools'
 import { registry, show, terminal } from './answer.ts'
 import { read, used } from './config.ts'
+import { VIA } from './rpc.ts'
 import type { Command, Ctx } from './run.ts'
 import { compose, dbOf, type Served } from './host.ts'
 
@@ -70,6 +71,21 @@ export let close = async (code?: number): Promise<void> => {
   held.clear()
 }
 
+/** Who a command line writes as: the answer the host's door gives a request
+ * naming this line's session in `x-via`, exactly as it answers one arriving
+ * over HTTP (@yaks/session/routes), so a session's writes are its own however
+ * they reached the graph. A door that knows no such session answers this
+ * process ({@link writer} in ./host.ts). */
+export let signer = async (
+  host: Pick<Served, 'who'>,
+  via?: string,
+): Promise<{ $actor?: Actor }> => {
+  let actor = await host.who(
+    new Request('http://localhost/', { headers: via ? { [VIA]: via } : {} }),
+  )
+  return actor ? { $actor: { ...actor } } : {}
+}
+
 /** The tools of the graph a config names that are offered on a command line,
  * as subcommands a person types — the list `cli` gathers when the command
  * named a config (run.ts `more`). */
@@ -94,6 +110,7 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
       let landed = await host.runner.call([{
         entity: { eid: '$call' },
         call: { to: toolEid(declared.name), args: args ?? {} },
+        ...await signer(host, c.via),
       }])
       // `--json` prints the answer as data, the same object an MCP client
       // reads as `structuredContent` (@yaks/tools `structured`).

@@ -25,6 +25,10 @@ export class Refused extends Error {}
 /** Nobody is signed in — the message is the sentence to print. */
 export class Unauthorized extends Error {}
 
+/** The header a command line names its session in, over HTTP and to a graph
+ * it opened itself (local.ts) alike. */
+export let VIA = 'x-via'
+
 /** Where to call and as whom: the `/mcp` URL, the bearer token, the session
  * this command speaks for, and the `fetch` to use (a test passes a handler, so
  * nothing here needs a socket). */
@@ -77,7 +81,7 @@ export let rpc = (door: Door): Rpc => {
         accept: 'application/json, text/event-stream',
         'mcp-protocol-version': PROTOCOL,
         ...(door.token ? { authorization: `Bearer ${door.token}` } : {}),
-        ...(door.via ? { 'x-via': door.via } : {}),
+        ...(door.via ? { [VIA]: door.via } : {}),
         ...(session ? { 'mcp-session-id': session } : {}),
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method, params }),
