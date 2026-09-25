@@ -10,7 +10,7 @@ import {
 } from '../../types.ts'
 import { ent, mutate, parents } from '../../live.ts'
 import { useBacklinks } from '../useQuery.ts'
-import { up } from './Show.tsx'
+import { up } from './Dependency.tsx'
 import { block, el } from '../ui.tsx'
 import { Prop } from '../editors.tsx'
 import { Id } from './Inline.tsx'
@@ -300,7 +300,7 @@ export let Debug = (
           eid={d.parent}
           view='Dependency'
           type={d.type}
-          label={up[d.type] ?? d.type}
+          label={up(d.type)}
         />
       ))}
       {e.refs.map((r) => (

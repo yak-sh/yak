@@ -104,6 +104,7 @@
       "component": true,
       "type": "object",
       "edge": "contains",
+      "reversed": "contained by",
       "description": "that task is part of this one",
       "properties": {}
     },
@@ -111,6 +112,7 @@
       "component": true,
       "type": "object",
       "edge": "requires",
+      "reversed": "required by",
       "description": "this task waits for that one",
       "properties": {}
     },

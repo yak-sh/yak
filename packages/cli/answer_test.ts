@@ -130,7 +130,7 @@ Deno.test('a lone entity’s page asks for its links and comments, and leaves bo
   let page = lines.join('\n').split('\n\nDetails')[0]
   let parts = page.split('\n\n')
   assertEquals(parts.slice(0, 2), ['task T-9 open', 'Fix the bar'])
-  for (let group of ['contains ←', 'requires →']) {
+  for (let group of ['contained by', 'requires']) {
     assertEquals(parts[parts.indexOf(group) + 1], '- T-10 Ship it done')
   }
   assert(!page.includes('references'), page)

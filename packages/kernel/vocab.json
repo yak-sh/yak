@@ -9,6 +9,7 @@
       "component": true,
       "type": "object",
       "edge": "about",
+      "reversed": "subject of",
       "properties": {},
       "description": "edge tag: this entity is about that one"
     },
@@ -111,6 +112,7 @@
       "component": true,
       "type": "object",
       "edge": "delegates",
+      "reversed": "delegated by",
       "properties": {},
       "description": "edge tag: this entity handed work off to that one"
     },
@@ -230,6 +232,7 @@
       "component": true,
       "type": "object",
       "edge": "reads",
+      "reversed": "read by",
       "properties": {},
       "description": "edge tag: this entity reads that one"
     },
@@ -265,6 +268,7 @@
       "component": true,
       "type": "object",
       "edge": "referenced",
+      "reversed": "referenced by",
       "properties": {},
       "description": "edge tag: this entity refers to that one"
     },
@@ -272,6 +276,7 @@
       "component": true,
       "type": "object",
       "edge": "supersedes",
+      "reversed": "superseded by",
       "properties": {},
       "description": "edge tag: this entity replaces that one"
     },
@@ -279,6 +284,7 @@
       "component": true,
       "type": "object",
       "edge": "supervises",
+      "reversed": "supervised by",
       "properties": {},
       "description": "edge tag: this entity oversees that one"
     },
@@ -334,6 +340,7 @@
       "component": true,
       "type": "object",
       "edge": "wants",
+      "reversed": "wanted by",
       "properties": {},
       "description": "edge tag: this entity wants that one"
     },
@@ -341,6 +348,7 @@
       "component": true,
       "type": "object",
       "edge": "worked",
+      "reversed": "worked on by",
       "properties": {},
       "description": "edge tag: this entity worked on that one"
     },

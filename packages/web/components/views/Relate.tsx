@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Ent, uuid } from '../../types.ts'
 import { mutate } from '../../live.ts'
 import { link } from '../../edge.ts'
+import { up } from './Dependency.tsx'
 import { spec, taskChanges } from '../../client.ts'
 import { peek, useDraft } from '../drafts.ts'
 import { block } from '../ui.tsx'
@@ -22,14 +23,18 @@ let { Verb, Anchor, Pop, Find, Row, New } = Frame
 // The sentences a task grows an edge by — parent-first, the same
 // grammar Dependency renders. out: this task is the parent.
 let verbs = [
-  { label: 'requires', type: 'requires', out: true },
-  { label: 'blocks', type: 'requires', out: false },
-  { label: 'contains', type: 'contains', out: true },
-  { label: 'part of', type: 'contains', out: false },
-  { label: 'reads', type: 'reads', out: true },
-  { label: 'about', type: 'about', out: true },
+  { type: 'requires', out: true },
+  { type: 'requires', out: false },
+  { type: 'contains', out: true },
+  { type: 'contains', out: false },
+  { type: 'reads', out: true },
+  { type: 'about', out: true },
 ] as const
 type V = (typeof verbs)[number]
+
+// A verb as it reads: the relation's name from the parent's side, its
+// reversed phrase from the child's ('required by', 'contained by').
+let said = (v: V) => v.out ? v.type : up(v.type)
 
 // Add an edge by finishing its sentence: pick a verb chip, then type —
 // the list is a live search over documented entities; Enter (or a click)
@@ -41,7 +46,7 @@ export let Relate = ({ e }: { e: Ent }) => {
   // On mount, a verb whose line was left half-typed reopens itself — a
   // new task or edge the last mount never filed resurfaces, caret and all
   // (drafts.ts). Keyed by (host, verb) so the sentence resumes exact.
-  let dk = (v: V) => `relate:${e.eid}:${v.label}`
+  let dk = (v: V) => `relate:${e.eid}:${said(v)}`
   let [verb, setVerb] = useState<V | null>(() =>
     verbs.find((v) => peek(dk(v))) ?? null
   )
@@ -123,12 +128,12 @@ export let Relate = ({ e }: { e: Ent }) => {
       <Frame>
         {verbs.map((v) => (
           <Verb
-            key={v.label}
+            key={said(v)}
             mod={v.type}
             type='button'
             onClick={() => setVerb(v)}
           >
-            + {v.label}
+            + {said(v)}
           </Verb>
         ))}
       </Frame>
@@ -136,7 +141,7 @@ export let Relate = ({ e }: { e: Ent }) => {
   }
   return (
     <Frame>
-      <Verb mod={verb.type} type='button' onClick={close}>{verb.label}</Verb>
+      <Verb mod={verb.type} type='button' onClick={close}>{said(verb)}</Verb>
       <Anchor>
         <Find
           elRef={find}

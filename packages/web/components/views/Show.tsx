@@ -29,6 +29,7 @@ import { Markdown } from '../Markdown.tsx'
 import { title, TitleEdit } from '../title.tsx'
 import { ColumnEdit, Prop } from '../editors.tsx'
 import { Relate } from './Relate.tsx'
+import { up } from './Dependency.tsx'
 import { Id } from './Inline.tsx'
 import { decisionActions, Entity } from '../Entity.tsx'
 import { Icon } from '../icons.tsx'
@@ -354,17 +355,8 @@ export let Acceptance = ({ e }: { e: Ent }) => {
   )
 }
 
-// The reversed sentences: how each edge below reads from the child's side.
-export let up: Record<string, string> = {
-  contains: 'part of',
-  requires: 'required by',
-  reads: 'read by',
-  about: 'subject of',
-  supersedes: 'superseded by',
-}
-
 // Every edge sentence an entity speaks, top-down: what holds it (reversed
-// — 'part of X', 'required by Y'), then what it holds — its contains
+// — 'contained by X', 'required by Y'), then what it holds — its contains
 // children (ent() splits those out of refs into kids, so they'd
 // otherwise only show as board tallies) and its requires/reads.
 export let Dependencies = ({ e }: { e: Ent }) => {
@@ -388,7 +380,7 @@ export let Dependencies = ({ e }: { e: Ent }) => {
           eid={d.parent}
           view='Dependency'
           type={d.type}
-          label={up[d.type] ?? d.type}
+          label={up(d.type)}
         />
       ))}
       {e.kids.map((k) => (

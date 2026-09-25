@@ -83,6 +83,7 @@
       "component": true,
       "type": "object",
       "edge": true,
+      "reversed": "imported by",
       "description": "edge tag: this module imports or re-exports that one",
       "properties": {}
     },

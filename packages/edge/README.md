@@ -53,7 +53,12 @@ let blog = {
       kind: true,
       properties: { title: { type: 'string' } },
     },
-    cites: { component: true, type: 'object', edge: true },
+    cites: {
+      component: true,
+      type: 'object',
+      edge: true,
+      reversed: 'cited by',
+    },
     links: { component: true, type: 'object', edge: 'linked' },
   },
 }
@@ -62,7 +67,9 @@ let blog = {
 `edge: true` uses the component name in queries. A string gives it a different
 query name: `links` is stored as a component but queried as `linked`. `link()`
 and `unlink()` take the **component name**; `walk()` takes the **query name**.
-The package declares no application relations of its own.
+`reversed` says how a relation reads from its far end, so a page drawing the
+posts that cite this one can say `cited by`. The package declares no application
+relations of its own.
 
 ## Creating a link
 
@@ -157,19 +164,22 @@ clauses on its reads.
 
 | Export                             | Purpose                                                       |
 | ---------------------------------- | ------------------------------------------------------------- |
-| `edgeKeywords`, `EDGE_URI`         | Register the `edge` keyword                                   |
+| `edgeKeywords`, `EDGE_URI`         | Register the `edge` and `reversed` keywords                   |
 | `edgeDoc`, `EDGE`                  | Component declaration and component name                      |
 | `relations(vocab)`, `names(vocab)` | Relation-to-component and component-to-relation maps          |
+| `reversed(vocab)`                  | Relation-to-phrase map: how each reads from its far end       |
 | `link`, `unlink`, `edgeEid`        | Create/remove link bundles and compute their IDs              |
 | `tagOf`, `derive`                  | Find a bundle's relation component and build an ID derivation |
 | `edges(vocab)`, `stated(vocab)`    | Graph plugin and its validation hook                          |
 | `walk`, `traverse`                 | Storage traversal and SQL extension                           |
 
 `@yaks/edge/vocab` exports `docs` and `keywords` for plugin loading, plus
-`edgeDoc` and `edgeKeywords`. `@yaks/edge/rules` exports `rules(host)` and
-`extend(host)`, where the **host** is the process that opened the graph; its
-vocabulary is used to create `edges(vocab)` and `traverse(vocab)`, so a host
-that composes this package compiles both clauses above.
+`edgeDoc`, `edgeKeywords`, `relations`, `names` and `reversed`, for a browser
+that reads the vocabulary without loading storage. `@yaks/edge/rules` exports
+`rules(host)` and `extend(host)`, where the **host** is the process that opened
+the graph; its vocabulary is used to create `edges(vocab)` and
+`traverse(vocab)`, so a host that composes this package compiles both clauses
+above.
 
 ## Composition
 

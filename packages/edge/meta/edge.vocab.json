@@ -2,12 +2,16 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yak.sh/vocab/edge",
   "title": "yaks edge keyword vocabulary",
-  "description": "The keyword @yaks/edge adds to a component vocabulary. A component declaring `edge` names a relation: an entity carrying it, beside `edge{from,to}`, is a link of that kind — a `cites` component beside `edge{from,to}` means this post cites that one. Which relations exist is for the application to declare, and this keyword is how it declares them.",
+  "description": "The keywords @yaks/edge adds to a component vocabulary. A component declaring `edge` names a relation: an entity carrying it, beside `edge{from,to}`, is a link of that kind — a `cites` component beside `edge{from,to}` means this post cites that one. Which relations exist is for the application to declare, and these keywords are how it declares them.",
   "$comment": "A vocabulary declaration in the JSON Schema sense: a URI naming this keyword set, plus the schema of each keyword. A vocab file declares it under $vocabulary; a loader registers it with loadVocab(docs, [edgeKeywords]).",
   "$defs": {
     "edge": {
       "description": "This component, stored beside an `edge` component, names the kind of link. `true` names the relation after the component itself (a `cites` component is the `cites` relation); a string gives it a different name in queries, for a vocabulary that stores `references` but queries it as `referenced`. The keyword is named after the component it accompanies, so one rule covers them all — a component stored beside a key declares `key`.",
       "type": ["boolean", "string"]
+    },
+    "reversed": {
+      "description": "How the relation reads from its far end: `cited by` for `cites`, so a post that another cites says it is cited by that one. A reader drawing the links that point at an entity shows this phrase; without one it can only show the relation's own name.",
+      "type": "string"
     }
   }
 }

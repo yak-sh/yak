@@ -28,6 +28,7 @@
       "component": true,
       "type": "object",
       "edge": "satisfies",
+      "reversed": "satisfied by",
       "properties": {},
       "description": "the relation on a link: doing this served that purpose"
     }

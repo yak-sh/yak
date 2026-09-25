@@ -46,6 +46,7 @@
       "component": true,
       "type": "object",
       "edge": true,
+      "reversed": "entry in",
       "description": "a tree holds a child under a name; packing follows these edges to find every reachable object",
       "properties": {
         "name": {
@@ -64,6 +65,7 @@
       "component": true,
       "type": "object",
       "edge": true,
+      "reversed": "parent of",
       "description": "this commit's parent; the edge's `ord` property keeps the parent order",
       "properties": {}
     },
@@ -239,6 +241,7 @@
       "component": true,
       "type": "object",
       "edge": true,
+      "reversed": "cited by",
       "properties": {},
       "description": "edge tag: this entity refers to a place in that one, and can fall out of date when that place changes"
     },

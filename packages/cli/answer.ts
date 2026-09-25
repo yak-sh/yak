@@ -32,6 +32,7 @@ import {
 } from '@yaks/render'
 import type { ComponentRenderer } from '@yaks/preact'
 import type { ComponentChild } from 'preact'
+import { names, reversed } from '@yaks/edge/vocab'
 import { type Node, plain, tree } from '@yaks/text'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import {
@@ -182,8 +183,9 @@ let nearOf = (eid: string, found: Bundle[]): Near => ({
 })
 
 // What a page says about the entity it draws: each link as the entity at its
-// other end, grouped by relation and direction (`contains ←` for the entities
-// that contain it), and the comments aimed at it.
+// other end, grouped by relation and direction — `requires` for what it
+// requires, and the relation's `reversed` phrase (@yaks/edge), `required by`,
+// for the entities that require it — and the comments aimed at it.
 let around = (
   vocab: Vocab,
   it: Bundle,
@@ -191,6 +193,8 @@ let around = (
   held: Map<string, Bundle>,
 ): { relations: Related[]; comments: Bundle[] } => {
   let eid = it.entity.eid
+  let named = names(vocab)
+  let back = reversed(vocab)
   let groups = new Map<string, Bundle[]>()
   for (let b of near.links) {
     let rel = relationOf(vocab, b)
@@ -198,7 +202,7 @@ let around = (
     if (!rel || !edge) continue
     let out = edge.from == eid
     let other = (out ? edge.to : edge.from) ?? ''
-    let title = `${rel} ${out ? '→' : '←'}`
+    let title = out ? rel : back[named[rel]] ?? `${rel} ←`
     groups.set(title, [
       ...groups.get(title) ?? [],
       held.get(other) ?? { entity: { eid: other } },

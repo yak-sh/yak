@@ -82,6 +82,7 @@
       "component": true,
       "type": "object",
       "edge": "serves",
+      "reversed": "served by",
       "description": "an edge relation: this provider serves that model",
       "properties": {
         "name": {

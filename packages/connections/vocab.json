@@ -131,6 +131,7 @@
       "component": true,
       "type": "object",
       "edge": true,
+      "reversed": "used by",
       "properties": {
         "anyone": {
           "type": "boolean",
