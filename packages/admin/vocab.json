@@ -160,12 +160,16 @@
     },
     "admin_query": {
       "tool": true,
+      "surfaces": ["cli"],
       "noun": "admin",
       "verb": "query",
       "title": "Query an app’s store",
-      "description": "An app’s store as this account reads it, through the filter grammar.\n\n  yak admin query jeff/recipes .doc!\n  yak admin query jeff .kind=note",
+      "description": "An app’s store as this account reads it, through the filter grammar. `yak/platform` is the platform’s own store (people, spaces, seats), answered only to a seat in `yak`.\n\n  yak admin query jeff/recipes .doc!\n  yak admin query jeff .kind=note\n  yak admin query yak/platform '.person!&.email.address=jeff@yak.sh' --admin",
       "input": {
-        "where": { "type": "string", "description": "a space, or space/app" },
+        "where": {
+          "type": "string",
+          "description": "a space, space/app, or yak/platform"
+        },
         "filters": {
           "type": "array",
           "items": { "type": "string" },
