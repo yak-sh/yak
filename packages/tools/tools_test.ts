@@ -361,6 +361,24 @@ Deno.test('a call somebody else wrote is run because an effect matched it', asyn
   assertEquals((await g.read('.execution&*'))[0].execution, { state: 'done' })
 })
 
+Deno.test('a call its caller runs owes the pool nothing; one nobody runs does', async () => {
+  let vocab = words()
+  let fx = effects(vocab, { report: () => {} })
+  let g = graph({ vocab, storage: ram(vocab), plugins: [fx] })
+  let r = runner(g, { tools: [echo], report: () => {} })
+  let owed: string[] = []
+  for (let rule of r.rules) {
+    fx.on(rule.plan, (e) => void owed.push(e.entity.eid))
+  }
+  await r.ensure()
+  await r.call(called('example_echo', { value: 'mine' }))
+  await g.apply([{
+    entity: { eid: 'c9' },
+    call: { to: toolEid('example_echo'), args: { value: 'theirs' } },
+  }])
+  assertEquals(owed, ['c9'])
+})
+
 Deno.test('a call for a tool this runner has no word for is left alone', async () => {
   let { g, r } = watched()
   await r.ensure()

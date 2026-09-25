@@ -152,13 +152,15 @@ tools (left out, such a call is left for the runner that has its tool); and
 `toolsDoc` declares two effect-phase rules:
 
 ```text
-call_ready  $call .call, !results, !wake;         +result.call=$call
-call_woken  $call .call, .wake, .fired, !results; +result.call=$call
+call_ready  $call .call, !execution, !results, !wake; +result.call=$call
+call_woken  $call .call, .wake, .fired, !results;       +result.call=$call
 ```
 
-`call_ready` selects a call with no result and no `wake` component. `call_woken`
-selects a call whose [@yaks/wake](../wake) trigger has fired. If the graph does
-not load the wake components, only the first rule can match.
+`call_ready` selects a call nobody has claimed, with no result and no `wake`
+component. A call written through `call()` carries its claim from the start, so
+it owes no run: the caller is running it. `call_woken` selects a call whose
+[@yaks/wake](../wake) trigger has fired. If the graph does not load the wake
+components, only the first rule can match.
 
 The emitted result entity has an id derived from the rule match. Reprocessing
 the same call therefore addresses the same result entity rather than creating a

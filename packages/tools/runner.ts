@@ -18,12 +18,13 @@
 // process, or a year later. Running a call twice patches one entity, never
 // two.
 //
-// Finding a call another process wrote — one scheduled for later, one a crash
-// left behind — is not this file's job. That is an effect, and ./vocab.json
-// declares two (`call_ready`, `call_woken`), each a query over calls; a host
-// that runs effects handles both with `run.due` (@yaks/effects `handle`), one
-// line each, nothing more. `drive()` runs those same two queries once, which
-// is what a boot sweep is.
+// Finding a call another process wrote — one nobody claimed, one scheduled for
+// later — is not this file's job. That is an effect, and ./vocab.json declares
+// two (`call_ready`, `call_woken`), each a query over calls; a host that runs
+// effects handles both with `run.due` (@yaks/effects `handle`), one line each,
+// nothing more. A call written claimed owes neither: the caller is running it.
+// `drive()` runs those same two queries once, and asks for every claimed call
+// with no answer besides, which is what a boot sweep is.
 //
 // At most once, and how a crash is recovered: `execution{state, by}` on the
 // call is the claim. The runner writes `running` with a `$was` precondition
@@ -106,6 +107,10 @@ export class CallError extends Error {
  * each a query the runner also asks on its own, for what a crash left. */
 export let RULES: Declared[] = effectsIn(toolsDoc)
   .flatMap((e) => e.match ? [{ name: e.name, match: e.match }] : [])
+
+/** Every call claimed and not yet answered, whole: what a boot sweep asks for
+ * beside the rules, which owe nothing for a claimed call. */
+export let HELD = '.call&.execution&!results&*'
 
 /** The rule that selects a call due now — the one whose emit names the result
  * entity. */
@@ -542,7 +547,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
 
   // The queue: every call either rule selects, queried once. A rule's match IS
   // the query — its first pattern is the call — so this asks storage the same
-  // question an effect registered on that pattern would.
+  // question an effect registered on that pattern would. The rules owe nothing
+  // for a claimed call, so the claims with no answer are asked for besides:
+  // `whose` says which of them have lapsed.
   let queued = async (): Promise<Bundle[]> => {
     let out = new Map<Eid, Bundle>()
     for (let p of plans) {
@@ -553,6 +560,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         out.set(b.entity.eid, b)
       }
     }
+    for (let b of await g.read(HELD)) out.set(b.entity.eid, b)
     return [...out.values()]
   }
 

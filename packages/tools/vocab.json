@@ -163,8 +163,8 @@
     },
     "call_ready": {
       "effect": true,
-      "match": "$call .call, !results, !wake; +result.call=$call",
-      "description": "a call nobody has run and nobody scheduled: run the tool it names and attach the result"
+      "match": "$call .call, !execution, !results, !wake; +result.call=$call",
+      "description": "a call nobody has claimed and nobody scheduled: run the tool it names and attach the result. A call written already claimed (the caller runs it) owes nothing"
     },
     "call_woken": {
       "effect": true,
