@@ -10,6 +10,7 @@ import {
 import { harnessTools } from './tools.ts'
 import { open } from './store.ts'
 import { local } from './local.ts'
+import { repo } from './testing.ts'
 
 let setup = () => {
   let h = open(':memory:')
@@ -271,6 +272,7 @@ Deno.test('child marks task done through a tool before its final answer: one fin
     },
   })
   let a = local({
+    cwd: repo(),
     h,
     tools,
     model: (req) => {
@@ -544,6 +546,7 @@ Deno.test('existing fork receipts do not read inherited transcript bodies on res
     return read(query, ...rest as [])
   }) as typeof h.g.read
   let a = local({
+    cwd: repo(),
     h,
     name: 'fake',
     model: () => {

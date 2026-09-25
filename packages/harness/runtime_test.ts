@@ -3,11 +3,13 @@ import { local } from './local.ts'
 import { open } from './store.ts'
 import { runtimeRows } from './runtime.ts'
 import { elapsed } from './RuntimePanel.ts'
+import { repo } from './testing.ts'
 
 Deno.test('runtime cancellation preserves partial text, waits for new input, and resumes explicitly', async () => {
   let entered = Promise.withResolvers<void>()
   let calls = 0
   let a = local({
+    cwd: repo(),
     h: open(':memory:'),
     name: 'fake',
     streaming: true,
@@ -64,6 +66,7 @@ Deno.test('runtime queued cancellation is scoped, and inspection does not schedu
   let h = open(':memory:')
   let calls = 0
   let a = local({
+    cwd: repo(),
     h,
     maxChildren: 0,
     name: 'fake',

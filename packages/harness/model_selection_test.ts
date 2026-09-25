@@ -6,6 +6,7 @@ import { identityEid } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import { open } from './store.ts'
 import { sessionTools, usingBefore } from '@yaks/session'
+import { repo } from './testing.ts'
 
 const M = (name: string) => identityEid('model', [name])
 
@@ -21,6 +22,7 @@ Deno.test('model selection derives provider, does not ask, and applies only to s
     })
   }
   const a = local({
+    cwd: repo(),
     h,
     providers: { openai: fake('openai'), openrouter: fake('openrouter') },
   })
@@ -66,6 +68,7 @@ Deno.test('inflight model is unchanged; a passive selection survives its complet
   const held = new Promise<void>((resolve) => release = resolve)
   const seen: string[] = []
   const a = local({
+    cwd: repo(),
     h,
     providers: {
       openai: async (req) => {
@@ -112,6 +115,7 @@ Deno.test('passive model controls do not add invented user text to the next requ
   const seen: Request[] = []
   const h = open(':memory:')
   const a = local({
+    cwd: repo(),
     h,
     model: (req) => {
       seen.push(req)
@@ -144,6 +148,7 @@ Deno.test('late nonstream ask does not override an explicitly selected model', a
   const begun = new Promise<void>((r) => started = r)
   const held = new Promise<void>((r) => release = r)
   const a = local({
+    cwd: repo(),
     h,
     streaming: false,
     model: async (req) => {

@@ -4,6 +4,7 @@ import { Database, driver } from '@yaks/sqlite/db'
 import { MigrationPending, migrations } from '@yaks/sqlite'
 import { local } from './local.ts'
 import { open } from './store.ts'
+import { repo } from './testing.ts'
 
 Deno.test('daemon stop releases its migration monitor before a shared harness is reused', async () => {
   using time = new FakeTime()
@@ -16,7 +17,7 @@ Deno.test('daemon stop releases its migration monitor before a shared harness is
     if (!h.db.open) throw new Error('monitor read a closed database')
     return read()
   }
-  const a = local({ h })
+  const a = local({ cwd: repo(), h })
   let b: ReturnType<typeof local> | undefined
   try {
     time.tick(1000)
@@ -27,7 +28,7 @@ Deno.test('daemon stop releases its migration monitor before a shared harness is
     // Daemon-only shutdown deliberately leaves the connection open for the
     // replacement host (pool_test's durable-queue restart contract).
     assertEquals(h.db.open, true)
-    b = local({ h })
+    b = local({ cwd: repo(), h })
     time.tick(1000)
     assertEquals(reads, 2)
     await b.close()
@@ -71,6 +72,7 @@ Deno.test('migration observation stops admission but drains current model before
     close()
   }
   const a = local({
+    cwd: repo(),
     h,
     migrationPollMs: 1,
     model: async () => {

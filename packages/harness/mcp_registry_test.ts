@@ -5,6 +5,7 @@ import { graphMCP } from './mcp_registry.ts'
 import { signins } from './signin.ts'
 import { fixture } from '../mcp-client/testing.ts'
 import { graphToolName } from '@yaks/mcp-client/graph'
+import { repo } from './testing.ts'
 
 Deno.test('graph MCP definitions persist; rename keeps identity, edits and removal affect next discovery', async () => {
   const f = fixture()
@@ -135,6 +136,7 @@ Deno.test('an already-running agent discovers graph additions on its next ask an
   const h = open(':memory:')
   const offered: string[][] = []
   const a = local({
+    cwd: repo(),
     h,
     tools: [],
     model: (req) => {
@@ -254,6 +256,7 @@ Deno.test('issued calls keep their handler when another ask refreshes the same p
     release = Promise.withResolvers<void>()
   let asks = 0
   const a = local({
+    cwd: repo(),
     h,
     tools: [],
     name: 'fake',

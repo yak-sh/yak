@@ -7,6 +7,7 @@ import { signins } from './signin.ts'
 import { fixture } from '../mcp-client/testing.ts'
 import { serverOf } from '@yaks/mcp-client/graph'
 import { graphToolName } from '@yaks/mcp-client/graph'
+import { repo } from './testing.ts'
 
 Deno.test('configured remote MCP tool publishes mockup through existing call/result transcript', async () => {
   const f = fixture()
@@ -25,6 +26,7 @@ Deno.test('configured remote MCP tool publishes mockup through existing call/res
     },
   }])
   const a = local({
+    cwd: repo(),
     h,
     model: (req) => {
       requests++

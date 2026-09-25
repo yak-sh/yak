@@ -8,7 +8,7 @@ import { App, changes } from './app.ts'
 import { panels, type UIAgent } from './panels.ts'
 import { local } from './local.ts'
 import { open } from './store.ts'
-import { scratchRepo } from './testing.ts'
+import { repo, scratchRepo } from './testing.ts'
 import { until } from '../process/harness.ts'
 
 let settle = async () => {
@@ -114,7 +114,12 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
 
 Deno.test('graph effects paint a model reply without a keypress; sends are input bundles', async () => {
   let reply = deferred<Awaited<ReturnType<Model>>>()
-  let a = local({ h: open(':memory:'), model: () => reply.promise, tools: [] })
+  let a = local({
+    cwd: repo(),
+    h: open(':memory:'),
+    model: () => reply.promise,
+    tools: [],
+  })
   let subscribe = changes(a)
   let ui = await mount(() => h(App, { agent: a, subscribe }), 120, 40)
   try {

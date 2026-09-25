@@ -5,6 +5,7 @@ import { open } from './store.ts'
 import { local } from './local.ts'
 import { harnessTools } from './tools.ts'
 import type { Request } from '@yaks/model'
+import { repo } from './testing.ts'
 
 Deno.test('large outputs snapshot transparently, survive reopen and source mutation', async () => {
   const dir = Deno.makeTempDirSync()
@@ -101,6 +102,7 @@ Deno.test('model receives bounded tool result, UI keeps original and prompt/user
   const text = 'TOOL '.repeat(30000)
   const user = 'USER '.repeat(4000)
   const a = local({
+    cwd: repo(),
     h,
     name: 'fake',
     tools: [...harnessTools(h.g), {

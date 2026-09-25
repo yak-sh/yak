@@ -4,6 +4,7 @@ import { open } from './store.ts'
 import { type Comp, transient } from '@yaks/graph'
 import { ModelError } from '@yaks/model'
 import { statusOf } from '@yaks/session'
+import { repo } from './testing.ts'
 
 Deno.test('streaming records ask before dispatch, projects text without durable token writes, and finalizes same entry', async () => {
   const h = open(':memory:')
@@ -23,6 +24,7 @@ Deno.test('streaming records ask before dispatch, projects text without durable 
   const frames: import('@yaks/graph').TransientFrame[] = []
   transient(h.g).subscribe((f) => frames.push(f))
   const a = local({
+    cwd: repo(),
     h,
     streaming: true,
     model: async (req) => {
@@ -81,6 +83,7 @@ Deno.test('partial failure preserves text and does not automatically retry ambig
   const h = open(':memory:')
   let calls = 0
   const a = local({
+    cwd: repo(),
     h,
     streaming: true,
     model: (req) => {
@@ -152,6 +155,7 @@ Deno.test('new input while streaming is outside frozen ask boundary and served i
   const sent = new Promise<void>((r) => started = r)
   const requests: import('@yaks/model').Request[] = []
   const a = local({
+    cwd: repo(),
     h,
     streaming: true,
     model: async (req) => {
@@ -196,6 +200,7 @@ Deno.test('new input while streaming is outside frozen ask boundary and served i
 Deno.test('restart of dispatched attempt is interrupted, never resent', async () => {
   const h = open(':memory:')
   const a = local({
+    cwd: repo(),
     h,
     streaming: true,
     model: () => {
@@ -292,6 +297,7 @@ Deno.test('an empty successful reply completes its ask rather than issuing anoth
   const h = open(':memory:')
   let count = 0
   const a = local({
+    cwd: repo(),
     h,
     streaming: true,
     model: () => {
@@ -318,6 +324,7 @@ Deno.test('checkpoints bound blob versions and finalization persists one stable 
     if (f.op == 'append') appends++
   })
   const a = local({
+    cwd: repo(),
     h,
     streaming: true,
     checkpointMs: 0,
@@ -361,7 +368,7 @@ Deno.test('operational interruption retains partial context, waits, and continue
   model.mark = (reply) => ({ openai: { response_id: reply.id } })
   model.anchor = (entry) =>
     (entry.openai as Comp | undefined)?.response_id as string | undefined
-  const a = local({ h, streaming: true, model })
+  const a = local({ cwd: repo(), h, streaming: true, model })
   try {
     const id = await a.start('first')
     await a.idle(id)
@@ -398,6 +405,7 @@ Deno.test('operational interruption retains partial context, waits, and continue
 Deno.test('unexpected model programming failure remains an exception', async () => {
   const h = open(':memory:')
   const a = local({
+    cwd: repo(),
     h,
     streaming: true,
     model: () => {
@@ -427,6 +435,7 @@ Deno.test('input admitted during an aborted turn is served once after interrupti
   const gate = new Promise<void>((r) => abort = r)
   const requests: import('@yaks/model').Request[] = []
   const a = local({
+    cwd: repo(),
     h,
     streaming: true,
     model: async (req) => {
@@ -471,6 +480,7 @@ Deno.test('invalid provider history records a healable exception, not an operati
   let { responses } = await import('@yaks/openai')
   let h = open(':memory:')
   let a = local({
+    cwd: repo(),
     h,
     streaming: true,
     model: responses({
@@ -509,6 +519,7 @@ Deno.test('provider rejection paints crashed and successful recovery clears it',
   let h = open(':memory:')
   let calls = 0
   let a = local({
+    cwd: repo(),
     h,
     streaming: true,
     model: () => {

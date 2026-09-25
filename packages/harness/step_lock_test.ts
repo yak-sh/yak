@@ -5,6 +5,7 @@ import { local } from './local.ts'
 import { open } from './store.ts'
 import { stepLock } from './step_lock.ts'
 import type { Comp } from '@yaks/graph'
+import { repo } from './testing.ts'
 
 Deno.test('step locks share an inode and release without blocking other sessions', () => {
   let dir = Deno.makeTempDirSync()
@@ -93,6 +94,7 @@ Deno.test('a second runtime cannot interrupt a live provider attempt', async () 
   let finish = Promise.withResolvers<void>()
   let calls = 0
   let a = local({
+    cwd: repo(),
     h: open(path),
     tools: [],
     streaming: true,
@@ -112,6 +114,7 @@ Deno.test('a second runtime cannot interrupt a live provider attempt', async () 
     let id = await a.start('hello')
     await started.promise
     b = local({
+      cwd: repo(),
       h: open(path),
       tools: [],
       streaming: true,

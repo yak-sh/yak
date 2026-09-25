@@ -6,6 +6,7 @@ import { toolEid } from '@yaks/tools'
 import { seed } from './agent.ts'
 import { local } from './local.ts'
 import { open } from './store.ts'
+import { repo } from './testing.ts'
 
 const P = (name: string) => identityEid('provider', [name])
 const M = (name: string) => identityEid('model', [name])
@@ -29,6 +30,7 @@ Deno.test('OpenRouter provider uses UUIDs and is selected per session/ask, inclu
         provider === 'openai' && b.openai ? 'oa' : undefined,
     })
   const a = local({
+    cwd: repo(),
     h,
     providers: { openai: fake('openai'), openrouter: fake('openrouter') },
   })
@@ -64,6 +66,7 @@ Deno.test('OpenRouter provider uses UUIDs and is selected per session/ask, inclu
 })
 Deno.test('explicit default provider seeds correctly and custom model override remains usable', async () => {
   const a = local({
+    cwd: repo(),
     h: open(':memory:'),
     provider: 'openrouter',
     name: 'vendor/model',
@@ -86,6 +89,7 @@ Deno.test('fork and spawn selecting an existing model are served by a provider t
   const h = open(':memory:')
   const seen: string[] = []
   const a = local({
+    cwd: repo(),
     h,
     providers: {
       openai: (req) => {
@@ -172,6 +176,7 @@ Deno.test('a model two providers serve is asked by the named one, by its name fo
     return Promise.resolve({ id: 'r', model: req.model, items: [] })
   }
   const a = local({
+    cwd: repo(),
     h,
     providers: { openai: fake('openai'), openrouter: fake('openrouter') },
   })

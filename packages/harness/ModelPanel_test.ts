@@ -11,11 +11,13 @@ import { local } from './local.ts'
 import { edgeEid } from '@yaks/edge'
 import { identityEid } from '@yaks/graph'
 import type { Request } from '@yaks/model'
+import { repo } from './testing.ts'
 
 Deno.test('m chooses a model for a new draft; existing choice is passive, Esc preserves draft', async () => {
   const hnd = open(':memory:')
   const requests: Request[] = []
   const a = local({
+    cwd: repo(),
     h: hnd,
     model: (req) => {
       requests.push(req)
@@ -89,6 +91,7 @@ Deno.test('model row mouse selection preserves INSERT and does not submit a draf
   const hnd = open(':memory:')
   let requests = 0
   const a = local({
+    cwd: repo(),
     h: hnd,
     model: (req) => {
       requests++

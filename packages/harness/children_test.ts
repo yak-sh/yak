@@ -13,6 +13,7 @@ import {
 import { seed } from './agent.ts'
 import { type Local, local } from './local.ts'
 import { open } from './store.ts'
+import { repo } from './testing.ts'
 
 let reply = (text: string): Reply => ({
   id: 'r',
@@ -136,7 +137,7 @@ Deno.test('wait resolves while child completion waits behind the parent tool', a
     }
     return Promise.resolve(reply('done'))
   }
-  let a = local({ h, model, tools })
+  let a = local({ cwd: repo(), h, model, tools })
   let parent = await a.start('parent')
   await childAsked.promise
   await waiting.promise
@@ -165,7 +166,12 @@ Deno.test('child capacity queues without rejection; root starts retain their sep
     }
     return Promise.resolve(reply('done'))
   }
-  let a = local({ h, model, tools: sessionTools(h.g, { maxChildren: 1 }) })
+  let a = local({
+    cwd: repo(),
+    h,
+    model,
+    tools: sessionTools(h.g, { maxChildren: 1 }),
+  })
   let parent = await a.start('parent')
   await childAsked.promise
   await a.idle(parent)
@@ -177,7 +183,13 @@ Deno.test('child capacity queues without rejection; root starts retain their sep
 
   h = open(':memory:')
   pending = deferred<Reply>()
-  a = local({ h, model: () => pending.promise, tools: [], maxSessions: 1 })
+  a = local({
+    cwd: repo(),
+    h,
+    model: () => pending.promise,
+    tools: [],
+    maxSessions: 1,
+  })
   let results = await Promise.allSettled([a.start('one'), a.start('two')])
   assertEquals(results.filter((r) => r.status == 'fulfilled').length, 1)
   assertEquals((await a.sessions()).length, 1)
@@ -303,6 +315,7 @@ Deno.test('child completion is queued behind an in-flight parent ask without col
   let turns = 0
   let h = open(':memory:')
   let a = local({
+    cwd: repo(),
     h,
     tools: sessionTools(h.g),
     model: (req) => {

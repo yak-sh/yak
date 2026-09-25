@@ -4,6 +4,7 @@ import { streamingEnabled } from './streaming.ts'
 import { local } from './local.ts'
 import { open } from './store.ts'
 import { remote } from './remote.ts'
+import { repo } from './testing.ts'
 
 Deno.test('streaming defaults on; explicit options override the environment', () => {
   for (const value of [undefined, '1', '0']) {
@@ -31,6 +32,7 @@ Deno.test('default inline streaming admits an ask for a model without deltas; op
     const h = open(':memory:')
     let observed = false
     const a = local({
+      cwd: repo(),
       h,
       env: streamAs(undefined),
       ...options,
@@ -57,6 +59,7 @@ Deno.test('default inline streaming admits an ask for a model without deltas; op
   }
   let calls = 0
   const failed = local({
+    cwd: repo(),
     h: open(':memory:'),
     env: streamAs(undefined),
     model: () => {

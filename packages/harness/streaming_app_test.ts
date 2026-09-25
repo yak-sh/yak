@@ -6,11 +6,13 @@ import { frontend } from './frontend.ts'
 import { local } from './local.ts'
 import { open } from './store.ts'
 import { until } from '../process/harness.ts'
+import { repo } from './testing.ts'
 
 Deno.test('mounted transcript paints partial markdown before the model returns', async () => {
   let release!: () => void
   const wait = new Promise<void>((r) => release = r)
   const a = local({
+    cwd: repo(),
     h: open(':memory:'),
     streaming: true,
     model: async (req) => {
