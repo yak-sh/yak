@@ -1,7 +1,7 @@
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { ids, locked, seed, store } from './harness.ts'
-import { QUIET, turnsOf } from './past.ts'
+import { QUIET, turnsOf, typedIn } from './past.ts'
 import { backfill } from './service.ts'
 
 let line = (e: Record<string, unknown>) => JSON.stringify(e)
@@ -52,10 +52,10 @@ Deno.test('a transcript becomes its typed prompts and each turn’s last reply',
       typed('again', 'T9'),
     ]),
     [
-      { sid: 's', at: 'T1', input: 'fix it' },
+      { sid: 's', at: 'T1', input: 'fix it', typed: true },
       { sid: 's', at: 'T5', output: 'fixed\n\nand tested' },
-      { sid: 's', at: 'T7', input: '/loop 5m go' },
-      { sid: 's', at: 'T9', input: 'again' },
+      { sid: 's', at: 'T7', input: '/loop 5m go', typed: true },
+      { sid: 's', at: 'T9', input: 'again', typed: true },
     ],
   )
 })
@@ -81,8 +81,29 @@ Deno.test('a message a running turn took is typed once, and a subagent’s lines
         message: { content: 'brief' },
       }),
     ]),
-    [{ sid: 's', at: 'T2', input: 'also this' }],
+    [{ sid: 's', at: 'T2', input: 'also this', typed: true }],
   )
+})
+
+Deno.test('a transcript says which prompt a person typed, by the id its hook named', () => {
+  let dir = Deno.makeTempDirSync()
+  try {
+    let path = `${dir}/t.jsonl`
+    let prompt = (promptId: string, kind?: string) =>
+      line({ type: 'user', promptId, ...(kind ? { origin: { kind } } : {}) })
+    Deno.writeTextFileSync(
+      path,
+      [prompt('p1', 'human'), prompt('p1'), prompt('p2', 'task-notification')]
+        .join('\n'),
+    )
+    assertEquals(
+      ['p1', 'p2', 'p3'].map((id) => typedIn(path, id)),
+      [true, false, undefined],
+    )
+    assertEquals(typedIn(`${dir}/none.jsonl`, 'p1'), undefined)
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
 })
 
 let c = (b: Bundle, name: string) => b[name] as Comp | undefined
@@ -118,7 +139,7 @@ Deno.test('a past transcript is read in once, each entry dated when it was said'
   projects([['old-sid', turn]], async (dir) => {
     let g = locked(store())
     let known = new Set<string>()
-    assertEquals(await backfill(g, dir, known), 'old-sid')
+    assertEquals(await backfill(g, dir, known, ids.ada), 'old-sid')
     let [s] = await g.read('.session.id=old-sid&*')
     assertEquals(c(s, 'session')?.operator, true)
     let entries = await g.read(
@@ -129,10 +150,11 @@ Deno.test('a past transcript is read in once, each entry dated when it was said'
         c(b, 'output') ? 'output' : 'input',
         c(b, 'content')?.body,
         c(b, 'created')?.at,
+        c(b, 'created')?.by,
       ]),
       [
-        ['input', 'ship it', '2026-09-01T10:00:00.000Z'],
-        ['output', 'shipped', '2026-09-01T10:05:01.000Z'],
+        ['input', 'ship it', '2026-09-01T10:00:00.000Z', ids.ada],
+        ['output', 'shipped', '2026-09-01T10:05:01.000Z', undefined],
       ],
     )
     assertEquals(await backfill(g, dir, known), undefined)
@@ -149,6 +171,6 @@ Deno.test('a transcript the graph already holds, or one still being written, is 
     let g = locked(s)
     let now = Date.now()
     Deno.utimeSync(`${dir}/-home-me-code/live.jsonl`, new Date(), new Date())
-    assertEquals(await backfill(g, dir, new Set(), now), undefined)
+    assertEquals(await backfill(g, dir, new Set(), undefined, now), undefined)
     assertEquals(await g.read('.session.id=live&*'), [])
   }))

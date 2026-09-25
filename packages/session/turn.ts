@@ -27,6 +27,14 @@ export type Turn = {
   input?: string
   /** the reply the turn ended on */
   output?: string
+  /** the harness's own record of the session, which says whether a person
+   * typed the input or the harness put it there (./past.ts `typedIn`) */
+  transcript?: string
+  /** the harness's id for the input, which its transcript lines carry */
+  promptId?: string
+  /** a person typed the input: known already, as a past transcript's reader
+   * knows it (./past.ts `turnsOf`) */
+  typed?: boolean
 }
 
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
@@ -46,7 +54,10 @@ export let spoolOf = (db?: string): string | undefined =>
 
 /**
  * The spool line a hook payload makes: a prompt is an input, a stop is an
- * output, and anything else is no line at all.
+ * output, and anything else is no line at all. A prompt keeps where the
+ * harness writes it down and under what id: the hook fires for a notification
+ * the harness injected as well as for what a person typed, and only the
+ * transcript tells them apart.
  *
  * ```ts
  * turnOf({ hook_event_name: 'UserPromptSubmit', session_id: 's', prompt: 'hi' }, 'T')
@@ -62,7 +73,14 @@ export let turnOf = (
   let input = event == 'UserPromptSubmit' ? str(body.prompt) : ''
   let output = event == 'Stop' ? str(body.last_assistant_message) : ''
   if (!sid || !(input || output)) return undefined
-  return { sid, at, ...(input ? { input } : { output }) }
+  let transcript = str(body.transcript_path)
+  let promptId = str(body.prompt_id)
+  return {
+    sid,
+    at,
+    ...(input ? { input } : { output }),
+    ...(input && transcript && promptId ? { transcript, promptId } : {}),
+  }
 }
 
 let locked = <T>(f: Deno.FsFile, body: () => T): T => {
@@ -106,30 +124,34 @@ export let report = (body: Record<string, unknown>, path: string): void => {
 }
 
 /** The complete lines in the spool, and how many bytes they took — what
- * {@link trim} is handed once they are written down. The file is left as it
- * was. */
-export let taken = (path: string): { turns: Turn[]; bytes: number } => {
+ * {@link trim} is handed once they are written down. `ends[i]` is where
+ * `turns[i]`'s line ends, for a reader that writes down only the first few.
+ * The file is left as it was. */
+export let taken = (
+  path: string,
+): { turns: Turn[]; ends: number[]; bytes: number } => {
   let f: Deno.FsFile
   try {
     f = Deno.openSync(path, { read: true })
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return { turns: [], bytes: 0 }
+    if (e instanceof Deno.errors.NotFound) {
+      return { turns: [], ends: [], bytes: 0 }
+    }
     throw e
   }
   try {
     // Up to the last newline: a fragment after it is not a line yet.
     let all = locked(f, () => readAll(f))
-    let bytes = all.lastIndexOf(10) + 1
-    let turns = new TextDecoder().decode(all.subarray(0, bytes)).split('\n')
-      .filter(Boolean)
-      .flatMap((line) => {
-        try {
-          return [JSON.parse(line) as Turn]
-        } catch {
-          return [] // a line that is not JSON is nobody's turn
-        }
-      })
-    return { turns, bytes }
+    let turns: Turn[] = []
+    let ends: number[] = []
+    let from = 0
+    for (let nl; (nl = all.indexOf(10, from)) >= 0; from = nl + 1) {
+      try {
+        turns.push(JSON.parse(new TextDecoder().decode(all.subarray(from, nl))))
+        ends.push(nl + 1)
+      } catch { /* a line that is not JSON is nobody's turn */ }
+    }
+    return { turns, ends, bytes: from }
   } finally {
     f.close()
   }

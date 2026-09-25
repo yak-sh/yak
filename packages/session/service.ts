@@ -24,7 +24,7 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { SESSION } from './comp.ts'
 import { CONTENT, ENTRY, OUTPUT } from './native.ts'
-import { claudeProjects, next, turnsOf } from './past.ts'
+import { claudeProjects, next, turnsOf, typedIn } from './past.ts'
 import { spoolOf, taken, trim, type Turn } from './turn.ts'
 import { sessionFor } from './who.ts'
 
@@ -57,73 +57,97 @@ let idOf = async (t: Turn): Promise<string> =>
     ),
   )
 
+// How long an input waits in the spool for its harness to write it down, so
+// the transcript can say whether a person typed it (./past.ts `typedIn`). Past
+// that it is written unsigned: who typed it stays unknown.
+export let WAIT = 30_000
+
+// Whether a person typed the input, as its transcript says: `undefined` while
+// the harness has not written it down.
+let typedOf = (t: Turn): boolean | undefined =>
+  t.transcript && t.promptId ? typedIn(t.transcript, t.promptId) : false
+
 /**
- * The bundles a run of spool lines becomes: each session they name, created
- * where the graph has none and marked `operator` where a person typed into it,
- * then one transcript entry per line, in spool order.
+ * The bundles a spool line becomes: its session, created where the graph has
+ * none and marked `operator` where a person typed into it, then its transcript
+ * entry. An input marked `typed` is signed with `person`, through the session
+ * where it already exists.
  */
-export let recorded = async (g: Graph, turns: Turn[]): Promise<Bundle[]> => {
-  // Per harness id: the session's eid (an alias where it is new), whether it
-  // is already marked `operator`, and what this batch writes on it.
-  let seen = new Map<string, { eid: string; operator: boolean; own: Comp }>()
-  let entries: Bundle[] = []
-  for (let t of turns) {
-    let s = seen.get(t.sid)
-    if (!s) {
-      let found = await sessionFor(g, t.sid)
-      s = found
-        ? {
-          eid: found.entity.eid,
-          operator: !!(found[SESSION] as Comp).operator,
-          own: {},
-        }
-        : { eid: `$${t.sid}`, operator: false, own: { id: t.sid } }
-      seen.set(t.sid, s)
-    }
-    if (t.input != null && !s.operator) s.operator = s.own.operator = true
-    entries.push({
-      entity: { eid: await idOf(t) },
-      [ENTRY]: { session: s.eid },
-      [CONTENT]: { body: t.input ?? t.output ?? '' },
-      ...(t.output != null ? { [OUTPUT]: { source: s.eid } } : {}),
-    })
+export let recorded = async (
+  g: Graph,
+  t: Turn,
+  person?: string,
+): Promise<Bundle[]> => {
+  let found = await sessionFor(g, t.sid)
+  let eid = found?.entity.eid ?? `$${t.sid}`
+  let own: Comp = found ? {} : { id: t.sid }
+  if (t.input != null && !(found?.[SESSION] as Comp | undefined)?.operator) {
+    own.operator = true
   }
-  let sessions = [...seen.values()].flatMap((s): Bundle[] =>
-    Object.keys(s.own).length
-      ? [{ entity: { eid: s.eid }, [SESSION]: s.own }]
-      : []
-  )
-  return [...sessions, ...entries]
+  let by = t.input != null && t.typed ? person : undefined
+  return [
+    ...(Object.keys(own).length ? [{ entity: { eid }, [SESSION]: own }] : []),
+    {
+      entity: { eid: await idOf(t) },
+      [ENTRY]: { session: eid },
+      [CONTENT]: { body: t.input ?? t.output ?? '' },
+      ...(t.output != null ? { [OUTPUT]: { source: eid } } : {}),
+      ...(by ? { $actor: { by, ...(found ? { via: eid } : {}) } } : {}),
+    },
+  ]
 }
 
 /** Write turns into their transcripts, each stamped with the moment it
  * happened rather than the moment it was read, so a person's words sort by
  * when they were said. */
-export let record = async (g: Graph, turns: Turn[]): Promise<void> => {
-  for (let t of turns) await g.apply(await recorded(g, [t]), { now: t.at })
+export let record = async (
+  g: Graph,
+  turns: Turn[],
+  person?: string,
+): Promise<void> => {
+  for (let t of turns) {
+    await g.apply(await recorded(g, t, person), { now: t.at })
+  }
 }
 
-/** Read the spool into the graph once, then trim what was written. Answers how
- * many lines it read. */
-export let drain = async (g: Graph, path: string): Promise<number> => {
-  let { turns, bytes } = taken(path)
-  await record(g, turns)
-  trim(path, bytes)
-  return turns.length
+/** Read the spool into the graph once, then trim what was written. Where
+ * there is a `person` to sign with, each input is asked of its transcript; one
+ * the harness has not written down yet stops the read there, for up to
+ * {@link WAIT}, so it and the lines after it wait for the next pass. Answers
+ * how many lines it wrote. */
+export let drain = async (
+  g: Graph,
+  path: string,
+  person?: string,
+  now: number = Date.now(),
+): Promise<number> => {
+  let { turns, ends, bytes } = taken(path)
+  let ready: Turn[] = []
+  for (let t of turns) {
+    let typed = person && t.input != null ? typedOf(t) : false
+    if (typed === undefined && now - Date.parse(t.at) < WAIT) break
+    ready.push({ ...t, typed: !!typed })
+  }
+  let n = ready.length
+  await record(g, ready, person)
+  trim(path, n < turns.length ? ends[n - 1] ?? 0 : bytes)
+  return n
 }
 
-/** Read one past transcript into the graph, if one is waiting (./past.ts).
- * Answers the session it read, or nothing. */
+/** Read one past transcript into the graph, if one is waiting (./past.ts),
+ * its typed prompts signed with `person`. Answers the session it read, or
+ * nothing. */
 export let backfill = async (
   g: Graph,
   dir: string,
   known: Set<string>,
+  person?: string,
   now?: number,
 ): Promise<string | undefined> => {
   let past = await next(g, dir, known, now)
   if (!past) return undefined
   let lines = Deno.readTextFileSync(past.path).split('\n')
-  await record(g, turnsOf(past.sid, lines))
+  await record(g, turnsOf(past.sid, lines), person)
   known.add(past.sid)
   return past.sid
 }
@@ -141,9 +165,10 @@ let sleep = (ms: number, signal: AbortSignal) =>
  * gets one pass. A pass that fails is logged and tried again on the next, so
  * the lines wait in the spool rather than being lost. Between passes, a
  * long-running host reads in one past transcript; once none is waiting, it
- * looks again every ten minutes. */
+ * looks again every ten minutes. What the config's `person` typed is signed
+ * with them. */
 export let service = async (
-  host: { graph: Graph; config?: { db?: string } },
+  host: { graph: Graph; config?: { db?: string; person?: string } },
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
@@ -152,16 +177,20 @@ export let service = async (
   let dir = options.transcripts ?? claudeProjects()
   let known = new Set<string>()
   let idle = 0
+  let said = host.config?.person
+  let person = said && ((await host.graph.address([said])).get(said) ?? said)
   for (;;) {
     try {
-      await drain(host.graph, path)
+      await drain(host.graph, path, person)
     } catch (e) {
       console.error('turn spool —', e)
     }
     if (signal.aborted) return
     if (dir && Date.now() >= idle) {
       try {
-        if (!await backfill(host.graph, dir, known)) idle = Date.now() + LOOK
+        if (!await backfill(host.graph, dir, known, person)) {
+          idle = Date.now() + LOOK
+        }
       } catch (e) {
         console.error('transcript backfill —', e)
         idle = Date.now() + LOOK

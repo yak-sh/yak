@@ -152,14 +152,19 @@ export type Agent<H extends Host = Host> = {
   model: Eid
   /** what to call a model or tool entity, for the views */
   names: Record<string, string>
-  /** start a transcript with one instruction; the daemon takes it from there */
-  start: (prompt: string, o?: { effort?: string; model?: Eid }) => Promise<Eid>
+  /** start a transcript with one instruction; the daemon takes it from there.
+   * `by` is who wrote the instruction, where the caller knows. */
+  start: (
+    prompt: string,
+    o?: { effort?: string; model?: Eid; by?: Eid },
+  ) => Promise<Eid>
   /** the configured models, and what this session asks for next */
   models: (session?: Eid) => Promise<ModelSelection>
   /** record a passive model choice; the next request honours it */
   selectModel: (session: Eid, model: Eid) => Promise<void>
-  /** say something more to a transcript that is already going */
-  send: (session: Eid, text: string) => Promise<Eid>
+  /** say something more to a transcript that is already going, as `by` where
+   * the caller knows who wrote it */
+  send: (session: Eid, text: string, by?: Eid) => Promise<Eid>
   /** mint and delegate unfiled work under an existing session */
   taskEntry: (session: Eid, text: string) => Promise<{ task: Eid; child: Eid }>
   archive: (session: Eid, archived: boolean) => Promise<void>
@@ -301,11 +306,15 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     [using.model]: name,
     ...Object.fromEntries(tools.map((t) => [toolEid(t.name), t.name])),
   }
-  // What attributes a write made here: the transcript it is about. The harness
-  // runs for whoever is at the keyboard and holds no entity for them, so the
-  // instrument is recorded and the actor is left unset rather than guessed; a
-  // model turn attributes itself (@yaks/session react.ts).
-  let through = (session: Eid) => ({ via: session })
+  // What attributes a write made here: the transcript it is about, and who
+  // wrote it where the caller said. The harness runs for whoever is at the
+  // keyboard and holds no entity for them, so otherwise the instrument is
+  // recorded and the actor is left unset rather than guessed; a model turn
+  // attributes itself (@yaks/session react.ts).
+  let through = (session: Eid, by?: Eid) => ({
+    ...by ? { by } : {},
+    via: session,
+  })
 
   // Lifecycle bookkeeping only; all application state remains in the graph.
   let refusal: Error | undefined
@@ -345,7 +354,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     },
     start: admitted((
       prompt: string,
-      o: { effort?: string; model?: Eid } = {},
+      o: { effort?: string; model?: Eid; by?: Eid } = {},
     ) =>
       admit(h.g, undefined, opts, async () => {
         const chosen = o.model
@@ -362,7 +371,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
             entity: { eid: session },
             session: { id: session.slice(0, 8) },
             ...home ? { home } : {},
-            $actor: through(session),
+            $actor: through(session, o.by),
           },
           {
             entity: { eid: crypto.randomUUID() as Eid },
@@ -378,7 +387,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
         return session
       })
     ),
-    send: admitted(async (session: Eid, text: string) => {
+    send: admitted(async (session: Eid, text: string, by?: Eid) => {
       // Admission is independent of the provider/tool execution queue. The
       // session plugin assigns seq inside this write's transaction.
       let eid = crypto.randomUUID() as Eid
@@ -386,7 +395,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
         entity: { eid },
         [ENTRY]: { session },
         [CONTENT]: { body: text },
-        $actor: through(session),
+        $actor: through(session, by),
       }])
       return eid
     }),

@@ -41,6 +41,28 @@ Deno.test('the runner needs a graph and a model, nothing of a machine', async ()
   await assertRejects(() => a.send(s, 'again'), Error, 'Agent is closing')
 })
 
+Deno.test('what a caller says is signed with them, through the transcript', async () => {
+  let { h, release } = host()
+  let a = agent({ h, model: echo, release })
+  try {
+    let [caller] = await h.g.apply([
+      { entity: { eid: '$c' }, session: { id: 'caller' } },
+    ])
+    let by = caller.entity.eid
+    let s = await a.start('ping', { by })
+    await a.idle(s)
+    await a.send(s, 'again', by)
+    await a.idle(s)
+    let said = (await a.transcript(s)).filter((b) => b.content && !b.output)
+    assertEquals(
+      said.map((b) => [(b.created as Comp).by, (b.created as Comp).via]),
+      [[by, s], [by, s]],
+    )
+  } finally {
+    await a.close()
+  }
+})
+
 Deno.test('a new session opens with what its host found for it', async () => {
   let a = agent({
     ...host(),

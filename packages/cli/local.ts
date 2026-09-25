@@ -75,14 +75,22 @@ export let close = async (code?: number): Promise<void> => {
  * naming this line's session in `x-via`, exactly as it answers one arriving
  * over HTTP (@yaks/session/routes), so a session's writes are its own however
  * they reached the graph. A door that knows no such session answers this
- * process ({@link writer} in ./host.ts). */
+ * process ({@link writer} in ./host.ts), and a line with no session, typed at a
+ * terminal, writes as the config's `person` through it: an agent's shell always
+ * names its session (run.ts `via`), so a keyboard with none is the person's. */
 export let signer = async (
-  host: Pick<Served, 'who'>,
+  host: Pick<Served, 'who' | 'config' | 'graph'>,
   via?: string,
+  typed: boolean = Deno.stdin.isTerminal(),
 ): Promise<{ $actor?: Actor }> => {
   let actor = await host.who(
     new Request('http://localhost/', { headers: via ? { [VIA]: via } : {} }),
   )
+  let said = !via && typed ? host.config.person : undefined
+  if (said) {
+    let by = (await host.graph.address([said])).get(said) ?? said
+    return { $actor: { ...actor, by } }
+  }
   return actor ? { $actor: { ...actor } } : {}
 }
 

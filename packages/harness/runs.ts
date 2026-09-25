@@ -61,6 +61,13 @@ let settled = async (a: Local, s: Eid): Promise<Bundle[]> => {
   return (await a.transcript(s)).slice(-1)
 }
 
+// Who called: what they asked a session is theirs (@yaks/tools signs the call
+// with its caller).
+let caller = (call: Bundle): Eid | undefined => {
+  let by = (call.created as Comp | undefined)?.by
+  return typeof by == 'string' ? by : undefined
+}
+
 let text = (call: Bundle, body: string): Bundle => ({
   entity: { eid: crypto.randomUUID() },
   content: { body },
@@ -87,6 +94,7 @@ export let runs = (host: Host): Runs => ({
     try {
       let s = await a.start(String(args.prompt ?? ''), {
         effort: word(args, 'effort'),
+        by: caller(call),
       })
       return await settled(a, s)
     } finally {
@@ -99,7 +107,7 @@ export let runs = (host: Host): Runs => ({
     try {
       let s = await sessionAt(graph, a, String(args.session))
       if (!s) throw new Error(`no such session: ${args.session}`)
-      await a.send(s, String(args.text))
+      await a.send(s, String(args.text), caller(call))
       return await settled(a, s)
     } finally {
       await a.close()

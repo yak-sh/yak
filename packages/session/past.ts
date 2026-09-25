@@ -63,6 +63,36 @@ let typed = (e: Line): string | undefined => {
   }
 }
 
+/**
+ * What the transcript at `path` says about the prompt the harness's hook named
+ * `id` (its `prompt_id`, each line's `promptId`): `true` where a person typed
+ * it, `false` where the harness put it there (a task's notification), and
+ * `undefined` where the transcript holds no line of it. The hook fires before
+ * the harness writes the prompt down, so a moment later is when to ask.
+ */
+export let typedIn = (path: string, id: string): boolean | undefined => {
+  let text: string
+  try {
+    text = Deno.readTextFileSync(path)
+  } catch {
+    return undefined
+  }
+  let seen: boolean | undefined
+  for (let raw of text.split('\n')) {
+    if (!raw.includes(id)) continue
+    let e: Line
+    try {
+      e = obj(JSON.parse(raw))
+    } catch {
+      continue
+    }
+    if (e.type != 'user' || e.promptId != id) continue
+    if (obj(e.origin).kind == 'human') return true
+    seen = false
+  }
+  return seen
+}
+
 // The harness writes one of these when a turn ends, where the Stop hook runs.
 let ended = (e: Line) =>
   e.type == 'system' &&
@@ -102,7 +132,7 @@ export let turnsOf = (sid: string, lines: string[]): Turn[] => {
       // copy already stands.
       if (e.type == 'queue-operation') absorbed.add(input)
       else if (absorbed.has(input)) continue
-      out.push({ sid, at, input })
+      out.push({ sid, at, input, typed: true })
       reply = undefined
     } else if (e.type == 'assistant' && !e.isSidechain) {
       let msg = obj(e.message)

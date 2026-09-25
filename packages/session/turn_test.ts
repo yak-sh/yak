@@ -36,6 +36,21 @@ Deno.test('a prompt is an input, a stop is an output, the rest is nothing', () =
   assertEquals(turnOf(stop('hi', '')), undefined)
 })
 
+Deno.test('a prompt keeps where its harness writes it down, and under what id', () => {
+  let where = { transcript_path: '/t.jsonl', prompt_id: 'p1' }
+  assertEquals(turnOf({ ...prompt('hi'), ...where }, 'T'), {
+    sid: 's1',
+    at: 'T',
+    input: 'hi',
+    transcript: '/t.jsonl',
+    promptId: 'p1',
+  })
+  assertEquals(
+    turnOf({ ...stop('done'), ...where }, 'T')?.transcript,
+    undefined,
+  )
+})
+
 Deno.test('the spool sits beside the database, and a memory graph has none', () => {
   assertEquals(spoolOf('/h/.yak/yak.db'), '/h/.yak/spool/turns.jsonl')
   assertEquals(spoolOf(':memory:'), undefined)
@@ -46,12 +61,18 @@ Deno.test('lines come back in order, and a trim keeps what arrived since', () =>
   spooled((path) => {
     report(prompt('one\ntwo'), path)
     report(stop('three'), path)
-    let { turns, bytes } = taken(path)
+    let { turns, ends, bytes } = taken(path)
     assertEquals(turns.map((t) => t.input ?? t.output), ['one\ntwo', 'three'])
+    assertEquals(ends.at(-1), bytes)
     report(prompt('four'), path)
-    trim(path, bytes)
-    assertEquals(taken(path).turns.map((t) => t.input), ['four'])
+    trim(path, ends[0])
+    assertEquals(taken(path).turns.map((t) => t.input ?? t.output), [
+      'three',
+      'four',
+    ])
   }))
 
 Deno.test('a spool nobody wrote is empty', () =>
-  spooled((path) => assertEquals(taken(path), { turns: [], bytes: 0 })))
+  spooled((path) =>
+    assertEquals(taken(path), { turns: [], ends: [], bytes: 0 })
+  ))

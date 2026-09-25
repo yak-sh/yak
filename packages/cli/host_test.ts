@@ -327,7 +327,7 @@ Deno.test('a host that names itself writes as itself, and a plugin may say who e
   }
 })
 
-Deno.test('a command line writes as the session it names, through the same door as HTTP', async () => {
+Deno.test('a command line writes as the session it names, through the same door as HTTP, or as the person typing it', async () => {
   // The door knows one run by its `x-via`, as @yaks/session's does.
   let ana = { by: 'ana', via: 'her-run' }
   let told: Plugged = {
@@ -337,21 +337,25 @@ Deno.test('a command line writes as the session it names, through the same door 
     },
   }
   let host = await compose(
-    { db: ':memory:', plugins: ['shop', 'told'] },
+    { db: ':memory:', plugins: ['shop', 'told'], person: 'jo' },
     only({ shop, told }),
   )
   try {
     await host.runner.ensure()
-    let add = async (via?: string) =>
+    let add = async (via?: string, typed = false) =>
       (await host.runner.call([{
         entity: { eid: '$call' },
         call: { to: toolEid('book_add'), args: { title: 'Dune' } },
-        ...await signer(host, via),
+        ...await signer(host, via, typed),
       }])).find((b) => b.book)?.created as Comp
     assertEquals((await add('her-run')).by, 'ana')
     // A run the door does not know, or none at all, is this process's writing.
     assertEquals((await add('nobody')).by, me)
     assertEquals((await add()).by, me)
+    // A line typed at a terminal, naming no session, is the config's person's;
+    // a session typed into a terminal is still that session's.
+    assertEquals((await add(undefined, true)).by, 'jo')
+    assertEquals((await add('her-run', true)).by, 'ana')
   } finally {
     host.close()
   }

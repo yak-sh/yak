@@ -1,7 +1,7 @@
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { ids, locked, store } from './harness.ts'
-import { drain } from './service.ts'
+import { drain, WAIT } from './service.ts'
 import { report } from './turn.ts'
 
 let say = (path: string, event: string, sid: string, text: string) =>
@@ -45,6 +45,47 @@ Deno.test('prompts and replies land in order, a new session under its own id', (
     ])
     assertEquals(await told(g, ids.run1), [['input', 'and this']])
     assertEquals(await drain(g, path), 0)
+  }))
+
+Deno.test('what a person typed is signed with them; a prompt not yet written down waits', () =>
+  spooled(async (path) => {
+    let g = locked(store())
+    let transcript = `${path}.transcript`
+    let written = (...kinds: string[]) =>
+      Deno.writeTextFileSync(
+        transcript,
+        kinds.map((kind, i) =>
+          JSON.stringify({ type: 'user', promptId: `p${i}`, origin: { kind } })
+        ).join('\n'),
+      )
+    let ask = (text: string, i: number) =>
+      report({
+        hook_event_name: 'UserPromptSubmit',
+        session_id: 'one',
+        prompt: text,
+        transcript_path: transcript,
+        prompt_id: `p${i}`,
+      }, path)
+    let signed = async () =>
+      (await g.read(`.entry.session=${ids.run1}&.order=entry.seq&*`)).map((
+        b,
+      ) => [c(b, 'content')?.body, c(b, 'created')?.by])
+    ask('typed', 0)
+    ask('notified', 1)
+    ask('typed too', 2)
+    written('human', 'task-notification')
+    assertEquals(await drain(g, path, ids.ada), 2)
+    written('human', 'task-notification', 'human')
+    assertEquals(await drain(g, path, ids.ada), 1)
+    ask('never written', 3)
+    assertEquals(await drain(g, path, ids.ada), 0)
+    assertEquals(await drain(g, path, ids.ada, Date.now() + WAIT), 1)
+    assertEquals(await signed(), [
+      ['typed', ids.ada],
+      ['notified', undefined],
+      ['typed too', ids.ada],
+      ['never written', undefined],
+    ])
   }))
 
 Deno.test('a line read twice writes nothing new', () =>

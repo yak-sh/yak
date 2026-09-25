@@ -50,6 +50,13 @@ export type Config = {
   adopt?: boolean
   /** what the MCP server calls itself (default `yak`) */
   name?: string
+  /** the person who works at this machine, as any id the graph resolves (an
+   * eid, a human id, a name). What they type here is signed with them: a
+   * prompt their harness's transcript marks as typed (@yaks/session
+   * `service`), and a command line run at a terminal that names no session
+   * (./local.ts `signer`). Left out, nothing is signed as a person: a machine
+   * never guesses who is at its keyboard. */
+  person?: string
   /** how long this process's lease on a duty stands before another
    * process may take it over, in milliseconds (default 30_000). A holder still
    * doing the work renews it on a timer; one that was killed leaves a lease
