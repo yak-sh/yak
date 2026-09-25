@@ -2,9 +2,11 @@
 // one a config names, opened in this process (./local.ts), or the one behind an
 // MCP server (./platform.ts), whose reply carries the same bundles. A tool
 // returns bundles and never keeps the terminal; drawing them is the caller's,
-// through the same @yaks/render views a browser draws with. Printed, they go
-// through @yaks/text as plain lines; under `--tui`, @yaks/preact mounts them in
-// @yaks/tui, which holds the terminal until Ctrl-C.
+// through the same @yaks/render views a browser draws with, lowered by where
+// they go. Piped, they go through @yaks/text as plain lines; to a terminal,
+// @yaks/preact mounts the same trees in @yaks/tui's document and its painter
+// lays them out in color, once; under `--tui`, @yaks/tui holds them until
+// Ctrl-C.
 //
 // The views are every configured plugin's `./views`, then @yaks/tools' (the
 // host always carries its `content`), then the generic ones any entity has
@@ -30,11 +32,18 @@ import {
   type Selection,
 } from '@yaks/render'
 import type { ComponentRenderer } from '@yaks/preact'
-import { render, tree } from '@yaks/text'
+import type { ComponentChild } from 'preact'
+import { type Node, plain, tree } from '@yaks/text'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { type Related, type Shown, views as generic } from '@yaks/web/views'
+import {
+  type Related,
+  sheet,
+  type Shown,
+  views as generic,
+} from '@yaks/web/views'
 import { subpath } from './config.ts'
 import { understood } from './keywords.ts'
+import type { Tty } from './run.ts'
 
 /** How one plugin's `./views` becomes a module: {@link subpath} unless a test
  * hands its modules over inline. */
@@ -207,6 +216,29 @@ let around = (
   return { relations, comments }
 }
 
+// What an answer draws, in whatever tree `draw` builds: each entity it is about
+// as a `Page` with what surrounds it, a blank line apart, or else every entity
+// as its view, a line apiece. The one composition both lowerings share.
+let drawn = <Node>(
+  vocab: Vocab,
+  answer: Bundle[],
+  named: Bundle[],
+  draw: (b: Bundle, view: string, ctx: Shown<Node>) => Node | null,
+): { nodes: (Node | null)[]; gap: string } => {
+  let ctx = shown(vocab, answer, draw, named)
+  let about = subjects(vocab, answer)
+  if (!about.length) {
+    return { nodes: answer.map((b) => draw(b, viewOf(answer), ctx)), gap: '\n' }
+  }
+  let held = new Map([...named, ...answer].map((b) => [b.entity.eid, b]))
+  return {
+    nodes: about.map((b) =>
+      draw(b, 'Page', { ...ctx, ...around(vocab, b, answer, held) })
+    ),
+    gap: '\n\n',
+  }
+}
+
 /** An answer as the lines a terminal prints. `named` holds the entities its
  * references point at, so each prints as its id; one not there prints as its
  * handle. */
@@ -216,61 +248,73 @@ export let printed = (
   answer: Bundle[],
   named: Bundle[] = [],
 ): string => {
-  let ctx = shown(
+  let { nodes, gap } = drawn<Node>(
     vocab,
     answer,
-    (b, v, c) => tree(views, b, v, vocab, c),
     named,
+    (b, v, c) => tree(views, b, v, vocab, c),
   )
-  let about = subjects(vocab, answer)
-  if (about.length) {
-    let held = new Map([...named, ...answer].map((b) => [b.entity.eid, b]))
-    return about
-      .map((b) =>
-        render(views, b, 'Page', vocab, {
-          ...ctx,
-          ...around(vocab, b, answer, held),
-        }, 'plain')
-      )
-      .join('\n\n')
-  }
-  return answer
-    .map((b) => render(views, b, viewOf(answer), vocab, ctx, 'plain'))
-    .filter(Boolean)
-    .join('\n')
+  return nodes.map((n) => plain(n)).filter(Boolean).join(gap)
 }
 
-/** An answer held in the terminal (@yaks/tui) until Ctrl-C. Loaded only when
- * asked for, so a printed answer never pays for a terminal app. `db` is the
- * file the answer came from, for a view that keeps reading it. A lone answer
- * drawn by a component of its own (a plugin's `./tui`) is an app, and has the
- * whole terminal; anything else scrolls. */
+/** The same answer painted for a terminal `columns` wide: the same views,
+ * mounted in @yaks/tui's document and laid out, styled and colored by its
+ * painter, once. Loaded only for a terminal, so a printed answer never pays
+ * for the painter. */
+export let painted = async (
+  views: Registry,
+  vocab: Vocab,
+  answer: Bundle[],
+  named: Bundle[],
+  columns: number,
+): Promise<string> => {
+  let [{ render: mount }, { print }] = await Promise.all([
+    import('@yaks/preact'),
+    import('@yaks/tui/print'),
+  ])
+  let { nodes, gap } = drawn<ComponentChild>(
+    vocab,
+    answer,
+    named,
+    (b, v, c) => mount(views, b, v, vocab, { ...c, readOnly: true }),
+  )
+  return nodes.map((n) => print(n, columns, sheet)).filter(Boolean).join(gap)
+}
+
+/** An answer held in the terminal (@yaks/tui) until Ctrl-C, drawn as a
+ * printout draws it ({@link painted}). Loaded only when asked for, so a
+ * printed answer never pays for a terminal app. `db` is the file the answer
+ * came from, for a view that keeps reading it. A lone answer drawn by a
+ * component of its own (a plugin's `./tui`) is an app, and has the whole
+ * terminal; anything else scrolls. */
 export let hold = async (
   views: Held,
   vocab: Vocab,
   answer: Bundle[],
   db?: string,
+  named: Bundle[] = [],
 ): Promise<void> => {
   let [{ h }, { render: mount }, { run, Scroll }] = await Promise.all([
     import('preact'),
     import('@yaks/preact'),
     import('@yaks/tui'),
   ])
-  let ctx = {
-    ...shown(vocab, answer, (b, v, c) => mount(views, b, v, vocab, c)),
-    db,
-  }
-  let view = viewOf(answer)
   let [lone] = answer
   let app = answer.length == 1 && 'Render' in
-      (resolve(views, lone, view, vocab, ctx) ?? {})
-  await run(() =>
-    app ? mount(views, lone, view, vocab, ctx) : h(
+      (resolve(views, lone, viewOf(answer), vocab, { db }) ?? {})
+  await run(() => {
+    let { nodes } = drawn<ComponentChild>(
+      vocab,
+      answer,
+      named,
+      (b, v, c) => mount(views, b, v, vocab, { ...c, db }),
+    )
+    return app ? nodes[0] : h(
       Scroll,
       { id: 'answer', grow: '1' },
-      answer.map((b) => h('div', null, mount(views, b, view, vocab, ctx))),
+      nodes.map((n) => h('div', null, n)),
     )
-  )
+  }, { sheet })
 }
 
 // A package a server named that this machine has no copy of: its plugins are
@@ -298,20 +342,28 @@ export let reported = async (
 
 /** An answer shown the way the command asked — held in the terminal under
  * `--tui`, drawn by `held` where the command has terminal views and a file to
- * read ({@link terminal}), and printed otherwise. `lookup` reads the entities
- * the answer's references point at, from wherever the answer came from, so a
- * reference prints as the id a person types. */
+ * read ({@link terminal}), painted where stdout is a terminal, and printed
+ * otherwise. `lookup` reads the entities the answer's references point at,
+ * from wherever the answer came from, so a reference prints as the id a person
+ * types. */
 export let show = async (
-  c: { tui: boolean; out: (line: string) => void },
+  c: { tui: boolean; tty?: Tty; out: (line: string) => void },
   views: Registry,
   vocab: Vocab,
   answer: Bundle[],
   held: { views?: Held; db?: string } = {},
   lookup: (eids: string[]) => Bundle[] | Promise<Bundle[]> = () => [],
 ): Promise<void> => {
-  if (c.tui) return await hold(held.views ?? views, vocab, answer, held.db)
   let refs = referenced(vocab, answer)
   let named = refs.length ? await lookup(refs) : []
+  if (c.tui) {
+    return await hold(held.views ?? views, vocab, answer, held.db, named)
+  }
+  if (c.tty) {
+    let text = await painted(views, vocab, answer, named, c.tty.columns)
+    if (text) c.tty.write(text)
+    return
+  }
   let text = printed(views, vocab, answer, named)
   if (text) c.out(text)
 }

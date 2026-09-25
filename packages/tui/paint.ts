@@ -127,6 +127,7 @@ let INLINE = new Set([
   'del',
   'code',
   'a',
+  'time',
   'button',
   'label',
 ])
@@ -200,6 +201,24 @@ let flow = (
     return lines
   }
   if (el.localName == 'hr') return [[{ text: '────────', style: s }]]
+  if (el.localName == 'dl') {
+    // A term and the description after it share a line, `term: description`,
+    // as @yaks/text prints them.
+    for (let k of kids(el)) {
+      if (k.localName == 'dd' && cur.length) {
+        cur.push({ text: ' ', style: s }, ...inline(k, s, c))
+        flush()
+      } else if (k.localName == 'dt') {
+        flush()
+        cur.push(...inline(k, s, c), { text: ':', style: s })
+      } else {
+        flush()
+        lines.push(...lay(k, s, w, null, c))
+      }
+    }
+    flush()
+    return lines
+  }
   if (el.localName == 'pre') {
     // A preformatted block paints its allocated width, including blank rows.
     // Keep long lines intact so the enclosing layout retains its wrap policy.
@@ -580,6 +599,23 @@ export let screenful = (
 ): { lines: Line[]; metrics: Metrics } => {
   let c: Ctx = { sheet, metrics: {} }
   return { lines: lay(root, {}, columns, rows, c), metrics: c.metrics }
+}
+
+/** A tree painted once, as tall as it is, for a command that prints and exits:
+ * the layout and escapes a held screen gets, folded at word boundaries to the
+ * terminal's width, with no screen kept. `sheet` extends the theme, as it does
+ * for {@link ansiBackend}. */
+export let printout = (
+  root: TElement,
+  columns: number,
+  sheet: Sheet = {},
+): string => {
+  let lines = lay(root, {}, columns, null, {
+    sheet: { ...base, ...sheet },
+    metrics: {},
+  }).flatMap((line) => wrap(line, columns))
+  while (lines.length && !width(lines.at(-1)!)) lines.pop()
+  return lines.map((line) => ansi(line).trimEnd()).join('\n')
 }
 
 let enc = new TextEncoder()

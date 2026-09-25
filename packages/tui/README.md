@@ -29,12 +29,14 @@ multiline input, and two responsive sidebar panels. Press Ctrl+C to exit.
 
 The public entry point is `mod.ts`. It exports:
 
-- application lifecycle: `run` and `quit`;
+- application lifecycle: `run` and `quit`, and `print`, which paints a tree once
+  for a command that prints and exits (also `@yaks/tui/print`, without the
+  widgets);
 - components and related types: `Frame`, `Panel`, `Scroll`, `View`, `Textarea`,
   `VirtualList`, `VirtualWindow`, `VirtualItem`, `Anchor`, `Image`, and
   `ImageSource`;
 - rendering: `ansiBackend`, `Backend`, `Line`, `Seg`, `Metrics`, `lay`, `clip`,
-  `wrap`, `screenful`, `ansi`, and `clipboard`;
+  `wrap`, `screenful`, `printout`, `ansi`, and `clipboard`;
 - styling: `theme`, `everforest`, `Sheet`, and `Style`;
 - input and routing: `decode`, `feed`, `Input`, `Key`, `Mouse`, `MouseEvent`,
   `Name`, `Keys`, `useKeys`, `useKeymap`, `press`, `pressTo`, `pressFocused`,

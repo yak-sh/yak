@@ -50,6 +50,10 @@ export type Ctx = {
   /** Whether an answer is held in the terminal (@yaks/tui) rather than
    * printed — `--tui`. */
   tui: boolean
+  /** Where an answer is painted rather than printed: present when stdout is
+   * a terminal (and `NO_COLOR` is unset), with its width and a writer that
+   * keeps the painter's escapes — the painter strips content's own. */
+  tty?: Tty
   help: boolean
   /** The session this command line speaks for ({@link via}), named the same
    * way to a host over HTTP and to a graph this process opened. */
@@ -68,6 +72,15 @@ export type Ctx = {
   /** The usage page — every tool one line each, and why a list is missing. */
   page: () => Promise<string>
 }
+
+/** A terminal an answer is painted on: how wide it is, and where its bytes go. */
+export type Tty = { columns: number; write: (text: string) => void }
+
+// This process's stdout, where it is a terminal a person reads in color.
+let terminal = (env: Env): Tty | undefined =>
+  Deno.stdout.isTerminal() && !env('NO_COLOR')
+    ? { columns: Deno.consoleSize().columns, write: (t) => console.log(t) }
+    : undefined
 
 /**
  * One command this program can run: a tool's declaration — its name, its
@@ -401,6 +414,9 @@ export let cli = async (
       duties,
       json,
       tui,
+      // Only this process's own stdout can be a terminal: a caller that hands
+      // in `out` reads text.
+      tty: opts.out ? undefined : terminal(env),
       help,
       via: speaks,
       state,
