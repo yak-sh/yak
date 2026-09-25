@@ -93,8 +93,8 @@ includes only the requested entity's changes in this response. The low-level
 ## What it returns
 
 This example assumes `vocab` declares a `page` component with a string `title`,
-and `driver` implements `@yaks/sqlite`'s synchronous `query`/`exec` interface.
-Both graph storage and journal use that same connection.
+and `driver` is @yaks/sql's synchronous `Driver`. Both graph storage and journal
+use that same connection.
 
 ```ts
 import { graph } from '@yaks/graph'

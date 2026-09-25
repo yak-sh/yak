@@ -29,10 +29,8 @@ export function location() {
 /** A driver that prepares every statement afresh: no layer gets a private
  * cache. */
 export let perCall = (db: Database): Driver => ({
-  query: (s, bound) => {
-    let { sql, params } = typeof s == 'string'
-      ? { sql: s, params: bound ?? [] }
-      : render(s)
+  query: (s) => {
+    let { sql, params } = render(s)
     let stmt = db.prepare(sql)
     try {
       return stmt.all(...params)
@@ -40,7 +38,6 @@ export let perCall = (db: Database): Driver => ({
       stmt.finalize()
     }
   },
-  exec: (s) => db.exec(typeof s == 'string' ? s : render(s).sql),
 })
 
 /** A file as every bench opens it: keys enforced, WAL, normal sync. */

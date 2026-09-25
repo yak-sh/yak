@@ -57,8 +57,9 @@ does the indexing, so the order of a bundle's components does not matter.
 ## The four pieces
 
 This example assumes `vocab` is loaded from the schema above with the graph's
-base vocabulary, and `db` is a synchronous driver with `query(sql, params)` and
-`exec(sql)`. Create the graph's component tables before these indexes.
+base vocabulary, and `db` is @yaks/sql's synchronous `Driver`, which runs a
+statement with `query(statement)`. Create the graph's component tables before
+these indexes.
 
 ```ts
 import { fields, find, heal, schema, search } from '@yaks/fts'

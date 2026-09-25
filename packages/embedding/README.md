@@ -20,9 +20,9 @@ deno add jsr:@yaks/embedding
 ## Use
 
 This example assumes a loaded `vocab` declaring a `book` component with text
-properties and a numeric `price`, and a synchronous `@yaks/sqlite` `db` driver
-with `query(sql, params)` and `exec(sql)`. The graph's tables and sample books
-must already exist.
+properties and a numeric `price`, and a synchronous `db`, @yaks/sql's `Driver`,
+which runs a statement with `query(statement)`. The graph's tables and sample
+books must already exist.
 
 ```ts
 import { fields, hashEmbedder, schema, semantic, sweep } from '@yaks/embedding'

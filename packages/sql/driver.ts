@@ -6,33 +6,18 @@
 // Synchronous on purpose: SQLite is a synchronous engine, and a store's reads
 // and writes stay free of promise plumbing. An engine that is async (D1) wraps
 // it at its own boundary.
-//
-// TODO(T-39499): a string and its parameters are still taken while the
-// packages that wrote SQL text move onto the AST; the string form and `exec`
-// go once none does.
 
-import {
-  as,
-  col,
-  count,
-  type Expr,
-  type Param,
-  select,
-  type Stmt,
-  table,
-} from './ast.ts'
+import { as, col, count, type Expr, select, type Stmt, table } from './ast.ts'
 
 /** One row, a bag of column values keyed by name. */
 export type Row = Record<string, unknown>
 
 export type Driver = {
   /** run a statement and return every row */
-  query: (s: Stmt | string, params?: Param[]) => Row[]
+  query: (s: Stmt) => Row[]
   /** run a write and return how many rows it changed, triggers aside;
    * optional for a driver that can only query */
-  run?: (s: Stmt | string, params?: Param[]) => number
-  /** run a script of statements for effect */
-  exec: (s: Stmt | string) => void
+  run?: (s: Stmt) => number
   /**
    * Run `body` as one all-or-nothing unit, for an engine that owns its
    * transactions: commit when it returns, roll back when it throws. Most
@@ -61,13 +46,9 @@ export type Driver = {
 }
 
 /** A statement run for its effect, through `run` where the driver has one. */
-export let effect = (
-  driver: Driver,
-  s: Stmt | string,
-  params?: Param[],
-): void => {
-  if (driver.run) driver.run(s, params)
-  else driver.query(s, params)
+export let effect = (driver: Driver, s: Stmt): void => {
+  if (driver.run) driver.run(s)
+  else driver.query(s)
 }
 
 /** How many rows a table holds, or how many of them a condition keeps. */

@@ -41,7 +41,7 @@ let loaded = (
     { now: NOW, number: true, derived, extend: [...extend, search(text)] },
   )
   s.install()
-  for (let stmt of ftsSchema(text)) db.exec(stmt)
+  for (let stmt of ftsSchema(text)) db.query(stmt)
   s.tx((tx) => tx.patch(rows))
   return s
 }

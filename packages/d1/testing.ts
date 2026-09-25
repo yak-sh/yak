@@ -1,9 +1,9 @@
 // The stand-in (not part of the published package — see deno.json): D1's API
-// over an in-memory SQLite (@yaks/sqlite/db `open`), so the adapter can be
-// tested without Cloudflare. The surface is small enough to imitate exactly,
-// and imitating it exactly is the point — every rule below is one the runtime
-// enforces, so a bug this stand-in cannot see is a bug the runtime would not
-// have shown either:
+// over an in-memory SQLite that takes text (../sqlite/testing.ts `textual`),
+// so the adapter can be tested without Cloudflare. The surface is small enough
+// to imitate exactly, and imitating it exactly is the point — every rule below
+// is one the runtime enforces, so a bug this stand-in cannot see is a bug the
+// runtime would not have shown either:
 //
 //   It is async-only          `all()` and `batch()` return promises. An adapter
 //                             that accidentally relied on a synchronous answer
@@ -26,9 +26,9 @@
 // a number that quietly grows. hops_test.ts holds each shape of batch to a
 // pinned count.
 
-import { open } from '@yaks/sqlite/db'
+import { render, type Tx } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import { shop } from '../sqlite/testing.ts'
+import { shop, textual } from '../sqlite/testing.ts'
 import type { D1Like, D1Result, D1Value, Row } from './d1.ts'
 import { storage, type Store } from './store.ts'
 
@@ -73,7 +73,7 @@ export type Prepared = {
 
 /** A stand-in for a `D1Database` binding over a fresh in-memory database. */
 export let d1 = (): D1Like<Prepared> => {
-  let db = open(':memory:')
+  let db = textual()
 
   let run = (sql: string, params: D1Value[]): Row[] => {
     // The runtime takes an ArrayBuffer; the library underneath takes bytes.
@@ -84,8 +84,10 @@ export let d1 = (): D1Like<Prepared> => {
         ? Number(p)
         : p
     )
-    return db.query(sql, binds).map(out)
+    return db.run(sql, binds).map(out)
   }
+  // The transaction a batch is, said by the stand-in itself.
+  let unit = (s: Tx) => void db.run(render(s).sql)
 
   let check = (sql: string, params: D1Value[]) => {
     for (let p of params) {
@@ -118,14 +120,15 @@ export let d1 = (): D1Like<Prepared> => {
     // any failure rolls all of them back.
     batch: (statements) => {
       for (let s of statements) check(s.sql, s.params)
-      db.exec('savepoint d1_batch')
+      let name = 'd1_batch'
+      unit({ t: 'savepoint', name })
       try {
         let results = statements.map((s) => ({ results: run(s.sql, s.params) }))
-        db.exec('release d1_batch')
+        unit({ t: 'release', name })
         return Promise.resolve(results)
       } catch (e) {
-        db.exec('rollback to d1_batch')
-        db.exec('release d1_batch')
+        unit({ t: 'rollback', to: name })
+        unit({ t: 'release', name })
         return Promise.reject(e)
       }
     },

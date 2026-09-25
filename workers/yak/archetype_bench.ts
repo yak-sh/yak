@@ -13,9 +13,9 @@ for (let indexed of [false, true]) {
   let statements: unknown[] = []
   const sql: Driver = {
     ...base,
-    query: (s, p) => {
+    query: (s) => {
       statements.push(s)
-      return base.query(s, p)
+      return base.query(s)
     },
   }
   const defs = Object.fromEntries(

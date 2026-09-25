@@ -19,9 +19,9 @@ for (
     let statements = 0
     const sql: Driver = {
       ...base,
-      query: (s, p) => {
+      query: (s) => {
         statements++
-        return base.query(s, p)
+        return base.query(s)
       },
     }
     const vocab = loadVocab(

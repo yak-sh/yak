@@ -12,8 +12,8 @@ import { embedder, shop, stocked } from './testing.ts'
 
 // The eids a query selects, in the order the statement yields them.
 let ask = (db: Driver, q: string, ext: ReturnType<typeof semantic>) => {
-  let { sql, params } = compile(parse(q), shop, { extend: [ext] })
-  return db.query(sql, params).map((r) => String(r.eid))
+  return db.query(compile(parse(q), shop, { extend: [ext] }))
+    .map((r) => String(r.eid))
 }
 
 Deno.test('.near selects the neighbourhood and nothing else', async () => {

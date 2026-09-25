@@ -21,22 +21,22 @@ Deno.test('rules raises the vectors and adds no rule to apply()', () => {
 Deno.test('the extension a config builds answers .near over these vectors', async () => {
   let db = await stocked()
   let [near] = extend({ sql: db }, hash)
-  let { sql, params } = compile(
-    parse('.near=book-1&.order=similar'),
-    shop,
-    { extend: [near] },
-  )
-  assertEquals(db.query(sql, params).map((r) => String(r.eid))[0], 'book-2')
+  let q = compile(parse('.near=book-1&.order=similar'), shop, {
+    extend: [near],
+  })
+  assertEquals(db.query(q).map((r) => String(r.eid))[0], 'book-2')
 })
 
 Deno.test('the neighbourhood the config bounded is the one it gets', async () => {
   let db = await stocked()
   let [near] = extend({ sql: db }, { ...hash, neighbours: 1 })
-  let { sql, params } = compile(parse('.near=book-1'), shop, { extend: [near] })
-  assertEquals(db.query(sql, params).length, 1)
+  assertEquals(
+    db.query(compile(parse('.near=book-1'), shop, { extend: [near] })).length,
+    1,
+  )
   let [strict] = extend({ sql: db }, { ...hash, floor: 0.99 })
   let tight = compile(parse('.near=book-1'), shop, { extend: [strict] })
-  assertEquals(db.query(tight.sql, tight.params).length, 0)
+  assertEquals(db.query(tight).length, 0)
 })
 
 Deno.test('no embedder named is no space to rank in, and no extension', () => {
@@ -61,12 +61,10 @@ Deno.test('a key that has not arrived still names the space it will fill', async
       key: undefined,
     },
   })
-  let { sql, params } = compile(
-    parse('.near=book-1&.order=similar'),
-    shop,
-    { extend: [near] },
-  )
-  assertEquals(db.query(sql, params).map((r) => String(r.eid))[0], 'book-2')
+  let q = compile(parse('.near=book-1&.order=similar'), shop, {
+    extend: [near],
+  })
+  assertEquals(db.query(q).map((r) => String(r.eid))[0], 'book-2')
 })
 
 Deno.test('the mark starts dirty: an index never built is owed one', () => {

@@ -35,20 +35,6 @@ Deno.test('a file opens in WAL with NORMAL sync and a busy timeout', () => {
   }
 })
 
-Deno.test('a string of several statements runs every one', () => {
-  using sql = scratch()
-  sql.query('create table t (x); insert into t values (1), (2)', [])
-  assertEquals(sql.query('select x from t order by x', []), [{ x: 1 }, {
-    x: 2,
-  }])
-  assertThrows(
-    () => sql.query('insert into t values (?); insert into t values (?)', [3]),
-    Error,
-    'one statement',
-  )
-  assertEquals(sql.query('select count(*) as n from t', []), [{ n: 2 }])
-})
-
 Deno.test('a kept statement answers with the columns the schema now has', () => {
   using sql = scratch()
   sql.query({ t: 'create table', name: 't', cols: [{ name: 'x' }] })

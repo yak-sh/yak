@@ -1,6 +1,7 @@
 // The stand-in (not part of the published package — see deno.json): a Durable
-// Object's storage surface over @yaks/sqlite's `open()`, so the adapter can be
-// tested without Cloudflare. The surface is small enough to imitate exactly — one
+// Object's storage surface over an in-memory SQLite that takes text
+// (../sqlite/testing.ts `textual`), so the adapter can be tested without
+// Cloudflare. The surface is small enough to imitate exactly — one
 // `exec`, one `transactionSync` — and imitating it exactly is the point:
 //
 //   it takes only SqlStorageValues     a boolean, a bigint or a byte array
@@ -17,10 +18,19 @@
 // so a bug this stand-in cannot see is a bug the runtime would not have shown
 // either.
 
-import { open } from '@yaks/sqlite/db'
-import { type Param, render, type Stmt } from '@yaks/sql'
+import {
+  col,
+  lit,
+  not,
+  op,
+  type Param,
+  render,
+  select,
+  type Stmt,
+  table,
+} from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import { shop } from '../sqlite/testing.ts'
+import { shop, textual } from '../sqlite/testing.ts'
 import { type DurableStorage, prohibited, type SqlValue } from './sql.ts'
 import { storage, type Store } from './store.ts'
 
@@ -85,16 +95,21 @@ export let durable = (): DurableStorage & {
   // The one alarm, as the runtime holds it: an instant or nothing, cleared by
   // the delivery that fires it.
   let alarm: number | null = null
-  let db = open(':memory:')
+  let db = textual()
   let closed = false
   let depth = 0
   // The runtime takes an ArrayBuffer; the engine underneath takes bytes.
   let run = (query: string, bindings: (SqlValue | Param)[]) => {
     if (closed) throw new Error('storage is disposed')
-    return db.query(
+    return db.run(
       query,
       bindings.map((b) => b instanceof ArrayBuffer ? new Uint8Array(b) : b),
     )
+  }
+  // What the stand-in says itself, as the runtime does below the authorizer.
+  let said = (s: Stmt) => {
+    let { sql, params } = render(s)
+    return run(sql, params)
   }
   return {
     // Native SQLite allocations are invisible to the JS heap's GC pressure.
@@ -122,8 +137,8 @@ export let durable = (): DurableStorage & {
       },
       // What this database weighs, the way SQLite itself measures it.
       get databaseSize() {
-        let [page] = run('pragma page_count', [])
-        let [size] = run('pragma page_size', [])
+        let [page] = said({ t: 'pragma', name: 'page_count' })
+        let [size] = said({ t: 'pragma', name: 'page_size' })
         return Number(Object.values(page ?? {})[0] ?? 0) *
           Number(Object.values(size ?? {})[0] ?? 0)
       },
@@ -133,14 +148,15 @@ export let durable = (): DurableStorage & {
     // this drops everything in the schema, which over one in-memory database
     // is the same end state.
     deleteAll: () => {
-      let names = run(
-        "select type, name from sqlite_master where name not like 'sqlite_%'",
-        [],
-      ) as { type: string; name: string }[]
-      for (let kind of ['trigger', 'view', 'index', 'table']) {
+      let names = said(select({
+        cols: [col('type'), col('name')],
+        from: table('sqlite_master'),
+        where: not(op('like', col('name'), lit('sqlite_%'))),
+      }))
+      for (let kind of ['trigger', 'view', 'index', 'table'] as const) {
         for (let it of names.filter((n) => n.type == kind)) {
           try {
-            run(`drop ${kind} if exists "${it.name}"`, [])
+            said({ t: 'drop', kind, name: String(it.name), ifExists: true })
           } catch { /* a shadow table its virtual table already took */ }
         }
       }
@@ -153,22 +169,19 @@ export let durable = (): DurableStorage & {
     // creating `_cf_KV` and reading it back are both things workerd refuses to
     // an object and does itself. This is the only way a test can see what every
     // deployed object actually contains.
-    beneath: (statement) => {
-      let { sql, params } = render(statement)
-      return run(sql, params)
-    },
+    beneath: said,
     // Nested savepoints, which is what the runtime's own transaction is: an
     // inner throw rolls back only the inner run.
     transactionSync: (body) => {
       let name = `do_tx_${depth++}`
-      run(`savepoint ${name}`, [])
+      said({ t: 'savepoint', name })
       try {
         let value = body()
-        run(`release ${name}`, [])
+        said({ t: 'release', name })
         return value
       } catch (e) {
-        run(`rollback to ${name}`, [])
-        run(`release ${name}`, [])
+        said({ t: 'rollback', to: name })
+        said({ t: 'release', name })
         throw e
       } finally {
         depth--

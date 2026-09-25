@@ -1,5 +1,7 @@
 // The {@link Driver} over one native @db/sqlite handle. Internal to this
-// package: ./db.ts `open()` is the door, and the handle never leaves it.
+// package: ./db.ts `open()` is the door, and the handle never leaves it. The
+// one other caller is ./testing.ts, whose stand-ins imitate engines that take
+// text.
 
 import './sqlitepath.ts'
 import type { Database } from '@db/sqlite'
@@ -10,18 +12,15 @@ import {
   eq,
   type Param,
   render,
+  type Row,
   select,
-  type Stmt,
   STOCK,
   val,
 } from '@yaks/sql'
 
-// A statement as the text the engine prepares and what it binds.
-let text = (s: Stmt | string, params: Param[] = []) =>
-  typeof s == 'string' ? { sql: s, params } : render(s)
-
 /*
- * The {@link Driver} over one open embedded database.
+ * Text in, rows out, over one open embedded database: what {@link driver}
+ * renders every statement into.
  *
  * It keeps the statements it prepares. The adapter asks the same
  * parameterized gathers and writes thousands of times a session, and
@@ -32,28 +31,13 @@ let text = (s: Stmt | string, params: Param[] = []) =>
  * answer with the columns it was prepared under. The cache empties whenever
  * the schema version moves, a rolled-back change included.
  *
- * A string of several statements runs all of them, as a Durable Object's
- * `exec` does, and answers no rows. Parameters bind to one statement, so such
- * a string with parameters is refused rather than cut short.
- *
- * A database on disk is a file other processes may have open too, so the
- * driver reports that ({@link Driver.file}) and the outermost unit takes the
- * write lock up front. An in-memory one belongs to this process alone and sets
- * nothing.
+ * Text a stand-in was handed can hold several statements, as a Durable
+ * Object's `exec` takes; they all run, and answer no rows. Parameters bind to
+ * one statement, so such a string with parameters is refused rather than cut
+ * short. A rendered statement is always one.
  */
-export let driver = (db: Database): Driver => {
+export let prepared = (db: Database) => {
   let cache = new Map<string, ReturnType<Database['prepare']>>()
-  // Whether this is a file other processes may have open, asked of SQLite
-  // itself rather than of the string somebody passed: `main` has a path on
-  // disk, and an in-memory or temporary database has none.
-  let main = render(select({
-    cols: [col('file')],
-    from: call('pragma_database_list', []),
-    where: eq(col('name'), val('main')),
-  }))
-  let file = !!(db.prepare(main.sql).all(...main.params)[0] as
-    | { file?: string }
-    | undefined)?.file
   let schema = db.prepare(
     render({ t: 'pragma', schema: 'main', name: 'schema_version' }).sql,
   )
@@ -69,8 +53,7 @@ export let driver = (db: Database): Driver => {
     cache.clear()
     version = now
   }
-  let query: Driver['query'] = (s, bound) => {
-    let { sql, params } = text(s, bound)
+  return (sql: string, params: Param[] = []): Row[] => {
     live()
     let statement = cache.get(sql)
     if (!statement) {
@@ -106,12 +89,31 @@ export let driver = (db: Database): Driver => {
       throw error
     }
   }
+}
+
+/**
+ * The {@link Driver} over one open embedded database.
+ *
+ * A database on disk is a file other processes may have open too, so the
+ * driver reports that ({@link Driver.file}) and the outermost unit takes the
+ * write lock up front. An in-memory one belongs to this process alone and sets
+ * nothing.
+ */
+export let driver = (db: Database): Driver => {
+  let run = prepared(db)
+  // Whether this is a file other processes may have open, asked of SQLite
+  // itself rather than of the string somebody passed: `main` has a path on
+  // disk, and an in-memory or temporary database has none.
+  let main = render(select({
+    cols: [col('file')],
+    from: call('pragma_database_list', []),
+    where: eq(col('name'), val('main')),
+  }))
+  let file = !!run(main.sql, main.params)[0]?.file
   return {
-    query,
-    exec: (s) => {
-      if (typeof s != 'string') return void query(s)
-      live()
-      db.exec(s)
+    query: (s) => {
+      let { sql, params } = render(s)
+      return run(sql, params)
     },
     file,
     arms: STOCK,

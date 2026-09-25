@@ -55,7 +55,7 @@ Deno.test('archetype query golden: presence/kind, value joins, boolean, paths, r
     ]
   ) {
     let old = compile(parse(q), vocab)
-    assertEquals(rows(driver, vocab, q), driver.query(old.sql, old.params), q)
+    assertEquals(rows(driver, vocab, q), driver.query(old), q)
   }
   let bool = and(or(present('doc'), present('product')), absent('marker'))
   let old = compile(bool, vocab)
@@ -101,11 +101,11 @@ Deno.test('archetype plans and gathers observe commits from another SQLite handl
     // Deferred units, so the commit staged below can land while the reader's
     // unit is open rather than wait on the write lock it would take up front.
     file: false,
-    query: (s, params) => {
-      let result = db.query(s, params)
+    query: (s) => {
+      let result = db.query(s)
       // The planner consults the catalog through its version probe; a
       // commit landing right after it is the race this test stages.
-      let sql = typeof s == 'string' ? s : render(s).sql
+      let sql = render(s).sql
       if (db == first && sql.startsWith('select count(*) as "n", max(')) {
         let hook = afterCatalog
         afterCatalog = undefined

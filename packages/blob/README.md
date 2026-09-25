@@ -62,8 +62,8 @@ binary artifacts rather than assuming every backend validates keys and data.
 
 ## Configure storage and the plugin
 
-This example continues with `blog` above. Supply a synchronous SQLite `driver`
-with `query(sql, params)` and `exec(sql)` methods:
+This example continues with `blog` above. Supply a synchronous SQLite `driver`,
+@yaks/sql's `Driver`, which runs a statement with `query(statement)`:
 
 ```ts
 import { loadVocab } from '@yaks/vocab'

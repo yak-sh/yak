@@ -109,20 +109,11 @@ let unbind = (row: Row): Row => {
  * ```
  */
 export let driver = (durable: DurableStorage): Driver => {
-  let query = (s: Stmt | string, bound: Param[] = []): Row[] => {
-    let { sql, params } = typeof s == 'string'
-      ? { sql: s, params: bound }
-      : render(s)
+  // The cursor is lazy: draining it is what runs the statement.
+  let query = (s: Stmt): Row[] => {
+    let { sql, params } = render(s)
     return durable.sql.exec(sql, ...params.map(bind)).toArray().map(unbind)
   }
   query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
-  return {
-    query,
-    // The cursor is lazy: draining it is what runs the statement.
-    exec: (s) => {
-      if (typeof s == 'string') durable.sql.exec(s).toArray()
-      else query(s)
-    },
-    tx: (body) => durable.transactionSync(body),
-  }
+  return { query, tx: (body) => durable.transactionSync(body) }
 }

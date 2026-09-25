@@ -7,7 +7,10 @@
 // forms (a product's unique sku, a shelf's composite slot) without any
 // knowledge outside this file.
 
+import './sqlitepath.ts'
+import { Database } from '@db/sqlite'
 import { open } from './db.ts'
+import { prepared } from './native.ts'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import {
@@ -18,13 +21,26 @@ import {
   type Param,
   render,
   type Row,
-  type Stmt,
 } from '@yaks/sql'
 import { storage, type Store } from './mod.ts'
 
 // A Driver over a fresh in-memory database, foreign keys enforced so a dangling
 // reference is rejected the way it would be in production.
 export let mem = (): Driver => open(':memory:')
+
+/**
+ * An in-memory database that takes text, for a stand-in imitating an engine
+ * whose own API is text: a Durable Object's `sql.exec`, D1's `prepare`. Only a
+ * stand-in needs this door, and nothing published has one: @yaks/sqlite runs
+ * what @yaks/sql renders. Keys are enforced, as `open()` enforces them.
+ */
+export let textual = () => {
+  let db = new Database(':memory:')
+  let run = prepared(db)
+  let keys = render({ t: 'pragma', name: 'foreign_keys', value: 'on' })
+  run(keys.sql, keys.params)
+  return { run, close: () => db.close() }
+}
 
 // The shop vocabulary, authored as JSON Schema plus the yaks keywords.
 let doc: VocabDoc = {
@@ -180,9 +196,6 @@ export let seed = (s: Store, bundles: Bundle[]): void => {
 export let shopGraph = (): Graph => graph({ storage: store(), vocab: shop })
 
 // A statement as SQLite receives it: its text and the values it binds.
-let said = (s: Stmt | string, params: Param[] = []) =>
-  typeof s == 'string' ? { sql: s, params } : render(s)
-
 /** Whether a statement opens, closes or marks a unit (unit.ts) rather than
  * reading or writing. */
 export let unit = (sql: string): boolean =>
@@ -198,13 +211,9 @@ export let spy = (
   saw: (sql: string, params: Param[]) => Row[] | void,
 ): Driver => ({
   ...d,
-  query: (s, params) => {
-    let r = said(s, params)
-    return saw(r.sql, r.params) ?? d.query(s, params)
-  },
-  exec: (s) => {
-    let r = said(s)
-    if (!saw(r.sql, r.params)) d.exec(s)
+  query: (s) => {
+    let r = render(s)
+    return saw(r.sql, r.params) ?? d.query(s)
   },
 })
 
