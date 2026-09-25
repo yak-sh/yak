@@ -16,7 +16,7 @@ import {
 } from '@yaks/effects'
 import { modelDoc } from '@yaks/model'
 import { ram } from '@yaks/ram'
-import { sessionDoc, sessions } from '@yaks/session'
+import { sessionDoc, sessions, transcriptUsage } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { launch, processDoc, processes, selfEid, store } from '@yaks/process'
@@ -62,6 +62,11 @@ Deno.test('the request starts the provider, and what it printed is the transcrip
     let last = (await said(g.g)).at(-1)!
     assertEquals(comp(last, 'stop'), {})
     assertEquals(comp(last, 'usage')?.output_tokens, 34)
+    // Where a daemon's ask keeps it, so what reads a transcript's usage reads
+    // a run's.
+    let [cost] = await transcriptUsage(g.g, 'S1')
+    assertEquals(comp(cost, 'usage')?.output_tokens, 34)
+    assertEquals(comp(cost, 'ask')?.through, 'E1')
     await until(
       async () => comp((await g.g.read('.session&*'))[0], 'exit'),
       'the ending',

@@ -89,6 +89,9 @@ let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
 export type Asked = Job & {
   /** the provider's name, which is what names an adapter */
   provider: string
+  /** the ask a turn of this run answers (@yaks/session `ask`): the model
+   * entity, and the request entry it was asked through */
+  ask: Comp
 }
 
 // The efforts a model accepts, space- or comma-separated. An empty list allows
@@ -161,8 +164,23 @@ export let asked = async (
     model: spelled,
     effort: effort || undefined,
     instruction: String(said?.body ?? ''),
+    ask: {
+      ...served ? { to: String(using.model) } : {},
+      through: request.entity.eid,
+    },
   }
 }
+
+// A turn's ending carries what it cost, and says which ask it answers the way
+// a daemon's ask entry does, so whatever reads usage off `ask` rows
+// (@yaks/session `transcriptUsage`) reads a run's too.
+let answering = (adapter: Adapter, ask: Comp): Adapter => ({
+  ...adapter,
+  entry: (e) => {
+    let comps = adapter.entry(e)
+    return comps?.usage ? { ...comps, ask } : comps
+  },
+})
 
 // How far the transcript has already read its own log: the highest line
 // imported, which is where the next read starts. The stamp is the cursor, so
@@ -376,7 +394,7 @@ export let start = async (
     eid: session, // one entity: the transcript is the thing running
     stream: false, // the lines are entries, not anonymous output
   })
-  follow(g, session, adapter, o).catch(told(o))
+  follow(g, session, answering(adapter, job.ask), o).catch(told(o))
   return run
 }
 
@@ -408,7 +426,9 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
     run.done.catch(told(o))
     let job = await asked(g, run.eid).catch(() => null)
     let adapter = job && (o.adapters ?? known)[job.provider]
-    if (adapter) follow(g, run.eid, adapter, o).catch(told(o))
+    if (job && adapter) {
+      follow(g, run.eid, answering(adapter, job.ask), o).catch(told(o))
+    }
   }
   return runs
 }

@@ -37,6 +37,7 @@ Deno.test('a request is the using on the transcript, read back as a job', async 
     model: 'fake-1',
     effort: 'high',
     instruction: 'fix it',
+    ask: { to: FAKE.model, through: 'E1' },
   })
   // A transcript nobody asked a provider for is nobody's to start.
   await g.apply([{ entity: { eid: 'S2' }, session: {} }])

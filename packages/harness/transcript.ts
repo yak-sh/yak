@@ -168,10 +168,11 @@ export let transcriptViews = define([
     shellCommand,
   ),
   row('.entry&.call', 'call', 'Key'),
+  // A provider run's last turn is both, and reads as the stop it is.
+  row('.entry&.stop', 'stop', 'Warn'),
   row('.entry&.ask&.attempt.state=inflight', 'asking', 'Key'),
   row('.entry&.ask&.attempt.state=interrupted', 'interrupted', 'Muted'),
   row('.entry&.ask', 'ask', 'Muted'),
-  row('.entry&.stop', 'stop', 'Warn'),
   row('.entry&.output', 'output', 'Accent', false, true),
   row('.entry&.content', 'input', 'Good', false, true, true),
   row('.entry', 'entry', 'Muted'),
