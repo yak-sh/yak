@@ -1,0 +1,36 @@
+# @yaks/process on macOS: the one package whose code differs by platform
+# (packages/process/run.ts `platforms`). The box runs the macOS launcher under
+# its own perl, sh and kill; only a Mac has Apple's perl, BSD kill(1) and
+# macOS /bin/sh, so this runs the package's tests on one.
+#
+# A hosted runner, unlike the gate's: GitHub's standard runners cost nothing
+# for a public repository, so this buys no minutes (M-9560), and it never
+# touches the box. Its own workflow, so a push that leaves the package alone
+# neither starts it nor cancels a run that is going.
+name: macos
+
+on:
+  push:
+    branches: [main]
+    paths: [packages/process/**, .github/workflows/macos.yml]
+  pull_request:
+    paths: [packages/process/**, .github/workflows/macos.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  process:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.1
+      - name: the tools the launcher runs
+        run: sw_vers; ls -l /usr/bin/perl /bin/sh /bin/kill; perl -MPOSIX=setsid -e 1
+      - name: '@yaks/process tests'
+        run: deno test -A packages/process
