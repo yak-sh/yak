@@ -3,7 +3,17 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import { blogGraph, durableBlog } from './harness.ts'
-import { drop, held, holding, LEASE, leaseEid, take, until } from './lease.ts'
+import {
+  drop,
+  held,
+  holding,
+  LEASE,
+  leaseEid,
+  SWEEP,
+  sweeping,
+  take,
+  until,
+} from './lease.ts'
 
 let g = () => blogGraph([], durableBlog)
 
@@ -13,6 +23,16 @@ let at = (ms: number) => () => ms
 Deno.test('a duty is one row, whoever asks for it', () => {
   assertEquals(leaseEid('@yaks/wake'), leaseEid('@yaks/wake'))
   assert(leaseEid('@yaks/wake') != leaseEid('@yaks/spawn'))
+})
+
+Deno.test('the sweep is ours when we hold it or nobody does', async () => {
+  let graph = g()
+  assertEquals(await sweeping(graph, 'cli', at(0)), true)
+  await take(graph, SWEEP, { holder: 'server', hold: 100, now: at(0) })
+  assertEquals(await sweeping(graph, 'server', at(50)), true)
+  assertEquals(await sweeping(graph, 'cli', at(50)), false)
+  // A holder that died leaves a take that lapses.
+  assertEquals(await sweeping(graph, 'cli', at(150)), true)
 })
 
 Deno.test('the first process to ask gets it, and the second is told no', async () => {

@@ -42,14 +42,21 @@ import {
   store,
   watch,
 } from '@yaks/process'
+import { createWorktree, discover, reclaim } from '@yaks/git/host'
 import { type Adapter, adapters as known, type Job } from './adapters.ts'
 
 /** How a spawn runs, all optional. */
 export type Opts = {
   /** the providers that are commands, by name (default the package's table) */
   adapters?: Record<string, Adapter>
-  /** where the child runs (default this process's own cwd) */
+  /** where the child runs (default this process's own cwd) — and, with
+   * `worktrees`, the checkout each run's own is cut from */
   cwd?: string
+  /** where each run gets a checkout of its own: `<worktrees>/<session>` on
+   * branch `session-<session>`, cut from `cwd`'s HEAD and taken back when the
+   * run ends unless it holds work, so two runs never write in one worktree
+   * and no run writes in its launcher's */
+  worktrees?: string
   /** the child's whole environment (default the server's own, since a
    * provider's subscription credentials are found through `HOME` and its CLI
    * through `PATH`) */
@@ -303,6 +310,38 @@ export let follow = async (
   }
 }
 
+/** Where a run's own checkout is, under `worktrees`. */
+export let checkoutOf = (session: string, worktrees: string): string =>
+  `${worktrees}/${session}`
+
+// A run's own checkout, cut from the source checkout's HEAD on a branch named
+// after the session. Committed work only: what is uncommitted in the source
+// stays there.
+let cut = async (g: Graph, session: string, o: Opts): Promise<string> => {
+  let tree = await createWorktree(g, o.cwd ?? Deno.cwd(), {
+    path: checkoutOf(session, o.worktrees!),
+    branch: `session-${session}`,
+  })
+  return String(comp(tree, 'worktree')?.path)
+}
+
+/** The environment a run speaks in: the one it was given, with the session
+ * that launched it taken out and this run's own named. A variable naming the
+ * launcher's session would sign the run's writes as the launcher's (@yaks/cli
+ * `via`); a harness that sets its own for its children still does. */
+export let speaking = (
+  session: string,
+  env: Record<string, string>,
+): Record<string, string> => {
+  let {
+    CLAUDE_CODE_SESSION_ID: _claude,
+    CODEX_THREAD_ID: _codex,
+    TASKS_SESSION: _tasks,
+    ...rest
+  } = env
+  return { ...rest, TASKS_SESSION: session }
+}
+
 /**
  * Start a session's provider and read its output back into the transcript.
  *
@@ -330,8 +369,8 @@ export let start = async (
   let run = await launch(store(g), {
     command: argv[0],
     args: argv.slice(1),
-    cwd: o.cwd,
-    env: o.env ?? Deno.env.toObject(),
+    cwd: o.worktrees ? await cut(g, session, o) : o.cwd,
+    env: speaking(session, o.env ?? Deno.env.toObject()),
   }, {
     ...o,
     eid: session, // one entity: the transcript is the thing running
@@ -381,6 +420,7 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
 // observed, not inferred from the conversation, which is the difference
 // between evidence and a guess.
 let ended = async (g: Graph, session: string, o: Opts): Promise<void> => {
+  if (o.worktrees) await taken(g, checkoutOf(session, o.worktrees))
   let [said] = await g.read(`.stop&.entry.session=${session}&.limit=1`)
   if (said) return
   let code = comp(await one(g, session), EXIT)?.code
@@ -398,6 +438,19 @@ let ended = async (g: Graph, session: string, o: Opts): Promise<void> => {
       output: { source: session },
     }),
   }], { trusted: true })
+}
+
+// A run's checkout, taken back now that the run is over — its row brought up
+// to date first, so a resume can create it again where it stood. One that
+// holds work (uncommitted, or commits nothing has landed) is kept.
+let taken = async (g: Graph, path: string): Promise<void> => {
+  try {
+    await Deno.stat(path)
+  } catch {
+    return
+  }
+  await discover(g, path).catch(() => {})
+  await reclaim(path)
 }
 
 /**

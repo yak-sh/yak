@@ -9,6 +9,7 @@ import type { Bundle, Comp, Tx } from '@yaks/graph'
 import { detached, isPromise } from '@yaks/graph'
 import { effects } from './registry.ts'
 import { EFFECT, ledger } from './durable.ts'
+import { Elsewhere } from './lease.ts'
 import { blogGraph, durableBlog } from './harness.ts'
 
 let sync = <T>(out: T | Promise<T>): T => {
@@ -53,6 +54,46 @@ Deno.test('a run is recorded and marked done', () => {
   assertEquals(row.comp, 'post')
   assertEquals(row.kind, 'created')
   assertEquals(row.attempts, 1)
+})
+
+Deno.test('a run handed Elsewhere waits, due at once, for the sweep holder', () => {
+  let f = fixture()
+  let mine = false
+  f.fx.created('post', (e) => {
+    if (!mine) throw new Elsewhere('the server starts it')
+    f.seen.push(e.entity.eid)
+  })
+  sync(f.g.apply([post('p1')]))
+  // Nothing reported, no attempt spent, and nothing to wait out.
+  assertEquals(f.oops, [])
+  let [row] = f.rows()
+  assertEquals(row.state, 'pending')
+  assertEquals(row.attempts, 0)
+  assertEquals(row.error, null)
+  assertEquals(sync(f.log.due(f.tx)), f.now())
+  // The process holding the sweep runs it on its next pass.
+  mine = true
+  assertEquals(sync(f.log.reconcile(f.fx, f.tx)), 1)
+  assertEquals(f.seen, ['p1'])
+  assertEquals(f.rows()[0].state, 'done')
+})
+
+Deno.test('a run still going here is not taken for one a crash left', async () => {
+  let f = fixture()
+  let finish = () => {}
+  let runs = 0
+  f.fx.created('post', () => {
+    runs++
+    return new Promise<void>((go) => finish = go)
+  })
+  let applied = f.g.apply([post('p1')])
+  // Pending with no `next` reads as interrupted, but its handler is running.
+  assertEquals(await f.log.reconcile(f.fx, f.tx), 0)
+  assertEquals(runs, 1)
+  finish()
+  await applied
+  await new Promise((go) => setTimeout(go))
+  assertEquals(f.rows()[0].state, 'done')
 })
 
 Deno.test('a failing run keeps its error and comes back due, not failed', () => {

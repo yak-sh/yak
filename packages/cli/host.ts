@@ -91,6 +91,7 @@ import {
   ledger,
   released,
   sleep,
+  SWEEP,
   type SweepRows,
   until,
   type Watch,
@@ -264,15 +265,11 @@ export type RoutesFacet = {
   handler?: (host: Host, options: Options) => Handler
 }
 
-/** The name of the one duty this host owns rather than any plugin:
- * the effect sweep, which finishes what a crash left between a commit and its
- * handler, and retries what a handler could not do the first time. */
-export let SWEEP = '@yaks/effects'
-
 /** The longest the sweep sleeps between passes (ms). It already knows the
- * exact time everything it owns comes due; this cap only ensures a row written
- * by another process is picked up without waiting for a write here. */
-let CAP = 60_000
+ * exact time everything it owns comes due; this cap is how soon a row another
+ * process wrote is picked up — a one-shot command handing a run to the server
+ * waits no longer than this for it to start. */
+let CAP = 5_000
 
 /** One duty that exactly one process at a time runs: the lease name
  * to hold it under, and the work. `run` does at least one pass and then keeps

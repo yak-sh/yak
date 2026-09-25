@@ -57,6 +57,7 @@ import doc from './vocab.json' with { type: 'json' }
 import type { Around, Effects } from './registry.ts'
 import type { Policy } from './registration.ts'
 import type { Kind } from './trace.ts'
+import { Elsewhere } from './lease.ts'
 
 /**
  * This package's components, to load beside your own when you want durable
@@ -180,6 +181,18 @@ export let ledger = (opts: LedgerOpts): Ledger => {
       })
       : rest(tx, eid, said(err))
 
+  // Not this process's run ({@link Elsewhere}): back to pending, due at once,
+  // the attempt not counted and nothing reported, for the process holding the
+  // sweep to run on its next pass.
+  let handed = (tx: Tx, eid: Eid, attempts: number) =>
+    write(tx, eid, {
+      state: 'pending',
+      attempts: attempts - 1,
+      error: null,
+      next: stamp(clock()),
+      ...free,
+    })
+
   // The row a retry is for, handed to the wrapper below. `reconcile` claimed
   // it and wrote the attempt down already, so the wrapper reuses that row
   // instead of minting a second one for the same run. The handoff is
@@ -187,23 +200,38 @@ export let ledger = (opts: LedgerOpts): Ledger => {
   // anything awaits — so nothing else can run between them.
   let resuming: { eid: Eid; attempts: number } | undefined
 
+  // The rows this ledger's handlers are running now. Such a row reads as
+  // interrupted (pending, no `next`) for as long as its handler runs, and a
+  // handler may run for as long as the process does — the `serve` call's is
+  // the server itself — so a sweep that took one for a crash's leftover would
+  // run it again and wait on it for good.
+  let running = new Set<Eid>()
+
   let around: Around = (job, tx, next) => {
     let held = resuming
     resuming = undefined
     let eid = held?.eid ?? mint()
     let attempts = held?.attempts ?? 1
     let go = () => {
+      running.add(eid)
+      let over = () => running.delete(eid)
       // The handler's own failure still belongs to the caller — the registry
       // isolates it — so the row is marked and the throw goes on.
-      let raise = (err: unknown) =>
-        then(fell(tx, eid, attempts, job.slot, err), (): never => {
-          throw err
-        })
+      let raise = (err: unknown) => {
+        over()
+        return err instanceof Elsewhere
+          ? then(handed(tx, eid, attempts), () => undefined)
+          : then(fell(tx, eid, attempts, job.slot, err), (): never => {
+            throw err
+          })
+      }
+      let land = <T>(v: T) => {
+        over()
+        return then(landed(tx, eid), () => v)
+      }
       try {
         let out = next()
-        return isPromise(out)
-          ? out.then((v) => then(landed(tx, eid), () => v), raise)
-          : then(landed(tx, eid), () => out)
+        return isPromise(out) ? out.then(land, raise) : land(out)
       } catch (err) {
         return raise(err)
       }
@@ -236,6 +264,8 @@ export let ledger = (opts: LedgerOpts): Ledger => {
     // A complementary process must not claim (or mark failed) work belonging
     // to its sibling. Unknown ids still take the ordinary reporting path.
     if (slot && !fx.owns(handler)) return false
+    // Running here now, so neither interrupted nor owed.
+    if (running.has(eid)) return false
     let attempts = Number(row.attempts ?? 0)
     let now = clock()
     let expiry = row.lease_expiry ? Date.parse(String(row.lease_expiry)) : 0

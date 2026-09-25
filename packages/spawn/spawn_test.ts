@@ -4,10 +4,25 @@
 // whole file costs a few hundred milliseconds.
 
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Comp } from '@yaks/graph'
-import { launch, selfEid, store } from '@yaks/process'
+import { type Bundle, type Comp, detached, graph } from '@yaks/graph'
+import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import {
+  effectDoc,
+  type Effects,
+  effects,
+  ledger,
+  SWEEP,
+  take,
+} from '@yaks/effects'
+import { modelDoc } from '@yaks/model'
+import { ram } from '@yaks/ram'
+import { sessionDoc, sessions } from '@yaks/session'
+import { toolsDoc } from '@yaks/tools/vocab'
+import { loadVocab } from '@yaks/vocab'
+import { launch, processDoc, processes, selfEid, store } from '@yaks/process'
 import { spawning } from './effects.ts'
-import { down, resume } from './run.ts'
+import { checkoutDoc } from '@yaks/git/vocab'
+import { checkoutOf, down, resume, speaking } from './run.ts'
 import { asking, fake, tracked, until } from './harness.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -59,6 +74,119 @@ Deno.test('the request starts the provider, and what it printed is the transcrip
   } finally {
     Deno.removeSync(where, { recursive: true })
   }
+})
+
+Deno.test('a request made beside a server is started by the server, not the command', async () => {
+  let vocab = loadVocab(
+    [sessionDoc, toolsDoc, modelDoc, processDoc, edgeDoc, effectDoc],
+    [edgeKeywords],
+  )
+  // One store, two processes: a one-shot command and the server holding the
+  // effect sweep. Each has its own registry and ledger, as it would.
+  let process = (me: string, fx: Effects) => {
+    for (
+      let { comp, ...watch } of spawning({ adapters: { fake } })({
+        graph: g,
+        me,
+      }, { dir: where, poll: 20 })
+    ) fx.on(comp, watch)
+  }
+  let cmd = ledger({ owner: 'cmd' })
+  let cmdFx: Effects = effects(vocab, {
+    around: cmd.around,
+    write: (b) => g.apply(b, { trusted: true }),
+  })
+  let g = graph({
+    storage: ram(vocab, { number: true }),
+    vocab,
+    plugins: [sessions(), processes(), cmdFx],
+  })
+  let where = dir()
+  process('cmd', cmdFx)
+  await take(g, SWEEP, { holder: 'server' })
+  try {
+    await g.apply(asking('S1', 'E1', 'do the thing'))
+    // The command started nothing, and the run waits for the server.
+    assertEquals(comp((await g.read('.session&*'))[0], 'process'), undefined)
+    let [row] = await g.read('.effect.comp=using&*')
+    assertEquals(comp(row, 'effect')?.state, 'pending')
+    assertEquals(comp(row, 'effect')?.attempts, 0)
+    // The server's sweep, on its next pass, starts it.
+    let server = ledger({ owner: 'server' })
+    let serverFx: Effects = effects(vocab, { around: server.around })
+    process('server', serverFx)
+    assertEquals(await server.reconcile(serverFx, detached(g.storage)), 1)
+    await until(
+      async () => comp((await g.read('.session&*'))[0], 'exit'),
+      'the run the server started to end',
+    )
+  } finally {
+    Deno.removeSync(where, { recursive: true })
+  }
+})
+
+Deno.test('a run works in a checkout of its own, taken back when it ends', async () => {
+  let vocab = loadVocab(
+    [sessionDoc, toolsDoc, modelDoc, processDoc, edgeDoc, checkoutDoc],
+    [edgeKeywords],
+  )
+  let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
+  let g = graph({
+    storage: ram(vocab, { number: true }),
+    vocab,
+    plugins: [sessions(), processes(), fx],
+  })
+  let top = await Deno.realPath(dir())
+  let repo = `${top}/repo`
+  let runs = `${top}/runs`
+  await Deno.mkdir(repo)
+  await Deno.mkdir(runs)
+  let sh = (...args: string[]) =>
+    new Deno.Command('git', { cwd: repo, args, stdout: 'null' }).output()
+  await sh('init', '-q', '-b', 'main', '.')
+  await sh(
+    '-c',
+    'user.email=t@example.org',
+    '-c',
+    'user.name=T',
+    'commit',
+    '-q',
+    '--allow-empty',
+    '-m',
+    'initial',
+  )
+  for (
+    let { comp, ...watch } of spawning({ adapters: { fake } })({
+      graph: g,
+      me: selfEid(),
+    }, { dir: top, poll: 20, cwd: repo, worktrees: runs })
+  ) fx.on(comp, watch)
+  try {
+    await g.apply(asking('S1', 'E1', 'do the thing'))
+    await until(
+      async () => comp((await g.read('.session&*'))[0], 'process'),
+      'the run to start',
+    )
+    let [row] = await g.read('.session&*')
+    assertEquals(comp(row, 'process')?.cwd, checkoutOf('S1', runs))
+    // It held nothing, so once it ends its checkout is gone again.
+    await until(
+      () => Deno.stat(checkoutOf('S1', runs)).then(() => false, () => true),
+      'its checkout to be taken back',
+    )
+  } finally {
+    Deno.removeSync(top, { recursive: true })
+  }
+})
+
+Deno.test('a run speaks as its own session, never its launcher’s', () => {
+  let env = speaking('S1', {
+    PATH: '/bin',
+    CLAUDE_CODE_SESSION_ID: 'launcher',
+    CODEX_THREAD_ID: 'launcher-thread',
+    TASKS_SESSION: 'launcher-task',
+  })
+  assertEquals(env, { PATH: '/bin', TASKS_SESSION: 'S1' })
 })
 
 Deno.test('a stop on the session reaches the agent', async () => {

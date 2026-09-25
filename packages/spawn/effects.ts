@@ -19,18 +19,19 @@
 // starts the work, and returns; failures go to `report` and never back into the
 // transaction, which is what @yaks/effects guarantees for every handler.
 //
-// Config sets the working directory the agent runs in and how often its log is
-// read:
+// Config sets the checkout agents work from, the directory each run's own
+// checkout is cut under, and how often its log is read:
 //
 // ```json
-// { "use": "@yaks/spawn", "with": { "cwd": "/srv/work", "poll": 250 } }
+// { "use": "@yaks/spawn",
+//   "with": { "cwd": "/srv/repo", "worktrees": "/srv/runs", "poll": 250 } }
 // ```
 //
 // Providers are not in it: an adapter is a function, so a server with one of
 // its own calls {@link spawning} from a module of its own.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { take, type Watch } from '@yaks/effects'
+import { Elsewhere, sweeping, take, type Watch } from '@yaks/effects'
 import { EXIT, PROCESS } from '@yaks/process'
 import { down, type Opts, resume, start } from './run.ts'
 
@@ -48,8 +49,11 @@ export type Host = { graph: Graph; me: Eid; config?: { duties?: boolean } }
 
 /** What config can set — the JSON-expressible half of {@link Opts}. */
 export type Options = {
-  /** where an agent runs (default the server's own cwd) */
+  /** where an agent runs (default the server's own cwd), or with `worktrees`
+   * the checkout each run's own is cut from */
   cwd?: string
+  /** where each run gets a checkout of its own (@yaks/spawn `Opts`) */
+  worktrees?: string
   /** where @yaks/process keeps its files */
   dir?: string
   /** how often a log and an ending are read (ms) */
@@ -87,6 +91,12 @@ export let spawning =
       // The request. A `using` recorded on an `ask` row says what was
       // served, not what is wanted, and a session that is already running was
       // started the first time round: either way there is nothing to start.
+      //
+      // Starting one is the duties' work. A one-shot command beside a server —
+      // a `yak land` whose failure filed a bug that asked for a fixer — hands
+      // the run to the process holding the effect sweep, so no agent is ever
+      // born inside a command's process, cwd and environment. On a machine
+      // with no server the command holds the sweep and starts it itself.
       created: async (e) => {
         let entry = await one(host.graph, e.entity.eid)
         if (!entry?.entry || entry.ask) return
@@ -94,6 +104,14 @@ export let spawning =
         if (!session) return
         let row = await one(host.graph, session)
         if (!row || row[PROCESS]) return
+        if (
+          host.config?.duties == false ||
+          !await sweeping(host.graph, host.me)
+        ) {
+          throw new Elsewhere(
+            `the process running the duties starts ${session}`,
+          )
+        }
         start(host.graph, session, opts).catch(report)
       },
     }, {

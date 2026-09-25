@@ -180,6 +180,36 @@ export let released = (
 export let held = (g: Graph, name: string): Promise<Lease | undefined> =>
   contested(g) ? leaseOf(g, leaseEid(name)) : Promise.resolve(undefined)
 
+/** The lease the effect sweep is held under: the one duty every host runs,
+ * which finishes what a crash left between a commit and its handler and runs
+ * what another process handed on ({@link Elsewhere}). */
+export let SWEEP = '@yaks/effects'
+
+/**
+ * Whether the effect sweep is this process's: it holds the lease, or nobody's
+ * take stands. A handler whose work belongs to the process running the duties
+ * asks this, and throws {@link Elsewhere} when the answer is no, so a one-shot
+ * command beside a running server leaves that work to the server, while on a
+ * machine with no server the command does it itself.
+ */
+export let sweeping = async (
+  g: Graph,
+  me: Eid,
+  now: () => number = Date.now,
+): Promise<boolean> => {
+  let l = await held(g, SWEEP)
+  let until = l?.until ? Date.parse(String(l.until)) : 0
+  return !l?.holder || l.holder == me || until <= now()
+}
+
+/** A run that belongs to the process holding the effect sweep
+ * ({@link sweeping}), thrown by its handler anywhere else. The ledger
+ * (./durable.ts) leaves the run pending and due at once, with no attempt
+ * spent and nothing reported, and that process's sweep runs it. */
+export class Elsewhere extends Error {
+  override name = 'Elsewhere'
+}
+
 /** Wait, unless we are done waiting: a sleep the signal cuts short, so a pass
  * between renewals releases the lease the moment it is asked to. */
 export let sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
