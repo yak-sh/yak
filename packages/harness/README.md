@@ -19,7 +19,7 @@ provider; shell tools run on this machine and are not sandboxed.
   terminal's entry rendering.
 - `open()` creates or opens storage and registers vocabulary and plugins;
   `hosted()` is the same handle over a graph a `yak` config composed.
-- `harnessTools()` combines shell, delegation and graph tools.
+- `harnessTools()` combines machine, delegation and graph tools.
 - `@yaks/harness/vocab` and `/tools` are its facets as a plugin (@yaks/cli
   `compose`): its own words and the functions behind its tools. `/tui` is its
   terminal view.
@@ -204,23 +204,28 @@ bundles from graph-backed interfaces. To embed the app, mount `App` with
   and assignment metadata. `a.tasks()` reads `.task.status=open,wip`, oldest
   first, without requiring filing or a project. The CLI and sidebar use that
   same interface.
-- **Tools use the session's graph.** `harnessTools()` combines process,
+- **Tools use the session's graph.** `harnessTools()` combines machine,
   delegation, artifact, text-inspection, and generic graph tools (`graph_apply`,
   `graph_query`, `graph_show`, `graph_schema`). Existing JSON Schemas are
   retained; Zod arguments are converted to JSON Schema for the model.
 - **Restart recovery.** `open()` releases execution leases whose holders are
   absent from the graph; `resume()` schedules sessions with unfinished work.
 
-## The shell
+## The machine
 
-`harnessTools()` includes `shell`, `wait` and `stop` (./shell.ts), over
-@yaks/process. `shell` runs `bash -c` as a non-interactive, non-login shell with
-the host environment, including `PATH` and `HOME`. If the command exceeds the
-tool timeout, it continues running and the result includes its process entity
-ID. `wait` polls that entity for an exit and returns recent output. `stop` sends
-SIGTERM and then SIGKILL if necessary. The tools write process state to the
-graph before starting the child, and `wait` and `stop` read the persisted exit,
-so they also work for processes that `watch()` adopted after a restart.
+./machine.ts declares the machine tools once: `shell`, `wait`, `stop`, `read`
+and `write`, over a `Machine` the host lends (`@yaks/harness/machine`, runtime
+neutral). A box lends its own through @yaks/process (./box.ts); the yaks.app
+Worker lends its sandbox container (workers/yak/sandbox.ts).
+
+`shell` runs `bash -c`. If the command outlives the call's timeout, it keeps
+running and the answer names its process id; `wait` looks for its exit and
+answers recent output, and `stop` sends SIGTERM and then SIGKILL if necessary.
+On a box, a command runs with the host environment, including `PATH` and `HOME`,
+and is a process entity written before the child starts; `wait` and `stop` read
+its persisted exit, so they also work for processes that `watch()` adopted after
+a restart. `read` and `write` take a path from the session's directory unless it
+is rooted.
 
 ## Not here
 

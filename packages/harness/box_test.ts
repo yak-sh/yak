@@ -11,7 +11,9 @@ import { ram } from '@yaks/ram'
 import { sessionDoc } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
-import { type ShellOpts, shellTools } from './shell.ts'
+import { type Opts } from '@yaks/process'
+import { boxMachine } from './box.ts'
+import { machineTools } from './machine.ts'
 
 // The lines a process prints are `content` beside `output` (@yaks/tools), in
 // a graph that also knows sessions and models.
@@ -19,16 +21,24 @@ let vocab = loadVocab([processDoc, sessionDoc, toolsDoc, modelDoc])
 let tracked = () =>
   graph({ storage: ram(vocab), vocab, plugins: [processes()] })
 
-let opts = (): ShellOpts => ({
+let opts = (): Opts => ({
   dir: Deno.makeTempDirSync({ prefix: 'yaks-process-' }),
   poll: 5,
-  grace: 500,
 })
 
-let named = (g: ReturnType<typeof tracked>, o = opts()) => {
-  let tools = shellTools(g, o)
+let named = (g: ReturnType<typeof tracked>, cwd?: string) => {
+  let tools = machineTools(boxMachine(g, opts()), {
+    grace: 500,
+    cwd: () => cwd,
+  })
   let by = (name: string) => tools.find((t) => t.name == name)!
-  return { shell: by('shell'), wait: by('wait'), stop: by('stop') }
+  return {
+    shell: by('shell'),
+    wait: by('wait'),
+    stop: by('stop'),
+    read: by('read'),
+    write: by('write'),
+  }
 }
 
 // The id the answers name, so a test reaches the same process the model would.
@@ -90,4 +100,15 @@ Deno.test('shell uses bash and inherits the harness environment', async () => {
     command: '[[ -n "$BASH_VERSION" ]] && printf "%s" "$PATH"',
   })
   assertEquals(said, `process ${eidIn(said)} exited 0\n${Deno.env.get('PATH')}`)
+})
+
+Deno.test('write makes the directory it needs, and read gives the text back', async () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yaks-machine-' })
+  let { read, write } = named(tracked(), dir)
+  assertEquals(
+    await write.run({ path: 'src/lib.rs', content: 'fn main() {}' }),
+    'wrote src/lib.rs',
+  )
+  assertEquals(await read.run({ path: `${dir}/src/lib.rs` }), 'fn main() {}')
+  await Deno.remove(dir, { recursive: true })
 })

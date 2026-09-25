@@ -5,8 +5,9 @@ import { artifactTools } from './artifact_tools.ts'
 import { type Blobs, valueTools } from '@yaks/blob'
 // What the agent can do here: run a program, and read and write its own graph.
 //
-// Both halves already exist as packages — @yaks/process declares the shell as
-// session tools, @yaks/mcp declares the generic graph tools — and the only
+// Both halves already exist — ./machine.ts declares the machine tools over
+// whatever machine the host lends, @yaks/mcp declares the generic graph tools —
+// and the only
 // thing between them is a difference of format. A graph tool declares its
 // arguments as a Zod schema, because that is what the MCP SDK takes; a model
 // wants JSON Schema. So this file is one conversion and one adapter:
@@ -30,7 +31,8 @@ import { worktrees } from './paths.ts'
 import type { Entity, Graph, Tool as GraphTool } from '@yaks/graph'
 import { shapeOf } from '@yaks/mcp'
 import { core, type Depth } from '@yaks/mcp'
-import { shellTools } from './shell.ts'
+import { boxMachine } from './box.ts'
+import { machineTools } from './machine.ts'
 import {
   type ChildLimits,
   sessionTools,
@@ -85,7 +87,7 @@ export let graphTools = (
   }))
 }
 
-/** The shell, delegation, and the graph, with one wait for all three targets.
+/** The machine, delegation, and the graph, with one wait for all three targets.
  * react records every tool's wall-clock and projects it after output bounding;
  * these raw answers remain parseable JSON for non-model callers. */
 export let harnessTools = (
@@ -101,21 +103,15 @@ export let harnessTools = (
     }
     & ChildLimits = {},
 ): Tool[] => {
-  let shell = shellTools(g, { cwd: opts.cwd })
   let directory = opts.cwd ?? Deno.cwd()
-  let baseShell = shell.find((t) => t.name == 'shell')!
-  let runShell = baseShell.run
-  baseShell.run = async (args, ctx) =>
-    runShell({
-      ...args,
-      cwd: args.cwd ??
-        (ctx ? await sessionCwd(g, ctx.session, directory) : directory),
-    }, ctx)
+  let machine = machineTools(boxMachine(g), {
+    cwd: (ctx) => ctx ? sessionCwd(g, ctx.session, directory) : directory,
+  })
   let session = sessionTools(g, {
     ...workspace(g, directory, opts.worktrees ?? worktrees()),
     ...opts,
   })
-  let processWait = shell.find((t) => t.name == 'wait')!
+  let processWait = machine.find((t) => t.name == 'wait')!
   let childWait = session.find((t) => t.name == 'wait')!
   let wait: Tool = {
     name: 'wait',
@@ -149,7 +145,7 @@ export let harnessTools = (
     },
   }
   return [
-    ...shell.map((t) => t.name == 'wait' ? wait : t),
+    ...machine.map((t) => t.name == 'wait' ? wait : t),
     ...session.filter((t) => t.name != 'wait'),
     ...artifactTools(g, opts),
     ...graphTools(g, { depth: opts.depth }),
