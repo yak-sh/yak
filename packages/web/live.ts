@@ -38,7 +38,6 @@ import {
 import { moves, typeOf } from './edge.ts'
 import { dotFields } from './tray_query.ts'
 import { isUnread, type Row } from './client.ts'
-import type { WorkClaimMutation } from './mutation.ts'
 import {
   distinctValues,
   EDGES,
@@ -1532,26 +1531,6 @@ export let mutate = (...changes: Change[]) => {
   deliver(parsed)
 }
 
-// Worker claims are server-owned intents, not optimistic component patches.
-// The response lands immediately; the feed's later echo is the same merge.
-export let mutateWork = async (mutation: WorkClaimMutation) => {
-  problem.value = ''
-  let res = await fetch(`${base()}/apply`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(config.client ? { 'x-via': config.client } : {}),
-    },
-    body: JSON.stringify(mutation),
-  })
-  if (!res.ok) {
-    let why = await res.text()
-    problem.value = why
-    throw new Error(why)
-  }
-  let out = await res.json() as { changes?: Change[] }
-  if (out.changes?.length) applyLocal(out.changes)
-}
 
 type Catchup = { catchup: Change[]; cursor: number }
 type Reset = { reset?: boolean; snapshot: Snapshot; error?: string }

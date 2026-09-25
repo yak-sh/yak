@@ -9,11 +9,11 @@
 // echoes or prefills a secret. Drafts live only in the mounted UI, never in this
 // controller.
 import { signal } from '@preact/signals'
-import type { Change } from './types.ts'
-import type { SettingRow, SettingType, Source } from './config.ts'
-import { validate } from './config.ts'
+import type { Change } from '../packages/web/types.ts'
+import type { SettingRow, SettingType, Source } from '../packages/web/config.ts'
+import { validate } from '../packages/web/config.ts'
 import type { CredSource, CredState, CredStatus } from './credentials.ts'
-import { base, mutate, uuid } from './live.ts'
+import { base, mutate, uuid } from '../packages/web/live.ts'
 
 export type { CredSource, CredState, CredStatus, SettingRow, SettingType }
 

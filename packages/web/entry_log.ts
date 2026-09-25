@@ -1,0 +1,346 @@
+// The provider-neutral face of a graph-native Session partition. Ordered
+// entry facets become the same LogRow vocabulary the process-backed adapters
+// serve, while readiness remains derived from leases and outcomes.
+import { type LogRow } from './types.ts'
+
+export type EntryRow = {
+  eid: string
+  seq: number
+  comps: Record<string, Record<string, unknown>>
+}
+
+export type GraphLogEntry = {
+  eid: string
+  call?: string
+  seq: number
+  line: string
+  row?: LogRow
+}
+
+export type GraphLog = {
+  entries: GraphLogEntry[]
+  busy: boolean
+  terminal: boolean
+  latest: number
+  activity?: { kind: 'tool' | 'model' | 'runner' | 'working'; label: string }
+  model?: string
+  stderr?: string
+  context?: number
+}
+
+let text = (value: unknown) => String(value ?? '')
+let clip = (value: unknown, limit = 240) => {
+  let out = text(value).replace(/\s+/g, ' ').trim()
+  return out.length > limit ? `${out.slice(0, limit - 1)}…` : out
+}
+
+let toolName = (comps: EntryRow['comps']) =>
+  comps.bash
+    ? 'shell'
+    : comps.patch
+    ? 'apply_patch'
+    : comps.task_context
+    ? 'task_context'
+    : comps.graph_query
+    ? 'graph_query'
+    : comps.apply
+    ? 'graph_apply'
+    : comps.tool_use
+    ? text(comps.tool_use.name)
+    : 'tool'
+
+let detail = (comps: EntryRow['comps']) =>
+  comps.patch
+    ? text(comps.patch.path || '.')
+    : comps.graph_query
+    ? clip(comps.graph_query.query)
+    : comps.apply
+    ? clip(comps.apply.changes)
+    : undefined
+
+let usage = (comps: EntryRow['comps']) =>
+  comps.usage
+    ? JSON.stringify({
+      input_tokens: Number(comps.usage.input ?? 0),
+      cached_input_tokens: Number(comps.usage.cached ?? 0),
+      output_tokens: Number(comps.usage.output ?? 0),
+      reasoning_tokens: Number(comps.usage.reasoning ?? 0),
+    })
+    : undefined
+
+// Busy is a lifecycle fact; activity says which unresolved edge owns it. A
+// lease distinguishes work an executor has picked up from work still queued.
+let activityOf = (rows: EntryRow[]) => {
+  let cancelled = new Set(
+    rows.flatMap((row) =>
+      row.comps.cancel?.target ? [text(row.comps.cancel.target)] : []
+    ),
+  )
+  let results = new Set(
+    rows.flatMap((row) =>
+      row.comps.result?.call ? [text(row.comps.result.call)] : []
+    ),
+  )
+  let outputs = new Set(
+    rows.flatMap((row) =>
+      row.comps.output?.source ? [text(row.comps.output.source)] : []
+    ),
+  )
+  let call = rows.findLast((row) =>
+    row.comps.call && !row.comps.failed && !cancelled.has(row.eid) &&
+    !results.has(row.eid)
+  )
+  if (call) {
+    let name = toolName(call.comps)
+    return {
+      kind: 'tool' as const,
+      label: call.comps.lease ? `running ${name}…` : `waiting for ${name}…`,
+    }
+  }
+  let generation = rows.findLast((row) =>
+    row.comps.generation && !row.comps.failed && !cancelled.has(row.eid) &&
+    !row.comps.delivered && !outputs.has(row.eid)
+  )
+  if (generation) {
+    return generation.comps.lease
+      ? { kind: 'model' as const, label: 'waiting for model…' }
+      : { kind: 'runner' as const, label: 'waiting for runner…' }
+  }
+  return rows.some((row) => row.comps.lease)
+    ? { kind: 'working' as const, label: 'working…' }
+    : undefined
+}
+
+let shown = (
+  row: EntryRow,
+  byEid: Map<string, EntryRow>,
+): LogRow | undefined => {
+  let c = row.comps
+  if (c.failed) return { kind: 'error', text: text(c.failed.message) }
+  if (c.message) {
+    return {
+      kind: 'say',
+      role: c.message.role == 'user' ? 'user' : 'agent',
+      text: text(c.content?.body),
+    }
+  }
+  if (c.reasoning) {
+    let body = text(c.content?.body)
+    return body ? { kind: 'reason', text: body } : undefined
+  }
+  if (c.generation) {
+    let model = text(c.generation.serving_model || c.generation.model)
+    if (c.delivered || c.usage) {
+      return { kind: 'turn', model, usage: usage(c) }
+    }
+    return { kind: 'sys', tag: 'generation', text: model }
+  }
+  if (c.attention) return { kind: 'sys', tag: 'attention' }
+  if (c.call) {
+    if (c.bash) {
+      return {
+        kind: 'exec',
+        command: text(c.bash.command),
+        desc: 'Command',
+      }
+    }
+    return {
+      kind: 'tool',
+      name: toolName(c),
+      detail: c.tool_use ? clip(c.tool_use.detail) : detail(c),
+    }
+  }
+  if (c.result) {
+    let call = byEid.get(text(c.result.call))
+    let name = call ? toolName(call.comps) : 'tool'
+    let body = clip(c.content?.body)
+    let stderr = clip(c.stderr?.text)
+    let code = c.exit?.code == null ? undefined : Number(c.exit.code)
+    return {
+      kind: 'tool',
+      name: `↳ ${name}`,
+      ...body ? { detail: body } : {},
+      ...code == null ? {} : { ok: code == 0 },
+      ...stderr ? { error: stderr } : {},
+    }
+  }
+  if (c.checkpoint) {
+    return { kind: 'sys', tag: 'checkpoint', text: clip(c.content?.body) }
+  }
+  if (c.cancel) {
+    return { kind: 'sys', tag: 'cancel', text: text(c.cancel.target) }
+  }
+  if (c.opaque) {
+    let format = text(c.opaque.format)
+    return format.startsWith('openai:failed:')
+      ? undefined
+      : { kind: 'sys', tag: format }
+  }
+  return undefined
+}
+
+let raw = (row: EntryRow) =>
+  JSON.stringify({ eid: row.eid, seq: row.seq, ...row.comps })
+
+// The busy/terminal FACT a SessionDot needs, computed WITHOUT the entries
+// build — the per-row raw()/shown() mapping in graphLog that dominated the
+// 157ms dot render. busy and terminal are mutually exclusive (terminal
+// requires !busy), so one enum captures the log-derived standing: `busy` (a
+// generation/call in flight), `terminal` (the turn returned, failed, or was
+// interrupted with nothing pending), or `idle` (neither). graphLog reuses this,
+// so the dot's O(1) read and the full log can never drift. A server can
+// materialize this onto the session (a facet) so the dot never scans.
+export type SessionEnd = 'completed' | 'failed' | 'interrupted'
+
+export let sessionStateOf = (
+  source: EntryRow[],
+): { standing: 'busy' | 'terminal' | 'idle'; end?: SessionEnd } => {
+  let rows = source.toSorted((a, b) => a.seq - b.seq)
+  let cancelled = new Set(
+    rows.flatMap((row) =>
+      row.comps.cancel?.target ? [text(row.comps.cancel.target)] : []
+    ),
+  )
+  let results = new Set(
+    rows.flatMap((row) =>
+      row.comps.result?.call ? [text(row.comps.result.call)] : []
+    ),
+  )
+  let outputs = new Set(
+    rows.flatMap((row) =>
+      row.comps.output?.source ? [text(row.comps.output.source)] : []
+    ),
+  )
+  let busy = rows.some((row) => {
+    let c = row.comps
+    if (c.lease) return true
+    if (c.failed || cancelled.has(row.eid)) return false
+    if (c.generation) {
+      return !c.delivered && !outputs.has(row.eid)
+    }
+    return !!c.call && !results.has(row.eid)
+  })
+  if (busy) return { standing: 'busy' }
+  let generation = rows.filter((row) => row.comps.generation).at(-1)
+  let edge =
+    rows.find((row) => row.eid == generation?.comps.generation?.through)?.seq ??
+      generation?.seq ?? 0
+  let stopped = generation
+    ? rows.findLast((row) => row.comps.cancel?.target == generation.eid)?.seq ??
+      0
+    : 0
+  let input = rows.some((row) =>
+    row.seq > Math.max(edge, stopped) && (row.comps.attention ||
+      (row.comps.message?.role == 'user' && !row.comps.output))
+  )
+  if (stopped && !input) return { standing: 'terminal', end: 'interrupted' }
+  // Match advanceable(): a healthy generation that asked for tools still
+  // owes the model their outcomes, even when a call failed or was cancelled.
+  // Between settling the last call and appending the next generation there
+  // is no lease, but this is NOT a terminal turn (not even if prose beside
+  // the calls was labelled final_answer). Boot recovery exposes this gap.
+  if (
+    generation && !generation.comps.failed && !stopped &&
+    rows.some((row) =>
+      row.comps.call && row.comps.output?.source == generation.eid
+    )
+  ) return { standing: 'idle' }
+  let completed = !input &&
+    rows.some((row) =>
+      row.comps.output?.source == generation?.eid &&
+      row.comps.output?.phase == 'final_answer' &&
+      row.comps.message?.role == 'agent'
+    )
+  if (completed) return { standing: 'terminal', end: 'completed' }
+  if (input) return { standing: 'idle' }
+  let turn = rows.filter((row) => row.seq >= edge)
+  let turnEids = new Set(turn.map((row) => row.eid))
+  if (
+    turn.some((row) =>
+      row.comps.cancel?.target &&
+      (row.comps.cancel.target == generation?.eid ||
+        turnEids.has(String(row.comps.cancel.target)))
+    )
+  ) return { standing: 'terminal', end: 'interrupted' }
+  if (turn.some((row) => row.comps.failed)) {
+    return { standing: 'terminal', end: 'failed' }
+  }
+  return { standing: 'idle' }
+}
+
+export let standingOf = (source: EntryRow[]) => sessionStateOf(source).standing
+
+export let graphLog = (source: EntryRow[]): GraphLog => {
+  let rows = source.toSorted((a, b) => a.seq - b.seq)
+  let byEid = new Map(rows.map((row) => [row.eid, row]))
+  let stand = standingOf(rows)
+  let busy = stand == 'busy'
+  let terminal = stand == 'terminal'
+  let activity = busy ? activityOf(rows) : undefined
+  let generation = rows.filter((row) => row.comps.generation).at(-1)
+  let model = generation?.comps.generation
+  let entries = rows.map((source) => {
+    let row = shown(source, byEid)
+    let at = text(source.comps.created?.at)
+    if (row && at && !row.at) row = { ...row, at }
+    if (row?.kind == 'turn' && source.comps.usage) {
+      let context = Number(source.comps.usage.input ?? 0)
+      if (context > 0) row = { ...row, context }
+    }
+    return {
+      eid: source.eid,
+      ...(source.comps.result?.call
+        ? { call: text(source.comps.result.call) }
+        : {}),
+      seq: source.seq,
+      line: raw(source),
+      ...(row ? { row } : {}),
+    }
+  })
+  let context = entries.findLast((entry) => entry.row?.context)?.row?.context
+  return {
+    entries,
+    busy,
+    terminal,
+    latest: rows.at(-1)?.seq ?? 0,
+    ...(activity ? { activity } : {}),
+    ...(context ? { context } : {}),
+    ...model ? { model: text(model.serving_model || model.model) } : {},
+  }
+}
+
+// Bound a rendered log's ENTRIES to an output page. graphLog must see the WHOLE
+// partition to resolve call↔result and derive busy/latest/model, so a page
+// bounds only what a reader returns, never what it reads: `tail` takes the last
+// N rendered rows, else `after` is a seq cursor and `limit` a cap. A reader
+// spreads it back over its GraphLog — `{ ...log, entries: pageEntries(...) }`.
+export let pageEntries = (
+  entries: GraphLogEntry[],
+  p: { after?: number; tail?: number; limit?: number },
+): GraphLogEntry[] => {
+  let tail = Math.max(0, p.tail ?? 0)
+  let after = Math.max(0, p.after ?? 0)
+  let limit = Math.max(0, p.limit ?? 0)
+  let picked = tail > 0
+    ? entries.slice(-tail)
+    : entries.filter((entry) => entry.seq > after)
+  return limit > 0 ? picked.slice(0, limit) : picked
+}
+
+// The token context (input tokens of the latest turn) for a PROCESS-BACKED
+// session, read from the session's `usage_json` facet — the graph already holds
+// it (adapters stamp it each turn.completed), so no rollout-file read. A
+// graph-native session derives context from its usage entries instead
+// (graphLog above); this covers the substrate whose usage never becomes an
+// entry (ingest routes token counts to summary — sessions.ts drain).
+export let contextOf = (usage_json?: string | null): number | undefined => {
+  if (!usage_json) return undefined
+  try {
+    let n = Number(
+      (JSON.parse(usage_json) as { input_tokens?: unknown }).input_tokens ?? 0,
+    )
+    return n > 0 ? n : undefined
+  } catch {
+    return undefined // a torn or foreign usage shape carries no context
+  }
+}

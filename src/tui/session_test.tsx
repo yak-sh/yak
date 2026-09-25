@@ -9,12 +9,12 @@ import { render } from 'preact'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { TElement } from './dom.ts'
 import { Md } from './md.tsx'
-import { onMarkdown } from '../components/Markdown.tsx'
+import { onMarkdown } from '../../packages/web/components/Markdown.tsx'
 // Entity.tsx before Entry.tsx: the two form the registry's render cycle, and
 // entering it from Entity's side lets Entry finish initializing first (the same
 // order Session_test.tsx relies on).
-import '../components/Entity.tsx'
-import { EntryBody, type EntryLine } from '../components/views/Entry.tsx'
+import '../../packages/web/components/Entity.tsx'
+import { EntryBody, type EntryLine } from '../../packages/web/components/views/Entry.tsx'
 import { ansi, pane } from './paint.ts'
 
 // The same injection tui/main.tsx makes at boot: the one markdown door paints

@@ -1,9 +1,9 @@
 // TUI-only renderers keep the shared scalar language in their visible labels.
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
-import { type Change, type Ent } from '../types.ts'
-import { config as liveConfig, mode, useRoute } from '../live.ts'
-import { extend, resolve } from '../components/registry.ts'
+import { type Change, type Ent } from '../../packages/web/types.ts'
+import { config as liveConfig, mode, useRoute } from '../../packages/web/live.ts'
+import { extend, resolve } from '../../packages/web/components/registry.ts'
 import {
   accountCallback,
   configKey,

@@ -1,0 +1,329 @@
+// Typed scalar parsing and formatting. PropType declares the language;
+// this module gives every declaration one canonical stored and shown value.
+import {
+  type Change,
+  comps,
+  derivedProps,
+  EID,
+  type PropType,
+  spineProps,
+  stamped,
+} from './types.ts'
+import { timeInstant } from '@yaks/query'
+import { local } from './time.ts'
+import { normalize } from './url.ts'
+
+export type PropContext = {
+  now?: number
+  resolve?: (id: string) => string | undefined
+  describe?: (eid: string) => string | undefined
+  // What the caller probably meant, already checked to resolve (near.ts).
+  // `comp` is the reference's declared target, so a bad `.project=` can
+  // only ever be answered with a project.
+  near?: (id: string, comp: string) => string | undefined
+}
+
+export type Prop = {
+  comp: string
+  prop: string
+  name: string
+  type: PropType
+}
+
+// comps/stamped are immutable module constants, so a component's merged type
+// map and a prop's owner list are fixed for the process. They sit on the hot
+// path — every query match, index pass and prop render funnels through them —
+// so recomputing the spread (a fresh object per call) and the O(components)
+// owner scan on each call was pure waste (T-17036, the 16ms frame budget).
+// Memoize both; nothing invalidates because nothing mutates the vocabulary.
+let typeCache = new Map<string, Record<string, PropType>>()
+let types = (comp: string): Record<string, PropType> => {
+  let hit = typeCache.get(comp)
+  if (hit) return hit
+  let t = {
+    ...comps[comp],
+    ...stamped[comp],
+    ...derivedProps[comp],
+    ...spineProps[comp],
+  }
+  typeCache.set(comp, t)
+  return t
+}
+
+let ownerCache = new Map<string, string[]>()
+export let propOwners = (prop: string): string[] => {
+  let hit = ownerCache.get(prop)
+  if (hit) return hit
+  let out = [...new Set([...Object.keys(comps), ...Object.keys(stamped)])]
+    .filter((comp) => prop in types(comp))
+  ownerCache.set(prop, out)
+  return out
+}
+
+// The qualified name is only noise until two components share the column.
+export let propAt = (comp: string, prop: string): Prop | undefined => {
+  let type = types(comp)[prop]
+  if (!type) return
+  let owners = propOwners(prop)
+  return {
+    comp,
+    prop,
+    name: owners.length > 1 ? `${comp}.${prop}` : prop,
+    type,
+  }
+}
+
+// The declared type of a prop whose owning component isn't named — a shared
+// reference routed to comp '' (route()'s any-of), or a bare filter. Every
+// component sharing a name declares it identically, so the first hit is
+// authoritative.
+export let bareType = (prop: string): PropType | undefined => {
+  for (let c of propOwners(prop)) {
+    let t = types(c)[prop]
+    if (t) return t
+  }
+}
+
+// THE reference detector: is (comp, prop) an entity reference, and to what
+// kind? 'entity' target = any entity; undefined = not a reference. A named
+// comp reads its own declaration; comp '' searches the vocabulary.
+export let refOf = (comp: string, prop: string): string | undefined => {
+  let t = comp ? types(comp)[prop] : bareType(prop)
+  return typeof t == 'object' && 'eid' in t ? t.eid : undefined
+}
+
+// Just the yes/no of it: refOf answers with a target kind ('entity' = any),
+// which is truthy for every reference, so this is a thin name over the
+// intent — ask isRef when the kind doesn't matter, refOf when it does.
+export let isRef = (comp: string, prop: string): boolean =>
+  refOf(comp, prop) != null
+
+// The columns a component declares as BODIES — the long markdown that no
+// board, list or dot view reads, and the one slice a payload may leave
+// behind (subs.ts `bodyless`). Derived from the vocabulary, so a new body
+// column is deferred and healed without touching either end.
+export let bodyCols = (comp: string) =>
+  Object.entries(types(comp)).filter(([, t]) => t == 'body').map(([p]) => p)
+
+// What the caller sent, quoted back. An object says its shape rather than
+// '[object Object]': a refusal is read by whoever wrote the value.
+let got = (v: unknown) =>
+  v && typeof v == 'object' ? JSON.stringify(v) : String(v)
+let fail = (p: Prop, grammar: string, v: unknown): never => {
+  throw new Error(`${p.name} is ${grammar} — got '${got(v)}'`)
+}
+
+let DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i
+
+let number = (p: Prop, v: unknown): number => {
+  let s = typeof v == 'string' ? v.trim() : String(v)
+  if (
+    (typeof v != 'string' && typeof v != 'number') ||
+    !DECIMAL.test(s) ||
+    !Number.isFinite(Number(s))
+  ) {
+    return fail(p, 'a finite decimal number (1, -2.5, 6e3)', v)
+  }
+  return Number(s)
+}
+
+let priority = (p: Prop, v: unknown) => {
+  let s = typeof v == 'string' ? v.trim().replace(/^p/i, '') : String(v)
+  if (
+    (typeof v != 'string' && typeof v != 'number') ||
+    !DECIMAL.test(s) ||
+    !Number.isFinite(Number(s))
+  ) {
+    return fail(p, 'a finite number, optionally P-prefixed (P2, p02, 1.5)', v)
+  }
+  return Number(s)
+}
+
+let bool = (p: Prop, v: unknown): number => {
+  let s = String(v).trim().toLowerCase()
+  if (s == 'true' || s == '1' || s == 'yes') return 1
+  if (s == 'false' || s == '0' || s == 'no') return 0
+  return fail(p, 'a boolean (true, false, 1, 0, yes, no)', v)
+}
+
+let time = (p: Prop, v: unknown, ctx: PropContext): string => {
+  if (typeof v != 'string') {
+    return fail(p, 'a time (today, 1 hour ago, in 60m, or ISO stamp)', v)
+  }
+  let at = timeInstant(v, ctx.now)
+  if (at == null || !Number.isFinite(at)) {
+    return fail(p, 'a time (today, 1 hour ago, in 60m, or ISO stamp)', v)
+  }
+  return new Date(at).toISOString()
+}
+
+let oneOf = (p: Prop, v: unknown): string => {
+  let type = p.type as Extract<PropType, { enum: readonly string[] }>
+  let s = typeof v == 'string' ? v : ''
+  let declared = type.enum.find((x) => x.toLowerCase() == s.toLowerCase())
+  let alias = Object.entries(type.aliases ?? {})
+    .find(([a]) => a.toLowerCase() == s.toLowerCase())?.[1]
+  let value = declared ??
+    type.enum.find((x) => x.toLowerCase() == alias?.toLowerCase())
+  return value ?? fail(p, `one of ${type.enum.join(', ')}`, v)
+}
+
+// `.project=tasks` is the shape: a token that IS a venture in the fleet,
+// under an alias that diverges. When a near match resolves, naming it is
+// the whole message — the grammar is not what the caller got wrong, and
+// it is spelled by the noun the column carries ('no project', not 'no
+// project'). Nothing close: the grammar line, plainly, no guess.
+let noun = (p: Prop) => p.prop == 'eid' ? 'entity' : p.prop
+let eid = (p: Prop, v: unknown, ctx: PropContext): string => {
+  // A read handed back. A reference ANSWERS `{eid, name}` wherever the reader
+  // could name what it points at (workers/yak/listing.ts `named`), so the row
+  // a page read and writes back means the eid it named — one more spelling of
+  // an id, at the door that already accepts every other one.
+  let s = String(
+    v && typeof v == 'object' && 'eid' in v ? (v as { eid: unknown }).eid : v,
+  ).trim()
+  if (EID.test(s)) return s.toLowerCase()
+  let found = ctx.resolve?.(s)
+  if (found && EID.test(found)) return found.toLowerCase()
+  let target = typeof p.type == 'object' && 'eid' in p.type ? p.type.eid : ''
+  let near = ctx.near?.(s, target)
+  if (near) throw new Error(`no ${noun(p)} '${s}' — did you mean ${near}?`)
+  return fail(p, 'a human id / alias / UUID', v)
+}
+
+let text = (p: Prop, v: unknown): string =>
+  typeof v == 'string' ? v : fail(p, 'text', v)
+
+// A page address is text with ONE canonical spelling (url.ts normalize).
+// Living here is what keeps a save and a query in agreement without
+// either side knowing: both grammars parse their scalars through this
+// module, so `.url=https://x.com/p?utm_source=n#top` written and the same
+// string filtered land on the same characters.
+let url = (p: Prop, v: unknown): string => normalize(text(p, v))
+
+let tag = (t: PropType) =>
+  typeof t == 'string' ? t : 'enum' in t ? 'enum' : 'eid' in t ? 'eid' : 'text'
+
+// Empty clears these — an optional enum too (T-16491): a closed set is still
+// an optional column, so `.venture.paused_from=` un-sets it the way every other
+// scalar does. A required enum (for example venture.phase) is protected by
+// the schema, so clearing it is refused loudly rather than silently corrupted.
+let nullable = (t: PropType) =>
+  ['number', 'priority', 'bool', 'time', 'eid', 'enum'].includes(tag(t))
+
+type Parser = (
+  p: Prop,
+  input: unknown,
+  ctx: PropContext,
+) => string | number
+
+let parsers: Record<string, Parser> = {
+  number,
+  priority,
+  bool,
+  time,
+  enum: oneOf,
+  eid,
+  text,
+  url,
+}
+
+// Null always passes through. Empty text is text; empty optional scalars clear.
+export let parseProp = (
+  p: Prop,
+  input: unknown,
+  ctx: PropContext = {},
+): string | number | null => {
+  if (input == null) return null
+  if (input === '' && nullable(p.type)) return null
+  return (parsers[tag(p.type)] ?? text)(p, input, ctx)
+}
+
+export let formatProp = (
+  p: Prop,
+  value: unknown,
+  ctx: PropContext = {},
+): string | null => {
+  let parsed = parseProp(p, value, ctx)
+  if (parsed == null) return null
+  if (tag(p.type) == 'priority') return `P${parsed}`
+  if (tag(p.type) == 'bool') return parsed ? 'true' : 'false'
+  // A stamp is stored Zulu but SHOWN local — one door for every face.
+  if (tag(p.type) == 'time') return local(String(parsed))
+  if (tag(p.type) == 'eid') {
+    return ctx.describe?.(String(parsed)) ?? String(parsed)
+  }
+  return String(parsed)
+}
+
+let ref = (name: string): Prop => ({
+  comp: 'entity',
+  prop: name,
+  name,
+  type: { eid: 'entity', death: 'keep' },
+})
+let requiredRef = (
+  p: Prop,
+  value: unknown,
+  ctx: PropContext,
+): string => {
+  let parsed = parseProp(p, value, ctx)
+  if (parsed == null) return fail(p, 'a human id / alias / UUID', value)
+  return String(parsed)
+}
+
+// A field OPERATOR is a plain object whose key names an apply()-resolved op
+// (`$edit`, …) rather than a literal column value. Detected by the `$` sigil so
+// the value language leaves it alone; a real scalar is never an object. Kept
+// here (not imported from edit.ts) to avoid a props↔edit cycle.
+export let isFieldOp = (v: unknown): boolean =>
+  v != null && typeof v == 'object' && !Array.isArray(v) &&
+  Object.keys(v as object).some((k) => k.startsWith('$'))
+
+// The same operator, said at a DOT-PARAM door, where every value arrives as
+// text: the JSON graph_apply takes as a comp value, spelled inline —
+// `.body={"$edit":{"old":"a","new":"b"}}`. Undefined for anything else, so
+// ordinary prose (JSON included) stays a literal; only the reserved `$` sigil
+// is read as an operator. Without this the JSON stored AS the body and
+// clobbered the doc it was meant to patch (T-33926).
+export let fieldOp = (raw: string): Record<string, unknown> | undefined => {
+  if (!raw.trimStart().startsWith('{')) return
+  let v: unknown
+  try {
+    v = JSON.parse(raw)
+  } catch {
+    return
+  }
+  return isFieldOp(v) ? v as Record<string, unknown> : undefined
+}
+
+// A batch gets one value language before any writer observes it. Unknown
+// components and server-owned columns stay untouched for the db allowlist;
+// every declared scalar leaves in canonical form.
+export let normalizeChanges = (
+  changes: Change[],
+  ctx: PropContext = {},
+): Change[] =>
+  changes.map((change) => {
+    let eid = requiredRef(ref('eid'), change.eid, ctx)
+    if (change.comp == null) return { ...change, eid }
+    let comp = Object.fromEntries(
+      Object.entries(change.comp).map(([name, value]) => {
+        // A field OPERATOR (e.g. { $edit }) is not a literal — pass it through
+        // untouched for apply() to resolve against the current stored value.
+        // A scalar parser would (rightly) reject the object as non-text.
+        if (isFieldOp(value)) return [name, value]
+        let p = name in (comps[change.name] ?? {})
+          ? propAt(change.name, name)
+          : undefined
+        if (!p) return [name, value]
+        // An edge's ends ARE its identity: a value that resolves to nothing is
+        // a name nobody can hold, refused here rather than stored as null.
+        if (change.name == 'edge' && name != 'ord') {
+          return [name, requiredRef(p, value, ctx)]
+        }
+        return [name, parseProp(p, value, ctx)]
+      }),
+    )
+    return { ...change, eid, comp }
+  })

@@ -8,7 +8,6 @@ import {
   ent,
   mode,
   mutate,
-  mutateWork,
   pinned,
   problem,
   rows,
@@ -257,7 +256,6 @@ let exec = async (line: string) => {
     let task = spawnTask(r.spawn)
     if (task) changes = [...changes, ...scene(task)]
     if (changes.length) mutate(...changes)
-    if (r.mutation) await mutateWork(r.mutation)
     if (r.go) navigate(entityPath(idOf(ent(r.go))))
     if (r.card) {
       let root = screenTarget()

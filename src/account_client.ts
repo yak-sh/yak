@@ -3,7 +3,7 @@
 // vocabulary and browser storage never become another account authority.
 import { signal } from '@preact/signals'
 import type { AccountError, AccountStatus, LoginStart } from './accounts.ts'
-import { base } from './live.ts'
+import { base } from '../packages/web/live.ts'
 
 export type LoginMethod = 'browser' | 'device'
 export type Ceremony = Exclude<LoginStart, AccountStatus>

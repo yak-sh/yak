@@ -6,10 +6,10 @@
 import { onPaint, root, touch } from './dom.ts' // installs document — first
 import { render } from 'preact'
 import { effect } from '@preact/signals'
-import { boot, config } from '../live.ts'
-import { extend } from '../components/registry.ts'
+import { boot, config } from '../../packages/web/live.ts'
+import { extend } from '../../packages/web/components/registry.ts'
 import { loadPlugins, pluginSpecifiers } from '../plugins.ts'
-import { onMarkdown } from '../components/Markdown.tsx'
+import { onMarkdown } from '../../packages/web/components/Markdown.tsx'
 import { Md } from './md.tsx'
 import {
   App,

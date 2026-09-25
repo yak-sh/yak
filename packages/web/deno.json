@@ -3,21 +3,19 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
-    "./routes": "./routes.ts",
-    "./views": "./views.ts",
-    "./client": "./client.ts"
+    "./routes": "./routes.ts"
   },
   "license": "Apache-2.0",
-  "description": "A graph in a browser: every entity at its own address, drawn by the same portable views a terminal prints.",
+  "description": "The web door: canvas, cards, boards and editing in a browser, served by yak serve over @yaks/api and @yaks/client.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "preact": "npm:preact@^10.29.1",
-    "preact/hooks": "npm:preact@^10.29.1/hooks"
+    "preact/hooks": "npm:preact@^10.29.1/hooks",
+    "preact/jsx-runtime": "npm:preact@^10.29.1/jsx-runtime",
+    "@preact/signals": "npm:@preact/signals@^2.9.0",
+    "lucide-preact": "npm:lucide-preact@1.31.0",
+    "marked": "npm:marked@18.0.6",
+    "highlight.js": "npm:highlight.js@11.11.1/lib/common"
   },
-  "publish": {
-    "exclude": [
-      "**/*_test.ts",
-      "./browser.json"
-    ]
-  }
+  "publish": false
 }

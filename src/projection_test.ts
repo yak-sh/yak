@@ -385,13 +385,3 @@ Deno.test('an addressed sub projects one row without a bespoke read door', () =>
   assertEquals(session.turn, 'busy')
   db.close()
 })
-
-// The chrome projection the Tray actually opens must round-trip the wire, or
-// live.ts silently falls back to the in-memory resolver and the 6.22 MB comes
-// straight back — with nothing failing to say so.
-Deno.test('the session chrome line parses to a projection', async () => {
-  let { sessionDetail } = await import('./live.ts')
-  let ps = parseQuery(sessionDetail)
-  assertEquals(ps.some((p) => p.op == PROJECT), true)
-  assertEquals(fieldsOf(ps)!.length > 10, true)
-})

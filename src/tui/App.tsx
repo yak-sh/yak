@@ -6,11 +6,11 @@
 // painted as lines instead of CSS.
 import { signal } from '@preact/signals'
 import { parse } from '@yaks/query'
-import { useBoardSub, useEntity } from '../components/subscriptions.ts'
-import { useCommentsOn } from '../components/useQuery.ts'
-import { tuiKeys } from '../keybindings.ts'
-import { formatProp, propAt } from '../props.ts'
-import { type Ent, idOf, statusOf, verdictName } from '../types.ts'
+import { useBoardSub, useEntity } from '../../packages/web/components/subscriptions.ts'
+import { useCommentsOn } from '../../packages/web/components/useQuery.ts'
+import { tuiKeys } from '../../packages/web/keybindings.ts'
+import { formatProp, propAt } from '../../packages/web/props.ts'
+import { type Ent, idOf, statusOf, verdictName } from '../../packages/web/types.ts'
 import {
   applyLocal,
   boardTasks,
@@ -23,7 +23,6 @@ import {
   gated,
   mode,
   mutate,
-  mutateWork,
   pending,
   problem,
   queryEids,
@@ -32,8 +31,8 @@ import {
   send,
   statuses,
   uuid,
-} from '../live.ts'
-import { parseQuery, resolveRefs } from '../query.ts'
+} from '../../packages/web/live.ts'
+import { parseQuery, resolveRefs } from '../../packages/web/query.ts'
 import {
   type Command,
   commands,
@@ -41,15 +40,15 @@ import {
   run,
   type SpawnIntent,
   spawnTask,
-} from '../commands.ts'
-import { sessionFrames, spawnPlan } from '../client.ts'
+} from '../../packages/web/commands.ts'
+import { sessionFrames, spawnPlan } from '../../packages/web/client.ts'
 import { inflate } from '../client_host.ts'
-import { applicable, type Renderer, resolve } from '../components/registry.ts'
-import { Entity } from '../components/Entity.tsx'
-import { byline, viaName } from '../components/Comments.tsx'
-import { Dot } from '../components/Dot.tsx'
-import { Id } from '../components/views/Inline.tsx'
-import { eidOf } from '../components/nav.tsx'
+import { applicable, type Renderer, resolve } from '../../packages/web/components/registry.ts'
+import { Entity } from '../../packages/web/components/Entity.tsx'
+import { byline, viaName } from '../../packages/web/components/Comments.tsx'
+import { Dot } from '../../packages/web/components/Dot.tsx'
+import { Id } from '../../packages/web/components/views/Inline.tsx'
+import { eidOf } from '../../packages/web/components/nav.tsx'
 import { clipboard, link } from './paint.ts'
 import { root, touch } from './dom.ts'
 import { Md } from './md.tsx'
@@ -64,11 +63,11 @@ import {
   type CredStatus,
   type SettingRow,
 } from '../config_client.ts'
-import { catalog as settingCatalog, spec as settingSpec } from '../config.ts'
-import { catalog } from '../providers.ts'
-import { liveBlocked, load, providers } from '../components/Run.tsx'
-import { useQuery } from '../components/useQuery.ts'
-import { navigationQuery, navigationView } from '../navigation.ts'
+import { catalog as settingCatalog, spec as settingSpec } from '../../packages/web/config.ts'
+import { catalog } from '../../packages/web/providers.ts'
+import { liveBlocked, load, providers } from '../../packages/web/components/Run.tsx'
+import { useQuery } from '../../packages/web/components/useQuery.ts'
+import { navigationQuery, navigationView } from '../../packages/web/navigation.ts'
 
 export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
@@ -447,7 +446,6 @@ let exec = async (line: string) => {
   try {
     let r = run(line, ctx(), local)
     if (r.changes?.length) mutate(...r.changes)
-    if (r.mutation) await mutateWork(r.mutation)
     if (r.go) trail.value = [...trail.value, r.go]
     if (r.card) trail.value = [...trail.value, r.card]
     msg.value = r.msg ?? ''
