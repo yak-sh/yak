@@ -11,7 +11,10 @@
 // That is why this is its own module. A command that only needs to know where
 // the graph is must not import host.ts, which pulls in every plugin a config
 // names — a cost `yak login` should not pay. So the config is read here, by a
-// module that imports nothing.
+// module that imports no code: only this package's deno.json, for the release
+// a plugin named without a map entry is taken from (`located`).
+
+import cli from './deno.json' with { type: 'json' }
 
 /** The options a config passes to one plugin, given to each of that plugin's
  * exported factories as the second argument, after the host. A value written
@@ -128,10 +131,42 @@ let unexported = (error: unknown, spec: string, facet: string): boolean =>
  * yes, since only importing it can tell. */
 export let exported = (plugin: string, name: string): boolean => {
   try {
-    import.meta.resolve(`${plugin}/${name}`)
+    import.meta.resolve(located(`${plugin}/${name}`))
     return true
   } catch {
     return false
+  }
+}
+
+/** Where a bare `@yaks/…` name is imported from. Inside a workspace the
+ * import map resolves it; a `yak` installed from JSR has no map entry for a
+ * package it does not itself import (a plugin a config names, the views of a
+ * component another plugin declared), so the name goes to JSR at the release
+ * this CLI came from, which keeps every plugin and view one coherent set.
+ * `resolve` is `import.meta.resolve`, which throws for a name nothing maps.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let none = (): string => {
+ *   throw new TypeError('not a dependency')
+ * }
+ * assertEquals(located('@yaks/tools/views', none, '1.2.3'), 'jsr:@yaks/tools@1.2.3/views')
+ * assertEquals(located('@yaks/tools/views', (s) => s, '1.2.3'), '@yaks/tools/views')
+ * assertEquals(located('./plugins/mail/vocab', none, '1.2.3'), './plugins/mail/vocab')
+ * ```
+ */
+export let located = (
+  spec: string,
+  resolve: (spec: string) => string = import.meta.resolve,
+  release: string = cli.version,
+): string => {
+  if (!spec.startsWith('@yaks/')) return spec
+  try {
+    resolve(spec)
+    return spec
+  } catch {
+    let [scope, name, ...rest] = spec.split('/')
+    return ['jsr:' + scope, `${name}@${release}`, ...rest].join('/')
   }
 }
 
@@ -141,7 +176,7 @@ export let subpath = async <M>(
   plugin: string,
   name: string,
 ): Promise<M | null> => {
-  let spec = `${plugin}/${name}`
+  let spec = located(`${plugin}/${name}`)
   try {
     return await import(spec)
   } catch (error) {
