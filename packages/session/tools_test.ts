@@ -284,6 +284,11 @@ Deno.test('a transcript owed a turn for hours is a warn', async () => {
   let said = await checkup('session_check', g)
   assertEquals(said.level, 'warn')
   assert(said.body.includes('has been pending since'), said.body)
+  // The headline agrees with what was found.
+  assertEquals(
+    said.body.split('\n')[0],
+    '1 finding(s) against: no transcript has stalled',
+  )
 })
 
 // Nothing asked the daemon, so the turn is a harness's to take, and one that

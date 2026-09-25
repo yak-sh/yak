@@ -230,12 +230,15 @@ const available = checks(r.tools)
 ```
 
 `checked(call, about, findings)` builds the standard one-bundle response for a
-check. It always includes readable `content.body` and `output.source`. If there
-are findings, `error.code` contains the most severe level: `fail` for a measured
-invariant violation, or `warn` for a leak or an outcome the check could not
-determine. A check with no findings still returns a response. `ailing(answer)`
-is true only when that verdict is `fail`. Reporting a failed invariant does not
-mean the tool invocation itself failed; use `faulted()` for the latter.
+check. `about` is the claim that holds when nothing is found ("no transcript has
+stalled"): the body reads `<about> — nothing to report`, or
+`<n> finding(s) against: <about>` above the findings. It always includes
+readable `content.body` and `output.source`. If there are findings, `error.code`
+contains the most severe level: `fail` for a measured invariant violation, or
+`warn` for a leak or an outcome the check could not determine. A check with no
+findings still returns a response. `ailing(answer)` is true only when that
+verdict is `fail`. Reporting a failed invariant does not mean the tool
+invocation itself failed; use `faulted()` for the latter.
 
 ## Exports
 

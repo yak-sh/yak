@@ -49,9 +49,10 @@ let worst = (found: Finding[]): Level | undefined =>
     : undefined
 
 /**
- * What a check returns: one bundle, however much it found. The text leads with
- * what was checked, so the answer reads the same whether it is empty or long,
- * and `error{code}` carries the level for a caller that has to act on it.
+ * What a check returns: one bundle, however much it found. `about` is the
+ * claim that holds when nothing is found ("no transcript has stalled"); the
+ * text leads with it either way, and `error{code}` carries the level for a
+ * caller that has to act on it.
  *
  * One bundle rather than one per finding, deliberately: the runner writes what
  * a tool returns, and a sweep that created an entity per stale lease would
@@ -67,10 +68,11 @@ export let checked = (
     entity: { eid: '$check' },
     ...level ? { error: { code: level } } : {},
     content: {
+      // `about` is what holds when the check finds nothing, so a check that
+      // found something says it against that claim rather than under it.
       body: found.length
-        ? [`${about} — ${found.length} finding(s)`, ...found.map(said)].join(
-          '\n',
-        )
+        ? [`${found.length} finding(s) against: ${about}`, ...found.map(said)]
+          .join('\n')
         : `${about} — nothing to report`,
     },
     output: { source: call },
