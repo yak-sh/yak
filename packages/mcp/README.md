@@ -129,7 +129,7 @@ tools are listed by default; `search` requires a callback.
 | -------------- | --------------------------------------------------------------- |
 | `graph_apply`  | Apply changes and return their applied bundles                  |
 | `graph_query`  | Read entities selected by a query                               |
-| `graph_show`   | Read named entities and, by default, entities referencing them  |
+| `graph_show`   | Read named entities, each whole                                 |
 | `graph_schema` | Describe components, properties, and kinds                      |
 | `search`       | Return ranked text matches using the supplied `search` callback |
 
@@ -146,7 +146,7 @@ For the vocabulary in the in-memory example:
 { "q": ".status=shelved&.price<20" }
 
 // graph_show
-{ "ids": ["b1"], "backrefs": false }
+{ "ids": ["b1"] }
 
 // graph_schema
 {}
@@ -159,10 +159,10 @@ met. Call records are still written. A later application can fail even if the
 check succeeded.
 
 `graph_query` accepts a query defined by [@yaks/query](../query/README.md),
-optional `filters` joined with `&`, and a `limit`. `graph_show` returns entity
-bundles; references remain in their component properties, and edge entities are
-ordinary bundles. `backrefs: false` omits entities that reference the requested
-ones.
+optional `filters` joined with `&`, and a `limit`. `graph_show` returns the
+entities asked for and nothing else; references remain in their component
+properties, and what references an entity is a query of its own (`.refs=<id>`),
+where edge entities are ordinary bundles.
 
 `graph_schema` answers markdown to read and, as `structuredContent`, one JSON
 Schema document with each component's entry under `$defs`, the shape of a

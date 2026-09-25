@@ -842,10 +842,7 @@ slow(
       ) as { entity: { eid: string } }[]
       assertEquals(byName.map((b) => b.entity.eid), [once])
       let shown = JSON.parse(
-        await agent.tool('graph_show', {
-          ids: ['recipe:lemon-cakes'],
-          backrefs: false,
-        }),
+        await agent.tool('graph_show', { ids: ['recipe:lemon-cakes'] }),
       ) as { entity: { eid: string } }[]
       assertEquals(shown.map((b) => b.entity.eid), [once])
       // and it goes when the entity does — the name is released, not

@@ -116,30 +116,16 @@ let batch = (v: unknown): Bundle[] => {
   })
 }
 
-// The entities, then everything pointing at them, each one whole and each one
-// once. `.refs=<id>` is the query grammar's backlink union, so the incoming
-// references cost one query, not one per reference property.
-let gather = async (
-  graph: Graph,
-  said: string[],
-  backrefs: boolean,
-): Promise<Bundle[]> => {
+// The entities asked for, each one whole and each one once, and nothing
+// else: what points at them is a query of its own (`.refs=<id>`), asked by
+// whoever wants it.
+let gather = async (graph: Graph, said: string[]): Promise<Bundle[]> => {
   // What the caller typed, as the eids it names: an id that is an entity is
   // itself, and anything else is whatever a plugin declares it addresses — a name,
   // where @yaks/alias is composed in. Nothing composed, nothing to resolve.
   let at = await graph.address(said)
-  let ids = said.map((id) => at.get(id) ?? id)
-  let found = await detached(graph.storage).get(ids)
-  let seen = new Map<string, Bundle>()
-  for (let b of found) seen.set(b.entity.eid, b)
-  if (backrefs) {
-    for (let id of ids) {
-      for (let b of await graph.read(`.refs=${id}`)) {
-        if (!seen.has(b.entity.eid)) seen.set(b.entity.eid, b)
-      }
-    }
-  }
-  return [...seen.values()]
+  let ids = [...new Set(said.map((id) => at.get(id) ?? id))]
+  return await detached(graph.storage).get(ids)
 }
 
 /**
@@ -189,7 +175,7 @@ export let runs = (seams: Seams = {}): Runs => {
       let args = argsOf(call)
       let ids = strings(args.ids)
       if (!ids.length) throw new Refused('graph_show needs at least one id')
-      return await gather(graph, ids, args.backrefs !== false)
+      return await gather(graph, ids)
     },
     graph_schema: (call, graph) => {
       let args = argsOf(call)

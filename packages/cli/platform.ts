@@ -85,6 +85,7 @@ export let printed = async (
   roster: Roster | null,
   name: string,
   said: Result,
+  args: Record<string, unknown> = {},
 ): Promise<number> => {
   let read = saidBy(said)
   let { text, stale } = read
@@ -114,16 +115,20 @@ export let printed = async (
     // Imported only to draw, so a command that never does pays nothing.
     let { reported, show } = await import('./answer.ts')
     let { views, vocab: read } = await reported(vocab)
-    // The entities its references point at, asked of the same host, so each
-    // prints as the id a person types rather than as its handle.
-    let lookup = async (ids: string[]) =>
-      answered(
-        await c.ask('tools/call', {
-          name: 'graph_show',
-          arguments: { ids, backrefs: false },
-        }) as Result,
-      ) ?? []
-    await show(c, views, read, answer, {}, (ids) => lookup(ids).catch(() => []))
+    // What the drawing asks for beyond the answer — the entities its
+    // references name, a page's links and comments — asked of the same host
+    // in the same app the call named. A drawing that cannot get them draws
+    // without them.
+    let scope = Object.fromEntries(
+      ['app', 'space'].flatMap((k) => args[k] == null ? [] : [[k, args[k]]]),
+    )
+    let asked = (tool: string, more: Record<string, unknown>) =>
+      c.ask('tools/call', { name: tool, arguments: { ...scope, ...more } })
+        .then((r) => answered(r as Result) ?? [], () => [])
+    await show(c, views, read, answer, {}, {
+      lookup: (ids) => asked('graph_show', { ids }),
+      query: (q) => asked('graph_query', { q }),
+    })
   } else if (text) c.out(text)
   return 0
 }
@@ -153,6 +158,7 @@ let toolOf = (roster: Roster, t: Listed): Command => ({
         name: t.name,
         arguments: args,
       }) as Result,
+      args,
     ),
 })
 

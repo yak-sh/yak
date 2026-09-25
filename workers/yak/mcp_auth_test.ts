@@ -555,7 +555,6 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
         space: 'ada',
         app: 'runs',
         ids: [run],
-        backrefs: false,
       }),
     ) as { entity: { eid: string } }[]
     assertEquals(shown[0].entity.eid, run)

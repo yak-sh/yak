@@ -8,8 +8,7 @@
  * - **`graph_apply`** — bundles in, the transaction as applied out, one bundle
  *   per entity;
  * - **`graph_query`** — a query string in, bundles out;
- * - **`graph_show`** — whole entities, plus everything that references them, as
- *   bundles;
+ * - **`graph_show`** — the entities asked for, each whole, as bundles;
  * - **`graph_schema`** — the index of every component, or one component in
  *   full, as markdown and as one JSON Schema document with each component's
  *   entry under `$defs`;

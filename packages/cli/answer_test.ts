@@ -1,4 +1,4 @@
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords } from '@yaks/edge/vocab'
 import { views as docViews } from '@yaks/doc/views'
@@ -10,7 +10,10 @@ import { toolsDoc } from '@yaks/tools'
 import { views as toolViews } from '@yaks/tools/views'
 import { loadVocab } from '@yaks/vocab'
 import { define, resolve } from '@yaks/render'
-import { printed, referenced, registry, terminal } from './answer.ts'
+import { graph } from '@yaks/graph'
+import { storage } from '@yaks/sqlite'
+import { mem } from '../sqlite/harness.ts'
+import { printed, referenced, registry, show, terminal } from './answer.ts'
 
 let vocab = loadVocab([kernelDoc, edgeDoc, docDoc, taskDoc, toolsDoc], [
   kernelKeywords,
@@ -93,20 +96,46 @@ let link = (from: string, relation: string, to: string) => ({
   [relation]: {},
 })
 
-Deno.test('an entity and what links to it prints whole, each link by its relation', () => {
+Deno.test('a lone entity’s page asks for its links and comments, and leaves bookkeeping out', async () => {
   let t9eid = t9.entity.eid, t10eid = t10.entity.eid
-  let shown = printed(views, vocab, [
-    t9,
-    link(t10eid, 'contains', t9eid),
-    link(t9eid, 'requires', t10eid),
-    link(t10eid, 'references', t9eid),
-  ] as never, [t10] as never)
-  assertEquals(
-    shown.split('\n\nDetails')[0],
-    'task T-9 open\n\nFix the bar\n\n' +
-      'contains ←\n\n- T-10 Ship it done\n\n' +
-      'requires →\n\n- T-10 Ship it done',
+  let store = storage(mem(), vocab)
+  store.install()
+  let g = graph({ storage: store, vocab })
+  let edge = (from: string, relation: string, to: string) => ({
+    entity: { eid: `$${relation}` },
+    edge: { from, to },
+    [relation]: {},
+  })
+  await g.apply([
+    { entity: { eid: t9eid }, doc: t9.doc, task: {} },
+    { entity: { eid: t10eid }, doc: t10.doc, task: {}, completed: {} },
+    edge(t10eid, 'contains', t9eid),
+    edge(t9eid, 'requires', t10eid),
+    edge(t10eid, 'references', t9eid),
+    {
+      entity: { eid: '$c' },
+      doc: { body: 'looks good' },
+      comment: { target: t9eid },
+    },
+  ] as never)
+  let lines: string[] = []
+  await show(
+    { tui: false, out: (line) => lines.push(line) },
+    views,
+    vocab,
+    [t9] as never,
+    {},
+    { lookup: () => [t10] as never, query: (q) => g.read(q) },
   )
+  let page = lines.join('\n').split('\n\nDetails')[0]
+  let parts = page.split('\n\n')
+  assertEquals(parts.slice(0, 2), ['task T-9 open', 'Fix the bar'])
+  for (let group of ['contains ←', 'requires →']) {
+    assertEquals(parts[parts.indexOf(group) + 1], '- T-10 Ship it done')
+  }
+  assert(!page.includes('references'), page)
+  assertStringIncludes(page, '1 comment')
+  assertStringIncludes(page, 'looks good')
 })
 
 Deno.test('a link in a list reads as the sentence it states', () => {

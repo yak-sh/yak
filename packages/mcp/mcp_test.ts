@@ -260,7 +260,7 @@ Deno.test('an unattributed server leaves the actor off', async () => {
   )
 })
 
-Deno.test('graph_show answers only bundles, including what points at the entity', async () => {
+Deno.test('graph_show answers the entities asked for and nothing else', async () => {
   let graph = shopGraph()
   await graph.apply([spring, {
     entity: { eid: 'r1' },
@@ -268,23 +268,14 @@ Deno.test('graph_show answers only bundles, including what points at the entity'
   }])
   let client = await connect({ graph })
   let out = bundles(result(await called(client, 'graph_show', { ids: ['b1'] })))
-  assertEquals(out.map((b) => b.entity.eid), ['b1', 'r1'])
-  assertEquals(comp(out[1], 'review'), { stars: 5, book: 'b1' })
-
-  let alone = bundles(result(
-    await called(client, 'graph_show', {
-      ids: ['b1'],
-      backrefs: false,
-    }),
-  ))
-  assertEquals(alone.map((b) => b.entity.eid), ['b1'])
+  assertEquals(out.map((b) => b.entity.eid), ['b1'])
   await client.close()
 })
 
-// The backlinks are asked as `.refs=`, which is one term per reference
-// property, and workerd's SQLite takes five terms in a compound (@yaks/sql
-// `ARMS`). So the shape that broke — backrefs on, over a compiled store whose
-// vocabulary references more than five ways — is held here, through the tool.
+// `.refs=` is one term per reference property, and workerd's SQLite takes
+// five terms in a compound (@yaks/sql `ARMS`). So the shape that broke — a
+// backlink read over a compiled store whose vocabulary references more than
+// five ways — is held here, through the tool.
 let wideDoc: VocabDoc = {
   $defs: {
     entity: {
@@ -311,7 +302,7 @@ let wideDoc: VocabDoc = {
   } as VocabDoc['$defs'],
 }
 
-Deno.test('graph_show gathers backrefs over a vocabulary wider than a compound', async () => {
+Deno.test('graph_query .refs= reads backlinks over a vocabulary wider than a compound', async () => {
   let wide = loadVocab([wideDoc, toolsDoc])
   let store = storage(mem(), wide)
   store.install()
@@ -323,9 +314,9 @@ Deno.test('graph_show gathers backrefs over a vocabulary wider than a compound',
   ])
   let client = await connect({ graph: g })
   let out = bundles(result(
-    await called(client, 'graph_show', { ids: ['a1'], backrefs: true }),
+    await called(client, 'graph_query', { q: '.refs=a1' }),
   ))
-  assertEquals(out.map((b) => b.entity.eid).sort(), ['a1', 'b1', 'b2'])
+  assertEquals(out.map((b) => b.entity.eid).sort(), ['b1', 'b2'])
   await client.close()
 })
 

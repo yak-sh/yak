@@ -12,10 +12,9 @@
 // host always carries its `content`), then the generic ones any entity has
 // (@yaks/web/views) — the order @yaks/web's browser registers them in, so an
 // entity reads the same in both. A server names no plugins, so its answers get
-// the last two. A lone entity is shown whole, as its `Page`; several are a
-// `Tile` each, one line apiece — unless the answer is some entities and what
-// points at them (`yak graph show`), when each of those is a `Page` and the
-// rest are its relations and comments.
+// the last two. A lone entity is shown whole, as its `Page`, beside the links
+// and comments the page asks for itself, since a tool answers only what it
+// was asked; several are a `Tile` each, one line apiece.
 //
 // A terminal can hold more than a printout: a plugin's `./tui` exports views
 // that are Preact components of their own — the harness's session, which is
@@ -143,115 +142,108 @@ export let referenced = (vocab: Vocab, answer: Bundle[]): string[] => {
 // anybody made — the kernel's `references` (text that mentions it) and
 // @yaks/dreaming's `recalled` (a session recalled it). `yak graph query
 // '.refs=<id>&.references&*'` lists them.
-let META = new Set(['references', 'recalled'])
+let META = ['references', 'recalled']
 
-// How many of one group a page lists before it only counts the rest.
+// How many of one group a page lists before it only counts the rest, and how
+// many links it asks for at all: an actor's page could name thousands.
 let MOST = 10
+let ENOUGH = 100
 
-// The entities an answer is about, where it is some entities and what points
-// at them: each is pointed at by something in the answer and points at
-// nothing in it, and everything else points at one of them. A list whose
-// members stand on their own is about none of them.
-let subjects = (vocab: Vocab, answer: Bundle[]): Bundle[] => {
-  let held = new Set(answer.map((b) => b.entity.eid))
-  let aims = new Map(answer.map((b) => [
-    b.entity.eid,
-    new Set(
-      refsOf(vocab, b).map(([, , eid]) => eid)
-        .filter((eid) => held.has(eid) && eid != b.entity.eid),
-    ),
-  ]))
-  let aimed = new Set([...aims.values()].flatMap((s) => [...s]))
-  let about = answer.filter((b) =>
-    aimed.has(b.entity.eid) && !aims.get(b.entity.eid)!.size
-  )
-  let at = new Set(about.map((b) => b.entity.eid))
-  return about.length &&
-      answer.every((b) =>
-        at.has(b.entity.eid) ||
-        [...aims.get(b.entity.eid)!].some((e) => at.has(e))
-      )
-    ? about
-    : []
-}
+/** What a page draws beside an entity: the links it is in and the comments
+ * aimed at it. A tool answers only what it was asked for, so the page asks
+ * for these itself, with the queries {@link nearQueries} writes. */
+export type Near = { links: Bundle[]; comments: Bundle[] }
 
-// What a page says about one of an answer's subjects: each link as the entity
-// at its other end, grouped by relation and direction (`contains ←` for the
-// entities that contain it), anything else that points at it grouped by the
-// property that does, and the comments aimed at it.
+/** The two queries a page asks about one entity: its links, bar META, and
+ * its comments — each only where this vocabulary has the component. */
+export let nearQueries = (vocab: Vocab, eid: string) => ({
+  links: vocab.comp('edge')
+    ? [
+      `.refs=${eid}`,
+      '.edge',
+      ...META.filter((m) => vocab.comp(m)).map((m) => `!${m}`),
+      `.limit=${ENOUGH}`,
+      '*',
+    ].join('&')
+    : null,
+  comments: vocab.comp('comment')
+    ? `.comment.target=${eid}&.limit=${ENOUGH}&*`
+    : null,
+})
+
+// What a page says about the entity it draws: each link as the entity at its
+// other end, grouped by relation and direction (`contains ←` for the entities
+// that contain it), and the comments aimed at it.
 let around = (
   vocab: Vocab,
   it: Bundle,
-  answer: Bundle[],
+  near: Near,
   held: Map<string, Bundle>,
 ): { relations: Related[]; comments: Bundle[] } => {
   let eid = it.entity.eid
   let groups = new Map<string, Bundle[]>()
-  let put = (title: string, b: Bundle) =>
-    groups.set(title, [...groups.get(title) ?? [], b])
-  let comments: Bundle[] = []
-  for (let b of answer) {
-    let hits = refsOf(vocab, b).filter(([, , e]) => e == eid)
-    if (b == it || !hits.length) continue
+  for (let b of near.links) {
     let rel = relationOf(vocab, b)
     let edge = b.edge as { from?: string; to?: string } | undefined
-    if (rel && edge) {
-      if (META.has(rel)) continue
-      let out = edge.from == eid
-      let other = (out ? edge.to : edge.from) ?? ''
-      put(
-        `${rel} ${out ? '→' : '←'}`,
-        held.get(other) ?? { entity: { eid: other } },
-      )
-    } else if ((b.comment as { target?: string })?.target == eid) {
-      comments.push(b)
-    } else put(`${hits[0][0]}.${hits[0][1]} ←`, b)
+    if (!rel || !edge) continue
+    let out = edge.from == eid
+    let other = (out ? edge.to : edge.from) ?? ''
+    let title = `${rel} ${out ? '→' : '←'}`
+    groups.set(title, [
+      ...groups.get(title) ?? [],
+      held.get(other) ?? { entity: { eid: other } },
+    ])
   }
+  // Asked for at most ENOUGH, so a full answer counts only what it holds.
+  let more = near.links.length >= ENOUGH ? '+' : ''
   let relations = [...groups].map(([title, items]) => ({
     title: items.length > MOST
-      ? `${title} (${MOST} of ${items.length})`
+      ? `${title} (${MOST} of ${items.length}${more})`
       : title,
     items: items.slice(0, MOST),
   }))
-  return { relations, comments }
+  return { relations, comments: near.comments }
 }
 
-// What an answer draws, in whatever tree `draw` builds: each entity it is about
-// as a `Page` with what surrounds it, a blank line apart, or else every entity
-// as its view, a line apiece. The one composition both lowerings share.
+// What an answer draws, in whatever tree `draw` builds: a lone entity as its
+// `Page`, with what `near` holds beside it, or else every entity as its view,
+// a line apiece. The one composition every lowering shares.
 let drawn = <Node>(
   vocab: Vocab,
   answer: Bundle[],
   named: Bundle[],
+  near: Near,
   draw: (b: Bundle, view: string, ctx: Shown<Node>) => Node | null,
 ): { nodes: (Node | null)[]; gap: string } => {
   let ctx = shown(vocab, answer, draw, named)
-  let about = subjects(vocab, answer)
-  if (!about.length) {
+  let [lone] = answer
+  if (answer.length != 1) {
     return { nodes: answer.map((b) => draw(b, viewOf(answer), ctx)), gap: '\n' }
   }
   let held = new Map([...named, ...answer].map((b) => [b.entity.eid, b]))
   return {
-    nodes: about.map((b) =>
-      draw(b, 'Page', { ...ctx, ...around(vocab, b, answer, held) })
-    ),
+    nodes: [draw(lone, 'Page', { ...ctx, ...around(vocab, lone, near, held) })],
     gap: '\n\n',
   }
 }
 
+let nothing: Near = { links: [], comments: [] }
+
 /** An answer as the lines a terminal prints. `named` holds the entities its
  * references point at, so each prints as its id; one not there prints as its
- * handle. */
+ * handle. A lone entity is its `Page`, with what `near` holds beside it. */
 export let printed = (
   views: Registry,
   vocab: Vocab,
   answer: Bundle[],
   named: Bundle[] = [],
+  near: Near = nothing,
 ): string => {
   let { nodes, gap } = drawn<Node>(
     vocab,
     answer,
     named,
+    near,
     (b, v, c) => tree(views, b, v, vocab, c),
   )
   return nodes.map((n) => plain(n)).filter(Boolean).join(gap)
@@ -267,6 +259,7 @@ export let painted = async (
   answer: Bundle[],
   named: Bundle[],
   columns: number,
+  near: Near = nothing,
 ): Promise<string> => {
   let [{ render: mount }, { print }] = await Promise.all([
     import('@yaks/preact'),
@@ -276,6 +269,7 @@ export let painted = async (
     vocab,
     answer,
     named,
+    near,
     (b, v, c) => mount(views, b, v, vocab, { ...c, readOnly: true }),
   )
   return nodes.map((n) => print(n, columns, sheet)).filter(Boolean).join(gap)
@@ -293,6 +287,7 @@ export let hold = async (
   answer: Bundle[],
   db?: string,
   named: Bundle[] = [],
+  near: Near = nothing,
 ): Promise<void> => {
   let [{ h }, { render: mount }, { run, Scroll }] = await Promise.all([
     import('preact'),
@@ -307,6 +302,7 @@ export let hold = async (
       vocab,
       answer,
       named,
+      near,
       (b, v, c) => mount(views, b, v, vocab, { ...c, db }),
     )
     return app ? nodes[0] : h(
@@ -340,30 +336,46 @@ export let reported = async (
   return { views, vocab }
 }
 
+/** Where a drawing asks for what it draws beyond the answer, from wherever
+ * the answer came from: `lookup` reads entities by eid, so a reference
+ * prints as the id a person types, and `query` answers a page's
+ * {@link nearQueries}. */
+export type Source = {
+  lookup: (eids: string[]) => Bundle[] | Promise<Bundle[]>
+  query: (q: string) => Bundle[] | Promise<Bundle[]>
+}
+
+let none: Source = { lookup: () => [], query: () => [] }
+
 /** An answer shown the way the command asked — held in the terminal under
  * `--tui`, drawn by `held` where the command has terminal views and a file to
  * read ({@link terminal}), painted where stdout is a terminal, and printed
- * otherwise. `lookup` reads the entities the answer's references point at,
- * from wherever the answer came from, so a reference prints as the id a person
- * types. */
+ * otherwise. */
 export let show = async (
   c: { tui: boolean; tty?: Tty; out: (line: string) => void },
   views: Registry,
   vocab: Vocab,
   answer: Bundle[],
   held: { views?: Held; db?: string } = {},
-  lookup: (eids: string[]) => Bundle[] | Promise<Bundle[]> = () => [],
+  from: Source = none,
 ): Promise<void> => {
-  let refs = referenced(vocab, answer)
-  let named = refs.length ? await lookup(refs) : []
+  let asked = answer.length == 1
+    ? nearQueries(vocab, answer[0].entity.eid)
+    : { links: null, comments: null }
+  let near: Near = {
+    links: asked.links ? await from.query(asked.links) : [],
+    comments: asked.comments ? await from.query(asked.comments) : [],
+  }
+  let refs = referenced(vocab, [...answer, ...near.links, ...near.comments])
+  let named = refs.length ? await from.lookup(refs) : []
   if (c.tui) {
-    return await hold(held.views ?? views, vocab, answer, held.db, named)
+    return await hold(held.views ?? views, vocab, answer, held.db, named, near)
   }
   if (c.tty) {
-    let text = await painted(views, vocab, answer, named, c.tty.columns)
+    let text = await painted(views, vocab, answer, named, c.tty.columns, near)
     if (text) c.tty.write(text)
     return
   }
-  let text = printed(views, vocab, answer, named)
+  let text = printed(views, vocab, answer, named, near)
   if (text) c.out(text)
 }
