@@ -934,7 +934,10 @@ export let stripeKey = () => {
 
 /** One call to Stripe, in Stripe's own dialect: form-encoded in, JSON out,
  * with the bracketed keys its nested fields are written with. A refusal is
- * thrown carrying Stripe's own message, which is the whole of the failure. */
+ * thrown carrying Stripe's own message, which is the whole of the failure.
+ * An answer that says `Stripe-Should-Retry: true` (an object another request
+ * held, say) is asked again, as Stripe's own libraries do, under one
+ * idempotency key so a write retried is the same write. */
 export let charged = async (
   key: string,
   path: string,
@@ -952,14 +955,25 @@ export let charged = async (
     } else body.set(prefix, String(value))
   }
   write('', fields ?? {})
-  let r = await fetch(`https://api.stripe.com${path}`, {
-    method,
-    headers: {
-      authorization: `Bearer ${key}`,
-      'content-type': 'application/x-www-form-urlencoded',
-      ...(on ? { 'stripe-account': on } : {}),
-    },
-    ...(fields ? { body: body.toString() } : {}),
+  let once = crypto.randomUUID()
+  let r = await until(async (): Promise<Response | null> => {
+    let r = await fetch(`https://api.stripe.com${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${key}`,
+        'content-type': 'application/x-www-form-urlencoded',
+        ...(method == 'POST' ? { 'idempotency-key': once } : {}),
+        ...(on ? { 'stripe-account': on } : {}),
+      },
+      ...(fields ? { body: body.toString() } : {}),
+    })
+    if (r.headers.get('stripe-should-retry') != 'true') return r
+    await r.body?.cancel()
+    return null
+  }, {
+    timeout: 15_000,
+    poll: 500,
+    label: `stripe ${path} to stop asking for a retry`,
   })
   let said = await r.json() as { error?: { message: string } }
   if (said.error) throw new Error(`stripe ${path}: ${said.error.message}`)

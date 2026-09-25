@@ -20,7 +20,7 @@ export let until = async <T>(
     poll?: number
     label?: string | (() => string)
   } = {},
-): Promise<T> => {
+): Promise<NonNullable<T>> => {
   let deadline = Date.now() + timeout
   while (true) {
     let v = await fact()
