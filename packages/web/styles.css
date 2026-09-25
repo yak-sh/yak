@@ -130,7 +130,7 @@ html {
   color: var(--purple);
 }
 
-/* Markdown bodies (marked, GFM — src/md.ts). These are prose defaults,
+/* Markdown bodies (marked, GFM — md.ts). These are prose defaults,
    wherever prose lands: documents, comments, and session messages all
    speak the same HTML. Zero specificity lets a component still override
    a structural choice. */

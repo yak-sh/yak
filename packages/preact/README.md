@@ -66,17 +66,17 @@ prints. The example page demonstrates one portable renderer, a function store,
 and a button that updates it through the subscription interface.
 
 The example serves TypeScript as individual JavaScript modules using the same
-Sucrase stripping as the application, with an import map pointing at the
-existing plain ESM Preact files in `src/vendor`. No bundler or `node_modules` is
-needed. It runs from this repository; it is excluded from publication.
+Sucrase stripping as the application, with an import map pointing at Preact's
+ESM on esm.sh. No bundler or `node_modules` is needed. It runs from this
+repository; it is excluded from publication.
 
 ## Compatibility
 
 Deno and Node for module loading and rendering with an injected DOM; browsers
 for mounting. Imports `preact` and `preact/hooks`, using the repository's Preact
 10 version. Both names must resolve to the same Preact instance. A browser can
-map them to vendored ESM as the example does. The package itself has no Deno
-globals and never installs a global document.
+map them to esm.sh as the example does. The package itself has no Deno globals
+and never installs a global document.
 
 ## Verification
 

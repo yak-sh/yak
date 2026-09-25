@@ -95,13 +95,6 @@ grouped approximately by function, **not** by dependency order.
   passes; they are not an unconditional startup or periodic refresh. Bounded
   passes need further scheduling to process all stale rows.
 
-- **[@yaks/telemetry](./telemetry)** — Retired standalone SQLite tool-call log.
-  New code records `call`, `execution`, `result`, timing, attribution and
-  failures in the graph through
-  [@yaks/tools](./tools/README.md#what-replaced-the-tool-call-log), which can be
-  queried for telemetry. Only the legacy server imports this package; removal is
-  planned with that server.
-
 - **[@yaks/match](./match)** — Evaluate supported query AST clauses against
   bundles in memory. Tests compare shared behavior with SQL, but search,
   ordering and unsupported queries differ; see the package's compatibility
@@ -394,7 +387,7 @@ grouped approximately by function, **not** by dependency order.
   tools: accounts and their sign-in, standing links, the fee, a space's
   deletion, a store's query, any connector tool, and the platform's deploys,
   errors, tail, rollback and revert. Sessions are secrets in the box's graph.
-  Unpublished (`"publish": false`): it reaches into this repository's `src/` and
+  Unpublished (`"publish": false`): it reaches into this repository's
   `workers/yak`, and is installed into the box's own `yak` through its
   `yak.json`.
 
@@ -445,12 +438,9 @@ layout. A package's `vocab.json` is JSON Schema 2020-12; optional graph rules,
 tools, effects or views implement behavior. An application defines its own
 components the same way and combines them on entities by id.
 
-The legacy server in `src/` is being replaced by this package composition.
-[`docs/transition.md`](../docs/transition.md) maps its components to package
-components, or records why a component is not migrated. Each component name has
-one declaring package. `bin/transition_test.ts` checks the JSON files;
-`packages/facets_test.ts` also checks the actual `./vocab` imports so an export
-cannot silently include a second package's declarations.
+Each component name has one declaring package. `packages/facets_test.ts` checks
+that every package's words load beside every other's, and that a package's
+`./vocab` export cannot silently include a second package's declarations.
 
 ## A plugin is a package; its parts are subpath exports
 
@@ -595,12 +585,11 @@ distinguish implemented behavior from remaining proposals.
   `pane{layout, parent, dir, content, view}` — a region of a layout — and a
   terminal pane is the other thing people call a pane. Component names share one
   flat namespace and `loadVocab` rejects a name declared twice
-  (`bin/transition_test.ts` checks that every package's vocabulary can load
-  alongside every other), so only one of them can have it — and a program may
-  well want both a canvas and a terminal. Resolved by nesting one: `@yaks/tmux`
-  declares `tmux{of, pane}`, where the component is named after the package and
-  `pane` is just a property naming what tmux addresses. That is also what the
-  fleet's own note in `src/sessions.ts` proposed. The alternative, renaming the
+  (`packages/facets_test.ts` checks that every package's words load beside every
+  other's), so only one of them can have it — and a program may well want both a
+  canvas and a terminal. Resolved by nesting one: `@yaks/tmux` declares
+  `tmux{of, pane}`, where the component is named after the package and `pane` is
+  just a property naming what tmux addresses. The alternative, renaming the
   canvas's `pane` to `region`, is a better name for a layout split but belongs
   with the canvas's own redesign rather than with this split.
 - **The list of statuses depends on loaded schemas.** `task.status` is computed

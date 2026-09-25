@@ -5,9 +5,7 @@
 // fixed span: it yields with `tick` and waits on a fact with `until`, both
 // deterministic, so nothing pads for a settle that a loaded box would stretch
 // past the pad. A fixed sleep lives only behind `slow()`, where the real
-// process it waits on is the point. The migrated-db clone (freshDb) lives in
-// src/testdb.ts, not here, so importing these primitives never pulls in db.ts —
-// this module stays free of the DB_PATH import-order discipline db.ts carries.
+// process it waits on is the point.
 //
 // The speed bar (bin/test-budget.ts) is ADVISORY, not a wall (T-17785): it lists
 // tests over 1ms slowest-first but exits 0 on the budget alone, turning fatal

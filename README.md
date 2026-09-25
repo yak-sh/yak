@@ -23,7 +23,8 @@ project, `S-31` session, `M-40` memory, `E-9` mail…).
 - a **session** is an agent run, reified; a **claim** is its lease on a task —
   the server refuses to hand a held lease to another session
 - mail, memories, personas, people, webhook deliveries are entities too — one
-  vocabulary (`comps` in `src/types.ts`) that every door derives from
+  vocabulary (each package's `vocab.json`, loaded by @yaks/vocab) that every
+  door derives from
 
 **Edges** are typed sentences between entities: `requires` (hard gate),
 `contains` (decomposition), `reads` (read-first), `about` (subject reference),
@@ -211,8 +212,6 @@ tailnet.
   the invariants, the recipes. Start there to change anything.
 - `docs/EVALUATION.md` — the target branching evaluator: one evaluation, literal
   frame context, stateless provider reduction, and result-only joins.
-- `docs/ADAPTERS.md` — native TUIs, managed sessions, persistent roles, and the
-  compatibility contract for future harnesses.
 
 ## License
 

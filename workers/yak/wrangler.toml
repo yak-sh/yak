@@ -2,8 +2,8 @@
 # below the app line — hostname and path routing, the Store Durable Object
 # (one SQLite graph per (space, app)), session verification, the apex's static
 # home page, and an app's files out of R2. Everything above it is an app.
-# Local: `wrangler dev` here, or the tests (workers/yak/yak_test.ts and
-# src/store/do_test.ts boot it on a probe port). Deploy: `wrangler deploy`
+# Local: `wrangler dev` here, or the tests (workers/yak/yak_test.ts boots it
+# on a probe port). Deploy: `wrangler deploy`
 # once the owner points DNS at it — nothing deploys on its own.
 name = "yak"
 main = "index.ts"

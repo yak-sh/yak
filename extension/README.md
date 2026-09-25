@@ -32,8 +32,8 @@ permission, which is why it happens on a click.
 
 - **It does not normalize the URL.** The address goes over raw both when filing
   and when asking, and the `url` PropType canonicalizes it server-side
-  (`src/url.ts`). Two spellings of one page must not be able to disagree, and
-  the only way to guarantee that is to have one implementation.
-- **It does not parse the `:` line.** Same reason: `src/commands.ts` is the
+  (@yaks/page `canon`). Two spellings of one page must not be able to disagree,
+  and the only way to guarantee that is to have one implementation.
+- **It does not parse the `:` line.** Same reason: the server's tools are the
   vocabulary, for every door.
 - Screenshots stay deferred, with the R2 story (T-3696).

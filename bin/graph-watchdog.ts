@@ -7,7 +7,7 @@
 // silence, but it pages via `task mail`, i.e. through the graph, so it cannot
 // report the graph itself being down. This watchdog reaches the owner through
 // the Cloudflare Email Sending API directly — the same door mail uses, inlined
-// here so this script imports nothing from src/ and shares no failure mode with
+// here so this script imports nothing from the server and shares no failure mode with
 // what it watches (the deadman's founding principle: a checker inside the thing
 // it checks dies with it).
 //
@@ -212,8 +212,8 @@ let logSend = (kind: string, outcome: string) => {
   }
 }
 
-// Inlined Cloudflare Email Sending — deliberately not imported from src/mailer.ts
-// so a broken src/ can't disarm the alarm. Text + a minimal html part, matching
+// Inlined Cloudflare Email Sending — deliberately not imported from the server
+// so a broken server can't disarm the alarm. Text + a minimal html part, matching
 // the payload shape mailer.ts uses. Returns the message-id; logs every attempt.
 let page = async (
   kind: string,

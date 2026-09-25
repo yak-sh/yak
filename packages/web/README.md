@@ -47,8 +47,8 @@ routes still reach their own handlers.
   the rows it touched are read again; a network error or a 5xx is redelivered.
 - **Rendering.** components/registry.ts selects renderers through @yaks/render
   and mounts them with @yaks/preact; Entity.tsx holds the curated list, and
-  components/views holds the views. The TUI (src/tui) mounts the same registry
-  through a fake DOM and a terminal painter.
+  components/views holds the views. The TUI (tui/, `deno task tui`) mounts the
+  same registry through @yaks/tui's fake DOM and layout.
 - **Portable views.** `@yaks/web/views` (views.ts) holds the @yaks/render views
   any entity has — `Title`, `Tile`, `Facts`, `Comment`, `Page` — which the `yak`
   command prints an answer through (packages/cli/answer.ts).

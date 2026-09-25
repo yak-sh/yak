@@ -1,5 +1,4 @@
-// Self-contained unit tests: @yaks/sql over a tiny inline vocab, no fleet, no
-// src/. They pin the public contract the integration builds on — the shape of
+// Self-contained unit tests: @yaks/sql over a tiny inline vocab, no fleet. They pin the public contract the integration builds on — the shape of
 // the compiled statement, the derived-property hook, that values are bound
 // never inlined, and that a gap declines loudly.
 
