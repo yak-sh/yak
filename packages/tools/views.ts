@@ -22,7 +22,7 @@ let lines = <Node>(b: Record<string, unknown>, h: H<Node>): Node => {
   )
 }
 
-let said = parse('.content.body!=')
+let said = parse('.content.body')
 
 /** `Tile` and `Page` for an entity that carries a tool's text. */
 export let views: Registry = define([

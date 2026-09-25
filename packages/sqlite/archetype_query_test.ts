@@ -35,9 +35,6 @@ Deno.test('archetype query golden: presence/kind, value joins, boolean, paths, r
   for (
     let q of [
       '.doc',
-      '.doc',
-      '!doc',
-      '!.doc',
       '!doc',
       '?doc',
       '.marker',
@@ -54,7 +51,7 @@ Deno.test('archetype query golden: presence/kind, value joins, boolean, paths, r
       '.product.maker.marker',
       '!product.maker.marker',
       '.reviews.marker',
-      '.reviews!.marker!',
+      '.reviews!.marker',
     ]
   ) {
     let old = compile(parse(q), vocab)

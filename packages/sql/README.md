@@ -51,7 +51,7 @@ their returned order.
 - **Reference column:** stores another entity's integer `id`. Comparing it to a
   public `eid` resolves that string through the entity table.
 - **Presence test:** asks whether a component exists, such as `.task`, `.doc`,
-  or `!.claim`, without comparing a stored value.
+  or `!claim`, without comparing a stored value.
 
 Deleted entities retain their identity rows and appear in `tombstone`. Compiled
 queries exclude these entities.

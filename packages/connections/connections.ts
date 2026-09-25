@@ -152,7 +152,7 @@ let held = async (read: Read, eid: Eid): Promise<Bundle> => {
 
 // The `uses` links at one end, and the far end of one.
 let links = (read: Read, at: 'from' | 'to', eid: Eid) =>
-  read(`.${EDGE}.${at}=${eid}&.${USES}!${ALL}`)
+  read(`.${EDGE}.${at}=${eid}&.${USES}${ALL}`)
 let far = (l: Bundle, at: 'from' | 'to'): Eid =>
   String(comp(l, EDGE)[at == 'from' ? 'to' : 'from'])
 
@@ -271,7 +271,7 @@ export let list = async (read: Read, owner: Eid): Promise<Bundle[]> => {
   let owned = await read(`.${CONNECTION}.owner=${owner}${ALL}`)
   if (!owned.length) return []
   let links = await read(
-    `.${EDGE}.to=${any(owned.map((b) => b.entity.eid))}&.${USES}!${ALL}`,
+    `.${EDGE}.to=${any(owned.map((b) => b.entity.eid))}&.${USES}${ALL}`,
   )
   return [...owned, ...links]
 }

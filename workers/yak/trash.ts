@@ -4,7 +4,7 @@
 // counted off the `at` in it, so the ask and the clock were both the caller's:
 // every door that trashes anything had to remember to date its own mark.
 //
-// It is a rule instead: `*trashed, trashed.at=` says what it needs (a row
+// It is a rule instead: `*trashed, !trashed.at` says what it needs (a row
 // wearing the word — the write set says so — with no date on it) and what it
 // does about it (write one), while `#Actor, #Now` name the two singletons the
 // tick hands it. The store that holds the row runs it in the `stamp` phase
@@ -46,7 +46,7 @@ export let trashPlugin: Plugin = {
   rules: [{
     name: 'trashed',
     phase: 'stamp',
-    match: '*trashed, trashed.at=, #Actor, #Now',
+    match: '*trashed, !trashed.at, #Actor, #Now',
     run: ({ Actor, Now }) => ({ trashed: { at: Now, by: Actor } }),
   }, {
     name: 'trash',

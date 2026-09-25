@@ -273,7 +273,7 @@ let fold = (rows, f) => {
 // out of the question unless the filter names one.
 let RIDERS = { id: '.eid', limit: '.limit', after: '.after' }
 let SCREEN = ['exception', 'error', 'person']
-let OPERATOR = /^([A-Za-z_.\-[\]][\w.\-[\]]*)(!=|~=|<=|>=|<|>|=|!|\?)/
+let OPERATOR = /^([A-Za-z_.\-[\]][\w.\-[\]]*)(!=|~=|<=|>=|<|>|=)/
 
 let plain = (v) => {
   try {

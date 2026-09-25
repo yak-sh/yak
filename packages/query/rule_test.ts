@@ -17,7 +17,7 @@ Deno.test('declared splits the filter from the instructions', () => {
 // A rule writes what it matched, so the mutable sigil is a presence clause
 // too — unless an ensure or a gate has already said how it gets there.
 Deno.test('a write set says the component is present', () => {
-  let r = declared(parse('*trashed, trashed.at='))
+  let r = declared(parse('*trashed, !trashed.at'))
   assertEquals(r.writes, ['trashed'])
   assertEquals(r.filter.clauses.length, 2)
   assertEquals(r.filter.clauses[1], present('trashed'))

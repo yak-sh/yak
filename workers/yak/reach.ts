@@ -255,7 +255,7 @@ export let split = (line: string) => {
     else {
       let one = parts.get(key) ?? { segs: [], asks: true }
       one.segs.push(seg)
-      one.asks &&= seg.startsWith('?') || seg.endsWith('?')
+      one.asks &&= seg.startsWith('?')
       parts.set(key, one)
     }
   }

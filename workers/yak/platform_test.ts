@@ -459,7 +459,7 @@ Deno.test('a store that is not the directory is still an app', async () => {
   assertEquals(why.startsWith('unknown component: space'), true)
   assertEquals(why.includes('vocab.json'), true)
   let read = await (await store.fetch(
-    new Request('http://store/query?q=.doc%3F', {
+    new Request('http://store/query?q=%3Fdoc', {
       headers: { 'x-store': 'ada/cookbook' },
     }),
   )).json() as Bundle[]

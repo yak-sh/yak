@@ -35,7 +35,7 @@ let RIDERS: Record<string, string> = {
 
 // Where a segment's name ends and its value begins: the operators the grammar
 // knows, longest first, so `!=` is not read as `!`.
-let OPERATOR = /^([A-Za-z_.\-[\]][A-Za-z0-9_.\-[\]]*)(!=|~=|<=|>=|<|>|=|!|\?)/
+let OPERATOR = /^([A-Za-z_.\-[\]][A-Za-z0-9_.\-[\]]*)(!=|~=|<=|>=|<|>|=)/
 
 // One value, as the page wrote it. A page builds its own line, so a value may
 // be escaped (`search()` escapes what it is given) or plain (a filter typed

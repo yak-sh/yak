@@ -332,7 +332,7 @@ And `.refs` is the union of all of them — everything pointing at one entity, b
 whichever property:
 
     await query(`.refs=${eid}&?doc`)   // what mentions this
-    await query('.refs=&?doc')         // what mentions nothing
+    await query('!refs&?doc')          // what mentions nothing
 
 ## Counting and tallying
 

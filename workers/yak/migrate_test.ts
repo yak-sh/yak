@@ -42,7 +42,6 @@ import {
   HOMED,
   MARK,
   MARKS,
-  queried,
   Refused as Unreconciled,
   type Report,
   respelled,
@@ -379,11 +378,6 @@ Deno.test('each query clause in its one spelling', () => {
     [`'.recipe&?doc'`, null],
   ]
   for (let [text, now] of cases) assertEquals(respelled(text), now, text)
-  assertEquals(
-    ['index.html', 'app.js', 'lib/x.mjs', 'vocab.json', 'docs.json', 'a.w']
-      .filter(queried),
-    ['index.html', 'app.js', 'lib/x.mjs', 'vocab.json'],
-  )
 })
 
 Deno.test('a tools slot, each argument the JSON Schema it meant', () => {

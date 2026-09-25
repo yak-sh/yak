@@ -59,7 +59,7 @@ export let inboxCountQueries = (who: Reader): string[] => {
       ? `.${prop}=${JSON.stringify(got)}&!archived&!opened${extra}&.count`
       : ''
   }
-  let mail = '&!comment&!knock&.mail.message_id!='
+  let mail = '&!comment&!knock&.mail.message_id'
   return [
     select('comment.target', [who.actor]),
     select('deliver.to', [who.actor], '&.knock&!comment'),

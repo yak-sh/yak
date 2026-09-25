@@ -63,7 +63,7 @@ Deno.test('a rule MAKES an entity, named from its firing', () => {
   // entity it writes to.
   let one = g([{
     name: 'kind-word',
-    match: '$p .product, reviews=; +review.product=$p, +review.stars=5',
+    match: '$p .product, !reviews; +review.product=$p, +review.stars=5',
   }])
   let out = one.apply([{
     entity: { eid: 'p1' },
@@ -88,7 +88,7 @@ Deno.test('a rule fires on what another rule wrote, in one batch', () => {
     { name: 'shelve', match: '.product, +!shelf, +shelf.aisle=Z' },
     {
       name: 'sticker',
-      match: '.shelf.aisle=Z, product.status=, *product.status=live',
+      match: '.shelf.aisle=Z, !product.status, *product.status=live',
     },
   ])
   let out = one.apply([{

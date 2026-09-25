@@ -212,9 +212,9 @@ evaluation (`@yaks/sql`, `@yaks/match`).
 
 ### Two more rules
 
-- Each clause has one spelling. The suffix forms `.p!`, `.p=` (with no value)
-  and `.p?` still parse, to the same nodes as `.p`, `!p` and `?p`, only until
-  stored queries have moved to the prefix forms (T-39341).
+- Each clause has one spelling. The forms it once had beside that one (`.p!`,
+  `.p!=` and `.p=` with no value, `.p?`, and a prefix with a dot after it,
+  `!.p`) are refused with a message naming the one it has.
 - `parse(q, { text: false })` refuses bare-word text terms, so a rule or a saved
   filter fails on a stray word instead of quietly gaining a search term. A
   quoted term is still allowed — quoting is how a strict query asks for a word.

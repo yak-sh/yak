@@ -112,22 +112,29 @@ let SEG = '[A-Za-z_]+(?:-[A-Za-z_]+)*'
 let WORD = `${SEG}(?:\\.${SEG})*`
 // A bare path so far — where a `[` opens a bracket rather than joining a value.
 let PATH = new RegExp(`^\\.?${WORD}$`)
-// A prefix character and the component name it marks. `.` carries no meaning of
-// its own and is still accepted after any of the others, so `+!created` and
-// `+!.created` are the same clause. `?comp` is the prefix mirror of `!comp`:
+// A prefix character and the component name it marks, with nothing between
+// them: `!created`, never `!.created`. `?comp` is the prefix mirror of `!comp`:
 // optional (selected when present, never filtered on) against absent. `-comp`
 // is the opposite of `+comp`: `+` means a component is added, `-` means one was
 // removed — which is why a leading minus marks a component name here, and a
 // bare `-word` is no longer a text term.
-let SIGIL = new RegExp(`^(\\+!|[-!+*#$?])\\.?(${WORD})$`)
+let SIGIL = new RegExp(`^(\\+!|[-!+*#$?])(${WORD})$`)
+// A prefix with a dot after it: the one spelling it had beside the one it has.
+let DOTTED = /^(\+!|[-!+*#$?])\.([A-Za-z_].*)$/s
 // A component name alone, with the leading dot: present. The dot is what tells
 // `.env` (this entity has the component `env`) from `env` (a word to search
 // for).
 let PLAIN = new RegExp(`^\\.(${WORD})$`)
 // The head of a clause: its path and the bracket it may carry.
 let HEAD = new RegExp(`^\\.?(${WORD})(?:\\[([^\\]]*)\\])?`)
-// The operators, longest first so `!=` is not read as `!`, `<-` not as `<`.
-let OPS = /^(!=|~=|<=|>=|->|<-|<|>|=|!|\?)/
+// The operators, longest first so `<=` is not read as `<`, `<-` not as `<`.
+let OPS = /^(!=|~=|<=|>=|->|<-|<|>|=)/
+
+// A clause in a spelling it had before each had one (T-39341), refused by the
+// one it has: presence was `.p!` (and `.p!=` with no value), absence `.p=`
+// with no value, the request `.p?`, and a prefix could take a dot, `!.p`.
+let spelled = (token: string, one: string) =>
+  new SyntaxError(`${token} is written ${one}`)
 
 // ---- qualifiers ----
 
@@ -202,6 +209,8 @@ export let cursor = (val: string): number | undefined => {
 // write that took it away, and no amount of reading the stored rows tells them
 // apart.
 let sigil = (token: string): Clause[] | null => {
+  let dot = token.match(DOTTED)
+  if (dot) throw spelled(token, dot[1] + dot[2])
   // An eid fragment is a singleton resource too; unlike a component name it
   // may contain (or consist entirely of) digits. The store resolves it.
   if (/^#[0-9a-f]{6,64}$/i.test(token)) {
@@ -296,10 +305,10 @@ export let parseDot = (token: string): Clause[] | null => {
   // PATH carrying an operator just the same (`+doc.title=$x`): the prefix means
   // the component is written, and the property beside it names which part of
   // it. The gate is left out — an absence has no value to write.
-  let written = token.match(/^([+*])(\.?[A-Za-z_].*)$/s)
+  let written = token.match(/^([+*])([A-Za-z_].*)$/s)
   if (written) {
     let [, mark, rest] = written
-    let inner = parseDot(rest.startsWith('.') ? rest : `.${rest}`)
+    let inner = parseDot(`.${rest}`)
     let c = inner?.length == 1 ? inner[0] : undefined
     if (!c || c.kind != 'pred' || c.op != '=' || !c.value) {
       throw new SyntaxError(
@@ -320,7 +329,7 @@ export let parseDot = (token: string): Clause[] | null => {
   }
   // A bracket belongs to a path, and a prefix character marks a whole component
   // name: `?doc[x]` is a broken clause, never a search term.
-  if (/^(\+!|[!+*#$?])\.?[A-Za-z_][^\s]*\[/.test(token)) {
+  if (/^(\+!|[!+*#$?])[A-Za-z_][^\s]*\[/.test(token)) {
     throw new SyntaxError(`not a clause: ${token}`)
   }
   // The `.` prefix is accepted everywhere and required nowhere: it keeps a URL
@@ -342,6 +351,10 @@ export let parseDot = (token: string): Clause[] | null => {
     refuse(pathStr, quals, bracket)
     return [PRESENCE[pathStr] ?? pres(pathStr)]
   }
+  if (rest == '!') {
+    throw spelled(token, `.${pathStr}${bracket == null ? '' : `[${bracket}]`}`)
+  }
+  if (rest == '?') throw spelled(token, `?${pathStr}`)
   let o = rest.match(OPS)
   if (!o) {
     if (!dotted && bracket == null) return null
@@ -370,10 +383,6 @@ export let parseDot = (token: string): Clause[] | null => {
       target: val,
     }]
   }
-  // `.edges[referenced,entry.session]!` — the select, read above the refusal.
-  if (pathStr == 'edges' && quals.length && op == '!' && !val) {
-    return [edgeSelect(quals)]
-  }
   // Nothing else takes a qualifier yet.
   refuse(pathStr, quals, bracket)
 
@@ -381,15 +390,12 @@ export let parseDot = (token: string): Clause[] | null => {
   if (pathStr == 'order' && op == '=') return [{ kind: 'order', value: val }]
   if (pathStr == 'near' && op == '=') return [{ kind: 'near', value: val }]
   if (pathStr == 'refs') {
+    if (op == '=' && !rawValue) throw spelled(token, '!refs')
     if (op == '=') return [{ kind: 'refs', op: '=', value: val }]
-    if (op == '!') return [{ kind: 'refs', op: '!', value: '' }]
     throw new SyntaxError(
       '.refs takes an id (.refs=T-3), presence (.refs) or absence (!refs)',
     )
   }
-  // `.count!` — how many rows match. It names no property, so presence is the
-  // only form it has.
-  if (pathStr == 'count' && op == '!') return [{ kind: 'count' }]
   // `.distinct=prop` / `.tally=prop` — an aggregate over one property. The
   // property stays raw segments; whether it is a single property or an invalid
   // path is schema.
@@ -432,12 +438,9 @@ export let parseDot = (token: string): Clause[] | null => {
     }
     return [{ kind: 'after', n }]
   }
-  // `.edges!` / `.edges.peers=status,title` — carry edges back with the
-  // answer.
+  // `.edges.limit=200` / `.edges.peers=status,title` — how the edges `.edges`
+  // carries back are cut and projected.
   if (segs[0] == 'edges') {
-    if (segs.length == 1 && op == '!' && !val) {
-      return [{ kind: 'edges', peers: [] }]
-    }
     if (segs.length == 2 && segs[1] == 'limit' && op == '=') {
       if (!/^\d+$/.test(val)) {
         throw new SyntaxError(
@@ -455,26 +458,11 @@ export let parseDot = (token: string): Clause[] | null => {
     )
   }
 
-  // A `!` in the middle of a path was parsed above as a reverse child test. Any
-  // other operand on a presence filter is malformed.
-  if (op == '!' && val) {
-    throw new SyntaxError(
-      `presence filters end at !: .${pathStr}!` +
-        (val.startsWith('.')
-          ? ` — separate filters with a space: .${pathStr}! ${val}`
-          : ''),
-    )
-  }
+  if (!rawValue && op == '=') throw spelled(token, `!${pathStr}`)
+  if (!rawValue && op == '!=') throw spelled(token, `.${pathStr}`)
 
-  // An ordinary predicate. Presence (`!`) and the projection request (`?`)
-  // carry no value; contains (`~=`) is deliberately literal, so its value is
-  // one raw scalar; every other form parses list and range structure.
-  if (op == '?' && val) {
-    throw new SyntaxError(`a request ends at ?: .${pathStr}?`)
-  }
-  if (op == '!' || op == '?') {
-    return [{ kind: 'pred', path: segs, op, value: null }]
-  }
+  // An ordinary predicate. Contains (`~=`) is deliberately literal, so its
+  // value is one raw scalar; every other form parses list and range structure.
   if (op == '~=') return [{ kind: 'pred', path: segs, op, value: scalar(val) }]
   return [{ kind: 'pred', path: segs, op: op as Op, value: value(val) }]
 }
@@ -557,7 +545,7 @@ let VALUED = new RegExp(
 // comma at the edge of a value with a bare word on the other side (`.p=a, b`,
 // `.p=a ,b`) or nothing (`.p=a,`) is neither: it is a list broken by a space,
 // and is refused. With a clause on the other side (`.p=a, .q=b`,
-// `trashed.at=, #Actor`) it is the optional separator it looks like.
+// `.p=a, #Actor`) it is the optional separator it looks like.
 let clauseish = (tok: string): boolean => {
   let first = splitOutside(tok.replace(/^,+/, ''), ',', true)[0]
   return first == '*' || /^["']/.test(first) || parseDot(first) != null

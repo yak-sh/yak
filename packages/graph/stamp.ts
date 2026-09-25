@@ -159,7 +159,7 @@ export let marks = (vocab: Vocab): Rule[] =>
   vocab.all.filter((c) => marked(vocab, c)).map((comp) => ({
     name: `mark/${comp}`,
     phase: 'stamp',
-    match: `.${comp}, ${comp}.at=, *${comp}, #Vocab, #Actor, #Now`,
+    match: `.${comp}, !${comp}.at, *${comp}, #Vocab, #Actor, #Now`,
     run: (b: Bound) =>
       wear(comp, b.Vocab, b.Now.at, b.Actor, undefined, b[comp] as Comp),
   }))

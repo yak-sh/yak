@@ -21,12 +21,12 @@ let text = (b: Record<string, unknown>, prop: string): string => {
 export let views: Registry = define([
   {
     view: 'Title',
-    match: parse(`.${DOC}.${TITLE}!=`),
+    match: parse(`.${DOC}.${TITLE}`),
     render: (b, h) => h('span', null, text(b, TITLE)),
   },
   {
     view: 'Body',
-    match: parse(`.${DOC}.${BODY}!=`),
+    match: parse(`.${DOC}.${BODY}`),
     render: (b, h) =>
       h(
         'div',

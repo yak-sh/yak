@@ -55,7 +55,7 @@ Deno.test('the door names the writer of a request', async () => {
     env,
   )
   let anon: Bundle[] = await body(
-    await w.fetch(req('/query?q=.price=12%26.created%3F'), env),
+    await w.fetch(req('/query?q=.price=12%26%3Fcreated'), env),
   )
   assert(!(anon[0].created as { by?: string })?.by, 'nobody signed it')
 
@@ -68,7 +68,7 @@ Deno.test('the door names the writer of a request', async () => {
     env,
   )
   let signed: Bundle[] = await body(
-    await w.fetch(req('/query?q=.price=9%26.created%3F'), env),
+    await w.fetch(req('/query?q=.price=9%26%3Fcreated'), env),
   )
   assertEquals((signed[0].created as { by?: string }).by, 'm1')
 })

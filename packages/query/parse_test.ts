@@ -59,12 +59,9 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.priority=1..5', and(eq('priority', range('1', '5')))],
   ['.priority=1...5', and(eq('priority', range('1', '5', true)))],
   ['.created.at=2026-07-25', and(eq('created.at', scalar('2026-07-25')))],
-  // presence and absence: the sigil forms, and the older ones they replace
+  // presence and absence
   ['.assignee', and(present('assignee'))],
   ['!assignee', and(absent('assignee'))],
-  ['.assignee!', and(present('assignee'))],
-  ['.assignee=', and(absent('assignee'))],
-  ['!.assignee', and(absent('assignee'))],
   ['.created.at', and(present('created.at'))],
   // the rule sigils
   ['+created', and(ensure('created'))],
@@ -72,7 +69,6 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['*created', and(mutable('created'))],
   // `-comp` is a removal: what the batch took, which no row can be asked
   ['-created', and(gone('created'))],
-  ['-.created', and(gone('created'))],
   ['.task -claim', and(present('task'), gone('claim'))],
   // a resource is capitalized: it binds beside the components, not among them
   ['#Clock', and(resource('Clock'))],
@@ -82,7 +78,7 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.entity,+!created', and(present('entity'), gate('created'))],
   ['.entity, +!created', and(present('entity'), gate('created'))],
   ['.entity +!created', and(present('entity'), gate('created'))],
-  // `?comp` is the prefix mirror of `!comp`; `.comp?` stays its synonym
+  // `?comp` is the prefix mirror of `!comp`
   ['?doc', and(want('doc'))],
   ['!doc ?former', and(absent('doc'), want('former'))],
   [
@@ -106,7 +102,6 @@ let cases: [string, ReturnType<typeof and>][] = [
   // the dot is accepted, never required, once a token carries an operator
   ['status=open', and(eq('status', 'open'))],
   ['comment.target=T-3', and(eq('comment.target', 'T-3'))],
-  ['.loan?', and(want('loan'))],
   [
     '.comment.target.doc.title~=foo',
     and(contains('comment.target.doc.title', 'foo')),
@@ -121,29 +116,29 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.order=hot', and(order('hot'))],
   ['.near=T-3', and(near('T-3'))],
   ['.refs=T-3', and(refs('T-3'))],
-  ['.refs=', and(refs(''))],
-  ['.refs!', and(hasRefs())],
-  ['.count!', and(count())],
+  ['!refs', and(refs(''))],
+  ['.refs', and(hasRefs())],
+  ['.count', and(count())],
   ['.distinct=domain', and(distinct('domain'))],
   ['.tally=task.domain', and(tally('task.domain'))],
   ['.fields=pin.x,pin.z~', and(fields('pin.x', 'pin.z~'))],
   // `*` is the widest projection, and only as a whole token: a trailing star
   // on a word stays the full-text prefix term.
   ['*', and(every())],
-  ['.recipe!&*', and(present('recipe'), every())],
+  ['.recipe&*', and(present('recipe'), every())],
   ['lemo*', and(text('lemo*'))],
   ['.limit=200', and(limit(200))],
   ['.after=13882', and(after(13882))],
   // a human id is the same number wearing its display prefix
   ['.after=T-13882', and(after(13882))],
-  ['.edges!', and(edges())],
+  ['.edges', and(edges())],
   [
     '.edges.peers=status,title',
     and(edges({ peers: [['status'], ['title']] })),
   ],
   // the bracket on `edges` is the select, read as two bare qualifiers
   [
-    '.edges[referenced,entry.session]!',
+    '.edges[referenced,entry.session]',
     and(edges({ select: { type: 'referenced', via: ['entry', 'session'] } })),
   ],
   ['.edges[cites]', and(edges({ select: { type: 'cites' } }))],
@@ -166,7 +161,7 @@ let cases: [string, ReturnType<typeof and>][] = [
     and(walk('requires', '->', 'T-1', 2), eq('status', 'open')),
   ],
   [
-    '.edges[cites,author]!,.post',
+    '.edges[cites,author],.post',
     and(edges({ select: { type: 'cites', via: ['author'] } }), present('post')),
   ],
   // a bracket after the operator is part of the value
@@ -202,7 +197,7 @@ Deno.test('| is OR, looser than the AND of adjacent terms; ( ) groups', () => {
   assertEquals(parse('(.a=1 .b=2)'), and(eq('a', '1'), eq('b', '2')))
   // a group's commas are its clauses' own lists, never a split of the group
   assertEquals(
-    parse('.s!&(.a=1,2|.b=3)'),
+    parse('.s&(.a=1,2|.b=3)'),
     and(present('s'), or(eq('a', list('1', '2')), eq('b', '3'))),
   )
   // quotes inside a group still glue
@@ -266,7 +261,7 @@ Deno.test('a list has no spaces and no empty member', () => {
     and(eq('status', 'open'), eq('p', '1')),
   )
   assertEquals(
-    parse('*trashed, trashed.at=, #Actor'),
+    parse('*trashed, !trashed.at, #Actor'),
     and(mutable('trashed'), absent('trashed.at'), resource('Actor')),
   )
 })
@@ -323,11 +318,11 @@ Deno.test('qualifiers', () => {
   assertThrows(() => parse('.requires[<=3->X'), Error, 'unclosed bracket')
   assertThrows(() => parse('.requires->'), Error, 'one entity')
   assertThrows(() => parse('.requires->a,b'), Error, 'one entity')
-  assertThrows(() => parse('.edges[a,b,c]!'), Error, 'one edge type')
-  assertThrows(() => parse('.edges[<=3]!'), Error, 'one edge type')
+  assertThrows(() => parse('.edges[a,b,c]'), Error, 'one edge type')
+  assertThrows(() => parse('.edges[<=3]'), Error, 'one edge type')
   // whitespace inside the bracket is the bracket's own
   assertEquals(
-    parse('.edges[referenced, entry.session]!'),
+    parse('.edges[referenced, entry.session]'),
     and(edges({ select: { type: 'referenced', via: ['entry', 'session'] } })),
   )
   assertEquals(
@@ -353,7 +348,35 @@ Deno.test('refusals', () => {
     'no qualifier',
   )
   assertThrows(() => parse('?doc[x]'), Error, 'not a clause')
-  assertThrows(() => parse('.doc[x]?'), Error, 'no qualifier')
+})
+
+// Each clause has one spelling (T-39341): the forms it had beside that one are
+// refused by the one it has.
+Deno.test('an old spelling is refused by the one it has now', () => {
+  let said: [string, string][] = [
+    ['.assignee!', '.assignee'],
+    ['.assignee!=', '.assignee'],
+    ['.assignee=', '!assignee'],
+    ['created.at=', '!created.at'],
+    ['.loan?', '?loan'],
+    ['!.assignee', '!assignee'],
+    ['?.doc', '?doc'],
+    ['-.created', '-created'],
+    ['+!.created', '+!created'],
+    ['+.doc.title=$x', '+doc.title=$x'],
+    ['.refs!', '.refs'],
+    ['.refs=', '!refs'],
+    ['.count!', '.count'],
+    ['.edges!', '.edges'],
+    ['.edges[cites]!', '.edges[cites]'],
+  ]
+  for (let [old, now] of said) {
+    assertThrows(
+      () => parse(`.task ${old}`),
+      SyntaxError,
+      `${old} is written ${now}`,
+    )
+  }
 })
 
 // A reserved word without its bracket is just a raw path here — validating it

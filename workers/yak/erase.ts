@@ -76,7 +76,7 @@ import {
   url,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
-import { carried, drop } from './dispatch.ts'
+import { drop } from './dispatch.ts'
 import { deleteBindings } from './bindings.ts'
 import { reachable, release } from './domains.ts'
 import { bound, type Env } from './env.ts'
@@ -85,21 +85,8 @@ import { destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
 import { NOTES } from './standing.ts'
-import {
-  addressed,
-  type Files,
-  moved,
-  own,
-  type Pinner,
-  pruned,
-  renamed,
-  rewritten,
-} from './versions.ts'
+import { moved, own, type Pinner, pruned, renamed } from './versions.ts'
 import { refuse } from './tool.ts'
-import { BODY } from './gitobj.ts'
-import { queried, respelled } from './migrate.ts'
-import { configured, deployWorker } from './deploy_worker.ts'
-import { caught } from './sentry.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
 // sign-in code's ten minutes, because nobody is standing at the form waiting
@@ -599,46 +586,6 @@ let retitled = async (
   if (entities.length) await dir.apply({ entities })
 }
 
-// One app's query clauses respelled, and its worker with them.
-let respelt = async (env: Env, dir: Directory, one: Pinner, store: string) => {
-  let blobs = r2Objects(env.BLOBS)
-  let said = await rewritten(
-    blobs,
-    dir,
-    one,
-    queried,
-    respelled,
-    BODY,
-    (files, paths) => reworked(env, one, store, files, paths),
-  )
-  let where = [...said.live, ...said.versions.map((v) => `v${v}`)]
-  if (!where.length) return
-  console.log(
-    `yak-trash: queries respelled in ${one.prefix}: ${where.join(', ')}`,
-  )
-}
-
-// The worker the newest version runs, uploaded again from its rewritten files
-// where one of its modules moved: the bytes in the bucket are not what the
-// dispatch namespace runs. Every pin is under its address by now, since
-// `moved` ran first.
-let reworked = async (
-  env: Env,
-  one: Pinner,
-  store: string,
-  files: Files,
-  paths: string[],
-) => {
-  let blobs = r2Objects(env.BLOBS)
-  let read = (path: string) =>
-    path in files ? blobs.read(addressed(files[path])) : Promise.resolve(null)
-  let modules = await carried(read, (await configured(read)).config.main)
-  if (!modules.some((m) => paths.includes(m.name))) return
-  let { worker, lines } = await deployWorker(env, one.app, store, read)
-  if (!worker) throw new Error(`worker not uploaded: ${lines.join('; ')}`)
-  console.log(`yak-trash: worker of ${one.prefix} uploaded again as ${worker}`)
-}
-
 export let collected = async (env: Env, now = new Date()) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let gone = 0
@@ -651,7 +598,6 @@ export let collected = async (env: Env, now = new Date()) => {
   // mark — and so is the platform's own space, which is skipped for erasure and
   // holds pins like any other.
   let standing: Pinner[] = []
-  let stores = new Map<string, string>()
   for (let space of await dir.all()) {
     // Never the directory itself, whatever its row says: the app that holds
     // every space on the platform is not one a sweep may erase (`refused`
@@ -679,9 +625,7 @@ export let collected = async (env: Env, now = new Date()) => {
       }
     }
     for (let app of apps) {
-      if (went.has(app.eid)) continue
-      standing.push({ prefix: under(space, app), app })
-      stores.set(app.eid, storeName(space, app))
+      if (!went.has(app.eid)) standing.push({ prefix: under(space, app), app })
     }
   }
   // And then what those apps are still holding on to: the bytes a write or a
@@ -701,14 +645,6 @@ export let collected = async (env: Env, now = new Date()) => {
   let notes = 0
   for (let one of standing) {
     if (await renamed(blobs, dir, one, 'AGENTS.md', NOTES)) notes++
-  }
-  // And every query clause an app wrote in its one spelling (T-39341), live
-  // and in every version, so a rollback or an install never brings an old one
-  // back (versions.ts `rewritten`).
-  for (let one of standing) {
-    await respelt(env, dir, one, stores.get(one.app.eid)!).catch((e) =>
-      caught(e, { request: 'yak-trash respell', app: one.prefix })
-    )
   }
   let unpinned = await pruned(dir, blobs, standing, now.getTime())
   if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)

@@ -274,9 +274,8 @@ let POSTFIX =
 /**
  * Text with each query clause in its one spelling (T-39341): `.p!` is `.p`,
  * `.edges[t]!` is `.edges[t]`, and `.p?` is `?p`. A store's tools slot is
- * rewritten at its next open (graph.ts `#reshaping`), and an app's files, live
- * and in every version, by the daily sweep (erase.ts `collected`). `null`
- * where there is nothing to do.
+ * rewritten at its next open (graph.ts `#reshaping`), since the parser refuses
+ * the old spellings. `null` where there is nothing to do.
  */
 export let respelled = (text: string): string | null => {
   let now = text.replace(
@@ -286,11 +285,6 @@ export let respelled = (text: string): string | null => {
   )
   return now == text ? null : now
 }
-
-/** The app files a query line is written in: its pages and scripts, and the
- * manifest whose tools each carry one. */
-export let queried = (path: string) =>
-  /\.(html|js|mjs)$|(^|\/)vocab\.(json|ya?ml)$/.test(path)
 
 /** The marker written when a pass reconciles, so it never runs twice. The
  * number is the version an object stands at: {@link MARK} is the move off the

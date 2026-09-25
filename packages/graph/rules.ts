@@ -200,7 +200,7 @@ export type Patch = Record<string, Comp | null>
  * let dated: Rule = {
  *   name: 'trashed',
  *   phase: 'stamp',
- *   match: '*trashed, trashed.at=, #Now',
+ *   match: '*trashed, !trashed.at, #Now',
  *   run: ({ Now }) => ({ trashed: { at: Now } }),
  * }
  * ```

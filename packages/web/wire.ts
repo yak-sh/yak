@@ -46,7 +46,7 @@ export let changesOf = (rows: Bundle[]): Change[] =>
 // What a view asks for beside its rows that this host answers some other way:
 // incident edges are subscriptions of their own (live.ts routeSub), and every
 // row arrives whole.
-let aside = /^(?:\.edges(?:\.[a-z]+=.*|\[[^\]]*\])?!?$|\.fields=)/
+let aside = /^(?:\.edges(?:\.[a-z]+=.*|\[[^\]]*\])?$|\.fields=)/
 
 /** A view's query line as the host reads it: an id list is `.eid=`, and the
  * edge riders and projections are left out. */

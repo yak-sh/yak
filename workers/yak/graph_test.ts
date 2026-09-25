@@ -152,8 +152,8 @@ Deno.test('a malformed query is a 400 to the caller, not a failure', async () =>
   using logged = stub(console, 'error')
   for (
     let [q, error, said] of [
-      ['.recipe!"&.doc?"', 'SyntaxError', 'presence filters end at !'],
-      ['.recipe!"&.doc?"&.count!', 'SyntaxError', 'presence filters end at !'],
+      ['.recipe!', 'SyntaxError', '.recipe! is written .recipe'],
+      ['.recipe&.doc?&.count', 'SyntaxError', '.doc? is written ?doc'],
       [
         '.recipe.nope=1',
         'Unknown',
@@ -762,7 +762,7 @@ Deno.test('app archetypes classify writes and migrate old rows only on schema ch
   ], owner)
   assertEquals(added.status, 200)
   let read = async (s: Store) =>
-    await (await get(s, '/query?q=.recipe!%26.doc?', owner)).json() as Bundle[]
+    await (await get(s, '/query?q=.recipe%26%3Fdoc', owner)).json() as Bundle[]
   let rows = await read(store)
   let original = rows[0].entity.archetype
   assert(typeof original == 'string')
@@ -855,13 +855,13 @@ Deno.test('app archetype descriptors are read-only and vocabulary extension trac
   )
   assertEquals(extended.status, 200)
   await post(store, '/apply', [{ entity: { eid: CAKE }, specialty: {} }], owner)
-  let got = await (await get(store, '/query?q=.recipe!%26.specialty!', owner))
+  let got = await (await get(store, '/query?q=.recipe%26.specialty', owner))
     .json() as Bundle[]
   assertEquals(got.length, 1)
   assert(got[0].entity.archetype)
   store = new Store(ctx)
   assertEquals(
-    (await (await get(store, '/query?q=.recipe!%26.specialty!', owner)).json())
+    (await (await get(store, '/query?q=.recipe%26.specialty', owner)).json())
       .length,
     1,
   )
