@@ -1,12 +1,12 @@
 // The replica over a hand-driven socket: what it asks the host, and what a
 // frame the host sends does to the box and to the names that asked.
-import './testing.ts'
+import { tick } from './testing.ts'
 import { assertEquals } from '@std/assert'
 import type { Frame, Socket } from '@yaks/sync'
 import { liveClient } from './live_client.ts'
 
 // A socket that is open at once, keeps what is sent on it, and lets the test
-// speak for the host.
+// speak for the host. Frames land when the timer turns (T-37445).
 let host = () => {
   let sent: Record<string, unknown>[] = []
   let heard: ((e: Event & { data?: unknown }) => void)[] = []
@@ -22,6 +22,7 @@ let host = () => {
     for (let fn of heard) {
       fn({ data: JSON.stringify(f) } as Event & { data: string })
     }
+    return tick()
   }
   return { socket, sent, say }
 }
@@ -55,37 +56,40 @@ Deno.test('two names on one line share one subscription on the wire', () => {
   assertEquals(sent.filter((m) => 'unsubscribe' in m).length, 1)
 })
 
-Deno.test('a frame lands in the box and is reported to every name, first as a reset', () => {
+Deno.test('a frame lands in the box and is reported to every name, first as a reset', async () => {
   let { c, frames, sent, say } = replica()
   c.open('a', '.doc!')
   c.open('b', '.doc!')
   let id = String(sent[0].id)
-  say({ id, bundles: [row('x', 'One')] })
+  await say({ id, bundles: [row('x', 'One')] })
   assertEquals(c.members('a'), ['x'])
   assertEquals(c.ready('b'), true)
   assertEquals(c.box.ent('x')?.doc, { title: 'One' })
   assertEquals(frames.map(([subs, , reset]) => [subs, reset]), [
     [['a', 'b'], true],
   ])
-  say({ id, bundles: [row('x', 'Two')] })
+  await say({ id, bundles: [row('x', 'Two')] })
   assertEquals(frames[1][2], false)
   assertEquals(c.box.ent('x')?.doc, { title: 'Two' })
 })
 
-Deno.test('a derived value wider than its enum still lands', () => {
+Deno.test('a derived value wider than its enum still lands', async () => {
   let { c, sent, say } = replica()
   c.open('a', '.task!')
-  say({
+  await say({
     id: String(sent[0].id),
     bundles: [{ entity: { eid: 'x', num: 1 }, task: { status: 'wip' } }],
   })
   assertEquals(c.box.ent('x')?.task, { status: 'wip' })
 })
 
-Deno.test('a refusal is reported, and lands no rows', () => {
+Deno.test('a refusal is reported, and lands no rows', async () => {
   let { c, frames, sent, say } = replica()
   c.open('a', '.nope!')
-  say({ id: String(sent[0].id), refused: { error: 'Refused', message: 'no' } })
+  await say({
+    id: String(sent[0].id),
+    refused: { error: 'Refused', message: 'no' },
+  })
   assertEquals(frames[0][1].refused?.message, 'no')
   assertEquals(frames[0][2], false)
   assertEquals(c.members('a'), [])

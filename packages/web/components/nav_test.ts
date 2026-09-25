@@ -1,5 +1,5 @@
 // A peek belongs to its one opener without making every link reactive.
-import '../testing.ts'
+import { until } from '../testing.ts'
 import { effect } from '@preact/signals'
 import { parseHTML } from 'linkedom'
 import { assertEquals, assertStrictEquals } from '@std/assert'
@@ -20,6 +20,7 @@ import {
   menu,
   openAt,
   peek,
+  screenResolving,
   screenTarget,
 } from './nav.tsx'
 import { Id } from './views/Inline.tsx'
@@ -248,9 +249,9 @@ Deno.test('short id chip and browser route round trip; kind is checked', async (
       }
       : { bundles: [{ entity: { eid, num: 0 }, task: {} }] }
   )
-  let ready = async (path: string) => {
+  let ready = (path: string) => {
     screenTarget(path)
-    await new Promise((r) => setTimeout(r, 0))
+    return until(() => !screenResolving(path))
   }
   try {
     let row = { ...e, eid, num: 0 }

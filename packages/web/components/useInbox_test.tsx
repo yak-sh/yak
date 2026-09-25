@@ -32,10 +32,7 @@ Deno.test('inbox count waits for authority, shares holds, and switches to watch/
         root,
       )
     )
-  let say = (f: Frame) =>
-    act(() => {
-      wire.say(f)
-    })
+  let say = (f: Frame) => act(() => wire.say(f))
   let asks = () => wire.asked()
   let gone = () =>
     wire.sent.flatMap((m) => m.unsubscribe ? [m.unsubscribe] : [])

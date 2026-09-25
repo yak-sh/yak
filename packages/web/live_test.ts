@@ -2761,6 +2761,41 @@ Deno.test('a lost socket reconnects in place; the painted cache survives', async
   }
 })
 
+// T-37445: every frame the socket carried by the time the timer turns lands
+// in one batch, so a burst of answers is one render pass, not one per frame.
+Deno.test('frames that arrive together land in one batch', async () => {
+  let ids = ['a', 'b', 'c'].map((c) =>
+    `b0000000-0000-4000-8000-00000000000${c}`
+  )
+  cache.value = {}
+  let wire = host()
+  let offs: (() => void)[] = []
+  try {
+    offs = ids.map((id) => routeSub(id, ROW))
+    await tick()
+    let runs = 0
+    let stop = effect(() => {
+      cache.value
+      runs++
+    })
+    let before = runs
+    for (let [i, eid] of ids.entries()) {
+      let ask = wire.asked().find((a) => a.subscribe.startsWith(`.eid=${eid}`))!
+      wire.say({
+        id: ask.id,
+        bundles: [{ entity: { eid, num: 20 + i }, doc: { title: `t${i}` } }],
+      })
+    }
+    await until(() => ent(ids[2]).doc?.title == 't2')
+    assertEquals(ids.map((id) => ent(id).doc?.title), ['t0', 't1', 't2'])
+    assertEquals(runs - before, 1)
+    stop()
+  } finally {
+    for (let off of offs) off()
+    wire.free()
+  }
+})
+
 // The client half of the aggregate wire (T-21283): the server's initial tally
 // REPLACES the local count and is authoritative from then on; delta frames
 // merge (n=0 drops the key); rows never ride, so the cache is untouched.

@@ -4,6 +4,7 @@
 // frame in the box. The socket is tapped so each frame is also reported by the
 // names that asked for it, after it has landed: live.ts keeps its per-name
 // bookkeeping (readiness, refusals, one-shot reads) from that.
+import { batch } from '@preact/signals'
 import { type Client, client, type Watch, wireIdb } from '@yaks/client'
 import { type Bundle, type Comp, dead } from '@yaks/graph'
 import { type Coverage, echo, type Frame, type Socket } from '@yaks/sync'
@@ -94,12 +95,26 @@ export let liveClient = (opts: {
     close: () => s.close(),
     addEventListener: (type, fn) => {
       if (type != 'message') return s.addEventListener(type, fn)
-      let wrapped = (e: Event & { data?: unknown }) => {
+      let land = (e: Event & { data?: unknown }) => {
         fn(e)
         after(String(e.data))
       }
-      deliver = wrapped
-      s.addEventListener(type, wrapped)
+      deliver = land
+      // Frames land in batches (T-37445): every frame the socket has carried
+      // by the time the timer turns lands inside one signals batch, so a
+      // burst of answers is one render pass, not one per frame. A macrotask is
+      // the coalescing point on purpose: the message events already queued
+      // behind this one run before it.
+      let arrived: (Event & { data?: unknown })[] = []
+      s.addEventListener(type, (e: Event & { data?: unknown }) => {
+        arrived.push(e)
+        if (arrived.length > 1) return
+        setTimeout(() => {
+          let frames = arrived
+          arrived = []
+          batch(() => frames.forEach(land))
+        })
+      })
     },
   })
   let box: Client = client(browserVocab(), [], {
