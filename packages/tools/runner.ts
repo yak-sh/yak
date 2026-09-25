@@ -12,21 +12,18 @@
 // program running it where the caller named one. That is a bundle, not a row —
 // the stored call never wears `process`.
 //
-// The result entity is emitted by a declared rule (./vocab.json, @yaks/graph
-// `emitted`), so its id is derived from the match — `call_ready(<the call>)` —
+// The result entity is emitted by the declared effect's match (./vocab.json,
+// @yaks/graph `emitted`), so its id is derived from the match — `call_ready(<the call>)` —
 // and the same call names the same result entity in this process, in another
 // process, or a year later. Running a call twice patches one entity, never
 // two.
 //
 // Finding a call another process wrote — one scheduled for later, one a crash
-// left behind — is not this file's job. That is an effect, and the rules here
-// are the patterns to register it on (@yaks/effects `on`):
-//
-//   fx.on('$call .call, !results, !wake', (e) => run.run(e.entity.eid))
-//   fx.on('$call .call, .wake, .fired, !results', (e) => run.run(e.entity.eid))
-//
-// one registration each, nothing more. `drive()` runs those same two queries
-// once, which is what a boot sweep is.
+// left behind — is not this file's job. That is an effect, and ./vocab.json
+// declares two (`call_ready`, `call_woken`), each a query over calls; a host
+// that runs effects handles both with `run.run` (@yaks/effects `handle`), one
+// line each, nothing more. `drive()` runs those same two queries once, which
+// is what a boot sweep is.
 //
 // At most once, and how a crash is recovered: `execution{state, by}` on the
 // call is the claim. The runner writes `running` with a `$was` precondition
@@ -68,7 +65,7 @@ import {
   who,
 } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph'
-import { rulesIn } from '@yaks/vocab'
+import { effectsIn } from '@yaks/vocab'
 import { validateToolInput } from '@yaks/vocab/tools'
 import { toolsDoc } from './vocab.ts'
 
@@ -105,10 +102,11 @@ export class CallError extends Error {
   }
 }
 
-/** The two rules this package declares, as written in the vocabulary: the
- * call that is due now, and the one that is due once its wake has fired. */
-export let RULES: Declared[] = rulesIn(toolsDoc)
-  .filter((r) => r.phase == 'effect')
+/** The two effects this package declares, as written in the vocabulary: the
+ * call that is due now, and the one that is due once its wake has fired —
+ * each a query the runner also asks on its own, for what a crash left. */
+export let RULES: Declared[] = effectsIn(toolsDoc)
+  .flatMap((e) => e.match ? [{ name: e.name, match: e.match }] : [])
 
 /** The rule that selects a call due now — the one whose emit names the result
  * entity. */
@@ -157,7 +155,8 @@ export type Opts = {
 /** A live runner: the rules a sweep queries, and the functions a caller
  * invokes. */
 export type Runner = {
-  /** the rules a deferred call is found by — what an effect registers on */
+  /** the queries a deferred call is found by — the two declared effects, by
+   * name */
   rules: Ready[]
   /** the tools it runs, named */
   tools: NamedTool[]
@@ -271,9 +270,9 @@ let checked = (
  * ```
  *
  * Nothing polls the graph for calls. A server that wants the deferred ones too
- * registers the rules as effects — `for (let r of run.rules)
- * fx.on(r.plan, (e) => run.run(e.entity.eid))` — and calls `reconcile()` at
- * boot for whatever a crash left claimed.
+ * handles the two effects ./vocab.json declares — `fx.handle({ [r.rule.name]:
+ * (e) => run.run(e.entity.eid) })` for each of `run.rules` — and calls
+ * `reconcile()` at boot for whatever a crash left claimed.
  */
 export let runner = (g: Graph, opts: Opts): Runner => {
   let tools = opts.tools.map(namedTool)

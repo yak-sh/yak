@@ -306,6 +306,12 @@
       "description": "Check that every received mail message has a sender. Also reports incomplete configuration for a sender this server has configured. A message with a Message-ID but no `from` can never be answered, since a reply has no address to go to. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
+    },
+    "mail_post": {
+      "effect": true,
+      "created": ["mail"],
+      "sweep": ".mail&.deliver&!delivered&!bounced&!deliver.tried",
+      "description": "hand an outbound letter to the sender and record its outcome. The sweep replays the letters still owed, so one written while no sender could run is sent by the first process that can"
     }
   }
 }

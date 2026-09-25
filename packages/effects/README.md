@@ -1,18 +1,29 @@
 # @yaks/effects
 
-Runs application handlers after graph changes commit, for work such as updating
-an index, notifying subscribers or calling an external API. Handler failures are
-reported separately and cannot roll back the committed change.
+Runs application code after graph changes commit, for work such as sending mail,
+updating an index or calling an external API. A failure is reported and cannot
+roll back the committed change.
 
 A **bundle** is one entity's components as a JSON object. A **batch** is a list
 of changes applied in one transaction, such as the array passed to
 `graph.apply()`. See the [graph architecture](../graph/ARCHITECTURE.md) for the
 write phases.
 
-The default registry is in memory and stores no graph data. Optional `effect`
-and `lease` components support retry records and coordination of duties, and
-`provisional` marks an entity whose effect has not finished yet. Applications
-supply the handlers and their domain components.
+Two kinds of registration meet in one registry, and the difference is who knows
+about them:
+
+- An **effect** is declared in a vocabulary (`effect: true`), so every process
+  that loads the vocabulary knows what a write owes, whatever code it imported.
+  The code that runs one is registered under its name (`handle`). With the
+  optional `effect` component loaded, a commit writes each run it owes into the
+  graph in its own transaction, whichever process wrote it, and any number of
+  processes working the **pool** claim those runs and run each once.
+- An **observer** is registered at runtime (`created`, `changed`, `removed`,
+  `on`), so only its own process knows it: it runs there, after that process's
+  own commits, at most once. A view refreshing what it shows is an observer.
+
+The `lease` component coordinates a duty only one process should run, and
+`provisional` marks an entity whose asynchronous step has not finished.
 
 ## Install
 
@@ -21,7 +32,7 @@ deno add jsr:@yaks/effects
 # or: npx jsr add @yaks/effects
 ```
 
-## Register handlers
+## Declare an effect, and handle it
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -45,20 +56,43 @@ let vocab = loadVocab([{
         published: { type: 'boolean' },
       },
     },
+    post_announce: {
+      effect: true,
+      created: ['post'],
+      changed: ['post.published'],
+      description: 'tell the subscribers about a post',
+    },
   },
 }])
 let fx = effects(vocab)
 let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
 
-fx.created('post', (event) => console.log('created', event.entity.eid))
-fx.changed('post', 'published', (event) => console.log(event.comp?.published))
-fx.removed('post', (event) => console.log('removed', event.entity.eid))
+fx.handle({
+  post_announce: (event) => console.log(event.kind, event.entity.eid),
+})
 
 g.apply([{ entity: { eid: 'p1' }, post: { title: 'First post' } }])
 g.apply([{ entity: { eid: 'p1' }, post: { published: true } }])
 ```
 
-`effects()` returns a graph plugin with registration methods. Handlers can be
+A declaration names its triggers: `created`, `changed` (a component, or
+`comp.prop` for one property), `removed`, and `match`, a pattern (below). It can
+also say how many attempts a run gets (`tries`), that a run interrupted mid-way
+must not run again (`idempotent: false`), and a `sweep`, a query whose matches
+are owed a `created` run again whenever a worker starts. `handle` throws for a
+name the vocabulary does not declare, so a typo never goes quietly unrun.
+Without the `effect` component there is no pool, and a handled effect runs in
+the process that committed, like an observer.
+
+## Observe
+
+```ts
+fx.created('post', (event) => console.log('created', event.entity.eid))
+fx.changed('post', 'published', (event) => console.log(event.comp?.published))
+fx.removed('post', (event) => console.log('removed', event.entity.eid))
+```
+
+`effects()` returns a graph plugin with registration methods. Code can be
 registered before or after graph construction. Every handler receives
 `(event, tx, write)`: the event, a detached transaction interface for reading
 committed state, and a callback for new graph writes when configured.
@@ -81,9 +115,9 @@ multiple entities require a storage adapter with `bindings`, such as
 `@yaks/sqlite` or `@yaks/durable-object`. Unsupported query execution is
 reported as an effect failure after commit.
 
-Rows missed during a process failure need application-driven reconciliation,
-such as running the query at startup; registering a pattern alone does not
-replay them.
+An observer's pattern is never replayed: a run a crash lost is lost. A declared
+effect's `match` is written down with the commit, and its `sweep` finds what
+nobody wrote down.
 
 ## A removal is a clause too
 
@@ -99,13 +133,13 @@ rows cannot show which removed components were present before the write.
 
 ## Three things happen to a component
 
-| Registration               | Trigger                                                  |
-| -------------------------- | -------------------------------------------------------- |
-| `created(comp, run)`       | An entity gains the component                            |
-| `changed(comp, prop, run)` | An applied patch includes that property                  |
-| `changed(comp, run)`       | An applied patch updates that component                  |
-| `removed(comp, run)`       | The component is removed, directly or by entity deletion |
-| `on(pattern, run)`         | A query matches an entity touched by the batch           |
+| Observer                   | Declared            | Trigger                                                  |
+| -------------------------- | ------------------- | -------------------------------------------------------- |
+| `created(comp, run)`       | `created: [comp]`   | An entity gains the component                            |
+| `changed(comp, prop, run)` | `changed: [c.prop]` | An applied patch includes that property                  |
+| `changed(comp, run)`       | `changed: [comp]`   | An applied patch updates that component                  |
+| `removed(comp, run)`       | `removed: [comp]`   | The component is removed, directly or by entity deletion |
+| `on(pattern, run)`         | `match: pattern`    | A query matches an entity touched by the batch           |
 
 The plugin reads component presence before applying changes, including
 components on entities about to be deleted by a cascade. After commit it
@@ -132,9 +166,9 @@ and is absent on removal. Pattern events have `kind: 'matched'` and can carry
   a write that already committed.
 - **Isolated failures:** thrown errors and rejected promises go to `report`;
   other handlers still run. The default reporter uses `console.warn`.
-- **No automatic replay:** ordinary dispatch attempts handlers for that
-  invocation. A crash after commit can lose work. Repeated dispatch can repeat
-  work; there is no durable deduplication in the basic registry.
+- **Written with the commit, where there is a pool:** a declared effect's runs
+  commit with the write that owes them, so a crash cannot lose one. Without a
+  pool, and for every observer, a crash after commit can lose the run.
 - **Synchronous return when possible:** synchronous handlers preserve a
   synchronous `apply()` result. Returning a promise makes that call
   asynchronous. Work started without returning its promise does not delay the
@@ -176,55 +210,49 @@ handlers. `depth: 0` disables handlers for all effect-generated writes.
 
 <a id="the-durable-tier-optional"></a>
 
-## Durable execution records (optional)
+## The pool (optional)
 
-Load `effectDoc` and wrap handler runs with `ledger().around` to persist
-attempts:
+Load `effectDoc` beside your own vocabulary and a commit writes down the runs it
+owes; `work` claims and runs them:
 
 ```ts
-import { detached, graph } from '@yaks/graph'
-import { loadVocab } from '@yaks/vocab'
-import { effectDoc, effects, ledger } from '@yaks/effects'
+import { effectDoc, effects } from '@yaks/effects'
 
-// appDocs includes the graph and application component declarations.
+// appDocs declares the application's components and effects.
 let vocab = loadVocab([...appDocs, effectDoc])
-let log = ledger({ owner: 'worker-1' })
-let fx = effects(vocab, { around: log.around })
+let fx = effects(vocab, {
+  owner: me,
+  write: (b) => g.apply(b, { trusted: true }),
+})
 let g = graph({ storage, vocab, plugins: [fx] })
+fx.handle({ send_receipt: receipt })
 
-fx.created('order', receipt, { tries: 5 })
-await log.reconcile(fx, detached(storage))
+await fx.work(g, signal) // until `signal` aborts
+await fx.work(g) // or one pass, on the way through
 ```
 
-Supply storage created for this vocabulary and application handler `receipt`.
-Register the same handlers before reconciling persisted attempts. Run
-`reconcile()` at startup and subsequently when retries are due; the ledger
-starts no scheduler. `due(tx)` reports the earliest scheduled retry time.
+An `effect` row records the effect's name (`handler`), the target, the
+component, the event kind, the state, the attempt count, the error, the next
+attempt time, the generation and the claim. A claim is the row's own lease —
+owner, token, expiry — taken with the graph's precondition, so two workers
+reaching for one row settle it in one transaction and the loser moves on. A
+worker renews the claims it is running; one that dies leaves claims that expire,
+and the next pass takes them.
 
-An `effect` row records the handler ID, target, component, event kind, state,
-attempt count, error, next attempt time and lease information. The default is
-three attempts, with exponential backoff starting at one second and capped at
-five minutes. An exhausted run stays `failed`; the `effect_check` tool reports
-failed or overdue runs.
+A process working the pool claims the runs its own commits owe as it writes
+them, and starts them once the commit is done. What another process wrote is
+picked up by the next pass, at most a second away. A worker that stays up holds
+a presence lease, one per process, and a one-shot `work` leaves the pool to it:
+a command passing through does not race a server for the same rows. `stop`
+leaves the pool, so what the process commits afterwards is left for the others.
 
-The ledger records an attempt **after the original graph commit**, before
-calling the handler, and marks it afterward. A crash between graph commit and
-creation of that record can still lose the event. A recorded attempt may be
-retried after a crash, so external operations need their own idempotency or
-reconciliation.
-
-A handler that throws is eligible for a scheduled retry until it exhausts its
-attempts. Set `{ idempotent: false }` to prevent retrying an interrupted attempt
-whose outcome is unknown. This setting does not prevent retries of reported
-failures, and throwing does not prove an external operation had no effect.
-
-A recorded attempt holds its process's lease from the moment it is written, and
-reconciliation claims pending rows with expiring leases, skipping unexpired
-claims belonging to other owners. A run still going in one process is therefore
-left to it by every other process's sweep, and an interrupted one is taken once
-its lease lapses. Retry records do not preserve the original property patch:
-reconciliation rebuilds the event using current target state. Handlers needing
-historical values must store or obtain those values separately.
+A run that throws is due again after a backoff (a second, doubling, capped at
+five minutes) until it spends its attempts (`tries`, default three) and stays
+`failed` with its error. A run interrupted mid-way is run again, unless its
+declaration says `idempotent: false`, where it is left failed: a second run
+could repeat something that already reached an external system. A run rebuilds
+its event from the target's current state, so a handler needing a historical
+value stores it itself. The `effect_check` tool reports failed and overdue runs.
 
 ## Duties, and the one process running each
 
@@ -261,62 +289,25 @@ wears `provisional{note}` beside its other components: `note` is a line for the
 person reading it, such as "saving the key". The effect that finishes the step
 removes the mark. A write that waits for its effects never shows its own writer
 the mark; another reader in between sees it, and can say so. `provisionalDoc`
-declares the mark alone, for a vocabulary that does not load the ledger;
-`effectDoc` carries it too.
+declares the mark alone, for a vocabulary that keeps no pool; `effectDoc`
+carries it too.
 
 ## Composition
 
-The basic plugin works with `@yaks/ram` or database adapters. Durable attempts
-and leases are graph components stored by the chosen adapter; they survive
-process restarts only when that storage is persistent. Pattern features depend
-on the adapter's query support.
-
-## External journals and split processes
-
-`fx.dispatch(events, tx?)` accepts committed `Event[]` from an external journal.
-The consumer owns its cursor and process coordination. Dispatch starts handlers
-eagerly and isolates their failures. Without `tx`, event-only handlers work, but
-attempts to read through the transaction are reported as errors. The configured
-`write` callback remains available.
-
-Grouped registrations can select a process class and declare startup work:
-
-```ts
-let fx = effects(vocab, { want: (where) => where == 'do', write })
-fx.on('order', {
-  where: 'do',
-  created: ship,
-  changed: { address: reroute },
-  sweep: { pending: 'shipped_at is null' },
-  doc: 'Ship pending orders',
-  wants: (bundles) => [{ eids: bundles.map((b) => b.entity.eid) }],
-})
-await fx.dispatch(events, tx)
-await fx.relay((comp, pending) => pendingRows(comp, pending), tx)
-```
-
-Here `ship`, `reroute`, `write` and `pendingRows` are application functions, and
-`events`/`tx` come from the consumer. The application interprets `pending`; SQL
-is one choice. `relay()` fetches once per sweep declaration and invokes only the
-created handler for each returned row, which must include `eid`. Declaring a
-sweep requires an idempotent handler because reconciliation can repeat work.
-
-`want` filters graph-plugin dispatch, external dispatch, `attempt` and `relay`.
-The default process class is `do`; without a filter all classes run. The third
-argument to `dispatch` or `relay` can override `want` and `report` for that
-pass. `wants` declares reads gathered for graph-plugin execution; external
-consumers supply their own transaction. `docs()` describes grouped hooks and
-`slots()` lists individual registrations.
+The plugin works with `@yaks/ram` or database adapters. The pool and leases are
+graph components stored by the chosen adapter; they survive process restarts
+only when that storage is persistent. Pattern features depend on the adapter's
+query support.
 
 ## Exports
 
 The root exports `effects`, registry/event/registration types, event derivation
-helpers, effect-write generation helpers, `ledger`, `effectDoc`, retry settings,
+helpers, effect-write generation helpers, `pool`, `effectDoc`, retry settings,
 lease operations, `PROVISIONAL` and `provisionalDoc`. `@yaks/effects/vocab`
 exports `docs`, `effectDoc`, which declares `effect`, `lease`, `provisional` and
 `effect_check`, and `provisionalDoc`. `@yaks/effects/tools` exports the tool
-implementations. Loading declarations alone does not install a registry or start
-reconciliation.
+implementations. Loading declarations alone does not install a registry or work
+the pool.
 
 ## Compatibility
 

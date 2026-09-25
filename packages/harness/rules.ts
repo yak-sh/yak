@@ -8,7 +8,7 @@
 
 import { blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
 import { edges } from '@yaks/edge'
-import type { Plugin } from '@yaks/graph'
+import type { Bundle, Plugin } from '@yaks/graph'
 import { sessions, taskMarks } from '@yaks/session'
 import { processes } from '@yaks/process'
 import { projects } from '@yaks/project'
@@ -22,7 +22,14 @@ import { secrets, type Vault } from '@yaks/secrets'
  * the host's vault. The blob tables are created first — a plugin may create
  * what it needs through the caller's connection. */
 export let rules = (
-  host: { vocab: Vocab; sql: Driver; vault: Vault },
+  host: {
+    vocab: Vocab
+    sql: Driver
+    vault: Vault
+    /** the graph's own `apply()`, trusted: what a sealed secret's mark coming
+     * off is written through */
+    write: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
+  },
 ): Plugin[] => {
   for (let statement of blobSchema()) host.sql.exec(statement)
   return [
@@ -32,6 +39,6 @@ export let rules = (
     tasks(),
     projects(host.vocab, taskMarks),
     processes(),
-    secrets(host.vault),
+    secrets(host.vault, host.write),
   ]
 }

@@ -4,27 +4,21 @@
 // whole file costs a few hundred milliseconds.
 
 import { assert, assertEquals } from '@std/assert'
-import { type Bundle, type Comp, detached, graph } from '@yaks/graph'
+import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
-import {
-  effectDoc,
-  type Effects,
-  effects,
-  ledger,
-  SWEEP,
-  take,
-} from '@yaks/effects'
+import { effectDoc, type Effects, effects, POOL, take } from '@yaks/effects'
 import { modelDoc } from '@yaks/model'
 import { ram } from '@yaks/ram'
 import { sessionDoc, sessions, transcriptUsage } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
-import { launch, processDoc, processes, selfEid, store } from '@yaks/process'
+import { launch, processDoc, processes, store } from '@yaks/process'
 import { spawning } from './effects.ts'
 import { adopting } from './service.ts'
 import { checkoutDoc } from '@yaks/git/vocab'
 import { checkoutOf, down, speaking } from './run.ts'
 import { asking, fake, tracked, until } from './testing.ts'
+import { spawnDoc } from './vocab.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? undefined) as Comp | undefined
@@ -32,14 +26,8 @@ let comp = (b: Bundle | undefined, name: string) =>
 let dir = () => Deno.makeTempDirSync({ prefix: 'yaks-spawn-' })
 
 // The facet, composed the way `yak serve` composes it.
-let watching = (g: ReturnType<typeof tracked>, o: Record<string, unknown>) => {
-  for (
-    let { comp, ...watch } of spawning({ adapters: { fake }, ...o })({
-      graph: g.g,
-      me: selfEid(),
-    })
-  ) g.fx.on(comp, watch)
-}
+let watching = (g: ReturnType<typeof tracked>, o: Record<string, unknown>) =>
+  g.fx.handle(spawning({ adapters: { fake }, ...o })({ graph: g.g }))
 
 let said = (g: { read: (q: string) => unknown }) =>
   g.read('.entry&.order=entry.seq&*') as Promise<Bundle[]>
@@ -84,44 +72,39 @@ Deno.test('the request starts the provider, and what it printed is the transcrip
 
 Deno.test('a request made beside a server is started by the server, not the command', async () => {
   let vocab = loadVocab(
-    [sessionDoc, toolsDoc, modelDoc, processDoc, edgeDoc, effectDoc],
+    [sessionDoc, toolsDoc, modelDoc, processDoc, edgeDoc, effectDoc, spawnDoc],
     [edgeKeywords],
   )
-  // One store, two processes: a one-shot command and the server holding the
-  // effect sweep. Each has its own registry and ledger, as it would.
-  let process = (me: string, fx: Effects) => {
-    for (
-      let { comp, ...watch } of spawning({ adapters: { fake } })({
-        graph: g,
-        me,
-      }, { dir: where, poll: 20 })
-    ) fx.on(comp, watch)
+  let storage = ram(vocab, { number: true })
+  // One store, two processes: a one-shot command and a server working the
+  // effects. Each has its own registry and graph, as it would.
+  let process = (me: string) => {
+    let fx: Effects = effects(vocab, {
+      owner: me,
+      write: (b) => g.apply(b, { trusted: true }),
+    })
+    let g = graph({ storage, vocab, plugins: [sessions(), processes(), fx] })
+    fx.handle(
+      spawning({ adapters: { fake } })({ graph: g }, { dir: where, poll: 20 }),
+    )
+    return { g, fx }
   }
-  let cmd = ledger({ owner: 'cmd' })
-  let cmdFx: Effects = effects(vocab, {
-    around: cmd.around,
-    write: (b) => g.apply(b, { trusted: true }),
-  })
-  let g = graph({
-    storage: ram(vocab, { number: true }),
-    vocab,
-    plugins: [sessions(), processes(), cmdFx],
-  })
   let where = dir()
-  process('cmd', cmdFx)
-  await take(g, SWEEP, { holder: 'server' })
+  let cmd = process('cmd')
+  let g = cmd.g
+  // The server is up and working the pool.
+  await take(g, `${POOL}/server`, { holder: 'server' })
   try {
     await g.apply(asking('S1', 'E1', 'do the thing'))
+    await cmd.fx.work(g)
     // The command started nothing, and the run waits for the server.
     assertEquals(comp((await g.read('.session&*'))[0], 'process'), undefined)
     let [row] = await g.read('.effect.comp=using&*')
     assertEquals(comp(row, 'effect')?.state, 'pending')
     assertEquals(comp(row, 'effect')?.attempts, 0)
-    // The server's sweep, on its next pass, starts it.
-    let server = ledger({ owner: 'server' })
-    let serverFx: Effects = effects(vocab, { around: server.around })
-    process('server', serverFx)
-    assertEquals(await server.reconcile(serverFx, detached(g.storage)), 1)
+    // The server's next pass starts it.
+    let server = process('server')
+    await server.fx.work(server.g)
     await until(
       async () => comp((await g.read('.session&*'))[0], 'exit'),
       'the run the server started to end',
@@ -133,7 +116,15 @@ Deno.test('a request made beside a server is started by the server, not the comm
 
 Deno.test('a run works in a checkout of its own, taken back when it ends', async () => {
   let vocab = loadVocab(
-    [sessionDoc, toolsDoc, modelDoc, processDoc, edgeDoc, checkoutDoc],
+    [
+      sessionDoc,
+      toolsDoc,
+      modelDoc,
+      processDoc,
+      edgeDoc,
+      checkoutDoc,
+      spawnDoc,
+    ],
     [edgeKeywords],
   )
   let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
@@ -166,12 +157,14 @@ Deno.test('a run works in a checkout of its own, taken back when it ends', async
     '-m',
     'initial',
   )
-  for (
-    let { comp, ...watch } of spawning({ adapters: { fake } })({
-      graph: g,
-      me: selfEid(),
-    }, { dir: top, poll: 20, cwd: repo, worktrees: runs })
-  ) fx.on(comp, watch)
+  fx.handle(
+    spawning({ adapters: { fake } })({ graph: g }, {
+      dir: top,
+      poll: 20,
+      cwd: repo,
+      worktrees: runs,
+    }),
+  )
   try {
     await g.apply(asking('S1', 'E1', 'do the thing'))
     await until(

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yak.sh/vocab/meta",
   "title": "yaks vocab file",
-  "description": "The meta-schema a vocabulary document validates against: a JSON Schema 2020-12 document whose $defs entries each carry a marker saying what they are \u2014 an entry marked \"component\": true is a component (an object schema whose properties are each storable and declare a type: a scalar, a reference, a closed set, or a JSON value \u2014 type object, array, or a union \u2014 kept as one), an entry marked \"tool\": true is a tool declaration (a noun, a verb, or both, plus description and input), an entry marked \"rule\": true is a rule declaration (the query it matches, and the rules it runs before), and an entry with no marker is an ordinary reusable subschema this format does not constrain. Only the CORE keyword shapes are inlined, so this file validates standalone; a file using an extension vocabulary's keywords validates against extendMeta([thoseKeywords]) instead.",
+  "description": "The meta-schema a vocabulary document validates against: a JSON Schema 2020-12 document whose $defs entries each carry a marker saying what they are \u2014 an entry marked \"component\": true is a component (an object schema whose properties are each storable and declare a type: a scalar, a reference, a closed set, or a JSON value \u2014 type object, array, or a union \u2014 kept as one), an entry marked \"tool\": true is a tool declaration (a noun, a verb, or both, plus description and input), an entry marked \"rule\": true is a rule declaration (the query it matches, and the rules it runs before), an entry marked \"effect\": true is an effect declaration (what a commit owes a run of, by name), and an entry with no marker is an ordinary reusable subschema this format does not constrain. Only the CORE keyword shapes are inlined, so this file validates standalone; a file using an extension vocabulary's keywords validates against extendMeta([thoseKeywords]) instead.",
   "$vocabulary": {
     "https://json-schema.org/draft/2020-12/vocab/core": true,
     "https://json-schema.org/draft/2020-12/vocab/applicator": true,
@@ -48,7 +48,7 @@
   },
   "$defs": {
     "entry": {
-      "description": "One $defs entry, by its marker: a component, a tool, a rule, or an ordinary subschema nothing here constrains. An entry carries one marker, never two.",
+      "description": "One $defs entry, by its marker: a component, a tool, a rule, an effect, or an ordinary subschema nothing here constrains. An entry carries one marker, never two.",
       "allOf": [
         {
           "if": {
@@ -84,6 +84,17 @@
           }
         },
         {
+          "if": {
+            "type": "object",
+            "required": [
+              "effect"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/effect"
+          }
+        },
+        {
           "not": {
             "type": "object",
             "required": [
@@ -105,8 +116,35 @@
           "not": {
             "type": "object",
             "required": [
+              "component",
+              "effect"
+            ]
+          }
+        },
+        {
+          "not": {
+            "type": "object",
+            "required": [
               "tool",
               "rule"
+            ]
+          }
+        },
+        {
+          "not": {
+            "type": "object",
+            "required": [
+              "tool",
+              "effect"
+            ]
+          }
+        },
+        {
+          "not": {
+            "type": "object",
+            "required": [
+              "rule",
+              "effect"
             ]
           }
         }
@@ -578,15 +616,85 @@
           "items": {
             "type": "string"
           }
-        },
-        "phase": {
-          "type": "string",
-          "description": "the phase it runs in: `rules` (the default) is the declared half of apply(), before persistence; `effect` is a pattern a post-commit handler is registered on (@yaks/effects) or a sweep asks once (@yaks/tools). Only the `rules` half is run by apply() itself."
         }
       },
       "required": [
         "rule",
         "match"
+      ],
+      "additionalProperties": false
+    },
+    "effect": {
+      "description": "An effect declaration: what a commit owes, by name. `created`, `changed` and `removed` list the components (and, for `changed`, `comp.prop` for one property) whose appearance, patch or removal owes a run; `match` is a query that owes one wherever a batch made it hold. The code that runs it is registered under the same name by a plugin's `./effects` (@yaks/effects). `sweep` selects the entities still owed a run when a worker starts, and declaring it promises running twice is safe.",
+      "type": "object",
+      "properties": {
+        "effect": {
+          "const": true
+        },
+        "created": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "changed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "removed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "match": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sweep": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tries": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "idempotent": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "effect"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "created"
+          ]
+        },
+        {
+          "required": [
+            "changed"
+          ]
+        },
+        {
+          "required": [
+            "removed"
+          ]
+        },
+        {
+          "required": [
+            "match"
+          ]
+        }
       ],
       "additionalProperties": false
     }

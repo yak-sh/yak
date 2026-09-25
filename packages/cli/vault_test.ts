@@ -7,14 +7,12 @@ import { ram } from '@yaks/ram'
 import {
   reveal,
   sealed,
-  sealing,
   secretEid,
   secrets,
   secretsDoc,
   unsealed,
 } from '@yaks/secrets'
 import { loadVocab } from '@yaks/vocab'
-import { effects } from '@yaks/effects'
 import { fileVault, vaultOf } from './vault.ts'
 
 let vocab = loadVocab([secretsDoc])
@@ -23,13 +21,11 @@ Deno.test('the file vault is private files, one per secret, and follows no symli
   let dir = await Deno.makeTempDir()
   try {
     let vault = fileVault(`${dir}/secrets`)
-    let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
     let g = graph({
       storage: ram(vocab),
       vocab,
-      plugins: [secrets(vault), fx],
+      plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }))],
     })
-    fx.on('secret', sealing(vault))
     await g.apply([sealed('A', 'one')])
     let eid = secretEid('A')
     assertEquals(await reveal(fileVault(`${dir}/secrets`), 'A'), 'one')

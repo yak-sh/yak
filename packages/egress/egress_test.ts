@@ -7,8 +7,7 @@ import { type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
-import { ramVault, sealing, secrets, secretsDoc, SENTINEL } from '@yaks/secrets'
-import { effects } from '@yaks/effects'
+import { ramVault, secrets, secretsDoc, SENTINEL } from '@yaks/secrets'
 import {
   begin,
   connect,
@@ -69,13 +68,14 @@ let vocab = loadVocab(
   [edgeKeywords],
 )
 let vault = ramVault()
-let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
 let g = graph({
   storage: ram(vocab),
   vocab,
-  plugins: [secrets(vault), edges(vocab), fx],
+  plugins: [
+    secrets(vault, (b) => g.apply(b, { trusted: true })),
+    edges(vocab),
+  ],
 })
-fx.on('secret', sealing(vault))
 let c: Ctx = { graph: g, vault, fetch: net }
 for (let seeds of [undefined, SEEDS]) {
   await g.apply(await install(g.read, seeds), { trusted: true })

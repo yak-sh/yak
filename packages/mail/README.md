@@ -65,8 +65,8 @@ message.
 Sending is at most once. The handler stamps `deliver.tried` before the message
 reaches the transport, so a crash between the send and its outcome leaves a
 message with `tried` and no outcome, which is never handed over again. The
-handler declares a sweep over the messages still owed a send (`PENDING`), so a
-host replays it at start-up and a message written while no sender could run goes
+`mail_post` effect declares a sweep over the messages still owed a send, so a
+worker coming up replays it and a message written while no sender could run goes
 out with the first process that has one.
 
 ## Delivery after commit
@@ -75,8 +75,9 @@ out with the first process that has one.
 transport after the original transaction commits. It records the outcome through
 a second `graph.apply()` call. This makes the outcome available to queries,
 subscriptions, and journaling when those plugins are configured. A transport
-failure does not roll back the original message. Effects are awaited, so a slow
-transport can still delay completion of the call.
+failure does not roll back the original message. Where the graph keeps no effect
+pool, the send is awaited, so a slow transport delays completion of the call;
+with one, the send is written down with the message and run by a worker.
 
 This complete in-memory example sends through `stash()`:
 

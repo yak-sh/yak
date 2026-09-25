@@ -2,7 +2,6 @@
 // seals into it, the value reads back, and the rows hold only ciphertext.
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { effects } from '@yaks/effects'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import {
@@ -10,7 +9,6 @@ import {
   retryable,
   reveal,
   sealed,
-  sealing,
   secretEid,
   secrets,
   secretsDoc,
@@ -31,9 +29,11 @@ let key = () =>
 let setup = (db = d1()) => {
   // The key still on its way, as one imported from a Worker secret is.
   let vault: Vault = d1Vault(db, key())
-  let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
-  let g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault), fx] })
-  fx.on('secret', sealing(vault))
+  let g = graph({
+    storage: ram(vocab),
+    vocab,
+    plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }))],
+  })
   return { db, g, vault }
 }
 

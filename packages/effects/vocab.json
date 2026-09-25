@@ -7,12 +7,12 @@
     "effect": {
       "component": true,
       "type": "object",
-      "description": "one run of a post-commit handler, recorded so it happens at most once",
+      "description": "one run a commit owes, written in the commit's own transaction and claimed by whichever process runs it",
       "properties": {
         "handler": {
           "type": "string",
           "stamped": true,
-          "description": "the registration that ran, by its slot id"
+          "description": "the declared effect it runs, by name"
         },
         "target": {
           "type": "string",
@@ -45,7 +45,8 @@
             "failed"
           ],
           "stamped": true,
-          "description": "how far the run got"
+          "description": "how far the run got — pending until a worker settles it",
+          "index": true
         },
         "attempts": {
           "type": "number",
@@ -58,6 +59,11 @@
           "stamped": true,
           "description": "when the run was recorded"
         },
+        "generation": {
+          "type": "number",
+          "stamped": true,
+          "description": "how deep in effect-written batches the commit that owed it was: 0 for a client's write, 1 for an effect's own, so what this run writes is one more"
+        },
         "error": {
           "type": "string",
           "stamped": true,
@@ -67,12 +73,12 @@
           "type": "string",
           "format": "date-time",
           "stamped": true,
-          "description": "when the next attempt falls due; set means a failure that reported and is waiting out its backoff, absent means a run in progress (or one nobody has picked up)"
+          "description": "when the next attempt falls due; set means a failure that reported and is waiting out its backoff, absent means a run nobody has started or one in progress"
         },
         "lease_owner": {
           "type": "string",
           "stamped": true,
-          "description": "the process currently reconciling this row"
+          "description": "the process that claimed this run"
         },
         "lease_token": {
           "type": "string",
@@ -126,7 +132,7 @@
       "noun": "effect",
       "verb": "check",
       "title": "Check effect runs",
-      "description": "Check recorded background actions (effects), such as sending mail after a transaction commits. Reports runs marked failed after exhausting their attempts, and runs still pending past their due time by more than the server’s threshold (10 minutes by default). An overdue run can indicate that no process is dispatching actions, even while graph writes succeed. Does not retry or mark runs failed itself; with no effect records supported by the schema, reports no findings. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
+      "description": "Check recorded background actions (effects), such as sending mail after a transaction commits. Reports runs marked failed after exhausting their attempts, and runs still pending past their due time by more than the server’s threshold (10 minutes by default). An overdue run can indicate that no process is running them, even while graph writes succeed. Does not retry or mark runs failed itself; with no effect records supported by the schema, reports no findings. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
     }

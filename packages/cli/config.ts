@@ -63,11 +63,12 @@ export type Config = {
    * that expires, which is how a second long-running process takes over
    * without anybody having to reap the first. */
   lease?: number
-  /** whether this process runs its duties: the effect sweep, each
-   * plugin's `./service`, and the start-up passes a plugin holds a lease for
-   * (default true). `false` takes no lease and runs none of them, so the
-   * process answers what it is asked and nothing else — what
-   * `yak --no-duties` sets. */
+  /** whether this process runs its duties: the effect pool, each plugin's
+   * `./service`, and the start-up passes a plugin holds a lease for (default
+   * true). `false` takes no lease, works no effects and runs none of them, so
+   * the process answers what it is asked and nothing else — what its writes
+   * owe is left written down for a process that does — what `yak --no-duties`
+   * sets. */
   duties?: boolean
 }
 

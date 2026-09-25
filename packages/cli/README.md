@@ -48,7 +48,7 @@ serves:
 | --------------- | ------------------------------- | ---------------------------------------------- |
 | `graph`         | `./vocab`, `./rules`, `./tools` | opens the file, admits writes, runs tool calls |
 | `web`           | `./routes`                      | answers HTTP with the routes @yaks/api hosts   |
-| `effects`       | `./effects`                     | runs what a commit owes, and the effect sweep  |
+| `effects`       | `./effects`                     | claims and runs what commits owe, in a pool    |
 | a plugin's name | that plugin's `./service`       | keeps that plugin's timer or poll running      |
 
 The `yak` command serves commands and rendering itself. Listing its commands
@@ -191,7 +191,7 @@ contributes nothing to that process.
 | `./vocab`   | `graph`    | `docs?`, `keywords?`, and `derived?` declarations                                       |
 | `./rules`   | `graph`    | `rules?: (host, options) => Plugin[]`, query `extend?`, and at most one `authenticate?` |
 | `./tools`   | `graph`    | `runs?: (host, options) => Runs`, keyed by declared tool name                           |
-| `./effects` | `effects`  | `effects?: (host, options) => Watch[]` for post-commit work                             |
+| `./effects` | `effects`  | `effects?: (host, options) => Handlers`, keyed by declared effect name                  |
 | `./routes`  | `web`      | `routes?: (host, options) => Route[]`, and at most one `handler?`                       |
 | `./service` | its plugin | `service?: (host, options, signal)` for a duty                                          |
 | `.`         |            | Public types and library functions; not loaded by `compose`                             |
@@ -268,10 +268,10 @@ Writes without an explicit actor are attributed to that process. Authenticated
 requests are attributed to the authenticated identity. On shutdown, `close()`
 records the exit and releases the process's leases in one transaction.
 
-Creating the process entity also provides the startup event. Plugins can
-register an effect for `created(process)` and compare its entity ID with
-`host.me`; there is no separate `./boot` facet. A lease prevents two processes
-opening the same graph from performing the same startup work.
+Creating the process entity also provides the startup event: a plugin can
+declare an effect `created: ["process"]`, and whichever process works the pool
+runs it; there is no separate `./boot` facet. Start-up work that must run in the
+process that started holds a lease instead.
 
 ## What `compose` does
 
@@ -284,10 +284,13 @@ opening the same graph from performing the same startup work.
 3. Opens SQLite, runs migrations, and builds storage with derived columns, query
    extensions, optional entity numbers, and full-text indexes for fields
    declared with `search: true`.
-4. Builds the graph from plugin rules and the post-commit effect registry.
+4. Builds the graph from plugin rules and the effect registry. Every process
+   writes down the runs its commits owe, whatever roles it serves.
 5. Joins tool declarations to their `runs` implementations; a declared tool
-   without an implementation is an error. Serving `effects`, it registers the
-   plugins' effects and the tool runner's rules for calls another process wrote.
+   without an implementation is an error. Serving `effects`, it handles each
+   plugin's declared effects with that plugin's `./effects` (a declared effect
+   the config gives no code is settled as done) and the tool runner's two
+   effects for calls another process wrote.
 6. Serving `web`, asks the plugin that hosts routes, if the config listed one,
    for the one handler this host answers with.
 7. Creates the current process entity after registrations are ready.
@@ -301,11 +304,12 @@ the duties for as long as it listens. `words(config)` reads the plugins'
 
 ## Duties: the work nobody is asking for
 
-The effect sweep and each plugin's `./service` export are duties: the sweep is
-the `effects` role's, and a service is the role named by its plugin. Each duty
-runs under a lease named for its owning package, so only one process over a
-graph runs it at a time, and a process takes only the leases of the roles it
-serves.
+Working the effect pool and each plugin's `./service` export are duties: the
+pool is the `effects` role's, and a service is the role named by its plugin. Any
+number of processes work the pool at once, each claiming a run before it runs
+it. Each service runs under a lease named for its owning package, so only one
+process over a graph runs it at a time, and a process takes only the leases of
+the roles it serves.
 
 ```ts
 await host.duties() // Run until the host shuts down.
@@ -314,18 +318,22 @@ await host.duties(AbortSignal.abort()) // Run one pass, then release leases.
 
 The `serve` tool uses the long-running form. A one-shot local command uses the
 second form before executing its tool, allowing overdue effects and scheduled
-work to progress when no server is running. A live process renews its lease;
-another process can take over after the lease expires or is released.
+work to progress when no server is running; where a process that stays up is
+working the pool, the command leaves its runs written down for it. A live
+process renews its lease; another process can take over after the lease expires
+or is released.
 
 `yak --no-duties` (config `duties: false`) turns them off for one process: it
-takes no lease, and runs neither the sweep, the services, nor the start-up
-passes `@yaks/session` and `@yaks/spawn` hold a lease for. A one-shot command
-then only runs its tool, and `yak --no-duties serve` answers requests while
-another process, or none, does the duties.
+takes no lease, works no effects, and runs neither the services nor the start-up
+passes `@yaks/session` and `@yaks/spawn` hold a lease for; what it commits is
+left written down for a process that does. A one-shot command then only runs its
+tool, and `yak --no-duties serve` answers requests while another process, or
+none, does the duties.
 
-`close()` first aborts `host.stopping`, then releases leases, records the
-process exit, and closes SQLite. Plugin timers and loops should listen to
-`host.stopping` or the signal passed to `service`.
+`close()` first aborts `host.stopping`, lets the effects it started finish and
+leaves the pool, then releases leases, records the process exit, and closes
+SQLite. Plugin timers and loops should listen to `host.stopping` or the signal
+passed to `service`.
 
 ## The command line
 

@@ -15,7 +15,7 @@ import { taskDoc } from '@yaks/task'
 import { modelDoc } from '@yaks/model'
 import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
-import { processDoc, processes, selfEid } from '@yaks/process'
+import { processDoc, processes } from '@yaks/process'
 import { spawning } from './effects.ts'
 import { fake, slow, until } from './testing.ts'
 import { every, runs } from './tools.ts'
@@ -220,13 +220,9 @@ Deno.test('a wait answers "still running" rather than killing anything', async (
 slow('spawn --wait runs the provider and answers what it came to', async () => {
   let { g, fx } = host()
   let where = Deno.makeTempDirSync({ prefix: 'yaks-spawn-tools-' })
-  for (
-    let { comp, ...watch } of spawning({
-      adapters: { fake },
-      dir: where,
-      poll: 20,
-    })({ graph: g, me: selfEid() })
-  ) fx.on(comp, watch)
+  fx.handle(
+    spawning({ adapters: { fake }, dir: where, poll: 20 })({ graph: g }),
+  )
   try {
     await g.apply(shelf)
     let said = body(

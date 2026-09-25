@@ -9,14 +9,14 @@
 // step left for the person looking.
 
 import type { VocabDoc } from '@yaks/vocab'
-import { effectDoc } from './durable.ts'
+import { effectDoc } from './pool.ts'
 
 /** The mark's component, by the name ./vocab.json declares it. */
 export let PROVISIONAL = 'provisional'
 
 /**
- * The mark on its own, for a vocabulary that wants it without the durable
- * ledger: `loadVocab([provisionalDoc, ...mine])`. {@link effectDoc} carries it
+ * The mark on its own, for a vocabulary that wants it without the pool's
+ * rows: `loadVocab([provisionalDoc, ...mine])`. {@link effectDoc} carries it
  * too, so a host loads one or the other, never both.
  */
 export let provisionalDoc: VocabDoc = {

@@ -1,7 +1,7 @@
-// The graph plugin and the effect that finish a secret's write between them:
-// a secret's value comes out of a write in its first phase, and goes into the
-// vault once the write has committed, so nothing the graph keeps — storage, the
-// journal, a broadcast, a backup — ever holds more than the handle.
+// The graph plugin that finishes a secret's write, in two halves: a secret's
+// value comes out of a write in its first phase, and goes into the vault once
+// the write has committed, so nothing the graph keeps — storage, the journal,
+// a broadcast, a backup — ever holds more than the handle.
 //
 // `normalize` is the first thing `apply()` does. It takes each written value
 // and puts the secret's handle where the value was (./sentinel.ts): the handle
@@ -19,14 +19,16 @@
 // behind, is marked `provisional` (@yaks/effects) with a note saying the key is
 // being saved. The change commits with the handle and the mark.
 //
-// `sealing` is the other half: an effect, registered on the host's registry.
-// After the change commits it seals each waiting value into the vault under the
+// The other half is the same plugin's `effect` hook (`sealing` below). After
+// the change commits it seals each waiting value into the vault under the
 // secret's entity id and removes the mark; a deleted secret is dropped from the
-// vault the same way. `apply()` waits for its effects, so whoever wrote the
-// value gets their answer once it is sealed and never sees the mark; only
-// another reader in between does. A seal that fails says so on the secret, in
-// @yaks/tools' words: `error` for a failure the vault expects and the effect
-// tries again, `exception` for one somebody has to fix (`sealing` below).
+// vault the same way. It is not an effect another process could run: the value
+// is in this process's memory and nowhere else, which is the point, so the
+// process that wrote it seals it. `apply()` waits for its effect hooks, so
+// whoever wrote the value gets their answer once it is sealed and never sees
+// the mark; only another reader in between does. A seal that fails says so on
+// the secret, in @yaks/tools' words: `error` for a failure the vault expects
+// and the seal tries again, `exception` for one somebody has to fix.
 //
 // Nothing touches the vault inside the transaction. A vault may answer later
 // (D1 on yaks.app) and a transaction may not wait for it (a Durable Object's
@@ -34,10 +36,9 @@
 // call carried that never ran, is let go after a while rather than kept for the
 // life of the process.
 
-import type { Handler, Registration } from '@yaks/effects'
-import { PROVISIONAL } from '@yaks/effects'
-import type { Bundle, Eid, Plugin } from '@yaks/graph'
-import { each, isPromise, then } from '@yaks/graph'
+import { PROVISIONAL, type Write } from '@yaks/effects'
+import type { Bundle, Eid, Hook, Plugin, Tx } from '@yaks/graph'
+import { dead, each, isPromise, then } from '@yaks/graph'
 import { isOpRef } from './op.ts'
 import { secretEid } from './reveal.ts'
 import { handle, isHandle } from './sentinel.ts'
@@ -109,8 +110,8 @@ export let carries = (bundles: unknown): boolean =>
   bundles.some((b) => !!obj(b) && writes(b as Bundle))
 
 // Values waiting to be sealed, per vault, in this process's memory: the plugin
-// takes them out of a write and the effect puts them in the vault, and those
-// are two registrations a host makes separately, over the one vault.
+// takes them out of a write and puts them in the vault once it commits — and
+// a plugin built twice over one vault shares them.
 type Holding = {
   waiting: Map<string, { value: string; eid?: Eid; until: number }>
   minted: Map<Eid, { handle: string; until: number }>
@@ -122,9 +123,10 @@ let holding = (vault: Vault): Holding => {
   return h
 }
 
-/** The plugin, over the vault its secrets are kept in. The host registers
- * {@link sealing} over the same vault, or nothing is ever sealed. */
-export let secrets = (vault: Vault): Plugin => {
+/** The plugin, over the vault its secrets are kept in and the door what it
+ * says about a seal is written through: the graph's own `apply()`, trusted,
+ * since `provisional` coming off is the host's word, never a client's. */
+export let secrets = (vault: Vault, write: Write): Plugin => {
   let { waiting, minted } = holding(vault)
 
   // The handle for a secret being written: the one the vault keeps for it, the
@@ -180,6 +182,7 @@ export let secrets = (vault: Vault): Plugin => {
   return {
     name: '@yaks/secrets',
     hooks: {
+      effect: sealing(vault, write),
       normalize: (bundles) => {
         let now = Date.now()
         for (let [h, w] of waiting) if (w.until < now) waiting.delete(h)
@@ -228,10 +231,10 @@ let pause = (n: number) =>
 let told = (e: unknown) => e instanceof Error ? e.message : String(e)
 
 /**
- * The effect that finishes a secret's write, over the vault the plugin holds
- * its values for: the waiting value sealed under the secret's entity id and
- * the mark removed. A secret that goes — its entity, or its component — is
- * dropped from the vault.
+ * The half that finishes a secret's write, over the vault the plugin holds its
+ * values for: after the commit, each waiting value sealed under the secret's
+ * entity id and the mark removed. A secret that goes — its entity, or its
+ * component — is dropped from the vault.
  *
  * A seal can fail two ways. One the vault calls {@link retryable} is expected:
  * the entity gets an `error` (@yaks/tools) saying so, and the seal is tried
@@ -240,29 +243,19 @@ let told = (e: unknown) => e instanceof Error ? e.message : String(e)
  * or a retryable failure that outlasts every try, so one failure can be both —
  * is a defect somebody has to fix: the mark comes off, an `exception` goes on
  * with what went wrong in `content` beside it, and the failure is rethrown for
- * the registry to report. Either way the value is gone, and the person gives it
+ * the graph to report. Either way the value is gone, and the person gives it
  * again.
- *
- * ```ts
- * import { effects } from '@yaks/effects'
- * import { sealing, secrets } from '@yaks/secrets'
- *
- * // let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
- * // let g = graph({ storage, vocab, plugins: [secrets(vault), fx] })
- * // fx.on('secret', sealing(vault))
- * ```
  */
-export let sealing = (vault: Vault): Registration => {
+let sealing = (vault: Vault, write: Write): Hook => {
   let { waiting, minted } = holding(vault)
-  let seal: Handler = (e, tx, write) => {
-    let eid = e.entity.eid
-    let h = e.comp?.value
+  let seal = (eid: Eid, comp: Record<string, unknown>, tx: Tx) => {
+    let h = comp.value
     let held = typeof h == 'string' ? waiting.get(h) : undefined
     if (!held || held.eid && held.eid != eid) return
     waiting.delete(h as string)
     minted.delete(eid)
     let kept = isOpRef(held.value) ? { op: held.value } : { value: held.value }
-    let name = e.comp?.name
+    let name = comp.name
     let put = () =>
       then(vault.read(eid), (was) => {
         let named = typeof name == 'string' ? name : was?.name
@@ -308,13 +301,18 @@ export let sealing = (vault: Vault): Registration => {
           ))
     return attempt(1)
   }
-  return {
-    doc: 'seal a written value into the vault, and drop a deleted one',
-    created: seal,
-    changed: { value: seal },
-    removed: (e) => {
-      minted.delete(e.entity.eid)
-      return vault.drop(e.entity.eid)
-    },
+  let drop = (eid: Eid) => {
+    minted.delete(eid)
+    return vault.drop(eid)
   }
+  return (bundles, tx) =>
+    then(
+      each(bundles, null as unknown, (_, b) => {
+        let eid = b.entity.eid
+        if (dead(b) || b[SECRET] === null) return drop(eid)
+        let comp = obj(b[SECRET])
+        return comp ? seal(eid, comp, tx) : null
+      }),
+      () => bundles,
+    )
 }

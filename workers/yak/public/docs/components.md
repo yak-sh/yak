@@ -465,12 +465,13 @@ These are the names, all of them:
     completed connection contains content created delegates deliver delivered
     deploy doc edge email entity error exception execution favorite fee feedback
     file filed fired former gallery gitobj grant home hook hostname image
-    installed integration invite inviting key lines mail member memory meter
-    notified opened order output parent person plan product project provisional
-    published quarantined quote reads recalled ref referenced report repository
-    requires restored result retired revision satisfies secret seeded signed_in
-    signin space stripe supersedes supervises sweep task theme tool trashed
-    tree_entry tunnel updated uses wake wants web worked worktree
+    installed integration integration_install invite inviting key lines mail
+    mail_post member memory meter notified opened order output parent person
+    plan product project provisional published quarantined quote reads recalled
+    ref referenced report repository requires restored result retired revision
+    satisfies secret seeded signed_in signin space stripe supersedes supervises
+    sweep task theme tool trashed tree_entry tunnel updated uses wake wants web
+    worked worktree
 
 When your first choice is taken, ask what the component is _for_ and name that:
 the taken name is the general one, yours is the specific one. Not `comment` but

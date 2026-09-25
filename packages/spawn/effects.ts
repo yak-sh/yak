@@ -1,7 +1,7 @@
-// The effect handlers this package exports as `@yaks/spawn/effects`. They run
-// after a transaction commits, and decide what that commit means for a managed
-// session. A server that lists `@yaks/spawn` in its `plugins` config loads
-// them.
+// The code behind the effects this package declares (./vocab.json), exported
+// as `@yaks/spawn/effects`. It runs after a transaction commits, in whichever
+// process works the effects, and decides what that commit means for a managed
+// session.
 //
 // Two components, both defined elsewhere:
 //
@@ -31,16 +31,13 @@
 // Providers are not in it: an adapter is a function, so a server with one of
 // its own calls {@link spawning} from a module of its own.
 
-import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { Elsewhere, sweeping, type Watch } from '@yaks/effects'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import type { Handlers } from '@yaks/effects'
 import { EXIT, PROCESS } from '@yaks/process'
 import { down, type Opts, start } from './run.ts'
 
-/** What these handlers are given: the open graph, the eid of this process
- * (@yaks/cli `Host.me`), and whether it runs its duties (@yaks/cli
- * `Config.duties`) — together, whether a run asked for here is this process's
- * to start. */
-export type Host = { graph: Graph; me: Eid; config?: { duties?: boolean } }
+/** What these handlers are given: the open graph. */
+export type Host = { graph: Graph }
 
 /** What config can set — the JSON-expressible half of {@link Opts}. */
 export type Options = {
@@ -78,48 +75,31 @@ let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
  * added.
  */
 export let spawning =
-  (o: Opts = {}) => (host: Host, options: Options = {}): Watch[] => {
+  (o: Opts = {}) => (host: Host, options: Options = {}): Handlers => {
     let opts: Opts = { ...options, ...o }
     let report = o.report ?? ((err: unknown) => console.error('spawn —', err))
-    return [{
-      comp: 'using',
+    return {
       // The request. A `using` recorded on an `ask` row says what was
       // served, not what is wanted, and a session that is already running was
       // started the first time round: either way there is nothing to start.
-      //
-      // Starting one is the duties' work. A one-shot command beside a server —
-      // a `yak land` whose failure filed a bug that asked for a fixer — hands
-      // the run to the process holding the effect sweep, so no agent is ever
-      // born inside a command's process, cwd and environment. On a machine
-      // with no server the command holds the sweep and starts it itself.
-      created: async (e) => {
+      spawn_start: async (e) => {
         let entry = await one(host.graph, e.entity.eid)
         if (!entry?.entry || entry.ask) return
         let session = String(comp(entry, 'entry')?.session ?? '')
         if (!session) return
         let row = await one(host.graph, session)
         if (!row || row[PROCESS]) return
-        if (
-          host.config?.duties == false ||
-          !await sweeping(host.graph, host.me)
-        ) {
-          throw new Elsewhere(
-            `the process running the duties starts ${session}`,
-          )
-        }
         start(host.graph, session, opts).catch(report)
       },
-    }, {
-      comp: 'stop',
       // Kill. A `stop` on an entry only marks the end of a transcript; only
       // a `stop` on the entity that is running a process means kill it.
-      created: async (e) => {
+      spawn_stop: async (e) => {
         let row = await one(host.graph, e.entity.eid)
         if (!row?.[PROCESS] || row[EXIT] != null) return
         down(host.graph, e.entity.eid, opts).catch(report)
       },
-    }]
+    }
   }
 
 /** The handlers, with the providers this package ships. */
-export let effects: (host: Host, options?: Options) => Watch[] = spawning()
+export let effects: (host: Host, options?: Options) => Handlers = spawning()

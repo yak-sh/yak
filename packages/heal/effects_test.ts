@@ -7,7 +7,7 @@ import {
   identityEid,
 } from '@yaks/graph'
 import { edgeDoc, edgeEid, edgeKeywords } from '@yaks/edge'
-import { loadVocab } from '@yaks/vocab'
+import { effectsIn, loadVocab } from '@yaks/vocab'
 import { idDoc, idKeywords } from '@yaks/id'
 import { ids } from '@yaks/id/rules'
 import { nameKeywords } from '@yaks/names'
@@ -33,7 +33,7 @@ let comp = (b: Bundle | undefined, name: string) =>
 // A host with every word a failure, a task and a spawn request touch, and
 // this package's handlers on it. No @yaks/spawn handlers: a fixer is the
 // request written, never a process started.
-let host = async (options: Options = {}, duties = true) => {
+let host = async (options: Options = {}) => {
   let vocab = loadVocab(
     [
       spineDoc,
@@ -56,12 +56,13 @@ let host = async (options: Options = {}, duties = true) => {
     vocab,
     plugins: [ids(vocab), fx],
   })
-  for (
-    let { comp, ...watch } of effects(
-      { graph: g, me: 'me', config: { duties } },
-      { provider: 'codex', model: 'sol', project: 'home', cap: 2, ...options },
-    )
-  ) fx.on(comp, watch)
+  fx.handle(effects({ graph: g }, {
+    provider: 'codex',
+    model: 'sol',
+    project: 'home',
+    cap: 2,
+    ...options,
+  }))
   await g.apply([
     { entity: { eid: P }, provider: { name: 'codex' } },
     { entity: { eid: M }, model: { name: 'sol' } },
@@ -162,12 +163,11 @@ Deno.test('a new bug starts one fixer holding it', async () => {
   assert(String(comp(ask, 'content')?.body).includes('codex not found'))
 })
 
-Deno.test('off: no provider, or no duties, files and starts nothing', async () => {
-  for (let g of [await host({ provider: undefined }), await host({}, false)]) {
-    await fail(g, 'boom')
-    assertEquals((await bugs(g)).length, 1)
-    assertEquals((await fixers(g)).length, 0)
-  }
+Deno.test('off: no provider files and starts nothing', async () => {
+  let g = await host({ provider: undefined })
+  await fail(g, 'boom')
+  assertEquals((await bugs(g)).length, 1)
+  assertEquals((await fixers(g)).length, 0)
 })
 
 Deno.test('muted: nofix on the project, or on home for all', async () => {
@@ -223,8 +223,8 @@ Deno.test('the boot sweep finds the open bugs nobody holds', async () => {
   await fail(g, 'two')
   let [a] = await bugs(g)
   await g.apply([{ entity: a.entity, completed: {} }], { trusted: true })
-  let [sweep] = effects({ graph: g, me: 'me' }).filter((w) => w.sweep)
-  let pending = await g.read(sweep.sweep!.pending)
+  let [fix] = effectsIn([healDoc]).filter((e) => e.sweep)
+  let pending = await g.read(fix.sweep!)
   assertEquals(pending.length, 1)
   assert(pending[0].entity.eid != a.entity.eid)
 })

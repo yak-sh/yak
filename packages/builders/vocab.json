@@ -80,6 +80,24 @@
         "short": { "m": "model", "p": "provider" }
       },
       "idempotent": true
+    },
+    "builder_open": {
+      "effect": true,
+      "created": ["builder"],
+      "changed": ["builder.floor"],
+      "sweep": ".builder",
+      "description": "build a builder whose floor has passed, unless its key is built"
+    },
+    "builder_ring": {
+      "effect": true,
+      "created": ["fired"],
+      "changed": ["fired.at"],
+      "description": "a wake fired on a builder: check whether it is due"
+    },
+    "builder_answer": {
+      "effect": true,
+      "created": ["output"],
+      "description": "a build's session answered: the answer is the output's body"
     }
   }
 }

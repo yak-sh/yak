@@ -100,12 +100,6 @@ export let owed = (letter: Bundle | undefined): boolean =>
   comp(letter, DELIVER)?.tried == null &&
   !comp(letter, DELIVERED) && !comp(letter, BOUNCED)
 
-/** The letters {@link owed} a send, as a query. A host replays the sending
- * handler over these when it starts (@yaks/effects `sweep`), so a letter
- * written while no sender could run is sent by the first process that can. */
-export let PENDING =
-  `.${MAIL}&.${DELIVER}&!${DELIVERED}&!${BOUNCED}&!${DELIVER}.tried`
-
 /** The address an entity is reachable at: its own `email.address`. */
 export let addressOf = (
   tx: Tx,
@@ -154,12 +148,11 @@ export let message = (
  * import { sending, stash } from '@yaks/mail'
  *
  * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
- * fx.created('mail', sending({ sender: stash() }))
+ * fx.handle({ mail_post: sending({ sender: stash() }) })
  * ```
  *
- * Register it on `created('deliver')` too and a letter that gains its
- * recipient later is sent then — the handler reads the whole entity, so it does
- * not care which component triggered it. It is idempotent either way: only a
+ * It reads the whole entity, so it does not care which component triggered
+ * it, and it is idempotent: only a
  * letter still {@link owed} a send is touched, and `deliver.tried` is written
  * before the letter reaches the transport, so a crash between the send and its
  * outcome leaves a letter that is never handed over twice.

@@ -162,14 +162,12 @@
       }
     },
     "call_ready": {
-      "rule": true,
-      "phase": "effect",
+      "effect": true,
       "match": "$call .call, !results, !wake; +result.call=$call",
       "description": "a call nobody has run and nobody scheduled: run the tool it names and attach the result"
     },
     "call_woken": {
-      "rule": true,
-      "phase": "effect",
+      "effect": true,
       "match": "$call .call, .wake, .fired, !results; +result.call=$call",
       "description": "a scheduled call whose wake has fired and that nobody has run yet: run it now. Never matches in a graph that does not load the wake components, where `call_ready` alone applies and every call is due when it is written"
     }

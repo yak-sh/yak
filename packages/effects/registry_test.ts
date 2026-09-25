@@ -9,7 +9,7 @@ import type { Bundle, Tx } from '@yaks/graph'
 import { isPromise } from '@yaks/graph'
 import { effects, type Job } from './registry.ts'
 import type { Event } from './trace.ts'
-import { blog, blogGraph } from './testing.ts'
+import { blog, blogGraph, owingBlog } from './testing.ts'
 
 let sync = <T>(out: T | Promise<T>): T => {
   assert(!isPromise(out), 'apply() went async over a Map')
@@ -294,4 +294,37 @@ Deno.test('a pattern over two entities needs a storage that answers bindings', (
   // The batch committed; a question this storage cannot answer is telemetry.
   apply([post('p1')])
   assertEquals(oops.map((j) => j.handler), ['post.matched'])
+})
+
+// A registry over the blog with its effects declared and no pool to write
+// them down in.
+let owing = () => {
+  let seen: string[] = []
+  let fx = effects(owingBlog)
+  let g = blogGraph([fx], owingBlog)
+  let apply = (change: Bundle[]) => sync(g.apply(change))
+  let note = (e: Event) => void seen.push(`${e.kind} ${e.entity.eid}`)
+  return { fx, seen, apply, note }
+}
+
+Deno.test('a declared effect runs where it is handled, on each trigger it declares', () => {
+  let { fx, seen, apply, note } = owing()
+  fx.handle({ post_note: note, post_gone: note })
+  apply([post('p1')])
+  apply([post('p1', { title: 'Two' })])
+  apply([post('p1', { published: true })])
+  apply([{ entity: { eid: 'p1' }, post: null }])
+  assertEquals(seen, ['created p1', 'changed p1', 'removed p1'])
+})
+
+Deno.test('a declared effect nobody handles runs nothing', () => {
+  let { fx, seen, apply } = owing()
+  fx.created('post', (e) => seen.push(`saw ${e.entity.eid}`))
+  apply([post('p1')])
+  assertEquals(seen, ['saw p1'])
+})
+
+Deno.test('handling a name nothing declares is an error', () => {
+  let { fx } = owing()
+  assertThrows(() => fx.handle({ post_nte: () => {} }), Error, 'post_nte')
 })

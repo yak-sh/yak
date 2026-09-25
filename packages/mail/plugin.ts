@@ -1,5 +1,5 @@
 // The package as one graph plugin: the components, the address canonicalizer,
-// and — when you pass it an effect registry — the sending.
+// and — when you pass it an effect registry — the code behind `mail_post`.
 //
 // The canonicalizer runs in the `normalize` phase, which is the earliest phase
 // there is: before anything is validated or written, so an address reaches
@@ -15,16 +15,16 @@ import type { Bundle, Comp, Plugin } from '@yaks/graph'
 import type { Effects } from '@yaks/effects'
 import { canon } from './addr.ts'
 import { EMAIL, MAIL, mailDoc } from './comp.ts'
-import { PENDING, type Post, sending } from './send.ts'
+import { type Post, sending } from './send.ts'
 
 /** How the plugin is built. */
 export type Mailbox = {
   /** your own mail domain — the addresses this graph canonicalizes on write */
   domain?: string
-  /** register `created(mail)` on this registry, so letters actually go. The
-   * registry needs a write function — `effects(vocab, { write })`, applied
-   * trusted — since that is how the outcome is written back onto the
-   * letter. */
+  /** handle `mail_post` on this registry, so letters actually go. The
+   * registry's vocabulary carries {@link mailDoc}, which declares it, and it
+   * needs a write function — `effects(vocab, { write })`, applied trusted —
+   * since that is how the outcome is written back onto the letter. */
   effects?: Effects
 } & Partial<Post>
 
@@ -79,9 +79,7 @@ export let mailbox = (
   { domain, effects, sender, now, local }: Mailbox = {},
 ): Plugin => {
   if (effects && sender) {
-    effects.created(MAIL, sending({ sender, now, local }), {
-      sweep: { pending: PENDING },
-    })
+    effects.handle({ mail_post: sending({ sender, now, local }) })
   }
   let fix = domain ? clean(canon(domain)) : null
   return {

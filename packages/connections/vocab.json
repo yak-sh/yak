@@ -215,6 +215,11 @@
       "required": ["owner"],
       "options": { "positional": ["owner"] },
       "readOnly": true
+    },
+    "integration_install": {
+      "effect": true,
+      "created": ["process"],
+      "description": "install the integrations this package builds whenever a process starts; a graph already holding them as shipped is read once and written nothing"
     }
   }
 }

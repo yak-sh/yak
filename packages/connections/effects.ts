@@ -1,29 +1,23 @@
-// What a host does about @yaks/connections at start-up: the
-// `@yaks/connections/effects` entry point. When this process's own `process`
-// row is created (@yaks/process `started`), the integrations this package
-// builds are installed into the graph, trusted, since `built` is server-owned
-// (./integrations.ts `install`). A graph already holding them as shipped is
-// read once and written nothing.
+// What a host does about @yaks/connections when a process starts: the
+// `@yaks/connections/effects` entry point, the code behind
+// `integration_install` (./vocab.json). A `process` row is written by every
+// process on its way in (@yaks/process `started`), and whichever process works
+// the effects installs the integrations this package builds, trusted, since
+// `built` is server-owned (./integrations.ts `install`). A graph already
+// holding them as shipped is read once and written nothing, so a new build's
+// integrations land with the first process it starts.
 
-import type { Watch } from '@yaks/effects'
-import type { Eid, Graph } from '@yaks/graph'
+import type { Handlers } from '@yaks/effects'
+import type { Graph } from '@yaks/graph'
 import { install } from './integrations.ts'
 
-/** @yaks/process's component, named here rather than imported: a component
- * name is just a string in either direction. */
-let PROCESS = 'process'
+/** What the handler is given: the graph. */
+export type Host = { graph: Graph }
 
-/** What the handler is given: the graph, and the eid of this process's own
- * `process` row (@yaks/cli `Host.me`). */
-export type Host = { graph: Graph; me: Eid }
-
-/** The built integrations installed, once per process start. */
-export let effects = (host: Host): Watch[] => [{
-  comp: PROCESS,
-  doc: 'install the built integrations, once per process start',
-  created: async (e) => {
-    if (e.entity.eid != host.me) return
+/** The built integrations installed, whenever a process starts. */
+export let effects = (host: Host): Handlers => ({
+  integration_install: async () => {
     let change = await install(host.graph.read)
     if (change.length) await host.graph.apply(change, { trusted: true })
   },
-}]
+})

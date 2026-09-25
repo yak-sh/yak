@@ -50,15 +50,15 @@ let held = new Map<string, Promise<Served>>()
 
 /**
  * The roles a command's process serves: the graph, the tool's own (`serve`
- * serves `web`), and — until the effects role reads every commit from the
- * journal, whoever wrote it — the effects and every plugin's service, one pass
- * of each on the way in, so what a command writes has its effects run and a
- * machine with no server still gets its duties done.
+ * serves `web`), and the effects and every plugin's service, one pass of each
+ * on the way in — so a machine with no server still gets its duties done. The
+ * effects are worked by the command only where no process that stays up is
+ * working them (@yaks/effects `work`); otherwise what it writes is left
+ * written down for that process.
  *
- * TODO(T-39522): a command takes `effects` and the service roles only where no
- * live process holds their lease, once effects are read from the journal; and
- * a process that stays up takes the roles its config gives it rather than all
- * of them.
+ * TODO(T-39522): a command imports the effects and service facets only where
+ * no live process serves them; and a process that stays up takes the roles
+ * its config gives it rather than all of them.
  */
 export let rolesOf = (
   config: Config,
@@ -71,8 +71,8 @@ export let rolesOf = (
 ]
 
 // On the way in, a command does whatever is overdue and nobody else is doing:
-// the effect sweep a crash interrupted, the scheduled wakes that came due
-// while nothing was listening (`Host.duties` in host.ts). It is handed a
+// the effects nobody is working, the scheduled wakes that came due while
+// nothing was listening (`Host.duties` in host.ts). It is handed a
 // signal that has already aborted, so each duty runs exactly one
 // pass and then releases its lease — a one-shot command is not a lesser kind
 // of process, it is the only one there is on a machine where nobody runs a

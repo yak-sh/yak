@@ -56,7 +56,7 @@ let TAIL =
   --tui           hold the answer in the terminal, scrollable, until Ctrl-C
   --timing        one line on stderr per response, with its Server-Timing
                   (or YAKS_TIMING=1)
-  --no-duties     take no lease and run no duty — the effect sweep, the
+  --no-duties     take no lease and run no duty — the effects, the
                   plugins' services — in the graph this opens
   --help         this page, or one subcommand's own
 

@@ -1,5 +1,6 @@
-// The effect handlers this package exports as `@yaks/heal/effects`: what a
-// host does when something it did not expect goes wrong.
+// The code behind the effects ./vocab.json declares, exported as
+// `@yaks/heal/effects`: what a host does when something it did not expect goes
+// wrong.
 //
 // An `exception` landing on any entity files one task about it, keyed by the
 // fault (./fault.ts). While that task is open, the same fault caught again
@@ -11,13 +12,13 @@
 // task, marked `fixer` so the gates can count it. Four gates stand in front of
 // that, and a gate saying no leaves the task filed and nothing more:
 //
-// - off: no `provider` configured, or a host running without duties;
+// - off: no `provider` configured;
 // - muted: `nofix` on the bug's project, or on the home project for all;
 // - at cap: this many fixers running already;
 // - cooling down: a fixer was started for the same fault this recently.
 //
 // A bug a gate held back is tried again when a fixer's process exits and when
-// the host starts (the `bug` sweep); one bug never gets a second fixer.
+// a worker starts (`bug_fix`'s sweep); one bug never gets a second fixer.
 //
 // Config:
 //
@@ -26,21 +27,15 @@
 //   "with": { "provider": "codex", "model": "gpt-5.6-sol", "project": "P-19" } }
 // ```
 
-import {
-  addressed,
-  type Bundle,
-  type Comp,
-  type Eid,
-  type Graph,
-} from '@yaks/graph'
-import type { Watch } from '@yaks/effects'
+import { addressed, type Bundle, type Comp, type Graph } from '@yaks/graph'
+import type { Handlers } from '@yaks/effects'
 import { edgeEid, link } from '@yaks/edge'
 import { human } from '@yaks/id'
 import { absent, and, eq, list, present, want } from '@yaks/query'
 import { actionable, faultKey, recurred, severity } from './fault.ts'
 
 /** What these handlers are given (@yaks/cli `Host`). */
-export type Host = { graph: Graph; me: Eid; config?: { duties?: boolean } }
+export type Host = { graph: Graph }
 
 /** What config can set. */
 export type Options = {
@@ -100,7 +95,7 @@ let serially = () => {
   }
 }
 
-export let effects = (host: Host, options: Options = {}): Watch[] => {
+export let effects = (host: Host, options: Options = {}): Handlers => {
   let g = host.graph
   let cap = options.cap ?? 2
   let cooldown = options.cooldown ?? 30 * 60_000
@@ -154,7 +149,7 @@ export let effects = (host: Host, options: Options = {}): Watch[] => {
   // one, and the gates let it.
   let fix = (eid: string) =>
     serial(async () => {
-      if (!options.provider || host.config?.duties == false) return
+      if (!options.provider) return
       let bug = await one(g, eid)
       if (!bug?.bug || bug.completed || bug.cancelled || bug.claim) return
       if ((await g.read(and(eq('fixer.bug', eid)))).length) return
@@ -246,22 +241,13 @@ export let effects = (host: Host, options: Options = {}): Watch[] => {
     ], { trusted: true })
   }
 
-  return [{
-    comp: 'exception',
-    created: (e) => file(e.entity.eid),
-    doc: 'file an unexpected failure as a task, one per fault',
-  }, {
-    comp: 'bug',
-    created: (e) => fix(e.entity.eid),
+  return {
+    exception_file: (e) => file(e.entity.eid),
     // Idempotent: a bug that has a fixer, or is held, starts nothing.
-    sweep: { pending: '.bug !completed !cancelled !claim' },
-    doc: 'start a fixer on a new bug, behind the gates',
-  }, {
-    comp: 'exit',
+    bug_fix: (e) => fix(e.entity.eid),
     // A fixer's process ended: its slot is free for a bug the cap held back.
-    created: async (e) => {
+    fixer_exit: async (e) => {
       if (comp(await one(g, e.entity.eid), 'fixer')) await retry()
     },
-    doc: 'when a fixer exits, try the bugs the gates held back',
-  }]
+  }
 }

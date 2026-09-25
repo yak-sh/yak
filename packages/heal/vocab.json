@@ -47,6 +47,22 @@
       "type": "object",
       "properties": {},
       "description": "on a project: bugs filed under it start no fixer. On the project unowned bugs are filed under, no bug starts one"
+    },
+    "exception_file": {
+      "effect": true,
+      "created": ["exception"],
+      "description": "file an unexpected failure as a task, one per fault"
+    },
+    "bug_fix": {
+      "effect": true,
+      "created": ["bug"],
+      "sweep": ".bug !completed !cancelled !claim",
+      "description": "start a fixer on a new bug, behind the gates"
+    },
+    "fixer_exit": {
+      "effect": true,
+      "created": ["exit"],
+      "description": "when a fixer exits, try the bugs the gates held back"
     }
   }
 }

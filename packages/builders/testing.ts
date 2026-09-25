@@ -122,7 +122,7 @@ export let shop = async (
     vocab,
     plugins: [fx, docs(), edges(vocab), sessions()],
   })
-  for (let { comp, ...watch } of watches({ ...o, vocab })) fx.on(comp, watch)
+  fx.handle(watches({ ...o, vocab }))
   await g.apply([
     { entity: { eid: ids.work }, project: { name: 'Work' } },
     { entity: { eid: ids.voice }, persona: { name: 'Scribe' } },

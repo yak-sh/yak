@@ -9,7 +9,7 @@ import {
   assertRejects,
 } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
-import { effects, provisionalDoc } from '@yaks/effects'
+import { provisionalDoc } from '@yaks/effects'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -22,7 +22,6 @@ import {
   records,
   reveal,
   sealed,
-  sealing,
   secretEid,
   secrets,
   secretsDoc,
@@ -36,19 +35,19 @@ import {
   warm,
 } from './mod.ts'
 
-// The graph a host builds: the plugin, and the seal registered beside it on
-// the host's effects, over one vault. `call` is @yaks/tools', a component whose
+// The graph a host builds: the plugin over one vault, writing what it says
+// about a seal back through the graph, and reporting where the graph does. `call` is @yaks/tools', a component whose
 // text carries a whole change as JSON, and so are `error`, `exception` and
 // `content`, the words a failed seal is said in.
 let setup = <V extends Vault = Local>(vault: V = ramVault() as V) => {
   let vocab = loadVocab([secretsDoc, provisionalDoc, toolsDoc])
   let reported: unknown[] = []
-  let fx = effects(vocab, {
-    write: (b) => g.apply(b, { trusted: true }),
+  let g = graph({
+    storage: ram(vocab),
+    vocab,
+    plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }))],
     report: (e) => void reported.push(e),
   })
-  let g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault), fx] })
-  fx.on('secret', sealing(vault))
   return { g, vault, reported }
 }
 

@@ -3,15 +3,16 @@
 // process that can send sends them, once.
 
 import { assert, assertEquals } from '@std/assert'
-import { type Bundle, type Comp, detached, graph } from '@yaks/graph'
+import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { effects as registry, type Watch } from '@yaks/effects'
+import { effectDoc, effects as registry, type Handlers } from '@yaks/effects'
 import { docs } from '@yaks/doc'
+import { loadVocab } from '@yaks/vocab'
 import { effects, post } from './effects.ts'
 import type { Transport } from './options.ts'
 import { mailbox } from './plugin.ts'
 import { club, noon } from './testing.ts'
-import { PENDING, type Sender, sending } from './send.ts'
+import { type Sender, sending } from './send.ts'
 import { stash } from './stash.ts'
 
 let quietly = async <T>(body: () => T): Promise<[Awaited<T>, unknown[]]> => {
@@ -27,36 +28,32 @@ let quietly = async <T>(body: () => T): Promise<[Awaited<T>, unknown[]]> => {
 
 let unarmed = { via: 'cloudflare', account: 'a' } as Transport
 
-// A club whose mail watch is whatever the test registers — the process that
-// wrote the letter — over storage a second registry can sweep afterwards.
-let rig = (watches: Watch[]) => {
-  let fx = registry(club, { write: (b) => g.apply(b, { trusted: true }) })
-  for (let { comp, ...w } of watches) fx.on(comp, w)
-  let storage = ram(club)
+// The club with a pool, so what one process writes another can run.
+let pooled = loadVocab([...club.docs, effectDoc])
+
+// A process over `storage`, working the pool with the code it was given.
+let proc = async (storage: Storage, handlers: Handlers) => {
+  let fx = registry(pooled, { write: (b) => g.apply(b, { trusted: true }) })
+  fx.handle(handlers)
   let g = graph({
     storage,
-    vocab: club,
+    vocab: pooled,
     plugins: [fx, docs(), mailbox({ domain: 'books.example' })],
   })
-  return Object.assign(g, { tx: detached(storage) })
+  await fx.work(g)
+  return Object.assign(g, { fx, storage })
 }
 
-// Another process opening the same graph with a sender: its registry, and the
-// start-up pass a host makes over the letters still owed (@yaks/cli
-// `unfinished`).
-let sweep = (g: ReturnType<typeof rig>, sender: Sender) => {
-  let fx = registry(club, { write: (b) => g.apply(b, { trusted: true }) })
-  fx.created('mail', sending({ sender, now: noon }), {
-    sweep: { pending: PENDING },
+// The process that wrote the letter, with whatever code the test gives it.
+let rig = (handlers: Handlers) => proc(ram(pooled), handlers)
+
+// Another process opening the same graph with a sender, and coming up: the
+// letters still owed are swept and sent.
+let sweep = async (g: Awaited<ReturnType<typeof rig>>, sender: Sender) => {
+  let next = await proc(g.storage, {
+    mail_post: sending({ sender, now: noon }),
   })
-  return fx.relay(
-    async (comp, pending) =>
-      ((await g.read(pending)) as Bundle[]).map((b) => ({
-        eid: b.entity.eid,
-        ...b[comp] as Comp,
-      })),
-    g.tx,
-  )
+  await next.fx.idle()
 }
 
 let ana = {
@@ -72,20 +69,23 @@ let letter = (eid: string, extra: Bundle = { entity: { eid } }): Bundle => ({
   deliver: { to: 'p-ana', ...(extra.deliver as Comp) },
 })
 
-let read = async (g: ReturnType<typeof rig>, eid: string) =>
+let read = async (g: { read: (q: string) => unknown }, eid: string) =>
   ((await g.read(`.eid=${eid}`)) as Bundle[])[0]
 
-Deno.test('a transport that is named and complete is the one watch', async () => {
-  let [watches] = await quietly(() =>
+Deno.test('a transport that is named and complete sends', async () => {
+  let [code, warned] = await quietly(() =>
     effects(null, { sender: { via: 'stash' } })
   )
-  assertEquals(watches.map((w) => w.comp), ['mail'])
-  assertEquals(watches[0].sweep, { pending: PENDING })
+  let g = await rig(code)
+  await g.apply([ana, letter('e-one')])
+  await g.fx.idle()
+  assert((await read(g, 'e-one')).delivered)
+  assertEquals(warned, [])
 })
 
-Deno.test('no sender named is no watch, and nothing said about it', async () => {
-  let [watches, warned] = await quietly(() => effects(null, {}))
-  assertEquals(watches, [])
+Deno.test('no sender named is no code, and nothing said about it', async () => {
+  let [code, warned] = await quietly(() => effects(null, {}))
+  assertEquals(code, {})
   assertEquals(warned, [])
 })
 
@@ -93,22 +93,21 @@ Deno.test('credentials that have not arrived say nothing until a letter is owed'
   let said = post(unarmed)
   assertEquals(said.sender, undefined)
   assert(said.waiting?.startsWith('waiting for credentials'), `${said.waiting}`)
-  let [watches, warned] = await quietly(() =>
-    effects(null, { sender: unarmed })
-  )
-  assertEquals(watches.map((w) => w.sweep), [{ pending: PENDING }])
+  let [code, warned] = await quietly(() => effects(null, { sender: unarmed }))
   assertEquals(warned, [])
-  let g = rig(watches)
-  let [, arrived] = await quietly(() =>
-    g.apply([ana, {
+  let g = await rig(code)
+  let [, arrived] = await quietly(async () => {
+    await g.apply([ana, {
       entity: { eid: 'e-in' },
       mail: { from: 'bea@out.example', to: 'hello@books.example' },
     }])
-  )
+    await g.fx.idle()
+  })
   assertEquals(arrived, [])
   let [, owed] = await quietly(async () => {
     await g.apply([letter('e-one')])
     await g.apply([letter('e-two')])
+    await g.fx.idle()
   })
   assertEquals(owed.length, 1)
   assert(String(owed[0]).includes('waiting for credentials'), `${owed[0]}`)
@@ -118,9 +117,12 @@ Deno.test('credentials that have not arrived say nothing until a letter is owed'
 })
 
 Deno.test('a letter written with no sender goes with the first process that has one, once', async () => {
-  let [watches] = await quietly(() => effects(null, { sender: unarmed }))
-  let g = rig(watches)
-  await quietly(() => g.apply([ana, letter('e-one')]))
+  let [code] = await quietly(() => effects(null, { sender: unarmed }))
+  let g = await rig(code)
+  await quietly(async () => {
+    await g.apply([ana, letter('e-one')])
+    await g.fx.idle()
+  })
   let box = stash()
   await sweep(g, box)
   assertEquals(box.sent.map((m) => m.subject), ['Potluck Friday'])
@@ -133,7 +135,7 @@ Deno.test('a letter written with no sender goes with the first process that has 
 })
 
 Deno.test('a letter handed over and never settled is not handed over again', async () => {
-  let g = rig([])
+  let g = await rig({})
   await g.apply([ana])
   await g.apply([letter('e-lost', {
     entity: { eid: 'e-lost' },
@@ -150,9 +152,8 @@ Deno.test('a letter handed over and never settled is not handed over again', asy
 
 Deno.test('the letter is marked tried before the transport sees it', async () => {
   let at: unknown[] = []
-  let g = rig([{
-    comp: 'mail',
-    created: sending({
+  let g = await rig({
+    mail_post: sending({
       now: noon,
       sender: {
         send: async () => {
@@ -161,7 +162,8 @@ Deno.test('the letter is marked tried before the transport sees it', async () =>
         },
       },
     }),
-  }])
+  })
   await g.apply([ana, letter('e-one')])
+  await g.fx.idle()
   assertEquals(at, [noon()])
 })

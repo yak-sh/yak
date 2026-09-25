@@ -123,6 +123,13 @@
           "description": "write nothing: report the files that would change"
         }
       }
+    },
+    "persona_files": {
+      "effect": true,
+      "created": ["persona", "edge"],
+      "changed": ["persona.home", "doc.title", "doc.body"],
+      "removed": ["persona", "contains", "reads"],
+      "description": "write the persona files again: a persona, its home, a doc a persona says, or a link carrying or reading one moved"
     }
   }
 }

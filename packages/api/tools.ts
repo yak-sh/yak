@@ -70,11 +70,12 @@ export let runs = (host: Serving): Runs => ({
     // process is running; a process that is about to stay up is the one that
     // can afford to.
     await reconcile(host.runner)
-    // And the duties in their long-lived form: the effect sweep and
-    // the plugins' timers, each under its own lease, held for as long as this
-    // process is up. A one-shot command runs the same duties for one pass on its
-    // way in — an HTTP server is not a special kind of process, it is the one
-    // that stays. Not awaited: it returns when the host closes.
+    // And the duties in their long-lived form: the effect pool, where this
+    // process serves `effects`, and the plugins' services, each under its own
+    // lease, for as long as this process is up. A one-shot command runs the
+    // same duties for one pass on its way in — an HTTP server is not a special
+    // kind of process, it is the one that stays. Not awaited: it returns when
+    // the host closes.
     void host.duties()
     let at = ''
     let began = Date.now()

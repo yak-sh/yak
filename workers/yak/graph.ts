@@ -107,7 +107,7 @@ import {
   type Wire,
 } from '@yaks/durable-object'
 import { effects } from '@yaks/effects'
-import { sealing, SECRET, secrets } from '@yaks/secrets'
+import { secrets } from '@yaks/secrets'
 import { edges } from '@yaks/edge'
 import { keys } from '@yaks/key'
 import { aliases } from '@yaks/alias'
@@ -734,7 +734,7 @@ export class Store {
     })
     // Where the directory keeps a connection's credential (vault.ts). A key
     // comes out of a write before anything else reads it, and is sealed once
-    // the write commits (`sealing` below); an app's store keeps none.
+    // the write commits, by the same plugin; an app's store keeps none.
     let vault = meta ? vaultOf(this.#bind) : null
     let g = graph({
       storage: store,
@@ -747,7 +747,7 @@ export class Store {
       // kernel's own gate in front of it is the whole rule.
       plugins: [
         this.#logging,
-        ...(vault ? [secrets(vault)] : []),
+        ...(vault ? [secrets(vault, (b) => this.#trust(b, null))] : []),
         ...(vocab.comp('archetype') ? [archetypes()] : []),
         // First, before anything reads a word that is not there. The directory
         // is left out: its words are the platform's own, its callers are the
@@ -820,19 +820,20 @@ export class Store {
       created: (e) => this.#arming(e.comp?.at as string),
       changed: { at: (e) => this.#arming(e.comp?.at as string) },
     })
-    // The app's own commands, run here (T-37605, D-37562). @yaks/tools says
-    // which calls still want running as two rules — one for a call nobody
-    // scheduled, one for a call whose wake has fired — and a host registers
-    // each as an effect. That is the whole of the scheduled case: a page
-    // writes a `call` wearing a `wake{at}`, the object comes back at that
-    // instant, the firing makes the second rule hold, and the answer lands
-    // beside the ask.
-    for (let rule of this.#runner(g).rules) {
-      fx.on(rule.plan, (e) => this.#runner().run(e.entity.eid), {
-        doc: rule.rule.name,
-      })
-    }
-    if (vault) fx.on(SECRET, sealing(vault))
+    // The app's own commands, run here (T-37605, D-37562). @yaks/tools
+    // declares which calls still want running as two effects — one for a call
+    // nobody scheduled, one for a call whose wake has fired — and a host
+    // handles both. That is the whole of the scheduled case: a page writes a
+    // `call` wearing a `wake{at}`, the object comes back at that instant, the
+    // firing makes the second hold, and the answer lands beside the ask. This
+    // store keeps no `effect` rows, so each runs here once the write commits.
+    let due = (e: { entity: { eid: string } }) =>
+      this.#runner().run(e.entity.eid)
+    fx.handle(
+      Object.fromEntries(
+        this.#runner(g).rules.map((r) => [r.rule.name, due]),
+      ),
+    )
     effected(PLUGINS, fx, {
       env: this.#bind,
       meta,

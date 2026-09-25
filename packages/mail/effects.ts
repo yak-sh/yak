@@ -1,31 +1,28 @@
 // What the server does about a letter: the `@yaks/mail/effects` entry point —
-// one `created(mail)` handler that hands an outbound letter to a sender and
-// writes `delivered` or `bounced` back onto it.
+// the code behind `mail_post` (./vocab.json), which hands an outbound letter to
+// a sender and writes `delivered` or `bounced` back onto it.
 //
 // The sender is why this entry point takes OPTIONS. Handing a letter over
 // needs a transport — an account, a token, an endpoint — and none of that is a
 // fact about the graph, so the config names it beside the plugin (./options.ts)
 // and the factory builds it here.
 //
-// A server that names no sender registers no handler, which is exactly what a
-// graph that only receives mail wants — not a letter sitting outbound forever
-// against a transport nobody configured.
+// A server that names no sender gives it no code, so its runs are settled with
+// nothing sent, which is exactly what a graph that only receives mail wants.
 //
 // A transport that is named but has not been given its credentials is a
 // process that cannot send, and missing config never stops it from starting.
 // Its handler sends nothing and leaves the letter owed; it says why once, and
 // only when it meets a letter it could not send, so a command that never
 // touches mail stays quiet. The letter is kept in the graph, not in the
-// sender: the handler declares a sweep over the letters still owed (./send.ts
-// `PENDING`), so the first process that has the token sends them when it
-// starts.
+// sender: `mail_post` declares a sweep over the letters still owed, so the
+// first process that has the token sends them when it starts.
 
-import type { Handler, Watch } from '@yaks/effects'
+import type { Handler, Handlers } from '@yaks/effects'
 import { then } from '@yaks/graph'
-import { MAIL } from './comp.ts'
 import type { Options, Transport } from './options.ts'
 import type { Sender } from './send.ts'
-import { letterOf, owed, PENDING, sending } from './send.ts'
+import { letterOf, owed, sending } from './send.ts'
 import { cloudflare } from './cloudflare.ts'
 import { stash } from './stash.ts'
 
@@ -58,16 +55,14 @@ export let waiting = (reason: string): Handler => {
     })
 }
 
-/** The outbound half: a `created(mail)` handler wherever a sender was named,
- * with a sweep over the letters still owed. Where the sender cannot be built,
- * nothing is sent and the letters wait in the graph rather than the server
- * refusing to start. */
-export let effects = (_host: unknown, options: Options = {}): Watch[] => {
-  if (!options.sender) return []
+/** The outbound half: `mail_post`, wherever a sender was named. Where the
+ * sender cannot be built, nothing is sent and the letters wait in the graph
+ * rather than the server refusing to start. */
+export let effects = (_host: unknown, options: Options = {}): Handlers => {
+  if (!options.sender) return {}
   let { sender, waiting: reason } = post(options.sender)
-  return [{
-    comp: MAIL,
-    created: sender
+  return {
+    mail_post: sender
       ? sending({
         sender,
         // Where the domain belongs to this graph, a letter to it never
@@ -75,7 +70,5 @@ export let effects = (_host: unknown, options: Options = {}): Watch[] => {
         ...(options.local && options.domain ? { local: options.domain } : {}),
       })
       : waiting(reason!),
-    sweep: { pending: PENDING },
-    doc: 'hand an outbound letter to the sender and record its outcome',
-  }]
+  }
 }

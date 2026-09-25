@@ -5,16 +5,15 @@
 // pushes to — never a row put straight into a transaction that has finished.
 
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Graph, Tx } from '@yaks/graph'
-import { detached, graph, isPromise } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
+import { graph, isPromise } from '@yaks/graph'
 import { ddl, journal, log } from '@yaks/journal'
 import { mem } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import { effects } from './registry.ts'
-import { ledger } from './durable.ts'
 import { generation, ORIGIN } from './write.ts'
-import { blog, blogGraph, durableBlog } from './testing.ts'
+import { blog, blogGraph } from './testing.ts'
 
 let sync = <T>(out: T | Promise<T>): T => {
   assert(!isPromise(out), 'apply() went async over a Map')
@@ -184,55 +183,4 @@ Deno.test("the journal carries an effect's own write", () => {
   assertEquals(deltas, [null, 'email'])
   // Its own batch row, not a line tacked onto the one that woke it.
   assertEquals(j.tip(), 2)
-})
-
-// A bounded number of attempts is the ledger's promise, and the write door
-// does not change it: a run that was interrupted is tried again up to the
-// count, and a run that already wrote is not run again just because its write
-// went through apply().
-Deno.test('the attempt count holds when the effect writes through the door', async () => {
-  let runs: string[] = []
-  let log = ledger({
-    owner: 'w1',
-    mint: (() => {
-      let n = 0
-      return () => `fx${++n}`
-    })(),
-  })
-  let fx = effects(durableBlog, {
-    around: log.around,
-    write: (b) => g.apply(b, { trusted: true }),
-  })
-  let g = blogGraph([fx], durableBlog)
-  fx.created('post', (e, _tx: Tx, write) => {
-    runs.push(e.entity.eid)
-    return write([{
-      entity: { eid: `s-${e.entity.eid}` },
-      subscriber: { email: `${e.entity.eid}@blog` },
-    }])
-  })
-  await g.apply([post('p1')])
-  assertEquals(runs, ['p1'])
-
-  // Nothing is left pending, so a boot reconcile runs nothing at all.
-  assertEquals(await log.reconcile(fx, detached(g.storage)), 0)
-  assertEquals(runs, ['p1'])
-
-  // A run the ledger thinks was interrupted is tried again, up to the count
-  // and no further — never a loop, however many times boot comes round.
-  let interrupt = () =>
-    g.apply([{ entity: { eid: 'fx1' }, effect: { state: 'pending' } }], {
-      trusted: true,
-    })
-  await interrupt()
-  assertEquals(await log.reconcile(fx, detached(g.storage)), 1)
-  await interrupt()
-  assertEquals(await log.reconcile(fx, detached(g.storage)), 1)
-  assertEquals(runs, ['p1', 'p1', 'p1'])
-  await interrupt()
-  assertEquals(await log.reconcile(fx, detached(g.storage)), 0)
-  assertEquals(runs, ['p1', 'p1', 'p1'])
-  // Three runs, three write-backs, one row: the writes were idempotent by eid,
-  // and the attempts are spent rather than looping.
-  assertEquals((g.read('.subscriber') as Bundle[]).length, 1)
 })

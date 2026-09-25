@@ -12,7 +12,7 @@
  * ```
  * graph       vocab, rules, tools   open the file, admit writes, run tool calls
  * web         routes                the HTTP a listener answers with
- * effects     effects               what runs after a commit, and the sweep
+ * effects     effects               the code behind the effects a commit owes
  * @yaks/mail  that plugin's service the timer or poll one plugin keeps up
  * ```
  *
@@ -38,7 +38,8 @@
  * ```ts
  * import { compose } from '@yaks/cli/host'
  *
- * // let host = await compose({ db: 'graph.db', plugins: ['@yaks/task'] }, ['graph'])
+ * // let config = { db: 'graph.db', plugins: ['@yaks/task'] }
+ * // let host = await compose(config, ['graph'])
  * // console.log(await host.graph.read('.task'))
  * ```
  *
@@ -47,22 +48,20 @@
 
 import {
   type Actor,
-  type Bundle,
   type Comp,
   detached,
   type Eid,
   type Graph,
   graph,
-  isPromise,
   type NamedTool,
   type Plugin,
-  then,
   toolName,
 } from '@yaks/graph'
 import { type Runner, runner, toolsDoc } from '@yaks/tools'
 import { loadTools, type Runs, type Search, tier } from '@yaks/graph/tools'
 import { toolsIn } from '@yaks/vocab/tools'
 import {
+  effectsIn,
   type Keywords,
   loadVocab,
   type Vocab,
@@ -79,19 +78,12 @@ import { open } from '@yaks/sqlite/db'
 import type { Authenticate, Handler, Route } from '@yaks/api'
 import { adopt, fields as searched, find, search } from '@yaks/fts'
 import {
-  EFFECT,
   type Effects,
   effects,
+  type Handlers,
   HOLD,
   holding,
-  type Ledger,
-  ledger,
   released,
-  sleep,
-  SWEEP,
-  type SweepRows,
-  until,
-  type Watch,
 } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
 import { type Blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
@@ -143,8 +135,9 @@ export type Host = {
    * text — so a plugin reading SQL directly reads what the store reads */
   derived: Derived
   graph: Graph
-  /** the post-commit effect registry the plugins register on — for a plugin
-   * that watches a component only while one of its tools runs */
+  /** the post-commit registry: what a commit owes, written down by every
+   * process (@yaks/effects), and the observers a plugin registers while one of
+   * its tools runs */
   fx: Effects
   /** every route of this host as one request handler — built by the listed
    * plugin that hosts routes ({@link RoutesFacet.handler}, @yaks/api) in a
@@ -167,9 +160,10 @@ export type Host = {
    * function and writes the result back, for a command line and an HTTP
    * request alike. */
   runner: Runner
-  /** Every duty this process may run: the effect sweep where it serves
-   * `effects`, and each plugin's `./service` where it serves that plugin. Each
-   * is taken under a lease named for the package that owns it (@yaks/effects
+  /** The work this process does that nobody asked for: the effect pool where
+   * it serves `effects` (@yaks/effects `work` — any number of processes work
+   * it at once), and each plugin's `./service` where it serves that plugin.
+   * A service is taken under a lease named for its package (@yaks/effects
    * `holding`), so of all the processes over one graph exactly one is running
    * each — a second long-running process waits, and takes over when a killed
    * holder's lease expires.
@@ -177,7 +171,8 @@ export type Host = {
    * Runs until `signal` aborts; left out, that signal is this host's own, so
    * it stops with {@link Served.close}. Pass an already-aborted signal for one
    * pass each and no waiting, which is what a one-shot command does on its way
-   * in, and the live form is what a process that stays up calls. */
+   * in — and it works no effects at all where a process that stays up is
+   * working them — and the live form is what a process that stays up calls. */
   duties: (signal?: AbortSignal) => Promise<void>
 
   /** This process, as an entity (@yaks/process `started`): the row it wrote on
@@ -272,12 +267,22 @@ export type RulesFacet = {
  * arguments — still arrives on the tool context. */
 export type ToolsFacet = { runs?: (host: Host, options: Options) => Runs }
 
-/** `<plugin>/effects` — what runs after a commit. A mail sender, a process
- * launcher, a sweep: what an effect acts on is named in this plugin's
- * options. */
+/** `<plugin>/effects` — the code behind the effects this plugin's vocabulary
+ * declares (`effect: true`), keyed by the name each is declared under. A mail
+ * sender, a process launcher: what an effect acts on is named in this
+ * plugin's options, and a declared effect this config gives no code has
+ * nothing to do here — its runs are settled as done. */
 export type EffectsFacet = {
-  effects?: (host: Host, options: Options) => Watch[]
+  effects?: (host: Host, options: Options) => Handlers
 }
+
+// What a declared effect does where this config gives it no code.
+let nothing: Handlers[string] = () => {}
+
+// A plugin's `./effects` handling a name its vocabulary never declares: code
+// that would never run, since nothing owes it.
+let undeclared = (plugin: string, name: string) =>
+  new Error(`${plugin} handles ${name}, which it never declares`)
 
 /** `<plugin>/routes` — the HTTP a plugin adds, and, for the one plugin that
  * hosts them, what answers a request at all.
@@ -292,12 +297,6 @@ export type RoutesFacet = {
   handler?: (host: Host, options: Options) => Handler
 }
 
-/** The longest the sweep sleeps between passes (ms). It already knows the
- * exact time everything it owns comes due; this cap is how soon a row another
- * process wrote is picked up — a one-shot command handing a run to the server
- * waits no longer than this for it to start. */
-let CAP = 5_000
-
 /** One duty that exactly one process at a time runs: the lease name
  * to hold it under, and the work. `run` does at least one pass and then keeps
  * going until the signal aborts — a loop on a timer, or a single pass followed
@@ -308,37 +307,9 @@ export type Duty = {
   run: (signal: AbortSignal) => void | Promise<void>
 }
 
-// The effect sweep: the `effects` role's own duty.
-let sweep = (host: Host, fx: Effects, log?: Ledger): Duty => ({
-  name: SWEEP,
-  run: async (signal) => {
-    // The sweep's query is written in the graph's own query grammar, so the
-    // rows are read the way everything else here reads them — and a handler
-    // that declared a sweep promised to be idempotent, since this re-runs
-    // work that may well have run already. Each handler is handed the graph to
-    // read, as it is on a commit.
-    await fx.relay(unfinished(host.graph), detached(host.storage))
-    if (!log) return await until(signal)
-    // Then the ledger: what a crash left between a commit and its handler, and
-    // every failure whose retry backoff has elapsed. One pass, then a sleep
-    // until the soonest of them is due — so an already-aborted signal gets one
-    // pass including the retries that are owed, and a host that stays running
-    // finishes what its handlers could not.
-    for (;;) {
-      await log.reconcile(fx, detached(host.storage))
-      if (signal.aborted) return
-      let at = await log.due(detached(host.storage))
-      await sleep(
-        Math.min(CAP, Math.max(0, (at ?? Infinity) - Date.now())),
-        signal,
-      )
-    }
-  },
-})
-
 /** `<plugin>/service` — the work this plugin keeps doing while a process
- * serving that plugin's role is up: a timer, a poll, a sweep. It is neither a request
- * nor a post-commit observation, which is why neither `routes` nor `effects`
+ * serving that plugin's role is up: a timer, a poll, a sweep. It is neither a
+ * request nor what a commit owes, which is why neither `routes` nor `effects`
  * could hold it: a scheduled wake coming due, and a mailbox that has to be
  * polled, are things nobody is calling about.
  *
@@ -594,9 +565,10 @@ export let words = async (
 /**
  * Open the graph a config names, for the roles this process serves: import
  * those roles' facets and nothing else, open the database, build the graph, and
- * wire in what each role brings — the effects and their sweep for `effects`,
- * the request handler for `web`, a plugin's service for the role named by its
- * package. Every process serves `graph`, since the graph is what it opened.
+ * wire in what each role brings — the code behind the effects, and the worker
+ * that runs them, for `effects`; the request handler for `web`; a plugin's
+ * service for the role named by its package. Every process serves `graph`,
+ * since the graph is what it opened.
  *
  * `load` is how one of a plugin's subpaths becomes a module ({@link facet}).
  * It is injectable, so a test can assemble a host from modules it wrote inline
@@ -742,20 +714,15 @@ export let compose = async (
     })
     store.install()
 
-    // The ledger, where this vocabulary declares the component for one: every
-    // effect written down before it runs and marked after, so a crash between
-    // the commit and the handler leaves a row the sweep finds, and a handler
-    // that threw is retried on the terms its registration set. A graph with no
-    // `effect` component still runs effects at most once, and stores
-    // nothing.
-    let log: Ledger | undefined = vocab.comp(EFFECT)
-      ? ledger({ owner: host.me })
-      : undefined
-    // An effect writes through the graph's own `apply()`, trusted: what it
-    // writes comes from the host, never from a client.
+    // The registry, in every process: the effects the plugins' vocabularies
+    // declare are what a commit owes, so whatever this process writes, the
+    // runs it owes are written down with it (@yaks/effects), for any process
+    // working the pool — this one only if it serves `effects`. An effect
+    // writes through the graph's own `apply()`, trusted: what it writes comes
+    // from the host, never from a client.
     let fx = watching = effects(vocab, {
       write: (b) => host.graph.apply(b, { trusted: true }),
-      ...(log ? { around: log.around } : {}),
+      owner: host.me,
     })
     g = graph({
       storage: host.storage,
@@ -769,13 +736,33 @@ export let compose = async (
         fx,
       ],
     })
-    // The plugins' effects, where this process serves `effects`: `watched` is
-    // empty anywhere else, since their facets were never imported. The
-    // registry itself is the graph's, in every process, for a tool that
-    // watches a component only while it runs.
-    for (let [mod, options] of watched) {
-      for (let { comp, ...watch } of mod.effects?.(host, options) ?? []) {
-        fx.on(comp, watch)
+    // The code behind the plugins' effects, where this process serves
+    // `effects` (their facets were never imported anywhere else). Each plugin
+    // handles the effects its own vocabulary declares, and one this config
+    // gives no code has nothing to do here: its runs are settled as done, not
+    // left owed to a process that will never come.
+    let effecting = roles.includes('effects')
+    if (effecting) {
+      let given = new Map(
+        watched.map(([mod, options, plugin]) => [
+          plugin,
+          mod.effects?.(host, options) ?? {},
+        ]),
+      )
+      for (let [v, , plugin] of vocabs) {
+        let names = effectsIn(v.docs ?? []).map((e) => e.name)
+        let code = given.get(plugin) ?? {}
+        given.delete(plugin)
+        let stray = Object.keys(code).find((n) => !names.includes(n))
+        if (stray) throw undeclared(plugin, stray)
+        fx.handle({
+          ...Object.fromEntries(names.map((n) => [n, nothing])),
+          ...code,
+        })
+      }
+      for (let [plugin, code] of given) {
+        let [stray] = Object.keys(code)
+        if (stray) throw undeclared(plugin, stray)
       }
     }
     // After every table exists, the plugins' own included: a full-text index is
@@ -814,14 +801,14 @@ export let compose = async (
       ),
     ]
     // The one tool runner over this graph. A caller runs a tool and the runner
-    // records the request and the result as it goes; what its rules add, in a
-    // process serving `effects`, is the calls nobody here is waiting on — one
-    // written by another process through `/apply`, or one whose scheduled wake
-    // has now fired. Each rule is one post-commit effect registration, and a
-    // call this graph has no tool for is left alone for whoever does have it.
-    // The `tool` rows a call points at are written on the first call and at
-    // start-up, never while assembling: a one-shot command opens a host to ask
-    // one question and should not write just to say hello.
+    // records the request and the result as it goes; what the two effects
+    // @yaks/tools declares add, in a process serving `effects`, is the calls
+    // nobody is waiting on — one written through `/apply`, or one whose
+    // scheduled wake has now fired. A call this graph has no tool for is left
+    // alone for whoever does have it. The `tool` rows a call points at are
+    // written on the first call and at start-up, never while assembling: a
+    // one-shot command opens a host to ask one question and should not write
+    // just to say hello.
     let run = calls = runner(g, {
       tools,
       // This host owns the calls it claims, so the start-up pass re-runs its
@@ -837,11 +824,9 @@ export let compose = async (
       process: started()[PROCESS] as Comp,
       report: (err) => console.error('tool failed —', err),
     })
-    let effecting = roles.includes('effects')
     if (effecting) {
-      for (let rule of run.rules) {
-        fx.on(rule.plan, (e) => run.run(e.entity.eid), { doc: rule.rule.name })
-      }
+      let due: Handlers[string] = (e) => run.run(e.entity.eid)
+      fx.handle(Object.fromEntries(run.rules.map((r) => [r.rule.name, due])))
     }
     // Which listed plugin hosts the routes — turns them into the one handler
     // this host answers with (@yaks/api). Two would be two answers to one
@@ -858,48 +843,47 @@ export let compose = async (
       paths = served.flatMap(([r, o]) => r.routes?.(host, o) ?? [])
       answering = mod.handler(host, options ?? {})
     }
-    // The duties: work that is nobody's request and everybody's to
-    // do, each leased under the name of the package that owns it. The SWEEP is
-    // the `effects` role's own — a crash between the commit and the handler,
-    // and a handler that threw, are exactly what the ledger and a
-    // registration's `sweep` are for — and the rest are the plugins' timers,
-    // each the role named by its package (`running` holds only those served). One
-    // pass, then a wait, is the shape they share: do what is overdue, then hold
-    // the lease until this process ends, so no second process runs it at the
-    // same time.
+    // The duties: work that is nobody's request and everybody's to do. The
+    // effect pool is the `effects` role's, worked by any number of processes
+    // at once; each plugin's service is the role named by its package
+    // (`running` holds only those served), leased under that name so exactly
+    // one process runs it. One pass, then a wait, is the shape they share: do
+    // what is overdue, then keep at it until this process ends.
     let hold = config.lease ?? HOLD
-    let duties: Duty[] = [
-      ...(effecting ? [sweep(host, fx, log)] : []),
-      ...running.map(([mod, options, plugin]): Duty => ({
-        name: plugin,
-        run: (signal) => mod.service!(host, options, signal),
-      })),
-    ]
+    let duties: Duty[] = running.map(([mod, options, plugin]): Duty => ({
+      name: plugin,
+      run: (signal) => mod.service!(host, options, signal),
+    }))
     // Started together and stopped together, by one signal: a host shutting
     // down is one fact, and a duty that outlived the database it
     // reads would be a crash nobody asked for. One that throws is reported
     // and that plugin's duty stops — the others keep going, the way a failing
     // effect is telemetry rather than a broken host. A config that turned
-    // them off (`duties: false`, `yak --no-duties`) takes no lease and
-    // runs none of them, in either form.
-    doing = config.duties == false ? async () => {} : (signal) =>
-      Promise.all(
-        duties.map((d) =>
-          holding(
-            g!,
-            d.name,
-            { holder: selfEid(), hold, signal: signal ?? stopping.signal },
-            d.run,
-          ).catch((e) => console.error(`duty failed — ${d.name}`, e))
+    // them off (`duties: false`, `yak --no-duties`) takes no lease, works no
+    // effects and runs none of them, in either form: what it commits is left
+    // written down for a process that does.
+    doing = config.duties == false ? async () => {} : (signal) => {
+      let until = signal ?? stopping.signal
+      return Promise.all([
+        ...(effecting
+          ? [
+            fx.work(g!, until)
+              .catch((e) => console.error('effects failed —', e)),
+          ]
+          : []),
+        ...duties.map((d) =>
+          holding(g!, d.name, { holder: selfEid(), hold, signal: until }, d.run)
+            .catch((e) => console.error(`duty failed — ${d.name}`, e))
         ),
-      ).then(() => {})
+      ]).then(() => {})
+    }
     // This process, written in. Last in this function, because the creation of
-    // this row is what start-up work hangs off — a `created(process)` effect
-    // comparing the entity against `host.me` is a plugin's one pass at start,
-    // and the registrations above have to be in place before it fires. First
-    // among the writes, because everything after is attributed to it and
-    // `created.by` is a reference: a process attributing writes to an entity
-    // nothing created would store a dangling id on its very first write.
+    // this row owes what a process starting owes (@yaks/connections installs
+    // what it builds), and the declarations above have to be in place when it
+    // commits. First among the writes, because everything after is attributed
+    // to it and `created.by` is a reference: a process attributing writes to an
+    // entity nothing created would store a dangling id on its very first
+    // write.
     if (self) await g.apply([started()])
     return {
       ...host,
@@ -914,9 +898,12 @@ export let compose = async (
       //
       // First of all, the abort: the duties stop and every timer a
       // plugin hung off {@link Host.stopping} is cancelled, so nothing is
-      // still pending over a database that is about to be closed.
-      close: (code?: number) => {
+      // still pending over a database that is about to be closed. Then the
+      // effects this process started are let finish, and it leaves the pool,
+      // so what its last transaction owes is left written down for another.
+      close: async (code?: number) => {
         stopping.abort()
+        await fx.stop()
         let shut = () => {
           try {
             sql.close()
@@ -924,15 +911,9 @@ export let compose = async (
         }
         if (!self) return shut()
         try {
-          let done = then(
-            released(g!, selfEid()),
-            (lets: Bundle[]) => g!.apply([...lets, ended(code)]),
-          )
-          if (!isPromise(done)) return shut()
-          return done.then(shut, shut)
-        } catch {
-          shut()
-        }
+          await g!.apply([...await released(g!, selfEid()), ended(code)])
+        } catch { /* the file is going either way */ }
+        shut()
       },
     }
   } catch (error) {
@@ -940,19 +921,3 @@ export let compose = async (
     throw error
   }
 }
-
-/**
- * What an effect's `sweep` means here: its `pending` is a query in the graph's
- * own grammar, so the rows it selects are read the way everything else is, and
- * flattened to the `{eid, …props}` shape a registration's handler is given
- * (@yaks/effects `relay`).
- */
-export let unfinished = (g: Graph): SweepRows => (comp, pending) =>
-  then(
-    g.read(pending),
-    (found: Bundle[]) =>
-      found.map((b) => ({
-        eid: b.entity?.eid,
-        ...b[comp] as Record<string, unknown>,
-      })),
-  )

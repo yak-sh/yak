@@ -20,8 +20,7 @@
  * import { watches } from '@yaks/builders/effects'
  *
  * // let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
- * // for (let { comp, ...w } of watches({ desk: { model: 'O-1' }, vocab }))
- * //   fx.on(comp, w)
+ * // fx.handle(watches({ desk: { model: 'O-1' }, vocab }))
  * ```
  *
  * @module

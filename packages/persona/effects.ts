@@ -1,7 +1,8 @@
 // What a host does about a persona that changed, exported as
-// `@yaks/persona/effects`: it writes the persona files again (./files.ts) a
-// moment after the write commits, so a checkout's AGENTS.md says what the
-// graph says without anybody running `persona sync`.
+// `@yaks/persona/effects`: the code behind `persona_files` (./vocab.json),
+// which writes the persona files again (./files.ts) a moment after the write
+// commits, so a checkout's AGENTS.md says what the graph says without anybody
+// running `persona sync`.
 //
 // Only where the config asks for it: `{"use": "@yaks/persona", "with":
 // {"files": true}}`. Each file's path comes from a project's checkout, not from
@@ -11,21 +12,18 @@
 // A write starts a timer and returns, so the commit is never held open, and a
 // burst of writes is one pass. A pass renders every persona (a few hundred
 // milliseconds over the fleet's graph) and writes only the files whose text
-// moved, so the watches only have to avoid passes nothing asked for: a doc
-// edit or a new link counts when it touches something the last pass said. A
+// moved, so a run only has to avoid passes nothing asked for: a doc edit or a
+// new link counts when it touches something the last pass said. A
 // host that has not made a pass yet counts every one, and its first pass
 // learns the set. Passes run one at a time; the timer is dropped when the
 // host shuts down.
 
-import type { Watch } from '@yaks/effects'
+import type { Handlers } from '@yaks/effects'
 import type { Eid, Graph } from '@yaks/graph'
-import { EDGE, relations } from '@yaks/edge'
+import { EDGE } from '@yaks/edge'
 import { DOC } from '@yaks/doc'
 import { sync } from '@yaks/mirror'
-import type { Vocab } from '@yaks/vocab'
-import { PERSONA } from './comp.ts'
 import { personaMirror, remembered } from './files.ts'
-import { CARRIES, READS } from './worn.ts'
 
 /** What this plugin reads from its entry in a config. */
 export type Options = { files?: boolean }
@@ -33,17 +31,16 @@ export type Options = { files?: boolean }
 /** How long a burst of writes settles before one pass answers all of it. */
 export let AFTER = 1_000
 
-/** The watches that keep the persona files current, when `files` is on. */
+/** The code that keeps the persona files current, when `files` is on. */
 export let effects = (
   host: {
     graph: Graph
-    vocab: Vocab
     config?: { db?: string }
     stopping?: AbortSignal
   },
   options: Options = {},
-): Watch[] => {
-  if (!options.files) return []
+): Handlers => {
+  if (!options.files) return {}
   let db = host.config?.db ?? Deno.env.get('DB_PATH')
   let said = new Set<Eid>()
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -71,30 +68,15 @@ export let effects = (
   })
   let about = (...eids: unknown[]) =>
     (!said.size || eids.some((e) => said.has(String(e)))) && soon()
-  let tags = relations(host.vocab)
-  let doc = 'write the persona files again'
-  return [
-    {
-      comp: PERSONA,
-      created: soon,
-      changed: { home: soon },
-      removed: soon,
-      doc,
-    },
-    {
-      comp: DOC,
-      changed: {
-        title: (e) => about(e.entity.eid),
-        body: (e) => about(e.entity.eid),
-      },
-      doc,
-    },
-    { comp: EDGE, created: (e) => about(e.comp?.from, e.comp?.to), doc },
-    // An unlinked edge is gone before anybody can read which ends it had.
-    ...[tags[CARRIES], tags[READS]].filter(Boolean).map((comp) => ({
-      comp,
-      removed: soon,
-      doc,
-    })),
-  ]
+  return {
+    // A doc or a new link counts when it touches what the last pass said; a
+    // persona moving, or a link carrying or reading one going — gone before
+    // anybody can read which ends it had — always does.
+    persona_files: (e) =>
+      e.name == DOC
+        ? about(e.entity.eid)
+        : e.name == EDGE
+        ? about(e.comp?.from, e.comp?.to)
+        : soon(),
+  }
 }

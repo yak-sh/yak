@@ -1,7 +1,7 @@
-// What a server does about builders, exported as `@yaks/builders/effects`:
-// build a builder when its schedule comes due, and write what a build's
-// session answers into its output. Nothing at all when the configuration names
-// no session to open.
+// What a server does about builders, exported as `@yaks/builders/effects`: the
+// code behind the three effects ./vocab.json declares — build a builder when
+// its schedule comes due, and write what a build's session answers into its
+// output. Nothing at all when the configuration names no session to open.
 //
 // That session is why this export takes OPTIONS. Opening one means asking a
 // provider, at an effort, with a persona — an account, a model and a persona
@@ -19,7 +19,7 @@
 //             "rest": "1h" } }
 // ```
 //
-// A configuration that names no `desk` registers no watches, which is what a
+// A configuration that names no `desk` gives them no code, which is what a
 // graph that only stores builders wants rather than a session opening on a
 // machine with no agent on it.
 //
@@ -27,17 +27,16 @@
 // this machine cannot parse would otherwise mean a builder that never rests,
 // and boot is a cheaper place to discover that than the bill. It is reported
 // at boot rather than thrown — malformed configuration never stops the server
-// coming up — and the plugin then registers nothing.
+// coming up — and the plugin then gives no code.
 
 import { type Comp, then } from '@yaks/graph'
-import type { Handler, Watch } from '@yaks/effects'
+import type { Handler, Handlers } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
 import { DOC } from '@yaks/doc'
 import { and, eq } from '@yaks/query'
-import { kindOf, OUTPUT, textOf } from '@yaks/session'
-import { FIRED, next, WAKE } from '@yaks/wake'
+import { kindOf, textOf } from '@yaks/session'
+import { next, WAKE } from '@yaks/wake'
 import {
-  BUILDER,
   BUILT,
   clock,
   decide,
@@ -61,12 +60,12 @@ let stir = (o: Open): Handler => (event, tx, write) =>
   )
 
 /**
- * The handler that runs when a builder itself changes: registered on
- * `created(builder)` and on `changed(builder.floor)`, so a builder created now
- * builds now, and one whose floor was moved back into the present builds then.
+ * `builder_open`, run when a builder itself changes: on `created(builder)` and
+ * on `changed(builder.floor)`, so a builder created now builds now, and one
+ * whose floor was moved back into the present builds then.
  *
- * It is idempotent, which is what lets a boot reconciliation replay it over
- * every builder in the graph: a second run finds the output under the key, or
+ * It is idempotent, which is what lets its sweep replay it over every builder
+ * in the graph: a second run finds the output under the key, or
  * the floor it moved, and builds nothing. Its own write moves that floor, so
  * the write triggers this handler once more, and that run is the one that
  * finds the output.
@@ -74,8 +73,8 @@ let stir = (o: Open): Handler => (event, tx, write) =>
 export let opening = (o: Open): Handler => stir(o)
 
 /**
- * The handler a wake runs: registered on `created(fired)` and
- * `changed(fired.at)`, it is how a resting builder comes back at all. A
+ * `builder_ring`, run on `created(fired)` and `changed(fired.at)`: how a
+ * resting builder comes back at all. A
  * recurring @yaks/wake `wake` on the builder — or one aimed at it through
  * `wake.target` — fires, and the builder is checked again.
  */
@@ -91,7 +90,7 @@ export let ringing = (o: Open): Handler => (event, tx, write) =>
     ))
 
 /**
- * The handler that fills an output: when a build's session answers, the
+ * `builder_answer`, which fills an output: when a build's session answers, the
  * answer becomes the output's `doc` body. Each answer replaces the last, so
  * what the output holds once the session settles is what it said last.
  */
@@ -112,46 +111,27 @@ export let answering: Handler = (event, tx, write) =>
     )
   })
 
-/** The watches that build: a builder changing, a wake firing on one, and a
+/** The code that builds: a builder changing, a wake firing on one, and a
  * build's session answering. */
-export let watches = (o: Open): Watch[] => [
-  {
-    comp: BUILDER,
-    created: opening(o),
-    changed: { floor: opening(o) },
-    // The handler builds nothing for a builder that is resting or built under
-    // its key, so replaying it over every builder at boot is safe: what a
-    // crash interrupted is picked up, and what it did not is left alone.
-    sweep: { pending: `.${BUILDER}` },
-    doc: 'build a builder whose floor has passed, unless its key is built',
-  },
-  {
-    comp: FIRED,
-    created: ringing(o),
-    changed: { at: ringing(o) },
-    doc: 'a wake fired on a builder: check whether it is due',
-  },
-  {
-    comp: OUTPUT,
-    created: answering,
-    doc: "a build's session answered: the answer is the output's body",
-  },
-]
+export let watches = (o: Open): Handlers => ({
+  builder_open: opening(o),
+  builder_ring: ringing(o),
+  builder_answer: answering,
+})
 
-/** The watches to register, when the configuration named a session to
- * open. */
+/** The code to run, when the configuration named a session to open. */
 export let effects = (
   host: { vocab: Vocab },
   options: Options = {},
-): Watch[] => {
+): Handlers => {
   let { desk, rest } = options
-  if (!desk) return []
+  if (!desk) return {}
   if (rest && next(rest, Date.now()) == null) {
     console.warn(
       `@yaks/builders: ${JSON.stringify(rest)} is no rest — nothing builds ` +
         `until the config says how long a builder rests`,
     )
-    return []
+    return {}
   }
   return watches({ desk, rest, vocab: host.vocab })
 }

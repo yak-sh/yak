@@ -7,7 +7,7 @@
 import { type Graph, graph, type Options } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { effectDoc } from './durable.ts'
+import { effectDoc } from './pool.ts'
 
 let doc: VocabDoc = {
   $defs: {
@@ -65,8 +65,28 @@ let doc: VocabDoc = {
 /** The blog vocabulary the tests write against. */
 export let blog: Vocab = loadVocab([doc])
 
-/** The same blog, plus the `effect` component the durability tier needs. */
-export let durableBlog: Vocab = loadVocab([doc, effectDoc])
+/** What the blog owes after a commit: a note for every post, and one more
+ * whenever a post is published. */
+export let owes: VocabDoc = {
+  $defs: {
+    post_note: {
+      effect: true,
+      created: ['post'],
+      changed: ['post.published'],
+      tries: 2,
+    },
+    post_gone: { effect: true, removed: ['post'], idempotent: false },
+    post_swept: { effect: true, created: ['post'], sweep: '.post' },
+  },
+}
+
+/** The blog with its effects declared, and the `effect` rows a pool of
+ * workers runs them from. */
+export let pooledBlog: Vocab = loadVocab([doc, effectDoc, owes])
+
+/** The blog with its effects declared and no pool: a handled effect runs in
+ * the process that committed. */
+export let owingBlog: Vocab = loadVocab([doc, owes])
 
 /** A graph over a fresh Map, with whatever plugins a test brings. */
 export let blogGraph = (

@@ -90,6 +90,19 @@ let doc: VocabDoc = {
   },
 }
 
+// What a commit to the shop owes: a note for every book, and a price for one
+// that has none — which a process coming up finds again by its sweep.
+let owes: VocabDoc = {
+  $defs: {
+    book_seen: { effect: true, created: ['book'] },
+    book_priced: {
+      effect: true,
+      created: ['book'],
+      sweep: '.book !book.price',
+    },
+  },
+}
+
 // A plugin's facets, written here rather than on disk: `compose` takes how a
 // plugin's subpath becomes a module, so a test never writes a package to be
 // imported. What a plugin does not export is what it does not have.
@@ -490,7 +503,7 @@ Deno.test('two plugins may not both host the routes', async () => {
 Deno.test('a process imports the facets of the roles it serves, and no others', async () => {
   let ran: string[] = []
   let busy: Plugged = {
-    effects: { effects: () => [] },
+    effects: { effects: () => ({}) },
     service: { service: () => void ran.push('busy') },
   }
   let asked = (roles: Role[]) => {
@@ -564,7 +577,7 @@ Deno.test('a facet that fails to import is loud; one that is absent is skipped',
 Deno.test('a rule sees the graph it is part of, and an effect fires on a commit', async () => {
   let seen: string[] = []
   let mod: Plugged = {
-    vocab: { docs: [doc] },
+    vocab: { docs: [doc, owes] },
     tools: { runs: () => ({ book_list: () => [], book_add: () => [] }) },
     rules: {
       rules: (host) => [{
@@ -579,10 +592,7 @@ Deno.test('a rule sees the graph it is part of, and an effect fires on a commit'
       }],
     },
     effects: {
-      effects: () => [{
-        comp: 'book',
-        created: (e) => seen.push(e.entity.eid),
-      }],
+      effects: () => ({ book_seen: (e) => void seen.push(e.entity.eid) }),
     },
   }
   let host = await compose(
@@ -601,15 +611,21 @@ Deno.test('a start-up pass is an effect on this process being born', async () =>
   let booted: string[] = []
   let mod: Plugged = {
     ...shop,
+    vocab: {
+      docs: [
+        doc,
+        processDoc,
+        { $defs: { boot: { effect: true, created: ['process'] } } },
+      ],
+    },
     effects: {
-      effects: (host) => [{
-        comp: 'process',
+      effects: (host) => ({
         // A `process` born here is either this run writing itself in or a
         // child it launched, and only the first is a start-up.
-        created: (e) => {
+        boot: (e) => {
           if (e.entity.eid == host.me) booted.push(host.me)
         },
-      }],
+      }),
     },
   }
   let host = await compose({ db: ':memory:', plugins: ['m'] }, only({ m: mod }))
@@ -739,7 +755,7 @@ Deno.test('a plugin named with options gets them, beside the host', async () => 
         effects: {
           effects: (_h, options) => {
             said.push(options)
-            return []
+            return {}
           },
         },
       },
@@ -754,28 +770,35 @@ Deno.test('a plugin named with options gets them, beside the host', async () => 
   }
 })
 
-Deno.test('an effect that said what pending looks like is re-driven at boot', async () => {
+// The `effect` word, which is what makes a host keep a pool at all, and its
+// check, which comes with the word: a host that declares `effect_check` and
+// implements nothing is a host that refuses to start.
+let pooled = (effects: Plugged['effects']): Plugged => ({
+  vocab: { docs: [doc, processDoc, effectDoc, owes] },
+  tools: {
+    runs: (host, options) => ({
+      ...shop.tools?.runs?.(host, options),
+      ...effectRuns(host, options),
+    }),
+  },
+  effects,
+})
+
+Deno.test('a process coming up owes again what a declared sweep selects', async () => {
   let ran: string[] = []
-  let mod: Plugged = {
-    vocab: { docs: [doc] },
-    tools: shop.tools,
-    effects: {
-      effects: () => [{
-        comp: 'book',
-        // Declaring a sweep promises an idempotent handler: what it re-drives
-        // may well have run already.
-        sweep: { pending: '!book.price' },
-        // It reads the row it is handed, as a handler on a commit does.
-        created: async (event, tx) => {
-          let [book] = await tx.get([event.entity.eid])
-          ran.push(String((book.book as Comp).title))
-        },
-      }],
-    },
-  }
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
-    only({ shop: mod }),
+    only({
+      shop: pooled({
+        effects: () => ({
+          // It reads the row it is handed, as a run always does.
+          book_priced: async (event, tx) => {
+            let [book] = await tx.get([event.entity.eid])
+            ran.push(String((book.book as Comp).title))
+          },
+        }),
+      }),
+    }),
   )
   try {
     // Two books, one of them unpriced — the shape the sweep's query names.
@@ -783,60 +806,45 @@ Deno.test('an effect that said what pending looks like is re-driven at boot', as
       { entity: { eid: 'b1' }, book: { title: 'Spring', price: 12 } },
       { entity: { eid: 'b2' }, book: { title: 'Winter' } },
     ])
-    assertEquals(ran, ['Spring', 'Winter'])
+    await host.duties(AbortSignal.abort())
+    assertEquals(ran.sort(), ['Spring', 'Winter'])
     ran.length = 0
-    // What `serve` does after boot: only the row still pending comes back.
+    // The next pass on the way in: only the book still unpriced comes back.
     await host.duties(AbortSignal.abort())
     assertEquals(ran, ['Winter'])
   } finally {
-    host.close()
+    await host.close()
   }
 })
 
-Deno.test('the sweep a one-shot line makes runs the retries that are due', async () => {
+Deno.test('the pass a one-shot line makes runs the retries that are due', async () => {
   let ran: string[] = []
-  let mod: Plugged = {
-    // The `effect` word, which is what makes this host keep a ledger at all.
-    vocab: { docs: [doc, processDoc, effectDoc] },
-    // Its check comes with the word: a host that declares `effect_check` and
-    // implements nothing is a host that refuses to start.
-    tools: {
-      runs: (host, options) => ({
-        ...shop.tools?.runs?.(host, options),
-        ...effectRuns(host, options),
-      }),
-    },
-    effects: {
-      effects: () => [{
-        comp: 'book',
-        created: (event) => {
-          ran.push(String(event.entity.eid))
-        },
-      }],
-    },
-  }
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
     only({
-      shop: mod,
+      shop: pooled({
+        effects: () => ({
+          book_seen: (event) => void ran.push(String(event.entity.eid)),
+        }),
+      }),
     }),
   )
   try {
+    // A line joins the pool on its way in, so what it writes it runs.
+    await host.duties(AbortSignal.abort())
     await host.graph.apply([{ entity: { eid: 'b1' }, book: { title: 'One' } }])
+    await host.fx.idle()
     assertEquals(ran, ['b1'])
-    // The run, written down and marked — no handler asked for any of this.
+    // The runs, written down and settled — no handler asked for any of this.
     let rows = await host.graph.read('.effect')
-    assertEquals(
-      rows.map((b) => (b.effect as Comp).state),
-      ['done'],
-    )
+    assertEquals(rows.map((b) => (b.effect as Comp).state), ['done', 'done'])
     // A failure that reported, whose backoff has come up. Written as the
-    // ledger would have written it, so the pass below is the only thing
-    // under test.
+    // pool would have written it, so the pass below is the only thing under
+    // test.
     await detached(host.storage).patch([{
       entity: { eid: 'r1' },
       effect: {
-        handler: 'book.created',
+        handler: 'book_seen',
         target: 'b1',
         comp: 'book',
         kind: 'created',
@@ -1055,7 +1063,7 @@ Deno.test('a facet hangs its timer off the host ending, and closing cancels it',
           effects: (h) => {
             let timer = setTimeout(() => late++, 5)
             h.stopping.addEventListener('abort', () => clearTimeout(timer))
-            return []
+            return {}
           },
         },
       },

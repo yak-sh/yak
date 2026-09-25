@@ -27,7 +27,7 @@ import { open as opened, type Opened } from '@yaks/sqlite/db'
 import { type Vocab } from '@yaks/vocab'
 import { vaultOf } from '@yaks/cli'
 import { dbOf, type Host } from '@yaks/cli/host'
-import { sealing, type Vault } from '@yaks/secrets'
+import type { Vault } from '@yaks/secrets'
 import { install } from '@yaks/connections'
 
 import { computed } from './vocab.ts'
@@ -125,13 +125,15 @@ export let open = (
     storage: store,
     vocab,
     plugins: [
-      ...rules({ vocab, sql, vault }),
+      ...rules({
+        vocab,
+        sql,
+        vault,
+        write: (b) => g.apply(b, { trusted: true }),
+      }),
       fx,
     ],
   })
-  // The other half of the secrets plugin in `rules`: a written value sealed
-  // into the vault once its write commits (./effects.ts).
-  fx.on('secret', sealing(vault))
   reapLeases(store)
   // The integrations @yaks/connections builds, installed as a composed host
   // installs them at start-up (@yaks/connections/effects): the OpenRouter

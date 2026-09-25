@@ -180,14 +180,16 @@ grouped approximately by function, **not** by dependency order.
   files), or both. Each path remembers the Git blob and value hash it last
   agreed on, so a path both sides changed is reported as a conflict and never
   overwritten.
-- **[@yaks/effects](./effects)** — Run registered handlers after committed
-  component changes or newly matching query patterns, isolating handler failures
-  from the original transaction. An optional durable attempt log supports
-  retries; it does not guarantee exactly-once external effects.
-  `lease{name, holder, until}` records named duty ownership using deterministic
-  ids and transactional preconditions. Coordination requires suitable storage
-  isolation and lease configuration. This package provides mechanisms, not
-  domain-specific actions.
+- **[@yaks/effects](./effects)** — Run code after committed component changes or
+  newly matching query patterns, isolating failures from the original
+  transaction. What a commit owes is declared in the vocabulary
+  (`effect: true`); with the optional `effect` component, each commit writes its
+  runs down in its own transaction and any number of processes claim and run
+  them, with retries and backoff. It does not guarantee exactly-once external
+  effects. `lease{name, holder, until}` records named duty ownership using
+  deterministic ids and transactional preconditions. Coordination requires
+  suitable storage isolation and lease configuration. This package provides
+  mechanisms, not domain-specific actions.
 
 - **[@yaks/journal](./journal)** — Record committed transactions as after-images
   in three append-oriented tables on the same database transaction/connection.
@@ -461,7 +463,7 @@ or the `yak` command, takes `./vocab`, `./views` and `./tui`.
 | `./vocab`   | `docs`, `keywords?`, `derived?`                                                 | nothing server-side |
 | `./rules`   | `rules: (host, options) => Plugin[]`, `extend?` (@yaks/sql), `authenticate?`    | anything            |
 | `./tools`   | `runs: (host, options) => Runs` — the code behind its `tool: true` declarations | ajv, SQL, anything  |
-| `./effects` | `effects: (host, options) => Watch[]`                                           | anything            |
+| `./effects` | `effects: (host, options) => Handlers` — the code behind its `effect: true`     | anything            |
 | `./routes`  | `routes: (host, options) => Route[]`, `handler?`                                | anything            |
 | `./service` | `service: (host, options, signal) => void \| Promise<void>`                     | anything            |
 | `./views`   | `views` — `@yaks/render` renderers                                              | nothing server-side |

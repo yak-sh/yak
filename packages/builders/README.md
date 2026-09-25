@@ -61,9 +61,8 @@ to mint it cannot both commit.
   is changed, and when a [@yaks/wake](../wake) `wake` on it — or one aimed at it
   through `wake.target` — fires. It builds when its floor has passed and its key
   has no output. With a `rest` configured, each build moves the floor forward by
-  that much. Nothing polls. The check is idempotent, so the registration
-  declares `sweep: { pending: '.builder' }` and a server may replay it over
-  every builder at boot.
+  that much. Nothing polls. The check is idempotent, so `builder_open` declares
+  `sweep: ".builder"` and a worker coming up replays it over every builder.
 - **On demand.** `builder build <builder>` builds now, whatever the floor says.
   `--model` and `--provider` build with a model other than the configured one,
   giving a sibling output. An unchanged key answers with the output that is

@@ -112,6 +112,16 @@
       },
       "readOnly": true,
       "idempotent": true
+    },
+    "spawn_start": {
+      "effect": true,
+      "created": ["using"],
+      "description": "start the run a session asks for: a `using` written on an entry names the provider, the model and the effort"
+    },
+    "spawn_stop": {
+      "effect": true,
+      "created": ["stop"],
+      "description": "kill the run a `stop` on the session running it names"
     }
   }
 }

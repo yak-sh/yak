@@ -1,12 +1,13 @@
 # @yaks/vocab
 
 A **vocabulary document** is a JSON Schema 2020-12 document whose `$defs`
-entries describe components (`component: true`), tools (`tool: true`), or rules
-(`rule: true`). This package defines that format and loads it: `loadVocab()`
-reads one or more such documents into a runtime model used for validation, query
-resolution, and storage schema generation. This package declares no components
-of its own — the components you declare use the format it defines. The loaded
-model lives in memory; this package creates no tables and stores no entity data.
+entries describe components (`component: true`), tools (`tool: true`), rules
+(`rule: true`), or effects (`effect: true`). This package defines that format
+and loads it: `loadVocab()` reads one or more such documents into a runtime
+model used for validation, query resolution, and storage schema generation. This
+package declares no components of its own — the components you declare use the
+format it defines. The loaded model lives in memory; this package creates no
+tables and stores no entity data.
 
 ## Use
 
@@ -416,8 +417,8 @@ it have no result validation through this helper.
 
 ## Rules
 
-A `$defs` entry marked `rule: true` declares a graph rule. By default the graph
-evaluates it during each batch, a list of changes applied in one transaction.
+A `$defs` entry marked `rule: true` declares a graph rule. The graph evaluates
+it during each batch, a list of changes applied in one transaction.
 
 ```json
 {
@@ -440,19 +441,47 @@ and a `$name` in a value refers to that same variable. `before` names the rules
 this one runs before, to specify execution order.
 
 `rulesIn(docs)` reads rule entries, the way `toolsIn` reads tool declarations,
-and `loadVocab` skips both. For the default `rules` phase, `match` describes the
-changes directly; no separate handler is required. `phase: "effect"` instead
-declares a pattern for a post-commit handler or an explicit scan and is not
-executed during `apply()`. `@yaks/graph` loads rule declarations from plugin
+and `loadVocab` skips both. `match` describes the changes directly; no separate
+handler is required. `@yaks/graph` loads rule declarations from plugin
 documents.
+
+## Effects
+
+A `$defs` entry marked `effect: true` declares what a commit owes after it
+lands: work outside the transaction, such as sending a letter. The declaration
+names the triggers; the code is registered under the same name by whichever
+process runs effects (@yaks/effects `handle`), so every process that loads the
+vocabulary knows what a write owes, whatever code it imported.
+
+```json
+{
+  "$defs": {
+    "mail_post": {
+      "effect": true,
+      "created": ["mail"],
+      "sweep": ".mail&.deliver&!delivered&!bounced&!deliver.tried",
+      "description": "hand an outbound letter to the sender"
+    }
+  }
+}
+```
+
+`created` and `removed` list components; `changed` lists components or
+`comp.prop` for one property; `match` is a pattern in the rule grammar, run
+wherever the batch made it hold. `tries` bounds the attempts,
+`idempotent:
+false` says an interrupted run must not run again, and `sweep` is a
+query whose matches are owed a `created` run again whenever a worker starts.
+`effectsIn(docs)` reads them, refuses a name declared twice, and `loadVocab`
+skips them.
 
 ## Exports
 
 The root export includes `loadVocab`, `Vocab`, schema and property types,
 `Unknown` and `Ambiguous` lookup errors, `storable`, `reserved`, `kindOrder`,
-`composite`, state-lifetime helpers, `rulesIn`, and `RuleDecl`. `CORE_URI`,
-`coreVocabulary` and `metaSchema` expose the bundled schema documents;
-`Keywords`, `JsonSchema` and `extendMeta` support extensions.
+`composite`, state-lifetime helpers, `rulesIn`, `RuleDecl`, `effectsIn` and
+`EffectDecl`. `CORE_URI`, `coreVocabulary` and `metaSchema` expose the bundled
+schema documents; `Keywords`, `JsonSchema` and `extendMeta` support extensions.
 
 The `@yaks/vocab/tools` sub-module exports `ToolDefinition`, `toolDefinition`,
 `toolDefinitionSchema`, `toolsIn`, `toolsSaid`, `validateToolInput`,

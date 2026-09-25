@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { effectsIn } from '@yaks/vocab'
 import { edgeEid, link } from '@yaks/edge'
 import { counter, ids, noon, shop, workshop } from './testing.ts'
 import { type Desk, type Open, output } from './build.ts'
@@ -337,19 +338,16 @@ Deno.test("content is what was written, not the server's stamps", () => {
   assertNotEquals(hash(said), hash({ ...said, reads: {} }))
 })
 
-Deno.test('the facet is the watch list, and nothing without a desk', async () => {
+Deno.test('the facet is the code, and nothing without a desk', async () => {
   let { vocab } = await building()
-  assertEquals(effects({ vocab }, {}), [])
-  assertEquals(effects({ vocab }), [])
+  assertEquals(effects({ vocab }, {}), {})
+  assertEquals(effects({ vocab }), {})
   let said = effects({ vocab }, { desk: scribe, rest: '1h' })
-  assertEquals(said.map((w) => w.comp), ['builder', 'fired', 'output'])
-  assertEquals(said[0].sweep, { pending: '.builder' })
-  assertEquals(Object.keys(said[0].changed ?? {}), ['floor'])
-  assertEquals(Object.keys(said[1].changed ?? {}), ['at'])
-  assert(said.every((w) => !!w.created && !!w.doc))
+  let declared = effectsIn(vocab.docs).map((e) => e.name)
+  assert(Object.keys(said).every((n) => declared.includes(n)))
   assertEquals(
-    watches({ desk: scribe, rest: '1h', vocab }).map((w) => [w.comp, w.doc]),
-    said.map((w) => [w.comp, w.doc]),
+    Object.keys(watches({ desk: scribe, rest: '1h', vocab })),
+    Object.keys(said),
   )
 })
 
@@ -359,7 +357,7 @@ Deno.test('a rest this box cannot read builds nothing, and says so', async () =>
   let warn = console.warn
   console.warn = (...said: unknown[]) => warned.push(said[0])
   try {
-    assertEquals(effects({ vocab }, { desk: scribe, rest: 'whenever' }), [])
+    assertEquals(effects({ vocab }, { desk: scribe, rest: 'whenever' }), {})
   } finally {
     console.warn = warn
   }

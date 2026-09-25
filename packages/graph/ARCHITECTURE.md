@@ -55,9 +55,9 @@ A program built from these packages is a config file and a list of plugins,
 assembled by [@yaks/cli](../cli/README.md). A plugin is a package that says what
 it contributes, one facet per subpath, and never where it runs: its words
 (`./vocab`), what a write means (`./rules`), the code behind its tools
-(`./tools`), what runs after a commit (`./effects`), the HTTP it adds
-(`./routes`), the timer or poll it keeps up (`./service`), and how its entities
-are drawn (`./views`, `./tui`).
+(`./tools`), the code behind the effects its words declare (`./effects`), the
+HTTP it adds (`./routes`), the timer or poll it keeps up (`./service`), and how
+its entities are drawn (`./views`, `./tui`).
 
 A process serves roles, and imports only the facets of the roles it serves:
 
@@ -65,15 +65,20 @@ A process serves roles, and imports only the facets of the roles it serves:
 | --------------- | ------------------------------- | ---------------------------------------------- |
 | `graph`         | `./vocab`, `./rules`, `./tools` | opens the file, admits writes, runs tools      |
 | `web`           | `./routes`                      | answers HTTP (`yak serve`, @yaks/api)          |
-| `effects`       | `./effects`                     | runs what commits owe                          |
+| `effects`       | `./effects`                     | claims and runs what commits owe, in a pool    |
 | a plugin's name | that plugin's `./service`       | keeps that plugin's timer or poll running      |
 | rendering       | `./vocab`, `./views`, `./tui`   | draws entities: a browser tab, a `yak` command |
 
 The config names the plugins; each process picks its roles. A browser tab
 renders and reaches the graph through a server. A `yak` command renders, and
-opens the graph itself with the `graph` role. `yak serve` serves `web`. A role
-that one process at a time may hold, the effect sweep or a plugin's service, is
-held under a lease named for its package.
+opens the graph itself with the `graph` role. `yak serve` serves `web`.
+
+What a commit owes is declared in the vocabulary (`effect: true`), so every
+writer writes the runs down in its own transaction, whatever it imported; the
+code runs wherever `effects` is served. `effects` is a pool: any number of
+processes claim runs and run each once (@yaks/effects). `web` and each plugin's
+service are exclusive, held by one process at a time under a lease named for its
+package.
 
 ### Data definitions and execution
 

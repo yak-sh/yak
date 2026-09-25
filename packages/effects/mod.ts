@@ -1,21 +1,26 @@
 /**
  * @yaks/effects — what a graph does about the data it commits, kept out of the
- * write path.
+ * write path and out of the writer.
  *
  * A write is settled by {@link https://jsr.io/@yaks/graph | @yaks/graph}'s
- * `apply()`. An effect is the other half: a function registered per component
- * that runs after the transaction commits and acts on what changed. When a post
- * is published, notify its subscribers. When an order is paid, print a receipt.
- * When an account is deleted, close its sessions.
- *
- * This package is the mechanism only — a registry, a write phase, and the rules
- * for running a handler safely. It ships no effect of its own and declares no
- * components; the components are your vocabulary's and the handlers are yours.
+ * `apply()`. An effect is the other half: work a commit owes, run after the
+ * transaction commits. When a letter is written, send it. When an order is
+ * paid, print a receipt.
  *
  * A batch, here and throughout, is a list of changes applied in one
  * transaction: the array passed to `apply()`, written in full or not at all.
  *
- * ## Use
+ * ## Declared, then handled
+ * An effect is declared in a vocabulary, beside the components it is about,
+ * so every process that loads the vocabulary knows what a write owes:
+ *
+ * ```json
+ * { "$defs": { "send_receipt": { "effect": true, "changed": ["order.paid"] } } }
+ * ```
+ *
+ * and the code that runs it is registered by name, by a process that runs
+ * effects:
+ *
  * ```ts
  * import { graph } from '@yaks/graph'
  * import { ram } from '@yaks/ram'
@@ -23,67 +28,46 @@
  *
  * let fx = effects(vocab)
  * let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
- *
- * fx.created('post', (e) => index(e.entity.eid, e.comp?.title))
- * fx.changed('post', 'published', (e) => notify(e.entity.eid))
- * fx.removed('post', (e) => unindex(e.entity.eid))
+ * fx.handle({ send_receipt: (e) => print(e.entity.eid) })
  * ```
  *
- * Three things happen to a component: {@link Effects.created} when an entity
- * gains it, {@link Effects.changed} when it is patched (for one property, or
- * for any), {@link Effects.removed} when it goes — by its own deletion, or with
- * an entity that died, including every casualty a cascade took. The last of
- * those is `on('-comp', run)` written shortly; the first two describe what
- * changed, and what changed is not a query about what is now true.
+ * Where the vocabulary also loads {@link effectDoc}, a commit writes every run
+ * it owes into the graph, in its own transaction, and any number of processes
+ * work the pool ({@link Effects.work}): each claims a run, runs it, and retries
+ * it on the terms its declaration set. Where it does not, a handled effect
+ * runs in the process that committed, at most once.
  *
- * ## Or a pattern
- * Those three are the narrow question. The wide one is any query, run
- * wherever this batch just made it true:
+ * ## Observers
+ * A process can also watch its own commits, for as long as it runs:
  *
  * ```ts
- * fx.on('$call .call, !results', (e) => run(e.entity.eid))
+ * fx.created('post', (e) => redraw(e.entity.eid))
+ * fx.on('$call .call, !results', (e) => show(e.entity.eid))
  * ```
  *
- * Nothing has to be derived into the graph to trigger that — "a call with no
- * result" is a query the storage can already answer, so the query itself is the
- * registration, with no flag property and no second write to record the first.
- * Only a batch that moved a component the query reads is asked, and a result
- * row counts only where the batch touched the entity it bound.
+ * An observer is known only to the process that registered it, so it runs
+ * there, after that process's commits, and is never written down.
  *
  * ## The promises
  * - **Post-commit only.** A handler cannot reject a write; by the time it runs,
- *   the write is durable. A batch that was refused fires nothing at all.
+ *   the write is durable. A batch that was refused owes nothing.
  * - **Isolated.** A handler that throws is passed to `report` and the next
- *   handler still runs. A broken handler never breaks the batch.
- * - **At most once.** A crash between the commit and the handler loses the
- *   run. Where that is not acceptable, the optional durability tier
- *   ({@link ledger}, {@link effectDoc}) writes each run down and finishes what
- *   an interrupted process left — once.
- * - **Sync stays sync.** Synchronous handlers keep `apply()` synchronous; the
- *   first handler that returns a promise makes that call's return value a
- *   promise.
+ *   handler still runs.
+ * - **Written with the write.** Where the pool is kept, a run is committed with
+ *   the change that owes it, so no crash between the two can lose it.
  *
  * ## Writing back
  * An effect that writes has one route, and it is the graph's own `apply()`:
  *
  * ```ts
  * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
- *
- * fx.changed('order', 'paid', (e, tx, write) =>
- *   write([{ entity: { eid: receipt }, receipt: { order: e.entity.eid } }]))
  * ```
  *
- * So the write is admitted, stamped, journaled, broadcast to subscribers and
- * seen by the other effects — everything a write through `tx.patch` is not. It
- * is a new batch, applied after the commit that triggered the handler, never a
- * row inserted into the finished transaction. `trusted` is what lets an effect
- * write a server-owned property, which is most of what effects write.
- *
- * A write from an effect could of course trigger an effect. That loop is
- * stopped in one place rather than by a rule in each handler: every batch
- * carries its {@link generation} — 0 when it came from a client, 1 for an
- * effect's write — and a batch past `depth` (default 1) commits and broadcasts
- * like any other while triggering nothing.
+ * So the write is admitted, stamped, journaled and broadcast like any other. A
+ * write from an effect could trigger an effect; that loop is stopped in one
+ * place: every batch carries its {@link generation} — 0 when it came from a
+ * client, 1 for an effect's write — and a batch past `depth` (default 1) owes
+ * nothing.
  *
  * It imports no platform API, so the same registry runs on a server, in a
  * worker, and in a browser tab.
@@ -94,6 +78,6 @@
 export * from './trace.ts'
 export * from './write.ts'
 export * from './registry.ts'
-export * from './durable.ts'
+export * from './pool.ts'
 export * from './lease.ts'
 export * from './provisional.ts'

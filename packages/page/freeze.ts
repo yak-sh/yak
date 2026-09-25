@@ -90,7 +90,7 @@ export let froze = async (
 }
 
 /**
- * The `created(web)` handler: fetch a page that was recorded by its address
+ * The code behind `web_freeze`: fetch a page that was recorded by its address
  * alone, and store its bytes.
  *
  * ```ts
@@ -98,7 +98,7 @@ export let froze = async (
  * import { freezing } from '@yaks/page'
  *
  * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
- * // fx.created('web', freezing({ archive, blobs }))
+ * // fx.handle({ web_freeze: freezing({ archive, blobs }) })
  * ```
  *
  * Idempotent, which is what lets a start-up sweep re-run it: a page that

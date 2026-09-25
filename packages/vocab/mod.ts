@@ -24,6 +24,9 @@
 //   rules.ts     rulesIn(docs) → the rules a vocabulary declares: a `$defs`
 //                entry marked `rule: true` is a query the graph runs, and
 //                there is no implementation to join it to
+//   effects.ts   effectsIn(docs) → the effects a vocabulary declares: a
+//                `$defs` entry marked `effect: true` names what a commit owes,
+//                and a plugin's code runs it by that name
 
 export * from './types.ts'
 export * from './order.ts'
@@ -33,3 +36,4 @@ export * from './validate.ts'
 export * from './meta.ts'
 export * from './keywords.ts'
 export * from './rules.ts'
+export * from './effects.ts'

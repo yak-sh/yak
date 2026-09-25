@@ -16,11 +16,12 @@ import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { processDoc, processes } from '@yaks/process'
 import { claude } from './adapters.ts'
+import { spawnDoc } from './vocab.ts'
 import type { Adapter } from './adapters.ts'
 
-/** Every component a managed session uses. */
+/** Every component a managed session uses, and what this package declares. */
 export let host: Vocab = loadVocab(
-  [sessionDoc, toolsDoc, modelDoc, processDoc, edgeDoc],
+  [sessionDoc, toolsDoc, modelDoc, processDoc, edgeDoc, spawnDoc],
   [edgeKeywords],
 )
 

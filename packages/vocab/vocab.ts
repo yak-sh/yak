@@ -522,9 +522,10 @@ export let loadVocab = (
   // twice is a conflict (one name, one home). `$defs` is JSON Schema's own
   // reuse slot, so an entry carries a marker saying what it is:
   // `component: true` is a component, `tool: true` is a tool declaration
-  // (tools.ts `toolsIn` reads those) and `rule: true` is a rule (rules.ts
-  // `rulesIn` reads those), both of which this loader skips, and anything else
-  // is an ordinary subschema somebody `$ref`s. An entry with properties and no
+  // (tools.ts `toolsIn` reads those), `rule: true` is a rule (rules.ts
+  // `rulesIn`) and `effect: true` is an effect (effects.ts `effectsIn`), all of
+  // which this loader skips, and anything else is an ordinary subschema
+  // somebody `$ref`s. An entry with properties and no
   // marker is the one case that throws rather than being skipped: it is a
   // component whose marker was forgotten, and creating no table for it would
   // silently lose the component.
@@ -538,7 +539,10 @@ export let loadVocab = (
   let adding: [string, PropSchema][] = []
   for (let doc of docs) {
     for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
-      if (schema?.tool === true || schema?.rule === true) continue
+      if (
+        schema?.tool === true || schema?.rule === true ||
+        schema?.effect === true
+      ) continue
       if (schema?.component !== true) {
         if (schema?.properties || schema?.type == 'object') {
           throw new Error(

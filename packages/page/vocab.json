@@ -32,6 +32,11 @@
         }
       },
       "description": "a web page as it was seen: the address that was read, and when and where a copy of it was stored"
+    },
+    "web_freeze": {
+      "effect": true,
+      "created": ["web"],
+      "description": "archive a page recorded by its address, and store its bytes"
     }
   }
 }

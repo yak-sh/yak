@@ -67,7 +67,7 @@ let str = (c: Comp, k: string): string => c[k] == null ? '' : String(c[k])
  * import { invited, sending, stash } from '@yaks/mail'
  *
  * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
- * fx.created('mail', sending({ sender: stash() }))
+ * fx.handle({ mail_post: sending({ sender: stash() }) })
  * fx.created('member', invited({
  *   apply: (bundles) => club.apply(bundles),
  *   welcome: ({ person }) => ({

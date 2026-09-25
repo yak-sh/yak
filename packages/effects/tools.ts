@@ -3,21 +3,21 @@
 // declaration in ./vocab.json. One tool, and it is a check — a tool whose verb
 // is `check`, which is all a "doctor" command is (@yaks/tools ./check.ts).
 //
-// The ledger is written for exactly this. ./durable.ts retries a run that did
-// not complete, backing off between attempts, and when its last attempt is
-// spent marks the row `failed` with the error beside it and leaves it for A
-// human. Nothing in that sequence tells the human. This does.
+// The pool is written for exactly this. ./pool.ts retries a run that did not
+// complete, backing off between attempts, and when its last attempt is spent
+// marks the row `failed` with the error beside it and leaves it for a person.
+// Nothing in that sequence tells the person. This does.
 //
-// The other half is a row that never got that far: `pending` is written before
-// the handler runs and marked after, so a row that has been waiting since long
-// before it came due means nobody is running effects at all — the registry's
-// process died, or the application was built with a ledger and no sweep. That
-// failure is invisible from every other angle: the writes commit, the graph
-// looks normal, the mail just never goes out.
+// The other half is a row that never got that far: a run is written pending
+// by the commit that owes it, so a row that has been waiting since long before
+// it came due means nobody is working the pool — no process serves the
+// effects role, or none of them handles that effect. That failure is invisible
+// from every other angle: the writes commit, the graph looks normal, the mail
+// just never goes out.
 //
-// A graph with no `effect` component keeps no ledger, which is a legitimate
-// configuration (at-most-once in memory, nothing written down) and not a fault
-// — the check reports that and finds nothing.
+// A graph with no `effect` component keeps no pool, which is a legitimate
+// configuration (effects run where they were committed, nothing written down)
+// and not a fault — the check reports that and finds nothing.
 
 import { and, eq } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -25,12 +25,12 @@ import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
 import { checked, type Finding } from '@yaks/tools'
 import type { Vocab } from '@yaks/vocab'
-import { EFFECT } from './durable.ts'
+import { EFFECT } from './pool.ts'
 
 /** What configuration this package's check accepts. */
 export type Options = {
   /** how long a run may sit pending past its due instant before that means
-   * nothing is dispatching, in minutes (default 10) */
+   * nothing is working them, in minutes (default 10) */
   minutes?: number
   /** how many of the failed runs to name (default 5) */
   sample?: number
@@ -57,9 +57,9 @@ export let runs = (
   effect_check: async (call, graph) => {
     let about = 'every effect run reached an end somebody would hear about'
     if (!host.vocab.comp(EFFECT)) {
-      // Not a fault: an application that wants at-most-once in memory loads no
-      // `effect` component, so there is nothing written down to fall behind
-      // on.
+      // Not a fault: an application that runs its effects where it commits
+      // them loads no `effect` component, so there is nothing written down to
+      // fall behind on.
       return checked(call.entity.eid, about, [])
     }
     let id = human(host.vocab)
@@ -87,7 +87,7 @@ export let runs = (
       found.push({
         level: 'warn',
         text: `${stuck.length} effect run(s) have been pending since before ` +
-          `${new Date(cutoff).toISOString()} — nothing is dispatching: ` +
+          `${new Date(cutoff).toISOString()} — nothing is working them: ` +
           `${some(stuck, id, sample)}`,
       })
     }
