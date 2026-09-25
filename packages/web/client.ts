@@ -108,7 +108,6 @@ export let rowOf = (r: Record<string, unknown>): Row => {
   }
 }
 
-
 // The graph as rows: one per entity, components merged in; kind derived.
 // Quarantine is absent unless the caller takes the explicit reveal branch.
 export let rows = ({ changes }: { changes: Change[] }, quarantined = false) => {
@@ -2191,7 +2190,6 @@ export let notices = (all: Row[], who: Reader) => {
   }, '')
   return { lines, eids, at }
 }
-
 
 // The scribe's desk: the cheap model wearing the scribe persona on the
 // standing task — the same spawn whether the sweep or :scribe summons it.

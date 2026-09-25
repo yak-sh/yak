@@ -49,6 +49,9 @@ routes still reach their own handlers.
   and mounts them with @yaks/preact; Entity.tsx holds the curated list, and
   components/views holds the views. The TUI (src/tui) mounts the same registry
   through a fake DOM and a terminal painter.
+- **Portable views.** `@yaks/web/views` (views.ts) holds the @yaks/render views
+  any entity has — `Title`, `Tile`, `Facts`, `Comment`, `Page` — which the `yak`
+  command prints an answer through (packages/cli/answer.ts).
 
 ## Limits
 

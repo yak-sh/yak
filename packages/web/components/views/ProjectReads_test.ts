@@ -1,7 +1,17 @@
 import '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { parseQuery, resolveRefs } from '../../query.ts'
-import { applyLocal, cache, dropQuery, findEid, holdQuery, landSub, predsToQuery, querySubscription, useRoute } from '../../live.ts'
+import {
+  applyLocal,
+  cache,
+  dropQuery,
+  findEid,
+  holdQuery,
+  landSub,
+  predsToQuery,
+  querySubscription,
+  useRoute,
+} from '../../live.ts'
 import '../Entity.tsx'
 
 Deno.test('project reads open wire subs and retain hits without cached far rows', () => {

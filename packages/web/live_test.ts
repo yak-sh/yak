@@ -1,12 +1,72 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
 import { slow } from './testing.ts'
-import { agreementProbe, applyLocal, assertAgree, backlinks, boardAll, boardPost, boardsOver, boardSub, boardTasks, byWarmth, cache, census, chatFor, clearResolved, commentCount, commentsOn, config, deps, domains, dropQuery, ent, findEid, foldFor, gated, holdQuery, inbox, jobOf, landSub, loaded, myCamera, myCursor, myMode, openDeps, parents, pinned, predsToQuery, projects, queryEids, querySubscription, relations, repoUrl, resetSignals, row, sessionRows, setInbox, shelfFor, shown, sieve, subEids, subscriptionChecks, subscriptionState, topZ, unreadFor, unsubscribe, useRoute } from './live.ts'
+import {
+  agreementProbe,
+  applyLocal,
+  assertAgree,
+  backlinks,
+  boardAll,
+  boardPost,
+  boardsOver,
+  boardSub,
+  boardTasks,
+  byWarmth,
+  cache,
+  census,
+  chatFor,
+  clearResolved,
+  commentCount,
+  commentsOn,
+  config,
+  deps,
+  domains,
+  dropQuery,
+  ent,
+  findEid,
+  foldFor,
+  gated,
+  holdQuery,
+  inbox,
+  jobOf,
+  landSub,
+  loaded,
+  myCamera,
+  myCursor,
+  myMode,
+  openDeps,
+  parents,
+  pinned,
+  predsToQuery,
+  projects,
+  queryEids,
+  querySubscription,
+  relations,
+  repoUrl,
+  resetSignals,
+  row,
+  sessionRows,
+  setInbox,
+  shelfFor,
+  shown,
+  sieve,
+  subEids,
+  subscriptionChecks,
+  subscriptionState,
+  topZ,
+  unreadFor,
+  unsubscribe,
+  useRoute,
+} from './live.ts'
 import { edgeEid, link } from './edge.ts'
 import { EXISTS, parseQuery, PROJECT, resolveRefs } from './query.ts'
 import { type Ent } from './types.ts'
 import { effect } from '@preact/signals'
-import { assertEquals, assertNotStrictEquals, assertStrictEquals } from '@std/assert'
+import {
+  assertEquals,
+  assertNotStrictEquals,
+  assertStrictEquals,
+} from '@std/assert'
 
 // Status is DERIVED (D-24102): to make a cache Ent read as done/wip/cancelled,
 // give it the mark/claim comp statusOf keys off, not a stored status column.
@@ -108,7 +168,6 @@ Deno.test('server-resolve: a cache hit never touches the wire', () => {
     f.restore()
   }
 })
-
 
 // The auto-derivation proof: filed.assignee is an {eid} reference with NO
 // hand-written index anywhere — yet it is queryable through the same reverse

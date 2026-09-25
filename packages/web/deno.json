@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
-    "./routes": "./routes.ts"
+    "./routes": "./routes.ts",
+    "./views": "./views.ts"
   },
   "license": "Apache-2.0",
   "description": "The web door: canvas, cards, boards and editing in a browser, served by yak serve over @yaks/api and @yaks/client.",

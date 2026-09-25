@@ -8,6 +8,8 @@
  *   stylesheet, icons and the vocabulary (routes.ts).
  * - `.` — the vocabulary the app speaks, learned from the host's documents
  *   (types.ts `learn`).
+ * - `./views` — the portable views any entity has, which a terminal prints
+ *   an answer through (views.ts).
  *
  * @module
  */

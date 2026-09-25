@@ -1,5 +1,17 @@
 import './testing.ts'
-import { awake, cols, comps, deaths, friendly, nick, type Session, settled, stamped, standing, statusOf } from './types.ts'
+import {
+  awake,
+  cols,
+  comps,
+  deaths,
+  friendly,
+  nick,
+  type Session,
+  settled,
+  stamped,
+  standing,
+  statusOf,
+} from './types.ts'
 import { assertEquals } from '@std/assert'
 
 Deno.test('the current vocabulary carries no representation suffixes', () => {
@@ -13,7 +25,7 @@ Deno.test('the current vocabulary carries no representation suffixes', () => {
 // The death words come from the host's vocabulary, one per reference: a
 // delete guard reads the cascade set, so a word lost in learning is a delete
 // that says less than it will do.
-Deno.test('death words: each reference carries its plugin\'s word', () => {
+Deno.test("death words: each reference carries its plugin's word", () => {
   let words = (w: Parameters<typeof deaths>[0]) =>
     new Set(deaths(w).map(([c, p]) => `${c}.${p}`))
   assertEquals(words('cascade').has('card.target'), true)

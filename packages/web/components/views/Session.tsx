@@ -28,7 +28,14 @@ import { useBacklinks, useCommentsOn, useReferences } from '../useQuery.ts'
 import { UrlVal } from '../editors.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
-import { EntryBody, EntryLens, type EntryLine, EntrySummary, entryVisible, mergeTools } from './Entry.tsx'
+import {
+  EntryBody,
+  EntryLens,
+  type EntryLine,
+  EntrySummary,
+  entryVisible,
+  mergeTools,
+} from './Entry.tsx'
 import { entityUrl } from '../../url.ts'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar

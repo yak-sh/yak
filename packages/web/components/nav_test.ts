@@ -5,7 +5,15 @@ import { parseHTML } from 'linkedom'
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { cache, landSub, peek as shellPeek, unsubscribe } from '../live.ts'
 import { type Ent } from '../types.ts'
-import { actionsAt, cardMenuAt, clickProps, eidOf, menu, openAt, peek } from './nav.tsx'
+import {
+  actionsAt,
+  cardMenuAt,
+  clickProps,
+  eidOf,
+  menu,
+  openAt,
+  peek,
+} from './nav.tsx'
 
 let e: Ent = {
   eid: 'task',

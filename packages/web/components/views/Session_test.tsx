@@ -7,7 +7,17 @@ import { cache, ent, landSub, repoUrl, useRoute } from '../../live.ts'
 import { type Ent } from '../../types.ts'
 import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
-import { mentionSig, resolveMentions, SessionContext, SessionDiagnostics, SessionEntry, sessionMentions, SessionReferences, SessionTime, threadMentions } from './Session.tsx'
+import {
+  mentionSig,
+  resolveMentions,
+  SessionContext,
+  SessionDiagnostics,
+  SessionEntry,
+  sessionMentions,
+  SessionReferences,
+  SessionTime,
+  threadMentions,
+} from './Session.tsx'
 
 Deno.test('session list Tile omits its chip and falls back to its actor', () => {
   cache.value = {

@@ -16,7 +16,25 @@ import {
   signal,
   untracked,
 } from '@preact/signals'
-import { awake, type Change, checkPrefix, comps, type Dep, type Ent, type EntCore, idOf, type Pinned, type Session, sessionOf, settled, shortParts, slugsOf, type Snapshot, statusOf, vocab } from './types.ts'
+import {
+  awake,
+  type Change,
+  checkPrefix,
+  comps,
+  type Dep,
+  type Ent,
+  type EntCore,
+  idOf,
+  type Pinned,
+  type Session,
+  sessionOf,
+  settled,
+  shortParts,
+  slugsOf,
+  type Snapshot,
+  statusOf,
+  vocab,
+} from './types.ts'
 import { moves, typeOf } from './edge.ts'
 import { dotFields } from './tray_query.ts'
 import { isUnread, type Row } from './client.ts'
@@ -1011,10 +1029,8 @@ let depOf = (row?: Comps): Dep | undefined => {
 export let crewed = (e: Ent) => {
   let s = e.claim && ent(e.claim.session).session
   return !!s && awake(s)
-}
-
-// A cache peek, exposed for eyes (a CDP probe, the console) to verify what
-// the DOM does not show. Not load-bearing.
+} // A cache peek, exposed for eyes (a CDP probe, the console) to verify what
+ // the DOM does not show. Not load-bearing.
 ;(globalThis as { __peek?: (eid: string) => unknown }).__peek = (eid) =>
   paint.value[eid]
 

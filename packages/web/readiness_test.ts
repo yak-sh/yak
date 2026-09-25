@@ -1,7 +1,15 @@
 // Cold, provisional and confirmed-empty are distinct read states.
 import './testing.ts'
 import { assertEquals } from '@std/assert'
-import { cache, clientSubscription, ent, foldFor, landSub, repoTrace, useRoute } from './live.ts'
+import {
+  cache,
+  clientSubscription,
+  ent,
+  foldFor,
+  landSub,
+  repoTrace,
+  useRoute,
+} from './live.ts'
 
 Deno.test('fold absence becomes expanded only after the client first frame', () => {
   let prior = useRoute(() => {})
