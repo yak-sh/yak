@@ -80,15 +80,15 @@ embedding. The host's `stopping` signal cancels pending timers.
 
 Options:
 
-| Option       | Meaning                                                                            |
-| ------------ | ---------------------------------------------------------------------------------- |
-| `embedder`   | `{ via: 'hash', dim? }`, or a remote embedder configuration                        |
-| `text`       | Selected `component.property` names; defaults to all stored scalar text properties |
-| `neighbours` | Maximum `.near` results, default 8                                                 |
-| `floor`      | Minimum similarity for `.near`, default 0                                          |
-| `after`      | Debounce delay in milliseconds, default 3000                                       |
-| `batch`      | Maximum entities embedded per sweep; default all                                   |
-| `stale`      | Age threshold in minutes used by `vector_check`, default 30                        |
+| Option       | Meaning                                                                               |
+| ------------ | ------------------------------------------------------------------------------------- |
+| `embedder`   | `{ via: 'hash', dim? }`, or a remote embedder configuration                           |
+| `text`       | Selected `component.property` names; defaults to the properties marked `search: true` |
+| `neighbours` | Maximum `.near` results, default 8                                                    |
+| `floor`      | Minimum similarity for `.near`, default 0                                             |
+| `after`      | Debounce delay in milliseconds, default 3000                                          |
+| `batch`      | Maximum entities embedded per sweep; default all                                      |
+| `stale`      | Age threshold in minutes used by `vector_check`, default 30                           |
 
 The `batch` option limits embedding work; it does not mean a graph transaction.
 If a pass leaves stale vectors because of this limit, another write or an

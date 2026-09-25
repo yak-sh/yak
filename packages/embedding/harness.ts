@@ -34,7 +34,7 @@ let doc: VocabDoc = {
       type: 'object',
       kind: true,
       properties: {
-        title: { type: 'string' },
+        title: { type: 'string', search: true },
         blurb: { type: 'string' },
         price: { type: 'number' },
       },
@@ -46,7 +46,7 @@ let doc: VocabDoc = {
       type: 'object',
       kind: true,
       properties: {
-        prose: { type: 'string' },
+        prose: { type: 'string', search: true },
         stars: { type: 'number' },
         book: { type: 'string', ref: 'book', death: 'cascade' },
       },

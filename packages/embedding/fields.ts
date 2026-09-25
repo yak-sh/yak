@@ -48,6 +48,14 @@ export type Pick = (prop: Prop) => boolean
 export let textual: Pick = (c) =>
   !c.computed && c.category == 'scalar' && c.scalar == 'text'
 
+/**
+ * The text a bare word searches: the stored text properties the vocabulary
+ * marks `search: true`. What a plugin embeds when its config names no `text`,
+ * so a vector is made of prose people wrote, never of transcripts, tool
+ * arguments or command lines, which are text too.
+ */
+export let searched: Pick = (c) => textual(c) && c.search
+
 /** The embedded fields of a vocabulary, by component then declaration order. */
 export let fields = (vocab: Vocab, pick: Pick = textual): Field[] =>
   vocab.all.flatMap((comp) =>

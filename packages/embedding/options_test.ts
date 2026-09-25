@@ -61,7 +61,7 @@ Deno.test('a key the environment has not got yet is waiting, and the space is kn
 
 Deno.test('what a pass needs is read whole, and a bad name waits rather than throws', () => {
   let now = ready(shop, { embedder: { via: 'hash' } })
-  assertEquals(now.text.length, 3)
+  assertEquals(now.text.length, 2)
   assertEquals(now.embedder?.model, 'hash-64')
   let bad = ready(shop, { embedder: { via: 'hash' }, text: ['book.spine'] })
   assertEquals(bad.text, [])
@@ -69,10 +69,9 @@ Deno.test('what a pass needs is read whole, and a bad name waits rather than thr
   assert(bad.waiting?.includes('book.spine'), `${bad.waiting}`)
 })
 
-Deno.test('text defaults to every textual property and narrows by name', () => {
+Deno.test('text defaults to the searched properties and narrows by name', () => {
   assertEquals(chosen(shop, {}).map((f) => `${f.comp}.${f.prop}`), [
     'book.title',
-    'book.blurb',
     'review.prose',
   ])
   assertEquals(chosen(shop, { text: ['book.blurb'] }), [{

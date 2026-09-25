@@ -35,7 +35,7 @@
 import type { Vocab } from '@yaks/vocab'
 import type { Embedder } from './embedder.ts'
 import { hashEmbedder } from './embedder.ts'
-import { type Field, fields } from './fields.ts'
+import { type Field, fields, searched } from './fields.ts'
 import { type Remote, remote } from './remote.ts'
 
 /** An embedder, as a config names one. */
@@ -52,7 +52,7 @@ export type Options = {
    * space every stored row is stamped with */
   embedder?: Named
   /** which text feeds a vector, as `comp.prop` pairs. The default is every
-   * stored text property the vocabulary declares. */
+   * property the vocabulary marks `search: true` (./fields.ts `searched`). */
   text?: string[]
   /** how many neighbours a `.near` selects (default 8) */
   neighbours?: number
@@ -115,11 +115,11 @@ export let embedderOf = (options: Options): Ready => {
   }
 }
 
-/** The fields a config chose, or every text property. A name the vocabulary
+/** The fields a config chose, or every searched one. A name the vocabulary
  * does not declare is an error rather than a field that silently embeds
  * nothing. */
 export let chosen = (vocab: Vocab, options: Options): Field[] => {
-  if (!options.text) return fields(vocab)
+  if (!options.text) return fields(vocab, searched)
   return options.text.map((said) => {
     let [comp, prop, ...rest] = said.split('.')
     if (!prop || rest.length || !vocab.prop(comp, prop)) {
