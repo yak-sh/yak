@@ -52,9 +52,9 @@ Deno.test('a task nobody filed wears no filing', async () => {
 })
 
 Deno.test('a listing always says .task, and open unless told otherwise', () => {
-  assertEquals(listing(), '.task&.task.status=open')
-  assertEquals(listing('.filed.project=P-19'), '.task&.filed.project=P-19')
-  assertEquals(listing('hobbit', 5), '.task&hobbit&.limit=5')
+  assertEquals(listing(), '.task&.task.status=open&*')
+  assertEquals(listing('.filed.project=P-19'), '.task&.filed.project=P-19&*')
+  assertEquals(listing('hobbit', 5), '.task&hobbit&.limit=5&*')
 })
 
 Deno.test('a status is the marks that mean it', async () => {

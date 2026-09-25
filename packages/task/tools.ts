@@ -80,7 +80,8 @@ export let marked: Record<string, Record<string, Comp | null>> = {
  * The default names `.task.status`, not `.status`: a graph that also keeps
  * transcripts has a `session.status` too, so a bare `.status` there would be
  * ambiguous — the query grammar reporting a genuine ambiguity, not a bug to
- * work around. A caller's own query is passed through as typed.
+ * work around. A caller's own query is passed through as typed, and every
+ * task comes back whole (`*`): a listing shows tasks, not the words it matched.
  */
 export let listing = (query?: unknown, limit?: unknown): string => {
   let said = String(query ?? '').trim()
@@ -88,6 +89,7 @@ export let listing = (query?: unknown, limit?: unknown): string => {
     '.task',
     said || '.task.status=open',
     ...(limit == null ? [] : [`.limit=${Number(limit)}`]),
+    '*',
   ].join('&')
 }
 
