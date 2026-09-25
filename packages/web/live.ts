@@ -2855,28 +2855,35 @@ export let shelfFor = (client: string): string | undefined => {
   return localEids([eq('shelf', 'client', client)]).value[0]
 }
 
-// THIS tab's own screen-state rows — cursor, camera, fold, shelf: every
-// component whose `client` column names this browser — streamed by ONE small
-// server sub per tab (T-21490, step 3 of D-21486). Held for the tab's LIFE: the
-// key space is exactly one value (this client's uuid), so the eid-keyed
-// teardown rule (T-21489) doesn't bite — O(tabs) wire subs, not O(rows) — and
-// the singleton readers stay LOCAL lookups over the rows the sub streams in. A
-// per-shape wire sub here would accumulate (a fold sub per board visited);
-// resolving locally without the sub would under-report on a partial cache.
+// THIS tab's own screen-state rows — cursor, camera, fold, shelf: the
+// components whose `client` names this browser — streamed by one small server
+// sub per component per tab (T-21490, step 3 of D-21486). Named one by one,
+// because a bare `.client` is ambiguous wherever another plugin declares a
+// `client` that is not this reference (@yaks/connections' integration). Held
+// for the tab's LIFE: the key space is exactly one value (this client's uuid),
+// so the eid-keyed teardown rule (T-21489) doesn't bite — O(tabs) wire subs,
+// not O(rows) — and the singleton readers stay LOCAL lookups over the rows the
+// subs stream in. A per-shape wire sub here would accumulate (a fold sub per
+// board visited); resolving locally without the sub would under-report on a
+// partial cache.
+let SCREEN = ['camera', 'cursor', 'fold', 'shelf']
+let screenOf = (comp: string, client: string) =>
+  resolveRefs(parseQuery(`.${comp}.client=${client}`), findEid)
+
+/** The read state of one of this tab's screen components (default its folds). */
 export let clientSubscription = (
   client: string,
+  comp = 'fold',
 ): SubscriptionRead | undefined => {
   ensureClientRows(client)
-  return querySubscription(
-    resolveRefs(parseQuery(`.client=${client}`), findEid),
-  )
+  return querySubscription(screenOf(comp, client))
 }
 
 let clientSubs = new Set<string>()
 export let ensureClientRows = (client: string) => {
   if (!client || clientSubs.has(client)) return
   clientSubs.add(client)
-  holdQuery(resolveRefs(parseQuery(`.client=${client}`), findEid))
+  for (let comp of SCREEN) holdQuery(screenOf(comp, client))
 }
 
 // The comments aimed HERE — every entity whose `comment.target` is this eid,

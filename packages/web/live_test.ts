@@ -2056,11 +2056,11 @@ Deno.test('reverse subs: held per open card, torn down on close (T-21489)', () =
   }
 })
 
-// T-21490: per-client singletons — cursor, camera, fold, shelf — ride ONE small
-// server sub per tab (`.client=<uuid>`, the shared-ref scan query.ts already
-// speaks), held for the tab's life; the readers stay LOCAL lookups over the
-// rows it streams, so visiting boards or canvases opens no further wire subs.
-Deno.test('client singletons: one tab sub, local reads, isolation (T-21490)', () => {
+// T-21490: per-client singletons — cursor, camera, fold, shelf — ride one small
+// server sub per component per tab (`.fold.client=<uuid>`, …), held for the
+// tab's life; the readers stay LOCAL lookups over the rows they stream, so
+// visiting boards or canvases opens no further wire subs.
+Deno.test('client singletons: four tab subs, local reads, isolation (T-21490)', () => {
   let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
   ;(globalThis as { WebSocket: unknown }).WebSocket = class {
     readyState = 0
@@ -2110,20 +2110,20 @@ Deno.test('client singletons: one tab sub, local reads, isolation (T-21490)', ()
         cursor: { eid: 'cb', client: B, target: CV },
       },
     }
-    // The sub line is the shared-ref scan, proven round-trippable to the wire.
-    let preds = resolveRefs(parseQuery(`.client=${A}`), findEid)
-    assertEquals(predsToQuery(preds), `.client=${A}`)
+    // Each sub line names its component, proven round-trippable to the wire.
+    let preds = resolveRefs(parseQuery(`.fold.client=${A}`), findEid)
+    assertEquals(predsToQuery(preds), `.fold.client=${A}`)
     let n0 = probe.subN()
-    // Every singleton read for A answers A's rows through ONE wire sub.
+    // Every singleton read for A answers A's rows through its four wire subs.
     assertEquals(myCursor(A)?.target, T)
     assertEquals(foldFor(A, b1)?.statuses, 'open')
     assertEquals(foldFor(A, b2), undefined) // a second board: no second sub
     assertEquals(shelfFor(A), 'sa')
     assertEquals(myCamera(A, CV)?.x, 7)
-    assertEquals(probe.subN(), n0 + 1)
-    // Isolation: A's reads never surface B's rows; B's first read adds ITS sub.
+    assertEquals(probe.subN(), n0 + 4)
+    // Isolation: A's reads never surface B's rows; B's first read adds ITS subs.
     assertEquals(myCursor(B)?.target, CV)
-    assertEquals(probe.subN(), n0 + 2)
+    assertEquals(probe.subN(), n0 + 8)
     // The tab sub streams a new fold row for A — the local reader sees it.
     landSub({
       sub: `q:${JSON.stringify(preds)}`,
@@ -2137,7 +2137,7 @@ Deno.test('client singletons: one tab sub, local reads, isolation (T-21490)', ()
       ],
     })
     assertEquals(foldFor(A, b2)?.statuses, 'wip')
-    assertEquals(probe.subN(), n0 + 2) // still no per-shape subs
+    assertEquals(probe.subN(), n0 + 8) // still no per-shape subs
   } finally {
     ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
   }
