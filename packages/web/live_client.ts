@@ -41,6 +41,12 @@ export let quiet = (): Socket => ({
   addEventListener: () => {},
 })
 
+// The page draws an entity by whatever components it carries (the registry
+// matches on any of them), so every line it watches asks for all of them: `*`,
+// the query grammar's widest projection (@yaks/graph `wanted`).
+export let entire = (line: string): string =>
+  /(^|&)\*(&|$)/.test(line) ? line : line ? `${line}&*` : '*'
+
 export type LiveClient = ReturnType<typeof liveClient>
 export let liveClient = (opts: {
   url: string
@@ -111,10 +117,11 @@ export let liveClient = (opts: {
   let open = (sub: string, line: string) => {
     if (handles.get(sub)?.line === line) return
     close(sub)
-    let watch = box.watch(line, { evaluate: 'server' })
+    let wire = entire(line)
+    let watch = box.watch(wire, { evaluate: 'server' })
     handles.set(sub, { line, watch })
-    let names = named.get(line) ?? new Set()
-    named.set(line, names.add(sub))
+    let names = named.get(wire) ?? new Set()
+    named.set(wire, names.add(sub))
     watch.subscribe(() => opts.ready(sub))
     opts.ready(sub)
   }
@@ -122,9 +129,10 @@ export let liveClient = (opts: {
     let h = handles.get(sub)
     if (!h) return
     handles.delete(sub)
-    let names = named.get(h.line)
+    let wire = entire(h.line)
+    let names = named.get(wire)
     names?.delete(sub)
-    if (!names?.size) named.delete(h.line)
+    if (!names?.size) named.delete(wire)
     h.watch.close()
   }
   // Changes as whole rows: a reset rebuilds each row from what it carries.
@@ -158,7 +166,7 @@ export let liveClient = (opts: {
   let receive = (f: Sub) => {
     let h = handles.get(f.sub)
     let id = h &&
-      [...lines].find(([, line]) => line === h.line)?.[0]
+      [...lines].find(([, line]) => line === entire(h.line))?.[0]
     if (!id || !deliver) return
     let frame: Frame = f.error
       ? { id, refused: { error: 'read', message: f.error } }
