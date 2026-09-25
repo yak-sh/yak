@@ -1,5 +1,5 @@
 // A codebase in a scratch Git repository, read into an in-memory graph and read
-// again as it changes. Slow: it runs git and `deno doc` as subprocesses.
+// again as it changes. It runs git and `deno doc` as subprocesses.
 
 import { assertEquals } from '@std/assert'
 import { docDoc } from '@yaks/doc/vocab'
@@ -11,9 +11,6 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { codeDoc } from './vocab.ts'
 import { codeMirror } from './sync.ts'
-
-let slow = (name: string, fn: () => Promise<void>) =>
-  Deno.test({ name, fn, ignore: !Deno.env.get('TASKS_SLOW') })
 
 let entity = {
   $defs: {
@@ -61,7 +58,7 @@ let commit = async (dir: string) => {
 let names = (bundles: Bundle[]) =>
   bundles.map((b) => String((b.symbol as Comp).name)).sort()
 
-slow(
+Deno.test(
   'code sync reads a tree, then only what moved, and clears what went',
   async () => {
     let dir = Deno.makeTempDirSync()
@@ -86,7 +83,7 @@ slow(
       [2, 1, 1],
     )
     assertEquals(names(await g.read('.symbol')), ['add', 'gone'])
-    let [add] = await g.read('.symbol.name=add')
+    let [add] = await g.read('.symbol.name=add&?doc')
     assertEquals((add.doc as Comp).body, 'Adds.')
     assertEquals((await pass()).read, [])
 

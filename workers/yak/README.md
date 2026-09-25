@@ -31,11 +31,10 @@ GitHub Actions workflow. Builds clones the repo itself and mints its own API
 token, so no Cloudflare credential exists in this repo, on the Actions runner,
 or in a GitHub secret.
 
-Nothing gates that push. `.github/workflows/gate.yml` runs the check, the fast
-tests, and — where the diff touches `workers/` or `packages/` — the complete
-`deno task test:workerd` tier, and it reports what it finds: a red tier is a bug
-to fix, not a deploy held back. T-37197 briefly promoted a gated `deploy` branch
-instead; it was reverted the same day (M-37262).
+Nothing gates that push. `.github/workflows/gate.yml` runs `deno task check` and
+`deno task test`, the workerd tests included, and it reports what it finds: a
+red test is a bug to fix, not a deploy held back. T-37197 briefly promoted a
+gated `deploy` branch instead; it was reverted the same day (M-37262).
 
 The dashboard settings, in full (Workers & Pages → `yak` → Settings → Builds):
 
@@ -66,10 +65,10 @@ deploy gate judges the rows already recorded (`bench/deploys.md`).
 
 Everything the build actually does is in `bin/build-yak`, so the dashboard holds
 one line: install Deno (not on the Ubuntu 24.04 image), `deno task check` from
-the repo root, `deno task test:workers`. A red build deploys nothing. A push's
-build that fails is started once more through the `BUILD_HOOK` deploy hook
-(builds.ts), since most failures are the network's; the second build's failure
-stands.
+the repo root, `deno task test --only=deno workers`. A red build deploys
+nothing. A push's build that fails is started once more through the `BUILD_HOOK`
+deploy hook (builds.ts), since most failures are the network's; the second
+build's failure stands.
 
 The sandbox image is two halves (sandbox/base.ts). `sandbox/base/Dockerfile` is
 the toolchain, pushed to the registry once per version of that file as

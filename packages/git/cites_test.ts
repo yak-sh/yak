@@ -2,17 +2,11 @@
 // git, where the interesting part is which question git is asked, and against
 // a disposable repository, where the interesting part is that git's answer
 // means what this module says it means.
-//
-// The repository cases cost git processes and a temp directory, so they run
-// under TASKS_SLOW; everything else stays in the fast tier.
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import type { Ran, Run } from './land.ts'
 import { status } from './cites.ts'
-
-let slow = (name: string, fn: () => Promise<void>) =>
-  Deno.test({ name, fn, ignore: !Deno.env.get('TASKS_SLOW') })
 
 // A git that answers whatever the case wants and remembers what it was asked.
 let fake = (answer: (args: string[]) => Partial<Ran> = () => ({})) => {
@@ -248,7 +242,7 @@ let setup = async () => {
   return { cwd, at }
 }
 
-slow(
+Deno.test(
   'a definition somebody edited moved; the line above it did not',
   async () => {
     let { cwd, at } = await setup()
@@ -274,7 +268,7 @@ slow(
   },
 )
 
-slow('a commit rebased out of the repository reads unknown', async () => {
+Deno.test('a commit rebased out of the repository reads unknown', async () => {
   let { cwd } = await setup()
   let gone = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
   let got = await status(

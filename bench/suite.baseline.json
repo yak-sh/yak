@@ -16,13 +16,6 @@
         "controlFloorSeconds": 0.05178629543076968,
         "seconds": 43.901683555
       }
-    },
-    "test:workerd": {
-      "baseline": {
-        "ratio": 1092.8202610407966,
-        "controlFloorSeconds": 0.04721433025925917,
-        "seconds": 62.305967882
-      }
     }
   }
 }

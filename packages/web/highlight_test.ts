@@ -1,15 +1,14 @@
 // One tokenizer feeds HTML and terminal segments; both keep the source while
 // explicit and inferred languages add only the library's semantic classes.
-import { slow } from './testing.ts'
+import './testing.ts'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { highlight } from './highlight.ts'
 
 // Both invoke hljs's grammar work — compiling a language on first use, and, with
-// no language given, auto-detecting across every registered grammar. That cost
-// is the highlighter's, not trimmable, so they ride the slow tier. The escaping
-// guard below takes no grammar path (an unknown language never compiles), so it
-// stays a fast unit.
-slow('highlight: a specified language colors code and preserves text', () => {
+// no language given, auto-detecting across every registered grammar. The
+// escaping guard below takes no grammar path (an unknown language never
+// compiles).
+Deno.test('highlight: a specified language colors code and preserves text', () => {
   let lit = highlight("let name: string = 'Ada'", 'typescript')
   assertEquals(lit.language, 'typescript')
   assertStringIncludes(lit.html, 'hljs-keyword')
@@ -20,7 +19,7 @@ slow('highlight: a specified language colors code and preserves text', () => {
   )
 })
 
-slow('highlight: an absent language is detected', () => {
+Deno.test('highlight: an absent language is detected', () => {
   let lit = highlight(
     '#!/usr/bin/env python3\ndef greet(name):\n    print(f"hello {name}")',
   )

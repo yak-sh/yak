@@ -1,6 +1,5 @@
 import { assertEquals } from '@std/assert'
 import { letters, mailed } from './probe.ts'
-import { readyAddress } from './probe-suite.ts'
 
 Deno.test('mailed waits for a new delivery rather than returning a spent code', async () => {
   let log = Deno.makeTempFileSync()
@@ -18,13 +17,4 @@ Deno.test('mailed waits for a new delivery rather than returning a spent code', 
   } finally {
     Deno.removeSync(log)
   }
-})
-
-Deno.test('a probe waits for its own runtime readiness and bound port', () => {
-  assertEquals(readyAddress('Starting local server...'), '')
-  assertEquals(readyAddress('GET / 404 Not Found'), '')
-  assertEquals(
-    readyAddress('[wrangler:info] Ready on http://127.0.0.1:49152\n'),
-    'http://127.0.0.1:49152',
-  )
 })

@@ -1,30 +1,43 @@
-// Run the bin/ and workers/ tests in one parallel pass. The packages carry
-// their own (`deno task test:packages`).
+// Every test in the repository, divided by the platform it runs on, and each
+// platform's environment started once per run (M-39441):
+//
+// - deno: every `*_test.ts`, sharded across processes;
+// - workerd: every `*_workerd_test.ts`, against the one kernel
+//   workers/yak/probe-suite.ts starts for the run.
+//
+// `deno task test [--only=deno|workerd] [path...]` runs what lies under the
+// paths given, or all of it, on every platform or the one named.
 
 import { denoDir } from './testing.ts'
 
-export async function inventory() {
+export let ROOTS = ['packages', 'bin', 'workers']
+
+/** A test that runs against the run's kernel, in workerd. */
+export let workerd = (file: string) => /_workerd_test\.tsx?$/.test(file)
+
+// Ours only. `node_modules` is walked into otherwise, and a dependency that
+// ships its own `*_test.ts` (`@jsr/std__streams` does) is then run as if it
+// were this repo's, against an import map that is not its own.
+let SKIP = ['vendor', 'node_modules', '.wrangler']
+
+export async function inventory(roots = ROOTS) {
   let tests: string[] = []
-  // Ours only. `node_modules` is walked into otherwise, and a dependency that
-  // ships its own `*_test.ts` — `@jsr/std__streams` does — is then run as if it
-  // were this repo's, against an import map that is not its own. The workerd
-  // probes install one under workers/yak, so this fires for anybody who runs
-  // them before the suite.
-  let SKIP = new Set(['vendor', 'node_modules'])
   let collect = async (dir: string): Promise<void> => {
     for await (let entry of Deno.readDir(dir)) {
       let path = `${dir}/${entry.name}`
       if (entry.isFile && /_test\.tsx?$/.test(entry.name)) {
         tests.push(path)
-      } else if (entry.isDirectory && !SKIP.has(entry.name)) {
+      } else if (entry.isDirectory && !SKIP.includes(entry.name)) {
         await collect(path)
       }
     }
   }
-  for (let dir of ['bin', 'workers']) await collect(dir)
-  tests.sort()
-
-  return tests
+  for (let root of roots) {
+    let path = root.replace(/\/+$/, '')
+    if ((await Deno.stat(path)).isDirectory) await collect(path)
+    else tests.push(path)
+  }
+  return tests.sort()
 }
 
 let common = [
@@ -39,9 +52,9 @@ let common = [
   '--unstable-worker-options',
   // No --fail-fast. A suite reports every failure it has: stopping at the
   // first one turns a red run into a single symptom, and the shard that never
-  // ran is indistinguishable from a green one. The slow tier hid 22 failures
-  // behind an early shard for hundreds of commits that way.
+  // ran is indistinguishable from a green one.
 ]
+
 export type TestCommand = {
   command: string
   args: string[]
@@ -299,15 +312,17 @@ function report(
   while (bytes.length) bytes = bytes.subarray(stream.writeSync(bytes))
 }
 
+// `--bulk <file>...`
 if (import.meta.main && Deno.args[0] === '--bulk') {
   // Deno --parallel shares a native SQLite allocator across its worker threads.
   // Separate processes avoid its mutex contention. This coordinator and all
-  // its children stay in the outer runner's process group: fail-fast or a
-  // signal still settles the complete tree, not just a shard's leader.
+  // its children stay in the outer runner's process group: a signal still
+  // settles the complete tree, not just a shard's leader.
+  let files = Deno.args.slice(1)
   let jobs = Number(Deno.env.get('DENO_JOBS') ?? navigator.hardwareConcurrency)
-  let children = shards(Deno.args.slice(1), jobs).map((files) =>
+  let children = shards(files, jobs).map((f) =>
     new Deno.Command(Deno.execPath(), {
-      args: [...common, ...files],
+      args: [...common, ...f],
       stdin: 'inherit',
       // Keep each reporter intact: interleaved half-lines would also fool
       // test:budget's per-test duration parser. Drain concurrently below.
@@ -330,39 +345,73 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   for (let line of failed) console.error(line)
   if (failed.length) Deno.exit(1)
 } else if (import.meta.main) {
-  let tests = await inventory()
-  let suite = Deno.env.get('TASKS_SLOW')
-    ? await (await import('../workers/yak/probe-suite.ts')).probeSuite()
+  let only = Deno.args.find((a) => a.startsWith('--only='))?.slice(7)
+  let paths = Deno.args.filter((a) => !a.startsWith('--only='))
+  let files = (await inventory(paths.length ? paths : ROOTS))
+    .filter((f) => !only || workerd(f) == (only == 'workerd'))
+  let { sandboxKey } = await import('../workers/yak/probe.ts')
+  let stripe = await sandboxKey()
+  let env: Record<string, string> = {
+    TEST_DENO_DIR: denoDir(),
+    DENO_DIR: denoDir(),
+    ...stripe ? { STRIPE_KEY: stripe } : {},
+  }
+  let wd = files.filter(workerd)
+  // The kernel starts while the deno pass runs, and is ready by its end.
+  let started = wd.length
+    ? import('../workers/yak/probe-suite.ts').then((m) => m.probeSuite(stripe))
     : undefined
-  let env = { TEST_DENO_DIR: denoDir(), DENO_DIR: denoDir(), ...suite?.env }
+  started?.catch(() => {})
+  let bulk = (label: string, args: string[], extra = {}): TestCommand => ({
+    command: Deno.execPath(),
+    args: [
+      'run',
+      '-A',
+      '--unstable-worker-options',
+      import.meta.filename!,
+      '--bulk',
+      ...args,
+    ],
+    env: { ...env, ...extra },
+    label,
+  })
   let failed: string[] = []
+  let options = {
+    onFailure: (spec: TestCommand) =>
+      failed.push(spec.label ?? spec.args.join(' ')),
+  }
+  let suite: Awaited<typeof started>
+  let result: Result = { code: 1 }
   try {
-    let result = await runTestCommands([
-      {
-        command: Deno.execPath(),
-        args: [
-          'run',
-          '-A',
-          '--unstable-worker-options',
-          import.meta.filename!,
-          '--bulk',
-          ...tests,
-        ],
-        env,
-        label: 'the parallel pass',
-      },
-    ], {
-      terminateOnSignal: !suite,
-      onFailure: (spec) => failed.push(spec.label ?? spec.args.join(' ')),
-    })
-    Deno.exitCode = result.code ?? (result.signal === 'SIGINT' ? 130 : 143)
+    result = await runTestCommands([
+      bulk('deno', files.filter((f) => !workerd(f))),
+    ], options)
+    if (started && !result.signal) {
+      try {
+        suite = await started
+      } catch (e) {
+        console.error(e)
+        failed.push('workerd: the kernel did not start')
+        result = { code: 1 }
+      }
+      if (suite) {
+        let passed = await runTestCommands(
+          [bulk('workerd', wd, suite.env)],
+          options,
+        )
+        result = passed.signal || !result.code ? passed : result
+      }
+    }
   } finally {
-    await suite?.stop()
-    // The closing word on a long run: which phases were red, after every one
-    // of them has printed its own report.
+    await (suite ?? await started?.catch(() => undefined))?.stop()
+    // The closing word on a long run: which platforms were red, after every
+    // one of them has printed its own report.
     if (failed.length) {
-      console.error(`\n─── ${failed.length} failing phase(s) ───`)
+      console.error(`\n─── ${failed.length} failing platform(s) ───`)
       for (let phase of failed) console.error(`  ${phase}`)
     }
   }
+  // The code is said last and outright: wrangler's close sets Node's exit
+  // code, which is Deno's.
+  Deno.exit(result.code ?? (result.signal === 'SIGINT' ? 130 : 143))
 }

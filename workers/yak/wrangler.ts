@@ -22,8 +22,8 @@
 // miniflare simulates the builder; mail_test.ts holds it.
 //
 // And not the newest either: 4.128.0 boots the same probes three times slower
-// and drops kernels under the parallel slow tier (`Network connection lost`),
-// where 4.111.0 runs it at the old pin's pace. Measure before moving.
+// and drops kernels under parallel load (`Network connection lost`), where
+// 4.111.0 runs them at the old pin's pace. Measure before moving.
 // Exact pins can reuse npm's restored cache without registry revalidation.
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'

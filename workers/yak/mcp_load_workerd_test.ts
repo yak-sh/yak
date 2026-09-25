@@ -6,7 +6,6 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { slow } from '../../bin/testing.ts'
 import {
   charged,
   connector,
@@ -21,6 +20,7 @@ import {
   stripeKey,
   txt,
   vocabFile,
+  WEBHOOK_SECRET,
 } from './probe.ts'
 import { HAS_NOTES } from './standing.ts'
 import { managePath } from './route.ts'
@@ -29,7 +29,7 @@ import { HELLO } from './mcp-probe.ts'
 // And a bundle the store refuses refuses the deploy, naming the file and the
 // entry: an agent that wrote ten seed files needs to know which one it
 // mistyped, and the refusal itself only ever names the word.
-slow('a refused seed bundle names its file and index', async () => {
+Deno.test('a refused seed bundle names its file and index', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -83,7 +83,7 @@ slow('a refused seed bundle names its file and index', async () => {
 // reading as the seed, asked for on purpose: a folder of files as one batch,
 // aliases across them, only the *.json among them, and no once-only mark — so
 // a second call loads the same file again.
-slow('store_load writes a file already in the app into its store', async () => {
+Deno.test('store_load writes a file already in the app into its store', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -176,7 +176,7 @@ slow('store_load writes a file already in the app into its store', async () => {
 // it and until when, a grant cannot mint another, and revoking it shuts the
 // door that bearer was walking through — the 401 every credential that did not
 // verify gets (T-34344), rather than the surface a stranger sees.
-slow(
+Deno.test(
   'a grant signs a terminal in, and revoking it shuts the door',
   async () => {
     let k = await kernel()
@@ -228,7 +228,7 @@ slow(
       )
       assertStringIncludes(
         (await assertRejects(
-          () => only.tool('space_new', { slug: 'three', title: 'three' }),
+          () => only.tool('space_new', { slug: 'three38', title: 'three38' }),
           Error,
         )).message,
         'and no other space',
@@ -251,7 +251,7 @@ slow(
 // The spreadsheet half (csv.ts, T-34393): `as` is what a row IS, the headers
 // are its properties, and the id column names each row — which is what makes
 // the second load patch the same two rows rather than mint two more (T-34454).
-slow('store_load reads a CSV as rows of one component', async () => {
+Deno.test('store_load reads a CSV as rows of one component', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -338,7 +338,7 @@ slow('store_load reads a CSV as rows of one component', async () => {
 //
 // The two halves are handed over at different moments since T-34632: the
 // roster rides on `initialize`, and the notes are `about`'s answer.
-slow('an app says what it holds, and keeps notes about itself', async () => {
+Deno.test('an app says what it holds, and keeps notes about itself', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -472,10 +472,10 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
 
     // Until she installs it. The notes are one of the app's files, so a copy
     // carries them — the publisher's notes, in her own copy, hers to rewrite.
-    await agent.tool('app_publish', { space, app: 'recipes' })
+    await agent.tool('app_publish', { space, app: 'recipes', name: 'grams' })
     assertStringIncludes(
-      await maya.tool('app_install', { name: 'recipes' }),
-      'installed recipes',
+      await maya.tool('app_install', { name: 'grams' }),
+      'installed grams v1 as',
     )
     assertStringIncludes(
       await maya.tool('app_files', {
@@ -499,21 +499,16 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
 // provider it carries imports `cloudflare:` modules only workerd can load.
 // Stripe is Stripe's own sandbox (probe.ts `stripeKey`): the checkout session,
 // the subscription and the connected account are all made there and read back.
-slow('space_sell connects an account and hands back one link', async () => {
+Deno.test('space_sell connects an account and hands back one link', async () => {
   let key = stripeKey()
   let price = await plusPrice(key)
-  let k = await kernel({
-    STRIPE_KEY: key,
-    STRIPE_PRICE: price,
-    STRIPE_CONNECT_WEBHOOK_SECRET: 'whsec_a_connect_probe_secret',
-    STRIPE_WEBHOOK_SECRET: 'whsec_plan_probe',
-  })
+  let k = await kernel()
   try {
-    let { cookie, eids } = await seed(k, [{ slug: 'ada', apps: ['shop'] }])
+    let { cookie, eids } = await seed(k, [{ slug: 'ada39', apps: ['shop'] }])
     let agent = connector(k, cookie)
     // Selling has its own account page; the library links to it. The form's
     // action and next step must follow the account through all three states.
-    let path = managePath('selling', 'ada')
+    let path = managePath('selling', 'ada39')
     let page = async (button: string, value = 'start') => {
       let r = await k.at('yaks.app', path, { headers: { cookie } })
       assertEquals(r.status, 200)
@@ -530,7 +525,7 @@ slow('space_sell connects an account and hands back one link', async () => {
         button,
       )
     }
-    let library = await k.at('yaks.app', managePath('apps', 'ada'), {
+    let library = await k.at('yaks.app', managePath('apps', 'ada39'), {
       headers: { cookie },
     })
     assertStringIncludes(await library.text(), `href="${path}"`)
@@ -547,7 +542,7 @@ slow('space_sell connects an account and hands back one link', async () => {
     }
     await freePage()
     await assertRejects(
-      () => agent.tool('space_sell', { space: 'ada' }),
+      () => agent.tool('space_sell', { space: 'ada39' }),
       Error,
       'Plus',
     )
@@ -597,19 +592,19 @@ slow('space_sell connects an account and hands back one link', async () => {
       success_url: string
       cancel_url: string
     }
-    assertEquals(purchase.metadata.space, eids.ada)
+    assertEquals(purchase.metadata.space, eids.ada39)
     assertEquals(purchase.line_items.data[0].price.id, price)
     // Checkout started from a space's page hands the person back to that
     // space's plan settings, not to the apex connector (billing.ts `checkout`).
     assertEquals(
       purchase.success_url,
-      `https://yaks.app${managePath('billing', 'ada')}&paid=1`,
+      `https://yaks.app${managePath('billing', 'ada39')}&paid=1`,
     )
     assertEquals(
       purchase.cancel_url,
-      `https://yaks.app${managePath('billing', 'ada')}&paid=0`,
+      `https://yaks.app${managePath('billing', 'ada39')}&paid=0`,
     )
-    let sub = await plus(k, 'whsec_plan_probe', eids.ada)
+    let sub = await plus(k, eids.ada39)
     await page('Connect Stripe')
     let paid = await subscribe()
     assertEquals(paid.status, 409)
@@ -618,14 +613,14 @@ slow('space_sell connects an account and hands back one link', async () => {
     // The tool hands back one link and says to stop there — an assistant that
     // kept going would be an assistant clicking through somebody's identity
     // form.
-    let said = await agent.tool('space_sell', { space: 'ada' })
+    let said = await agent.tool('space_sell', { space: 'ada39' })
     assertStringIncludes(said, 'https://connect.stripe.com/')
     assertStringIncludes(said, 'They are the merchant')
 
     // The account Stripe now holds is the charge-merchants-directly model, and
     // it names the space so an account read back at Stripe says whose it is.
     let seller = async () =>
-      ((await meta(k, cookie).query(`id=${eids.ada}`))[0] as {
+      ((await meta(k).query(`id=${eids.ada39}`))[0] as {
         stripe?: { account: string }
       }).stripe?.account
     let acct = await seller()
@@ -643,7 +638,7 @@ slow('space_sell connects an account and hands back one link', async () => {
     assertEquals(made.controller.losses.payments, 'stripe')
     assertEquals(made.controller.stripe_dashboard.type, 'full')
     assertEquals(made.controller.requirement_collection, 'stripe')
-    assertEquals(made.metadata.slug, 'ada')
+    assertEquals(made.metadata.slug, 'ada39')
 
     // The page now reads mid-setup, and does not offer the first step again.
     await page('Continue setup')
@@ -654,17 +649,17 @@ slow('space_sell connects an account and hands back one link', async () => {
     let ready = await delivered(
       k,
       '/stripe/connect',
-      'whsec_a_connect_probe_secret',
+      WEBHOOK_SECRET,
       'account.updated',
       { ...made, charges_enabled: true, details_submitted: true },
       acct,
     )
-    assertEquals(JSON.parse(ready).did, 'ada can sell')
+    assertEquals(JSON.parse(ready).did, 'ada39 can sell')
 
     // The page says so, and the tool stops offering a link nobody needs.
     await page('Disconnect Stripe', 'stop')
     assertStringIncludes(
-      await agent.tool('space_sell', { space: 'ada' }),
+      await agent.tool('space_sell', { space: 'ada39' }),
       'already selling',
     )
     assertEquals(await seller(), acct, 'one account, ever')
@@ -679,14 +674,14 @@ slow('space_sell connects an account and hands back one link', async () => {
     await delivered(
       k,
       '/stripe/webhook',
-      'whsec_plan_probe',
+      WEBHOOK_SECRET,
       'customer.subscription.deleted',
       ended,
     )
     await freePage()
     await page('Disconnect Stripe', 'stop')
     await assertRejects(
-      () => agent.tool('space_sell', { space: 'ada' }),
+      () => agent.tool('space_sell', { space: 'ada39' }),
       Error,
       'Plus',
     )
@@ -694,7 +689,7 @@ slow('space_sell connects an account and hands back one link', async () => {
     // Stopping is the platform forgetting, never Stripe deleting: the account
     // is the merchant's own.
     assertStringIncludes(
-      await agent.tool('space_sell', { space: 'ada', disconnect: true }),
+      await agent.tool('space_sell', { space: 'ada39', disconnect: true }),
       'Their Stripe account is untouched',
     )
     await freePage()
@@ -702,9 +697,9 @@ slow('space_sell connects an account and hands back one link', async () => {
     // And nobody but the owner may connect a space to a bank account.
     let stranger = connector(k, (await signIn(k)).cookie)
     await assertRejects(
-      () => stranger.tool('space_sell', { space: 'ada' }),
+      () => stranger.tool('space_sell', { space: 'ada39' }),
       Error,
-      'ada',
+      'ada39',
     )
     // The sandbox keeps what a test made unless it is deleted.
     await charged(key, `/v1/accounts/${acct}`, undefined, undefined, 'DELETE')
@@ -715,7 +710,7 @@ slow('space_sell connects an account and hands back one link', async () => {
 
 // A title is one line, and short (T-37885): it heads the app on every
 // agent's roster, so a newline in one could start a section of its own there.
-slow('a title is one line on the roster, and a name-sized one', async () => {
+Deno.test('a title is one line on the roster, and a name-sized one', async () => {
   let k = await kernel()
   try {
     let them = await signIn(k)
@@ -736,7 +731,7 @@ slow('a title is one line on the roster, and a name-sized one', async () => {
       '81 characters — 80 at most',
     )
     await assertRejects(
-      () => agent.tool('space_new', { slug: 'long', title: 'x'.repeat(81) }),
+      () => agent.tool('space_new', { slug: 'long40', title: 'x'.repeat(81) }),
       Error,
     )
   } finally {

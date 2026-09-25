@@ -28,7 +28,6 @@ import { answered, routed } from './plugin.ts'
 import { opened } from './lib/token.ts'
 import { minted, type Who } from './session.ts'
 import { vaultOf } from './vault.ts'
-import { slow } from '../../bin/testing.ts'
 
 let KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)))
 let SECRET = 'a probe secret'
@@ -79,7 +78,7 @@ let setup = async (vault = true) => {
   return { p, at, dir, space, person, post, shown, dump }
 }
 
-slow(
+Deno.test(
   'a pasted key is sealed in the vault, and the directory holds its handle',
   async () => {
     let s = await setup()
@@ -116,7 +115,7 @@ slow(
   },
 )
 
-slow('without a vault no key is taken, and the page says so', async () => {
+Deno.test('without a vault no key is taken, and the page says so', async () => {
   let s = await setup(false)
   assertEquals(
     await s.post({
@@ -130,7 +129,7 @@ slow('without a vault no key is taken, and the page says so', async () => {
   assertEquals((await s.shown()).on, false)
 })
 
-slow(
+Deno.test(
   'a built integration reached by OAuth is offered once this deploy holds its client',
   async () => {
     let s = await setup()
@@ -153,7 +152,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'a sign-in begun on a page opened with ?enable= comes back to that page',
   async () => {
     let s = await setup()
@@ -179,7 +178,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'the directory holds the built integrations, and a space cannot change where their tokens go',
   async () => {
     let s = await setup()
@@ -202,7 +201,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'the page tells a key being saved from one that could not be',
   async () => {
     let s = await setup()
@@ -230,7 +229,7 @@ slow(
   },
 )
 
-slow('a connection elsewhere is not this page to change', async () => {
+Deno.test('a connection elsewhere is not this page to change', async () => {
   let s = await setup()
   let eid = crypto.randomUUID()
   await s.at.apply([{
@@ -309,7 +308,7 @@ let posted = (fields: Record<string, string> = {}) => {
 
 let to = (r: Response) => [r.status, r.headers.get('location')]
 
-slow(
+Deno.test(
   'a person connects their own account for an app that asks each person, and the space holds only the ask',
   async () => {
     let s = await setup()
@@ -349,7 +348,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'a testing integration is asked for only on a page opened with ?enable=',
   async () => {
     let s = await setup()
@@ -365,7 +364,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'a person signs in for their own connection and comes back to the app',
   async () => {
     let s = await setup()
@@ -429,7 +428,7 @@ let wired = async (
   }
 }
 
-slow(
+Deno.test(
   'an app calls out with the key in its sentinel’s place, for whom its link allows, and its worker is bound to it',
   async () => {
     let s = await setup()
@@ -548,7 +547,7 @@ let signed = async (secret: string, body: string) => {
     [...mac].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-slow(
+Deno.test(
   'a webhook lands in the app that uses the connection, when it is signed',
   async () => {
     let s = await setup()

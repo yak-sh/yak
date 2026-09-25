@@ -1,7 +1,7 @@
 // Per-file wall clocks, including cold process/module startup, under bounded
 // contention. Diagnostic only: these do not sum to the sharded suite's clock.
 // deno run -A bin/test-profile.ts /tmp/fleet-profile [jobs=4]
-import { inventory } from './test.ts'
+import { inventory, workerd } from './test.ts'
 
 let [directory, count = '4'] = Deno.args
 let jobs = Number(count)
@@ -9,7 +9,8 @@ if (!directory || !Number.isInteger(jobs) || jobs < 1) {
   throw new Error('usage: test-profile.ts OUTPUT_DIRECTORY [JOBS=4]')
 }
 await Deno.mkdir(directory, { recursive: true })
-let files = await inventory()
+// The deno platform's files: a workerd test needs the run's kernel.
+let files = (await inventory()).filter((f) => !workerd(f))
 let at = 0
 let rows: { file: string; seconds: number; code: number }[] = []
 let load = () => Deno.readTextFileSync('/proc/loadavg').trim()

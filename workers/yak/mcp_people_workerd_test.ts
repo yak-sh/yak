@@ -5,7 +5,6 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 
 import {
   accepted,
@@ -32,10 +31,10 @@ import { HELLO, minted } from './mcp-probe.ts'
 // What the person said, kept as they said it (memory.ts, T-34473, T-34474).
 // The whole point is that the words survive the conversation they were said
 // in, so the proof is a second connection reading them without asking.
-slow('what the person said is kept, and read back whole', async () => {
+Deno.test('what the person said is kept, and read back whole', async () => {
   let k = await kernel()
   try {
-    let them = await seed(k, [{ slug: 'kitchen', apps: ['recipes'] }])
+    let them = await seed(k, [{ slug: 'kitchen42', apps: ['recipes'] }])
     let agent = connector(k, them.cookie)
     let words = 'use grams, never cups'
     let kept = await agent.tool('memory_save', {
@@ -44,14 +43,16 @@ slow('what the person said is kept, and read back whole', async () => {
       // the handle and never the summary.
       context: 'setting up the recipe app\nwe were on ingredients\nand this',
       about: 'recipes',
-      space: 'kitchen',
+      space: 'kitchen42',
     })
     assertStringIncludes(kept, `"${words}"`)
-    assertStringIncludes(kept, 'kitchen')
+    assertStringIncludes(kept, 'kitchen42')
 
     // The row, in the space's own store: the words verbatim in doc.body,
     // where the store's search index reads them, and the byline nobody typed.
-    let rows = await meta(k, them.cookie).query('.memory&?doc&?created')
+    let rows = await meta(k).query(
+      `.memory.space=${them.eids.kitchen42}&?doc&?created`,
+    )
     assertEquals(rows.length, 1)
     let one = rows[0] as unknown as {
       doc: { body: string }
@@ -64,7 +65,7 @@ slow('what the person said is kept, and read back whole', async () => {
       'setting up the recipe app\nwe were on ingredients',
     )
     assertEquals(one.memory.about, 'recipes')
-    assertStringIncludes(JSON.stringify(one.memory.space), them.eids.kitchen)
+    assertStringIncludes(JSON.stringify(one.memory.space), them.eids.kitchen42)
     assertEquals(one.created.by.name, them.name)
 
     // Recall by words: whole, with the context under it. Ranked by meaning
@@ -72,7 +73,7 @@ slow('what the person said is kept, and read back whole', async () => {
     // where none is.
     let found = await agent.tool('memory_recall', {
       words: 'grams',
-      space: 'kitchen',
+      space: 'kitchen42',
     })
     assertStringIncludes(found, `"${words}"`)
     assertStringIncludes(found, 'setting up the recipe app')
@@ -83,7 +84,7 @@ slow('what the person said is kept, and read back whole', async () => {
     assertStringIncludes(
       await agent.tool('memory_recall', {
         words: 'how should it look',
-        space: 'kitchen',
+        space: 'kitchen42',
       }),
       words,
     )
@@ -91,7 +92,7 @@ slow('what the person said is kept, and read back whole', async () => {
     // A memory with no sentence in it is an agent's note about a
     // conversation, which is the one thing this is not.
     let no = await assertRejects(
-      () => agent.tool('memory_save', { said: '   ', space: 'kitchen' }),
+      () => agent.tool('memory_save', { said: '   ', space: 'kitchen42' }),
       Error,
     )
     assertStringIncludes(no.message, 'never your summary')
@@ -114,10 +115,10 @@ slow('what the person said is kept, and read back whole', async () => {
     let ana = connector(k, (await signIn(k)).cookie)
     assertEquals((await ana.tool('about')).includes(words), false)
     let shut = await assertRejects(
-      () => ana.tool('memory_recall', { space: 'kitchen' }),
+      () => ana.tool('memory_recall', { space: 'kitchen42' }),
       Error,
     )
-    assertStringIncludes(shut.message, 'not a member of kitchen')
+    assertStringIncludes(shut.message, 'not a member of kitchen42')
     assertStringIncludes(
       await ana.tool('memory_recall', {}),
       'Nothing has been kept',
@@ -127,12 +128,12 @@ slow('what the person said is kept, and read back whole', async () => {
   }
 })
 
-slow('feedback reaches the platform, in the words it was said in', async () => {
+Deno.test('feedback reaches the platform, in the words it was said in', async () => {
   let k = await kernel()
   try {
-    let them = await seed(k, [{ slug: 'kitchen', apps: ['recipes'] }])
+    let them = await seed(k, [{ slug: 'kitchen43', apps: ['recipes'] }])
     let agent = connector(k, them.cookie)
-    let app = { space: 'kitchen', app: 'recipes' }
+    let app = { space: 'kitchen43', app: 'recipes' }
     await agent.tool('app_files', {
       ...app,
       files: [{ path: 'index.html', content: '<h1>Recipes</h1>' }],
@@ -144,7 +145,7 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
     let said = await agent.tool('feedback', { app: 'recipes', text: words })
     // One sentence the agent can repeat: it arrived, and they can answer.
     assertStringIncludes(said, 'people who run yaks.app')
-    assertStringIncludes(said, 'kitchen/recipes v1')
+    assertStringIncludes(said, 'kitchen43/recipes v1')
     assertStringIncludes(said, them.email)
 
     // The letter: the words first, the context under a rule beneath them.
@@ -152,8 +153,8 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
     assertStringIncludes(sent.subject, 'feedback: She said renaming')
     assert(sent.body.startsWith(words), sent.body)
     assertStringIncludes(sent.body, `${them.name} <${them.email}>`)
-    assertStringIncludes(sent.body, 'kitchen/recipes v1')
-    assertStringIncludes(sent.body, 'https://kitchen.yaks.app/recipes/')
+    assertStringIncludes(sent.body, 'kitchen43/recipes v1')
+    assertStringIncludes(sent.body, 'https://kitchen43.yaks.app/recipes/')
     assertStringIncludes(sent.body, `yaks.app ${VERSION}`)
     // The same letter is addressed to the fleet's graph inbox as well, so it
     // lands in `task inbox` instead of waiting on a person to relay it. One
@@ -164,7 +165,9 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
     // The row, in the meta store: the words, who said them, and where they
     // were standing — the app, the deploy it was serving, and the platform's
     // own release, none of which anyone was asked for.
-    let rows = await meta(k, them.cookie).query('.report&?doc&?created')
+    let rows = await meta(k).query(
+      `.report&.created.by=${them.person}&?doc&?created`,
+    )
     assertEquals(rows.length, 1)
     let one = rows[0] as unknown as {
       doc: { title: string; body: string }
@@ -184,9 +187,9 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
     assertEquals(one.report.release, VERSION)
     assertStringIncludes(
       JSON.stringify(one.report.app),
-      them.eids['kitchen/recipes'],
+      them.eids['kitchen43/recipes'],
     )
-    assertStringIncludes(JSON.stringify(one.report.space), them.eids.kitchen)
+    assertStringIncludes(JSON.stringify(one.report.space), them.eids.kitchen43)
 
     // And with no app: the space still rides along, and the letter carries no
     // link to a page nobody named.
@@ -196,8 +199,8 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
     assertStringIncludes(plain, 'people who run yaks.app')
     let second = await letter(k, 'hello@yaks.app', 'four minutes')
     assertEquals(second.body.includes('/recipes/'), false)
-    let [, noApp] = await meta(k, them.cookie).query(
-      '.report&?doc',
+    let [, noApp] = await meta(k).query(
+      `.report&.created.by=${them.person}&?doc`,
     ) as unknown as { report: { app: unknown; version: unknown } }[]
     assertEquals(noApp.report.app, null)
     assertEquals(noApp.report.version, null)
@@ -212,7 +215,10 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
     assertStringIncludes(stopped.message, 'kept and will be read')
     assertStringIncludes(stopped.message, 'hello@yaks.app')
     // Nothing was written for the one that was held.
-    assertEquals((await meta(k, them.cookie).query('.report')).length, 3)
+    assertEquals(
+      (await meta(k).query(`.report&.created.by=${them.person}`)).length,
+      3,
+    )
   } finally {
     await k.stop()
   }
@@ -223,7 +229,7 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
 // "theirs" aims at it. Belonging to the inviter's space is not having one —
 // while it was, an invited person's first app_install aimed at the
 // publisher's space and was refused there by the publisher's own app ceiling.
-slow('an invited person gets a space of their own', async () => {
+Deno.test('an invited person gets a space of their own', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -278,7 +284,7 @@ slow('an invited person gets a space of their own', async () => {
 // rung — a grant on that app alone. What it proves is the "alone": the app she
 // was invited to answers her as a member, the app beside it does not exist as
 // far as she is concerned, and the file door is shut to her in both.
-slow(
+Deno.test(
   'a guest of one app holds that app and nothing else in the space',
   async () => {
     let k = await kernel()
@@ -374,7 +380,7 @@ slow(
 // house rules — so the overview an agent writes belongs in the app's own store,
 // as the entity `doc` already is. This is the guide's own example, run: the
 // section stops being true by failing here rather than by misleading somebody.
-slow('a project document is an entity, and search finds it', async () => {
+Deno.test('a project document is an entity, and search finds it', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -449,7 +455,7 @@ slow('a project document is an entity, and search finds it', async () => {
 // being true fails rather than misleads: what a `time` property takes,
 // filtering a property that holds an eid, what an unwritten property reads back
 // as, and `task.status` before either mark.
-slow('the answers four builders had to guess at', async () => {
+Deno.test('the answers four builders had to guess at', async () => {
   let k = await kernel()
   try {
     let them = await signIn(k)

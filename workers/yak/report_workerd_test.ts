@@ -13,18 +13,18 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
-import { slow, tick } from '../../bin/testing.ts'
+import { tick } from '../../bin/testing.ts'
 import { client, connector, kernel, meta, seed } from './probe.ts'
 
-slow('a page reports its own breaks, and the agent hears', async () => {
+Deno.test('a page reports its own breaks, and the agent hears', async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
-    let files = client(k, 'jeff.yaks.app', 'recipes', cookie)
+    let { cookie } = await seed(k, [{ slug: 'jeff59', apps: ['recipes'] }])
+    let files = client(k, 'jeff59.yaks.app', 'recipes', cookie)
     let agent = connector(k, cookie)
-    let app = { space: 'jeff', app: 'recipes' }
+    let app = { space: 'jeff59', app: 'recipes' }
     let report = (body: unknown, type = 'application/json') =>
-      k.at('jeff.yaks.app', '/recipes/api/report', {
+      k.at('jeff59.yaks.app', '/recipes/api/report', {
         method: 'POST',
         headers: { 'content-type': type },
         body: JSON.stringify(body),
@@ -37,7 +37,7 @@ slow('a page reports its own breaks, and the agent hears', async () => {
       '<!doctype html><html><head><title>R</title>' +
         '</head><body><script>boom()</script></body></html>',
     )
-    let page = await k.at('jeff.yaks.app', '/recipes/')
+    let page = await k.at('jeff59.yaks.app', '/recipes/')
     let html = await page.text()
     assertEquals(
       html.split('/recipes/api/report.js').length - 1,
@@ -51,7 +51,7 @@ slow('a page reports its own breaks, and the agent hears', async () => {
     )
     assertMatch(page.headers.get('nel') ?? '', /"report_to":"yak"/)
     assertMatch(
-      (await k.at('jeff.yaks.app', '/recipes/api/report.js')).headers
+      (await k.at('jeff59.yaks.app', '/recipes/api/report.js')).headers
         .get('content-type') ?? '',
       /javascript/,
     )
@@ -59,7 +59,7 @@ slow('a page reports its own breaks, and the agent hears', async () => {
     // A page with no head and no body still gets it.
     await files.put('/bare.html', '<!doctype html><h1>bare</h1>')
     assertMatch(
-      await (await k.at('jeff.yaks.app', '/recipes/bare.html')).text(),
+      await (await k.at('jeff59.yaks.app', '/recipes/bare.html')).text(),
       /<h1>bare<\/h1>[\s\S]*report\.js/,
     )
 
@@ -68,7 +68,7 @@ slow('a page reports its own breaks, and the agent hears', async () => {
       (await report({
         message: 'boom is not a function',
         stack: 'at /recipes/:1',
-        url: 'https://jeff.yaks.app/recipes/',
+        url: 'https://jeff59.yaks.app/recipes/',
         line: 1,
       })).status,
       204,
@@ -76,11 +76,11 @@ slow('a page reports its own breaks, and the agent hears', async () => {
     assertEquals(
       (await report([{
         type: 'csp-violation',
-        url: 'https://jeff.yaks.app/recipes/',
+        url: 'https://jeff59.yaks.app/recipes/',
         body: {
           effectiveDirective: 'script-src',
           blockedURL: 'https://evil.example/x.js',
-          documentURL: 'https://jeff.yaks.app/recipes/',
+          documentURL: 'https://jeff59.yaks.app/recipes/',
         },
       }], 'application/reports+json')).status,
       204,
@@ -110,15 +110,18 @@ slow('a page reports its own breaks, and the agent hears', async () => {
       'served once',
     )
 
-    // A page in a loop cannot flood the door.
-    let statuses = []
-    for (let n = 0; n < 34; n++) {
+    // A page in a loop cannot flood the door. The allowance is per clock
+    // minute (apps.ts `flooding`), so a loop that straddles a minute can need
+    // twice it before the door says stop.
+    let statuses: number[] = []
+    for (let n = 0; n < 62 && !statuses.includes(429); n++) {
       statuses.push((await report({ message: `loop ${n}` })).status)
     }
     assert(statuses.includes(429), 'the door said stop')
+    let taken = statuses.filter((s) => s == 204).length + 2
     let listed = await agent.tool('app_errors', app)
     assert(
-      listed.split('\n').filter((l) => l.startsWith('- ')).length <= 34,
+      listed.split('\n').filter((l) => l.startsWith('- ')).length <= taken,
       'the flood was capped',
     )
   } finally {
@@ -128,14 +131,14 @@ slow('a page reports its own breaks, and the agent hears', async () => {
 
 // A refusal the door answered on purpose is the platform working, so it files
 // nothing; a page that threw still lands (C-32652 item 3, T-32655).
-slow('a refusal the door meant is not a break', async () => {
+Deno.test('a refusal the door meant is not a break', async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'club', apps: ['runs'] }])
+    let { cookie } = await seed(k, [{ slug: 'club60', apps: ['runs'] }])
     let agent = connector(k, cookie)
-    let app = { space: 'club', app: 'runs' }
+    let app = { space: 'club60', app: 'runs' }
     let report = (body: unknown) =>
-      k.at('club.yaks.app', '/runs/api/report', {
+      k.at('club60.yaks.app', '/runs/api/report', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -143,7 +146,7 @@ slow('a refusal the door meant is not a break', async () => {
 
     // A signed-out visitor clicks the app's own button: the door says no on
     // purpose, and the guide's flow follows `signIn` to the sign-in page.
-    let no = await k.at('club.yaks.app', '/runs/api/apply', {
+    let no = await k.at('club60.yaks.app', '/runs/api/apply', {
       method: 'POST',
       body: JSON.stringify([]),
     })
@@ -156,7 +159,7 @@ slow('a refusal the door meant is not a break', async () => {
     assertEquals(
       (await report({
         message: `401 /runs/api/apply: ${said}`,
-        url: 'https://club.yaks.app/runs/',
+        url: 'https://club60.yaks.app/runs/',
         status: 401,
         answer: said,
       })).status,
@@ -166,7 +169,7 @@ slow('a refusal the door meant is not a break', async () => {
       (await report({
         message: 'boom is not a function',
         stack: 'at /runs/:1',
-        url: 'https://club.yaks.app/runs/',
+        url: 'https://club60.yaks.app/runs/',
       })).status,
       204,
     )
@@ -175,7 +178,7 @@ slow('a refusal the door meant is not a break', async () => {
     assertEquals(
       (await report({
         message: 'unhandled rejection: sign in to change this app',
-        url: 'https://club.yaks.app/runs/',
+        url: 'https://club60.yaks.app/runs/',
         status: 401,
       })).status,
       204,
@@ -189,7 +192,7 @@ slow('a refusal the door meant is not a break', async () => {
     assertEquals(
       (await report({
         message: '401 /runs/weather: the weather service refused our key',
-        url: 'https://club.yaks.app/runs/',
+        url: 'https://club60.yaks.app/runs/',
         status: 401,
         answer: 'the weather service refused our key',
       })).status,
@@ -199,7 +202,7 @@ slow('a refusal the door meant is not a break', async () => {
     assertEquals(
       (await report({
         message: '500 /runs/weather: undefined is not an object',
-        url: 'https://club.yaks.app/runs/',
+        url: 'https://club60.yaks.app/runs/',
         status: 500,
         answer: 'undefined is not an object',
       })).status,
@@ -227,32 +230,35 @@ slow('a refusal the door meant is not a break', async () => {
 // else is invisible to an ordinary read — which is how the ninth user test's
 // first throw after a deploy filed as `weather v1` while the deploy had just
 // answered v2 (C-32869 item 4). The report path reads past the cache.
-slow('a break names the version the app is serving', async () => {
+Deno.test('a break names the version the app is serving', async () => {
   let k = await kernel()
   try {
-    let { cookie, eids } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+    let { cookie, eids } = await seed(k, [{
+      slug: 'jeff61',
+      apps: ['recipes'],
+    }])
     let agent = connector(k, cookie)
 
     // Serving the app puts its row in the read cache.
-    await (await k.at('jeff.yaks.app', '/recipes/')).body?.cancel()
+    await (await k.at('jeff61.yaks.app', '/recipes/')).body?.cancel()
     // A bump through the graph tier, which is NOT the door that empties that
     // cache — so the kernel is now holding a version the app has moved past,
     // exactly as it is in the seconds after somebody else's deploy.
-    await meta(k, cookie).apply([
-      { entity: { eid: eids['jeff/recipes'] }, app: { version: 9 } },
+    await meta(k).apply([
+      { entity: { eid: eids['jeff61/recipes'] }, app: { version: 9 } },
     ])
 
-    await (await k.at('jeff.yaks.app', '/recipes/api/report', {
+    await (await k.at('jeff61.yaks.app', '/recipes/api/report', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         message: 'boom is not a function',
-        url: 'https://jeff.yaks.app/recipes/',
+        url: 'https://jeff61.yaks.app/recipes/',
       }),
     })).body?.cancel()
 
     assertMatch(
-      await agent.tool('app_errors', { space: 'jeff', app: 'recipes' }),
+      await agent.tool('app_errors', { space: 'jeff61', app: 'recipes' }),
       /recipes v9: page \/recipes\/ — boom is not a function/,
     )
   } finally {
@@ -267,13 +273,13 @@ slow('a break names the version the app is serving', async () => {
 // the break the reporter posts for a file that never loaded, and the reporter
 // every page is served carries the soft state, and the capture-phase listener
 // that catches such a break at all.
-slow('a page that dies on its first import says so', async () => {
+Deno.test('a page that dies on its first import says so', async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['weather'] }])
-    let files = client(k, 'jeff.yaks.app', 'weather', cookie)
+    let { cookie } = await seed(k, [{ slug: 'jeff62', apps: ['weather'] }])
+    let files = client(k, 'jeff62.yaks.app', 'weather', cookie)
     let agent = connector(k, cookie)
-    let app = { space: 'jeff', app: 'weather' }
+    let app = { space: 'jeff62', app: 'weather' }
 
     // The installed copy's own shape: a shell, and a module beside it that is
     // not there.
@@ -283,18 +289,19 @@ slow('a page that dies on its first import says so', async () => {
         '<h1>Weather</h1><script type="module" src="app.js"></script>' +
         '</body></html>',
     )
-    let page = await k.at('jeff.yaks.app', '/weather/')
+    let page = await k.at('jeff62.yaks.app', '/weather/')
     assertMatch(await page.text(), /<script src="\/weather\/api\/report\.js">/)
-    assertEquals((await k.at('jeff.yaks.app', '/weather/app.js')).status, 404)
+    assertEquals((await k.at('jeff62.yaks.app', '/weather/app.js')).status, 404)
 
     // What the reporter posts for that, and the one break it becomes.
     assertEquals(
-      (await k.at('jeff.yaks.app', '/weather/api/report', {
+      (await k.at('jeff62.yaks.app', '/weather/api/report', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          message: 'failed to load script https://jeff.yaks.app/weather/app.js',
-          url: 'https://jeff.yaks.app/weather/app.js',
+          message:
+            'failed to load script https://jeff62.yaks.app/weather/app.js',
+          url: 'https://jeff62.yaks.app/weather/app.js',
         }),
       })).status,
       204,
@@ -306,12 +313,13 @@ slow('a page that dies on its first import says so', async () => {
       'one break, not none',
     )
     assertMatch(told, /page \/weather\/app\.js — failed to load script/)
-    assertStringIncludes(told, 'https://jeff.yaks.app/weather/app.js')
+    assertStringIncludes(told, 'https://jeff62.yaks.app/weather/app.js')
 
     // And the soft state the page shows instead of empty space, carried by
     // the reporter the page is served.
-    let reporter = await (await k.at('jeff.yaks.app', '/weather/api/report.js'))
-      .text()
+    let reporter =
+      await (await k.at('jeff62.yaks.app', '/weather/api/report.js'))
+        .text()
     assertStringIncludes(
       reporter,
       'Something went wrong. Try reloading the page.',
@@ -382,14 +390,14 @@ let browser = (code: string, page: string) => {
   }
 }
 
-slow("the platform's own scripts are never the app's break", async () => {
+Deno.test("the platform's own scripts are never the app's break", async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['weather'] }])
+    let { cookie } = await seed(k, [{ slug: 'jeff63', apps: ['weather'] }])
     let agent = connector(k, cookie)
-    let app = { space: 'jeff', app: 'weather' }
-    let page = 'https://jeff.yaks.app/weather/'
-    let code = await (await k.at('jeff.yaks.app', '/weather/api/report.js'))
+    let app = { space: 'jeff63', app: 'weather' }
+    let page = 'https://jeff63.yaks.app/weather/'
+    let code = await (await k.at('jeff63.yaks.app', '/weather/api/report.js'))
       .text()
 
     // The beacon the edge injected, blocked in the visitor's browser. It is
@@ -413,13 +421,13 @@ slow("the platform's own scripts are never the app's break", async () => {
     assertEquals(filed.length, 1, "the app's own break, filed")
     assertStringIncludes(
       filed[0].message,
-      'failed to load script https://jeff.yaks.app/weather/app.js',
+      'failed to load script https://jeff63.yaks.app/weather/app.js',
     )
     assertEquals(own.drawn.length, 1, 'and the soft state over the shell')
 
     // And what the door makes of everything the two pages sent: one break.
     for (let body of [...await noise.filed(), ...filed]) {
-      await (await k.at('jeff.yaks.app', '/weather/api/report', {
+      await (await k.at('jeff63.yaks.app', '/weather/api/report', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -458,14 +466,14 @@ slow("the platform's own scripts are never the app's break", async () => {
 // decoder throws on while serving an app's file (files.ts `keyed`) — and it
 // proves what an eviction would: our code fell over, on the app's address,
 // with no app code anywhere near it.
-slow("the platform's own break is ours, not the app's", async () => {
+Deno.test("the platform's own break is ours, not the app's", async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'acme', apps: ['shop'] }])
+    let { cookie } = await seed(k, [{ slug: 'acme64', apps: ['shop'] }])
     let agent = connector(k, cookie)
-    let app = { space: 'acme', app: 'shop' }
+    let app = { space: 'acme64', app: 'shop' }
 
-    let broke = await k.at('acme.yaks.app', '/shop/%E0%A4%A')
+    let broke = await k.at('acme64.yaks.app', '/shop/%E0%A4%A')
     await broke.body?.cancel()
     assertEquals(broke.status, 500, 'the visitor got the soft page')
 
@@ -478,10 +486,12 @@ slow("the platform's own break is ours, not the app's", async () => {
     )
 
     // And it is ours, in the meta store, where we read it and they cannot.
-    let ours = await meta(k, cookie).query('.exception')
+    // The run's other breaks are in the same store; this one names its space.
+    let ours = (await meta(k).query('.exception'))
+      .filter((r) => JSON.stringify(r.exception).includes('acme64.yaks.app'))
     let said = ours.map((r) => JSON.stringify(r.exception)).join('\n')
     assertEquals(ours.length, 1, `one break of ours: ${said}`)
-    assertStringIncludes(said, 'GET acme.yaks.app/shop/%E0%A4%A')
+    assertStringIncludes(said, 'GET acme64.yaks.app/shop/%E0%A4%A')
     // No version: the code that broke is the platform's, and the meta store
     // has no deploy of its own to name.
     assertEquals((ours[0].exception as { version: unknown }).version, null)

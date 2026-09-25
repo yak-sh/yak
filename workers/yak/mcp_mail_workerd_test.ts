@@ -5,7 +5,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { slow, until } from '../../bin/testing.ts'
+import { until } from '../../bin/testing.ts'
 import {
   arrives,
   client,
@@ -19,10 +19,10 @@ import {
 } from './probe.ts'
 import { type Letter } from './mcp-probe.ts'
 
-slow("an app's letters, listed and sent through the connector", async () => {
+Deno.test("an app's letters, listed and sent through the connector", async () => {
   let k = await kernel()
   try {
-    let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+    let them = await seed(k, [{ slug: 'jeff41', apps: ['recipes'] }])
     let agent = connector(k, them.cookie)
     // Two letters arrive at the app's address, the way a stranger's does.
     for (
@@ -34,10 +34,10 @@ slow("an app's letters, listed and sent through the connector", async () => {
       assertEquals(
         (await arrives(k, {
           from: 'ana@books.example',
-          to: 'jeff.recipes@yaks.app',
+          to: 'jeff41.recipes@yaks.app',
           raw: rfc822({
             From: 'Ana <ana@books.example>',
-            To: 'jeff.recipes@yaks.app',
+            To: 'jeff41.recipes@yaks.app',
             Subject: subject,
             'Content-Type': 'text/plain; charset="utf-8"',
           }, body),
@@ -57,7 +57,7 @@ slow("an app's letters, listed and sent through the connector", async () => {
         body: 'It went in **one** sitting.',
       }),
     ) as Letter[]
-    assertEquals(sent.mail.from, 'jeff.recipes@yaks.app')
+    assertEquals(sent.mail.from, 'jeff41.recipes@yaks.app')
     assertEquals(sent.doc.title, 'Thanks for the pudding')
     assert(sent.deliver!.to, 'the letter names a recipient entity')
 
@@ -83,7 +83,7 @@ slow("an app's letters, listed and sent through the connector", async () => {
       await agent.tool('mail_list', { app: 'recipes', direction: 'received' }),
     ) as Letter[]
     assertEquals(inbox[0].mail.from, 'ana@books.example')
-    assertEquals(inbox[0].mail.to, 'jeff.recipes@yaks.app')
+    assertEquals(inbox[0].mail.to, 'jeff41.recipes@yaks.app')
     assert(!inbox[0].deliver, 'an arrival asked nobody to send it')
 
     // What became of the one that went is a row on that same letter, written
@@ -137,15 +137,15 @@ slow("an app's letters, listed and sent through the connector", async () => {
       () =>
         stranger.tool('mail_send', {
           app: 'recipes',
-          space: 'jeff',
+          space: 'jeff41',
           to: 'ana@books.example',
           title: 'Not mine to send',
           body: 'From nobody here.',
         }),
       Error,
-      'not a member of jeff',
+      'not a member of jeff41',
     )
-    let anybody = client(k, 'jeff.yaks.app', 'recipes')
+    let anybody = client(k, 'jeff41.yaks.app', 'recipes')
     let relay = await anybody.post({
       entities: [
         { entity: { eid: '$them' }, email: { address: 'ana@books.example' } },
@@ -178,7 +178,7 @@ slow("an app's letters, listed and sent through the connector", async () => {
 // across them, the app's own component seeded because the vocabulary is
 // planted first, a redeploy that writes nothing more, and files the web never
 // sees.
-slow(
+Deno.test(
   'a deploy seeds the store once, and the seed is not on the web',
   async () => {
     let k = await kernel()

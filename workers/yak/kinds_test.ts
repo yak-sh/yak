@@ -1,6 +1,6 @@
 // The two tools a kind is worth: what they are called, what they ask for, what
 // they say, and the two ways an app declines them. The workerd half — the same
-// manifest through app_deploy and a call at the MCP door — is in mcp_test.ts.
+// manifest through app_deploy and a call at the MCP door — is in mcp_workerd_test.ts.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { withKinds } from './kinds.ts'
 import { appDoc } from './vocab.ts'

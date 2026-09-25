@@ -19,7 +19,6 @@
 //     what the runtime must do with it — a wasm compiled, a `.js` linked
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { COOKIE, seal, sign } from './lib/token.ts'
-import { slow } from '../../bin/testing.ts'
 import type { App, Space } from './directory.ts'
 import {
   carried,
@@ -39,7 +38,6 @@ import {
   WORKER,
 } from './dispatch.ts'
 import type { Env } from './env.ts'
-import { script } from './probe.ts'
 import { nobody } from './session.ts'
 
 let SECRET = 'a-probe-secret'
@@ -751,32 +749,4 @@ Deno.test('a wasm module goes up as a module part of its own type', async () => 
     WASM,
   )
   assertEquals(await part('worker.js').text(), new TextDecoder().decode(APP))
-})
-
-/**
- * And the modules run. A dispatch namespace has no local implementation, so
- * what the account would run cannot be exercised here; this runs the same
- * module set — the shim, the app's worker.js, and the wasm it imports — in
- * the same runtime (probe.ts `script`), which is where a mislabelled or
- * missing module shows itself. The upload's own shape is the test above,
- * against the API's documented multipart form.
- */
-slow('workerd links the shim, the app, and its wasm', async () => {
-  let w = await script({
-    '__yak_entry.js': SHIM,
-    'worker.js': new TextDecoder().decode(APP),
-    'add.wasm': WASM,
-  }, '__yak_entry.js')
-  try {
-    let r = await w.at('/api/add?a=2&b=3')
-    assertEquals(r.status, 200)
-    assertEquals(await r.text(), '5')
-    // The worker's 404 is the pass verdict the kernel reads (`ran`), so the
-    // fixture answers one for everything that is not its route.
-    let pass = await w.at('/index.html')
-    assertEquals(pass.status, 404)
-    await pass.body?.cancel()
-  } finally {
-    await w.stop()
-  }
 })

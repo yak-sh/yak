@@ -1,5 +1,4 @@
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from './testing.ts'
 import {
   ours,
   running,
@@ -83,7 +82,7 @@ let leaks = async (base: string, env: Record<string, string>) => {
   }
 }
 
-slow(
+Deno.test(
   'a stray fails a named base and only warns on the shared one',
   async () => {
     // clearEnv is the only way to unset TMPDIR for a child, so the few names

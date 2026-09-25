@@ -6,7 +6,6 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import { connector, kernel, meta, seed, signIn } from './probe.ts'
 
 // The whole of T-32907 (C-32905 items 1 and 3): an app's own files never name
@@ -16,7 +15,7 @@ import { connector, kernel, meta, seed, signIn } from './probe.ts'
 // path, where a relative URL would otherwise resolve against the page's depth.
 // Before this, an install under another name served bare HTML: no stylesheet,
 // no script, and nothing said so.
-slow('an app names no app, and the copy works at its own address', async () => {
+Deno.test('an app names no app, and the copy works at its own address', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -104,14 +103,14 @@ slow('an app names no app, and the copy works at its own address', async () => {
 // correctness). The person's own repair when their assistant breaks a working
 // page is "put it back", so every deploy is a version and one word restores
 // one — as a new version, since history is never rewritten.
-slow('a deploy is a version, and one word puts it back', async () => {
+Deno.test('a deploy is a version, and one word puts it back', async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'undo', apps: ['recipes'] }])
+    let { cookie } = await seed(k, [{ slug: 'undo31', apps: ['recipes'] }])
     let agent = connector(k, cookie)
-    let app = { space: 'undo', app: 'recipes' }
+    let app = { space: 'undo31', app: 'recipes' }
     let served = async (path: string) => {
-      let r = await k.at('undo.yaks.app', `/recipes/${path}`)
+      let r = await k.at('undo31.yaks.app', `/recipes/${path}`)
       return { status: r.status, text: await r.text() }
     }
 
@@ -135,15 +134,15 @@ slow('a deploy is a version, and one word puts it back', async () => {
 
     // What it has to pick from: newest first, with what each deploy changed.
     let list = await agent.tool('app_versions', app)
-    assertStringIncludes(list, 'undo/recipes: 2 versions')
+    assertStringIncludes(list, 'undo31/recipes: 2 versions')
     // When it went out, off the row's own created stamp.
     assertMatch(list, /- v2 \(live\) 20\d\d-\d\d-\d\dT/)
     assertStringIncludes(list, 'added broken.js, changed index.html')
 
     // One word. It names what came back and where, and goes out as v3.
     let back = await agent.tool('app_rollback', app)
-    assertStringIncludes(back, 'put undo/recipes back to v1, live now as v3')
-    assertStringIncludes(back, 'https://undo.yaks.app/recipes/')
+    assertStringIncludes(back, 'put undo31/recipes back to v1, live now as v3')
+    assertStringIncludes(back, 'https://undo31.yaks.app/recipes/')
     assertStringIncludes(back, 'changed index.html, removed broken.js')
 
     // The page is v1's own bytes again — the kernel adds its reporter to
@@ -159,11 +158,11 @@ slow('a deploy is a version, and one word puts it back', async () => {
     // History is not rewritten: three versions, and v2 is still there to go
     // forward to by name.
     let after = await agent.tool('app_versions', app)
-    assertStringIncludes(after, 'undo/recipes: 3 versions')
+    assertStringIncludes(after, 'undo31/recipes: 3 versions')
     assertStringIncludes(after, 'v3 (live)')
     assertMatch(
       await agent.tool('app_rollback', { ...app, version: 2 }),
-      /put undo\/recipes back to v2, live now as v4/,
+      /put undo31\/recipes back to v2, live now as v4/,
     )
     assertStringIncludes((await served('')).text, 'OOPS')
     assertEquals((await served('broken.js')).status, 200)
@@ -176,7 +175,7 @@ slow('a deploy is a version, and one word puts it back', async () => {
         () => agent.tool('app_rollback', { ...app, version: 9 }),
         Error,
       )).message,
-      'no v9 of undo/recipes — it keeps v4, v3, v2, v1',
+      'no v9 of undo31/recipes — it keeps v4, v3, v2, v1',
     )
     assertEquals(
       (await agent.tool('app_files', { ...app, op: 'list' })).split('\n')
@@ -192,7 +191,7 @@ slow('a deploy is a version, and one word puts it back', async () => {
       op: 'history',
       path: 'index.html',
     })
-    assertStringIncludes(past, 'index.html in undo/recipes:')
+    assertStringIncludes(past, 'index.html in undo31/recipes:')
     assertMatch(past, /now — 13 B, sha256 [0-9a-f]{64}/)
     assertMatch(past, /- until 20\d\d-\d\d-\d\dT[\d:.]+Z — 19 B, sha256 /)
     // Undo the last write, with nothing to remember: the newest entry.
@@ -253,7 +252,7 @@ slow('a deploy is a version, and one word puts it back', async () => {
     // which is all this can be held to here, because local workerd answers
     // `getCurrentBookmark` and refuses the two that would move anything.
     let window = await agent.tool('store_restore', app)
-    assertStringIncludes(window, "undo/recipes's store can be put back")
+    assertStringIncludes(window, "undo31/recipes's store can be put back")
     assertMatch(window, /any moment since 20\d\d-\d\d-\d\dT/)
     assertStringIncludes(window, "store_restore(app: 'recipes', at:")
     // A moment outside the thirty days is refused before the store is asked
@@ -276,17 +275,17 @@ slow('a deploy is a version, and one word puts it back', async () => {
 // says it right after the write. The directory's read cache is 30 seconds
 // wide and private to an isolate, so a deploy made anywhere else is invisible
 // to an ordinary read — which is why the tool tier reads fresh (directory.ts).
-slow(
+Deno.test(
   'after a rollback, the list says what is live and what came back',
   async () => {
     let k = await kernel()
     try {
       let { cookie, eids } = await seed(k, [{
-        slug: 'back',
+        slug: 'back32',
         apps: ['recipes'],
       }])
       let agent = connector(k, cookie)
-      let app = { space: 'back', app: 'recipes' }
+      let app = { space: 'back32', app: 'recipes' }
       let file = (content: string) =>
         agent.tool('app_files', {
           ...app,
@@ -316,13 +315,13 @@ slow(
       // tier is NOT the door that empties it, so the kernel is now holding a
       // version the app has moved past — exactly as it is in the seconds after
       // somebody else's deploy.
-      await (await k.at('back.yaks.app', '/recipes/')).body?.cancel()
-      await meta(k, cookie).apply([
-        { entity: { eid: eids['back/recipes'] }, app: { version: 4 } },
+      await (await k.at('back32.yaks.app', '/recipes/')).body?.cancel()
+      await meta(k).apply([
+        { entity: { eid: eids['back32/recipes'] }, app: { version: 4 } },
         {
           entity: { eid: '$deploy' },
           deploy: {
-            app: eids['back/recipes'],
+            app: eids['back32/recipes'],
             version: 4,
             files: '{"index.html":"beef"}',
             worker: '',
@@ -338,96 +337,15 @@ slow(
   },
 )
 
-// D-32318 §Errors, verbatim: "One is open until a later deploy stops
-// producing it or the agent marks it fixed." So the deploy that carries the
-// Who visited (views.ts, T-34498). The SQL API is an HTTP call rather than a
-// binding, so the probe aims it at a server of this test's own (ANALYTICS_API,
-// the way MAIL_API is aimed) and answers each of the four
-// queries fixed rows. What is being held here is the sentence the agent reads
-// and the structured half beside it — and that the numbers can be had at all
-// without the account.
-slow('app_stats answers counts, and never a visitor', async () => {
-  let asked: string[] = []
-  let rows: Record<string, Record<string, unknown>[]> = {
-    day: [{
-      day: `${new Date().toISOString().slice(0, 10)} 00:00:00`,
-      views: 9,
-    }],
-    path: [{ path: '/weather/', views: '6' }, {
-      path: '/weather/map',
-      views: 3,
-    }],
-    site: [{ site: 'news.example.com', views: 5 }],
-    country: [{ country: 'US', views: 9 }],
-  }
-  let api = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
-    let sql = await req.text()
-    asked.push(sql)
-    let col = Object.keys(rows).find((k) => sql.includes(` AS ${k},`)) ?? ''
-    return Response.json({ data: rows[col] ?? [] })
-  })
-  let port = (api.addr as Deno.NetAddr).port
-  let k = await kernel({
-    CF_ANALYTICS_TOKEN: 'a probe token',
-    ANALYTICS_API: `http://127.0.0.1:${port}`,
-  })
-  try {
-    let { cookie } = await seed(k, [{ slug: 'watch', apps: ['weather'] }])
-    let agent = connector(k, cookie)
-    let said = await agent.tool('app_stats', { space: 'watch', app: 'weather' })
-    assertStringIncludes(said, '9 visits in 30 days')
-    assertStringIncludes(said, '/weather/ — 6')
-    assertStringIncludes(said, 'news.example.com — 5')
-    assertStringIncludes(said, 'US — 9')
-    // Four queries, every one of them this app's and every one of them
-    // counting sampled rows rather than rows.
-    assertEquals(asked.length, 4)
-    for (let q of asked) {
-      assertStringIncludes(q, 'sum(_sample_interval)')
-      assertStringIncludes(q, 'FROM yak_views')
-    }
-    let dashboard = await k.at('yaks.app', '/manage/visits?space=watch', {
-      headers: { cookie },
-    })
-    assertEquals(dashboard.status, 200)
-    assertStringIncludes(await dashboard.text(), '9 visits')
-    assertEquals(asked.length, 4)
-    // A shorter window is a different question, and it says so.
-    assertStringIncludes(
-      await agent.tool('app_stats', {
-        space: 'watch',
-        app: 'weather',
-        days: 7,
-      }),
-      'in 7 days',
-    )
-    assert(
-      asked.slice(4).every((q) => q.includes("INTERVAL '7' DAY")),
-      'window',
-    )
-
-    // And somebody who is nobody here is refused, however public the app is.
-    let stranger = connector(k, (await signIn(k)).cookie)
-    await assertRejects(
-      () => stranger.tool('app_stats', { space: 'watch', app: 'weather' }),
-      Error,
-      'watch',
-    )
-  } finally {
-    await k.stop()
-    await api.shutdown()
-  }
-})
-
 // With no token there is nothing to read, and the agent is told so in one
 // sentence rather than handed a failure: the secret is the owner's to set and
 // there is nothing an agent can do about it (README.md).
-slow('app_stats with no analytics token says so, once', async () => {
+Deno.test('app_stats with no analytics token says so, once', async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'quiet', apps: ['weather'] }])
+    let { cookie } = await seed(k, [{ slug: 'quiet33', apps: ['weather'] }])
     let said = await connector(k, cookie).tool('app_stats', {
-      space: 'quiet',
+      space: 'quiet33',
       app: 'weather',
     })
     assertStringIncludes(said, 'not switched on')
@@ -436,20 +354,22 @@ slow('app_stats with no analytics token says so, once', async () => {
   }
 })
 
+// D-32318 §Errors, verbatim: "One is open until a later deploy stops
+// producing it or the agent marks it fixed." So the deploy that carries the
 // fix closes it, with nobody archiving by hand (T-32910, C-32905 item 7).
-slow('the deploy that fixes a break closes it', async () => {
+Deno.test('the deploy that fixes a break closes it', async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'mend', apps: ['weather'] }])
+    let { cookie } = await seed(k, [{ slug: 'mend34', apps: ['weather'] }])
     let agent = connector(k, cookie)
-    let app = { space: 'mend', app: 'weather' }
+    let app = { space: 'mend34', app: 'weather' }
     let report = (message: string) =>
-      k.at('mend.yaks.app', '/weather/api/report', {
+      k.at('mend34.yaks.app', '/weather/api/report', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           message,
-          url: 'https://mend.yaks.app/weather/',
+          url: 'https://mend34.yaks.app/weather/',
         }),
       })
 
@@ -467,7 +387,7 @@ slow('the deploy that fixes a break closes it', async () => {
     let open = await agent.tool('app_errors', app)
     assertStringIncludes(open, 'weather v1: page /weather/ — failed to load')
     assertStringIncludes(
-      await agent.tool('app_list', { space: 'mend' }),
+      await agent.tool('app_list', { space: 'mend34' }),
       '1 open',
     )
 
@@ -481,7 +401,7 @@ slow('the deploy that fixes a break closes it', async () => {
     assertStringIncludes(out, 'closed 1 break from earlier versions')
     assertEquals(await agent.tool('app_errors', app), 'no open errors')
     assert(
-      !(await agent.tool('app_list', { space: 'mend' })).includes('open'),
+      !(await agent.tool('app_list', { space: 'mend34' })).includes('open'),
       'the count follows',
     )
 

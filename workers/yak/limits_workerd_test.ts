@@ -4,15 +4,13 @@
 // month's letters are shared by every free space the owner has. usage_test.ts
 // holds the sums at their seam; this holds that the doors ask them.
 import { assertStringIncludes } from '@std/assert'
-import { slow, until } from '../../bin/testing.ts'
+import { until } from '../../bin/testing.ts'
 import { connector, kernel, meta, plus, signIn } from './probe.ts'
-
-let SECRET = 'whsec_a_probe_secret'
 
 let eidIn = (said: string) => /\(([0-9a-f-]{36})\)/.exec(said)![1]
 
-slow('free allowances hold per person, not per space', async () => {
-  let k = await kernel({ STRIPE_WEBHOOK_SECRET: SECRET })
+Deno.test('free allowances hold per person, not per space', async () => {
+  let k = await kernel()
   try {
     // The first to sign in owns the platform too, which is how this test
     // writes a meter reading below.
@@ -34,13 +32,13 @@ slow('free allowances hold per person, not per space', async () => {
     assertStringIncludes(refused, 'Plus plan')
 
     // One on the Plus plan is paid for on its own, and frees a place.
-    await plus(k, SECRET, made[0])
+    await plus(k, made[0])
     made.push(eidIn(await make(5)))
 
     // The letters: two of her free spaces have sent the month's hundred
     // between them, so a third may not send one, though it has sent none.
     let month = new Date().toISOString().slice(0, 7)
-    await meta(k, ada.cookie).apply([
+    await meta(k).apply([
       { entity: { eid: made[1] }, meter: { month, emails: 60 } },
       { entity: { eid: made[2] }, meter: { month, emails: 40 } },
     ])

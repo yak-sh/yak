@@ -1,6 +1,6 @@
 // MCP workerd probes, split by subject so Deno can run the modules in parallel.
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
-import { slow, until } from '../../bin/testing.ts'
+import { until } from '../../bin/testing.ts'
 import {
   connector,
   kernel,
@@ -17,7 +17,7 @@ import { hearing, HELLO } from './mcp-probe.ts'
 // different request opened — which is what makes the notification arrive at
 // all outside one isolate — and a client whose connection dropped picks up
 // what it missed from its `Last-Event-ID`.
-slow('the stream names its session and replays a missed line', async () => {
+Deno.test('the stream names its session and replays a missed line', async () => {
   let k = await kernel()
   let ear: ReturnType<typeof hearing> | undefined
   try {
@@ -131,7 +131,7 @@ slow('the stream names its session and replays a missed line', async () => {
 // tools that are always there, so a client's cached list stays right. `about`
 // still says what is here right now — the tools, the version naming them, and
 // the apps in reach with their commands.
-slow(
+Deno.test(
   'a deploy leaves the roster where it was, and about says what is here',
   async () => {
     let k = await kernel()
@@ -195,7 +195,7 @@ slow(
 // draw their answers in are what resources/list is made of, and a client
 // holding that list is told on the stream. The tool list is not told about,
 // because it did not move — an app's commands are not tools (T-34541).
-slow(
+Deno.test(
   'a release whose views moved says resources, and never tools',
   async () => {
     let k = await kernel()
@@ -271,13 +271,13 @@ slow(
 // A break is pushed to whoever is listening as it lands (T-33006, V-32361):
 // `notifications/message` on the members' streams — and the push marks
 // nothing, so the unseen block still carries it on the next tool reply.
-slow(
+Deno.test(
   'a break is pushed as notifications/message and still rides the reply',
   async () => {
     let k = await kernel()
     let ear: ReturnType<typeof hearing> | undefined
     try {
-      let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+      let { cookie } = await seed(k, [{ slug: 'jeff53', apps: ['recipes'] }])
       let agent = connector(k, cookie)
       let stream = await k.at('yaks.app', '/mcp', {
         headers: { cookie, accept: 'text/event-stream' },
@@ -288,15 +288,15 @@ slow(
         poll: 50,
         label: 'the stream to open',
       })
-      // What a page's injected reporter posts (report_test.ts).
+      // What a page's injected reporter posts (report_workerd_test.ts).
       assertEquals(
-        (await k.at('jeff.yaks.app', '/recipes/api/report', {
+        (await k.at('jeff53.yaks.app', '/recipes/api/report', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             message: 'boom is not a function',
             stack: 'at /recipes/:1',
-            url: 'https://jeff.yaks.app/recipes/',
+            url: 'https://jeff53.yaks.app/recipes/',
           }),
         })).status,
         204,
@@ -307,11 +307,11 @@ slow(
         label: 'the break to reach the stream',
       })
       assertStringIncludes(ear.said(), '"level":"error"')
-      assertStringIncludes(ear.said(), '"logger":"jeff/recipes"')
+      assertStringIncludes(ear.said(), '"logger":"jeff53/recipes"')
       assertStringIncludes(ear.said(), 'boom is not a function')
       // Unmarked by the push: served-in-a-reply stays the only mark.
       let told = await agent.tool('app_files', {
-        space: 'jeff',
+        space: 'jeff53',
         app: 'recipes',
         op: 'list',
       })

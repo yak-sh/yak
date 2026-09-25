@@ -20,10 +20,10 @@
 # workers/yak, so nothing here may assume a working directory — every path is
 # derived from this file's own location.
 #
-# What it does not do: `deno task test` (the fast tier boots probe servers and
-# is the Actions runner's job, .github/workflows/gate.yml) and bin/verify-deploy
-# (Builds runs the build BEFORE the deploy, so there is nothing yet to verify —
-# see the README).
+# What it does not do: the workerd tests (they boot the kernel and reach the
+# Stripe sandbox, and are the Actions runner's job, .github/workflows/gate.yml)
+# and bin/verify-deploy (Builds runs the build BEFORE the deploy, so there is
+# nothing yet to verify — see the README).
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -67,7 +67,7 @@ esac
 echo "--- deno task check"
 deno task check
 
-echo "--- deno task test:workers"
-deno task test:workers
+echo "--- deno task test --only=deno workers"
+deno task test --only=deno workers
 
 echo "--- build ok; Workers Builds deploys from here"

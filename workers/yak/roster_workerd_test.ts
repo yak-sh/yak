@@ -10,8 +10,8 @@
 //
 // Two ways to run it.
 //
-//   Under workerd (the slow tier, `deno task test:workerd`). A kernel boots
-//   with a throwaway store and everything runs, purchases included: the money
+//   Under workerd (`deno task test`), against the run's kernel and its
+//   throwaway store, and everything runs, purchases included: the money
 //   paths talk to Stripe's own sandbox with a test-mode key, never a
 //   stand-in. Set these first, or the money steps fail naming them:
 //
@@ -31,7 +31,7 @@
 //   check:
 //
 //     YAK_PROBE_URL=https://yaks.app YAK_PROBE_TOKEN=<bearer> \
-//       TASKS_SLOW=1 deno test -A --unstable-net workers/yak/roster_workerd_test.ts
+//       deno test -A --unstable-net workers/yak/roster_workerd_test.ts
 //
 //   The bearer is an ordinary OAuth token for a test account, an address on
 //   the bot domain (lib/bots.ts), got the way a host gets one (probe.ts
@@ -45,23 +45,22 @@
 //   purchase, so `space_sell` and `domain_attach` are called there for the
 //   refusal a free space gets, which is their other answer and worth holding.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import {
+  attached,
   bearerFor,
   charged,
   connector,
   delivered,
   deployed,
-  hostnames,
   kernel,
   letters,
   num,
-  plusPrice,
   signIn,
   stripeKey,
   subscribed,
   txt,
   vocabFile,
+  WEBHOOK_SECRET,
 } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
 import { BOT } from './lib/bots.ts'
@@ -110,27 +109,14 @@ let refused = async (
   }
 }
 
-slow(
+Deno.test(
   'every tool the connector lists is called, and one with no call fails this',
   async () => {
     // Cloudflare's custom hostnames are stood in for even under workerd: a
     // hostname attached for real would be written on the zone that serves
     // yaks.app, and a domain is a third party, not a purchase. Stripe is the
     // one third party this suite talks to for real.
-    let cf = LIVE ? undefined : hostnames()
-    let whsec = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? `whsec_${tag()}`
-    let connsec = Deno.env.get('STRIPE_CONNECT_WEBHOOK_SECRET') ??
-      `whsec_${tag()}`
-    let sandboxKey = Deno.env.get('STRIPE_KEY') ?? ''
-    let price = sandboxKey ? await plusPrice(sandboxKey) : ''
-    let k = LIVE ? deployed(LIVE) : await kernel({
-      CF_ZONE: 'a-zone',
-      CF_HOSTNAMES_TOKEN: 'a-token',
-      HOSTNAMES_API: cf!.url,
-      STRIPE_WEBHOOK_SECRET: whsec,
-      STRIPE_CONNECT_WEBHOOK_SECRET: connsec,
-      ...(sandboxKey ? { STRIPE_KEY: sandboxKey, STRIPE_PRICE: price } : {}),
-    })
+    let k = LIVE ? deployed(LIVE) : kernel()
     // Every space this run made and has not yet erased.
     let spaces: string[] = []
     try {
@@ -189,7 +175,13 @@ slow(
         /is a test account|already this hour/.test(sent),
         `feedback: ${sent}`,
       )
-      if (!LIVE) assertEquals(letters(k, GRAPH), [], 'no feedback letter went')
+      if (!LIVE) {
+        assertEquals(
+          letters(k, GRAPH).filter((l) => l.body.includes('roster suite says')),
+          [],
+          'no feedback letter went',
+        )
+      }
 
       // ---- a space, and a second one to install into ---------------------
       let mine = `roster-${tag()}`
@@ -526,7 +518,7 @@ slow(
           await delivered(
             k,
             '/stripe/webhook',
-            whsec,
+            WEBHOOK_SECRET,
             'customer.subscription.updated',
             sub,
           ),
@@ -554,7 +546,7 @@ slow(
         let heardIt = await delivered(
           k,
           '/stripe/connect',
-          connsec,
+          WEBHOOK_SECRET,
           'account.updated',
           await charged(key, `/v1/accounts/${account.data[0].id}`),
           account.data[0].id,
@@ -576,7 +568,7 @@ slow(
           await tool('domain_detach', { space: mine, hostname: host }),
           `${host} is detached`,
         )
-        assert(!cf!.held.has(host), 'the hostname went back to Cloudflare')
+        assert(!await attached(host), 'the hostname went back to Cloudflare')
 
         // And cancelled, the way the person would, so the space is one a
         // delete may take: a paying space is refused (erase.ts `refused`).
@@ -591,7 +583,7 @@ slow(
         await delivered(
           k,
           '/stripe/webhook',
-          whsec,
+          WEBHOOK_SECRET,
           'customer.subscription.deleted',
           ended,
         )
@@ -635,7 +627,6 @@ slow(
             .catch(() => {/* already gone */})
         }
       }
-      cf?.stop()
       await k.stop()
     }
   },

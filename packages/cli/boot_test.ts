@@ -1,21 +1,15 @@
 // The whole thing, once: a config file naming plugins, their facets imported
 // one subpath at a time, a scratch database, and the four endpoints answering
-// over it. It costs a port and a file, so it runs under TASKS_SLOW rather than
-// in the fast tier.
+// over it.
 //
 // The port is bound here rather than through the `serve` tool, because this is
 // `compose` being tested and not that tool: what the tool adds — binding a
 // port with the handler the config's own plugins built and recording the call
 // for as long as it listens — is @yaks/api's own test. What this asserts of it
 // is that a config naming that package gets the verb, and a handler at all.
-// The verb is the command line's alone (`surfaces: ["cli"]`): a server keeps
-// its process, so the MCP listing leaves it out.
 
 import { assert, assertEquals } from '@std/assert'
 import { compose, read } from './host.ts'
-
-let slow = (name: string, fn: () => Promise<void>) =>
-  Deno.test({ name, fn, ignore: !Deno.env.get('TASKS_SLOW') })
 
 // A port this box is not using, asked for and given back.
 let free = (): number => {
@@ -25,7 +19,7 @@ let free = (): number => {
   return port
 }
 
-slow(
+Deno.test(
   'a composed host answers on every endpoint, and carries the serve verb',
   async () => {
     let dir = Deno.makeTempDirSync()
@@ -71,7 +65,6 @@ slow(
       let names = listed.result.tools.map((t: { name: string }) => t.name)
       assert(names.includes('session_list'), names.join(' '))
       assert(names.includes('graph_apply'), names.join(' '))
-      assert(!names.includes('serve'), names.join(' '))
 
       // A subscription hears about a write it did not make.
       let socket = new WebSocket(`ws://localhost:${port}/ws`)

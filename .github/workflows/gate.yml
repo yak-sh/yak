@@ -1,4 +1,4 @@
-# The gate: what `deno task check` and the test tiers say about a commit.
+# The gate: what `deno task check` and `deno task test` say about a commit.
 #
 # It does not deploy. The kernel Worker ships through Cloudflare Workers Builds,
 # which runs its own build (bin/build-yak) and mints its own token — see
@@ -41,27 +41,6 @@ jobs:
         shell: deno run -A bin/suite-time.ts --ci bash --noprofile --norc -eo pipefail {0}
     steps:
       - uses: actions/checkout@v4
-        with:
-          # The workerd tier scopes itself by diff, so the base commit of a
-          # push must be in the clone.
-          fetch-depth: 0
-
-      - name: worker paths
-        id: paths
-        env:
-          SUITE_STEP: worker paths
-          BEFORE: ${{ github.event.before }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          base="${PR_BASE:-$BEFORE}"
-          if [ -z "$base" ] || [ "$base" = 0000000000000000000000000000000000000000 ]; then
-            base=$(git hash-object -t tree /dev/null)
-          fi
-          # A failed diff must fail the gate, never masquerade as no changes.
-          git diff --name-only "$base" "$GITHUB_SHA" -- workers/ packages/ > "$RUNNER_TEMP/yak-paths"
-          if grep -q . "$RUNNER_TEMP/yak-paths"; then
-            echo 'workers=true' >> "$GITHUB_OUTPUT"
-          fi
 
       # FIRST, before a single test: `live` is the recorder's first successful
       # probe, so whatever the job does before this step is measured as deploy
@@ -91,33 +70,15 @@ jobs:
           DENO_JOBS: 4
         run: deno task check
 
-      # Quoted: a bare YAML scalar cannot carry a `: ` — the runner would never
-      # see this line, the file would fail to parse.
+      # Every platform's tests (bin/test.ts), workerd's included: the money
+      # paths reach Stripe's sandbox, so the runner's environment carries
+      # STRIPE_KEY. Quoted: a bare YAML scalar cannot carry a `: ` — the
+      # runner would never see this line, the file would fail to parse.
       - name: tests
         env:
           SUITE_STEP: tests
           DENO_JOBS: 4
         run: 'DB_PATH=:memory: deno task test'
-
-      # No install step: the Worker's npm dependencies are gitignored, and
-      # since T-34159 the probe fills them itself (workers/yak/wrangler.ts
-      # `ready()`, called from probe.ts) before workerd reads them.
-      #
-      # @db/sqlite ships a prebuilt libsqlite3.so that segfaults on this box the
-      # moment it is opened. Nothing here has to say so any more: since T-34183
-      # every importer takes `Database` from @yaks/sqlite/db, whose prelude names
-      # the system library first (packages/sqlite/sqlitepath_test.ts holds that
-      # line). Before that, these runs only survived because every login shell
-      # here exports DENO_SQLITE_PATH and a systemd unit inherits none of it.
-      # The fast tier skips slow(...); this one boots real workerd and SQLite,
-      # so it runs where the diff touches those paths. It REPORTS: a red
-      # workerd tier is a bug to fix, never a held-back deploy (T-37250).
-      - name: workerd tests
-        if: steps.paths.outputs.workers == 'true'
-        continue-on-error: true
-        env:
-          SUITE_STEP: workerd tests
-        run: deno task test:workerd
 
       # Reads the row `deploy time` wrote; needs no credentials. Until
       # T-35336 rows were only written when someone hand-ran deploy:time, so

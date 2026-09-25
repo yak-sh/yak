@@ -1,6 +1,6 @@
 // Query ownership lives at view roots. Exercise the real hooks and transport,
 // including overlapping mounts, retargeting, and reads between cleanup/mount.
-import { slow } from '../testing.ts'
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -13,7 +13,7 @@ let B = 'dddd3703-0000-4000-8000-000000000002'
 let actor = 'dddd3703-0000-4000-8000-000000000003'
 type Frame = { sub?: string; unsub?: string; q?: string }
 
-slow('eid-keyed view queries release on retarget and last unmount', () => {
+Deno.test('eid-keyed view queries release on retarget and last unmount', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {

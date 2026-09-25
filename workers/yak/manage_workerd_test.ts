@@ -3,27 +3,25 @@
 // use the browser's cookie and form paths, including the boundaries that keep
 // another person, and another page, from changing this account.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import {
   charged,
   client,
   connector,
   kernel,
   meta,
-  plusPrice,
   signIn,
   stripeKey,
 } from './probe.ts'
 import { MANAGE, managePath } from './route.ts'
 
-slow('the dashboard is at the apex, whatever serves the space', async () => {
+Deno.test('the dashboard is at the apex, whatever serves the space', async () => {
   let k = await kernel()
   try {
     let them = await signIn(k)
     let slug = them.email.split('@')[0]
     let host = `${slug}.yaks.app`
     let agent = connector(k, them.cookie)
-    let dir = meta(k, them.cookie)
+    let dir = meta(k)
     let get = (path: string, cookie = them.cookie) =>
       k.at('yaks.app', path, { redirect: 'manual', headers: { cookie } })
     let post = (
@@ -211,14 +209,11 @@ slow('the dashboard is at the apex, whatever serves the space', async () => {
   }
 })
 
-slow(
+Deno.test(
   'Billing management opens checkout and the customer portal for this space',
   async () => {
     let key = stripeKey()
-    let k = await kernel({
-      STRIPE_KEY: key,
-      STRIPE_PRICE: await plusPrice(key),
-    })
+    let k = await kernel()
     try {
       let them = await signIn(k)
       let slug = them.email.split('@')[0]

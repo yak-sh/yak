@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
 import { at, fn, insert, lit, type Stmt } from '@yaks/sql'
 import { open, type Opened } from '@yaks/sqlite/db'
-import { slow } from './testing.ts'
 
 let script = fileURLToPath(new URL('./backup', import.meta.url))
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
@@ -95,7 +94,7 @@ let fixture = async () => {
   }
 }
 
-slow(
+Deno.test(
   'backup snapshots WAL commits and leaves existing SQLite files attached',
   async () => {
     let f = await fixture()
@@ -129,7 +128,7 @@ slow(
 // fails to create, which is what left every `insert into mail_fts` with no
 // such table from 2026-09-11. The script's own round-trip gate is the rest of
 // the proof: a run that gets here loaded its dump back.
-slow(
+Deno.test(
   'the dump defines each FTS5 index and dumps none of its rows',
   async () => {
     let f = await fixture()
@@ -156,7 +155,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'a backup timing out on the lock cannot remove the active verifier database',
   async () => {
     let f = await fixture()

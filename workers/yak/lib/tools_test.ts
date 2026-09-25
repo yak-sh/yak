@@ -1,7 +1,7 @@
 // An app's own tools, from the manifest to the act: what a `"tool": true`
 // entry may say, how one refusal names every problem in it, and what a call's
 // arguments do to a template. The workerd half — the same file through
-// app_deploy and a call at the MCP door — is in workers/yak/mcp_test.ts.
+// app_deploy and a call at the MCP door — is in workers/yak/mcp_workerd_test.ts.
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import { filled, parseTools, schemaOf, viewsOf } from './tools.ts'
 

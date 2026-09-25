@@ -1,6 +1,6 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
-import { slow, tick, until } from './testing.ts'
+import { tick, until } from './testing.ts'
 import {
   agreementProbe,
   applyLocal,
@@ -2137,7 +2137,7 @@ Deno.test('client singletons: four tab subs, local reads, isolation (T-21490)', 
 })
 
 // An unheld local door must never resurrect a released view's subscription.
-slow(
+Deno.test(
   'local reverse reads never dial, including one read per entry (T-37033)',
   () => {
     let frames: unknown[] = []
@@ -2156,7 +2156,12 @@ slow(
       for (let i = 0; i < 200; i++) {
         backlinks(`dddd3703-0000-4000-8000-${String(i).padStart(12, '0')}`)
       }
-      assertEquals(frames, [])
+      // A new route is handed the releases earlier tests left queued; what
+      // this test must not send is a subscription.
+      assertEquals(
+        frames.filter((f) => !Object.hasOwn(f as object, 'unsubscribe')),
+        [],
+      )
     } finally {
       useRoute(restore)
       cache.value = {}

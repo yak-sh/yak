@@ -1,6 +1,6 @@
 // The Debug inspector exposes every component and gives its editing controls
 // the same component vocabulary as its stored rows.
-import { slow } from '../../testing.ts'
+import '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -11,9 +11,8 @@ import { applicable } from '../registry.ts'
 
 // Each case imports Entity.tsx — the whole component registry — and mounts a
 // Debug view through preact; the first pays that registry import (and hljs to
-// render the Markdown/JSON tabs), the rest the mount. The registry load is the
-// floor here, not trimmable, so the whole file rides the slow tier.
-slow('raw formats are nested under Debug', async () => {
+// render the Markdown/JSON tabs), the rest the mount.
+Deno.test('raw formats are nested under Debug', async () => {
   await import('../Entity.tsx')
   let { DebugTabs } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -72,7 +71,7 @@ slow('raw formats are nested under Debug', async () => {
   }
 })
 
-slow('addable components keep their component tones', async () => {
+Deno.test('addable components keep their component tones', async () => {
   await import('../Entity.tsx')
   let { AddComp } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -108,7 +107,7 @@ slow('addable components keep their component tones', async () => {
   }
 })
 
-slow('a reference reads as one association row, eid and all', async () => {
+Deno.test('a reference reads as one association row, eid and all', async () => {
   await import('../Entity.tsx')
   let { Debug } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -156,7 +155,7 @@ slow('a reference reads as one association row, eid and all', async () => {
   }
 })
 
-slow('project backlinks omit attribution and cap associations', async () => {
+Deno.test('project backlinks omit attribution and cap associations', async () => {
   await import('../Entity.tsx')
   let { ProjectDebug } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')

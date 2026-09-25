@@ -4,7 +4,7 @@
 import { assertEquals, assertRejects, assertStrictEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { stub } from '@std/testing/mock'
-import { denoDir, slow, until } from './testing.ts'
+import { denoDir, until } from './testing.ts'
 
 Deno.test('until rechecks a settled fact after a delayed poll', async () => {
   using time = new FakeTime(0)
@@ -51,7 +51,7 @@ Deno.test('denoDir retains the invoking cache after test environment redirection
   assertEquals(denoDir(), cache)
 })
 
-slow('a HOME-moving child shares the invoking Deno cache', async () => {
+Deno.test('a HOME-moving child shares the invoking Deno cache', async () => {
   let home = await Deno.makeTempDir({ prefix: 'tasks-cache-probe-' })
   try {
     let result = await new Deno.Command(Deno.execPath(), {

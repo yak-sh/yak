@@ -1,5 +1,4 @@
 import { assertEquals } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import { upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { script } from './probe.ts'
@@ -7,7 +6,7 @@ import { script } from './probe.ts'
 // A dispatch namespace is remote-only. The API is stood in for at fetch, as
 // in dispatch_test.ts; its uploaded bytes then run in workerd, where missing
 // class exports and bindings lost by the shim can no longer hide in metadata.
-slow(
+Deno.test(
   'the uploaded shim keeps local classes and the app bindings in workerd',
   async () => {
     let files: Record<string, string> = {}
@@ -63,21 +62,17 @@ slow(
     }
   `
     let worker = await script(files, 'probe.js')
-    try {
-      let response = await worker.at('/', {
-        headers: { 'x-yak-grant': 'private' },
-      })
-      assertEquals(response.status, 200)
-      assertEquals(await response.json(), {
-        label: 'hello',
-        json: { enabled: true },
-        resources: ['d1', 'r2', 'vectorize', 'ai'],
-        grant: null,
-        doors: true,
-        count: 7,
-      })
-    } finally {
-      await worker.stop()
-    }
+    let response = await worker.at('/', {
+      headers: { 'x-yak-grant': 'private' },
+    })
+    assertEquals(response.status, 200)
+    assertEquals(await response.json(), {
+      label: 'hello',
+      json: { enabled: true },
+      resources: ['d1', 'r2', 'vectorize', 'ai'],
+      grant: null,
+      doors: true,
+      count: 7,
+    })
   },
 )

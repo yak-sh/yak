@@ -37,7 +37,7 @@ let stubSockets = async () => {
   }
 }
 
-// An in-memory outbox double (no IndexedDB in the fast tier), mirroring idb's
+// An in-memory outbox double (no IndexedDB under Deno), mirroring idb's
 // key = delivery id.
 type Parked = { changes: Change[]; at: number }
 let fakeOutbox = () => {

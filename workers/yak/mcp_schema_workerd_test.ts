@@ -6,7 +6,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { Ajv } from 'ajv'
-import { slow, until } from '../../bin/testing.ts'
+import { until } from '../../bin/testing.ts'
 import {
   accepted,
   commandsIn,
@@ -23,7 +23,7 @@ import { hearing, HELLO } from './mcp-probe.ts'
 // An app's own tools (T-32685, T-38021): `$defs` entries of its vocab.json
 // marked `"tool": true`, planted by the same deploy, called at the same door as `<app>__<tool>` — and doing
 // through it exactly what the caller could do on the app's own page.
-slow('an app declares its own commands, and command runs them', async () => {
+Deno.test('an app declares its own commands, and command runs them', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -281,7 +281,7 @@ slow('an app declares its own commands, and command runs them', async () => {
 // no tool of its own still has a verb for adding one and a verb for finding
 // it, so the next agent the person talks to discovers the app the way it
 // discovers anything else here — by asking what the apps in reach can do.
-slow(
+Deno.test(
   'a kind an app declares is two commands, with no tool of its own',
   async () => {
     let k = await kernel()
@@ -417,7 +417,7 @@ slow(
 // with what somebody deployed this morning, is a list the published connector
 // can never match. What an app declares is a command instead: `commands` says
 // which there are, `command` runs one, and neither name ever moves.
-slow(
+Deno.test(
   'the roster is one list for everybody, and apps carry commands',
   async () => {
     let k = await kernel()
@@ -565,7 +565,7 @@ slow(
 // for getting specific parts and also the full thing probably? should come
 // with docs, i expect, to explain the meaning". Three sizes over the caller's
 // own words: the index, one component whole, and a kind.
-slow('graph_schema answers the index, a word whole, and a kind', async () => {
+Deno.test('graph_schema answers the index, a word whole, and a kind', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -660,7 +660,7 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
 // guessing at the comp types". So the published input schema is checked here
 // the way a client checks it — with a JSON Schema validator, against the
 // letter bundle the guide teaches (public/docs/mail.md §Sending a letter).
-slow(
+Deno.test(
   "graph_apply's input schema is the vocabulary a client can write",
   async () => {
     let k = await kernel()

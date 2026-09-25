@@ -4,15 +4,14 @@
 // refused by the runtime, and every such call was answered as a refusal.
 import { assertEquals } from '@std/assert'
 import { toolEid } from '@yaks/tools'
-import { slow } from '../../bin/testing.ts'
 import { client, connector, kernel, seed, txt, vocabFile } from './probe.ts'
 
-slow('a command that takes an argument runs in its store', async () => {
+Deno.test('a command that takes an argument runs in its store', async () => {
   let k = await kernel()
   try {
-    let them = await seed(k, [{ slug: 'ada', apps: [] }])
+    let them = await seed(k, [{ slug: 'ada6', apps: [] }])
     let agent = connector(k, them.cookie)
-    let at = { space: 'ada', app: 'notes' }
+    let at = { space: 'ada6', app: 'notes' }
     await agent.tool('app_new', { ...at, slug: 'notes', title: 'Notes' })
     await agent.tool('app_files', {
       ...at,
@@ -32,7 +31,7 @@ slow('a command that takes an argument runs in its store', async () => {
       ],
     })
     await agent.tool('app_deploy', at)
-    let app = client(k, 'ada.yaks.app', 'notes', them.cookie)
+    let app = client(k, 'ada6.yaks.app', 'notes', them.cookie)
     let call = crypto.randomUUID()
     await app.applied([{
       entity: { eid: call },

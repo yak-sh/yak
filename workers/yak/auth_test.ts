@@ -16,7 +16,7 @@
 //   the mount      @yaks/mcp over the same graph under the same seam
 //
 // The half not here is turning a cookie or an OAuth bearer into a person:
-// that is identity.ts's `withAuth`, and identity_test.ts walks the whole OAuth
+// that is identity.ts's `withAuth`, and identity_workerd_test.ts walks the whole OAuth
 // flow in workerd to prove a bearer resolves to the same person the cookie
 // does. From there on, every credential is a vouch, which is what this file
 // starts from.

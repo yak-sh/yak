@@ -6,7 +6,6 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import { COOKIE, sign } from './lib/token.ts'
 import {
   allowed,
@@ -36,7 +35,7 @@ import { b64u, facing, GUIDE, HELLO } from './mcp-probe.ts'
 // challenge, which is how an MCP client discovers our authorization server.
 // Break that header while making things public and no connector can sign in
 // at all.
-slow('the door before anyone signs in', async () => {
+Deno.test('the door before anyone signs in', async () => {
   let k = await kernel()
   try {
     let anon = connector(k)
@@ -412,10 +411,10 @@ slow('the door before anyone signs in', async () => {
 // would show somebody who never signed in, this door shows: the guide, the
 // gallery of published apps, and the data of one app anyone with the link can
 // read, named on the call. Nothing else, and no write.
-slow('signed out: the gallery, the guide, and one public app', async () => {
+Deno.test('signed out: the gallery, the guide, and one public app', async () => {
   let k = await kernel()
   try {
-    let them = await seed(k, [{ slug: 'ada', apps: [] }])
+    let them = await seed(k, [{ slug: 'ada30', apps: [] }])
     let agent = connector(k, them.cookie)
     let anon = connector(k)
     let made = async (
@@ -425,27 +424,27 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
       access?: string,
     ) => {
       await agent.tool('app_new', {
-        space: 'ada',
+        space: 'ada30',
         slug,
         title: slug,
         ...(access ? { access } : {}),
       })
       await agent.tool('app_files', {
-        space: 'ada',
+        space: 'ada30',
         app: slug,
         files: [{
           path: 'vocab.json',
           content: vocabFile({ [comp]: props }),
         }],
       })
-      await agent.tool('app_deploy', { space: 'ada', app: slug })
+      await agent.tool('app_deploy', { space: 'ada30', app: slug })
     }
     // One app anyone with the link reads, one only its members do.
     await made('runs', 'jog', { miles: num })
     await made('diary', 'confession', { mood: txt }, 'private')
     let run = crypto.randomUUID()
     await agent.tool('graph_apply', {
-      space: 'ada',
+      space: 'ada30',
       app: 'runs',
       entities: [{
         entity: { eid: run },
@@ -454,7 +453,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
       }],
     })
     await agent.tool('graph_apply', {
-      space: 'ada',
+      space: 'ada30',
       app: 'diary',
       entities: [{
         entity: { eid: crypto.randomUUID() },
@@ -463,7 +462,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
       }],
     })
     await agent.tool('app_publish', {
-      space: 'ada',
+      space: 'ada30',
       app: 'runs',
       name: 'run-club',
       about: 'A log of everybody runs',
@@ -539,7 +538,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
     // gets at that address, through the tool an agent already has.
     let rows = JSON.parse(
       await anon.tool('graph_query', {
-        space: 'ada',
+        space: 'ada30',
         app: 'runs',
         q: '.jog&?doc',
       }),
@@ -547,12 +546,12 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
     assertEquals(rows.length, 1)
     assertEquals(rows[0].entity.eid, run)
     assertEquals(rows[0].doc.title, 'Morning loop')
-    let page = await client(k, 'ada.yaks.app', 'runs').get('.jog')
+    let page = await client(k, 'ada30.yaks.app', 'runs').get('.jog')
     assertEquals(page.map((r) => r.entity.eid), [run])
     // Whole, by id, and by its words.
     let shown = JSON.parse(
       await anon.tool('graph_show', {
-        space: 'ada',
+        space: 'ada30',
         app: 'runs',
         ids: [run],
       }),
@@ -560,7 +559,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
     assertEquals(shown[0].entity.eid, run)
     let found = JSON.parse(
       await anon.tool('search', {
-        space: 'ada',
+        space: 'ada30',
         app: 'runs',
         words: 'Morning',
       }),
@@ -568,7 +567,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
     assertEquals(found[0].entity.eid, run)
     // And the app's own word is in the schema it answers — the vocabulary of
     // that app, because it is the only one this caller is reading.
-    let words = await anon.tool('graph_schema', { space: 'ada', app: 'runs' })
+    let words = await anon.tool('graph_schema', { space: 'ada30', app: 'runs' })
     assertStringIncludes(words, 'jog')
     assertEquals(words.includes('confession'), false)
 
@@ -578,13 +577,13 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
     let hidden = await assertRejects(
       () =>
         anon.tool('graph_query', {
-          space: 'ada',
+          space: 'ada30',
           app: 'diary',
           q: '.confession',
         }),
       Error,
     )
-    assertStringIncludes(hidden.message, 'ada/diary is private')
+    assertStringIncludes(hidden.message, 'ada30/diary is private')
     // A read that names no app says the app is what is missing, and where the
     // apps to read are listed.
     let bare = await assertRejects(
@@ -596,7 +595,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
     // Naming an app on the query line is not a way around it either: `.in=`
     // asks about a membership, and a stranger holds none.
     let inLine = await assertRejects(
-      () => anon.tool('graph_query', { q: '.in=ada/diary&.confession' }),
+      () => anon.tool('graph_query', { q: '.in=ada30/diary&.confession' }),
       Error,
     )
     assertStringIncludes(inLine.message, 'signed out')
@@ -656,7 +655,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
 // the probe answers 200 and the host writes down "no auth"; at
 // `/mcp?auth=required` it answers the challenge, which is the whole
 // difference — everything past signing in is the same door and the same list.
-slow('?auth=required answers the challenge a probing host needs', async () => {
+Deno.test('?auth=required answers the challenge a probing host needs', async () => {
   let k = await kernel()
   try {
     let hello = (auth?: string) => ({
@@ -780,7 +779,7 @@ slow('?auth=required answers the challenge a probing host needs', async () => {
 // One test rather than five because it is one sequence: every step here is
 // what the step before it handed over, and a break anywhere in it is a person
 // looking at a connector that will not connect.
-slow(
+Deno.test(
   'mixed auth: a stranger reads the menu, then signs in for it',
   async () => {
     let k = await kernel()

@@ -2,7 +2,7 @@
 // The pure seams of what an agent is told broke (unseen.ts): which word closes
 // which break, which file a break happened in, and what the rider is quiet
 // about. The end-to-end half — a page reporting itself, the mark landing in
-// the app's store — is serving_test.ts and report_test.ts.
+// the app's store — is serving_test.ts and report_workerd_test.ts.
 import { assert, assertEquals } from '@std/assert'
 import { fileOf, line, named, past } from './unseen.ts'
 

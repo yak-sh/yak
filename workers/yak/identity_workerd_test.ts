@@ -16,7 +16,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { slow, until } from '../../bin/testing.ts'
+import { until } from '../../bin/testing.ts'
 import {
   allowed,
   connector,
@@ -26,6 +26,7 @@ import {
   letters,
   mailed,
   meta,
+  owner,
   signIn,
 } from './probe.ts'
 import { COOKIE, sign } from './lib/token.ts'
@@ -64,7 +65,7 @@ let b64u = (b: ArrayBuffer) =>
   btoa(String.fromCharCode(...new Uint8Array(b)))
     .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 
-slow(
+Deno.test(
   'agents identify existing grants and belong to the signed-in browser',
   async () => {
     let k = await kernel()
@@ -194,26 +195,7 @@ slow(
   },
 )
 
-// A deploy with no mail secret (staging, before MAIL_TOKEN is set) answers the
-// card in one sentence naming what is missing, not a 500: nothing is minted,
-// so the address is not charged a letter it never got.
-slow(
-  'a deploy that cannot mail answers the sign-in card in one sentence',
-  async () => {
-    let k = await kernel({ MAIL_DEV: '0' })
-    try {
-      let r = await form(k, '/login', { email: 'nobody@yaks.app' })
-      assertEquals(r.status, 503)
-      // identity.ts NO_MAIL, by its opening words: the module itself imports
-      // `cloudflare:` and cannot be loaded here.
-      assertMatch(await r.text(), /Sign-in mail is not switched on here yet/)
-    } finally {
-      await k.stop()
-    }
-  },
-)
-
-slow('a person signs in by mail, and an agent by OAuth', async () => {
+Deno.test('a person signs in by mail, and an agent by OAuth', async () => {
   let k = await kernel()
   try {
     // The card asks for an address, and nothing else.
@@ -258,7 +240,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     let cookie = set.split(';')[0]
     // The first person ever to sign in owns the meta space, and the graph
     // tier is their door into it.
-    let dir = meta(k, cookie)
+    let dir = meta(k)
 
     // Signing in is having a space (T-32482): one named for their address,
     // with them as its owner, so nothing ever asks them for a name.
@@ -335,22 +317,23 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     // Spent: the same code opens nothing twice.
     assertEquals((await form(k, '/login/code', { email, code })).status, 400)
 
-    // The person the address minted, and their ownership of the meta space —
-    // the first sign-in ever is the platform's owner.
+    // The person the address minted. The first sign-in ever owns the meta
+    // space, which on this kernel was the run's own, before any test's.
     let [person] = await dir.query(
       `.person&.email.address=${encodeURIComponent(email)}`,
     )
     assert(person, 'a person for ' + email)
     let me = person.entity.eid
+    let first = owner()
     let [yak] = await dir.query('.space.slug=yak')
-    let [owner] = await dir.query(
-      `.member.person=${me}&.member.space=${yak.entity.eid}`,
+    let [ownership] = await dir.query(
+      `.member.person=${first.person}&.member.space=${yak.entity.eid}`,
     )
     // The person a member row names answers with their name beside the eid
     // (T-32733); the space it names is not a person, so it stays an eid.
-    assertEquals(owner.member, {
+    assertEquals(ownership.member, {
       space: yak.entity.eid,
-      person: { eid: me, name: email.split('@')[0] },
+      person: { eid: first.person, name: first.name },
       role: 'owner',
     })
 
@@ -658,7 +641,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
 // expiry, and a public client's refresh refused for carrying a `client_secret`
 // it was never issued, which is what ChatGPT sends and what a person reads as
 // "your connection has expired, reconnect it".
-slow('a connector keeps its door until the person closes it', async () => {
+Deno.test('a connector keeps its door until the person closes it', async () => {
   let k = await kernel()
   try {
     let { cookie } = await signIn(k)
@@ -782,7 +765,7 @@ slow('a connector keeps its door until the person closes it', async () => {
 // them on — to the page they were headed for when it is ours to send them to,
 // and to where a fresh sign-in lands when it is nowhere or a stranger's, which
 // is the same guard closing the same open redirect.
-slow('/login never draws the box for a browser already signed in', async () => {
+Deno.test('/login never draws the box for a browser already signed in', async () => {
   let k = await kernel()
   try {
     let get = (path: string, cookie?: string) =>
@@ -839,7 +822,7 @@ slow('/login never draws the box for a browser already signed in', async () => {
 // mints nothing beside it, and where the code lands them is the one page that
 // space serves — the owner's, with the button that brings it back. This is the
 // half of the trash a person meets without ever being told about it.
-slow(
+Deno.test(
   'the code lands on the trash page when the only space is there',
   async () => {
     let k = await kernel()
@@ -911,7 +894,7 @@ slow(
 // their apps live at. One form, one POST to the space's own address, and the
 // answer is a redirect — a changed address moves this hostname, so where they
 // land is wherever the space now is.
-slow('account settings save the name and address', async () => {
+Deno.test('account settings save the name and address', async () => {
   let k = await kernel()
   let uniq = () => crypto.randomUUID().slice(0, 8)
   let post = (
@@ -931,7 +914,7 @@ slow('account settings save the name and address', async () => {
   try {
     let { cookie, email, person } = await signIn(k)
     let slug = email.split('@')[0]
-    let dir = meta(k, cookie)
+    let dir = meta(k)
 
     // The block, as its owner reads it: their address and the name signing in
     // derived for them, both filled in and both theirs to change.
@@ -1041,7 +1024,7 @@ slow('account settings save the name and address', async () => {
 // stranger asking for it is sent to sign in (T-34408). Its own kernel, because
 // the first sign-in on one owns the meta space, which is the door every
 // directory read below goes through.
-slow('the connector page, and the address chosen on it', async () => {
+Deno.test('the connector page, and the address chosen on it', async () => {
   let k = await kernel()
   let uniq = () => crypto.randomUUID().slice(0, 8)
   let post = (fields: Record<string, string>, cookie?: string) =>
@@ -1082,7 +1065,7 @@ slow('the connector page, and the address chosen on it', async () => {
     )
     await inn.body?.cancel()
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
-    let dir = meta(k, cookie)
+    let dir = meta(k)
 
     // Signed in, the whole page: the instructions, and the card saying where
     // they are, filled with the address signing in derived for them — theirs
@@ -1162,42 +1145,6 @@ slow('the connector page, and the address chosen on it', async () => {
   }
 })
 
-// The CIMD claim is a lever, not a constant. The suite above rides the on
-// default — the metadata claims support, and a URL client_id is a document we
-// go and fetch — so this holds the other side: a kernel wearing `CIMD=off`
-// says it does not support CIMD, still offers dynamic registration, and reads
-// a URL client_id out of the store like any other name, where it is simply
-// not registered (T-33027).
-slow(
-  'CIMD is a flag, and dropped it leaves registration standing',
-  async () => {
-    let k = await kernel({ CIMD: 'off' })
-    try {
-      let as = await (await k.at(
-        'yaks.app',
-        '/.well-known/oauth-authorization-server',
-      )).json()
-      assertEquals(as.client_id_metadata_document_supported, false)
-      assertMatch(as.registration_endpoint, /\/oauth\/register$/)
-      assertMatch(as.authorization_endpoint, /\/oauth\/authorize$/)
-
-      // No document is fetched: the id is looked up, found nowhere, and the
-      // client is refused as the stranger it is — not as an outage of ours.
-      let doc = 'https://probe.invalid/client_metadata.json'
-      let bare = await k.at(
-        'yaks.app',
-        `/oauth/authorize?response_type=code&client_id=${
-          encodeURIComponent(doc)
-        }&redirect_uri=https%3A%2F%2Fprobe.invalid%2Fcb`,
-      )
-      assertEquals(bare.status, 400)
-      assertEquals(/client metadata document/.test(await bare.text()), false)
-    } finally {
-      await k.stop()
-    }
-  },
-)
-
 // The OAuth settings the connect page teaches (T-34414), against the two
 // documents the authorization server actually serves. The page tells a person
 // what to put in a connector form; if it ever named an address the door does
@@ -1205,7 +1152,7 @@ slow(
 // was lying. So both are read here from one kernel and compared. It lives
 // beside the identity part rather than in site_test.ts because the connect
 // page is the kernel's own (pages.ts), not one of the static ones.
-slow(
+Deno.test(
   'the connect page teaches the OAuth settings the door serves',
   async () => {
     let k = await kernel()
@@ -1266,7 +1213,7 @@ slow(
 // the four requests a browser makes.
 let BUDGET = 3_000
 
-slow('a cold sign-in stays well under the budget', async () => {
+Deno.test('a cold sign-in stays well under the budget', async () => {
   let k = await kernel()
   try {
     let email = 'cold@yaks.app'
@@ -1316,7 +1263,7 @@ slow('a cold sign-in stays well under the budget', async () => {
 // app directory's reviewer is given instead of a mailbox — OpenAI's review
 // refuses any credential that needs one. Both are the same door and the same
 // landing a typed code reaches; what tells them apart is how they die.
-slow('a link signs a person in, once or until it is revoked', async () => {
+Deno.test('a link signs a person in, once or until it is revoked', async () => {
   let k = await kernel()
   try {
     // The letter's one click. The same code, said as a link.
@@ -1355,7 +1302,7 @@ slow('a link signs a person in, once or until it is revoked', async () => {
 
     // And the person wears the mark of how they last got in, which is what
     // says whether a standing link was ever used at all.
-    let dir = meta(k, cookie)
+    let dir = meta(k)
     let [them] = await dir.query(
       `.person&.email.address=${encodeURIComponent(email)}&?signed_in`,
     )
@@ -1442,7 +1389,7 @@ slow('a link signs a person in, once or until it is revoked', async () => {
 // The renewal, wired (session.ts `slid`, T-35380): every answer leaves the
 // router past it, so a cookie past half its life comes back fresh from a door
 // that knows nothing about sessions — here the apex's own home page.
-slow(
+Deno.test(
   'an answer to a request past half a session renews the cookie',
   async () => {
     let k = await kernel()

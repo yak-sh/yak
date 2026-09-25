@@ -5,10 +5,9 @@
 // hears its page token and never the cookie, one app's token opens no other,
 // it keeps its words to itself, and it keeps a page's storage.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import { connector, kernel, signIn, txt, vocabFile } from './probe.ts'
 
-slow('an installed copy runs like its space, or sandboxed', async () => {
+Deno.test('an installed copy runs like its space, or sandboxed', async () => {
   let k = await kernel()
   try {
     let me = await signIn(k)

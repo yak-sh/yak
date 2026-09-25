@@ -1,6 +1,6 @@
 // The graph palette lets a word settle before asking the single server loop
 // to search it.
-import { slow, until } from '../testing.ts'
+import { until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
@@ -47,8 +47,8 @@ Deno.test('search fills tile titles and bodies with marked matches', () => {
 })
 
 // Polls a real debounce window to prove only the settled query is sent — the
-// settle is the point, so it cannot be sub-ms; slow().
-slow('search sends only the settled query while typing', async () => {
+// settle is the point, so it cannot be sub-ms.
+Deno.test('search sends only the settled query while typing', async () => {
   let host = config.host
   // A location-less process no longer guesses a server. This test owns its
   // fetch below, so name that test endpoint rather than the operator's host.
@@ -59,11 +59,10 @@ slow('search sends only the settled query while typing', async () => {
   })
   let { document, window } = parseHTML('<main></main>')
   let asked: string[] = []
-  // The line rides /query as its leading bare term (hits.ts), not a param.
+  // The line rides /query as `q`, the typed word its leading term (hits.ts).
   let term = (input: string | URL | Request) =>
-    decodeURIComponent(
-      new URL(String(input), 'http://tasks.test').search.slice(1).split('&')[0],
-    )
+    new URL(String(input), 'http://tasks.test').searchParams.get('q')
+      ?.split('&')[0] ?? ''
   Object.defineProperties(globalThis, {
     document: { value: document, configurable: true },
     fetch: {

@@ -17,7 +17,7 @@ import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { processDoc, processes } from '@yaks/process'
 import { spawning } from './effects.ts'
-import { fake, slow, until } from './testing.ts'
+import { fake, until } from './testing.ts'
 import { every, runs } from './tools.ts'
 import { spawnDoc } from './vocab.ts'
 
@@ -217,7 +217,7 @@ Deno.test('a wait answers "still running" rather than killing anything', async (
 // The whole machine, with a provider that is a shell script: the request
 // starts it, the wait blocks on the process ending rather than the transcript,
 // and the peek reads back what it said.
-slow('spawn --wait runs the provider and answers what it came to', async () => {
+Deno.test('spawn --wait runs the provider and answers what it came to', async () => {
   let { g, fx } = host()
   let where = Deno.makeTempDirSync({ prefix: 'yaks-spawn-tools-' })
   fx.handle(

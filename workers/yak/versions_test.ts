@@ -2,7 +2,7 @@
 // and shas and never bytes, the bytes it names are still there when a rollback
 // asks for them however many deploys later, and what comes back is byte for
 // byte what went out — the app's own code included. The whole tool is held in
-// workerd beside it (mcp_test.ts, "a deploy is a version, and one word puts
+// workerd beside it (mcp_workerd_test.ts, "a deploy is a version, and one word puts
 // it back"); a dispatch namespace has no local implementation, so the worker's
 // last hop is proved here against the same stubbed account API dispatch_test.ts
 // uses.
@@ -46,7 +46,7 @@ let APP = { eid: 'a1', slug: 'recipes', version: 0 } as App
 // app is handed as a list.
 let ONE: Pinner[] = [{ prefix: PREFIX, app: APP }]
 
-// The blob seam in memory: no I/O, so the fast tier stays fast. `at` is when
+// The blob seam in memory: no I/O, so the test stays fast. `at` is when
 // each object landed, which the sweep's grace period reads — `clock` moves it,
 // so a test can put bytes that look a day old.
 //

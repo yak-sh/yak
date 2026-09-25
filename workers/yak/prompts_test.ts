@@ -3,7 +3,7 @@
 // straight to a model, so a hole left unfilled, a name nobody can pick twice,
 // or a sentence that only reads when every argument was given is the whole
 // failure. The door's own shape — the -32602s, the message envelope — is held
-// in workerd by mcp_test.ts.
+// in workerd by mcp_workerd_test.ts.
 import { assert, assertEquals } from '@std/assert'
 import { IDEAS, missing, promptOf, PROMPTS } from './prompts.ts'
 

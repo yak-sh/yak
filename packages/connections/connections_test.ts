@@ -128,10 +128,6 @@ let setup = async (...replies: [number, unknown][]) => {
   return { g, vault, c, needs, seen: e.seen }
 }
 
-// A test over the 1ms budget runs with the heavy tier, under TASKS_SLOW.
-let slow = (name: string, fn: () => Promise<void>) =>
-  Deno.test({ name, fn, ignore: !Deno.env.get('TASKS_SLOW') })
-
 let at = async (g: { read: Ctx['graph']['read'] }, eid: string) =>
   (await g.read(`.eid=${eid}`))[0] as Bundle | undefined
 
@@ -151,7 +147,7 @@ await sentinelOf(warm.vault, 'none')
 await crypto.subtle.digest('SHA-256', new Uint8Array())
 new URL('https://warm.example/?a=b').searchParams.set('c', 'd')
 
-slow(
+Deno.test(
   'install: each built integration whole and marked built, and nothing once all match',
   async () => {
     let { g } = await setup()
@@ -180,7 +176,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'only the host marks an integration built, and need never writes over one',
   async () => {
     let { g } = await setup()
@@ -201,7 +197,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'need: a connection with no credential, linked from the app, and asked again is the same one',
   async () => {
     let { g, c, needs } = await setup()
@@ -226,7 +222,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'need: a key for an unbuilt service names its hosts, which no later need may change',
   async () => {
     let { g, needs } = await setup()
@@ -260,7 +256,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'connect: a pasted key goes to the vault, and the app is handed its sentinel',
   async () => {
     let { g, vault, c, needs } = await setup()
@@ -283,7 +279,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'begin and connect: a sign-in keeps its grant behind the connection’s own handle',
   async () => {
     let { g, vault, c, needs, seen } = await setup([200, {
@@ -308,7 +304,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'a sign-in answering a key needs no registered client, and the key is its credential',
   async () => {
     let { c, needs } = await setup([200, { key: 'sk-or' }])
@@ -319,7 +315,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'an OAuth client is kept once, and a custom integration never signs in as a built one’s',
   async () => {
     let { g, vault } = await setup()
@@ -334,7 +330,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'refresh: a new token behind the same handle; a refused grant is broken, a failed wire is not',
   async () => {
     let { g, c, needs } = await setup(
@@ -358,7 +354,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'disconnect: the credential is forgotten, and an app that used it needs a new one',
   async () => {
     let { g, vault, c, needs } = await setup()
@@ -382,7 +378,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'each: every person connects their own, which only they are handed, and which a disconnect does not replace',
   async () => {
     let { g, vault, c, needs } = await setup()
@@ -419,7 +415,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'envOf: what the app reads, by name: a sentinel, or the key itself where the link is direct',
   async () => {
     let { g, vault, c, needs } = await setup()
@@ -475,7 +471,7 @@ Deno.test('a deleted owner takes its connections, and their credentials', async 
   assertEquals(kept(vault), CLIENTS)
 })
 
-slow(
+Deno.test(
   'the tools: need writes nothing secret, and list answers the owner’s',
   async () => {
     let { g } = await setup()

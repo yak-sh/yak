@@ -17,7 +17,7 @@
 //   the app hears it     a page subscribed to its own store sees the letter
 //                        arrive without asking
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { slow, until } from '../../bin/testing.ts'
+import { until } from '../../bin/testing.ts'
 import { monthOf } from './meter.ts'
 import {
   arrives,
@@ -49,16 +49,16 @@ let SECOND = 'd0000000-0000-4000-8000-000000000005'
 let signed = (dkim: 'pass' | 'fail') =>
   `mx.yaks.app; dkim=${dkim} header.i=@books.example; spf=pass`
 
-slow('a letter lands in the app its address named', async () => {
+Deno.test('a letter lands in the app its address named', async () => {
   let k = await kernel()
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-inbox-' })
-  let them = await seed(k, [{ slug: 'jeff', apps: ['recipes', 'garden'] }])
-  let mine = browser(k, 'jeff.yaks.app', them.cookie)
-  let wire = relay(k, 'jeff.yaks.app', them.cookie)
+  let them = await seed(k, [{ slug: 'jeff24', apps: ['recipes', 'garden'] }])
+  let mine = browser(k, 'jeff24.yaks.app', them.cookie)
+  let wire = relay(k, 'jeff24.yaks.app', them.cookie)
   let stop = () => {}
   try {
     // The page's own client, so the socket half is the one an app really uses.
-    let source = await (await k.at('jeff.yaks.app', '/recipes/api/client.js'))
+    let source = await (await k.at('jeff24.yaks.app', '/recipes/api/client.js'))
       .text()
     Deno.writeTextFileSync(`${dir}/client.js`, source)
     let mod = await import(`file://${dir}/client.js`)
@@ -72,10 +72,10 @@ slow('a letter lands in the app its address named', async () => {
     // bounce address, as it is in life; the author is the From header.
     let landed = await arrives(k, {
       from: 'bounces@relay.example',
-      to: 'jeff.recipes@yaks.app',
+      to: 'jeff24.recipes@yaks.app',
       raw: rfc822({
         From: 'Ana <ana@books.example>',
-        To: 'jeff.recipes@yaks.app',
+        To: 'jeff24.recipes@yaks.app',
         Subject: 'Bring a dish',
         Date: 'Tue, 27 Aug 2024 08:49:44 -0700',
         'Authentication-Results': signed('pass'),
@@ -92,24 +92,24 @@ slow('a letter lands in the app its address named', async () => {
     assertEquals(letter.doc.title, 'Bring a dish')
     assertEquals(letter.doc.body, 'Potluck Friday. Bring a dish.')
     assertEquals(letter.mail.from, 'ana@books.example')
-    assertEquals(letter.mail.to, 'jeff.recipes@yaks.app')
+    assertEquals(letter.mail.to, 'jeff24.recipes@yaks.app')
     assertEquals(letter.mail.at, '2024-08-27T15:49:44.000Z')
     assertEquals(letter.mail.verified, true)
 
     // Nobody wrote it: the sender is a property and never an actor, so a letter
     // cannot put words in a member's mouth.
-    let [byline] = await client(k, 'jeff.yaks.app', 'recipes', them.cookie)
+    let [byline] = await client(k, 'jeff24.yaks.app', 'recipes', them.cookie)
       .get('.mail&.created') as unknown as { created: { by: unknown } }[]
     assertEquals(byline.created.by, null)
 
     // The other app in the space has its own address and its own store: the
     // letter above is nowhere in it.
-    let garden = client(k, 'jeff.yaks.app', 'garden', them.cookie)
+    let garden = client(k, 'jeff24.yaks.app', 'garden', them.cookie)
     assertEquals(await garden.get('.mail'), [])
     assertEquals(
       (await arrives(k, {
         from: 'ana@books.example',
-        to: 'jeff.garden@yaks.app',
+        to: 'jeff24.garden@yaks.app',
         raw: rfc822({ Subject: 'Tomatoes are in' }, 'Come and take some.'),
       })).status,
       200,
@@ -124,17 +124,17 @@ slow('a letter lands in the app its address named', async () => {
     // The space's own name is its front page's address — the app it made its
     // front page, since being the first app claims nothing (apps.ts).
     await connector(k, them.cookie)
-      .tool('app_set', { space: 'jeff', app: 'recipes', home: true })
+      .tool('app_set', { space: 'jeff24', app: 'recipes', home: true })
     assertEquals(
       (await arrives(k, {
         from: 'ana@books.example',
-        to: 'jeff@yaks.app',
+        to: 'jeff24@yaks.app',
         raw: rfc822({ Subject: 'To the front page' }, 'Hello in there.'),
       })).status,
       200,
     )
     let titles = (rows: Row[]) => rows.map((r) => r.doc.title).sort()
-    let recipes = client(k, 'jeff.yaks.app', 'recipes', them.cookie)
+    let recipes = client(k, 'jeff24.yaks.app', 'recipes', them.cookie)
     await until(
       async () =>
         titles(await recipes.get('.mail&?doc') as unknown as Row[]).includes(
@@ -148,7 +148,7 @@ slow('a letter lands in the app its address named', async () => {
     assertEquals(
       (await arrives(k, {
         from: 'spoof@relay.example',
-        to: 'jeff.recipes@yaks.app',
+        to: 'jeff24.recipes@yaks.app',
         raw: rfc822({
           From: 'Ana <ana@books.example>',
           Subject: 'Nobody signed for this',
@@ -166,7 +166,7 @@ slow('a letter lands in the app its address named', async () => {
     assertEquals(
       (await arrives(k, {
         from: 'ana@books.example',
-        to: 'jeff.recipes@yaks.app',
+        to: 'jeff24.recipes@yaks.app',
         raw: rfc822(
           {
             Subject: 'The list',
@@ -212,30 +212,30 @@ slow('a letter lands in the app its address named', async () => {
   }
 })
 
-slow("a letter to an app's former address follows the rename", async () => {
+Deno.test("a letter to an app's former address follows the rename", async () => {
   let k = await kernel()
   try {
-    let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+    let them = await seed(k, [{ slug: 'jeff25', apps: ['recipes'] }])
     await connector(k, them.cookie)
-      .tool('app_set', { space: 'jeff', app: 'recipes', slug: 'cookbook' })
+      .tool('app_set', { space: 'jeff25', app: 'recipes', slug: 'cookbook' })
     assertEquals(
       (await arrives(k, {
         from: 'ana@books.example',
-        to: 'jeff.recipes@yaks.app',
+        to: 'jeff25.recipes@yaks.app',
         raw: rfc822({ Subject: 'Still find you' }, 'Bring a dish.'),
       })).status,
       200,
     )
     // The store is named at birth, so the letter is in the app it named — now
     // answering at its new address, with the envelope it arrived under.
-    let [letter] = await client(k, 'jeff.yaks.app', 'cookbook', them.cookie)
+    let [letter] = await client(k, 'jeff25.yaks.app', 'cookbook', them.cookie)
       .get('.mail&?doc') as unknown as Row[]
     assertEquals(letter.doc.title, 'Still find you')
-    assertEquals(letter.mail.to, 'jeff.recipes@yaks.app')
+    assertEquals(letter.mail.to, 'jeff25.recipes@yaks.app')
     // A slug nobody here has ever had is no move to follow: still refused.
     let no = await arrives(k, {
       from: 'ana@books.example',
-      to: 'jeff.nothere@yaks.app',
+      to: 'jeff25.nothere@yaks.app',
       raw: rfc822({ Subject: 'Anyone there?' }, 'Hello?'),
     })
     assertEquals(no.status, 400)
@@ -245,18 +245,18 @@ slow("a letter to an app's former address follows the rename", async () => {
   }
 })
 
-slow("a letter to a space's former subdomain follows the rename", async () => {
+Deno.test("a letter to a space's former subdomain follows the rename", async () => {
   let k = await kernel()
   try {
-    let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+    let them = await seed(k, [{ slug: 'jeff26', apps: ['recipes'] }])
     await connector(k, them.cookie).tool('space_set', {
-      space: 'jeff',
-      slug: 'jeffs-kitchen',
+      space: 'jeff26',
+      slug: 'jeffs-kitchen26',
     })
     assertEquals(
       (await arrives(k, {
         from: 'ana@books.example',
-        to: 'jeff.recipes@yaks.app',
+        to: 'jeff26.recipes@yaks.app',
         raw: rfc822({ Subject: 'Still find you' }, 'Bring a dish.'),
       })).status,
       200,
@@ -265,25 +265,25 @@ slow("a letter to a space's former subdomain follows the rename", async () => {
     // have been — read back at the space's new address.
     let [letter] = await client(
       k,
-      'jeffs-kitchen.yaks.app',
+      'jeffs-kitchen26.yaks.app',
       'recipes',
       them.cookie,
     )
       .get('.mail&?doc') as unknown as Row[]
     assertEquals(letter.doc.title, 'Still find you')
-    assertEquals(letter.mail.to, 'jeff.recipes@yaks.app')
+    assertEquals(letter.mail.to, 'jeff26.recipes@yaks.app')
   } finally {
     await k.stop()
   }
 })
 
-slow(
+Deno.test(
   'an address nobody answers at is refused, and nothing is written',
   async () => {
     let k = await kernel()
     try {
-      let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }, {
-        slug: 'bare',
+      let them = await seed(k, [{ slug: 'jeff27', apps: ['recipes'] }, {
+        slug: 'bare27',
         apps: [],
       }])
       let no = async (to: string) => {
@@ -298,28 +298,31 @@ slow(
       // A space nobody has taken, an app that space does not have, and a local
       // part that is no address of ours at all.
       assertStringIncludes(await no('nobody@yaks.app'), 'no mailbox')
-      assertStringIncludes(await no('jeff.nothere@yaks.app'), 'no mailbox')
-      assertStringIncludes(await no('jeff.recipes.old@yaks.app'), 'no mailbox')
+      assertStringIncludes(await no('jeff27.nothere@yaks.app'), 'no mailbox')
+      assertStringIncludes(
+        await no('jeff27.recipes.old@yaks.app'),
+        'no mailbox',
+      )
       // A space whose address is spelled right and has nothing behind it is told
       // apart from a typo: the sender is told where to write instead.
-      let bare = await no('bare@yaks.app')
-      assertStringIncludes(bare, 'no front page')
-      assertStringIncludes(bare, 'bare.<app>@yaks.app')
+      let bare27 = await no('bare27@yaks.app')
+      assertStringIncludes(bare27, 'no front page')
+      assertStringIncludes(bare27, 'bare27.<app>@yaks.app')
       // Nothing landed anywhere: a refusal writes no row.
-      let rows = await client(k, 'jeff.yaks.app', 'recipes').get('.mail')
+      let rows = await client(k, 'jeff27.yaks.app', 'recipes').get('.mail')
       assertEquals(rows, [])
       // An app in the trash has no mailbox either (erase.ts, T-34430), and it
       // bounces as the same nothing: the sender is not told that an app was
       // deleted here. Its letters land again when it is restored.
       await connector(k, them.cookie)
-        .tool('app_delete', { space: 'jeff', app: 'recipes' })
-      assertStringIncludes(await no('jeff.recipes@yaks.app'), 'no mailbox')
+        .tool('app_delete', { space: 'jeff27', app: 'recipes' })
+      assertStringIncludes(await no('jeff27.recipes@yaks.app'), 'no mailbox')
       await connector(k, them.cookie)
-        .tool('app_restore', { space: 'jeff', app: 'recipes' })
+        .tool('app_restore', { space: 'jeff27', app: 'recipes' })
       assertEquals(
         (await arrives(k, {
           from: 'ana@books.example',
-          to: 'jeff.recipes@yaks.app',
+          to: 'jeff27.recipes@yaks.app',
           raw: rfc822({ Subject: 'Back in the box' }, 'Hello again.'),
         })).status,
         200,
@@ -337,16 +340,16 @@ slow(
           body: new URLSearchParams(fields).toString(),
         })
       assertEquals(
-        (await door('/space/jeff/delete', { confirm: 'jeff' })).status,
+        (await door('/space/jeff27/delete', { confirm: 'jeff27' })).status,
         200,
       )
-      assertStringIncludes(await no('jeff.recipes@yaks.app'), 'no mailbox')
-      assertStringIncludes(await no('jeff@yaks.app'), 'no mailbox')
-      await connector(k, them.cookie).tool('space_restore', { space: 'jeff' })
+      assertStringIncludes(await no('jeff27.recipes@yaks.app'), 'no mailbox')
+      assertStringIncludes(await no('jeff27@yaks.app'), 'no mailbox')
+      await connector(k, them.cookie).tool('space_restore', { space: 'jeff27' })
       assertEquals(
         (await arrives(k, {
           from: 'ana@books.example',
-          to: 'jeff.recipes@yaks.app',
+          to: 'jeff27.recipes@yaks.app',
           raw: rfc822({ Subject: 'Back again' }, 'Hello once more.'),
         })).status,
         200,
@@ -362,23 +365,23 @@ slow(
 // counted on (meter.ts `metering`, mail_test.ts) — and it is counted past the
 // allowance rather than refused there, because a letter turned away at the door
 // is somebody else's words lost.
-slow(
+Deno.test(
   'an arrival is one letter on the month, over the ceiling too',
   async () => {
     let k = await kernel()
     try {
-      let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+      let them = await seed(k, [{ slug: 'jeff28', apps: ['recipes'] }])
       let agent = connector(k, them.cookie)
-      let dir = meta(k, them.cookie)
+      let dir = meta(k)
       let spent = async () => {
-        let [row] = await dir.query(`.eid=${them.eids.jeff}&?meter`)
+        let [row] = await dir.query(`.eid=${them.eids.jeff28}&?meter`)
         return ((row?.meter ?? {}) as { emails?: number }).emails ?? 0
       }
       let write = async (subject: string) =>
         assertEquals(
           (await arrives(k, {
             from: 'ana@books.example',
-            to: 'jeff.recipes@yaks.app',
+            to: 'jeff28.recipes@yaks.app',
             raw: rfc822({ Subject: subject }, 'Hello in there.'),
           })).status,
           200,
@@ -393,7 +396,7 @@ slow(
       // over (meter.ts `metering`) — one Durable Object asking another. The
       // letter comes to rest either way, and the answer is why it bounced or
       // `''` where it left.
-      let page = client(k, 'jeff.yaks.app', 'recipes', them.cookie)
+      let page = client(k, 'jeff28.yaks.app', 'recipes', them.cookie)
       let outbound = async (eid: string) => {
         await page.applied([
           { entity: { eid: ANA }, email: { address: 'ana@books.example' } },
@@ -421,12 +424,12 @@ slow(
 
       // At the allowance. The seeding goes in through the graph tier, which is
       // not the directory's own write door, so the kernel's 30-second read cache
-      // is emptied by a write that is (mcp_test.ts says the same).
+      // is emptied by a write that is (mcp_workerd_test.ts says the same).
       await dir.apply([{
-        entity: { eid: them.eids.jeff },
+        entity: { eid: them.eids.jeff28 },
         meter: { month: monthOf(new Date()), emails: 100 },
       }])
-      await agent.tool('space_new', { slug: 'elsewhere', title: 'Elsewhere' })
+      await agent.tool('space_new', { slug: 'elsewhere28', title: 'Elsewhere' })
       await write('The hundred and first')
       assertEquals(await spent(), 101)
       assertEquals(

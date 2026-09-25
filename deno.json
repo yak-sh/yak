@@ -67,11 +67,7 @@
       ]
     },
     "check:content": "deno task content --check",
-    "check:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno run -A bin/scratch.ts deno test --parallel --no-check -A packages/ packages/*_test.ts",
     "content": "deno run --allow-read --allow-write --allow-run=deno workers/yak/gen.ts",
-    "test:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno run -A bin/scratch.ts deno test --parallel -A packages/ packages/*_test.ts",
-    "test:workerd": "deno run -A bin/suite-time.ts test:workerd deno task test:workerd:run",
-    "test:workers": "deno run -A bin/scratch.ts deno test -A workers/yak/",
     "gate": "deno task check && deno task test",
     "dev": "deno run -A --unstable-net --unstable-worker-options packages/cli/yak.ts serve --config $HOME/.yak/yak.json",
     "dev:yak": "deno run --allow-read --allow-write --allow-run=npm,npx,pgrep,kill workers/yak/wrangler.ts dev",
@@ -89,7 +85,6 @@
     "app-grep": "deno run --allow-net=api.cloudflare.com --allow-read --allow-write --allow-env=HOME,XDG_CACHE_HOME --allow-run=op,rg bin/app-grep.ts",
     "jsr": "deno run --allow-read --allow-net=api.jsr.io --allow-env=JSR_TOKEN bin/jsr.ts",
     "test": "deno run -A bin/suite-time.ts test deno task test:run",
-    "test:all": "TASKS_SLOW=1 DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/scratch.ts deno run -A bin/test.ts",
     "test:budget": "deno run -A bin/test-budget.ts",
     "bench": "bash bin/bench.sh",
     "bench:check": "bash bin/bench.sh check",
@@ -103,12 +98,10 @@
         "check:publish",
         "check:browser",
         "check:workers",
-        "check:content",
-        "check:packages"
+        "check:content"
       ]
     },
-    "test:run": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/scratch.ts deno run -A bin/test.ts",
-    "test:workerd:run": "deno run -A bin/test-workerd.ts"
+    "test:run": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/scratch.ts deno run -A --node-modules-dir=manual bin/test.ts"
   },
   "workspace": [
     "./workers/yak",

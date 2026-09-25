@@ -3,10 +3,8 @@
 // lists, so a test sees the components a page does, and gives the test a
 // localStorage of its own. Import it before anything else in a test file: a
 // module that reads the tables or the storage as it loads reads them once,
-// and both are set below before any later import evaluates. A
-// `slow` test rides a real subprocess or server and runs only under
-// TASKS_SLOW; a fast test never sleeps a fixed span, it yields with `tick` and
-// waits on a fact with `until`.
+// and both are set below before any later import evaluates. A test never
+// sleeps a fixed span: it yields with `tick` and waits on a fact with `until`.
 
 import { learn } from './types.ts'
 import { docs as kernel } from '@yaks/kernel/vocab'
@@ -110,19 +108,6 @@ learn([
   member,
   admin,
 ].flatMap((d) => d ?? []))
-
-type Fn = () => void | Promise<void>
-export let slow = (
-  name: string,
-  a: Fn | Omit<Deno.TestDefinition, 'name' | 'fn'>,
-  b?: Fn,
-) =>
-  Deno.test({
-    ...(b ? a as object : {}),
-    name,
-    fn: (b ?? a) as Fn,
-    ignore: !Deno.env.get('TASKS_SLOW'),
-  })
 
 /** One macrotask yield. */
 export let tick = () => new Promise<void>((go) => setTimeout(go, 0))

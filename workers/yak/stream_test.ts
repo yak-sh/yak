@@ -4,7 +4,7 @@
 // per-deploy version id (CF_VERSION_METADATA.id), or the human VERSION when
 // that binding is absent — and tells a stream that crossed a release its three
 // lists moved, once per session, directly, off the log. The object is a plain
-// class over a structural storage slice, so the fast tier constructs it with a
+// class over a structural storage slice, so a test constructs it with a
 // Map and an injected env, and reads the SSE frames straight off the attach
 // Response. Passing env {} exercises the VERSION fallback the workerd probes
 // take, since they have no version-metadata binding either.

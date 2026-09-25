@@ -1,5 +1,5 @@
 import { assertEquals } from '@std/assert'
-import { slow, tick } from './testing.ts'
+import { tick } from './testing.ts'
 import { type Body, kept } from './kept.ts'
 import { bundle } from './bundle.ts'
 
@@ -45,7 +45,7 @@ Deno.test('a body once made is kept', async () => {
   assertEquals(seen.tries, 1)
 })
 
-slow('a stopped bundle stops the bundler', async () => {
+Deno.test('a stopped bundle stops the bundler', async () => {
   let stop = new AbortController()
   let built = bundle(stop.signal)
   stop.abort()

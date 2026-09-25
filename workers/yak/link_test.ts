@@ -2,7 +2,7 @@
 // one click dies with the code it carries, a standing link lives to its expiry
 // unless somebody takes it back, and neither survives a foreign secret. Nothing
 // here imports a Cloudflare name, so the whole contract holds in plain Deno;
-// the door it hangs on is held in workerd (identity_test.ts).
+// the door it hangs on is held in workerd (identity_workerd_test.ts).
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { seal } from './lib/token.ts'

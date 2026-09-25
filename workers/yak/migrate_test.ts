@@ -21,7 +21,6 @@ import {
   ServerRuntimeClient,
   setCurrentClient,
 } from '@sentry/core'
-import { slow } from '../../bin/testing.ts'
 import { blobSchema } from '@yaks/blob'
 import { type Bundle, derivedEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
@@ -245,7 +244,7 @@ let seedApp = async (ctx: State) => {
   return { requires, refs }
 }
 
-slow('an app store carries every row across, and reconciles', async () => {
+Deno.test('an app store carries every row across, and reconciles', async () => {
   let ctx = state()
   let said = await seedApp(ctx)
 
@@ -295,7 +294,7 @@ slow('an app store carries every row across, and reconciles', async () => {
   assert(!tables.some((t) => t.startsWith('journal_')), tables.join(', '))
 })
 
-slow("the runtime's own table is not the object's to move", async () => {
+Deno.test("the runtime's own table is not the object's to move", async () => {
   let ctx = state()
   await seedApp(ctx)
 
@@ -334,7 +333,7 @@ slow("the runtime's own table is not the object's to move", async () => {
 // document at the object's next open — and `seedApp` writes one the old way,
 // which is what `older().vocab()` still does. The tools slot the same way: a
 // manifest accepted while `{{arg}}` was the hole is rewritten with `$arg`.
-slow(
+Deno.test(
   'a store holding an old shape is rewritten at its next open',
   async () => {
     let ctx = state()
@@ -521,7 +520,7 @@ Deno.test('the short type map, as the document it means', () => {
   assertEquals(documented('not json'), null)
 })
 
-slow('the second boot is a no-op', async () => {
+Deno.test('the second boot is a no-op', async () => {
   let ctx = state()
   await seedApp(ctx)
   let first = newer(ctx, 'ada/cookbook')
@@ -548,7 +547,7 @@ slow('the second boot is a no-op', async () => {
 
 // ---- the directory ---------------------------------------------------------
 
-slow('the directory keeps its three seats', async () => {
+Deno.test('the directory keeps its three seats', async () => {
   let ctx = state()
   let old = older(ctx, PLATFORM_STORE)
   await old.apply([
@@ -584,7 +583,7 @@ slow('the directory keeps its three seats', async () => {
   assertEquals((await now.query('.app.slug=cookbook')).length, 1)
 })
 
-slow('an app store splits the seat from the level', async () => {
+Deno.test('an app store splits the seat from the level', async () => {
   let ctx = state()
   let old = older(ctx, 'ada/cookbook')
   await old.apply([
@@ -680,7 +679,7 @@ let carriedOne = async (ctx: State) => {
   return now
 }
 
-slow(
+Deno.test(
   'a store carrying now arrives with the front page on the app',
   async () => {
     let ctx = state()
@@ -694,7 +693,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'a directory that already carried moves the column on next touch',
   async () => {
     let ctx = state()
@@ -712,7 +711,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'two spaces naming one app refuses, and the column keeps the fact',
   async () => {
     let ctx = state()
@@ -798,7 +797,7 @@ let carriedTwo = async (ctx: State) => {
   return now
 }
 
-slow('a store carrying now arrives with the addresses moved', async () => {
+Deno.test('a store carrying now arrives with the addresses moved', async () => {
   let ctx = state()
   await seedFormer(ctx)
   let now = newer(ctx, PLATFORM_STORE)
@@ -813,7 +812,7 @@ slow('a store carrying now arrives with the addresses moved', async () => {
   assertEquals(marker(ctx), LATEST)
 })
 
-slow('a directory that already carried moves them on next touch', async () => {
+Deno.test('a directory that already carried moves them on next touch', async () => {
   let ctx = state()
   await carriedTwo(ctx)
 
@@ -860,7 +859,7 @@ let carriedThree = async (ctx: State) => {
   return now
 }
 
-slow('a domain aimed by the old column is aimed by the new one', async () => {
+Deno.test('a domain aimed by the old column is aimed by the new one', async () => {
   let ctx = state()
   await carriedThree(ctx)
 
@@ -926,7 +925,7 @@ let handling = async (now: ReturnType<typeof newer>) =>
     ])
     .sort()
 
-slow('an app named by its birth address is named by a handle', async () => {
+Deno.test('an app named by its birth address is named by a handle', async () => {
   let ctx = state()
   await carriedFour(ctx)
 
@@ -952,7 +951,7 @@ slow('an app named by its birth address is named by a handle', async () => {
   assertEquals(marker(ctx), LATEST)
 })
 
-slow('two apps may hold one address, and be two stores', async () => {
+Deno.test('two apps may hold one address, and be two stores', async () => {
   let ctx = state()
   await carriedFour(ctx)
   let now = newer(ctx, PLATFORM_STORE)
@@ -1014,7 +1013,7 @@ let disambiguated = (report: Report) => {
 }
 
 for (let source of ['former', 'fallback']) {
-  slow(
+  Deno.test(
     `colliding handles from ${source} keep the oldest app's store`,
     async () => {
       let ctx = state()
@@ -1032,7 +1031,7 @@ for (let source of ['former', 'fallback']) {
   )
 }
 
-slow('a handle already assigned stays with its app', async () => {
+Deno.test('a handle already assigned stays with its app', async () => {
   let ctx = state()
   await collision(ctx)
   run(ctx, patch('app', TWO, { store: 'ada/shed' }))
@@ -1045,7 +1044,7 @@ slow('a handle already assigned stays with its app', async () => {
   assertEquals(marker(ctx), LATEST)
 })
 
-slow('a directory grows the handle column before indexing it', async () => {
+Deno.test('a directory grows the handle column before indexing it', async () => {
   let ctx = state()
   await collision(ctx)
   // A directory from before app.store existed must reach the migration too.
@@ -1070,7 +1069,7 @@ slow('a directory grows the handle column before indexing it', async () => {
 })
 
 for (let conflict of ['suffix', 'index']) {
-  slow(
+  Deno.test(
     `a handle ${conflict} conflict refuses with the assignment report`,
     async () => {
       let ctx = state()
@@ -1332,7 +1331,7 @@ for (
   })
 }
 
-slow('a re-addressing that collides rolls the whole pass back', async () => {
+Deno.test('a re-addressing that collides rolls the whole pass back', async () => {
   let ctx = state()
   let old = older(ctx, 'ada/cookbook')
   let refs = edgeEid(TWO, 'references', ADA)
@@ -1364,7 +1363,7 @@ slow('a re-addressing that collides rolls the whole pass back', async () => {
   assertEquals(write.status, 202)
 })
 
-slow('counts that do not reconcile refuse the pass', async () => {
+Deno.test('counts that do not reconcile refuse the pass', async () => {
   let ctx = state()
   await seedApp(ctx)
   // The rule itself, at its own seam. It guards the code, not the data — a copy
@@ -1419,7 +1418,7 @@ slow('counts that do not reconcile refuse the pass', async () => {
   assertEquals(tally(db(ctx), 'doc'), before)
 })
 
-slow('a body nothing holds refuses the pass', async () => {
+Deno.test('a body nothing holds refuses the pass', async () => {
   let ctx = state()
   await seedApp(ctx)
   // The blob a doc addresses, gone. Nothing can read that body, and a body that
@@ -1640,7 +1639,7 @@ Deno.test('app filing rolls back a conflicting destination', async () => {
   assertEquals(priorities('filed'), [{ priority: 9 }])
 })
 
-slow(
+Deno.test(
   'a fleet-shaped app carries filing from the former task columns',
   async () => {
     let ctx = state()

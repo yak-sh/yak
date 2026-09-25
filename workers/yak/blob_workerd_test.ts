@@ -7,13 +7,15 @@
 // words a guest can act on, and a stranger on a `public` app is sent to sign
 // in.
 import { assert, assertEquals, assertMatch } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import { browser, connector, kernel, seed } from './probe.ts'
 
 // The client module the kernel serves, loaded the way a page loads it.
-let served = async (k: Awaited<ReturnType<typeof kernel>>, dir: string) => {
-  let source = await (await k.at('jeff.yaks.app', '/photos/api/client.js'))
-    .text()
+let served = async (
+  k: Awaited<ReturnType<typeof kernel>>,
+  dir: string,
+  host: string,
+) => {
+  let source = await (await k.at(host, '/photos/api/client.js')).text()
   Deno.writeTextFileSync(`${dir}/client.js`, source)
   return await import(`file://${dir}/client.js`)
 }
@@ -75,14 +77,14 @@ type Row = {
   image?: { w: number; h: number }
 }
 
-slow('the file door: a page uploads bytes and gets an address', async () => {
+Deno.test('the file door: a page uploads bytes and gets an address', async () => {
   let k = await kernel()
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-blob-' })
-  let them = await seed(k, [{ slug: 'jeff', apps: ['photos'] }])
-  let mine = browser(k, 'jeff.yaks.app', them.cookie)
-  let anyone = browser(k, 'jeff.yaks.app')
+  let them = await seed(k, [{ slug: 'jeff5', apps: ['photos'] }])
+  let mine = browser(k, 'jeff5.yaks.app', them.cookie)
+  let anyone = browser(k, 'jeff5.yaks.app')
   try {
-    let mod = await served(k, dir)
+    let mod = await served(k, dir, 'jeff5.yaks.app')
     let store = mod.store(`${mine.origin}/photos/api/`)
 
     // The guide's own two lines: a file in, its address back.
@@ -170,7 +172,7 @@ slow('the file door: a page uploads bytes and gets an address', async () => {
 
     // Over the ceiling, refused with a sentence a person can act on. Sent at
     // the wire: a page would never build this, and the door must not read it.
-    let over = await k.at('jeff.yaks.app', '/photos/api/blob', {
+    let over = await k.at('jeff5.yaks.app', '/photos/api/blob', {
       method: 'POST',
       headers: { cookie: them.cookie, 'content-type': 'image/png' },
       body: new Uint8Array(21 * 1024 * 1024),
@@ -203,7 +205,7 @@ slow('the file door: a page uploads bytes and gets an address', async () => {
     // anyone with the link save a row lets them put a photo beside it.
     let agent = connector(k, them.cookie)
     await agent.tool('app_set', {
-      space: 'jeff',
+      space: 'jeff5',
       app: 'photos',
       access: 'open',
     })

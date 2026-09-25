@@ -3,18 +3,11 @@
 // moved fast-forwards; a base that moved makes land rebase and return without
 // merging, so a second land fast-forwards cleanly. No gate runs. No remote is
 // needed except the two publish cases, which wire a real bare upstream.
-//
-// Every case that builds a repository costs git processes and a temp directory,
-// so it runs under TASKS_SLOW; the guard's own two questions are stubbed and
-// stay in the fast tier.
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { land, reverts } from './land.ts'
 import { runs } from './tools.ts'
 import { CallError } from '@yaks/tools'
 import type { Graph } from '@yaks/graph'
-
-let slow = (name: string, fn: () => Promise<void>) =>
-  Deno.test({ name, fn, ignore: !Deno.env.get('TASKS_SLOW') })
 
 let command = async (cwd: string, ...args: string[]) => {
   let r = await new Deno.Command('git', {
@@ -115,7 +108,7 @@ let withUpstream = async (r: Repo, reachable = true) => {
 
 let quiet = { write: () => {} }
 
-slow(
+Deno.test(
   'land fast-forwards a branch whose base has not moved — no graph, no rebase',
   async () => {
     let r = await setup()
@@ -140,7 +133,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'the `land` tool answers the sha; a divergence is a refusal',
   async () => {
     let r = await setup()
@@ -170,7 +163,7 @@ slow(
   },
 )
 
-slow('a dirty worktree is a tool refusal, not an exception', async () => {
+Deno.test('a dirty worktree is a tool refusal, not an exception', async () => {
   let r = await setup()
   try {
     Deno.writeTextFileSync(`${r.tree}/scratch.txt`, 'not committed\n')
@@ -190,7 +183,7 @@ slow('a dirty worktree is a tool refusal, not an exception', async () => {
   }
 })
 
-slow(
+Deno.test(
   'landing leaves the checkout holding the work it landed, dirt untouched',
   async () => {
     let r = await setup()
@@ -220,7 +213,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'a moved base makes land rebase and RETURN without merging; a second land fast-forwards',
   async () => {
     let r = await setup()
@@ -259,7 +252,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   "a rebase conflict returns with git's conflict output, leaving the rebase to resolve",
   async () => {
     let r = await setup()
@@ -286,7 +279,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'local changes the landing would overwrite are a tool refusal, never an exception',
   async () => {
     let r = await setup()
@@ -322,7 +315,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'land refuses to run in the shared checkout, not a linked worktree',
   async () => {
     let r = await setup()
@@ -338,7 +331,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'a landing publishes to the base branch upstream when it has one',
   async () => {
     let r = await setup()
@@ -353,7 +346,7 @@ slow(
   },
 )
 
-slow('land does not publish when the base has no upstream', async () => {
+Deno.test('land does not publish when the base has no upstream', async () => {
   let r = await setup()
   try {
     let outcome = await land({ cwd: r.tree, ...quiet })
@@ -368,7 +361,7 @@ slow('land does not publish when the base has no upstream', async () => {
   }
 })
 
-slow(
+Deno.test(
   'a publish refusal lands anyway — publishing is best-effort, never a failed land',
   async () => {
     let r = await setup()
@@ -427,7 +420,7 @@ Deno.test('a detached worktree is refused, a failing git is a fault', async () =
   }
 })
 
-slow('a transiently failing push publishes on the retry', async () => {
+Deno.test('a transiently failing push publishes on the retry', async () => {
   let r = await setup()
   try {
     let bare = await withUpstream(r)
@@ -590,7 +583,7 @@ let stale = async (r: Repo) => {
 
 // A move deletes the old path in the landing diff; the branch's own log must
 // say so too, not only name the new path, or every rename reads as the rebase's.
-slow('a file the branch moves is the branch', async () => {
+Deno.test('a file the branch moves is the branch', async () => {
   let r = await setup()
   try {
     await command(r.tree, 'mv', 'base.txt', 'moved.txt')
@@ -602,7 +595,7 @@ slow('a file the branch moves is the branch', async () => {
   }
 })
 
-slow('land refuses a rebase that rewound a file past the base', async () => {
+Deno.test('land refuses a rebase that rewound a file past the base', async () => {
   let r = await setup()
   try {
     await stale(r)
@@ -617,7 +610,7 @@ slow('land refuses a rebase that rewound a file past the base', async () => {
   }
 })
 
-slow('--allow-revert lands the rewind, with a warning', async () => {
+Deno.test('--allow-revert lands the rewind, with a warning', async () => {
   let r = await setup()
   try {
     await stale(r)
@@ -635,7 +628,7 @@ slow('--allow-revert lands the rewind, with a warning', async () => {
   }
 })
 
-slow('a clean rebase still lands', async () => {
+Deno.test('a clean rebase still lands', async () => {
   let r = await setup()
   try {
     await rivalLands(r, 'other.txt', 'rival\n')
@@ -657,7 +650,7 @@ slow('a clean rebase still lands', async () => {
 // past — but the branch's diff adds not one line, and a hunk that only takes
 // lines away reintroduces nothing. Deleting is the whole point of some
 // branches; the guard must not read one as a revert.
-slow('a pure deletion of content main added still lands', async () => {
+Deno.test('a pure deletion of content main added still lands', async () => {
   let r = await setup()
   try {
     await mainCommits(r, 'tools.txt', 'core\n', 'the tools')
@@ -679,7 +672,7 @@ slow('a pure deletion of content main added still lands', async () => {
 // The other side of that coin: main removed a line after the branch forked,
 // and a stale rebase's resolution puts it back. Those are added lines matching
 // content the base deleted — the revert the guard exists for.
-slow('a rebase that re-adds a line main removed is still refused', async () => {
+Deno.test('a rebase that re-adds a line main removed is still refused', async () => {
   let r = await setup()
   try {
     await mainCommits(r, 'list.txt', 'keep\ndrop\n', 'the list')

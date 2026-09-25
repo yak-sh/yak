@@ -1,11 +1,11 @@
 # Suite and CI wall clocks
 
-`deno task check`, `test`, and `test:workerd` time the complete command
-(including Deno startup and discovery). Their original commands live under
-`:run`; use those only when intentionally bypassing timing. Arguments and exit
-statuses pass through. Timing is **report-only**, matching the performance steps
-in CI: a regression is printed as `REGRESSION`, not turned into a failing test
-or a deployment veto.
+`deno task check` and `deno task test` time the complete command (including Deno
+startup and discovery). Their original commands live under `:run`; use those
+only when intentionally bypassing timing. Arguments and exit statuses pass
+through. Timing is **report-only**, matching the performance steps in CI: a
+regression is printed as `REGRESSION`, not turned into a failing test or a
+deployment veto.
 
 `bench/results.json` now has a `suiteTimings` namespace beside the throughput
 bench's existing fields. Each row records seconds, mean control seconds, sample

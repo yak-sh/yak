@@ -1,7 +1,6 @@
 import { pkt } from '@yaks/git'
 import type { Bundle } from '@yaks/graph'
 import { assert, assertEquals } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import {
   client,
   connector,
@@ -12,28 +11,30 @@ import {
   vocabFile,
 } from './probe.ts'
 
-slow(
+Deno.test(
   'hosted app archetypes classify and query writes through the deployed Worker',
   async () => {
     let k = await kernel()
     try {
-      let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+      let { cookie } = await seed(k, [{ slug: 'jeff1', apps: ['recipes'] }])
       // The directory shares classification but retains its own vocabulary.
-      const directoryRows = await meta(k, cookie).query('.archetype&.limit=2')
+      const directoryRows = await meta(k).query(
+        '.archetype&.limit=2',
+      )
       assert(directoryRows.length > 0)
       assert(
         directoryRows.every((b) =>
           typeof (b as unknown as Bundle).entity.archetype == 'string'
         ),
       )
-      let app = client(k, 'jeff.yaks.app', 'recipes', cookie)
+      let app = client(k, 'jeff1.yaks.app', 'recipes', cookie)
       let planted = await app.put(
         '/vocab.json',
         vocabFile({ recipe: { serves: num }, specialty: {} }),
       )
       await app.put('/index.html', '<!doctype html><h1>Recipes</h1>')
       await connector(k, cookie).tool('app_deploy', {
-        space: 'jeff',
+        space: 'jeff1',
         app: 'recipes',
       })
       let wrote = await app.post([{
@@ -55,7 +56,7 @@ slow(
       assertEquals((await app.get('.recipe&.specialty')).length, 0)
       // A deploy also writes the separate Git object store; cloning traverses it.
       const refs = await k.at(
-        'jeff.yaks.app',
+        'jeff1.yaks.app',
         '/recipes.git/info/refs?service=git-upload-pack',
         {
           headers: { cookie, 'git-protocol': 'version=2' },
@@ -65,7 +66,7 @@ slow(
       assert((await refs.text()).includes('version 2'))
       const utf8 = new TextDecoder()
       const advertised = await k.at(
-        'jeff.yaks.app',
+        'jeff1.yaks.app',
         '/recipes.git/git-upload-pack',
         {
           method: 'POST',
@@ -83,7 +84,7 @@ slow(
       const oid = /([0-9a-f]{40}) refs\/heads\/main/.exec(branches)?.[1]
       assert(oid, branches)
       const packed = await k.at(
-        'jeff.yaks.app',
+        'jeff1.yaks.app',
         '/recipes.git/git-upload-pack',
         {
           method: 'POST',

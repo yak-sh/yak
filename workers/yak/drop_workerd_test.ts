@@ -8,7 +8,6 @@
 // three refusals are sentences on a page rather than a stack trace — a path
 // out of the app, more than the ceiling, and nobody signed in.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import { kernel, type Packed, seed, signIn, zipped } from './probe.ts'
 import { MAX } from './unzip.ts'
 import { managePath } from './route.ts'
@@ -35,10 +34,10 @@ let drops = (
 let zip = async (name: string, entries: Packed[]) =>
   new File([await zipped(entries)], name, { type: 'application/zip' })
 
-slow('a dropped zip becomes an app at its own address', async () => {
+Deno.test('a dropped zip becomes an app at its own address', async () => {
   let k = await kernel()
   try {
-    let them = await seed(k, [{ slug: 'jeff', apps: [] }])
+    let them = await seed(k, [{ slug: 'jeff14', apps: [] }])
     // A zip made from a folder, which is how one is made: every entry sits
     // under `recipes/`, and the app is already called recipes.
     let file = await zip('recipes.zip', [
@@ -47,20 +46,20 @@ slow('a dropped zip becomes an app at its own address', async () => {
       { path: 'recipes/style.css', content: 'body { color: teal }' },
       { path: 'recipes/__MACOSX/._index.html', content: 'junk' },
     ])
-    let out = await drops(k, 'jeff.yaks.app', file, '', them.cookie)
+    let out = await drops(k, 'jeff14.yaks.app', file, '', them.cookie)
     assertEquals(out.status, 200)
     let page = await out.text()
     // The answer is the page: the address, and what went in.
-    assertStringIncludes(page, 'https://jeff.yaks.app/recipes/')
+    assertStringIncludes(page, 'https://jeff14.yaks.app/recipes/')
     assertStringIncludes(page, 'index.html')
     assertStringIncludes(page, 'style.css')
     assert(!page.includes('__MACOSX'), page)
     // And the app is serving, at the address the page named, with the folder
     // prefix gone.
-    let live = await k.at('jeff.yaks.app', '/recipes/')
+    let live = await k.at('jeff14.yaks.app', '/recipes/')
     assertEquals(live.status, 200)
     assertStringIncludes(await live.text(), 'Lemon cake')
-    let css = await k.at('jeff.yaks.app', '/recipes/style.css')
+    let css = await k.at('jeff14.yaks.app', '/recipes/style.css')
     assertEquals(css.status, 200)
     assertStringIncludes(await css.text(), 'teal')
 
@@ -68,7 +67,7 @@ slow('a dropped zip becomes an app at its own address', async () => {
     // zip twice is how a person redeploys.
     let again = await drops(
       k,
-      'jeff.yaks.app',
+      'jeff14.yaks.app',
       await zip('recipes.zip', [
         {
           path: 'index.html',
@@ -82,7 +81,7 @@ slow('a dropped zip becomes an app at its own address', async () => {
     assertEquals(again.status, 200)
     assertStringIncludes(await again.text(), 'Version 2')
     assertStringIncludes(
-      await (await k.at('jeff.yaks.app', '/recipes/')).text(),
+      await (await k.at('jeff14.yaks.app', '/recipes/')).text(),
       'Lemon drizzle',
     )
   } finally {
@@ -95,16 +94,16 @@ slow('a dropped zip becomes an app at its own address', async () => {
 // it — so what has to hold here is that the bytes survive the trip: a drop
 // carries a file that is not text through unchanged, and the deploy behind it
 // is the same `app_deploy` that walks worker.js's imports.
-slow('a dropped zip carries a worker and the wasm it imports', async () => {
+Deno.test('a dropped zip carries a worker and the wasm it imports', async () => {
   let k = await kernel()
   try {
-    let them = await seed(k, [{ slug: 'jeff', apps: [] }])
+    let them = await seed(k, [{ slug: 'jeff15', apps: [] }])
     let wasm = Deno.readFileSync(
       new URL('./fixtures/add.wasm', import.meta.url),
     )
     let out = await drops(
       k,
-      'jeff.yaks.app',
+      'jeff15.yaks.app',
       await zip('adder.zip', [
         { path: 'index.html', content: '<h1>2 + 3</h1>' },
         {
@@ -119,37 +118,40 @@ slow('a dropped zip carries a worker and the wasm it imports', async () => {
       them.cookie,
     )
     assertEquals(out.status, 200)
-    assertStringIncludes(await out.text(), 'https://jeff.yaks.app/adder/')
+    assertStringIncludes(await out.text(), 'https://jeff15.yaks.app/adder/')
     // Byte for byte, and typed as wasm — a file the door decoded as text
     // would arrive as mojibake and never compile.
-    let back = await k.at('jeff.yaks.app', '/adder/add.wasm')
+    let back = await k.at('jeff15.yaks.app', '/adder/add.wasm')
     assertEquals(back.status, 200)
     assertEquals(back.headers.get('content-type'), 'application/wasm')
     assertEquals(new Uint8Array(await back.arrayBuffer()), wasm)
     // The worker is the app's inside, here as anywhere: it is deployed, not
     // served (apps.ts manifest).
-    assertEquals((await k.at('jeff.yaks.app', '/adder/worker.js')).status, 404)
+    assertEquals(
+      (await k.at('jeff15.yaks.app', '/adder/worker.js')).status,
+      404,
+    )
   } finally {
     await k.stop()
   }
 })
 
-slow('a bare index.html is an app, once it is named', async () => {
+Deno.test('a bare index.html is an app, once it is named', async () => {
   let k = await kernel()
   try {
-    let them = await seed(k, [{ slug: 'jeff', apps: [] }])
+    let them = await seed(k, [{ slug: 'jeff16', apps: [] }])
     let page = () =>
       new File(['<h1>Hello</h1>'], 'index.html', { type: 'text/html' })
     // Unnamed, the file says nothing about what to call the app, so the door
     // asks rather than guessing `index`.
-    let asked = await drops(k, 'jeff.yaks.app', page(), '', them.cookie)
+    let asked = await drops(k, 'jeff16.yaks.app', page(), '', them.cookie)
     assertEquals(asked.status, 400)
     assertStringIncludes(await asked.text(), 'needs a name typed')
 
-    let out = await drops(k, 'jeff.yaks.app', page(), 'greeting', them.cookie)
+    let out = await drops(k, 'jeff16.yaks.app', page(), 'greeting', them.cookie)
     assertEquals(out.status, 200)
-    assertStringIncludes(await out.text(), 'https://jeff.yaks.app/greeting/')
-    let live = await k.at('jeff.yaks.app', '/greeting/')
+    assertStringIncludes(await out.text(), 'https://jeff16.yaks.app/greeting/')
+    let live = await k.at('jeff16.yaks.app', '/greeting/')
     assertEquals(live.status, 200)
     assertStringIncludes(await live.text(), 'Hello')
   } finally {
@@ -157,14 +159,14 @@ slow('a bare index.html is an app, once it is named', async () => {
   }
 })
 
-slow('what the door will not take, it says in a sentence', async () => {
+Deno.test('what the door will not take, it says in a sentence', async () => {
   let k = await kernel()
   try {
-    let them = await seed(k, [{ slug: 'jeff', apps: [] }])
+    let them = await seed(k, [{ slug: 'jeff17', apps: [] }])
     // A path that would land outside the app.
     let escaping = await drops(
       k,
-      'jeff.yaks.app',
+      'jeff17.yaks.app',
       await zip('bad.zip', [
         { path: 'index.html', content: 'page' },
         { path: '../secrets.txt', content: 'no' },
@@ -182,19 +184,19 @@ slow('what the door will not take, it says in a sentence', async () => {
       'big.zip',
       { type: 'application/zip' },
     )
-    let over = await drops(k, 'jeff.yaks.app', big, 'big', them.cookie)
+    let over = await drops(k, 'jeff17.yaks.app', big, 'big', them.cookie)
     assertEquals(over.status, 400)
     assertStringIncludes(await over.text(), 'the most one drop may be')
 
     // Neither app was made: a refusal leaves the space exactly as it was.
-    assertEquals((await k.at('jeff.yaks.app', '/bad/')).status, 404)
-    assertEquals((await k.at('jeff.yaks.app', '/big/')).status, 404)
+    assertEquals((await k.at('jeff17.yaks.app', '/bad/')).status, 404)
+    assertEquals((await k.at('jeff17.yaks.app', '/big/')).status, 404)
 
     // Nobody, and somebody who is nobody here: the first is sent to sign in,
     // the second is told whose space it is.
     let cold = await drops(
       k,
-      'jeff.yaks.app',
+      'jeff17.yaks.app',
       await zip('mine.zip', [{ path: 'index.html', content: 'page' }]),
       'mine',
     )
@@ -203,14 +205,14 @@ slow('what the door will not take, it says in a sentence', async () => {
     let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
     let guest = await drops(
       k,
-      'jeff.yaks.app',
+      'jeff17.yaks.app',
       await zip('mine.zip', [{ path: 'index.html', content: 'page' }]),
       'mine',
       ann.cookie,
     )
     assertEquals(guest.status, 403)
     assertStringIncludes(await guest.text(), 'not yours to deploy')
-    assertEquals((await k.at('jeff.yaks.app', '/mine/')).status, 404)
+    assertEquals((await k.at('jeff17.yaks.app', '/mine/')).status, 404)
   } finally {
     await k.stop()
   }
@@ -220,24 +222,24 @@ slow('what the door will not take, it says in a sentence', async () => {
 // building. A stranger must not be offered a form that will only refuse them.
 // The page is the dashboard's, at the apex, and its form posts to the space's
 // own door, which takes it from there and from nowhere else but the space.
-slow("the drop zone is on the owner's New app page", async () => {
+Deno.test("the drop zone is on the owner's New app page", async () => {
   let k = await kernel()
   try {
-    let them = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
-    let path = managePath('new', 'jeff')
-    let library = await k.at('yaks.app', managePath('apps', 'jeff'), {
+    let them = await seed(k, [{ slug: 'jeff18', apps: ['recipes'] }])
+    let path = managePath('new', 'jeff18')
+    let library = await k.at('yaks.app', managePath('apps', 'jeff18'), {
       headers: { cookie: them.cookie },
     })
     assertStringIncludes(await library.text(), `href="${path}"`)
     let mine = await (await k.at('yaks.app', path, {
       headers: { cookie: them.cookie },
     })).text()
-    assertStringIncludes(mine, 'action="https://jeff.yaks.app/deploy"')
+    assertStringIncludes(mine, 'action="https://jeff18.yaks.app/deploy"')
     assertStringIncludes(mine, 'type="file"')
     let file = new File(['<h1>Hi</h1>'], 'index.html', { type: 'text/html' })
     let sent = await drops(
       k,
-      'jeff.yaks.app',
+      'jeff18.yaks.app',
       file,
       'greeting',
       them.cookie,
@@ -247,7 +249,7 @@ slow("the drop zone is on the owner's New app page", async () => {
     await sent.body?.cancel()
     let forged = await drops(
       k,
-      'jeff.yaks.app',
+      'jeff18.yaks.app',
       file,
       'greeting',
       them.cookie,
@@ -255,7 +257,7 @@ slow("the drop zone is on the owner's New app page", async () => {
     )
     assertEquals(forged.status, 403)
     await forged.body?.cancel()
-    let cold = await (await k.at('jeff.yaks.app', '/')).text()
+    let cold = await (await k.at('jeff18.yaks.app', '/')).text()
     assert(!cold.includes('/deploy'), cold)
     let shut = await k.at('yaks.app', path, { redirect: 'manual' })
     assertEquals(shut.status, 303)

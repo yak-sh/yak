@@ -5,10 +5,9 @@
 // examples in it.
 //
 // The whole act — publish, letter, approve, page, search, unpublish — is held
-// in workerd in mcp_test.ts, where there is a directory to write and a letter
+// in workerd in mcp_workerd_test.ts, where there is a directory to write and a letter
 // to read off the log.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import type { App, Directory, Space } from './directory.ts'
 import {
   card,
@@ -194,7 +193,7 @@ Deno.test('staging gallery listings, reviews and mail stay on its own host', asy
 
 // The ticket carries which answer, signed, so a decline cannot be talked into
 // a listing by editing an address — and it lapses on its own after a week.
-slow(
+Deno.test(
   'a gallery ticket carries its answer for a week and no longer',
   async () => {
     let secret = 'gallery-secret'

@@ -3,7 +3,6 @@
 // address put the inviter's space in the stranger's listing, their agent's
 // instructions, and behind a bare app name their agent would say.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import { SUBJECT } from './invite.ts'
 import {
   accepted,
@@ -16,7 +15,7 @@ import {
 } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
 
-slow('an invitation reaches nobody until its person accepts it', async () => {
+Deno.test('an invitation reaches nobody until its person accepts it', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -82,7 +81,7 @@ slow('an invitation reaches nobody until its person accepts it', async () => {
     )
 
     // The letter counted against his space's month.
-    let [row] = await meta(k, jeff.cookie).query(
+    let [row] = await meta(k).query(
       `.space.slug=${mine}&?meter`,
     ) as { meter?: { emails?: number } }[]
     assertEquals(row.meter?.emails, 1)

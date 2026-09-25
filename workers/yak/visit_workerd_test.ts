@@ -3,21 +3,20 @@
 // an order was paid, and send at a visitor's size and pace. The owner is not
 // held to any of it.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import { client, connector, kernel, seed, signedIn } from './probe.ts'
 
-slow(
+Deno.test(
   'a visitor to an open app adds, and changes only what they wrote',
   async () => {
     let k = await kernel()
     try {
-      let { cookie } = await seed(k, [{ slug: 'fair', apps: ['guests'] }])
+      let { cookie } = await seed(k, [{ slug: 'fair67', apps: ['guests'] }])
       await connector(k, cookie).tool('app_set', {
-        space: 'fair',
+        space: 'fair67',
         app: 'guests',
         access: 'open',
       })
-      let host = 'fair.yaks.app'
+      let host = 'fair67.yaks.app'
       let owner = client(k, host, 'guests', cookie)
       let anybody = client(k, host, 'guests')
       let kim = client(

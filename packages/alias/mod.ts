@@ -39,11 +39,12 @@
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
  * import { keyDoc, keyKeywords, keys } from '@yaks/key'
  * import { aliasDoc, aliases } from '@yaks/alias'
  *
- * let vocab = loadVocab([keyDoc, aliasDoc, mine], [keyKeywords])
- * // let g = graph({ storage, vocab, plugins: [keys(vocab), aliases()] })
+ * let vocab = loadVocab([keyDoc, aliasDoc], [keyKeywords])
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [keys(vocab), aliases()] })
  * ```
  *
  * It imports no platform API, so the same package runs on a server, in a

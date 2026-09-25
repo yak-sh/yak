@@ -352,8 +352,8 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
 // agent is handed says each property the way the store that owns it does.
 //
 // It also says which properties the reach cannot agree on: two spaces may spell
-// one word differently (mcp_test.ts "a word two spaces spell differently
-// stays two words"), and the merged vocabulary keeps one of the two. A schema
+// one word differently (mcp_publish_workerd_test.ts "a word two spaces spell
+// differently stays two words"), and the merged vocabulary keeps one of the two. A schema
 // derived from it would then refuse a write the other store takes, so those
 // properties are named here and typed nowhere (`reading` below).
 //

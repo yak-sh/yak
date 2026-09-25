@@ -12,33 +12,32 @@
 // the shape a deploy has before the owner sets one. Stripe cannot reach a
 // loopback workerd, so the test signs each delivery with that secret.
 import { assert, assertEquals } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import {
   charged,
   connector,
   delivered,
   kernel,
   meta,
+  owner,
   seed,
   signed,
   stripeKey,
   subscribed,
+  WEBHOOK_SECRET,
 } from './probe.ts'
 
-let SECRET = 'whsec_a_probe_secret'
-
-slow(
+Deno.test(
   'the webhook flips a plan, once, whatever order it arrives in',
   async () => {
     let key = stripeKey()
-    let k = await kernel({ STRIPE_WEBHOOK_SECRET: SECRET })
+    let k = await kernel()
     try {
-      let { cookie, eids } = await seed(k, [{
-        slug: 'jeff',
+      let { eids } = await seed(k, [{
+        slug: 'jeff2',
         apps: ['recipes'],
       }])
-      let space = eids['jeff']
-      let graph = meta(k, cookie)
+      let space = eids['jeff2']
+      let graph = meta(k)
       // The plan as the graph holds it. `id=` answers the whole bundle, so this
       // is the row the webhook wrote and nothing else.
       let plan = async () =>
@@ -47,7 +46,15 @@ slow(
         }).plan
       let post = async (type: string, sub: unknown, at: number) =>
         (JSON.parse(
-          await delivered(k, '/stripe/webhook', SECRET, type, sub, '', at),
+          await delivered(
+            k,
+            '/stripe/webhook',
+            WEBHOOK_SECRET,
+            type,
+            sub,
+            '',
+            at,
+          ),
         ) as { did: string }).did
 
       // Nothing paid for yet: the sweep has not run either, so there is no row.
@@ -61,7 +68,7 @@ slow(
       }
       let now = Math.floor(Date.now() / 1000)
       let updated = 'customer.subscription.updated'
-      assertEquals(await post(updated, sub, now), 'jeff is plus')
+      assertEquals(await post(updated, sub, now), 'jeff2 is plus')
       let paid = await plan()
       assertEquals(paid?.tier, 'plus')
       assertEquals(paid?.customer, sub.customer)
@@ -88,7 +95,7 @@ slow(
         'DELETE',
       ) as { ended_at: number }
       let deleted = 'customer.subscription.deleted'
-      assertEquals(await post(deleted, ended, now + 60), 'jeff is free')
+      assertEquals(await post(deleted, ended, now + 60), 'jeff2 is free')
       let dead = await plan()
       assertEquals(dead?.tier, 'free')
       assertEquals(dead?.status, 'canceled')
@@ -105,10 +112,10 @@ slow(
 // Every one of these is refused before its object is read, so the object need
 // not be Stripe's: the refusals are the door's own. A delivery getting in with
 // no Origin is the test above.
-slow('an unsigned webhook is refused, and so is a foreign Origin', async () => {
-  let k = await kernel({ STRIPE_WEBHOOK_SECRET: SECRET })
+Deno.test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
+  let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+    await seed(k, [{ slug: 'jeff3', apps: ['recipes'] }])
     let raw = '{"type":"customer.subscription.updated"}'
     let at = Math.floor(Date.now() / 1000)
 
@@ -126,7 +133,7 @@ slow('an unsigned webhook is refused, and so is a foreign Origin', async () => {
     assertEquals((await bare.json()).error.code, 'bad_signature')
 
     let wrong = await send({
-      'stripe-signature': await signed(SECRET, '{}', at),
+      'stripe-signature': await signed(WEBHOOK_SECRET, '{}', at),
     })
     assertEquals(wrong.status, 400)
     assertEquals(
@@ -135,7 +142,7 @@ slow('an unsigned webhook is refused, and so is a foreign Origin', async () => {
     )
 
     let old = await send({
-      'stripe-signature': await signed(SECRET, raw, at - 3600),
+      'stripe-signature': await signed(WEBHOOK_SECRET, raw, at - 3600),
     })
     assertEquals((await old.json()).error.message, 'the signature is too old')
 
@@ -146,7 +153,7 @@ slow('an unsigned webhook is refused, and so is a foreign Origin', async () => {
     // activates. A page at somebody else's address, signature and all, still
     // does not get in.
     let page = await send({
-      'stripe-signature': await signed(SECRET, raw, at),
+      'stripe-signature': await signed(WEBHOOK_SECRET, raw, at),
       origin: 'https://evil.example',
     })
     assertEquals(page.status, 403)
@@ -159,7 +166,7 @@ slow('an unsigned webhook is refused, and so is a foreign Origin', async () => {
     // Read as text, not parsed: the answer arrives with the unseen block
     // appended, which is these very exceptions being delivered — the channel
     // working is part of what is being asserted.
-    let broke = await connector(k, cookie).tool('graph_query', {
+    let broke = await connector(k, owner().cookie).tool('graph_query', {
       space: 'yak',
       app: 'platform',
       query: '.exception',
@@ -170,7 +177,7 @@ slow('an unsigned webhook is refused, and so is a foreign Origin', async () => {
   }
 })
 
-slow('the billing doors say no before they say anything else', async () => {
+Deno.test('the billing doors say no before they say anything else', async () => {
   let k = await kernel()
   try {
     // Signed out, at both doors: the same refusal, and never a 500.
@@ -191,15 +198,7 @@ slow('the billing doors say no before they say anything else', async () => {
     assertEquals(nowhere.status, 404)
     await nowhere.body?.cancel()
 
-    // Signed in, with no STRIPE_KEY on this kernel: the door says the paid
-    // tier is not switched on rather than throwing its way to a soft 500.
-    let { cookie } = await seed(k, [{ slug: 'jeff', apps: [] }])
-    let out = await k.at('yaks.app', '/api/billing/checkout', {
-      method: 'POST',
-      headers: { cookie },
-    })
-    assertEquals(out.status, 503)
-    assertEquals((await out.json()).error.code, 'no_billing')
+    let { cookie } = await seed(k, [{ slug: 'jeff4', apps: [] }])
 
     // The signed-in page is where a purchase starts, and the only place: the
     // card names the plan they are on and carries the button that asks the

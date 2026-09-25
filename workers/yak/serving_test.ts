@@ -29,7 +29,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
-import { slow, until } from '../../bin/testing.ts'
+import { until } from '../../bin/testing.ts'
 import { sign } from './lib/token.ts'
 import * as apps from './apps.ts'
 import { directory, stamp, storeName } from './directory.ts'
@@ -987,7 +987,7 @@ Deno.test('rung 1½: a router that throws is skipped, and written on the home ap
   assertEquals((await openIn(k.env, k.space, garden, OWNER, true)).length, 0)
 })
 
-slow(
+Deno.test(
   'rung 1½: a router that hangs is skipped when its patience runs out',
   async () => {
     using k = await fronted(() => new Promise<Response>(() => {}))
@@ -1433,7 +1433,7 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
 // The seller is a connected account in the sandbox that can take money
 // (probe.ts `merchant`), so every call the door makes on the seller's behalf
 // is made on that account and read back from it.
-slow('a cart is priced at Stripe, paid, refunded and disputed', async () => {
+Deno.test('a cart is priced at Stripe, paid, refunded and disputed', async () => {
   let key = stripeKey()
   using k = await shopping()
   await k.deploy()
@@ -1757,7 +1757,7 @@ slow('a cart is priced at Stripe, paid, refunded and disputed', async () => {
 // are made in Stripe's sandbox (probe.ts `stripeKey`), and read back from it.
 //
 // The space page's half of this — the three states an owner reads, and the
-// button that posts back — is in mcp_load_test.ts instead: drawing that page
+// button that posts back — is in mcp_load_workerd_test.ts instead: drawing that page
 // reaches identity.ts for whether an assistant has ever connected, and the
 // OAuth provider it carries imports `cloudflare:` modules that only workerd can
 // load. So the page is driven where a runtime exists, and the door is driven
@@ -1769,7 +1769,7 @@ let sold = async (env: Env) =>
     .space('ada'))?.stripe
 
 // The button on that page, as its form posts it. The page it is on is drawn in
-// mcp_load_test.ts; the POST is apps.ts `saved` and reaches nothing that needs
+// mcp_load_workerd_test.ts; the POST is apps.ts `saved` and reaches nothing that needs
 // a runtime.
 let pressed = async (env: Env, sell: string) =>
   await apps.fetch(
@@ -1805,7 +1805,7 @@ let hook = async (env: Env, type: string, object: unknown, account: string) =>
     ),
   ) as { did: string }).did
 
-slow('a space connects Stripe, and the webhook makes it ready', async () => {
+Deno.test('a space connects Stripe, and the webhook makes it ready', async () => {
   let key = stripeKey()
   using scenario = inMemory(SECRET, {
     STRIPE_KEY: key,

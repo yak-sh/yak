@@ -12,7 +12,6 @@
 // The second test is the one door that is deliberately open to every page
 // (T-33408): an app's read door, answered with the credentials taken off.
 import { assert, assertEquals } from '@std/assert'
-import { slow } from '../../bin/testing.ts'
 import { client, connector, kernel, meta, relay, seed } from './probe.ts'
 
 // How a socket ended: open, or refused at the handshake. Whichever comes
@@ -32,20 +31,20 @@ let opened = (url: string) =>
 let titles = (rows: unknown[]) =>
   rows.map((r) => (r as { doc: { title: string } }).doc.title).sort()
 
-slow('a page at another address reaches no door here', async () => {
+Deno.test('a page at another address reaches no door here', async () => {
   let k = await kernel()
   try {
     let { cookie, eids } = await seed(k, [{
-      slug: 'jeff',
+      slug: 'jeff55',
       apps: ['recipes', 'garden'],
     }])
-    let owner = client(k, 'jeff.yaks.app', 'recipes', cookie)
+    let owner = client(k, 'jeff55.yaks.app', 'recipes', cookie)
     await owner.applied({ entities: [{ doc: { title: 'Lemon cake' } }] })
 
     // A door, asked from a page — the cookie a browser carries, and the
     // address that browser has in its bar.
     let page = (from: string, path: string, init: RequestInit = {}) =>
-      k.at('jeff.yaks.app', path, {
+      k.at('jeff55.yaks.app', path, {
         ...init,
         headers: {
           cookie,
@@ -90,7 +89,7 @@ slow('a page at another address reaches no door here', async () => {
     // altogether — no preflight exists for it — so a page on any address can
     // open one, and the cookie goes with it. Deno's WebSocket sends no
     // `Origin` of its own, so the relay puts the attacker's on the wire.
-    let evil = relay(k, 'jeff.yaks.app', cookie, 'https://evil.yaks.app')
+    let evil = relay(k, 'jeff55.yaks.app', cookie, 'https://evil.yaks.app')
     try {
       assertEquals(
         await opened(`${evil.origin.replace('http:', 'ws:')}/recipes/api/ws`),
@@ -101,7 +100,7 @@ slow('a page at another address reaches no door here', async () => {
     }
 
     // What must keep working, starting with the app's own page.
-    let mine = await page('https://jeff.yaks.app', '/recipes/api/apply', {
+    let mine = await page('https://jeff55.yaks.app', '/recipes/api/apply', {
       method: 'POST',
       headers: { 'content-type': 'text/plain' },
       body: JSON.stringify({ entities: [{ doc: { title: 'Plum tart' } }] }),
@@ -113,14 +112,14 @@ slow('a page at another address reaches no door here', async () => {
     // same origin. App isolation is a different question and deliberately not
     // this one — borrowed words are written exactly this way.
     let sibling = await page(
-      'https://jeff.yaks.app',
+      'https://jeff55.yaks.app',
       '/recipes/api/query?.doc',
     )
     assertEquals(sibling.status, 200)
     assertEquals(titles(await sibling.json()), ['Lemon cake', 'Plum tart'])
 
     // The app's own socket still opens.
-    let ours = relay(k, 'jeff.yaks.app', cookie, 'https://jeff.yaks.app')
+    let ours = relay(k, 'jeff55.yaks.app', cookie, 'https://jeff55.yaks.app')
     try {
       assertEquals(
         await opened(`${ours.origin.replace('http:', 'ws:')}/recipes/api/ws`),
@@ -141,30 +140,30 @@ slow('a page at another address reaches no door here', async () => {
     // `herbusiness.com` and the page says `herbusiness.com`; the router
     // rewrites that to `jeff.yaks.app/recipes/…` on the way in, so a check
     // made after the rewrite would refuse the customer her own site.
-    await meta(k, cookie).apply([{
+    await meta(k).apply([{
       hostname: {
-        name: 'herbusiness.com',
-        serves: eids['jeff/recipes'],
+        name: 'herbusiness107.com',
+        serves: eids['jeff55/recipes'],
         stage: 'active',
       },
     }])
-    let hers = await k.at('herbusiness.com', '/api/query?.doc', {
-      headers: { cookie, origin: 'https://herbusiness.com' },
+    let hers = await k.at('herbusiness107.com', '/api/query?.doc', {
+      headers: { cookie, origin: 'https://herbusiness107.com' },
     })
     assertEquals(hers.status, 200)
     assertEquals(titles(await hers.json()).length, 3)
-    let wrote = await k.at('herbusiness.com', '/api/apply', {
+    let wrote = await k.at('herbusiness107.com', '/api/apply', {
       method: 'POST',
       headers: {
         cookie,
-        origin: 'https://herbusiness.com',
+        origin: 'https://herbusiness107.com',
         'content-type': 'text/plain',
       },
       body: JSON.stringify({ entities: [{ doc: { title: 'A cake' } }] }),
     })
     assertEquals(wrote.status, 200)
     // And a stranger's page aimed at her domain is refused there too.
-    let at = await k.at('herbusiness.com', '/api/apply', {
+    let at = await k.at('herbusiness107.com', '/api/apply', {
       method: 'POST',
       headers: { cookie, origin: 'https://evil.yaks.app' },
       body: JSON.stringify({ entities: [{ doc: { title: 'Forged' } }] }),
@@ -205,28 +204,28 @@ slow('a page at another address reaches no door here', async () => {
 // gets, whatever cookie was on the request — and the two that must not move:
 // a write is still refused, on an `open` app most of all, and a private app
 // refuses a stranger's page even carrying its owner's own session.
-slow(
+Deno.test(
   'a public app reads to any page, and only ever as a stranger',
   async () => {
     let k = await kernel()
     try {
       let { cookie } = await seed(k, [{
-        slug: 'jeff',
+        slug: 'jeff56',
         apps: ['recipes', 'garden'],
       }])
-      let owner = client(k, 'jeff.yaks.app', 'recipes', cookie)
+      let owner = client(k, 'jeff56.yaks.app', 'recipes', cookie)
       await owner.applied({ entities: [{ doc: { title: 'Lemon cake' } }] })
-      let gardener = client(k, 'jeff.yaks.app', 'garden', cookie)
+      let gardener = client(k, 'jeff56.yaks.app', 'garden', cookie)
       await gardener.applied({ entities: [{ doc: { title: 'Tomatoes' } }] })
       let agent = connector(k, cookie)
       await agent.tool('app_set', {
-        space: 'jeff',
+        space: 'jeff56',
         app: 'garden',
         access: 'private',
       })
 
       let page = (from: string, path: string, init: RequestInit = {}) =>
-        k.at('jeff.yaks.app', path, {
+        k.at('jeff56.yaks.app', path, {
           ...init,
           headers: {
             origin: from,
@@ -261,7 +260,7 @@ slow(
       assertEquals(shut.status, 401)
       assertEquals((await shut.json()).error.code, 'not_a_reader')
       let hers = await page(
-        'https://jeff.yaks.app',
+        'https://jeff56.yaks.app',
         '/garden/api/query?.doc',
         {
           headers: { cookie },
@@ -273,7 +272,7 @@ slow(
       // An open app is the sharpest write case: a stranger may write in it,
       // from its own page, with no session at all. Not from another page.
       await agent.tool('app_set', {
-        space: 'jeff',
+        space: 'jeff56',
         app: 'recipes',
         access: 'open',
       })

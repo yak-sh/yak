@@ -1,8 +1,8 @@
 #!/usr/bin/env -S deno run -A
-// test-budget — the fast tier's 1ms guard.
+// test-budget — the deno platform's 1ms budget (M-39441).
 //
-// The rule: no normal test may run slower than 1ms (`deno task test`, TASKS_SLOW
-// unset). deno's reporter prints each test's duration — sub-ms as `(NNNµs)`,
+// The rule: no test on the deno platform may run slower than 1ms (`deno task
+// test --only=deno`). deno's reporter prints each test's duration — sub-ms as `(NNNµs)`,
 // then `(Nms)` once it rounds to a whole millisecond. So an offender is any test
 // line reporting `(Nms)` with N >= 2: a µs line is always < 1ms, and `(1ms)` is
 // the boundary the rule allows. (deno rounds to the nearest ms, so a `(1ms)`
@@ -12,14 +12,14 @@
 // offenders are db-backed tests whose 2–9ms is production freshDb + apply()
 // cost, not trimmable setup — sub-1ms for those needs a server perf pass, not a
 // test rewrite. So the guard's job is to flag accidental cost (real I/O, a
-// missing slow()), not to gate that band. It runs the normal suite, prints the
+// test that belongs at a seam), not to gate that band. It runs the normal suite, prints the
 // offenders slowest-first, and exits 0 on the budget alone. Set
 // TASKS_FAST_STRICT=1 to make the budget fatal (exit 1 on any offender) — the
 // opt-in a targeted trim or a perf-pass branch runs to hold a line locally. A
 // real test failure always propagates, strict or not: this guards timing, it
 // never hides a red suite.
 //
-// It reuses `deno task test` verbatim (no flag duplication that could drift from
+// It reuses `deno task test` (no flag duplication that could drift from
 // deno.json), teeing the child's stdout so the run still streams live while the
 // `(Nms)` lines are parsed out of it.
 
@@ -28,7 +28,7 @@ let ansi = /\x1b\[[0-9;]*m/g
 let done = /^(.+?) \.\.\. ok \((\d+)ms\)$/ // a passing test's duration line
 
 let child = new Deno.Command('deno', {
-  args: ['task', 'test'],
+  args: ['task', 'test', '--only=deno'],
   stdout: 'piped',
   stderr: 'inherit',
 }).spawn()
@@ -54,7 +54,7 @@ let strict = !!Deno.env.get('TASKS_FAST_STRICT')
 
 offenders.sort((a, b) => b.ms - a.ms)
 console.log(
-  `\n─── fast-tier budget: ${offenders.length} test(s) over 1ms ───`,
+  `\n─── deno budget: ${offenders.length} test(s) over 1ms ───`,
 )
 for (let o of offenders) {
   console.log(`  ${String(o.ms).padStart(5)}ms  ${o.name}`)

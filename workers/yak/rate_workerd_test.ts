@@ -5,19 +5,19 @@
 // that is still let in. The window is a fixed minute counted from the epoch,
 // so the whole run starts where half a minute is left in it.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow, until } from '../../bin/testing.ts'
+import { until } from '../../bin/testing.ts'
 import { connector, kernel, seed } from './probe.ts'
 
 let from = (ip: string) => ({ 'cf-connecting-ip': ip })
 
-slow(
+Deno.test(
   'a stranger is held to a rate per source at every anonymous door',
   async () => {
     let k = await kernel()
     try {
-      let them = await seed(k, [{ slug: 'rated', apps: ['board'] }])
+      let them = await seed(k, [{ slug: 'rated58', apps: ['board'] }])
       await connector(k, them.cookie).tool('app_set', {
-        space: 'rated',
+        space: 'rated58',
         app: 'board',
         access: 'public',
       })
@@ -103,7 +103,7 @@ slow(
       // A public app's data: three hundred requests a minute from a stranger,
       // and its own people are not counted at all.
       let read = (ip: string, cookie?: string) =>
-        k.at('rated.yaks.app', '/board/api/query?.doc', {
+        k.at('rated58.yaks.app', '/board/api/query?.doc', {
           headers: { ...from(ip), ...(cookie ? { cookie } : {}) },
         })
       for (let i = 0; i < 300; i++) {

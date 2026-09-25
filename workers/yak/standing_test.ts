@@ -2,7 +2,7 @@
 // ceiling a write is refused against, the roster every agent is handed, the
 // notes `about` hands over on top of it, the prompt names a person picks
 // from, and the line a client is told when either moved. The doors themselves
-// are mcp_test.ts's, inside workerd.
+// are mcp_workerd_test.ts's, inside workerd.
 import { assert, assertEquals } from '@std/assert'
 import type { App, Space } from './directory.ts'
 import {

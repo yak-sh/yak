@@ -2,8 +2,8 @@
 // is a function from its call to bundles: nothing here opens a store, and what
 // the answer lands as is the runner's, tested where the runner is.
 //
-// The cases that need Git run under TASKS_SLOW, since each builds a
-// repository. The rest reach no subprocess at all: a citation nobody has
+// The cases that need Git each build a repository. The rest reach no
+// subprocess at all: a citation nobody has
 // checked, and a citation of an entity with no journal to read, are both
 // answered before Git is asked anything.
 
@@ -15,9 +15,6 @@ import { git as vocab } from './testing.ts'
 import { runs } from './tools.ts'
 
 let tools = runs()
-
-let slow = (name: string, fn: () => Promise<void>) =>
-  Deno.test({ name, fn, ignore: !Deno.env.get('TASKS_SLOW') })
 
 // A call made from `cwd` (none, where it is empty), and a graph over a fixed
 // set of bundles: `read` answers the citations among them, and `get` answers
@@ -190,7 +187,7 @@ let repo = async () => {
   return { cwd, at }
 }
 
-slow(
+Deno.test(
   'a citation whose file moved since it was verified fails the check',
   async () => {
     let { cwd, at } = await repo()
@@ -209,7 +206,7 @@ slow(
   },
 )
 
-slow(
+Deno.test(
   'verify marks the citation and moves its revision to the commit checked out',
   async () => {
     let { cwd, at } = await repo()

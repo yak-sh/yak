@@ -1,6 +1,6 @@
 // The markdown door's contract — the behaviors the app leans on. If a
 // re-vendored marked or a config change breaks one, this says so.
-import { slow } from './testing.ts'
+import './testing.ts'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { md, mdAbs, mdInline, mdMentions } from './md.ts'
 import { prefix } from './types.ts'
@@ -30,14 +30,14 @@ Deno.test('md: gfm tables render', () => {
 })
 
 // hljs highlights the fence — grammar compile and, absent a language, auto-
-// detection across every registered grammar: inherently heavy, so slow().
-slow('md: fenced code with blank lines survives whole', () => {
+// detection across every registered grammar.
+Deno.test('md: fenced code with blank lines survives whole', () => {
   let html = md('```\none\n\ntwo\n```')
   assertStringIncludes(html, '<pre><code class="hljs')
   assertStringIncludes(html, '</span>\n\ntwo')
 })
 
-slow('md: fenced code follows its language or detects one', () => {
+Deno.test('md: fenced code follows its language or detects one', () => {
   let typed = md("```ts\nlet name: string = 'Ada'\n```")
   assertStringIncludes(typed, '<code class="hljs language-ts">')
   assertStringIncludes(typed, '<span class="hljs-keyword">let</span>')

@@ -1306,7 +1306,7 @@ let syncOutbox = () => {
 // survives the reload and surfaces again at boot for seven days unless the user
 // dismisses it. It names what failed (the batch), why (the server's reason), and
 // that success would have been the write reaching the server. localStorage backs
-// it by default; the TUI and the fast tier swap an in-memory double.
+// it by default; the TUI and the tests swap an in-memory double.
 export type Refusal = {
   id: string
   reason: string
@@ -1385,7 +1385,7 @@ export let loadRefusals = () => syncRefused()
 // every entry is mirrored to IndexedDB (idb.ts) under the SAME delivery id it
 // carries in memory, and replayed at boot. This seam is the mirror: park on
 // deliver, unpark on ack, read what a prior life left at boot. Defaults to the
-// IDB store; the TUI and the fast tier — neither has IndexedDB — swap an
+// IDB store; the TUI and the tests — neither has IndexedDB — swap an
 // in-memory double via useOutboxStore. Every op is best-effort, so a failure
 // degrades to the in-memory-only outbox, never a broken frame.
 type Parked = { changes: Change[]; at: number }

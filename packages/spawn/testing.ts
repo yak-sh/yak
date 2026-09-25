@@ -90,7 +90,3 @@ export let until = async <T>(
     await new Promise((go) => setTimeout(go, 10))
   }
 }
-
-/** A test that costs a process: heavy, so it runs under TASKS_SLOW. */
-export let slow = (name: string, fn: () => Promise<void>) =>
-  Deno.test({ name, fn, ignore: !Deno.env.get('TASKS_SLOW') })
