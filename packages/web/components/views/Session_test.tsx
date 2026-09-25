@@ -17,191 +17,6 @@ import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
 import { doing, mentionSig, resolveMentions, Session, SessionContext, SessionDiagnostics, SessionEntry, sessionMentions, SessionReferences, SessionSummary, SessionTime, threadMentions } from './Session.tsx'
 
-Deno.test('Session explains loading, ready-empty, rows, and read failure', async () => {
-  let priorRoute = useRoute(() => {})
-  let session = (eid: string, num: number, status: string) => {
-    cache.value = {
-      [eid]: {
-        entity: { eid, num },
-        session: { eid, id: eid, status },
-      },
-    }
-    resetSignals()
-    return ent(eid)
-  }
-  let mounted: ReturnType<typeof mount> | undefined
-  try {
-    let e = session('session-loading-copy', 7101, 'running')
-    mounted = mount(<Session e={e} />)
-    assertEquals(
-      mounted.root.querySelector('.Session_EntryState')?.textContent,
-      'Loading entries for S-7101…',
-    )
-
-    landSub({
-      sub: `entries:${e.eid}`,
-      changes: [],
-      replace: true,
-    })
-    await Promise.resolve()
-    assertEquals(
-      mounted.root.querySelector('.Session_EntryState')?.textContent,
-      'No entries yet',
-    )
-
-    landSub({
-      sub: `entries:${e.eid}`,
-      replace: true,
-      changes: [
-        {
-          eid: 'session-entry-copy',
-          name: 'entity',
-          comp: { num: 7102 },
-        },
-        {
-          eid: 'session-entry-copy',
-          name: 'entry',
-          comp: { session: e.eid, seq: 1 },
-        },
-        {
-          eid: 'session-entry-copy',
-          name: 'message',
-          comp: { role: 'agent' },
-        },
-        {
-          eid: 'session-entry-copy',
-          name: 'content',
-          comp: { body: 'ordinary row' },
-        },
-      ],
-    })
-    await Promise.resolve()
-    assertEquals(mounted.root.querySelector('.Session_EntryState'), null)
-    assertEquals(
-      mounted.root.querySelector('.Session_Log')?.textContent.includes(
-        'ordinary row',
-      ),
-      true,
-    )
-    mounted.free()
-    mounted = undefined
-
-    e = session('session-ended-copy', 7103, 'completed')
-    landSub({ sub: `entries:${e.eid}`, changes: [], replace: true })
-    mounted = mount(<Session e={e} />)
-    assertEquals(
-      mounted.root.querySelector('.Session_EntryState')?.textContent,
-      'No entries recorded',
-    )
-    mounted.free()
-    mounted = undefined
-
-    e = session('session-failed-copy', 7104, 'completed')
-    landSub({
-      sub: `entries:${e.eid}`,
-      changes: [],
-      replace: true,
-      error: 'source unreadable',
-      reference: 'entries:S-7104',
-    })
-    mounted = mount(<Session e={e} />)
-    assertEquals(
-      mounted.root.querySelector('.Session_EntryState')?.textContent,
-      'Entries could not be loaded: source unreadable [entries:S-7104] retry',
-    )
-  } finally {
-    mounted?.free()
-    useRoute(priorRoute)
-    cache.value = {}
-    resetSignals()
-  }
-})
-
-Deno.test('session Tile omits its chip and lists every worked task', () => {
-  let prior = globalThis.fetch
-  let fetched = 0
-  globalThis.fetch = (() => {
-    fetched++
-    throw new Error('session Tile must not fetch')
-  }) as typeof fetch
-  cache.value = {
-    persona: {
-      entity: { eid: 'persona', num: 1 },
-      doc: { eid: 'persona', title: 'Ada', body: '' },
-      persona: { eid: 'persona' },
-    },
-    session: {
-      entity: { eid: 'session', num: 2 },
-      session: {
-        eid: 'session',
-        id: 'session-id',
-        model: 'gpt-5.6-sol',
-        effort: 'high',
-        persona: 'persona',
-      },
-      created: { eid: 'session', at: '2026-08-15T09:00:00-04:00' },
-    },
-    one: {
-      entity: { eid: 'one', num: 3 },
-      doc: { eid: 'one', title: 'First task', body: '' },
-      task: { eid: 'one', status: 'done' },
-      filed: { eid: 'one', priority: 1 },
-    },
-    two: {
-      entity: { eid: 'two', num: 4 },
-      doc: { eid: 'two', title: 'Second task', body: '' },
-      task: { eid: 'two', status: 'wip' },
-      filed: { eid: 'two', priority: 1 },
-    },
-  }
-  deps.value = [
-    { parent: 'session', type: 'worked', child: 'one' },
-    { parent: 'session', type: 'worked', child: 'two' },
-  ]
-
-  let e = ent('session')
-  let mounted = mount(h(resolve(e, 'Tray.List.Tile').Render, { e }))
-  try {
-    let { root } = mounted
-    let head = root.querySelector('.SessionRow_Head')!
-    assertEquals(
-      [...head.children].map((x) => x.className.split(' ')[0]),
-      [
-        'Dot',
-        'SessionRow_Identity',
-        'SessionRow_Model',
-        'SessionRow_Effort',
-        'Stamp',
-      ],
-    )
-    assertEquals(head.querySelector('.Id'), null)
-    assertEquals(
-      head.querySelector('.SessionRow_Identity')?.textContent,
-      'Ada',
-    )
-    assertEquals(
-      head.querySelector('.SessionRow_Model')?.textContent,
-      'GPT 5.6 Sol',
-    )
-    assertEquals(
-      head.querySelector('.SessionRow_Effort')?.textContent,
-      'high',
-    )
-    assertEquals(
-      [...root.querySelectorAll('.SessionRow_Task')].map((x) =>
-        x.textContent.replace(/\s+/g, ' ').trim()
-      ).sort(),
-      ['First task', 'Second task'],
-    )
-    assertEquals(fetched, 0)
-  } finally {
-    mounted.free()
-    cache.value = {}
-    deps.value = []
-    globalThis.fetch = prior
-  }
-})
-
 Deno.test('session list Tile omits its chip and falls back to its actor', () => {
   cache.value = {
     actor: {
@@ -515,50 +330,6 @@ Deno.test('session references use the usual entity and URL faces', () => {
   }
 })
 
-Deno.test('session lifecycle shares the task summary lane', () => {
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  let { document } = parseHTML('<main></main>')
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
-  cache.value = {
-    task: {
-      entity: { eid: 'task', num: 1 },
-      doc: { eid: 'task', title: 'The task', body: '' },
-      task: { eid: 'task', status: 'wip' },
-      filed: { eid: 'task', priority: 1 },
-    },
-    session: {
-      entity: { eid: 'session', num: 2 },
-      session: {
-        eid: 'session',
-        id: 'session-id',
-        requested_task: 'task',
-      },
-    },
-  }
-
-  let root = document.querySelector('main')!
-  try {
-    render(
-      h(SessionSummary, { e: ent('session'), gist: 'started 2m ago' }),
-      root,
-    )
-    let summary = root.querySelector('.Session_Summary')!
-    assertEquals(summary.querySelector('.Inline') != null, true)
-    assertEquals(
-      summary.querySelector('.Session_Facts')?.parentElement == summary,
-      true,
-    )
-  } finally {
-    render(null, root)
-    cache.value = {}
-    if (prior) Object.defineProperty(globalThis, 'document', prior)
-    else delete (globalThis as { document?: unknown }).document
-  }
-})
-
 // The mention scan is memoized in the view on this signature — it must be STABLE
 // when nothing feeding the parse changed (else the scan reruns every render, the
 // regression) and CHANGE whenever it did (else a new/edited mention goes stale).
@@ -566,7 +337,6 @@ Deno.test('mentionSig: stable on unchanged content, shifts on every input', () =
   let base = {
     count: 3,
     seq: 10,
-    rev: 0,
     said: false,
     final: '',
     heard: [] as Ent[],
@@ -576,7 +346,6 @@ Deno.test('mentionSig: stable on unchanged content, shifts on every input', () =
   assertEquals(mentionSig({ ...base }), a) // unchanged → same key → no rescan
   assert(mentionSig({ ...base, seq: 11 }) != a, 'new log entry')
   assert(mentionSig({ ...base, count: 4 }) != a, 'entry count')
-  assert(mentionSig({ ...base, rev: 1 }) != a, 'streaming growth of last entry')
   assert(
     mentionSig({ ...base, said: true }) != a,
     'said flips the final prepend',

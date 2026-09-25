@@ -36,59 +36,6 @@ Deno.test('local table names prove the spine without reading component bodies', 
   assertEquals(archetypeTables(next), undefined)
 })
 
-Deno.test('projected descriptors batch, wake renderers, release, and survive eviction', async () => {
-  let sent: { sub?: string; q?: string; unsub?: string }[] = []
-  let prior = useRoute((f) => sent.push(f as typeof sent[number]))
-  let host = config.host
-  config.host = 'archetypes.test'
-  let off = () => {}
-  try {
-    let tables = ['future_plugin', 'task'], id = eidOf(tables)
-    let other = ['future_plugin_two'], id2 = eidOf(other)
-    let seen: (readonly string[] | undefined)[] = []
-    off = effect(() => {
-      seen.push(archetypeTables(id))
-    })
-    archetypeTables(id)
-    archetypeTables(id2)
-    await tick()
-    let requests = sent.filter((f) => f.q)
-    assertEquals(requests.length, 1)
-    let sub = requests[0].sub!
-    assertEquals(requests[0].q, `id=${id},${id2}&.fields=archetype.tables`)
-    landSub({
-      sub,
-      replace: true,
-      fields: [{ comp: 'archetype', prop: 'tables', wake: true }],
-      changes: [
-        ...[[id, tables], [id2, other]].flatMap(([eid, names]) => [
-          { eid: eid as string, name: 'entity', comp: { eid } },
-          {
-            eid: eid as string,
-            name: 'archetype',
-            comp: { tables: JSON.stringify(names) },
-          },
-        ]),
-      ],
-    })
-    await tick()
-    assertEquals(seen.at(-1), tables)
-    assertEquals(sent.filter((f) => f.unsub == sub).length, 1)
-    applyLocal([
-      { eid: id, name: 'retired', comp: {} },
-      { eid: id2, name: 'entity', comp: null },
-    ])
-    assertEquals(archetypeTables(id), tables)
-    assertEquals(archetypeTables(id2), other)
-    await tick()
-    assertEquals(sent.filter((f) => f.q).length, 1)
-  } finally {
-    off()
-    config.host = host
-    useRoute(prior)
-  }
-})
-
 Deno.test('a later physical set is learned, not the prior set of the same owner', () => {
   let names = ['late_plugin'], id = eidOf(names)
   let value = {

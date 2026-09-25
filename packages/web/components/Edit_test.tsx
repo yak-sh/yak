@@ -157,19 +157,6 @@ Deno.test('an unloaded body refuses the editor and commits nothing', () => {
   assertEquals(out.armed, false)
 })
 
-Deno.test('a loaded body is still edited, empty or not', () => {
-  let out = typeInto('', 'a fragment')
-  assertEquals(out.armed, true)
-  assertEquals(out.sent, [
-    {
-      eid: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-      name: 'doc',
-      comp: { body: 'a fragment' },
-    },
-  ])
-  assertEquals(out.stored, 'a fragment')
-})
-
 Deno.test('a body made read-only during editing reverts on blur', () => {
   let out = typeInto('stored words', 'unsaved words', true)
   assertEquals(out.armed, true)

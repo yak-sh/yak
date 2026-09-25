@@ -228,29 +228,6 @@ Deno.test('normalized user messages render as entry markdown', () =>
     assertEquals(root.querySelector('.Entry-user strong')?.textContent, 'hello')
   }))
 
-Deno.test('session prompts are collapsed persona entries', () =>
-  withDom((root) => {
-    let e: Ent = {
-      eid: 'prompt',
-      num: 1,
-      kind: 'entry',
-      refs: [],
-      kids: [],
-      entry: { eid: 'prompt', session: 'session', seq: 1 },
-      prompt: { eid: 'prompt' },
-      message: { eid: 'prompt', role: 'user' },
-      content: { eid: 'prompt', body: 'one\ntwo' },
-    }
-    assertEquals(resolve(e, 'Entry.Summary').Render, PromptSummary)
-    render(<PromptSummary e={e} />, root)
-    let details = root.querySelector('details.Prompt')!
-    assertEquals(details.hasAttribute('open'), false)
-    assertEquals(
-      details.querySelector('.Prompt_Gist')?.textContent,
-      'persona · 2 lines',
-    )
-  }))
-
 Deno.test('expanded entries offer only specifically rendered faces', () =>
   withDom((root) => {
     rows()

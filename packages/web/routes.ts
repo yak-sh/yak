@@ -28,7 +28,7 @@ export let letters = (vocab: Vocab): string[] => {
   return [...upper].flatMap((l) => [l, l.toLowerCase()]).sort()
 }
 
-let sha = async (body: string | Uint8Array) =>
+let sha = async (body: string | Uint8Array<ArrayBuffer>) =>
   [
     ...new Uint8Array(
       await crypto.subtle.digest(
@@ -40,7 +40,7 @@ let sha = async (body: string | Uint8Array) =>
     .map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32)
 
 // A body the browser may keep, revalidated on each load by its hash.
-let kept = async (request: Request, body: string | Uint8Array, type: string) => {
+let kept = async (request: Request, body: string | Uint8Array<ArrayBuffer>, type: string) => {
   let tag = `"${await sha(body)}"`
   let headers = {
     'content-type': type,
@@ -56,10 +56,10 @@ let kept = async (request: Request, body: string | Uint8Array, type: string) => 
 // failure is not kept: the next request tries again, and says why meanwhile.
 let served = (
   type: string,
-  make: () => Promise<string | Uint8Array>,
+  make: () => Promise<string | Uint8Array<ArrayBuffer>>,
   early = false,
 ) => {
-  let made: Promise<string | Uint8Array> | undefined
+  let made: Promise<string | Uint8Array<ArrayBuffer>> | undefined
   if (early) made = make()
   return async (request: Request) => {
     try {
@@ -77,11 +77,11 @@ let text = (path: string) => () => fetch(here(path)).then((r) => r.text())
 let bytes = (path: string) => () =>
   fetch(here(path)).then(async (r) => new Uint8Array(await r.arrayBuffer()))
 
-let files: [string, string, () => Promise<string | Uint8Array>][] = [
+let files: [string, string, () => Promise<string | Uint8Array<ArrayBuffer>>][] = [
   ['styles.css', 'text/css; charset=utf-8', text('./styles.css')],
   ['manifest.webmanifest', 'application/manifest+json', text('./manifest.webmanifest')],
   ...['icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png']
-    .map((name): [string, string, () => Promise<Uint8Array>] => [name, 'image/png', bytes(`./${name}`)]),
+    .map((name): [string, string, () => Promise<Uint8Array<ArrayBuffer>>] => [name, 'image/png', bytes(`./${name}`)]),
 ]
 
 /** The page at every entity's address, `/web/*`, and the vocabulary. */

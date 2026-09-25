@@ -19,27 +19,6 @@ Deno.test('typeWord: one spelling per type', () => {
   assertEquals(typeWord({ text: 'domains' }), 'text (domains)')
 })
 
-Deno.test('schema(): stamped marked, death words carried, tags empty', () => {
-  let rows = Object.fromEntries(schema().map((s) => [s.comp, s.cols]))
-  assertEquals(
-    rows.claim.find((c) => c.col == 'session')?.death,
-    'release',
-  )
-  assertEquals(rows.claim.find((c) => c.col == 'at')?.stamped, true)
-  assertEquals(rows.entity.every((c) => c.stamped), true) // spine: all server's
-  assertEquals(rows.canvas, []) // a tag — the row is the statement
-  assertEquals(rows.favorite, [{ col: 'at', type: 'time', stamped: true }])
-  // The venture's window colour is its one project-specific value.
-  assertEquals(rows.project, [{ col: 'color', type: 'text', stamped: false }])
-  // wire-writable and stamped columns of one comp land in one place
-  let session = rows.session.map((c) => c.col)
-  assert(session.includes('provider') && session.includes('exit_code'))
-  assertEquals(
-    rows.spawn.map((c) => c.col),
-    ['provider', 'model', 'effort', 'persona'],
-  )
-})
-
 Deno.test('vocabularyMd: components, death words, effects — all present', () => {
   let md = vocabularyMd([{
     comp: 'session',

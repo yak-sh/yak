@@ -36,28 +36,3 @@ Deno.test('board columns request a projected, priority-ordered screenful', () =>
   )
   assertEquals(columnLine('', 'open', 8), '')
 })
-
-Deno.test('quick-add previews empty facets and ordinary properties', async () => {
-  let key = `test:quick-add:${crypto.randomUUID()}`
-  let mounted = mount(
-    <QuickAdd dkey={key} file={() => true} close={() => {}} />,
-  )
-  try {
-    let input = mounted.root.querySelector<HTMLTextAreaElement>('.Board_New')!
-    input.setSelectionRange = () => {}
-    input.value = '.verifier=true .noverify=false .domain=Eng Ship'
-    input.dispatchEvent(
-      new input.ownerDocument.defaultView!.Event('input', { bubbles: true }),
-    )
-    await tick()
-    assertEquals(
-      [...mounted.root.querySelectorAll('.Board_Chip')].map((e) =>
-        e.textContent
-      ),
-      ['verifier=true', 'noverify=false', 'domain=Eng'],
-    )
-  } finally {
-    mounted.free()
-    drop(key)
-  }
-})

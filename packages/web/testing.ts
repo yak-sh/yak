@@ -2,47 +2,93 @@
 // learns the documents a host composes from the plugins a yak serve config
 // lists, so a test sees the components a page does. Import it before anything
 // else in a test file: a module that reads the tables as it loads reads them
-// once. A `slow` test rides a real subprocess or server and runs only under
+// once, and the learning below runs before any later import evaluates. A
+// `slow` test rides a real subprocess or server and runs only under
 // TASKS_SLOW; a fast test never sleeps a fixed span, it yields with `tick` and
 // waits on a fact with `until`.
 
-import type { VocabDoc } from '@yaks/vocab'
 import { learn } from './types.ts'
+import { docs as kernel } from '@yaks/kernel/vocab'
+import { docs as id } from '@yaks/id/vocab'
+import { docs as secrets } from '@yaks/secrets/vocab'
+import { docs as key } from '@yaks/key/vocab'
+import { docs as alias } from '@yaks/alias/vocab'
+import { docs as edge } from '@yaks/edge/vocab'
+import { docs as blob } from '@yaks/blob/vocab'
+import { docs as doc } from '@yaks/doc/vocab'
+import { docs as archetype } from '@yaks/archetype/vocab'
+import { docs as effects } from '@yaks/effects/vocab'
+import { docs as journal } from '@yaks/journal/vocab'
+import { docs as task } from '@yaks/task/vocab'
+import { docs as project } from '@yaks/project/vocab'
+import { docs as goal } from '@yaks/goal/vocab'
+import { docs as design } from '@yaks/design/vocab'
+import { docs as session } from '@yaks/session/vocab'
+import { docs as tools } from '@yaks/tools/vocab'
+import { docs as api } from '@yaks/api/vocab'
+import { docs as model } from '@yaks/model/vocab'
+import { docs as openai } from '@yaks/openai/vocab'
+import { docs as processes } from '@yaks/process/vocab'
+import { docs as spawn } from '@yaks/spawn/vocab'
+import { docs as persona } from '@yaks/persona/vocab'
+import { docs as memory } from '@yaks/memory/vocab'
+import { docs as embedding } from '@yaks/embedding/vocab'
+import { docs as dreaming } from '@yaks/dreaming/vocab'
+import { docs as context } from '@yaks/context/vocab'
+import { docs as mail } from '@yaks/mail/vocab'
+import { docs as notify } from '@yaks/notify/vocab'
+import { docs as wake } from '@yaks/wake/vocab'
+import { docs as hook } from '@yaks/hook/vocab'
+import { docs as page } from '@yaks/page/vocab'
+import { docs as git } from '@yaks/git/vocab'
+import { docs as code } from '@yaks/code/vocab'
+import { docs as canvas } from '@yaks/canvas/vocab'
+import { docs as tmux } from '@yaks/tmux/vocab'
+import { docs as platform } from '@yaks/platform/vocab'
+import { docs as member } from '@yaks/member/vocab'
+import { docs as admin } from '@yaks/admin/vocab'
 
-// The plugins whose components the views draw, as a config lists them.
-let plugins = [
-  'kernel',
-  'id',
-  'key',
-  'alias',
-  'edge',
-  'blob',
-  'doc',
-  'archetype',
-  'journal',
-  'task',
-  'project',
-  'goal',
-  'design',
-  'session',
-  'tools',
-  'model',
-  'process',
-  'persona',
-  'memory',
-  'mail',
-  'notify',
-  'page',
-  'git',
-  'canvas',
-  'member',
-]
-let docs: VocabDoc[] = []
-for (let p of plugins) {
-  let m = await import(`../${p}/vocab.ts`) as { docs?: VocabDoc[] }
-  docs.push(...(m.docs ?? []))
-}
-learn(docs)
+learn([
+  kernel,
+  id,
+  secrets,
+  key,
+  alias,
+  edge,
+  blob,
+  doc,
+  archetype,
+  effects,
+  journal,
+  task,
+  project,
+  goal,
+  design,
+  session,
+  tools,
+  api,
+  model,
+  openai,
+  processes,
+  spawn,
+  persona,
+  memory,
+  embedding,
+  dreaming,
+  context,
+  mail,
+  notify,
+  wake,
+  hook,
+  page,
+  git,
+  code,
+  canvas,
+  tmux,
+  platform,
+  member,
+  admin,
+].flatMap((d) => d ?? []))
 
 type Fn = () => void | Promise<void>
 export let slow = (

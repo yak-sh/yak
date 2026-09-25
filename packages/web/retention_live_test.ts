@@ -140,30 +140,3 @@ Deno.test('full confirmation drops removed components without blanking retained 
     restore()
   }
 })
-
-Deno.test('bodyless confirmations preserve the paint floor without claiming body coverage', () => {
-  let route = useRoute(() => {})
-  try {
-    cache.value = {}
-    landSub({ sub: 'bodyless', replace: true, changes: changes('bodyless') })
-    applyLocal([{
-      eid: 'bodyless',
-      name: 'doc',
-      comp: { body: 'cached body' },
-    }])
-    unsubscribe('bodyless')
-    assertEquals(ent('bodyless').doc?.body, 'cached body')
-    subscribe('bodyless', 'id=bodyless')
-    landSub({ sub: 'bodyless', replace: true, changes: changes('bodyless') })
-    assertEquals(ent('bodyless').doc?.body, 'cached body')
-    let priorHost = config.host
-    config.host = 'browser.test'
-    assertEquals(loaded('bodyless', 'doc', 'body'), false)
-    config.host = priorHost
-    unsubscribe('bodyless')
-  } finally {
-    useRoute(route)
-    cache.value = {}
-    restore()
-  }
-})

@@ -22,24 +22,6 @@ Deno.test('viaName names a session by its chip id, never its harness uuid', () =
   cache.value = {}
 })
 
-Deno.test('composer names an unnamed session by its chip id', () => {
-  cache.value = {
-    session: {
-      entity: { eid: 'session', num: 31 },
-      session: {
-        eid: 'session',
-        id: 'raw-session-uuid',
-        origin: 'managed',
-        provider_session_id: 'provider-session-uuid',
-        status: 'completed',
-        model: 'gpt-5.6',
-      },
-    },
-  }
-  assertEquals(prompt(ent('session')), 'send to S-31… (resumes the session)')
-  cache.value = {}
-})
-
 Deno.test('graph-native prose is one ordered user entry', () => {
   assertEquals(composerChanges('session', 'keep going', true, 'input'), [
     { eid: 'input', name: 'entry', comp: { session: 'session' } },

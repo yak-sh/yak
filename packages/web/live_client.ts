@@ -159,6 +159,8 @@ export let liveClient = (opts: {
     if (!id || !deliver) return
     let frame: Frame = f.error
       ? { id, refused: { error: 'read', message: f.error } }
+      : f.agg
+      ? { id, tally: f.agg }
       : {
         id,
         reset: f.replace,

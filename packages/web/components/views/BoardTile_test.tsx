@@ -51,8 +51,9 @@ let stats = (root: Element) =>
 
 // The server's tally frames for the board's own aggregate sub, landed and then
 // awaited — a signal wakes its component on preact's own queue, not inline.
-let tally = async (agg: Record<string, number>, replace = false) => {
-  landSub({ sub: boardTallyName(ent('board')), changes: [], agg, replace })
+// Each frame is the whole tally (@yaks/api answers an aggregate with its value).
+let tally = async (agg: Record<string, number>) => {
+  landSub({ sub: boardTallyName(ent('board')), changes: [], agg })
   await tick()
 }
 
@@ -64,11 +65,11 @@ Deno.test('board tile counts come from the tally sub, not the members', async ()
     // four zeros would be a wrong number, which is worse than none.
     assertEquals(stats(root), [])
 
-    await tally({ open: 1, done: 1 }, true)
+    await tally({ open: 1, done: 1 })
     assertEquals(stats(root), ['1', '0', '1', '0'])
 
-    // A delta moves one key and the tile follows without a member in sight.
-    await tally({ open: 0, wip: 1 })
+    // The tally moves and the tile follows without a member in sight.
+    await tally({ wip: 1, done: 1 })
     assertEquals(stats(root), ['0', '1', '1', '0'])
 
     let meta = [...root.querySelector('.Show_Meta')!.children]

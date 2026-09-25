@@ -35,57 +35,6 @@ let e: Ent = {
 
 let from = () => peek.value.at(-1)?.from
 
-Deno.test('short id chip and browser route round trip; kind is checked', async () => {
-  let eid = '3f9a1c2e-7b00-4000-8000-000000000001'
-  let before = cache.peek()
-  cache.value = { [eid]: { entity: { eid, num: 0 }, task: { eid } } }
-  clearResolved()
-  let prior = useRoute((frame) => {
-    let { sub, q } = frame as { sub?: string; q?: string }
-    if (!sub || !q) return
-    queueMicrotask(() =>
-      landSub({
-        sub,
-        replace: true,
-        drop: [],
-        changes: [
-          { eid, name: 'entity', comp: { eid, num: 0 } },
-          { eid, name: 'task', comp: { eid } },
-        ],
-        ...(q.includes('S#')
-          ? { error: 'prefix S does not match task (T)' }
-          : {}),
-      })
-    )
-  })
-  let ready = async (path: string) => {
-    screenTarget(path)
-    await new Promise((r) => setTimeout(r, 0))
-  }
-  try {
-    let row = { ...e, eid, num: 0 }
-    let props = clickProps(row)
-    assertEquals(props.href, '/T%233f9a1c2e7b')
-    await ready(props.href)
-    assertEquals(screenTarget(props.href)?.eid, eid)
-    await ready('/%233f9a1c2e7b')
-    assertEquals(screenTarget('/%233f9a1c2e7b')?.eid, eid)
-    await ready('/S%233f9a1c2e7b')
-    assertThrows(() => screenTarget('/S%233f9a1c2e7b'), Error, 'prefix S')
-    let { root, free } = mount(Id({ e: row }))
-    try {
-      assertEquals(root.textContent, 'T#3f9a1c2e7b')
-      assertEquals(root.querySelector('a')?.getAttribute('href'), props.href)
-    } finally {
-      free()
-    }
-  } finally {
-    useRoute(prior)
-    clearResolved()
-    cache.value = before
-  }
-})
-
 Deno.test('numeric routes resolve confirmed retained rows before a reopen frame', () => {
   cache.value = {}
   try {

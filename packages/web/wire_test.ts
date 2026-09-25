@@ -1,24 +1,51 @@
-// The sync wire's two-way rolling-deploy contract.
 import './testing.ts'
-import { assert, assertEquals } from '@std/assert'
-import type { Change } from './types.ts'
-import { liveChanges, liveFrame } from './wire.ts'
+import { assertEquals } from '@std/assert'
+import { bundlesOf, changesOf, yakLine } from './wire.ts'
 
-let changes: Change[] = [
-  { eid: 'one', name: 'doc', comp: { title: 'One' } },
-]
-
-Deno.test('unadvertised clients receive the old bare batch', () => {
-  let frame = liveFrame(changes, 7, false)
-  assert(Array.isArray(frame))
-  assertEquals(frame, changes)
+Deno.test('a batch leaves as one bundle per entity, without spine writes', () => {
+  assertEquals(
+    bundlesOf([
+      { eid: 'a', name: 'doc', comp: { eid: 'a', title: 'One' } },
+      { eid: 'a', name: 'doc', comp: { body: 'more' } },
+      { eid: 'a', name: 'claim', comp: null },
+      { eid: 'a', name: 'entity', comp: { num: 3 } },
+      { eid: 'b', name: 'doc', comp: { title: 'Two' } },
+      { eid: 'b', name: 'entity', comp: null },
+    ]),
+    [
+      {
+        entity: { eid: 'a' },
+        doc: { title: 'One', body: 'more' },
+        claim: null,
+      },
+      { entity: { eid: 'b' }, tombstone: {} },
+    ],
+  )
 })
 
-Deno.test('advertised clients receive a cursor envelope', () => {
-  assertEquals(liveFrame(changes, 7, true), { live: changes, cursor: 7 })
+Deno.test('an answer lands as changes: the spine, each component, a death', () => {
+  assertEquals(
+    changesOf([
+      { entity: { eid: 'a', num: 3 }, doc: { title: 'One' }, claim: null },
+      { entity: { eid: 'b' }, tombstone: {} },
+    ]),
+    [
+      { eid: 'a', name: 'entity', comp: { num: 3 } },
+      { eid: 'a', name: 'doc', comp: { title: 'One' } },
+      { eid: 'a', name: 'claim', comp: null },
+      { eid: 'b', name: 'entity', comp: null },
+    ],
+  )
 })
 
-Deno.test('new decoders accept old and new server frames', () => {
-  assertEquals(liveChanges(changes), changes)
-  assertEquals(liveChanges({ live: changes, cursor: 7 }), changes)
+Deno.test('a line asks the host by .eid and leaves riders and projections out', () => {
+  assertEquals(yakLine('id=a,b'), '.eid=a,b')
+  assertEquals(
+    yakLine('id=a&.edges.peers=task.status,doc.title&.edges.limit=100'),
+    '.eid=a',
+  )
+  assertEquals(
+    yakLine('.task!&.fields=doc.title&.edges[requires]!&.limit=5'),
+    '.task!&.limit=5',
+  )
 })

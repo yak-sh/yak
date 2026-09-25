@@ -1596,10 +1596,14 @@ export type Sub = {
   error?: string
   reference?: string
 }
-// How a replica reaches its host: the page's /ws, or no socket at all in a
-// process with no host (a test), whose frames arrive through landSub.
+// How a replica reaches its host: the page's /ws. A process with no host (a
+// test) has a socket that sends through the route seam and hears nothing: its
+// frames arrive through landSub.
 let socketFor = (url: string): Socket =>
-  config.host ? new WebSocket(url) as unknown as Socket : quiet()
+  config.host ? new WebSocket(url) as unknown as Socket : {
+    ...quiet(),
+    send: (text: string) => route(JSON.parse(text)),
+  }
 export let useSocket = (fn: typeof socketFor): typeof socketFor => {
   let prev = socketFor
   socketFor = fn

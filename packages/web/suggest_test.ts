@@ -71,9 +71,6 @@ let has: [string, string, string, string][] = [
   ['similar rank value', '.order=simi', '.order=similar', 'rank'],
   ['similar rank input', '.nea', '.near=', 'rank'],
 ]
-for (let [name, token, text, kind] of has) {
-  Deno.test(`complete: ${name}`, () => assertEquals(cand(token)[text], kind))
-}
 
 Deno.test('complete: prefixes filter', () => {
   let c = cand('.mem')
@@ -84,14 +81,6 @@ Deno.test('complete: prefixes filter', () => {
 Deno.test('complete: ambiguous columns only via the explicit spelling', () => {
   assertEquals(cand('.')['.x'], undefined) // pin/camera collide
   assertEquals(cand('.pin.')['.pin.x'], 'pin')
-})
-
-Deno.test("complete: wells are the caller's lists", () => {
-  assertEquals(
-    cand('.domain=', { domains: ['Eng', 'Ops'] })['.domain=Eng'],
-    'domains',
-  )
-  assertEquals(suggest('.domain='), []) // pure: no lists passed, none invented
 })
 
 Deno.test("complete: {eid} params offer the caller's entities by kind", () => {

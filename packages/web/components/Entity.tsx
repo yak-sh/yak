@@ -44,7 +44,6 @@ import { Layout } from './views/Layout.tsx'
 import { Dashboard } from './views/Dashboard.tsx'
 import { Persona } from './views/Persona.tsx'
 import { Inbox } from './views/Inbox.tsx'
-import { Usage } from './views/Usage.tsx'
 import { MemoryTile } from './views/Memory.tsx'
 import { TaskTile } from './views/TaskTile.tsx'
 import { BoardMeta, BoardTile } from './views/BoardTile.tsx'
@@ -145,14 +144,6 @@ define([
     Render: (props) => <Dashboard {...props} />,
   },
   { view: 'Persona', match: parse('.doc .persona'), Render: Persona },
-  // Usage reads FOR a project: the cost + throughput of the sessions that
-  // worked its tasks, projected from usage.ts. Delegates nothing, so no
-  // deferral needed.
-  {
-    view: 'Usage',
-    match: parse('.project'),
-    Render: (props) => <Usage {...props} />,
-  },
   // An inbox reads FOR an actor, so it offers itself on the two things
   // that can be one: a venture and a person.
   // Inbox delegates its rows back through Entity, so defer the binding as
@@ -268,7 +259,6 @@ define([
   // default.
   'Inbox',
   'Dashboard',
-  'Usage',
   'Role',
   'Session',
   'Full',

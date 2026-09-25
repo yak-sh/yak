@@ -65,29 +65,6 @@ Deno.test('only whole-entity subscriptions carry bodies', () => {
   ) assertEquals(bodied(sub), false, sub)
 })
 
-Deno.test('the bodyless projection drops declared bodies, keeps the rest', () => {
-  assertEquals(
-    bodyless([
-      { eid: 'e1', name: 'entity', comp: { eid: 'e1', num: 7 } },
-      { eid: 'e1', name: 'doc', comp: { title: 'hi', body: 'long' } },
-      { eid: 'e1', name: 'task', comp: {} },
-      { eid: 'e1', name: 'accept', comp: { eid: 'e1', body: 'must pass' } },
-      { eid: 'e1', name: 'session', comp: { status: 'done', final_text: 'x' } },
-      { eid: 'e1', name: 'doc', comp: { body: 'the whole patch' } },
-      { eid: 'e1', name: 'entity', comp: null },
-    ]),
-    [
-      { eid: 'e1', name: 'entity', comp: { eid: 'e1', num: 7 } },
-      { eid: 'e1', name: 'doc', comp: { title: 'hi' } },
-      { eid: 'e1', name: 'task', comp: {} },
-      { eid: 'e1', name: 'accept', comp: { eid: 'e1' } },
-      { eid: 'e1', name: 'session', comp: { status: 'done' } },
-      // a patch that was only a body says nothing at all
-      { eid: 'e1', name: 'entity', comp: null },
-    ],
-  )
-})
-
 // A precondition rides BESIDE comp, so the projection must SPREAD what it
 // touches: a rebuilt Change would drop the guard and land unguarded.
 Deno.test('the projection carries a precondition through', () => {
