@@ -207,7 +207,12 @@ let spawn = (
 ) => {
   let f = files(dir, eid)
   let wrapper = `${dir}/wrapper.sh`
-  Deno.writeTextFileSync(wrapper, WRAPPER)
+  // Every launch shares this file, and a write truncates before it writes: a
+  // `sh wrapper.sh` opened in between ran an empty script, so its child never
+  // started. A rename replaces the file whole, and a shell already reading the
+  // old one keeps reading all of it.
+  Deno.writeTextFileSync(`${wrapper}.${eid}`, WRAPPER)
+  Deno.renameSync(`${wrapper}.${eid}`, wrapper)
   let child = new Deno.Command('sh', {
     args: [
       '-c',
@@ -260,13 +265,31 @@ let groupOf = (path: string) => {
   return ns.length > 1 ? ns[0] : 0
 }
 
-let codeOf = (path: string) => {
+let textOf = (path: string) => {
   try {
-    let n = Number(Deno.readTextFileSync(path).trim())
-    return Number.isFinite(n) ? n : null
+    return Deno.readTextFileSync(path)
   } catch {
-    return null
+    return '' // not written yet
   }
+}
+
+// A number the wrapper wrote, or null until it is there. `Number('')` is 0,
+// so an empty file must not reach it.
+let numberIn = (text: string) => {
+  let n = Number(text.trim())
+  return text.trim() && Number.isFinite(n) ? n : null
+}
+
+let codeOf = (path: string) => numberIn(textOf(path))
+
+// The exit code, once the wrapper has written all of it. Its `echo $code >
+// file` creates the file empty and writes the line a moment later; a load that
+// stretches that moment let a read see the empty file and stamp a clean exit on
+// a child that exited 3 (T-38290). echo ends the line with a newline, so a
+// complete write is one that ends with one.
+let exitIn = (path: string) => {
+  let text = textOf(path)
+  return text.endsWith('\n') ? numberIn(text) : null
 }
 
 // The start and end times are kept in files, so a process picked back up
@@ -405,16 +428,23 @@ let drain = async (
 }
 
 // The wrapper writes the exit-code file just after the child it waited on is
-// gone, so we know the process ended a moment before we know its code. This is
-// the reader for runs whose files are ours; a caller that adopted a process
-// and keeps its own exit code reads that once, with no delay to wait out.
-let reported = (path: string, poll: number) => async () => {
-  for (let i = 0; i < 20; i++) {
-    let code = codeOf(path)
+// gone, so we know the process ended a moment before we know its code. It is
+// waited for while the wrapper lives, since load can stretch that moment past
+// any fixed count of polls; once the wrapper is gone the file is final. A run
+// with no wrapper pid on file gets the old short grace, and WRITE bounds a
+// wrapper pid another process took over. This is the reader for runs whose
+// files are ours; a caller that adopted a process and keeps its own exit code
+// reads that once, with no delay to wait out.
+let WRITE = 10_000
+let reported = (f: ReturnType<typeof files>, poll: number) => async () => {
+  let wrapper = groupOf(f.pid)
+  for (let i = 0, end = Date.now() + WRITE;; i++) {
+    let code = exitIn(f.code)
     if (code != null) return code
+    let over = wrapper ? !(await alive(wrapper)) : i >= 20
+    if (over || Date.now() >= end) return exitIn(f.code)
     await sleep(poll)
   }
-  return null
 }
 
 // The one loop: watch the pid, write what the process printed, record how it
@@ -489,7 +519,7 @@ export let launch = async (
     // transaction, so no reader ever sees the new pid beside it.
     ...(o.eid ? { [EXIT]: null } : {}),
   }])
-  let done = follow(store, eid, pid, tails, reported(f.code, beat(o)), o)
+  let done = follow(store, eid, pid, tails, reported(f, beat(o)), o)
   return { eid, pid, done, elapsed: elapsedOf(dir, eid) }
 }
 
@@ -546,7 +576,7 @@ export let watch = async (store: Store, o: Opts = {}): Promise<Run[]> => {
       eid,
       pid,
       elapsed: elapsedOf(dir, eid),
-      done: follow(store, eid, pid, [], reported(f.code, beat(o)), o),
+      done: follow(store, eid, pid, [], reported(f, beat(o)), o),
     })
   }
   return runs

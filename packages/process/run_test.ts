@@ -58,6 +58,33 @@ Deno.test('watch picks up an unfinished row and stamps the one already gone', as
   assertEquals(await watch(store(g), { dir: dir(), poll: 5 }), [])
 })
 
+// The wrapper's `echo $code > file` creates the file empty and writes it a
+// moment later; a load that stretches that moment let a read see the empty
+// file and stamp a clean exit on a child that exited 3 (T-38290).
+Deno.test('an exit-code file read before it is written is waited for, never read as 0', async () => {
+  let g = tracked()
+  let d = dir()
+  await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: await gone() } }])
+  Deno.writeTextFileSync(`${d}/p1.code`, '')
+  setTimeout(() => Deno.writeTextFileSync(`${d}/p1.code`, '3\n'), 30)
+  let [run] = await watch(store(g), { dir: d, poll: 5 })
+  assertEquals(await run.done, 3)
+})
+
+// And a wrapper slowed past the poll budget still has its code read: it is
+// waited for for as long as it is alive, not for a fixed number of polls.
+Deno.test('a wrapper slow to write the code is waited for while it lives', async () => {
+  let g = tracked()
+  let d = dir()
+  let wrapper = new Deno.Command('sleep', { args: ['0.3'] }).spawn()
+  await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: await gone() } }])
+  Deno.writeTextFileSync(`${d}/p1.pid`, `${wrapper.pid} ${await gone()}\n`)
+  setTimeout(() => Deno.writeTextFileSync(`${d}/p1.code`, '3\n'), 200)
+  let [run] = await watch(store(g), { dir: d, poll: 5 })
+  assertEquals(await run.done, 3)
+  await wrapper.status
+})
+
 // systemd expands the command line it launches, so an unescaped `$` reaches
 // the program as an empty string — a hosted shell wrote a heredoc with every
 // `${…}` deleted before anyone noticed (T-37332).
