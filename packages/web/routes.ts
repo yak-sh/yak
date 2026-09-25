@@ -5,22 +5,27 @@
 // reads the address and draws the rest (main.tsx).
 //
 // The id routes are one prefix per series letter the vocabulary uses, in both
-// cases, rather than a catch-all: a host's routes are matched first, and a
-// catch-all would answer `/query` and `/ws` before @yaks/api could.
+// cases. Any other path is a name an id may be written as (`/lemon-cake`, an
+// alias), resolved the way every door resolves an id (Graph.address): the page
+// when it names an entity, and the same page answered 404 when it names
+// nothing, which the app draws as its 404 face. That route is a catch-all, and
+// @yaks/api lets the route naming a path most closely answer it, so `/query`,
+// `/ws` and every other plugin's route stay theirs.
 //
 // `/web/*` is what that page loads: the app bundled from main.tsx, its
 // stylesheet, icons and manifest, and the vocabulary exactly as the host
 // loaded it, so the browser and the server read one set of components.
 
 import type { Route } from '@yaks/api'
+import { dead, detached, type Graph } from '@yaks/graph'
 import { prefixOf } from '@yaks/id'
 import type { Vocab } from '@yaks/vocab'
 import { bundle } from './bundle.ts'
 import { type Body, kept } from './kept.ts'
 
 /** What this facet reads off the host it is composing into: the vocabulary
- * its plugins loaded. */
-export type Hosting = { vocab: Vocab }
+ * its plugins loaded, and the graph a name is resolved in. */
+export type Hosting = { vocab: Vocab; graph: Graph }
 
 /** Every letter an id in this vocabulary can start with, in both cases. */
 export let letters = (vocab: Vocab): string[] => {
@@ -56,11 +61,34 @@ let files: [string, string, () => Promise<Body>][] = [
     ]),
 ]
 
+// Whether a path names an entity: one segment, resolved to an eid, and that
+// entity alive. A name no plugin resolves is taken as an eid, and one a plugin
+// recognises but finds naming nothing is refused: both are no entity.
+let names = async (graph: Graph, path: string): Promise<boolean> => {
+  let id = decodeURIComponent(path.slice(1))
+  if (!id || id.includes('/')) return false
+  try {
+    let eid = (await graph.address([id])).get(id) ?? id
+    let [row] = await detached(graph.storage).get([eid])
+    return !!row && !dead(row)
+  } catch {
+    return false
+  }
+}
+
 /** The page at every entity's address, `/web/*`, and the vocabulary. */
 export let routes = (host: Hosting): Route[] => {
   let page = kept('/', 'text/html; charset=utf-8', text('./index.html'))
   let vocab = JSON.stringify(host.vocab.docs)
+  let named = async (request: Request) => {
+    if (await names(host.graph, new URL(request.url).pathname)) {
+      return page(request)
+    }
+    let lost = await page(new Request(request.url))
+    return new Response(lost.body, { status: 404, headers: lost.headers })
+  }
   return [
+    { method: 'GET', path: '/*', handle: named },
     { method: 'GET', path: '/', handle: page },
     { method: 'GET', path: '/admin', handle: page },
     { method: 'GET', path: '/admin/*', handle: page },

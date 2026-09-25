@@ -238,11 +238,15 @@ reads to tell a refusal from a defect.
 This package is also the plugin that makes a host answer HTTP at all.
 [`routes.ts`](./routes.ts) exports `handler`, which the host calls once its
 graph is open and `host.routes` holds every listed plugin's routes: what comes
-back is those routes in front of `/apply`, `/query` and `/ws`, and it becomes
-`host.handler`. A config that does not list this package composes a host with no
-handler, and the routes the other plugins would have added are never asked for
-([@yaks/cli](../cli/README.md)). `/mcp` is one of those routes, contributed by
-[@yaks/mcp](../mcp/README.md) when a config lists that package too.
+back is those routes beside `/apply`, `/query` and `/ws`, and it becomes
+`host.handler`. The route that names a path most closely answers it: an exact
+path over a prefix, a longer prefix over a shorter, and plugin order between
+equals. The three doors are exact paths, so a plugin's catch-all (`/*`) answers
+only what nothing else claims. A config that does not list this package composes
+a host with no handler, and the routes the other plugins would have added are
+never asked for ([@yaks/cli](../cli/README.md)). `/mcp` is one of those routes,
+contributed by [@yaks/mcp](../mcp/README.md) when a config lists that package
+too.
 
 [`vocab.json`](./vocab.json) declares one tool, `serve`, and
 [`tools.ts`](./tools.ts) implements it: it binds a TCP port and answers with

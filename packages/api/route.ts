@@ -52,6 +52,9 @@ export type Options = {
 
 let nobody: Authenticate = () => null
 
+/** The paths {@link api} answers itself. */
+export let DOORS: string[] = ['/apply', '/query', '/ws']
+
 /**
  * Build the request handler for a graph: `POST /apply`, `GET|POST /query`, and
  * `/ws` for live subscriptions. Everything else is a 404, and every thrown

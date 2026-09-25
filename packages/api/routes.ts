@@ -13,7 +13,7 @@
 
 import type { Graph } from '@yaks/graph'
 import type { Authenticate } from './actor.ts'
-import { api, type Handler, type Route, routed } from './route.ts'
+import { api, DOORS, type Handler, type Route, routed } from './route.ts'
 
 /** What this facet reads off the host it is composing into: the graph its
  * endpoints answer over, who that host says is calling, and every route the
@@ -24,20 +24,33 @@ export type Hosting = {
   routes: Route[]
 }
 
+// How closely a route names a path: an exact path over any prefix, and a
+// longer prefix over a shorter one.
+let exact = (r: Route) => !r.path.endsWith('*')
+let reach = (r: Route) => exact(r) ? Infinity : r.path.length
+
 /**
  * The host's one request handler: each plugin's route, and this package's
- * three endpoints behind them.
+ * three endpoints.
  *
- * A plugin's route is matched first, so a host answers a path of its own ahead
- * of the doors; a request no route claimed goes to `/apply`, `/query` and
- * `/ws`, which refuse anything they do not serve.
+ * The route that names the path most closely wins, whichever plugin listed it:
+ * an exact path over a prefix, a longer prefix over a shorter, and plugin order
+ * between equals. `/apply`, `/query` and `/ws` are exact paths, so a plugin's
+ * catch-all (`/*`) answers only what nothing else claims. A request no route
+ * claimed goes to the doors, which refuse anything they do not serve.
  */
 export let handler = (host: Hosting): Handler => {
   let routes = host.routes
   let door = api({ graph: host.graph, authenticate: host.who })
   return (request) => {
     let path = new URL(request.url).pathname
-    let route = routes.find((r) => routed(r, request.method, path))
-    return route ? route.handle(request) : door(request)
+    let route = routes.filter((r) => routed(r, request.method, path))
+      .reduce<Route | undefined>(
+        (best, r) => best && reach(best) >= reach(r) ? best : r,
+        undefined,
+      )
+    return route && (exact(route) || !DOORS.includes(path))
+      ? route.handle(request)
+      : door(request)
   }
 }
