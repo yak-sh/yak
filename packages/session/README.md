@@ -229,11 +229,16 @@ read in lazily, one per pass, its prose alone. It skips a managed run, whose
 transcript asks a provider for it (`using{provider}`), and subagents'
 transcripts.
 
-| Option        | Default              | Meaning                                    |
-| ------------- | -------------------- | ------------------------------------------ |
-| `every`       | `1000`               | milliseconds between looks                 |
-| `transcripts` | `~/.claude/projects` | where transcripts are read from            |
-| `full`        | 14 days              | how long a transcript keeps its full depth |
+Once an hour the duty finds the imported sessions whose newest entry is older
+than `full` (`stale()`), from any importer, and strips each to its prose
+(`strip()`, a small batch between looks): calls, results, thoughts, notices and
+a turn's ending go; what a person typed and what the model said stay.
+
+| Option        | Default              | Meaning                                 |
+| ------------- | -------------------- | --------------------------------------- |
+| `every`       | `1000`               | milliseconds between looks              |
+| `transcripts` | `~/.claude/projects` | where transcripts are read from         |
+| `full`        | 14 days              | how long a session keeps its full depth |
 
 ## Identity and HTTP attribution
 

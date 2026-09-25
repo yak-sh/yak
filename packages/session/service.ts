@@ -24,6 +24,13 @@
 // its stdout, and its transcript file is left alone. So are subagents'
 // transcripts, under `<session>/subagents/`, which are not sessions of their
 // own yet.
+//
+// A session keeps its full depth for `full` days after it last said anything.
+// Once an hour the duty finds every imported session older than that, from
+// whichever importer, and strips it to its prose: each imported entry the
+// prose-only read would have left out goes, a small batch between looks, so
+// what a session says now never waits behind it. What a person typed and what
+// the model said stay, and so does everything nobody imported.
 
 import type { Eid, Graph } from '@yaks/graph'
 import { SESSION } from './comp.ts'
@@ -40,12 +47,12 @@ export type Options = {
   /** the Claude projects directory transcripts are read from (default
    * `~/.claude/projects`) */
   transcripts?: string
-  /** how long after it was last written a transcript is read at full depth,
-   * in milliseconds (default 14 days) */
+  /** how long a session keeps its full depth after it was last written, in
+   * milliseconds (default 14 days) */
   full?: number
 }
 
-/** How long a transcript is read at full depth once it stops being written. */
+/** How long a session keeps its full depth once it stops being written. */
 export let FULL = 14 * 24 * 60 * 60 * 1000
 
 /** Where Claude keeps its transcripts on this machine. */
@@ -150,6 +157,64 @@ export let look = async (
   seen.done.add(old.path)
 }
 
+// What a strip takes from an imported entry: all of it where there is no
+// prose (a call), and each whose prose sits beside a kind the prose-only read
+// leaves out (`prose` in ./tail.ts), of the kinds the vocabulary has.
+let STRIPPED = [
+  'reasoning',
+  'notice',
+  'result',
+  'error',
+  'exception',
+  'stop',
+  'usage',
+]
+let stripped = (g: Graph) =>
+  `.imported&(${
+    ['!content', ...STRIPPED.filter((c) => g.vocab.comp(c)).map((c) => `.${c}`)]
+      .join('|')
+  })`
+
+/**
+ * What a strip owes: each imported entry that is not prose, in a session whose
+ * newest entry was written more than `full` milliseconds before `now`.
+ */
+export let stale = async (
+  g: Graph,
+  o: { full?: number; now?: number } = {},
+): Promise<Eid[]> => {
+  let before = new Date((o.now ?? Date.now()) - (o.full ?? FULL))
+    .toISOString()
+  let by = new Map<Eid, Eid[]>()
+  for (let b of await g.read(`${stripped(g)}&?entry.session`)) {
+    let session = (b.entry as { session: Eid }).session
+    if (!by.has(session)) by.set(session, [])
+    by.get(session)!.push(b.entity.eid)
+  }
+  let out: Eid[] = []
+  for (let [session, eids] of by) {
+    let [last] = await g.read(
+      `.entry.session=${session}&.order=-entry.seq&.limit=1&?created`,
+    )
+    let at = (last?.created as { at?: string } | undefined)?.at ?? ''
+    if (at < before) out.push(...eids)
+  }
+  return out
+}
+
+/** How many entries one step of a strip deletes. */
+export let BATCH = 50
+
+/** One step of a strip: these entries, deleted. */
+export let strip = async (g: Graph, eids: Eid[]): Promise<void> => {
+  if (eids.length) {
+    await g.apply(eids.map((eid) => ({ entity: { eid }, $delete: true })))
+  }
+}
+
+// How often the duty looks for sessions to strip.
+let HOUR = 60 * 60 * 1000
+
 let sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((done) => {
     let timer = setTimeout(done, ms)
@@ -159,10 +224,10 @@ let sleep = (ms: number, signal: AbortSignal) =>
     }, { once: true })
   })
 
-/** Free the locks whose holder is gone, then read transcripts in until
- * `signal` aborts. A look that fails is logged and made again on the next
- * pass, where the transcript stands. What the config's `person` typed is
- * signed with them. */
+/** Free the locks whose holder is gone, then read transcripts in and strip
+ * the stale sessions until `signal` aborts. A pass that fails is logged and
+ * made again on the next, where the transcript stands. What the config's
+ * `person` typed is signed with them. */
 export let service = async (
   host: { graph: Graph; config?: { person?: string } },
   options: Options = {},
@@ -174,12 +239,21 @@ export let service = async (
   let said = host.config?.person
   let person = said && ((await host.graph.address([said])).get(said) ?? said)
   let seen: Seen = { tails: new Map(), done: new Set() }
+  let owed: Eid[] = []
+  let due = 0
   while (!signal.aborted) {
     try {
       await look(host.graph, dir, seen, {
         ...(person ? { person: person as Eid } : {}),
         full: options.full,
       })
+      if (!owed.length && Date.now() >= due) {
+        owed = await stale(host.graph, { full: options.full })
+        due = Date.now() + HOUR
+      }
+      // Taken off the list before the delete, so a batch that fails is
+      // dropped rather than tried every pass; the next hour finds it again.
+      await strip(host.graph, owed.splice(0, BATCH))
     } catch (e) {
       console.error('transcripts —', e)
     }

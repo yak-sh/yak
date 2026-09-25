@@ -298,7 +298,14 @@ export let pull = async (
   o: Pull = {},
 ): Promise<number> => {
   let from = t.line
+  let breath = performance.now()
   for (let text of lines(t, o.final)) {
+    // A long read hands the event loop back every so often: the lease its duty
+    // holds and every other duty in the process renew and fire on timers.
+    if (performance.now() - breath > 50) {
+      await new Promise((go) => setTimeout(go, 0))
+      breath = performance.now()
+    }
     let line = ++t.line
     let event = parsed(text)
     if (!event) continue
