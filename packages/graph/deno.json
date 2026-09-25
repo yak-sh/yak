@@ -9,9 +9,7 @@
   "license": "Apache-2.0",
   "description": "The entity-component data model, the bundle write format, and the phased, pluggable transaction pipeline the yaks packages share.",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0",
-    "@yaks/id": "jsr:@yaks/id@^0.1.0",
-    "@yaks/vocab": "jsr:@yaks/vocab@^0.1.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0"
   },
   "publish": {
     "exclude": [
