@@ -56,14 +56,18 @@ export let useEntity = (eid?: string | null, fields?: string) => {
   return eid ? entityRead(eid, fields) : undefined
 }
 
-// The same hold for a LIST of pins. The canvas List face and the tray's shelf
-// chips paint a pin's target without mounting a Card, so they hold it here; the
-// joined key means a re-render that moves no pin re-subscribes nothing. The
-// tiles read their rows alone, never their edges, in one sub (live.ts rowsSub).
-export let usePinTargets = (ps: { target: string }[]) => {
-  let key = ps.map((p) => p.target).join(',')
+// The rows of a LIST of entities, in one sub (live.ts rowsSub), never their
+// edges; the joined key means a re-render that moves nothing re-subscribes
+// nothing.
+export let useRows = (eids: string[]) => {
+  let key = [...new Set(eids)].join(',')
   useLayoutEffect(() => rowsSub(key ? key.split(',') : []), [key])
 }
+
+// The canvas List face and the tray's shelf chips paint a pin's target without
+// mounting a Card, so they hold it here.
+export let usePinTargets = (ps: { target: string }[]) =>
+  useRows(ps.map((p) => p.target))
 
 // Ref columns are not edge peers. Ask for the small face, not its document,
 // transcript or incident edges; several visible chips share this query.

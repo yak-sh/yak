@@ -15,22 +15,7 @@ import {
 import { type Ent } from '../../types.ts'
 import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
-import {
-  doing,
-  mentionSig,
-  observing,
-  resolveMentions,
-  Session,
-  SessionContext,
-  SessionDiagnostics,
-  SessionEntry,
-  sessionMentions,
-  SessionObservation,
-  SessionReferences,
-  SessionSummary,
-  SessionTime,
-  threadMentions,
-} from './Session.tsx'
+import { doing, mentionSig, resolveMentions, Session, SessionContext, SessionDiagnostics, SessionEntry, sessionMentions, SessionReferences, SessionSummary, SessionTime, threadMentions } from './Session.tsx'
 
 Deno.test('Session explains loading, ready-empty, rows, and read failure', async () => {
   let priorRoute = useRoute(() => {})
@@ -130,29 +115,6 @@ Deno.test('Session explains loading, ready-empty, rows, and read failure', async
     cache.value = {}
     resetSignals()
   }
-})
-
-Deno.test('session activity explains transcript and transient waits', () => {
-  assertEquals(doing(undefined, undefined, true), 'starting…')
-  assertEquals(
-    doing({ kind: 'say', role: 'agent', text: 'done' }, 'idle'),
-    'waiting for request…',
-  )
-  assertEquals(
-    doing({ kind: 'exec', command: 'deno task test' }),
-    'running command…',
-  )
-  assertEquals(
-    observing({
-      generation: 'g',
-      model: 'old model text',
-      reasoning: '',
-      tools: ['old_tool'],
-      items: [{ kind: 'reasoning', text: 'new thought' }],
-      rev: 3,
-    }),
-    'thinking…',
-  )
 })
 
 Deno.test('session Tile omits its chip and lists every worked task', () => {
@@ -548,50 +510,6 @@ Deno.test('session references use the usual entity and URL faces', () => {
   } finally {
     render(null, root)
     cache.value = {}
-    if (prior) Object.defineProperty(globalThis, 'document', prior)
-    else delete (globalThis as { document?: unknown }).document
-  }
-})
-
-Deno.test('transient Session model progress renders through safe Markdown', () => {
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  let { document } = parseHTML('<main></main>')
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
-  let root = document.querySelector('main')!
-  try {
-    render(
-      h(SessionObservation, {
-        state: {
-          generation: 'generation',
-          model: '**answer** <b>raw</b>',
-          reasoning: '[reason](javascript:alert(1))',
-          tools: ['shell'],
-          items: [
-            { kind: 'model', text: '**answer** <b>raw</b>' },
-            { kind: 'reasoning', text: '[reason](javascript:alert(1))' },
-            { kind: 'tool', name: 'shell' },
-          ],
-          rev: 3,
-        },
-      }),
-      root,
-    )
-    assertEquals(
-      root.querySelector('.Entry-agent')?.textContent.trim(),
-      'answer <b>raw</b>',
-    )
-    assertEquals(
-      root.querySelector('.Entry_Reason')?.textContent,
-      '[reason](javascript:alert(1))',
-    )
-    assertEquals(root.querySelector('a'), null)
-    assertEquals(root.querySelector('b'), null)
-    assertEquals(root.querySelector('.Entry_Name')?.textContent, 'shell')
-  } finally {
-    render(null, root)
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
   }

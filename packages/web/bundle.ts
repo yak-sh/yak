@@ -17,7 +17,7 @@ export let bundle = async (): Promise<string> => {
         '--quiet',
         '--platform',
         'browser',
-        // '--minify',
+        '--minify',
         '-o',
         to,
         new URL('./main.tsx', here).pathname,

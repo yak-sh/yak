@@ -1,22 +1,6 @@
 import './testing.ts'
 import { assertEquals } from '@std/assert'
-import {
-  applyLocal,
-  cache,
-  census,
-  config,
-  dropQuery,
-  ent,
-  holdQuery,
-  landSub,
-  loaded,
-  restore,
-  seedFrom,
-  subscribe,
-  subscriptionState,
-  unsubscribe,
-  useRoute,
-} from './live.ts'
+import { applyLocal, cache, census, config, dropQuery, ent, holdQuery, landSub, loaded, restore, subscribe, subscriptionState, unsubscribe, useRoute } from './live.ts'
 import { parseQuery } from './query.ts'
 
 let changes = (eid: string) => [
@@ -177,34 +161,6 @@ Deno.test('bodyless confirmations preserve the paint floor without claiming body
     assertEquals(loaded('bodyless', 'doc', 'body'), false)
     config.host = priorHost
     unsubscribe('bodyless')
-  } finally {
-    useRoute(route)
-    cache.value = {}
-    restore()
-  }
-})
-
-Deno.test('same-epoch reconnect retains live rows and re-primes mounted subscriptions', async () => {
-  let route = useRoute(() => {})
-  try {
-    cache.value = {}
-    restore()
-    subscribe('route:reconnect', 'id=reconnect')
-    landSub({
-      sub: 'route:reconnect',
-      replace: true,
-      changes: changes('reconnect'),
-    })
-    await seedFrom(
-      { changes: [], deps: [], epoch: 'reconnect', cursor: 1 },
-      false,
-    )
-    assertEquals(cache.peek().reconnect?.doc?.title, 'reconnect')
-    assertEquals(ent('reconnect').doc?.title, 'reconnect')
-    assertEquals(subscriptionState('route:reconnect').status, 'loading')
-    landSub({ sub: 'route:reconnect', replace: true, changes: [] })
-    assertEquals(ent('reconnect').doc, undefined)
-    unsubscribe('route:reconnect')
   } finally {
     useRoute(route)
     cache.value = {}

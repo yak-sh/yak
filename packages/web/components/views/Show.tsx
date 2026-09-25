@@ -1,4 +1,4 @@
-import { useReference, useRepoUrl } from '../subscriptions.ts'
+import { useReference, useRepoUrl, useRows } from '../subscriptions.ts'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { type ComponentChildren } from 'preact'
 import { type Ent, statusOf } from '../../types.ts'
@@ -373,6 +373,12 @@ export let Dependencies = ({ e }: { e: Ent }) => {
   // the whole neighbourhood — the same statement a windowed list owes (M-16612).
   let win = edgeWindow(e.eid)
   let shown = parents(e.eid).length + e.kids.length + e.refs.length
+  // The far end of each sentence is its own row: held here, beside the list.
+  useRows([
+    ...parents(e.eid).map((d) => d.parent),
+    ...e.kids.map((k) => k.eid),
+    ...e.refs.map((r) => r.child),
+  ])
   let more = win?.total == null ? 0 : win.total - shown
   return (
     <>
