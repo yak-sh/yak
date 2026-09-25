@@ -275,16 +275,37 @@ Deno.test('a config may keep a component off the human number line', async () =>
   host.close()
 })
 
-Deno.test('a declared tool nobody runs refuses to compose', async () => {
+Deno.test('a declared tool nobody runs refuses its first call', async () => {
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'] },
+    only({ shop: { vocab: { docs: [doc] } } }),
+  )
+  let list = host.tools.find((t) => t.name == 'book_list')!
   await assertRejects(
-    () =>
-      compose(
-        { db: ':memory:', plugins: ['shop'] },
-        only({ shop: { vocab: { docs: [doc] } } }),
-      ),
+    async () => await list.run({ entity: { eid: 'c' } }, host.graph),
     Error,
     'declared and not implemented',
   )
+  host.close()
+})
+
+Deno.test('a plugin’s tools are imported by the first call of one of them', async () => {
+  let asked: string[] = []
+  let load = <F extends keyof Facets>(spec: string, name: F) => {
+    asked.push(name)
+    return only({
+      shop: {
+        vocab: { docs: [doc] },
+        tools: { runs: () => ({ book_list: () => [], book_add: () => [] }) },
+      },
+    })(spec, name)
+  }
+  let host = await compose({ db: ':memory:', plugins: ['shop'] }, load)
+  assertEquals(asked.includes('tools'), false)
+  let list = host.tools.find((t) => t.name == 'book_list')!
+  assertEquals(await list.run({ entity: { eid: 'c' } }, host.graph), [])
+  assertEquals(asked.filter((f) => f == 'tools').length, 1)
+  host.close()
 })
 
 Deno.test('a host that names itself writes as itself, and a plugin may say who else', async () => {

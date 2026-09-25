@@ -208,6 +208,10 @@ export let FACETS = [
 /** One of those six subpath names. */
 export type FacetName = typeof FACETS[number]
 
+// The facets a host imports while it is assembled: every one but `./tools`,
+// which the first call of one of the plugin's tools imports.
+let FIRST = FACETS.filter((f) => f != 'tools')
+
 /** `<plugin>/vocab` — what the plugin declares, and nothing that could not
  * run in a browser tab: a page importing this must never reach SQL, a database
  * driver or a server runtime. */
@@ -474,23 +478,28 @@ export let compose = async (
   // is fetched then, and a command does not wait on 1Password for it.
   let vault = vaultOf(path)
   await warm(vault, plugins.flatMap((plug) => bound(given(plug))))
+  // Every facet but the tools, now: nothing is read or written without the
+  // vocabulary, the rules and the effects, and nobody is named without the
+  // routes. A plugin's `./tools` is imported by the first call of one of its
+  // tools, which its vocabulary declares: a command runs one tool, and most of
+  // the plugins' code is for tools it will not run.
   let got = await Promise.all(
     plugins.map(async (plug) =>
       [
         used(plug),
         revealing(given(plug), vault) as Options,
-        await Promise.all(FACETS.map((name) => load(used(plug), name))),
+        await Promise.all(FIRST.map((name) => load(used(plug), name))),
       ] as const
     ),
   )
-  // A plugin that exports none of the six subpaths is a typo in the config,
-  // not a plugin: fail here rather than run a host quietly missing its
-  // components.
+  // A plugin that exports none of these subpaths is a typo in the config, not
+  // a plugin: fail here rather than run a host quietly missing its components.
+  // Its tools do not count, since what declares them is its vocabulary.
   for (let [plugin, , facets] of got) {
     if (facets.every((f) => !f)) {
       throw new Error(
         `${plugin} exports no facet — a plugin has at least one of ` +
-          FACETS.map((f) => `./${f}`).join(', '),
+          FIRST.map((f) => `./${f}`).join(', '),
       )
     }
   }
@@ -499,10 +508,12 @@ export let compose = async (
   // specifier comes third, because a duty's lease is named after the
   // package that owns the work: the lease `@yaks/wake` holds is the one every
   // process reaching for that timer reaches for.
-  let taken = <F extends FacetName>(name: F): [Facets[F], Options, string][] =>
+  let taken = <F extends typeof FIRST[number]>(
+    name: F,
+  ): [Facets[F], Options, string][] =>
     got.map(([plugin, options, facets]) =>
       [
-        facets[FACETS.indexOf(name)] as Facets[F] | null,
+        facets[FIRST.indexOf(name)] as Facets[F] | null,
         options,
         plugin,
       ] as const
@@ -510,7 +521,6 @@ export let compose = async (
 
   let vocabs = taken('vocab')
   let ruled = taken('rules')
-  let tooled = taken('tools')
   let watched = taken('effects')
   let served = taken('routes')
   let running = taken('service')
@@ -689,14 +699,16 @@ export let compose = async (
     // assembled here beside the plugins' own, in the form the vocabulary
     // declares, and a transport that needs them in its own form restates them
     // (@yaks/mcp `core`).
+    //
+    // A plugin's own tools are listed from its vocabulary and run by its
+    // `./tools`, imported the first time one of them is called.
     let tools = made = [
       ...tier({ search: ranked, keywords: vocab.keywords }),
-      ...loadTools(
-        docs,
-        Object.assign(
-          {},
-          ...tooled.map(([t, options]) => t.runs?.(host, options) ?? {}),
-        ) as Runs,
+      ...vocabs.flatMap(([v, options, plugin]) =>
+        loadTools(v.docs ?? [], async () => {
+          let code = await load(plugin, 'tools')
+          return code?.runs?.(host, options) ?? {}
+        })
       ),
     ]
     // The one tool runner over this graph. A caller runs a tool and the runner

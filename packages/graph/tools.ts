@@ -7,9 +7,10 @@
 //
 //   let tools = loadTools([vocab], { session_list: (call, graph) => ... })
 //
-// A declaration nothing implements throws at load time, rather than producing
-// a tool that returns "not implemented" when it is called: the vocabulary is
-// what a client lists, and a tool it lists has to work. (An app manifest is
+// A declaration nothing implements throws when the implementations arrive —
+// at load time, or on the first call for a host that fetches them then — never
+// as a tool that answers "not implemented": the vocabulary is what a client
+// lists, and a tool it lists has to work. (An app manifest is
 // the other half of the same rule — there a template takes the place of the
 // module, and workers/yak declared.ts runs it.)
 //
@@ -47,11 +48,26 @@ import { type Guide, proseOf, schemaOf } from './schema.ts'
  * word itself for a tool that declared only a noun or only a verb. */
 export type Runs<R = Bundle[]> = Record<string, Tool<R>['run']>
 
+/** The implementations, fetched the first time one of the tools is called: a
+ * host imports a package's code only for a tool somebody calls (@yaks/cli
+ * `compose`). A declaration nothing implements throws then, on that call. */
+export type Later<R = Bundle[]> = () => Promise<Runs<R>>
+
 export let loadTools = <R = Bundle[]>(
   docs: VocabDoc | VocabDoc[],
-  runs: Runs<R>,
-): NamedTool<R>[] =>
-  toolsIn(docs).map((decl) => {
+  runs: Runs<R> | Later<R>,
+): NamedTool<R>[] => {
+  if (typeof runs == 'function') {
+    let joined: Promise<NamedTool<R>[]> | undefined
+    let tools = () => joined ??= runs().then((said) => loadTools(docs, said))
+    return toolsIn(docs).map((decl) => {
+      let name = decl.name ?? toolName(decl)
+      let run = async (call: Bundle, graph: Graph) =>
+        (await tools()).find((t) => t.name == name)!.run(call, graph)
+      return { ...decl, name, run }
+    })
+  }
+  return toolsIn(docs).map((decl) => {
     let name = decl.name ?? toolName(decl)
     let run = runs[name] ??
       runs[[decl.noun, decl.verb].filter(Boolean).join('_')]
@@ -63,6 +79,7 @@ export let loadTools = <R = Bundle[]>(
     }
     return { ...decl, name, run }
   })
+}
 
 /**
  * Ranked full-text search, where the program that opened the graph has it.
