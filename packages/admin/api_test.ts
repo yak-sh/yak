@@ -296,7 +296,7 @@ Deno.test("an app store's refusal keeps its code, rather than becoming a defect"
 })
 
 // `yak --timing`, this end: the account's calls do not go through the
-// connector door, so `sent` says the same line for them (@yaks/cli `timed`).
+// connector door, so `sent` says the same line for them (@yaks/api `timed`).
 // The stub answers the header a platform answer would carry.
 Deno.test('--timing says one line per account call, and none without', async () => {
   let said: string[] = []

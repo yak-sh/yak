@@ -73,6 +73,7 @@ export {
   subscriptions,
 } from './subs.ts'
 export { attach, receive, sink, type Socket, type Upgrade } from './socket.ts'
+export { timed } from './timing.ts'
 export {
   type Addr,
   denoListen,

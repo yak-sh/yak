@@ -106,7 +106,7 @@ let acting = (
   vault: Local,
   a: Args,
   keep: Bundle[],
-  state?: string,
+  state: string,
 ): Account => {
   let at = pick(accountsIn(vault), {
     as: word(a, 'as'),
@@ -125,8 +125,8 @@ let acting = (
 let signIn = async (
   graph: Graph,
   address: string,
-  given?: string,
-  state?: string,
+  given: string | undefined,
+  state: string,
 ): Promise<Bundle> => {
   let since = Date.now()
   await askCode(address)
@@ -222,7 +222,7 @@ type Verb = (
 ) => Promise<Bundle[]> | Bundle[]
 
 /** The implementations of the tools ./vocab.json declares. */
-export let runs = (host: { vault: Local; state?: string }): Runs => {
+export let runs = (host: { vault: Local; state: string }): Runs => {
   let verb = (run: Verb) => async (call: Bundle, graph: Graph) => {
     let keep: Bundle[] = []
     try {

@@ -19,7 +19,6 @@
 //
 // Nothing here ever renders a session value. `render` shows addresses and
 // kinds; the token crosses only between the vault and an http header.
-import { stateDir } from '@yaks/cli'
 import type { Local } from '@yaks/secrets'
 import { CallError } from '@yaks/tools'
 import { ADMIN, BOT, isTestAddress } from '../../workers/yak/lib/bots.ts'
@@ -57,12 +56,11 @@ export let accountsIn = (vault: Local, at = zone()): Account[] =>
 
 // The remembered test account a bare command runs as, one per zone. It is not
 // a secret, so it is not kept with the sessions: it is one more thing this
-// machine remembers between commands, beside the bearer `yak login` keeps
-// (@yaks/cli `stateDir`), in the directory the caller names, this machine's
-// own by default.
+// machine remembers between commands, in the directory the host keeps those in
+// (@yaks/cli `Host.state`).
 let currentFile = (dir: string, at: string) => `${dir}/current.${at}`
 
-export let current = (dir: string = stateDir(), at = zone()): string => {
+export let current = (dir: string, at = zone()): string => {
   try {
     return Deno.readTextFileSync(currentFile(dir, at)).trim()
   } catch {
@@ -73,7 +71,7 @@ export let current = (dir: string = stateDir(), at = zone()): string => {
 // Remember one, or forget it with null.
 export let choose = (
   address: string | null,
-  dir: string = stateDir(),
+  dir: string,
   at = zone(),
 ): void => {
   if (address == null) {

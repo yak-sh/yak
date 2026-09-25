@@ -78,6 +78,7 @@ All exports are available from `@yaks/api`:
 | `attach`, `receive`, `sink`, `Socket`, `Upgrade`, `denoUpgrade` | Connect the subscription protocol to sockets                                          |
 | `denoListen`, `Listen`, `Listener`, `Addr`                      | Bind a port on Deno, which is what the `serve` tool listens with                      |
 | `json`, `refusal`, `refuse`, `Refusal`, `Unauthorized`          | Construct JSON responses and translate errors                                         |
+| `timed`                                                         | A client `fetch` that says one line per response, with the `Server-Timing` it carried |
 
 `Route` and `routed` help an application compose additional routes; `api()`
 itself only serves the three paths above.

@@ -116,33 +116,6 @@ export let rpc = (door: Door): Rpc => {
   }
 }
 
-/** A `fetch` that prints one line per response, for `yak --timing`:
- *
- *     POST /mcp 200  door;dur=12, hops;dur=3, total;dur=41
- *
- * `total` is wall-clock milliseconds; `hops` and `r2` are counts.
- *
- * The numbers are the server's own `Server-Timing` header
- * (workers/yak/timing.ts), printed exactly as they arrived, so this line and a
- * `curl -i` agree. A server that sends no such header still gets a line. The
- * owner's admin plugin prints the same line for the calls it makes outside
- * this server. */
-export let timed = (
-  say: (line: string) => void,
-  go: (request: Request) => Response | Promise<Response> = (r) => fetch(r),
-) =>
-async (request: Request): Promise<Response> => {
-  let res = await go(request)
-  let at = new URL(request.url)
-  let entries = res.headers.get('server-timing')
-  say(
-    `${request.method} ${at.pathname}${at.search} ${res.status}${
-      entries ? `  ${entries}` : ''
-    }`,
-  )
-  return res
-}
-
 /** The `initialize` handshake, sent before listing tools: it returns what the
  * server calls itself and which protocol version it agreed to. */
 export let initialize = async (ask: Rpc): Promise<Record<string, unknown>> =>

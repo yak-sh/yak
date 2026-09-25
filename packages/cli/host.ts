@@ -98,6 +98,7 @@ import {
 } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
 import { type Config, given, type Options, subpath, used } from './config.ts'
+import { stateDir } from './store.ts'
 import { understood } from './keywords.ts'
 import { vaultOf } from './vault.ts'
 
@@ -128,6 +129,10 @@ export type Host = {
    * its database, or memory for a graph in memory — what @yaks/secrets seals
    * into and a config's `{"secret": "NAME"}` is read from */
   vault: Local
+  /** where this program keeps what it remembers between commands on this
+   * machine (./store.ts `stateDir`): a plugin remembering something for the
+   * next command keeps it there */
+  state: string
   /** every property the store reads through an expression rather than as
    * stored, keyed `comp.prop` — a @yaks/blob body resolves its address to its
    * text — so a plugin reading SQL directly reads what the store reads */
@@ -572,6 +577,7 @@ export let compose = async (
       vocab,
       sql,
       vault,
+      state: stateDir(),
       derived,
       me: selfEid(),
       who: (request) => authenticate(request),
