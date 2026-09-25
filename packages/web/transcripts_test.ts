@@ -1,5 +1,6 @@
 // External provider transcripts against captured interactive JSONL shapes.
 // Managed streams have their own fixtures in adapters_test.ts.
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { codexTranscript } from './transcripts.ts'
 

@@ -1,6 +1,7 @@
 // The usage projection as a pure seam: normalization at the adapter, the
 // absent-beats-zero law surviving every roll, and cost/throughput off the
 // folded totals. The fixtures are the two providers' real usage shapes.
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { anthropicUsage, codexUsage } from './adapters.ts'
 import type { Session } from './types.ts'

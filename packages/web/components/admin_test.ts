@@ -2,6 +2,7 @@
 // through Preact + linkedom, so they import the heavy Admin.tsx and cannot hit
 // the 1ms budget. The PURE census-derivation tests moved to admin_logic_test.ts
 // (light imports, sub-ms); keep only the render tests here.
+import { until } from '../testing.ts'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { loadVocab } from '@yaks/vocab'
@@ -9,7 +10,6 @@ import { Admin } from './Admin.tsx'
 import { route } from './nav.tsx'
 import { cache, landSub, useRoute } from '../live.ts'
 import { assertEquals } from '@std/assert'
-import { until } from '../../bin/testing.ts'
 
 // A mounted view holds subscriptions. In a test there is no server to hold
 // them against, so control frames go nowhere through live.ts's transport

@@ -2,7 +2,7 @@
 // Complete local table sets prove their identity by hash; a projection that
 // cannot do so learns just its descriptor through the existing one-shot door.
 import { Archetypes, eidOf, tablesOf } from '@yaks/archetype'
-import { config, onArchetypes, oneShot, row } from './live.ts'
+import { config, oneShot, row } from './live.ts'
 
 let sets = new Archetypes()
 let checked = new WeakSet<object>()
@@ -76,16 +76,3 @@ export let archetypeTables = (eid: string): readonly string[] | undefined => {
   if (config.host) request(eid)
 }
 
-// A frame's riders land here before its rows render (T-37445); the one-shot
-// read above stays as the fallback for a descriptor no frame carried.
-onArchetypes((rows) => {
-  for (let { eid, comp } of rows) {
-    let value = (comp as { tables?: unknown } | null)?.tables
-    if (value === undefined) continue
-    try {
-      descriptor(eid, value)
-    } catch (error) {
-      console.error(error)
-    }
-  }
-})

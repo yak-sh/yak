@@ -1,5 +1,6 @@
 // next() — the recurrence half of the time vocabulary (T-18724). Pure seam:
 // interval phrases ride the epoch grid, cron resolves local, junk is null.
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { next } from './time.ts'
 

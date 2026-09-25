@@ -1,5 +1,6 @@
 // The in-place editor leaves native text gestures alone once editing —
 // and refuses to arm at all over a body it doesn't have.
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'

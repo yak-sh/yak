@@ -150,7 +150,7 @@ let Index = (
   useEffect(() => {
     let dead = false
     setFetched([]) // never show the previous section's rows under this head
-    fetch(`/query?.${kind}!&limit=${CAP}`)
+    fetch(`/query?q=${encodeURIComponent(`.${kind}!&.limit=${CAP}`)}`)
       .then((r) => r.json())
       .then(
         (

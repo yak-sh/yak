@@ -1,6 +1,7 @@
 // The derived index (index.ts): refCols flows from the vocabulary, the reverse
 // {eid} index and edge endpoints maintain incrementally, and anchor() picks the
 // smallest candidate set for a query. Pure — no cache, no DOM.
+import './testing.ts'
 import {
   anchor,
   emptyIndex,

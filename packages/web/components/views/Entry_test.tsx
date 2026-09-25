@@ -1,5 +1,6 @@
 // Entry renderer tests hold specialization, truncation, and the expanded
 // view picker without a server or session transcript.
+import '../../testing.ts'
 import { h, render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'

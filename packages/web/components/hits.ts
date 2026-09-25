@@ -20,9 +20,7 @@ export let hits = async (
   signal?: AbortSignal,
 ): Promise<Hit[]> => {
   let r = await fetch(
-    `${base()}/query?${encodeURIComponent(q)}&${
-      encodeURIComponent('.order=search')
-    }&limit=${limit}`,
+    `${base()}/query?q=${encodeURIComponent(`${q}&.limit=${limit}`)}`,
     { signal },
   )
   if (!r.ok) throw new Error(await r.text())

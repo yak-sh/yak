@@ -55,7 +55,6 @@ let useItems = (
     useQueryResult(queries[3], enabled),
     useQueryResult(queries[4], enabled),
     useQueryResult(queries[5], enabled),
-    useQueryResult(queries[6], enabled),
   ]
   return {
     items: uniq(rows(reads.flatMap((r) => r.eids))).filter(inboxItem(who)),

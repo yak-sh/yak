@@ -33,46 +33,13 @@
       }
     }
     </style>
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
-    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/styles.css" />
-    <!-- The user's theme, from their vault (~/.tasks/theme.css). Loaded after
-         styles.css so its :root overrides win; empty when absent. -->
-    <link rel="stylesheet" href="/theme.css" />
-    <script type="importmap">
-    {
-      "imports": {
-        "@yaks/client": "/packages/client/mod.ts",
-        "@yaks/sync": "/packages/sync/mod.ts",
-        "@yaks/ram": "/packages/ram/mod.ts",
-        "@yaks/preact": "/packages/preact/mod.ts",
-        "@yaks/render": "/packages/render/mod.ts",
-        "@yaks/query": "/packages/query/mod.ts",
-        "@yaks/match": "/packages/match/mod.ts",
-        "@yaks/sql": "/packages/sql/mod.ts",
-        "@yaks/fts": "/packages/fts/mod.ts",
-        "@yaks/vocab": "/packages/vocab/mod.ts",
-        "@yaks/id": "/packages/id/mod.ts",
-        "@yaks/names": "/packages/names/mod.ts",
-        "@yaks/edge": "/packages/edge/mod.ts",
-        "@yaks/blob": "/packages/blob/mod.ts",
-        "@yaks/graph": "/packages/graph/mod.ts",
-        "@yaks/archetype": "/packages/archetype/mod.ts",
-        "preact": "/vendor/preact.module.js",
-        "preact/hooks": "/vendor/hooks.module.js",
-        "preact/jsx-runtime": "/vendor/jsxRuntime.module.js",
-        "@preact/signals": "/vendor/signals.module.js",
-        "@preact/signals-core": "/vendor/signals-core.module.js",
-        "lucide-preact": "/vendor/lucide-preact.mjs",
-        "marked": "/vendor/marked.esm.js",
-        "highlight.js": "/vendor/highlight.bundle.mjs"
-      }
-    }
-    </script>
+    <link rel="manifest" href="/web/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/web/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/web/icon-512.png" />
+    <link rel="apple-touch-icon" href="/web/apple-touch-icon.png" />
+    <link rel="stylesheet" href="/web/styles.css" />
   </head>
   <body>
-    <script type="module" src="/main.tsx"></script>
+    <script type="module" src="/web/app.js"></script>
   </body>
 </html>

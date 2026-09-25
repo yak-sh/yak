@@ -1,6 +1,7 @@
 // One model catalog, one transport rule: present each compatible model once
 // and route it graph-native → CLI fallback by readiness, independent of
 // provider-table order.
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import {
   catalog,

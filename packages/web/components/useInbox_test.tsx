@@ -1,5 +1,6 @@
 // Exercise the real view hooks/transport: absence is a server answer, not an
 // empty RAM cache; counts share ownership and watch/mute keeps row policy.
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'

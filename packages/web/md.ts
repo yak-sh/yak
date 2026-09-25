@@ -32,19 +32,11 @@
 // `mdInline` is the title face: no block wrapper, links/images flattened
 // because the surrounding title is usually the link.
 import { EID, SHORT } from './types.ts'
-import { Marked } from 'marked'
+import { Marked, type RendererThis, type Tokens } from 'marked'
 import { highlight } from './highlight.ts'
 import { prefix } from './types.ts'
 import { entityPath, entityUrl } from './url.ts'
 
-// The vendored marked ships no types — the token shapes we touch.
-type RefToken = { id?: unknown }
-type LinkToken = { href: string; tokens: unknown }
-type ImageToken = { href: string; text: string }
-type TextToken = { text: string }
-type CodeToken = { text: string; lang?: string }
-type Inline = { parser: { parseInline: (t: unknown) => string } }
-type Token = { type: string; id?: unknown; href?: string; text?: string }
 
 export type Mention =
   | { kind: 'entity'; id: string }
@@ -103,16 +95,16 @@ let door = (ref: Ref, repo?: string | null, links = true) =>
         let m = REF.exec(src)
         if (m) return { type: 'ref', raw: m[0], id: m[0] }
       },
-      renderer: (t: RefToken) => ref(String(t.id), String(t.id)),
+      renderer: (t: Tokens.Generic) => ref(String(t.id), String(t.id)),
     }],
     renderer: {
       // Markup a body wrote is text, not markup — block and inline alike
       // arrive as this one token.
-      html: (t: TextToken) => esc(t.text),
+      html: (t: Tokens.HTML | Tokens.Tag) => esc(t.text),
       // A written link aimed at an id gets the same anchor as a bare one;
       // every other link keeps marked's own rendering, unless its href
       // couldn't be an href — then the words stay, the trap goes.
-      link(this: Inline, token: LinkToken) {
+      link(this: RendererThis, token: Tokens.Link) {
         if (!links) return this.parser.parseInline(token.tokens)
         if (
           (/^[A-Za-z]+-\d+$/.test(token.href) || SHORT.test(token.href) ||
@@ -126,17 +118,17 @@ let door = (ref: Ref, repo?: string | null, links = true) =>
         return false
       },
       // Same rule for a src; an image we refuse shows its alt text.
-      image: (t: ImageToken) =>
+      image: (t: Tokens.Image) =>
         links && LINKABLE.test(t.href.trim()) ? false : esc(t.text),
       // A code span is an explicit signal that a hex word is a commit, so
       // ordinary prose such as "decafed" never becomes a repository link.
-      codespan: (t: CodeToken) => {
+      codespan: (t: Tokens.Codespan) => {
         let href = commitUrl(repo, t.text)
         return href
           ? `<a href="${attr(href)}"><code>${esc(t.text)}</code></a>`
           : false
       },
-      code: (t: CodeToken) => {
+      code: (t: Tokens.Code) => {
         let lit = highlight(t.text, t.lang)
         let language = lit.language ? ` language-${lit.language}` : ''
         return `<pre><code class="hljs${language}">${lit.html}</code></pre>\n`
@@ -179,8 +171,7 @@ export let mdInline = (s: string): string =>
 export let mdMentions = (s: string, repo?: string | null): Mention[] => {
   let p = parser(canvasRef, repo)
   let out: Mention[] = []
-  p.walkTokens(p.lexer(s), (token: unknown) => {
-    let t = token as Token
+  p.walkTokens(p.lexer(s), (t: Tokens.Generic) => {
     if (t.type == 'ref') {
       out.push({ kind: 'entity', id: String(t.id) })
     } else if (

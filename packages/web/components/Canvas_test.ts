@@ -1,4 +1,5 @@
 // Canvas gesture settlement: cancellation forgets the pan without saving it.
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { panEvents } from './Canvas.tsx'
 

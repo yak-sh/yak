@@ -1,6 +1,7 @@
 // The adapter readers against REAL captured events — each fixture line is
 // pasted from a live probe of the CLI it mimics (trimmed, same shape).
 // If a vendor changes dialect, these say exactly which reader went deaf.
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { adapters } from './adapters.ts'
 

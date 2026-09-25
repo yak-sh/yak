@@ -2,6 +2,7 @@
 // at module init and reads the two web stores inside its functions, so the
 // fakes go in FIRST and the module is imported after. Everything a launch
 // can be — cold, warm, deep-linked, a second tab — is then one line.
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { cache, census, useRoute } from '../live.ts'
 

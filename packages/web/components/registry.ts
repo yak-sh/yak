@@ -23,9 +23,8 @@ import { parseProp, propAt } from '../props.ts'
 import { cache, ent, findEid, mutate, problem } from '../live.ts'
 import { editorViews } from './editors.tsx'
 import { and, present } from '@yaks/query'
-import { type Ent, statusOf } from '../types.ts'
+import { type Ent, statusOf, vocab } from '../types.ts'
 import { archetypeTables, rememberArchetype } from '../live_archetypes.ts'
-import { fleetVocab } from '../vocab/fleet_vocab.ts'
 
 export type Renderer = ComponentRenderer<Ent> & {
   file?: { ext: string; mime: string; text: (e: Ent) => string }
@@ -36,7 +35,7 @@ export type Render = Renderer['Render']
 export type Action = { label: string; run: () => void; mod?: string }
 export type Contributor = Contribution<Action, Ent>
 
-export let vocab = fleetVocab()
+export { vocab }
 // The fleet adds its input language (P2, relative times and human ids); the
 // package still owns column patches and vocabulary validation.
 export let editOptions: EditOptions = {

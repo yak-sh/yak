@@ -1,3 +1,4 @@
+import './testing.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 import { eidOf } from '@yaks/archetype'
 import { archetypeTables } from './live_archetypes.ts'

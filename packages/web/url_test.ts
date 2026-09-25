@@ -1,4 +1,5 @@
 // Public entity links have one origin and speak the current path grammar.
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { entityUrl, normalize } from './url.ts'
 

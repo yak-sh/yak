@@ -1,5 +1,6 @@
 // Scored resolution: the most specific renderer wins, ties go to
 // registration order, platform overrides beat the shared list on ties.
+import '../testing.ts'
 import { h } from 'preact'
 import { and, type Query } from '@yaks/query'
 import {

@@ -1,4 +1,5 @@
 // The encoded-word decoder, table-tested: Q and B, folds, fallbacks.
+import './testing.ts'
 import { unmime } from './rfc2047.ts'
 let { assertEquals } = await import('@std/assert')
 

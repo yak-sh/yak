@@ -1,5 +1,6 @@
 // ANSI rendering keeps terminal presentation while refusing terminal control.
 
+import '../testing.ts'
 import { h, render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'

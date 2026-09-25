@@ -1,4 +1,5 @@
 // The link surround decided purely (anchor): become an <a>, dedupe, demote.
+import '../testing.ts'
 import { anchor } from './ui.tsx'
 import { assertEquals } from '@std/assert'
 

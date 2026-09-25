@@ -1,4 +1,5 @@
 // The shared renderer registry picks a vocabulary column's face and control.
+import '../testing.ts'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'

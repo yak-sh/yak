@@ -1,5 +1,6 @@
 // Human-facing instruments use graph ids; browser clients keep their short
 // handles.
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { cache, ent } from '../live.ts'
 import { byline, composerChanges, prompt, viaName } from './Comments.tsx'

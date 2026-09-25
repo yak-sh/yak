@@ -1,24 +1,24 @@
-// Tasks' protocol boundary. Payloads, membership, readiness and retention belong
-// to @yaks/client; only addressed transport names and declared projections live
-// here. No query is evaluated over an incomplete browser graph.
+// The browser's replica: a @yaks/client box on the host's own /ws (@yaks/api).
+// Each named subscription live.ts holds is a server-evaluated watch; @yaks/sync
+// owns the socket, its reconnect and the resubscribe after it, and lands every
+// frame in the box. The socket is tapped so each frame is also reported by the
+// names that asked for it, after it has landed: live.ts keeps its per-name
+// bookkeeping (readiness, refusals, one-shot reads) from that.
 import { type Client, client, type Watch, wireIdb } from '@yaks/client'
 import { type Bundle, type Comp, dead } from '@yaks/graph'
 import { type Coverage, echo, type Frame, type Socket } from '@yaks/sync'
 import { loadVocab } from '@yaks/vocab'
-import { fleetDocs, fleetKeywords } from './vocab/fleet_vocab.ts'
-import { bodyCols } from './props.ts'
-import { bodied } from './subs.ts'
-import { type Field } from './query.ts'
 import { resultComps } from './route.ts'
-import type { Change } from './types.ts'
+import { type Change, keywords, vocab } from './types.ts'
 import type { Sub } from './live.ts'
 
 // Server-derived columns are ordinary received data in a browser replica.
 // Their derivation/writability remains the server's responsibility.
 let browserVocab = () => {
-  let docs = fleetDocs()
+  let docs = structuredClone(vocab.docs)
   for (let doc of docs) {
-    for (let def of Object.values(doc.$defs ?? {})) {
+    for (let [name, def] of Object.entries(doc.$defs ?? {})) {
+      if (!def.component || name == 'entity') continue
       def.properties ??= {}
       def.properties.eid = { type: 'string' }
       for (let prop of Object.values(def.properties ?? {})) {
@@ -26,59 +26,70 @@ let browserVocab = () => {
       }
     }
   }
-  return loadVocab(docs, fleetKeywords)
+  return loadVocab(docs, keywords)
 }
 
-type Handle = { key: string; watch: Watch }
-type Group = {
-  id?: string
-  names: Set<string>
-  transport: string
-  q: string
-  body: boolean
-  silent: boolean
-  fields?: Field[]
-  peers: Map<string, Exclude<Coverage, true>>
-}
+// A socket that answers nothing: the replica of a process with no host (a
+// test), where frames only ever arrive through `receive`.
+export let quiet = (): Socket => ({
+  readyState: 1,
+  send: () => {},
+  close: () => {},
+  addEventListener: () => {},
+})
+
 export type LiveClient = ReturnType<typeof liveClient>
 export let liveClient = (opts: {
-  send: (sub: string, q?: string) => void
+  url: string
+  connect: (url: string) => Socket
   changed: (eids: string[]) => void
   ready: (sub: string) => void
+  // A frame the socket carried, once the box has landed it, with the names
+  // whose line it answers and whether it replaced the whole set.
+  frame: (subs: string[], f: Frame, reset: boolean) => void
   disk?: boolean
 }) => {
-  let muted = false
-  let groups = new Map<string, Group>()
-  let handles = new Map<string, Handle>()
-  let ids = new Map<string, Group>()
-  let names = new Map<string, Group>()
-  let transports = new Map<string, Group>()
-  let message: ((event: Event & { data?: unknown }) => void) | undefined
-  let socket: Socket = {
-    readyState: 1,
-    addEventListener: (type, fn) => {
-      if (type === 'message') message = fn
-    },
-    close: () => {},
-    send: (text) => {
-      let f = JSON.parse(text)
-      if (f.subscribe !== undefined) {
-        let g = groups.get(f.subscribe)!
-        g.id = f.id
-        ids.set(f.id, g)
-        if (!g.silent && !muted) opts.send(g.transport, g.q)
-      } else {
-        let g = ids.get(f.unsubscribe)
-        if (g) {
-          if (!g.silent && !muted) opts.send(g.transport)
-          ids.delete(f.unsubscribe)
-        }
-      }
-    },
+  let handles = new Map<string, { line: string; watch: Watch }>()
+  let named = new Map<string, Set<string>>() // line -> the names holding it
+  let lines = new Map<string, string>() // wire id -> line
+  let fresh = new Set<string>() // wire ids whose next frame is the whole set
+  let deliver: ((event: Event & { data?: unknown }) => void) | undefined
+  let after = (text: string) => {
+    let f = JSON.parse(text) as Frame
+    let line = f.id ? lines.get(f.id) : undefined
+    if (!line) return
+    let reset = !f.refused && (fresh.delete(f.id) || !!f.reset)
+    opts.frame([...named.get(line) ?? []], f, reset)
   }
+  let tap = (s: Socket): Socket => ({
+    get readyState() {
+      return s.readyState
+    },
+    send: (text) => {
+      let m = JSON.parse(text)
+      if (typeof m.subscribe == 'string') {
+        lines.set(m.id, m.subscribe)
+        fresh.add(m.id)
+      } else if (m.unsubscribe) {
+        lines.delete(m.unsubscribe)
+        fresh.delete(m.unsubscribe)
+      }
+      s.send(text)
+    },
+    close: () => s.close(),
+    addEventListener: (type, fn) => {
+      if (type != 'message') return s.addEventListener(type, fn)
+      let wrapped = (e: Event & { data?: unknown }) => {
+        fn(e)
+        after(String(e.data))
+      }
+      deliver = wrapped
+      s.addEventListener(type, wrapped)
+    },
+  })
   let box: Client = client(browserVocab(), [], {
-    url: 'http://tasks-adapter.invalid',
-    connect: () => socket,
+    url: opts.url,
+    connect: (url) => tap(opts.connect(url)),
     vault: false,
     retainUnownedProps: true,
     provenance: () => null,
@@ -87,63 +98,33 @@ export let liveClient = (opts: {
       : false,
     // Local writes use echoed patches below, never sync's automatic POST.
     fetch: () => {
-      throw new Error('Tasks writes must use the durable outbox')
+      throw new Error('writes leave through the durable outbox (live.ts)')
     },
     report: (r) => {
-      if (r.error) console.warn('Tasks client adapter', r.error)
+      if (r.error) console.warn('live client', r.error)
     },
   })
   box.cache.onRows(opts.changed)
-  let open = (sub: string, q: string, silent = false) => {
-    let key = JSON.stringify([q, bodied(sub)])
-    if (handles.get(sub)?.key === key) {
-      let g = groups.get(key)!
-      if (g.silent && !silent) {
-        g.silent = false
-        opts.send(g.transport, g.q)
-      }
-      return
-    }
+  let open = (sub: string, line: string) => {
+    if (handles.get(sub)?.line === line) return
     close(sub)
-    let g = groups.get(key)
-    if (!g) {
-      groups.set(
-        key,
-        g = {
-          names: new Set(),
-          q,
-          body: bodied(sub),
-          transport: sub,
-          silent,
-          peers: new Map(),
-        },
-      )
-      transports.set(sub, g)
-    }
-    let activate = g.silent && !silent
-    if (activate) g.silent = false
-    g.names.add(sub)
-    names.set(sub, g)
-    let watch = box.watch(key, { evaluate: 'server' })
-    handles.set(sub, { key, watch })
+    let watch = box.watch(line, { evaluate: 'server' })
+    handles.set(sub, { line, watch })
+    let names = named.get(line) ?? new Set()
+    named.set(line, names.add(sub))
     watch.subscribe(() => opts.ready(sub))
     opts.ready(sub)
-    if (activate) opts.send(g.transport, g.q)
   }
   let close = (sub: string) => {
     let h = handles.get(sub)
     if (!h) return
-    let g = groups.get(h.key)!
-    // Keep the transport name until the package has sent its final unsubscribe.
     handles.delete(sub)
+    let names = named.get(h.line)
+    names?.delete(sub)
+    if (!names?.size) named.delete(h.line)
     h.watch.close()
-    names.delete(sub)
-    g.names.delete(sub)
-    if (!g.names.size) {
-      groups.delete(h.key)
-      transports.delete(g.transport)
-    }
   }
+  // Changes as whole rows: a reset rebuilds each row from what it carries.
   let bundles = (changes: Change[], reset = false): Bundle[] => {
     let rows = new Map<string, Bundle>()
     for (let { eid, name, comp } of changes) {
@@ -165,124 +146,51 @@ export let liveClient = (opts: {
     }
     return [...rows.values()]
   }
-  let scope = (
-    rows: Bundle[],
-    projection: Field[] | undefined,
-    body: boolean,
-  ) =>
-    Object.fromEntries(rows.map((row) => {
-      let coverage: Coverage = {}
-      if (projection) {
-        for (let f of projection) {
-          let ps = coverage[f.comp] as string[] | undefined
-          coverage[f.comp] = [...ps ?? [], f.prop]
-        }
-      } else {
-        // Include absent components so full snapshots clear removed tags, but
-        // exclude deliberately unloaded body columns on ordinary list doors.
-        for (let name of box.vocab.all) {
-          coverage[name] = body || !bodyCols(name).length
-            ? true
-            : box.vocab.props(name).filter((p) => !bodyCols(name).includes(p))
-        }
-      }
-      return [row.entity.eid, coverage]
-    }))
-  let receive = (f: Sub) => {
-    let g = transports.get(f.sub) ?? names.get(f.sub)
-    if (!g) return
-    // A refusal carries no authoritative data, even if a malformed transport
-    // attached changes. Preserve payload, membership and coverage unchanged.
-    if (f.error) {
-      message?.(
-        {
-          data: JSON.stringify({
-            id: g.id!,
-            refused: { error: 'read', message: f.error },
-          }),
-        } as Event & { data: string },
-      )
-      return [...g.names]
-    }
-    if (f.replace && !f.error) {
-      g.fields = f.fields
-      g.peers.clear()
-    }
-    // Tasks sends patches after the initial reset; sync expects covered snapshots.
-    let rows = bundles(f.changes ?? [], !!f.replace && !f.shadow)
-    let deaths = (f.changes ?? []).filter((c) =>
-      c.name === 'entity' && c.comp === null
+  let whole = (rows: Bundle[]) =>
+    Object.fromEntries(
+      rows.map((row) => [row.entity.eid, true as Coverage]),
     )
-    if (deaths.length) box.graph.apply(echo(bundles(deaths)), { trusted: true })
-    let peers = bundles(f.peers ?? [], !!f.replace)
-    let frame: Frame = {
-      id: g.id!,
-      reset: f.replace,
-      bundles: rows.filter((b) => !dead(b)),
-      gone: [...f.drop ?? [], ...rows.filter(dead).map((b) => b.entity.eid)],
-      coverage: scope(rows, g.fields, g.body || !!f.shadow),
-      peers,
-      peerGone: f.unpeers,
-      // A peer delta is a covered snapshot too; only delivered peer columns
-      // are known, never all the other columns shared RAM happens to contain.
-      peerCoverage: Object.fromEntries(peers.map((row) => {
-        let coverage: Exclude<Coverage, true> = {
-          ...g.peers.get(row.entity.eid),
-        }
-        for (let c of f.peers ?? []) {
-          if (c.eid === row.entity.eid && c.name !== 'entity') {
-            coverage[c.name] = c.comp === null ? true : [
-              ...new Set([
-                ...(Array.isArray(coverage[c.name])
-                  ? coverage[c.name] as string[]
-                  : []),
-                ...Object.keys(c.comp),
-              ]),
-            ]
-          }
-        }
-        g.peers.set(row.entity.eid, coverage)
-        return [row.entity.eid, coverage]
-      })),
-    }
-    for (let eid of f.unpeers ?? []) g.peers.delete(eid)
-    message?.({ data: JSON.stringify(frame) } as Event & { data: string })
-    return [...g.names]
+  // A frame written as changes, for a name this side opened: a test's server.
+  // It lands through the same socket listener a carried frame does.
+  let receive = (f: Sub) => {
+    let h = handles.get(f.sub)
+    let id = h &&
+      [...lines].find(([, line]) => line === h.line)?.[0]
+    if (!id || !deliver) return
+    let frame: Frame = f.error
+      ? { id, refused: { error: 'read', message: f.error } }
+      : {
+        id,
+        reset: f.replace,
+        bundles: bundles(f.changes ?? [], !!f.replace).filter((b) =>
+          !dead(b)
+        ),
+        gone: [
+          ...f.drop ?? [],
+          ...bundles(f.changes ?? []).filter(dead).map((b) => b.entity.eid),
+        ],
+      }
+    if (frame.bundles) frame.coverage = whole(frame.bundles)
+    deliver({ data: JSON.stringify(frame) } as Event & { data: string })
   }
   return {
     box,
-    // Topology owns reconnection. Refresh only readiness while disconnected;
-    // the epoch handshake later resends the asks over the real transport.
-    invalidate: () => {
-      muted = true
-      try {
-        box.wire?.refresh()
-      } finally {
-        muted = false
-      }
-    },
-    active: () => [...groups.values()].filter((g) => !g.silent).length,
     open,
     close,
     receive,
+    active: () => handles.size,
     retry: (sub: string) => {
       let h = handles.get(sub)
-      let g = h && groups.get(h.key)
-      if (g) {
-        g.silent = false
-        box.wire?.refresh(g.id)
-      }
+      if (!h) return
+      handles.delete(sub)
+      h.watch.close()
+      open(sub, h.line)
     },
-    has: (sub: string) => names.has(sub) || transports.has(sub),
-    aliases: (
-      sub: string,
-    ) => [...(transports.get(sub) ?? names.get(sub))?.names ?? []],
+    has: (sub: string) => handles.has(sub),
     members: (sub: string) =>
       handles.get(sub)?.watch.value.map((b) => b.entity.eid) ?? [],
     ready: (sub: string) => handles.get(sub)?.watch.ready ?? false,
-    patch: (changes: Change[]) => {
-      let rows = bundles(changes)
-      return box.graph.apply(echo(rows), { trusted: true })
-    },
+    patch: (changes: Change[]) =>
+      box.graph.apply(echo(bundles(changes)), { trusted: true }),
   }
 }

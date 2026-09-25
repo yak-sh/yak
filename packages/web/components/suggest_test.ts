@@ -1,3 +1,4 @@
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { type Hit } from '../types.ts'
 import * as suggest from './suggest.ts'

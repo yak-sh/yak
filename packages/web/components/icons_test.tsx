@@ -1,4 +1,5 @@
 // The icon vocabulary keeps Lucide behind one stable, data-driven component.
+import '../testing.ts'
 import { render } from 'preact'
 import { assertEquals, assertExists } from '@std/assert'
 import { parseHTML } from 'linkedom'

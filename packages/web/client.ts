@@ -85,7 +85,7 @@ export let rowOf = (r: Record<string, unknown>): Row => {
   return {
     eid: String(entity.eid),
     num: Number(entity.num ?? 0),
-    kind: String(kind),
+    kind: kind ? String(kind) : kindOf(comps),
     comps: projectSession(comps as Record<string, Record<string, unknown>>),
   }
 }
@@ -1112,7 +1112,7 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
     // arm matches NOTHING rather than the fleet's whole correspondence
     // (1338 arrived letters in a week: the wrong default is a firehose,
     // not an inconvenience).
-    return (!!who.addrs?.size && who.addrs.has(String(m.to_addr ?? ''))) ||
+    return (!!who.addrs?.size && who.addrs.has(String(m.to ?? ''))) ||
       (!!who.scope && String(m.target) == who.scope)
   }
   return false

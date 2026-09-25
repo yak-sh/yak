@@ -1,4 +1,5 @@
 // A task tile owns the frame; its facts come through the shared Meta view.
+import '../../testing.ts'
 import { type VNode } from 'preact'
 import { assertEquals } from '@std/assert'
 import { type Ent } from '../../types.ts'

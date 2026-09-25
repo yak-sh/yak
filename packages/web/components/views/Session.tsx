@@ -18,12 +18,10 @@ import {
   ent,
   findEid,
   mutate,
-  observation,
   retryEntrySub,
   uuid,
 } from '../../live.ts'
 import { contextOf, graphLog } from '../../entry_log.ts'
-import { type ObservationState } from '../../observations.ts'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { linkProps } from '../nav.tsx'
 import { ago, block, pretty, Stamp } from '../ui.tsx'
@@ -238,13 +236,12 @@ export let sessionMentions = (
 // A cheap content signature for the mention scan: everything that changes the
 // parsed mentions, read as ids/seqs/stamps — no markdown parse, no walk of the
 // thread text — so useMemo reruns the scan once per content change, never per
-// render. Log rows are append-only (seq + count + streaming rev cover growth);
+// render. Log rows are append-only (seq + count cover growth);
 // a heard comment set is keyed by its size and newest edit (add/remove/edit/
 // heard-flip all move one of the two).
 export let mentionSig = (a: {
   count: number
   seq: number
-  rev: number
   said: boolean
   final: string
   heard: Ent[]
@@ -253,7 +250,6 @@ export let mentionSig = (a: {
   [
     a.count,
     a.seq,
-    a.rev,
     a.said ? 1 : 0,
     a.final,
     a.heard.length,
@@ -316,50 +312,6 @@ export let doing = (r?: LogRow, turn?: string | null, starting = false) =>
     : starting
     ? 'starting…'
     : 'working…'
-
-export let SessionObservation = (
-  { state, repo }: { state: ObservationState; repo?: string },
-) => (
-  <Transient>
-    {(state.items ?? []).map((item, i) =>
-      item.kind == 'reasoning'
-        ? (
-          <EntryBody
-            key={i}
-            x={{
-              seq: i,
-              line: '',
-              row: { kind: 'reason', text: item.text },
-            }}
-          />
-        )
-        : item.kind == 'tool'
-        ? <ToolSummary key={i} name={item.name} status='preparing…' />
-        : (
-          <EntryBody
-            key={i}
-            x={{
-              seq: i,
-              line: '',
-              row: { kind: 'say', role: 'agent', text: item.text },
-            }}
-            repo={repo}
-          />
-        )
-    )}
-  </Transient>
-)
-
-export let observing = (state?: ObservationState) => {
-  let item = state?.items.at(-1)
-  return item?.kind == 'tool'
-    ? `preparing ${item.name}…`
-    : item?.kind == 'model'
-    ? 'responding…'
-    : item?.kind == 'reasoning'
-    ? 'thinking…'
-    : undefined
-}
 
 // A named fact, present only when there IS one — absence says enough.
 let Fact = ({ k, v }: { k: string; v?: string | null }) =>
@@ -614,7 +566,6 @@ export let Session = ({ e }: { e: Ent }) => {
   }, [entries.status])
   let native = s.origin == 'managed' && s.status == null &&
     e.spawn?.provider == 'codex'
-  let stream = native ? observation(e.eid) : undefined
   let live = native ? !s.base_revision || !!ready?.busy : awake(s)
   let status = state.status
   let fault = e.exception?.message ?? e.failed?.message
@@ -664,7 +615,7 @@ export let Session = ({ e }: { e: Ent }) => {
   // Windowed from the tail on the web; the whole thread in the TUI.
   let { frame, start, older } = useTranscript(
     thread.length,
-    `${log.entries.at(-1)?.seq ?? 0}:${stream?.rev ?? 0}`,
+    `${log.entries.at(-1)?.seq ?? 0}`,
     // Window on a real element tree (browser + linkedom mounts); render the
     // whole log in the TUI, whose fake document has no querySelector and owns
     // its own scrollback.
@@ -681,7 +632,6 @@ export let Session = ({ e }: { e: Ent }) => {
   let sig = mentionSig({
     count: log.entries.length,
     seq: log.entries.at(-1)?.seq ?? 0,
-    rev: stream?.rev ?? 0,
     said,
     final: s.final_text ?? '',
     heard: heardCs,
@@ -707,7 +657,7 @@ export let Session = ({ e }: { e: Ent }) => {
   let graphActivity = native ? ready?.activity : undefined
   let activity = graphActivity?.kind == 'tool'
     ? graphActivity.label
-    : observing(stream) ?? graphActivity?.label ??
+    : graphActivity?.label ??
       doing(
         rows.at(-1)?.row,
         s.turn ?? (status == 'idle' ? 'idle' : undefined),
@@ -783,7 +733,6 @@ export let Session = ({ e }: { e: Ent }) => {
               ? <Row key={x.seq} x={x} repo={repo} />
               : <Note key={x.eid} c={x} />
           )}
-          {stream && <SessionObservation state={stream} repo={repo} />}
           {showActivity && <Think>✳ {activity}</Think>}
         </Log>
         {

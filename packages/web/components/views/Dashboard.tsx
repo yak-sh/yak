@@ -69,8 +69,6 @@ export let sessionsOf = (
   e: Ent,
   sessions: Ent[],
   claims: Ent[],
-  requested: Set<string>,
-  roles: Set<string>,
 ) => {
   let jobs = new Map<string, Ent>()
   for (let task of claims) {
@@ -84,8 +82,7 @@ export let sessionsOf = (
   return sessions
     .filter((s) => {
       let job = jobs.get(s.eid)
-      return (job ? job.filed?.project == e.eid : requested.has(s.eid)) ||
-        roles.has(s.eid)
+      return job?.filed?.project == e.eid
     })
     .sort((a, b) =>
       Number(awake(b.session!)) - Number(awake(a.session!)) || b.num - a.num
@@ -109,12 +106,6 @@ export let Dashboard = ({ e }: { e: Ent }) => {
   let sessions = useQueryResult(sessionDetail)
   let claims = useQueryResult(
     '.claim!&.fields=task.status,claim.session,claim.at,filed.project',
-  )
-  let requested = useQueryResult(
-    `.session.requested_task.filed.project=${e.eid}&.fields=session.id`,
-  )
-  let serving = useQueryResult(
-    `.session.role.role.scope=${e.eid}&.fields=session.id`,
   )
   let roles = useQueryResult(`.role.scope=${e.eid}`)
   // This facet paints eight rows, so stream only its eight warmest. Fetching
@@ -140,13 +131,11 @@ export let Dashboard = ({ e }: { e: Ent }) => {
       />
       <Facet
         name='sessions'
-        reads={[sessions, claims, requested, serving]}
+        reads={[sessions, claims]}
         ids={sessionsOf(
           e,
           sessions.eids.map(ent),
           claims.eids.map(ent),
-          new Set(requested.eids),
-          new Set(serving.eids),
         ).map((s) => s.eid)}
       />
       <Facet name='lately' reads={[tasks]} ids={tasks.eids} />

@@ -13,27 +13,15 @@ import type { Field } from './query.ts'
 // renders coloured DOTS.
 //
 // So the chrome asks for the columns it decides and paints with, and nothing
-// else: enough to tell awake from settled and recent from old (Tray `shown`),
-// sort by start, and give each dot its standing (session_status graphStanding —
-// which reads `failed`/`exception` for PRESENCE, hence their timestamps). A
-// session's `provider`/`pid` are spawn-preferred through sessionOf, so both
-// spellings ride or the merge reads a stale one.
+// else: the session's status and standing (@yaks/session), who it acts for,
+// its process, and when it was made.
 export let dotFields: Field[] = [
   'session.status',
-  'session.pid',
-  'session.turn',
-  'session.origin',
   'session.standing',
-  'session.started_at',
-  'session.finished_at',
-  'session.provider',
-  'spawn.provider',
-  'runtime.pid',
-  'run.started_at',
-  'settled.status',
-  'settled.at',
-  'failed.at',
-  'exception.at',
+  'session.actor',
+  'process.pid',
+  'exit.code',
+  'created.at',
 ].map((f) => {
   let [comp, prop] = f.split('.')
   return { comp, prop, wake: true }
@@ -44,12 +32,7 @@ export let dotFields: Field[] = [
 // ONE sub and lands ONE frame for the strip where seven separate selections
 // cost seven serves and seven render flushes (T-37445).
 export let traySessionQuery = '.session!&(' + [
-  '.session.status=starting,running,stopping',
-  '.session.pid!&.session.finished_at=&.settled=',
-  '.runtime.pid!&.session.finished_at=&.settled=',
-  '.session.started_at>=6-hours-ago',
-  '.run.started_at>=6-hours-ago',
-  '.session.finished_at>=6-hours-ago',
-  '.settled.at>=6-hours-ago',
+  '.session.status=pending,running',
+  '.created.at>=6-hours-ago',
 ].join('|') + ')&.fields=' +
   dotFields.map((f) => `${f.comp}.${f.prop}`).join(',')

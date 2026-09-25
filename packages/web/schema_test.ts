@@ -1,6 +1,7 @@
 // The schema read back out: one derivation (schema.ts over types.ts),
 // two faces — the Schema view's rows and the Vocabulary doc's markdown.
 // Pin the spellings both share, and that the doc says everything.
+import './testing.ts'
 import { assert, assertEquals } from '@std/assert'
 import { schema, typeWord, vocabularyMd } from './schema.ts'
 

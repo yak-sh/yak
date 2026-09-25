@@ -550,16 +550,13 @@ export let kindPreds = (kind: string): Pred[] | null => {
 // why the bespoke `kind` parameter that threaded five layers is gone. A
 // resolver returns null for a value it cannot name (`.kind=typo`); the pred
 // seam turns that into the refusal any bad filter earns. Real column/component
-// props resolve FIRST in pred(), so a scope never shadows `.status`/`.project`
-// — and a scope name colliding with a real prop is a registration error,
-// caught here at load rather than as a silent dead scope later.
+// props resolve FIRST in pred(), so a scope never shadows `.status`/`.project`:
+// where a host's vocabulary has a real `kind` column, that column is what
+// `.kind=` filters.
 export let scopes: Record<string, (value: string) => Pred[] | null> = {
   // kindWord folds the plural in (`.kind=projects` reads like `.kind=project`),
   // the leniency the bare-word listing already granted.
   kind: (value) => kindPreds(kindWord(value) ?? value),
-}
-for (let name in scopes) {
-  if (owned(name)) throw new Error(`scope .${name} shadows a real prop`)
 }
 
 // `doc` sits in kindOrder as the fallback NAME for a bare document, but

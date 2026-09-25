@@ -1,6 +1,7 @@
 // The Shelf's write seam: first use mints the per-client canvas, while later
 // cards reuse it. UI gestures only choose when to send these graph facts.
 
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { shelfChanges } from './shelf.ts'
 

@@ -3,6 +3,7 @@
 // — createElement, createTextNode, activeElement. So navigation startup
 // cannot object-guard alone: `document?.querySelectorAll(…)` passes the guard
 // and then throws on the missing member, which is how the TUI lost its boot.
+import '../testing.ts'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
 import { cache, census } from '../live.ts'

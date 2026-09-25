@@ -1,5 +1,6 @@
 // The graph HTTP door's restart tolerance, with transport and time injected so
 // the suite proves the retry schedule without opening a socket or waiting.
+import './testing.ts'
 import { request } from './http.ts'
 import { timing, watching } from './timing.ts'
 import { assertEquals, assertRejects } from '@std/assert'

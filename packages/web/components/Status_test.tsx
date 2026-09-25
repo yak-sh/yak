@@ -1,5 +1,6 @@
 // The statusbar's command door and graph-backed spawn answer: its left side
 // enters command mode; session messages follow server-minted ids and lifecycle.
+import '../testing.ts'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'

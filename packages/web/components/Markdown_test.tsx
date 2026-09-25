@@ -1,5 +1,6 @@
 // Markdown owns the DOM injection while its caller keeps the element that
 // participates in layout and interaction.
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { render } from 'preact'
 import { parseHTML } from 'linkedom'

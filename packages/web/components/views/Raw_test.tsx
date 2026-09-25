@@ -1,4 +1,5 @@
 // Raw views keep their source inert while presenting it as highlighted code.
+import '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'

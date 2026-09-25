@@ -1,3 +1,4 @@
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { compTone } from './comp.ts'
 

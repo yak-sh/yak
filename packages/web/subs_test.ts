@@ -1,5 +1,6 @@
 // The subscription seam, proven without a socket: the §2 membership transition
 // and the comps→Changes spread. Run: deno test src/subs_test.ts
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { matchQuery, parseQuery } from './query.ts'
 import {

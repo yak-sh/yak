@@ -1,5 +1,6 @@
 // Transient observations stay small, provider-neutral, and subordinate to
 // their generation's durable graph evidence.
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { foldObservation, observedBy, safeObservation } from './observations.ts'
 

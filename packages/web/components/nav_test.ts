@@ -1,4 +1,5 @@
 // A peek belongs to its one opener without making every link reactive.
+import '../testing.ts'
 import { effect } from '@preact/signals'
 import { parseHTML } from 'linkedom'
 import { assertEquals, assertStrictEquals, assertThrows } from '@std/assert'

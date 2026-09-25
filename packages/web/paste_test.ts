@@ -1,5 +1,6 @@
 // pasted(): text → entity spec. Pure over the cache signal — the seams
 // the canvas drop and the palette's board chip ride.
+import './testing.ts'
 import { pasted } from './paste.ts'
 import { cache } from './live.ts'
 import { assertEquals, assertThrows } from '@std/assert'

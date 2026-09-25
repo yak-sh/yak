@@ -58,7 +58,6 @@ import {
   DebugTaskItem,
   ProjectDebug,
 } from './views/Debug.tsx'
-import { Schema } from './views/Schema.tsx'
 import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
 import { Web } from './views/Web.tsx'
@@ -248,15 +247,6 @@ define([
       text: (e) => JSON.stringify(e, null, 2),
     },
   },
-  // The live schema — its tab appears only on the boot-written
-  // Vocabulary doc (alias `vocabulary`), whose Show face is the same
-  // content as generated markdown; any card can still ask for the view
-  // by name.
-  {
-    view: 'Schema',
-    match: parse('.alias.slug=vocabulary'),
-    Render: Schema,
-  },
   { view: 'Debug', match: parse('.project'), Render: ProjectDebug },
   { view: 'Debug', match: and(), Render: Debug },
   { view: 'Debug.Tile', match: parse('.task'), Render: DebugTaskItem },
@@ -284,7 +274,6 @@ define([
   'Full',
   'Web',
   'Media',
-  'Schema',
   'Debug',
 ])
 

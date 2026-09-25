@@ -1,6 +1,7 @@
 // `## goals` — the standing goals (M-31946 §5) a context reads right after
 // what the owner said: fleet-wide ones plus its own project's, never another
 // project's, titles only.
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { contextDigest, goalLines, rows } from './client.ts'
 import type { Snapshot } from './types.ts'

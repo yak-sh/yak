@@ -4,6 +4,7 @@
 // asserts every branch that reads one of those indexes still fires correctly —
 // the behavior the eight former per-name scans produced.
 
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { link } from './edge.ts'
 import { attentionOf, channelEvents, type Ctx } from './channel.ts'

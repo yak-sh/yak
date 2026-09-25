@@ -40,7 +40,6 @@ export let icons: Record<string, string> = {
   Session: 'bot',
   Markdown: 'hash',
   JSON: 'braces',
-  Schema: 'shapes',
   Debug: 'bug',
 }
 

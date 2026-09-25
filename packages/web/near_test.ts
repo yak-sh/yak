@@ -1,6 +1,7 @@
 // The near match: what a failed handle lookup may name. Scoring only —
 // the check that a suggestion RESOLVES belongs to the door that offers it
 // (client.ts nearby), and client_test drives that half.
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { nearest, offer } from './near.ts'
 

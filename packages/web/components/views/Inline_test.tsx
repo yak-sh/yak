@@ -1,3 +1,4 @@
+import '../../testing.ts'
 import { type ComponentChild, h, type VNode } from 'preact'
 import { assertEquals } from '@std/assert'
 import { applyLocal, cache, ent } from '../../live.ts'

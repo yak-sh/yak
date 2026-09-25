@@ -1,6 +1,7 @@
 // DOM-mount tests for the <Run/> form — they render the real form through
 // Preact + linkedom (heavy Run.tsx import), so they can't hit the 1ms budget.
 // The PURE catalog test moved to Run_catalog_test.ts (light imports, sub-ms).
+import '../testing.ts'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'

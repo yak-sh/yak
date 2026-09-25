@@ -5,14 +5,19 @@
 // Nothing here is written down per component: a plugin the host lists is
 // understood the moment the host loads it.
 //
-// The tables start empty. A view never reads them at import time; tests learn
-// the same documents a host would compose (testing.ts).
+// In a browser the documents are fetched at the top of this module, so every
+// module that imports it evaluates after the tables are full. Under Deno the
+// tables start empty until something calls learn(): the tests learn the
+// documents a host composes (testing.ts), a terminal the ones its server
+// serves.
 
 import { type Keywords, loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { idKeywords } from '@yaks/id'
+import { idKeywords } from '@yaks/id/vocab'
 import { nameKeywords } from '@yaks/names'
-import { edgeKeywords } from '@yaks/edge'
+import { edgeKeywords } from '@yaks/edge/vocab'
 import { blobKeywords } from '@yaks/blob'
+import { kernelKeywords } from '@yaks/kernel/vocab'
+import { keyKeywords } from '@yaks/key/vocab'
 
 export let statuses = ['open', 'wip', 'done', 'cancelled'] as const
 export let turnStates = ['idle', 'busy'] as const
@@ -64,13 +69,15 @@ export let planTiers = ['free', 'plus'] as const
 export let hostnameStages = ['pending', 'active', 'error'] as const
 
 
-// The keyword vocabularies the documents are written with: ids, names, edges
-// and content-addressed bodies. The rest travel as carried keywords.
+// The keyword vocabularies the documents are written with: every set the
+// packages ship.
 export let keywords: Keywords[] = [
   idKeywords,
   nameKeywords,
   edgeKeywords,
   blobKeywords,
+  kernelKeywords,
+  keyKeywords,
 ]
 
 // The loaded vocabulary itself, for readers that ask it directly (the renderer
@@ -88,9 +95,9 @@ export let comps: Record<string, Record<string, PropType>> = {}
 // `unique` over.
 export let indexes: Record<string, Idx[]> = {}
 
-// Transcript entries are never part of a working set; a view that needs them
-// holds its own subscription (live.ts entrySub).
-export let partition: Record<string, 'eager' | 'lazy'> = { entry: 'lazy' }
+// Components never part of a working set (the kernel's `lazy` keyword): a
+// view that needs them holds its own subscription (live.ts entrySub).
+export let partition: Record<string, 'eager' | 'lazy'> = {}
 
 // Server-stamped columns — never wire-writable, still read.
 export let stamped: Record<string, Record<string, PropType>> = {}
@@ -160,6 +167,7 @@ export let learn = (docs: VocabDoc[]): Vocab => {
   let px: typeof prefix = {}
   let names = new Set<string>()
   let relations: string[] = []
+  let parts: typeof partition = {}
   // The spine is every entity's, read through spineProps below.
   for (let name of v.all.filter((n) => n != 'entity')) {
     let def = (v.def(name) ?? {}) as {
@@ -172,10 +180,11 @@ export let learn = (docs: VocabDoc[]): Vocab => {
     }
     let own: Record<string, PropType> = {}
     let server: Record<string, PropType> = {}
+    // A computed column is the host's to derive: read, filtered on, never
+    // written — the same standing as a stamped one.
     for (let prop of v.props(name)) {
       let p = v.prop(name, prop)!
-      if (p.computed) continue
-      ;(p.stamped ? server : own)[prop] = typeOf(v, name, prop)
+      ;(p.stamped || p.computed ? server : own)[prop] = typeOf(v, name, prop)
     }
     c[name] = own
     if (Object.keys(server).length) st[name] = server
@@ -189,6 +198,7 @@ export let learn = (docs: VocabDoc[]): Vocab => {
     if (typeof letter == 'string') px[name] = letter
     if (def.by_name) names.add(name)
     if (typeof def.edge == 'string') relations.push(def.edge)
+    if (v.comp(name)?.keywords?.lazy) parts[name] = 'lazy'
   }
   vocab = v
   comps = c
@@ -198,6 +208,7 @@ export let learn = (docs: VocabDoc[]): Vocab => {
   prefix = px
   byName = names
   edges = relations
+  partition = parts
   kindOrder = [...v.kinds]
   kindRank = new Map(kindOrder.map((k, i) => [k, i]))
   planted = 0
@@ -1043,21 +1054,18 @@ export type Dream = {
   floor?: string | null
 }
 
-// Mail, either direction: the request columns are the ask; the send
-// outcome is the shared `delivered`/`failed` facet (deliver.ts). to_addr is
-// the envelope copy — what delivery resolved and used. An INBOUND mail
-// carries message_id (the fleet spool's id, also the never-send mark),
-// received_at, and the edge's verified verdict.
+// Mail, either direction (@yaks/mail): `to` is the address, `at` when it
+// was sent or arrived. An INBOUND mail carries message_id (also the
+// never-send mark) and the edge's verified verdict.
 export type Mail = {
   eid: string
   from?: string | null
+  to?: string | null
+  at?: string | null
   target?: string | null
   reply_to?: string | null
-  to_addr?: string | null
   message_id?: string | null
-  received_at?: string | null
   verified?: boolean | null
-  sent_id?: string | null
   in_reply_to?: string | null
 }
 
@@ -1505,4 +1513,10 @@ export type Snapshot = {
   epoch?: string
   vocabHash?: string
   capabilities?: string[]
+}
+
+// A page learns its host's vocabulary here, at the bottom of the module, so
+// every module that imports this one evaluates with the tables full.
+if (globalThis.document && !('Deno' in globalThis)) {
+  learn(await (await fetch('/web/vocab.json')).json())
 }

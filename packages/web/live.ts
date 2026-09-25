@@ -34,6 +34,7 @@ import {
   slugsOf,
   type Snapshot,
   statusOf,
+  vocab,
 } from './types.ts'
 import { moves, typeOf } from './edge.ts'
 import { dotFields } from './tray_query.ts'
@@ -70,18 +71,14 @@ import {
   reindexEdge,
 } from './index.ts'
 import { type MemoryResolver, memoryResolver } from './resolver.ts'
-import { type LiveClient, liveClient } from './live_client.ts'
+import { type LiveClient, liveClient, quiet } from './live_client.ts'
+import type { Socket } from '@yaks/sync'
+import type { Bundle } from '@yaks/graph'
 import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
-import { liveChanges } from './wire.ts'
+import { bundlesOf, changesOf, yakLine } from './wire.ts'
 import { diff, gaps } from './subs.ts'
 import { dead } from '@yaks/graph'
-import {
-  foldObservation,
-  type ObservationState,
-  observedBy,
-  safeObservation,
-} from './observations.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
 // Derived from EntCore so a new component (types.ts) threads through here —
@@ -136,12 +133,23 @@ let replica: LiveClient
 let replacing = false
 let makeClient = () =>
   liveClient({
+    url: config.host ? base() : 'http://replica.invalid',
+    connect: (url) => socketFor(url),
     disk: typeof location !== 'undefined',
-    send: (sub, q) => {
+    frame: (subs, f, reset) => {
       if (replacing) return
-      if (q !== undefined) {
-        control({ sub, q, ...shadowSubs.has(sub) ? { shadow: true } : {} })
-      } else control({ unsub: sub })
+      let changes = changesOf(f.bundles ?? [])
+      batch(() => {
+        for (let sub of subs) {
+          landSubFrame({
+            sub,
+            replace: reset,
+            changes,
+            drop: f.gone,
+            error: f.refused?.message,
+          })
+        }
+      })
     },
     ready: (sub) => {
       if (replacing) return
@@ -156,6 +164,16 @@ let makeClient = () =>
       }
       let agg = aggSets.get(sub)
       if (agg) agg.live.value = replica.ready(sub)
+      // A line another name already holds answers with no frame of its own.
+      let one = oneShots.get(sub)
+      if (one && replica.ready(sub)) {
+        oneShots.delete(sub)
+        clearTimeout(one.timer)
+        queueMicrotask(() => {
+          one.done()
+          unsubscribe(sub)
+        })
+      }
       ticked(sub)
     },
     changed: (eids) => {
@@ -1183,15 +1201,9 @@ let publishLocal = (
   return { eids: [...eids], edges }
 }
 
-// The cursor/epoch/vocab this tab holds. A reconnect opens its socket from
-// this cursor; the server replays the gap before joining it to live broadcast.
-let held: {
-  cursor?: number
-  epoch?: string
-  vocabHash?: string
-  capabilities?: string[]
-} = {}
-export let capable = (name: string) => !!held.capabilities?.includes(name)
+// Whether the host composed a plugin: `capable('spawn')` is @yaks/spawn.
+export let capable = (name: string) =>
+  vocab.docs.some((d) => (d as { package?: string }).package == `@yaks/${name}`)
 
 // Consumers that care about canonical live edits subscribe here.
 let listeners = new Set<(changes: Change[]) => void>()
@@ -1578,227 +1590,76 @@ export type Sub = {
   error?: string
   reference?: string
 }
-type Observed = { observe: unknown }
-
-let ws: WebSocket | null = null
-let polling = false
-let serial = Promise.resolve()
-
-// First paint is allowed only after an authoritative bootstrap has landed.
-// Opening a WebSocket is not that boundary: its snapshot arrives on a later
-// turn, and painting between the two made `/` claim there was no root canvas.
-let initialResolve: () => void
-let initialReady = new Promise<void>((resolve) => initialResolve = resolve)
-let initialLanded = false
-let settleInitial = () => {
-  if (initialLanded) return
-  initialLanded = true
-  initialResolve()
+// How a replica reaches its host: the page's /ws, or no socket at all in a
+// process with no host (a test), whose frames arrive through landSub.
+let socketFor = (url: string): Socket =>
+  config.host ? new WebSocket(url) as unknown as Socket : quiet()
+export let useSocket = (fn: typeof socketFor): typeof socketFor => {
+  let prev = socketFor
+  socketFor = fn
+  return prev
 }
 
-// That wait is BOUNDED. A socket that opens but never answers — a server mid-
-// restart, a half-open connection — would leave the tab awaiting a frame that
-// never comes: a white page, no exception, nothing in telemetry. So the wait
-// gets a floor: after `ms` this tab reconnects once; if even that lands
-// nothing, the page paints and says so — a visible, reported stall beats a
-// blank screen. Every tab owns its socket (T-37445): no tab ever waits on a
-// peer tab, so a stale tab elsewhere can never blank this one.
-export let BOOT_WAIT = 6_000
-let nap = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
-export let firstPaint = async (
-  landed: Promise<void>,
-  ms: number,
-  rescue: () => void,
-  stall: () => void,
-  sleep: (ms: number) => Promise<void> = nap,
-) => {
-  let ready = landed.then(() => 'ready' as const)
-  let late = () => sleep(ms).then(() => 'late' as const)
-  if (await Promise.race([ready, late()]) == 'ready') return
-  rescue()
-  if (await Promise.race([ready, late()]) == 'ready') return
-  stall()
-}
-// The boot-time binding of firstPaint: reconnect this tab, then give up on the
-// gate rather than hang on it.
-let painted = () =>
-  firstPaint(initialReady, BOOT_WAIT, () => connect(), () => {
-    problem.value =
-      'no state arrived — showing what this tab has; reload to retry'
-    settleInitial()
-  })
-
-// Socket liveness (T-21511). A half-open socket (network drop with no FIN, a
-// suspended/backgrounded tab) stays `readyState == OPEN`, so onclose never fires
-// and the reconnect poller never starts — the tab goes silently deaf until a
-// manual reload. The server pings every 25s (server.ts PING_MS); the watchdog
-// resets on ANY frame and, after WATCHDOG_MS of total silence, force-closes the
-// socket so the existing onclose → poller → reconnect path runs. `seen` is the
-// last-frame time, so a tab refocused after being frozen can tell a live socket
-// from a stale one.
-let WATCHDOG_MS = 60_000
-let seen = 0
-let watchdog: ReturnType<typeof setTimeout> | undefined
-// A heartbeat frame carries liveness only, never graph data.
-export let isPing = (data: unknown): boolean =>
-  !!data && typeof data == 'object' && 'ping' in data
-// A socket is stale if it is not OPEN, or has heard nothing (data OR ping) for
-// `ms` — the refocus/watchdog recovery trigger.
-export let socketStale = (
-  readyState: number,
-  since: number,
-  now: number,
-  ms = WATCHDOG_MS,
-): boolean => readyState != WebSocket.OPEN || now - since > ms
-let pet = () => {
-  seen = Date.now()
-  if (watchdog !== undefined) clearTimeout(watchdog)
-  watchdog = setTimeout(() => {
-    if (ws && ws.readyState <= WebSocket.OPEN) ws.close()
-  }, WATCHDOG_MS)
-}
-let unpet = () => {
-  if (watchdog !== undefined) clearTimeout(watchdog)
-  watchdog = undefined
-}
-
-// Observations never join cache or IDB. One bounded state per watched Session
-// is enough to paint its unfinished generation; the partition replaces it at
-// the first durable output or reconnect frame.
-let observations = signal<Record<string, ObservationState>>({})
-export let observation = (session: string) => observations.value[session]
-export let clearObservations = (session?: string) => {
-  if (session == null) return void (observations.value = {})
-  if (!observations.peek()[session]) return
-  let next = { ...observations.peek() }
-  delete next[session]
-  observations.value = next
-}
-export let landObservation = (raw: unknown) => {
-  let value = safeObservation(raw)
-  if (!value) return false
-  let was = observations.peek()[value.session]
-  let state = foldObservation(was, value)
-  if (state == was) return true
-  let next = { ...observations.peek() }
-  if (state) next[value.session] = state
-  else delete next[value.session]
-  observations.value = next
-  return true
-}
-let settleObservations = (changes: Change[]) => {
-  let next = observations.peek()
-  let changed = false
-  for (let [session, state] of Object.entries(next)) {
-    if (!observedBy(state, changes)) continue
-    if (!changed) next = { ...next }
-    delete next[session]
-    changed = true
-  }
-  if (changed) observations.value = next
-}
-
-// The entity a cold tab should be seeded with: the route's id, when the URL
-// names one (`/T-123`); nothing for the root canvas or /admin.
-let seedOf = () => {
-  let path = (globalThis as { location?: { pathname?: string } }).location
-    ?.pathname ?? ''
-  let id = decodeURIComponent(path.slice(1))
-  return id && !id.startsWith('admin') ? { seed: id } : {}
-}
-
-// One physical socket per tab. Incoming JSON is parsed once here and landed
-// in order.
-let connect = () => {
-  if (ws && ws.readyState <= WebSocket.OPEN) return ws
-  let socket = new WebSocket(
-    `ws${config.secure ? 's' : ''}://${serverHost()}/ws${
-      config.client ? `?client=${config.client}` : ''
-    }`,
+// Put a batch the host answered back into the rows it touched: the host's
+// rows replace this side's, and a row the host does not have leaves.
+let heal = async (changes: Change[]) => {
+  let eids = [...new Set(changes.map((c) => c.eid))]
+  let res = await fetch(
+    `${base()}/query?q=${encodeURIComponent(`.eid=${eids.join(',')}`)}`,
   )
-  ws = socket
-  // The catch-up handshake: send the held cursor first, so every later live
-  // frame the server broadcasts arrives AFTER the catch-up it just sent.
-  socket.onopen = () => {
-    pet()
-    resetBackoff() // server reachable again → retry unacked writes promptly
-    socket.send(JSON.stringify({
-      since: held.cursor ?? 0,
-      epoch: held.epoch,
-      vocab: held.vocabHash,
-      live: 1,
-      // ws:1 asks a cold boot to seed the WORKING SET, not the whole graph
-      // (M-21143) — server-backed membership keeps a partial cache complete.
-      ws: 1,
-      // A tab on an entity route seeds that entity alone (T-37445): the doc
-      // paints from the handshake, and the shell's subscriptions fill the rest.
-      ...seedOf(),
-    }))
+  if (!res.ok) return
+  let rows = await res.json() as Bundle[]
+  let found = new Set(rows.map((b) => b.entity.eid))
+  let back: Change[] = eids.filter((eid) => !found.has(eid)).map((eid) => ({
+    eid,
+    name: 'entity',
+    comp: null,
+  }))
+  for (let b of rows) {
+    let had = cache.peek()[b.entity.eid] ?? {}
+    for (let name of Object.keys(had)) {
+      if (name != 'entity') back.push({ eid: b.entity.eid, name, comp: null })
+    }
   }
-  socket.onmessage = (m) => {
-    pet()
-    let text = String(m.data)
-    // What the socket has actually carried, per sub — the instrument the
-    // projection work is measured with (D-22567 §3), and the one that tells a
-    // tab holding a 6 MB sub from one holding a 1.5 MB one. Counting the raw
-    // frame is the honest number: it is what crossed the wire, before any
-    // parsing this side does with it.
-    carried.total += text.length
-    let data = JSON.parse(text) as unknown
-    // Attribute the RAW frame's bytes to the sub that asked for them — the
-    // number is what crossed the wire, before any parsing this side does, but
-    // the NAME has to come from the parsed frame: a sub is named after its
-    // canonical preds, which is JSON with its own escaped quotes.
-    let sub = (data as { sub?: string }).sub
-    if (sub) carried.subs[sub] = (carried.subs[sub] ?? 0) + text.length
-    // A heartbeat frame is liveness only (T-21511) — pet the watchdog, land
-    // nothing.
-    if (isPing(data)) return
-    arrived.push(data)
-    if (arrived.length == 1) setTimeout(landArrived, 0)
-  }
-  socket.onclose = () => {
-    unpet()
-    if (ws != socket) return
-    ws = null
-    clearObservations()
-    replica?.invalidate()
-    if (polling) return
-    polling = true
-    // A lost socket is a SOCKET to get back, never a page to reload: what this
-    // tab painted stays painted, and the handshake on the new socket (held
-    // cursor, epoch) patches in whatever it missed. Reloading here is what
-    // turned every server restart into a blank tab — a page reborn into a
-    // half-up server, or as a follower of a leader mid-rebirth (T-37450).
-    let poll = setInterval(async () => {
-      try {
-        await fetch(`${base()}/capabilities`, { method: 'HEAD' })
-        // The server is back. Writes made while the socket was down leave
-        // through /apply first (T-21413); a failed drain leaves the poller
-        // running, so the next tick asks again.
-        if (!(await drain())) return
-        clearInterval(poll)
-        polling = false
-        connect()
-      } catch { /* still down */ }
-    }, 500)
-  }
-  return socket
+  applyLocal([...back, ...changesOf(rows)])
 }
 
-let wire = (frame: unknown) => {
-  let s = connect()
-  let msg = JSON.stringify(frame)
-  if (s.readyState == WebSocket.OPEN) s.send(msg)
-  else s.addEventListener('open', () => s.send(msg), { once: true })
+// A write leaves as bundles on POST /apply (@yaks/api). The answer is the
+// batch as applied, which lands like any patch. A refusal settles the write:
+// it is kept where the person can see it (refuse) and the rows it touched are
+// read back, so the optimistic edit heals. An unreachable or failing host
+// leaves the write in the outbox, and redelivery tries again.
+let post = async (changes: Change[], id: string) => {
+  let res: Response
+  try {
+    res = await fetch(`${base()}/apply`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(bundlesOf(changes)),
+    })
+  } catch {
+    return
+  }
+  if (res.status >= 500) return
+  if (!res.ok) {
+    refuse(id, await res.text(), outbox.get(id)?.changes ?? changes)
+    acked(id)
+    await heal(changes).catch(() => {})
+    return
+  }
+  let applied = await res.json() as Bundle[]
+  acked(id)
+  applyLocal(changesOf(applied))
+  tell(changes)
 }
 
-// An acked delivery threads its id through so a retry REPLACES its queued
-// transport entry instead of piling up a duplicate per tick.
-let defaultRoute = (frame: unknown, _id?: string) => wire(frame)
+// The write seam: a test counts deliveries without a host. Returns the prior
+// route so the test can restore it.
+let defaultRoute = (frame: unknown, id?: string) => {
+  let batch = (frame as { apply?: Change[] }).apply
+  if (batch && id) void post(batch, id)
+}
 let route = defaultRoute
-// The transport seam (mirrors useOutboxStore): a test counts redelivery sends
-// without a socket. Returns the prior route so the test can restore it.
 export let useRoute = (fn: typeof route): typeof route => {
   let prev = route
   route = fn
@@ -1816,11 +1677,10 @@ export let send = (...changes: unknown[]) => deliver(changes as Change[])
 // without eviction while the complete stream remains the cache owner.
 let subQueries = new Map<string, string>()
 let shadowSubs = new Set<string>()
-let primeSub = (sub: string, q: string, silent = false) => {
+let primeSub = (sub: string, q: string) => {
   ensureClient()
   subQueries.set(sub, q)
-  replica.open(sub, q, silent)
-  primeMetadata(sub)
+  replica.open(sub, yakLine(q))
 }
 // One version signal PER SUB (T-37445): a frame for sub A wakes only the
 // readers of A. One global version woke every subscription-holding view on
@@ -1871,9 +1731,6 @@ export let edgeWindow = (eid: string): Window | undefined => {
   return routeWindows.get(eid)
 }
 
-// Bytes this socket has carried, whole and per sub (__probe.wire) — see the
-// onmessage counter.
-let carried = { total: 0, subs: {} as Record<string, number> }
 
 // What each PROJECTED sub declared it carries (D-22567 §3) — recorded from the
 // server's own statement on the reply, so the client believes the frame rather
@@ -2047,44 +1904,15 @@ let implicitQuery = (sub: string) => {
 export let landSub = (f: Sub) =>
   batch(() => {
     ensureClient()
-    // A frame may land for a sub this side never opened (a host fixture, a
-    // server-initiated replace). Attach without echoing a subscribe back.
+    // A frame may land for a sub this side never opened (a test's server).
     if (!replica.has(f.sub)) {
       let q = subQueries.get(f.sub)
       // An in-flight frame after final release must not create a new owner.
-      if (!q && config.host) return { eids: [], edges: [] }
-      replica.open(f.sub, q ?? implicitQuery(f.sub), true)
+      if (!q && config.host) return
+      replica.open(f.sub, yakLine(q ?? implicitQuery(f.sub)))
     }
     replica.receive(f)
-    let touched = { eids: [] as string[], edges: [] as Dep[] }
-    for (let sub of replica.aliases(f.sub)) {
-      touched = landSubFrame({ ...f, sub, changes: f.changes ?? [] })
-    }
-    return touched
   })
-// A newly mounted alias shares the answered metadata too. This is result
-// metadata, not a payload mirror; rows and membership remain package-owned.
-let primeMetadata = (sub: string) => {
-  let source = replica.aliases(sub).find((s) => s !== sub)
-  if (!source) return
-  if (subWindows.has(source)) subWindows.set(sub, subWindows.get(source)!)
-  if (subFields.has(source)) subFields.set(sub, subFields.get(source)!)
-  if (subFailures.has(source)) subFailures.set(sub, subFailures.get(source)!)
-  ticked(sub)
-  let agg = aggSets.get(sub), prior = aggSets.get(source)
-  if (agg && prior) {
-    agg.map.value = prior.map.peek()
-    agg.live.value = replica.ready(sub)
-  }
-  let result = resultSignals.get(sub), previous = resultSignals.get(source)
-  if (result && previous) result.value = previous.peek()
-  let edges = [...subEdges.get(source) ?? []].flatMap((k) => {
-    let dep = edgeHolders.get(k)?.dep
-    return dep ? [dep] : []
-  })
-  let rode = holdEdges(sub, edges, [])
-  settleEdges(rode.gained, rode.lost)
-}
 let landSubFrame = (f: Sub & { changes: Change[] }) => {
   if (f.error) {
     let one = oneShots.get(f.sub)
@@ -2138,9 +1966,6 @@ let landSubFrame = (f: Sub & { changes: Change[] }) => {
     }
     found.value = next
   }
-  if (f.replace && f.sub.startsWith('entries:')) {
-    clearObservations(f.sub.slice('entries:'.length))
-  }
   // A window rides any frame that has one to state; a REPLACE with none is the
   // server saying this answer is whole, which must clear a bound left by the
   // query this frame replaced.
@@ -2159,7 +1984,6 @@ let landSubFrame = (f: Sub & { changes: Change[] }) => {
   if (f.replace) {
     f.fields ? subFields.set(f.sub, f.fields) : subFields.delete(f.sub)
   }
-  settleObservations(f.changes)
   let dropped = f.replace ? freeEdges(f.sub) : []
   let rode = holdEdges(f.sub, f.edges ?? [], f.unedges ?? [])
   settleEdges(rode.gained, [...dropped, ...rode.lost])
@@ -2189,9 +2013,6 @@ let landSubFrame = (f: Sub & { changes: Change[] }) => {
 
 // A control frame is an OBJECT (design §1), distinct from the array batches
 // send() ships — a subscribe/replace or an unsubscribe.
-let control = (frame: object) => {
-  route(frame)
-}
 export let subscribe = (sub: string, q: string) => {
   primeSub(sub, q)
 }
@@ -2232,9 +2053,6 @@ let forget = (sub: string) => {
   if (sub.startsWith('route:')) routeWindows.delete(sub.slice('route:'.length))
   subFields.delete(sub)
   agreement?.checked.delete(sub)
-  if (sub.startsWith('entries:')) {
-    clearObservations(sub.slice('entries:'.length))
-  }
   settleEdges([], lost)
   ticked(sub)
   heldMoved(members)
@@ -2319,10 +2137,7 @@ let resultSignals = new Map<
 // paged membership.
 let boardEntrySubs = new Map<string, Map<string, () => void>>()
 
-let ownBoard = (sub: string, q: string) => {
-  if (!config.host) shadowSubs.add(sub)
-  primeSub(sub, q, !config.host && route === defaultRoute)
-}
+let ownBoard = (sub: string, q: string) => primeSub(sub, q)
 let dropBoard = (sub: string) => unsubscribe(sub)
 
 // Hold one addressed edge-rider query for a component's lifetime. The rider is
@@ -2525,12 +2340,22 @@ export let routeSub = (eid: string, fields?: string) => {
   // The scope rides in the name (the server answers that one entity), but the
   // query says it explicitly too — an empty q is refused server-side, never a
   // silent match-all.
-  if (!n) ownBoard(sub, routeLine(eid, fields))
+  // A whole route also holds the edges incident to the entity, each end its
+  // own subscription: the edge rows land like any other, and the cache reads
+  // the sentences off them.
+  let ends = fields ? [] : ['from', 'to'].map((end) => `${sub}:${end}`)
+  if (!n) {
+    ownBoard(sub, routeLine(eid, fields))
+    for (let end of ends) {
+      ownBoard(end, `.edge.${end.split(':').at(-1)}=${eid}&.limit=100`)
+    }
+  }
   return () => {
     let held = (routeUses.get(sub) ?? 1) - 1
     if (held > 0) return void routeUses.set(sub, held)
     routeUses.delete(sub)
     dropBoard(sub)
+    for (let end of ends) dropBoard(end)
   }
 }
 
@@ -2602,244 +2427,24 @@ export let boardQuery = (e: Ent) => {
   syncEntrySubs(sub, q)
 }
 
-// Reset the working set and validate the retention epoch. Same-epoch reconnects
-// keep a bounded paint floor; a changed epoch invalidates every old row. The
-// disk checkpoint replaces rows and epoch in one transaction, never the outbox.
-export let seedFrom = async (snap: Snapshot, write = true) => {
-  ensureClient()
-  // The disk floor hydrates BEHIND the seed, never ahead of it (T-37445): an
-  // addressed tab paints its entity the moment the handshake lands, and the
-  // vault's rows (up to the retention floor) fill in the rest of the page
-  // afterwards. Only a MOVED epoch validates first, since it invalidates every
-  // old row, the seed's included. A failed hydration is a missing floor, not
-  // a broken boot; the client's own report already names it.
-  let moved = !!held.epoch && !!snap.epoch && held.epoch !== snap.epoch
-  if (moved) await replica.box.setEpoch(snap.epoch!)
-  let hydrate = () =>
-    snap.epoch && !moved
-      ? replica.box.setEpoch(snap.epoch).catch(() => {})
-      : snap.epoch
-      ? undefined
-      : replica.box.wire?.refresh()
-  clearObservations()
-  pinZs.clear()
-  // A seed replaces the ROWS; the edge table is rebuilt by the subs that hold
-  // it, which re-subscribe over the same reconnect. A working-set boot now
-  // carries `deps: []` — it used to carry 4,909 of them, 81% of the frame on the
-  // live graph (T-22371) — and a
-  // legacy whole-graph snapshot still seeds its own, unheld, exactly as before.
-  deps.value = snap.deps
-  syncHolders()
-  // Rebuild derived signals around the package-owned boot answer in one pass.
-  seeding = true
-  if (config.host) {
-    replica.open('boot', '@boot', true)
-    replica.receive({ sub: 'boot', replace: true, changes: snap.changes })
-  } else applyLocal(snap.changes)
-  resetSignals()
-  seeding = false
-  held = {
-    cursor: snap.cursor,
-    epoch: snap.epoch,
-    vocabHash: snap.vocabHash,
-    capabilities: snap.capabilities,
-  }
-  void hydrate()
-  void write
-  return false
-}
-// The disk checkpoint is a paint floor for the NEXT visit, never a gate on
-// this one: a landing returns as soon as the rows are in memory, and the
-// package coalesces the vault writes behind it (T-37445).
-
-// Frames land in BATCHES (T-37445). A burst of fifty answers used to cost
-// fifty render passes: each frame landed in its own microtask, and the
-// signals it moved re-rendered the page before the next one landed, ~250 ms
-// of Preact for ~35 ms of landing. Now every frame the socket has carried by
-// the time the timer turns lands inside one signals batch, so the burst is
-// one render. A macrotask boundary is the coalescing point on purpose: the
-// message events already queued behind the current one run before it.
-let arrived: unknown[] = []
-let landArrived = () => {
-  let frames = arrived
-  arrived = []
-  serial = serial.then(() => landAll(frames))
-}
-let isSnapshot = (data: unknown) =>
-  !!data && typeof data == 'object' &&
-  !!(data as { snapshot?: unknown }).snapshot
-// A seed is the one frame that awaits (the vault's epoch check); everything
-// around it lands synchronously, in order, one batch per run.
-let landAll = async (frames: unknown[]) => {
-  for (let i = 0; i < frames.length;) {
-    if (isSnapshot(frames[i])) {
-      try {
-        await land(frames[i])
-      } catch (e) {
-        problem.value = String(e)
-      }
-      i++
-      continue
-    }
-    let j = i
-    while (j < frames.length && !isSnapshot(frames[j])) j++
-    batch(() => {
-      for (; i < j; i++) {
-        try {
-          landNow(frames[i])
-        } catch (e) {
-          problem.value = String(e)
-        }
-      }
-    })
-  }
-}
-
-// Descriptors ride frames; the archetype module registers its learner here,
-// since it imports this module and not the other way round.
-let learnArchetypes: (rows: Change[]) => void = () => {}
-export let onArchetypes = (fn: (rows: Change[]) => void) => {
-  learnArchetypes = fn
-}
-let learnFrom = (data: unknown) => {
-  let rows = (data as { archetypes?: Change[] } | null)?.archetypes
-  if (Array.isArray(rows)) learnArchetypes(rows)
-}
-
-// Every incoming shape has one landing door; a cursor-stamped frame is
-// checkpointed to disk once it has landed.
-let land = async (data: unknown) => {
-  learnFrom(data)
-  if (isSnapshot(data)) {
-    mark('reset')
-    await seedFrom((data as Reset).snapshot)
-    settleInitial()
-  } else landNow(data)
-}
-let landNow = (data: unknown) => {
-  learnFrom(data)
-  if (data && typeof data == 'object' && 'disconnected' in data) {
-    replica?.invalidate()
-    return
-  }
-  if (data && typeof data == 'object' && 'ack' in data) {
-    acked(String((data as { ack: unknown }).ack))
-    return
-  }
-  if (data && typeof data == 'object' && 'observe' in data) {
-    let value = (data as Observed).observe
-    if (value == null) clearObservations()
-    else landObservation(value)
-    return
-  }
-  let changes = liveChanges(data)
-  if (changes) {
-    applyLocal(changes)
-    settleObservations(changes)
-    let cursor = Array.isArray(data)
-      ? undefined
-      : (data as Partial<Live>).cursor
-    if (cursor !== undefined) {
-      held = { ...held, cursor }
-    }
-    tell(changes)
-    return
-  }
-  if (!data || typeof data != 'object') return
-  let frame = data as Partial<Live & Catchup & Reset & Sub>
-  // A refused SUBSCRIPTION is addressed by its stable sub identity. landSub
-  // retains that read failure (and does not mistake its empty transport batch
-  // for an authoritative empty result) without raising the global problem
-  // banner a rejected WRITE earns.
-  if (frame.error && typeof frame.sub == 'string') {
-    console.warn(`sub ${frame.sub} refused —`, frame.error)
-    landSub(frame as Sub)
-    return
-  }
-  if (frame.error) {
-    // A rejected batch comes back with the authoritative state of the eids it
-    // touched (server.ts correct()) — apply it to undo the optimistic write.
-    // Its cursor is unchanged (nothing committed), so this only heals the cache.
-    // A refusal settles the delivery: the outbox must not redeliver it. Capture
-    // the refused batch from the outbox BEFORE acked() removes it, so the durable
-    // refusal names the edit the server threw away — not the correction that heals
-    // it. A frame with no id (a general socket error) keeps the ephemeral surface.
-    let id = (frame as { id?: unknown }).id
-    if (id) {
-      refuse(String(id), String(frame.error), outbox.get(String(id))?.changes)
-      acked(String(id))
-    } else problem.value = String(frame.error)
-    if (Array.isArray(frame.changes)) applyLocal(frame.changes)
-    return
-  }
-  if (frame.catchup !== undefined) {
-    applyLocal(frame.catchup)
-    if (frame.cursor !== undefined) held = { ...held, cursor: frame.cursor }
-    settleInitial()
-  } else if (typeof frame.sub == 'string') {
-    landSub(frame as Sub)
-    if (frame.cursor !== undefined) held = { ...held, cursor: frame.cursor }
-  }
-}
-
 // Tests replace the cache wholesale; this rebuilds the replica around it.
 export let restore = () => {
   ensureClient()
   resetSignals()
 }
 
-// Boot waits on NOTHING from disk (T-37445). A tab used to await its durable
-// outbox before the first frame could land, and IndexedDB answered that open
-// only after up to a minute in a long-lived profile: a blank page with a live
-// socket and pings coming in. Now the seed paints the moment it arrives; the
-// outbox replays behind it, and an ack that outruns the replay is remembered
-// (acked) so the replay drops that entry instead of redelivering it.
+// Boot waits on nothing: there is no bootstrap frame. Every view opens its own
+// subscription and says loading until it answers. The writes a prior life
+// left undelivered, and the refusals it kept, come back first.
 let booted = false
-let once = () => {
+export let boot = async () => {
   if (booted) return
   booted = true
   ensureClient()
-  void replica.box.ready.then(() => mark('working-set'))
-  // Read back what a prior life left refused — the post-reload half of the
-  // durability guarantee (T-21441): a drain refusal wiped by its own reload
-  // returns to view instead of vanishing.
   loadRefusals()
-  // Requeue any write a prior life left undelivered (T-21440).
-  void replayOutbox()
+  await replayOutbox()
   idb.forgetLegacy()
 }
-
-// Every tab owns its socket and its subscriptions (T-37445). There is no
-// cross-tab leader: a tab that depended on a peer tab being fresh went blank
-// whenever that peer was frozen, mid-reload, or holding a dead socket.
-export let boot = async () => {
-  // Accept the old probe flag, but it no longer selects a second cache owner.
-  let search = (globalThis as { location?: { search?: string } }).location
-    ?.search ?? ''
-  config.store ||= storeProbe(search)
-  // Refocusing a tab must recover a stale connection WITHOUT a manual reload
-  // (T-21511): a backgrounded tab is frozen, so its watchdog and the socket
-  // both stall; on becoming visible, if the socket is closed or has heard
-  // nothing for WATCHDOG_MS, force-close it so the onclose → poller →
-  // reconnect path runs. A live socket is left untouched (no needless reload).
-  let doc = (globalThis as { document?: Document }).document
-  doc?.addEventListener?.('visibilitychange', () => {
-    if (doc.visibilityState != 'visible' || !ws) return
-    if (socketStale(ws.readyState, seen, Date.now())) ws.close()
-  })
-  once()
-  connect()
-  await painted()
-}
-;(globalThis as {
-  __sync?: () => {
-    socket: number | null
-    cursor?: number
-  }
-}).__sync = () => ({
-  socket: ws?.readyState ?? null,
-  cursor: held.cursor,
-})
 // Probe hooks: subscription/membership/wire counters over the active adapter.
 // `store()` remains false: the legacy IDB resolver is no longer a live surface.
 // `resolve` is a diagnostic local lookup only, never an authoritative query.
@@ -2859,9 +2464,6 @@ let probe = globalThis as {
     subMembersOf: (line: string) => number
     cacheN: () => number
     retainedN: () => number
-    wire: () => { total: number; subs: Record<string, number> }
-    socket: () => WebSocket | null
-    connect: () => WebSocket
   }
 }
 probe.__probe = {
@@ -2911,9 +2513,6 @@ probe.__probe = {
   // floor + sub-held + demand-fetched, far below the server's row count.
   cacheN: () => Object.keys(cache.peek()).length,
   retainedN: () => replica.box.cache.size(),
-  wire: () => ({ total: carried.total, subs: { ...carried.subs } }),
-  socket: () => ws,
-  connect: () => connect(),
 }
 
 // The whole entity, assembled for a renderer: spine, components present,
@@ -3267,17 +2866,8 @@ let sessionDots: Pred[] = [
 // the cache merges the two because the fuller one is a superset.
 export let sessionDetail = '.session!&.fields=' + [
   ...dotFields.map((f) => `${f.comp}.${f.prop}`),
-  'session.model',
-  'session.effort',
-  'session.persona',
-  'session.actor',
-  'session.serving_model',
-  'session.requested_task',
-  'session.role',
-  'spawn.model',
-  'spawn.effort',
-  'spawn.persona',
-  'created.at',
+  'using.model',
+  'using.effort',
   'doc.title',
 ].join(',')
 

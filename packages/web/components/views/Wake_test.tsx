@@ -1,4 +1,5 @@
 // A wake reads from its clock and addressing facets, never a stored title.
+import '../../testing.ts'
 import { render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'

@@ -1,4 +1,5 @@
 // The scalar language: each PropType has one stored value and one face.
+import './testing.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
   formatProp,

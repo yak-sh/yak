@@ -1,4 +1,5 @@
 // hot: the decay rank behind `.order=hot`; sunk/warm: the retirement damper.
+import './testing.ts'
 import { assert, assertEquals } from '@std/assert'
 import { hot, SUNK, sunk, warm } from './warmth.ts'
 

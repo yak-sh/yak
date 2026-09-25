@@ -1,4 +1,5 @@
 // A memo boundary skips parent reconciliation but yields to its own signal.
+import '../testing.ts'
 import { signal } from '@preact/signals'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'

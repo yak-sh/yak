@@ -1,4 +1,5 @@
 // Derived titles say the same words at every display door.
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { wakeList, wakeTitle } from './title.ts'
 import { local } from './time.ts'

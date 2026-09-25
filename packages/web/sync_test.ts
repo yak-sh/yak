@@ -7,6 +7,7 @@
 // heavy end-to-end (a real /apply refusal, a real reload) is a CDP probe; this
 // tier holds the pure client logic.
 
+import './testing.ts'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { type Change } from './types.ts'
 

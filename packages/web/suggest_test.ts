@@ -1,5 +1,6 @@
 // suggest(): candidates as text → kind, so a case asserts membership without
 // freezing the whole vocabulary into the test.
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { suggest } from './suggest.ts'
 

@@ -1,5 +1,6 @@
 // The chat's first write is one atomic move: retire the selected binding,
 // create the replacement Session, bind it, and preserve the first prompt.
+import '../testing.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 import { h } from 'preact'
 import { cache, ent, useRoute } from '../live.ts'

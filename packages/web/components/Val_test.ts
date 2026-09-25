@@ -1,5 +1,6 @@
 // The untyped door dispatches on constructors and distinctive shapes —
 // never a date-parse of prose. Unclaimed values fall back to String.
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { faceFor, Val } from './Val.tsx'
 import { Entity } from './Entity.tsx'

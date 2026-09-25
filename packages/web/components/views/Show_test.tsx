@@ -2,6 +2,7 @@
 // where an absent field must paint nothing. A renderer is a component: every
 // case mounts it through Preact (mount.ts) and asserts on the resulting DOM,
 // never on a bare call's vnode tree.
+import '../../testing.ts'
 import { h } from 'preact'
 import { assertEquals, assertExists } from '@std/assert'
 import { cache, config, deps, dropAgg, ent, useRoute } from '../../live.ts'
@@ -482,7 +483,7 @@ Deno.test('comment dependencies lead with the entity commented on', () => {
 
 Deno.test('claim chip loads its referenced session instead of painting a blank', async () => {
   let { landSub, routeName, unsubscribe } = await import('../../live.ts')
-  let { tick } = await import('../../../bin/testing.ts')
+  let { tick } = await import('../../testing.ts')
   cache.value = {
     claimed: {
       entity: { eid: 'claimed', num: 900 },

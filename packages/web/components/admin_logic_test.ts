@@ -4,6 +4,7 @@
 // pulls types.ts + client.ts, no view), so they never mount and stay sub-ms.
 // The DOM-mount tests that render <Admin/> live in admin_test.ts, which must
 // import the heavy Admin.tsx view and cannot hit the 1ms budget.
+import '../testing.ts'
 import {
   adminRoute,
   censusComps,

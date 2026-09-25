@@ -1,11 +1,11 @@
 // The frozen 432-set sample contains table names only (no owner bodies/IDs).
 // Every curated web registration and terminal overlay must keep its old pick,
 // including qualified views, unnamed defaults, tabs and registration ties.
+import '../testing.ts'
 import './Entity.tsx'
-import { overrides } from '../tui/App.tsx'
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { Archetypes } from '@yaks/archetype'
-import { applicable, define, extend, resolve } from '@yaks/render'
+import { applicable, define, resolve } from '@yaks/render'
 import { bundle, registry, vocab } from './registry.ts'
 import type { Ent } from '../types.ts'
 import fixture from './fixtures/archetypes.json' with { type: 'json' }
@@ -36,16 +36,11 @@ Deno.test('the fleet Ent boundary selects from the spine without touching bodies
   )
 })
 
-for (let terminal of [false, true]) {
-  Deno.test(`432 archetypes preserve every ${terminal ? 'TUI' : 'web'} registry pick`, () => {
+Deno.test('432 archetypes preserve every registry pick', () => {
     assertEquals(entries.length, 432)
     assertEquals(new Set(entries.map((a) => a.eid)).size, 432)
     let old = define(registry.renderers, { views: registry.views })
     let next = define(registry.renderers, { views: registry.views, archetypes })
-    if (terminal) {
-      extend(old, overrides)
-      extend(next, overrides)
-    }
     let views = [...new Set(old.renderers.map((r) => r.view))]
     // Column-only view names reject an entity subject in the old registry;
     // preserve that refusal too rather than dropping those registrations.
@@ -94,4 +89,3 @@ for (let terminal of [false, true]) {
       )
     }
   })
-}

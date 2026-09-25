@@ -4,6 +4,7 @@
 // SECOND implementation satisfies the same Resolver interface, proof the seam is
 // real (T-17124, the boundary T-17125's IDB backend plugs into). Pure — a plain
 // mutable graph stands in for the live cache, so no DB and no DOM.
+import './testing.ts'
 import { anchor, emptyIndex, indexAll } from './index.ts'
 import { parseQuery, type Pred } from './query.ts'
 import { memoryResolver, type Resolver, type Store } from './resolver.ts'

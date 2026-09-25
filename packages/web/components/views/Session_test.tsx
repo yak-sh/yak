@@ -1,4 +1,5 @@
 // A session row keeps the actor it works for visible in every shared list.
+import '../../testing.ts'
 import { h, render } from 'preact'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -698,7 +699,7 @@ Deno.test('sessionMentions == resolveMentions(threadMentions)', () => {
 Deno.test('SessionRow loads its actor face when no peer delivered it', async () => {
   let { SessionRow } = await import('./Session.tsx')
   let { routeName, unsubscribe } = await import('../../live.ts')
-  let { tick } = await import('../../../bin/testing.ts')
+  let { tick } = await import('../../testing.ts')
   let prior = useRoute(() => {})
   cache.value = {
     'actor-row-session': {

@@ -4,7 +4,6 @@ import { favoritePin, navigationQuery, navigationView } from '../navigation.ts'
 import { cache, ent, mode, mutate } from '../live.ts'
 import { block } from './ui.tsx'
 import { useQuery } from './useQuery.ts'
-import { ConfigTab } from './Config.tsx'
 import { Entity } from './Entity.tsx'
 import { Icon } from './icons.tsx'
 import { CARD_DATA, cardData } from './drag.ts'
@@ -39,9 +38,8 @@ let Frame = block('aside', 'Navigation', {
   Title: 'span',
   Empty: 'p',
   Items: 'nav',
-  Foot: 'footer',
 })
-let { Shade, Head, Title, Empty, Items, Foot } = Frame
+let { Shade, Head, Title, Empty, Items } = Frame
 
 export let NavigationToggle = () => (
   <button
@@ -130,9 +128,6 @@ export let Navigation = () => {
             </Empty>
           )}
         </Items>
-        <Foot>
-          <ConfigTab text />
-        </Foot>
       </Frame>
     </>
   )

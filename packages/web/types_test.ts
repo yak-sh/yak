@@ -1,3 +1,4 @@
+import './testing.ts'
 import {
   awake,
   cols,

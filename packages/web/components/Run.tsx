@@ -6,8 +6,6 @@ import { catalog, type Pick, type Provider, transport } from '../providers.ts'
 import { block } from './ui.tsx'
 import { menu, navigate, screenTarget } from './nav.tsx'
 import { usePlaceAt } from './overlay.tsx'
-import { codexAccount } from '../account_client.ts'
-import { openAccount } from './Account.tsx'
 
 // The Run door: a task's "run session…" verb opens this over the point
 // the menu stood on — model, effort; the provider is never asked, it is
@@ -25,14 +23,10 @@ import { openAccount } from './Account.tsx'
 
 type Ask = { eid: string; x: number; y: number }
 
-// The live readiness predicate every spawn door judges transports by:
-// graph-native Codex is blocked unless its account is signed in. Reads the
-// account first so an unread status never forces the fallback on a signed-in
-// owner. Shared by choose() here and the :fix doors (Status/TUI via spawnPlan).
-export let liveBlocked = async (): Promise<(name: string) => boolean> => {
-  if (!codexAccount.view.peek().status) await codexAccount.read()
-  return (name) => name == 'codex' && !codexAccount.view.peek().status?.ready
-}
+// The live readiness predicate every spawn door judges transports by. No
+// transport is blocked: a provider that cannot start says so on its session.
+export let liveBlocked = (): Promise<(name: string) => boolean> =>
+  Promise.resolve(() => false)
 
 // The live transport for a picked model: graph-native Codex only when its
 // account is signed in, else the permanent CLI fallback.
@@ -42,11 +36,9 @@ export let choose = async (pick: Pick): Promise<string> =>
 let Frame = block('div', 'Run', {
   Row: 'label',
   Name: 'span',
-  State: 'span',
-  Account: 'button',
   Go: 'button',
 })
-let { Row, Name, State, Account, Go } = Frame
+let { Row, Name, Go } = Frame
 
 // The table, fetched once per page: it changes when the server changes.
 export let providers = signal<Provider[]>([])
@@ -91,11 +83,6 @@ let Form = ({ a }: { a: Ask }) => {
   let ms = catalog(providers.value)
   let m = ms.find((x) => x.model == choice) ?? ms[0]
   let ef = m?.efforts.includes(effort) ? effort : m?.efforts[0]
-  let native = !!m?.transports.includes('codex')
-  let av = codexAccount.view.value
-  useEffect(() => {
-    if (native) codexAccount.read()
-  }, [native])
 
   let go = async () => {
     if (!m) return
@@ -169,21 +156,6 @@ let Form = ({ a }: { a: Ask }) => {
           >
             {m.efforts.map((x) => <option key={x} value={x}>{x}</option>)}
           </select>
-        </Row>
-      )}
-      {native && (
-        <Row>
-          <Name>account</Name>
-          <State mod={av.status?.state}>
-            {av.status?.ready
-              ? `ready${av.status.plan ? ` · ${av.status.plan}` : ''}`
-              : av.busy == 'read' && !av.status
-              ? 'checking…'
-              : av.status?.state.replace('_', ' ') ?? 'not checked'}
-          </State>
-          <Account type='button' onClick={openAccount}>
-            {av.status?.ready ? 'manage' : 'log in'}
-          </Account>
         </Row>
       )}
       <Go type='button' disabled={!m} onClick={go}>▶ start</Go>

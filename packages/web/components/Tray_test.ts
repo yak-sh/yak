@@ -1,5 +1,6 @@
 // The web tray hotkey respects normal mode, editable controls, and browser
 // shortcuts before it toggles the tray state.
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { mode } from '../live.ts'
 import { type Ent } from '../types.ts'

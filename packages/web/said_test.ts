@@ -4,6 +4,7 @@
 // a subagent's are its parent's prompts, an unmarked user turn is the
 // harness's, and a gesture the web writes in the owner's name is not
 // authorship.
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { contextDigest, rows, saidLines } from './client.ts'
 import type { Snapshot } from './types.ts'

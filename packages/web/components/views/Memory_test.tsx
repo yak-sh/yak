@@ -1,5 +1,6 @@
 // The memory's list face: registry specificity and the three facts a row
 // promises.
+import '../../testing.ts'
 import { type ComponentChildren, type VNode } from 'preact'
 import { assertEquals } from '@std/assert'
 import { type Ent } from '../../types.ts'

@@ -241,20 +241,20 @@ export let Mail = ({ e }: { e: Ent }) => {
   let inbound = !!m.message_id
   // The send outcome is the shared delivered/failed facet (D-14945), not a
   // mail column: delivered = sent, failed = attempted-and-failed, neither =
-  // pending. received_at stays on the row as the arrival DATA.
+  // pending. `at` stays on the row as the arrival DATA.
   let sent = e.delivered?.at
   let fault = e.failed?.message
   return (
     <MailEl>
       <MailField name='from'>{m.from || '?'}</MailField>
-      {!inbound && e.deliver?.to && e.deliver.to != m.to_addr &&
+      {!inbound && e.deliver?.to && e.deliver.to != m.to &&
         <MailField name='requested'>{e.deliver.to}</MailField>}
-      <MailField name='to'>{m.to_addr || e.deliver?.to || ''}</MailField>
+      <MailField name='to'>{m.to || e.deliver?.to || ''}</MailField>
       {inbound
         ? (
           <>
             <MailField name='received'>
-              <Stamp at={m.received_at} />
+              <Stamp at={m.at} />
             </MailField>
             <MailKey>verified</MailKey>
             <MailVal mod={m.verified ? 'verified' : 'unverified'}>
@@ -411,24 +411,16 @@ export let CommentDependencies = ({ e }: { e: Ent }) => (
   </>
 )
 
-// The entity's sessions: every run that named it as requested work or its
-// persistent role, plus the claim's holder — one row each, so a task or role
-// is the door to the agents that served it.
-export let Runs = ({ e }: { e: Ent }) => {
-  let ids = new Set(
-    [
-      ...useQueryEids(`.session.requested_task=${e.eid}`),
-      ...useQueryEids(`.session.role=${e.eid}`),
-    ],
-  )
-  if (e.claim) ids.add(e.claim.session)
-  if (!ids.size) return null
-  return (
-    <RunsEl>
-      {[...ids].map((s) => <Entity key={s} eid={s} view='List.Tile' />)}
-    </RunsEl>
-  )
-}
+// The entity's session: the claim's holder, so a task is the door to the
+// agent working it.
+export let Runs = ({ e }: { e: Ent }) =>
+  e.claim
+    ? (
+      <RunsEl>
+        <Entity eid={e.claim.session} view='List.Tile' />
+      </RunsEl>
+    )
+    : null
 
 // The saved boards that watch this entity — a project's boards, found by
 // boardsOver's query scan, since a query string is where a board names
@@ -479,9 +471,8 @@ export let Similar = ({ e }: { e: Ent }) => {
       if (mine == seq.current) setKin(hits.filter((h) => h.eid != e.eid))
     }
     if (!text) return got([])
-    let q = [`.near=${e.eid}`, '.order=similar', 'limit=5']
-      .map(encodeURIComponent).join('&')
-    fetch(`${base()}/query?${q}`).then((r) => (r.ok ? r.json() : []))
+    let q = encodeURIComponent(`.near=${e.eid}&.order=similar&.limit=5`)
+    fetch(`${base()}/query?q=${q}`).then((r) => (r.ok ? r.json() : []))
       .then((rows) =>
         got(
           (rows as Record<string, unknown>[]).map((row) => {

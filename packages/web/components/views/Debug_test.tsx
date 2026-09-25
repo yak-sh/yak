@@ -1,5 +1,6 @@
 // The Debug inspector exposes every component and gives its editing controls
 // the same component vocabulary as its stored rows.
+import { slow } from '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -7,7 +8,6 @@ import { parseHTML } from 'linkedom'
 import { compTone } from '../comp.ts'
 import { cache, ent, useRoute } from '../../live.ts'
 import { applicable } from '../registry.ts'
-import { slow } from '../../../bin/testing.ts'
 
 // Each case imports Entity.tsx — the whole component registry — and mounts a
 // Debug view through preact; the first pays that registry import (and hljs to

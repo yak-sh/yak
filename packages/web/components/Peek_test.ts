@@ -1,4 +1,5 @@
 // The Peek keyboard seam: an editor spends Escape before its floating card.
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { peekKey, popPeek } from './Peek.tsx'
 

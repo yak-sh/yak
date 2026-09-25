@@ -1,3 +1,4 @@
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { type Change, type Pane } from './types.ts'
 import {

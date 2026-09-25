@@ -1,3 +1,4 @@
+import '../testing.ts'
 import { assert, assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'

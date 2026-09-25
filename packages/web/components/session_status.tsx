@@ -9,14 +9,14 @@ import { useLocalEids, useQueryEids } from './useQuery.ts'
 import { Dot } from './Dot.tsx'
 
 // A wake still pending for this session: a `wake` entity aimed at it (the
-// derived `deliver.to` reverse index) that is neither `delivered` nor `error` —
+// derived `deliver.to` reverse index) that is not yet `delivered` —
 // the same tri-state pending-wake fact, now expressed as a query rather than a
 // bespoke index. The dot re-renders only when ITS wake membership changes; a
 // patch to any other entity (another session's wake included) triggers zero
 // re-render (T-17036).
-export let PENDING_WAKE = '.wake!&.delivered=&.failed='
+export let PENDING_WAKE = '.wake!&.delivered='
 let pendingWakeFor = (session: string) =>
-  `.wake! .deliver.to=${session} .delivered= .failed=`
+  `.wake! .deliver.to=${session} .delivered=`
 // Every dot holds the ONE defining sub — every pending wake, with the session
 // it is aimed at — and reads its own session off those rows, so a strip or a
 // list of dots costs one server sub, not one per session (T-37445: a page

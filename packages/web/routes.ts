@@ -1,42 +1,25 @@
 // The routes facet, exported as `@yaks/web/routes`: the addresses a person
-// opens in a browser. `/` is home, and each entity is at its own id — `/T-9`,
-// or `/T#8d83e663ef` for one the store has not numbered, whose `#` the browser
-// keeps to itself, so the server sees `/T`. Every one of them answers the same
-// page; the app reads the address and draws the rest (./app.ts).
+// opens in a browser. `/` is the root canvas, `/admin` the component tables,
+// and each entity is at its own id — `/T-9`, or `/T%23abc123` for one the
+// store has not numbered. Every one of them answers the same page, and the app
+// reads the address and draws the rest (main.tsx).
 //
 // The id routes are one prefix per series letter the vocabulary uses, in both
-// cases, rather than a catch-all: a host's routes are matched first and a
+// cases, rather than a catch-all: a host's routes are matched first, and a
 // catch-all would answer `/query` and `/ws` before @yaks/api could.
 //
-// `/web/*` is what that page loads: the app bundled for this host's plugins
-// (./bundle.ts), its stylesheet, and the vocabulary exactly as the host loaded
-// it, so the browser and the server read one set of components.
+// `/web/*` is what that page loads: the app bundled from main.tsx, its
+// stylesheet, icons and manifest, and the vocabulary exactly as the host
+// loaded it, so the browser and the server read one set of components.
 
 import type { Route } from '@yaks/api'
 import { prefixOf } from '@yaks/id'
 import type { Vocab } from '@yaks/vocab'
-import { bundle, entry, type Plug } from './bundle.ts'
+import { bundle } from './bundle.ts'
 
-/** What this facet reads off the host it is composing into: the config that
- * named the plugins, and the vocabulary they loaded. */
-export type Hosting = {
-  config: { name?: string; plugins?: Plug[] }
-  vocab: Vocab
-}
-
-let escape = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
-
-/** The one page every address answers with. */
-export let shell = (name: string): string =>
-  `<!doctype html>
-<html lang="en">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escape(name)}</title>
-<link rel="stylesheet" href="/web/style.css">
-<script type="module" src="/web/client.js"></script>
-`
+/** What this facet reads off the host it is composing into: the vocabulary
+ * its plugins loaded. */
+export type Hosting = { vocab: Vocab }
 
 /** Every letter an id in this vocabulary can start with, in both cases. */
 export let letters = (vocab: Vocab): string[] => {
@@ -45,16 +28,19 @@ export let letters = (vocab: Vocab): string[] => {
   return [...upper].flatMap((l) => [l, l.toLowerCase()]).sort()
 }
 
-let sha = async (text: string) =>
+let sha = async (body: string | Uint8Array) =>
   [
     ...new Uint8Array(
-      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)),
+      await crypto.subtle.digest(
+        'SHA-256',
+        typeof body == 'string' ? new TextEncoder().encode(body) : body,
+      ),
     ),
   ]
     .map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32)
 
 // A body the browser may keep, revalidated on each load by its hash.
-let kept = async (request: Request, body: string, type: string) => {
+let kept = async (request: Request, body: string | Uint8Array, type: string) => {
   let tag = `"${await sha(body)}"`
   let headers = {
     'content-type': type,
@@ -68,8 +54,13 @@ let kept = async (request: Request, body: string, type: string) => {
 
 // A body made on its first request and kept for the life of the process. A
 // failure is not kept: the next request tries again, and says why meanwhile.
-let served = (type: string, make: () => Promise<string>) => {
-  let made: Promise<string> | undefined
+let served = (
+  type: string,
+  make: () => Promise<string | Uint8Array>,
+  early = false,
+) => {
+  let made: Promise<string | Uint8Array> | undefined
+  if (early) made = make()
   return async (request: Request) => {
     try {
       return await kept(request, await (made ??= make()), type)
@@ -81,36 +72,43 @@ let served = (type: string, make: () => Promise<string>) => {
   }
 }
 
-/** `/`, an id route per series letter, and `/web/*`. */
+let here = (path: string) => new URL(path, import.meta.url)
+let text = (path: string) => () => fetch(here(path)).then((r) => r.text())
+let bytes = (path: string) => () =>
+  fetch(here(path)).then(async (r) => new Uint8Array(await r.arrayBuffer()))
+
+let files: [string, string, () => Promise<string | Uint8Array>][] = [
+  ['styles.css', 'text/css; charset=utf-8', text('./styles.css')],
+  ['manifest.webmanifest', 'application/manifest+json', text('./manifest.webmanifest')],
+  ...['icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png']
+    .map((name): [string, string, () => Promise<Uint8Array>] => [name, 'image/png', bytes(`./${name}`)]),
+]
+
+/** The page at every entity's address, `/web/*`, and the vocabulary. */
 export let routes = (host: Hosting): Route[] => {
-  let name = host.config.name ?? 'yak'
-  let page = shell(name)
-  let html = () =>
-    new Response(page, {
-      headers: { 'content-type': 'text/html; charset=utf-8' },
-    })
-  let file = (path: string) => async () =>
-    (await fetch(new URL(path, import.meta.url))).text()
+  let page = served('text/html; charset=utf-8', text('./index.html'))
   let vocab = JSON.stringify(host.vocab.docs)
   return [
-    { method: 'GET', path: '/', handle: html },
+    { method: 'GET', path: '/', handle: page },
+    { method: 'GET', path: '/admin', handle: page },
+    { method: 'GET', path: '/admin/*', handle: page },
+    { method: 'GET', path: '/%23*', handle: page },
     ...letters(host.vocab).flatMap((l): Route[] => [
-      { method: 'GET', path: `/${l}-*`, handle: html },
-      { method: 'GET', path: `/${l}`, handle: html },
+      { method: 'GET', path: `/${l}-*`, handle: page },
+      { method: 'GET', path: `/${l}%23*`, handle: page },
+      { method: 'GET', path: `/${l}`, handle: page },
     ]),
     {
       method: 'GET',
-      path: '/web/client.js',
-      handle: served(
-        'text/javascript; charset=utf-8',
-        () => bundle(entry(name, host.config.plugins ?? [])),
-      ),
+      path: '/web/app.js',
+      // Started with the host, so the first page load finds it built.
+      handle: served('text/javascript; charset=utf-8', bundle, true),
     },
-    {
+    ...files.map(([name, type, make]): Route => ({
       method: 'GET',
-      path: '/web/style.css',
-      handle: served('text/css; charset=utf-8', file('./style.css')),
-    },
+      path: `/web/${name}`,
+      handle: served(type, make),
+    })),
     {
       method: 'GET',
       path: '/web/vocab.json',

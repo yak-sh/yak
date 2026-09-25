@@ -4,33 +4,6 @@ import { agreementProbe, boot, cache, clientId, config, ent } from './live.ts'
 import { idOf, slugsOf } from './types.ts'
 import { restore, route } from './components/nav.tsx'
 import { App } from './components/App.tsx'
-import { loadPlugins } from './plugins.ts'
-
-// Tell the server when this page breaks (the rows land in telemetry) — a
-// crash nobody sees is a crash nobody fixes. Capped per page load: a
-// render loop that throws every frame must not become a POST loop. Every
-// failure here is swallowed, because the reporter must never become the
-// bug it reports.
-let left = 10
-let report = (message: string, stack?: string) => {
-  if (left-- <= 0) return
-  try {
-    fetch('/error', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        message,
-        stack: stack?.slice(0, 2000),
-        url: location.href,
-        client: clientId(),
-      }),
-    }).catch(() => {})
-  } catch { /* no localStorage, no fetch — nothing worth a second crash */ }
-}
-addEventListener('error', (e) => report(e.message, e.error?.stack))
-addEventListener('unhandledrejection', (e) => {
-  report(String(e.reason?.message ?? e.reason), e.reason?.stack)
-})
 
 // Name this tab to the socket before it opens, so its writes journal a
 // resolved actor (T-6669). Fill the cache, open the socket, render.
@@ -62,12 +35,5 @@ restore()
 // The cursor is update-only: nav.tsx publishes where this client
 // looks, but nothing reads it back to move the tab. Rendering answers to the
 // URL and to gestures, never to graph state, so there is no follow to arm here.
-
-// Load configured plugins before the first render, so their renderers, actions
-// and editors are registered when App mounts (D-18663 seam 1). The server hands
-// the browser the list (it read TASKS_PLUGINS) as a JSON script; absent by
-// default, so this imports nothing and the boot is unchanged.
-let pluginTag = document.getElementById('tasks-plugins')?.textContent
-await loadPlugins(pluginTag ? JSON.parse(pluginTag) : [])
 
 render(<App />, document.body)

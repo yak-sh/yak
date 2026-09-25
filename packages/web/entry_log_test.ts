@@ -1,5 +1,6 @@
 // Graph Session log projection tests hold the provider-neutral rendering and
 // derived-state contract without a server, browser, or process transcript.
+import './testing.ts'
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import {
   contextOf,

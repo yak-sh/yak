@@ -4,12 +4,12 @@
 // tally frame the server sends, and read the numbers off the meta row. The
 // board's task rows are deliberately ABSENT from the cache here: a tile that
 // could still count them locally would hide the very regression this fixes.
+import { tick } from '../../testing.ts'
 import { render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { boardTallyName, cache, ent, landSub, useRoute } from '../../live.ts'
 import { resolve } from '../Entity.tsx'
-import { tick } from '../../../bin/testing.ts'
 import { BoardTile } from './BoardTile.tsx'
 
 // A mounted view holds subscriptions. In a test there is no server to hold

@@ -1,5 +1,6 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
+import { slow, until } from './testing.ts'
 import { stub } from '@std/testing/mock'
 import { FakeTime } from '@std/testing/time'
 import {
@@ -96,7 +97,6 @@ import {
   assertStrictEquals,
   assertThrows,
 } from '@std/assert'
-import { slow, until } from '../bin/testing.ts'
 
 // Status is DERIVED (D-24102): to make a cache Ent read as done/wip/cancelled,
 // give it the mark/claim comp statusOf keys off, not a stored status column.

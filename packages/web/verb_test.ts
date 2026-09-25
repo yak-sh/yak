@@ -1,6 +1,7 @@
 // The verb vocabulary is executable data: finite kinds teach and validate,
 // while usage and arity are mechanical renderings of one declaration.
 
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { comps } from './types.ts'
 import { type Decl, enumOf, id, of, text, usageOf, wordsOf } from './verb.ts'

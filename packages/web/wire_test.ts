@@ -1,4 +1,5 @@
 // The sync wire's two-way rolling-deploy contract.
+import './testing.ts'
 import { assert, assertEquals } from '@std/assert'
 import type { Change } from './types.ts'
 import { liveChanges, liveFrame } from './wire.ts'

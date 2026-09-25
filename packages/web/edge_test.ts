@@ -1,4 +1,5 @@
 // The edge identity derivation and the transition table (D-23820, T-23825).
+import './testing.ts'
 import {
   assertEquals,
   assertMatch,

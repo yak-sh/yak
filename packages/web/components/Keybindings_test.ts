@@ -1,5 +1,6 @@
 // The web help door respects modes and editable controls before it reveals the
 // keybinding card.
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { mode } from '../live.ts'
 import { keybindingKey, keybindingsOpen } from './Keybindings.tsx'

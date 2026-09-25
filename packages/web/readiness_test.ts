@@ -1,4 +1,5 @@
 // Cold, provisional and confirmed-empty are distinct read states.
+import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { effect } from '@preact/signals'
 import {

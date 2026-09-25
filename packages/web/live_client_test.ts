@@ -1,3 +1,4 @@
+import './testing.ts'
 import { assertEquals, assertFalse } from '@std/assert'
 import { liveClient } from './live_client.ts'
 import { spread } from './subs.ts'

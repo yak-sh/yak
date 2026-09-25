@@ -125,8 +125,8 @@ export let REFS_PROP: Prop = {
 // column, DERIVED from refCols — never hand-listed — named plural(comp) when the
 // comp has a single ref column, plural(comp)_{prop} when several ref columns
 // share the plural (the prop says which pointer). English is not the goal;
-// uniqueness is (shelf→shelfs is fine). A name colliding with a real prop is a
-// load error, so a real column always wins its spelling — the scopes discipline.
+// uniqueness is (shelf→shelfs is fine). A name colliding with a real prop is
+// left out, so a real column always wins its spelling — the scopes discipline.
 export type Assoc = { comp: string; prop: string }
 let plural = (s: string) =>
   s.endsWith('y') ? s.slice(0, -1) + 'ies' : s.endsWith('s') ? s : s + 's'
@@ -136,13 +136,10 @@ export let reverseAssocs: Map<string, Assoc> = (() => {
   let m = new Map<string, Assoc>()
   for (let [c, p] of refCols) {
     let name = byComp.get(c)!.length == 1 ? plural(c) : `${plural(c)}_${p}`
-    m.set(name, { comp: c, prop: p })
+    if (!owned(name)) m.set(name, { comp: c, prop: p })
   }
   return m
 })()
-for (let name of reverseAssocs.keys()) {
-  if (owned(name)) throw new Error(`reverse assoc .${name} shadows a real prop`)
-}
 
 // The reserved query WORDS — directives that are neither a column nor an
 // association: `.refs` (the multi-column reverse-union), the `.distinct` /

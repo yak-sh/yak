@@ -1,5 +1,6 @@
 // The app's curated faces, actions and mounted Entity door preserve the same
 // defaults and live behavior across the web and terminal hosts.
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { useState } from 'preact/hooks'

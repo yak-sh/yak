@@ -1,4 +1,5 @@
 // The inbox line names and opens the thing that asked for attention.
+import '../../testing.ts'
 import { render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'

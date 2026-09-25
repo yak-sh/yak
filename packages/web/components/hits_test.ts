@@ -1,3 +1,4 @@
+import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { pickLine } from './hits.ts'
 import { EXISTS, parseQuery, TEXT } from '../query.ts'
