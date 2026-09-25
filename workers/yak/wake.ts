@@ -9,8 +9,14 @@
 // longer exists, and the occurrence is spent (@yaks/wake runs an effect at
 // most once). So a run is marked on its own row while it lasts
 // (`sweep.began`), and the next incarnation reads a mark older than itself as
-// a run that died: it says so and fires the job again (`resumed`). Every job
-// here is a sweep that can run twice.
+// a run that died and fires the job again (`resumed`). Every job here is a
+// sweep that can run twice.
+//
+// A reset is expected — each deploy resets every object twice, and so does a
+// `wrangler tail` starting — so a run it kills is not a failure: the run after
+// it finishes. The failure is a job that never does, so a death is reported
+// only once no run has finished for `STUCK` since the first one of the streak
+// began (`sweep.since`), and every death after that says so again.
 //
 // Seeds are insert-once: a restart must not rewind `at`, erase `fired`, or
 // undo a schedule someone deliberately paused. A new recurring seed starts
@@ -35,6 +41,14 @@ export let sweepDoc: VocabDoc = {
           format: 'date-time',
           stamped: true,
           description: 'when the run under way began; null once it ends',
+        },
+        since: {
+          type: 'string',
+          format: 'date-time',
+          stamped: true,
+          description:
+            'when the first of the runs that died unfinished in a row began; ' +
+            'null once one ends',
         },
       },
     },
@@ -88,40 +102,53 @@ export let reporting = async (
   row: Fired,
   run: () => Promise<unknown>,
 ): Promise<undefined> => {
-  let mark = (began: string | null) =>
-    meta(env).apply([{ entity: row.entity, sweep: { began } }], KERNEL)
-  await mark(new Date().toISOString())
+  let mark = (sweep: Record<string, string | null>) =>
+    meta(env).apply([{ entity: row.entity, sweep }], KERNEL)
+  await mark({ began: new Date().toISOString() })
   try {
     await run()
   } catch (error) {
     await reported(env, jobOf(row), error)
     throw error
   } finally {
-    await mark(null).catch((e) => reported(env, jobOf(row), e))
+    await mark({ began: null, since: null })
+      .catch((e) => reported(env, jobOf(row), e))
   }
 }
 
+/** How long a job may go without a run finishing before a death is reported:
+ * longer than a burst of deploys, shorter than anyone waits for a sweep. */
+export let STUCK = 15 * 60_000
+
 /** The jobs an object died in the middle of: a run marked begun before this
  * incarnation was `born`, which only a dead one could have left. Each is
- * reported and fired again, unless its wake was paused; a run this
- * incarnation began is still going and is left alone. */
+ * fired again, unless its wake was paused, and reported once no run has
+ * finished for `STUCK`; a run this incarnation began is still going and is
+ * left alone. */
 export let resumed = async (
   graph: Pick<Graph, 'read' | 'apply'>,
   born: number,
   report: (job: string, error: Error) => Promise<unknown>,
 ): Promise<void> => {
   for (let row of await graph.read('.sweep&?wake')) {
-    let began = (row.sweep as { began?: string | null }).began
+    let sweep = row.sweep as { began?: string | null; since?: string | null }
+    let began = sweep.began
     if (!began || Date.parse(began) >= born) continue
+    let since = sweep.since ?? began
     let job = jobOf(row as Fired)
-    await report(
-      job,
-      new Error(`wake ${job}: the run begun ${began} died unfinished`),
-    )
+    if (born - Date.parse(since) >= STUCK) {
+      await report(
+        job,
+        new Error(
+          `wake ${job}: no run has finished since ${since}; ` +
+            `the run begun ${began} died unfinished`,
+        ),
+      )
+    }
     let paused = (row.wake as { at?: string | null } | undefined)?.at == null
     await graph.apply([{
       entity: row.entity,
-      sweep: { began: null },
+      sweep: { began: null, since },
       ...(paused ? {} : { wake: { at: new Date().toISOString() } }),
     }])
   }

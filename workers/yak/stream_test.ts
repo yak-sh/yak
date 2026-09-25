@@ -10,7 +10,7 @@
 // take, since they have no version-metadata binding either.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { VERSION } from './seo.ts'
-import { Wire } from './stream.ts'
+import { resumable, Wire } from './stream.ts'
 
 let kv = () => {
   let m = new Map<string, unknown>()
@@ -192,4 +192,31 @@ Deno.test('the same deploy id stays quiet', async () => {
   } finally {
     drained(wire)
   }
+})
+
+// A held stream over a body that breaks after one frame, as a reset leaves it:
+// what the client reads, and what was reported.
+let broken = async (why: Error) => {
+  let body = new ReadableStream<Uint8Array>({
+    start: (c) => c.enqueue(new TextEncoder().encode('id: 1\n\n')),
+    pull: (c) => c.error(why),
+  })
+  let told: unknown[] = []
+  let text = await new Response(resumable(body, (e) => told.push(e))).text()
+  return { text, told }
+}
+
+Deno.test('a stream its object was reset under ends cleanly, unreported', async () => {
+  for (
+    let why of [
+      new Error('Network connection lost.'),
+      new Error('Durable Object reset because its code was updated.'),
+      Object.assign(new Error('anything'), { retryable: true }),
+    ]
+  ) assertEquals(await broken(why), { text: 'id: 1\n\n', told: [] })
+})
+
+Deno.test('a stream broken any other way ends cleanly and is reported', async () => {
+  let why = new Error('boom')
+  assertEquals(await broken(why), { text: 'id: 1\n\n', told: [why] })
 })

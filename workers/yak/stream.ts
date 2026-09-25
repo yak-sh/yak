@@ -44,7 +44,7 @@
 import { rosterLine } from '@yaks/mcp/roster'
 import { VERSION } from './seo.ts'
 import type { Env } from './env.ts'
-import { fetchOf, type Namespace } from './door.ts'
+import { evicted, fetchOf, type Namespace } from './door.ts'
 
 // The slice of the Durable Object runtime this object touches, structurally,
 // so `deno check` reads it without @cloudflare/workers-types.
@@ -341,10 +341,43 @@ export class Wire {
 // within the person it already belongs to.
 let wireOf = (ns: Namespace, person: string) => fetchOf(ns, person)
 
+// The object went away under a stream it held: reset (door.ts `evicted`), or
+// the connection to it lost with it.
+let gone = (e: unknown) =>
+  evicted(e) ||
+  e instanceof Error && /Network connection lost/.test(e.message)
+
+/**
+ * A held stream that ends when the object behind it does. Every deploy resets
+ * the Wire, and so does a `wrangler tail` starting, and the body breaks under
+ * the client. The log is resumable, so that is not a failure: the stream ends
+ * as if the server closed it, and the client comes back with `Last-Event-ID`
+ * for what it missed. A break for any other reason ends it the same way and is
+ * told to `lost`.
+ */
+export let resumable = (
+  body: ReadableStream<Uint8Array>,
+  lost: (e: unknown) => unknown,
+): ReadableStream<Uint8Array> => {
+  let reader = body.getReader()
+  return new ReadableStream({
+    pull: async (out) => {
+      try {
+        let read = await reader.read()
+        read.done ? out.close() : out.enqueue(read.value)
+      } catch (e) {
+        if (!gone(e)) await lost(e)
+        out.close()
+      }
+    },
+    cancel: (why) => reader.cancel(why),
+  })
+}
+
 // The GET's answer: this person's stream, resumed where the client says it
 // left off.
-export let listen = (env: Env, person: string, req: Request) =>
-  wireOf(env.WIRE, person)(
+export let listen = async (env: Env, person: string, req: Request) => {
+  let held = await wireOf(env.WIRE, person)(
     () =>
       new Request('http://wire/open', {
         headers: Object.fromEntries(
@@ -354,6 +387,13 @@ export let listen = (env: Env, person: string, req: Request) =>
         ),
       }),
   )
+  if (!held.body) return held
+  let lost = async (e: unknown) => {
+    let { fault } = await import('./unseen.ts')
+    await fault(env, 'mcp stream', e)
+  }
+  return new Response(resumable(held.body, lost), held)
+}
 
 // The roster a session is holding, against the one this door lists now: the
 // line to say on this reply, or nothing. `init` records what a client just

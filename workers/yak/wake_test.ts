@@ -16,7 +16,7 @@ import { GRAPHQL } from './usage.ts'
 import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Env } from './env.ts'
-import { reporting } from './wake.ts'
+import { reporting, STUCK } from './wake.ts'
 
 let at = (time: string) => Date.parse(`2026-09-07T${time}:00Z`)
 let iso = (time: string) => new Date(at(time)).toISOString()
@@ -133,18 +133,19 @@ Deno.test('a job is marked begun on its row while it runs, and cleared after', a
     return Promise.resolve()
   })
   assert((marks[0] as { began: string }).began)
-  assertEquals(marks[1], { began: null })
+  assertEquals(marks[1], { began: null, since: null })
 })
 
 // A deploy resets the object under whatever job it is running: the job's own
-// catch never runs, so the incarnation after it is what can tell.
-Deno.test('a job its object died under is reported and fired by the next one', async () => {
+// catch never runs, so the incarnation after it is what can tell. A reset is
+// expected, so the run is fired again quietly; only a job that has not
+// finished for `STUCK` is reported.
+let died = async (began: string, since?: string) => {
   let p = platform('wake resumed')
   await directory(p)
-  let began = new Date(Date.now() - 60_000).toISOString()
   await meta(p.env).apply([{
     entity: { eid: 'yak-trash' },
-    sweep: { began },
+    sweep: { began, since },
   }], KERNEL)
   let store = new Store(p.states.get(PLATFORM_STORE)!, p.env)
   p.env.STORE = {
@@ -152,17 +153,29 @@ Deno.test('a job its object died under is reported and fired by the next one', a
     get: () => ({ fetch: (req: Request) => store.fetch(req) }),
   } as typeof p.env.STORE
   let row = await wake(p.env, 'yak-trash')
-  assertEquals((row.sweep as { began: unknown }).began, null)
   assert(Date.parse(row.wake.at!) <= Date.now(), 'the job is due again')
-  let [broke] = await meta(p.env).query('.exception')
-  assertEquals(
-    broke.exception,
-    {
-      ...broke.exception as object,
-      request: 'wake trash',
-      message: `wake trash: the run begun ${began} died unfinished`,
-    },
-  )
+  let broke = await meta(p.env).query('.exception')
+  return { sweep: row.sweep, broke: broke.map((b) => b.exception) }
+}
+let ago = (ms: number) => new Date(Date.now() - ms).toISOString()
+
+Deno.test('a job its object died under is fired again by the next one, unreported', async () => {
+  let began = ago(60_000)
+  let { sweep, broke } = await died(began)
+  assertEquals(sweep, { kind: 'trash', began: null, since: began })
+  assertEquals(broke, [])
+})
+
+Deno.test('a job with no run finished for STUCK is reported at each death', async () => {
+  let began = ago(60_000), since = ago(STUCK)
+  let { sweep, broke } = await died(began, since)
+  assertEquals(sweep, { kind: 'trash', began: null, since })
+  assertEquals(broke, [{
+    ...broke[0] as object,
+    request: 'wake trash',
+    message: `wake trash: no run has finished since ${since}; ` +
+      `the run begun ${began} died unfinished`,
+  }])
 })
 
 Deno.test('the meter wake runs its job at the supplied hour', async () => {
