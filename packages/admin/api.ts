@@ -19,6 +19,7 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { timed } from '@yaks/cli'
 import { type And, and, eq, ge, limit, want } from '@yaks/query'
+import { CallError } from '@yaks/tools'
 import { LINK } from '../../workers/yak/link.ts'
 import { PLATFORM_STORE } from '../../workers/yak/door.ts'
 import { PLATFORM } from '../../workers/yak/route.ts'
@@ -275,12 +276,18 @@ export let rpc = (session: string) => {
 export type Content = { type: string; text?: string }
 
 // What a tool SAID, not the envelope it said it in. An erring tool throws
-// with its own words, so a caller reads one sentence either way.
+// with its own words as an expected remote-tool refusal, so another tool
+// calling it does not report it as a defect.
 export let saidBy = (out: { content?: Content[]; isError?: boolean }) => {
   let text = (out.content ?? [])
     .map((c) => c.text ?? `[${c.type}]`)
     .join('\n')
-  if (out.isError) throw new Error(text || 'the tool erred and said nothing')
+  if (out.isError) {
+    throw new CallError(
+      'mcp_tool',
+      text || 'the tool erred and said nothing',
+    )
+  }
   return text
 }
 

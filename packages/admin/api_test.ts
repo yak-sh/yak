@@ -8,6 +8,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
 import { mailDoc } from '@yaks/mail/vocab'
+import { CallError } from '@yaks/tools'
 import {
   claimsOf,
   codeFor,
@@ -144,13 +145,16 @@ Deno.test('a tool answers its words, and an erring one throws them', () => {
     'made notes',
   )
   assertEquals(saidBy({}), '')
-  let no = assertThrows(() =>
-    saidBy({
-      content: [{ type: 'text', text: 'no space notes' }],
-      isError: true,
-    })
+  let no = assertThrows(
+    () =>
+      saidBy({
+        content: [{ type: 'text', text: 'no space notes' }],
+        isError: true,
+      }),
+    CallError,
   )
   assertStringIncludes((no as Error).message, 'no space notes')
+  assertEquals((no as CallError).code, 'mcp_tool')
 })
 
 Deno.test('a kernel page is read back as the words it says', () => {
