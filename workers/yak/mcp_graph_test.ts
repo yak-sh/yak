@@ -6,6 +6,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
+import { handle, secretEid } from '@yaks/secrets'
 import { slow } from '../../bin/testing.ts'
 import {
   client,
@@ -22,6 +23,33 @@ import {
 import { FREE, monthOf } from './meter.ts'
 import { minted } from './mcp-probe.ts'
 import { token } from '@yaks/graph'
+
+slow(
+  'a platform secret alias derives before the reach hands it to the store',
+  async () => {
+    let k = await kernel()
+    try {
+      let them = await signIn(k)
+      let agent = connector(k, them.cookie)
+      let name = 'oauth_client probe-dry-run'
+      let said = await agent.tool('graph_apply', {
+        app: 'yak/platform',
+        check: true,
+        entities: [{
+          entity: { eid: '$secret' },
+          secret: { name, value: handle() },
+        }],
+      })
+      assertEquals(minted(said, '$secret'), secretEid(name))
+      assertEquals(
+        await meta(k, them.cookie).query(`.secret.name="${name}"`),
+        [],
+      )
+    } finally {
+      await k.stop()
+    }
+  },
+)
 
 // An entity spans apps (T-32699): a read that names no app asks every store
 // the caller can reach and answers one bundle per eid — and only the stores

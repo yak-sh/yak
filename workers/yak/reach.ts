@@ -27,6 +27,18 @@
 // declare — the language a merged bundle is written in, and the one @yaks/match
 // reads an order out of.
 import { asking, listed, PLATFORM, type Row, STAMPS } from './listing.ts'
+import { archetypes } from '@yaks/archetype'
+import { edges } from '@yaks/edge'
+import {
+  type Bundle,
+  dead,
+  type Entity,
+  identities,
+  requested,
+  resolve,
+  status,
+} from '@yaks/graph'
+import { keys } from '@yaks/key'
 import {
   type App,
   appStore,
@@ -38,8 +50,7 @@ import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { edits, mode } from '@yaks/member'
 import { storeOf } from './door.ts'
-import { appKeywords, coreDocs, meant } from './vocab.ts'
-import { type Bundle, dead, type Entity, requested, status } from '@yaks/graph'
+import { appKeywords, coreDocs, meant, platformDocs } from './vocab.ts'
 import { matcher } from '@yaks/match'
 import { parse } from '@yaks/query'
 import {
@@ -56,6 +67,19 @@ import { said as told } from './writes.ts'
 // relations. A word outside this list was declared by an app, which is what
 // makes it the most specific thing said about a row.
 let CORE: Vocab = loadVocab(coreDocs, appKeywords)
+
+// The directory has no app-owned vocab.json for `/vocab` to answer: its own
+// words are the documents shipped with the platform. Keep only the words not
+// already in every store, the same shape an app's `/vocab` answers, so routing
+// and alias derivation see `secret.name` and the rest of the directory's own
+// identities without treating shared words as though only it declared them.
+let PLATFORM_WORDS: VocabDoc = {
+  title: 'platform',
+  $defs: Object.fromEntries(
+    platformDocs.flatMap((doc) => Object.entries(doc.$defs ?? {}))
+      .filter(([name]) => !CORE.all.includes(name)),
+  ),
+}
 
 // The platform's own rows, screened out of the question (listing.ts `asking`)
 // — but only the ones a store actually plants. A store refuses a filter naming
@@ -651,6 +675,7 @@ export let read = async (
 // store that cannot answer says nothing, which reads as an app with no words
 // of its own.
 let vocabAt = async (env: Env, r: Reach): Promise<VocabDoc> => {
+  if (at(r) == META_STORE) return PLATFORM_WORDS
   let res = await storeOf(env.STORE, storeName(r.space, r.app))('/vocab')
   if (!res.ok) {
     await res.body?.cancel()
@@ -710,16 +735,13 @@ let isComp = (k: string) => !NOT_A_COMP.includes(k) && !k.startsWith('$')
 
 // Every `$alias` in the batch, minted here. A bundle that lands in two stores
 // must land under one eid, and two stores minting their own would make two
-// entities out of one — so the door mints, the answer maps the alias to what
-// it minted, and each store is handed an eid it has only to accept. A bundle
-// with no address at all is minted the same way, for the same reason.
-let minted = (batch: Bundle[]) => {
-  let aliases: Record<string, string> = {}
-  let eids = batch.map((e) => {
+// entities out of one — so the door derives content-addressed ids by the same
+// rules as a store, mints the rest, and hands every store the one answer. A
+// bundle with no address at all is minted the same way, for the same reason.
+let minted = (batch: Bundle[], vocab: Vocab) => {
+  let stated = batch.map((e) => {
     let eid = e.entity?.eid
-    if (typeof eid == 'string') {
-      return eid.startsWith('$') ? (aliases[eid] ??= crypto.randomUUID()) : eid
-    }
+    if (typeof eid == 'string') return e
     // An eid is the only address an app's store has: it mints no numbers
     // (vocab.ts), so a bundle naming one names nothing, and minting an eid for
     // it would write a new entity where the caller meant an existing one.
@@ -729,8 +751,21 @@ let minted = (batch: Bundle[]) => {
         'entity.num addresses nothing here — name the entity by its eid',
       )
     }
-    return crypto.randomUUID()
+    return { ...e, entity: { ...e.entity, eid: crypto.randomUUID() } }
   })
+  let derive = {
+    ...identities(vocab),
+    ...(vocab.comp('archetype') ? archetypes().derive : {}),
+    ...edges(vocab).derive,
+    ...keys(vocab).derive,
+  }
+  let resolved = resolve(stated, vocab, derive, () => crypto.randomUUID())
+  let aliases = Object.fromEntries(
+    resolved.flatMap((e) =>
+      typeof e.$alias == 'string' ? [[e.$alias, e.entity.eid]] : []
+    ),
+  )
+  let eids = resolved.map((e) => e.entity.eid)
   // An alias stands wherever an eid goes — a ref property, an edge's end,
   // a nested bundle's address — so the swap is the whole batch's, by value.
   let swap = (v: unknown): unknown =>
@@ -745,7 +780,7 @@ let minted = (batch: Bundle[]) => {
         ) => [k, swap(x)]),
       )
       : v
-  let entities = batch.map((e, i) => {
+  let entities = stated.map((e, i) => {
     let one = swap(e) as Bundle
     if (!eids[i]) return one
     // The alias rides along (T-34390). A store's own mint phase reads `$alias`
@@ -805,8 +840,8 @@ let routed = async (
   named: Reach | undefined,
   batch: Bundle[],
 ) => {
-  let { entities, eids, aliases } = minted(batch)
-  let { words, apart } = await spoken(env, reach)
+  let { words, apart, vocab } = await spoken(env, reach)
+  let { entities, eids, aliases } = minted(batch, vocab)
   // Where the entity already lives, read only when the answer depends on it:
   // a death fans out to whoever holds the eid, and a shared word with no app
   // named goes to the app that already wears it.

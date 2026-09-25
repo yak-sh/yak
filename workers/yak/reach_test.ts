@@ -7,7 +7,7 @@
 // order settled after it, and the dry run that keeps a refused half-batch from
 // landing anywhere.
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, identityEid } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
 import { durable } from '../../packages/durable-object/harness.ts'
 import { Store } from './graph.ts'
@@ -106,6 +106,10 @@ let where = async () => {
       book: {
         component: true,
         properties: { pages: { type: 'number' }, shelf: { type: 'string' } },
+      },
+      catalog: {
+        component: true,
+        properties: { code: { type: 'string', identity: true } },
       },
     },
   })
@@ -251,6 +255,21 @@ Deno.test('a name written twice through the door is one entity', async () => {
   let all = bundles(await read(env, reach, '.book!'))
   assertEquals(all.map((b) => b.entity.eid), [once])
   assertEquals(comp(all[0], 'book').pages, 500)
+})
+
+Deno.test('a declared identity is minted before the door hands it to a store', async () => {
+  let { env, reach } = await where()
+  let out = await written(env, reach, reach[0], [{
+    entity: { eid: '$catalog' },
+    catalog: { code: 'dune' },
+  }])
+  assertEquals(out.aliases.$catalog, identityEid('catalog', ['dune']))
+  assertEquals(
+    bundles(await read(env, reach, '.catalog.code=dune')).map((b) =>
+      b.entity.eid
+    ),
+    [identityEid('catalog', ['dune'])],
+  )
 })
 
 Deno.test('the space speaks one vocabulary, and a word nobody declares is the platform’s', async () => {
