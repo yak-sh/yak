@@ -195,6 +195,7 @@ import {
   recut,
   Refused as Unreconciled,
   type Report,
+  respelled,
   SANDBOXED,
   SENT,
   sent,
@@ -584,13 +585,15 @@ export class Store {
   // at the door any more — so it is rewritten here, before anything above the
   // storage reads it: the vocabulary as the document (T-37546, migrate.ts
   // `documented`), and the tools with `$arg` for `{{arg}}` (migrate.ts
-  // `unholed`) and a JSON Schema for each argument (T-38021, migrate.ts
-  // `unworded`). After one wake no old shape is left in the object.
+  // `unholed`), a JSON Schema for each argument (T-38021, migrate.ts
+  // `unworded`) and each query clause in its one spelling (T-39341, migrate.ts
+  // `respelled`). After one wake no old shape is left in the object.
   #reshaping() {
     let shapes = [
       ['vocab', documented],
       ['tools', unholed],
       ['tools', unworded],
+      ['tools', respelled],
     ] as const
     for (let [w, to] of shapes) {
       let held = this.#get(w)

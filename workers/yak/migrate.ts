@@ -266,6 +266,32 @@ export let unworded = (held: string): string | null => {
   )
 }
 
+// A clause in a postfix form, where a query line can hold one: after a quote,
+// a `&` or a query string's own `?`, and before a quote or a `&`.
+let POSTFIX =
+  /(?<=['"`&?])\.([A-Za-z_][\w-]*(?:\.[A-Za-z_][\w-]*)*)(\[[^\]\s]*\])?([!?])(?=['"`&])/g
+
+/**
+ * Text with each query clause in its one spelling (T-39341): `.p!` is `.p`,
+ * `.edges[t]!` is `.edges[t]`, and `.p?` is `?p`. A store's tools slot is
+ * rewritten at its next open (graph.ts `#reshaping`), and an app's files, live
+ * and in every version, by the daily sweep (erase.ts `collected`). `null`
+ * where there is nothing to do.
+ */
+export let respelled = (text: string): string | null => {
+  let now = text.replace(
+    POSTFIX,
+    (m, word, pick = '', mark) =>
+      mark == '!' ? `.${word}${pick}` : pick ? m : `?${word}`,
+  )
+  return now == text ? null : now
+}
+
+/** The app files a query line is written in: its pages and scripts, and the
+ * manifest whose tools each carry one. */
+export let queried = (path: string) =>
+  /\.(html|js|mjs)$|(^|\/)vocab\.(json|ya?ml)$/.test(path)
+
 /** The marker written when a pass reconciles, so it never runs twice. The
  * number is the version an object stands at: {@link MARK} is the move off the
  * fleet-shaped store, and each one after it a pass over the new schema

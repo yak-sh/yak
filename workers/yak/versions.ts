@@ -611,6 +611,85 @@ export let renamed = async (
   return moves || entities.length > 0
 }
 
+/**
+ * An app's files rewritten wherever it keeps them: the live bytes and every
+ * deploy manifest, so a rollback or an install never brings the old text back
+ * (T-39341: each query clause in its prefix form). `reads` says which paths
+ * the rewrite is for, and `rewrite` answers the new text, or null where there
+ * is nothing to do. It rides the daily sweep (erase.ts `collected`) the way
+ * `renamed` does, and is idempotent: a second run finds nothing to rewrite.
+ *
+ * A live file's outgoing bytes go into its history (`replaced`), so `app_files`
+ * can put them back. Git history is not rewritten: a commit names the bytes
+ * its deploy named then (gitobj.ts), so a manifest's old bytes go under `aside`
+ * — git's own key space, which no sweep reaches — before the manifest stops
+ * naming them. The same bytes in many versions are read and rewritten once.
+ *
+ * The newest version's files are what the app's worker was uploaded from, so
+ * where it moved, `release` is handed its new files and the paths rewritten in
+ * them before any manifest is written: a release that throws leaves every
+ * manifest as it was, for the next run to try again. Answers the live paths it
+ * rewrote and the versions whose manifest moved.
+ */
+export let rewritten = async (
+  blobs: Objects,
+  dir: Directory,
+  { prefix, app }: Pinner,
+  reads: (path: string) => boolean,
+  rewrite: (text: string) => string | null,
+  aside: string,
+  release = (_files: Files, _paths: string[]): Promise<unknown> =>
+    Promise.resolve(),
+) => {
+  let decode = (b: Uint8Array) => new TextDecoder().decode(b)
+  let encode = (s: string) => new TextEncoder().encode(s)
+  let live: string[] = []
+  let paths = own((await blobs.list(prefix)).map((k) => k.slice(prefix.length)))
+  for (let path of paths.filter(reads)) {
+    let bytes = await blobs.read(prefix + path)
+    let now = bytes && rewrite(decode(bytes))
+    if (now == null) continue
+    await replaced(blobs, prefix, path, '')
+    await blobs.put(prefix + path, encode(now))
+    live.push(path)
+  }
+  let store = pins(blobs, prefix)
+  let shas = new Map<string, Promise<string | null>>()
+  let respun = async (sha: string) => {
+    let was = await store.get(sha)
+    let now = was ? rewrite(decode(was)) : null
+    if (!was || now == null) return null
+    let bytes = encode(now)
+    let to = await sha256(bytes)
+    await store.put(to, bytes)
+    if (!(await blobs.has(aside + sha))) await blobs.put(aside + sha, was)
+    return to
+  }
+  let all = await versions(dir, app)
+  let moved: number[] = []
+  let entities = []
+  for (let v of all) {
+    let files = { ...v.files }
+    let paths: string[] = []
+    for (let [path, sha] of Object.entries(v.files).filter(([p]) => reads(p))) {
+      if (!shas.has(sha)) shas.set(sha, respun(sha))
+      let to = await shas.get(sha)
+      if (!to) continue
+      files[path] = to
+      paths.push(path)
+    }
+    if (!paths.length) continue
+    if (v == all[0]) await release(files, paths)
+    moved.push(v.version)
+    entities.push({
+      entity: { eid: v.eid },
+      deploy: { files: JSON.stringify(files) },
+    })
+  }
+  if (entities.length) await dir.apply({ entities })
+  return { live, versions: moved }
+}
+
 // The bytes about to be dropped from `from`, pinned and said as an entry, so
 // the newer file winning never loses the older one.
 let pinnedAs = async (

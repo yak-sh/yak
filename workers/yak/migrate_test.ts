@@ -42,8 +42,10 @@ import {
   HOMED,
   MARK,
   MARKS,
+  queried,
   Refused as Unreconciled,
   type Report,
+  respelled,
   SANDBOXED,
   SENT,
   SERVES,
@@ -336,13 +338,14 @@ slow(
         serving: {
           description: 'Recipes that serve so many',
           input: { n: 'number' },
-          query: '.recipe.serves={{n}}',
+          query: '.recipe!&.recipe.serves={{n}}&.doc?',
         },
       }),
     )
     let woke = newer(ctx, 'ada/cookbook')
     let tools = await (await woke.door('/tools')).json()
-    assertEquals(tools.serving.query, '.recipe.serves=$n')
+    // With its clauses in their one spelling (T-39341).
+    assertEquals(tools.serving.query, '.recipe&.recipe.serves=$n&?doc')
     // And each argument as the JSON Schema it is now (T-38021).
     assertEquals(tools.serving.input, { n: { type: 'number' } })
     assertEquals(tools.serving.required, ['n'])
@@ -357,6 +360,30 @@ Deno.test('the {{arg}} hole, as the variable it became', () => {
   // Nothing to do: the variable already, `$$`, or braces that hold no name.
   assertEquals(unholed('{"a":{"query":".r.t=$t"}}'), null)
   assertEquals(unholed('{"a":{"query":".r.t=$$5 {{ }} {{T}}"}}'), null)
+})
+
+Deno.test('each query clause in its one spelling', () => {
+  let cases: [string, string | null][] = [
+    [`query('.recipe!&.doc?')`, `query('.recipe&?doc')`],
+    [`'/query?.art_asset!&.doc?'`, `'/query?.art_asset&?doc'`],
+    [`\`.comment.target=\${eid}&.did?\``, `\`.comment.target=\${eid}&?did\``],
+    [
+      '{"query":".created.by!","q":".guest&.rsvp?"}',
+      '{"query":".created.by","q":".guest&?rsvp"}',
+    ],
+    [`'.edges[requires]!'`, `'.edges[requires]'`],
+    // Nothing a query line holds: code, prose, a value, a concatenation.
+    [`if (a.done?.x) b.c!`, null],
+    [`values.any? &.present?`, null],
+    [`'.fobtable.code=' + code + '&.doc'`, null],
+    [`'.recipe&?doc'`, null],
+  ]
+  for (let [text, now] of cases) assertEquals(respelled(text), now, text)
+  assertEquals(
+    ['index.html', 'app.js', 'lib/x.mjs', 'vocab.json', 'docs.json', 'a.w']
+      .filter(queried),
+    ['index.html', 'app.js', 'lib/x.mjs', 'vocab.json'],
+  )
 })
 
 Deno.test('a tools slot, each argument the JSON Schema it meant', () => {

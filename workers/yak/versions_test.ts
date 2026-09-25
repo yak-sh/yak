@@ -6,7 +6,7 @@
 // it back"); a dispatch namespace has no local implementation, so the worker's
 // last hop is proved here against the same stubbed account API dispatch_test.ts
 // uses.
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Objects } from '@yaks/blob'
 import { counted } from './lib/objects.ts'
 import type { Tally } from './lib/hops.ts'
@@ -17,6 +17,7 @@ import type { Plugin } from './plugin.ts'
 import type { Who } from './session.ts'
 import {
   addressed,
+  type Files,
   GRACE,
   held,
   history,
@@ -32,6 +33,7 @@ import {
   replaced,
   restore,
   restored,
+  rewritten,
   SHA,
   sha256,
   snapshot,
@@ -623,4 +625,49 @@ Deno.test('a renamed path carries its bytes, history and releases', async () => 
   let kept = (await history(blobs, PREFIX, 'NOTES.md'))[0]
   assertEquals(kept.sha, await sha256(bytes('cups')))
   assert(await pins(blobs, PREFIX).has(kept.sha), 'pinned')
+})
+
+// T-39341: a rewrite of an app's files lands live and in every release, so a
+// rollback or an install never brings the old text back.
+Deno.test('a rewritten file lands live and in every release', async () => {
+  let { blobs } = memory()
+  let { dir, rows } = directory()
+  let bare = (s: string) => s.includes('!') ? s.replaceAll('!', '') : null
+  let html = (path: string) => path.endsWith('.html')
+  let newest: string[][] = []
+  let release = (files: Files, paths: string[]) =>
+    Promise.resolve(newest.push([files['index.html'], ...paths]))
+  let pass = () => rewritten(blobs, dir, ONE[0], html, bare, 'aside/', release)
+  await blobs.put(PREFIX + 'index.html', bytes('a!'))
+  await blobs.put(PREFIX + 'NOTES.md', bytes('b!'))
+  await record(dir, WHO, APP, 1, await snapshot(blobs, PREFIX), '')
+  await blobs.put(PREFIX + 'index.html', bytes('a!!'))
+  await record(dir, WHO, APP, 2, await snapshot(blobs, PREFIX), '')
+  let was = rows().map((r) => r.files['index.html'])
+
+  assertEquals(await pass(), { live: ['index.html'], versions: [2, 1] })
+  assertEquals(await read(blobs, 'index.html'), 'a')
+  assertEquals(await read(blobs, 'NOTES.md'), 'b!')
+  let sha = await sha256(bytes('a'))
+  assertEquals(rows().map((r) => r.files['index.html']), [sha, sha])
+  // The newest version's new files, handed over before its manifest moved.
+  assertEquals(newest, [[sha, 'index.html']])
+  assert(await pins(blobs, PREFIX).has(sha), 'pinned')
+  // The live bytes are one restore away, and a release's old bytes stay where
+  // its commit reads them.
+  assertEquals((await history(blobs, PREFIX, 'index.html'))[0].sha, was[1])
+  for (let old of was) assert(await blobs.has('aside/' + old), 'aside')
+  // Idempotent: the next day's sweep finds nothing to rewrite.
+  assertEquals(await pass(), { live: [], versions: [] })
+  assertEquals(newest.length, 1)
+
+  // A release that throws leaves every manifest for the next run.
+  await blobs.put(PREFIX + 'index.html', bytes('c!'))
+  await record(dir, WHO, APP, 3, await snapshot(blobs, PREFIX), '')
+  let before = rows().map((r) => r.files['index.html'])
+  let failed = () => Promise.reject(new Error('upload'))
+  await assertRejects(() =>
+    rewritten(blobs, dir, ONE[0], html, bare, 'aside/', failed)
+  )
+  assertEquals(rows().map((r) => r.files['index.html']), before)
 })
