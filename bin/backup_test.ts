@@ -2,6 +2,7 @@
 // replace a database another reader or restore verifier still has open.
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
+import { at, fn, insert, lit, type Stmt } from '@yaks/sql'
 import { open, type Opened } from '@yaks/sqlite/db'
 import { slow } from './testing.ts'
 
@@ -22,10 +23,13 @@ let fixture = async () => {
   let database = (path: string) => {
     let db = open(`${dir}/${path}`)
     opened.push(db)
-    db.exec(
-      'pragma journal_mode=wal; create table entity (id integer primary key)',
-    )
-    db.exec('insert into entity values (1)')
+    db.query({ t: 'pragma', name: 'journal_mode', value: 'wal' })
+    db.query({
+      t: 'create table',
+      name: 'entity',
+      cols: [{ name: 'id', type: 'integer', pk: true }],
+    })
+    db.query(insert('entity', { id: 1 }))
     return db
   }
   let db = database('yak.db')
@@ -33,14 +37,42 @@ let fixture = async () => {
   // external-content FTS5 mirror plus the trigger that keeps it. Named after
   // no index the script ever hard-coded, because that is the failure — a new
   // index (mail_fts, 5db8be2b) that a list of names could not know about.
-  db.exec(`create table note (entity integer primary key, body text);
-    create virtual table "note_fts" using fts5(
-      "body", content='note', content_rowid='entity'
-    );
-    create trigger "note_fts_insert" after insert on "note" begin
-      insert into "note_fts"(rowid, "body") values (new.entity, coalesce(new."body", ''));
-    end;
-    insert into note values (1, 'the words the index holds')`)
+  let fresh = at('new')
+  for (
+    let s of [
+      {
+        t: 'create table',
+        name: 'note',
+        cols: [
+          { name: 'entity', type: 'integer', pk: true },
+          { name: 'body', type: 'text' },
+        ],
+      },
+      {
+        t: 'create virtual table',
+        name: 'note_fts',
+        using: 'fts5',
+        args: ['body', ['content', 'note'], ['content_rowid', 'entity']],
+      },
+      {
+        t: 'create trigger',
+        name: 'note_fts_insert',
+        timing: 'after',
+        event: 'insert',
+        on: 'note',
+        body: [{
+          t: 'insert',
+          into: 'note_fts',
+          cols: ['rowid', 'body'],
+          rows: [[
+            fresh('entity'),
+            fn('coalesce', fresh('body'), lit('')),
+          ]],
+        }],
+      },
+      insert('note', { entity: 1, body: 'the words the index holds' }),
+    ] satisfies Stmt[]
+  ) db.query(s)
   // Previous versions used these public names. Another process may still
   // hold either open; a new backup has no ownership of those files.
   database('snap/yak.db')
@@ -73,7 +105,7 @@ slow(
       let out = await f.backup()
       assert(out.success, decode(out.stderr))
       assertEquals(paths.map((p) => Deno.statSync(`${f.dir}/${p}`).ino), inodes)
-      assertEquals(f.db.query('pragma integrity_check', []), [{
+      assertEquals(f.db.query({ t: 'pragma', name: 'integrity_check' }), [{
         integrity_check: 'ok',
       }])
       let sql = await run(
