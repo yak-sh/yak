@@ -76,6 +76,7 @@ import {
   zone,
 } from './api.ts'
 import { deploys, rollback, table } from './deploys.ts'
+import { push, read } from './push.ts'
 import { errors, OBSERVABILITY, tail } from './logs.ts'
 import { revert } from './revert.ts'
 
@@ -427,6 +428,18 @@ export let runs = (host: { vault: Local; state: string }): Runs => {
         arguments: (argsOf(call).args ?? {}) as Record<string, unknown>,
       })
       return [said(call, saidBy(answer))]
+    }),
+
+    admin_push: verb(async (call, vault, keep) => {
+      let a = argsOf(call)
+      let dir = String(a.dir).replace(/\/+$/, '')
+      let at = acting(vault, a, keep, host.state)
+      let lines = await push(rpc(at.session), await read(dir), {
+        app: word(a, 'app') ?? dir.slice(dir.lastIndexOf('/') + 1),
+        space: word(a, 'space'),
+        title: word(a, 'title'),
+      })
+      return [said(call, lines)]
     }),
 
     admin_deploys: verb(async (call) => {

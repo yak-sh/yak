@@ -238,6 +238,41 @@
       "options": { "positional": ["name"], "rest": "args" },
       "openWorld": true
     },
+    "admin_push": {
+      "tool": true,
+      "surfaces": ["cli"],
+      "noun": "admin",
+      "verb": "push",
+      "title": "Push a directory to a yaks.app app",
+      "description": "Make an app hold exactly the files in a directory, through the connector's own tools: app_new when the app does not exist yet, app_files for every file (base64 for any that is not UTF-8), a delete for each file the directory no longer has, then app_deploy. Git is the app's only source. The app's slug is the directory's name unless --app names another; --space picks one when the account has several.\n\n  yak admin push apps/mail --owner\n  yak admin push apps/mail --app inbox --space jeff --title Inbox --owner",
+      "input": {
+        "dir": {
+          "type": "string",
+          "description": "the directory holding the app's files"
+        },
+        "app": {
+          "type": "string",
+          "description": "the app's slug, when it is not the directory's name"
+        },
+        "space": {
+          "type": "string",
+          "description": "the space, when the account has several"
+        },
+        "title": {
+          "type": "string",
+          "description": "the title a new app is created with; the slug unless named"
+        },
+        "as": { "type": "string", "description": "act as this account" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "required": ["dir"],
+      "options": { "positional": ["dir"] },
+      "openWorld": true
+    },
     "admin_deploys": {
       "tool": true,
       "noun": "admin",
