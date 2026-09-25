@@ -1,8 +1,9 @@
 // The stand-in (not part of the published package — see deno.json): D1's API
-// over jsr:@db/sqlite, so the adapter can be tested without Cloudflare. The
-// surface is small enough to imitate exactly, and imitating it exactly is the
-// point — every rule below is one the runtime enforces, so a bug this stand-in
-// cannot see is a bug the runtime would not have shown either:
+// over an in-memory SQLite (@yaks/sqlite/db `open`), so the adapter can be
+// tested without Cloudflare. The surface is small enough to imitate exactly,
+// and imitating it exactly is the point — every rule below is one the runtime
+// enforces, so a bug this stand-in cannot see is a bug the runtime would not
+// have shown either:
 //
 //   It is async-only          `all()` and `batch()` return promises. An adapter
 //                             that accidentally relied on a synchronous answer
@@ -25,7 +26,7 @@
 // a number that quietly grows. hops_test.ts holds each shape of batch to a
 // pinned count.
 
-import { Database } from '@yaks/sqlite/db'
+import { open } from '@yaks/sqlite/db'
 import type { Vocab } from '@yaks/vocab'
 import { shop } from '../sqlite/harness.ts'
 import type { D1Like, D1Result, D1Value, Row } from './d1.ts'
@@ -72,8 +73,7 @@ export type Prepared = {
 
 /** A stand-in for a `D1Database` binding over a fresh in-memory database. */
 export let d1 = (): D1Like<Prepared> => {
-  let db = new Database(':memory:')
-  db.exec('pragma foreign_keys = on')
+  let db = open(':memory:')
 
   let run = (sql: string, params: D1Value[]): Row[] => {
     // The runtime takes an ArrayBuffer; the library underneath takes bytes.
@@ -84,8 +84,7 @@ export let d1 = (): D1Like<Prepared> => {
         ? Number(p)
         : p
     )
-    let stmt = db.prepare(sql)
-    return (stmt.all(...binds) as Record<string, unknown>[]).map(out)
+    return db.query(sql, binds).map(out)
   }
 
   let check = (sql: string, params: D1Value[]) => {

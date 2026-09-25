@@ -2,8 +2,8 @@
 // FTS owns the schema and the text predicate, including reads inside a tx.
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
-import { type Driver, storage } from '@yaks/sqlite'
-import { Database } from '@yaks/sqlite/db'
+import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
 import { fields, schema, search } from './mod.ts'
 
 Deno.test('storage composes FTS explicitly for document and non-document prose', () => {
@@ -24,12 +24,8 @@ Deno.test('storage composes FTS explicitly for document and non-document prose',
       },
     },
   })
-  let sqlite = new Database(':memory:')
-  using _close = { [Symbol.dispose]: () => sqlite.close() }
-  let db: Driver = {
-    query: (sql, params) => sqlite.prepare(sql).all(...params),
-    exec: (sql) => sqlite.exec(sql),
-  }
+  let db = open(':memory:')
+  using _close = { [Symbol.dispose]: () => db.close() }
   let text = fields(vocab)
   let store = storage(db, vocab, { extend: [search(text)] })
   store.install()
@@ -76,12 +72,8 @@ Deno.test('.order=search puts the closest match first', () => {
       },
     },
   })
-  let sqlite = new Database(':memory:')
-  using _close = { [Symbol.dispose]: () => sqlite.close() }
-  let db: Driver = {
-    query: (sql, params) => sqlite.prepare(sql).all(...params),
-    exec: (sql) => sqlite.exec(sql),
-  }
+  let db = open(':memory:')
+  using _close = { [Symbol.dispose]: () => db.close() }
   let text = fields(vocab)
   let store = storage(db, vocab, { extend: [search(text, db)] })
   store.install()

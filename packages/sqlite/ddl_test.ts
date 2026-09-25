@@ -4,7 +4,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
-import { compile, STOCK } from '@yaks/sql'
+import { compile } from '@yaks/sql'
 import memberDoc from '../member/vocab.json' with { type: 'json' }
 import { schema } from './ddl.ts'
 import { open } from './db.ts'

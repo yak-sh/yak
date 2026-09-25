@@ -1,13 +1,12 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
-// bookshop vocabulary over an in-memory SQLite graph, and a stand-in socket
-// the socket tests drive by hand. The subject is a shop — books with a price
-// and a status, reviews about them, members who joined — so nothing here
-// needs knowledge from outside this file.
+// bookshop vocabulary over a graph in memory, and a stand-in socket the socket
+// tests drive by hand. The subject is a shop — books with a price and a status,
+// reviews about them, members who joined — so nothing here needs knowledge
+// from outside this file.
 
-import { Database } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
-import { storage } from '@yaks/sqlite'
+import { ram } from '@yaks/ram'
 import type { Socket } from './socket.ts'
 import type { Frame } from './subs.ts'
 
@@ -94,22 +93,10 @@ let doc: VocabDoc = {
 /** The bookshop vocabulary the package's tests read and write against. */
 export let shop: Vocab = loadVocab(doc)
 
-/** A graph over a fresh in-memory SQLite database, schema installed. */
-export let shopGraph = (): Graph => {
-  let db = new Database(':memory:')
-  db.exec('pragma foreign_keys = on')
-  // Numbered entities: a person refers to a book by its number.
-  let store = storage(
-    {
-      query: (sql, params) => db.prepare(sql).all(...params),
-      exec: (sql) => db.exec(sql),
-    },
-    shop,
-    { number: true },
-  )
-  store.install()
-  return graph({ storage: store, vocab: shop })
-}
+/** A graph over a fresh store in memory. Numbered entities: a person refers to
+ * a book by its number. */
+export let shopGraph = (): Graph =>
+  graph({ storage: ram(shop, { number: true }), vocab: shop })
 
 /** One component off a bundle, for a test that wants a property out of it. */
 export let comp = (b: Bundle, name: string): Record<string, unknown> => {

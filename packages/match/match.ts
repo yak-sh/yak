@@ -1,4 +1,5 @@
-// The package's two public functions: a query in, the bundles it selects out.
+// The package's public functions: a query in, the bundles it selects (or the
+// rows it answers) out.
 //
 // Compiling a query produces three things — a test every bundle must pass, an
 // ordering, and a window — and this file is where they meet. The test is built
@@ -16,10 +17,12 @@ import {
   type After,
   type And,
   type Clause,
+  type Distinct,
   type Limit,
   type Order,
   parse,
   type Query as Ast,
+  type Tally,
 } from '@yaks/query'
 import { Unsupported, whole } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
@@ -63,8 +66,9 @@ export type Filter = (bundle: Bundle, among?: readonly Bundle[]) => boolean
 let ast = (q: Query): And => typeof q == 'string' ? parse(q) : q
 
 // The directives that sit in the clause list without filtering anything, and
-// the ones this package refuses: an aggregate is a row shape, not a selection
-// of entities, and `.near` and `.edges` need an index no bundle holds. A
+// the ones a selection refuses: an aggregate is a row shape, not a selection
+// of entities (rows() lifts it out first), and `.near` and `.edges` need an
+// index no bundle holds. A
 // projection (`fields`, `*`) names which properties the result should carry and
 // nothing about which bundles match, so it is carried along and never tested.
 let DIRECTIVES = new Set([
@@ -196,6 +200,58 @@ let past = (
 ): Bundle[] => {
   let at = bundles.find((b) => b.entity.num == n)
   return at ? out.filter((b) => sort(at, b) < 0) : out
+}
+
+/** One row of {@link rows}: `{ eid }`, or an aggregate's `{ value, n }`. */
+export type Row = Record<string, unknown>
+
+let AGGS = new Set(['count', 'distinct', 'tally'])
+
+/**
+ * Compile a query into the rows @yaks/sql's `rows()` answers for it, over the
+ * bundles in hand: one `{ eid }` per match, or an aggregate's rows. `.count` is
+ * one `{ value: '', n }`; `.tally=prop` is a `{ value, n }` per value and
+ * `.distinct=prop` a `{ value }` per value, empty values dropped and sorted by
+ * value. As there, only a text, enum or eid property is tallied, since a
+ * number or a time read as text would not compare the same.
+ *
+ * ```ts
+ * rows('.book&.tally=status', vocab)(bundles) // [{ value: 'sold', n: 2 }]
+ * ```
+ */
+export let rows = (
+  query: Query,
+  vocab: Vocab,
+  opts: MatchOpts = {},
+): (bundles: readonly Bundle[]) => Row[] => {
+  let cs = ast(query).clauses
+  let agg = cs.find((c) => AGGS.has(c.kind))
+  let select = matcher(
+    { kind: 'and', clauses: cs.filter((c) => c != agg) },
+    vocab,
+    opts,
+  )
+  if (!agg) return (bs) => select(bs).map((b) => ({ eid: b.entity.eid }))
+  if (agg.kind == 'count') return (bs) => [{ value: '', n: select(bs).length }]
+  let path = (agg as Distinct | Tally).path.join('.')
+  let ctx = { v: vocab, now: 0, computed: opts.computed ?? {} }
+  let { read, tag } = field(ctx, path)
+  if (!['text', 'enum', 'eid'].includes(tag)) {
+    throw new Unsupported('.distinct/.tally', `over a ${tag} property`, BY)
+  }
+  return (bs) => {
+    let n = new Map<string, number>()
+    for (let b of select(bs)) {
+      let v = read(b)
+      if (v != null && String(v) != '') {
+        n.set(String(v), (n.get(String(v)) ?? 0) + 1)
+      }
+    }
+    let values = [...n.keys()].sort()
+    return agg.kind == 'tally'
+      ? values.map((value) => ({ value, n: n.get(value) }))
+      : values.map((value) => ({ value }))
+  }
 }
 
 /**

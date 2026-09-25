@@ -11,8 +11,7 @@ import { views as toolViews } from '@yaks/tools/views'
 import { loadVocab } from '@yaks/vocab'
 import { define, resolve } from '@yaks/render'
 import { graph } from '@yaks/graph'
-import { storage } from '@yaks/sqlite'
-import { mem } from '../sqlite/harness.ts'
+import { ram } from '@yaks/ram'
 import { printed, referenced, registry, show, terminal } from './answer.ts'
 
 let vocab = loadVocab([kernelDoc, edgeDoc, docDoc, taskDoc, toolsDoc], [
@@ -98,9 +97,7 @@ let link = (from: string, relation: string, to: string) => ({
 
 Deno.test('a lone entity’s page asks for its links and comments, and leaves bookkeeping out', async () => {
   let t9eid = t9.entity.eid, t10eid = t10.entity.eid
-  let store = storage(mem(), vocab)
-  store.install()
-  let g = graph({ storage: store, vocab })
+  let g = graph({ storage: ram(vocab), vocab })
   let edge = (from: string, relation: string, to: string) => ({
     entity: { eid: `$${relation}` },
     edge: { from, to },

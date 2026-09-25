@@ -8,7 +8,7 @@
 // promise: a filter written once means one thing wherever the data lives.
 
 import { assertEquals, assertThrows } from '@std/assert'
-import { Database } from '@yaks/sqlite/db'
+import { open } from '@yaks/sqlite/db'
 import type { Bundle } from './read.ts'
 import { storage } from '@yaks/sqlite'
 import { fields, schema as ftsSchema, search } from '@yaks/fts'
@@ -17,7 +17,7 @@ import { compute, derived as taskDerived, taskDoc } from '@yaks/task'
 import { projectDoc } from '@yaks/project'
 import { edgeDoc, edgeKeywords, link, traverse } from '@yaks/edge'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { matcher } from './match.ts'
+import { matcher, rows } from './match.ts'
 import { bundles, corpus, DEAD, NOW, shop } from './harness.ts'
 
 // Bundles in a fresh in-memory database, read through the vocabulary they were
@@ -32,15 +32,11 @@ let loaded = (
   derived: Derived = {},
   extend: Extension[] = [],
 ) => {
-  let db = new Database(':memory:')
-  db.exec('pragma foreign_keys = on')
+  let db = open(':memory:')
   // Match the in-memory evaluator's doc-only text policy explicitly.
   let text = fields(v).filter((f) => f.comp == 'doc')
   let s = storage(
-    {
-      query: (q, params) => db.prepare(q).all(...params),
-      exec: (q) => db.exec(q),
-    },
+    db,
     v,
     { now: NOW, number: true, derived, extend: [...extend, search(text)] },
   )
@@ -220,6 +216,22 @@ Deno.test('every query selects the same entities', () => {
     if (asks(q)) assertEquals(mine, theirs, label)
     else assertEquals(mine.sort(), theirs.sort(), label)
   }
+})
+
+Deno.test('an aggregate answers the same rows on both sides', () => {
+  let s = sql()
+  for (
+    let q of [
+      '.count',
+      '.review&.count',
+      '.distinct=status',
+      '.tally=status',
+      '.price<20&.tally=status',
+      '.tally=author',
+      '.distinct=review.book',
+    ]
+  ) assertEquals(rows(q, shop, { now: NOW })(bundles), s.rows(q), q)
+  assertThrows(() => rows('.tally=price', shop), Error, 'cannot compile')
 })
 
 Deno.test('a query neither side can answer is declined by both', () => {

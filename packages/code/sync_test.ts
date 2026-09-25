@@ -7,8 +7,7 @@ import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { gitDoc } from '@yaks/git'
 import { sync } from '@yaks/mirror'
-import { storage } from '@yaks/sqlite'
-import { Database, driver } from '@yaks/sqlite/db'
+import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { codeDoc } from './vocab.ts'
 import { codeMirror } from './sync.ts'
@@ -31,9 +30,7 @@ let fixture = () => {
   let vocab = loadVocab([entity, edgeDoc, gitDoc, docDoc, codeDoc], [
     edgeKeywords,
   ])
-  let db = storage(driver(new Database(':memory:')), vocab)
-  db.install()
-  return graph({ storage: db, vocab, plugins: [edges(vocab)] })
+  return graph({ storage: ram(vocab), vocab, plugins: [edges(vocab)] })
 }
 
 let git = (cwd: string, ...args: string[]) =>

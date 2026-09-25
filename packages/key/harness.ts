@@ -4,27 +4,16 @@
 // `mailbox`, so the tests also cover a vocabulary where the component written
 // and the kind queries name differ.
 //
-// Storage is @yaks/sqlite over an in-memory database, which is how an
-// application composes this package: the adapter owns the bytes, the graph owns
-// the rules, and this package brings the key.
+// Storage is @yaks/ram, which is how an application composes this package:
+// the adapter owns the bytes, the graph owns the rules, and this package
+// brings the key.
 
-import { Database } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph, type Storage } from '@yaks/graph'
-import { type Driver, storage } from '@yaks/sqlite'
+import { ram } from '@yaks/ram'
 import { keyDoc } from './comp.ts'
 import { keyKeywords } from './keywords.ts'
 import { keys } from './plugin.ts'
-
-// A Driver over a fresh in-memory database.
-export let mem = (): Driver => {
-  let db = new Database(':memory:')
-  db.exec('pragma foreign_keys = on')
-  return {
-    query: (sql, params) => db.prepare(sql).all(...params),
-    exec: (sql) => db.exec(sql),
-  }
-}
 
 let doc: VocabDoc = {
   $defs: {
@@ -70,12 +59,8 @@ let doc: VocabDoc = {
 /** The library vocabulary: books, people, two kinds, and the key itself. */
 export let library: Vocab = loadVocab([keyDoc, doc], [keyKeywords])
 
-/** A store over a fresh in-memory database with the schema installed. */
-export let store = (): Storage => {
-  let s = storage(mem(), library)
-  s.install()
-  return s
-}
+/** A fresh store in memory. */
+export let store = (): Storage => ram(library)
 
 /** The whole stack: a graph over that store, with the key plugin registered. */
 export let libraryGraph = (s: Storage = store()): Graph =>

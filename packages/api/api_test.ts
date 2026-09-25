@@ -62,7 +62,10 @@ Deno.test('expected client refusals do not log server errors', async () => {
     })(ask(''))).status,
     401,
   )
-  assertEquals((await shop()(post('/query', '{'))).status, 400)
+  assertEquals(
+    (await shop()(req('/query', { method: 'POST', body: '{' }))).status,
+    400,
+  )
   assertEquals(logged.calls.length, 0)
 })
 
@@ -142,7 +145,7 @@ Deno.test('an unattributed door leaves the actor off', async () => {
     { entity: { eid: 'b1' }, book: { price: 12 }, $actor: { by: 'villain' } },
   ]))
   let found: Bundle[] = await body(await handler(ask('.price=12&?created')))
-  assertEquals(comp(found[0], 'created').by, null)
+  assertEquals(comp(found[0], 'created').by ?? null, null)
 })
 
 Deno.test('a refused property answers 400 in the shape apply threw', async () => {

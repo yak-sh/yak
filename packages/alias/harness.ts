@@ -2,28 +2,16 @@
 // cookbook, written as a vocabulary. Recipes and comments, the `key` component
 // from @yaks/key, and the `alias` kind of key this package declares.
 //
-// The store is @yaks/sqlite over an in-memory database, which is how an
-// application composes this package: the adapter owns the bytes, the graph owns
-// the write-time behaviour, @yaks/key brings the `key` component, and this
-// package brings the name.
+// The store is @yaks/ram, which is how an application composes this package:
+// the adapter owns the bytes, the graph owns the write-time behaviour,
+// @yaks/key brings the `key` component, and this package brings the name.
 
-import { Database } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph, type Storage } from '@yaks/graph'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
-import { type Driver, storage } from '@yaks/sqlite'
+import { ram } from '@yaks/ram'
 import { aliasDoc } from './comp.ts'
 import { aliases } from './plugin.ts'
-
-// A Driver over a fresh in-memory database.
-export let mem = (): Driver => {
-  let db = new Database(':memory:')
-  db.exec('pragma foreign_keys = on')
-  return {
-    query: (sql, params) => db.prepare(sql).all(...params),
-    exec: (sql) => db.exec(sql),
-  }
-}
 
 let doc: VocabDoc = {
   $defs: {
@@ -61,12 +49,8 @@ let doc: VocabDoc = {
 /** The cookbook vocabulary: recipes, comments, the key and the name. */
 export let cookbook: Vocab = loadVocab([keyDoc, aliasDoc, doc], [keyKeywords])
 
-/** A store over a fresh in-memory database with the schema installed. */
-export let store = (): Storage => {
-  let s = storage(mem(), cookbook)
-  s.install()
-  return s
-}
+/** A fresh store in memory. */
+export let store = (): Storage => ram(cookbook)
 
 /** The whole stack: a graph over that store, with both plugins registered —
  * @yaks/key first, since an alias is stored as one of its keys. */

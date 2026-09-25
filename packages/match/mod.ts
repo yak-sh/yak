@@ -45,6 +45,8 @@ export {
   matcher,
   type MatchOpts,
   type Query,
+  type Row,
+  rows,
   type Select,
 } from './match.ts'
 export { type Bundle, type Computed, type Eid, live } from './read.ts'

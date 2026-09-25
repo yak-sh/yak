@@ -1,8 +1,8 @@
 // `.order=hot` ranks by the recall curve, over a store that composed it.
 import { assertEquals } from '@std/assert'
 import { loadVocab, type PropSchema } from '@yaks/vocab'
-import { type Driver, storage } from '@yaks/sqlite'
-import { Database } from '@yaks/sqlite/db'
+import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
 import { extend } from './rules.ts'
 
 let at: PropSchema = { type: 'string', format: 'date-time' }
@@ -27,12 +27,8 @@ let ago = (days: number) =>
   new Date(Date.now() - days * 86_400_000).toISOString()
 
 Deno.test('.order=hot: recent and often-recalled first, a retired project sunk', () => {
-  let sqlite = new Database(':memory:')
-  using _close = { [Symbol.dispose]: () => sqlite.close() }
-  let db: Driver = {
-    query: (sql, params) => sqlite.prepare(sql).all(...params),
-    exec: (sql) => sqlite.exec(sql),
-  }
+  let db = open(':memory:')
+  using _close = { [Symbol.dispose]: () => db.close() }
   let store = storage(db, vocab, { extend: extend() })
   store.install()
   store.tx((tx) =>

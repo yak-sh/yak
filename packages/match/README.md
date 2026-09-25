@@ -4,7 +4,8 @@ Runs [@yaks/query](../query/README.md) queries against bundles held in memory. A
 bundle is one entity's components as a JSON object. This package stores no data
 itself: callers supply the array to search, and no database is opened.
 `matcher()` selects from an array of bundles, including ordering and paging;
-`filter()` tests a single bundle. Both read a [@yaks/vocab](../vocab/README.md)
+`filter()` tests a single bundle; `rows()` answers the rows @yaks/sql `rows()`
+returns, aggregates included. All three read a [@yaks/vocab](../vocab/README.md)
 schema to find out which component a property belongs to and what type it holds.
 
 The same query text can be run against a database by
@@ -330,8 +331,9 @@ before any bundle is read.
   for links to be returned alongside the result. This evaluator does not
   implement either directive. Walks are supported using the supplied entities;
   see above.
-- **`.count`, `.distinct=`, `.tally=`** — these return aggregate rows rather
-  than entities. Count what comes back instead.
+- **`.count`, `.distinct=`, `.tally=` in `matcher()` or `filter()`** — these
+  return aggregate rows rather than entities; `rows()` answers them. As in
+  @yaks/sql, `.distinct` and `.tally` take only a text, enum or eid property.
 - **A computed property nobody registered** — no function was supplied to
   calculate it. Register it through `opts.computed` and it is answered;
   @yaks/sql refuses the same property for the same reason when its `derived`

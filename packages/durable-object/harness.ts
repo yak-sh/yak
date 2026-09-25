@@ -17,7 +17,12 @@
 // so a bug this stand-in cannot see is a bug the runtime would not have shown
 // either.
 
-import { Database } from '@yaks/sqlite/db'
+// The engine itself rather than @yaks/sqlite/db `open`: workerd runs every
+// statement of a script and refreshes a statement's columns after DDL, and a
+// Driver's `query` does neither. TODO(T-39499): test the adapter in workerd
+// and delete this stand-in.
+import '../sqlite/sqlitepath.ts'
+import { Database } from '@db/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { shop } from '../sqlite/harness.ts'
 import { type DurableStorage, prohibited, type SqlValue } from './sql.ts'

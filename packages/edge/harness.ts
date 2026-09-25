@@ -9,7 +9,7 @@
 // application composes this package: the adapter owns the bytes, the graph owns
 // the rules, and this package brings the edge.
 
-import { Database } from '@yaks/sqlite/db'
+import { open } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph, type Storage } from '@yaks/graph'
 import { type Driver, storage } from '@yaks/sqlite'
@@ -19,14 +19,7 @@ import { edges } from './plugin.ts'
 import { traverse } from './sql.ts'
 
 // A Driver over a fresh in-memory database.
-export let mem = (): Driver => {
-  let db = new Database(':memory:')
-  db.exec('pragma foreign_keys = on')
-  return {
-    query: (sql, params) => db.prepare(sql).all(...params),
-    exec: (sql) => db.exec(sql),
-  }
-}
+export let mem = (): Driver => open(':memory:')
 
 let doc: VocabDoc = {
   $defs: {

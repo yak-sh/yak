@@ -1,23 +1,17 @@
 // Shared test fixtures (not part of the published package — see deno.json): an
-// in-memory SQLite driver over jsr:@db/sqlite, a small made-up vocabulary, and
-// just enough table creation to search it. The example domain is a bookshop:
-// books with a title and a blurb, reviews with prose of their own, and a price
-// that is not text at all — so the tests can prove that search reaches every
-// property marked searchable and no others.
+// in-memory SQLite driver (@yaks/sqlite/db `open`), a small made-up vocabulary,
+// and just enough table creation to search it. The example domain is a
+// bookshop: books with a title and a blurb, reviews with prose of their own,
+// and a price that is not text at all — so the tests can prove that search
+// reaches every property marked searchable and no others.
 
-import { Database } from '@yaks/sqlite/db'
+import { open } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import type { Driver } from './driver.ts'
 import { fields, schema, type Text } from './mod.ts'
 
 // A Driver over a fresh in-memory database.
-export let mem = (): Driver => {
-  let db = new Database(':memory:')
-  return {
-    query: (sql, params) => db.prepare(sql).all(...params),
-    exec: (sql) => db.exec(sql),
-  }
-}
+export let mem = (): Driver => open(':memory:')
 
 let doc: VocabDoc = {
   $defs: {

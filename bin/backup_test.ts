@@ -2,7 +2,7 @@
 // replace a database another reader or restore verifier still has open.
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
-import { Database } from '@yaks/sqlite/db'
+import { open, type Opened } from '@yaks/sqlite/db'
 import { slow } from './testing.ts'
 
 let script = fileURLToPath(new URL('./backup', import.meta.url))
@@ -18,9 +18,9 @@ let fixture = async () => {
   await run('git', ['init', '-q'], dir)
   await Deno.writeTextFile(`${dir}/.gitignore`, '*.db\n*.db-*\n')
   await Deno.mkdir(`${dir}/snap`)
-  let opened: Database[] = []
+  let opened: Opened[] = []
   let database = (path: string) => {
-    let db = new Database(`${dir}/${path}`)
+    let db = open(`${dir}/${path}`)
     opened.push(db)
     db.exec(
       'pragma journal_mode=wal; create table entity (id integer primary key)',
@@ -73,9 +73,9 @@ slow(
       let out = await f.backup()
       assert(out.success, decode(out.stderr))
       assertEquals(paths.map((p) => Deno.statSync(`${f.dir}/${p}`).ino), inodes)
-      assertEquals(f.db.prepare('pragma integrity_check').get(), {
+      assertEquals(f.db.query('pragma integrity_check', []), [{
         integrity_check: 'ok',
-      })
+      }])
       let sql = await run(
         'git',
         ['show', 'HEAD:snap/graph.sql.part.000'],

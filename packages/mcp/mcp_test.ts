@@ -9,8 +9,7 @@ import { z } from 'zod'
 import { type Bundle, graph, who } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools'
-import { storage } from '@yaks/sqlite'
-import { mem } from '../sqlite/harness.ts'
+import { ram } from '@yaks/ram'
 import { comp, connect, result, shopGraph, text } from './harness.ts'
 import { roster } from './server.ts'
 import { rosterLine, rosterVersion } from './roster.ts'
@@ -272,10 +271,8 @@ Deno.test('graph_show answers the entities asked for and nothing else', async ()
   await client.close()
 })
 
-// `.refs=` is one term per reference property, and workerd's SQLite takes
-// five terms in a compound (@yaks/sql `ARMS`). So the shape that broke — a
-// backlink read over a compiled store whose vocabulary references more than
-// five ways — is held here, through the tool.
+// A backlink read through the tool, over a vocabulary that references eight
+// ways; how SQL cuts that into compounds is @yaks/sql's (bind_test.ts).
 let wideDoc: VocabDoc = {
   $defs: {
     entity: {
@@ -302,11 +299,9 @@ let wideDoc: VocabDoc = {
   } as VocabDoc['$defs'],
 }
 
-Deno.test('graph_query .refs= reads backlinks over a vocabulary wider than a compound', async () => {
+Deno.test('graph_query .refs= reads backlinks over a vocabulary that references many ways', async () => {
   let wide = loadVocab([wideDoc, toolsDoc])
-  let store = storage(mem(), wide)
-  store.install()
-  let g = graph({ storage: store, vocab: wide })
+  let g = graph({ storage: ram(wide), vocab: wide })
   await g.apply([
     { entity: { eid: 'a1' }, doc: { title: 'the target' } },
     { entity: { eid: 'b1' }, n3: { of: 'a1' } },

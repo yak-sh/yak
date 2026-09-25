@@ -6,12 +6,11 @@
 // tree body is binary — raw ids, not text — and that backend stores text. A
 // deployment uses the file or object backend for the same reason.
 
-import { Database } from '@yaks/sqlite/db'
 import { address, type Blobs, encode } from '@yaks/blob'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { type Graph, graph, type Plugin } from '@yaks/graph'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
-import { type Driver, storage } from '@yaks/sqlite'
+import { ram } from '@yaks/ram'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { gitDoc } from './comp.ts'
 import { type Index, index } from './index.ts'
@@ -32,15 +31,6 @@ export let git: Vocab = loadVocab([entity, edgeDoc, keyDoc, gitDoc], [
   edgeKeywords,
   keyKeywords,
 ])
-
-let mem = (): Driver => {
-  let db = new Database(':memory:')
-  db.exec('pragma foreign_keys = on')
-  return {
-    query: (sql, params) => db.prepare(sql).all(...params),
-    exec: (sql) => db.exec(sql),
-  }
-}
 
 /** A byte store over a Map, counting the reads so that a test can prove an
  * object whose id is already known is never read again. */
@@ -81,10 +71,8 @@ export let fixture = (
       keyKeywords,
     ])
     : git
-  let db = storage(mem(), vocab)
-  db.install()
   let g = graph({
-    storage: db,
+    storage: ram(vocab),
     vocab,
     plugins: [edges(vocab), keys(vocab), ...more.plugins ?? []],
   })
