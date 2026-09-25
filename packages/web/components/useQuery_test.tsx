@@ -11,7 +11,9 @@ import { useBacklinks, useBoardsOver, useChatFor } from './useQuery.ts'
 let A = 'dddd3703-0000-4000-8000-000000000001'
 let B = 'dddd3703-0000-4000-8000-000000000002'
 let actor = 'dddd3703-0000-4000-8000-000000000003'
-type Frame = { sub?: string; unsub?: string; q?: string }
+// What @yaks/sync sends: `{subscribe, id}` opens a subscription and
+// `{unsubscribe}` closes it.
+type Frame = { subscribe?: unknown; id?: string; unsubscribe?: string }
 
 Deno.test('eid-keyed view queries release on retarget and last unmount', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -45,13 +47,13 @@ Deno.test('eid-keyed view queries release on retarget and last unmount', () => {
   try {
     mount([A, A])
     assertEquals(probe.subN(), baseline + 3)
-    assertEquals(frames.filter((f) => f.sub).length, 3)
+    assertEquals(frames.filter((f) => f.subscribe).length, 3)
     mount([A])
-    assertEquals(frames.filter((f) => f.unsub).length, 0)
+    assertEquals(frames.filter((f) => f.unsubscribe).length, 0)
     mount([B])
     assertEquals(probe.subN(), baseline + 3)
-    assertEquals(frames.filter((f) => f.sub).length, 6)
-    assertEquals(frames.filter((f) => f.unsub).length, 3)
+    assertEquals(frames.filter((f) => f.subscribe).length, 6)
+    assertEquals(frames.filter((f) => f.unsubscribe).length, 3)
     mount([B], '')
     assertEquals(probe.subN(), baseline + 2)
     mount([])
@@ -66,8 +68,8 @@ Deno.test('eid-keyed view queries release on retarget and last unmount', () => {
     mount([A])
     mount([])
     assertEquals(probe.subN(), baseline)
-    assertEquals(frames.filter((f) => f.sub).length, 9)
-    assertEquals(frames.filter((f) => f.unsub).length, 9)
+    assertEquals(frames.filter((f) => f.subscribe).length, 9)
+    assertEquals(frames.filter((f) => f.unsubscribe).length, 9)
   } finally {
     act(() => render(null, root))
     useRoute(restore)
