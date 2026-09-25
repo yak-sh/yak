@@ -7,12 +7,11 @@
 // `yak cites check` build the graph and call the tool in that same process
 // (@yaks/cli local.ts).
 //
-// A diverged base is A failure. Landing ends in one of two ways (./land.ts):
-// it landed, or the base moved and the branch was rebased and left waiting for
-// its tests to be re-run. The second is not a landing, so it is thrown as a
-// `CallError` carrying Git's whole account of it as the message, which the
-// tool runner records as a failed call and a command line reports as exit 1.
-// Those are the same two exit codes `land` has always had.
+// A landing that does not land is an expected invocation failure. A moved base
+// is returned as a divergence; a failed precondition or Git operation is a
+// `LandError`. Both become a `CallError` carrying Git's whole account, which
+// the tool runner records as a failed call and a command line reports as exit
+// 1. Unexpected exceptions still escape for the runner to report as defects.
 //
 // `cites check` is a check — a tool whose verb is `check`, which is all a
 // doctor is (@yaks/tools ./check.ts) — so a citation that moved is a finding
@@ -42,7 +41,7 @@ import { human } from '@yaks/id'
 import { CallError, checked, type Finding, type Level } from '@yaks/tools'
 import type { Driver } from '@yaks/sqlite'
 import { logFor } from '@yaks/journal/rules'
-import { land, run as git } from './land.ts'
+import { land, LandError, run as git } from './land.ts'
 import {
   type Changed,
   CITES,
@@ -126,14 +125,22 @@ export let runs = (host: Seams = {}): Runs => ({
     // arrived: what the caller reads is Git's own account, not a summary of
     // it.
     let said: string[] = []
-    let outcome = await land({
-      cwd,
-      allow: str(args['allow-revert']).split(',').filter(Boolean),
-      write: (text) => {
-        let line = text.trimEnd()
-        if (line) said.push(line)
-      },
-    })
+    let outcome
+    try {
+      outcome = await land({
+        cwd,
+        allow: str(args['allow-revert']).split(',').filter(Boolean),
+        write: (text) => {
+          let line = text.trimEnd()
+          if (line) said.push(line)
+        },
+      })
+    } catch (error) {
+      if (error instanceof LandError) {
+        throw new CallError('land', error.message)
+      }
+      throw error
+    }
     if (!('landed' in outcome)) throw new CallError('diverged', said.join('\n'))
     return [{
       entity: { eid: '$landed' },

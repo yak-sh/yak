@@ -170,6 +170,26 @@ slow(
   },
 )
 
+slow('a dirty worktree is a tool refusal, not an exception', async () => {
+  let r = await setup()
+  try {
+    Deno.writeTextFileSync(`${r.tree}/scratch.txt`, 'not committed\n')
+    let call = {
+      entity: { eid: 'c1' },
+      call: { args: {} },
+      process: { cwd: r.tree },
+    }
+    let refused = await assertRejects(
+      () => Promise.resolve(runs().land(call, {} as Graph)),
+      CallError,
+      'land: worktree is dirty:\n?? scratch.txt',
+    )
+    assertEquals(refused.code, 'land')
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
 slow(
   'landing leaves the checkout holding the work it landed, dirt untouched',
   async () => {

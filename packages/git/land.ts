@@ -50,6 +50,15 @@ export type Ran = { ok: boolean; code: number; out: string; err: string }
  * repository. */
 export type Run = (args: string[], cwd: string) => Promise<Ran>
 
+/** A deliberate landing refusal or a failed Git operation. Callers may
+ * distinguish these expected invocation failures from defects in land. */
+export class LandError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'LandError'
+  }
+}
+
 let dec = new TextDecoder()
 
 // No terminal prompts, ever: this may run with nobody there to answer, and a
@@ -287,14 +296,14 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   }
   let need = async (label: string, at: string, args: string[]) => {
     let r = await git(at, args, false)
-    if (r.code) throw new Error(message(label, r))
+    if (r.code) throw new LandError(message(label, r))
     return r.out.trim()
   }
   // What the guard reads: a git command run in this worktree whose output is
   // raw lines — a failure here is a broken read, never an answer.
   let read = async (args: string[]) => {
     let r = await git(tree, args, false)
-    if (r.code) throw new Error(message(`git ${args[0]}`, r))
+    if (r.code) throw new LandError(message(`git ${args[0]}`, r))
     return r.out
   }
 
@@ -319,17 +328,17 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   let base = (head.find((l) => l.startsWith('branch '))?.slice(7) ?? '')
     .replace(/^refs\/heads\//, '')
   if (!base) {
-    throw new Error(
+    throw new LandError(
       'land: the shared checkout is detached — no base to land onto',
     )
   }
   if (same(tree, root)) {
-    throw new Error(
+    throw new LandError(
       'land: run it inside a linked worktree, not the shared checkout',
     )
   }
   if (branch == base) {
-    throw new Error('land: the worktree is on the base branch')
+    throw new LandError('land: the worktree is on the base branch')
   }
 
   // Uncommitted work would not land and would break a rebase, so a dirty
@@ -339,7 +348,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     '--porcelain=v1',
     '--untracked-files=all',
   ])
-  if (dirty) throw new Error(`land: worktree is dirty:\n${dirty}`)
+  if (dirty) throw new LandError(`land: worktree is dirty:\n${dirty}`)
 
   // Ancestry decides which of the two things this invocation does, and it is
   // asked before the merge because the guard's refusal has to come before the
@@ -350,7 +359,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     false,
   )
   if (anc.code != 0 && anc.code != 1) {
-    throw new Error(message('read merge contention', anc))
+    throw new LandError(message('read merge contention', anc))
   }
 
   if (anc.code == 0) {
@@ -359,7 +368,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     let found = await reverts(read, base)
     let allow = new Set(ops.allow ?? [])
     let refuse = found.filter((r) => !allow.has(r.file))
-    if (refuse.length) throw new Error(await refusal(read, base, refuse))
+    if (refuse.length) throw new LandError(await refusal(read, base, refuse))
     for (let r of found) {
       write(`land: --allow-revert — landing anyway:${why(r, base, '')}`, true)
     }
@@ -368,7 +377,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     // files, and leaves alone any edit it would not touch. If it refuses for
     // some other reason — a hook, a dirty checkout — surface git's own error.
     let merged = await git(root, ['merge', '--ff-only', branch])
-    if (merged.code) throw new Error(message('git merge', merged))
+    if (merged.code) throw new LandError(message('git merge', merged))
     let sha = await need('read landed commit', root, ['rev-parse', 'HEAD'])
     await publish(git, write, root, base)
     // The worktree and its branch survive landing: the caller does its own
