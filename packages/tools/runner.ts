@@ -513,16 +513,26 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   return {
     rules: plans,
     tools,
-    // Once per runner, however many callers ask: a tool row is the same row
-    // every time (its id is derived from the name), and writing it again would
-    // move an `updated` stamp for nothing.
+    // Once per runner, however many callers ask, and only the rows that are
+    // missing or say something else: a tool row is the same row every time
+    // (its id is derived from the name), and writing it again would move an
+    // `updated` stamp for nothing — on every process that opens the graph.
     ensure: () =>
-      ensured ??= Promise.resolve(g.apply(
-        tools.map((t) => ({
-          entity: { eid: toolEid(t.name) },
-          tool: { name: t.name, description: t.description },
-        })),
-      )),
+      ensured ??= Promise.resolve(
+        g.storage.tx((tx) => tx.get(tools.map((t) => toolEid(t.name)))),
+      ).then((held) => {
+        let said = new Map(held.map((b) => [b.entity.eid, b.tool as Comp]))
+        let stale = tools.filter((t) => {
+          let row = said.get(toolEid(t.name))
+          return row?.name != t.name || row?.description != t.description
+        })
+        return stale.length
+          ? g.apply(stale.map((t) => ({
+            entity: { eid: toolEid(t.name) },
+            tool: { name: t.name, description: t.description },
+          })))
+          : []
+      }),
     call: async (bundles) => {
       // The call is written first, because it is the record: what was asked
       // stands whether or not an answer ever does. Then the tool runs — here,

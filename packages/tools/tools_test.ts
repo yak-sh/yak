@@ -106,6 +106,15 @@ Deno.test('a call is the transcript: the ask, the answer, the result beside it',
   assertEquals(again.find((b) => b.result)!.entity.eid, result.entity.eid)
 })
 
+Deno.test('a runner writes only the tool rows the graph lacks or holds otherwise', async () => {
+  let { g, r } = world()
+  assertEquals((await r.ensure()).length, 1)
+  assertEquals(await runner(g, { tools: [echo] }).ensure(), [])
+  let moved = { ...echo, description: 'Echo a value back' }
+  let [row] = await runner(g, { tools: [moved] }).ensure()
+  assertEquals((row.tool as Comp).description, 'Echo a value back')
+})
+
 Deno.test('a claim is a claim: a second run of a call in flight is the same run', async () => {
   let { g, r } = world()
   await r.ensure()
