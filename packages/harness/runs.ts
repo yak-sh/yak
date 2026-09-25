@@ -19,11 +19,13 @@ import {
   type Graph,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import type { Host } from '@yaks/cli/host'
 import { parse } from '@yaks/query'
 import { codexPaths, fromCodex, fromEnv } from '@yaks/openai'
 import { type Local, local } from './local.ts'
 import { hosted } from './store.ts'
+
+// The host a `yak` config composed, as much of it as a harness runs over.
+type Host = Parameters<typeof hosted>[0]
 
 type Args = Record<string, unknown>
 let word = (args: Args, name: string): string | undefined => {

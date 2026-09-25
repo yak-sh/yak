@@ -29,9 +29,6 @@ export const serverOf = (row: Bundle): GraphServer | undefined => {
   ) {
     throw new Error('MCP URL must be HTTP(S) without embedded credentials')
   }
-  if (c.credential && c.credential !== url.hostname) {
-    throw new Error('MCP credential host must match the server hostname')
-  }
   let allow: string[] | undefined
   if (c.allow != null) {
     const value = JSON.parse(String(c.allow))
@@ -55,7 +52,6 @@ export const serverOf = (row: Bundle): GraphServer | undefined => {
       namespace: namespaceOf(c.name),
       url: url.href,
       ...allow ? { allow } : {},
-      ...c.credential ? { credential: String(c.credential) } : {},
       ...Object.keys(oauth!).length ? { oauth } : {},
     },
   }

@@ -1,4 +1,4 @@
-/** Host composition: shared MCP connections and the existing yak credential store. */
+/** Host composition: shared MCP connections, signed in through their connections. */
 import { graphMCP } from './mcp_registry.ts'
 import { toolName } from '@yaks/graph'
 import type { Harness } from './store.ts'

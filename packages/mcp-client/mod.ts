@@ -40,8 +40,6 @@ export type Server = {
   url: string
   /** Exact remote names; omission exposes all discovered tools. */
   allow?: string[]
-  /** Private credential reference, interpreted by the application. */
-  credential?: string
   /** Explicit OAuth settings; tokens stay in the application's own storage. */
   oauth?: {
     redirectUrl?: string

@@ -18,10 +18,6 @@
           "type": "boolean",
           "description": "False disables discovery; omission enables it."
         },
-        "credential": {
-          "type": "string",
-          "description": "Optional reference into the application's credential store, never a token."
-        },
         "allow": {
           "type": "string",
           "description": "Optional JSON array of exact remote tool names; [] exposes none."

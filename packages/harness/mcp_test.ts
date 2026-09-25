@@ -5,7 +5,6 @@ import { remote } from './remote.ts'
 import { mcpTools } from './mcp.ts'
 import { signins } from './signin.ts'
 import { fixture } from '../mcp-client/testing.ts'
-import { serverOf } from '@yaks/mcp-client/graph'
 import { graphToolName } from '@yaks/mcp-client/graph'
 import { repo } from './testing.ts'
 
@@ -106,23 +105,6 @@ Deno.test('worker owns MCP connection and preserves exact configured tool schema
     await a.close()
     await server.shutdown()
   }
-})
-
-Deno.test('graph server rejects mismatched credential host', () => {
-  let failed = false
-  try {
-    serverOf({
-      entity: { eid: 'site' },
-      mcp_server: {
-        name: 'site',
-        url: 'https://other.test/mcp',
-        credential: 'yaks.app',
-      },
-    })
-  } catch {
-    failed = true
-  }
-  assert(failed)
 })
 
 Deno.test('tool isError uses expected tool failure rather than a defect', async () => {

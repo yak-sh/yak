@@ -149,8 +149,7 @@ await graph.apply([{
 label, entity ID, and portable `Server` configuration. The `$server` alias asks
 the graph to generate a UUID. `enabled: false` disables the definition. `allow`
 contains JSON text for an array of exact remote names. OAuth fields are
-`redirect_url`, `client_id`, `client_metadata_url`, and `scope`. `credential` is
-an application-defined reference, never a bearer token.
+`redirect_url`, `client_id`, `client_metadata_url`, and `scope`.
 
 `graphToolName` creates the displayed tool name, which is also the tool's
 identity in a graph: a `tool` entity's id is derived from its name. Renaming the

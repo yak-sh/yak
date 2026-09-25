@@ -7,7 +7,6 @@ import {
   type Server,
 } from '@yaks/mcp-client'
 import type { AuthorizationChallenge } from '@yaks/mcp-client/oauth'
-import { tokenFor } from '@yaks/cli'
 import type { Tool } from '@yaks/graph'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 
@@ -36,10 +35,7 @@ export const authorizedMCP = (servers: Server[], token: Token) => {
   const get = (s: Server) => {
     let c = connections.get(s.name)
     if (!c) {
-      c = connect(s, {
-        token: async () =>
-          await token(s) ?? (s.credential ? tokenFor(s.credential) : null),
-      })
+      c = connect(s, { token: async () => await token(s) ?? null })
       connections.set(s.name, c)
     }
     return c
