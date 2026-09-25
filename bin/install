@@ -1,0 +1,22 @@
+#!/bin/sh
+# Put `yak` on PATH, with `task` as its other name, and turn on the repository's
+# git hooks.
+#
+# `yak` is a two-line shim that runs the main checkout's CLI against that
+# checkout's own deno.json and deno.lock, read each time it starts. Nothing is
+# copied: `deno install -g` froze the import map at install time, so a landing
+# that moved or deleted a package's export broke every `yak` command until
+# someone reinstalled.
+set -eu
+root=$(git worktree list --porcelain | head -1 | cut -c 10-)
+bin="${DENO_INSTALL_ROOT:-$HOME/.deno}/bin"
+git -C "$root" config core.hooksPath .githooks
+mkdir -p "$bin"
+# The copied config a `deno install -g` of this CLI left behind.
+rm -rf "$bin/.yak"
+cat >"$bin/yak" <<EOF
+#!/bin/sh
+exec deno run -A --config '$root/deno.json' '$root/packages/cli/yak.ts' "\$@"
+EOF
+chmod +x "$bin/yak"
+ln -sf yak "$bin/task"

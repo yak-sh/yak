@@ -86,7 +86,7 @@
     "session:spike": "deno run -A packages/session/cli.ts",
     "tui:demo": "deno run -A packages/tui/demo.ts",
     "tui": "sh -c 'while :; do deno run -A packages/web/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
-    "install": "sh -c 'cd \"$(git worktree list --porcelain | head -1 | cut -c 10-)\" && git config core.hooksPath .githooks && deno install -g -f --name yak -A --config deno.json packages/cli/yak.ts && bin=\"${DENO_INSTALL_ROOT:-$HOME/.deno}/bin\" && ln -sf yak \"$bin/task\"'",
+    "install": "bin/install",
     "app-grep": "deno run --allow-net=api.cloudflare.com --allow-read --allow-write --allow-env=HOME,XDG_CACHE_HOME --allow-run=op,rg bin/app-grep.ts",
     "jsr": "deno run --allow-read --allow-net=api.jsr.io --allow-env=JSR_TOKEN bin/jsr.ts",
     "test": "deno run -A bin/suite-time.ts test deno task test:run",
