@@ -114,11 +114,13 @@ export let unserved = async (
 
 // The graph a command opens: composed for its own roles, with its duty roles
 // handed to a thread beside it. Where one of them is idle, the thread starts
-// now and runs one pass of each on the way in — beside the command, never
-// ahead of it; where all are served, it starts only if the process asks for
-// its duties to go on (`serve`). A command passing through is not a lesser
-// kind of process: on a machine where nobody runs a server it is the only one
-// there is, and a graph must not require one.
+// now and runs one pass of each idle one on the way in — beside the command,
+// never ahead of it, and never on a role another process is serving, which
+// would only be a second writer waiting on the same lock; where all are
+// served, it starts only if the process asks for its duties to go on
+// (`serve`). A command passing through is not a lesser kind of process: on a
+// machine where nobody runs a server it is the only one there is, and a graph
+// must not require one.
 let open = async (
   path: string,
   roles: Role[],
@@ -131,7 +133,8 @@ let open = async (
   try {
     let duties = dutiesOf(host.vocab, config, roles)
     aside.plan({ config: path, roles: duties, me: host.me })
-    if ((await unserved(host.graph, duties, host.me)).length) aside.start()
+    let idle = await unserved(host.graph, duties, host.me)
+    if (idle.length) aside.start(idle)
   } catch (error) {
     await host.close()
     throw error

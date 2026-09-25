@@ -13,17 +13,20 @@
 // It is planned once the command's own host is open, because only then can the
 // process say which duty roles its graph has and ask which of them nobody is
 // serving (local.ts). A command passing through starts it only where one of
-// them is idle, for one pass of each; a process that stays up starts it
-// whenever it asks for its duties to go on, since a holder that dies later is
-// one it has to take over from. Either way the thread composes every duty role
-// and leaves each lease, and the pool, to settle who does what.
+// them is idle, for one pass of those alone: a role another process serves is
+// that process's, and a second worker on it is only a second writer waiting on
+// the same lock. A process that stays up starts it whenever it asks for its
+// duties to go on, since a holder that dies later is one it has to take over
+// from, and it goes on with every duty role, leaving each lease, and the pool,
+// to settle who does what.
 
 import type { Eid } from '@yaks/graph'
 import type { Role, Thread } from './host.ts'
 
-/** What the thread is started with: the config to compose, the roles it
- * takes, and the process it is part of. */
-export type Start = { config: string; roles: Role[]; me: Eid }
+/** What the thread is started with: the config to compose, the duty roles it
+ * composes, the process it is part of, and the roles nobody else serves, which
+ * its first pass takes (every one of them where absent). */
+export type Start = { config: string; roles: Role[]; me: Eid; idle?: Role[] }
 
 /** What the process says to its thread. */
 export type Said =
@@ -47,8 +50,8 @@ export type Heard =
 export type Aside = Thread & {
   /** what it would take: the config, the duty roles, the process */
   plan: (start: Start) => void
-  /** start it now, for one pass of each on the way in */
-  start: () => void
+  /** start it now, for one pass of each idle role on the way in */
+  start: (idle?: Role[]) => void
 }
 
 /** A thread for this process's duties, not started yet. */
@@ -64,7 +67,7 @@ export let thread = (): Aside => {
   for (let p of all) p.promise.catch(() => {})
   let fail = (error: Error) => all.forEach((p) => p.reject(error))
   let tell = (said: Said) => worker?.postMessage(said)
-  let spawn = () => {
+  let spawn = (idle?: Role[]) => {
     if (worker || !plan?.roles.length) return
     worker = new Worker(new URL('./worker.ts', import.meta.url), {
       type: 'module',
@@ -81,7 +84,7 @@ export let thread = (): Aside => {
       e.preventDefault()
       fail(e.error instanceof Error ? e.error : new Error(e.message))
     }
-    tell({ start: plan })
+    tell({ start: { ...plan, ...idle ? { idle } : {} } })
   }
   return {
     plan: (start) => planned.resolve(plan = start),

@@ -188,8 +188,10 @@ export type Host = {
    * Runs until `signal` aborts; left out, that signal is this host's own, so
    * it stops with {@link Served.close}. Pass an already-aborted signal for one
    * pass each and no waiting, which is what a one-shot command does on its way
-   * in, and the live form is what a process that stays up calls. */
-  duties: (signal?: AbortSignal) => Promise<void>
+   * in, and the live form is what a process that stays up calls. `only`
+   * narrows them to those duty roles: a pass over the ones nobody else is
+   * serving. */
+  duties: (signal?: AbortSignal, only?: readonly Role[]) => Promise<void>
   /** What {@link Served.close} would have written for each process on this
    * machine that ended without running it (@yaks/process `vanished`): its
    * calls ended as interrupted, its leases released, its `exit` stamped with
@@ -697,7 +699,9 @@ export let compose = async (
     let ranked: Search | undefined
     let calls: Runner | undefined
     let watching: Effects | undefined
-    let doing: ((signal?: AbortSignal) => Promise<void>) | undefined
+    let doing:
+      | ((signal?: AbortSignal, only?: readonly Role[]) => Promise<void>)
+      | undefined
     let stopping = new AbortController()
     // Who is calling is settled before anything is built: a plugin's route
     // needs the same answer @yaks/api's own endpoints get, or what it writes
@@ -751,9 +755,9 @@ export let compose = async (
         if (!calls) throw new Error('the tool runner is not built yet')
         return calls
       },
-      duties: (signal) => {
+      duties: (signal, only) => {
         if (!doing) throw new Error('the duties are not built yet')
-        return doing(signal)
+        return doing(signal, only)
       },
       bury: async () => {
         if (!self || !g) return []
@@ -942,8 +946,9 @@ export let compose = async (
     // A config that turned them off (`duties: false`, `yak --no-duties`)
     // takes no lease, works no effects and runs none of them, in either form:
     // what it commits is left written down for a process that does.
-    doing = config.duties == false ? async () => {} : (signal) => {
+    doing = config.duties == false ? async () => {} : (signal, only) => {
       let until = signal ?? stopping.signal
+      let mine = (role: Role) => !only || only.includes(role)
       return Promise.all([
         ...(opts.thread
           ? [
@@ -951,13 +956,13 @@ export let compose = async (
               .catch((e) => console.error('the duty thread failed —', e)),
           ]
           : []),
-        ...(effecting
+        ...(effecting && mine('effects')
           ? [
             fx.work(g!, until)
               .catch((e) => console.error('effects failed —', e)),
           ]
           : []),
-        ...duties.map((d) =>
+        ...duties.filter((d) => mine(d.name)).map((d) =>
           holding(g!, d.name, { holder: selfEid(), hold, signal: until }, d.run)
             .catch((e) => console.error(`duty failed — ${d.name}`, e))
         ),

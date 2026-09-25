@@ -870,6 +870,43 @@ Deno.test('the pass a one-shot line makes runs the retries that are due', async 
   }
 })
 
+Deno.test('a pass over some duty roles leaves the others to whoever serves them', async () => {
+  let ran: string[] = []
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'] },
+    only({
+      shop: pooled({
+        effects: () => ({
+          book_seen: (event) => void ran.push(String(event.entity.eid)),
+        }),
+      }),
+    }),
+  )
+  try {
+    await detached(host.storage).patch([
+      { entity: { eid: 'b1' }, book: { title: 'One' } },
+      {
+        entity: { eid: 'r1' },
+        effect: {
+          handler: 'book_seen',
+          target: 'b1',
+          comp: 'book',
+          kind: 'created',
+          state: 'pending',
+          attempts: 0,
+        },
+      },
+    ])
+    // The pool is somebody else's: a pass over the other roles leaves it.
+    await host.duties(AbortSignal.abort(), ['shop'])
+    assertEquals(ran, [])
+    await host.duties(AbortSignal.abort(), ['effects'])
+    assertEquals(ran, ['b1'])
+  } finally {
+    await host.close()
+  }
+})
+
 Deno.test('a host reads the letter an id wears, which no plugin registers', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
