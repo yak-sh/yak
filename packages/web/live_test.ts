@@ -1,16 +1,18 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
-import { slow } from './testing.ts'
+import { slow, tick, until } from './testing.ts'
 import {
   agreementProbe,
   applyLocal,
   assertAgree,
   backlinks,
+  base,
   boardAll,
   boardPost,
   boardsOver,
   boardSub,
   boardTasks,
+  boot,
   byWarmth,
   cache,
   census,
@@ -21,12 +23,16 @@ import {
   config,
   deps,
   domains,
+  dropLocal,
   dropQuery,
   ent,
   findEid,
   foldFor,
   gated,
+  holdCommentCount,
+  holdLocal,
   holdQuery,
+  hostFrom,
   inbox,
   jobOf,
   landSub,
@@ -44,28 +50,40 @@ import {
   relations,
   repoUrl,
   resetSignals,
+  resolveGen,
+  resolvingId,
+  routeSub,
+  ROW,
   row,
+  rowsSub,
+  serverEid,
+  serverName,
   setInbox,
   shelfFor,
   shown,
   sieve,
   subEids,
+  subscribe,
   subscriptionChecks,
   subscriptionState,
   topZ,
   unreadFor,
   unsubscribe,
+  useOutboxStore,
   useRoute,
 } from './live.ts'
 import { edgeEid, link } from './edge.ts'
+import { type Ask, host } from './host_testing.ts'
 import { EXISTS, parseQuery, PROJECT, resolveRefs } from './query.ts'
-import { type Ent } from './types.ts'
+import { type Change, type Ent } from './types.ts'
 import { effect } from '@preact/signals'
 import {
   assertEquals,
   assertNotStrictEquals,
   assertStrictEquals,
+  assertThrows,
 } from '@std/assert'
+import { FakeTime } from '@std/testing/time'
 
 // Status is DERIVED (D-24102): to make a cache Ent read as done/wip/cancelled,
 // give it the mark/claim comp statusOf keys off, not a stored status column.
@@ -138,30 +156,23 @@ Deno.test('findEid does not scan or subscribe after indexing', () => {
 // settles on the answer. resolveGen wakes the reader. Each test isolates the
 // module-level sidecar with clearResolved and restores the transport seam.
 let stubResolve = (
-  handler: (id: string, sub: string) =>
-    | { eid: string; num: number; kind: string }
-    | null
-    | undefined
-    | Promise<{ eid: string; num: number; kind: string } | null | undefined>,
+  handler: (
+    id: string,
+    ask: Ask,
+  ) => { eid: string; num: number; kind: string } | null | undefined,
 ) => {
   let calls: string[] = []
-  let prior = useRoute((frame) => {
-    let f = frame as { sub?: string; q?: string }
-    if (!f.sub || !f.q?.startsWith('id=')) return
-    let id = f.q.slice(3).split('&')[0]
+  let wire = host((a) => {
+    if (!a.subscribe.startsWith('.eid=')) return
+    let id = a.subscribe.slice('.eid='.length).split('&')[0]
     calls.push(id)
-    Promise.resolve(handler(id, f.sub)).then((n) => {
-      if (n === undefined) return
-      let changes = n
-        ? [
-          { eid: n.eid, name: 'entity', comp: { eid: n.eid, num: n.num } },
-          { eid: n.eid, name: n.kind, comp: { eid: n.eid } },
-        ]
-        : []
-      landSub({ sub: f.sub!, changes, drop: [], replace: true })
-    })
+    let n = handler(id, a)
+    if (n === undefined) return
+    return {
+      bundles: n ? [{ entity: { eid: n.eid, num: n.num }, [n.kind]: {} }] : [],
+    }
   })
-  return { calls, restore: () => useRoute(prior) }
+  return { calls, wire, restore: wire.free }
 }
 
 Deno.test('server-resolve: a cache hit never touches the wire', () => {
@@ -2164,5 +2175,683 @@ Deno.test('an empty browser query is locally empty, never an unsupported remote 
     dropQuery(preds)
   } finally {
     config.host = prior
+  }
+})
+
+Deno.test('comment badges share a target tally, refcount it, and reopen it', async () => {
+  let sent: Record<string, unknown>[] = []
+  let prior = useRoute((f) => sent.push(f as Record<string, unknown>))
+  let a = crypto.randomUUID(), b = crypto.randomUUID()
+  let value = commentCount(a)
+  let off = holdCommentCount(a), duplicate = holdCommentCount(a)
+  let other = holdCommentCount(b)
+  try {
+    await Promise.resolve()
+    let asks = () =>
+      sent.filter((f) => String(f.subscribe).includes('.tally=comment.target'))
+    assertEquals(asks().length, 1)
+    assertEquals(String(asks()[0].subscribe).includes(a), true)
+    assertEquals(String(asks()[0].subscribe).includes(b), true)
+    landSub({
+      sub: 'agg:comments',
+      changes: [],
+      replace: true,
+      agg: { [a]: 7 },
+    })
+    assertEquals(value.value, 7)
+    off()
+    await Promise.resolve()
+    assertEquals(asks().length, 1)
+    duplicate()
+    other()
+    await Promise.resolve()
+    assertEquals(sent.some((f) => f.unsubscribe == asks()[0].id), true)
+    let again = holdCommentCount(a)
+    await Promise.resolve()
+    landSub({
+      sub: 'agg:comments',
+      changes: [],
+      replace: true,
+      agg: { [a]: 9 },
+    })
+    assertEquals(value.value, 9)
+    again()
+    await Promise.resolve()
+  } finally {
+    useRoute(prior)
+  }
+})
+
+// A location-less process (a test) has NO server until it names one. The
+// default used to be the owner's dev port, so any test that mounted a view
+// streamed the live graph into the module-global cache and read it back as
+// fixture data. Two halves: the default is nothing, and nothing refuses.
+Deno.test('no location, no host: nothing dials a server we never named', () => {
+  assertEquals(hostFrom(undefined), '')
+  assertEquals(hostFrom({ host: 'graph.example:8080' }), 'graph.example:8080')
+  let prior = config.host
+  config.host = ''
+  let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
+  let dialed: string[] = []
+  ;(globalThis as { WebSocket: unknown }).WebSocket = class {
+    constructor(url: string) {
+      dialed.push(url)
+    }
+  }
+  try {
+    assertThrows(() => base(), Error, 'no server host')
+    subscribe('probe', '.task!')
+    unsubscribe('probe')
+    assertEquals(dialed, [])
+  } finally {
+    ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
+    config.host = prior
+  }
+})
+
+Deno.test('findEid indexes human ids and short handles', () => {
+  let one = 'abcdef10-0000-4000-8000-000000000001'
+  let two = 'abcdef10-0000-4000-8000-000000000002'
+  cache.value = {
+    [one]: { entity: { eid: one, num: 31 }, task: { eid: one } },
+  }
+  assertEquals(findEid('T-31'), one)
+  assertEquals(findEid('31'), one)
+  assertEquals(findEid('#abcdef'), one)
+  // A second entity under the same handle makes it ambiguous, live.
+  applyLocal([{ eid: two, name: 'entity', comp: { eid: two, num: 32 } }])
+  assertThrows(() => findEid('#abcdef'), Error, 'ambiguous')
+  applyLocal([{ eid: two, name: 'entity', comp: null }])
+  assertEquals(findEid('#abcdef'), one)
+})
+
+Deno.test('server-resolve: an unloaded id resolves through one addressed sub', async () => {
+  clearResolved()
+  cache.value = {}
+  let eid = 'aaaaaaaa-0000-4000-8000-000000000099'
+  let f = stubResolve((id) =>
+    id == 'T-99' ? { eid, num: 99, kind: 'task' } : null
+  )
+  try {
+    // A first miss KICKS the fetch and returns undefined — never blocks — and
+    // the token reads as resolving, not a premature miss.
+    assertEquals(serverEid('T-99'), undefined)
+    assertEquals(resolvingId('T-99'), true)
+    // A second read before the answer lands reuses the in-flight resolve.
+    assertEquals(serverEid('T-99'), undefined)
+    await until(() => serverEid('T-99') == eid)
+    // Naming-only, resolvable by eid too (the reverse read a crumb uses).
+    assertEquals(serverName(eid), { eid, num: 99, kind: 'task' })
+    assertEquals(resolvingId('T-99'), false)
+    assertEquals(f.calls, ['T-99']) // deduped: one round trip, not per read
+  } finally {
+    f.restore()
+  }
+})
+
+Deno.test('server-resolve: a 404 is a genuine miss — Lost, and no retry storm', async () => {
+  clearResolved()
+  cache.value = {}
+  let f = stubResolve(() => null)
+  try {
+    let gen = resolveGen.value
+    assertEquals(serverEid('T-404'), undefined)
+    await until(() => resolveGen.value > gen)
+    // null (gone), not undefined (pending): the router shows Lost, not a
+    // spinner. And the cached null stops any re-kick.
+    assertEquals(serverName('T-404'), null)
+    assertEquals(resolvingId('T-404'), false)
+    for (let i = 0; i < 20; i++) serverEid('T-404')
+    assertEquals(f.calls.length, 1)
+  } finally {
+    f.restore()
+  }
+})
+
+Deno.test('server-resolve: a hanging server never stalls nav, and never storms', async () => {
+  clearResolved()
+  cache.value = {}
+  let eid = 'cccccccc-0000-4000-8000-000000000007'
+  let asked: Ask | undefined
+  let f = stubResolve((_id, a) => {
+    asked = a
+    return undefined
+  })
+  try {
+    // The read returns immediately though the wire hangs — routing/crumbs
+    // never block on a slow resolve (the risk this leaf guards).
+    assertEquals(serverEid('T-7'), undefined)
+    assertEquals(resolvingId('T-7'), true)
+    // Repeated reads while it hangs never launch a second request.
+    for (let i = 0; i < 20; i++) serverEid('T-7')
+    await tick()
+    assertEquals(f.calls.length, 1)
+    // Let it finally answer — settling clears the abort timer (no leak).
+    f.wire.say({
+      id: asked!.id,
+      bundles: [{ entity: { eid, num: 7 }, task: {} }],
+    })
+    await until(() => serverEid('T-7') == eid)
+  } finally {
+    f.restore()
+  }
+})
+
+Deno.test('server-resolve: a reconnect reseed clears the sidecar', async () => {
+  clearResolved()
+  cache.value = {}
+  let eid = 'dddddddd-0000-4000-8000-000000000005'
+  let f = stubResolve(() => ({ eid, num: 5, kind: 'task' }))
+  try {
+    serverEid('T-5')
+    await until(() => serverName(eid) != null)
+    // A wholesale reseed (reconnect) may now hold what was resolved remotely,
+    // so the sidecar is dropped and the next read re-resolves.
+    resetSignals()
+    assertEquals(serverName(eid), undefined) // dropped — and this re-kicks
+    await until(() => serverName(eid) != null) // let the re-kick settle (no leak)
+  } finally {
+    f.restore()
+  }
+})
+
+// The pending-wake membership, a query over the wake.target reverse index. It
+// anchors on the index — one candidate read, not a whole-graph scan — and its
+// signal wakes ONLY when this session's wake membership changes.
+let SOON = '2026-09-25T12:00:00Z', NOW = '2026-09-25T12:00:01Z'
+let pendingWakeQ = (session: string) =>
+  resolveRefs(parseQuery(`.wake.target=${session} .fired=`), findEid)
+
+Deno.test('queryEids resolves pending wakes off the reverse index, narrowly', () => {
+  cache.value = {
+    session: {
+      entity: { eid: 'session', num: 1 },
+      session: { eid: 'session', id: 's' },
+    },
+    other_session: {
+      entity: { eid: 'other_session', num: 2 },
+      session: { eid: 'other_session', id: 'o' },
+    },
+    wake: {
+      entity: { eid: 'wake', num: 3 },
+      wake: { eid: 'wake', at: SOON, target: 'session' },
+    },
+  }
+  deps.value = []
+  let mine = holdQuery(pendingWakeQ('session'))
+  assertEquals(mine.value, ['wake'])
+
+  let runs = 0
+  let stop = effect(() => {
+    mine.value
+    runs++
+  })
+  try {
+    // A wake for a DIFFERENT session — membership unchanged, zero re-render.
+    applyLocal([
+      {
+        eid: 'other_wake',
+        name: 'wake',
+        comp: { at: SOON, target: 'other_session' },
+      },
+    ])
+    assertEquals(runs, 1)
+    // An unrelated doc edit — likewise nothing.
+    applyLocal([{ eid: 'other_session', name: 'doc', comp: { title: 'x' } }])
+    assertEquals(runs, 1)
+    // THIS wake fires — membership drops, the dot re-renders once.
+    applyLocal([{ eid: 'wake', name: 'fired', comp: { at: NOW } }])
+    assertEquals(mine.value, [])
+    assertEquals(runs, 2)
+  } finally {
+    stop()
+    dropQuery(pendingWakeQ('session'))
+  }
+})
+
+// T-37445: a strip of session dots asks the same per-row question once per
+// session; each resolves over the rows the strip's ONE defining sub holds, so
+// no dot opens a server sub of its own.
+Deno.test('holdLocal answers a per-row query off held rows, opening no server sub', () => {
+  let probe =
+    (globalThis as unknown as { __probe: { subN: () => number } }).__probe
+  cache.value = {
+    s1: { entity: { eid: 's1', num: 1 }, session: { eid: 's1', id: 'a' } },
+    s2: { entity: { eid: 's2', num: 2 }, session: { eid: 's2', id: 'b' } },
+    w1: {
+      entity: { eid: 'w1', num: 3 },
+      wake: { eid: 'w1', at: SOON, target: 's1' },
+    },
+  }
+  deps.value = []
+  let n0 = probe.subN()
+  let mine = holdLocal(pendingWakeQ('s1'))
+  let theirs = holdLocal(pendingWakeQ('s2'))
+  try {
+    assertEquals(mine.value, ['w1'])
+    assertEquals(theirs.value, [])
+    assertEquals(probe.subN(), n0)
+    applyLocal([{ eid: 'w1', name: 'fired', comp: { at: NOW } }])
+    assertEquals(mine.value, [])
+  } finally {
+    dropLocal(pendingWakeQ('s1'))
+    dropLocal(pendingWakeQ('s2'))
+  }
+})
+
+Deno.test('subscription failures persist until a successful replacement', () => {
+  let sub = 'entries:failure-state-test'
+  landSub({
+    sub,
+    changes: [],
+    replace: true,
+    error: 'source unreadable',
+  })
+  assertEquals(subscriptionState(sub), {
+    status: 'failed',
+    reason: 'source unreadable',
+    reference: sub,
+  })
+
+  // An unrelated cache publication is not a subscription recovery.
+  applyLocal([{
+    eid: 'unrelated-failure-state-test',
+    name: 'entity',
+    comp: { num: 1 },
+  }])
+  assertEquals(subscriptionState(sub).status, 'failed')
+
+  landSub({ sub, changes: [], replace: true })
+  assertEquals(subscriptionState(sub), {
+    status: 'ready',
+    eids: new Set<string>(),
+  })
+})
+
+// The census is an AGGREGATE, not a task stream (D-22567 §1): once the server
+// answers `.distinct=filed.domain` the well reads THAT, with no task in the
+// cache to reduce. The local pass above is the pre-answer courtesy, not the
+// source of truth.
+Deno.test('domains: the server distinct wins over the working set', () => {
+  fill([['T', 'Ops']])
+  assertEquals(domains.value, ['Ops'])
+  landSub({ sub: 'agg:domains', agg: { Fable: 1, Eng: 1 } })
+  assertEquals(domains.value, ['Eng', 'Fable'])
+  // A later answer moves it without a task changing hands.
+  landSub({ sub: 'agg:domains', agg: { Fable: 1, Ops: 1 } })
+  assertEquals(domains.value, ['Fable', 'Ops'])
+})
+
+// backlinks read `.refs=target`, the multi-column reverse-union, through the
+// query door (T-18101): every entity referencing this eid across ALL {eid}
+// columns of the schema. Parity: the set equals who points here, each with its
+// via label; the face wakes only when a referrer starts or stops pointing here —
+// never on an unrelated row — and stays correct through a retarget.
+Deno.test('backlinks: reverse-union set + via, awake only for its own target', () => {
+  cache.value = {
+    p1: { entity: { eid: 'p1', num: 1 }, project: { eid: 'p1' } },
+    s1: {
+      entity: { eid: 's1', num: 2 },
+      session: { eid: 's1', id: 'x', actor: 'p1' },
+    },
+    t1: {
+      entity: { eid: 't1', num: 3 },
+      task: { eid: 't1' },
+      claim: { eid: 't1', session: 's1' },
+    },
+    other: {
+      entity: { eid: 'other', num: 4 },
+      doc: { eid: 'other', title: 'o', body: '' },
+    },
+  }
+  deps.value = []
+  resetSignals()
+  assertEquals(backlinks('p1'), [{ from: 's1', via: 'session.actor' }])
+  assertEquals(backlinks('s1'), [{ from: 't1', via: 'claim.session' }])
+
+  let byFrom = <T extends { from: string }>(b: T[]) =>
+    b.toSorted((a, z) => (a.from < z.from ? -1 : 1))
+  let runs = 0
+  let stop = effect(() => {
+    backlinks('p1')
+    runs++
+  })
+  try {
+    // an unrelated doc edit leaves the target's backlinks asleep
+    applyLocal([{ eid: 'other', name: 'doc', comp: { title: 'changed' } }])
+    assertEquals(runs, 1)
+
+    // a new referrer through ANY {eid} column wakes it and joins the union
+    applyLocal([
+      { eid: 'c2', name: 'entity', comp: { eid: 'c2', num: 5 } },
+      { eid: 'c2', name: 'comment', comp: { target: 'p1' } },
+    ])
+    assertEquals(runs, 2)
+    assertEquals(byFrom(backlinks('p1')), [
+      { from: 'c2', via: 'comment.target' },
+      { from: 's1', via: 'session.actor' },
+    ])
+
+    // retargeting the session away wakes it and drops it — correct through the patch
+    applyLocal([{ eid: 's1', name: 'session', comp: { actor: null } }])
+    assertEquals(runs, 3)
+    assertEquals(backlinks('p1'), [{ from: 'c2', via: 'comment.target' }])
+  } finally {
+    stop()
+  }
+})
+
+// A board now renders from the server's subscription (subEids); the local query
+// door is the pre-flip agreement check beside it, taken at the render that
+// actually reads them. So the counter counts once a render has BOTH doors: the
+// subscription's members and the query door resolved against the same cache.
+// Before the first sub frame the query door answers alone and there is nothing
+// to compare — the deferred counter stays null, which a probe must not mistake
+// for "no divergence found".
+Deno.test('a board cache prime opens no second unwindowed subscription', () => {
+  cache.value = {
+    board_prime: {
+      entity: { eid: 'board_prime', num: 1 },
+      board: { eid: 'board_prime', query: '.task!' },
+    },
+    task_prime: {
+      entity: { eid: 'task_prime', num: 2 },
+      task: { eid: 'task_prime' },
+      filed: { eid: 'task_prime', priority: 1 },
+    },
+  }
+  let sent: { subscribe?: string }[] = []
+  let restore = useRoute((frame) =>
+    void sent.push(frame as typeof sent[number])
+  )
+  let drop = boardSub(ent('board_prime'))
+  try {
+    assertEquals(boardTasks(ent('board_prime')).map((e) => e.eid), [
+      'task_prime',
+    ])
+    assertEquals(sent.flatMap((f) => f.subscribe ?? []), [
+      '.task!&.limit=400&*',
+    ])
+  } finally {
+    drop()
+    unsubscribe('board:board_prime')
+    useRoute(restore)
+  }
+})
+
+// A frame's rows as the host sends them: whole, never a bare spine.
+let whole = (...eids: string[]): Change[] =>
+  eids.flatMap((eid) =>
+    Object.entries(cache.peek()[eid] ?? {}).map(([name, comp]) => ({
+      eid,
+      name,
+      comp: comp as Record<string, unknown>,
+    }))
+  )
+
+Deno.test('the agreement counter counts when both doors answer', async () => {
+  config.agreement = true
+  cache.value = {
+    board: {
+      entity: { eid: 'board', num: 1 },
+      board: { eid: 'board', query: '.status=open' },
+    },
+    t1: {
+      entity: { eid: 't1', num: 2 },
+      task: { eid: 't1' },
+      filed: { eid: 't1', priority: 1 },
+    },
+  }
+  // What a Board view does on mount: register the subscription, then render.
+  let drop = boardSub(ent('board'))
+  try {
+    // Before the first sub frame the query door answers alone — nothing yet to
+    // compare it against.
+    assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['t1'])
+    assertEquals(subscriptionChecks(), undefined)
+
+    // The subscription's first frame lands, carrying the rows it holds.
+    landSub({
+      sub: 'board:board',
+      changes: whole('t1'),
+      replace: true,
+    })
+    assertEquals(subEids('board:board')?.size, 1)
+
+    // Now a render has the sub's members AND resolves the query door beside
+    // them: the two are compared.
+    assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['t1'])
+    // Poll the off-thread agreement counter instead of guessing its latency.
+    let counts = await until(() => {
+      let c = subscriptionChecks()
+      return c && (c.agreements ?? 0) > 0 ? c : undefined
+    }, { label: 'the agreement counter to count' })
+    assertEquals(counts?.divergences, 0)
+    assertEquals((counts?.agreements ?? 0) > 0, true, 'the counter counted')
+  } finally {
+    config.agreement = false
+    drop()
+    unsubscribe('board:board')
+  }
+})
+
+// A board IS a saved query, so the server's subscription is its membership: the
+// render reads subEids, not a cache scan. The first frame paints it, and a
+// maintenance frame that adds or drops an eid moves the board live — the join/
+// leave the boot flip needs to keep working under a partial cache (T-18099).
+Deno.test('a board renders from the subscription and tracks joins and leaves', () => {
+  cache.value = {
+    board: {
+      entity: { eid: 'board', num: 1 },
+      board: { eid: 'board', query: '.status=open' },
+    },
+    t1: {
+      entity: { eid: 't1', num: 2 },
+      task: { eid: 't1' },
+      filed: { eid: 't1', priority: 1 },
+    },
+    t2: {
+      entity: { eid: 't2', num: 3 },
+      task: { eid: 't2' },
+      filed: { eid: 't2', priority: 2 },
+    },
+  }
+  deps.value = []
+  let drop = boardSub(ent('board'))
+  try {
+    // The server's first frame IS the membership — the render reads it.
+    landSub({
+      sub: 'board:board',
+      replace: true,
+      changes: whole('t1'),
+    })
+    assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['t1'])
+
+    // A task joins the query: a maintenance frame adds it and the board picks
+    // it up live — no cache scan, no per-patch re-test.
+    landSub({
+      sub: 'board:board',
+      changes: whole('t2'),
+    })
+    assertEquals(
+      boardTasks(ent('board')).map((e) => e.eid).toSorted(),
+      ['t1', 't2'],
+    )
+
+    // A task leaves the query: the server drops it from THIS sub (it still
+    // exists), and the board drops it too.
+    landSub({ sub: 'board:board', changes: [], drop: ['t1'] })
+    assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['t2'])
+  } finally {
+    drop()
+    unsubscribe('board:board')
+  }
+})
+
+// boardPost is the face split, wherever the members come from: the server can
+// stream the board's own eid and chrome (a comment, a card) into the sub's set,
+// and boardPost still keeps them out — the whole-graph face drops comment/card/
+// self, the tasks face keeps only task-bearing rows.
+Deno.test('boardPost excludes chrome and self from the subscription members', () => {
+  cache.value = {
+    board: {
+      entity: { eid: 'board', num: 1 },
+      doc: { eid: 'board', title: 'feed', body: '' },
+      board: { eid: 'board', query: '.order=hot' },
+    },
+    task: {
+      entity: { eid: 'task', num: 2 },
+      task: { eid: 'task' },
+      filed: { eid: 'task', priority: 1 },
+    },
+    note: {
+      entity: { eid: 'note', num: 3 },
+      comment: { eid: 'note', target: 'task' },
+    },
+    card: {
+      entity: { eid: 'card', num: 4 },
+      card: { eid: 'card', target: 'task', view: 'Full' },
+    },
+  }
+  deps.value = []
+  let drop = boardSub(ent('board'))
+  try {
+    landSub({
+      sub: 'board:board',
+      replace: true,
+      changes: whole('board', 'task', 'note', 'card'),
+    })
+    assertEquals(boardAll(ent('board')).map((e) => e.eid), ['task'])
+    assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['task'])
+  } finally {
+    drop()
+    unsubscribe('board:board')
+  }
+})
+
+// T-37450: a painted tab keeps what it painted through a lost socket. The
+// poller gets the SOCKET back once the server answers; it never reloads the
+// page, and the rows in the cache are untouched the whole time.
+Deno.test('a lost socket reconnects in place; the painted cache survives', async () => {
+  let D = 'd0c00000-0000-4000-8000-0000000000d0'
+  cache.value = {
+    [D]: { entity: { eid: D, num: 1 }, doc: { eid: D, title: 't', body: 'b' } },
+  }
+  using time = new FakeTime()
+  let wire = host()
+  let asks = () =>
+    wire.asked().filter((a) => a.subscribe.startsWith(`.eid=${D}`)).length
+  let off = () => {}
+  try {
+    off = routeSub(D, ROW)
+    await time.runMicrotasks()
+    assertEquals([wire.dials(), asks()], [1, 1])
+    wire.drop()
+    // Down: nothing painted changes.
+    await time.tickAsync(100)
+    assertEquals(ent(D).doc?.title, 't')
+    // Back: one new socket, the same rows, and the line asked again on it.
+    await time.tickAsync(1_000)
+    await time.runMicrotasks()
+    assertEquals([wire.dials(), asks()], [2, 2])
+    assertEquals(ent(D).doc?.title, 't')
+  } finally {
+    off()
+    wire.free()
+  }
+})
+
+// The client half of the aggregate wire (T-21283): the server's initial tally
+// REPLACES the local count and is authoritative from then on; delta frames
+// merge (n=0 drops the key); rows never ride, so the cache is untouched.
+Deno.test('each aggregate frame replaces the whole tally', () => {
+  let X = 'cccc0000-0000-4000-8000-000000000011'
+  let Y = 'cccc0000-0000-4000-8000-000000000012'
+  cache.value = {
+    c1: { entity: { eid: 'c1', num: 1 }, comment: { eid: 'c1', target: X } },
+  }
+  let x = commentCount(X)
+  let y = commentCount(Y)
+  let offX = holdCommentCount(X), offY = holdCommentCount(Y)
+  try {
+    assertEquals(x.value, 1) // local prime — the working-set count
+    // The server answers the whole tally: X has three comments beyond the
+    // working set, Y one — authoritative over the local scan.
+    landSub({ sub: 'agg:comments', agg: { [X]: 3, [Y]: 1 } })
+    assertEquals(x.value, 3)
+    assertEquals(y.value, 1)
+    // The next answer is whole too: a target it leaves out has none.
+    landSub({ sub: 'agg:comments', agg: { [X]: 4 } })
+    assertEquals(x.value, 4)
+    assertEquals(y.value, 0)
+    assertEquals(Object.keys(cache.value).length, 1) // no rows landed
+  } finally {
+    offX()
+    offY()
+  }
+})
+
+// T-37445: a list of tiles is ONE addressed sub, named by its ids, so ten
+// reference rows cost one serve and one frame instead of ten route subs.
+Deno.test('a list of rows is held in one sub and freed by its last holder', async () => {
+  let sent: Record<string, unknown>[] = []
+  let prior = useRoute((f) => sent.push(f as Record<string, unknown>))
+  let ids = ['a', 'b', 'c'].map((c) =>
+    `c0000000-0000-4000-8000-00000000000${c}`
+  )
+  let name = `rows:${ids.join(',')}`
+  let offs = [rowsSub(ids), rowsSub(ids)]
+  try {
+    await Promise.resolve()
+    let asks = sent.filter((f) => f.subscribe == `.eid=${ids.join(',')}&*`)
+    assertEquals(asks.length, 1)
+    landSub({
+      sub: name,
+      replace: true,
+      changes: ids.flatMap((eid, i) => [
+        { eid, name: 'entity', comp: { eid, num: 30 + i } },
+        { eid, name: 'doc', comp: { eid, title: `r${i}` } },
+      ]),
+    })
+    assertEquals(ids.map((id) => ent(id).doc?.title), ['r0', 'r1', 'r2'])
+    // Two holders, one sub: the first drop keeps it, the last one frees it.
+    offs.shift()!()
+    await Promise.resolve()
+    assertEquals(sent.some((f) => f.unsubscribe == asks[0].id), false)
+    offs.shift()!()
+    await Promise.resolve()
+    assertEquals(sent.some((f) => f.unsubscribe == asks[0].id), true)
+  } finally {
+    for (let off of offs) off()
+    unsubscribe(name)
+    useRoute(prior)
+  }
+})
+
+// T-37445: boot waits on nothing from disk. The durable outbox here never
+// answers, as a gigabyte legacy IndexedDB did for up to a minute in a long
+// profile; an answer still paints the moment the socket carries it.
+Deno.test('boot paints the first answer while the durable outbox never answers', async () => {
+  let restoreStore = useOutboxStore({
+    park: () => {},
+    unpark: () => {},
+    parked: () => new Promise(() => {}),
+  })
+  let D = 'd0c00000-0000-4000-8000-0000000000d1'
+  cache.value = {}
+  let wire = host((a) =>
+    a.subscribe.startsWith(`.eid=${D}`)
+      ? { bundles: [{ entity: { eid: D, num: 7 }, doc: { title: 't' } }] }
+      : undefined
+  )
+  let off = () => {}
+  try {
+    void boot()
+    off = routeSub(D, ROW)
+    await until(() => ent(D).doc?.title == 't')
+  } finally {
+    off()
+    useOutboxStore(restoreStore)
+    wire.free()
   }
 })

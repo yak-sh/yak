@@ -4,7 +4,10 @@ import './testing.ts'
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { eidOf } from '@yaks/archetype'
 import { archetypeTables, rememberArchetype } from './live_archetypes.ts'
-import { type Comps } from './live.ts'
+import { applyLocal, type Comps, config } from './live.ts'
+import { host } from './host_testing.ts'
+import { tick } from './testing.ts'
+import { effect } from '@preact/signals'
 
 Deno.test('local table names prove the spine without reading component bodies', () => {
   let tables = ['doc', 'local_plugin', 'task'], id = eidOf(tables)
@@ -49,4 +52,46 @@ Deno.test('a later physical set is learned, not the prior set of the same owner'
   })
   assertEquals(archetypeTables(nextId), next)
   assertEquals(archetypeTables(id), names)
+})
+
+Deno.test('projected descriptors batch, wake renderers, release, and survive eviction', async () => {
+  let prior = config.host
+  config.host = 'archetypes.test'
+  let tables = ['future_plugin', 'task'], id = eidOf(tables)
+  let other = ['future_plugin_two'], id2 = eidOf(other)
+  let wire = host(() => ({
+    bundles: ([[id, tables], [id2, other]] as const).map(([eid, names]) => ({
+      entity: { eid },
+      archetype: { tables: JSON.stringify(names) },
+    })),
+  }))
+  let asks = () => wire.asked().filter((a) => a.subscribe.startsWith('.eid='))
+  let off = () => {}
+  try {
+    let seen: (readonly string[] | undefined)[] = []
+    off = effect(() => {
+      seen.push(archetypeTables(id))
+    })
+    archetypeTables(id2)
+    await tick()
+    assertEquals(asks().map((a) => a.subscribe), [`.eid=${id},${id2}&*`])
+    await tick()
+    assertEquals(seen.at(-1), tables)
+    assertEquals(
+      wire.sent.filter((m) => m.unsubscribe == asks()[0].id).length,
+      1,
+    )
+    applyLocal([
+      { eid: id, name: 'retired', comp: {} },
+      { eid: id2, name: 'entity', comp: null },
+    ])
+    assertEquals(archetypeTables(id), tables)
+    assertEquals(archetypeTables(id2), other)
+    await tick()
+    assertEquals(asks().length, 1)
+  } finally {
+    off()
+    config.host = prior
+    wire.free()
+  }
 })

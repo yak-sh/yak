@@ -1,13 +1,19 @@
 // Cold, provisional and confirmed-empty are distinct read states.
 import './testing.ts'
 import { assertEquals } from '@std/assert'
+import { effect } from '@preact/signals'
 import {
   cache,
   clientSubscription,
   ent,
+  entityRead,
   foldFor,
   landSub,
+  loaded,
   repoTrace,
+  routeName,
+  routeSub,
+  unsubscribe,
   useRoute,
 } from './live.ts'
 
@@ -59,4 +65,55 @@ Deno.test('repo trace names missing hops and stops cycles', () => {
   assertEquals(repoTrace(ent('comment')).url, 'https://github.com/acme/repo')
   cache.value = { cycle: { comment: { eid: 'cycle', target: 'cycle' } } }
   assertEquals(repoTrace(ent('cycle')), { eids: ['cycle'] })
+})
+
+Deno.test('entity read distinguishes loading, loaded, and confirmed absent', () => {
+  let prior = useRoute(() => {})
+  let eid = 'cold-read'
+  let fields = 'doc.title'
+  let sub = routeName(eid, fields)
+  cache.value = {}
+  assertEquals(entityRead(eid, fields).ready, false)
+  assertEquals(loaded(eid, 'doc', 'title'), false)
+  let wakes: boolean[] = []
+  let off = effect(() => {
+    wakes.push(loaded(eid, 'doc', 'title'))
+  })
+  try {
+    landSub({
+      sub,
+      replace: true,
+      changes: [
+        { eid, name: 'entity', comp: { num: 1 } },
+        { eid, name: 'doc', comp: { title: 'Loaded' } },
+      ],
+    })
+    let read = entityRead(eid, fields)
+    assertEquals(read.ready, true)
+    assertEquals(read.value?.doc?.title, 'Loaded')
+    assertEquals(wakes.at(-1), true)
+    landSub({ sub, replace: true, changes: [] })
+    assertEquals(entityRead(eid, fields).ready, true)
+    assertEquals(entityRead(eid, fields).value, undefined)
+  } finally {
+    off()
+    unsubscribe(sub)
+    useRoute(prior)
+  }
+})
+
+Deno.test('entity holds share one line and close at the last release', () => {
+  let sent: { subscribe?: string; unsubscribe?: string }[] = []
+  let prior = useRoute((frame) => void sent.push(frame as typeof sent[number]))
+  try {
+    let a = routeSub('reference', 'doc.title')
+    let b = routeSub('reference', 'doc.title')
+    assertEquals(sent.flatMap((f) => f.subscribe ?? []), ['.eid=reference&*'])
+    a()
+    assertEquals(sent.some((f) => f.unsubscribe), false)
+    b()
+    assertEquals(sent.filter((f) => f.unsubscribe).length, 1)
+  } finally {
+    useRoute(prior)
+  }
 })
