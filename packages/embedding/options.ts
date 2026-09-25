@@ -58,7 +58,8 @@ export type Options = {
   neighbours?: number
   /** the similarity a neighbour must reach to be one at all (default 0) */
   floor?: number
-  /** how many entities one sweep embeds before stopping (default: all) */
+  /** how many queued entities one sweep takes (default 64, ./sweep.ts
+   * `BATCH`); the next sweep follows at once while any are left */
   batch?: number
   /** how long a burst of writes settles before the sweep runs, in
    * milliseconds (default 3000) */

@@ -56,25 +56,30 @@ Deno.test('a burst of writes is one sweep, and it never holds the write open', a
   await until(() => count(db) == 4)
 })
 
-// A slow, counting embedder, named the way a config names one — which is also
-// how a test reaches inside a facet that otherwise only takes JSON.
+// A slow embedder counting the texts it is sent, named the way a config names
+// one — which is also how a test reaches inside a facet that otherwise only
+// takes JSON.
 let counted = (during: (call: number) => void = () => {}) => {
   let calls = 0
+  let texts = 0
   let embedder = {
     via: 'ollama',
     model: 'counted',
     base: 'http://box',
-    fetch: async () => {
+    fetch: async (_: string, init?: { body?: string }) => {
+      let input: string[] = JSON.parse(init!.body!).input
+      texts += input.length
       during(++calls)
       await new Promise((go) => setTimeout(go, 1))
+      let body = { embeddings: input.map(() => [1, 0, 0]) }
       return {
         ok: true,
         status: 200,
-        text: () => Promise.resolve('{"embeddings":[[1,0,0]]}'),
+        text: () => Promise.resolve(JSON.stringify(body)),
       }
     },
   } as const
-  return { embedder, calls: () => calls }
+  return { embedder, texts: () => texts }
 }
 
 // A write that lands while a pass is asking the model belongs to no pass: the
@@ -84,7 +89,7 @@ let counted = (during: (call: number) => void = () => {}) => {
 Deno.test('a nudge mid-pass runs after it, and nothing is embedded twice', async () => {
   let db = shelf()
   let model = counted((call) => {
-    if (call != 2) return
+    if (call != 1) return
     db.exec(`insert into entity (id, eid, num) values (9, 'book-9', 9)`)
     db.query(
       `insert into book (entity, title, blurb, price) values (?, ?, ?, ?)`,
@@ -98,7 +103,7 @@ Deno.test('a nudge mid-pass runs after it, and nothing is embedded twice', async
   })
   fire(watches[0])
   await until(() => count(db) == 5)
-  assertEquals(model.calls(), 5, 'one call per entity, not one per nudge')
+  assertEquals(model.texts(), 5, 'one text per entity, not one per nudge')
 })
 
 Deno.test('an embedder that cannot be reached leaves the vectors stale, not the write broken', async () => {

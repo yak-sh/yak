@@ -1,7 +1,8 @@
 // What the server does about text that changed: the `effects` export
 // (`@yaks/embedding/effects`) — one watch per embedded component, each
-// scheduling a sweep a moment after the write commits. "The server" here means
-// whichever process opened the graph and loaded this package.
+// scheduling a sweep a moment after the write commits, and the sweep running
+// again at once while the queue (./owed.ts) still holds work. "The server"
+// here means whichever process opened the graph and loaded this package.
 //
 // Embedding is slow and usually remote; a write is neither. So no handler here
 // embeds anything: a write starts a timer and returns, and the sweep runs on
@@ -9,13 +10,12 @@
 // `apply()` — a graph that waited for a model to respond before it could record
 // that a title changed would be a graph nobody could write to.
 //
-// The sweep reconciles the whole corpus rather than the one entity that
-// triggered it, which is what makes a model change repair itself: under the new
-// model's name every vector is stale, and the first write after the change
-// starts re-embedding them (`sweep.ts` decides "stale" from a content hash, so
-// an unchanged corpus costs one query and no calls to the embedder). What this
-// export does not have is a clock — it is a list of watches and owns no
-// lifecycle, so a server that wants to reconcile on a schedule rather than on a
+// The sweep settles whatever is queued rather than the one entity that
+// triggered it: the triggers queue writes from every process, so a write made
+// by a CLI is embedded on the server's next pass, and a model change queues
+// every vector once the queue runs dry, which is what makes it repair itself.
+// What this export does not have is a clock — it is a list of watches and owns
+// no lifecycle, so a server that wants to sweep on a schedule rather than on a
 // write calls `sweep()` from a wake (@yaks/wake) or from cron.
 //
 // The config is read on every pass, never once when the plugin is composed
@@ -51,14 +51,16 @@ export let AGAIN = 1_000
 // remembered and runs when that pass is over rather than being dropped: the
 // writes it was about would otherwise stay stale until something else changed.
 //
-// A pass that asks for another one gets it after the same delay: that is how a
-// server waiting for config keeps checking, cheaply, until the config arrives.
+// A pass says when the next one is due: at once while the queue holds work,
+// after the settle delay while the config is not there yet — which is how a
+// server waiting for config keeps checking, cheaply, until it arrives — and
+// never once there is nothing left, until a write nudges again.
 //
 // A failure is reported where it happens. A write that has already committed
 // cannot be failed by an embedder nobody can reach, and a machine that cannot
 // reach its model has stale vectors, not a broken write.
 let nudge = (
-  run: () => Promise<boolean>,
+  run: () => Promise<number | null>,
   ms: number,
   report: (error: unknown) => void,
   stopping?: AbortSignal,
@@ -74,9 +76,9 @@ let nudge = (
   let go = async (): Promise<void> => {
     if (busy) return void (again = true)
     busy = true
-    let more = false
+    let next: number | null = null
     try {
-      more = await run()
+      next = await run()
     } catch (error) {
       report(error)
     }
@@ -84,7 +86,7 @@ let nudge = (
     if (again) {
       again = false
       await go()
-    } else if (more) arm(ms || AGAIN)
+    } else if (next != null) arm(next)
   }
   // The server shutting down is what stops this: the pending timer is dropped
   // rather than firing into a closed store.
@@ -92,12 +94,14 @@ let nudge = (
   return () => arm(ms)
 }
 
-// The components those fields live on, each with the properties watched on it:
-// an entity's vector is made from all of its text fields, so a change to any of
-// them means the same thing.
+// The components those fields live on, each with the properties watched on it,
+// and the components that scope a field (`on`), with none: an entity's vector
+// is made from all of its text fields, so a change to any of them means the
+// same thing.
 let watched = (text: Field[]): Map<string, string[]> => {
   let by = new Map<string, string[]>()
   for (let f of text) by.set(f.comp, [...by.get(f.comp) ?? [], f.prop])
+  for (let f of text) if (f.on && !by.has(f.on)) by.set(f.on, [])
   return by
 }
 
@@ -121,7 +125,8 @@ export let effects = (
   // on the first pass and then goes quiet, and `vector_check` is where the
   // answer stays available.
   let told = new Set<string>()
-  let pass = async (): Promise<boolean> => {
+  let after = options.after ?? AFTER
+  let pass = async (): Promise<number | null> => {
     let now = ready(host.vocab, options)
     if (!now.embedder) {
       if (!told.has(now.waiting!)) {
@@ -129,17 +134,20 @@ export let effects = (
         console.warn('@yaks/embedding —', now.waiting)
       }
       // Look again after the next delay: the config may be one export away.
-      return true
+      return after || AGAIN
     }
     // A body @yaks/blob stores by address is read as its text, the way the
     // store reads it (the host's derived columns).
     let text = resolved(now.text, host.derived)
-    await sweep(host.sql, text, now.embedder, options.batch)
-    return false
+    let swept = await sweep(host.sql, text, now.embedder, options.batch)
+    for (let r of swept.refused) {
+      console.warn('@yaks/embedding refused', r.entity, '—', r.error)
+    }
+    return swept.left ? 0 : null
   }
   let soon = nudge(
     pass,
-    options.after ?? AFTER,
+    after,
     (error) => console.warn('@yaks/embedding sweep —', error),
     host.stopping,
   )

@@ -2,6 +2,7 @@
 
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { cut, type Fetch, remote } from './remote.ts'
+import { Refused } from './embedder.ts'
 
 // Float32 stores what it can: compare a vector at the precision it has.
 let round = (v: Float32Array) => [...v].map((n) => Math.round(n * 1e6) / 1e6)
@@ -30,7 +31,7 @@ Deno.test('ollama: /api/embed, and the vector out of `embeddings`', async () => 
   assertEquals(e.model, 'qwen3')
   assertEquals([...await e.embed('hello')], [3, 4])
   assertEquals(seen[0].url, 'https://box/api/embed')
-  assertEquals(seen[0].init?.body, '{"model":"qwen3","input":"hello"}')
+  assertEquals(seen[0].init?.body, '{"model":"qwen3","input":["hello"]}')
   assert(!seen[0].init?.headers?.authorization)
 })
 
@@ -38,7 +39,7 @@ Deno.test('a text longer than the model reads is sent as its opening', async () 
   let { go, seen } = answered({ embeddings: [[1]] })
   let e = remote({ via: 'ollama', model: 'm', base: 'b', chars: 3, fetch: go })
   await e.embed('abcdef')
-  assertEquals(JSON.parse(seen[0].init!.body!).input, 'abc')
+  assertEquals(JSON.parse(seen[0].init!.body!).input, ['abc'])
 })
 
 Deno.test('openai: /v1/embeddings, the vector out of `data`, and the key as a bearer', async () => {
@@ -89,4 +90,41 @@ Deno.test('a status and a shapeless answer both throw, with the body in the word
     fetch: empty.go,
   })
   await assertRejects(async () => await f.embed('x'), Error, 'no vector')
+})
+
+Deno.test('calls made together ride together, split by count and in order', async () => {
+  let seen: string[][] = []
+  let e = remote({
+    via: 'openai',
+    model: 'm',
+    base: 'b',
+    count: 2,
+    fetch: (_, init) => {
+      let input: string[] = JSON.parse(init!.body!).input
+      seen.push(input)
+      // an OpenAI server says which input each vector is for
+      let data = input.map((t, index) => ({ index, embedding: [t.length] }))
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify({ data: data.reverse() })),
+      })
+    },
+  })
+  let got = await Promise.all(['a', 'bb', 'ccc'].map((t) => e.embed(t)))
+  assertEquals(got.map((v) => v[0]), [1, 2, 3])
+  assertEquals(seen, [['a', 'bb'], ['ccc']])
+})
+
+Deno.test('a refused input is Refused; an unreachable server is not', async () => {
+  let at = (status: number) =>
+    remote({
+      via: 'ollama',
+      model: 'm',
+      base: 'b',
+      fetch: answered({}, false, status).go,
+    })
+  await assertRejects(() => Promise.resolve(at(413).embed('x')), Refused)
+  let down = await Promise.resolve(at(503).embed('x')).catch((e) => e)
+  assert(!(down instanceof Refused))
 })

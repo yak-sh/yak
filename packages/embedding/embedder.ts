@@ -22,9 +22,17 @@ import { unit } from './vector.ts'
 export type Embedder = {
   /** names the vector space; changing it invalidates every stored vector */
   model: string
-  /** the vector for a piece of text; may be async (a hosted model) */
+  /** the vector for a piece of text; may be async (a hosted model). Calls
+   * made together may be answered together (./remote.ts batches them). */
   embed: (text: string) => Float32Array | Promise<Float32Array>
 }
+
+/**
+ * What an embedder throws for a text it will not take, as distinct from an
+ * embedder that cannot be reached: the sweep drops a refused text and carries
+ * on, and stops at anything else, keeping the rest owed.
+ */
+export class Refused extends Error {}
 
 /**
  * Names the exact embedding a stored row holds: FNV-1a over the model and the

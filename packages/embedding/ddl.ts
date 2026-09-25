@@ -1,6 +1,6 @@
-// Where the vectors live: one table, one row per entity that has text, and
-// beside it the one-row dirty flag a persisted index reads to know the vectors
-// have changed.
+// Where the vectors live: one table, one row per entity that has text; beside
+// it the one-row dirty flag a persisted index reads to know the vectors have
+// changed; and the queue of entities owed a look (./owed.ts).
 //
 // The layout is deliberately the plainest thing that works — the entity's own
 // integer id as the primary key, so a vector joins to the graph the way every
@@ -18,38 +18,104 @@
 // same SQLite statement, by trigger, and only a finished rebuild clears it. An
 // exact scan never reads it.
 
+import {
+  col,
+  type CreateTrigger,
+  eq,
+  fn,
+  lit,
+  render,
+  type Stmt,
+} from '@yaks/sql'
+
 /** The vector table's name. */
 export let TABLE = 'embedding'
 
 /** The flag table's name: one row, `dirty` 1 while an index needs a rebuild. */
 export let MARK = 'embedding_index'
 
+/** The queue's name: one row per entity owed a look, and how many writes have
+ * queued it since it was last settled. */
+export let OWED = 'embedding_owed'
+
+let NOW = fn('strftime', lit('%Y-%m-%dT%H:%M:%fZ'), lit('now'))
+
 // One trigger per kind of write; an index rebuilt after a write that set no
 // flag would answer from vectors that no longer exist.
-let triggers = ['insert', 'update', 'delete'].map((on) =>
-  `create trigger if not exists "${MARK}_a${on[0]}" after ${on} on "${TABLE}"` +
-  ` begin update "${MARK}" set dirty = 1 where id = 1; end`
-)
+let triggers = (['insert', 'update', 'delete'] as const).map((
+  event,
+): CreateTrigger => ({
+  t: 'create trigger',
+  name: `${MARK}_a${event[0]}`,
+  ifNot: true,
+  timing: 'after',
+  event,
+  on: TABLE,
+  body: [{
+    t: 'update',
+    table: MARK,
+    set: { dirty: lit(1) },
+    where: eq(col('id'), lit(1)),
+  }],
+}))
+
+let statements: Stmt[] = [
+  {
+    t: 'create table',
+    name: TABLE,
+    ifNot: true,
+    cols: [
+      {
+        name: 'entity',
+        type: 'integer',
+        pk: true,
+        ref: { table: 'entity', cols: ['id'] },
+      },
+      { name: 'model', type: 'text', notNull: true },
+      { name: 'hash', type: 'text', notNull: true },
+      { name: 'vec', type: 'blob', notNull: true },
+      { name: 'at', type: 'text', notNull: true, default: NOW },
+    ],
+  },
+  {
+    t: 'create index',
+    name: `${TABLE}_model`,
+    on: TABLE,
+    cols: [col('model')],
+    ifNot: true,
+  },
+  {
+    t: 'create table',
+    name: MARK,
+    ifNot: true,
+    cols: [
+      { name: 'id', type: 'integer', pk: true, check: eq(col('id'), lit(1)) },
+      { name: 'dirty', type: 'integer', notNull: true },
+    ],
+  },
+  // A fresh flag starts dirty: an index that has never been built needs one.
+  {
+    t: 'insert',
+    or: 'ignore',
+    into: MARK,
+    cols: ['id', 'dirty'],
+    rows: [[lit(1), lit(1)]],
+  },
+  ...triggers,
+  {
+    t: 'create table',
+    name: OWED,
+    ifNot: true,
+    cols: [
+      { name: 'entity', type: 'integer', pk: true },
+      { name: 'n', type: 'integer', notNull: true },
+    ],
+  },
+]
 
 /**
  * The schema the vectors need, as ordered statements. Run them after the
  * component tables exist — the table references the entity spine. Every
  * statement is idempotent, so a table that already exists is left as it is.
  */
-export let schema = (): string[] => [
-  `create table if not exists "${TABLE}" (
-    entity integer primary key references entity(id),
-    model text not null,
-    hash text not null,
-    vec blob not null,
-    at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-  )`,
-  `create index if not exists "${TABLE}_model" on "${TABLE}" (model)`,
-  `create table if not exists "${MARK}" (
-    id integer primary key check (id = 1),
-    dirty integer not null
-  )`,
-  // A fresh flag starts dirty: an index that has never been built needs one.
-  `insert or ignore into "${MARK}" (id, dirty) values (1, 1)`,
-  ...triggers,
-]
+export let schema = (): string[] => statements.map((st) => render(st).sql)

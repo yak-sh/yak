@@ -12,9 +12,18 @@
 // differs. A failure — an error status, an unexpected body, a timeout — is
 // thrown, because the sweep is what decides what an unreachable embedder means
 // (it stops, and the corpus stays stale), and a vector invented here to avoid
-// the error would be worse than no vector at all.
+// the error would be worse than no vector at all. A status saying the input
+// itself was refused throws {@link Refused}, which the sweep treats as one
+// text it cannot embed rather than a model it cannot reach.
+//
+// Calls made together are sent together. Both servers take an array of inputs,
+// and a batch of 64 costs a local model about a seventh of the time per vector
+// that 64 single requests do, so every `embed()` made in one turn of the event
+// loop (the sweep makes a batch's calls at once) waits for that turn to end
+// and rides in one request — split by {@link parts} into requests no longer
+// than a server takes.
 
-import type { Embedder } from './embedder.ts'
+import { type Embedder, Refused } from './embedder.ts'
 import { unit } from './vector.ts'
 
 /** The slice of `fetch` this file uses — the web one, and a Worker's. */
@@ -40,17 +49,19 @@ export type Remote = {
   key?: string
   /** Matryoshka width: keep this many leading coordinates (see {@link cut}) */
   dim?: number
-  /** how long to wait for one vector (default 30s) */
+  /** how long to wait for one request (default 30s) */
   timeout?: number
   /** the most characters sent for one vector (default {@link CHARS}) */
   chars?: number
+  /** the most inputs one request carries (default {@link COUNT}) */
+  count?: number
+  /** the most characters one request carries (default {@link LOAD}) */
+  load?: number
   /** the fetch to call through (default: the global one) */
   fetch?: Fetch
 }
 
 // Where each server takes an embedding request, and where it puts the answer.
-// One input in, one vector out: this package embeds an entity at a time
-// because the sweep already bounds how many it asks for.
 let PATH = { ollama: '/api/embed', openai: '/v1/embeddings' }
 
 /**
@@ -62,12 +73,54 @@ let PATH = { ollama: '/api/embed', openai: '/v1/embeddings' }
  */
 export let CHARS = 30_000
 
-let vectorOf = (via: Remote['via'], body: unknown): number[] | undefined => {
+/** The most inputs one request carries by default. */
+export let COUNT = 64
+
+/** The most characters one request carries by default: a batch of long texts
+ * is split before a server spends the whole timeout on it. */
+export let LOAD = 128_000
+
+// The statuses that mean the input was refused, not the request: malformed,
+// too large, or unprocessable.
+let REFUSED = [400, 413, 422]
+
+let vectorsOf = (via: Remote['via'], body: unknown): number[][] | undefined => {
   let said = body as {
     embeddings?: number[][]
-    data?: { embedding?: number[] }[]
+    data?: { embedding?: number[]; index?: number }[]
   }
-  return via == 'ollama' ? said.embeddings?.[0] : said.data?.[0]?.embedding
+  return via == 'ollama' ? said.embeddings : said.data
+    ?.toSorted((a, b) => (a.index ?? 0) - (b.index ?? 0))
+    .map((d) => d.embedding ?? [])
+}
+
+/**
+ * Texts split into runs of at most `count` of them and `load` characters,
+ * in order. A text longer than `load` rides alone.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(parts(['ab', 'cd', 'e', 'fghij'], 2, 4), [['ab', 'cd'], ['e'], ['fghij']])
+ * ```
+ */
+export let parts = (
+  texts: string[],
+  count: number,
+  load: number,
+): string[][] => {
+  let runs: string[][] = []
+  let size = Infinity
+  for (let t of texts) {
+    let run = runs.at(-1)
+    if (!run || run.length >= count || size + t.length > load) {
+      runs.push([t])
+      size = t.length
+    } else {
+      run.push(t)
+      size += t.length
+    }
+  }
+  return runs
 }
 
 /**
@@ -86,44 +139,78 @@ export let cut = (v: Float32Array, dim: number): Float32Array => {
   return unit(v.slice(0, dim))
 }
 
-/** An {@link Embedder} that asks a server for every vector. */
+/** An {@link Embedder} that asks a server for every vector, batching the
+ * calls made together. */
 export let remote = (said: Remote): Embedder => {
   let root = said.base.trim().replace(/\/+$/, '')
   let go: Fetch = said.fetch ?? (fetch as unknown as Fetch)
+  // One request: texts in, a vector each out, in order.
+  let ask = async (input: string[]): Promise<Float32Array[]> => {
+    let headers: Record<string, string> = {
+      'content-type': 'application/json',
+    }
+    if (said.key) headers.authorization = `Bearer ${said.key}`
+    let res = await go(`${root}${PATH[said.via]}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: said.model, input }),
+      signal: AbortSignal.timeout(said.timeout ?? 30_000),
+    })
+    let raw = await res.text()
+    if (!res.ok) {
+      let Fault = REFUSED.includes(res.status) ? Refused : Error
+      throw new Fault(
+        `@yaks/embedding: ${said.via} answered ${res.status} — ${
+          raw.slice(0, 200)
+        }`,
+      )
+    }
+    let got = vectorsOf(said.via, JSON.parse(raw))
+    if (got?.length != input.length || got.some((v) => !v?.length)) {
+      throw new Error(
+        `@yaks/embedding: ${said.via} answered no vector for ${input.length} ` +
+          `input${input.length == 1 ? '' : 's'} — ${raw.slice(0, 200)}`,
+      )
+    }
+    return got.map((v) => {
+      let vec = Float32Array.from(v)
+      return said.dim ? cut(vec, said.dim) : vec
+    })
+  }
+  type Wait = {
+    text: string
+    ok: (v: Float32Array) => void
+    no: (e: unknown) => void
+  }
+  let waiting: Wait[] = []
+  // Send what this turn asked for, a run at a time; a run that fails fails
+  // every call in it.
+  let flush = async (): Promise<void> => {
+    let all = waiting
+    waiting = []
+    let at = 0
+    for (
+      let run of parts(
+        all.map((w) => w.text),
+        said.count ?? COUNT,
+        said.load ?? LOAD,
+      )
+    ) {
+      let mine = all.slice(at, at += run.length)
+      try {
+        let got = await ask(run)
+        mine.forEach((w, i) => w.ok(got[i]))
+      } catch (error) {
+        for (let w of mine) w.no(error)
+      }
+    }
+  }
   return {
     model: said.model,
-    embed: async (text) => {
-      let headers: Record<string, string> = {
-        'content-type': 'application/json',
-      }
-      if (said.key) headers.authorization = `Bearer ${said.key}`
-      let res = await go(`${root}${PATH[said.via]}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: said.model,
-          input: text.slice(0, said.chars ?? CHARS),
-        }),
-        signal: AbortSignal.timeout(said.timeout ?? 30_000),
-      })
-      let raw = await res.text()
-      if (!res.ok) {
-        throw new Error(
-          `@yaks/embedding: ${said.via} answered ${res.status} — ${
-            raw.slice(0, 200)
-          }`,
-        )
-      }
-      let got = vectorOf(said.via, JSON.parse(raw))
-      if (!got?.length) {
-        throw new Error(
-          `@yaks/embedding: ${said.via} answered no vector — ${
-            raw.slice(0, 200)
-          }`,
-        )
-      }
-      let vec = Float32Array.from(got)
-      return said.dim ? cut(vec, said.dim) : vec
-    },
+    embed: (text) =>
+      new Promise((ok, no) => {
+        if (!waiting.length) setTimeout(flush)
+        waiting.push({ text: text.slice(0, said.chars ?? CHARS), ok, no })
+      }),
   }
 }

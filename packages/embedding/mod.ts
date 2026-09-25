@@ -21,7 +21,9 @@
  * - {@link schema} returns the statements for the table the vectors live in,
  *   and for the dirty flag an approximate index reads ({@link dirty},
  *   {@link clean}) to know it needs rebuilding;
- * - {@link sweep} embeds what changed and drops what left, off the write path;
+ * - {@link sweep} embeds what changed and drops what left, off the write path,
+ *   reading what moved from a queue the database's own triggers keep
+ *   ({@link watch});
  * - {@link nearest} ranks the stored vectors against a query vector;
  * - {@link semantic} — the {@link https://jsr.io/@yaks/sql | @yaks/sql}
  *   extension — compiles `.near=<entity>` and `.order=similar` into that
@@ -74,6 +76,7 @@ export * from './remote.ts'
 export * from './fields.ts'
 export * from './ddl.ts'
 export * from './sweep.ts'
+export * from './owed.ts'
 export * from './near.ts'
 export * from './mark.ts'
 export * from './compile.ts'

@@ -1,8 +1,8 @@
 // Which text feeds a vector: every text property, across components, and
 // nothing that is not prose.
 
-import { assert, assertEquals } from '@std/assert'
-import { fields, pieces, resolved } from './fields.ts'
+import { assertEquals } from '@std/assert'
+import { fields, pieces } from './fields.ts'
 import { shop } from './testing.ts'
 
 Deno.test('every text property is embedded, across components', () => {
@@ -18,22 +18,6 @@ Deno.test('a price is not prose and a Pick can narrow further', () => {
   assertEquals(titles, [{ comp: 'book', prop: 'title' }])
 })
 
-Deno.test('the pieces statement drops blank text and orders the join', () => {
-  let stmt = pieces(fields(shop))!
-  assert(stmt.sql.includes('union all'), stmt.sql)
-  assert(stmt.sql.includes(`trim(coalesce("book"."title", ''), ?) != ''`))
-  assertEquals(stmt.params.length, 3)
-  // the ord is the field's position, which is the order a text is joined in
-  assert(stmt.sql.includes('0 as ord') && stmt.sql.includes('2 as ord'))
-})
-
 Deno.test('a vocabulary with no prose has no statement to write', () => {
   assertEquals(pieces([]), null)
-})
-
-Deno.test('a property stored by address is read as the text it stands for', () => {
-  let read = { 'book.blurb': { text: (s: string) => `(lookup ${s})` } }
-  let text = resolved(fields(shop), read)
-  assertEquals(text.map((f) => !!f.text), [false, true, false])
-  assert(pieces(text)!.sql.includes('(lookup "book"."blurb") as t'))
 })

@@ -22,7 +22,8 @@ Deno.test('a rebuild cleans it and the next write sets it again', async () => {
   db.exec(`update embedding set hash = 'moved' where entity = 1`)
   assertEquals(dirty(db), true)
   clean(db)
-  assertEquals(await sweep(db, fields(shop), embedder), { fresh: 2, left: 0 })
+  // the vector deleted by hand is owed back, and making it is a write
+  assertEquals((await sweep(db, fields(shop), embedder)).fresh, 1)
   assertEquals(dirty(db), true)
 })
 
@@ -64,7 +65,7 @@ let PRIOR = [
   begin update embedding_index set dirty = 1 where id = 1; end`,
 ]
 
-Deno.test('install adopts prior tables unchanged, adding only its index', () => {
+Deno.test('install adopts prior tables unchanged, adding only its index and queue', () => {
   let db = mem()
   for (let stmt of PRIOR) db.exec(stmt)
   let master = () =>
@@ -73,10 +74,10 @@ Deno.test('install adopts prior tables unchanged, adding only its index', () => 
   for (let stmt of schema()) db.exec(stmt)
   let after = master()
   let added = after.filter((r) => !before.some((b) => b.name == r.name))
-  assertEquals(added.map((r) => [r.type, r.name]), [[
-    'index',
-    'embedding_model',
-  ]])
-  assertEquals(after.filter((r) => r.name != 'embedding_model'), before)
+  assertEquals(added.map((r) => [r.type, r.name]), [
+    ['index', 'embedding_model'],
+    ['table', 'embedding_owed'],
+  ])
+  assertEquals(after.filter((r) => !added.includes(r)), before)
   assertEquals(dirty(db), false)
 })

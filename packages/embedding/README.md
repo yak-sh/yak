@@ -75,8 +75,9 @@ The plugin configuration selects a model, endpoint, credentials and text fields:
 `@yaks/embedding/rules` creates the vector tables through the host's SQL driver.
 Its `extend()` export registers the `.near` compiler. `@yaks/embedding/effects`
 returns component watches: creation, changes to selected properties, and removal
-schedule a sweep after a debounce timer. The graph write does not await
-embedding. The host's `stopping` signal cancels pending timers.
+schedule a sweep after a debounce timer, and a sweep that leaves work queued is
+followed by the next at once. The graph write does not await embedding. The
+host's `stopping` signal cancels pending timers.
 
 Options:
 
@@ -87,19 +88,16 @@ Options:
 | `neighbours` | Maximum `.near` results, default 8                                                    |
 | `floor`      | Minimum similarity for `.near`, default 0                                             |
 | `after`      | Debounce delay in milliseconds, default 3000                                          |
-| `batch`      | Maximum entities embedded per sweep; default all                                      |
+| `batch`      | Queued entities one sweep takes, default 64                                           |
 | `stale`      | Age threshold in minutes used by `vector_check`, default 30                           |
 
-The `batch` option limits embedding work; it does not mean a graph transaction.
-If a pass leaves stale vectors because of this limit, another write or an
-application-scheduled sweep is needed to continue.
+The `batch` option bounds one sweep; it does not mean a graph transaction.
 
 Missing embedder configuration or a missing configured key does not prevent
 startup. `vector_check` reports the missing configuration. After a watched write
 schedules a pass, a pass waiting for configuration reschedules itself and checks
-again. There is no unconditional startup sweep or recurring successful sweep. An
-unknown provider is reported as unavailable; invalid `text` names are also
-reported.
+again. There is no unconditional startup sweep. An unknown provider is reported
+as unavailable; invalid `text` names are also reported.
 
 The CLI resolves `{ "secret": "NAME" }` through [@yaks/secrets](../secrets) each
 time options are read, so a key written through the graph after the host started
@@ -117,7 +115,11 @@ in ordinary graph snapshots or client sync.
 `fields(vocab)` selects stored scalar text properties in vocabulary order,
 excluding computed properties and references. A `pick(prop)` argument replaces
 that default predicate; combine it with `textual(prop)` to narrow the default
-safely.
+safely. After them come the fields a component's `search` list names
+(@yaks/vocab): `entry` says `"search": ["content.body"]`, so a transcript entry
+is embedded by its content and no other entity carrying `content` is. The same
+list makes @yaks/fts index that text, so what a bare word finds, `.near` finds
+too.
 
 Each entity gets one vector from its nonblank selected fields joined with
 newlines. The source query reads component columns directly, except a column the
@@ -141,26 +143,38 @@ makes existing text stale and causes the next sweep to recompute it.
 
 `hashEmbedder(dim?)` defaults to 64 dimensions. It hashes words into counts and
 normalizes the resulting vector. `remote({ via, model, base, key?, dim? })`
-sends one POST per vector to Ollama's `/api/embed` or an OpenAI-compatible
-`/v1/embeddings` endpoint. Credentials are arguments; `remote()` itself reads no
-environment variables. Optional `dim` truncates and renormalizes vectors; use it
-with a model that supports that operation. `chars` (default 30,000) bounds the
-text sent for one vector: a server refuses input past its model's context rather
-than truncating it, which would stop every sweep at the same document. Remote
-errors reject the embedding request.
+posts to Ollama's `/api/embed` or an OpenAI-compatible `/v1/embeddings`
+endpoint; the calls made in one turn of the event loop ride in one request, up
+to `count` (64) inputs and `load` (128,000) characters each. Credentials are
+arguments; `remote()` itself reads no environment variables. Optional `dim`
+truncates and renormalizes vectors; use it with a model that supports that
+operation. `chars` (default 30,000) bounds the text sent for one vector: a
+server refuses input past its model's context rather than truncating it. A
+status saying the input was refused (400, 413, 422) rejects with `Refused`; any
+other failure rejects with the error.
 
 ## The sweep
 
-`sweep(db, fields, embedder, limit?)` prunes vectors for deleted entities or
-entities whose selected text is now empty, then embeds changed text. It returns
-`{ fresh, left }`. Source hashes avoid model calls for unchanged text. An
-embedder failure stops the pass and leaves remaining work stale; the caller
-receives the error. With an empty field list, the current prune implementation
-leaves existing vectors in place.
+Triggers on each component a field lives on queue the entity a write touched in
+`embedding_owed`, in the same statement as the write, whichever process made it.
+`watch(db, fields)` makes the triggers match the fields; when it changes any, it
+queues every entity wearing a field or holding a vector, which is how a new
+database or a new field is backfilled.
 
-`sources()`, `stale()`, `prune()` and `put()` expose the individual operations.
-Embedding can run asynchronously; source reads, vector writes and query ranking
-use the synchronous database driver. A sweep is not one graph transaction.
+`sweep(db, fields, embedder, limit?)` calls `watch`, then takes the newest
+`limit` (64) queued entities: it embeds those whose text changed, deletes the
+vector of those with no text (emptied, deleted, or no longer wearing a field),
+and settles each unless a write queued it again meanwhile. Source hashes avoid
+model calls for unchanged text. Once the queue is empty, a vector made by
+another model queues everything again. It returns `{ fresh, left, refused }`. A
+text the embedder refuses loses its vector and is reported in `refused`; any
+other embedder failure stops the pass, the caller receives the error, and the
+work stays queued.
+
+`sources()`, `put()`, `watch()`, `owe()`, `due()` and `paid()` expose the
+individual operations. Embedding can run asynchronously; source reads, vector
+writes and query ranking use the synchronous database driver. A sweep is not one
+graph transaction.
 
 A newly created entity cannot be compared until its vector exists. Applications
 that need immediate duplicate suggestions can embed the new text themselves and
