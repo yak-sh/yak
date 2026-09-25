@@ -25,7 +25,7 @@
 //   deno run -A bin/reimport-transcripts.ts <config> [--write] [--import]
 
 import type { Bundle, Eid } from '@yaks/graph'
-import { holding } from '@yaks/effects'
+import { held, holding } from '@yaks/effects'
 import { close, opened } from '../packages/cli/local.ts'
 import { sessionFor } from '../packages/session/who.ts'
 import {
@@ -104,11 +104,24 @@ let migrate = async () => {
     // that never waits on a timer starves its own lease renewals too. So a
     // batch halves while it holds the lock past a second and a half (an entry
     // with many edges cascades slowly), and the lock sits free as long as it
-    // was held.
+    // was held. A batch that finds the lock held past its busy timeout (a
+    // server booting) waits and goes again; one that finds the lease gone
+    // stops, since an importer is reading transcripts in and a delete now would
+    // race it.
     let size = BATCH
     for (let i = 0; i < doomed.length;) {
       let t = performance.now()
-      await g.apply(deletes(doomed.slice(i, i + size)))
+      try {
+        if ((await held(g, '@yaks/session'))?.holder != host.me) {
+          throw new Error(`the lease is gone after ${i} of ${doomed.length}`)
+        }
+        await g.apply(deletes(doomed.slice(i, i + size)))
+      } catch (e) {
+        if (!String(e).includes('database is locked')) throw e
+        console.log(`${i} of ${doomed.length}: locked, again`)
+        await new Promise((go) => setTimeout(go, 2000))
+        continue
+      }
       i += size
       let ms = Math.round(performance.now() - t)
       console.log(`${Math.min(i, doomed.length)} of ${doomed.length}: ${ms}ms`)
