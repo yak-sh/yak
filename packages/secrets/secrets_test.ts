@@ -280,12 +280,12 @@ Deno.test('peek answers on the spot, with 1Password values warmed first', async 
 Deno.test('records change under the lock and are written back through the graph', async () => {
   let { g, vault } = setup()
   let store = records<{ n?: number }>(g, vault, 'count ')
-  assertEquals(await store.read('a&*'), undefined)
+  assertEquals(await store.read('a'), undefined)
   await Promise.all(
     [1, 2, 3].map(() =>
       store.update('a', (r) => Promise.resolve(void (r.n = (r.n ?? 0) + 1)))
     ),
   )
-  assertEquals(await store.read('a&*'), { n: 3 })
+  assertEquals(await store.read('a'), { n: 3 })
   assert(isHandle((await row(g, 'count a'))!.value))
 })

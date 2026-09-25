@@ -156,7 +156,7 @@ Deno.test('a batch applied comes back as it landed, and reads back', async () =>
 
   let found = bundles(result(
     await called(client, 'graph_query', {
-      q: '.price<20',
+      q: '.price<20&.doc?',
     }),
   ))
   assertEquals(found.map((b) => b.entity.eid), ['b1'])

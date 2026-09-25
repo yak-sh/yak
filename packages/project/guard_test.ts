@@ -117,7 +117,7 @@ Deno.test('filing stores separately and a bare priority query orders filed tasks
     { entity: { eid: 'micro' }, task: {} },
   ])
   let rows = g.read(
-    '.priority>=0 .order=filed.priority',
+    '.priority>=0 .order=filed.priority .task?',
   ) as import('@yaks/graph').Bundle[]
   assertEquals(rows.map((b) => b.entity.eid), ['first', 'later'])
   assertEquals(rows[1].task, {})

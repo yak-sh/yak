@@ -86,7 +86,7 @@ let asking = async (
 
 Deno.test('a server’s answer is drawn through its packages’ views', async () => {
   await asking(async (c, call) => {
-    let lines = (await call('graph_query', { q: '.task&.doc?' })).split('\n')
+    let lines = (await call('graph_query', { q: '.task&*' })).split('\n')
       .sort()
     assertEquals(lines.length, 2)
     assert(/^T-\d+ Fix the bar open$/.test(lines[0]), lines.join('\n'))
