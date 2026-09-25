@@ -54,9 +54,10 @@ serves:
 The `yak` command serves commands and rendering itself. Listing its commands
 reads only the plugins' `./vocab`, where the tools are declared, so the usage
 page opens nothing. Running one opens the graph for that command's roles: the
-graph, the roles the tool declares (`serve` declares `web`), and for now the
-effects and every plugin's service, one pass of each on the way in. The
-rendering role imports `./views`, and `./tui` under `--tui`.
+graph and the roles the tool declares (`serve` declares `web`). The duty roles,
+the effect pool and each plugin's service, run beside it in a thread of the same
+process where no live process serves them (see Duties). The rendering role
+imports `./views`, and `./tui` under `--tui`.
 
 ## Where a command runs
 
@@ -316,12 +317,21 @@ await host.duties() // Run until the host shuts down.
 await host.duties(AbortSignal.abort()) // Run one pass, then release leases.
 ```
 
-The `serve` tool uses the long-running form. A one-shot local command uses the
-second form before executing its tool, allowing overdue effects and scheduled
-work to progress when no server is running; where a process that stays up is
-working the pool, the command leaves its runs written down for it. A live
-process renews its lease; another process can take over after the lease expires
-or is released.
+A `yak` command that opens a graph runs its duties in a thread of its own
+([`thread.ts`](./thread.ts), [`worker.ts`](./worker.ts)), so the thread that
+runs the command and draws its answer never waits on them. The thread composes
+the same config for the duty roles, as the same process: it writes no process
+row of its own, and a claim it takes names the process. Once the command's host
+is open, the process asks which duty roles no live process is serving
+([`local.ts`](./local.ts) `unserved`). A one-shot command starts the thread only
+when one of them is idle, for one pass of each on the way in, and closes it with
+one last pass over the pool, for what the command itself wrote; where a process
+that stays up is serving them, the command leaves its runs written down for it.
+The `serve` tool asks for the long-running form, which starts the thread
+whatever the leases say, since a holder that dies later is one it has to take
+over from. The thread takes the leases and the pool settles who does what. A
+live process renews its lease; another process can take over after the lease
+expires or is released.
 
 `yak --no-duties` (config `duties: false`) turns them off for one process: it
 takes no lease, works no effects, and runs neither the services nor the start-up
@@ -330,10 +340,10 @@ left written down for a process that does. A one-shot command then only runs its
 tool, and `yak --no-duties serve` answers requests while another process, or
 none, does the duties.
 
-`close()` first aborts `host.stopping`, lets the effects it started finish and
-leaves the pool, then releases leases, records the process exit, and closes
-SQLite. Plugin timers and loops should listen to `host.stopping` or the signal
-passed to `service`.
+`close()` first aborts `host.stopping`, closes the duty thread, lets the effects
+it started finish and leaves the pool, then releases leases, records the process
+exit, and closes SQLite. Plugin timers and loops should listen to
+`host.stopping` or the signal passed to `service`.
 
 ## The command line
 

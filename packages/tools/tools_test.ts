@@ -76,7 +76,7 @@ let watched = (tools: Tool[] = [echo], extra = {}) => {
   let fx = effects(vocab, { report: () => {} })
   let g = graph({ vocab, storage: ram(vocab), plugins: [fx] })
   let r = runner(g, { tools, report: () => {} })
-  for (let rule of r.rules) fx.on(rule.plan, (e) => r.run(e.entity.eid))
+  for (let rule of r.rules) fx.on(rule.plan, (e) => r.due(e.entity.eid))
   return { g, r, fx }
 }
 
@@ -84,11 +84,11 @@ let called = (
   to: string,
   args: Record<string, unknown> = {},
   by?: string,
-): Bundle[] => [{
+): Bundle => ({
   entity: { eid: '$call' },
   call: { to: toolEid(to), args },
   ...(by ? { $actor: { by } } : {}),
-}]
+})
 
 let body = (b: Bundle | undefined) => String((b?.content as Comp)?.body ?? '')
 
@@ -141,9 +141,10 @@ Deno.test('a claim with no answer is unfinished, and the boot pass re-drives it'
   )
 })
 
-Deno.test('a call somebody else holds is left alone, redrive and all', async () => {
+Deno.test('a call a live process holds is left alone, redrive and all', async () => {
   // What an imported transcript looks like: every call in it was made by the
-  // process that recorded it, and it says so.
+  // process that recorded it, and it says so. This process's own claim, not
+  // running in this runner, is running in another of its threads.
   let { g, r } = world([echo], 'host1')
   await r.ensure()
   await g.apply([{
@@ -156,16 +157,38 @@ Deno.test('a call somebody else holds is left alone, redrive and all', async () 
     execution: { state: 'running', by: 'host1' },
   }])
   assertEquals(await r.run('theirs'), [])
-  assertEquals(
-    body((await r.drive({ redrive: true })).find((b) => b.result)),
-    'here 2',
-  )
-  assertEquals((await g.read('.result&*')).length, 1)
-  // And this runner's own claim says whose it is, still, once it is done.
-  assertEquals((await g.read('.execution.by=host1&*'))[0].execution, {
-    state: 'done',
-    by: 'host1',
-  })
+  assertEquals(await r.run('mine'), [])
+  assertEquals(await r.drive({ redrive: true }), [])
+  assertEquals((await g.read('.result&*')).length, 0)
+})
+
+Deno.test('a call is held from the moment it is written, by whoever asked it', async () => {
+  // Another thread of this process, and another process: runners over graphs
+  // of their own on the same store, sharing nothing in memory, and each
+  // finding the call the moment it commits. The tool reads, so its answer is
+  // never written down: only the runner that asked has it.
+  let vocab = words()
+  let storage = ram(vocab)
+  let fx = effects(vocab, { report: () => {} })
+  let here = graph({ vocab, storage, plugins: [fx] })
+  let there = graph({ vocab, storage })
+  let ran = 0
+  let peek: Tool = {
+    ...echo,
+    readOnly: true,
+    run: (call, g) => (ran++, echo.run(call, g)),
+  }
+  for (let owner of ['host1', 'host2']) {
+    let other = runner(there, { tools: [peek], owner })
+    for (let rule of other.rules) {
+      fx.on(rule.plan, (e) => other.due(e.entity.eid))
+    }
+  }
+  let asking = runner(here, { tools: [peek], owner: 'host1' })
+  await asking.ensure()
+  let answer = await asking.call(called('example_echo', { value: 'mine' }))
+  assertEquals(body(answer.find((b) => b.output)), 'mine 2')
+  assertEquals(ran, 1)
 })
 
 Deno.test('a claim whose holder has exited is free, and runs once', async () => {
@@ -320,7 +343,7 @@ Deno.test('two runners over one graph are one claimant and one answer', async ()
   // is written; the runner that wrote it still reads back what was landed,
   // and the tool ran once between them.
   let other = runner(g, { tools: [echo] })
-  for (let rule of other.rules) fx.on(rule.plan, (e) => other.run(e.entity.eid))
+  for (let rule of other.rules) fx.on(rule.plan, (e) => other.due(e.entity.eid))
   let answer = await other.call(called('example_echo', { value: 'both' }))
   assertEquals(body(answer.find((b) => b.output)), 'both 2')
   assertEquals((await g.read('.result&*')).length, 1)

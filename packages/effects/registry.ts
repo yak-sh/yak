@@ -134,6 +134,10 @@ export type Opts = Partial<PoolOpts> & {
    * `apply()`, trusted (see {@link Write}). Without it a handler that tries to
    * write is reported rather than quietly writing past the pipeline. */
   write?: Write
+  /** called after a commit that wrote runs down and claimed none of them
+   * here: how a thread working the pool beside this one is told to look now,
+   * rather than at its next pass */
+  nudge?: () => void
   /** how many generations of effect-written batches still owe runs (default:
    * `1`). A batch from a client is generation 0 and an effect's own write is
    * 1, so the default lets one effect see another's write and stops the
@@ -185,6 +189,8 @@ export type Effects = Plugin & {
    * where no process that stays up is working the pool. Does nothing where
    * the vocabulary keeps no `effect` rows. */
   work: (g: Graph, signal?: AbortSignal) => Promise<void>
+  /** Look at the pool again now, rather than at the next pass. */
+  wake: () => void
   /** Settles once every run this process started has, and a worker whose
    * signal aborted has stopped. */
   idle: () => Promise<void>
@@ -476,6 +482,8 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   // them to the phase that starts them, keyed by the batch's first bundle —
   // the same object in both phases.
   let owed = new WeakMap<Bundle, Owed[]>()
+  // The batches that wrote runs down and left some for another to claim.
+  let left = new WeakSet<Bundle>()
 
   // Inside the transaction: the runs this batch owes, written down.
   let owe: Hook = (bundles, tx) => {
@@ -487,6 +495,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
           pooled!.owe(tx, found, generation(bundles)),
           (mine) => {
             if (mine.length) owed.set(bundles[0], mine)
+            if (mine.length < found.length) left.add(bundles[0])
             return bundles
           },
         ),
@@ -502,6 +511,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       owed.delete(bundles[0])
       pooled!.start(mine)
     }
+    if (bundles[0] && left.delete(bundles[0])) opts.nudge?.()
     let gen = generation(bundles)
     if (gen > depth || !slots.some(here)) return clean()
     let write = writer(gen)
@@ -567,6 +577,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     slots: () => [...slots],
     docs: () => describe(slots),
     work: (g, signal) => pooled?.work(g, signal) ?? Promise.resolve(),
+    wake: () => pooled?.wake(),
     idle: () => pooled?.idle() ?? Promise.resolve(),
     stop: () => pooled?.stop() ?? Promise.resolve(),
   }

@@ -21,7 +21,7 @@
 // Finding a call another process wrote — one scheduled for later, one a crash
 // left behind — is not this file's job. That is an effect, and ./vocab.json
 // declares two (`call_ready`, `call_woken`), each a query over calls; a host
-// that runs effects handles both with `run.run` (@yaks/effects `handle`), one
+// that runs effects handles both with `run.due` (@yaks/effects `handle`), one
 // line each, nothing more. `drive()` runs those same two queries once, which
 // is what a boot sweep is.
 //
@@ -29,12 +29,18 @@
 // call is the claim. The runner writes `running` with a `$was` precondition
 // that the property was absent, so a second server loses the race instead of
 // running the tool twice; it writes `done` or `failed` when the result is
-// applied. A call left `running` by a process that died has no result, so the
-// same rules still select it, and `reconcile()` at boot runs it again,
-// claiming over the stale `running`. `by` records whose claim it is: a runner
-// re-runs its own claims and leaves another process's alone, which is what a
-// transcript imported from another machine needs — every call in it arrives
-// already executed. The exception is a holder that has finished: a process
+// applied. A call asked through `call()` is written already claimed, in the
+// same change: the caller asking is the one waiting for the answer, so the
+// tool runs where it asked, and every other runner (an effect of the same
+// commit, another thread of the process, another process) finds the call held
+// from the moment it exists. A call left `running` by a process that died has
+// no result, so the same rules still select it, and `reconcile()` at boot runs
+// it again, claiming over the stale `running`. `by` records whose claim it is:
+// a runner leaves a live process's claim alone, its own process's included,
+// since a claim this runner is not running is running in another of the
+// process's threads. That is also what a transcript imported from another
+// machine needs: every call in it arrives already executed. The exception is
+// a holder that has finished: a process
 // writes its `exit` row in the last transaction it will ever write, so a call
 // it left `running` has nobody coming back to finish it. That claim has
 // lapsed, and the next sweep takes it the way a re-run takes one — which is
@@ -54,11 +60,13 @@ import {
   type Eid,
   emitted,
   type Graph,
+  mint,
   type NamedTool,
   namedTool,
   type Ready,
   ready,
   signed,
+  Stale,
   status,
   token,
   type Tool,
@@ -69,20 +77,11 @@ import { effectsIn } from '@yaks/vocab'
 import { validateToolInput } from '@yaks/vocab/tools'
 import { toolsDoc } from './vocab.ts'
 
-// What each call is doing right now in this process, and what the last few
-// returned — keyed per graph, not per runner. When a request handler calls a
-// tool and an effect finds the same call, there is one claimant and one answer
-// between them: the second finds the first's promise instead of racing it, and
-// reads the bundles that were written for it whichever one ran. This memo is
-// what makes that work for a read-only tool, whose answer is never written
-// down.
+// What each call is doing right now in this process, keyed per graph, not per
+// runner: a second runner over the same graph that is asked for a call in
+// flight finds the first's promise instead of racing it, and an effect finds
+// the call taken.
 let running = new WeakMap<Graph, Map<Eid, Promise<Bundle[]>>>()
-let answers = new WeakMap<Graph, Map<Eid, Bundle[]>>()
-let per = <V>(at: WeakMap<Graph, Map<Eid, V>>, g: Graph): Map<Eid, V> => {
-  let mine = at.get(g)
-  if (!mine) at.set(g, mine = new Map())
-  return mine
-}
 
 /** A stored claim exists but no result does. The caller must reconcile it:
  * running the tool again could repeat an effect the outside world already
@@ -142,8 +141,10 @@ export type Opts = {
    * `execution.by`, and a call held by anyone else is left alone — a
    * transcript imported from elsewhere arrives already executed, held by the
    * process that made the calls, and no boot pass here re-runs it. A holder
-   * that has written an `exit` row holds nothing: its calls are free. Omitted,
-   * this runner claims anonymously and takes any call nobody else holds. */
+   * that has written an `exit` row holds nothing: its calls are free. A claim
+   * naming this owner that this runner is not running is left alone too: it
+   * is running in another thread of the same process. Omitted, this runner
+   * claims anonymously and takes any call nobody else holds. */
   owner?: Eid
   /** the program running these calls on this machine, as @yaks/process
    * records one — `{pid, command, cwd}` — put on every call a tool is handed,
@@ -164,10 +165,18 @@ export type Runner = {
    * many times it is called, so a request handler may call it on the way into
    * every request */
   ensure: () => Promise<Bundle[]>
-  /** invoke a tool: the call's bundles in, the answer's bundles out */
-  call: (bundles: Bundle[]) => Promise<Bundle[]>
-  /** run one call that is already in the graph */
+  /** invoke a tool: the call in, the answer's bundles out. The call is
+   * written claimed and runs here; an `$alias` eid is given a fresh one. */
+  call: (asked: Bundle) => Promise<Bundle[]>
+  /** run one call that is already in the graph: its answer if it has one, the
+   * same promise if it is in flight here, nothing if a live process holds it,
+   * and {@link UnfinishedCall} if it was claimed anonymously and never
+   * answered */
   run: (call: Eid, opts?: { redrive?: boolean }) => Promise<Bundle[]>
+  /** run one call a rule selected, if it is this runner's to take: what an
+   * effect handler calls. A call somebody holds, in flight here included, is
+   * left to them rather than awaited or refused. */
+  due: (call: Eid, opts?: { redrive?: boolean }) => Promise<Bundle[]>
   /** run every call the rules select: one sweep, which is what a boot pass
    * does with `redrive` set, for the calls a crash left claimed */
   drive: (opts?: { redrive?: boolean }) => Promise<Bundle[]>
@@ -264,14 +273,15 @@ let checked = (
  * let r = runner(g, { tools })
  * await r.ensure()
  * // the call entity is the record; the answer is the tool's own bundles
- * let answer = await r.call([
- *   { entity: { eid: '$c' }, call: { to: toolEid('text_echo'), args: {} } },
- * ])
+ * let answer = await r.call({
+ *   entity: { eid: '$c' },
+ *   call: { to: toolEid('text_echo'), args: {} },
+ * })
  * ```
  *
  * Nothing polls the graph for calls. A server that wants the deferred ones too
  * handles the two effects ./vocab.json declares — `fx.handle({ [r.rule.name]:
- * (e) => run.run(e.entity.eid) })` for each of `run.rules` — and calls
+ * (e) => run.due(e.entity.eid) })` for each of `run.rules` — and calls
  * `reconcile()` at boot for whatever a crash left claimed.
  */
 export let runner = (g: Graph, opts: Opts): Runner => {
@@ -289,29 +299,26 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     .filter((p): p is Ready => !!p.plan)
   let answering = plans.find((p) => p.rule.name == READY)!
   let woken = plans.find((p) => p.rule.name == WOKEN)
-  let inflight = per(running, g)
-  let landings = per(answers, g)
+  let inflight = running.get(g) ?? new Map<Eid, Promise<Bundle[]>>()
+  running.set(g, inflight)
   // Whose claim a call carries, as this runner reads it. Unclaimed, or claimed
-  // by this runner, is `free`. Another process's claim is `theirs` — unless
-  // that process wrote an `exit` row, which makes the claim `lapsed`: nothing
-  // is coming back to finish the call, so it is taken the way a re-run takes
-  // one, claiming over `running`. The holder entity is fetched whole rather
-  // than queried by `.exit`, so a graph that tracks no processes simply never
-  // finds one — this package reads a component by name and requires nothing of
-  // the vocabulary.
-  let whose = async (call: Bundle): Promise<'free' | 'lapsed' | 'theirs'> => {
+  // with no owner named, is `free`. This process's own claim is `mine`: one
+  // this runner is not running is running in another thread of this process,
+  // or failed there, and either way the process is not over. Another process's
+  // claim is `theirs` — unless that process wrote an `exit` row, which makes
+  // the claim `lapsed`: nothing is coming back to finish the call, so it is
+  // taken the way a re-run takes one, claiming over `running`. The holder
+  // entity is fetched whole rather than queried by `.exit`, so a graph that
+  // tracks no processes simply never finds one — this package reads a
+  // component by name and requires nothing of the vocabulary.
+  let whose = async (
+    call: Bundle,
+  ): Promise<'free' | 'mine' | 'lapsed' | 'theirs'> => {
     let by = (call.execution as Comp | undefined)?.by
-    if (by == null || by == opts.owner) return 'free'
+    if (by == null) return 'free'
+    if (by == opts.owner) return 'mine'
     let [holder] = await g.storage.tx((tx) => tx.get([String(by)]))
     return holder?.exit ? 'lapsed' : 'theirs'
-  }
-  // The last few answers, keyed by call. Bounded on purpose: this memo is a
-  // convenience for the caller that is about to ask, never a cache of the
-  // graph.
-  let keep = (id: Eid, bundles: Bundle[]) => {
-    landings.set(id, bundles)
-    for (let old of [...landings.keys()].slice(0, -256)) landings.delete(old)
-    return bundles
   }
   let ensured: Promise<Bundle[]> | undefined
 
@@ -340,9 +347,57 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     return { ...made, result: { ...made.result as Comp, ms } }
   }
 
+  // The claim this runner writes.
+  let claim = (): Comp => ({
+    state: 'running',
+    ...(opts.owner ? { by: opts.owner } : {}),
+  })
+  // The tool a call names, as this runner has it. A call naming a tool this
+  // runner does not have is left alone: another runner may have that tool,
+  // and failing the call here would be this runner's verdict on somebody
+  // else's work.
+  let toolOf = (call: Bundle): NamedTool | undefined =>
+    by.get(String((call.call as Comp).to)) ?? otherwise
+  // One promise per call in flight in this process, in the map before the
+  // work starts, so nothing the work sets off finds the call untaken.
+  let tracked = (id: Eid, go: () => Promise<Bundle[]>): Promise<Bundle[]> => {
+    let pending = Promise.resolve().then(go)
+      .finally(() => inflight.delete(id))
+    inflight.set(id, pending)
+    return pending
+  }
+
+  // A call written and claimed in one change, then run here. The claim is its
+  // own bundle: the call is the caller's, the claim is the runner's
+  // bookkeeping and carries no identity. A call somebody claimed first (only
+  // a named one can be) reads the way `run` reads it.
+  let born = (asked: Bundle): Promise<Bundle[]> => {
+    let id = asked.entity.eid.startsWith('$') ? mint() : asked.entity.eid
+    let call = { ...asked, entity: { ...asked.entity, eid: id } }
+    let tool = toolOf(call)
+    return tracked(id, async () => {
+      if (!tool) {
+        await g.apply([call])
+        return []
+      }
+      try {
+        await g.apply([call, {
+          entity: { eid: id },
+          execution: claim(),
+          $was: { execution: { state: null } },
+        }])
+      } catch (error) {
+        if (error instanceof Stale) return perform(id, {})
+        throw error
+      }
+      let [stored] = await g.storage.tx((tx) => tx.get([id]))
+      return execute(stored, tool)
+    })
+  }
+
   let perform = async (
     id: Eid,
-    o: { redrive?: boolean },
+    o: { redrive?: boolean; due?: boolean },
   ): Promise<Bundle[]> => {
     let [call] = await g.storage.tx((tx) => tx.get([id]))
     if (!call?.call) throw new CallError('call', 'Not a call: ' + id)
@@ -356,38 +411,49 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let went = (call.fired as Comp | undefined)?.at
     if (every && went) {
       let asked = call.call as Comp
-      let each = derivedEid(`call ${id} ${went}`)
-      await g.apply(signed([{
-        entity: { eid: each },
+      let [each] = signed([{
+        entity: { eid: derivedEid(`call ${id} ${went}`) },
         call: { to: asked.to, args: asked.args, source: id },
-      }], who(call)))
-      return run(each)
+      }], who(call))
+      return born(each)
     }
     let held = await recalled(id)
     if (held.length) return held
-    // A live holder's claim is not this runner's to take, redrive or not; a
-    // lapsed one is taken here and now, without waiting for a boot sweep.
+    // A live process's claim is not this runner's to take, redrive or not,
+    // this process's own included: a claim this runner is not running is
+    // running in another of its threads. A lapsed one is taken here and now,
+    // without waiting for a boot sweep.
     let hold = await whose(call)
-    if (hold == 'theirs') return []
+    if (hold == 'theirs' || hold == 'mine') return []
     let redrive = o.redrive || hold == 'lapsed'
-    if (call.execution && !redrive) throw new UnfinishedCall(id)
-    let c = call.call as Comp
-    let tool = by.get(String(c.to)) ?? otherwise
-    // The claim. A call naming a tool this runner does not have is left alone:
-    // another runner may have that tool, and failing the call here would be
-    // this runner's verdict on somebody else's work.
+    if (call.execution && !redrive) {
+      if (o.due) return []
+      throw new UnfinishedCall(id)
+    }
+    let tool = toolOf(call)
     if (!tool) return []
-    await g.apply([{
-      entity: call.entity,
-      execution: {
-        state: 'running',
-        ...(opts.owner ? { by: opts.owner } : {}),
-      },
-      $was: {
-        execution: { state: redrive ? token('running') : null },
-        call: { to: token(c.to), args: token(c.args) },
-      },
-    }])
+    let c = call.call as Comp
+    // The claim. A runner that loses it to another has nothing to run.
+    try {
+      await g.apply([{
+        entity: call.entity,
+        execution: claim(),
+        $was: {
+          execution: { state: redrive ? token('running') : null },
+          call: { to: token(c.to), args: token(c.args) },
+        },
+      }])
+    } catch (error) {
+      if (error instanceof Stale) return []
+      throw error
+    }
+    return execute(call, tool)
+  }
+
+  // Running a claimed call: the tool, its answer, and the record of both.
+  let execute = async (call: Bundle, tool: NamedTool): Promise<Bundle[]> => {
+    let id = call.entity.eid
+    let c = call.call as Comp
     let started = now()
     // What a thrown error becomes: the fault as its own entity, recording
     // which call it came from. An expected refusal gets `error{code}`: a
@@ -432,7 +498,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
           $was: { execution: { state: token('running') } },
         },
       ])
-      return keep(id, keeps ? landed : [...made, ...landed])
+      return keeps ? landed : [...made, ...landed]
     }
     try {
       let args = checked(tool, parsed(c.args))
@@ -463,13 +529,16 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     }
   }
 
-  let run = (id: Eid, o: { redrive?: boolean } = {}): Promise<Bundle[]> => {
-    let held = inflight.get(id)
-    if (held) return held
-    let pending = perform(id, o).finally(() => inflight.delete(id))
-    inflight.set(id, pending)
-    return pending
-  }
+  let run = (id: Eid, o: { redrive?: boolean } = {}): Promise<Bundle[]> =>
+    inflight.get(id) ?? tracked(id, () => perform(id, o))
+
+  let due = async (
+    id: Eid,
+    o: { redrive?: boolean } = {},
+  ): Promise<Bundle[]> =>
+    inflight.has(id)
+      ? []
+      : await tracked(id, () => perform(id, { ...o, due: true }))
 
   // The queue: every call either rule selects, queried once. A rule's match IS
   // the query — its first pattern is the call — so this asks storage the same
@@ -490,17 +559,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   let drive = async (o: { redrive?: boolean } = {}): Promise<Bundle[]> => {
     let out: Bundle[] = []
     for (let call of await queued()) {
-      let id = call.entity.eid
-      // Claimed and not this pass's to take: either it is already running in
-      // this process (the in-flight promise is the answer) or another process
-      // holds it.
-      if (inflight.has(id)) continue
-      let hold = await whose(call)
-      if (hold == 'theirs') continue
-      let redrive = o.redrive || hold == 'lapsed'
-      if (call.execution && !redrive) continue
       try {
-        out.push(...await run(id, { redrive }))
+        out.push(...await due(call.entity.eid, o))
       } catch (error) {
         let to = String((call.call as Comp | undefined)?.to)
         await opts.report?.(error, call, by.get(to)?.name)
@@ -532,23 +592,15 @@ export let runner = (g: Graph, opts: Opts): Runner => {
           })))
           : []
       }),
-    call: async (bundles) => {
-      // The call is written first, because it is the record: what was asked
-      // stands whether or not an answer ever does. Then the tool runs — here,
-      // in this process, for this caller — unless an effect on the same commit
-      // got there first, in which case its answer is this caller's answer.
-      let applied = await g.apply(bundles)
-      let made = applied.find((b) => b.call)
-      if (!made) throw new CallError('call', 'a call batch needs a call')
-      let id = made.entity.eid
-      let held = landings.get(id)
-      if (held) {
-        landings.delete(id)
-        return held
-      }
-      return inflight.get(id) ?? run(id)
+    // The call is written first, because it is the record: what was asked
+    // stands whether or not an answer ever does. It is written claimed, and
+    // the tool runs here, in this process, for this caller.
+    call: async (asked) => {
+      if (!asked.call) throw new CallError('call', 'a call needs a call')
+      return await born(asked)
     },
     run,
+    due,
     drive,
   }
 }

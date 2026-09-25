@@ -22,7 +22,9 @@
  * role @yaks/api's `serve` declares. A `yak` command serves commands and
  * rendering, which are its own (./run.ts, ./answer.ts), and reaches the graph
  * either through a server or by composing the graph role here itself
- * (local.ts). A role this process does not serve costs it nothing: its facets
+ * (local.ts), with the duty roles composed again in a thread of the same
+ * process (./thread.ts, ./worker.ts) that {@link ComposeOpts} `joins`. A role
+ * this process does not serve costs it nothing: its facets
  * are never imported, so a command that opens the graph to read it never loads
  * a line of HTTP, and a process that serves no `web` never asks a plugin for a
  * route.
@@ -168,11 +170,13 @@ export type Host = {
    * each — a second long-running process waits, and takes over when a killed
    * holder's lease expires.
    *
+   * The duty roles this host handed to a {@link Thread} run there, under the
+   * same signal.
+   *
    * Runs until `signal` aborts; left out, that signal is this host's own, so
    * it stops with {@link Served.close}. Pass an already-aborted signal for one
    * pass each and no waiting, which is what a one-shot command does on its way
-   * in — and it works no effects at all where a process that stays up is
-   * working them — and the live form is what a process that stays up calls. */
+   * in, and the live form is what a process that stays up calls. */
   duties: (signal?: AbortSignal) => Promise<void>
 
   /** This process, as an entity (@yaks/process `started`): the row it wrote on
@@ -357,6 +361,29 @@ export type Served = Host & {
    * it ended. Await it when the process is about to end, or that last write
    * races the exit and the row reads as still running forever. */
   close: (code?: number) => void | Promise<void>
+}
+
+/** Duties this process runs in a thread of its own (./thread.ts): started with
+ * the host's own by {@link Host.duties}, told when this process has written
+ * runs down for it, and finished before the host closes. */
+export type Thread = {
+  /** the duties the thread took: one pass where `signal` has already
+   * aborted, else for as long as it has not */
+  duties: (signal: AbortSignal) => Promise<void>
+  /** this process wrote runs down: look at the pool now */
+  nudge: () => void
+  /** finish: a last pass over what this process wrote, then close */
+  close: () => Promise<void>
+}
+
+/** How a host is composed, beyond its roles. */
+export type ComposeOpts = {
+  /** this host joins a process that already wrote itself in — a thread the
+   * process started (./worker.ts, with @yaks/process `become`) — so it writes
+   * no `process` row of its own on the way in and no `exit` on the way out */
+  joins?: boolean
+  /** the thread running the duties this host hands off */
+  thread?: Thread
 }
 
 /** The database a config names. `DB_PATH` is the other way to give it, for a
@@ -578,6 +605,7 @@ export let compose = async (
   config: Config,
   roles: readonly Role[],
   load: Load = facet,
+  opts: ComposeOpts = {},
 ): Promise<Served> => {
   if (!roles.includes('graph')) {
     throw new Error('a host opens a graph — its roles include graph')
@@ -723,6 +751,7 @@ export let compose = async (
     let fx = watching = effects(vocab, {
       write: (b) => host.graph.apply(b, { trusted: true }),
       owner: host.me,
+      nudge: opts.thread?.nudge,
     })
     g = graph({
       storage: host.storage,
@@ -825,7 +854,7 @@ export let compose = async (
       report: (err) => console.error('tool failed —', err),
     })
     if (effecting) {
-      let due: Handlers[string] = (e) => run.run(e.entity.eid)
+      let due: Handlers[string] = (e) => run.due(e.entity.eid)
       fx.handle(Object.fromEntries(run.rules.map((r) => [r.rule.name, due])))
     }
     // Which listed plugin hosts the routes — turns them into the one handler
@@ -858,13 +887,20 @@ export let compose = async (
     // down is one fact, and a duty that outlived the database it
     // reads would be a crash nobody asked for. One that throws is reported
     // and that plugin's duty stops — the others keep going, the way a failing
-    // effect is telemetry rather than a broken host. A config that turned
-    // them off (`duties: false`, `yak --no-duties`) takes no lease, works no
-    // effects and runs none of them, in either form: what it commits is left
-    // written down for a process that does.
+    // effect is telemetry rather than a broken host. The duties this host
+    // handed to a thread of its own run beside these, under the same signal.
+    // A config that turned them off (`duties: false`, `yak --no-duties`)
+    // takes no lease, works no effects and runs none of them, in either form:
+    // what it commits is left written down for a process that does.
     doing = config.duties == false ? async () => {} : (signal) => {
       let until = signal ?? stopping.signal
       return Promise.all([
+        ...(opts.thread
+          ? [
+            opts.thread.duties(until)
+              .catch((e) => console.error('the duty thread failed —', e)),
+          ]
+          : []),
         ...(effecting
           ? [
             fx.work(g!, until)
@@ -883,8 +919,8 @@ export let compose = async (
     // commits. First among the writes, because everything after is attributed
     // to it and `created.by` is a reference: a process attributing writes to an
     // entity nothing created would store a dangling id on its very first
-    // write.
-    if (self) await g.apply([started()])
+    // write. A host joining a process that wrote itself in writes none.
+    if (self && !opts.joins) await g.apply([started()])
     return {
       ...host,
       graph: g,
@@ -899,10 +935,15 @@ export let compose = async (
       // First of all, the abort: the duties stop and every timer a
       // plugin hung off {@link Host.stopping} is cancelled, so nothing is
       // still pending over a database that is about to be closed. Then the
+      // thread beside it finishes, running what this process wrote down; the
       // effects this process started are let finish, and it leaves the pool,
       // so what its last transaction owes is left written down for another.
+      // A host that joined another process stamps no ending: the process is
+      // not over when one of its threads is.
       close: async (code?: number) => {
         stopping.abort()
+        await opts.thread?.close()
+          .catch((e) => console.error('the duty thread failed —', e))
         await fx.stop()
         let shut = () => {
           try {
@@ -911,7 +952,11 @@ export let compose = async (
         }
         if (!self) return shut()
         try {
-          await g!.apply([...await released(g!, selfEid()), ended(code)])
+          let last = [
+            ...await released(g!, selfEid()),
+            ...opts.joins ? [] : [ended(code)],
+          ]
+          if (last.length) await g!.apply(last)
         } catch { /* the file is going either way */ }
         shut()
       },

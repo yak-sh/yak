@@ -385,11 +385,11 @@ Deno.test('a command line writes as the session it names, through the same door 
   try {
     await host.runner.ensure()
     let add = async (via?: string, typed = false) =>
-      (await host.runner.call([{
+      (await host.runner.call({
         entity: { eid: '$call' },
         call: { to: toolEid('book_add'), args: { title: 'Dune' } },
         ...await signer(host, via, typed),
-      }])).find((b) => b.book)?.created as Comp
+      })).find((b) => b.book)?.created as Comp
     assertEquals((await add('her-run')).by, 'ana')
     // A run the door does not know, or none at all, is this process's writing.
     assertEquals((await add('nobody')).by, me)
@@ -806,10 +806,12 @@ Deno.test('a process coming up owes again what a declared sweep selects', async 
       { entity: { eid: 'b1' }, book: { title: 'Spring', price: 12 } },
       { entity: { eid: 'b2' }, book: { title: 'Winter' } },
     ])
-    await host.duties(AbortSignal.abort())
-    assertEquals(ran.sort(), ['Spring', 'Winter'])
-    ran.length = 0
-    // The next pass on the way in: only the book still unpriced comes back.
+    // Every run they owed, settled — as a process since gone left them.
+    let owed = await host.graph.read('.effect')
+    await detached(host.storage).patch(
+      owed.map((b) => ({ entity: b.entity, effect: { state: 'done' } })),
+    )
+    // Coming up, the pool owes again only the book its sweep still selects.
     await host.duties(AbortSignal.abort())
     assertEquals(ran, ['Winter'])
   } finally {

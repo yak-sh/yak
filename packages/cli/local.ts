@@ -22,88 +22,137 @@
 // a tool an agent requested is identical, and the rules, the post-commit
 // effects and the attribution are one set for both.
 //
+// The effect pool and the plugins' services are never this thread's. Where no
+// process that stays up is running them, a thread of this process takes them
+// (./thread.ts), so the command and the answer it draws are never waiting on a
+// letter being sent; where one is, this process never imports their code.
+//
 // This module is imported only by a command that named a config, because
 // importing it pulls in the graph and every plugin's words — a cost `yak login`
 // on a machine with no graph should not pay.
 
-import { type Actor, offered } from '@yaks/graph'
+import { type Actor, type Eid, type Graph, offered } from '@yaks/graph'
+import type { Vocab } from '@yaks/vocab'
+import { EFFECT, held, type Lease, working } from '@yaks/effects'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools'
 import { registry, show, terminal } from './answer.ts'
-import { type Config, read, used } from './config.ts'
+import { type Config, exported, read, used } from './config.ts'
 import { VIA } from './rpc.ts'
 import type { Command, Ctx } from './run.ts'
 import {
   compose,
   dbOf,
   type Declared,
-  every,
+  facet,
   type Role,
   type Served,
   words,
 } from './host.ts'
+import { thread } from './thread.ts'
 
 // One graph per config path and set of roles, for the life of the process:
 // every call a command makes goes through the same assembled graph, and
 // opening the file twice for the same roles would mean two writers in one
 // process for no reason.
-let held = new Map<string, Promise<Served>>()
+let hosts = new Map<string, Promise<Served>>()
 
 /**
- * The roles a command's process serves: the graph, the tool's own (`serve`
- * serves `web`), and the effects and every plugin's service, one pass of each
- * on the way in — so a machine with no server still gets its duties done. The
- * effects are worked by the command only where no process that stays up is
- * working them (@yaks/effects `work`); otherwise what it writes is left
- * written down for that process.
+ * The roles a command's own thread serves: the graph, and whatever its tool
+ * declares it needs — `serve` answers HTTP, so it serves `web`. The effect
+ * pool and the plugins' services are not among them ({@link unserved}); the
+ * one exception is a graph that keeps no pool (`pooled` false), whose effects
+ * can only run where they were committed.
  *
- * TODO(T-39522): a command imports the effects and service facets only where
- * no live process serves them; and a process that stays up takes the roles
- * its config gives it rather than all of them.
+ * TODO(T-39522): a process that stays up takes the roles its config gives it;
+ * which config key says so is Jeff's to pick.
  */
 export let rolesOf = (
-  config: Config,
   tool: Pick<Declared, 'roles'>,
+  pooled: boolean,
 ): Role[] => [
-  ...new Set([
-    ...every(config).filter((r) => r != 'web'),
-    ...tool.roles ?? [],
-  ]),
+  ...new Set(['graph', ...pooled ? [] : ['effects'], ...tool.roles ?? []]),
 ]
 
-// On the way in, a command does whatever is overdue and nobody else is doing:
-// the effects nobody is working, the scheduled wakes that came due while
-// nothing was listening (`Host.duties` in host.ts). It is handed a
-// signal that has already aborted, so each duty runs exactly one
-// pass and then releases its lease — a one-shot command is not a lesser kind
-// of process, it is the only one there is on a machine where nobody runs a
-// server, and a graph must not require one.
-let drained = async (composing: Promise<Served>): Promise<Served> => {
-  let host = await composing
-  await host.duties(AbortSignal.abort())
+/** The duty roles of a config's graph that a process serving `mine` does not
+ * cover already: the effect pool, where the graph keeps one, and each plugin's
+ * service. A plugin that exports no `./service` has none (`has`, the resolver
+ * asked rather than the module imported). */
+export let dutiesOf = (
+  vocab: Vocab,
+  config: Config,
+  mine: readonly Role[],
+  has: (plugin: string, facet: string) => boolean = exported,
+): Role[] =>
+  [
+    ...vocab.comp(EFFECT) ? ['effects'] : [],
+    ...(config.plugins ?? []).map(used).filter((p) => has(p, 'service')),
+  ].filter((r) => !mine.includes(r))
+
+// Whether a lease is held, right now, by a process other than this one.
+let taken = (lease: Lease | undefined, me: Eid, now: number): boolean =>
+  !!lease?.holder && lease.holder != me &&
+  Date.parse(String(lease.until)) > now
+
+/** The duty roles no live process is serving: the effect pool where no
+ * process that stays up is working it (@yaks/effects `working`), and each
+ * service whose lease nobody live holds. */
+export let unserved = async (
+  g: Graph,
+  roles: readonly Role[],
+  me: Eid,
+  now: number = Date.now(),
+): Promise<Role[]> => {
+  let busy = await Promise.all(
+    roles.map(async (r) =>
+      r == 'effects'
+        ? await working(g, me, now)
+        : taken(await held(g, r), me, now)
+    ),
+  )
+  return roles.filter((_, i) => !busy[i])
+}
+
+// The graph a command opens: composed for its own roles, with its duty roles
+// handed to a thread beside it. Where one of them is idle, the thread starts
+// now and runs one pass of each on the way in — beside the command, never
+// ahead of it; where all are served, it starts only if the process asks for
+// its duties to go on (`serve`). A command passing through is not a lesser
+// kind of process: on a machine where nobody runs a server it is the only one
+// there is, and a graph must not require one.
+let open = async (
+  path: string,
+  roles: Role[],
+  duties: boolean,
+): Promise<Served> => {
+  let config = read(path)
+  if (!duties) return compose({ ...config, duties: false }, roles)
+  let aside = thread()
+  let host = await compose(config, roles, facet, { thread: aside })
+  try {
+    let duties = dutiesOf(host.vocab, config, roles)
+    aside.plan({ config: path, roles: duties, me: host.me })
+    if ((await unserved(host.graph, duties, host.me)).length) aside.start()
+  } catch (error) {
+    await host.close()
+    throw error
+  }
+  void host.duties(AbortSignal.abort())
   return host
 }
 
-/** The graph a config names, open for the roles a command's process serves —
- * and whatever was overdue on it, done, unless `duties` is false
- * (`--no-duties`), which leaves every duty to another process. Assembled once
- * per config path and roles; {@link close} closes it when the command is
- * done. */
+/** The graph a config names, open for the roles a command's own thread serves,
+ * with a thread doing what is overdue on it beside the command — unless
+ * `duties` is false (`--no-duties`), which leaves every duty to another
+ * process. Assembled once per config path and roles; {@link close} closes it
+ * when the command is done. */
 export let opened = (
   path: string,
   roles: Role[],
   duties = true,
 ): Promise<Served> => {
   let key = JSON.stringify([path, roles])
-  let host = held.get(key)
-  if (!host) {
-    let config = read(path)
-    held.set(
-      key,
-      host = drained(
-        compose(duties ? config : { ...config, duties: false }, roles),
-      ),
-    )
-  }
+  let host = hosts.get(key)
+  if (!host) hosts.set(key, host = open(path, roles, duties))
   return host
 }
 
@@ -112,8 +161,8 @@ export let opened = (
 export let close = async (code?: number): Promise<void> => {
   // Awaited, because the last batch is a write: a command that closed the file
   // without waiting would leave its own row saying it is still running.
-  for (let host of held.values()) await (await host).close(code)
-  held.clear()
+  for (let host of hosts.values()) await (await host).close(code)
+  hosts.clear()
 }
 
 /** Who a command line writes as: the answer the host's door gives a request
@@ -160,18 +209,18 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
     run: async (args: Record<string, unknown>): Promise<number> => {
       let host = await opened(
         c.config!,
-        rolesOf(config, declared),
+        rolesOf(declared, !!said.vocab.comp(EFFECT)),
         c.duties,
       )
       // Write the `tool` rows a call's `to` points at first: a call naming an
       // entity nothing created would be a dangling reference. Done once per
       // process, by whichever caller gets there first (@yaks/tools `ensure`).
       await host.runner.ensure()
-      let landed = await host.runner.call([{
+      let landed = await host.runner.call({
         entity: { eid: '$call' },
         call: { to: toolEid(declared.name), args: args ?? {} },
         ...await signer(host, c.via),
-      }])
+      })
       // `--json` prints the answer as data, the same object an MCP client
       // reads as `structuredContent` (@yaks/tools `structured`).
       let answer = answerOf(landed)

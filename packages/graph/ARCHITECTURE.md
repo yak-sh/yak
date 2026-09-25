@@ -71,7 +71,11 @@ A process serves roles, and imports only the facets of the roles it serves:
 
 The config names the plugins; each process picks its roles. A browser tab
 renders and reaches the graph through a server. A `yak` command renders, and
-opens the graph itself with the `graph` role. `yak serve` serves `web`.
+opens the graph itself with the `graph` role, or passes through a server with
+`--host`. `yak serve` serves `web`. A process runs its duty roles (the pool and
+the services) in a thread of its own, so the thread answering a command or a
+request never waits on them; a one-shot command starts that thread only where no
+live process serves them.
 
 What a commit owes is declared in the vocabulary (`effect: true`), so every
 writer writes the runs down in its own transaction, whatever it imported; the

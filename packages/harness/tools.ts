@@ -77,11 +77,11 @@ export let graphTools = (
       let actor = call?.session ? { eid: call.session } : opts.actor ?? null
       await r.ensure()
       return worded(answerOf(
-        await r.call([{
+        await r.call({
           entity: { eid: '$call' },
           call: { to: toolEid(toolName(t)), args: args ?? {} },
           ...(actor ? { $actor: { by: actor.eid } } : {}),
-        }]),
+        }),
       ))
     },
   }))

@@ -11,7 +11,6 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { answerOf, checks, toolEid, worded } from '@yaks/tools'
-import type { Bundle } from '@yaks/graph'
 import { compose, type Served } from './host.ts'
 
 // The session, project, task and doc words and their runs, and this process
@@ -39,10 +38,10 @@ let host = () =>
 // One check, asked the way a door asks: write the call, run it, read the prose.
 let ask = async (h: Served, name: string): Promise<string> => {
   await h.runner.ensure()
-  let landed = await h.runner.call([{
+  let landed = await h.runner.call({
     entity: { eid: `$${name}` },
     call: { to: toolEid(name), args: {} },
-  }]) as Bundle[]
+  })
   return worded(answerOf(landed))
 }
 

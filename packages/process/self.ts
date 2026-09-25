@@ -17,15 +17,14 @@
 // wrote this", and a child process's row, written by its parent, identifies its
 // parent without needing a property for it.
 //
-// A process starting is also an event. `created(process)` where the process is
-// this one is the moment the server has to pick up what a restart left behind —
-// the agents still running, the locks a dead session held — so start-up work is
-// an ordinary post-commit effect handler instead of a separate start-up hook
-// nothing else can see.
+// A process starting is also an event: an effect declared on
+// `created: ["process"]` is what a process coming up owes, so start-up work is
+// an ordinary effect instead of a separate start-up hook nothing else can see.
 //
 // The id is minted once, in memory, and it is a uuid rather than something
 // derived from the process: two runs of one command are two different runs, and
-// the kernel recycles a pid within the hour.
+// the kernel recycles a pid within the hour. A worker thread the process
+// started is the same run, and says so with {@link become}.
 
 import type { Bundle, Eid } from '@yaks/graph'
 import { EXIT, PROCESS } from './comp.ts'
@@ -35,6 +34,15 @@ let mine: Eid | undefined
 /** This process, as an entity — minted once, the same for every graph it
  * opens. */
 export let selfEid = (): Eid => mine ??= crypto.randomUUID() as Eid
+
+/** Join the process `eid` names: a worker thread is its own module realm, so
+ * it would mint an id of its own, and it is the same run of the same program
+ * as the thread that started it. Called before anything asks
+ * {@link selfEid}; a thread that already is another process refuses. */
+export let become = (eid: Eid): void => {
+  if (mine && mine != eid) throw new Error(`this thread is ${mine} already`)
+  mine = eid
+}
 
 /** What a run records about itself where the runtime cannot tell it (a test
  * standing in for a process, a caller naming its children its own way). */

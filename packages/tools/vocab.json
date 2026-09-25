@@ -127,7 +127,7 @@
     "execution": {
       "component": true,
       "type": "object",
-      "description": "How a recorded call is going, and which process is running it. `running` is that process’s claim on the call — a second server, or a re-entry, leaves it alone; a row still `running` when a process starts is a run that was interrupted, and the boot sweep runs it again. `by` names who is running it: a runner takes a call nobody holds, or one it holds itself, and never one held by somebody else — which is how a transcript imported from elsewhere arrives already executed.",
+      "description": "How a recorded call is going, and which process is running it. `running` is that process’s claim on the call — a second server, or a re-entry, leaves it alone; a row still `running` when a process starts is a run that was interrupted, and the boot sweep runs it again. `by` names who is running it: a runner takes a call nobody holds, or one whose holder has exited, and never one a live process holds, its own process included, whose other thread is running it — which is also how a transcript imported from elsewhere arrives already executed.",
       "properties": {
         "state": {
           "type": "string",

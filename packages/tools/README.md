@@ -101,17 +101,19 @@ const g = graph({ vocab, storage: ram(vocab) })
 const r = runner(g, { tools: [greet] })
 await r.ensure()
 
-const records = await r.call([{
+const records = await r.call({
   entity: { eid: '$call' },
   call: { to: toolEid('person_greet'), args: { name: 'Ada' } },
-}])
+})
 
 if (faulted(records)) throw new Error(worded(answerOf(records)))
 console.log(worded(answerOf(records)))
 ```
 
-`call()` writes the supplied changes, finds the call bundle among them, and runs
-its tool. It returns the tool's output together with runner bookkeeping. Use
+`call()` writes the call already claimed, in one change, and runs its tool in
+this process: the caller asking is the one waiting for the answer. A `$` eid is
+given a fresh one first, so the call is in flight here from the moment it is
+written. It returns the tool's output together with runner bookkeeping. Use
 `answerOf()` to remove `result` and `execution` bundles before displaying the
 answer. `worded()` joins `content.body` values, or returns formatted JSON when
 no text is present. `structured(tool, answer)` is the answer as data: the
@@ -119,8 +121,10 @@ bundles under `result`, or the `output.value` of a tool that declares an
 `outputSchema`. `faulted()` checks the stored execution state rather than
 treating an answer that contains `error` data as an execution failure.
 
-Use `run(callId)` for a call already stored in the graph. Use `drive()` to run
-all currently eligible calls in one pass.
+Use `run(callId)` for a call already stored in the graph, and `due(callId)` for
+one a rule selected: it runs the call if nobody holds it and otherwise leaves
+it, where `run()` answers with the call in flight or refuses an unfinished one.
+Use `drive()` to run all currently eligible calls in one pass.
 
 <a id="whose-name-a-tool-writes-in"></a>
 
@@ -166,7 +170,7 @@ runner rule with [@yaks/effects](../effects):
 
 ```ts
 for (const rule of r.rules) {
-  fx.on(rule.plan, (event) => r.run(event.entity.eid))
+  fx.on(rule.plan, (event) => r.due(event.entity.eid))
 }
 ```
 
@@ -179,8 +183,9 @@ for (const rule of r.rules) {
 
 Before invoking a tool, the runner writes `execution.state = "running"` with a
 precondition that prevents two processes from claiming an unclaimed call. It
-then writes `done` or `failed` with the result. Concurrent runners over the same
-graph share an in-process invocation and stored answer.
+then writes `done` or `failed` with the result, and a runner that loses the
+claim to another has nothing to run. Concurrent runners over the same graph
+object share an in-process invocation.
 
 When `owner` is set, `execution.by` identifies the process holding the claim. A
 runner leaves a call claimed by another active owner alone. If that owner's
@@ -188,7 +193,10 @@ entity has an `exit` component, the claim is considered abandoned and a later
 sweep can take it. This also prevents imported call histories from being
 executed again merely because another runner reads them.
 
-Calling `run()` for a call that has a `running` claim but no result throws
+A claim naming this runner's own owner that this runner is not running belongs
+to another thread of the same process, and is left to it, redrive and all: a
+process's own claims are taken again only once it has exited. Calling `run()`
+for a call that has a `running` claim with no owner and no result throws
 `UnfinishedCall`. `reconcile()` retries such calls during startup. Retrying can
 repeat an external side effect if the process stopped after that effect but
 before committing the result, so the package provides at-most-once claiming, not

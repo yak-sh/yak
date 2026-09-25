@@ -47,10 +47,10 @@ Deno.test('the harness composes as a plugin, and its words reach a command line 
     assertEquals(commandFor(h.tools, ['list', 'session'])?.verb, found.verb)
     assertEquals(await argsFor(found.verb, found.args, reads), {})
     let said = worded(answerOf(
-      await h.runner.call([{
+      await h.runner.call({
         entity: { eid: '$call' },
         call: { to: toolEid(namedTool(found.verb).name), args: {} },
-      }]),
+      }),
     ))
     assertEquals(said.includes('one'), true)
   } finally {

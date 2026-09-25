@@ -828,7 +828,7 @@ export class Store {
     // firing makes the second hold, and the answer lands beside the ask. This
     // store keeps no `effect` rows, so each runs here once the write commits.
     let due = (e: { entity: { eid: string } }) =>
-      this.#runner().run(e.entity.eid)
+      this.#runner().due(e.entity.eid)
     fx.handle(
       Object.fromEntries(
         this.#runner(g).rules.map((r) => [r.rule.name, due]),

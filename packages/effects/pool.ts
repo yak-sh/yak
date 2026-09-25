@@ -130,12 +130,31 @@ export type Pool = {
    * one, a single pass — and none at all where a process that stays up is
    * already working it. */
   work: (g: Graph, signal?: AbortSignal) => Promise<void>
+  /** Look again now, rather than at the next pass: what a thread beside this
+   * one says after it wrote runs down (./registry.ts `nudge`). */
+  wake: () => void
   /** Settles once every run started here has, and a worker whose signal
    * aborted has stopped. */
   idle: () => Promise<void>
   /** Leave the pool: claim nothing more — what this process commits from
    * now on is left for the others — and settle what was started. */
   stop: () => Promise<void>
+}
+
+/** Whether a process that stays up is working the pool over `g`: a presence
+ * lease other than `except`'s, still standing. */
+export let working = async (
+  g: Graph,
+  except?: Eid,
+  now: number = Date.now(),
+): Promise<boolean> => {
+  if (!g.vocab.comp(LEASE)) return false
+  let rows = (await g.read(`.${LEASE}`)) as Bundle[]
+  return rows.some((b) => {
+    let l = b[LEASE] as Comp | undefined
+    return String(l?.name ?? '').startsWith(`${POOL}/`) && !!l?.holder &&
+      l.holder != except && Date.parse(String(l.until)) > now
+  })
 }
 
 // What a handler threw, as the row can keep it.
@@ -369,18 +388,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     }
   }
 
-  // Whether a process that stays up is working the pool: any presence lease
-  // but this process's own, still standing.
-  let standing = async (g: Graph): Promise<boolean> => {
-    if (!g.vocab.comp(LEASE)) return false
-    let now = clock()
-    let rows = (await g.read(`.${LEASE}`)) as Bundle[]
-    return rows.some((b) => {
-      let l = b[LEASE] as Comp | undefined
-      return String(l?.name ?? '').startsWith(`${POOL}/`) && !!l?.holder &&
-        l.holder != me && Date.parse(String(l.until)) > now
-    })
-  }
+  // The worker's wait between passes, which a wake cuts short.
+  let nap = new AbortController()
 
   // The worker that stays up: present, a pass, the claims renewed, a wait.
   // Its presence lease goes with it, so nobody waits out its expiry.
@@ -405,7 +414,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
             event: { kind: 'created', entity: { eid: me }, name: EFFECT },
           })
         }
-        await sleep(CAP, signal)
+        await sleep(CAP, AbortSignal.any([signal, nap.signal]))
+        if (nap.signal.aborted) nap = new AbortController()
       }
     } finally {
       if (present) {
@@ -414,6 +424,17 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         } catch { /* already gone, or the graph is closing */ }
       }
     }
+  }
+
+  // Joining the pool, once: this process claims what it writes from now on,
+  // and what the declared sweeps select is owed a run — how a worker coming
+  // up finds what nobody wrote down.
+  let joined = false
+  let join = async (g: Graph) => {
+    member = true
+    if (joined) return
+    joined = true
+    await sweep(g)
   }
 
   let idle = async () => {
@@ -458,18 +479,17 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     work: async (g, signal = AbortSignal.abort()) => {
       graph = g
       if (signal.aborted) {
-        if (await standing(g)) return
-        member = true
-        await sweep(g)
+        if (await working(g, me, clock())) return
+        await join(g)
         await Promise.all(await pass(g))
         return
       }
-      member = true
-      await sweep(g)
+      await join(g)
       let done = stay(g, signal)
       loop = { done, signal }
       await done
     },
+    wake: () => nap.abort(),
     idle,
     stop: () => {
       member = false

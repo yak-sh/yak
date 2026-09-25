@@ -122,6 +122,19 @@ let unexported = (error: unknown, spec: string, facet: string): boolean =>
   (error.message.startsWith(`Unknown export './${facet}' for `) ||
     error.message == `Module not found "${spec}".`)
 
+/** Whether a plugin exports a subpath, asked of the resolver rather than by
+ * importing it: what a process checks before it hands a role to a thread
+ * that would only find the facet missing. A plugin named by a path answers
+ * yes, since only importing it can tell. */
+export let exported = (plugin: string, name: string): boolean => {
+  try {
+    import.meta.resolve(`${plugin}/${name}`)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** `import('<plugin>/<name>')`, or `null` where the package does not export
  * that subpath — a facet, or the `./views` a caller draws with. */
 export let subpath = async <M>(

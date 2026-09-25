@@ -150,10 +150,15 @@ Deno.test('a sweep owes what it selects one run, however many workers start at o
   await Promise.all([a.fx.work(a.g), b.fx.work(b.g)])
   await Promise.all([a.fx.idle(), b.fx.idle()])
   assertEquals(ran.sort(), ['p1', 'p2'])
-  // And again at the next start: a sweep is how what nobody wrote down is
-  // found, so what it selects is owed until the query stops selecting it.
+  // A second pass is not a worker coming up.
   await a.fx.work(a.g)
-  await a.fx.idle()
+  assertEquals(ran.length, 2)
+  // The next one to come up sweeps again: a sweep is how what nobody wrote
+  // down is found, so what it selects is owed until it stops selecting it.
+  let c = proc(s)
+  c.fx.handle({ post_swept: (e) => void ran.push(e.entity.eid) })
+  await c.fx.work(c.g)
+  await c.fx.idle()
   assertEquals(ran.length, 4)
 })
 
@@ -179,6 +184,22 @@ Deno.test('a pass on the way through leaves the pool to a process that stays', a
   await cli.fx.work(cli.g)
   await cli.fx.idle()
   assertEquals(cli.ran, ['created p2'])
+})
+
+Deno.test('a thread that wrote runs down wakes the worker beside it', async () => {
+  let s = store()
+  let server = proc(s, { owner: 'server' })
+  server.fx.handle({ post_note: server.note })
+  let up = new AbortController()
+  let serving = server.fx.work(server.g, up.signal)
+  await until(async () => (await rows(server.g, '.lease')).length)
+  let beside = proc(s, { nudge: () => server.fx.wake() })
+  await beside.g.apply([post('p1')])
+  // Well inside the pass the worker would otherwise wait for.
+  await until(() => server.ran.length, { timeout: 500 })
+  assertEquals(server.ran, ['created p1'])
+  up.abort()
+  await serving
 })
 
 Deno.test('a process that stops leaves what it writes next for the others', async () => {
