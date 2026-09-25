@@ -20,21 +20,12 @@ import { home } from './paths.ts'
 // reconciled one level up, by agent.ts `resume()`, because waking a transcript
 // needs a model and this file has none.
 
-import {
-  address,
-  type Blobs,
-  blobSchema,
-  bodies,
-  encode,
-  fileBlobs,
-  memoryBlobs,
-  sqliteBlobs,
-} from '@yaks/blob'
+import { type Blobs, fileBlobs, memoryBlobs } from '@yaks/blob'
 import { Database, driver } from '@yaks/sqlite/db'
 import { type Effects, effects } from '@yaks/effects'
 import { type Graph, graph } from '@yaks/graph'
 import { reapLeases } from '@yaks/session'
-import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
+import { migrations, storage, type Store } from '@yaks/sqlite'
 import { type Vocab } from '@yaks/vocab'
 import { vaultOf } from '@yaks/cli'
 import { sealing, type Vault } from '@yaks/secrets'
@@ -79,51 +70,6 @@ export type Harness = {
  * h.close()
  * ```
  */
-/** Move every body property this vocabulary marks `store: blob` into the blob
- * table, once. A marker row decides whether it has run, never the shape of the
- * text: a body that happens to look like a hash is prose like any other, and
- * re-running the migration over already-moved rows would store the hashes
- * themselves. The marker and the rows it covers commit together, so a
- * half-moved database cannot exist. */
-let toBlobs = (sql: Driver, bytes: Blobs) => {
-  let quote = (name: string) => '"' + name.replaceAll('"', '""') + '"'
-  sql.exec('begin immediate')
-  try {
-    for (let statement of blobSchema()) sql.exec(statement)
-    sql.exec(
-      'create table if not exists harness_upgrade (name text primary key)',
-    )
-    let done = sql.query(
-      "select name from harness_upgrade where name = 'blob-v1'",
-      [],
-    ).length
-    if (!done) {
-      for (let { comp, prop } of bodies(vocab)) {
-        let rows = sql.query(
-          'select entity, ' + quote(prop) + ' as body from ' + quote(comp) +
-            ' where ' + quote(prop) + ' is not null',
-          [],
-        )
-        for (let row of rows) {
-          let body = String(row.body)
-          let sha = address(body)
-          bytes.put(sha, encode(body))
-          sql.query(
-            'update ' + quote(comp) + ' set ' + quote(prop) +
-              ' = ? where entity = ?',
-            [sha, Number(row.entity)],
-          )
-        }
-      }
-      sql.exec("insert into harness_upgrade values ('blob-v1')")
-    }
-    sql.exec('commit')
-  } catch (error) {
-    sql.exec('rollback')
-    throw error
-  }
-}
-
 export let open = (path: string = dbPath()): Harness => {
   if (path != ':memory:') {
     let dir = path.slice(0, path.lastIndexOf('/'))
@@ -147,7 +93,6 @@ export let open = (path: string = dbPath()): Harness => {
     db.close()
     throw error
   }
-  let bytes = sqliteBlobs(sql)
   let store = storage(sql, vocab, {
     // Agent sessions, TUI microtasks and transcript artifacts use eids.
     number: false,
@@ -230,12 +175,6 @@ export let open = (path: string = dbPath()): Harness => {
   sql.exec(
     'update entity set num = null where num is not null and id in (select entity from entry)',
   )
-  try {
-    toBlobs(sql, bytes)
-  } catch (error) {
-    db.close()
-    throw error
-  }
   // Exclusive startup transaction: preserve EID fork boundaries while repairing
   // legacy fractional/duplicate positions. No live work is admitted yet.
   sql.exec('create table if not exists harness_upgrade (name text primary key)')

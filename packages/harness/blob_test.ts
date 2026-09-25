@@ -1,7 +1,7 @@
 // Prose in this graph is content-addressed: a body is stored once in
 // `blob_text` and every property holding it keeps only its address. The read
-// side resolves it back, so nothing above storage ever sees a hash — and a
-// database written before the move is migrated once, exactly, on open.
+// side resolves it back, so nothing above storage ever sees a hash, and a
+// reopened file reads the same prose it was written with.
 import { assertEquals } from '@std/assert'
 import { address } from '@yaks/blob'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -10,7 +10,7 @@ import { open } from './store.ts'
 let bodyOf = (b: Bundle, comp = 'content') =>
   (b[comp] as Comp | undefined)?.body
 
-Deno.test('blob prose deduplicates across properties, survives reopen and migrates legacy text exactly', async () => {
+Deno.test('blob prose deduplicates across properties and survives reopen', async () => {
   let dir = Deno.makeTempDirSync()
   let path = dir + '/test.db'
   let h = open(path)
@@ -28,24 +28,14 @@ Deno.test('blob prose deduplicates across properties, survives reopen and migrat
     })
     assertEquals(bodyOf((await h.g.read('.content'))[0]), body)
     assertEquals((await h.g.read('.doc.body="shared instruction"')).length, 1)
-    // Simulate the pre-blob schema: marker absent and all prose stored inline.
-    // A hash-looking legacy string must remain that string, not be dereferenced.
-    h.db.exec(
-      "delete from harness_upgrade; update content set body = '" +
-        address(body) + "'; update doc set body = 'legacy'",
-    )
     h.close()
+    // Reopening reads the prose back, never its address hashed again.
     h = open(path)
-    assertEquals(bodyOf((await h.g.read('.content'))[0]), address(body))
-    assertEquals(bodyOf((await h.g.read('.doc'))[0], 'doc'), 'legacy')
-    h.close()
-    // Reopening an already-migrated database is a no-op: the marker holds.
-    h = open(path)
-    assertEquals(bodyOf((await h.g.read('.content'))[0]), address(body))
+    assertEquals(bodyOf((await h.g.read('.content'))[0]), body)
     await h.g.apply([{
       entity: { eid: 'a' },
       content: { body: 'updated' },
-      $was: { content: { body: address(address(body)) } },
+      $was: { content: { body: address(body) } },
     }])
     assertEquals(bodyOf((await h.g.read('.content'))[0]), 'updated')
   } finally {
