@@ -45,6 +45,8 @@ export type Shown<Node> = {
   when: (at: string) => string
   /** another entity, drawn through the same registry */
   show: (b: Bundle, view: string) => Node | null
+  /** the relation an edge states: `contains` */
+  relation?: (b: Bundle) => string | undefined
   /** the groups of entities related to this one, for `Page` */
   relations?: Related[]
   /** the comments aimed at this one, oldest first, for `Page` */
@@ -83,8 +85,29 @@ let section = <Node>(h: H<Node>, title: string, ...kids: Child<Node>[]) =>
     ...kids,
   )
 
+// An entity with no title of its own is called by its id — except beside its
+// id in a `Tile`, where it is called by its kind rather than by its id twice.
 let title = <Node>(b: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node =>
-  h('span', null, shown(ctx).id(b))
+  h('span', null, ctx.in == 'Tile' ? shown(ctx).kind(b) : shown(ctx).id(b))
+
+// An edge is titled by the sentence it states: `T-1 requires T-2`.
+let sentence = <Node>(
+  b: Bundle,
+  h: H<Node>,
+  ctx: RenderContext<Node>,
+): Node => {
+  let s = shown(ctx)
+  let { from, to } = b.edge as { from?: string; to?: string }
+  return h(
+    'span',
+    null,
+    from ? value(h, s, from) : '?',
+    ' ',
+    s.relation?.(b) ?? s.kind(b),
+    ' ',
+    to ? value(h, s, to) : '?',
+  )
+}
 
 let tile = <Node>(b: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
   let s = shown(ctx)
@@ -93,7 +116,7 @@ let tile = <Node>(b: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
     { class: 'Tile', href: s.link?.(b.entity.eid) },
     h('span', { class: 'Tile_Id' }, s.id(b)),
     ' ',
-    h('span', { class: 'Tile_Title' }, ctx.render?.('Title')),
+    h('span', { class: 'Tile_Title' }, ctx.render?.('Title', { in: 'Tile' })),
     ' ',
     ctx.render?.('Status'),
   )
@@ -188,6 +211,7 @@ let page = <Node>(b: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
 /** The views any entity has. Register a package's own views ahead of these. */
 export let views: Registry = define([
   { view: 'Title', match: true, render: title },
+  { view: 'Title', match: parse('.edge'), render: sentence },
   { view: 'Tile', match: true, render: tile },
   { view: 'Facts', match: true, render: facts },
   { view: 'Comment', match: parse('.comment'), render: comment },

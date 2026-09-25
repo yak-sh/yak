@@ -1,5 +1,6 @@
 import { assertEquals } from '@std/assert'
 import { docDoc } from '@yaks/doc'
+import { edgeDoc, edgeKeywords } from '@yaks/edge/vocab'
 import { views as docViews } from '@yaks/doc/views'
 import { idKeywords } from '@yaks/id'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
@@ -11,9 +12,10 @@ import { loadVocab } from '@yaks/vocab'
 import { define, resolve } from '@yaks/render'
 import { printed, referenced, registry, terminal } from './answer.ts'
 
-let vocab = loadVocab([kernelDoc, docDoc, taskDoc, toolsDoc], [
+let vocab = loadVocab([kernelDoc, edgeDoc, docDoc, taskDoc, toolsDoc], [
   kernelKeywords,
   idKeywords,
+  edgeKeywords,
 ])
 let modules: Record<string, unknown> = {
   '@yaks/doc': { views: docViews },
@@ -81,4 +83,39 @@ Deno.test('a held answer is drawn by a plugin’s terminal views first', async (
   assertEquals(resolve(held, t9, 'Page', vocab), app)
   // A printed answer never reaches a component: it is not text.
   assertEquals(said(t9).includes('Fix the bar'), true)
+})
+
+// `from relation to`, as a stored link: the relation is the component beside
+// `edge`.
+let link = (from: string, relation: string, to: string) => ({
+  entity: { eid: `${from.slice(0, 8)}-${relation}` },
+  edge: { from, to },
+  [relation]: {},
+})
+
+Deno.test('an entity and what links to it prints whole, each link by its relation', () => {
+  let t9eid = t9.entity.eid, t10eid = t10.entity.eid
+  let shown = printed(views, vocab, [
+    t9,
+    link(t10eid, 'contains', t9eid),
+    link(t9eid, 'requires', t10eid),
+    link(t10eid, 'references', t9eid),
+  ] as never, [t10] as never)
+  assertEquals(
+    shown.split('\n\nDetails')[0],
+    'task T-9 open\n\nFix the bar\n\n' +
+      'contains ←\n\n- T-10 Ship it done\n\n' +
+      'requires →\n\n- T-10 Ship it done',
+  )
+})
+
+Deno.test('a link in a list reads as the sentence it states', () => {
+  assertEquals(
+    printed(views, vocab, [
+      link(t10.entity.eid, 'contains', t9.entity.eid),
+      link(t9.entity.eid, 'requires', t10.entity.eid),
+    ] as never, [t9, t10] as never).split('\n')
+      .map((line) => line.replace(/^#\S+ /, '').trimEnd()),
+    ['T-10 contains T-9', 'T-9 requires T-10'],
+  )
 })
