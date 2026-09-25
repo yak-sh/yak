@@ -70,12 +70,6 @@ Deno.test('a package with words exports them at ./vocab, and they load', async (
   assert(said.includes('@yaks/tmux'), said.join(' '))
 })
 
-// The aggregate: `@yaks/harness` is an application whose `./vocab` is the list
-// of everything that application speaks, so it names other packages' documents
-// on purpose and cannot be composed beside them. Every other package's `./vocab`
-// says the words that package owns.
-let AGGREGATE = ['harness']
-
 Deno.test("every package's words load beside every other package's", async () => {
   // A word has one home (packages/README.md). `bin/transition_test.ts` says
   // that of the `vocab.json` files; this says it of the facet a host actually
@@ -89,7 +83,7 @@ Deno.test("every package's words load beside every other package's", async () =>
   let docs: VocabDoc[] = []
   let keywords: Keywords[] = []
   for (let p of packages) {
-    if (!has(p, 'vocab') || AGGREGATE.includes(p.dir)) continue
+    if (!has(p, 'vocab')) continue
     let mod = await import(file(p, 'vocab').href) as {
       docs?: VocabDoc[]
       keywords?: Keywords[]
@@ -182,14 +176,22 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
 
 Deno.test('compose takes every facet of the plugins a config names', async () => {
   // The fleet's own config when the transition has written one, and the
-  // harness otherwise — either way a config file naming packages, read the way
-  // `yak serve` reads it.
+  // harness beside the words it runs over otherwise — either way a config file
+  // naming packages, read the way `yak serve` reads it.
   let path = new URL('etc/yak.json', root)
   let plugins: string[]
   try {
     plugins = JSON.parse(Deno.readTextFileSync(path)).plugins as string[]
   } catch {
-    plugins = ['@yaks/harness']
+    plugins = [
+      '@yaks/kernel',
+      '@yaks/id',
+      '@yaks/edge',
+      '@yaks/doc',
+      '@yaks/task',
+      '@yaks/session',
+      '@yaks/harness',
+    ]
   }
   let host = await compose({ db: ':memory:', plugins, numbers: false })
   try {

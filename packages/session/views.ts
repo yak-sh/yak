@@ -52,23 +52,36 @@ export let entryBody: Renderer['render'] = (b, h, ctx) => {
   )
 }
 
+let line: Renderer['render'] = (b, h, ctx) =>
+  h(
+    'p',
+    null,
+    String(comp(b, ENTRY)!.seq).padStart(3),
+    ' ',
+    (kindOf(b) ?? 'entry').padEnd(9),
+    ' ',
+    entryBody(b, h, ctx),
+  )
+
 /** The transcript views: `Line` for an entry, `Status` for a transcript. The
  * context may carry `names` (model or tool eid → name), `anchor` (reads a
  * provider's anchor off an ask entry), and `entries` (the transcript, for
- * `Status`), `full` (untruncated entry prose for transcript panes). */
+ * `Status`), `full` (untruncated entry prose for transcript panes). In a list
+ * of answers, an entry's `Tile` is its line and a transcript's is its status
+ * as the store computed it. */
 export let views: Registry = define([
+  { view: 'Line', match: parse('.entry'), render: line },
+  { view: 'Tile', match: parse('.entry'), render: line },
   {
-    view: 'Line',
-    match: parse('.entry'),
-    render: (b, h, ctx) =>
+    view: 'Tile',
+    match: parse(`.${SESSION}`),
+    render: (b, h) =>
       h(
         'p',
         null,
-        String(comp(b, ENTRY)!.seq).padStart(3),
-        ' ',
-        (kindOf(b) ?? 'entry').padEnd(9),
-        ' ',
-        entryBody(b, h, ctx),
+        String(comp(b, SESSION)?.id ?? b.entity.eid),
+        ': ',
+        String(comp(b, SESSION)?.status ?? 'unknown'),
       ),
   },
   { view: 'Body', match: parse('.entry'), render: entryBody },

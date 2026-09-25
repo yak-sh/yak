@@ -12,10 +12,22 @@
 // entity reads the same in both. A server names no plugins, so its answers get
 // the last two. A lone entity is shown whole, as its `Page`; several are a
 // `Tile` each, one line apiece.
+//
+// A terminal can hold more than a printout: a plugin's `./tui` exports views
+// that are Preact components of their own — the harness's session, which is
+// the whole interactive app — and those come first when the answer is held.
+// They are never printed, because a component is not text.
 
 import type { Bundle } from '@yaks/graph'
 import { human, short } from '@yaks/id'
-import { define, type Registry } from '@yaks/render'
+import {
+  define,
+  type Registry,
+  type Renderer,
+  resolve,
+  type Selection,
+} from '@yaks/render'
+import type { ComponentRenderer } from '@yaks/preact'
 import { render, tree } from '@yaks/text'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Shown, views as generic } from '@yaks/web/views'
@@ -37,6 +49,26 @@ export let registry = async (
   return define([
     ...found.flatMap((m) => m?.views?.renderers ?? []),
     ...generic.renderers,
+  ])
+}
+
+/** What a terminal draws with: portable views, and components of its own. */
+export type Held = Selection<Renderer | ComponentRenderer>
+
+/** How one plugin's `./tui` becomes a module. */
+export type Tui = (plugin: string) => Promise<{ views?: Held } | null>
+
+/** The views an answer held in the terminal draws with: each plugin's
+ * `./tui`, then {@link registry}'s. */
+export let terminal = async (
+  plugins: string[],
+  load: Views = (plugin) => subpath(plugin, 'views'),
+  held: Tui = (plugin) => subpath<{ views?: Held }>(plugin, 'tui'),
+): Promise<Held> => {
+  let own = await Promise.all(plugins.map(held))
+  return define([
+    ...own.flatMap((m) => m?.views?.renderers ?? []),
+    ...(await registry(plugins, load)).renderers,
   ])
 }
 
@@ -79,21 +111,31 @@ export let printed = (
 }
 
 /** An answer held in the terminal (@yaks/tui) until Ctrl-C. Loaded only when
- * asked for, so a printed answer never pays for a terminal app. */
+ * asked for, so a printed answer never pays for a terminal app. `db` is the
+ * file the answer came from, for a view that keeps reading it. A lone answer
+ * drawn by a component of its own (a plugin's `./tui`) is an app, and has the
+ * whole terminal; anything else scrolls. */
 export let hold = async (
-  views: Registry,
+  views: Held,
   vocab: Vocab,
   answer: Bundle[],
+  db?: string,
 ): Promise<void> => {
   let [{ h }, { render: mount }, { run, Scroll }] = await Promise.all([
     import('preact'),
     import('@yaks/preact'),
     import('@yaks/tui'),
   ])
-  let ctx = shown(vocab, answer, (b, v, c) => mount(views, b, v, vocab, c))
+  let ctx = {
+    ...shown(vocab, answer, (b, v, c) => mount(views, b, v, vocab, c)),
+    db,
+  }
   let view = viewOf(answer)
+  let [lone] = answer
+  let app = answer.length == 1 && 'Render' in
+      (resolve(views, lone, view, vocab, ctx) ?? {})
   await run(() =>
-    h(
+    app ? mount(views, lone, view, vocab, ctx) : h(
       Scroll,
       { id: 'answer', grow: '1' },
       answer.map((b) => h('div', null, mount(views, b, view, vocab, ctx))),
@@ -125,14 +167,16 @@ export let reported = async (
 }
 
 /** An answer shown the way the command asked — held in the terminal under
- * `--tui`, printed otherwise. */
+ * `--tui`, drawn by `held` where the command has terminal views and a file to
+ * read ({@link terminal}), and printed otherwise. */
 export let show = async (
   c: { tui: boolean; out: (line: string) => void },
   views: Registry,
   vocab: Vocab,
   answer: Bundle[],
+  held: { views?: Held; db?: string } = {},
 ): Promise<void> => {
-  if (c.tui) return await hold(views, vocab, answer)
+  if (c.tui) return await hold(held.views ?? views, vocab, answer, held.db)
   let text = printed(views, vocab, answer)
   if (text) c.out(text)
 }

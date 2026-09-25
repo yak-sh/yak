@@ -28,6 +28,93 @@
       "input": {},
       "readOnly": true,
       "title": "List sessions"
+    },
+    "session_new": {
+      "tool": true,
+      "surfaces": [
+        "cli"
+      ],
+      "noun": "session",
+      "verb": "new",
+      "title": "Start a session here",
+      "description": "Start an agent work session on this machine with an instruction, and run it until it settles: the model has answered and asks for nothing more. The session runs here, with this machine's shell, checkouts and sign-ins. Returns the session; `yak session new … --tui` then holds it in the terminal as the harness, to keep working in.",
+      "input": {
+        "prompt": {
+          "type": "string",
+          "description": "what to do"
+        },
+        "effort": {
+          "type": "string",
+          "description": "how hard to think"
+        },
+        "model": {
+          "type": "string",
+          "description": "the model to ask, by name (default gpt-6-astra)"
+        },
+        "provider": {
+          "type": "string",
+          "description": "the backend that serves it: openai or openrouter"
+        }
+      },
+      "options": {
+        "positional": [
+          "prompt"
+        ]
+      },
+      "required": [
+        "prompt"
+      ]
+    },
+    "session_send": {
+      "tool": true,
+      "surfaces": [
+        "cli"
+      ],
+      "noun": "session",
+      "verb": "send",
+      "title": "Say more to a session here",
+      "description": "Add an instruction to an agent work session and run it on this machine until it settles. Returns the session; under `--tui` the terminal holds it as the harness.",
+      "input": {
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "description": "the session; pass its id or registered name"
+        },
+        "text": {
+          "type": "string",
+          "description": "what to say"
+        },
+        "model": {
+          "type": "string",
+          "description": "the model to ask, by name (default gpt-6-astra)"
+        },
+        "provider": {
+          "type": "string",
+          "description": "the backend that serves it: openai or openrouter"
+        }
+      },
+      "required": [
+        "session",
+        "text"
+      ],
+      "options": {
+        "positional": [
+          "session",
+          "text"
+        ]
+      }
+    },
+    "model_list": {
+      "tool": true,
+      "surfaces": [
+        "cli"
+      ],
+      "noun": "model",
+      "verb": "list",
+      "title": "List the models this machine can reach",
+      "description": "Say which OpenAI credential this machine would send (OPENAI_API_KEY, else a Codex sign-in) and list the models its endpoint offers. The credential itself is never shown.",
+      "input": {},
+      "readOnly": true
     }
   }
 }

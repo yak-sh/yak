@@ -1,103 +1,61 @@
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import { argsFor, commandFor, unique } from '@yaks/cli'
-import { loadTools } from '@yaks/graph/tools'
-import { argsOf, type Bundle, namedTool } from '@yaks/graph'
-import { answerOf, runner, toolEid, worded } from '@yaks/tools'
-import { driver } from '@yaks/sqlite/db'
+import { compose } from '@yaks/cli/host'
+import { argsOf, type Bundle, namedTool, offered } from '@yaks/graph'
+import { answerOf, toolEid, worded } from '@yaks/tools'
 import { connect } from '../mcp/harness.ts'
 import { open } from './store.ts'
-import { tools as declared } from './declared.ts'
-import { tools as cliTools } from './cli.ts'
-import { docs, vocab } from './vocab.ts'
-import { rules } from './rules.ts'
-import { runs } from './runs.ts'
 
 let reads = { file: () => '', stdin: () => '' }
 
-Deno.test('the facet subpaths say the harness once, and one declaration reaches both doors', async () => {
-  // Every facet a host takes (@yaks/cli `compose`) is a subpath of the package
-  // — no manifest, no registration, no activation step — so a subsystem
-  // imports only the one it needs.
-  assertEquals(docs.some((d) => d.title == 'harness'), true)
-  // Every declaration the harness speaks, wearing its run — the checks the
-  // packages it composes bring included, since a word it lists has to work.
-  const declarations = loadTools(docs, runs({ vocab }))
-  const h = open(':memory:')
-  // The rules over that graph are `@yaks/harness/rules`, the very ones `open`
-  // built it with: blobs, transcripts, edges, tasks, the portfolio they are
-  // filed in, the programs a session runs, and the secrets it signs in with.
-  assertEquals(
-    rules({ vocab: h.vocab, sql: driver(h.db), vault: h.vault }).map((p) =>
-      p.name
-    ),
-    [
-      '@yaks/blob',
-      '@yaks/session',
+// The harness is one plugin among the packages whose words it runs over: its
+// `./vocab` says only its own, so it composes beside them.
+let host = () =>
+  compose({
+    db: ':memory:',
+    plugins: [
+      '@yaks/kernel',
+      '@yaks/id',
       '@yaks/edge',
+      '@yaks/doc',
       '@yaks/task',
-      '@yaks/project',
-      '@yaks/process',
-      '@yaks/secrets',
+      '@yaks/session',
+      '@yaks/harness',
     ],
-  )
-  await h.g.apply([{ entity: { eid: 'session-one' }, session: { id: 'one' } }])
-  // Nothing calls a tool function: a word typed here is a call in the graph,
-  // and @yaks/tools' runner is what answers it.
-  const r = runner(h.g, { tools: declarations })
-  await r.ensure()
-  const results: unknown[] = []
-  // The same declaration reaches a command line and a transport: @yaks/cli
-  // resolves either word order and reads the line through its input schema.
-  const found = commandFor(declarations, ['session', 'list'])!
-  assertEquals(found.verb, declarations[0])
-  assertEquals(
-    commandFor(declarations, ['list', 'session'])?.verb,
-    declarations[0],
-  )
-  assertEquals(await argsFor(found.verb, found.args, reads), {})
-  results.push(worded(answerOf(
-    await r.call([{
-      entity: { eid: '$call' },
-      call: { to: toolEid(namedTool(found.verb).name), args: {} },
-    }]),
-  )))
-  const client = await connect({
-    graph: h.g,
-    tools: [...declarations],
   })
-  try {
-    const listed = await client.listTools()
-    assertEquals(
-      listed.tools.some((t: { name: string }) => t.name === 'session_list'),
-      true,
-    )
-    const response = await client.callTool({
-      name: 'session_list',
-      arguments: {},
-    })
-    assertEquals(response.isError, undefined)
-    assertEquals(JSON.stringify(response).includes('session-one'), true)
-    assertEquals(JSON.stringify(results).includes('session-one'), true)
-  } finally {
-    await client.close()
-    h.close()
-  }
-})
 
-Deno.test('noun and verb traversal is automatic and collision checked', () => {
-  const c = declared[0]
-  assertEquals(namedTool(c).name, 'session_list')
-  assertEquals(commandFor([c], ['session', 'list', 'extra'])?.args, ['extra'])
-  assertEquals(commandFor([c], ['list', 'session'])?.verb, c)
-  assertEquals(commandFor([c], ['list']), undefined)
-  assertThrows(() => unique([c, c]), Error, 'two tools answer to')
-  assertThrows(
-    () => unique([c, { ...c, noun: 'list', verb: 'session' }]),
-    Error,
-    'two tools answer to',
-  )
-  // And every word the command itself carries is reachable and unambiguous.
-  unique(cliTools)
+Deno.test('the harness composes as a plugin, and its words reach a command line and MCP', async () => {
+  let h = await host()
+  try {
+    let names = h.tools.map((t) => t.name)
+    for (let name of ['session_list', 'session_new', 'session_send']) {
+      assertEquals(names.includes(name), true, name)
+    }
+    // Running a transcript here, or reading this machine's credential, is a
+    // command line's to ask; listing sessions is anybody's.
+    let cli = h.tools.filter(offered('cli')).map((t) => t.name)
+    let mcp = h.tools.filter(offered('mcp')).map((t) => t.name)
+    assertEquals(cli.includes('session_new'), true)
+    assertEquals(mcp.includes('session_new'), false)
+    assertEquals(mcp.includes('model_list'), false)
+    assertEquals(mcp.includes('session_list'), true)
+    unique(h.tools)
+
+    await h.graph.apply([{ entity: { eid: 'one' }, session: { id: 'one' } }])
+    await h.runner.ensure()
+    let found = commandFor(h.tools, ['session', 'list'])!
+    assertEquals(commandFor(h.tools, ['list', 'session'])?.verb, found.verb)
+    assertEquals(await argsFor(found.verb, found.args, reads), {})
+    let said = worded(answerOf(
+      await h.runner.call([{
+        entity: { eid: '$call' },
+        call: { to: toolEid(namedTool(found.verb).name), args: {} },
+      }]),
+    ))
+    assertEquals(said.includes('one'), true)
+  } finally {
+    await h.close()
+  }
 })
 
 Deno.test('JSON Schema tool uses identical metadata and constraints through MCP and provider adapter', async () => {

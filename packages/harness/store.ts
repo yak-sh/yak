@@ -7,13 +7,13 @@ import { home } from './paths.ts'
 // `:memory:` for a test), so an agent runs with the tasks daemon down and the
 // same rows can move into the fleet's graph later.
 //
-// What the harness is made of is declared once, in ./vocab.ts, ./rules.ts and
-// ./runs.ts: the vocabulary documents it loads, the properties it computes
-// rather than stores, and the plugins that decide what a write means. This file
-// imports those same three for the harness's own SQLite file, and a server
-// composing the harness (@yaks/cli `compose`) imports them for a served
-// database. What is here and not there is startup: the migrations an older file
-// needs, and the reconciliation an abnormal shutdown leaves behind.
+// What the harness is made of is declared in ./vocab.ts and ./rules.ts: the
+// vocabulary documents it loads, the properties it computes rather than
+// stores, and the plugins that decide what a write means. A `yak` config lists
+// the same packages as plugins, and the harness's tools run over that host
+// instead (local.ts `hosted`). What is here and not there is startup: the
+// migrations an older file needs, and the reconciliation an abnormal shutdown
+// leaves behind.
 //
 // That reconciliation is `reapLeases`, which frees every lease whose holder is
 // not a session in this graph. What a half-finished step leaves behind is
@@ -28,9 +28,10 @@ import { reapLeases } from '@yaks/session'
 import { migrations, storage, type Store } from '@yaks/sqlite'
 import { type Vocab } from '@yaks/vocab'
 import { vaultOf } from '@yaks/cli'
+import { dbOf, type Host } from '@yaks/cli/host'
 import { sealing, type Vault } from '@yaks/secrets'
 
-import { derived } from './vocab.ts'
+import { computed } from './vocab.ts'
 import { named, renamed } from './named.ts'
 import { rules } from './rules.ts'
 import { vocab } from './vocab.ts'
@@ -46,7 +47,6 @@ export let dbPath = (
  * the effects registry the daemon registers its handlers on. */
 export type Harness = {
   path: string
-  db: Database
   store: Store
   g: Graph
   fx: Effects
@@ -60,6 +60,32 @@ export type Harness = {
   close: () => void
 }
 
+/** Where the artifacts of the graph at `path` keep their bytes: the `images`
+ * directory beside it, or memory for a graph in memory. */
+export let artifactsAt = (path: string): Blobs =>
+  path == ':memory:'
+    ? memoryBlobs()
+    : fileBlobs(path.slice(0, path.lastIndexOf('/') + 1) + 'images')
+
+/** The graph a `yak` config composed (@yaks/cli `compose`), as a harness runs
+ * over it: its store, graph, effects and vault are the host's, and closing the
+ * harness leaves them open, since the command that composed the host closes
+ * it. */
+export let hosted = (host: Host): Harness => {
+  let path = dbOf(host.config)
+  return {
+    path,
+    store: host.storage,
+    g: host.graph,
+    fx: host.fx,
+    vocab: host.vocab,
+    vault: host.vault,
+    artifacts: artifactsAt(path),
+    migrations: migrations(host.sql),
+    close: () => {},
+  }
+}
+
 /**
  * Open (or create) the harness graph and reconcile it.
  *
@@ -70,7 +96,9 @@ export type Harness = {
  * h.close()
  * ```
  */
-export let open = (path: string = dbPath()): Harness => {
+export let open = (
+  path: string = dbPath(),
+): Harness & { db: Database } => {
   if (path != ':memory:') {
     let dir = path.slice(0, path.lastIndexOf('/'))
     if (dir) Deno.mkdirSync(dir, { recursive: true })
@@ -96,7 +124,7 @@ export let open = (path: string = dbPath()): Harness => {
   let store = storage(sql, vocab, {
     // Agent sessions, TUI microtasks and transcript artifacts use eids.
     number: false,
-    derived: derived(vocab),
+    derived: computed(vocab),
   })
   try {
     renamed(sql, vocab)
@@ -241,9 +269,7 @@ export let open = (path: string = dbPath()): Harness => {
     fx,
     vocab,
     vault,
-    artifacts: path == ':memory:'
-      ? memoryBlobs()
-      : fileBlobs(path.slice(0, path.lastIndexOf('/') + 1) + 'images'),
+    artifacts: artifactsAt(path),
     migrations: migration,
     close: () => db.close(),
   }

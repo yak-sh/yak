@@ -399,12 +399,12 @@ grouped approximately by function, **not** by dependency order.
   `yak.json`.
 
 - **[@yaks/harness](./harness)** — A local agent application combining SQLite,
-  model execution, shell tools, graph tools and a terminal interface. Its `new`,
-  `send`, `ls`, `show`, `tasks` and `models` commands use the flat @yaks/cli
-  API. The default TUI backend runs in a Web Worker. Blob text is stored in
-  SQLite; artifacts, private authorization state and draft recovery files also
-  use the filesystem. It starts no HTTP server by default and does not require
-  synchronization.
+  model execution, shell tools, graph tools and a terminal interface. As a `yak`
+  plugin, its verbs are tools (`session new`, `session send`, `model list`) and
+  its terminal app is how `--tui` draws a session (`./tui`). The TUI backend
+  runs in a Web Worker. Blob text is stored in SQLite; artifacts, private
+  authorization state and draft recovery files also use the filesystem. It
+  starts no HTTP server by default and does not require synchronization.
 
 - **[@yaks/workerd](./workerd)** — that handler as a Cloudflare Worker: the
   `WebSocketPair` upgrade that `/ws` needs, the `fetch` entrypoint a Worker
@@ -578,10 +578,13 @@ own, so its `./tools` export points at `./runs.ts`).
 two subpaths from every package, so neither may touch storage, SQL or a server
 runtime, and `deno task check:browser` type-checks both with only the web
 platform's types in scope. This separation lets `@yaks/process/vocab` describe a
-running program inside a page that could never start one.
-`packages/facets_test.ts` walks the whole set: every package with components
-exports them, every subpath has the shape a program expects, and `compose` over
-the fleet's own config loads all of them.
+running program inside a page that could never start one. A terminal has a half
+of its own: `./tui` exports views that are Preact components, which a `yak`
+command holding an answer (`--tui`) draws with ahead of `./views` (@yaks/cli
+`terminal`); `@yaks/harness/tui` is the terminal app. `packages/facets_test.ts`
+walks the whole set: every package with components exports them, every subpath
+has the shape a program expects, and `compose` over the fleet's own config loads
+all of them.
 
 ### Cases that do not split cleanly
 
@@ -668,13 +671,6 @@ distinguish implemented behavior from remaining proposals.
 - **`@yaks/render`'s `vocab.json` describes a property schema**, not a set of
   domain components, so it is the one vocabulary document with no `./vocab`
   subpath, and `packages/facets_test.ts` lists it as an exception.
-- **`@yaks/harness`'s `./vocab` is an application's list** of packages, rather
-  than the components that package owns. It is a program shaped like a plugin,
-  so it cannot be loaded alongside the packages it lists, and
-  `packages/facets_test.ts` records it as the other exception. It is a list
-  rather than a copy: every document in it is another package's own `./vocab`,
-  referenced once, so each still loads alongside every other. What it should
-  really be is a config file (`yak serve`), which is T-37580.
 
 ## How they compose
 

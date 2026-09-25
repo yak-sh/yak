@@ -46,7 +46,7 @@ export {
   useKeys,
   useMetric,
 } from './screen.ts'
-export { quit, run } from './run.ts'
+export { quit, run, useShutdown } from './run.ts'
 export { Scroll, scrolled, type View } from './Scroll.ts'
 export { bol, type Edit, edit, eol, spot, Textarea } from './Textarea.ts'
 export { Frame, type Panel } from './Frame.ts'

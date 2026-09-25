@@ -4,11 +4,12 @@ The default TUI separates terminal rendering from the database and agent
 runtime. The inline `local()` API remains available for diagnostics:
 
 ```sh
-HARNESS_DB=/path/to/candidate.db deno task harness
+yak --config candidate.json session new '…' --tui
 ```
 
-Use a separate candidate database. Changing working directory does not isolate
-storage. The worker opens the configured database and runs normal migrations.
+Use a config naming a separate candidate database. Changing working directory
+does not isolate storage. The worker opens that config's database and runs
+normal migrations.
 
 ## Ownership
 

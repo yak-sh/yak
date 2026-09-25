@@ -32,7 +32,14 @@ slow(
       `${dir}/yak.json`,
       JSON.stringify({
         db: 'graph.db',
-        plugins: ['@yaks/api', '@yaks/mcp', '@yaks/harness'],
+        plugins: [
+          '@yaks/api',
+          '@yaks/mcp',
+          '@yaks/kernel',
+          '@yaks/id',
+          '@yaks/session',
+          '@yaks/harness',
+        ],
         numbers: false,
         port,
       }),

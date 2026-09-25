@@ -14,13 +14,23 @@ import { answerOf, checks, toolEid, worded } from '@yaks/tools'
 import type { Bundle } from '@yaks/graph'
 import { compose, type Served } from './host.ts'
 
-// The harness plugin speaks the session, project, task and doc words and
-// carries their runs; @yaks/sqlite adds the two checks that can only be asked
-// of the file.
+// The session, project, task and doc words and their runs, and this process
+// as an entity; @yaks/sqlite adds the two checks that can only be asked of the
+// file.
 let host = () =>
   compose({
     db: ':memory:',
-    plugins: ['@yaks/harness', '@yaks/sqlite'],
+    plugins: [
+      '@yaks/kernel',
+      '@yaks/id',
+      '@yaks/edge',
+      '@yaks/doc',
+      '@yaks/task',
+      '@yaks/project',
+      '@yaks/session',
+      '@yaks/process',
+      '@yaks/sqlite',
+    ],
     // A person reads these reports and types the ids back, so this host is
     // one that opts into the human number line.
     numbers: true,

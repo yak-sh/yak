@@ -320,15 +320,15 @@ written in either order, such as `yak task list` or `yak list task`. The usage
 page groups verbs under their noun. `yak graph`, `yak graph --help`, and
 `yak help graph` print the commands in the `graph` group.
 
-| Global flag       | Meaning                                                                |
-| ----------------- | ---------------------------------------------------------------------- |
-| `--config <path>` | Open the graph described by a local config.                            |
-| `--host <host>`   | Call a remote MCP server.                                              |
-| `--json`          | Print structured results as JSON.                                      |
-| `--tui`           | Hold the answer in the terminal (@yaks/tui) until Ctrl-C.              |
-| `--timing`        | Print response timing to stderr. `$YAKS_TIMING=1` enables it globally. |
-| `--no-duties`     | Take no lease and run no duties (config `duties: false`).              |
-| `--help`, `-h`    | Print general or command-specific help.                                |
+| Global flag       | Meaning                                                                  |
+| ----------------- | ------------------------------------------------------------------------ |
+| `--config <path>` | Open the graph described by a local config.                              |
+| `--host <host>`   | Call a remote MCP server.                                                |
+| `--json`          | Print structured results as JSON.                                        |
+| `--tui`           | Hold the answer in the terminal until Ctrl-C, drawn by plugins' `./tui`. |
+| `--timing`        | Print response timing to stderr. `$YAKS_TIMING=1` enables it globally.   |
+| `--no-duties`     | Take no lease and run no duties (config `duties: false`).                |
+| `--help`, `-h`    | Print general or command-specific help.                                  |
 
 An argument value written as `@path` is read from that file; `-` reads from
 stdin. `yak apply` accepts a JSON array or newline-delimited JSON. For streamed

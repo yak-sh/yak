@@ -8,7 +8,8 @@ import { views as taskViews } from '@yaks/task/views'
 import { toolsDoc } from '@yaks/tools'
 import { views as toolViews } from '@yaks/tools/views'
 import { loadVocab } from '@yaks/vocab'
-import { printed, registry } from './answer.ts'
+import { define, resolve } from '@yaks/render'
+import { printed, registry, terminal } from './answer.ts'
 
 let vocab = loadVocab([kernelDoc, docDoc, taskDoc, toolsDoc], [
   kernelKeywords,
@@ -54,4 +55,16 @@ Deno.test('a lone entity is shown whole', () => {
     said(t10),
     'task T-10 done\n\nShip it\n\nDetails\n\ntask: ✓\ncompleted: ✓',
   )
+})
+
+Deno.test('a held answer is drawn by a plugin’s terminal views first', async () => {
+  let app = { view: 'Page', match: true as const, Render: () => null }
+  let held = await terminal(
+    ['@yaks/task'],
+    (p) => Promise.resolve(modules[p] ?? null),
+    (p) => Promise.resolve(p == '@yaks/task' ? { views: define([app]) } : null),
+  )
+  assertEquals(resolve(held, t9, 'Page', vocab), app)
+  // A printed answer never reaches a component: it is not text.
+  assertEquals(said(t9).includes('Fix the bar'), true)
 })

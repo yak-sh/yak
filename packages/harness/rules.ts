@@ -1,7 +1,6 @@
-// The graph plugins that decide what a write means in a harness graph,
-// exported as `@yaks/harness/rules` (and imported by @yaks/cli's `compose`).
-// It is the same list `store.ts` builds the harness's own SQLite file with: one
-// list, used by the standalone harness and by a server alike.
+// The graph plugins that decide what a write means in a harness graph that
+// `store.ts` opens on its own. Each is its own package's `./rules` facet too,
+// which is how a `yak` config composing those packages gets them.
 //
 // This is the part that needs a database — it creates the blob tables through
 // the caller's connection — which is why it is not in `./vocab`: a browser

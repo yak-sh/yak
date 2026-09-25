@@ -10,6 +10,7 @@ import { setClipboard } from './visual.ts'
  */
 
 import { type ComponentType, h, render } from 'preact'
+import { useEffect } from 'preact/hooks'
 import { install, onPaint, touch } from './dom.ts'
 import { ansiBackend, type Backend } from './paint.ts'
 import { clearMouse, routeMouse } from './mouse.ts'
@@ -20,6 +21,23 @@ import { clear, measured, press, size } from './screen.ts'
 import type { Sheet } from './theme.ts'
 
 let stop = { fn: () => {} }
+
+type Hold = { drain: () => Promise<unknown>; force?: () => void }
+// What the mounted components are still finishing, beside what `run` was
+// handed: an app that is one view among others holds the exit the same way.
+let holds = new Set<Hold>()
+
+/** Hold the exit open while this component finishes: the first interrupt
+ * waits for `drain`, a second calls `force`. Released when it unmounts. */
+export let useShutdown = (
+  drain: () => Promise<unknown>,
+  force?: () => void,
+): void =>
+  useEffect(() => {
+    let hold = { drain, force }
+    holds.add(hold)
+    return () => void holds.delete(hold)
+  }, [drain, force])
 
 /** Ask the running app to exit; the terminal is restored on the way out. */
 export let quit = (): void => stop.fn()
@@ -43,14 +61,24 @@ export let run = async (
   let backend = opts.backend ??
     ansiBackend({
       sheet: opts.sheet,
-      graphics: opts.graphics,
-      tmux: opts.tmux,
+      // What this terminal can do, unless the caller says: inside tmux, and
+      // whether it draws kitty graphics (HARNESS_GRAPHICS=kitty).
+      graphics: opts.graphics ??
+        (Deno.env.get('HARNESS_GRAPHICS') == 'kitty' ? 'kitty' : 'none'),
+      tmux: opts.tmux ?? !!Deno.env.get('TMUX'),
     })
   let screen = install()
   let host = screen.root as unknown as Parameters<typeof render>[1]
   let cancelRead: (() => Promise<void>) | undefined
   let done = false
-  let quitting = shutdown({ drain: opts.shutdown, force: opts.force })
+  let quitting = shutdown({
+    drain: () =>
+      Promise.all([opts.shutdown?.(), ...[...holds].map((d) => d.drain())]),
+    force: () => {
+      opts.force?.()
+      for (let d of holds) d.force?.()
+    },
+  })
   let interrupt = () => quitting.interrupt()
   let escapeTimer: ReturnType<typeof setTimeout> | undefined
   stop.fn = () => done = true

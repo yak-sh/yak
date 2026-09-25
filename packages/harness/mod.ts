@@ -14,7 +14,7 @@
  *                 operations a caller needs                   (./agent.ts)
  * local()         agent() here: the SQLite file, the shell, a checkout per
  *                 child, MCP servers, the terminal       (@yaks/harness/local)
- * tools           the commands, over @yaks/cli                   (./cli.ts)
+ * tools           its verbs, as `yak` tools                      (./runs.ts)
  * ```
  *
  * This door is the runner alone, and type-checks with only the web platform in
@@ -29,9 +29,9 @@
  * for (let e of await a.transcript(s)) console.log(a.line(e))
  * ```
  *
- * The command-line program is the other export
- * (`deno run -A jsr:@yaks/harness/bin`): `new`, `send`, `ls`, `show`,
- * `models`.
+ * On a command line the harness is a `yak` plugin: `yak session new`,
+ * `yak session send` and `yak model list` are its tools (./runs.ts), and
+ * `--tui` draws a session as its terminal app (./view.ts).
  *
  * @module
  */

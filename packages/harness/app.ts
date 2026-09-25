@@ -22,7 +22,6 @@ import {
   copyText,
   Frame,
   metrics,
-  run,
   Scroll,
   size,
   Textarea,
@@ -696,51 +695,6 @@ let Draft = (
     active: (ui.keyboard.value[0].keyboard as Comp).mode == 'INSERT',
     submit,
   })
-
-/** No-verb entry. The worker owns SQLite while the terminal is open. */
-export let tui = async (): Promise<void> => {
-  const { remote } = await import('./remote.ts')
-  const { openDrafts } = await import('./draft_vault.ts')
-  const drafts = await openDrafts()
-  const backend = await remote({ cwd: Deno.cwd() })
-    .catch(async (error) => {
-      await drafts.close()
-      throw error
-    })
-  const ui = drafts.ui
-  try {
-    await backend.resume()
-    await run(
-      () =>
-        h(App, {
-          agent: backend.agent,
-          subscribe: backend.subscribe,
-          frontend: drafts.ui,
-        }),
-      {
-        graphics: Deno.env.get('HARNESS_GRAPHICS') == 'kitty'
-          ? 'kitty'
-          : 'none',
-        tmux: !!Deno.env.get('TMUX'),
-        shutdown: () => {
-          ui.patch({
-            shuttingDown: true,
-            error:
-              'Shutting down—waiting for active operations; Ctrl+C again to force.',
-          })
-          return backend.close({ timeout: null })
-        },
-        force: backend.force,
-      },
-    )
-  } finally {
-    try {
-      await backend.close()
-    } finally {
-      await drafts.close()
-    }
-  }
-}
 
 /** Explicit bounded source inspection, separate from rendered cursor selection. */
 const EntryDetail = ({ ui, agent }: { ui: Frontend; agent: UIAgent }) => {

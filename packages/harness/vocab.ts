@@ -1,9 +1,12 @@
-// The vocabulary the harness uses, both as separate documents and as one
-// loaded vocabulary, exported as `@yaks/harness/vocab`.
+// The harness's words, exported as `@yaks/harness/vocab`: `docs` is what a host
+// composing the harness as one plugin among others (@yaks/cli `compose`) takes
+// from it — the harness's own components and tools, and nothing another
+// package says.
 //
-// The list is here and nowhere else — a server composing the harness (@yaks/cli
-// `compose`) imports it through that subpath, and `store.ts` loads it for the
-// harness's own SQLite file — so a component added here is available to both.
+// The rest of this file is the harness as an application: every document a
+// harness graph is made of, loaded into one vocabulary for the SQLite file
+// `store.ts` opens on its own. A `yak` config lists the same packages as
+// plugins instead.
 //
 // Every document is imported from another package's own `./vocab` subpath,
 // never from its main module: `@yaks/process`'s mod.ts starts child processes,
@@ -43,6 +46,9 @@ const { home, ...core } = doc.$defs
 export let workspaceDoc: VocabDoc = { title: 'workspace', $defs: { home } }
 export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
 
+/** The harness's own words: the `home` a session works from, and its tools. */
+export let docs: VocabDoc[] = [harnessDoc, workspaceDoc]
+
 /** Every vocabulary document the harness is made of: the components a
  * transcript is made of (@yaks/session), what it asks for and what answers
  * (@yaks/tools, @yaks/context), what serves it (@yaks/model, @yaks/openai),
@@ -61,7 +67,7 @@ export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
  * component has exactly one home: no document here redeclares another's
  * components, so any of them also loads alongside this one
  * (`packages/facets_test.ts`). */
-export let docs: VocabDoc[] = [
+export let made: VocabDoc[] = [
   spineDoc,
   idDoc,
   marksDoc,
@@ -86,11 +92,13 @@ export let docs: VocabDoc[] = [
   provisionalDoc,
 ]
 
-/** The JSON Schema keywords those documents use. */
-export let keywords: Keywords[] = [edgeKeywords, blobKeywords, idKeywords]
-
-/** Every one of those documents, loaded into one vocabulary. */
-export let vocab: Vocab = loadVocab(docs, keywords)
+/** Every one of those documents, loaded into one vocabulary, with the JSON
+ * Schema keywords they use. */
+export let vocab: Vocab = loadVocab(made, [
+  edgeKeywords,
+  blobKeywords,
+  idKeywords,
+] as Keywords[])
 
 /** The properties a harness graph computes rather than stores: a transcript's
  * status and a task's — both from @yaks/session, since the claim this graph
@@ -98,7 +106,7 @@ export let vocab: Vocab = loadVocab(docs, keywords)
  * text lives in the blob table. Every part of this comes from another package's
  * `./vocab` subpath, so the harness's vocabulary loads in a browser tab as
  * readily as in the daemon. */
-export let derived = (vocab: Vocab): Derived => ({
+export let computed = (vocab: Vocab): Derived => ({
   ...sessionDerived(),
   ...blobRead(vocab),
 })

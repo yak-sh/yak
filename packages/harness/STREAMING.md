@@ -1,7 +1,7 @@
 # Streamed responses
 
 Response streaming is enabled by default in both `agent` and the worker-backed
-`remote` frontend. Disable it with `HARNESS_STREAM=0 deno task harness`, or pass
+`remote` frontend. Disable it with `HARNESS_STREAM=0 yak session new …`, or pass
 `streaming: false` (also accepted as `stream: false`) to `agent` / `remote`.
 Explicit programmatic configuration overrides the environment; `streaming` wins
 if both option names are supplied. `HARNESS_STREAM=1` remains supported.

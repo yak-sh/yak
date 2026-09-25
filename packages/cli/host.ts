@@ -37,7 +37,7 @@
  * ```ts
  * import { compose } from '@yaks/cli/host'
  *
- * // let host = await compose({ db: 'graph.db', plugins: ['@yaks/harness/plugin'] })
+ * // let host = await compose({ db: 'graph.db', plugins: ['@yaks/session', '@yaks/harness'] })
  * // Deno.serve(host.handler)
  * ```
  *
@@ -132,6 +132,9 @@ export type Host = {
    * text — so a plugin reading SQL directly reads what the store reads */
   derived: Derived
   graph: Graph
+  /** the post-commit effect registry the plugins register on — for a plugin
+   * that watches a component only while one of its tools runs */
+  fx: Effects
   /** every route of this host as one request handler — built by the listed
    * plugin that hosts routes ({@link RoutesFacet.handler}, @yaks/api), and
    * absent where the config named no such plugin. Whether any process listens
@@ -326,8 +329,6 @@ export let facet: Load = (plugin, name) => subpath(plugin, name)
 /** An assembled host: everything a plugin factory was given, plus what only
  * the caller of {@link compose} needs. */
 export type Served = Host & {
-  /** the post-commit effect registry the plugins registered on */
-  fx: Effects
   /** close the graph: every lease this process holds released and its `exit`
    * stamped — with the code it is given, or with none where nobody knows how
    * it ended. Await it when the process is about to end, or that last write
@@ -335,11 +336,11 @@ export type Served = Host & {
   close: (code?: number) => void | Promise<void>
 }
 
-// The database a config names. `DB_PATH` is the other way to give it, for a
-// service file that would rather set it in the environment. Neither has a
-// default, because the path anybody would pick as one is somebody's live
-// graph.
-let dbOf = (config: Config): string => {
+/** The database a config names. `DB_PATH` is the other way to give it, for a
+ * service file that would rather set it in the environment. Neither has a
+ * default, because the path anybody would pick as one is somebody's live
+ * graph. */
+export let dbOf = (config: Config): string => {
   let db = config.db ?? Deno.env.get('DB_PATH')
   if (!db) {
     throw new Error(
@@ -556,6 +557,7 @@ export let compose = async (
     let made: NamedTool[] | undefined
     let ranked: Search | undefined
     let calls: Runner | undefined
+    let watching: Effects | undefined
     let doing: ((signal?: AbortSignal) => Promise<void>) | undefined
     let stopping = new AbortController()
     // Who is calling is settled before anything is built: a plugin's route
@@ -596,6 +598,10 @@ export let compose = async (
       get search(): Search | undefined {
         return ranked
       },
+      get fx(): Effects {
+        if (!watching) throw new Error('the effects are not built yet')
+        return watching
+      },
       get runner(): Runner {
         if (!calls) throw new Error('the tool runner is not built yet')
         return calls
@@ -634,7 +640,7 @@ export let compose = async (
       : undefined
     // An effect writes through the graph's own `apply()`, trusted: what it
     // writes comes from the host, never from a client.
-    let fx = effects(vocab, {
+    let fx = watching = effects(vocab, {
       write: (b) => host.graph.apply(b, { trusted: true }),
       ...(log ? { around: log.around } : {}),
     })

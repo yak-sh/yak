@@ -1,13 +1,14 @@
 # @yaks/harness
 
 An agent runner over a graph, and the host that runs it on this machine with
-SQLite persistence, command-line tools and a terminal interface. The runner
-composes `@yaks/session` for model execution over graph-backed task and
-transcript storage, and names no machine: it runs on a box or in a Cloudflare
-Worker. The local host adds `@yaks/process` for running commands on this
-machine, a Git checkout per delegated child, MCP servers, and the `~/.yak`
-files. No server is required. Model calls may use an external provider; shell
-tools run on this machine and are not sandboxed.
+SQLite persistence and a terminal interface. It is a `yak` plugin: its verbs are
+tools the `yak` command runs, and its terminal app is how `yak --tui` draws a
+session. The runner composes `@yaks/session` for model execution over
+graph-backed task and transcript storage, and names no machine: it runs on a box
+or in a Cloudflare Worker. The local host adds `@yaks/process` for running
+commands on this machine, a Git checkout per delegated child, MCP servers, and
+the `~/.yak` files. No server is required. Model calls may use an external
+provider; shell tools run on this machine and are not sandboxed.
 
 - `agent()` puts the session daemon on a graph and exposes session methods.
   Whatever touches a machine is an option its host lends: tools, remote tools,
@@ -16,10 +17,12 @@ tools run on this machine and are not sandboxed.
 - `local()` is `agent()` here: it opens storage, lends the shell, checkouts,
   instruction files, images, MCP and the OpenRouter sign-in, and adds the
   terminal's entry rendering.
-- `open()` creates or opens storage and registers vocabulary and plugins.
+- `open()` creates or opens storage and registers vocabulary and plugins;
+  `hosted()` is the same handle over a graph a `yak` config composed.
 - `harnessTools()` combines shell, delegation and graph tools.
-- `@yaks/harness/vocab`, `/rules`, and `/tools` expose schemas, graph rules, and
-  tool implementations for `@yaks/cli` composition.
+- `@yaks/harness/vocab` and `/tools` are its facets as a plugin (@yaks/cli
+  `compose`): its own words and the functions behind its tools. `/tui` is its
+  terminal view.
 
 The graph stores sessions, transcript entries, tasks, process records, and
 configuration in SQLite. Text bodies use blob tables in that database; binary
@@ -37,36 +40,35 @@ input.
 | --------------------- | ---------------------------------------------------------------------------------------- |
 | `@yaks/harness`       | `agent`, `seed`, `sessionTitle`, `titleOf`, and their types; web platform only           |
 | `@yaks/harness/local` | `local`, `open`, `dbPath`, `harnessTools`, `graphTools`, `parametersOf`, and their types |
-| `@yaks/harness/tui`   | `App`, `tui`, `changes`, `panels`, and their types                                       |
-| `@yaks/harness/cli`   | CLI `tools` and `own`                                                                    |
-| `@yaks/harness/bin`   | Command-line entry point                                                                 |
-| `@yaks/harness/vocab` | Vocabulary documents, `vocab`, schema `keywords`, and computed properties via `derived`  |
-| `@yaks/harness/rules` | `rules({vocab, sql, vault})`, the graph plugins used by the harness                      |
-| `@yaks/harness/tools` | `runs(host)`, implementations of the declared graph tools                                |
+| `@yaks/harness/tui`   | `views`: a lone session or entry, drawn as the terminal app                              |
+| `@yaks/harness/vocab` | `docs`, the harness's own words; `made` and `vocab`, everything a harness graph loads    |
+| `@yaks/harness/tools` | `runs(host)`, the functions behind the tools `vocab.json` declares                       |
 
 ## Use
 
-Run these commands from the repository root with Deno installed:
+List `@yaks/harness` among a `yak` config's plugins, beside the packages whose
+words it runs over (`@yaks/session`, `@yaks/openrouter`, `@yaks/mcp-client`,
+`@yaks/connections` and the rest of what `made` in `vocab.ts` lists). Then:
 
 ```sh
-deno task harness
+yak session new 'reply with the word pong'
+yak session send <session> 'and again'
+yak session list
+yak session peek <session>
+yak task list
+yak model list
 ```
 
-`deno task harness` with no verb opens the terminal UI. The transcript scrolls
-and word-wraps beside the Sessions, Tasks, and Context usage panels. Enter
-starts a session (or sends to the selected one); Shift+Enter inserts a newline.
-Ctrl+N / Ctrl+P or Alt+Down / Alt+Up select root sessions, Ctrl+O selects a new
-one, PgUp / PgDn scroll, and Ctrl+C quits. Shift+Enter needs a terminal
-supporting kitty keyboard sequences (Alt+Enter also inserts a newline).
-
-```sh
-deno task harness new 'reply with the word pong'
-deno task harness ls
-deno task harness show <session>
-deno task harness send <session> 'and again'
-deno task harness tasks
-deno task harness models
-```
+`session new` and `session send` run the transcript here until it settles and
+answer with the entry it settled on, so a command line prints the reply. With
+`--tui` the answer is held as the terminal app, selected on that session:
+`yak session new '…' --tui`, or `yak session list --tui` where the graph holds
+one session. The transcript scrolls and word-wraps beside the Sessions, Tasks,
+and Context usage panels. Enter starts a session (or sends to the selected one);
+Shift+Enter inserts a newline. Ctrl+N / Ctrl+P or Alt+Down / Alt+Up select root
+sessions, Ctrl+O selects a new one, PgUp / PgDn scroll, and Ctrl+C quits.
+Shift+Enter needs a terminal supporting kitty keyboard sequences (Alt+Enter also
+inserts a newline).
 
 `$HARNESS_HOME` moves harness state without changing `HOME`: the defaults are
 `$HARNESS_HOME/yak.db` and checkouts for children assigned tasks under
@@ -550,7 +552,7 @@ implemented.
 For example, with `OPENAI_API_KEY` configured:
 
 ```sh
-deno task harness new --model gpt-4.1 'Generate an image of a small garden'
+yak session new --model gpt-4.1 'Generate an image of a small garden'
 ```
 
 This is a paid provider operation, not a test command. No live generation is
@@ -722,21 +724,21 @@ compatibility check when an older binary first opens the file.
 
 ## The harness as a plugin module
 
-The harness exposes separate sub-module exports for composition:
-`@yaks/harness/vocab` supplies schema documents and computed properties,
-`@yaks/harness/rules` supplies graph plugins, and `@yaks/harness/tools` supplies
-tool implementations. `store.ts` uses the same definitions for its SQLite file
-that `@yaks/cli`'s `compose` uses for a database exposed by a server. The
-configured server can expose these graph operations over HTTP; importing these
-modules does not start the session daemon, open a database, or start a server.
+A `yak` config lists `@yaks/harness` as one plugin among the packages it runs
+over, and `@yaks/cli`'s `compose` takes two facets from it: `/vocab`, whose
+`docs` are the harness's own words (`home` and its tools), and `/tools`, the
+functions behind them. Every other word a harness graph speaks is its own
+package's plugin. `store.ts` still opens a harness graph on its own, loading
+`made`, the list of those packages' documents; the terminal app's worker opens
+the graph that way. Importing the facets does not start the session daemon, open
+a database, or start a server.
 
-The executable accepts `session list` and `list session`, returning session
-bundles as JSON. The same definition is exposed as MCP `session_list` through
-the MCP adapter. Both word orders on the command line derive from the same Tool
-noun/verb fields, without alias declarations. `bin.ts` passes `@yaks/cli`'s
-`cli()` one flat list — the graph's tools, then the harness's own — and there is
-no plugin registration in between. See
-[the command-line entry point and the export shape](../cli/README.md).
+`session_new`, `session_send` and `model_list` are offered on a command line
+only (`surfaces`), because they run on the machine that typed them.
+`session_list` is offered everywhere. Both word orders (`session list`,
+`list
+session`) derive from the same noun and verb, without alias declarations.
+See [the command-line entry point and the export shape](../cli/README.md).
 
 Mouse clicks select session rows, **New session**, and task rows in the sidebar.
 A claimed task opens its worker session; an unclaimed task selects only the row.

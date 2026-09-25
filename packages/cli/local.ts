@@ -22,10 +22,10 @@
 
 import { offered } from '@yaks/graph'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools'
-import { registry, show } from './answer.ts'
+import { registry, show, terminal } from './answer.ts'
 import { read, used } from './config.ts'
 import type { Command, Ctx } from './run.ts'
-import { compose, type Served } from './host.ts'
+import { compose, dbOf, type Served } from './host.ts'
 
 // One graph per config path, for the life of the process: listing the tools
 // and running one use the same assembled graph, and opening the file twice
@@ -76,9 +76,9 @@ export let close = async (code?: number): Promise<void> => {
 export let commands = async (c: Ctx): Promise<Command[]> => {
   let host = await opened(c.config!, c.duties)
   // The views are imported when an answer is first drawn, never to list.
+  let plugins = () => (read(c.config!).plugins ?? []).map(used)
   let views: ReturnType<typeof registry> | undefined
-  let drawn = () =>
-    views ??= registry((read(c.config!).plugins ?? []).map(used))
+  let drawn = () => views ??= registry(plugins())
   return host.tools.filter(offered('cli')).map((declared) => ({
     ...declared,
     // A tool arrives declaring its arguments as JSON Schema — the same
@@ -100,7 +100,17 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
       let answer = answerOf(landed)
       if (c.json) {
         c.out(JSON.stringify(structured(declared, answer), null, 2))
-      } else await show(c, await drawn(), host.vocab, answer)
+      } else {
+        await show(
+          c,
+          await drawn(),
+          host.vocab,
+          answer,
+          c.tui
+            ? { views: await terminal(plugins()), db: dbOf(host.config) }
+            : {},
+        )
+      }
       // A refusal is data, not an exception: the text is printed either way
       // and the exit code is what reports which it was — taken from the runner,
       // since a tool that returns fault rows has not itself failed.
