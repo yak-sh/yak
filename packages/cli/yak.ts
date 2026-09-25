@@ -136,7 +136,7 @@ export let own: Command[] = [
     run: (args, c) => {
       c.out(
         `bearer token for ${c.host} saved in ${
-          saveToken(c.host, String(args.token))
+          saveToken(c.host, String(args.token), c.state)
         }`,
       )
       return 0
@@ -147,7 +147,7 @@ export let own: Command[] = [
     description: 'forget the saved bearer token',
     inputSchema: { type: 'object', additionalProperties: false },
     run: (_args, c) => {
-      forgetToken(c.host)
+      forgetToken(c.host, c.state)
       c.out(`forgot the bearer token for ${c.host}`)
       return 0
     },

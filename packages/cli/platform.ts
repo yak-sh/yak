@@ -28,8 +28,12 @@ import { type Listed, spelling } from './tool.ts'
 /** The tool list for a host: the cached one, or an `initialize` handshake
  * followed by `tools/list`. The protocol version is negotiated on that same
  * path and cached beside the list. */
-export let rosterOf = async (host: string, ask: Rpc): Promise<Roster> => {
-  let kept = cached(host)
+export let rosterOf = async (
+  host: string,
+  ask: Rpc,
+  state?: string,
+): Promise<Roster> => {
+  let kept = cached(host, state)
   if (kept) return kept
   let hello = await initialize(ask)
   let listed = await ask('tools/list')
@@ -37,7 +41,7 @@ export let rosterOf = async (host: string, ask: Rpc): Promise<Roster> => {
     protocol: String(hello.protocolVersion ?? ''),
     tools: (listed.tools ?? []) as Listed[],
   }
-  remember(host, roster)
+  remember(host, roster, state)
   return roster
 }
 
@@ -56,7 +60,7 @@ let answered = (said: Result): Bundle[] | null => {
 // the display. Asked once and kept beside the tool list, so it goes when the
 // list does. A server that lists no `graph_schema` has none to give.
 let vocabOf = async (c: Ctx): Promise<VocabDoc | null> => {
-  let roster = await rosterOf(c.host, c.ask)
+  let roster = await rosterOf(c.host, c.ask, c.state)
   if (roster.vocab) return roster.vocab
   if (!roster.tools.some((t) => t.name == 'graph_schema')) return null
   let schema = async (args: Record<string, unknown>) =>
@@ -67,7 +71,7 @@ let vocabOf = async (c: Ctx): Promise<VocabDoc | null> => {
   let index = await schema({})
   let whole = await schema({ component: Object.keys(index?.$defs ?? {}) })
   if (!whole) return null
-  remember(c.host, { ...roster, vocab: whole })
+  remember(c.host, { ...roster, vocab: whole }, c.state)
   return whole
 }
 
@@ -89,12 +93,12 @@ export let printed = async (
   // caller holding no list has nothing of its own to keep fresh, and must not
   // throw away somebody else's.
   if (stale) {
-    forget(c.host)
+    forget(c.host, c.state)
     c.note(stale)
   } else if (roster) {
     let next = rosterAfter(roster, name, read)
-    if (!next) forget(c.host)
-    else if (next != roster) remember(c.host, next)
+    if (!next) forget(c.host, c.state)
+    else if (next != roster) remember(c.host, next, c.state)
   }
   if (said.isError) {
     c.note(text || 'the tool erred and said nothing')
@@ -156,6 +160,6 @@ let toolOf = (roster: Roster, t: Listed): Command => ({
  * a round trip (run.ts `more`), so a command that never needs it pays
  * nothing. */
 export let listed = async (c: Ctx): Promise<Command[]> => {
-  let roster = await rosterOf(c.host, c.ask)
+  let roster = await rosterOf(c.host, c.ask, c.state)
   return roster.tools.map((t) => toolOf(roster, t))
 }

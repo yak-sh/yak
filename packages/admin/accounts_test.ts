@@ -129,16 +129,15 @@ Deno.test('the vault’s sessions read back as accounts', () => {
 
 Deno.test('the remembered default is written, read and forgotten', () => {
   let home = Deno.makeTempDirSync()
-  Deno.env.set('YAKS_HOME', `${home}/yaks`)
+  let dir = `${home}/yaks`
   try {
-    assertEquals(current(), '')
-    choose('probe@bot.yak.sh')
-    assertEquals(current(), 'probe@bot.yak.sh')
-    choose(null)
-    choose(null)
-    assertEquals(current(), '')
+    assertEquals(current(dir), '')
+    choose('probe@bot.yak.sh', dir)
+    assertEquals(current(dir), 'probe@bot.yak.sh')
+    choose(null, dir)
+    choose(null, dir)
+    assertEquals(current(dir), '')
   } finally {
-    Deno.env.delete('YAKS_HOME')
     Deno.removeSync(home, { recursive: true })
   }
 })

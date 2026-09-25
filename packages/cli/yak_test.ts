@@ -9,23 +9,18 @@ import { own, YAK } from './yak.ts'
 
 type Call = { name: string; arguments: Record<string, unknown> }
 
-// One line aimed at a door that lists `graph_apply` and answers anything.
-// `YAKS_HOME` is where the tool list is cached, so it points at a scratch
-// directory this test takes away with it; `YAK_CONFIG`, `YAKS_HOST` and `HOME`
-// are all moved off the box's own, so the line opens no graph of its own
-// whatever this box keeps.
+// One line aimed at a door that lists `graph_apply` and answers anything. Its
+// environment names only `YAKS_HOME`, a scratch directory the tool list is
+// cached in and this test takes away with it: no `HOME`, `YAK_CONFIG` or
+// `YAKS_HOST`, so the line opens no graph of its own whatever this box keeps.
 let ran = async (argv: string[]): Promise<Call[]> => {
   let home = Deno.makeTempDirSync()
-  let was = { ...Deno.env.toObject() }
-  Deno.env.set('YAKS_HOME', home)
-  Deno.env.set('HOME', home)
-  Deno.env.delete('YAK_CONFIG')
-  Deno.env.delete('YAKS_HOST')
   let calls: Call[] = []
   try {
     await cli(own, {
       ...YAK,
       argv,
+      env: (name) => name == 'YAKS_HOME' ? home : undefined,
       host: 'yaks.test',
       reads: { file: () => '', stdin: () => '' },
       out: () => {},
@@ -43,11 +38,6 @@ let ran = async (argv: string[]): Promise<Call[]> => {
     })
     return calls
   } finally {
-    for (let name of ['YAKS_HOME', 'HOME', 'YAK_CONFIG', 'YAKS_HOST']) {
-      was[name] == undefined
-        ? Deno.env.delete(name)
-        : Deno.env.set(name, was[name])
-    }
     Deno.removeSync(home, { recursive: true })
   }
 }

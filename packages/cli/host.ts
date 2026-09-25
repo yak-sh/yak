@@ -340,8 +340,11 @@ export type Served = Host & {
  * service file that would rather set it in the environment. Neither has a
  * default, because the path anybody would pick as one is somebody's live
  * graph. */
-export let dbOf = (config: Config): string => {
-  let db = config.db ?? Deno.env.get('DB_PATH')
+export let dbOf = (
+  config: Config,
+  env: (name: string) => string | undefined = (n) => Deno.env.get(n),
+): string => {
+  let db = config.db ?? env('DB_PATH')
   if (!db) {
     throw new Error(
       'a host needs a database: `db` in the config, or DB_PATH in the ' +

@@ -21,7 +21,7 @@ import { adminDoc } from './vocab.ts'
 // opens, and whose remembered account is its own, never this machine's.
 let box = () => {
   let dir = Deno.makeTempDirSync()
-  return { dir, vault: vaultOf(`${dir}/yak.db`) }
+  return { dir, state: dir, vault: vaultOf(`${dir}/yak.db`) }
 }
 
 // What the last verb said on stderr: a banner, a note.
@@ -38,7 +38,6 @@ let ask = async (
   let error = console.error
   heard = []
   console.error = (line: string) => heard.push(line)
-  Deno.env.set('YAKS_HOME', at.dir)
   try {
     return await runs(at)[tool](
       { entity: { eid: 'c1' }, call: { args } },
@@ -46,7 +45,6 @@ let ask = async (
     ) as Bundle[]
   } finally {
     console.error = error
-    Deno.env.delete('YAKS_HOME')
     if (!o.at) Deno.removeSync(at.dir, { recursive: true })
   }
 }

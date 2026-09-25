@@ -55,27 +55,31 @@ export let accountsIn = (vault: Local): Account[] =>
 // The remembered test account a bare command runs as. It is not a secret, so
 // it is not kept with the sessions: it is one more thing this machine
 // remembers between commands, beside the bearer `yak login` keeps (@yaks/cli
-// `stateDir`).
-let currentFile = () => `${stateDir()}/current`
+// `stateDir`), in the directory the caller names, this machine's own by
+// default.
+let currentFile = (dir: string) => `${dir}/current`
 
-export let current = (): string => {
+export let current = (dir: string = stateDir()): string => {
   try {
-    return Deno.readTextFileSync(currentFile()).trim()
+    return Deno.readTextFileSync(currentFile(dir)).trim()
   } catch {
     return ''
   }
 }
 
 // Remember one, or forget it with null.
-export let choose = (address: string | null): void => {
+export let choose = (
+  address: string | null,
+  dir: string = stateDir(),
+): void => {
   if (address == null) {
     try {
-      Deno.removeSync(currentFile())
+      Deno.removeSync(currentFile(dir))
     } catch { /* nothing remembered */ }
     return
   }
-  Deno.mkdirSync(stateDir(), { recursive: true, mode: 0o700 })
-  Deno.writeTextFileSync(currentFile(), address + '\n')
+  Deno.mkdirSync(dir, { recursive: true, mode: 0o700 })
+  Deno.writeTextFileSync(currentFile(dir), address + '\n')
 }
 
 // What `--as` accepts: the whole address, or the local part when it names

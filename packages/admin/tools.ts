@@ -92,12 +92,17 @@ let said = (call: Bundle, lines: string | string[]): Bundle => ({
 // `renewing`) is kept under the same account, in the same write as the
 // answer: a box that kept the old value would sign out ninety days after its
 // first sign-in however often it called.
-let acting = (vault: Local, a: Args, keep: Bundle[]): Account => {
+let acting = (
+  vault: Local,
+  a: Args,
+  keep: Bundle[],
+  state?: string,
+): Account => {
   let at = pick(accountsIn(vault), {
     as: word(a, 'as'),
     owner: a.owner === true,
     admin: a.admin === true,
-    current: current(),
+    current: current(state),
   })
   if (!isTest(at)) note(banner(at))
   renewing((fresh) => keep.push(sealed(sessionName(at.address), fresh)))
@@ -111,6 +116,7 @@ let signIn = async (
   graph: Graph,
   address: string,
   given?: string,
+  state?: string,
 ): Promise<Bundle> => {
   let since = Date.now()
   await askCode(address)
@@ -121,7 +127,7 @@ let signIn = async (
   let session = await spendCode(address, code)
   // Only a throwaway is ever remembered as the default (./accounts.ts) — the
   // admin wears a bot address and is still not one.
-  if (isTestAddress(address)) choose(address)
+  if (isTestAddress(address)) choose(address, state)
   return sealed(sessionName(address), session)
 }
 
@@ -203,7 +209,7 @@ type Verb = (
 ) => Promise<Bundle[]> | Bundle[]
 
 /** The implementations of the tools ./vocab.json declares. */
-export let runs = (host: { vault: Local }): Runs => {
+export let runs = (host: { vault: Local; state?: string }): Runs => {
   let verb = (run: Verb) => async (call: Bundle, graph: Graph) => {
     let keep: Bundle[] = []
     try {
@@ -215,7 +221,7 @@ export let runs = (host: { vault: Local }): Runs => {
 
   return {
     admin_whoami: verb(async (call, vault, keep) => {
-      let at = acting(vault, argsOf(call), keep)
+      let at = acting(vault, argsOf(call), keep, host.state)
       let claims = claimsOf(at.session)
       let lines = [
         `account   ${at.address}`,
@@ -243,14 +249,14 @@ export let runs = (host: { vault: Local }): Runs => {
     }),
 
     admin_accounts: verb((call, vault) => [
-      said(call, render(accountsIn(vault), current())),
+      said(call, render(accountsIn(vault), current(host.state))),
     ]),
 
     admin_throwaway: verb(async (call, _vault, _keep, graph) => {
       let name = word(argsOf(call), 'name')
       let address = name ? `${name}${BOT}` : throwaway()
       return [
-        await signIn(graph, address),
+        await signIn(graph, address, undefined, host.state),
         said(call, `signed in as ${address} — current`),
       ]
     }),
@@ -277,20 +283,20 @@ export let runs = (host: { vault: Local }): Runs => {
         )
       }
       return [
-        await signIn(graph, address, word(a, 'code')),
+        await signIn(graph, address, word(a, 'code'), host.state),
         said(call, `signed in as ${address}`),
       ]
     }),
 
     admin_use: verb((call, vault) => {
       let at = one(accountsIn(vault), String(argsOf(call).account))
-      choose(usable(at).address)
+      choose(usable(at).address, host.state)
       return [said(call, `current: ${at.address}`)]
     }),
 
     admin_logout: verb((call, vault) => {
       let at = one(accountsIn(vault), String(argsOf(call).account))
-      if (current() == at.address) choose(null)
+      if (current(host.state) == at.address) choose(null, host.state)
       return [
         unsealed(sessionName(at.address)),
         said(call, `forgot ${at.address}`),
@@ -299,7 +305,7 @@ export let runs = (host: { vault: Local }): Runs => {
 
     admin_link: verb(async (call, vault, keep) => {
       let a = argsOf(call)
-      let at = acting(vault, a, keep)
+      let at = acting(vault, a, keep, host.state)
       let gone = word(a, 'revoke')
       if (gone) {
         let ids = await unlink(at.session, gone)
@@ -343,7 +349,7 @@ export let runs = (host: { vault: Local }): Runs => {
       if (bps != null && !/^\d+$/.test(bps)) {
         throw new CallError('bps', `not a whole number of basis points: ${bps}`)
       }
-      let at = acting(vault, a, keep)
+      let at = acting(vault, a, keep, host.state)
       let now = bps == null
         ? await feeNow(at.session)
         : await setFee(at.session, Number(bps))
@@ -355,7 +361,7 @@ export let runs = (host: { vault: Local }): Runs => {
     // letter carries to a person whose agent asked.
     admin_delete: verb(async (call, vault, keep) => {
       let slug = String(argsOf(call).space)
-      let at = acting(vault, argsOf(call), keep)
+      let at = acting(vault, argsOf(call), keep, host.state)
       let doomed = await doomedIn(at.session, slug)
       return [
         said(call, [
@@ -366,7 +372,7 @@ export let runs = (host: { vault: Local }): Runs => {
     }),
 
     admin_query: verb(async (call, vault, keep) => {
-      let at = acting(vault, argsOf(call), keep)
+      let at = acting(vault, argsOf(call), keep, host.state)
       let rows = await storeQuery(
         at.session,
         String(argsOf(call).where),
@@ -376,7 +382,7 @@ export let runs = (host: { vault: Local }): Runs => {
     }),
 
     admin_tool: verb(async (call, vault, keep) => {
-      let at = acting(vault, argsOf(call), keep)
+      let at = acting(vault, argsOf(call), keep, host.state)
       let answer = await rpc(at.session)('tools/call', {
         name: String(argsOf(call).name),
         arguments: (argsOf(call).args ?? {}) as Record<string, unknown>,

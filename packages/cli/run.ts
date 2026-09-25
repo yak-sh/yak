@@ -29,7 +29,10 @@ import { lineOf, safe, sketch, toolHelp } from './show.ts'
 import { commandOf, titleOf } from './tool.ts'
 import { doorUrl, type Rpc, rpc, timed } from './rpc.ts'
 import { configPath } from './config.ts'
-import { tokenFor } from './store.ts'
+import { type Env, stateDir, tokenFor } from './store.ts'
+
+// This process's environment: what every `env` seam here defaults to.
+let own: Env = (name) => Deno.env.get(name)
 
 /** What a command is handed: where it runs, where to print, and the global
  * flags. */
@@ -51,6 +54,9 @@ export type Ctx = {
   /** The session this command line speaks for ({@link via}), named the same
    * way to a host over HTTP and to a graph this process opened. */
   via?: string
+  /** The directory this machine keeps its token and tool lists in
+   * (./store.ts): its own, unless a test hands in a scratch one. */
+  state?: string
   ask: Rpc
   reads: Reads
   out: (line: string) => void
@@ -109,6 +115,9 @@ export type Opts = {
   ask?: Rpc
   /** The session this command line speaks for. Defaults to {@link via}. */
   via?: string
+  /** Where the environment is read from: this process's by default. A test
+   * passes a function, so it never sets a variable every other test shares. */
+  env?: Env
   /** Where a value written `@path` or `-` is read from. */
   reads?: Reads
   out?: (line: string) => void
@@ -259,6 +268,7 @@ export let nounUsage = (
  * {@link aimed}'s answer. */
 export let globals = (
   argv: readonly string[],
+  env: Env = own,
 ): {
   host?: string
   config?: string
@@ -277,7 +287,7 @@ export let globals = (
   let config: string | undefined
   // A whole shell asks for the timing line with YAKS_TIMING=1; one command
   // asks with the flag.
-  let timing = Deno.env.get('YAKS_TIMING') == '1'
+  let timing = env('YAKS_TIMING') == '1'
   let rest: string[] = []
   for (let i = 0; i < argv.length; i++) {
     let a = argv[i]
@@ -317,14 +327,15 @@ export let globals = (
 export let aimed = (
   said: { host?: string; config?: string },
   dflt = 'yaks.app',
+  env: Env = own,
 ): { config?: string; host: string } => {
   if (said.host && said.config) {
     throw new Usage('--host and --config name two places — a line names one')
   }
   if (said.config) return { config: said.config, host: dflt }
-  let door = said.host ?? Deno.env.get('YAKS_HOST')
+  let door = said.host ?? env('YAKS_HOST')
   if (door) return { host: door }
-  let path = configPath()
+  let path = configPath(undefined, env)
   return path ? { config: path, host: dflt } : { host: dflt }
 }
 
@@ -340,9 +351,7 @@ export let aimed = (
  * The variable names are the harnesses' own, read most specific first: a
  * subagent's own id before the tree it was spawned from.
  */
-export let via = (
-  env: (name: string) => string | undefined = (n) => Deno.env.get(n),
-): string | undefined =>
+export let via = (env: Env = own): string | undefined =>
   env('CLAUDE_CODE_SESSION_ID') ?? env('TASKS_SESSION') ??
     env('CODEX_THREAD_ID')
 
@@ -361,13 +370,15 @@ export let cli = async (
 ): Promise<number> => {
   let out = opts.out ?? ((line: string) => console.log(safe(line)))
   let note = opts.note ?? ((line: string) => console.error(safe(line)))
-  let said = globals(opts.argv ?? Deno.args)
+  let env = opts.env ?? own
+  let said = globals(opts.argv ?? Deno.args, env)
   let { duties, json, tui, help, timing, rest } = said
   try {
     // Where this command runs: a file it opens, or an MCP server it calls. A
     // command line naming both is refused here, like any other that means two
     // things.
-    let { config, host } = aimed(said, opts.host ?? 'yaks.app')
+    let { config, host } = aimed(said, opts.host ?? 'yaks.app', env)
+    let state = stateDir(env)
     // A list that cannot be fetched is a reason printed on the page, not a
     // page nobody gets: `yak` with no argument is what a person types when
     // nothing works.
@@ -383,7 +394,7 @@ export let cli = async (
       }
       return extra
     }
-    let speaks = opts.via ?? via()
+    let speaks = opts.via ?? via(env)
     let c: Ctx = {
       host,
       config,
@@ -392,9 +403,10 @@ export let cli = async (
       tui,
       help,
       via: speaks,
+      state,
       ask: opts.ask ?? rpc({
         url: doorUrl(host),
-        token: tokenFor(host),
+        token: tokenFor(host, state),
         via: speaks,
         fetch: timing ? timed(note) : undefined,
       }),

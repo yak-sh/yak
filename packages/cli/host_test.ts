@@ -11,6 +11,7 @@ import { effectDoc } from '@yaks/effects'
 import { runs as effectRuns } from '@yaks/effects/tools'
 import {
   compose,
+  dbOf,
   facet,
   FACETS,
   type Facets,
@@ -182,18 +183,14 @@ Deno.test('a config that is not an object, or not JSON, says which file', () => 
   }
 })
 
-Deno.test('a host without a database refuses rather than guessing one', async () => {
-  let db = Deno.env.get('DB_PATH')
-  Deno.env.delete('DB_PATH')
-  try {
-    await assertRejects(
-      () => compose({ plugins: [] }),
-      Error,
-      'there is no default',
-    )
-  } finally {
-    if (db) Deno.env.set('DB_PATH', db)
-  }
+Deno.test('a host without a database refuses rather than guessing one', () => {
+  // An environment with no DB_PATH in it: the process's own is shared by every
+  // test running beside this one, and the gate sets it.
+  assertThrows(
+    () => dbOf({ plugins: [] }, () => undefined),
+    Error,
+    'there is no default',
+  )
 })
 
 Deno.test('compose takes each facet from its own subpath, and mounts the doors', async () => {

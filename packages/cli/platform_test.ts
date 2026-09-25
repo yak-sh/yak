@@ -31,7 +31,7 @@ let vocab = loadVocab([
 ], [kernelKeywords, idKeywords])
 
 // One command line against a server holding two tasks, one of them done, with
-// the tool list cached under a scratch `YAKS_HOME` this test takes away.
+// the tool list cached in a scratch directory this test takes away.
 let asking = async (
   go: (
     c: Ctx,
@@ -39,8 +39,6 @@ let asking = async (
   ) => Promise<void>,
 ) => {
   let home = Deno.makeTempDirSync()
-  let was = Deno.env.get('YAKS_HOME')
-  Deno.env.set('YAKS_HOME', home)
   try {
     let g = graph({ storage: ram(vocab, { number: true }), vocab })
     await g.apply([
@@ -61,6 +59,7 @@ let asking = async (
       json: false,
       tui: false,
       help: false,
+      state: home,
       ask,
       reads: { file: () => '', stdin: () => '' },
       out: (line) => said.push(line),
@@ -70,16 +69,13 @@ let asking = async (
     }
     let call = async (name: string, args = {}) => {
       said.length = 0
-      let roster = await rosterOf(c.host, ask)
+      let roster = await rosterOf(c.host, ask, home)
       let result = await ask('tools/call', { name, arguments: args })
       await printed(c, roster, name, result as Result)
       return said.join('\n')
     }
     await go(c, call)
   } finally {
-    was == undefined
-      ? Deno.env.delete('YAKS_HOME')
-      : Deno.env.set('YAKS_HOME', was)
     Deno.removeSync(home, { recursive: true })
   }
 }
@@ -92,7 +88,10 @@ Deno.test('a server’s answer is drawn through its packages’ views', async ()
     assert(/^T-\d+ Fix the bar open$/.test(lines[0]), lines.join('\n'))
     assert(/^T-\d+ Ship it done$/.test(lines[1]), lines.join('\n'))
     // The vocabulary is asked once and kept beside the tool list.
-    assertEquals(cached(c.host)?.vocab?.$defs?.task?.package, '@yaks/task')
+    assertEquals(
+      cached(c.host, c.state)?.vocab?.$defs?.task?.package,
+      '@yaks/task',
+    )
   })
 })
 

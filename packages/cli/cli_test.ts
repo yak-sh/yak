@@ -183,16 +183,9 @@ Deno.test('duties run unless the command line turns them off', () => {
 })
 
 Deno.test('YAKS_TIMING enables timing only when set to 1', () => {
-  let before = Deno.env.get('YAKS_TIMING')
-  try {
-    for (let value of ['1', '0', 'true', '']) {
-      Deno.env.set('YAKS_TIMING', value)
-      assertEquals(globals(['app_list']).timing, value == '1')
-    }
-    Deno.env.delete('YAKS_TIMING')
-    assertEquals(globals(['app_list']).timing, false)
-  } finally {
-    if (before === undefined) Deno.env.delete('YAKS_TIMING')
-    else Deno.env.set('YAKS_TIMING', before)
+  for (let value of ['1', '0', 'true', '']) {
+    let env = (name: string) => name == 'YAKS_TIMING' ? value : undefined
+    assertEquals(globals(['app_list'], env).timing, value == '1')
   }
+  assertEquals(globals(['app_list'], () => undefined).timing, false)
 })
