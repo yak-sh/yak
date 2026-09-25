@@ -34,6 +34,15 @@ Deno.test("death words: each reference carries its plugin's word", () => {
   assertEquals(words('detach').has('filed.project'), true)
   assertEquals(words('release').has('claim.session'), true)
   assertEquals(words('keep').has('mail.target'), true)
+  // Every reference says one, and the four words leave none over.
+  let refs = Object.entries(comps).flatMap(([c, props]) =>
+    Object.entries(props).flatMap(([p, t]) =>
+      typeof t == 'object' && 'eid' in t ? [`${c}.${p}`] : []
+    )
+  )
+  let all = (['cascade', 'detach', 'release', 'keep'] as const)
+    .flatMap((w) => [...words(w)])
+  assertEquals(all.toSorted(), refs.toSorted())
 })
 
 Deno.test('nick: the model word, vendor and versions dropped', () => {

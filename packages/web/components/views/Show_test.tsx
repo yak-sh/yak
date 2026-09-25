@@ -520,3 +520,33 @@ Deno.test('claim chip loads its referenced session instead of painting a blank',
     cache.value = {}
   }
 })
+
+// Runs reads the claim the row carries; Tasks holds one typed membership.
+Deno.test('Runs and Tasks ask only their typed memberships, not every reverse ref', () => {
+  let target = 'dddd3707-0000-4000-8000-000000000001'
+  let sent: { subscribe?: string; unsubscribe?: string }[] = []
+  let restore = useRoute((f) => sent.push(f as typeof sent[number]))
+  // A partial cache containing unrelated referrers is not either list.
+  cache.value = {
+    [target]: { entity: { eid: target, num: 1 }, project: { eid: target } },
+    unrelated: { comment: { eid: 'unrelated', target } },
+  }
+  let free = () => {}
+  try {
+    let e = ent(target)
+    ;({ free } = mount(h('div', {}, [
+      h(resolve(e, 'Runs').Render, { e }),
+      h(resolve(e, 'Tasks').Render, { e }),
+    ])))
+    assertEquals(sent.flatMap((f) => f.subscribe ?? []), [
+      `.filed.project=${target}&.task!&.task.status=open,wip`,
+    ])
+    free()
+    free = () => {}
+    assertEquals(sent.filter((f) => f.unsubscribe).length, 1)
+  } finally {
+    free()
+    cache.value = {}
+    useRoute(restore)
+  }
+})

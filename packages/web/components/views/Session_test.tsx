@@ -4,7 +4,7 @@ import { identityEid } from '@yaks/graph'
 import { h, render } from 'preact'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { cache, ent, landSub, repoUrl, useRoute } from '../../live.ts'
+import { cache, deps, ent, landSub, repoUrl, useRoute } from '../../live.ts'
 import { type Ent } from '../../types.ts'
 import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
@@ -16,6 +16,7 @@ import {
   SessionEntry,
   sessionMentions,
   SessionReferences,
+  SessionSummary,
   SessionTime,
   threadMentions,
 } from './Session.tsx'
@@ -417,5 +418,131 @@ Deno.test('SessionRow loads its actor face when no peer delivered it', async () 
     unsubscribe(sub)
     useRoute(prior)
     cache.value = {}
+  }
+})
+
+Deno.test('session Tile omits its chip and lists every worked task', () => {
+  let prior = globalThis.fetch
+  let fetched = 0
+  globalThis.fetch = (() => {
+    fetched++
+    throw new Error('session Tile must not fetch')
+  }) as typeof fetch
+  let model = identityEid('model', ['gpt-5.6-sol'])
+  cache.value = {
+    persona: {
+      entity: { eid: 'persona', num: 1 },
+      doc: { eid: 'persona', title: 'Ada', body: '' },
+      persona: { eid: 'persona' },
+    },
+    [model]: {
+      entity: { eid: model, num: 5 },
+      model: { eid: model, name: 'gpt-5.6-sol' },
+    },
+    session: {
+      entity: { eid: 'session', num: 2 },
+      session: { eid: 'session', id: 'session-id', actor: 'persona' },
+      using: { eid: 'session', model, effort: 'high' },
+      created: { eid: 'session', at: '2026-08-15T09:00:00-04:00' },
+    },
+    one: {
+      entity: { eid: 'one', num: 3 },
+      doc: { eid: 'one', title: 'First task', body: '' },
+      task: { eid: 'one', status: 'done' },
+      filed: { eid: 'one', priority: 1 },
+    },
+    two: {
+      entity: { eid: 'two', num: 4 },
+      doc: { eid: 'two', title: 'Second task', body: '' },
+      task: { eid: 'two', status: 'wip' },
+      filed: { eid: 'two', priority: 1 },
+    },
+  }
+  deps.value = [
+    { parent: 'session', type: 'worked', child: 'one' },
+    { parent: 'session', type: 'worked', child: 'two' },
+  ]
+
+  let e = ent('session')
+  let mounted = mount(h(resolve(e, 'Tray.List.Tile').Render, { e }))
+  try {
+    let { root } = mounted
+    let head = root.querySelector('.SessionRow_Head')!
+    assertEquals(
+      [...head.children].map((x) => x.className.split(' ')[0]),
+      [
+        'Dot',
+        'SessionRow_Identity',
+        'SessionRow_Model',
+        'SessionRow_Effort',
+        'Stamp',
+      ],
+    )
+    assertEquals(head.querySelector('.Id'), null)
+    assertEquals(
+      head.querySelector('.SessionRow_Identity')?.textContent,
+      'Ada',
+    )
+    assertEquals(
+      head.querySelector('.SessionRow_Model')?.textContent,
+      'GPT 5.6 Sol',
+    )
+    assertEquals(
+      head.querySelector('.SessionRow_Effort')?.textContent,
+      'high',
+    )
+    assertEquals(
+      [...root.querySelectorAll('.SessionRow_Task')].map((x) =>
+        x.textContent.replace(/\s+/g, ' ').trim()
+      ).sort(),
+      ['First task', 'Second task'],
+    )
+    assertEquals(fetched, 0)
+  } finally {
+    mounted.free()
+    cache.value = {}
+    deps.value = []
+    globalThis.fetch = prior
+  }
+})
+
+Deno.test('session lifecycle shares the task summary lane', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  cache.value = {
+    task: {
+      entity: { eid: 'task', num: 1 },
+      doc: { eid: 'task', title: 'The task', body: '' },
+      task: { eid: 'task' },
+      filed: { eid: 'task', priority: 1 },
+      claim: { eid: 'task', session: 'session' },
+    },
+    session: {
+      entity: { eid: 'session', num: 2 },
+      session: { eid: 'session', id: 'session-id' },
+    },
+  }
+
+  let root = document.querySelector('main')!
+  try {
+    render(
+      h(SessionSummary, { e: ent('session'), gist: 'started 2m ago' }),
+      root,
+    )
+    let summary = root.querySelector('.Session_Summary')!
+    assertEquals(summary.querySelector('.Inline') != null, true)
+    assertEquals(
+      summary.querySelector('.Session_Facts')?.parentElement == summary,
+      true,
+    )
+  } finally {
+    render(null, root)
+    cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
   }
 })

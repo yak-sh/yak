@@ -3,7 +3,14 @@ import '../testing.ts'
 import { effect } from '@preact/signals'
 import { parseHTML } from 'linkedom'
 import { assertEquals, assertStrictEquals } from '@std/assert'
-import { cache, landSub, peek as shellPeek, unsubscribe } from '../live.ts'
+import {
+  cache,
+  clearResolved,
+  landSub,
+  peek as shellPeek,
+  unsubscribe,
+} from '../live.ts'
+import { host } from '../host_testing.ts'
 import { type Ent } from '../types.ts'
 import {
   actionsAt,
@@ -13,7 +20,10 @@ import {
   menu,
   openAt,
   peek,
+  screenTarget,
 } from './nav.tsx'
+import { Id } from './views/Inline.tsx'
+import { mount } from './mount.ts'
 
 let e: Ent = {
   eid: 'task',
@@ -221,4 +231,48 @@ Deno.test('link props do not subscribe to peek state', () => {
   assertEquals(runs, 1)
   stop()
   peek.value = []
+})
+
+Deno.test('short id chip and browser route round trip; kind is checked', async () => {
+  let eid = '3f9a1c2e-7b00-4000-8000-000000000001'
+  let before = cache.peek()
+  cache.value = { [eid]: { entity: { eid, num: 0 }, task: { eid } } }
+  clearResolved()
+  let wire = host((a) =>
+    a.subscribe.includes('S#')
+      ? {
+        refused: {
+          error: 'read',
+          message: 'prefix S does not match task (T)',
+        },
+      }
+      : { bundles: [{ entity: { eid, num: 0 }, task: {} }] }
+  )
+  let ready = async (path: string) => {
+    screenTarget(path)
+    await new Promise((r) => setTimeout(r, 0))
+  }
+  try {
+    let row = { ...e, eid, num: 0 }
+    let props = clickProps(row)
+    assertEquals(props.href, '/T%233f9a1c2e7b')
+    await ready(props.href)
+    assertEquals(screenTarget(props.href)?.eid, eid)
+    await ready('/%233f9a1c2e7b')
+    assertEquals(screenTarget('/%233f9a1c2e7b')?.eid, eid)
+    await ready('/S%233f9a1c2e7b')
+    // The host refuses a prefix that is not the row's kind: the page is Lost.
+    assertEquals(screenTarget('/S%233f9a1c2e7b'), null)
+    let { root, free } = mount(Id({ e: row }))
+    try {
+      assertEquals(root.textContent, 'T#3f9a1c2e7b')
+      assertEquals(root.querySelector('a')?.getAttribute('href'), props.href)
+    } finally {
+      free()
+    }
+  } finally {
+    wire.free()
+    clearResolved()
+    cache.value = before
+  }
 })

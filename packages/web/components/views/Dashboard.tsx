@@ -62,9 +62,8 @@ let Facet = (
   </Cell>
 )
 
-// The sessions serving this project: through the task each one is ON
-// (the newest claim first, the managed request as fallback) or the role it
-// serves; both walks end at an eid naming this project. Awake first.
+// The sessions serving this project: each through the task it claimed last,
+// filed here. Awake first.
 export let sessionsOf = (
   e: Ent,
   sessions: Ent[],

@@ -9,6 +9,7 @@ import { loadVocab } from '@yaks/vocab'
 import { Admin } from './Admin.tsx'
 import { route } from './nav.tsx'
 import { cache, useRoute } from '../live.ts'
+import { host } from '../host_testing.ts'
 import { assertEquals } from '@std/assert'
 
 // A mounted view holds subscriptions. In a test there is no server to hold
@@ -243,5 +244,62 @@ Deno.test('an admin query deep link filters the index', async () => {
     route.value = '/'
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+Deno.test('a refused direct query replaces partial rows with retry', async () => {
+  let priorDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let task = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  cache.value = {
+    [task]: {
+      entity: { eid: task, num: 2 },
+      doc: { eid: task, title: 'Partial row', body: '' },
+      task: { eid: task },
+      filed: { eid: task, priority: 1, project: null },
+    },
+  }
+  let query = '.entry.session=a,b'
+  route.value = `/admin/task?q=${encodeURIComponent(query)}`
+  let wire = host((a) =>
+    a.subscribe.startsWith(query)
+      ? { refused: { error: 'read', message: 'one Session is required' } }
+      : undefined
+  )
+  let refusals = () =>
+    wire.asked().filter((a) => a.subscribe.startsWith(query)).length
+  let root = document.querySelector('main')!
+  let restore = stubFetch()
+  try {
+    render(h(Admin, {}), root)
+    let failure = await until(
+      () => root.querySelector('.SubscriptionFailure'),
+      { label: 'direct query refusal' },
+    )
+    assertEquals(
+      failure!.textContent.includes(
+        'Query could not be loaded: one Session is required [',
+      ),
+      true,
+    )
+    assertEquals(root.querySelector('.Admin_Table'), null)
+
+    let before = refusals()
+    root.querySelector<HTMLButtonElement>('.SubscriptionFailure_Retry')!.click()
+    await Promise.resolve()
+    assertEquals(refusals(), before + 1)
+  } finally {
+    render(null, root)
+    wire.free()
+    restore()
+    cache.value = {}
+    route.value = '/'
+    if (priorDocument) {
+      Object.defineProperty(globalThis, 'document', priorDocument)
+    } else delete (globalThis as { document?: unknown }).document
   }
 })
