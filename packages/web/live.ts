@@ -1211,14 +1211,14 @@ let tell = (changes: Change[]) => {
   for (let fn of listeners) fn(changes)
 }
 
-// Bodies ride only on the payloads that paint one entity whole (subs.ts
-// `bodied`), and a patch that names no body leaves none either — so a cached
-// component can lack its body while the stored column holds one. An ABSENT
-// body means UNLOADED, never empty: nothing may render it as content or arm an
-// editor over it, because a commit would write a fragment over the stored
-// body. want() is the other end: the requested body column lands as an ordinary
-// patch through applyLocal and merges onto the cached component — exactly what
-// a live body edit does.
+// Bodies ride only on the payloads that ask for them (a `.fields=` projection
+// leaves them behind), and a patch that names no body leaves none either — so
+// a cached component can lack its body while the stored column holds one. An
+// ABSENT body means UNLOADED, never empty: nothing may render it as content or
+// arm an editor over it, because a commit would write a fragment over the
+// stored body. want() is the other end: the requested body column lands as an
+// ordinary patch through applyLocal and merges onto the cached component —
+// exactly what a live body edit does.
 //
 // One trip per PAINT, not per element: a card and all its comments ask
 // within the same render, so the queue drains on the next turn and they
@@ -1713,7 +1713,7 @@ let subFields = new Map<string, Field[]>()
 // down: at the ENTITY level absence never means non-existence, and at the COLUMN
 // level absence never means null. A projected sub streams only its declared
 // columns, so `e.session.final_text` reading undefined under a `.fields=` sub
-// means UNLOADED — the same word bodyless already gives a deferred body — and a
+// means UNLOADED — the same word a deferred body gets — and a
 // render that needs it subscribes for more (a fuller projection, or the
 // card/route sub that loads an entity whole).
 //

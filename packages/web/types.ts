@@ -555,7 +555,7 @@ export type Edge = (typeof edges)[number]
 // The written face of an entity — title and markdown body. Anything can
 // carry one: tasks and boards do; notes, comments, and future kinds get
 // rendering/editing/files for free by carrying it too.
-// `body` is optional because a payload may DEFER it (subs.ts `bodyless`):
+// `body` is optional because a payload may DEFER it (a `.fields=` projection):
 // undefined means unloaded, '' means empty, and the column defaults to ''
 // so the two can never be confused. Every reader must tell them apart —
 // paint a placeholder and ask (live.ts `pending`), never treat a missing

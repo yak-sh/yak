@@ -98,13 +98,6 @@ export let refOf = (comp: string, prop: string): string | undefined => {
 export let isRef = (comp: string, prop: string): boolean =>
   refOf(comp, prop) != null
 
-// The columns a component declares as BODIES — the long markdown that no
-// board, list or dot view reads, and the one slice a payload may leave
-// behind (subs.ts `bodyless`). Derived from the vocabulary, so a new body
-// column is deferred and healed without touching either end.
-export let bodyCols = (comp: string) =>
-  Object.entries(types(comp)).filter(([, t]) => t == 'body').map(([p]) => p)
-
 // What the caller sent, quoted back. An object says its shape rather than
 // '[object Object]': a refusal is read by whoever wrote the value.
 let got = (v: unknown) =>
