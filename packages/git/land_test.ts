@@ -398,6 +398,30 @@ Deno.test('a spawn-level failure is a failed result, never a crash', async () =>
   )
 })
 
+// Only where the caller stands is a refusal; a git command that fails is a
+// fault, and escapes the tool as one for the runner to report.
+let answering = (fails: string, code = 128) => (args: string[]) => {
+  let ok = { ok: true, code: 0, err: '' }
+  let said = args.join(' ')
+  if (said.startsWith(fails)) {
+    return Promise.resolve({ ok: false, code, out: '', err: 'fatal: broke' })
+  }
+  if (args[0] == 'rev-parse') return Promise.resolve({ ...ok, out: '/t\n' })
+  if (args[0] == 'symbolic-ref') return Promise.resolve({ ...ok, out: 'b\n' })
+  return Promise.resolve({ ...ok, out: '' })
+}
+
+Deno.test('a detached worktree is refused, a failing git is a fault', async () => {
+  let at = (fails: string, code?: number) =>
+    land({ ...quiet, cwd: '/t', run: answering(fails, code) })
+  let e = await assertRejects(() => at('symbolic-ref', 1))
+  assertEquals((e as Error).name, 'LandError')
+  for (let fails of ['symbolic-ref', 'worktree list']) {
+    let e = await assertRejects(() => at(fails))
+    assertEquals((e as Error).name, 'Error', fails)
+  }
+})
+
 slow('a transiently failing push publishes on the retry', async () => {
   let r = await setup()
   try {

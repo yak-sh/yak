@@ -50,8 +50,9 @@ export type Ran = { ok: boolean; code: number; out: string; err: string }
  * repository. */
 export type Run = (args: string[], cwd: string) => Promise<Ran>
 
-/** A deliberate landing refusal or a failed Git operation. Callers may
- * distinguish these expected invocation failures from defects in land. */
+/** A landing refused for the caller's own state: not in a linked worktree on
+ * a branch, a dirty worktree, a revert the guard caught. A Git command that
+ * fails is a plain `Error`, a fault somebody has to hear about. */
 export class LandError extends Error {
   constructor(message: string) {
     super(message)
@@ -306,14 +307,14 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   }
   let need = async (label: string, at: string, args: string[]) => {
     let r = await git(at, args, false)
-    if (r.code) throw new LandError(message(label, r))
+    if (r.code) throw new Error(message(label, r))
     return r.out.trim()
   }
   // What the guard reads: a git command run in this worktree whose output is
   // raw lines — a failure here is a broken read, never an answer.
   let read = async (args: string[]) => {
     let r = await git(tree, args, false)
-    if (r.code) throw new LandError(message(`git ${args[0]}`, r))
+    if (r.code) throw new Error(message(`git ${args[0]}`, r))
     return r.out
   }
 
@@ -321,13 +322,15 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   // primary worktree first, whichever worktree you run it in, since worktrees
   // share one ref store — and the branch that primary worktree has checked out
   // is the base. A primary worktree with a detached HEAD has no base to land
-  // onto, so refuse rather than guess.
-  let tree = await need('find worktree', cwd, ['rev-parse', '--show-toplevel'])
-  let branch = await need(
-    'read branch',
-    tree,
-    ['symbolic-ref', '--short', 'HEAD'],
-  )
+  // onto, so refuse rather than guess. A directory git does not know is where
+  // the caller stood, and so is a worktree with no branch checked out.
+  let top = await git(cwd, ['rev-parse', '--show-toplevel'], false)
+  if (top.code) throw new LandError(message('land: find worktree', top))
+  let tree = top.out.trim()
+  let on = await git(tree, ['symbolic-ref', '-q', '--short', 'HEAD'], false)
+  if (on.code == 1) throw new LandError('land: the worktree is detached')
+  if (on.code) throw new Error(message('read branch', on))
+  let branch = on.out.trim()
   let list = await need('list worktrees', tree, [
     'worktree',
     'list',
@@ -369,7 +372,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     false,
   )
   if (anc.code != 0 && anc.code != 1) {
-    throw new LandError(message('read merge contention', anc))
+    throw new Error(message('read merge contention', anc))
   }
 
   if (anc.code == 0) {
@@ -387,7 +390,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     // files, and leaves alone any edit it would not touch. If it refuses for
     // some other reason — a hook, a dirty checkout — surface git's own error.
     let merged = await git(root, ['merge', '--ff-only', branch])
-    if (merged.code) throw new LandError(message('git merge', merged))
+    if (merged.code) throw new Error(message('git merge', merged))
     let sha = await need('read landed commit', root, ['rev-parse', 'HEAD'])
     await publish(git, write, root, base)
     // The worktree and its branch survive landing: the caller does its own
