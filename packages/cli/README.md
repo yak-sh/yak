@@ -63,9 +63,13 @@ The CLI chooses its target in this order:
 
 Local and remote tool invocations both create a call entity and run it through
 `@yaks/tools`. Tool calls made by people and agents therefore use the same
-validation, rules, effects, attribution, and stored record. CLI-only commands
-such as `help`, `login`, `logout`, and `apply` use their own command
-implementations.
+validation, rules, effects, attribution, and stored record. Their answers are
+shown the same way too: through the views of the packages that declared the
+components, where this machine has them. A remote server's vocabulary, and the
+package behind each component, come from its `graph_schema`, asked once and
+cached beside its tool list; a reply that carries no entities prints as its
+text. CLI-only commands such as `help`, `login`, `logout`, and `apply` use their
+own command implementations.
 
 ## The config
 
@@ -336,10 +340,10 @@ Remote authentication uses `$YAKS_TOKEN` when set. Otherwise,
 removes it. Tokens and cached tool lists are stored separately under
 `$YAKS_HOME`, or the platform config directory followed by `/yaks`:
 
-| File         | Contents                                                    |
-| ------------ | ----------------------------------------------------------- |
-| `token.json` | Per-host bearer tokens; mode `0600` on non-Windows systems  |
-| `tools.json` | Per-host tool schemas, protocol version, and roster version |
+| File         | Contents                                                                |
+| ------------ | ----------------------------------------------------------------------- |
+| `token.json` | Per-host bearer tokens; mode `0600` on non-Windows systems              |
+| `tools.json` | Per-host tool schemas, protocol version, roster version, and vocabulary |
 
 The tool cache avoids an MCP round trip for ordinary calls. A server response
 that reports a changed roster invalidates or updates the cache.

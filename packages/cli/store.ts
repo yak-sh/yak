@@ -14,13 +14,17 @@
 // arrive for free — a tool result carrying the roster notice, and an `about`
 // result naming a different version.
 
+import type { VocabDoc } from '@yaks/vocab'
 import type { Listed } from './tool.ts'
 
-/** The tools a host served, and the version stamp of that list. */
+/** The tools a host served, and the version stamp of that list — and the
+ * vocabulary its answers are drawn with, once one needed drawing
+ * (platform.ts `vocabOf`), dropped with the list it came beside. */
 export type Roster = {
   version?: string
   protocol?: string
   tools: Listed[]
+  vocab?: VocabDoc
 }
 
 let env = (name: string): string | undefined => {

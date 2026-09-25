@@ -71,8 +71,6 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
-import { idKeywords } from '@yaks/id'
-import { nameKeywords } from '@yaks/names'
 import { ended, PROCESS, selfEid, started } from '@yaks/process'
 import type { Derived, Extension } from '@yaks/sql'
 import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
@@ -98,7 +96,8 @@ import {
   type Watch,
 } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
-import { type Config, given, type Options, used } from './config.ts'
+import { type Config, given, type Options, subpath, used } from './config.ts'
+import { understood } from './keywords.ts'
 import { vaultOf } from './vault.ts'
 
 export {
@@ -321,30 +320,6 @@ export type Load = <F extends FacetName>(
   facet: F,
 ) => Promise<Facets[F] | null>
 
-// A subpath a package does not export is a module it does not have. Anything
-// else that goes wrong importing one — a syntax error, a missing dependency, a
-// throw at module scope — is that module failing, and is rethrown: a host that
-// quietly runs without its rules is worse than one that refuses to start.
-let unexported = (error: unknown, spec: string, facet: string): boolean =>
-  error instanceof TypeError &&
-  (error.message.startsWith(`Unknown export './${facet}' for `) ||
-    error.message == `Module not found "${spec}".`)
-
-/** `import('<plugin>/<name>')`, or `null` where the package does not export
- * that subpath — a facet, or the `./views` a caller draws with. */
-export let subpath = async <M>(
-  plugin: string,
-  name: string,
-): Promise<M | null> => {
-  let spec = `${plugin}/${name}`
-  try {
-    return await import(spec)
-  } catch (error) {
-    if (unexported(error, spec, name)) return null
-    throw error
-  }
-}
-
 /** The default {@link Load}: {@link subpath}. */
 export let facet: Load = (plugin, name) => subpath(plugin, name)
 
@@ -388,24 +363,6 @@ let said = (docs: VocabDoc[]): VocabDoc[] => {
   return Object.keys($defs).length
     ? [{ title: 'invocation', package: '@yaks/tools', $defs }, ...docs]
     : docs
-}
-
-// The JSON Schema keywords that belong to the host rather than to any plugin:
-// which letter an entity's id carries (`prefix`, @yaks/id) and which property
-// is a name somebody may type (`by_name`, @yaks/names). Every package uses them
-// in its `$vocabulary`, none registers them — and an unregistered keyword is
-// silently ignored, so a host that skipped these would mint `entity.num` and
-// then render `P-1` for a persona that declared `N`, having fallen back to the
-// component's first letter. Minting the number and printing human-readable ids
-// are both this host's doing, so registering the keywords that shape them is
-// too. A plugin that supplies its own copy wins; this adds only the difference,
-// never a second registration.
-let understood = (brought: Keywords[]): Keywords[] => {
-  let taken = new Set(brought.map((k) => k.uri))
-  return [
-    ...brought,
-    ...[idKeywords, nameKeywords].filter((k) => !taken.has(k.uri)),
-  ]
 }
 
 // The name in `{"secret": "NAME"}`, when the object holds nothing else.

@@ -207,6 +207,9 @@ export type PropSchema = {
   search?: boolean
   kind?: boolean
   before?: string[]
+  // On a component reported out of a vocabulary of several packages: the one
+  // that declared it (@yaks/graph `schemaOf`). A document says it once instead.
+  package?: string
   wire?: boolean
   bare?: boolean
   // On a property a boolean (this property alone); on a component the composite

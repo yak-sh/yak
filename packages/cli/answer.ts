@@ -1,22 +1,26 @@
-// How the `yak` command shows a tool's answer. A tool returns bundles and never
-// keeps the terminal; drawing them is the caller's, through the same @yaks/render
-// views a browser draws with. Printed, they go through @yaks/text as plain
-// lines; under `--tui`, @yaks/preact mounts them in @yaks/tui, which holds the
-// terminal until Ctrl-C.
+// How the `yak` command shows a tool's answer, whichever graph gave it: the
+// one a config names, opened in this process (./local.ts), or the one behind an
+// MCP server (./platform.ts), whose reply carries the same bundles. A tool
+// returns bundles and never keeps the terminal; drawing them is the caller's,
+// through the same @yaks/render views a browser draws with. Printed, they go
+// through @yaks/text as plain lines; under `--tui`, @yaks/preact mounts them in
+// @yaks/tui, which holds the terminal until Ctrl-C.
 //
 // The views are every configured plugin's `./views`, then @yaks/tools' (the
 // host always carries its `content`), then the generic ones any entity has
 // (@yaks/web/views) — the order @yaks/web's browser registers them in, so an
-// entity reads the same in both. A lone entity is shown whole, as its `Page`;
-// several are a `Tile` each, one line apiece.
+// entity reads the same in both. A server names no plugins, so its answers get
+// the last two. A lone entity is shown whole, as its `Page`; several are a
+// `Tile` each, one line apiece.
 
 import type { Bundle } from '@yaks/graph'
 import { human, short } from '@yaks/id'
 import { define, type Registry } from '@yaks/render'
 import { render, tree } from '@yaks/text'
-import type { Vocab } from '@yaks/vocab'
+import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Shown, views as generic } from '@yaks/web/views'
-import { subpath } from './host.ts'
+import { subpath } from './config.ts'
+import { understood } from './keywords.ts'
 
 /** How one plugin's `./views` becomes a module: {@link subpath} unless a test
  * hands its modules over inline. */
@@ -95,4 +99,40 @@ export let hold = async (
       answer.map((b) => h('div', null, mount(views, b, view, vocab, ctx))),
     )
   )
+}
+
+// A package a server named that this machine has no copy of: its plugins are
+// its own, so an answer is drawn with the views that are here.
+let elsewhere = (error: unknown): boolean =>
+  error instanceof TypeError && error.message.includes('not a dependency')
+
+/** A vocabulary a server reported (`graph_schema`), read the way a host reads
+ * its own — with the keywords every host understands — and the views of the
+ * packages it says declared its components, where this machine has them. */
+export let reported = async (
+  doc: VocabDoc,
+): Promise<{ views: Registry; vocab: Vocab }> => {
+  let vocab = loadVocab([doc], understood())
+  let plugins = vocab.all.flatMap((n) => vocab.comp(n)?.package ?? [])
+  let views = await registry(
+    [...new Set(plugins)],
+    (plugin) =>
+      subpath<{ views?: Registry }>(plugin, 'views').catch((error) =>
+        elsewhere(error) ? null : Promise.reject(error)
+      ),
+  )
+  return { views, vocab }
+}
+
+/** An answer shown the way the command asked — held in the terminal under
+ * `--tui`, printed otherwise. */
+export let show = async (
+  c: { tui: boolean; out: (line: string) => void },
+  views: Registry,
+  vocab: Vocab,
+  answer: Bundle[],
+): Promise<void> => {
+  if (c.tui) return await hold(views, vocab, answer)
+  let text = printed(views, vocab, answer)
+  if (text) c.out(text)
 }

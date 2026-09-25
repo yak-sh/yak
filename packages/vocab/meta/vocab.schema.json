@@ -239,6 +239,10 @@
         },
         "by_name": {
           "type": "boolean"
+        },
+        "package": {
+          "type": "string",
+          "description": "the package that declared this component, written by whoever reports it from a vocabulary loaded out of several packages (the graph_schema tool); a document says it once, beside $defs"
         }
       },
       "additionalProperties": false,

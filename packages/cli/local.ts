@@ -22,7 +22,7 @@
 
 import { offered } from '@yaks/graph'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools'
-import { hold, printed, registry } from './answer.ts'
+import { registry, show } from './answer.ts'
 import { read, used } from './config.ts'
 import type { Command, Ctx } from './run.ts'
 import { compose, type Served } from './host.ts'
@@ -100,11 +100,7 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
       let answer = answerOf(landed)
       if (c.json) {
         c.out(JSON.stringify(structured(declared, answer), null, 2))
-      } else if (c.tui) await hold(await drawn(), host.vocab, answer)
-      else {
-        let text = printed(await drawn(), host.vocab, answer)
-        if (text) c.out(text)
-      }
+      } else await show(c, await drawn(), host.vocab, answer)
       // A refusal is data, not an exception: the text is printed either way
       // and the exit code is what reports which it was — taken from the runner,
       // since a tool that returns fault rows has not itself failed.

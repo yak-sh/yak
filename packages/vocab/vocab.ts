@@ -506,7 +506,8 @@ export let loadVocab = (
       }
       if (name in defs) throw new Error(`component '${name}' is declared twice`)
       defs[name] = schema
-      if (doc.package) from[name] = doc.package
+      let pkg = schema.package ?? doc.package
+      if (pkg) from[name] = pkg
     }
   }
   for (let [name, schema] of adding) {

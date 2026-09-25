@@ -714,3 +714,13 @@ Deno.test('a property says for itself whether its words are searched', () => {
   assertEquals(w.prop('recipe', 'note')!.search, true)
   assertEquals(w.prop('recipe', 'origin')!.search, false)
 })
+
+Deno.test('a component says which package declared it, or its document does', () => {
+  let one = (comp: PropSchema, doc: Partial<VocabDoc> = {}) =>
+    loadVocab({ ...doc, $defs: { book: comp } }).comp('book')?.package
+  let book: PropSchema = { component: true, type: 'object' }
+  assertEquals(one(book), undefined)
+  assertEquals(one(book, { package: '@yaks/shelf' }), '@yaks/shelf')
+  // A vocabulary reported out of several packages says it per component.
+  assertEquals(one({ ...book, package: '@yaks/shop' }), '@yaks/shop')
+})

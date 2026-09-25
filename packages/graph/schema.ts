@@ -96,10 +96,17 @@ let cut = (vocab: Vocab, name: string): PropSchema => {
 }
 
 // A component whole: its entry as declared, with an example value where it
-// declares none of its own.
+// declares none of its own, and the package that declared it where the
+// vocabulary says — which a reader loading this one document back needs, to
+// know whose views draw it (@yaks/cli `--host`).
 let whole = (vocab: Vocab, name: string): PropSchema => {
   let def = vocab.def(name)!
-  return { ...def, examples: def.examples ?? [example(vocab, name)] }
+  let from = vocab.comp(name)?.package
+  return {
+    ...def,
+    examples: def.examples ?? [example(vocab, name)],
+    ...(from ? { package: from } : {}),
+  }
 }
 
 // The components an answer is about, each at the size it is asked for.

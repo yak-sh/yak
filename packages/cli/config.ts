@@ -105,6 +105,30 @@ export let used = (plug: Plug): string =>
 export let given = (plug: Plug): Options =>
   typeof plug == 'string' ? {} : plug.with ?? {}
 
+// A subpath a package does not export is a module it does not have. Anything
+// else that goes wrong importing one — a syntax error, a missing dependency, a
+// throw at module scope — is that module failing, and is rethrown: a host that
+// quietly runs without its rules is worse than one that refuses to start.
+let unexported = (error: unknown, spec: string, facet: string): boolean =>
+  error instanceof TypeError &&
+  (error.message.startsWith(`Unknown export './${facet}' for `) ||
+    error.message == `Module not found "${spec}".`)
+
+/** `import('<plugin>/<name>')`, or `null` where the package does not export
+ * that subpath — a facet, or the `./views` a caller draws with. */
+export let subpath = async <M>(
+  plugin: string,
+  name: string,
+): Promise<M | null> => {
+  let spec = `${plugin}/${name}`
+  try {
+    return await import(spec)
+  } catch (error) {
+    if (unexported(error, spec, name)) return null
+    throw error
+  }
+}
+
 let resolved = (plug: Plug, base: URL): Plug =>
   typeof plug == 'string'
     ? near(plug, base)
