@@ -116,14 +116,15 @@ Deno.test("every package's words load beside every other package's", async () =>
 Deno.test('every other facet a package exports is shaped the way a host reads it', async () => {
   // What each facet's module has to say. `rules` has three, what a write
   // means, what a query may ask for and who is writing (@yaks/cli
-  // `RulesFacet`). `routes` has two: the HTTP a plugin adds, and — for the one
-  // plugin in a host that hosts them — what answers a request at all
-  // (@yaks/api). A module with any of them is that facet.
+  // `RulesFacet`). `routes` has three: the HTTP a plugin adds, the filter it
+  // puts in front of every route, and — for the one plugin in a host that
+  // hosts them — what answers a request at all (@yaks/api). A module with any
+  // of them is that facet.
   let shapes: Record<string, string[]> = {
     rules: ['rules', 'extend', 'authenticate'],
     tools: ['runs'],
     effects: ['effects'],
-    routes: ['routes', 'handler'],
+    routes: ['routes', 'filter', 'handler'],
     service: ['service'],
     views: ['views'],
   }
