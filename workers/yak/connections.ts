@@ -33,6 +33,7 @@ import {
   begin,
   BUILT,
   connect,
+  connectable,
   CONNECTION,
   connectionsDoc,
   type Ctx,
@@ -147,7 +148,8 @@ export type Connections = {
   list: Shown[]
   /** outside services holding a grant from the person (connected.ts) */
   services: Service[]
-  /** the built integrations nothing here is connected to yet */
+  /** the built integrations nothing here is connected to yet, and this deploy
+   * can connect: one reached by OAuth needs its client in `OAUTH_CLIENTS` */
   built: { name: string; keyed: boolean }[]
 }
 
@@ -291,7 +293,7 @@ export let connectionsOf = async (
     list: shown.sort((a, b) => a.integration.localeCompare(b.integration)),
     services,
     built: Object.values(BUILT)
-      .filter((i) => !taken.has(i.name))
+      .filter((i) => !taken.has(i.name) && connectable(i, clients(env)[i.name]))
       .map((i) => ({ name: i.name, keyed: keyed(i) })),
   }
 }

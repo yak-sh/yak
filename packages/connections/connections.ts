@@ -57,6 +57,7 @@ import {
 } from '@yaks/secrets'
 import {
   BUILT,
+  connectable,
   INTEGRATION,
   type Integration,
   integrationEid,
@@ -365,7 +366,7 @@ let signIn = async (c: Ctx, b: Bundle): Promise<Client> => {
     throw new Error(`${name} is connected with a pasted key, not by signing in`)
   }
   let registered = await c.client?.(i)
-  if (!registered && i.answers != 'key') {
+  if (!connectable(i, registered)) {
     throw new Error(`no OAuth client is registered for ${name}`)
   }
   let scopes = strs(comp(b, CONNECTION).scopes)

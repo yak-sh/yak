@@ -42,6 +42,7 @@
 export { connectionsDoc } from './vocab.ts'
 export {
   BUILT,
+  connectable,
   INTEGRATION,
   type Integration,
   integrationEid,

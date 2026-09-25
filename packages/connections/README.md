@@ -45,7 +45,15 @@ The built integrations ship with this package as data, one JSON file each, in
 and a lookup finds the built one first, so a space cannot change where a built
 integration's tokens are sent. `openrouter` is built: its sign-in needs no
 registered client, and its exchange answers an API key (`answers: 'key'`,
-@yaks/oauth), kept as the connection's grant.
+@yaks/oauth), kept as the connection's grant. `google-calendar` is built: it
+asks for `calendar.events` and `calendar.calendarlist.readonly` unless an app
+needs narrower, asks Google for offline access so the grant can be refreshed,
+and sends its token to `www.googleapis.com` alone.
+
+An integration reached by OAuth is connected through the client the host is
+registered as with it (`client` in the context, `OAUTH_CLIENTS` on yaks.app,
+keyed by the integration's name); `connectable` says whether one can be
+connected there at all, and the page offers only those.
 
 ## Verbs
 

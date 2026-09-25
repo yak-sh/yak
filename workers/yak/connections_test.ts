@@ -129,6 +129,19 @@ slow('without a vault no key is taken, and the page says so', async () => {
 })
 
 slow(
+  'a built integration reached by OAuth is offered once this deploy holds its client',
+  async () => {
+    let s = await setup()
+    let offered = async () => (await s.shown()).built.map((b) => b.name)
+    assertEquals(await offered(), ['openrouter'])
+    s.p.env.OAUTH_CLIENTS = JSON.stringify({
+      'google-calendar': { id: 'yaks', secret: 's' },
+    })
+    assertEquals(await offered(), ['google-calendar', 'openrouter'])
+  },
+)
+
+slow(
   'the page tells a key being saved from one that could not be',
   async () => {
     let s = await setup()

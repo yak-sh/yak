@@ -10,6 +10,8 @@ import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
 import { ramVault, sealing, secrets, secretsDoc, SENTINEL } from '@yaks/secrets'
 import { effects } from '@yaks/effects'
 import {
+  begin,
+  BUILT as SHIPPED,
   connect,
   connectionsDoc,
   type Ctx,
@@ -43,6 +45,7 @@ let BUILT: Record<string, Integration> = {
   },
   texts: { name: 'texts', hosts: ['api.texts.example'] },
   notes: { name: 'notes', hosts: ['api.notes.example'] },
+  'google-calendar': SHIPPED['google-calendar'],
 }
 
 // The network: every request it is sent, and the replies each test scripts.
@@ -75,7 +78,10 @@ let c: Ctx = {
   graph: g,
   vault,
   built: BUILT,
-  client: () => ({ id: 'yaks' }),
+  client: (i) =>
+    i.name == 'google-calendar'
+      ? { id: 'yaks-google', secret: 'shh' }
+      : { id: 'yaks' },
   fetch: net,
 }
 await g.apply(
@@ -251,3 +257,71 @@ Deno.test('a refreshed token the service refuses too is its answer', async () =>
   assertEquals((await events()).status, 401)
   assertEquals(seen.length, 3)
 })
+
+Deno.test(
+  'Google Calendar as shipped: a person signs in, and the app lists their calendars through the egress',
+  async () => {
+    let signing = { ...c, redirect: 'https://yaks.app/connections/callback' }
+    let gcal = await needs('google-calendar')
+    let { url, attempt } = await begin(signing, gcal)
+    let asked = new URL(url)
+    assertEquals(
+      [
+        asked.origin + asked.pathname,
+        ...[
+          'client_id',
+          'redirect_uri',
+          'scope',
+          'access_type',
+          'prompt',
+          'code_challenge_method',
+        ].map((k) => asked.searchParams.get(k)),
+      ],
+      [
+        'https://accounts.google.com/o/oauth2/v2/auth',
+        'yaks-google',
+        'https://yaks.app/connections/callback',
+        'https://www.googleapis.com/auth/calendar.events ' +
+        'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+        'offline',
+        'consent',
+        'S256',
+      ],
+    )
+    answering(
+      [200, { access_token: 'G1', refresh_token: 'GR', expires_in: 3599 }],
+      [200, { items: [] }],
+    )
+    await connect(signing, gcal, {
+      attempt,
+      callback: `${signing.redirect}?code=C&state=${attempt.state}`,
+    })
+    let sentinel = (await resolve(c, 'app', 'google-calendar'))!.sentinel
+    let call = (at: string) =>
+      forward(
+        c,
+        viewer,
+        new Request(at, { headers: { authorization: `Bearer ${sentinel}` } }),
+      )
+    assertEquals(
+      (await call(
+        'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+      )).status,
+      200,
+    )
+    assertEquals(seen.map((r) => [r.url, r.headers.get('authorization')]), [
+      [
+        'https://oauth2.googleapis.com/token',
+        `Basic ${btoa('yaks-google:shh')}`,
+      ],
+      [
+        'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+        'Bearer G1',
+      ],
+    ])
+    await assertRejects(
+      () => call('https://gmail.googleapis.com/gmail/v1/users/me/messages'),
+      Refused,
+    )
+  },
+)

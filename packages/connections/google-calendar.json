@@ -1,0 +1,11 @@
+{
+  "name": "google-calendar",
+  "authorize": "https://accounts.google.com/o/oauth2/v2/auth",
+  "token": "https://oauth2.googleapis.com/token",
+  "scopes": [
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
+  ],
+  "params": { "access_type": "offline", "prompt": "consent" },
+  "hosts": ["www.googleapis.com"]
+}

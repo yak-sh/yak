@@ -13,6 +13,7 @@
 
 import { type Bundle, type Eid, identityEid, type Query } from '@yaks/graph'
 import type { Scheme } from '@yaks/hook'
+import googleCalendar from './google-calendar.json' with { type: 'json' }
 import openrouter from './openrouter.json' with { type: 'json' }
 
 export let INTEGRATION = 'integration'
@@ -50,11 +51,20 @@ export type Read = (query: Query) => Bundle[] | Promise<Bundle[]>
 
 /** The integrations this package builds, by name. */
 export let BUILT: Record<string, Integration> = {
+  // `access_type: offline` is what makes Google issue a refresh token, and
+  // `prompt: consent` makes it issue one again when a person connects anew.
+  'google-calendar': googleCalendar,
   openrouter: { ...openrouter, answers: 'key' },
 }
 
 /** Whether a person connects it by pasting a key rather than signing in. */
 export let keyed = (i: Integration): boolean => !i.token
+
+/** Whether a person can connect it here: by pasting a key, through a sign-in
+ * that answers a key to any caller (OpenRouter), or through the OAuth client
+ * this host is registered as with it. */
+export let connectable = (i: Integration, client?: unknown): boolean =>
+  keyed(i) || i.answers == 'key' || !!client
 
 /** A custom integration's entity: derived from its name, so one name is one
  * integration. */
