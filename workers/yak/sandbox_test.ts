@@ -4,10 +4,11 @@
 // production — the platform's own tool table, the directory, the bucket, the
 // meter, the serving door.
 //
-// What is proved here is the whole path a compile takes: the four tools run
-// as the person, a `.wasm` survives the trip into the app as bytes, the
-// seconds land on the meter, the budget refuses in a sentence, and a runtime
-// with no container bound says so rather than half-running.
+// What is proved here is the whole path a compile takes: the machine tools
+// (@yaks/harness) run on the container as the person, a `.wasm` survives the
+// trip into the app as bytes, the seconds land on the meter, the budget
+// refuses in a sentence, and a runtime with no container bound says so rather
+// than half-running.
 //
 // The container itself is not proved here and cannot be: both `wrangler dev`
 // and `wrangler deploy --dry-run` build the image, which needs a container
@@ -122,7 +123,7 @@ let bench = async (answer: (cmd: string) => Ran | void = () => {}) => {
   return { env, space, ctx, box }
 }
 
-Deno.test('the four tools write, run, read and ship', async () => {
+Deno.test('the machine tools write, run and read, and a ship copies out', async () => {
   // The build leaves a .js and a .wasm in pkg/, and the glob finds both.
   let { ctx, box, env, space } = await bench((cmd) =>
     cmd.startsWith('ls -1d')
@@ -136,10 +137,10 @@ Deno.test('the four tools write, run, read and ship', async () => {
   })
   assertEquals(box.files.get('/workspace/src/lib.rs'), 'pub fn best_move() {}')
 
-  let ran = await tool('sandbox_exec').run(ctx, {
-    cmd: 'cargo build --release --target wasm32-unknown-unknown',
+  let ran = await tool('sandbox_shell').run(ctx, {
+    command: 'cargo build --release --target wasm32-unknown-unknown',
   })
-  assertStringIncludes(ran.text, 'code 0')
+  assertStringIncludes(ran.text, 'exited 0')
   assertStringIncludes(ran.text, 'Finished `release` profile')
   assertStringIncludes(ran.text, 'warning: unused')
   assert(box.ran.some((c) => c.startsWith('cargo build')))
@@ -188,14 +189,46 @@ Deno.test('a ship that matches nothing says what to look at', async () => {
 })
 
 Deno.test('a path that is not one is refused before the shell sees it', async () => {
-  let { ctx } = await bench()
+  let { ctx, box } = await bench()
   for (let path of ['pkg/../../etc/passwd', 'a; rm -rf /', '$(whoami)']) {
     await assertRejects(
-      () => tool('sandbox_read').run(ctx, { path }),
+      () => tool('sandbox_ship').run(ctx, { app: 'chess', paths: [path] }),
       Error,
       'a path inside the sandbox',
     )
   }
+  assertEquals(box.ran, [])
+})
+
+Deno.test('a command that outlives its call is a process wait and stop reach', async () => {
+  let { ctx } = await bench((cmd) =>
+    cmd == 'deno task dev'
+      ? { running: true, stdout: 'listening on :8000' }
+      : { stdout: 'built', exitCode: 3 }
+  )
+  let said = (await tool('sandbox_shell').run(ctx, {
+    command: 'deno task dev',
+    timeout: 1,
+  })).text
+  assertStringIncludes(said, 'still running (pid')
+  assertStringIncludes(said, 'listening on :8000')
+  let id = /^process (\S+) /.exec(said)![1]
+  assertStringIncludes(
+    (await tool('sandbox_stop').run(ctx, { process: id })).text,
+    `process ${id} exited`,
+  )
+
+  let done = /^process (\S+) /.exec(
+    (await tool('sandbox_shell').run(ctx, { command: 'make' })).text,
+  )![1]
+  assertEquals(
+    (await tool('sandbox_wait').run(ctx, { process: done })).text,
+    `process ${done} exited 3\nbuilt`,
+  )
+  assertEquals(
+    (await tool('sandbox_wait').run(ctx, { process: 'nope' })).text,
+    'no such process: nope',
+  )
 })
 
 Deno.test('a member who cannot write is not given the workbench', async () => {
@@ -218,7 +251,7 @@ Deno.test('a member who cannot write is not given the workbench', async () => {
 
   let ctx: Ctx = { env, dir: dirOf(env), person: BOB, spend: spending() }
   await assertRejects(
-    () => tool('sandbox_exec').run(ctx, { space: 'ada', cmd: 'whoami' }),
+    () => tool('sandbox_shell').run(ctx, { space: 'ada', command: 'whoami' }),
     Error,
     'not a writer of ada',
   )
@@ -229,7 +262,7 @@ Deno.test('no container bound is a sentence, not a stack trace', async () => {
   let { env } = await seeded()
   let ctx = ctxOf(env)
   await assertRejects(
-    () => tool('sandbox_exec').run(ctx, { cmd: 'whoami' }),
+    () => tool('sandbox_shell').run(ctx, { command: 'whoami' }),
     Error,
     NO_BOX,
   )
@@ -290,8 +323,8 @@ Deno.test('every command is signed in as the caller, with one grant', async () =
   // tools are concerned: what makes the two say one grant is the ledger row
   // the container wears, not a memory inside one call.
   let lone: Ctx = { env, dir: dirOf(env), person: ADA }
-  await tool('sandbox_exec').run(lone, { cmd: 'rustc --version' })
-  await tool('sandbox_exec').run(lone, { cmd: 'cargo build' })
+  await tool('sandbox_shell').run(lone, { command: 'rustc --version' })
+  await tool('sandbox_shell').run(lone, { command: 'cargo build' })
 
   let [first, second] = box.env
   assertEquals(first.YAKS_HOST, HOST)
@@ -313,7 +346,7 @@ Deno.test('every command is signed in as the caller, with one grant', async () =
 Deno.test('destroying the container revokes what it was wearing', async () => {
   let { box, env, space } = await bench(() => ({ stdout: 'ok' }))
   let lone: Ctx = { env, dir: dirOf(env), person: ADA }
-  await tool('sandbox_exec').run(lone, { cmd: 'ls' })
+  await tool('sandbox_shell').run(lone, { command: 'ls' })
   let token = box.env[0].YAKS_TOKEN
   let book = ledger(env.OAUTH_KV)!
   assert(await held(token, SECRET, book), 'live while the container is')
@@ -326,7 +359,7 @@ Deno.test('destroying the container revokes what it was wearing', async () => {
   assertEquals(await book.wearing(named(space)), null)
 
   // The next wake mints a fresh one rather than saying the dead one again.
-  await tool('sandbox_exec').run(lone, { cmd: 'ls' })
+  await tool('sandbox_shell').run(lone, { command: 'ls' })
   assert(box.env[1].YAKS_TOKEN != token, 'a new grant for a new container')
   assert(await held(box.env[1].YAKS_TOKEN, SECRET, book))
 })
@@ -338,8 +371,8 @@ Deno.test('the token is in the environment and never in the transcript', async (
     {
       calls: [{
         id: 'c1',
-        name: 'sandbox_exec',
-        args: JSON.stringify({ cmd: 'yak app_list' }),
+        name: 'sandbox_shell',
+        args: JSON.stringify({ command: 'yak app_list' }),
       }],
     },
     { text: 'listed' },
@@ -366,8 +399,8 @@ Deno.test('a build pays for its workbench and leaves none running', async () => 
     {
       calls: [{
         id: 'c1',
-        name: 'sandbox_exec',
-        args: JSON.stringify({ cmd: 'rustc --version' }),
+        name: 'sandbox_shell',
+        args: JSON.stringify({ command: 'rustc --version' }),
       }],
     },
     { text: 'compiled' },
@@ -397,7 +430,7 @@ Deno.test('a build that ships pays for both in one write', async () => {
     args: JSON.stringify(args),
   })
   let model = fake([
-    { calls: [call('c1', 'sandbox_exec', { cmd: 'cargo build' })] },
+    { calls: [call('c1', 'sandbox_shell', { command: 'cargo build' })] },
     { calls: [call('c2', 'app_new', { slug: 'chess', title: 'Chess' })] },
     {
       calls: [call('c3', 'app_files', {
@@ -426,9 +459,11 @@ Deno.test('the workbench is offered to the builder, and says what it is for', ()
   let names = TOOLS.map((t) => t.name)
   for (
     let want of [
-      'sandbox_exec',
-      'sandbox_write',
+      'sandbox_shell',
+      'sandbox_wait',
+      'sandbox_stop',
       'sandbox_read',
+      'sandbox_write',
       'sandbox_ship',
     ]
   ) {
@@ -439,7 +474,7 @@ Deno.test('the workbench is offered to the builder, and says what it is for', ()
     assertStringIncludes(t.description, 'metered')
     assertEquals(t.input.type, 'object')
   }
-  assertStringIncludes(tool('sandbox_exec').description, 'Rust')
+  assertStringIncludes(tool('sandbox_shell').description, 'Rust')
   assertStringIncludes(tool('sandbox_ship').description, 'served')
 })
 
@@ -590,8 +625,8 @@ Deno.test('a toolchain apiece, pinned, and every download checksummed', async ()
   assertStringIncludes(file, 'wasm32-freestanding')
 })
 
-Deno.test('sandbox_exec names what is in the image, and where the rest comes from', async () => {
-  let said = tool('sandbox_exec').description
+Deno.test('sandbox_shell names what is in the image, and where the rest comes from', async () => {
+  let said = tool('sandbox_shell').description
   for (let [name, version] of await pinned()) {
     assert(said.includes(version), `${name} ${version} is named`)
   }
@@ -627,7 +662,7 @@ Deno.test('a lone connector call pays for itself and leaves the container', asyn
   // No `spend` on the Ctx: this is somebody's own agent over the connector,
   // not a build we are running.
   let ctx: Ctx = { env, dir: dirOf(env), person: ADA }
-  await tool('sandbox_exec').run(ctx, { cmd: 'ls' })
+  await tool('sandbox_shell').run(ctx, { command: 'ls' })
 
   // It is counted — a second at least, since the call rounds up — and the
   // container is still there for the next call.
@@ -643,9 +678,9 @@ Deno.test('one person holds one sandbox awake on the free tier', async () => {
   await tool('space_new').run(ctx, { slug: 'ada2', title: 'Two' })
   let other = (await dirOf(env).space('ada2'))!
   let lone: Ctx = { env, dir: dirOf(env), person: ADA }
-  await tool('sandbox_exec').run(lone, { space: 'ada', cmd: 'ls' })
+  await tool('sandbox_shell').run(lone, { space: 'ada', command: 'ls' })
   let no = await assertRejects(
-    () => tool('sandbox_exec').run(lone, { space: 'ada2', cmd: 'ls' }),
+    () => tool('sandbox_shell').run(lone, { space: 'ada2', command: 'ls' }),
     Error,
     'allows 1 at a time',
   )
@@ -673,7 +708,10 @@ Deno.test("the month of sandbox time is the account's, and it refuses", async ()
     }],
   })
   await assertRejects(
-    () => tool('sandbox_exec').run({ ...ctx, spend: undefined }, { cmd: 'ls' }),
+    () =>
+      tool('sandbox_shell').run({ ...ctx, spend: undefined }, {
+        command: 'ls',
+      }),
     Error,
     'seconds of sandbox time a month',
   )

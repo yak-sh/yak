@@ -35,6 +35,7 @@ let READS = [
   'guide',
   'memory_recall',
   'sandbox_read',
+  'sandbox_wait',
 ]
 
 // It can delete, or change something no second call takes back. A create is
@@ -50,8 +51,9 @@ let DESTROYS = [
   'app_unpublish',
   'app_update',
   'member_remove',
-  'sandbox_exec',
+  'sandbox_shell',
   'sandbox_ship',
+  'sandbox_stop',
   'sandbox_write',
   'space_delete',
   'domain_detach',
@@ -76,7 +78,7 @@ let OUTSIDE = [
   'domain_status',
   'feedback',
   'member_add',
-  'sandbox_exec',
+  'sandbox_shell',
   'sandbox_ship',
   // It mints an account at Stripe and hands back a link onto Stripe's own
   // hosted form.

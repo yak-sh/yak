@@ -259,7 +259,13 @@ export let kv = () => {
 }
 
 /** One command, as the stand-in sandbox was told to answer it. */
-export type Ran = { stdout?: string; stderr?: string; exitCode?: number }
+export type Ran = {
+  stdout?: string
+  stderr?: string
+  exitCode?: number
+  /** a process that keeps running until it is killed */
+  running?: boolean
+}
 
 /**
  * The builder's workbench, in memory (sandbox.ts): a scripted answer per
@@ -268,7 +274,8 @@ export type Ran = { stdout?: string; stderr?: string; exitCode?: number }
  * answers is a second answer to what a sandbox is — and it keeps the tools
  * that reach for one testable with no container anywhere.
  *
- * `answer` is asked for every command; what it returns is what `exec` says.
+ * `answer` is asked for every command; what it returns is what `exec` says,
+ * and what a process `startProcess` began has printed and exited with.
  * Undefined is a command that did nothing and exited 0.
  */
 export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
@@ -277,15 +284,27 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
   let env: Record<string, string>[] = []
   let files = new Map<string, string>()
   let alive = new Set<string>()
+  // Every process a `startProcess` began, by its id, kept after it exits.
+  let processes = new Map<
+    string,
+    {
+      pid: number
+      status: string
+      exitCode?: number
+      stdout: string
+      stderr: string
+    }
+  >()
+  type Opts = { cwd?: string; timeout?: number; env?: Record<string, string> }
+  let heard = (name: string, cmd: string, opts?: Opts) => {
+    alive.add(name)
+    ran.push(cmd)
+    env.push(opts?.env ?? {})
+    return answer(cmd) ?? {}
+  }
   let box = (name: string) => ({
-    exec: (
-      cmd: string,
-      opts?: { cwd?: string; timeout?: number; env?: Record<string, string> },
-    ) => {
-      alive.add(name)
-      ran.push(cmd)
-      env.push(opts?.env ?? {})
-      let said = answer(cmd) ?? {}
+    exec: (cmd: string, opts?: Opts) => {
+      let said = heard(name, cmd, opts)
       return Promise.resolve({
         stdout: said.stdout ?? '',
         stderr: said.stderr ?? '',
@@ -293,6 +312,36 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
         cwd: opts?.cwd,
       })
     },
+    startProcess: (cmd: string, opts?: Opts) => {
+      let said = heard(name, cmd, opts)
+      let id = `proc-${processes.size + 1}`
+      let pid = processes.size + 100
+      processes.set(id, {
+        pid,
+        status: said.running ? 'running' : 'completed',
+        exitCode: said.running ? undefined : said.exitCode ?? 0,
+        stdout: said.stdout ?? '',
+        stderr: said.stderr ?? '',
+      })
+      return Promise.resolve({ id, pid })
+    },
+    getProcess: (id: string) => {
+      let p = processes.get(id)
+      return Promise.resolve(p ? { id, ...p } : null)
+    },
+    killProcess: (id: string) => {
+      let p = processes.get(id)
+      if (p?.status == 'running') p.status = 'killed'
+      return Promise.resolve()
+    },
+    getProcessLogs: (id: string) => {
+      let p = processes.get(id)
+      return Promise.resolve({
+        stdout: p?.stdout ?? '',
+        stderr: p?.stderr ?? '',
+      })
+    },
+    mkdir: () => Promise.resolve({ success: true }),
     writeFile: (path: string, content: string) => {
       alive.add(name)
       files.set(path, content)

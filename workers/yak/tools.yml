@@ -130,7 +130,7 @@ app_files:
     content or base64 for a write. list returns file paths, read returns
     file text, and delete confirms the path removed. Documentation:
     https://yaks.app/docs/files.
-sandbox_exec:
+sandbox_shell:
   title: Run a build command
   description: >-
     Run one command in this space's build sandbox, a Linux container for
@@ -159,10 +159,30 @@ sandbox_exec:
     One person has one sandbox awake at a time on the free tier, two on the
     Plus plan. The container is destroyed when the build ends; separate MCP
     calls reuse it until it sleeps after five idle minutes. Its files are
-    temporary. Returns the exit code, stdout and stderr, each output stream
-    truncated after 8,000 characters. A command can call these tools and
-    change apps, so its external effects are not undone by discarding the
-    container. Documentation: https://yaks.app/docs/code.
+    temporary. A command that ends within timeout milliseconds returns its
+    exit code and its last 40 lines of output, stdout then stderr, cut after
+    8,000 characters. One still running then keeps running, for at most 240
+    seconds, and the answer gives its process id for sandbox_wait and
+    sandbox_stop. A command can call these tools and change apps, so its
+    external effects are not undone by discarding the container.
+    Documentation: https://yaks.app/docs/code.
+sandbox_wait:
+  title: Wait for a build command
+  description: >-
+    Wait for a command sandbox_shell left running in this space's build
+    sandbox, by the process id its answer gave. Returns the exit code and the
+    last 40 lines of output, stdout then stderr, or says it is still running
+    when timeout milliseconds pass (default 60000). Waiting keeps the sandbox
+    awake, metered by the second as with sandbox_shell. Documentation:
+    https://yaks.app/docs/code.
+sandbox_stop:
+  title: Stop a build command
+  description: >-
+    Stop a command sandbox_shell left running in this space's build sandbox,
+    by the process id its answer gave, and return its exit code. Waking the
+    sandbox is metered by the second, as with sandbox_shell. Nothing to undo:
+    what it already wrote to the sandbox stays, and sandbox_shell runs it
+    again. Documentation: https://yaks.app/docs/code.
 sandbox_write:
   title: Write a build file
   description: >-
@@ -171,7 +191,7 @@ sandbox_write:
     nothing here is served, and files are temporary, not durable app
     storage. app_files writes what the app serves; sandbox_ship copies a
     built artifact from the sandbox into the app. Waking the sandbox is
-    metered by the second, as with sandbox_exec. Pass a sandbox path and
+    metered by the second, as with sandbox_shell. Pass a sandbox path and
     nonempty text; this overwrites that path without file history and
     returns the path written. Nothing to undo: nothing of the app lives
     here, and only sandbox_ship copies build output into durable app files.
@@ -181,9 +201,9 @@ sandbox_read:
   description: >-
     Read one file out of this space's build sandbox: a generated source, a
     build log, whatever the last command left behind. Waking the sandbox is
-    metered by the second, as with sandbox_exec. Pass a path relative to
+    metered by the second, as with sandbox_shell. Pass a path relative to
     /workspace. Returns file text, truncated after 8,000 characters;
-    sandbox_exec can inspect a large or binary file with a command.
+    sandbox_shell can inspect a large or binary file with a command.
     Documentation: https://yaks.app/docs/code.
 sandbox_ship:
   title: Copy build output into the app
@@ -194,7 +214,7 @@ sandbox_ship:
     app keeps the artifact independently of the temporary sandbox. This call
     does not itself destroy the sandbox. Binary files are copied as bytes,
     so a .wasm arrives intact. Waking the sandbox is metered by the second,
-    as with sandbox_exec. To undo: these are written through app_files, so
+    as with sandbox_shell. To undo: these are written through app_files, so
     each keeps the bytes it replaced; use app_files op: history, then op:
     restore. Pass paths as a list of file paths or wildcard patterns (globs)
     relative to /workspace. Returns the copied filenames, file count and app

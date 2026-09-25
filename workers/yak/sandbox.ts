@@ -1,6 +1,8 @@
 // The builder's workbench (T-34264): a container it can run commands in, so
 // the things a browser cannot compile get compiled somewhere and the artifact
-// is shipped into the app as ordinary files.
+// is shipped into the app as ordinary files. It is the machine this host lends
+// @yaks/harness's machine tools ({@link sandboxMachine}), as a box lends its
+// own through @yaks/process.
 //
 // Owner, 2026-09-05: "and can we also give the agent some sandbox tools so
 // they could compile rust, etc. if they needed to?"
@@ -51,6 +53,7 @@
 // one per command ({@link signed}), and it dies with the container
 // ({@link destroyed}). It rides the SDK's per-invocation env and is never
 // exported into a shell, so nothing puts it in the builder's transcript.
+import type { Machine } from '@yaks/harness/machine'
 import type { Space, Tier } from './directory.ts'
 import { retryOnce } from './door.ts'
 import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'
@@ -58,13 +61,28 @@ import { type Host, url } from './host.ts'
 import { refuse } from './tool.ts'
 import { caught } from './sentry.ts'
 
-/** One sandbox, as this file asks for it — the four things the tools do,
- * plus the one knob the deploy has no way to set. */
+/** How a command runs in the container: where, for how long at most, and with
+ * what beside the container's own environment. */
+type Run = { cwd?: string; timeout?: number; env?: Record<string, string> }
+
+/** One sandbox, as this file asks for it: what the tools do with it, plus the
+ * one knob the deploy has no way to set. The SDK's process calls answer
+ * objects carrying methods as well; only their data is read here. */
 export type Box = {
   exec(
     cmd: string,
-    opts?: { cwd?: string; timeout?: number; env?: Record<string, string> },
+    opts?: Run,
   ): Promise<{ stdout: string; stderr: string; exitCode: number }>
+  startProcess(
+    cmd: string,
+    opts?: Run & { autoCleanup?: boolean },
+  ): Promise<{ id: string; pid?: number }>
+  getProcess(
+    id: string,
+  ): Promise<{ pid?: number; status: string; exitCode?: number } | null>
+  killProcess(id: string): Promise<unknown>
+  getProcessLogs(id: string): Promise<{ stdout: string; stderr: string }>
+  mkdir(path: string, opts?: { recursive?: boolean }): Promise<unknown>
   writeFile(
     path: string,
     content: string,
@@ -286,6 +304,11 @@ let stub = (ns: Sandboxes, space: Space): Box => {
     retryOnce(() => send(ns.get(ns.idFromName(named(space)))))
   return {
     exec: (cmd, opts) => call((box) => box.exec(cmd, opts)),
+    startProcess: (cmd, opts) => call((box) => box.startProcess(cmd, opts)),
+    getProcess: (id) => call((box) => box.getProcess(id)),
+    killProcess: (id) => call((box) => box.killProcess(id)),
+    getProcessLogs: (id) => call((box) => box.getProcessLogs(id)),
+    mkdir: (path, opts) => call((box) => box.mkdir(path, opts)),
     writeFile: (path, content, opts) =>
       call((box) => box.writeFile(path, content, opts)),
     readFile: (path, opts) => call((box) => box.readFile(path, opts)),
@@ -400,27 +423,80 @@ export let boxOf = (
       caught(e, { request: 'sandbox sleep', space: space.slug })
     )
   }
+  // The grant rides here — the SDK's per-invocation env, awaited by the first
+  // command and handed to every one after it — rather than `setEnvVars`,
+  // which reaches the container by exporting the token into a shell where an
+  // `echo` would put it in the transcript.
+  let dressed = async <T extends Run>(opts?: T) => ({
+    ...opts,
+    env: {
+      ...await (spend.signing ??= signed(env, space, person)),
+      ...opts?.env,
+    },
+  })
   // Named rather than spread: the stub is a Durable Object proxy, and what a
   // proxy answers is its methods, never its own properties.
   return {
-    // The grant rides here — the SDK's per-invocation env, awaited by the
-    // first command and handed to every one after it — rather than
-    // `setEnvVars`, which reaches the container by exporting the token into a
-    // shell where an `echo` would put it in the transcript.
-    exec: async (cmd, opts) =>
-      await box.exec(cmd, {
-        ...opts,
-        env: {
-          ...await (spend.signing ??= signed(env, space, person)),
-          ...opts?.env,
-        },
-      }),
+    exec: async (cmd, opts) => await box.exec(cmd, await dressed(opts)),
+    startProcess: async (cmd, opts) =>
+      await box.startProcess(cmd, await dressed(opts)),
+    getProcess: (id) => box.getProcess(id),
+    killProcess: (id) => box.killProcess(id),
+    getProcessLogs: (id) => box.getProcessLogs(id),
+    mkdir: (path, opts) => box.mkdir(path, opts),
     writeFile: (path, content, opts) => box.writeFile(path, content, opts),
     readFile: (path, opts) => box.readFile(path, opts),
     destroy: () => box.destroy(),
     setSleepAfter: (after) => box.setSleepAfter?.(after),
   }
 }
+
+// What the container calls a process that has not ended yet.
+let RUNNING = new Set(['starting', 'running'])
+
+let lines = (said: string) => said ? said.replace(/\n$/, '').split('\n') : []
+
+/**
+ * A container as the machine @yaks/harness's machine tools run on
+ * (`machineTools`). Every command is a background process of the container's
+ * own, bounded by {@link TIMEOUT} and kept after it exits so a later `wait`
+ * still finds its code; the container's destruction clears them all.
+ *
+ * Its output is two streams where a box has one, so an answer's tail is what
+ * it printed to stdout followed by what it printed to stderr, where a
+ * compiler's errors are. A kill is the container's one kill: it takes no
+ * signal, so SIGTERM and SIGKILL are the same call.
+ */
+export let sandboxMachine = (box: Box): Machine => ({
+  // Every look is a call into the container, so it looks twice a second.
+  poll: 500,
+  start: async (command, cwd) =>
+    (await box.startProcess(command, {
+      cwd: cwd ?? CWD,
+      timeout: TIMEOUT,
+      autoCleanup: false,
+    })).id,
+  look: async (id) => {
+    let p = await box.getProcess(id)
+    return p && {
+      ...p.pid ? { pid: p.pid } : {},
+      ...RUNNING.has(p.status) ? {} : { exit: { code: p.exitCode ?? null } },
+    }
+  },
+  tail: async (id, n) => {
+    let { stdout, stderr } = await box.getProcessLogs(id)
+    return [...lines(stdout), ...lines(stderr)].slice(-n)
+  },
+  kill: async (id) => {
+    await box.killProcess(id)
+  },
+  read: async (path) => (await box.readFile(path)).content,
+  write: async (path, content) => {
+    let dir = path.slice(0, path.lastIndexOf('/'))
+    if (dir) await box.mkdir(dir, { recursive: true })
+    await box.writeFile(path, content)
+  },
+})
 
 /**
  * This space's container, destroyed. Answers whether there was a binding to

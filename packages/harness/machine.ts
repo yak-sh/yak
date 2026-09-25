@@ -50,6 +50,9 @@ export type MachineOpts = {
   cwd?: (ctx?: ToolContext) => string | undefined | Promise<string | undefined>
 }
 
+// How long `shell` waits for its command unless told otherwise (ms).
+let BUDGET = 5000
+
 let sleep = (ms: number) => new Promise((go) => setTimeout(go, ms))
 
 /** Whether a path names its own root.
@@ -71,8 +74,92 @@ let pid = (p: Proc) => p.pid ? ` (pid ${p.pid})` : ''
 
 let str = (description: string) => ({ type: 'string', description })
 
+/** A machine tool without its machine: what a door lists before it has one
+ * to run it on. */
+export type MachineTool = Omit<Tool, 'run'>
+
+/** The machine tools' declarations: `shell`, `wait`, `stop`, `read` and
+ * `write`. */
+export let machineDeclared = (o: MachineOpts = {}): MachineTool[] => [{
+  name: 'shell',
+  description:
+    'Run a shell command. A command still running when the timeout passes ' +
+    'keeps running as a process: the result gives its id, and wait or stop ' +
+    'accepts that id.',
+  parameters: {
+    type: 'object',
+    properties: {
+      command: str('the command line, run by bash'),
+      cwd: str('where to run it'),
+      timeout: {
+        type: 'number',
+        description: `milliseconds to wait for it (default ${
+          o.budget ?? BUDGET
+        })`,
+      },
+    },
+    required: ['command'],
+  },
+}, {
+  name: 'wait',
+  description:
+    'Wait for a process to exit. Returns its exit code and the last lines ' +
+    'of its output, or reports that it is still running when the timeout ' +
+    'passes.',
+  parameters: {
+    type: 'object',
+    properties: {
+      process: str('the process id'),
+      timeout: {
+        type: 'number',
+        description: 'milliseconds to wait (default 60000)',
+      },
+    },
+    required: ['process'],
+  },
+}, {
+  name: 'stop',
+  description:
+    'Stop a process: SIGTERM, then SIGKILL if it is still running after ' +
+    'the grace period. Returns its exit code.',
+  parameters: {
+    type: 'object',
+    properties: {
+      process: str('the process id'),
+      grace: {
+        type: 'number',
+        description: 'milliseconds between the two signals (default 2000)',
+      },
+    },
+    required: ['process'],
+  },
+}, {
+  name: 'read',
+  description: 'Read a text file.',
+  parameters: {
+    type: 'object',
+    properties: {
+      path: str('the file, from the working directory unless rooted'),
+    },
+    required: ['path'],
+  },
+}, {
+  name: 'write',
+  description:
+    'Write a text file, replacing whatever the path held and making its ' +
+    'directory if there is none.',
+  parameters: {
+    type: 'object',
+    properties: {
+      path: str('the file, from the working directory unless rooted'),
+      content: str('the whole text of the file'),
+    },
+    required: ['path', 'content'],
+  },
+}]
+
 /**
- * The machine tools over a machine: `shell`, `wait`, `stop`, `read`, `write`.
+ * The machine tools over a machine.
  *
  * A command that finishes within its timeout answers its code and output; one
  * that does not answers its process id, still running, for `wait` and `stop`
@@ -80,7 +167,6 @@ let str = (description: string) => ({ type: 'string', description })
  */
 export let machineTools = (m: Machine, o: MachineOpts = {}): Tool[] => {
   let poll = m.poll ?? 100
-  let budget = o.budget ?? 5000
   let lines = o.lines ?? 40
   let here = async (ctx?: ToolContext) => await o.cwd?.(ctx)
 
@@ -97,26 +183,9 @@ export let machineTools = (m: Machine, o: MachineOpts = {}): Tool[] => {
   let told = async (id: string, head: string) =>
     [head, ...await m.tail(id, lines)].join('\n')
 
-  return [{
-    name: 'shell',
-    description:
-      'Run a shell command. A command still running when the timeout passes ' +
-      'keeps running as a process: the result gives its id, and wait or stop ' +
-      'accepts that id.',
-    parameters: {
-      type: 'object',
-      properties: {
-        command: str('the command line, run by bash'),
-        cwd: str('where to run it'),
-        timeout: {
-          type: 'number',
-          description: `milliseconds to wait for it (default ${budget})`,
-        },
-      },
-      required: ['command'],
-    },
-    run: async (args, ctx) => {
-      let ms = Number(args.timeout ?? budget)
+  let runs: Record<string, Tool['run']> = {
+    shell: async (args, ctx) => {
+      let ms = Number(args.timeout ?? o.budget ?? BUDGET)
       // The timeout covers the whole call, the start included; a child that
       // outlived it is reported as running even if it exits a moment later.
       let end = Date.now() + ms
@@ -131,24 +200,7 @@ export let machineTools = (m: Machine, o: MachineOpts = {}): Tool[] => {
             'wait or stop it by that id',
       )
     },
-  }, {
-    name: 'wait',
-    description:
-      'Wait for a process to exit. Returns its exit code and the last lines ' +
-      'of its output, or reports that it is still running when the timeout ' +
-      'passes.',
-    parameters: {
-      type: 'object',
-      properties: {
-        process: str('the process id'),
-        timeout: {
-          type: 'number',
-          description: 'milliseconds to wait (default 60000)',
-        },
-      },
-      required: ['process'],
-    },
-    run: async (args) => {
+    wait: async (args) => {
       let id = String(args.process ?? '')
       let ms = Number(args.timeout ?? 60_000)
       let p = await settle(id, ms)
@@ -160,23 +212,7 @@ export let machineTools = (m: Machine, o: MachineOpts = {}): Tool[] => {
           : `process ${id} still running${pid(p)} after ${ms}ms`,
       )
     },
-  }, {
-    name: 'stop',
-    description:
-      'Stop a process: SIGTERM, then SIGKILL if it is still running after ' +
-      'the grace period. Returns its exit code.',
-    parameters: {
-      type: 'object',
-      properties: {
-        process: str('the process id'),
-        grace: {
-          type: 'number',
-          description: 'milliseconds between the two signals (default 2000)',
-        },
-      },
-      required: ['process'],
-    },
-    run: async (args) => {
+    stop: async (args) => {
       let id = String(args.process ?? '')
       let p = await m.look(id)
       if (!p) return `no such process: ${id}`
@@ -192,35 +228,13 @@ export let machineTools = (m: Machine, o: MachineOpts = {}): Tool[] => {
         ? `process ${id} ${code(p.exit.code)}`
         : `process ${id} signalled, no exit recorded yet`
     },
-  }, {
-    name: 'read',
-    description: 'Read a text file.',
-    parameters: {
-      type: 'object',
-      properties: {
-        path: str('the file, from the working directory unless rooted'),
-      },
-      required: ['path'],
-    },
-    run: async (args, ctx) =>
+    read: async (args, ctx) =>
       await m.read(under(await here(ctx), String(args.path ?? ''))),
-  }, {
-    name: 'write',
-    description:
-      'Write a text file, replacing whatever the path held and making its ' +
-      'directory if there is none.',
-    parameters: {
-      type: 'object',
-      properties: {
-        path: str('the file, from the working directory unless rooted'),
-        content: str('the whole text of the file'),
-      },
-      required: ['path', 'content'],
-    },
-    run: async (args, ctx) => {
+    write: async (args, ctx) => {
       let path = String(args.path ?? '')
       await m.write(under(await here(ctx), path), String(args.content ?? ''))
       return `wrote ${path}`
     },
-  }]
+  }
+  return machineDeclared(o).map((d) => ({ ...d, run: runs[d.name] }))
 }

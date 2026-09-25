@@ -228,9 +228,9 @@ Almost nothing needs compiling: an app is html, css and js, served as
 written, and reaching for a build step where none is needed is the commonest
 way to waste an afternoon. When something genuinely must be compiled — Rust
 to WebAssembly for a chess engine, an image codec, a solver — there is a
-sandbox: sandbox_write the sources, sandbox_exec the build (a Linux container
+sandbox: sandbox_write the sources, sandbox_shell the build (a Linux container
 with pinned Rust, Python, Go and Zig toolchains — zig cc is its C and C++
-compiler — plus wasm-bindgen and wasm-opt; sandbox_exec names the versions,
+compiler — plus wasm-bindgen and wasm-opt; sandbox_shell names the versions,
 and anything else installs for the session with apt or a package manager), then
 sandbox_ship the artifact — pkg/*.wasm, pkg/*.js — into the app, where it is
 served beside index.html and the page imports it. Its files are gone when the

@@ -416,7 +416,7 @@ slow(
         { path: 'hello.txt' },
         'from the roster suite',
       )
-      await box('sandbox_exec', { cmd: 'echo hello' }, 'hello')
+      await box('sandbox_shell', { command: 'echo hello' }, 'hello')
       await box('sandbox_ship', { app, paths: ['hello.txt'] }, 'hello.txt')
 
       // ---- the trash, and back out of it -------------------------------------

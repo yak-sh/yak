@@ -578,7 +578,7 @@ back puts its code back too.
 ## The build sandbox is signed in as you
 
 Some code has to be compiled before a browser can run it — a chess engine, an
-image codec, a solver — and `sandbox_exec` runs the compiler in a Linux
+image codec, a solver — and `sandbox_shell` runs the compiler in a Linux
 container of the space's own. Already in it:
 
     Rust 1.98.1      with wasm32-unknown-unknown, wasm-bindgen 0.2.128,

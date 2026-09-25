@@ -88,9 +88,11 @@ slow(
         'app_files',
         // The builder's workbench, offered to a person's own agent on the
         // same terms it is offered to ours (sandbox.ts, T-34264).
-        'sandbox_exec',
-        'sandbox_write',
+        'sandbox_shell',
+        'sandbox_wait',
+        'sandbox_stop',
         'sandbox_read',
+        'sandbox_write',
         'sandbox_ship',
         'app_deploy',
         'store_load',

@@ -153,10 +153,11 @@ import {
   CAP,
   CWD,
   paid,
+  sandboxMachine,
   seconds,
   spending,
-  TIMEOUT,
 } from './sandbox.ts'
+import { machineDeclared, machineTools } from '@yaks/harness/machine'
 import {
   connect,
   disconnect,
@@ -1524,7 +1525,7 @@ let capped = (said: string) =>
 
 // A path this may hand to a shell for globbing: what a path and a glob are
 // made of, and nothing a shell reads as punctuation. It is tidiness rather
-// than a boundary — the sandbox is the caller's own and sandbox_exec runs
+// than a boundary — the sandbox is the caller's own and sandbox_shell runs
 // anything in it — and it keeps one `ls` from becoming three commands.
 let SHIP = /^[A-Za-z0-9._\-/*?[\]]+$/
 
@@ -1542,7 +1543,7 @@ let shipPath = (v: unknown) => {
 
 // Where that path IS: from the sandbox's working directory, or as written
 // where a model wrote an absolute one. There is nowhere to escape to — the
-// sandbox is the caller's own and sandbox_exec reaches all of it — so this is
+// sandbox is the caller's own and sandbox_shell reaches all of it — so this is
 // about `/workspace//workspace/x`, not about a boundary.
 let inBox = (path: string) => path.startsWith('/') ? path : `${CWD}/${path}`
 
@@ -1551,6 +1552,49 @@ let inBox = (path: string) => path.startsWith('/') ? path : `${CWD}/${path}`
 // serves it by its extension either way).
 let unbase64 = (said: string) =>
   Uint8Array.from(atob(said.trim()), (c) => c.charCodeAt(0))
+
+// The machine tools (@yaks/harness), declared there once and listed here as
+// sandbox_<name>, run on this space's container (sandbox.ts
+// `sandboxMachine`). The door adds the space to each one's arguments, says
+// what each may do to the world, and caps what it hands back.
+let HINTS: Record<
+  string,
+  Pick<Row, 'readOnly' | 'destructive' | 'idempotent' | 'openWorld' | 'slots'>
+> = {
+  // What a build may spend, out of the one place that decides it
+  // (sandbox.ts BUDGET).
+  shell: { destructive: true, openWorld: true, slots: { budget: `${BUDGET}` } },
+  wait: { readOnly: true },
+  stop: { destructive: true },
+  read: { readOnly: true },
+  // A path that already holds something is overwritten.
+  write: { destructive: true, idempotent: true },
+}
+
+let SANDBOX: Row[] = machineDeclared().map((t) => {
+  let shape = t.parameters as Omit<Shape, 'type'>
+  return {
+    ...HINTS[t.name],
+    name: `sandbox_${t.name}`,
+    input: {
+      type: 'object',
+      properties: { space: SPACE, ...shape.properties },
+      required: shape.required,
+    },
+    run: async (ctx, args) => {
+      let { space } = await inSpace(ctx, args, true)
+      let said = await bench(
+        ctx,
+        space,
+        async (box) =>
+          await machineTools(sandboxMachine(box), { cwd: () => CWD })
+            .find((m) => m.name == t.name)!
+            .run(args),
+      )
+      return { text: capped(said), space }
+    },
+  }
+})
 
 // What an app's access means where it is felt: what happens when the person
 // sends someone the link. Said on every tool that sets it, so the agent can
@@ -2412,99 +2456,13 @@ let OURS: Row[] = [
       }
     },
   },
-  // The workbench (sandbox.ts, T-34264). Four tools, and they are here rather
-  // than in a tier of their own because they are the platform's verbs like the
-  // rest: an owner or editor of the space calls them, the builder we run calls
-  // them through the same table (builder.ts `roster`), and a person's own
-  // agent calls them over the connector.
-  {
-    name: 'sandbox_exec',
-    // What a build may spend, out of the one place that decides it
-    // (sandbox.ts BUDGET).
-    slots: { budget: `${BUDGET}` },
-    destructive: true,
-    openWorld: true,
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        cmd: str('the command, run in a shell, e.g. cargo build --release'),
-        cwd: str(`the directory to run it in (default ${CWD})`),
-        timeout: {
-          type: 'number',
-          description: `seconds to allow it (default and maximum, ${
-            TIMEOUT / 1000
-          })`,
-        },
-      },
-      required: ['cmd'],
-    },
-    run: async (ctx, args) => {
-      let { space } = await inSpace(ctx, args, true)
-      let cmd = text(args.cmd, 'cmd')
-      let asked = Number(args.timeout ?? 0) * 1000
-      let out = await bench(ctx, space, (box) =>
-        box.exec(cmd, {
-          cwd: args.cwd == null ? CWD : text(args.cwd, 'cwd'),
-          timeout: asked > 0 ? Math.min(asked, TIMEOUT) : TIMEOUT,
-        }))
-      return {
-        text: `code ${out.exitCode}` +
-          `\n\nstdout:\n${capped(out.stdout) || '(nothing)'}` +
-          `\n\nstderr:\n${capped(out.stderr) || '(nothing)'}`,
-        space,
-      }
-    },
-  },
-  {
-    name: 'sandbox_write',
-    // A path that already holds something is overwritten, which is the one
-    // thing here that is not purely additive.
-    destructive: true,
-    idempotent: true,
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        path: str(`the path in the sandbox, e.g. src/lib.rs (from ${CWD})`),
-        content: str('the file text'),
-      },
-      required: ['path', 'content'],
-    },
-    run: async (ctx, args) => {
-      let { space } = await inSpace(ctx, args, true)
-      let path = shipPath(args.path)
-      let content = text(args.content, 'content')
-      await bench(
-        ctx,
-        space,
-        (box) => Promise.resolve(box.writeFile(inBox(path), content)),
-      )
-      return { text: `wrote ${path} in the sandbox`, space }
-    },
-  },
-  {
-    name: 'sandbox_read',
-    readOnly: true,
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        path: str(`the path in the sandbox, e.g. pkg/app.js (from ${CWD})`),
-      },
-      required: ['path'],
-    },
-    run: async (ctx, args) => {
-      let { space } = await inSpace(ctx, args, true)
-      let path = shipPath(args.path)
-      let got = await bench(
-        ctx,
-        space,
-        (box) => box.readFile(inBox(path)),
-      )
-      return { text: capped(got.content), space }
-    },
-  },
+  // The workbench (sandbox.ts, T-34264): the machine tools, and shipping
+  // what they built. They are here rather than in a tier of their own because
+  // they are the platform's verbs like the rest: an owner or editor of the
+  // space calls them, the builder we run calls them through the same table
+  // (builder.ts `roster`), and a person's own agent calls them over the
+  // connector.
+  ...SANDBOX,
   {
     name: 'sandbox_ship',
     destructive: true,
@@ -2540,7 +2498,7 @@ let OURS: Row[] = [
           throw refuse(
             'missing',
             `nothing in the sandbox matches ${asked.join(', ')} — ` +
-              'sandbox_exec `ls` to see what the build left',
+              'sandbox_shell `ls` to see what the build left',
           )
         }
         return await Promise.all(paths.map(async (path) => ({
