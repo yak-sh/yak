@@ -122,7 +122,7 @@ Deno.test('a past transcript is read in once, each entry dated when it was said'
     let [s] = await g.read('.session.id=old-sid&*')
     assertEquals(c(s, 'session')?.operator, true)
     let entries = await g.read(
-      `.entry.session=${s.entity.eid}&.order=entry.seq`,
+      `.entry.session=${s.entity.eid}&.order=entry.seq&*`,
     )
     assertEquals(
       entries.map((b) => [

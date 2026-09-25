@@ -57,7 +57,7 @@ Deno.test('a second client sees the bundles, and a delete arrives as gone', asyn
   let srv = server()
   let a = client(srv)
   let b = client(srv)
-  b.wire.subscribe('.course=dinner', 'dinners')
+  b.wire.subscribe('.course=dinner&.doc?', 'dinners')
   await b.idle()
 
   a.graph.apply([dal()])

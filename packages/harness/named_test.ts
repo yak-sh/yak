@@ -78,11 +78,11 @@ Deno.test('an old file moves onto the ids names derive, once', () => {
     assertEquals(named(sql, h.store), 3)
     assertEquals(named(sql, h.store), null)
     assertEquals(renamed(sql, h.vocab), { moved: 0, merged: 0 })
-    let [m] = h.store.read('.model&*')
+    let [m] = h.store.read('.model')
     assertEquals(m.entity.eid, astra)
     assertEquals((m.model as Comp).label, 'GPT-6 Astra')
     assertEquals(
-      h.store.read('.serves&*').map((b) => [
+      h.store.read('.serves').map((b) => [
         (b.edge as Comp).from,
         (b.serves as Comp).name,
       ]).sort(),
@@ -92,7 +92,7 @@ Deno.test('an old file moves onto the ids names derive, once', () => {
         [P('openai'), 'gpt-6-astra'],
       ].sort(),
     )
-    let [e] = h.store.read('.entry&*')
+    let [e] = h.store.read('.entry')
     assertEquals(e.using, {
       provider: P('codex'),
       model: astra,
@@ -100,10 +100,10 @@ Deno.test('an old file moves onto the ids names derive, once', () => {
       instructions: null,
     })
     assertEquals((e.call as Comp).to, toolEid('wait'))
-    assertEquals(h.store.read('.tool&*').map((b) => b.entity.eid), [
+    assertEquals(h.store.read('.tool').map((b) => b.entity.eid), [
       toolEid('wait'),
     ])
-    assertEquals(h.store.read('.contains&*').map((b) => b.entity.eid), [
+    assertEquals(h.store.read('.contains').map((b) => b.entity.eid), [
       edgeEid('v', 'contains', astra),
     ])
     let cols = (t: string) =>

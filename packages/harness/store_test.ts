@@ -181,7 +181,7 @@ Deno.test('a deleted provider leaves past entries saying what answered', () => {
       },
     ])
     h.g.apply([{ entity: { eid: P }, tombstone: {} }])
-    assertEquals(h.store.read('.entry&*')[0].using, {
+    assertEquals(h.store.read('.entry')[0].using, {
       provider: P,
       model: A,
       effort: null,
@@ -215,7 +215,7 @@ Deno.test('legacy completion actors become authors once, including anonymous mar
     h.close()
     h = open(path)
     let authors = () =>
-      h.store.read('.task&*').map((b) => [
+      h.store.read('.task').map((b) => [
         b.entity.eid,
         (b.completed as Comp).by ?? null,
       ]).sort()
