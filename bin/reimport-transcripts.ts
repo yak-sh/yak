@@ -102,9 +102,9 @@ let migrate = async () => {
     // handler is not a queue: a writer that takes the lock again the moment
     // it lets go starves everyone else past their busy timeout, and a loop
     // that never waits on a timer starves its own lease renewals too. So a
-    // batch halves while it holds the lock past half a second (an entry with
-    // many edges cascades slowly), and the lock sits free as long as it was
-    // held.
+    // batch halves while it holds the lock past a second and a half (an entry
+    // with many edges cascades slowly), and the lock sits free as long as it
+    // was held.
     let size = BATCH
     for (let i = 0; i < doomed.length;) {
       let t = performance.now()
@@ -112,7 +112,7 @@ let migrate = async () => {
       i += size
       let ms = Math.round(performance.now() - t)
       console.log(`${Math.min(i, doomed.length)} of ${doomed.length}: ${ms}ms`)
-      size = ms > 500 ? Math.max(1, size >> 1) : Math.min(BATCH, size * 2)
+      size = ms > 1500 ? Math.max(1, size >> 1) : Math.min(BATCH, size * 2)
       await new Promise((go) => setTimeout(go, ms))
     }
   }
