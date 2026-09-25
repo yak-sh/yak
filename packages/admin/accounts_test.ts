@@ -127,6 +127,18 @@ Deno.test('the vault’s sessions read back as accounts', () => {
   ])
 })
 
+// One address signs in on each zone, and neither session is the other's.
+Deno.test('a session is kept per zone', () => {
+  let vault = ramVault()
+  let keep = (name: string, value: string) =>
+    vault.seal(secretEid(name), { name, handle: 'h', value })
+  keep(sessionName(ADMIN, 'yaks.app'), 'app.token')
+  keep(sessionName(ADMIN, 'yaks.fyi'), 'fyi.token')
+  let held = (at: string) => accountsIn(vault, at).map((a) => a.session)
+  assertEquals(held('yaks.app'), ['app.token'])
+  assertEquals(held('yaks.fyi'), ['fyi.token'])
+})
+
 Deno.test('the remembered default is written, read and forgotten', () => {
   let home = Deno.makeTempDirSync()
   let dir = `${home}/yaks`
@@ -134,6 +146,9 @@ Deno.test('the remembered default is written, read and forgotten', () => {
     assertEquals(current(dir), '')
     choose('probe@bot.yak.sh', dir)
     assertEquals(current(dir), 'probe@bot.yak.sh')
+    choose('other@bot.yak.sh', dir, 'yaks.fyi')
+    assertEquals(current(dir), 'probe@bot.yak.sh')
+    assertEquals(current(dir, 'yaks.fyi'), 'other@bot.yak.sh')
     choose(null, dir)
     choose(null, dir)
     assertEquals(current(dir), '')

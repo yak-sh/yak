@@ -1,6 +1,8 @@
 // The yaks.app accounts this box is signed in as, and the rule that keeps an
 // agent out of the owner's. A session is a secret (@yaks/secrets) named for
-// the address it signed in as, `yaks.app session <address>`, written through
+// the zone and the address it signed in as, `yaks.app session <address>` (or
+// `yaks.fyi session <address>` on staging), so one address holds a session on
+// each platform without either overwriting the other. It is written through
 // the graph this box's `yak` opens: the graph holds the name and a handle,
 // and the vault beside its database holds the session — never a checkout,
 // and never the data repo a backup pushes.
@@ -21,6 +23,7 @@ import { stateDir } from '@yaks/cli'
 import type { Local } from '@yaks/secrets'
 import { CallError } from '@yaks/tools'
 import { ADMIN, BOT, isTestAddress } from '../../workers/yak/lib/bots.ts'
+import { zone } from './api.ts'
 
 export type Account = {
   // The address it signed in as.
@@ -37,31 +40,31 @@ export let isAdmin = (a: Account) => a.address == ADMIN
 
 export let localPart = (address: string) => address.split('@')[0]
 
-// The secret one account's session is kept under.
-let SESSION = 'yaks.app session '
-export let sessionName = (address: string) => SESSION + address
+// The secret one account's session on one zone is kept under.
+let session = (at: string) => `${at} session `
+export let sessionName = (address: string, at = zone()) => session(at) + address
 
-// Every account whose session the vault keeps.
-export let accountsIn = (vault: Local): Account[] =>
+// Every account whose session on this zone the vault keeps.
+export let accountsIn = (vault: Local, at = zone()): Account[] =>
   vault.all().flatMap(([, kept]) => {
-    let address = kept.name?.startsWith(SESSION)
-      ? kept.name.slice(SESSION.length)
+    let address = kept.name?.startsWith(session(at))
+      ? kept.name.slice(session(at).length)
       : ''
     return address && kept.value
       ? [{ address, session: kept.value, name: localPart(address) }]
       : []
   }).sort((a, b) => a.name.localeCompare(b.name))
 
-// The remembered test account a bare command runs as. It is not a secret, so
-// it is not kept with the sessions: it is one more thing this machine
-// remembers between commands, beside the bearer `yak login` keeps (@yaks/cli
-// `stateDir`), in the directory the caller names, this machine's own by
-// default.
-let currentFile = (dir: string) => `${dir}/current`
+// The remembered test account a bare command runs as, one per zone. It is not
+// a secret, so it is not kept with the sessions: it is one more thing this
+// machine remembers between commands, beside the bearer `yak login` keeps
+// (@yaks/cli `stateDir`), in the directory the caller names, this machine's
+// own by default.
+let currentFile = (dir: string, at: string) => `${dir}/current.${at}`
 
-export let current = (dir: string = stateDir()): string => {
+export let current = (dir: string = stateDir(), at = zone()): string => {
   try {
-    return Deno.readTextFileSync(currentFile(dir)).trim()
+    return Deno.readTextFileSync(currentFile(dir, at)).trim()
   } catch {
     return ''
   }
@@ -71,15 +74,16 @@ export let current = (dir: string = stateDir()): string => {
 export let choose = (
   address: string | null,
   dir: string = stateDir(),
+  at = zone(),
 ): void => {
   if (address == null) {
     try {
-      Deno.removeSync(currentFile(dir))
+      Deno.removeSync(currentFile(dir, at))
     } catch { /* nothing remembered */ }
     return
   }
   Deno.mkdirSync(dir, { recursive: true, mode: 0o700 })
-  Deno.writeTextFileSync(currentFile(dir), address + '\n')
+  Deno.writeTextFileSync(currentFile(dir, at), address + '\n')
 }
 
 // What `--as` accepts: the whole address, or the local part when it names
