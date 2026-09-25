@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph'
+import { by, scan, tally } from '@yaks/sql'
 import { address } from './store.ts'
 import { blog, fixture } from './testing.ts'
 import { blobs } from './plugin.ts'
@@ -24,11 +25,11 @@ Deno.test('the row holds the address and the store holds the bytes', () => {
   g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay' } }])
   let sha = address('a long essay')
   assertEquals(
-    driver.query('select body from post', []),
+    scan(driver, 'post', undefined, ['body']),
     [{ body: sha }],
   )
   assertEquals(
-    driver.query('select value from blob_text where sha = ?', [sha]),
+    scan(driver, 'blob_text', by({ sha }), ['value']),
     [{ value: 'a long essay' }],
   )
 })
@@ -40,9 +41,7 @@ Deno.test('the same value written twice is stored once', () => {
     { entity: { eid: 'p2' }, post: { body: 'shared' } },
     { entity: { eid: 'p3' }, post: { body: 'other' } },
   ])
-  assertEquals(driver.query('select count(*) as n from blob_text', []), [{
-    n: 2,
-  }])
+  assertEquals(tally(driver, 'blob_text'), 2)
 })
 
 for (let async of [false, true]) {
@@ -104,15 +103,11 @@ Deno.test('interned references do not survive a rolled-back batch', () => {
       post: { body: 'shared' },
     }))
   assertThrows(() => g.apply(rows()), Error, 'rollback')
-  assertEquals(driver.query('select count(*) as n from blob_text', []), [{
-    n: 0,
-  }])
+  assertEquals(tally(driver, 'blob_text'), 0)
   fail = false
   g.apply(rows())
   assertEquals(db.read('.post').map((b) => post(b).body), ['shared', 'shared'])
-  assertEquals(driver.query('select count(*) as n from blob_text', []), [{
-    n: 1,
-  }])
+  assertEquals(tally(driver, 'blob_text'), 1)
 })
 
 Deno.test('a bundle that names no body property is untouched', () => {
@@ -170,9 +165,7 @@ Deno.test('clearing a body clears the property, not the store', () => {
   g.apply([{ entity: { eid: 'p1' }, post: { body: null } }])
   assertEquals(post(db.read('.post')[0]).body, null)
   // the bytes stay: another row may address them, and they cost one row
-  assertEquals(driver.query('select count(*) as n from blob_text', []), [{
-    n: 1,
-  }])
+  assertEquals(tally(driver, 'blob_text'), 1)
 })
 
 Deno.test('a backend may address bodies by integer keys while echoing text', async () => {
@@ -189,8 +182,8 @@ Deno.test('a backend may address bodies by integer keys while echoing text', asy
     post: { body: 'text' },
   }]) as Bundle[]
   assertEquals(post(out[0]).body, 'text')
-  assertEquals(driver.query('select body from post', []), [{ body: '42' }])
-  assertEquals(driver.query('select value from blob_text', []), [{
+  assertEquals(scan(driver, 'post', undefined, ['body']), [{ body: '42' }])
+  assertEquals(scan(driver, 'blob_text', undefined, ['value']), [{
     value: 'text',
   }])
 })
@@ -214,7 +207,7 @@ Deno.test('zero is a reusable backend reference, not a cache miss', () => {
   }))) as Bundle[]
   assertEquals(calls, 1)
   assertEquals(out.map((b) => post(b).body), ['shared', 'shared'])
-  assertEquals(driver.query('select body from post', []), [{ body: '0' }, {
+  assertEquals(scan(driver, 'post', undefined, ['body']), [{ body: '0' }, {
     body: '0',
   }])
 })
@@ -229,8 +222,6 @@ Deno.test('property selection leaves inline body properties alone', async () => 
     post: { body: 'inline' },
   }]) as Bundle[]
   assertEquals(post(out[0]).body, 'inline')
-  assertEquals(driver.query('select body from post', []), [{ body: 'inline' }])
-  assertEquals(driver.query('select count(*) as n from blob_text', []), [{
-    n: 0,
-  }])
+  assertEquals(scan(driver, 'post', undefined, ['body']), [{ body: 'inline' }])
+  assertEquals(tally(driver, 'blob_text'), 0)
 })

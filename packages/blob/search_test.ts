@@ -11,6 +11,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { fields, find, schema } from '@yaks/fts'
+import { by, insert, scan } from '@yaks/sql'
 import { blobRead } from './sqlite.ts'
 import { blog, fixture } from './testing.ts'
 
@@ -29,7 +30,7 @@ Deno.test('a body in the store is found by a word only the body says', () => {
     post: { title: 'On lemons', body: 'three lemons and a drizzle of syrup' },
   }])
   // The row kept the address; the index kept the words.
-  let [row] = driver.query(`select body from post where entity = 1`, [])
+  let [row] = scan(driver, 'post', by({ entity: 1 }), ['body'])
   assertEquals(String(row.body).includes('drizzle'), false)
   assertEquals(find(driver, text, 'drizzle').map((h) => h.entity), ['p1'])
   // The title still matches, and the snippet reads as prose rather than a hash.
@@ -66,10 +67,11 @@ Deno.test('the words are indexed on every write path, not just the plugin', () =
   // A row written straight into the table — a restore, a repair, a migration —
   // goes through the same triggers, so the index holds prose for it too.
   let { driver } = shelf()
-  driver.query(`insert into entity (id, eid, num) values (1, 'p1', 1)`, [])
-  driver.query(`insert into blob_text (sha, value) values ('k1', ?)`, [
-    'a cook writes down what the nights are like',
-  ])
-  driver.query(`insert into post (entity, body) values (1, 'k1')`, [])
+  driver.query(insert('entity', { id: 1, eid: 'p1', num: 1 }))
+  driver.query(insert('blob_text', {
+    sha: 'k1',
+    value: 'a cook writes down what the nights are like',
+  }))
+  driver.query(insert('post', { entity: 1, body: 'k1' }))
   assertEquals(find(driver, text, 'nights').map((h) => h.entity), ['p1'])
 })

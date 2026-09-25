@@ -3,7 +3,7 @@ import { type Graph, graph } from '@yaks/graph'
 import { type Authenticate, type Route, routed } from '@yaks/api'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
-import type { Driver } from '@yaks/sql'
+import { type Driver, tally } from '@yaks/sql'
 import { addressOf, type Artifact, artifactDoc } from './artifact.ts'
 import { mem } from './testing.ts'
 import type { Bucket } from './object.ts'
@@ -110,9 +110,7 @@ Deno.test('the same upload twice is one object and one row', async () => {
   await ask(put(sha, text, 'text/plain'))
   let again = await ask(put(sha, text, 'text/plain'))
   assertEquals(again.status, 200)
-  assertEquals(h.sql.query('select count(*) as n from blob_text', []), [{
-    n: 1,
-  }])
+  assertEquals(tally(h.sql, 'blob_text'), 1)
   assertEquals((await h.graph.read('.artifact')).length, 1)
 })
 
@@ -123,9 +121,7 @@ Deno.test('bytes that do not hash to their address are refused, and nothing land
   assertEquals(res.status, 400)
   assert((await res.json()).message.startsWith('these bytes address '))
   assertEquals((await h.graph.read(`.eid=${sha}`)).length, 0)
-  assertEquals(h.sql.query('select count(*) as n from blob_text', []), [{
-    n: 0,
-  }])
+  assertEquals(tally(h.sql, 'blob_text'), 0)
 })
 
 Deno.test('an address is 64 hex digits, whichever way the request points', async () => {
@@ -150,9 +146,7 @@ Deno.test('a text store that cannot keep the bytes says so at the write', async 
   assertEquals(res.status, 500)
   // and the store kept nothing: an address that answered mangled bytes is the
   // one thing content addressing promises never happens
-  assertEquals(h.sql.query('select count(*) as n from blob_text', []), [{
-    n: 0,
-  }])
+  assertEquals(tally(h.sql, 'blob_text'), 0)
   assertEquals((await ask(new Request(at(sha)))).status, 404)
   // and no row names an object nothing holds
   assertEquals((await h.graph.read('.artifact')).length, 0)
@@ -184,9 +178,7 @@ Deno.test('the store a host names is where the bytes land', async () => {
   assertEquals(new Uint8Array(await got.arrayBuffer()), png)
   assertEquals(got.headers.get('content-type'), 'image/png')
   // and the database kept nothing but the row
-  assertEquals(h.sql.query('select count(*) as n from blob_text', []), [{
-    n: 0,
-  }])
+  assertEquals(tally(h.sql, 'blob_text'), 0)
 })
 
 Deno.test('the bound is on the bytes, not on what a header claimed', async () => {

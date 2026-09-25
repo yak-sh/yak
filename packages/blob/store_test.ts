@@ -5,6 +5,7 @@ import { sqliteBlobs } from './sqlite.ts'
 import { hydrate } from './hydrate.ts'
 import { blog, mem } from './testing.ts'
 import { blobSchema } from './sqlite.ts'
+import { by, scan } from '@yaks/sql'
 
 Deno.test('an address is the SHA-256 of the text, and nothing else', () => {
   assertEquals(address('a long essay'), sha256('a long essay'))
@@ -20,7 +21,7 @@ Deno.test('text round-trips through the byte encoding', () => {
 
 let store = () => {
   let driver = mem()
-  for (let stmt of blobSchema()) driver.exec(stmt)
+  for (let stmt of blobSchema()) driver.query(stmt)
   return sqliteBlobs(driver)
 }
 
@@ -40,11 +41,11 @@ Deno.test('the sqlite backend stores, finds and answers for what it holds', () =
 Deno.test('a layout points the backend at a table it did not make', () => {
   let driver = mem()
   let layout = { table: 'body_text', key: 'entity', value: 'text' }
-  for (let stmt of blobSchema(layout)) driver.exec(stmt)
+  for (let stmt of blobSchema(layout)) driver.query(stmt)
   let s = sqliteBlobs(driver, layout)
   s.put('abc', encode('hello'))
   assertEquals(
-    driver.query('select text from body_text where entity = ?', ['abc']),
+    scan(driver, 'body_text', by({ entity: 'abc' }), ['text']),
     [{ text: 'hello' }],
   )
 })
