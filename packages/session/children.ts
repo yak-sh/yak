@@ -1,4 +1,5 @@
 import { appendEntry } from './append.ts'
+import { taskMarks } from './comp.ts'
 import { configurePool, pool } from './pool.ts'
 // Delegation is transcript structure, not a process handle. A spawned session
 // names its parent and originating call; a fork additionally names a prefix.
@@ -13,7 +14,7 @@ import {
   identityEid,
 } from '@yaks/graph'
 import { link } from '@yaks/edge'
-import { done, MARKS, statusOf as taskStatus } from '@yaks/task'
+import { done, statusOf as taskStatus } from '@yaks/task'
 import { type Tool, type ToolContext, ToolError, transcript } from './react.ts'
 import {
   newestAsk,
@@ -40,13 +41,6 @@ let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 let row = async (g: Graph, eid: Eid) =>
   (await g.storage.tx((tx) => tx.get([eid])))[0]
-
-/** The lease rung for a task held by a session; terminal task marks win. */
-export let taskMarks = [...MARKS, {
-  status: 'wip',
-  comp: 'claim',
-  settled: false,
-}]
 
 let taskRow = async (g: Graph, id: string): Promise<Bundle> => {
   let b = await row(g, id)

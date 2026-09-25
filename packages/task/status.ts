@@ -30,27 +30,43 @@ import { type Mark, MARKS, OPEN, type Status, statuses } from './words.ts'
 import { TASK } from './comp.ts'
 
 /** Does this bundle carry this component? */
-let wears = (b: Bundle, name: string): boolean => {
+let wears = (b: Record<string, unknown>, name: string): boolean => {
   let c = b[name]
   return c != null && typeof c == 'object'
 }
 
+/** The status a store derived and the bundle carries, if it carries one. */
+let carried = (b: Record<string, unknown>): Status | undefined => {
+  let s = (b[TASK] as { status?: unknown }).status
+  return typeof s == 'string' ? s : undefined
+}
+
 /**
- * A task's status, computed from the components it carries: the first mark in
- * ladder order wins, and a task carrying none is `open`. An entity that is not
- * a task has no status at all and reads `null` — the same nothing a database
- * reads for it.
+ * A task's status: the first mark in ladder order the bundle carries, else the
+ * `task.status` it carries, else `open`. An entity that is not a task has no
+ * status at all and reads `null` — the same nothing a database reads for it.
+ *
+ * The carried status is what a store derived with its whole ladder, so it
+ * holds where the marks are missing: a read answers the components it names,
+ * and `.task` alone brings the status without the `completed` behind it. It
+ * also knows rungs this caller's `marks` may not, such as a held claim's
+ * `wip`. A mark the bundle does carry wins over it, because a mark written
+ * here is newer evidence than the status read before it.
  *
  * ```ts
  * import { statusOf } from '@yaks/task'
  *
  * statusOf({ entity: { eid: 't1' }, task: {} }) // 'open'
  * statusOf({ entity: { eid: 't2' }, task: {}, completed: { at: '…' } }) // 'done'
+ * statusOf({ entity: { eid: 't3' }, task: { status: 'done' } }) // 'done'
  * ```
  */
-export let statusOf = (b: Bundle, marks: Mark[] = MARKS): Status | null => {
+export let statusOf = (
+  b: Record<string, unknown>,
+  marks: Mark[] = MARKS,
+): Status | null => {
   if (!wears(b, TASK)) return null
-  return marks.find((m) => wears(b, m.comp))?.status ?? OPEN
+  return marks.find((m) => wears(b, m.comp))?.status ?? carried(b) ?? OPEN
 }
 
 /**

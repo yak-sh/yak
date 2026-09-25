@@ -1,11 +1,12 @@
-// How a task's state reads, in every interface: one word, the status its
-// marks give it. A portable @yaks/render renderer, so a terminal prints the
-// word (@yaks/text) and a browser styles it by its class (@yaks/preact).
+// How a task's state reads, in every interface: one word, its status. A
+// portable @yaks/render renderer, so a terminal prints the word (@yaks/text)
+// and a browser styles it by its class (@yaks/preact).
 //
-// The status is computed, never stored (./status.ts), so the view computes it
-// too, from the marks the bundle carries: a bundle a browser holds has no
-// status property to read, and a matcher that has only the bundle cannot test
-// one, which is why this matches the component rather than a status.
+// The status is computed, never stored (./status.ts). A read carries the value
+// its store derived, and `statusOf` falls back to it where the bundle lacks the
+// marks, so a task read as `.task` alone still says done. A bundle built by
+// hand may carry neither, which is why this matches the component rather than
+// a status.
 
 import { parse } from '@yaks/query'
 import { define, type Registry } from '@yaks/render'

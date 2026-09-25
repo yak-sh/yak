@@ -57,7 +57,17 @@
 // the graph after a refusal, never sent by a client.
 
 import type { VocabDoc } from '@yaks/vocab'
+import { type Mark, MARKS } from '@yaks/task'
 import doc from './vocab.json' with { type: 'json' }
+
+/** A task's status ladder in a graph whose sessions lease their tasks:
+ * @yaks/task's marks, then a held claim reads `wip`, because somebody is on it
+ * and has not finished. The terminal marks come first and win. */
+export let taskMarks: Mark[] = [...MARKS, {
+  status: 'wip',
+  comp: 'claim',
+  settled: false,
+}]
 
 /** The session vocabulary, to load beside the packages whose components a
  * transcript uses — what serves an ask (@yaks/model), what a call and its

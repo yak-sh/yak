@@ -23,6 +23,8 @@ import { edgeKeywords } from '@yaks/edge/vocab'
 import { blobKeywords } from '@yaks/blob'
 import { kernelKeywords } from '@yaks/kernel/vocab'
 import { keyKeywords } from '@yaks/key/vocab'
+import { statusOf as taskStatus } from '@yaks/task'
+import { taskMarks } from '@yaks/session/vocab'
 
 export let statuses = ['open', 'wip', 'done', 'cancelled'] as const
 export let turnStates = ['idle', 'busy'] as const
@@ -332,29 +334,16 @@ export let spineProps: Record<string, Record<string, PropType>> = {
   entity: { eid: 'text' },
 }
 
-// Task status is DERIVED, not stored (D-24102): `cancelled` comp → cancelled;
-// else `completed` comp → done; else an active `claim` → wip; else open. `has`
-// is a component bag (a live row's `.comps`, a Row's comps). wip can't get
-// stuck: the claim vanishes when its session dies, and the task reads open again.
-//
-// The marks come first, and a MATERIALIZED `task.status` is the floor beneath
-// them — because a projected row may carry the derived column INSTEAD of the
-// marks it was derived from. That is exactly what an edge rider ships
-// (subserve.ts peerPayload, `.edges.peers=task.status`): a peer arrives as
-// spine + kind + the projected columns, never a `completed`/`cancelled`/`claim`
-// comp, so deriving from marks alone read every done dependency as open
-// (T-33752's projection met this reader). Marks still WIN where present, so a
-// row that holds both — a peer's stale projected value merged under a later
-// full-row payload, or a local patch landing on a held peer — reads its own
-// evidence rather than the server's older snapshot of it.
+// Task status is derived, never stored (D-24102). The rule is @yaks/task's
+// `statusOf` over @yaks/session's ladder: `cancelled`, then `completed`, then a
+// held `claim` reads wip, then the `task.status` the row carries, else open. The
+// carried value is what the host derived; it holds where a row arrives without
+// its marks (a read answers the components it names, and an edge rider ships
+// projected columns only). A mark the row does carry wins, so a local patch
+// reads its own evidence before the host's older answer. `has` is a component
+// bag (a live row's `.comps`, a Row's comps).
 export let statusOf = (has: Record<string, unknown>) =>
-  has.cancelled
-    ? 'cancelled'
-    : has.completed
-    ? 'done'
-    : has.claim
-    ? 'wip'
-    : (has.task as { status?: string } | undefined)?.status ?? 'open'
+  taskStatus(has, taskMarks) ?? 'open'
 
 // Settled = no longer open work, whether it finished or was called off.
 // Gating, board defaults, and lease-lapse audits all key off this

@@ -28,9 +28,15 @@ let CASES: [Bundle, string | null][] = [
   [task({ blocked: { on: 'legal' } }), OPEN],
   // not a task at all: no status, the same nothing a database reads
   [{ entity: { eid: 'x' }, doc: { title: 'a note' } }, null],
+  // a read that named only `task` carries the store's status, not the marks
+  [task({ task: { status: 'done' } }), 'done'],
+  // including a rung this ladder does not know: a held claim's wip
+  [task({ task: { status: 'wip' } }), 'wip'],
+  // a mark carried beside it is newer evidence, and wins
+  [task({ task: { status: 'open' }, completed: {} }), 'done'],
 ]
 
-Deno.test('statusOf reads the marks, in ladder order', () => {
+Deno.test('statusOf reads the marks in ladder order, then the status carried', () => {
   for (let [b, want] of CASES) assertEquals(statusOf(b), want, b.entity.eid)
 })
 

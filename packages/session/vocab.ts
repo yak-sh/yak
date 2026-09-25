@@ -13,11 +13,10 @@
 import type { VocabDoc } from '@yaks/vocab'
 import type { Derived } from '@yaks/sql'
 import { derived as ladder } from '@yaks/task'
-import { sessionDoc } from './comp.ts'
+import { sessionDoc, taskMarks } from './comp.ts'
 import { sessionDerived } from './status.ts'
-import { taskMarks } from './children.ts'
 
-export { sessionDoc }
+export { sessionDoc, taskMarks }
 
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [sessionDoc]
