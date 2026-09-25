@@ -37,7 +37,7 @@
 import { type Api, connect, disconnect, gateways, tunnels } from '@yaks/tunnel'
 import * as dirPart from './directory.ts'
 import { directory, type Space, stamp, type Tunnel } from './directory.ts'
-import { itsApp, namespace, nowhere } from './dispatch.ts'
+import { itsApp, namespace, nowhere, script } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import type { Answer } from './plugin.ts'
 import { caught } from './sentry.ts'
@@ -236,7 +236,7 @@ export let reach: Answer = async (
     )
   if (!env.DISPATCH) return none()
   try {
-    return await env.DISPATCH.get(gatewayOf(space)).fetch(out)
+    return await script(env.DISPATCH, gatewayOf(space), app, who).fetch(out)
   } catch (e) {
     if (nowhere(e)) return none()
     caught(e, { request: 'link', space: space.slug, app: app.slug })

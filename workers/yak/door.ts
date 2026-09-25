@@ -10,6 +10,7 @@
 // (meter.ts `metering`). This is why the door was lifted out of the store that
 // graph.ts replaced: living beside that class dragged src/db.ts into the
 // object's graph and failed that check. That class is gone (T-33807).
+import type { Caller } from '@yaks/egress'
 import { hop } from './lib/hops.ts'
 
 /** Anything a request can be handed to: a service binding, or a part of this
@@ -18,7 +19,9 @@ export type Fetcher = { fetch(req: Request): Promise<Response> }
 
 // The dispatch namespace binding, the slice we ask of it (env.ts): a name in,
 // a fetcher out, and what its outbound Worker is handed for every fetch that
-// script makes (wrangler.toml `outbound.parameters`). `get` throws for a
+// script makes (wrangler.toml `outbound.parameters`). Every parameter the
+// namespace declares is required: Cloudflare refuses a `get` that leaves one
+// out ("Missing one or more required arguments to worker"). `get` throws for a
 // script that is not there, and the docs give only the message's prefix to
 // know it by
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/dynamic-dispatch/).
@@ -30,8 +33,8 @@ export type Fetcher = { fetch(req: Request): Promise<Response> }
 export type Dispatch = {
   get(
     name: string,
-    args?: Record<string, unknown>,
-    options?: { outbound?: Record<string, unknown> },
+    args: Record<string, unknown>,
+    options: { outbound: { CALLER: Caller } },
   ): Fetcher
 }
 

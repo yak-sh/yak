@@ -55,7 +55,7 @@ import { storeName } from './directory.ts'
 import type { Env } from './env.ts'
 import { oops } from './pages.ts'
 import type { Who } from './session.ts'
-import { storeOf } from './door.ts'
+import { type Dispatch, storeOf } from './door.ts'
 import { failed, noted, refusal, serving } from './unseen.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import {
@@ -346,6 +346,22 @@ let hostOnly = (res: Response): Response => {
   } as ResponseInit)
 }
 
+/** A script in the apps' namespace, run for `app` and its visitor `who`: the
+ * namespace's outbound Worker (outbound.ts) is handed them as the caller of
+ * every fetch the script makes, the app from the directory's row and the
+ * visitor and their role on it from the kernel's own vouch. Throws for a
+ * script that is not there (`nowhere`). */
+export let script = (dispatch: Dispatch, name: string, app: App, who: Who) =>
+  dispatch.get(name, {}, {
+    outbound: {
+      CALLER: {
+        app: app.eid,
+        level: who.role,
+        person: who.person,
+      } satisfies Caller,
+    },
+  })
+
 // The seam (T-33234). `worker.fetch` below is the one line in the whole
 // kernel where the code running is the app's and not ours, so it is the one
 // place a throw may be filed as the app's break. Everything on either side of
@@ -374,13 +390,7 @@ let called = async (
   let store = storeName(space, app)
   let worker
   try {
-    // Who every fetch this request makes is on behalf of, said to the
-    // outbound Worker (outbound.ts): the app, from the directory's row, and
-    // the visitor and their role on it, from the kernel's own vouch.
-    let caller: Caller = { app: app.eid, level: who.role, person: who.person }
-    worker = env.DISPATCH.get(scriptName(store), {}, {
-      outbound: { CALLER: caller },
-    })
+    worker = script(env.DISPATCH, scriptName(store), app, who)
   } catch (e) {
     // Not the app's code — the namespace refusing to hand it over is ours.
     if (nowhere(e)) return null

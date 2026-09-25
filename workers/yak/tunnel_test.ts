@@ -209,15 +209,24 @@ let mail: App = {
 let itself: Who = { person: mail.eid, role: 'editor' }
 
 // The request an app's worker sends back through its binding, and what the
-// gateway it lands at was handed; `gone` is a link with no gateway yet.
+// gateway it lands at was handed; `gone` is a link with no gateway yet. The
+// namespace refuses a `get` without the caller its outbound Worker declares,
+// the way Cloudflare's does.
 let reach = async (
   over: { space?: Space; app?: App; who?: Who } = {},
   gone = false,
 ) => {
   let handed: Request[] = []
   let named: string[] = []
-  let get = (n: string) => {
+  let get = (
+    n: string,
+    _args?: unknown,
+    options?: { outbound?: { CALLER?: unknown } },
+  ) => {
     named.push(n)
+    if (!options?.outbound?.CALLER) {
+      throw new TypeError('Missing one or more required arguments to worker.')
+    }
     if (gone) throw new Error(`Worker not found: ${n}`)
     return {
       fetch: (r: Request) => {
