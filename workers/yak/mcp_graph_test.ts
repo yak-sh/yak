@@ -434,6 +434,13 @@ slow('a write with no app routes each component to its own app', async () => {
       'which app should doc go in?',
     )
 
+    // Arguments sent as a string are the caller's mistake, answered as one.
+    await assertRejects(
+      () => agent.tool('graph_apply', JSON.stringify({ change: [] })),
+      Error,
+      'not a string',
+    )
+
     // Death is the whole entity's: it clears every store holding a piece.
     await agent.tool('graph_apply', {
       entities: [{ entity: { eid: cake }, tombstone: {} }],

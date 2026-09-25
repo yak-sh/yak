@@ -643,6 +643,21 @@ let answered = async (
     said = JSON.stringify(rpc)
   }
   if (rpc.method == 'tools/call' && rpc.params) {
+    // Arguments are an object by the protocol; a string or a list is the
+    // caller's own mistake, refused as one rather than crashing `heard`.
+    let args = rpc.params.arguments
+    if (args != null && (typeof args != 'object' || Array.isArray(args))) {
+      return auth
+        ? erred(
+          rpc.id,
+          refuse(
+            'arguments',
+            `a tool's arguments are an object of its named parameters, ` +
+              `not ${Array.isArray(args) ? 'a list' : `a ${typeof args}`}`,
+          ),
+        )
+        : unauthorized(req, env)
+    }
     rpc.params = {
       ...rpc.params,
       arguments: heard(
