@@ -12,7 +12,8 @@ import type { Eid, Entity } from './bundle.ts'
 export type State = {
   /** entities this change deleted, in the order it deleted them */
   killed: Eid[]
-  /** entities storage created while applying it, with their `num` */
+  /** identities storage minted or numbered while applying it, with their
+   * `num` — a spine a reference minted among them, though no entity yet */
   born: Entity[]
   /** entities this change wrote to (a created entity counts as written to) */
   touched: Set<Eid>

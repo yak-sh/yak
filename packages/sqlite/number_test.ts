@@ -1,4 +1,5 @@
 import { assertEquals } from '@std/assert'
+import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { mem } from './harness.ts'
@@ -46,6 +47,31 @@ for (let backend of ['sqlite', 'ram']) {
       })
     },
   )
+}
+
+for (let backend of ['sqlite', 'ram']) {
+  Deno.test(backend + ': a reference to nothing numbers nothing', () => {
+    let opts = { number: true }
+    let s = backend == 'sqlite' ? storage(mem(), vocab, opts) : ram(vocab, opts)
+    s.install()
+    s.tx((tx) => {
+      let born = (bs: Bundle[]) =>
+        tx.patch(bs).map((e) => [e.eid, e.num ?? null])
+      let target = (eid: string, at?: string) => ({
+        entity: { eid },
+        task: at ? { target: at } : {},
+      })
+      assertEquals(born([target('a', 'nobody')]), [['a', 1], ['nobody', null]])
+      assertEquals(tx.get(['nobody']), [{ entity: { eid: 'nobody' } }])
+      // In one batch, a target is numbered where it is first touched.
+      assertEquals(born([target('b', 'c'), target('d'), target('c')]), [
+        ['b', 2],
+        ['c', 3],
+        ['d', 4],
+      ])
+      assertEquals(born([target('nobody')]), [['nobody', 5]])
+    })
+  })
 }
 
 Deno.test('SQLite migration retains historic high-water across clearing and reopen', () => {

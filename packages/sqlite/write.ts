@@ -47,6 +47,7 @@ import { comps } from '@yaks/graph'
 import { type Driver, effect, type Param, type Row } from './driver.ts'
 import { componentTables } from './physical.ts'
 import { isJsonb, jsonIn } from './jsonb.ts'
+import { keyed } from './keyed.ts'
 
 /** One statement of a write: the SQL, and the parameters it binds. This file
  * builds them; an adapter runs them — one at a time over an embedded engine,
@@ -86,9 +87,9 @@ let slot = (
     ? { sql: 'jsonb(?)', param: jsonIn(raw) }
     : { sql: '?', param: scalar(raw) }
 
-/** What the store already knows about an eid: whether that identity is
- * tombstoned. An eid with no entry has no entity yet. */
-export type Spine = { dead: boolean }
+/** What the store already knows about an eid: its number, and whether that
+ * identity is tombstoned. An eid with no entry has no entity yet. */
+export type Spine = { num: number | null; dead: boolean }
 
 /** What the store knows about these eids — one statement and one bound
  * parameter, whatever the batch's size (a Durable Object binds at most 100).
@@ -102,11 +103,14 @@ export let spines = (
   if (!eids.length) return new Map()
   return new Map(
     driver.query(
-      `select e.eid as eid, t.entity as dead from entity e
+      `select e.eid as eid, e.num as num, t.entity as dead from entity e
         left join tombstone t on t.entity = e.id
         where e.eid in (select value from json_each(?))`,
       [JSON.stringify(eids)],
-    ).map((r) => [String(r.eid), { dead: r.dead != null }]),
+    ).map((r) => [String(r.eid), {
+      num: r.num == null ? null : Number(r.num),
+      dead: r.dead != null,
+    }]),
   )
 }
 
@@ -146,6 +150,18 @@ export let mintSql = (eid: string, number: boolean | number = false): Sql => ({
   })
           on conflict(eid) do nothing returning eid, num`,
   params: typeof number == 'number' ? [eid, number] : [eid],
+})
+
+/** The statement that numbers a spine a reference minted, once a bundle of its
+ * own arrives: the next number, or the one stated. It returns what
+ * {@link mintSql} does, and nothing where the spine already has a number. */
+export let numberSql = (eid: string, number: true | number): Sql => ({
+  sql: `update entity set num = ${
+    number === true
+      ? '(select high + 1 from entity_sequence where singleton = 1)'
+      : '?'
+  } where eid = ? and num is null returning eid, num`,
+  params: number === true ? [eid] : [number, eid],
 })
 
 /** The identity a {@link mintSql} statement reported — the rows it returned —
@@ -313,9 +329,16 @@ export let touched = (v: Vocab, bundles: Bundle[]): string[] =>
   ])
 
 /**
- * Patch a batch of bundles in, in order, and return the entities this patch
- * minted — each with the `num` it was given, as the minting insert itself
- * reported it. A bundle for a tombstoned entity is skipped: death is final.
+ * Patch a batch of bundles in, in order, and return the spines this patch
+ * minted or numbered — each with the `num` it was given, as the statement
+ * itself reported it. A bundle for a tombstoned entity is skipped: death is
+ * final.
+ *
+ * An eid a reference only names still gets a spine, because a reference column
+ * holds its target's id, but that spine takes no number: it is a pointer to
+ * nothing, which a yaks app pointing into another app's store makes on
+ * purpose, and @yaks/graph brings no entity into being for it. It is numbered
+ * when a bundle of its own arrives, in this batch or a later one.
  */
 export let patch = (
   driver: Driver,
@@ -367,20 +390,46 @@ export let patch = (
       if (b.entity.num !== undefined) stated.set(b.entity.eid, b.entity.num)
     }
   }
+  // The number an entity is born with: none where the store numbers nothing or
+  // the entity wears an excepted component, the stated one where the store is
+  // adopting, else the next.
+  let take = (eid: string): boolean | number =>
+    number === false || excluded.has(eid)
+      ? false
+      : !stated.has(eid)
+      ? true
+      : stated.get(eid) ?? false
+  // The eids a bundle of their own arrives for: one giving a component, or,
+  // where the store is adopting, one stating the number.
+  let own = new Set([
+    ...alive.filter((b) => comps(b).some(([, c]) => c != null))
+      .map((b) => b.entity.eid),
+    ...stated.keys(),
+  ])
   let born: Entity[] = []
   let seen = new Set(known.keys())
   for (let eid of touched(vocab, alive)) {
     if (seen.has(eid)) continue
     seen.add(eid)
-    let mine = number !== false && !excluded.has(eid)
-    let take = !mine
-      ? false
-      : !stated.has(eid)
-      ? true
-      : stated.get(eid) ?? false
-    let s = mintSql(eid, take)
+    let s = mintSql(eid, own.has(eid) && take(eid))
     let e = minted(driver.query(s.sql, s.params))
     if (e) born.push(e)
+  }
+  // A spine an earlier reference minted is numbered now, if it still carries
+  // nothing: an unnumbered entity that carries something was left unnumbered
+  // on purpose, and keeps it that way.
+  let pointed = [...own].filter((eid) => {
+    let k = known.get(eid)
+    return k && !k.dead && k.num == null && take(eid) !== false
+  })
+  if (pointed.length) {
+    for (let b of keyed(driver, vocab, {})(pointed)) {
+      let n = take(b.entity.eid)
+      if (n === false || comps(b).length) continue
+      let s = numberSql(b.entity.eid, n)
+      let e = minted(driver.query(s.sql, s.params))
+      if (e) born.push(e)
+    }
   }
 
   for (let b of alive) {

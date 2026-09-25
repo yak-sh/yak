@@ -102,8 +102,12 @@ export let script: Step[] = [
     batch: [{ entity: { eid: 'p2' }, product: null }],
   },
   {
-    name: 'a reference mints the entity it names',
+    name: 'a reference to nothing brings nothing into being',
     batch: [{ entity: { eid: 'r5' }, review: { stars: 2, product: 'p5' } }],
+  },
+  {
+    name: 'a bundle of its own does, and numbers it then',
+    batch: [{ entity: { eid: 'p5' }, product: { price: 5 } }],
   },
   {
     name: '$was holds',

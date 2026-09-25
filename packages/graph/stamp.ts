@@ -21,6 +21,7 @@
 
 import type { Vocab } from '@yaks/vocab'
 import type { Actor, Bundle, Comp } from './bundle.ts'
+import { comps } from './bundle.ts'
 import type { State } from './state.ts'
 import type { Bound, Patch, Rule } from './rules.ts'
 
@@ -184,11 +185,21 @@ let wear = (
  * not copied — an adapter whose numbers the database picks (@yaks/d1) fills
  * the `num` in when its statements run, which happens after this phase and
  * before the caller sees the return value.
+ *
+ * An entity comes into being when it first carries a component, so only an
+ * identity this change gives one joins it. A spine storage minted because a
+ * reference named it is a pointer to nothing: it stays out of the change, so
+ * nothing stamps it `created` and no client hears of an entity.
  */
 export let births = (bundles: Bundle[], st: State): Bundle[] => {
   let dead = new Set(st.killed)
+  let given = new Set(
+    bundles.filter((b) => comps(b).some(([, c]) => c != null))
+      .map((b) => b.entity.eid),
+  )
   return [
     ...bundles,
-    ...st.born.filter((e) => !dead.has(e.eid)).map((e) => ({ entity: e })),
+    ...st.born.filter((e) => !dead.has(e.eid) && given.has(e.eid))
+      .map((e) => ({ entity: e })),
   ]
 }

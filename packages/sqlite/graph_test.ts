@@ -35,6 +35,20 @@ Deno.test('apply lands a batch and stamps it, synchronously', () => {
   )
 })
 
+Deno.test('a reference to nothing brings nothing into being', () => {
+  let g = shopGraph()
+  let out = sync(g.apply([
+    { entity: { eid: 'p1' }, product: { price: 1, maker: 'm1' } },
+  ]))
+  assertEquals(out.map((b) => b.entity), [{ eid: 'p1', num: 1 }])
+  assertEquals(g.storage.tx((tx) => tx.get(['m1'])), [{
+    entity: { eid: 'm1' },
+  }])
+  out = sync(g.apply([{ entity: { eid: 'm1' }, doc: { title: 'Acme' } }]))
+  assertEquals(out[0].entity, { eid: 'm1', num: 2 })
+  assert(out[0].created)
+})
+
 Deno.test('admission refuses an unknown property through the whole stack', () => {
   let g = shopGraph()
   assertThrows(

@@ -60,7 +60,8 @@ Deno.test('a reference names an entity the batch mints, in any order', () => {
     review: { stars: 5, product: 'p1' },
   })
   assertEquals(born.map((e) => e.eid), ['r1', 'p1'])
-  assertEquals(at(s, 'p1'), { entity: { eid: 'p1', num: 2 } })
+  // A pointer to nothing: held, and unnumbered until it carries something.
+  assertEquals(at(s, 'p1'), { entity: { eid: 'p1' } })
 })
 
 Deno.test('a removed entity is tombstoned, and takes no patch after', () => {

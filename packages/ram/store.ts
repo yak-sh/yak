@@ -173,6 +173,18 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         }
       }
     }
+    // An eid a reference only names gets a record to hold the pointer and no
+    // number, until a bundle of its own arrives (@yaks/sqlite `patch`): one
+    // giving it a component, or, where the store mirrors another, one telling
+    // it its number.
+    let own = new Set(
+      bundles.filter((b) =>
+        !rows.get(b.entity.eid)?.dead &&
+        (comps(b).some(([, c]) => c != null) ||
+          base.adopt && b.entity.num !== undefined)
+      ).map((b) => b.entity.eid),
+    )
+    let counts = (eid: Eid) => !!base.number && !excluded.has(eid)
     // Create a record for every eid this write touches or points at, so that a
     // reference may name a target created by the same write, in any order.
     let birth = (eid: Eid, num?: number | null) => {
@@ -186,6 +198,17 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         ) {
           save(eid)
           rows.set(eid, { ...rec, entity: { eid, num } })
+        } else if (
+          // A record an earlier reference made is numbered when a bundle of
+          // its own arrives, if it still carries nothing: an unnumbered entity
+          // that carries something was left unnumbered on purpose.
+          !base.adopt && own.has(eid) && counts(eid) && !rec.dead &&
+          rec.entity.num == null && !Object.keys(rec.comps).length
+        ) {
+          save(eid)
+          let entity = { ...rec.entity, ...numbered() }
+          rows.set(eid, { ...rec, entity })
+          born.push(entity)
         }
         return
       }
@@ -194,7 +217,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       cold.delete(eid)
       let entity = reserved
         ? { ...reserved, ...(base.adopt ? numbered(num) : {}) }
-        : { eid, ...!base.number || excluded.has(eid) ? {} : numbered(num) }
+        : { eid, ...own.has(eid) && counts(eid) ? numbered(num) : {} }
       rows.set(eid, { entity, comps: {} })
       if (!reserved) born.push(entity)
     }

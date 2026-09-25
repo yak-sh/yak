@@ -71,6 +71,7 @@ import { type BindOpts, DEEP, doomSql, looseSql, narrow } from '@yaks/sql'
 import {
   minted,
   mintSql,
+  numberSql,
   patchSql,
   projected,
   removeSql,
@@ -278,14 +279,23 @@ export let storage = <S extends Stmt<S>>(
     // transaction, and the statement returns it. So the entity handed out here
     // has no `num` yet — `flush` fills it into this very object, before the
     // transaction settles and before anything outside can read it.
-    let birth = (eid: Eid, born: Entity[], numbered: boolean): void => {
+    let birth = (eid: Eid, numbered: boolean): Entity | undefined => {
       if (known.get(eid)) return
       let entity: Entity = { eid }
       births.push({ at: pending.length, entity })
       pending.push(mintSql(eid, numbered))
       known.set(eid, { dead: false })
       dirty.set(eid, { entity })
-      born.push(entity)
+      return entity
+    }
+
+    // Number a spine an earlier reference minted, now that a bundle of its own
+    // has arrived. The number comes back the way a mint's does.
+    let number = (eid: Eid): Entity => {
+      let entity: Entity = { eid }
+      births.push({ at: pending.length, entity })
+      pending.push(numberSql(eid, true))
+      return entity
     }
 
     // Send the gathered writes, then read each mint's own RETURNING back out of
@@ -402,13 +412,35 @@ export let storage = <S extends Stmt<S>>(
             for (let [eid, b] of held) if (b[name] != null) excluded.add(eid)
           }
         }
+        let numbered = (e: Eid) => !!base.number && !excluded.has(e)
+        // An eid a reference only names gets a spine to hold the pointer and
+        // no number, until a bundle of its own arrives (@yaks/sqlite `patch`).
+        let own = new Set(
+          bs.filter((b) =>
+            !buried(b.entity.eid) && comps(b).some(([, c]) => c != null)
+          ).map((b) => b.entity.eid),
+        )
         // `touched` puts the bundle's own eid first, then what it points at, so
         // numbers land in the same first-touch order every adapter uses.
         for (let b of bs) {
           if (buried(b.entity.eid)) continue
           for (let e of touched(vocab, [b])) {
-            birth(e, born, !!base.number && !excluded.has(e))
+            let spine = birth(e, own.has(e) && numbered(e))
+            if (spine) born.push(spine)
           }
+        }
+        // A spine an earlier reference minted is numbered now, if it still
+        // carries nothing: an unnumbered entity that carries something was
+        // left unnumbered on purpose.
+        let made = new Set(born.map((e) => e.eid))
+        for (let e of own) {
+          let k = known.get(e)
+          let b = at(e)
+          if (
+            made.has(e) || !k || k.dead || k.num != null || !numbered(e) ||
+            !b || comps(b).length
+          ) continue
+          born.push(number(e))
         }
         for (let b of bs) {
           let eid = b.entity.eid

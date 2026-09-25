@@ -102,6 +102,7 @@ export {
   dropSql,
   minted,
   mintSql,
+  numberSql,
   patch,
   patchSql,
   remove,
