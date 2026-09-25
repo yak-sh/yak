@@ -96,6 +96,29 @@ Deno.test('a run still going here is not taken for one a crash left', async () =
   assertEquals(f.rows()[0].state, 'done')
 })
 
+Deno.test('a run still going in one process is not taken by another’s sweep', async () => {
+  let now = clock()
+  let f = fixture('worker-1', now)
+  let ran: string[] = []
+  let finish = () => {}
+  f.fx.created('post', () => {
+    ran.push('worker-1')
+    return new Promise<void>((go) => finish = go)
+  })
+  // The same handler in a second process over the same file.
+  let other = ledger({ owner: 'worker-2', now, lease: 60_000 })
+  let there = effects(durableBlog, { around: other.around })
+  there.created('post', () => void ran.push('worker-2'))
+  let applied = f.g.apply([post('p1')])
+  assertEquals(await other.reconcile(there, f.tx), 0)
+  assertEquals(ran, ['worker-1'])
+  finish()
+  await applied
+  await new Promise((go) => setTimeout(go))
+  let [row] = f.rows()
+  assertEquals([row.state, row.lease_owner], ['done', null])
+})
+
 Deno.test('a failing run keeps its error and comes back due, not failed', () => {
   let now = clock()
   let f = fixture('worker-1', now)

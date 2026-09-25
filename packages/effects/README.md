@@ -218,10 +218,13 @@ attempts. Set `{ idempotent: false }` to prevent retrying an interrupted attempt
 whose outcome is unknown. This setting does not prevent retries of reported
 failures, and throwing does not prove an external operation had no effect.
 
-Reconciliation claims pending rows with expiring leases and skips unexpired
-claims belonging to other owners. Retry records do not preserve the original
-property patch: reconciliation rebuilds the event using current target state.
-Handlers needing historical values must store or obtain those values separately.
+A recorded attempt holds its process's lease from the moment it is written, and
+reconciliation claims pending rows with expiring leases, skipping unexpired
+claims belonging to other owners. A run still going in one process is therefore
+left to it by every other process's sweep, and an interrupted one is taken once
+its lease lapses. Retry records do not preserve the original property patch:
+reconciliation rebuilds the event using current target state. Handlers needing
+historical values must store or obtain those values separately.
 
 ## Duties, and the one process running each
 

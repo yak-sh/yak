@@ -33,9 +33,10 @@
 // Policy) and never one call's, so no effect anywhere carries retry code of
 // its own.
 //
-// The lease is what keeps two processes off the same row: a reconciler claims
-// a row for a while (owner, token, expiry) before running it, and skips a row
-// whose claim belongs to somebody else and has not expired.
+// The lease is what keeps two processes off the same row: a run holds one
+// (owner, token, expiry) from the write that records it, a reconciler claims
+// a row the same way before running it, and each skips a row whose claim
+// belongs to somebody else and has not expired.
 //
 // A pattern effect is written down the same way, as `matched` on the entity
 // its first pattern bound. What a retry reconstructs is that entity, not the
@@ -204,7 +205,10 @@ export let ledger = (opts: LedgerOpts): Ledger => {
   // interrupted (pending, no `next`) for as long as its handler runs, and a
   // handler may run for as long as the process does — the `serve` call's is
   // the server itself — so a sweep that took one for a crash's leftover would
-  // run it again and wait on it for good.
+  // run it again and wait on it for good. Another process's sweep cannot see
+  // this set, so a run is written holding this process's lease as well — the
+  // claim `reconcile` takes before it runs one — or a server's sweep would run
+  // the call a command line had just written and race it for the tool.
   let running = new Set<Eid>()
 
   let around: Around = (job, tx, next) => {
@@ -245,6 +249,9 @@ export let ledger = (opts: LedgerOpts): Ledger => {
         state: 'pending',
         attempts,
         at: stamp(clock()),
+        lease_owner: opts.owner,
+        lease_token: mint(),
+        lease_expiry: stamp(clock() + hold),
       }),
       go,
     )
