@@ -120,12 +120,17 @@ Deno.test('what an entry is decides its row', () => {
 
 Deno.test('the log says what a working transcript waits on', () => {
   let activity = (rows: EntryRow[]) => graphLog(rows, names).activity
-  let input = row('input', 1, { content: { body: 'go' } })
+  let input = row('input', 1, { content: { body: 'go' }, using: {} })
   let ask = row('ask', 2, { ask: { to: 'gpt', through: 'input' } })
   let call = row('call', 3, { call: { to: 'query', source: 'ask' } })
   assertEquals(activity([input]), {
     kind: 'runner',
     label: 'waiting for runner…',
+  })
+  // Nothing asked the daemon: a harness's own model is answering.
+  assertEquals(activity([row('typed', 1, { content: { body: 'go' } })]), {
+    kind: 'model',
+    label: 'waiting for model…',
   })
   assertEquals(activity([input, ask]), {
     kind: 'model',
