@@ -73,11 +73,11 @@ The plugin configuration selects a model, endpoint, credentials and text fields:
 ```
 
 `@yaks/embedding/rules` creates the vector tables through the host's SQL driver.
-Its `extend()` export registers the `.near` compiler. `@yaks/embedding/effects`
-returns component watches: creation, changes to selected properties, and removal
-schedule a sweep after a debounce timer, and a sweep that leaves work queued is
-followed by the next at once. The graph write does not await embedding. The
-host's `stopping` signal cancels pending timers.
+Its `extend()` export registers the `.near` compiler. `@yaks/embedding/service`
+is the plugin's service, held by one process per graph: it sweeps the queue,
+takes the next batch at once while work is left, and looks again after `after`
+once the queue is empty. The graph write does not await embedding. The service
+stops when its signal aborts, and a pass the host ended leaves its work queued.
 
 Options:
 
@@ -87,17 +87,16 @@ Options:
 | `text`       | Selected `component.property` names; defaults to the properties marked `search: true` |
 | `neighbours` | Maximum `.near` results, default 8                                                    |
 | `floor`      | Minimum similarity for `.near`, default 0                                             |
-| `after`      | Debounce delay in milliseconds, default 3000                                          |
+| `after`      | How long an empty queue waits before the next look, in milliseconds, default 3000     |
 | `batch`      | Queued entities one sweep takes, default 64                                           |
 | `stale`      | Age threshold in minutes used by `vector_check`, default 30                           |
 
 The `batch` option bounds one sweep; it does not mean a graph transaction.
 
 Missing embedder configuration or a missing configured key does not prevent
-startup. `vector_check` reports the missing configuration. After a watched write
-schedules a pass, a pass waiting for configuration reschedules itself and checks
-again. There is no unconditional startup sweep. An unknown provider is reported
-as unavailable; invalid `text` names are also reported.
+startup. `vector_check` reports the missing configuration, and the service keeps
+looking until it arrives. An unknown provider is reported as unavailable;
+invalid `text` names are also reported.
 
 The CLI resolves `{ "secret": "NAME" }` through [@yaks/secrets](../secrets) each
 time options are read, so a key written through the graph after the host started
@@ -263,7 +262,7 @@ math/packing helpers, schema and dirty-state helpers, sweep operations,
 | ------------------------- | ----------------------------------------------------------------------------------------- |
 | `@yaks/embedding/vocab`   | `embeddingDoc` and `docs`, declaring `vector_check`                                       |
 | `@yaks/embedding/rules`   | `rules(host)` creates SQL objects; `extend(host, options)` creates the compiler extension |
-| `@yaks/embedding/effects` | `effects(host, options)` returns watches and schedules debounced sweeps                   |
+| `@yaks/embedding/service` | `service(host, options, signal)` sweeps the queue until the signal aborts                 |
 | `@yaks/embedding/tools`   | `runs(host, options)` implements `vector_check`; exports the options type                 |
 
 ## Compatibility

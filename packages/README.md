@@ -91,9 +91,9 @@ grouped approximately by function, **not** by dependency order.
 
 - **[@yaks/embedding](./embedding)** — Store vectors and compile
   `.near=<entity>` and `.order=similar`. An injected embedding function
-  determines what similarity means. Watched writes schedule debounced update
-  passes; they are not an unconditional startup or periodic refresh. Bounded
-  passes need further scheduling to process all stale rows.
+  determines what similarity means. Triggers queue the entities whose text a
+  write touched, from any process, and the plugin's service settles the queue a
+  batch at a time.
 
 - **[@yaks/match](./match)** — Evaluate supported query AST clauses against
   bundles in memory. Tests compare shared behavior with SQL, but search,
@@ -695,9 +695,9 @@ differ in supported queries, rules and transaction guarantees:
   with the embedding function passed in, so nothing ties you to one model. It is
   also the clearest example of what that extension point looks like in practice:
   its `./rules` creates the vector table and gives the store its `.near`
-  compiler (`extend`), its `./effects` schedules a debounced pass when indexed
-  text changes, and the model, endpoint and API key are options the config
-  passes to the plugin.
+  compiler (`extend`), its `./service` settles the queue of entities whose text
+  moved, and the model, endpoint and API key are options the config passes to
+  the plugin.
 - `@yaks/match` is the path with no storage at all: give it the same AST and
   vocabulary and it filters bundles you already hold in memory, for the
   supported shared subset. Unsupported clauses fail rather than silently

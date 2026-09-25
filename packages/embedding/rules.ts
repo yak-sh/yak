@@ -26,7 +26,7 @@ import { embedderOf, type Options } from './options.ts'
 
 /** The vector table and its dirty flag, in the server's own database. It
  * contributes no rule to `apply()`: nothing a client writes is a vector, and
- * what keeps the vectors in step with the text is the sweep (`./effects`), off
+ * what keeps the vectors in step with the text is the sweep (`./service`), off
  * the write path. */
 export let rules = (host: { sql: Driver }): Plugin[] => {
   for (let statement of schema()) host.sql.query(statement)

@@ -56,8 +56,8 @@
  * synchronous; only the sweep, which may be calling a hosted model, is not.
  *
  * As a plugin it is two exports and nothing else: `./rules` creates the vector
- * table and registers the `.near` compiler, `./effects` schedules a sweep when
- * embedded text changes, and the model, endpoint and key are the options named
+ * table and registers the `.near` compiler, `./service` keeps settling what the
+ * queue holds, and the model, endpoint and key are the options named
  * beside the plugin in the config. It declares no component — no client ever
  * writes a vector.
  *

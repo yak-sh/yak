@@ -5,7 +5,7 @@
 // The vectors are this package's business; the model is not. So the config
 // names one beside the plugin, and both exports build what they need from that
 // one declaration — `./rules` needs the vector space it names (a stored vector
-// is only comparable with others in the same space), `./effects` needs the
+// is only comparable with others in the same space), `./service` needs the
 // embedding function itself:
 //
 // ```json
@@ -61,8 +61,8 @@ export type Options = {
   /** how many queued entities one sweep takes (default 64, ./sweep.ts
    * `BATCH`); the next sweep follows at once while any are left */
   batch?: number
-  /** how long a burst of writes settles before the sweep runs, in
-   * milliseconds (default 3000) */
+  /** how long an empty queue waits before the service looks again, in
+   * milliseconds (default 3000) — how soon a new text is embedded */
   after?: number
   /** how long the index mark may stand before that means nobody is
    * rebuilding, in minutes (default 30) — the check reads it (./tools.ts) */
