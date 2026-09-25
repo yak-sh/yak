@@ -38,7 +38,6 @@
 // one yet.
 
 import type { Bundle } from '@yaks/graph'
-import { CONTENT, OUTPUT, STOP_ENTRY } from '@yaks/session'
 import {
   EXIT,
   type Exit,
@@ -49,6 +48,14 @@ import {
   type Service,
 } from './comp.ts'
 import type { Store } from './store.ts'
+
+// Components other packages declare, which a host composes beside this one:
+// each line a process prints is `content{body}` with an `output{source}`
+// naming the process (@yaks/tools), and a `stop` on a service's entity
+// (@yaks/session) is the wish that it stop.
+let CONTENT = 'content'
+let OUTPUT = 'output'
+let STOP = 'stop'
 
 /** What to run. */
 export type Spec = {
@@ -710,7 +717,7 @@ export let supervise = (store: Store, o: Care = {}): () => Promise<Run[]> => {
       if (pid) w.pid = pid
       let over = b[EXIT] != null
 
-      if (b[STOP_ENTRY] != null) {
+      if (b[STOP] != null) {
         if (!over) await down(eid, w, pid)
         continue
       }

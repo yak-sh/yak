@@ -87,27 +87,6 @@ await graph.apply([started()])
 await graph.apply([ended(0)])
 ```
 
-## Shell tools
-
-<a id="the-shell-as-a-sessions-tools"></a>
-
-`shellTools(graph)` returns `shell`, `wait`, and `stop` tools for a session.
-
-```ts
-import { shellTools } from '@yaks/process'
-
-const tools = [...shellTools(graph), ...applicationTools]
-```
-
-`shell` runs `bash -c` as a non-interactive, non-login shell with the host
-environment, including `PATH` and `HOME`. If the command exceeds the tool
-timeout, it continues running and the result includes its process entity ID.
-`wait` polls that entity for an exit and returns recent output. `stop` sends
-SIGTERM and then SIGKILL if necessary. These tools write process state directly
-to the graph because starting and monitoring the child must happen after the
-state is committed. `wait` and `stop` read persisted exit state, so they also
-work for processes that `watch()` adopted after a restart.
-
 ## Supervision
 
 `supervise(store, options)` returns one reconciliation pass. Call it from the
@@ -144,7 +123,6 @@ The main module exports:
 - storage: `Store`, `store()`, `RUNNING`, and `SERVICES`;
 - graph integration: `processes()`;
 - process operations: `dirOf()`, `paths()`, `launch()`, `adopt()`, `watch()`,
-  `signal()`, and `supervise()`;
-- session integration: `shellTools()`.
+  `signal()`, and `supervise()`.
 
 Additional entry points are `@yaks/process/vocab` and `@yaks/process/rules`.

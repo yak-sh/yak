@@ -30,7 +30,7 @@ import { worktrees } from './paths.ts'
 import type { Entity, Graph, Tool as GraphTool } from '@yaks/graph'
 import { shapeOf } from '@yaks/mcp'
 import { core, type Depth } from '@yaks/mcp'
-import { shellTools } from '@yaks/process'
+import { shellTools } from './shell.ts'
 import {
   type ChildLimits,
   sessionTools,

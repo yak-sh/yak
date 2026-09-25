@@ -37,10 +37,6 @@
  * with it, which is the only reason the launcher is shaped the way it is, and
  * exactly one supervisor sits above it (see ./run.ts).
  *
- * {@link shellTools} hands the same rows to a session as three tools — `shell`,
- * `wait`, `stop` — so a tool call that outlives its timeout returns the process
- * entity instead of blocking on it.
- *
  * @module
  */
 
@@ -49,4 +45,3 @@ export * from './self.ts'
 export * from './store.ts'
 export * from './plugin.ts'
 export * from './run.ts'
-export * from './tools.ts'

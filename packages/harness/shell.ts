@@ -19,9 +19,15 @@
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { CONTENT, OUTPUT, type Tool } from '@yaks/session'
-import { EXIT, type Exit, PROCESS, type Process } from './comp.ts'
-import { launch, type Opts } from './run.ts'
-import { store } from './store.ts'
+import {
+  EXIT,
+  type Exit,
+  launch,
+  type Opts,
+  PROCESS,
+  type Process,
+  store,
+} from '@yaks/process'
 
 /** How the shell tools behave, all optional. */
 export type ShellOpts = Opts & {
@@ -100,12 +106,8 @@ let signal = (pid: number, sig: Deno.Signal) => {
 
 /**
  * The shell as a session's tools: `shell` runs a command, `wait` blocks on one
- * that outlived its tool call, `stop` ends it.
- *
- * ```ts
- * import { shellTools } from '@yaks/process'
- * // let tools = [...shellTools(graph), ...mine]
- * ```
+ * that outlived its tool call, `stop` ends it. `harnessTools()` carries them
+ * (./tools.ts).
  *
  * A command that finishes before its timeout returns its output; one that does
  * not returns the id of the process entity, still running, for `wait` and

@@ -243,15 +243,15 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/process](./process)** — a running program as an entity, so whatever
   needs one points at it instead of keeping a pid: `process{pid, command, cwd}`
   for the one that is running, `service{command, cwd, restart, attempts}` for
-  the one that should be, `exit{code}`, and its output as @yaks/session's
+  the one that should be, `exit{code}`, and its output as @yaks/tools'
   `content{body}` + `output{source}`. Four entry points over one loop — launch a
   child detached, adopt one by pid, re-adopt every unfinished row at start-up,
   and supervise the ones that should be running on a timer. The program doing
   the launching gets a row too: `started()`/`ended()` are what a process writes
   about itself, which is what it signs its writes with and what a start-up
-  effect fires on — and the same rows back a session's `shell`, `wait` and
-  `stop` tools, so a long-running tool call returns the process instead of
-  blocking on it.
+  effect fires on. The same rows back the harness's `shell`, `wait` and `stop`
+  tools, so a long-running tool call returns the process instead of blocking on
+  it.
 - **[@yaks/spawn](./spawn)** — combine tools, sessions and processes: a session
   whose provider is an agent CLI. The `using` component on a session's first
   entry is the request; a provider that is a command line (`claude`, `codex`) is

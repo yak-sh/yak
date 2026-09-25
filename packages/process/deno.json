@@ -7,7 +7,7 @@
     "./rules": "./rules.ts"
   },
   "license": "Apache-2.0",
-  "description": "Starts, adopts and supervises operating-system processes, recording each one as a graph entity with its pid, output and exit code, plus shell tools for a session.",
+  "description": "Starts, adopts and supervises operating-system processes, recording each one as a graph entity with its pid, output and exit code.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

@@ -211,6 +211,17 @@ bundles from graph-backed interfaces. To embed the app, mount `App` with
 - **Restart recovery.** `open()` releases execution leases whose holders are
   absent from the graph; `resume()` schedules sessions with unfinished work.
 
+## The shell
+
+`harnessTools()` includes `shell`, `wait` and `stop` (./shell.ts), over
+@yaks/process. `shell` runs `bash -c` as a non-interactive, non-login shell with
+the host environment, including `PATH` and `HOME`. If the command exceeds the
+tool timeout, it continues running and the result includes its process entity
+ID. `wait` polls that entity for an exit and returns recent output. `stop` sends
+SIGTERM and then SIGKILL if necessary. The tools write process state to the
+graph before starting the child, and `wait` and `stop` read the persisted exit,
+so they also work for processes that `watch()` adopted after a restart.
+
 ## Not here
 
 The standalone harness does not run a sync service or HTTP server. It does not

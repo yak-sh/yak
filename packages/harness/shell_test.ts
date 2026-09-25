@@ -1,13 +1,23 @@
-// Real children again (see run_test.ts): what is under test is a call that
+// Real children again (see @yaks/process's run_test.ts): what is under test is a call that
 // outlives its budget, so a fake child would be testing the fake. The poll is
 // 5ms and every child is short or killed, so the file runs in well under a
 // second.
 
 import { assert, assertEquals, assertMatch } from '@std/assert'
-import type { Comp } from '@yaks/graph'
-import { EXIT } from './comp.ts'
-import { tracked } from './testing.ts'
-import { type ShellOpts, shellTools } from './tools.ts'
+import { type Comp, graph } from '@yaks/graph'
+import { modelDoc } from '@yaks/model'
+import { EXIT, processDoc, processes } from '@yaks/process'
+import { ram } from '@yaks/ram'
+import { sessionDoc } from '@yaks/session'
+import { toolsDoc } from '@yaks/tools/vocab'
+import { loadVocab } from '@yaks/vocab'
+import { type ShellOpts, shellTools } from './shell.ts'
+
+// The lines a process prints are `content` beside `output` (@yaks/tools), in
+// a graph that also knows sessions and models.
+let vocab = loadVocab([processDoc, sessionDoc, toolsDoc, modelDoc])
+let tracked = () =>
+  graph({ storage: ram(vocab), vocab, plugins: [processes()] })
 
 let opts = (): ShellOpts => ({
   dir: Deno.makeTempDirSync({ prefix: 'yaks-process-' }),
