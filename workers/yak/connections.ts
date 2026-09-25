@@ -31,7 +31,6 @@
 // refused rather than kept.
 import {
   begin,
-  BUILT,
   clientOf,
   connect,
   connectable,
@@ -40,6 +39,8 @@ import {
   type Ctx,
   disconnect,
   envOf,
+  install,
+  installed,
   INTEGRATION,
   type Integration,
   keyed,
@@ -106,10 +107,29 @@ let EID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
 
+/** A service as a page draws it: what a person calls it, a line about it,
+ * its site and its logo, each empty where its integration says none. */
+export type Face = {
+  title: string
+  tagline: string
+  site: string
+  /** an SVG document, drawn as an image */
+  logo: string
+}
+
+/** The face of an integration, called by its name where it has no title. */
+export let faceOf = (name: string, i?: Integration): Face => ({
+  title: i?.title || name,
+  tagline: i?.tagline ?? '',
+  site: i?.site ?? '',
+  logo: i?.logo ?? '',
+})
+
 /** One connection, as the page shows it. */
 export type Shown = {
   eid: string
   integration: string
+  face: Face
   /** the signed-in person's own, rather than the space's */
   own: boolean
   /** each person who uses its apps connects their own; the space's is only
@@ -153,7 +173,7 @@ export type Connections = {
   /** the built integrations nothing here is connected to yet, and this deploy
    * can connect: one reached by OAuth needs the client it names kept in the
    * vault (@yaks/connections `registration`) */
-  built: { name: string; keyed: boolean }[]
+  built: { name: string; keyed: boolean; face: Face }[]
 }
 
 // A read of the directory. Every read the verbs make is a filter line.
@@ -262,6 +282,7 @@ export let connectionsOf = async (
       return {
         eid: b.entity.eid,
         integration: String(c.integration),
+        face: faceOf(String(c.integration), i),
         own: c.owner == person,
         each: to.some((l) => comp(l, USES).each),
         status: (c.status ?? 'needed') as Status,
@@ -290,11 +311,14 @@ export let connectionsOf = async (
   // A client is kept in the vault, so a deploy with none has no client either.
   let offered = async (i: Integration) =>
     !taken.has(i.name) && (!i.testing || enable.includes(i.name)) &&
-    connectable(i, vaulted(env) && await clientOf(vaultOf(env), i))
+    connectable(i, vaulted(env) && await clientOf(vaultOf(env), read, i))
   let built = []
-  for (let i of Object.values(BUILT)) {
-    if (await offered(i)) built.push({ name: i.name, keyed: keyed(i) })
+  for (let i of await installed(read)) {
+    if (await offered(i)) {
+      built.push({ name: i.name, keyed: keyed(i), face: faceOf(i.name, i) })
+    }
   }
+  built.sort((a, b) => a.name.localeCompare(b.name))
   return {
     on: vaulted(env),
     list: shown.sort((a, b) => a.integration.localeCompare(b.integration)),
@@ -551,7 +575,7 @@ let own: Answer = async ({ env, req, path, space, app, who, refuse }) => {
     })
     return askConnect({
       app: app.title,
-      integration,
+      face: faceOf(integration, i),
       keyed: keyed(i),
       on: !keyed(i) || vaulted(env),
       status: (comp(mine, CONNECTION).status ?? 'needed') as Status,
@@ -824,8 +848,9 @@ let CONNECTIONS: Row[] = [
  * Connections, as what they contribute (plugin.ts): the words the directory
  * keeps them in — the connection and its integration, the secret its
  * credential is, the mark it wears while that is saved, and the text a
- * failure is said in beside `error` — the two tools, the two doors, and the
- * Connect button at an app's address.
+ * failure is said in beside `error` — the built integrations it installs
+ * there, the two tools, the two doors, and the Connect button at an app's
+ * address.
  */
 export let connectionsPlugin: Plugin = {
   name: 'connections',
@@ -835,6 +860,7 @@ export let connectionsPlugin: Plugin = {
     provisionalDoc,
     { title: 'content', $defs: { content: toolsDoc.$defs!.content } },
   ],
+  installs: [install],
   tools: CONNECTIONS.map(worded),
   routes: [callback, hook],
   answers: [own],

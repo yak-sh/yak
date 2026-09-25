@@ -139,7 +139,7 @@ import { commands, type Tools } from './lib/tools.ts'
 import { soonest, tick, type Ticked, wakes } from '@yaks/wake'
 import { type Alarm, arm } from '@yaks/wake/cloudflare'
 import { named, type Row } from './listing.ts'
-import { effected, rulesOf, wakesOf } from './plugin.ts'
+import { effected, installsOf, rulesOf, wakesOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import type { Env } from './env.ts'
 import { resumed, seeded } from './wake.ts'
@@ -1298,6 +1298,19 @@ export class Store {
   // resumes one they paused, and the stamp means a store that already holds
   // them asks its storage once rather than its graph three times.
   #sow = async (): Promise<void> => {
+    // First, the rows the platform ships (@yaks/connections' built
+    // integrations), brought up to date before this object answers anything:
+    // written as the kernel, their one writer, and only where they moved.
+    if (this.#get('name') == PLATFORM_STORE) {
+      for (let install of installsOf(PLUGINS)) {
+        try {
+          let change = await install((q) => this.#graph.read(q))
+          if (change.length) await this.#trust(change, null)
+        } catch (e) {
+          await this.#broke('install', e)
+        }
+      }
+    }
     try {
       let rows = this.#get('name') == PLATFORM_STORE ? wakesOf(PLUGINS) : []
       let stamp = sha256(rows.map((r) => r.entity.eid).join('\n'))

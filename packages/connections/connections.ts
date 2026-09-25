@@ -50,10 +50,8 @@ import {
   type Vault,
 } from '@yaks/secrets'
 import {
-  BUILT,
   connectable,
   INTEGRATION,
-  type Integration,
   integrationEid,
   keyed,
   known,
@@ -97,8 +95,6 @@ export type Ctx = {
     apply: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
   }
   vault: Vault
-  /** the built integrations (default {@link BUILT}) */
-  built?: Record<string, Integration>
   /** where the service sends the person back after they sign in */
   redirect?: string
   fetch?: typeof fetch
@@ -207,18 +203,15 @@ let linked = (
 })
 
 /** Make a connection needing a credential, linked from the app that needs it,
- * with the custom integration a key for an unbuilt service needs. An app that
- * already uses a connection through that integration is answered with it:
- * with `each`, the one the owner holds. The connection comes first. */
-export let need = async (
-  read: Read,
-  a: Need,
-  built: Record<string, Integration> = BUILT,
-): Promise<Bundle[]> => {
+ * with the custom integration a key for an unbuilt service needs — made only
+ * where no integration holds the name, so it never writes over one. An app
+ * that already uses a connection through that integration is answered with
+ * it: with `each`, the one the owner holds. The connection comes first. */
+export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
   let hosts = a.hosts ?? []
   let name = a.integration
-  let i = await known(read, name, built)
-  if (hosts.length && Object.hasOwn(built, name)) {
+  let i = await known(read, name)
+  if (hosts.length && i?.built) {
     throw new Error(
       `${name} is built, and sends its credential to its own hosts`,
     )
@@ -265,6 +258,8 @@ export let need = async (
     ...i ? [] : [{
       entity: { eid: integrationEid(name) },
       [INTEGRATION]: { name, hosts },
+      // Refused, rather than written over, where one was made meanwhile.
+      $was: { [INTEGRATION]: { name: null } },
     }],
     ...a.app ? [linked(a.app, made.entity.eid, u)] : [],
   ]
@@ -348,11 +343,11 @@ export let resolve = async (
 // it was asked for, and its tokens kept as its own secret.
 let signIn = async (c: Ctx, b: Bundle): Promise<Client> => {
   let name = String(comp(b, CONNECTION).integration)
-  let i = await known(c.graph.read, name, c.built)
+  let i = await known(c.graph.read, name)
   if (!i?.authorize || !i.token) {
     throw new Error(`${name} is connected with a pasted key, not by signing in`)
   }
-  let registered = await clientOf(c.vault, i, c.built)
+  let registered = await clientOf(c.vault, c.graph.read, i)
   if (!connectable(i, registered)) {
     throw new Error(`no OAuth client is registered for ${name}`)
   }
@@ -401,7 +396,7 @@ export let connect = async (
   }
   if ('key' in given) {
     let name = String(comp(b, CONNECTION).integration)
-    let i = await known(c.graph.read, name, c.built)
+    let i = await known(c.graph.read, name)
     if (!i || !keyed(i)) {
       throw new Error(`${name} is connected by signing in, not with a key`)
     }
@@ -472,11 +467,7 @@ export let credential = async (
   connection: Eid,
 ): Promise<string | undefined> => {
   let b = await held(c.graph.read, connection)
-  let i = await known(
-    c.graph.read,
-    String(comp(b, CONNECTION).integration),
-    c.built,
-  )
+  let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
   if (i && keyed(i)) {
     return await reveal(c.vault, nameOf(b), { env: () => undefined })
   }

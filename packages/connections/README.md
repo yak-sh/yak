@@ -13,13 +13,17 @@ swaps sentinels on the way out with them.
 
 ## Stored data
 
-- `integration{name, authorize, token, scopes, params, auth, hosts, signature}`
-  is a custom integration, kept in the space. `name` is its identity, so one
-  name is one integration. An integration with `authorize` and `token` is
-  connected by signing in (OAuth 2 with PKCE, through [@yaks/oauth](../oauth));
-  one without is a pasted key. `hosts` are the only API hosts its credential may
-  be sent to, and `signature` is the [@yaks/hook](../hook) scheme its webhooks
-  are signed with.
+- `integration{name, title, tagline, site, logo, authorize, token, scopes,
+  params, auth, hosts, signature, testing, built}`
+  is an outside service. `name` is its identity, so one name is one integration.
+  `title`, `tagline`, `site` and `logo` are how a page shows it: what a person
+  calls it, one line saying what it is, its address on the web, and its mark as
+  an SVG document, which a page draws as an image and never as markup. An
+  integration with `authorize` and `token` is connected by signing in (OAuth 2
+  with PKCE, through [@yaks/oauth](../oauth)); one without is a pasted key.
+  `hosts` are the only API hosts its credential may be sent to, and `signature`
+  is the [@yaks/hook](../hook) scheme its webhooks are signed with. `built` is
+  server-owned: it marks one this package builds.
 - `connection{integration, owner, account, scopes, status}` names its
   integration, the space or person that `owner`s it (and is deleted with them),
   the outside account, the scopes asked for or granted, and `status`: `needed`
@@ -40,18 +44,21 @@ swaps sentinels on the way out with them.
   rather than a sentinel, for a key it must sign with; only a pasted key shared
   by everyone may be direct.
 
-The built integrations ship with this package as data, one JSON file each, in
-`BUILT` by name. A built name is never a custom one's: `need` will not make one,
-and a lookup finds the built one first, so a space cannot change where a built
-integration's tokens are sent. `openrouter` is built: its sign-in needs no
-registered client, and its exchange answers an API key (`answers: 'key'`,
-@yaks/oauth), kept as the connection's grant. `google-calendar` is built: it
-asks for `calendar.events` and `calendar.calendarlist.readonly` unless an app
-needs narrower, asks Google for offline access so the grant can be refreshed,
-and sends its token to `www.googleapis.com` alone. It is `testing: true` while
-Google's app is in testing mode, where only the people Google lists may sign in,
-so yaks.app offers it only on a connections page opened with
-`?enable=google-calendar`.
+Every integration is an entity in the graph. The ones this package builds ship
+as seed data, one JSON file each, which a host installs into its graph at
+start-up, trusted (`install`); nothing reads the files after that. A custom one
+is made by `need`, only where no integration holds the name yet, so no verb a
+space can reach writes over a built integration or changes where its tokens are
+sent, and only the host can mark one `built`. Each logo is the service's mark
+from [Simple Icons](https://simpleicons.org) (CC0, simple-icons 16.32.0), in its
+brand colour. `openrouter` is built: its sign-in needs no registered client, and
+its exchange answers an API key (`answers: 'key'`, @yaks/oauth), kept as the
+connection's grant. `google-calendar` is built: it asks for `calendar.events`
+and `calendar.calendarlist.readonly` unless an app needs narrower, asks Google
+for offline access so the grant can be refreshed, and sends its token to
+`www.googleapis.com` alone. It is `testing: true` while Google's app is in
+testing mode, where only the people Google lists may sign in, so yaks.app offers
+it only on a connections page opened with `?enable=google-calendar`.
 
 An integration reached by OAuth signs in as the client it names
 (`client: 'google'`), registered once with the service and shared by every
@@ -59,9 +66,10 @@ integration that names it: google-calendar names `google`, as a later
 google-drive would. The client is a secret, kept as `oauth_client <name>`:
 `registration(name, {id, secret})` is the bundle that seals it, so the graph
 holds its handle and the vault its id and secret, and `clientOf` reads it back
-at sign-in. A custom integration never signs in as a built one's client, whose
-secret would go to the custom one's token endpoint. `connectable` says whether
-an integration can be connected there at all, and the page offers only those.
+at sign-in. A custom integration never signs in as a client a built one names,
+whose secret would go to the custom one's token endpoint. `connectable` says
+whether an integration can be connected there at all, and the page offers only
+those.
 
 ## Verbs
 
@@ -69,7 +77,7 @@ The two an untrusted caller may ask are the tools. Each returns bundles for the
 caller to apply in its own name:
 
 - `need(read, {owner, integration, app?, scopes?, hosts?, each?, binding?,
-  direct?}, built?)`
+  direct?})`
   makes a `needed` connection and the `uses` link from the app, read by
   `binding` (default: the integration's name in capitals, `bindingOf`). For a
   service with no integration, `hosts` makes a custom key integration, and hosts
@@ -87,8 +95,13 @@ caller to apply in its own name:
 uses through an integration: the shared one, or with `each`, the one the owner
 holds. A host reads the space's ask with it before a person connects their own.
 
+`known(read, name)` is an integration by name, and `installed(read)` every built
+one a graph holds. `install(read)` is the change that installs the built
+integrations: each one missing, or held otherwise than its seed says, written
+whole and marked `built`, and nothing where all match.
+
 The rest are for trusted code, and act on the `Ctx` they are given (the graph,
-its vault, the built integrations, and the redirect):
+its vault, and the redirect):
 
 - `begin(ctx, connection)` returns the sign-in link and the attempt to keep
   until the person returns.
@@ -119,7 +132,8 @@ its vault, the built integrations, and the redirect):
 
 `@yaks/connections/vocab` declares the components and the tools
 `connection_need` and `connection_list`; `@yaks/connections/tools` implements
-the tools. A host that composes this package also composes @yaks/secrets over
-its vault, the plugin and its effect, which seals each credential once the write
-commits and drops it when the connection is deleted, and @yaks/edge, which
+the tools; `@yaks/connections/effects` installs the built integrations when the
+process starts. A host that composes this package also composes @yaks/secrets
+over its vault, the plugin and its effect, which seals each credential once the
+write commits and drops it when the connection is deleted, and @yaks/edge, which
 derives each `uses` link's id.

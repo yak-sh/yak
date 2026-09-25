@@ -10,7 +10,7 @@
 
 import type { Bundle } from '@yaks/graph'
 import { reveal, sealed, type Vault } from '@yaks/secrets'
-import { BUILT, type Integration } from './integrations.ts'
+import { installed, type Integration, type Read } from './integrations.ts'
 
 /** A client registered with a service: its id, and a confidential client's
  * secret. */
@@ -39,17 +39,16 @@ export let registered = async (
   return c
 }
 
-/** The client an integration signs in as. A custom integration never names a
- * built one's client: that client's secret would go to whatever token endpoint
- * the custom integration gives. */
-export let clientOf = (
+/** The client an integration signs in as. A custom integration never signs in
+ * as a client a built one names: that client's secret would go to whatever
+ * token endpoint the custom integration gives. */
+export let clientOf = async (
   vault: Vault,
+  read: Read,
   i: Integration,
-  built: Record<string, Integration> = BUILT,
 ): Promise<Registered | undefined> => {
-  let own = built[i.name] === i
-  let taken = !own && Object.values(built).some((b) => b.client == i.client)
-  return !i.client || taken
-    ? Promise.resolve(undefined)
-    : registered(vault, i.client)
+  if (!i.client) return undefined
+  let taken = !i.built &&
+    (await installed(read)).some((b) => b.client == i.client)
+  return taken ? undefined : registered(vault, i.client)
 }

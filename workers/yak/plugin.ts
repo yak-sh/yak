@@ -27,6 +27,8 @@
 //            own post-commit registry (@yaks/effects, graph.ts `#boot`)
 //   wakes    rows seeded once in the directory: when to write `fired`, with
 //            the tags the plugin's effect rules match beside it
+//   installs rows the directory holds as the plugin ships them, written as
+//            the kernel whenever they differ (graph.ts `#sow`)
 //   pins     the pinned bytes it still names, so the retention sweep keeps
 //            them (versions.ts `pruned`)
 //
@@ -40,7 +42,7 @@
 // (plugins.ts) is the one list, and the host modules read that list instead of
 // naming a domain each.
 import type { Effects as Registry } from '@yaks/effects'
-import type { Bundle, Rule } from '@yaks/graph'
+import type { Bundle, Query, Rule } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Wake as Schedule } from '@yaks/wake'
 import type { Objects } from '@yaks/blob'
@@ -122,6 +124,13 @@ export type Watch = (v: Visit) => void
 /** A directory row a plugin seeds once, wearing the tags its rules match. */
 export type Wake = Bundle & { wake: Schedule }
 
+/** The change that brings the rows a plugin ships up to date in the
+ * directory, given a read of it: nothing where they already match
+ * (@yaks/connections `install`). */
+export type Install = (
+  read: (query: Query) => Bundle[] | Promise<Bundle[]>,
+) => Bundle[] | Promise<Bundle[]>
+
 /**
  * The store an effect is being registered in, said as what a plugin may know
  * about it (graph.ts `#boot`): the Worker's bindings, whether this is the
@@ -197,6 +206,9 @@ export type Plugin = {
   effects?: Effect[]
   /** schedules seeded once in the directory; existing rows keep their state */
   wakes?: Wake[]
+  /** rows the directory holds as the plugin ships them, installed as the
+   * kernel once per incarnation of the directory's store */
+  installs?: Install[]
   /** the pinned bytes it still names, which the sweep must keep */
   pins?: Pins[]
 }
@@ -251,6 +263,10 @@ export let pinsOf = async (
 /** Every schedule row, in plugin order, for the directory's first tick. */
 export let wakesOf = (plugins: Plugin[]): Wake[] =>
   plugins.flatMap((p) => p.wakes ?? [])
+
+/** Every install, in plugin order, for the directory's first request. */
+export let installsOf = (plugins: Plugin[]): Install[] =>
+  plugins.flatMap((p) => p.installs ?? [])
 
 /**
  * Register every plugin's effects on one store's registry, in plugin order

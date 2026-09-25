@@ -12,10 +12,11 @@ It serves no route. A host authenticates the caller and hands each call to
 ## The verb
 
 `forward(ctx, {app, level, person}, request)` returns the service's response.
-`ctx` is @yaks/connections' `Ctx`: the graph, its vault, the built integrations
-and the OAuth client registered with each. `level` is what the host vouches the
-caller holds on the app ([@yaks/member](../member)), or `null` for nothing, and
-`person` is who the host vouches they are, or `null` for nobody signed in.
+`ctx` is @yaks/connections' `Ctx`: the graph, which holds every integration, and
+its vault, which holds each OAuth client and credential. `level` is what the
+host vouches the caller holds on the app ([@yaks/member](../member)), or `null`
+for nothing, and `person` is who the host vouches they are, or `null` for nobody
+signed in.
 
 Before a sentinel is swapped:
 

@@ -144,6 +144,34 @@ slow(
     // Still in Google's testing mode: offered only on `?enable=`.
     assertEquals(await offered(), ['openrouter'])
     assertEquals(await offered(google), ['google-calendar', 'openrouter'])
+    let [calendar] = (await s.shown(google)).built
+    assertEquals(
+      [calendar.face.title, calendar.face.site],
+      ['Google Calendar', 'https://calendar.google.com'],
+    )
+  },
+)
+
+slow(
+  'the directory holds the built integrations, and a space cannot change where their tokens go',
+  async () => {
+    let s = await setup()
+    let hosts = async () => {
+      let [b] = await s.at.query(
+        `.eid=${integrationEid('openrouter')}&.integration`,
+      )
+      let i = b.integration as { hosts: string[]; built: boolean }
+      return [i.hosts, i.built]
+    }
+    assertEquals(await hosts(), [['openrouter.ai'], true])
+    let said = await s.post({
+      do: 'add',
+      integration: 'openrouter',
+      hosts: 'evil.test',
+      key: 'sk-live',
+    })
+    assertEquals((said as { no: boolean }).no, true)
+    assertEquals(await hosts(), [['openrouter.ai'], true])
   },
 )
 

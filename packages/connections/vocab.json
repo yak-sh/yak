@@ -10,12 +10,29 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "an outside service, as data: where a person signs in to it and where its codes are exchanged, for one reached by OAuth, and the hosts its credential may be sent to. The built ones ship with @yaks/connections; this component is a custom one, kept in the space",
+      "description": "an outside service, as data: where a person signs in to it and where its codes are exchanged, for one reached by OAuth, the hosts its credential may be sent to, and how a page shows it. A built one is installed by the host from @yaks/connections' own seed data, and marked built; any other is a custom one, kept in the space",
       "properties": {
         "name": {
           "type": "string",
           "identity": true,
-          "description": "what a connection names it by; the entity id is derived from it, and a built integration's name is never a custom one's"
+          "description": "what a connection names it by; the entity id is derived from it, so one name is one integration"
+        },
+        "title": {
+          "type": "string",
+          "description": "what a person calls it, written as its maker writes it: OpenRouter, Google Calendar"
+        },
+        "tagline": {
+          "type": "string",
+          "description": "one line saying what it is, written for a person"
+        },
+        "site": {
+          "type": "string",
+          "format": "uri",
+          "description": "its address on the web"
+        },
+        "logo": {
+          "type": "string",
+          "description": "its mark, as an SVG document; a page draws it as an image, never as markup"
         },
         "authorize": {
           "type": "string",
@@ -54,7 +71,7 @@
         },
         "client": {
           "type": "string",
-          "description": "the id of a public client registered with it for this host (RFC 7591), as an MCP server asks; a host may sign in with it where it has no client of its own"
+          "description": "the OAuth client it signs in as, by name: kept once as the secret `oauth_client <name>`, and shared by every integration naming it. Only a built integration signs in as a client a built one names"
         },
         "hosts": {
           "type": "array",
@@ -64,6 +81,15 @@
         "signature": {
           "type": ["string", "object"],
           "description": "how the service signs the webhooks it sends (@yaks/hook's Scheme)"
+        },
+        "testing": {
+          "type": "boolean",
+          "description": "still in the service's testing mode, where only the people it lists may sign in: a page offers it only where asked to by name"
+        },
+        "built": {
+          "type": "boolean",
+          "stamped": true,
+          "description": "installed by the host from @yaks/connections' own seed data. Only the host writes it, so no space can mark an integration built or sign in as a built one's client"
         }
       }
     },

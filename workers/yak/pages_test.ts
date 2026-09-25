@@ -11,6 +11,22 @@ import {
 } from './pages.ts'
 
 let env = { APEX: 'yaks.fyi' }
+// A service as a page draws it, bare but for its name.
+let named = (title: string) => ({ title, tagline: '', site: '', logo: '' })
+let CAL = {
+  title: 'Cal',
+  tagline: 'Your calendar.',
+  site: 'https://cal.test/',
+  logo: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+}
+// What a face draws: its logo as an image, never as markup, its line, and its
+// site linked by its host.
+let drawn = [
+  `<img class="Connection_Logo" src="data:image/svg+xml,${
+    encodeURIComponent(CAL.logo).replaceAll("'", '&#39;')
+  }"`,
+  'Your calendar. <a href="https://cal.test/">cal.test</a>',
+]
 let page: SpacePage = {
   space: 'ada',
   title: 'Ada',
@@ -105,6 +121,7 @@ Deno.test('connections: the space’s ask of each person offers nothing to conne
         list: [{
           eid: 'c',
           integration: 'Weather',
+          face: named('Weather'),
           own,
           each: true,
           status: 'needed',
@@ -139,7 +156,7 @@ Deno.test('connections: the space’s ask of each person offers nothing to conne
 Deno.test('askConnect: the app, the service, the one form, and the way back', async () => {
   let html = await askConnect({
     app: 'Notes',
-    integration: 'Cal',
+    face: CAL,
     keyed: false,
     on: true,
     status: 'connected',
@@ -151,8 +168,26 @@ Deno.test('askConnect: the app, the service, the one form, and the way back', as
       'Yours is connected.',
       'Connect again',
       'href="https://ada.yaks.fyi/notes/">Back to Notes',
+      ...drawn,
     ]
   ) assertStringIncludes(html, text)
+})
+
+Deno.test('connections: a built integration is offered by its face, and a site is linked only at https', async () => {
+  let offered = async (site: string) =>
+    await spaceIndex({
+      ...page,
+      view: 'connections',
+      connections: {
+        on: true,
+        list: [],
+        services: [],
+        built: [{ name: 'cal', keyed: false, face: { ...CAL, site } }],
+      },
+    }, env).text()
+  let html = await offered(CAL.site)
+  for (let text of ['<h2>Cal</h2>', ...drawn]) assertStringIncludes(html, text)
+  assertEquals((await offered('javascript:alert(1)')).includes('alert'), false)
 })
 
 Deno.test('paid plan settings describe unlimited apps', async () => {

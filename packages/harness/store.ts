@@ -23,13 +23,14 @@ import { home } from './paths.ts'
 import { type Blobs, fileBlobs, memoryBlobs } from '@yaks/blob'
 import { Database, driver } from '@yaks/sqlite/db'
 import { type Effects, effects } from '@yaks/effects'
-import { type Graph, graph } from '@yaks/graph'
+import { type Graph, graph, then } from '@yaks/graph'
 import { reapLeases } from '@yaks/session'
 import { migrations, storage, type Store } from '@yaks/sqlite'
 import { type Vocab } from '@yaks/vocab'
 import { vaultOf } from '@yaks/cli'
 import { dbOf, type Host } from '@yaks/cli/host'
 import { sealing, type Vault } from '@yaks/secrets'
+import { install } from '@yaks/connections'
 
 import { computed } from './vocab.ts'
 import { named, renamed } from './named.ts'
@@ -261,6 +262,13 @@ export let open = (
   // into the vault once its write commits (./effects.ts).
   fx.on('secret', sealing(vault))
   reapLeases(store)
+  // The integrations @yaks/connections builds, installed as a composed host
+  // installs them at start-up (@yaks/connections/effects): the OpenRouter
+  // sign-in goes through one.
+  then(
+    install(g.read),
+    (change) => change.length && g.apply(change, { trusted: true }),
+  )
   return {
     path,
     db,

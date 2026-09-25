@@ -91,7 +91,7 @@ let check = async (
     if (!l.each && !callsOut(l.anyone == true, caller.level)) {
       throw new Refused(`the caller may not call out through ${name}`)
     }
-    let i = await known(c.graph.read, name, c.built)
+    let i = await known(c.graph.read, name)
     let hosts = i?.hosts ?? []
     if (!i || url.protocol != 'https:' || !hosts.includes(url.host)) {
       throw new Refused(

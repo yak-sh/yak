@@ -3,7 +3,7 @@
 // deleted owner leaves behind.
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { type Bundle, type Comp, graph } from '@yaks/graph'
+import { type Bundle, type Comp, graph, Stale } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -21,7 +21,6 @@ import {
 import { effects } from '@yaks/effects'
 import {
   begin,
-  BUILT as SHIPPED,
   clientOf,
   connect,
   connectionsDoc,
@@ -29,8 +28,11 @@ import {
   type Ctx,
   disconnect,
   envOf,
+  install,
+  installed,
   type Integration,
   integrationEid,
+  known,
   list,
   need,
   refresh,
@@ -61,7 +63,6 @@ let CALENDAR: Integration = {
   hosts: ['api.example'],
 }
 let TEXTS: Integration = { name: 'texts', hosts: ['api.texts.example'] }
-let BUILT = { calendar: CALENDAR, texts: TEXTS, ...SHIPPED }
 let REDIRECT = 'https://yourname.yaks.app/_yaks/connections/back'
 let NOW = 1_000_000
 
@@ -100,11 +101,14 @@ let setup = async (...replies: [number, unknown][]) => {
     { entity: { eid: 'bob' }, space: {} },
     registration('example', { id: 'yaks', secret: 's' }),
   ])
+  // This package's own built integrations, and two more of the test's.
+  for (let seeds of [undefined, [CALENDAR, TEXTS]]) {
+    await g.apply(await install(g.read, seeds), { trusted: true })
+  }
   let e = endpoint(...replies)
   let c: Ctx = {
     graph: g,
     vault,
-    built: BUILT,
     redirect: REDIRECT,
     fetch: e.fetch,
     now: () => NOW,
@@ -118,7 +122,7 @@ let setup = async (...replies: [number, unknown][]) => {
         app: 'app',
         integration: 'calendar',
         ...asked,
-      }, BUILT),
+      }),
     )
     return made[0].entity.eid
   }
@@ -149,6 +153,56 @@ await crypto.subtle.digest('SHA-256', new Uint8Array())
 new URL('https://warm.example/?a=b').searchParams.set('c', 'd')
 
 slow(
+  'install: each built integration whole and marked built, and nothing once all match',
+  async () => {
+    let { g } = await setup()
+    let or = integrationEid('openrouter')
+    assertEquals((await known(g.read, 'openrouter'))?.title, 'OpenRouter')
+    assertEquals(await install(g.read), [])
+    // Held otherwise: written whole again, and what the seed does not name is
+    // cleared.
+    await g.apply([{
+      entity: { eid: or },
+      integration: { hosts: ['evil.example'], issuer: 'https://evil.example' },
+    }])
+    await g.apply(await install(g.read), { trusted: true })
+    let i = await known(g.read, 'openrouter')
+    assertEquals([i?.hosts, i?.issuer ?? null, i?.built], [
+      ['openrouter.ai'],
+      null,
+      true,
+    ])
+    assertEquals((await installed(g.read)).map((i) => i.name).sort(), [
+      'calendar',
+      'google-calendar',
+      'openrouter',
+      'texts',
+    ])
+  },
+)
+
+slow(
+  'only the host marks an integration built, and need never writes over one',
+  async () => {
+    let { g } = await setup()
+    let made = (name: string, hosts: string[]) => ({
+      entity: { eid: integrationEid(name) },
+      integration: { name, hosts, built: true },
+    })
+    await g.apply([made('mine', ['api.mine.example'])])
+    assertEquals((await known(g.read, 'mine'))?.built, undefined)
+    let asked = await need(g.read, {
+      owner: 'space',
+      integration: 'late',
+      hosts: ['api.late.example'],
+    })
+    await g.apply([made('late', ['elsewhere.example'])])
+    await assertRejects(async () => await g.apply(asked), Stale)
+    assertEquals((await known(g.read, 'late'))?.hosts, ['elsewhere.example'])
+  },
+)
+
+slow(
   'need: a connection with no credential, linked from the app, and asked again is the same one',
   async () => {
     let { g, c, needs } = await setup()
@@ -166,7 +220,7 @@ slow(
       owner: 'space',
       app: 'app',
       integration: 'calendar',
-    }, BUILT)
+    })
     assertEquals(again, [{ entity: { eid } }])
     await g.apply(again)
     assertEquals((await g.read('.connection')).length, 1)
@@ -195,7 +249,7 @@ slow(
       ]
     ) {
       await assertRejects(() =>
-        need(g.read, { owner: 'space', app: 'app', ...asked }, BUILT)
+        need(g.read, { owner: 'space', app: 'app', ...asked })
       )
     }
   },
@@ -215,7 +269,7 @@ slow(
     assertEquals(await reveal(vault, name), 'sk-live')
     assertEquals(await resolve(c, 'app', 'texts'), {
       connection: b!,
-      link: (await g.read('.uses'))[0],
+      link: (await g.read('.uses&*'))[0],
       sentinel: (await sentinelOf(vault, name))!,
     })
     let signs = await needs()
@@ -263,14 +317,15 @@ slow(
 slow(
   'an OAuth client is kept once, and a custom integration never signs in as a built one’s',
   async () => {
-    let { vault } = await setup()
+    let { g, vault } = await setup()
     let mine = { ...CALENDAR, name: 'mine', token: 'https://evil.example/t' }
-    assertEquals(await clientOf(vault, CALENDAR, BUILT), {
+    let calendar = (await known(g.read, 'calendar'))!
+    assertEquals(await clientOf(vault, g.read, calendar), {
       id: 'yaks',
       secret: 's',
     })
-    assertEquals(await clientOf(vault, mine, BUILT), undefined)
-    assertEquals(await clientOf(vault, TEXTS, BUILT), undefined)
+    assertEquals(await clientOf(vault, g.read, mine), undefined)
+    assertEquals(await clientOf(vault, g.read, TEXTS), undefined)
   },
 )
 
@@ -386,7 +441,7 @@ slow(
       ]
     ) {
       await assertRejects(() =>
-        need(g.read, { owner: 'space', app: 'other', ...asked }, BUILT)
+        need(g.read, { owner: 'space', app: 'other', ...asked })
       )
     }
     // Renamed where it is asked for again, and kept across a disconnect.
@@ -396,7 +451,7 @@ slow(
         app: 'app',
         integration: 'texts',
         binding: 'SMS',
-      }, BUILT),
+      }),
     )
     await disconnect(c, sky)
     let named = (await g.read('.uses&*')).map((l) => of(l, 'uses'))

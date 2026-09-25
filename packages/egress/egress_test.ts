@@ -11,10 +11,10 @@ import { ramVault, sealing, secrets, secretsDoc, SENTINEL } from '@yaks/secrets'
 import { effects } from '@yaks/effects'
 import {
   begin,
-  BUILT as SHIPPED,
   connect,
   connectionsDoc,
   type Ctx,
+  install,
   type Integration,
   need,
   registration,
@@ -37,18 +37,18 @@ let here: VocabDoc = {
   },
 }
 
-let BUILT: Record<string, Integration> = {
-  calendar: {
+// The test's own built integrations, beside the package's (google-calendar).
+let SEEDS: Integration[] = [
+  {
     name: 'calendar',
     authorize: 'https://auth.example/authorize',
     token: 'https://auth.example/token',
     client: 'example',
     hosts: ['api.example'],
   },
-  texts: { name: 'texts', hosts: ['api.texts.example'] },
-  notes: { name: 'notes', hosts: ['api.notes.example'] },
-  'google-calendar': SHIPPED['google-calendar'],
-}
+  { name: 'texts', hosts: ['api.texts.example'] },
+  { name: 'notes', hosts: ['api.notes.example'] },
+]
 
 // The network: every request it is sent, and the replies each test scripts.
 let seen: Request[] = []
@@ -76,11 +76,9 @@ let g = graph({
   plugins: [secrets(vault), edges(vocab), fx],
 })
 fx.on('secret', sealing(vault))
-let c: Ctx = {
-  graph: g,
-  vault,
-  built: BUILT,
-  fetch: net,
+let c: Ctx = { graph: g, vault, fetch: net }
+for (let seeds of [undefined, SEEDS]) {
+  await g.apply(await install(g.read, seeds), { trusted: true })
 }
 await g.apply([
   ...['space', 'app', 'widget', 'other', 'ann', 'bob'].map((eid) => ({
@@ -92,7 +90,7 @@ await g.apply([
 ])
 let needs = async (integration: string, owner = 'space', each = false) =>
   (await g.apply(
-    await need(g.read, { owner, app: 'app', integration, each }, BUILT),
+    await need(g.read, { owner, app: 'app', integration, each }),
   )).find((b) => b.connection)!.entity.eid
 
 // `app` uses a key and a calendar grant; `widget` uses the same key, open to

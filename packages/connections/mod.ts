@@ -3,9 +3,11 @@
  * links between a space or a person and one.
  *
  * An **integration** is an outside service as data: where a person signs in to
- * it and where its codes are exchanged, for one reached by OAuth, and the hosts
- * its credential may be sent to. The built ones ship with this package
- * ({@link BUILT}); a custom one is an `integration` entity in the space.
+ * it and where its codes are exchanged, for one reached by OAuth, the hosts
+ * its credential may be sent to, and how a page shows it. Every one is an
+ * `integration` entity in the graph: the built ones ship with this package as
+ * seed data, which a host installs at start-up ({@link install}), and a custom
+ * one is kept in the space.
  *
  * A **connection** is one link through an integration, owned by a space or a
  * person, and is also the secret its credential is kept as
@@ -41,8 +43,9 @@
 
 export { connectionsDoc } from './vocab.ts'
 export {
-  BUILT,
   connectable,
+  install,
+  installed,
   INTEGRATION,
   type Integration,
   integrationEid,

@@ -10,7 +10,7 @@
 
 import type { Frame } from './build.ts'
 import type { Agent } from './connected.ts'
-import type { Connections, Shown, Using } from './connections.ts'
+import type { Connections, Face, Shown, Using } from './connections.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icon, type IconName } from './icons.ts'
 import { esc } from './html.ts'
@@ -672,8 +672,13 @@ let deskCss = `
 .Desk_Trash p { color: var(--ink) }
 .Desk_Trash small { display: block; color: var(--soft-ink) }
 .Desk .Desk_Trash { max-width: none; margin: 0 }
-.Connection_Head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem .75rem; margin: 0 0 .5rem }
+.Connection_Head { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; margin: 0 0 .5rem }
 .Connection_Head h2 { margin: 0 }
+.Connection_Logo { flex: none; width: 28px; height: 28px }
+.Connection_About { margin: 0 0 .5rem; font-size: .95rem }
+.Connection_Face { display: grid; justify-items: center; gap: .5rem; margin: 0 0 1rem }
+.Connection_Face .Connection_Logo { width: 48px; height: 48px }
+.Connection_Face .Connection_About { margin: 0 }
 .Connection_Head .Apps_Tag { font-size: .8rem; color: var(--soft-ink) }
 .Connection_Status { font-size: .85rem; font-weight: 700; color: var(--soft-ink) }
 .Connection_Status-connected { color: var(--accent) }
@@ -893,6 +898,30 @@ let STATUS = {
   broken: 'Needs reconnecting',
 }
 
+// A service's logo, drawn as an image of its own SVG and never as markup: an
+// SVG an <img> loads runs no script and fetches nothing.
+let logo = (f: Face) =>
+  f.logo
+    ? `<img class="Connection_Logo" src="data:image/svg+xml,${
+      esc(encodeURIComponent(f.logo))
+    }" alt="" width="28" height="28">`
+    : ''
+
+// A line about a service and a link to its site, where it has them. Only an
+// https address is linked, so a site can never be a script.
+let about = (f: Face) => {
+  let site = /^https:\/\/\S+$/.test(f.site)
+    ? `<a href="${esc(f.site)}">${
+      esc(f.site.replace(/^https:\/\//, '').replace(/\/$/, ''))
+    }</a>`
+    : ''
+  return f.tagline || site
+    ? `<p class="Connection_About">${esc(f.tagline)}${
+      f.tagline && site ? ' ' : ''
+    }${site}</p>`
+    : ''
+}
+
 // One connection: whose it is, which apps use it and where its key may go,
 // whether its key is still being saved or could not be, and what to do next.
 // The space's side of an app that asks each person to connect their own is
@@ -929,7 +958,7 @@ let connection = (c: Shown, on: boolean) => {
   let keyForm = (label: string) =>
     form(
       `<input class="Field" name="key" type="password" autocomplete="off" spellcheck="false" aria-label="${label} for ${
-        esc(c.integration)
+        esc(c.face.title)
       }" placeholder="${label}" required>
 <button class="Button" type="submit" name="do" value="key">Save key</button>`,
     )
@@ -957,13 +986,15 @@ let connection = (c: Shown, on: boolean) => {
     }</button>`,
   )
   let apps = c.apps.map((a) => esc(a.title)).join(', ')
-  return `<section class="Card Connection"><header class="Connection_Head"><h2>${
-    esc(c.integration)
+  return `<section class="Card Connection"><header class="Connection_Head">${
+    logo(c.face)
+  }<h2>${
+    esc(c.face.title)
   }</h2><span class="Connection_Status Connection_Status-${c.status}">${
     ask ? 'Each person connects their own' : STATUS[c.status]
   }${c.account ? ` as ${esc(c.account)}` : ''}</span><span class="Apps_Tag">${
     c.own ? 'Yours' : 'This space'
-  }</span></header>
+  }</span></header>${about(c.face)}
 <p>${
     !c.apps.length
       ? 'No app uses it yet.'
@@ -1022,14 +1053,16 @@ let connections = (at: SpacePage) => {
     c.built.map((i) =>
       `<form class="Card Connection" method="post" action="${
         managePath('connections')
-      }"><header class="Connection_Head"><h2>${
-        esc(i.name)
-      }</h2></header><input type="hidden" name="integration" value="${
+      }"><header class="Connection_Head">${logo(i.face)}<h2>${
+        esc(i.face.title)
+      }</h2></header>${
+        about(i.face)
+      }<input type="hidden" name="integration" value="${
         esc(i.name)
       }"><div class="Connection_Do">${
         i.keyed
           ? `<input class="Field" name="key" type="password" autocomplete="off" aria-label="Key for ${
-            esc(i.name)
+            esc(i.face.title)
           }" placeholder="Paste the key" required><button class="Button" type="submit" name="do" value="add">Save key</button>`
           : '<button class="Button" type="submit" name="do" value="add">Connect</button>'
       }</div></form>`
@@ -1393,12 +1426,13 @@ export let closed = (env: Host = {}) =>
   )
 
 // The Connect button an app that asks each person to connect their own
-// account is given (connections.ts `own`): which app, which service, whether
-// this person's is connected, and the one form that connects it — a key
-// pasted, or a sign-in at the service. The form posts back to this page.
+// account is given (connections.ts `own`): which app, which service and how it
+// looks, whether this person's is connected, and the one form that connects
+// it — a key pasted, or a sign-in at the service. The form posts back to this
+// page.
 export let askConnect = (at: {
   app: string
-  integration: string
+  face: Face
   keyed: boolean
   /** whether a key can be kept here at all */
   on: boolean
@@ -1410,12 +1444,16 @@ export let askConnect = (at: {
 }, env: Host = {}) =>
   shell(
     env,
-    `Connect ${esc(at.integration)}`,
+    `Connect ${esc(at.face.title)}`,
     `${esc(at.app)} asks each person who uses it to connect their own ${
-      esc(at.integration)
+      esc(at.face.title)
     } account. Yours is used only when you use the app, and you can disconnect it from your own connections page.`,
     200,
     `${
+      at.face.logo || about(at.face)
+        ? `<div class="Connection_Face">${logo(at.face)}${about(at.face)}</div>`
+        : ''
+    }${
       at.status == 'needed'
         ? ''
         : `<p class="Say${at.status == 'broken' ? ' Say-no' : ''}">${
@@ -1435,7 +1473,7 @@ export let askConnect = (at: {
         : `<form method="post">${
           at.keyed
             ? `<input class="Field" name="key" type="password" autocomplete="off" spellcheck="false" aria-label="Your key for ${
-              esc(at.integration)
+              esc(at.face.title)
             }" placeholder="Paste your key" required>
 <button class="Button" type="submit">Save key</button>`
             : `<button class="Button" type="submit">${
