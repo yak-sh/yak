@@ -41,6 +41,7 @@ import {
   deliverChild,
   type Deps,
   ENTRY,
+  live,
   type Step,
   taskEntry,
   type Tool,
@@ -442,7 +443,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     transcriptWindow: (session, request) =>
       transcriptWindow(h.g, session, request),
     resume: admitted(async () => {
-      let live = await h.g.read('.session.status=pending,running,queued')
+      let woken = (await h.g.read(live)).map((b) => b.entity.eid)
       // Reconcile receipts lost between a child commit and its effect.
       for (
         let b of await h.g.read(
@@ -458,7 +459,6 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
         )
       }
       await opts.resuming?.()
-      let woken = live.map((b) => b.entity.eid)
       for (let s of woken) d.wake(s)
       return woken
     }),

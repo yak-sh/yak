@@ -17,6 +17,7 @@ import { link } from '@yaks/edge'
 import { done, statusOf as taskStatus } from '@yaks/task'
 import { type Tool, type ToolContext, ToolError, transcript } from './react.ts'
 import {
+  live,
   newestAsk,
   openCalls,
   statusOf,
@@ -72,11 +73,7 @@ export let admit = <T>(
           throw new Error('invalid session cap')
         }
       }
-      if (
-        !parent &&
-        (await g.read('.session .session.status=empty,pending,running'))
-            .length >= maxSessions
-      ) {
+      if (!parent && (await g.read(live)).length >= maxSessions) {
         throw new ToolError(
           'session_cap',
           `live session cap (${maxSessions}) reached`,

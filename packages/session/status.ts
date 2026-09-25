@@ -128,6 +128,11 @@ export let openCalls = (entries: Bundle[]): Bundle[] => {
 export let served = (entries: Bundle[]): boolean =>
   entries.some((b) => USING in b || ASK in b)
 
+/** The transcripts a runner is working on: the ones the session cap counts
+ * and a restart wakes. An empty session has nothing to run, and a graph holds
+ * thousands of them (every session a harness's hooks recorded). */
+export let live = '.session.status=pending,running,queued'
+
 /** The status of a transcript, from its entries in any order. */
 export let statusOf = (entries: Bundle[]): TranscriptStatus => {
   let all = ordered(entries).filter((b) => !b.notice)
