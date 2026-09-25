@@ -28,9 +28,9 @@
 // The third thing here is the two checks — tools whose verb is `check`, which
 // is all a "doctor" command is (@yaks/tools ./check.ts).
 //
-// A lock outlives its holder. ./effects.ts frees the locks whose holder is not
-// a session in this graph, at the one moment there is a reliable answer — this
-// process starting — so any lock the check finds appeared since then, and the
+// A lock outlives its holder. The duty (./service.ts) frees the locks whose
+// holder is not a session in this graph, at the one moment there is a reliable
+// answer — its process starting — so any lock the check finds appeared since then, and the
 // board is misreporting who is working. The other half is the lock held by a
 // transcript that ENDED: `stopped` or `failed` is a run nothing will resume,
 // and its lock is a document nobody is editing that nobody else may edit.

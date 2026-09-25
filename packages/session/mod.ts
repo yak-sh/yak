@@ -44,8 +44,8 @@
  * phase, after the rollback. `claim.session` is declared `death: 'release'`:
  * delete a session's entity and its locks go while the documents live —
  * declared in {@link sessionDoc}, carried out by @yaks/graph's cascade.
- * {@link reapLeases} frees, at start-up, every lock whose holder is not a
- * session in the graph.
+ * {@link reapLeases} frees every lock whose holder is not a session in the
+ * graph; the `@yaks/session/service` duty runs it when it starts.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'

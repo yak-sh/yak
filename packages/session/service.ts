@@ -2,6 +2,12 @@
 // `@yaks/session/service` for as long as it is up, and once on the way into a
 // one-shot command.
 //
+// The duty opens by freeing the locks whose holder is gone (./reap.ts). Start-up
+// is the one moment that answer is fresh, and holding the duty is what makes
+// this process the one to give it: the lease is renewed for as long as the
+// process that stays up runs, so a command started beside it leaves the reap
+// to it rather than writing the same releases again.
+//
 // A harness hook appends each prompt and each final reply to the spool
 // (./turn.ts), because a hook has milliseconds and opening the graph takes a
 // second. This reads the lines back in the order they were written and appends
@@ -25,6 +31,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { SESSION } from './comp.ts'
 import { CONTENT, ENTRY, OUTPUT } from './native.ts'
 import { claudeProjects, next, turnsOf, typedIn } from './past.ts'
+import { reapLeases } from './reap.ts'
 import { spoolOf, taken, trim, type Turn } from './turn.ts'
 import { sessionFor } from './who.ts'
 
@@ -172,6 +179,7 @@ export let service = async (
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
+  await reapLeases(host.graph.storage)
   let path = options.spool ?? spoolOf(host.config?.db)
   if (!path) return
   let dir = options.transcripts ?? claudeProjects()

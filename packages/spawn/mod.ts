@@ -39,10 +39,9 @@
  * ```
  *
  * `@yaks/spawn/effects` exports the handlers that run after that transaction
- * commits, and the same handlers cover restarts: when the server writes its own
- * `process` row at start-up, the handler on it picks up every run still going.
- * A server that lists `@yaks/spawn` in its `plugins` config writes no code at
- * all.
+ * commits, and `@yaks/spawn/service` covers restarts: the duty the process that
+ * stays up holds, which picks up every run still going. A server that lists
+ * `@yaks/spawn` in its `plugins` config writes no code at all.
  *
  * @module
  */

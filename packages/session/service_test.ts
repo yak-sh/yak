@@ -1,7 +1,7 @@
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
-import { ids, locked, store } from './harness.ts'
-import { drain, WAIT } from './service.ts'
+import { ids, locked, lockOn, seed, store } from './harness.ts'
+import { drain, service, WAIT } from './service.ts'
 import { report } from './turn.ts'
 
 let say = (path: string, event: string, sid: string, text: string) =>
@@ -29,6 +29,13 @@ let told = async (g: ReturnType<typeof locked>, session: string) =>
     c(b, 'output') ? 'output' : 'input',
     c(b, 'content')?.body,
   ])
+
+Deno.test('the duty frees the locks whose holder is gone as it starts', async () => {
+  let s = store()
+  seed(s, { entity: { eid: ids.p2 }, claim: { session: ids.gone } })
+  await service({ graph: locked(s) }, {}, AbortSignal.abort())
+  assertEquals(lockOn(s, ids.p2), undefined)
+})
 
 Deno.test('prompts and replies land in order, a new session under its own id', () =>
   spooled(async (path) => {

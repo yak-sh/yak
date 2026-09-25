@@ -3,15 +3,16 @@
 // session. A server that lists `@yaks/spawn` in its `plugins` config loads
 // them.
 //
-// Three components, all defined elsewhere:
+// Two components, both defined elsewhere:
 //
 // - a `using` written on an entry is a request — this session wants that
 //   provider, that model, that effort. When the provider is a command line,
 //   answering the request means running that command.
 // - a `stop` written on the session's own entity, next to the `process` it is
 //   running, kills the run.
-// - a `process` row written for the server's own process means the server is
-//   starting up: time to pick up the agents a restart left running.
+//
+// Picking up the agents a restart left running is not a commit's business: it
+// is the duty at `@yaks/spawn/service`, held by the process that stays up.
 //
 // No handler stays open while the work runs. Launching waits on systemd and
 // tailing a log runs for as long as the agent does, so a handler that awaited
@@ -31,20 +32,14 @@
 // its own calls {@link spawning} from a module of its own.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { Elsewhere, sweeping, take, type Watch } from '@yaks/effects'
+import { Elsewhere, sweeping, type Watch } from '@yaks/effects'
 import { EXIT, PROCESS } from '@yaks/process'
-import { down, type Opts, resume, start } from './run.ts'
+import { down, type Opts, start } from './run.ts'
 
-/** Lease name for picking up the agents a restart left running — one server
- * process at a time, so two starting together do not both tail the same
- * log. */
-export let ADOPT = '@yaks/spawn'
-
-/** What these handlers are given: the open graph, the eid of the server's own
- * process (@yaks/cli `Host.me`), and whether it runs its duties (@yaks/cli
- * `Config.duties`). A new `process` row is either the server recording itself or
- * a child it just launched, and only the first means the server is starting
- * up. */
+/** What these handlers are given: the open graph, the eid of this process
+ * (@yaks/cli `Host.me`), and whether it runs its duties (@yaks/cli
+ * `Config.duties`) — together, whether a run asked for here is this process's
+ * to start. */
 export type Host = { graph: Graph; me: Eid; config?: { duties?: boolean } }
 
 /** What config can set — the JSON-expressible half of {@link Opts}. */
@@ -122,27 +117,6 @@ export let spawning =
         let row = await one(host.graph, e.entity.eid)
         if (!row?.[PROCESS] || row[EXIT] != null) return
         down(host.graph, e.entity.eid, opts).catch(report)
-      },
-    }, {
-      comp: PROCESS,
-      // This server process starting up. An agent outlives whoever launched
-      // it, by design, so a fresh server finds runs it has no memory of — a pid
-      // in a row, a log file with unread lines in it — and one pass picks both
-      // back up: liveness from the pidfile, the transcript from where it
-      // stands.
-      //
-      // This fires on the birth of the row the server wrote for itself
-      // (@yaks/process `started`), which is why comparing against `host.me` is
-      // the whole guard: every other `process` row born here belongs to a
-      // child, and adopting a child we just launched would tail it twice.
-      //
-      // The lease keeps two servers that started together from both adopting.
-      // It is taken and never released: whoever got it is following those runs
-      // now, and a second tail over one log would import every line twice.
-      created: async (e) => {
-        if (e.entity.eid != host.me || host.config?.duties == false) return
-        if (!await take(host.graph, ADOPT, { holder: host.me })) return
-        await resume(host.graph, opts).catch(report)
       },
     }]
   }

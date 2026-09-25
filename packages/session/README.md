@@ -92,7 +92,7 @@ check runs in the transaction's `precondition` phase, before cascades change
 rows. After rollback, the `audit` phase records the conflict in a separate
 transaction. Claims do not expire. Deleting a session releases its claims
 through the graph cascade. `reapLeases(storage)` releases claims whose holder is
-no longer a session.
+no longer a session; the `/service` duty runs it when it starts.
 
 ## Running a transcript
 
@@ -274,10 +274,9 @@ The main module exports:
 - error types including `Bounced`, `Unnamed`, and `UnknownSession`.
 
 Additional entry points are `@yaks/session/vocab`, `/rules`, `/tools`,
-`/effects`, `/routes`, `/views`, `/service` (the turn spool duty), and `/turn`
-(the hook that writes the spool). A **host** is the process that opened the
-graph; effects and tools receive its graph and, where needed, its process entity
-ID.
+`/routes`, `/views`, `/service` (the turn spool duty), and `/turn` (the hook
+that writes the spool). A **host** is the process that opened the graph; effects
+and tools receive its graph and, where needed, its process entity ID.
 
 <a id="what-is-deliberately-not-here"></a>
 <a id="compatibility"></a>

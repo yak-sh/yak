@@ -38,9 +38,11 @@ in-process `@yaks/session` daemon.
 
 The process is stored on the session entity. It runs through `@yaks/process` in
 a detached systemd user scope, so it can outlive the process that opened the
-graph. That graph-opening process is the **host**. On host startup, the effects
-take the `@yaks/spawn` lease and resume monitoring active runs, preventing two
-hosts from importing the same logs. Effect handlers start the long-running work
+graph. That graph-opening process is the **host**. The host that stays up holds
+the `@yaks/spawn/service` duty under the `@yaks/spawn` lease, renewed for as
+long as it runs, and resumes monitoring active runs, so no two hosts import the
+same logs. A one-shot command adopts no run: its tails would outlive the lease
+it gives back when it closes. Effect handlers start the long-running work
 without awaiting it; failures go to the configured `report` callback.
 
 <a id="how-the-child-process-is-started"></a>
@@ -115,8 +117,10 @@ Custom adapters are functions and cannot be represented in JSON configuration:
 ```ts
 import { adapters } from '@yaks/spawn'
 import { spawning } from '@yaks/spawn/effects'
+import { adopting } from '@yaks/spawn/service'
 
 export const effects = spawning({ adapters: { ...adapters, mine } })
+export const service = adopting({ adapters: { ...adapters, mine } })
 ```
 
 ## Exports
@@ -128,6 +132,8 @@ points are:
 
 - `@yaks/spawn/vocab`: `spawnDoc` and `docs`;
 - `@yaks/spawn/effects`: `effects`, `spawning()`, and effect configuration;
+- `@yaks/spawn/service`: `service` and `adopting()`, the duty that resumes runs
+  after a restart;
 - `@yaks/spawn/tools`: `runs()`, duration parsing, and brief formatting.
 
 The launcher requires Linux, `setsid`, and a systemd user manager.

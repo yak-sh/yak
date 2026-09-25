@@ -21,8 +21,9 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { launch, processDoc, processes, selfEid, store } from '@yaks/process'
 import { spawning } from './effects.ts'
+import { adopting } from './service.ts'
 import { checkoutDoc } from '@yaks/git/vocab'
-import { checkoutOf, down, resume, speaking } from './run.ts'
+import { checkoutOf, down, speaking } from './run.ts'
 import { asking, fake, tracked, until } from './harness.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -227,6 +228,15 @@ Deno.test('a stop on the session reaches the agent', async () => {
   }
 })
 
+Deno.test('a command passing through adopts no run', async () => {
+  // Its tails would outlive the lease it gives back on the way out, so it
+  // does not so much as look.
+  let looked = false
+  let untouched = new Proxy({}, { get: () => (looked = true, undefined) })
+  await adopting()({ graph: untouched } as never, {}, AbortSignal.abort())
+  assertEquals(looked, false)
+})
+
 Deno.test('a restart adopts the run and reads its log on from where it stands', async () => {
   let g = tracked()
   let where = dir()
@@ -246,9 +256,13 @@ Deno.test('a restart adopts the run and reads its log on from where it stands', 
     )
     assertEquals((await said(g.g)).length, 1) // only the request so far
 
-    // The restart.
-    let runs = await resume(g.g, { adapters: { fake }, dir: where, poll: 20 })
-    assertEquals(runs.length, 1)
+    // The restart: the duty, held by a process that stays up.
+    let up = new AbortController()
+    let duty = adopting({ adapters: { fake } })(
+      { graph: g.g },
+      { dir: where, poll: 20 },
+      up.signal,
+    )
     await until(
       async () => (await bodies(g.g)).includes('working: linger here'),
       'the lines written while we were away',
@@ -258,6 +272,8 @@ Deno.test('a restart adopts the run and reads its log on from where it stands', 
       async () => comp((await g.g.read('.session&*'))[0], 'exit'),
       'the agent to go',
     )
+    up.abort()
+    await duty
   } finally {
     Deno.removeSync(where, { recursive: true })
   }
