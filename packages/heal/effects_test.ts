@@ -84,8 +84,8 @@ let fail = async (g: Graph, message: string, on = `s${++n}`) => {
   return on
 }
 
-let bugs = async (g: Graph) => await g.read('.bug')
-let fixers = async (g: Graph) => await g.read('.fixer')
+let bugs = async (g: Graph) => await g.read('.bug&*')
+let fixers = async (g: Graph) => await g.read('.fixer&*')
 
 Deno.test('a failure files one open task about it, under its project', async () => {
   let g = await host({ provider: undefined })
@@ -153,7 +153,7 @@ Deno.test('a new bug starts one fixer holding it', async () => {
   assert(fixer.session)
   assertEquals(comp(bug, 'claim')?.session, fixer.entity.eid)
   assertEquals(comp(bug, 'filed')?.priority, 1)
-  let [ask] = await g.read(`.entry.session=${fixer.entity.eid}`)
+  let [ask] = await g.read(`.entry.session=${fixer.entity.eid}&*`)
   assertEquals(comp(ask, 'using'), {
     provider: P,
     model: M,

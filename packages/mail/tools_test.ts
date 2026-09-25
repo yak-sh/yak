@@ -146,7 +146,7 @@ Deno.test('reading a letter marks it, and shows its thread', async () => {
   assert(said.includes('▶'), said)
   // The mark is a patch on the letter, not a note on the side.
   await g.apply(answer)
-  let [letter] = await g.read('.mail.message_id=a1@elsewhere.example')
+  let [letter] = await g.read('.mail.message_id=a1@elsewhere.example&*')
   assert(letter.opened, 'reading is the mark')
   await assertRejects(
     () => ask(g, 'mail_show', { letter: 'ana' }),
@@ -166,7 +166,7 @@ Deno.test('a reply to an arrival goes to its author, from the desk it came to', 
   assertEquals(comp(reply, 'doc').title, 'Re: Potluck Friday')
   assertEquals(comp(reply, 'mail').from, 'hello@books.example')
   // The author had no row here, so the address book grew one.
-  let [made] = await g.read('.email.address=stranger@elsewhere.example')
+  let [made] = await g.read('.email.address=stranger@elsewhere.example&*')
   assertEquals(comp(reply, 'deliver').to, made.entity.eid)
   // The configured sender carried it, threaded on what arrived.
   assertEquals(post.last()?.to, 'stranger@elsewhere.example')
@@ -219,7 +219,7 @@ Deno.test('sending mints the address it is for, and goes', async () => {
     from: 'hello@books.example',
     about: 'ana',
   }, { by: 'desk' })
-  let [letter] = await g.read('.mail.target=ana')
+  let [letter] = await g.read('.mail.target=ana&*')
   assertEquals(comp(letter, 'doc').title, 'Thursday')
   // Somebody else's namespace passes through untouched: only this graph's own
   // domain is canonicalized (./addr.ts).
@@ -255,7 +255,7 @@ Deno.test('a letter to somebody already in the book reuses their row', async () 
     body: '.',
     from: 'hello@books.example',
   })
-  let [letter] = await g.read('.deliver.to=desk')
+  let [letter] = await g.read('.deliver.to=desk&*')
   assertEquals(comp(letter, 'doc').title, 'Note to self')
 })
 

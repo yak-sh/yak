@@ -65,6 +65,7 @@ import {
   and,
   type Clause,
   eq,
+  every,
   limit,
   list,
   or,
@@ -142,6 +143,7 @@ let inbox = (who: Eid, address: string, all: boolean, n: number): Query =>
     present(MAIL),
     addressedTo(who, address),
     ...(all ? [] : [absent(ARCHIVED)]),
+    every(),
     limit(n),
   )
 
@@ -198,7 +200,9 @@ export let threadOf = async (
     up = prop(comp(b, MAIL), 'reply_to')
   }
   for (let front = [...seen]; front.length;) {
-    let down = (await graph.read(and(eq(`${MAIL}.reply_to`, list(...front)))))
+    let down = (await graph.read(
+      and(eq(`${MAIL}.reply_to`, list(...front)), every()),
+    ))
       .filter((b) => !seen.has(b.entity.eid))
     for (let b of down) seen.add(b.entity.eid), found.push(b)
     front = down.map((b) => b.entity.eid)
@@ -367,6 +371,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
         present(`${MAIL}.message_id`),
         absent(DELIVER),
         absent(`${MAIL}.from`),
+        every(),
       ),
     )
     let id = human(graph.vocab)

@@ -139,7 +139,7 @@ Deno.test('a commit body is in the store, verbatim', async () => {
     committer: COMMITTER,
     message: 'deploy 1',
   })
-  let [row] = await g.read(`.gitobj.type=commit`)
+  let [row] = await g.read(`.gitobj.type=commit&.blob?`)
   let body = await bytes.get(String(comp(row, 'blob').sha))
   assertEquals(row.entity.eid, one.oid)
   assertEquals(comp(row, 'gitobj').size, body!.length)

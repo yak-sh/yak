@@ -177,7 +177,7 @@ Deno.test('a checked batch says what would land and keeps none of it', async () 
   assertEquals(said[0].$alias, '$new')
   assert(said[0].entity.eid != '$new')
   assertEquals(said[0].doc, { title: 'Emma' })
-  assertEquals(await g.read('.doc.title="Emma"'), [])
+  assertEquals(await g.read('.doc.title="Emma"&*'), [])
   // And a batch it would refuse is refused, rehearsal or not.
   let no = await called(client, 'graph_apply', {
     change: [{ entity: { eid: 'b1' }, book: { colour: 'red' } }],
@@ -220,7 +220,7 @@ Deno.test('the server signs the batch, never the client', async () => {
   })
   // What landed is what this is about: the call was written as the door's
   // actor, and the runner signed the tool's bundles with the same name.
-  assertEquals(comp((await graph.read('.price=12'))[0], 'created').by, 'm1')
+  assertEquals(comp((await graph.read('.price=12&*'))[0], 'created').by, 'm1')
 })
 
 Deno.test('a tool runs as whoever called it', async () => {
@@ -243,7 +243,7 @@ Deno.test('a tool runs as whoever called it', async () => {
   // The tool was handed the caller, not the process running it…
   assertEquals(seen, 'm1')
   // …and what it answered is written in that name.
-  let [shelved] = await graph.read('.status=shelved')
+  let [shelved] = await graph.read('.status=shelved&*')
   assertEquals(comp(shelved, 'created').by, 'm1')
   await client.close()
 })
@@ -255,7 +255,7 @@ Deno.test('an unattributed server leaves the actor off', async () => {
     change: [{ ...spring, $actor: { by: 'villain' } }],
   })
   assertEquals(
-    comp((await graph.read('.price=12'))[0], 'created').by,
+    comp((await graph.read('.price=12&*'))[0], 'created').by,
     undefined,
   )
 })
@@ -422,7 +422,7 @@ Deno.test('a plugin contributes tools the way it contributes components', async 
   ))
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
   assertEquals(
-    comp((await graph.read('.status=shelved'))[0], 'created').by,
+    comp((await graph.read('.status=shelved&*'))[0], 'created').by,
     'm1',
   )
 })
@@ -460,7 +460,7 @@ Deno.test('a tool whose answer is words says them as content, and its bundles be
   assertEquals(text(out), 'two books here')
   let [said] = bundles(result(out))
   assertEquals(comp(said, 'content').body, 'two books here')
-  let [call] = await graph.read('.call')
+  let [call] = await graph.read('.call&*')
   assertEquals(comp(said, 'output').source, call.entity.eid)
   await client.close()
 })

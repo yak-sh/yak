@@ -46,7 +46,7 @@ Deno.test('an effect writes through apply(), so the write is stamped', () => {
       write([{ entity: { eid: 's1' }, subscriber: { email: 'ana@blog' } }]),
   )
   apply([post('p1')])
-  let [sub] = g.read('.subscriber!') as Bundle[]
+  let [sub] = g.read('.subscriber!&.created?') as Bundle[]
   assertEquals((sub.subscriber as Record<string, unknown>).email, 'ana@blog')
   // `created` is @yaks/graph's own stamp: a `tx.patch` write would carry none.
   assert(sub.created, 'the write-back went through the whole pipeline')

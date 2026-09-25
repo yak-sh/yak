@@ -368,7 +368,7 @@ Deno.test('a process writes itself in, signs with that row, and stamps its exit'
   try {
     assertEquals(host.me, me)
     assertEquals(writer(host.vocab)?.via, me)
-    let [row] = await host.graph.read(`.process`)
+    let [row] = await host.graph.read(`.process&.created?&.exit?`)
     assertEquals(row.entity.eid, me)
     assertEquals((row.process as Comp).pid, Deno.pid)
     // …and the row is its own author: a process signs everything it writes,
@@ -583,13 +583,13 @@ Deno.test('the door calls the tool, and the call is the transcript', async () =>
 
     // What was asked, and what came back, both written down — and the book
     // the tool answered is signed as the person who asked, not the server.
-    let [call] = await host.graph.read('.call')
+    let [call] = await host.graph.read('.call&.created?&.execution?')
     assertEquals((call.call as Comp).to, toolEid('book_add'))
     assertEquals((call.created as Comp).by, me)
     assertEquals((call.execution as Comp).state, 'done')
     let [result] = await host.graph.read('.result')
     assertEquals((result.result as Comp).call, call.entity.eid)
-    let [book] = await host.graph.read('.book')
+    let [book] = await host.graph.read('.book&.created?')
     assertEquals((book.created as Comp).by, me)
   } finally {
     host.close()

@@ -36,7 +36,7 @@ import {
   Refused,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import { and, present } from '@yaks/query'
+import { and, present, want } from '@yaks/query'
 import { human } from '@yaks/id'
 import { CallError, checked, type Finding, type Level } from '@yaks/tools'
 import type { Driver } from '@yaks/sqlite'
@@ -155,7 +155,7 @@ export let runs = (host: Seams = {}): Runs => ({
     let of = str(args.of)
     let [scope] = of ? await addressed(graph, [of]) : []
     let path = str(args.path)
-    let cites = await graph.read(and(present(CITES)))
+    let cites = await graph.read(and(present(CITES), want('edge')))
     // Both ends of every citation in one read: a finding names who cites what,
     // and an id a person recognizes rather than a uuid.
     let ends = [
@@ -209,7 +209,7 @@ export let runs = (host: Seams = {}): Runs => ({
     let [asked] = await addressed(graph, [cite || of])
     let found = cite
       ? (await detached(graph.storage).get([asked])).filter((b) => b[CITES])
-      : (await graph.read(and(present(CITES))))
+      : (await graph.read(and(present(CITES), want('edge'))))
         .filter((b) => str(comp(b, 'edge')?.from) == asked)
     if (!found.length) {
       throw new Refused(

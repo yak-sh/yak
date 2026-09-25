@@ -122,6 +122,6 @@ Deno.test('a patch that states no ends is left alone', () => {
     entity: { eid: edgeEid('p1', 'cites', 'p2') },
     edge: { ord: 2 },
   }]))
-  let [edge] = g.read('.cites!') as Bundle[]
+  let [edge] = g.read('.cites!&.edge?') as Bundle[]
   assertEquals((edge.edge as Record<string, unknown>).ord, 2)
 })

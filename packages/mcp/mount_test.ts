@@ -49,7 +49,7 @@ Deno.test('the door answers the protocol, and signs what a tool writes', async (
   let said = await wrote.json()
   assertEquals(said.result.isError, undefined)
 
-  let found: Bundle[] = await graph.read('.price=12')
+  let found: Bundle[] = await graph.read('.price=12&*')
   assertEquals(comp(found[0], 'created').by, 'm1')
 })
 

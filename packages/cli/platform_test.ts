@@ -86,7 +86,8 @@ let asking = async (
 
 Deno.test('a server’s answer is drawn through its packages’ views', async () => {
   await asking(async (c, call) => {
-    let lines = (await call('graph_query', { q: '.task' })).split('\n').sort()
+    let lines = (await call('graph_query', { q: '.task&.doc?' })).split('\n')
+      .sort()
     assertEquals(lines.length, 2)
     assert(/^T-\d+ Fix the bar open$/.test(lines[0]), lines.join('\n'))
     assert(/^T-\d+ Ship it done$/.test(lines[1]), lines.join('\n'))
@@ -97,7 +98,7 @@ Deno.test('a server’s answer is drawn through its packages’ views', async ()
 
 Deno.test('a lone entity is shown whole, as its page', async () => {
   await asking(async (_c, call) => {
-    let page = await call('graph_query', { q: '.completed' })
+    let page = await call('graph_query', { q: '.completed&*' })
     assert(/^task T-\d+ done\n\nShip it\n/.test(page), page)
   })
 })

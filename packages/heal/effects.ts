@@ -36,7 +36,7 @@ import {
 import type { Watch } from '@yaks/effects'
 import { edgeEid, link } from '@yaks/edge'
 import { human } from '@yaks/id'
-import { absent, and, eq, list, present } from '@yaks/query'
+import { absent, and, eq, list, present, want } from '@yaks/query'
 import { actionable, faultKey, recurred, severity } from './fault.ts'
 
 /** What these handlers are given (@yaks/cli `Host`). */
@@ -116,7 +116,9 @@ export let effects = (host: Host, options: Options = {}): Watch[] => {
       ? row.entity.eid
       : str(comp(row, 'entry')?.session)
     for (
-      let held of session ? await g.read(and(eq('claim.session', session))) : []
+      let held of session
+        ? await g.read(and(eq('claim.session', session), want('filed')))
+        : []
     ) {
       let p = str(comp(held, 'filed')?.project)
       if (p) return p
@@ -131,13 +133,18 @@ export let effects = (host: Host, options: Options = {}): Watch[] => {
       if (p && comp(await one(g, p), 'nofix')) return 'muted'
     }
     let now = Date.now()
-    let running = (await g.read(and(present('fixer'), absent('exit'))))
+    let running = (await g.read(
+      and(present('fixer'), absent('exit'), want('process'), want('created')),
+    ))
       .filter((f) => f.process || bornAfter(f, now - STARTING))
     if (running.length >= cap) return 'at cap'
     let same = await g.read(and(eq('bug.fault', str(comp(bug, 'bug')?.fault))))
     let fixers = same.length
       ? await g.read(
-        and(eq('fixer.bug', list(...same.map((b) => b.entity.eid)))),
+        and(
+          eq('fixer.bug', list(...same.map((b) => b.entity.eid))),
+          want('created'),
+        ),
       )
       : []
     if (fixers.some((f) => bornAfter(f, now - cooldown))) return 'cooling down'
@@ -197,7 +204,9 @@ export let effects = (host: Host, options: Options = {}): Watch[] => {
     let kind = g.vocab.kindOf(row)
     let fault = faultKey(kind, message, str(x.stack))
     let at = new Date().toISOString()
-    let [found] = await g.read(and(...open, eq('bug.fault', fault)))
+    let [found] = await g.read(
+      and(...open, eq('bug.fault', fault), want('doc')),
+    )
     if (found) {
       // Already counted: this handler ran for this failure before.
       if (comp(await one(g, edgeEid(found.entity.eid, 'about', eid)), 'edge')) {
