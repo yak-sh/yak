@@ -5,38 +5,52 @@
 // a `Pick` narrows the default when an application wants only some of them.
 //
 // The fields are grouped into one index per component (`indexes()`), because an
-// FTS5 external-content index mirrors exactly one table.
+// FTS5 external-content index mirrors exactly one table. A field read on behalf
+// of another component (`on`) is grouped under that one: `entry` is found by
+// `content.body`, so `entry_fts` indexes the body of every entity that is an
+// entry, and of no other entity carrying `content`.
 
 import type { Prop, Vocab } from '@yaks/vocab'
 
 // A `comp.prop` pair naming one indexed text property — a book's title, a
-// review's prose, a shop's own description.
-export type Field = { comp: string; prop: string }
+// review's prose, a shop's own description — and, for text an entity is found
+// by through another of its components, that component (`on`).
+export type Field = { comp: string; prop: string; on?: string }
 
 // Decides whether a property is indexed. An application passes its own to index
 // less than the vocabulary marked — say, titles only.
 export type Pick = (prop: Prop) => boolean
+
+// Stored prose: an index is created from a table, so a computed property has no
+// stored value to index, and a number or an entity reference holds no words.
+let prose: Pick = (c) =>
+  !c.computed && c.category == 'scalar' && c.scalar == 'text'
 
 // The default selection: the properties the vocabulary marked searchable with
 // `"search": true` (@yaks/vocab). Deciding which prose is worth finding belongs
 // to the vocabulary, not to this package: a repository path and a provider name
 // are text nobody goes looking for, and indexing them only adds terms a search
 // has to wade through. A vocabulary that marks none has nothing to search.
-//
-// The storage checks stand beside that mark because an index is created from a
-// table: a computed property has no stored value to index, and a number or an
-// entity reference holds no words even if the vocabulary marked it.
-export let searched: Pick = (c) =>
-  c.search && !c.computed && c.category == 'scalar' && c.scalar == 'text'
+export let searched: Pick = (c) => c.search && prose(c)
 
-// The searchable fields of a vocabulary, by component then declaration order.
-export let fields = (vocab: Vocab, pick: Pick = searched): Field[] =>
-  vocab.all.flatMap((comp) =>
+// The searchable fields of a vocabulary, by component then declaration order,
+// then the text each component's `search` list says its entities are found by.
+// `pick` narrows the properties; a list is the vocabulary's own statement about
+// its component and is always taken.
+export let fields = (vocab: Vocab, pick: Pick = searched): Field[] => [
+  ...vocab.all.flatMap((comp) =>
     vocab.props(comp)
       .map((prop) => vocab.prop(comp, prop)!)
       .filter(pick)
       .map((c) => ({ comp, prop: c.prop }))
-  )
+  ),
+  ...vocab.all.flatMap((on) =>
+    (vocab.comp(on)?.search ?? []).map((name) => {
+      let [comp, prop] = name.split('.')
+      return { comp, prop, on }
+    })
+  ),
+]
 
 // How a stored property is turned into the text to index, keyed `comp.prop`:
 // given a SQL expression for the stored value, the entry returns a SQL
@@ -50,22 +64,30 @@ export let fields = (vocab: Vocab, pick: Pick = searched): Field[] =>
 // no dependency.
 export type Text = Record<string, (stored: string) => string>
 
-// One component's search index: the component it mirrors and the properties
-// it covers, in the order they are declared to FTS5.
-export type Index = { comp: string; props: string[] }
+// One search index: its name (the component its entities are found through —
+// `on` where there is one, else the text's own), the component whose table
+// holds the text, and the properties it covers, in the order they are declared
+// to FTS5.
+export type Index = { name: string; comp: string; props: string[]; on?: string }
 
-// The fields grouped into indexes, one per component, in first-seen order.
+// The fields grouped into indexes, one per name, in first-seen order.
 export let indexes = (fields: Field[]): Index[] => {
-  let by = new Map<string, string[]>()
-  for (let f of fields) by.set(f.comp, [...(by.get(f.comp) ?? []), f.prop])
-  return [...by].map(([comp, props]) => ({ comp, props }))
+  let by = new Map<string, Index>()
+  for (let { comp, prop, on } of fields) {
+    let name = on ?? comp
+    let ix = by.get(name) ?? { name, comp, props: [], ...on ? { on } : {} }
+    ix.props.push(prop)
+    by.set(name, ix)
+  }
+  return [...by.values()]
 }
 
-// The name of the index mirroring a component: `book` → `book_fts`.
-export let indexName = (comp: string): string => `${comp}_fts`
+// The name of an index: `book` → `book_fts`.
+export let indexName = (name: string): string => `${name}_fts`
 
-// The name of the view that presents a component's columns as text: `doc` →
-// `doc_text`. It is created only for a component where at least one indexed
-// column has to be resolved (see {@link Text}); an index whose columns hold
+// The name of the view that presents an index's columns as text: `doc` →
+// `doc_text`. It is created for an index where at least one column has to be
+// resolved (see {@link Text}), and for every index read on behalf of another
+// component, which reads its text through a join; an index whose columns hold
 // their own text mirrors the component table itself.
-export let textName = (comp: string): string => `${comp}_text`
+export let textName = (name: string): string => `${name}_text`

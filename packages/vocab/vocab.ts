@@ -102,6 +102,53 @@ let extended = (
   return { ...base, properties, ...need.length ? { required: need } : {} }
 }
 
+// A component's `search` list: the text its entities are found by, read off
+// another component — `entry` names `content.body`, so a transcript entry is
+// found by what it says, while the tool results and process output that also
+// carry `content` are not. It is checked once every document is read, because
+// the text it names is usually declared by another package, and a name whose
+// component this load does not declare is text this graph cannot hold: it is
+// left out, the way a graph composed without that package has none of its
+// rows. The names share one component (one index reads one table), and each
+// is stored prose. A component that searches its own properties has an index
+// of that name already, so it cannot also carry a list. Returns the names
+// kept.
+let found = (
+  name: string,
+  schema: PropSchema,
+  defs: Record<string, PropSchema>,
+): string[] => {
+  let said = schema.search
+  if (said === true) wrong(name, said, 'a component names its text')
+  if (said === undefined || said === false) return []
+  if (!Array.isArray(said) || !said.length) {
+    wrong(name, said, 'a component names its text as ["comp.prop"]')
+  }
+  let kept = (said as string[]).filter((text) => defs[text.split('.')[0]])
+  let owners = new Set<string>()
+  for (let text of kept) {
+    let [comp, prop, ...rest] = text.split('.')
+    let s = defs[comp].properties?.[prop ?? '']
+    if (!s || rest.length) wrong(name, said, `${text} is no declared property`)
+    if (comp == name) {
+      wrong(name, said, 'a component marks its own properties `search`')
+    }
+    if (
+      s!.computed === true || s!.ref != null || s!.enum != null ||
+      s!.type != 'string'
+    ) wrong(name, said, `${text} is not stored text`)
+    owners.add(comp)
+  }
+  if (owners.size > 1) wrong(name, said, 'the text comes from one component')
+  let own = Object.values(schema.properties ?? {}).some((s) => s.search)
+  if (own) wrong(name, said, 'its own properties are searched already')
+  return kept
+}
+
+let wrong = (name: string, said: unknown, why: string): never => {
+  throw new Error(`'${name}' searches ${JSON.stringify(said)}: ${why}`)
+}
+
 // The extension keywords a registration admits, copied off a schema verbatim.
 // A keyword the caller did not register is dropped: the loader carries what
 // somebody asked for and nothing else.
@@ -514,6 +561,10 @@ export let loadVocab = (
   for (let [name, schema] of adding) {
     defs[name] = extended(name, defs[name], schema)
   }
+  let lists: Record<string, string[]> = {}
+  for (let [name, schema] of Object.entries(defs)) {
+    lists[name] = found(name, schema, defs)
+  }
 
   let props = (name: string): Record<string, PropSchema> =>
     defs[name]?.properties ?? {}
@@ -553,6 +604,7 @@ export let loadVocab = (
       stamped: entries.filter((p) => props(name)[p].stamped),
       sync: said(d.sync),
       durable: kept(d.durable),
+      search: lists[name],
       keywords: carried(d, compWords),
     }
   }

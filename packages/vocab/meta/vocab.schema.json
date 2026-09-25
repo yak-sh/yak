@@ -218,6 +218,14 @@
           "type": "string",
           "pattern": "^(forever|connection|[0-9]+(\\.[0-9]+)?(ms|s|m|h|d))$"
         },
+        "search": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$"
+          },
+          "minItems": 1
+        },
         "bare": {
           "type": "boolean"
         },

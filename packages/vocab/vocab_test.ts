@@ -715,6 +715,53 @@ Deno.test('a property says for itself whether its words are searched', () => {
   assertEquals(w.prop('recipe', 'origin')!.search, false)
 })
 
+Deno.test('a component names the text its entities are found by, from another package', () => {
+  let talk = (search: unknown, more: Record<string, PropSchema> = {}) =>
+    loadVocab([
+      {
+        $defs: {
+          entry: {
+            component: true,
+            type: 'object',
+            search,
+            properties: { seq: { type: 'number' }, ...more },
+          } as PropSchema,
+        },
+      },
+      {
+        $defs: {
+          content: {
+            component: true,
+            type: 'object',
+            properties: { body: { type: 'string' }, n: { type: 'number' } },
+          },
+          note: {
+            component: true,
+            type: 'object',
+            properties: { text: { type: 'string' } },
+          },
+        },
+      },
+    ])
+  assertEquals(talk(['content.body']).comp('entry')!.search, ['content.body'])
+  assertEquals(talk(undefined).comp('entry')!.search, [])
+  // Text from a package this graph does not compose is none to find it by.
+  assertEquals(talk(['letter.body']).comp('entry')!.search, [])
+  for (
+    let [said, why] of [
+      [['content.words'], 'no declared property'],
+      [['content.n'], 'not stored text'],
+      [['content.body', 'note.text'], 'one component'],
+      [true, 'names its text'],
+    ] as const
+  ) assertThrows(() => talk(said), Error, why)
+  assertThrows(
+    () => talk(['content.body'], { said: { type: 'string', search: true } }),
+    Error,
+    'searched already',
+  )
+})
+
 Deno.test('a component says which package declared it, or its document does', () => {
   let one = (comp: PropSchema, doc: Partial<VocabDoc> = {}) =>
     loadVocab({ ...doc, $defs: { book: comp } }).comp('book')?.package

@@ -92,8 +92,8 @@ export let search = (fields: Field[], db?: Driver): Extension => {
         // A screen compiled for another extension reads this clause again.
         if (!words.includes(t)) words.push(t)
         return or(
-          ...indexes(fields).map(({ comp }) => {
-            let fts = indexName(comp)
+          ...indexes(fields).map(({ name }) => {
+            let fts = indexName(name)
             return among(
               site.owner,
               select({

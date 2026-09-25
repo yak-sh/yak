@@ -66,7 +66,7 @@ component table needs on top:
 | `computed`  | prop  | `true` = derived, never stored (a query-only rank)                      |
 | `reads`     | prop  | on a computed prop: components on other entities it reads; `[]` = none  |
 | `stamped`   | prop  | `true` = the server owns it: clients read it, never write it            |
-| `search`    | prop  | `true` = this text property is full-text indexed                        |
+| `search`    | both  | prop: `true` = full-text indexed. comp: `["content.body"]`, found by it |
 | `aliases`   | prop  | input forms that resolve to an enum member                              |
 | `bare`      | both  | `false` = only the qualified component/property name is accepted        |
 | `unique`    | both  | prop: no two rows share it. comp: `[["space","slug"]]`                  |
@@ -114,6 +114,13 @@ fragment:
   }
 }
 ```
+
+On a component, `search` names the text its entities are found by when that text
+is another component's: `entry` says `"search": ["content.body"]`, so a
+transcript entry is indexed by what it says, while tool results and process
+output, which carry `content` too, are not. The names share one component and
+each is stored text; a component with its own `search: true` properties cannot
+also carry a list. The loader checks the list once every document is read.
 
 **`identity` declares deterministic entity ids.** A component whose property is
 marked `identity: true` derives entity ids from that value, as `@yaks/edge` and

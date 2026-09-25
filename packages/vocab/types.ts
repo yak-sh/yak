@@ -109,6 +109,10 @@ export type CompInfo = {
   /** how long one of its values lives: `forever`, `connection`, or a duration
    * (lifetime.ts `ms` reads the span out of one) */
   durable: string
+  /** the text an entity carrying this component is found by, as `comp.prop`
+   * names of another component's properties — the component's `search` list,
+   * [] for most (@yaks/fts indexes it, @yaks/embedding embeds it) */
+  search: string[]
   keywords: Record<string, unknown> // registered extension keywords, verbatim
 }
 
@@ -208,8 +212,10 @@ export type PropSchema = {
   // (lifetime.ts).
   sync?: string
   durable?: string
-  // true = this text property is full-text indexed (@yaks/fts reads it).
-  search?: boolean
+  // On a property, true = this text property is full-text indexed (@yaks/fts
+  // reads it). On a component, the `comp.prop` names of the text its entities
+  // are found by.
+  search?: boolean | string[]
   kind?: boolean
   before?: string[]
   // On a component reported out of a vocabulary of several packages: the one

@@ -28,10 +28,13 @@ import {
   op,
   type Raw,
   render,
+  type Select,
   select,
+  sub,
   table,
   unionAll,
   val,
+  when,
 } from '@yaks/sql'
 import { type Field, indexes, indexName } from './fields.ts'
 import { CLOSE, match, OPEN } from './term.ts'
@@ -62,46 +65,28 @@ export type SearchOpts = {
 // The words are ANDed terms (./term.ts) and bm25 orders the results, so a
 // search behaves as a set of words rather than as one phrase.
 //
-// One subquery per index, combined with `union all`; the outer statement joins
-// the `entity` table for the eid, excludes deleted entities, and keeps one row
-// per entity. `min(rank)` picks an entity's best-matching index, and the
-// snippet selected alongside it comes from that row — SQLite returns a bare
-// column selected next to a single `min()` from the row the minimum came from,
-// which is exactly the pairing wanted here.
+// The ranking is `best` (see `chosen`); a snippet is read last, and only for
+// the rows returned. FTS5 reads a row's text back to cut one, and a search
+// over transcripts matches thousands of rows, some of them megabytes of
+// command output: cutting a snippet for every match before choosing twenty
+// took seconds where ranking alone takes milliseconds.
 export let hits = (
   fields: Field[],
   text: string,
   opts: SearchOpts = {},
-): Raw | null => ranked(fields, match(text), opts)
-
-// The same statement over a match expression already built from the words
-// (term.ts) — what `.order=search` ranks by (./compile.ts). Each row also
-// carries the entity's integer `owner`.
-export let ranked = (
-  fields: Field[],
-  t: string,
-  opts: SearchOpts = {},
 ): Raw | null => {
-  let arms = indexes(fields)
-  if (!t || !arms.length) return null
+  let t = match(text)
+  let best = chosen(fields, t, opts)
+  if (!best) return null
   let context = opts.context ?? 10
-  let e = at('entity')
-  let hit = at('hit')
-  // Materialized, and it is not decoration: FTS5's `bm25` and `snippet` may
-  // only be used in a statement that matches the index, and SQLite's query
-  // flattener would fold a plain subquery into the join above it, moving them
-  // out of that context and raising "unable to use function bm25 in the
-  // requested context". Two or more indexes produce a `union all`, which is
-  // never flattened, so the error only ever appeared for a vocabulary with one
-  // indexed component.
-  let hits = unionAll(...arms.map(({ comp }) => {
-    let fts = indexName(comp)
-    return select({
-      cols: [
-        as(col('rowid'), 'owner'),
-        as(fn('bm25', col(fts)), 'rank'),
-        as(
-          fn(
+  let b = at('best')
+  let snippet = when(
+    indexes(fields).map(({ name }, i) => {
+      let fts = indexName(name)
+      return [
+        lit(i),
+        sub(select({
+          cols: [fn(
             'snippet',
             col(fts),
             lit(-1),
@@ -109,9 +94,63 @@ export let ranked = (
             val(CLOSE),
             lit('…'),
             lit(context),
+          )],
+          from: table(fts),
+          where: and(
+            op('match', col(fts), val(t)),
+            eq(col('rowid'), b('owner')),
           ),
-          'snippet',
-        ),
+        })),
+      ]
+    }),
+    undefined,
+    b('arm'),
+  )
+  return render({ ...best, cols: [...best.cols!, as(snippet, 'snippet')] })
+}
+
+// The same ranking over a match expression already built from the words
+// (term.ts), without snippets — what `.order=search` ranks by (./compile.ts).
+// Each row carries the entity's integer `owner`.
+export let ranked = (
+  fields: Field[],
+  t: string,
+  opts: SearchOpts = {},
+): Raw | null => {
+  let best = chosen(fields, t, opts)
+  return best && render(best)
+}
+
+// The ranking both statements share: every match with its bm25 rank and the
+// index it came from (`hit`), then the best `limit` entities (`best`), which
+// joins `entity` for the eid, excludes deleted entities and keeps one row per
+// entity. `min(rank)` picks an entity's best-matching index, and the `arm`
+// selected alongside it names that index — SQLite returns a bare column
+// selected next to a single `min()` from the row the minimum came from, which
+// is exactly the pairing wanted here.
+//
+// Both are materialized, and it is not decoration: FTS5's `bm25` and `snippet`
+// may only be used in a statement that matches the index, and SQLite's query
+// flattener would fold a plain subquery into the join above it, moving them
+// out of that context and raising "unable to use function bm25 in the
+// requested context".
+let chosen = (
+  fields: Field[],
+  t: string,
+  opts: SearchOpts,
+): Select | null => {
+  let arms = indexes(fields)
+  if (!t || !arms.length) return null
+  let e = at('entity')
+  let hit = at('hit')
+  let b = at('best')
+  let hits = unionAll(...arms.map(({ name }, i) => {
+    let fts = indexName(name)
+    return select({
+      cols: [
+        as(col('rowid'), 'owner'),
+        as(fn('bm25', col(fts)), 'rank'),
+        as(lit(i), 'arm'),
       ],
       from: table(fts),
       where: op('match', col(fts), val(t)),
@@ -122,14 +161,12 @@ export let ranked = (
     from: table('tombstone', 't'),
     where: eq(col('entity', 't'), e('id')),
   })))
-  return render({
-    t: 'select',
-    with: [{ name: 'hit', q: hits, materialized: true }],
+  let best = select({
     cols: [
       as(e('eid'), 'entity'),
       as(hit('owner'), 'owner'),
       as(fn('min', hit('rank')), 'rank'),
-      as(hit('snippet'), 'snippet'),
+      as(hit('arm'), 'arm'),
     ],
     from: table('hit'),
     joins: [join(table('entity'), eq(e('id'), hit('owner')))],
@@ -137,6 +174,19 @@ export let ranked = (
     group: [hit('owner')],
     order: [col('rank')],
     limit: val(opts.limit ?? 20),
+  })
+  return select({
+    with: [
+      { name: 'hit', q: hits, materialized: true },
+      { name: 'best', q: best, materialized: true },
+    ],
+    cols: [
+      as(b('entity'), 'entity'),
+      as(b('owner'), 'owner'),
+      as(b('rank'), 'rank'),
+    ],
+    from: table('best'),
+    order: [b('rank')],
   })
 }
 

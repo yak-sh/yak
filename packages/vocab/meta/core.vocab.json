@@ -81,8 +81,18 @@
       "type": "boolean"
     },
     "search": {
-      "description": "true = this text property is full-text indexed: a bare word in a query matches it, and a hit is ranked by it. A property nobody declares is stored and readable but never searched.",
-      "type": "boolean"
+      "description": "On a property, true = this text property is full-text indexed: a bare word in a query matches it, and a hit is ranked by it. A property nobody declares is stored and readable but never searched. On a component, the text its entities are found by, as `comp.prop` names of one other component's properties: `entry` says [\"content.body\"], so a transcript entry is found by what it says, and other entities carrying `content` are not.",
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
     },
     "kind": {
       "description": "true = this component names a display kind (feeds kindOf / kindOrder).",

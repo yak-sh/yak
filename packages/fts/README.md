@@ -45,6 +45,15 @@ external-content FTS5 table: the index stores terms while the original text
 remains in the component table. Insert, update and delete triggers keep it
 current.
 
+A component can also name text its entities are found by on another component,
+with a `search` list: `entry` says `"search": ["content.body"]`. That makes
+`entry_fts`, which indexes `content.body` for entities carrying `entry` and for
+no other entity carrying `content` (tool results, process output). It reads its
+text through the `entry_text` view, which joins the two tables, and two more
+triggers on `entry` index text already written when an entity becomes an entry
+and remove it when it stops being one. Whichever row a transaction writes second
+does the indexing, so the order of a bundle's components does not matter.
+
 ## The four pieces
 
 This example assumes `vocab` is loaded from the schema above with the graph's
@@ -101,7 +110,9 @@ snippet.
 FTS5 `bm25` supplies the rank, where lower numbers are better matches. No
 recency or popularity weighting is added. `limit` defaults to 20 and snippet
 `context` defaults to 10 words. An optional `screen` is SQL selecting the
-permitted eids, such as the statement returned by `compile()` above.
+permitted eids, such as the statement returned by `compile()` above. Ranking
+reads only the index; a snippet is cut afterwards, for the rows returned,
+because FTS5 reads a row's whole text back to cut one.
 
 Snippets mark matches with `OPEN` (`\x01`) and `CLOSE` (`\x02`), not HTML.
 Renderers must escape the text and add their own highlighting.

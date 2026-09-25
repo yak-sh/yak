@@ -28,8 +28,8 @@ Deno.test('a pick narrows the default — titles only', () => {
 
 Deno.test('fields group into one index per component', () => {
   assertEquals(indexes(fields(shop)), [
-    { comp: 'book', props: ['title', 'blurb'] },
-    { comp: 'review', props: ['prose'] },
+    { name: 'book', comp: 'book', props: ['title', 'blurb'] },
+    { name: 'review', comp: 'review', props: ['prose'] },
   ])
   assertEquals(indexName('book'), 'book_fts')
 })

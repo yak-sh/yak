@@ -32,6 +32,14 @@
 // requires. And a body written in the same transaction is already stored — the
 // bytes are inserted before the row that references them.
 //
+// An index read on behalf of another component (`entry` found by
+// `content.body`) covers only the entities carrying that component. Its view
+// joins the two tables, and its triggers fire on both: a write to the text
+// indexes it when the entity already is one, and the entity becoming one (or
+// ceasing to be) indexes the text already there (or removes it). Whichever of
+// the two rows a transaction writes second is the one that indexes, so an
+// entity is indexed once however its bundle's components are ordered.
+//
 // `heal()` is the other half. An index that has drifted from its table (a
 // trigger that did not run, a file restored around it) returns wrong results
 // quietly, so it is checked and rebuilt rather than trusted.
@@ -46,6 +54,7 @@
 
 import {
   type Field,
+  type Index,
   indexes,
   indexName,
   type Text,
@@ -58,60 +67,118 @@ let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
 let lit = (s: string): string => s.replaceAll("'", "''")
 
-// One component's index and the triggers on its table, plus the view the index
-// reads its content back through when any of its columns has to be resolved.
-let index = (comp: string, props: string[], text: Text): string[] => {
-  let fts = indexName(comp)
+// One index and the triggers keeping it, plus the view it reads its content
+// back through when any of its columns has to be resolved or it is read on
+// behalf of another component.
+let index = (ix: Index, text: Text): string[] => {
+  let { name, comp, props, on } = ix
+  let fts = q(indexName(name))
   let cols = props.map(q).join(', ')
   // How one column reads as text, given a SQL expression for its stored value.
   // With no resolution the stored value is the text, which is every ordinary
   // column.
   let read = (prop: string, stored: string) =>
     text[`${comp}.${prop}`]?.(stored) ?? stored
-  let resolved = props.filter((p) => text[`${comp}.${p}`])
   // The values a trigger inserts: the column read as text, or '' for a null —
   // the index never holds a null term, and the delete side must mirror the
   // insert side exactly.
   let side = (s: string) =>
     props.map((p) => `coalesce(${read(p, `${s}.${q(p)}`)}, '')`).join(', ')
+  let insert = (s: string) =>
+    `insert into ${fts}(rowid, ${cols}) values (${s}.entity, ${side(s)});`
+  let remove = (s: string) =>
+    `insert into ${fts}(${fts}, rowid, ${cols})
+        values ('delete', ${s}.entity, ${side(s)});`
   // Where FTS5 reads a column back from: the component table itself, or the
-  // view that resolves it. `<comp>_text` is this package's own name,
+  // view that resolves it. `<name>_text` is this package's own name,
   // deliberately not @yaks/sqlite's `doc_value` — that view is the read source
   // for whole `doc` rows, and a narrower view taking its place under
   // `if not exists` would hide the columns a query needs.
-  let content = resolved.length ? textName(comp) : comp
-  return [
-    ...(resolved.length
-      ? [
-        `create view if not exists ${q(content)} as
+  let content = sourceOf(ix, text)
+  let view = content == comp ? [] : on
+    ? [
+      `create view if not exists ${q(content)} as
+      select "c"."entity" as "entity", ${
+        props.map((p) => `${read(p, `"c".${q(p)}`)} as ${q(p)}`).join(', ')
+      }, "c"."entity" as rowid from ${q(comp)} "c"
+      join ${q(on)} "o" on "o"."entity" = "c"."entity"`,
+    ]
+    : [
+      `create view if not exists ${q(content)} as
       select "entity", ${
-          props.map((p) => `${read(p, q(p))} as ${q(p)}`).join(', ')
-        }, "entity" as rowid from ${q(comp)}`,
-      ]
-      : []),
-    `create virtual table if not exists ${q(fts)} using fts5(
+        props.map((p) => `${read(p, q(p))} as ${q(p)}`).join(', ')
+      }, "entity" as rowid from ${q(comp)}`,
+    ]
+  // The text's own triggers, which for a scoped index fire only for an entity
+  // that already carries `on`.
+  let when = (s: string) =>
+    on
+      ? ` when exists (select 1 from ${q(on)} where "entity" = ${s}.entity)`
+      : ''
+  let trigger = (what: string, event: string, table: string, body: string) =>
+    `create trigger if not exists ${
+      q(`${indexName(name)}_${what}`)
+    } after ${event} on ${q(table)}${
+      what == 'join' || what == 'leave'
+        ? ''
+        : when(event == 'delete' ? 'old' : 'new')
+    } begin
+      ${body}
+    end`
+  return [
+    ...view,
+    `create virtual table if not exists ${fts} using fts5(
       ${cols}, content='${lit(content)}', content_rowid='entity'
     )`,
-    `create trigger if not exists ${q(`${fts}_insert`)} after insert on ${
-      q(comp)
-    } begin
-      insert into ${q(fts)}(rowid, ${cols}) values (new.entity, ${side('new')});
-    end`,
-    `create trigger if not exists ${q(`${fts}_delete`)} after delete on ${
-      q(comp)
-    } begin
-      insert into ${q(fts)}(${q(fts)}, rowid, ${cols})
-        values ('delete', old.entity, ${side('old')});
-    end`,
-    `create trigger if not exists ${q(`${fts}_update`)} after update on ${
-      q(comp)
-    } begin
-      insert into ${q(fts)}(${q(fts)}, rowid, ${cols})
-        values ('delete', old.entity, ${side('old')});
-      insert into ${q(fts)}(rowid, ${cols}) values (new.entity, ${side('new')});
-    end`,
+    trigger('insert', 'insert', comp, insert('new')),
+    trigger('delete', 'delete', comp, remove('old')),
+    trigger(
+      'update',
+      'update',
+      comp,
+      `${remove('old')}
+      ${insert('new')}`,
+    ),
+    // The entity becoming one of `on`, or ceasing to be one, with its text
+    // already written.
+    ...on
+      ? [
+        trigger(
+          'join',
+          'insert',
+          on,
+          `insert into ${fts}(rowid, ${cols})
+        select new.entity, ${side('"c"')} from ${q(comp)} "c"
+        where "c"."entity" = new.entity;`,
+        ),
+        trigger(
+          'leave',
+          'delete',
+          on,
+          `insert into ${fts}(${fts}, rowid, ${cols})
+        select 'delete', old.entity, ${side('"c"')} from ${q(comp)} "c"
+        where "c"."entity" = old.entity;`,
+        ),
+      ]
+      : [],
   ]
 }
+
+// The trigger names an index owns: three on its text's table, and two more on
+// `on` for a scoped one.
+let owned = (ix: Index): string[] =>
+  [...TRIGGERS, ...ix.on ? SCOPED : []].map((s) => `${indexName(ix.name)}_${s}`)
+
+let TRIGGERS = ['insert', 'delete', 'update']
+let SCOPED = ['join', 'leave']
+
+// What an index reads its content back through: the component table, or its
+// text view where a column must be resolved or the text is read on behalf of
+// another component.
+let sourceOf = (ix: Index, text: Text): string =>
+  ix.on || ix.props.some((p) => text[`${ix.comp}.${p}`])
+    ? textName(ix.name)
+    : ix.comp
 
 // The whole search schema for a set of fields, as statements in the order they
 // must run: per component, its text view where one is needed, then the index
@@ -122,6 +189,12 @@ let index = (comp: string, props: string[], text: Text): string[] => {
 // `Derived` registry is also accepted: its `text` expression resolves the old
 // and new values without re-reading the owner row.
 export let schema = (fields: Field[], reads: Text | Derived = {}): string[] => {
+  let text = textOf(fields, reads)
+  return indexes(fields).flatMap((ix) => index(ix, text))
+}
+
+// The resolutions `schema()` was given, as one `Text` map over these fields.
+let textOf = (fields: Field[], reads: Text | Derived): Text => {
   let text: Text = {}
   for (let { comp, prop } of fields) {
     let key = `${comp}.${prop}`
@@ -133,7 +206,7 @@ export let schema = (fields: Field[], reads: Text | Derived = {}): string[] => {
         `FTS ${key}: read override needs a stored-value text expression`,
       )}
   }
-  return indexes(fields).flatMap(({ comp, props }) => index(comp, props, text))
+  return text
 }
 
 // Is this index still consistent with its table? Two checks, the cheap one
@@ -152,17 +225,21 @@ export let schema = (fields: Field[], reads: Text | Derived = {}): string[] => {
 // when a caller asks for it (`deep: true`), never on the pass a command line
 // makes on its way in. The row count is what catches the drift a missed
 // trigger leaves behind, which is the damage that actually happens.
+//
+// A scoped index holds one row per entity carrying both components, so its
+// rows are counted through its view's join rather than off the text's table.
 let fault = (
   db: Driver,
-  comp: string,
+  ix: Index,
   deep: boolean,
 ): string | undefined => {
-  let fts = indexName(comp)
+  let fts = indexName(ix.name)
   let count = (t: string) =>
     Number(db.query(`select count(*) as n from ${t}`, [])[0].n)
+  let rows = ix.on ? textName(ix.name) : ix.comp
   try {
-    let [indexed, rows] = [count(q(`${fts}_docsize`)), count(q(comp))]
-    if (indexed != rows) return `${fts} holds ${indexed} of ${rows} rows`
+    let [indexed, had] = [count(q(`${fts}_docsize`)), count(q(rows))]
+    if (indexed != had) return `${fts} holds ${indexed} of ${had} rows`
     if (deep) {
       db.exec(
         `insert into ${q(fts)}(${q(fts)}, rank) values('integrity-check', 1)`,
@@ -191,12 +268,12 @@ export let heal = (
 ): string[] => {
   let deep = opts.deep ?? false
   let healed: string[] = []
-  for (let { comp } of indexes(fields)) {
-    let before = fault(db, comp, deep)
+  for (let ix of indexes(fields)) {
+    let before = fault(db, ix, deep)
     if (!before) continue
-    let fts = indexName(comp)
+    let fts = indexName(ix.name)
     db.exec(`insert into ${q(fts)}(${q(fts)}) values('rebuild')`)
-    let after = fault(db, comp, deep)
+    let after = fault(db, ix, deep)
     if (after) {
       throw new Error(
         `${fts} is still broken after a rebuild; before: ${before}; after: ${after}`,
@@ -245,18 +322,26 @@ let body = (sql: string, name: string): string =>
   sql.slice(sql.indexOf(q(name)) + q(name).length).trim()
 
 // The text view currently in the database, or undefined when there is none.
-let standing = (db: Driver, view: string): string | undefined => {
+let standing = (db: Driver, view: string): string | undefined =>
+  stored(db, 'view', view)
+
+// A trigger's definition as the database holds it, or undefined.
+let trigger = (db: Driver, name: string): string | undefined =>
+  stored(db, 'trigger', name)
+
+let stored = (db: Driver, type: string, name: string): string | undefined => {
   let row = db.query(
-    `select sql from sqlite_master where type = 'view' and name = ?`,
-    [view],
+    `select sql from sqlite_master where type = ? and name = ?`,
+    [type, name],
   )[0]
   return row ? String(row.sql ?? '') : undefined
 }
 
 // The names of any triggers that write into an index other than this package's
-// own three.
-let strays = (db: Driver, fts: string): string[] => {
-  let ours = new Set(['insert', 'delete', 'update'].map((s) => `${fts}_${s}`))
+// own.
+let strays = (db: Driver, ix: Index): string[] => {
+  let fts = indexName(ix.name)
+  let ours = new Set(owned(ix))
   let word = new RegExp(`\\b${fts}\\b`)
   return db.query(
     `select name, sql from sqlite_master where type = 'trigger'`,
@@ -291,36 +376,36 @@ export let adopt = (
   opts: HealOpts = {},
 ): Adopted => {
   let recut: string[] = [], dropped: string[] = []
-  let stmts = schema(fields, reads)
-  for (let { comp, props } of indexes(fields)) {
-    let fts = indexName(comp)
+  let text = textOf(fields, reads)
+  for (let ix of indexes(fields)) {
+    let fts = indexName(ix.name)
     let have = declared(db, fts)
-    let content = stmts.some((s) => s.includes(`content='${textName(comp)}'`))
-      ? textName(comp)
-      : comp
-    let same = have.length == props.length &&
-      have.every((c, i) => c == props[i]) && source(db, fts) == content
-    for (let t of strays(db, fts)) {
+    let same = have.length == ix.props.length &&
+      have.every((c, i) => c == ix.props[i]) &&
+      source(db, fts) == sourceOf(ix, text)
+    for (let t of strays(db, ix)) {
       db.exec(`drop trigger if exists ${q(t)}`)
       dropped.push(t)
     }
-    let view = textName(comp)
-    let want = stmts.find((s) =>
+    let mine = index(ix, text)
+    let view = textName(ix.name)
+    let want = mine.find((s) =>
       s.startsWith(`create view if not exists ${q(view)}`)
     )
     let stood = standing(db, view)
     if (stood && (!want || body(stood, view) != body(want, view))) {
       db.exec(`drop view if exists ${q(view)}`)
     }
-    if (!same) {
-      for (let s of ['insert', 'delete', 'update']) {
-        db.exec(`drop trigger if exists ${q(`${fts}_${s}`)}`)
+    // A trigger's body is compared the same way: one written by an earlier
+    // version of this package (a scoped index's `when`, say) is created again.
+    for (let t of owned(ix)) {
+      let had = trigger(db, t)
+      let now = mine.find((s) => s.includes(q(t)))
+      if (had && (!same || !now || body(had, t) != body(now, t))) {
+        db.exec(`drop trigger if exists ${q(t)}`)
       }
-      db.exec(`drop table if exists ${q(fts)}`)
     }
-    let mine = stmts.filter((s) =>
-      s.includes(q(fts)) || s.includes(q(textName(comp)))
-    )
+    if (!same) db.exec(`drop table if exists ${q(fts)}`)
     for (let s of mine) db.exec(s)
     if (!same) {
       db.exec(`insert into ${q(fts)}(${q(fts)}) values('rebuild')`)

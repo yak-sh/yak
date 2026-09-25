@@ -168,6 +168,9 @@
         ]
       ],
       "description": "one entry of a transcript; the component stored beside it is its kind",
+      "search": [
+        "content.body"
+      ],
       "properties": {
         "session": {
           "type": "string",
