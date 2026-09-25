@@ -22,7 +22,15 @@ import {
   signed,
 } from '@yaks/graph'
 import { human } from '@yaks/id'
-import { absent, type And, and, type Clause, eq, present } from '@yaks/query'
+import {
+  absent,
+  type And,
+  and,
+  type Clause,
+  eq,
+  every,
+  present,
+} from '@yaks/query'
 import { safe } from '@yaks/text'
 import type { Vocab } from '@yaks/vocab'
 import { CLAIM } from './comp.ts'
@@ -115,7 +123,7 @@ export let hear = async (
   let seen = new Set<string>()
   let items: Bundle[] = []
   for (let q of addressedTo(vocab, session)) {
-    for (let b of await graph.read(q)) {
+    for (let b of await graph.read(and(...q.clauses, every()))) {
       if (seen.has(b.entity.eid) || author(b) == session) continue
       seen.add(b.entity.eid)
       items.push(b)

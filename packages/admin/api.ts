@@ -18,7 +18,7 @@
 // rather than a puzzling 401.
 import type { Bundle, Comp } from '@yaks/graph'
 import { timed } from '@yaks/cli'
-import { type And, and, eq, ge, limit } from '@yaks/query'
+import { type And, and, eq, ge, limit, want } from '@yaks/query'
 import { LINK } from '../../workers/yak/link.ts'
 import { PLATFORM } from '../../workers/yak/route.ts'
 import { COOKIE } from '../../workers/yak/lib/token.ts'
@@ -214,11 +214,13 @@ export let codeIn = (letters: Bundle[], address: string, since: number) => {
 
 // The letters for one address since the ask. The graph holds thousands of
 // letters, so the filter names the recipient and the window: an unfiltered
-// window of the newest few reads other mail and misses this one.
+// window of the newest few reads other mail and misses this one. The code is
+// in the subject, so the letter's `doc` is asked for beside its `mail`.
 export let lettersFor = (address: string, since: number): And =>
   and(
     eq('mail.to', address),
     ge('mail.at', new Date(since).toISOString()),
+    want('doc'),
     limit(10),
   )
 

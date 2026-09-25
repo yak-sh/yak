@@ -132,7 +132,7 @@ export let transcriptPlan = async (
     let low = Number(own[0].entry.seq), high = Number(own.at(-1)!.entry.seq)
     queries.push(
       base(s) + '&.entry.seq>=' + low + '&.entry.seq<=' + high +
-        '&.order=entry.seq&.limit=' + size,
+        '&.order=entry.seq&.limit=' + size + '&*',
     )
   }
   // Count metadata, not bodies. Fork segments are disjoint logical ranges.

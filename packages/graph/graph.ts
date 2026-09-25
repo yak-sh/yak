@@ -662,9 +662,12 @@ export let graph = (opts: Options): Graph => {
     // The rows carry what the query names (./projection.ts), the same answer
     // at every door.
     read: (query, readOpts) =>
-      then(aim(mean(query), address), (q) =>
-        then(storage.read(q, readOpts), (rows) =>
-          rows.map(only(wanted(vocab, q))))),
+      then(
+        aim(mean(query), address),
+        (q) =>
+          then(storage.read(q, readOpts), (rows) =>
+            rows.map(only(wanted(vocab, q)))),
+      ),
     rows: (query, readOpts) =>
       then(aim(mean(query), address), (q) => storage.rows(q, readOpts)),
     apply,

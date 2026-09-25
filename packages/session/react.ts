@@ -135,7 +135,7 @@ let objectIn = (text: string): Record<string, unknown> | undefined => {
 export let transcript = async (g: Graph, session: Eid): Promise<Bundle[]> => {
   let [self] = await g.storage.tx((tx) => tx.get([session]))
   if (!self?.session) throw new UnknownSession(session)
-  let own = await g.read(`.${ENTRY}.session=${session}`)
+  let own = await g.read(`.${ENTRY}.session=${session}&*`)
   let from = comp(self, FORK)?.from
   if (!from) return ordered(own)
   let [anchor] = await g.storage.tx((tx) => tx.get([String(from)]))

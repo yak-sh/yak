@@ -108,7 +108,7 @@ Deno.test('a batch applied comes back as it landed, and reads back', async () =>
   assertEquals(comp(applied[0], 'created').by, 'm1')
   assertEquals(applied[0].$actor, undefined)
 
-  let read = await handler(ask('.price<20'))
+  let read = await handler(ask('.price<20&.doc?'))
   assertEquals(read.status, 200)
   let found: Bundle[] = await body(read)
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
@@ -132,7 +132,7 @@ Deno.test('the door signs the batch, never the client', async () => {
     // the client claims someone else wrote this
     { entity: { eid: 'b1' }, book: { price: 12 }, $actor: { by: 'villain' } },
   ]))
-  let found: Bundle[] = await body(await handler(ask('.price=12')))
+  let found: Bundle[] = await body(await handler(ask('.price=12&.created?')))
   assertEquals(comp(found[0], 'created').by, 'm1')
 })
 
@@ -141,7 +141,7 @@ Deno.test('an unattributed door leaves the actor off', async () => {
   await handler(post('/apply', [
     { entity: { eid: 'b1' }, book: { price: 12 }, $actor: { by: 'villain' } },
   ]))
-  let found: Bundle[] = await body(await handler(ask('.price=12')))
+  let found: Bundle[] = await body(await handler(ask('.price=12&.created?')))
   assertEquals(comp(found[0], 'created').by, null)
 })
 

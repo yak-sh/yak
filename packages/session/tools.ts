@@ -57,7 +57,7 @@ import {
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
-import { and, eq, present } from '@yaks/query'
+import { and, eq, every, present } from '@yaks/query'
 import { checked, type Finding } from '@yaks/tools'
 import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
@@ -130,7 +130,7 @@ let holderOf = (b: Bundle): string => str(comp(b, CLAIM).session)
 // One transcript's entries. Few sessions hold a lock, so this is queried per
 // holder rather than by reading every entry in the graph.
 let transcript = (graph: Pick<Graph, 'read'>, session: string) =>
-  graph.read(and(eq(`${ENTRY}.session`, session)))
+  graph.read(and(eq(`${ENTRY}.session`, session), every()))
 
 // When an entry was written, as the kernel stamps it. A graph that stamps
 // nothing has no timestamp to judge a stall by, which the check reports rather
@@ -238,7 +238,7 @@ export let runs = (
     // A fresh transcript holds nothing: it has no entity yet, so nothing in
     // the graph can name it as a holder.
     let held = minted(eid)
-      ? await graph.read(`.${CLAIM}.session=${JSON.stringify(eid)}`)
+      ? await graph.read(`.${CLAIM}.session=${JSON.stringify(eid)}&*`)
       : []
     return [
       // Only the difference is written back — a transcript's own properties are
@@ -300,7 +300,8 @@ export let runs = (
 
   claim_check: async (call, graph) => {
     let id = human(host.vocab)
-    let locks = await graph.read(and(present(`${CLAIM}.session`)))
+    // Whole, since a lock is shown by the id its entity's kind gives it.
+    let locks = await graph.read(and(present(`${CLAIM}.session`), every()))
     let holders = [...new Set(locks.map(holderOf))]
     let rows = holders.length ? await detached(graph.storage).get(holders) : []
     // A tombstoned holder is a holder that is gone: `claim.session` is declared
@@ -344,7 +345,7 @@ export let runs = (
     let id = human(host.vocab)
     let hours = options.hours ?? HOURS
     let cutoff = Date.now() - hours * 3_600_000
-    let sessions = await graph.read(and(present(SESSION)))
+    let sessions = await graph.read(and(present(SESSION), every()))
     if (!sessions.length) {
       return checked(call.entity.eid, 'no transcript has stalled', [])
     }
@@ -352,7 +353,7 @@ export let runs = (
     // a whole, and asking per session would be one query per session.
     let lines = new Map<string, Bundle[]>()
     let stamped = false
-    for (let b of await graph.read(and(present(ENTRY)))) {
+    for (let b of await graph.read(and(present(ENTRY), every()))) {
       let of = str(comp(b, ENTRY).session)
       lines.set(of, [...lines.get(of) ?? [], b])
       if (!isNaN(writtenAt(b))) stamped = true

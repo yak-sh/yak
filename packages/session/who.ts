@@ -43,7 +43,7 @@ export let sessionFor = async (
   let [eid] = await addressed(g, [said])
   let [row] = await detached(g.storage).get([eid])
   if (row?.[SESSION] && row[TOMBSTONE] == null) return row
-  return (await g.read(`.${SESSION}.id=${JSON.stringify(said)}`))[0]
+  return (await g.read(`.${SESSION}.id=${JSON.stringify(said)}&*`))[0]
 }
 
 /**

@@ -18,7 +18,8 @@ let scribe: Desk = {
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
-let rows = async (g: Graph, q: string) => (await g.read(q)) as Bundle[]
+// Every component of each row (`*`): the tests read whatever a row carries.
+let rows = async (g: Graph, q: string) => (await g.read(`${q}&*`)) as Bundle[]
 let one = async (g: Graph, eid: string) => (await rows(g, `.eid=${eid}`))[0]
 let sessions = async (g: Graph) => (await rows(g, '.session')).length
 let outputs = (g: Graph) => rows(g, '.built')

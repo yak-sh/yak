@@ -51,14 +51,14 @@ export let taskMarks = [...MARKS, {
 let taskRow = async (g: Graph, id: string): Promise<Bundle> => {
   let b = await row(g, id)
   let num = /^T-(\d+)$/i.exec(id)?.[1]
-  if (!b && num) [b] = await g.read(`.task .num=${Number(num)}`)
+  if (!b && num) [b] = await g.read(`.task .num=${Number(num)} *`)
   if (!b?.task) throw new ToolError('task', `not a task: ${id}`)
   return b
 }
 
 /** Direct children, including forks created by the session tools. */
 export let children = (g: Graph, session: Eid): Promise<Bundle[]> =>
-  Promise.resolve(g.read(`.spawned.parent=${session}`))
+  Promise.resolve(g.read(`.spawned.parent=${session}&*`))
 
 /** The admission path the harness calls, shared by root starts and delegated
  * starts. */
@@ -485,7 +485,7 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
   // A settled child's receipt usually already exists. Inspect its local tail
   // before materializing the inherited prefix (which can be very large).
   let [tail] = await g.read(
-    '.entry.session=' + child + '&.order=-entry.seq&.limit=1',
+    '.entry.session=' + child + '&.order=-entry.seq&.limit=1&*',
   )
   let entries: Bundle[] | undefined
   if (!tail) entries = await transcript(g, child)
