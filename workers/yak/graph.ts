@@ -1,4 +1,3 @@
-import { backfill as backfillArchetypes } from '@yaks/sqlite'
 import { archetypes } from '@yaks/archetype'
 // The Store Durable Object, built out of the packages (T-33810, D-33490): one
 // app's graph, and nothing of the fleet's. It is composition, not code —
@@ -83,7 +82,20 @@ import {
   Unauthorized,
 } from '@yaks/api'
 import { blobRead, blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
-import { type Driver, render } from '@yaks/sql'
+import {
+  as,
+  col,
+  count,
+  type CreateTable,
+  type Driver,
+  eq,
+  notNull,
+  render,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
+import { reclassifyAll } from '@yaks/sqlite'
 import {
   driver,
   type DurableSql,
@@ -345,10 +357,15 @@ type Word =
 // The most one person keeps in one app's storage, in characters of JSON.
 let STORED = 1024 * 1024
 
-let KV = `create table if not exists yak_kv (
-    k text primary key,
-    v text not null
-  )`
+let KV: CreateTable = {
+  t: 'create table',
+  name: 'yak_kv',
+  ifNot: true,
+  cols: [
+    { name: 'k', type: 'text', pk: true },
+    { name: 'v', type: 'text', notNull: true },
+  ],
+}
 
 /** What the kernel vouched for one request: who is asking, the level the
  * platform says they hold on this app, and what to call them. */
@@ -492,7 +509,8 @@ export class Store {
   #ctx: State
   #vocab!: Vocab
   #graph!: Graph
-  #drive!: Driver
+  // The object's SQLite, as the driver every statement here runs through.
+  #sql!: Driver
   #live!: Sockets
   #route!: Handler
   #auth!: Authenticate
@@ -553,10 +571,11 @@ export class Store {
 
   #start() {
     let ctx = this.#ctx
-    ctx.storage.sql.exec(KV)
+    this.#sql = driver(ctx.storage)
+    this.#sql.query(KV)
     // The write log, before anything that can refuse the object: a store
     // whose graph cannot boot still keeps what it is sent (writes.ts).
-    ctx.storage.sql.exec(WRITES)
+    this.#sql.query(WRITES)
     this.#reshaping()
     this.#pending = !this.#get('migrated') && stale(ctx.storage)
     if (!this.#pending) this.#boot()
@@ -630,8 +649,7 @@ export class Store {
     // either one.
     let own = meta || name == GIT_STORE
     let vocab = vocabOfStore(name, this.#get('vocab') ?? {})
-    let drive = driver(ctx.storage)
-    this.#drive = drive
+    let drive = this.#sql = driver(ctx.storage)
     let bytes = sqliteBlobs(drive)
     // The vocabulary says which prose is searched — @yaks/doc declares its
     // title and body, and an app's own vocab.json declares `"search": true` on
@@ -869,18 +887,22 @@ export class Store {
   }
 
   #get(k: Word): string | null {
-    let [row] = this.#ctx.storage.sql
-      .exec('select v from yak_kv where k = ?', k).toArray()
-    return row ? String((row as { v: unknown }).v) : null
+    let [row] = this.#sql.query(select({
+      cols: [col('v')],
+      from: table(KV.name),
+      where: eq(col('k'), val(k)),
+    }))
+    return row ? String(row.v) : null
   }
 
   #put(k: Word, v: string) {
-    this.#ctx.storage.sql.exec(
-      'insert into yak_kv (k, v) values (?, ?) ' +
-        'on conflict(k) do update set v = excluded.v',
-      k,
-      v,
-    )
+    this.#sql.query({
+      t: 'insert',
+      into: KV.name,
+      cols: ['k', 'v'],
+      rows: [[val(k), val(v)]],
+      upsert: [{ on: [col('k')], set: { v: col('v', 'excluded') } }],
+    })
   }
 
   // What the kernel told this object about itself, on any request that carries
@@ -1277,7 +1299,7 @@ export class Store {
     // replay need nobody: the alarm set when one was kept wakes the object
     // after a deploy too. The oldest one's own request names the object for
     // a migration pass still ahead of it.
-    let kept = oldest(this.#ctx.storage.sql)
+    let kept = oldest(this.#sql)
     if (kept && this.#behind) await this.#pass(replayed(kept))
     if (this.#refused || this.#pending) {
       if (kept) await this.#retry()
@@ -1519,11 +1541,7 @@ export class Store {
         let report = move(ctx.storage, { store: name, app })
         // Legacy passes write physical tables directly, outside graph tracking.
         // Reclassify their rows before any presence-based reads can observe them.
-        if (this.#graph.vocab.comp('archetype')) {
-          const sql = driver(ctx.storage)
-          sql.exec('update entity set archetype = null')
-          backfillArchetypes(sql, false)
-        }
+        if (this.#graph.vocab.comp('archetype')) reclassifyAll(this.#sql)
         if (!report.ok) throw new Unreconciled(report)
         // A marker and its rows must commit together, including on write failure.
         this.#put('migrated', mark)
@@ -1664,7 +1682,7 @@ export class Store {
     }
     if (!fits(body) || keyed(body)) return unkept()
     try {
-      seq = keep(this.#ctx.storage.sql, request, body)
+      seq = keep(this.#sql, request, body)
     } catch (e) {
       // Storage that will not take a row: applied as it came, and said.
       defect(e, { request: 'write log', store: this.#name() })
@@ -1688,7 +1706,7 @@ export class Store {
    * lands; the ones left waiting are told they are kept. */
   #drain(): Promise<void> {
     if (this.#draining) return this.#draining
-    let sql = this.#ctx.storage.sql
+    let sql = this.#sql
     let run = async () => {
       // Yield once, so `#draining` is set before the loop can end and clear
       // it: a write that arrives in between must find the loop running.
@@ -1725,7 +1743,7 @@ export class Store {
    * still here to be told its refusal; a replay's refusal has nobody to tell,
    * so it stays in the log with its reason and is reported. */
   async #land(k: Kept, live: boolean): Promise<Response> {
-    let sql = this.#ctx.storage.sql
+    let sql = this.#sql
     try {
       let r = await this.#commit(replayed(k), k.seq)
       if (r.status < 300) done(sql, k.seq)
@@ -1750,7 +1768,7 @@ export class Store {
    * failure, which the alarm owns, or one is already running. */
   #settle(): Promise<unknown> | void {
     if (this.#draining) return this.#draining
-    if (!this.#stuck && waiting(this.#ctx.storage.sql)) return this.#drain()
+    if (!this.#stuck && waiting(this.#sql)) return this.#drain()
   }
 
   /** The caller's answer for a kept write, and the alarm that comes back for
@@ -1818,7 +1836,7 @@ export class Store {
     hooks: {
       commit: (bundles) => {
         if (this.#landing != null) {
-          done(this.#ctx.storage.sql, this.#landing)
+          done(this.#sql, this.#landing)
           this.#landing = null
         }
         return bundles
@@ -2008,7 +2026,7 @@ export class Store {
     if (!text.trim() || !rows.length) return rows
     // The same declared fields the boot schema and membership were cut from.
     let hits = find(
-      this.#drive,
+      this.#sql,
       fields(this.#vocab),
       text,
       { limit: Math.max(rows.length, 20) },
@@ -2158,8 +2176,8 @@ export class Store {
       } catch { /* already gone */ }
     }
     await this.#ctx.storage.deleteAll()
-    this.#ctx.storage.sql.exec(KV)
-    this.#ctx.storage.sql.exec(WRITES)
+    this.#sql.query(KV)
+    this.#sql.query(WRITES)
     if (name) this.#put('name', name)
     this.#boot()
     if (this.#refused) return this.#stalled()
@@ -2256,11 +2274,14 @@ export class Store {
           this.#put('vocab', JSON.stringify(doc))
           for (let name of dropped) {
             let [comp, prop] = name.split('.')
-            if (prop) shed(driver(this.#ctx.storage), comp, prop)
+            if (prop) shed(this.#sql, comp, prop)
             else {
-              this.#ctx.storage.sql.exec(
-                `drop table if exists "${comp.replaceAll('"', '""')}"`,
-              )
+              this.#sql.query({
+                t: 'drop',
+                kind: 'table',
+                name: comp,
+                ifExists: true,
+              })
             }
           }
         })
@@ -2289,12 +2310,12 @@ export class Store {
   // whether a word the manifest stopped naming may leave. A table or a column
   // that is not there holds nothing.
   #rows(name: string, prop?: string): number {
-    let q = (s: string) => `"${s.replaceAll('"', '""')}"`
     try {
-      let [row] = [...this.#ctx.storage.sql.exec(
-        `select count(*) as n from ${q(name)}` +
-          (prop ? ` where ${q(prop)} is not null` : ''),
-      )] as { n: number }[]
+      let [row] = this.#sql.query(select({
+        cols: [as(count(), 'n')],
+        from: table(name),
+        where: prop ? notNull(col(prop)) : undefined,
+      }))
       return Number(row?.n ?? 0)
     } catch {
       return 0

@@ -224,6 +224,8 @@ export type Column = {
   name: string
   type?: string
   pk?: boolean
+  /** a rowid key that never hands out a number a deleted row held */
+  autoincrement?: boolean
   notNull?: boolean
   unique?: boolean
   default?: Expr
@@ -287,12 +289,10 @@ export type CreateTrigger = {
   body: Write[]
 }
 
-export type Alter = {
-  t: 'alter table'
-  table: string
-  add?: Column
-  rename?: string
-}
+/** `alter table`: add a column, drop one, or rename the table. */
+export type Alter =
+  & { t: 'alter table'; table: string }
+  & ({ add: Column } | { drop: string } | { rename: string })
 
 export type Drop = {
   t: 'drop'

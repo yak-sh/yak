@@ -16,6 +16,7 @@ import {
   join,
   le,
   left,
+  lit,
   type Row,
   select,
   type Stmt,
@@ -176,6 +177,21 @@ let minter = (
   }
   return { mint, assign, made, born }
 }
+
+/**
+ * Every entity classified again from the tables it holds rows in, not only the
+ * unclassified ones: what a pass that wrote component tables directly, outside
+ * the graph, leaves to do. Atomic, like {@link backfill}.
+ */
+export let reclassifyAll = (driver: Driver, number = false): Backfill =>
+  unit(driver, () => {
+    driver.query({
+      t: 'update',
+      table: 'entity',
+      set: { archetype: lit(null) },
+    })
+    return backfill(driver, number)
+  })
 
 /**
  * Idempotent, atomic boot maintenance, after additive DDL has installed the

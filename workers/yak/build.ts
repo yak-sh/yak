@@ -63,8 +63,21 @@
 // T-34242); what that page draws is `POST /say` below — the round waited for,
 // then the whole conversation as this same list. One wire, two ways to read
 // it.
-import type { DurableSql, Hibernation, Wire } from '@yaks/durable-object'
+import {
+  driver,
+  type DurableStorage,
+  type Hibernation,
+  type Wire,
+} from '@yaks/durable-object'
 import { type Level, level, writes } from '@yaks/member'
+import {
+  col,
+  type CreateTable,
+  type Driver,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
 import type { Beat, Line } from './builder.ts'
 import { directory, type Space } from './directory.ts'
 import { fetchOf } from './door.ts'
@@ -86,8 +99,7 @@ import { caught } from './sentry.ts'
  * here is the socket slice above, which is checked where it is declared.
  */
 export type State = Hibernation & {
-  storage: {
-    sql: DurableSql
+  storage: DurableStorage & {
     // The one way to empty an object: dropping the tables leaves metadata
     // behind, and an object whose storage is empty ceases to exist. It is what
     // a deleted space's conversation goes through ({@link Builder.wipe}), the
@@ -197,13 +209,19 @@ let framed = (b: Beat): Frame[] =>
     ]
 
 // The conversation, one row per line, in the order it was said.
-let SAID = `create table if not exists said (
-    n integer primary key autoincrement,
-    json text not null
-  )`
+let SAID: CreateTable = {
+  t: 'create table',
+  name: 'said',
+  ifNot: true,
+  cols: [
+    { name: 'n', type: 'integer', pk: true, autoincrement: true },
+    { name: 'json', type: 'text', notNull: true },
+  ],
+}
 
 export class Builder {
   #ctx: State
+  #sql: Driver
   #env: Env
   // Whether a build is running in this object right now. In memory on purpose:
   // an object that was evicted has no build running, and a flag in storage
@@ -212,24 +230,30 @@ export class Builder {
 
   constructor(ctx: State, env: Env) {
     this.#ctx = ctx
+    this.#sql = driver(ctx.storage)
     this.#env = env
-    ctx.storage.sql.exec(SAID)
+    this.#sql.query(SAID)
   }
 
   /** The conversation so far, whole. */
   said(): Line[] {
-    return this.#ctx.storage.sql
-      .exec('select json from said order by n')
-      .toArray()
-      .map((r) => JSON.parse(String((r as { json: unknown }).json)) as Line)
+    return this.#sql
+      .query(select({
+        cols: [col('json')],
+        from: table('said'),
+        order: [col('n')],
+      }))
+      .map((r) => JSON.parse(String(r.json)) as Line)
   }
 
   #keep(said: Line[]) {
     for (let l of said) {
-      this.#ctx.storage.sql.exec(
-        'insert into said (json) values (?)',
-        JSON.stringify(l),
-      )
+      this.#sql.query({
+        t: 'insert',
+        into: 'said',
+        cols: ['json'],
+        rows: [[val(JSON.stringify(l))]],
+      })
     }
   }
 
@@ -252,7 +276,7 @@ export class Builder {
    */
   async wipe() {
     await this.#ctx.storage.deleteAll()
-    this.#ctx.storage.sql.exec(SAID)
+    this.#sql.query(SAID)
   }
 
   // Everyone watching this space, including the socket the frame came in on: a

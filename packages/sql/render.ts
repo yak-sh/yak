@@ -262,6 +262,7 @@ let column = (k: Column, c: Ctx): string =>
     q(k.name),
     k.type ? word(k.type, 'type', TYPE) : '',
     k.pk ? 'primary key' : '',
+    k.autoincrement ? 'autoincrement' : '',
     k.notNull ? 'not null' : '',
     k.unique ? 'unique' : '',
     k.default ? `default ${fallback(k.default, c)}` : '',
@@ -348,9 +349,11 @@ let stmt = (s: Stmt, c: Ctx): string => {
         ` begin ${s.body.map((b) => `${stmt(b, lit(c))};`).join(' ')} end`
     case 'alter table':
       return `alter table ${q(s.table)} ` +
-        (s.add
+        ('add' in s
           ? `add column ${column(s.add, lit(c))}`
-          : `rename to ${q(s.rename!)}`)
+          : 'drop' in s
+          ? `drop column ${q(s.drop)}`
+          : `rename to ${q(s.rename)}`)
     case 'drop':
       return `drop ${s.kind} ${s.ifExists ? 'if exists ' : ''}${q(s.name)}`
     case 'pragma':

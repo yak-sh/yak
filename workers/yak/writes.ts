@@ -12,7 +12,7 @@
 // the very transaction that commits its batch (graph.ts `yak/writes`), which
 // is what makes a replay exactly once: a Queue or another object could only
 // mark it done after the fact.
-// The shape is raw SQL that no vocabulary, migration or code version owns,
+// The table is a plain one that no vocabulary, migration or code version owns,
 // so whichever code wakes the object next can read it.
 //
 // A row is a request as the kernel sent it: its headers (the vouch — who
@@ -23,19 +23,40 @@
 // healthy wake. A replay that the store now refuses (a `$was` that moved, a
 // property the app no longer declares) is kept as `refused` with the reason and
 // reported, never dropped.
-import type { DurableSql } from '@yaks/durable-object'
 import { Refused } from '@yaks/graph'
 import { carries } from '@yaks/secrets'
+import {
+  and,
+  col,
+  type CreateTable,
+  type Driver,
+  eq,
+  lit,
+  op,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
 
-export let WRITES = `create table if not exists yak_writes (
-    seq integer primary key autoincrement,
-    at text not null,
-    headers text not null,
-    body text not null,
-    state text not null default 'pending',
-    tries integer not null default 0,
-    why text
-  )`
+let LOG = 'yak_writes'
+
+export let WRITES: CreateTable = {
+  t: 'create table',
+  name: LOG,
+  ifNot: true,
+  cols: [
+    { name: 'seq', type: 'integer', pk: true, autoincrement: true },
+    { name: 'at', type: 'text', notNull: true },
+    { name: 'headers', type: 'text', notNull: true },
+    { name: 'body', type: 'text', notNull: true },
+    { name: 'state', type: 'text', notNull: true, default: lit('pending') },
+    { name: 'tries', type: 'integer', notNull: true, default: lit(0) },
+    { name: 'why', type: 'text' },
+  ],
+}
+
+let PENDING = eq(col('state'), lit('pending'))
+let at = (seq: number) => eq(col('seq'), val(seq))
 
 /** One kept write. */
 export type Kept = { seq: number; headers: string; body: string }
@@ -71,23 +92,30 @@ export let keyed = (body: string): boolean => {
 }
 
 /** Keep one write; its place in the log. */
-export let keep = (sql: DurableSql, req: Request, body: string): number => {
-  let [row] = sql.exec(
-    'insert into yak_writes (at, headers, body) values (?, ?, ?) ' +
-      'returning seq',
-    new Date().toISOString(),
-    JSON.stringify([...req.headers]),
-    body,
-  ).toArray()
+export let keep = (db: Driver, req: Request, body: string): number => {
+  let [row] = db.query({
+    t: 'insert',
+    into: LOG,
+    cols: ['at', 'headers', 'body'],
+    rows: [[
+      val(new Date().toISOString()),
+      val(JSON.stringify([...req.headers])),
+      val(body),
+    ]],
+    returning: [col('seq')],
+  })
   return Number(row.seq)
 }
 
 /** The oldest write still waiting. */
-export let oldest = (sql: DurableSql): Kept | null => {
-  let [row] = sql.exec(
-    "select seq, headers, body from yak_writes where state = 'pending' " +
-      'order by seq limit 1',
-  ).toArray()
+export let oldest = (db: Driver): Kept | null => {
+  let [row] = db.query(select({
+    cols: [col('seq'), col('headers'), col('body')],
+    from: table(LOG),
+    where: PENDING,
+    order: [col('seq')],
+    limit: lit(1),
+  }))
   return row
     ? {
       seq: Number(row.seq),
@@ -98,23 +126,29 @@ export let oldest = (sql: DurableSql): Kept | null => {
 }
 
 /** Whether any write is waiting. */
-export let waiting = (sql: DurableSql): boolean => oldest(sql) != null
+export let waiting = (db: Driver): boolean => oldest(db) != null
 
 /** The write is applied, or answered as refused: it leaves the log. */
-export let done = (sql: DurableSql, seq: number) =>
-  void sql.exec('delete from yak_writes where seq = ?', seq)
+export let done = (db: Driver, seq: number) =>
+  void db.query({ t: 'delete', from: LOG, where: at(seq) })
 
 /** The write failed again, and waits. */
-export let tried = (sql: DurableSql, seq: number) =>
-  void sql.exec('update yak_writes set tries = tries + 1 where seq = ?', seq)
+export let tried = (db: Driver, seq: number) =>
+  void db.query({
+    t: 'update',
+    table: LOG,
+    set: { tries: op('+', col('tries'), lit(1)) },
+    where: at(seq),
+  })
 
 /** A replay the store refused: kept, with why, and never replayed again. */
-export let dead = (sql: DurableSql, seq: number, why: string) =>
-  void sql.exec(
-    "update yak_writes set state = 'refused', why = ? where seq = ?",
-    why,
-    seq,
-  )
+export let dead = (db: Driver, seq: number, why: string) =>
+  void db.query({
+    t: 'update',
+    table: LOG,
+    set: { state: lit('refused'), why: val(why) },
+    where: at(seq),
+  })
 
 /** The request a kept write was, to apply again. */
 export let replayed = (k: Kept): Request =>
@@ -145,11 +179,12 @@ export let said = async (r: Response): Promise<string> => {
 }
 
 /** Whether a write is still in the log, waiting. */
-export let held = (sql: DurableSql, seq: number): boolean =>
-  sql.exec(
-    "select 1 from yak_writes where seq = ? and state = 'pending'",
-    seq,
-  ).toArray().length > 0
+export let held = (db: Driver, seq: number): boolean =>
+  db.query(select({
+    cols: [lit(1)],
+    from: table(LOG),
+    where: and(at(seq), PENDING),
+  })).length > 0
 
 /** A kept write, as the door that sent it hears it (meta.ts): not applied
  * yet, and not lost. The failure that held it back was reported where it

@@ -1227,7 +1227,7 @@ Deno.test('a marker write failure rolls back its pass, even for a thrown value',
   await carriedOne(ctx)
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
   ctx.storage.sql.exec = (query, ...params) => {
-    if (query.startsWith('insert into yak_kv') && params[1] == HOMED) {
+    if (query.startsWith('insert into "yak_kv"') && params[1] == HOMED) {
       throw 'marker unavailable'
     }
     return exec(query, ...params)
@@ -1326,7 +1326,7 @@ for (
     let now = newer(ctx, PLATFORM_STORE)
     let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
     ctx.storage.sql.exec = (query, ...params) => {
-      if (query.startsWith('insert into yak_kv') && params[0] == 'name') {
+      if (query.startsWith('insert into "yak_kv"') && params[0] == 'name') {
         throw error
       }
       return exec(query, ...params)
