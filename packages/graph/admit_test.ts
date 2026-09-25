@@ -9,18 +9,17 @@ import { books } from './testing.ts'
 let one = (b: Record<string, unknown>, trusted = false) =>
   admit([b as never], books, trusted)
 
-Deno.test('an unknown component is dropped, the rest of the bundle lands', () => {
-  let [out] = one({
-    entity: { eid: 'b1' },
-    doc: { title: 'Dune' },
-    audiobook: { minutes: 400 },
-  })
-  assertEquals(out.doc, { title: 'Dune' })
-  assertEquals(out.audiobook, undefined)
-})
-
-Deno.test('a bundle whose every component was unknown leaves the batch', () => {
-  assertEquals(one({ entity: { eid: 'b1' }, audiobook: { minutes: 4 } }), [])
+Deno.test('an unknown component refuses the batch, naming it', () => {
+  assertThrows(
+    () =>
+      one({
+        entity: { eid: 'b1' },
+        doc: { title: 'Dune' },
+        audiobook: { minutes: 400 },
+      }),
+    Refused,
+    'unknown component: audiobook',
+  )
 })
 
 Deno.test('an unknown property on a known component refuses the batch', () => {
@@ -93,7 +92,7 @@ Deno.test('a delete survives even when its components were all dropped', () => {
   let [out] = one({
     entity: { eid: 'b1' },
     $delete: true,
-    audiobook: { minutes: 4 },
+    created: { at: 'now' },
   })
   assertEquals(out.$delete, true)
 })

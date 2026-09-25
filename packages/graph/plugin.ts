@@ -26,8 +26,8 @@ import type { VocabDoc } from '@yaks/vocab'
  * The phases of `apply()`, in order:
  *
  * - `normalize` — canonicalize what arrived. Pure, before the transaction.
- * - `admit` — drop undeclared components and server-owned properties, refuse an
- *   undeclared property, validate each value against the vocabulary.
+ * - `admit` — refuse an undeclared component or property, drop server-owned
+ *   properties, validate each value against the vocabulary.
  * - `mint` — give every `$alias` in the change a real id (a fresh one, or one
  *   derived from the content) and rewrite the references to it.
  * - `precondition` — the `$was` check, and any other "may this change be

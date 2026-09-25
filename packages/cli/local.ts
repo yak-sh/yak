@@ -175,7 +175,11 @@ export let close = (code?: number): Promise<void> =>
   closing ??= (async () => {
     // Awaited, because the last batch is a write: a command that closed the
     // file without waiting would leave its own row saying it is still running.
-    for (let host of hosts.values()) await (await host).close(code)
+    // A graph that failed to open has nothing to close, and the command said
+    // why.
+    for (let host of hosts.values()) {
+      await (await host.catch(() => undefined))?.close(code)
+    }
     hosts.clear()
   })().finally(() => closing = undefined)
 

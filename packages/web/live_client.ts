@@ -7,7 +7,7 @@
 import { batch } from '@preact/signals'
 import { type Client, client, type Watch, wireIdb } from '@yaks/client'
 import { type Bundle, type Comp, dead } from '@yaks/graph'
-import { type Coverage, echo, type Frame, type Socket } from '@yaks/sync'
+import { type Coverage, type Frame, replicate, type Socket } from '@yaks/sync'
 import { loadVocab } from '@yaks/vocab'
 import { resultComps } from './route.ts'
 import { type Change, keywords, vocab } from './types.ts'
@@ -222,7 +222,6 @@ export let liveClient = (opts: {
     members: (sub: string) =>
       handles.get(sub)?.watch.value.map((b) => b.entity.eid) ?? [],
     ready: (sub: string) => handles.get(sub)?.watch.ready ?? false,
-    patch: (changes: Change[]) =>
-      box.graph.apply(echo(bundles(changes)), { trusted: true }),
+    patch: (changes: Change[]) => replicate(box.graph, bundles(changes)),
   }
 }

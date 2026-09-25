@@ -215,9 +215,9 @@ ambiguity with components such as `session.status`. Its storage must support
 that computed status, as described above.
 
 The tools can write `doc` and `filed` without importing their packages because
-bundles are plain data. Load `@yaks/doc` and `@yaks/project` to retain those
-components: graph admission drops undeclared components. An unknown property on
-a declared component is refused instead.
+bundles are plain data. Load `@yaks/doc` and `@yaks/project` to keep those
+components: graph admission refuses a component the graph does not declare, and
+an unknown property on a declared one, naming it.
 
 Showing a complete entity uses the generic `graph_show` tool. Ranked search uses
 `search` when the server supplies a search implementation. Applying a plan uses

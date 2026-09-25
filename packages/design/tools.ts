@@ -9,7 +9,7 @@
 // `decided` for its lifecycle — anything can be proposed, so those two belong
 // to the kernel. A tool returns bundles, which are plain data, so naming
 // another package's component costs no import, and a server that composes
-// neither package simply has those properties dropped on the way in.
+// neither package refuses the write, naming the component it does not know.
 //
 // The decider is the caller. Neither implementation writes `by` or `at`: those
 // are stamped properties, filled in from the actor of the write (@yaks/graph's

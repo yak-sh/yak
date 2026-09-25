@@ -15,7 +15,7 @@
 //           skips any bundle carrying it, which is how a client can apply what
 //           it just received without sending it straight back.
 
-import type { Bundle, Plugin } from '@yaks/graph'
+import type { Bundle, Graph, Plugin } from '@yaks/graph'
 
 /** The mark on a bundle a caller sent, carrying the entity as it then stood. */
 export let SENT = '$sent'
@@ -55,6 +55,15 @@ export let echo = (bundles: Bundle[]): Bundle[] =>
 
 /** Whether a bundle came from the server. */
 export let echoed = (b: Bundle): boolean => b[ECHO] === true
+
+/** What the server sent, applied to this replica: marked as an echo so it never
+ * goes back, trusted since the server admitted it already, and as a replica so
+ * a component this copy was not loaded with is left out rather than refused. */
+export let replicate = (
+  graph: Graph,
+  bundles: Bundle[],
+): Bundle[] | Promise<Bundle[]> =>
+  graph.apply(echo(bundles), { trusted: true, replica: true })
 
 /** A bundle with both marks removed: what a caller gets back from `apply()`,
  * which is their data and not this package's bookkeeping. */

@@ -4,6 +4,7 @@ import { argsOf, type Bundle, type Comp, detached } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
+import { ids } from '@yaks/id/rules'
 import { blobKeywords, blobRead } from '@yaks/blob'
 import { rules as blobRules } from '@yaks/blob/rules'
 import { processDoc, selfEid } from '@yaks/process'
@@ -274,6 +275,8 @@ Deno.test('a config may keep a component off the human number line', async () =>
     { db: ':memory:', plugins: ['shop'], numbers: { except: ['note'] } },
     only({
       shop: {
+        // A numbered graph reads its numbers back (@yaks/id's resolver).
+        rules: { rules: (host) => [ids(host.vocab)] },
         vocab: {
           docs: [{
             ...doc,
@@ -294,6 +297,18 @@ Deno.test('a config may keep a component off the human number line', async () =>
   assertEquals(book.entity.num, 1)
   assertEquals(note.entity.num, null)
   host.close()
+})
+
+Deno.test('a config that numbers entities and reads no number back refuses', async () => {
+  await assertRejects(
+    () =>
+      compose(
+        { db: ':memory:', plugins: ['shop'], numbers: true },
+        only({ shop }),
+      ),
+    Error,
+    'add @yaks/id',
+  )
 })
 
 Deno.test('a declared tool nobody runs refuses its first call', async () => {
@@ -1120,10 +1135,18 @@ Deno.test('an option written {secret} is that secret, read each time it is asked
   let host = await compose(
     {
       db: ':memory:',
-      plugins: [{
-        use: 'mail',
-        with: { sender: { token: { secret: 'YAK_TEST_TOKEN' } }, keep: [1, 2] },
-      }, '@yaks/secrets'],
+      plugins: [
+        {
+          use: 'mail',
+          with: {
+            sender: { token: { secret: 'YAK_TEST_TOKEN' } },
+            keep: [1, 2],
+          },
+          // A value on its way to the vault wears @yaks/effects' `provisional`.
+        },
+        '@yaks/secrets',
+        '@yaks/effects',
+      ],
     },
     only({ mail: { rules: { rules: (_, options) => (seen = options, []) } } }),
   )

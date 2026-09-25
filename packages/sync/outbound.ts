@@ -19,7 +19,7 @@
 //              wrong about that turns a network blip into data loss.
 
 import type { Bundle, Graph } from '@yaks/graph'
-import { echo } from './mark.ts'
+import { replicate } from './mark.ts'
 import { inverse, outward } from './tier.ts'
 
 /** The body of a server's refusal: the error's own name, its message, and
@@ -103,13 +103,13 @@ export let post = async (
   if (!res.ok) {
     let refused = await refusalOf(res)
     let back = opts.held ? [] : inverse(batch)
-    if (back.length) await graph.apply(echo(back), { trusted: true })
+    if (back.length) await replicate(graph, back)
     opts.report({ sent, refused, reverted: back.length > 0 })
     return true
   }
   let applied = await res.json() as Bundle[]
   if (Array.isArray(applied) && applied.length) {
-    await graph.apply(echo(applied), { trusted: true })
+    await replicate(graph, applied)
   }
   return true
 }

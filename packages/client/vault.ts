@@ -27,7 +27,7 @@
 import type { Bundle, Comp, Eid, Graph, Plugin } from '@yaks/graph'
 import { comps, dead, detached, then } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { ECHO, echo, local } from '@yaks/sync'
+import { ECHO, local, replicate } from '@yaks/sync'
 
 // The components this file is responsible for: the ones no server sends, and
 // which the vocabulary declares outlive the tab.
@@ -184,10 +184,12 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
   }
   graph.use(plugin)
 
-  // Loading is applied like any other change: trusted (these values were
-  // admitted once already), marked as an echo so @yaks/sync does not post
-  // browser-owned components to a server, and marked as this package's own so
-  // the hook above does not write back what it just read.
+  // Loading is applied the way a server's frame is (@yaks/sync `replicate`):
+  // trusted, since these values were admitted once already; marked as an echo so
+  // @yaks/sync does not post browser-owned components to a server; and as a
+  // replica, so a word this copy is no longer loaded with is left out. It is
+  // also marked as this package's own, so the hook above does not write back
+  // what it just read.
   let ready = vault.load().then((recs) => {
     hydrated = true
     let bundles = recs.filter((r) => !loading.has(r.eid)).map((r): Bundle => ({
@@ -197,7 +199,7 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
     }))
     loading.clear()
     if (!bundles.length) return
-    return then(graph.apply(echo(bundles), { trusted: true }), () => undefined)
+    return then(replicate(graph, bundles), () => undefined)
   })
 
   return { plugin, ready }

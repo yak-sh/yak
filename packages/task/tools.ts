@@ -7,8 +7,8 @@
 // task with a title carries @yaks/doc's `doc`, and one filed in a portfolio
 // carries @yaks/project's `filed`. A tool returns bundles, which are plain
 // data, so naming a neighbour's component costs no import — and a server that
-// composes neither package simply has those properties dropped when the write
-// is admitted.
+// composes neither package refuses the write, naming the component it does not
+// know.
 //
 // There is no `task show`, no `task search` and no `task tree` here. Showing an
 // entity whole is `graph_show`, and ranked text search is `search`; both are in

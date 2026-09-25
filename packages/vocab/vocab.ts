@@ -464,6 +464,24 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string =>
   } — ${shapeOf(v, comp)}`
 
 /**
+ * The refusal for components this vocabulary does not declare. A component is
+ * a whole word, not a slip inside one, so the sentence says where words come
+ * from rather than listing every word there is.
+ *
+ * ```ts
+ * import { unknownComps } from '@yaks/vocab'
+ * unknownComps(['recipy'])
+ * // 'unknown component: recipy — nothing this vocabulary was loaded from declares it'
+ * ```
+ */
+export let unknownComps = (comps: string[]): string =>
+  `unknown ${comps.length > 1 ? 'components' : 'component'}: ${
+    comps.join(', ')
+  } — nothing this vocabulary was loaded from declares ${
+    comps.length > 1 ? 'them' : 'it'
+  }`
+
+/**
  * Who is told about a write to a component — `server` for a component this
  * vocabulary does not declare, which is the same answer a declared component
  * with no `sync` keyword gives, so a caller never has to special-case the
@@ -774,7 +792,7 @@ export let loadVocab = (
     check: (comp, value, opts) => {
       let errs: string[] = []
       let info = infoOf(comp)
-      if (!info) return [`unknown component '${comp}'`]
+      if (!info) return [unknownComps([comp])]
       if (value == null || typeof value != 'object' || Array.isArray(value)) {
         return [`${comp} is an object of properties`]
       }

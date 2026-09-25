@@ -7,6 +7,7 @@ import { type Bundle, type Comp, graph, Stale } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { provisionalDoc } from '@yaks/effects'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import {
   isHandle,
@@ -64,8 +65,9 @@ let TEXTS: Integration = { name: 'texts', hosts: ['api.texts.example'] }
 let REDIRECT = 'https://yourname.yaks.app/_yaks/connections/back'
 let NOW = 1_000_000
 
+// A credential on its way to the vault wears @yaks/effects' `provisional`.
 let vocab = loadVocab(
-  [here, edgeDoc, secretsDoc, connectionsDoc],
+  [here, edgeDoc, secretsDoc, provisionalDoc, connectionsDoc],
   [edgeKeywords],
 )
 

@@ -247,7 +247,8 @@ there are no sub-module exports:
 - Incoming frames: `land`, `strip`, and `snapshot`.
 - Sockets: `wire` and `backoff`.
 - Internal request/response marks: `asked`, `asking`, `before`, `clean`, `echo`,
-  `echoed`, `ECHO`, and `SENT`.
+  `echoed`, `ECHO`, and `SENT`; `replicate` applies what a server sent the way
+  every one of these paths does.
 - Partial-result scope: `covers` and `delivered`, with the `Coverage` type.
 - Worker messages: `portLink`, described below.
 

@@ -11,7 +11,7 @@ import { effectsIn, loadVocab } from '@yaks/vocab'
 import { idDoc, idKeywords } from '@yaks/id'
 import { ids } from '@yaks/id/rules'
 import { nameKeywords } from '@yaks/names'
-import { kernelKeywords, spineDoc } from '@yaks/kernel'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { ram } from '@yaks/ram'
 import { effects as registry } from '@yaks/effects'
 import { docDoc } from '@yaks/doc'
@@ -30,13 +30,14 @@ let M = identityEid('model', ['sol'])
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
-// A host with every word a failure, a task and a spawn request touch, and
-// this package's handlers on it. No @yaks/spawn handlers: a fixer is the
-// request written, never a process started.
+// A host with every word a failure, a task and a spawn request touch (the
+// `about` a bug is linked by is the kernel's), and this package's handlers on
+// it. No @yaks/spawn handlers: a fixer is the request written, never a process
+// started.
 let host = async (options: Options = {}) => {
   let vocab = loadVocab(
     [
-      spineDoc,
+      kernelDoc,
       idDoc,
       edgeDoc,
       docDoc,

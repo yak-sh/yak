@@ -14,7 +14,7 @@
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { comps, dead, detached, then, transient } from '@yaks/graph'
-import { echo } from './mark.ts'
+import { replicate } from './mark.ts'
 import type { Frame } from './socket.ts'
 import { type Coverage, covers } from './coverage.ts'
 import { outbound } from './tier.ts'
@@ -42,7 +42,7 @@ export let strip = (
 ): Bundle[] | Promise<Bundle[]> =>
   then(detached(graph.storage).get(eids), (held) => {
     let out = held.flatMap((b) => bare(graph, b))
-    return out.length ? graph.apply(echo(out), { trusted: true }) : []
+    return out.length ? replicate(graph, out) : []
   })
 
 /**
@@ -64,7 +64,7 @@ export let land = (
   let gone = frame.gone ?? []
   live.forget([...gone, ...frame.transientReset ?? []])
   return then(
-    bundles.length ? graph.apply(echo(bundles), { trusted: true }) : [],
+    bundles.length ? replicate(graph, bundles) : [],
     (applied) => {
       for (const update of frame.transient ?? []) live.receive(update)
       return gone.length
@@ -127,6 +127,6 @@ export let snapshot = (
         }
         return out
       })
-      return patches.length ? graph.apply(echo(patches), { trusted: true }) : []
+      return patches.length ? replicate(graph, patches) : []
     },
   )

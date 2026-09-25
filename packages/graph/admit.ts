@@ -1,14 +1,15 @@
 // Admission: what a change is allowed to contain. Three rules, and each is a
 // deliberate choice about which mistakes are loud and which are silent.
 //
-//   an undeclared component is dropped  forward compatibility: a newer client
-//                                       may send a component this graph has
-//                                       never heard of, and the rest of its
-//                                       change must still be applied
+//   an undeclared component is refused  a component this graph's vocabulary
+//                                       does not declare is a word it cannot
+//                                       keep: a typo, or a package the graph
+//                                       was not composed with, and a write
+//                                       that said it saved a title it dropped
+//                                       is worse than one that refused
 //   an undeclared property is refused     on a component the vocabulary does
 //                                       declare, an unrecognized property is a
-//                                       typo, and silently dropping a title is
-//                                       worse than refusing the change
+//                                       typo, for the same reason
 //   a server-owned property is dropped    `stamped` properties are readable but
 //                                       never writable by a client; a caller
 //                                       that sends one is ignored rather than
@@ -26,7 +27,7 @@
 // depends on no validator, and a graph that wants full JSON Schema validation
 // registers one as an `admit` hook.
 
-import { cast, unknownProps, type Vocab } from '@yaks/vocab'
+import { cast, unknownComps, unknownProps, type Vocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import { comps, dead, RESERVED } from './bundle.ts'
 
@@ -81,18 +82,44 @@ let admitComp = (
 }
 
 /**
- * The admit phase: every bundle in the change, reduced to what this graph's
- * vocabulary declares and this caller may write. A bundle whose components
- * were all dropped is removed from the change — it asked for nothing this
- * graph can do. `trusted` admits server-owned properties; it is the calling
- * program's decision, never a client's.
+ * A replica's copy of rows another graph already admitted, with the components
+ * this vocabulary does not declare left out (@yaks/graph `ApplyOpts.replica`):
+ * a copy holds only the words it was loaded with. A bundle left with nothing
+ * leaves the batch, unless it is a delete.
+ */
+export let known = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
+  bundles.flatMap((b) => {
+    let sent = comps(b)
+    let alien = sent.filter(([name]) => !vocab.comp(name))
+    if (!alien.length) return [b]
+    if (alien.length == sent.length && !dead(b)) return []
+    let out = { ...b }
+    for (let [name] of alien) delete out[name]
+    return [out]
+  })
+
+/**
+ * The admit phase: every bundle in the change, reduced to what this caller may
+ * write, or refused if it names a component or property this graph's
+ * vocabulary does not declare. A bundle whose components were all dropped is
+ * removed from the change — it asked for nothing this caller may write.
+ * `trusted` admits server-owned properties; it is the calling program's
+ * decision, never a client's.
  */
 export let admit = (
   bundles: Bundle[],
   vocab: Vocab,
   trusted = false,
-): Bundle[] =>
-  bundles.flatMap((b) => {
+): Bundle[] => {
+  let alien = [
+    ...new Set(
+      bundles.flatMap((b) =>
+        comps(b).map(([name]) => name).filter((n) => !vocab.comp(n))
+      ),
+    ),
+  ]
+  if (alien.length) throw new Refused(unknownComps(alien))
+  return bundles.flatMap((b) => {
     let sent = comps(b)
     if (!sent.length) return [b]
     let out: Bundle = { entity: b.entity }
@@ -101,8 +128,7 @@ export let admit = (
     }
     let kept = 0
     for (let [name, patch] of sent) {
-      let info = vocab.comp(name)
-      if (!info) continue // an undeclared component is a no-op, not an error
+      let info = vocab.comp(name)!
       // A component marked `wire: false` — the `entity` identity component,
       // for one — is not writable by a client.
       if (!info.wire && !trusted) continue
@@ -120,3 +146,4 @@ export let admit = (
     // carried does not cancel the delete.
     return kept || dead(b) ? [out] : []
   })
+}

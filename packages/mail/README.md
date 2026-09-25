@@ -331,8 +331,8 @@ address in `mail.to`. `who` defaults to the caller; `--all` includes archived
 items. `●` means unread, `·` read, and `×` archived. Reading leaves a message in
 the inbox. The `opened` and `archived` components belong to
 [@yaks/kernel](../kernel/README.md) and are stored on the message, not
-separately per reader. Load that vocabulary to retain these marks; undeclared
-components are dropped by graph admission.
+separately per reader. Load that vocabulary to keep these marks: graph admission
+refuses a component the graph does not declare.
 
 Replies use the original recipient address as sender for received messages, or
 the original sender address when following up on an outgoing message. The reply

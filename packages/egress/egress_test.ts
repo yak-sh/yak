@@ -6,6 +6,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { provisionalDoc } from '@yaks/effects'
 import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
 import { ramVault, secrets, secretsDoc, SENTINEL } from '@yaks/secrets'
 import {
@@ -63,8 +64,9 @@ let net = (input: RequestInfo | URL, init?: RequestInit) => {
   return Promise.resolve(replies.shift() ?? new Response('{}'))
 }
 
+// A credential on its way to the vault wears @yaks/effects' `provisional`.
 let vocab = loadVocab(
-  [here, edgeDoc, secretsDoc, connectionsDoc],
+  [here, edgeDoc, secretsDoc, provisionalDoc, connectionsDoc],
   [edgeKeywords],
 )
 let vault = ramVault()

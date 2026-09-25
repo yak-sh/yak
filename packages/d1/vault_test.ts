@@ -16,12 +16,14 @@ import {
   type Vault,
 } from '@yaks/secrets'
 import { loadVocab } from '@yaks/vocab'
+import { provisionalDoc } from '@yaks/effects'
 import { col, select, table } from '@yaks/sql'
 import { prepare } from './d1.ts'
 import { d1 } from './testing.ts'
 import { d1Vault, transient } from './vault.ts'
 
-let vocab = loadVocab([secretsDoc])
+// A value on its way to the vault wears @yaks/effects' `provisional` mark.
+let vocab = loadVocab([secretsDoc, provisionalDoc])
 let key = () =>
   crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
     'encrypt',

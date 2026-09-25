@@ -101,6 +101,31 @@ Deno.test('a batch lands, and the return carries the births', () => {
   assertEquals(comp(stored, 'book').pages, 412)
 })
 
+Deno.test('a write naming a component the graph does not declare lands nothing', () => {
+  let one = g()
+  assertThrows(
+    () =>
+      one.apply([
+        { entity: { eid: 'b1' }, doc: { title: 'Dune' }, audiobook: {} },
+      ]),
+    Refused,
+    'unknown component: audiobook',
+  )
+  assertEquals(one.storage.tx((tx) => tx.get(['b1'])), [])
+})
+
+Deno.test('a replica lands what it declares and leaves the rest out', () => {
+  let one = g()
+  sync(one.apply([
+    { entity: { eid: 'b1' }, doc: { title: 'Dune' }, audiobook: {} },
+    { entity: { eid: 'b2' }, audiobook: {} },
+  ], { trusted: true, replica: true }))
+  let [b1] = one.storage.tx((tx) => tx.get(['b1'])) as Bundle[]
+  assertEquals(comp(b1, 'doc').title, 'Dune')
+  assertEquals(b1.audiobook, undefined)
+  assertEquals(one.storage.tx((tx) => tx.get(['b2'])), [])
+})
+
 Deno.test('the answer is one bundle per entity, and no pipeline key', () => {
   let one = g()
   // A write: the caller's patch, the stamp and the birth are one bundle, and

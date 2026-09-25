@@ -11,8 +11,8 @@
 //
 //   normalize   core     every id the change names, as the eid it names
 //               hooks    pure, before the transaction opens
-//   admit       core     drop undeclared properties, refuse invalid ones, check
-//                        the values
+//   admit       core     refuse undeclared components and properties, drop the
+//                        server-owned ones, check the values
 //   mint        core     assign an id to every $alias, and rewrite the
 //                        references to it
 //   ───────────────────  the transaction opens
@@ -54,7 +54,7 @@ import type { Hook, Phase, Plugin, Tracker, WriteHook } from './plugin.ts'
 import { type Derive, isAlias, resolve, substitute } from './alias.ts'
 import { identified, identities } from './identity.ts'
 import { mint as fresh } from './mint.ts'
-import { admit, Refused } from './admit.ts'
+import { admit, known, Refused } from './admit.ts'
 import { requested } from './request.ts'
 import { composed } from './compose.ts'
 import { type Ask, complete, gather, holding, reached } from './gather.ts'
@@ -82,6 +82,11 @@ import { named, only } from './projection.ts'
 export type ApplyOpts = {
   /** the caller is trusted server code: server-owned properties are accepted */
   trusted?: boolean
+  /** the change copies rows another graph already admitted into this graph's
+   * copy of them — a replica landing what its server sent. A copy holds only
+   * the words it was loaded with, so a component this vocabulary does not
+   * declare is left out; every other write is refused for naming one. */
+  replica?: boolean
   /** the timestamp every stamp in this change uses, ISO-8601 (default: now) */
   now?: string
   /** a dry run: every phase runs and the transaction is rolled back instead of
@@ -575,7 +580,10 @@ export let graph = (opts: Options): Graph => {
           outside,
           (b) =>
             admit(
-              requested(b, plugins.flatMap((p) => p.requests ?? [])),
+              requested(
+                o.replica ? known(b, vocab) : b,
+                plugins.flatMap((p) => p.requests ?? []),
+              ),
               vocab,
               o.trusted,
             ),

@@ -806,6 +806,18 @@ export let compose = async (
       owner: host.me,
       nudge: opts.thread?.nudge,
     })
+    let rules = ruled.flatMap(([r, options]) => r.rules?.(host, options) ?? [])
+    // A numbered entity is printed as an id a person types back (`T-7`), and a
+    // graph that reads none back takes `T-7` for an eid and mints an entity of
+    // that name. So a config that numbers entities names a plugin that
+    // resolves them.
+    let graphing = roles.includes('graph')
+    if (config.numbers && graphing && !rules.some((p) => p.address)) {
+      throw new Error(
+        '`numbers` prints ids like T-7, and no plugin in this config reads ' +
+          'one back — add @yaks/id to plugins',
+      )
+    }
     g = graph({
       storage: host.storage,
       vocab,
@@ -813,10 +825,7 @@ export let compose = async (
       // effects, its start-up passes and the bulk loads it is handed are all
       // stored attributed to this process.
       ...(self ? { actor: self } : {}),
-      plugins: [
-        ...ruled.flatMap(([r, options]) => r.rules?.(host, options) ?? []),
-        fx,
-      ],
+      plugins: [...rules, fx],
     })
     // The code behind the plugins' effects, where this process serves
     // `effects` (their facets were never imported anywhere else). Each plugin

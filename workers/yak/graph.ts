@@ -990,14 +990,12 @@ export class Store {
    * of them writes to it, not when one of them looks at it.
    */
   /**
-   * A word nobody declared, refused at the write door instead of dropped.
+   * A word nobody declared, refused in the platform's own words.
    *
-   * @yaks/graph drops an unknown component on purpose — forward compatibility,
-   * so a newer client's batch still lands (admit.ts). This platform has the
-   * opposite problem: an app's own words are its `vocab.json`, and a `recipe`
-   * silently dropped is a page that saved nothing and said it saved. So the
-   * store that holds the vocabulary says where a word comes from, in the same
-   * sentence the read door says it in (`#taught`).
+   * @yaks/graph refuses an unknown component at admission too; this says it
+   * first, because an app's own words are its `vocab.json`, and the sentence
+   * that helps is where a word of your own comes from — the same sentence the
+   * read door says it in (`#taught`).
    */
   #teaching: Plugin = {
     name: 'yak/teach',

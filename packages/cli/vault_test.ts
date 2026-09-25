@@ -13,9 +13,11 @@ import {
   unsealed,
 } from '@yaks/secrets'
 import { loadVocab } from '@yaks/vocab'
+import { provisionalDoc } from '@yaks/effects'
 import { fileVault, vaultOf } from './vault.ts'
 
-let vocab = loadVocab([secretsDoc])
+// A value on its way to the vault wears @yaks/effects' `provisional` mark.
+let vocab = loadVocab([secretsDoc, provisionalDoc])
 
 Deno.test('the file vault is private files, one per secret, and follows no symlink', async () => {
   let dir = await Deno.makeTempDir()

@@ -96,6 +96,7 @@ export {
   echo,
   echoed,
   marks,
+  replicate,
   SENT,
 } from './mark.ts'
 export {
