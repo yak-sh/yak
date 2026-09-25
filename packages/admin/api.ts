@@ -22,7 +22,7 @@ import { type And, and, eq, ge, limit, want } from '@yaks/query'
 import { CallError } from '@yaks/tools'
 import { LINK } from '../../workers/yak/link.ts'
 import { PLATFORM_STORE } from '../../workers/yak/door.ts'
-import { PLATFORM } from '../../workers/yak/route.ts'
+import { PLATFORM, SLUG } from '../../workers/yak/route.ts'
 import { COOKIE } from '../../workers/yak/lib/token.ts'
 
 // The zone this client points at, so a probe can aim somewhere else.
@@ -34,8 +34,14 @@ export let apex = (path: string) => `https://${zone()}${path}`
 // a bare `<space>` is the space's front page, whose api lives at the
 // hostname's own root (workers/yak/apps.ts `front`).
 export let storeUrl = (at: string, path: string, host = zone()) => {
-  let [space, app] = at.split('/')
-  if (!space) throw new Error(`no space in "${at}" — try jeff/recipes`)
+  let parts = at.split('/')
+  if (parts.length > 2 || parts.some((part) => !SLUG.test(part))) {
+    throw new CallError(
+      'where',
+      `"${at}" is not a space or space/app — try jeff/recipes`,
+    )
+  }
+  let [space, app] = parts
   return `https://${space}.${host}${app ? `/${app}` : ''}/api${path}`
 }
 

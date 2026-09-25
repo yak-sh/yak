@@ -39,7 +39,14 @@ Deno.test('an app store answers under its space, the front page at the root', ()
     storeUrl('jeff', '/apply', 'yaks.app'),
     'https://jeff.yaks.app/api/apply',
   )
-  assertThrows(() => storeUrl('', '/query', 'yaks.app'))
+  for (let at of ['', '.email', 'jeff/.email', 'jeff/recipes/more']) {
+    let error = assertThrows(
+      () => storeUrl(at, '/query', 'yaks.app'),
+      CallError,
+      'not a space or space/app',
+    )
+    assertEquals(error.code, 'where')
+  }
 })
 
 Deno.test('a session says whose it is without the secret', () => {
