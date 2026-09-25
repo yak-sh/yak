@@ -20,6 +20,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { timed } from '@yaks/cli'
 import { type And, and, eq, ge, limit, want } from '@yaks/query'
 import { LINK } from '../../workers/yak/link.ts'
+import { PLATFORM_STORE } from '../../workers/yak/door.ts'
 import { PLATFORM } from '../../workers/yak/route.ts'
 import { COOKIE } from '../../workers/yak/lib/token.ts'
 
@@ -285,6 +286,10 @@ export let saidBy = (out: { content?: Content[]; isError?: boolean }) => {
 
 let bodyOf = async (r: Response) => {
   let text = await r.text()
+  return valueOf(text)
+}
+
+let valueOf = (text: string) => {
   try {
     return JSON.parse(text)
   } catch {
@@ -300,6 +305,16 @@ export let storeQuery = async (
   at: string,
   filters: string[],
 ) => {
+  // The directory is deliberately not served as an app (apps.ts `kernels`):
+  // its owner's public door is the graph tier, where naming yak/platform
+  // carries the same account to the store without exposing a kernel URL.
+  if (at == PLATFORM_STORE) {
+    let answer = await rpc(session)('tools/call', {
+      name: 'graph_query',
+      arguments: { app: at, query: filters.join('&') },
+    })
+    return valueOf(saidBy(answer))
+  }
   let url = `${storeUrl(at, '/query')}?${
     filters.map(encodeURIComponent).join('&')
   }`

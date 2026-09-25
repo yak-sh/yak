@@ -138,14 +138,14 @@ let kept = (at: ReturnType<typeof box>, address: string, value: string) => {
 
 // Every request this process makes, answered by `reply`.
 let answering = async <T>(
-  reply: (url: string) => Response,
+  reply: (url: string, init?: RequestInit) => Response,
   run: (hit: string[]) => Promise<T>,
 ): Promise<T> => {
   let hit: string[] = []
   let real = globalThis.fetch
-  globalThis.fetch = ((url: string | URL | Request) => {
+  globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
     hit.push(String(url))
-    return Promise.resolve(reply(String(url)))
+    return Promise.resolve(reply(String(url), init))
   }) as typeof fetch
   try {
     return await run(hit)
@@ -201,6 +201,58 @@ Deno.test('whoami with no spaces still asks once', async () => {
   let { hit, said } = await whoami([])
   assertEquals(hit, ['https://yaks.app/mcp'])
   assertStringIncludes(said, 'spaces    (none)')
+})
+
+Deno.test('the platform store is queried through its graph-tier door', async () => {
+  let at = box()
+  kept(at, ADMIN, 'admin.token')
+  let rows = [{
+    entity: { eid: 'broke' },
+    exception: { message: 'sift is not a function' },
+  }]
+  let called: unknown
+  await answering(
+    (url, init) => {
+      if (!url.endsWith('/mcp')) {
+        return new Response('<!doctype html><title>Nothing here</title>', {
+          status: 404,
+        })
+      }
+      called = JSON.parse(String(init?.body))
+      return new Response(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        result: {
+          content: [{ type: 'text', text: JSON.stringify(rows) }],
+        },
+      }))
+    },
+    async (hit) => {
+      try {
+        let answer = await ask('admin_query', {
+          admin: true,
+          where: 'yak/platform',
+          filters: ['.exception!'],
+        }, { at })
+        assertEquals(JSON.parse(body(answer)), rows)
+        assertEquals(hit, ['https://yaks.app/mcp'])
+        assertEquals(called, {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: {
+            name: 'graph_query',
+            arguments: {
+              app: 'yak/platform',
+              query: '.exception!',
+            },
+          },
+        })
+      } finally {
+        Deno.removeSync(at.dir, { recursive: true })
+      }
+    },
+  )
 })
 
 // A throwaway's code is a letter in this graph, and the session it buys is
