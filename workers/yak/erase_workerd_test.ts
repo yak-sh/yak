@@ -30,6 +30,7 @@ let space = (over: Partial<Space> = {}): Space => ({
   told: false,
   trashed: null,
   slugs: [],
+  tunnel: null,
   ...over,
 })
 
