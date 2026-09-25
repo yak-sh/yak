@@ -639,6 +639,13 @@ Deno.test('a property test says its component is present, so the planner drives 
     let { sql } = compile(parse(line), v)
     assert(sql.includes('("task"."entity" is not null and '), `${line}: ${sql}`)
   }
+  // A reference equality too, one target or a list: each arm of a delete's
+  // reverse-reference read is one, and unnarrowed it scanned every entity
+  // (T-38344).
+  for (let line of ['.note.about=n1', '.note.about=n1,n2']) {
+    let { sql } = compile(parse(line), v)
+    assert(sql.includes('("note"."entity" is not null and '), `${line}: ${sql}`)
+  }
   // An absence or a not-equals must still see the rows without the component.
   for (let line of ['.priority=', '.priority!=1']) {
     let { sql } = compile(parse(line), v)

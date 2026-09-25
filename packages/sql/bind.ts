@@ -384,22 +384,15 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   }
   let value = flat(p.value)
   let def = ctx.v.prop(hop.comp, hop.prop)
-  if (
-    op == '' && value && !value.includes('..') &&
+  let refs = op == '' && value && !value.includes('..') &&
     value.split(',').every(Boolean) && def?.category == 'ref' &&
-    !def.computed &&
-    !ctx.derived[`${hop.comp}.${hop.prop}`] && ctx.d.refCol
-  ) {
-    return raw(ctx.d.refEq(
-      ctx.d.refCol(hop.comp, hop.prop),
-      value.split(','),
-      false,
-    ))
-  }
-  if (op != EXISTS) {
+    !def.computed && !ctx.derived[`${hop.comp}.${hop.prop}`] && ctx.d.refCol
+  if (!refs && op != EXISTS) {
     opaque(read.tag, 'a filter on it', `${hop.comp}.${hop.prop}`)
   }
-  let frag = lowerScalar(ctx, read.expr, op, flat(p.value), read.tag)
+  let frag = refs
+    ? ctx.d.refEq(ctx.d.refCol!(hop.comp, hop.prop), value.split(','), false)
+    : lowerScalar(ctx, read.expr, op, flat(p.value), read.tag)
   if (!frag) {
     throw new Unsupported('this predicate', `.${hop.comp}.${hop.prop} ${p.op}`)
   }
@@ -408,11 +401,14 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   // (`guarded`) — and stating that lets the query planner drive from the
   // component's table instead of scanning the entity table through a LEFT JOIN:
   // `.board.query~=<id>` read every entity (243 ms) where the boards are 22
-  // rows (4 ms). path() applies the same narrowing. A test for absence (`=`
-  // with an empty operand) or a not-equals must still see the rows without the
-  // component. The one read left out is the one that returns a value for an
-  // entity without it (`worn: false`): `updated.at` falls back to
-  // `created.at`.
+  // rows (4 ms). A reference equality is one of these tests too: without it,
+  // each arm of a delete's reverse-reference read (@yaks/graph `pointing`)
+  // scanned the entity table, 6.5 s for one delete of 20 entities where the
+  // narrowed arms take 8 ms (T-38344). path() applies the same narrowing. A
+  // test for absence (`=` with an empty operand) or a not-equals must still see
+  // the rows without the component. The one read left out is the one that
+  // returns a value for an entity without it (`worn: false`): `updated.at`
+  // falls back to `created.at`.
   let needsComp = hop.comp != 'entity' &&
     ctx.derived[`${hop.comp}.${hop.prop}`]?.worn !== false && (
       op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
