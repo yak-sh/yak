@@ -130,13 +130,28 @@ let NUMERIC_TAGS: Tag[] = ['number', 'priority', 'bool']
 // A time column holds one format (an ISO timestamp), for which lexical order is
 // chronological. Restricting a comparison to the range a canonical timestamp
 // falls in excludes stored values that are not timestamps, which the JavaScript
-// matcher's Date.parse would drop as NaN.
+// matcher's Date.parse would drop as NaN. The unary `+` keeps that guard from
+// the index: SQLite seeks by one bound on each side, and the guard's would
+// displace the comparison's own, walking every stamp in the column.
 let LO = '0000-01-01T00:00:00.000Z'
 let HI = '9999-12-31T23:59:59.999Z'
 let stampish = (c: string, s: Frag): Frag => ({
-  sql: `(${c} between ? and ? and ${s.sql})`,
+  sql: `(+${c} between ? and ? and ${s.sql})`,
   params: [LO, HI, ...s.params],
 })
+
+// Any of several predicates. Equalities of one expression are one `in`, which
+// reads the expression once where `or` reads it once per value; a derived
+// property's expression is a whole subquery.
+let anyOf = (parts: Frag[]): Frag => {
+  let lhs = parts[0].sql.match(/^(.*) = \?$/s)?.[1]
+  let params = parts.flatMap((p) => p.params)
+  return parts.length == 1
+    ? parts[0]
+    : lhs && parts.every((p) => p.sql == parts[0].sql)
+    ? { sql: `(${lhs} in (${params.map(() => '?').join(', ')}))`, params }
+    : { sql: nest(parts.map((p) => p.sql), ' or '), params }
+}
 
 // A numeric comparison only where both sides are numeric: a numeric column
 // against a numeric operand. Anything else is refused rather than guessed at.
@@ -180,11 +195,8 @@ let eq = (c: string, value: string, tag: Tag): Frag | null => {
   }
   if (value.includes(',')) {
     let parts = value.split(',').map((p) => eq(c, p, tag))
-    if (parts.some((p) => !p)) return null
-    return {
-      sql: nest(parts.map((p) => p!.sql), ' or '),
-      params: parts.flatMap((p) => p!.params),
-    }
+    let frags = parts.filter((p) => p != null)
+    return frags.length == parts.length ? anyOf(frags) : null
   }
   if (NUMERIC_TAGS.includes(tag)) {
     return numeric(value) && String(Number(value)) === value
@@ -239,11 +251,6 @@ let both = (a: Frag, b: Frag): Frag => ({
   sql: `(${a.sql} and ${b.sql})`,
   params: [...a.params, ...b.params],
 })
-let anyOf = (parts: Frag[]): Frag =>
-  parts.length == 1 ? parts[0] : {
-    sql: nest(parts.map((p) => p.sql), ' or '),
-    params: parts.flatMap((p) => p.params),
-  }
 let edge = (c: string, op: string, s: Span): Frag => {
   let point = s.end <= s.start
   return op == '<'

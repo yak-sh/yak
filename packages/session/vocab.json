@@ -36,7 +36,8 @@
             "inflight",
             "completed",
             "interrupted"
-          ]
+          ],
+          "index": true
         }
       }
     },

@@ -211,76 +211,72 @@ export let sessionStatus = {
   ],
   deps: [] as string[],
   expr: (owner: string): string => {
-    let newest = `(select e.entity from "entry" e where e."session" = ${owner}
-      and not exists (select 1 from "notice" n where n.entity = e.entity)
-      order by e.seq desc limit 1)`
+    // The newest entry is the row this scalar subquery reads, `n`, so each
+    // branch looks at it without finding it again.
     let wears = (comp: string, and = '') =>
-      `exists (select 1 from "${comp}" k where k.entity = ${newest}${and})`
-    let seq = `(select e.seq from "entry" e where e.entity = ${newest})`
+      `exists (select 1 from "${comp}" k where k.entity = n.entity${and})`
     let allErrors = `(select count(*) from "entry" e2
-      where e2."session" = ${owner} and e2.seq > ${seq} - ${RETRIES}
+      where e2."session" = ${owner} and e2.seq > n.seq - ${RETRIES}
         and exists (select 1 from "error" x where x.entity = e2.entity)) = ${RETRIES}`
-    // The newest ask, and whether a call it made is still unanswered — the
-    // openCalls rule above, expressed in SQL.
-    let ask = `(select e.entity from "entry" e where e."session" = ${owner}
-      and exists (select 1 from "${ASK}" a where a.entity = e.entity)
-      order by e.seq desc limit 1)`
+    // The sessions with an attempt in flight: the few such attempts, found
+    // once for the whole statement by their index, where a test per session
+    // would scan all of its entries.
+    let inflight = `${owner} in (select e."session" from "attempt" a
+      join "entry" e on e.entity = a.entity where a.state = 'inflight')`
+    // A call no result answers — the openCalls rule above, expressed in SQL.
+    // Per session, so reading one costs its own entries, never every call.
     let open = `exists (select 1 from "${CALL}" c
       join "entry" e on e.entity = c.entity
       where e."session" = ${owner}
-        and not exists (
-          select 1 from "${RESULT}" r where r."call" = c.entity))`
-    let unread = `exists (select 1 from "entry" u
+        and not exists (select 1 from "${RESULT}" r where r."call" = c.entity))`
+    // The newest ask.
+    let ask = `(select e.entity from "entry" e where e."session" = ${owner}
+      and exists (select 1 from "${ASK}" a where a.entity = e.entity)
+      order by e.seq desc limit 1)`
+    // An input entry after `seq`: prose that is none of the other kinds.
+    let input = (seq: string) =>
+      `exists (select 1 from "entry" u
       join "content" uc on uc.entity = u.entity
-      where u."session" = ${owner}
-        and not exists (select 1 from "output" o where o.entity = u.entity)
-        and u.seq > (select boundary.seq from "ask" a
-          join "entry" boundary on boundary.entity = a."through"
-          where a.entity = ${ask})
-        and not exists (select 1 from "notice" n where n.entity = u.entity)
-        and not exists (select 1 from "result" r where r.entity = u.entity)
-        and not exists (select 1 from "error" r where r.entity = u.entity)
-        and not exists (select 1 from "exception" r where r.entity = u.entity)
-        and not exists (select 1 from "ask" r where r.entity = u.entity)
-        and not exists (select 1 from "call" r where r.entity = u.entity)
-        and not exists (select 1 from "stop" r where r.entity = u.entity))`
+      where u."session" = ${owner} and u.seq > ${seq}
+        and not exists (select 1 from "output" x where x.entity = u.entity)
+        and not exists (select 1 from "notice" x where x.entity = u.entity)
+        and not exists (select 1 from "result" x where x.entity = u.entity)
+        and not exists (select 1 from "error" x where x.entity = u.entity)
+        and not exists (select 1 from "exception" x where x.entity = u.entity)
+        and not exists (select 1 from "ask" x where x.entity = u.entity)
+        and not exists (select 1 from "call" x where x.entity = u.entity)
+        and not exists (select 1 from "stop" x where x.entity = u.entity))`
+    let unread = input(`(select boundary.seq from "ask" a
+      join "entry" boundary on boundary.entity = a."through"
+      where a.entity = ${ask})`)
     // `served` above: the transcript asked the daemon, by a request or a turn
     // it took.
     let served = `exists (select 1 from "entry" s where s."session" = ${owner}
-      and not exists (select 1 from "notice" n where n.entity = s.entity)
+      and not exists (select 1 from "notice" x where x.entity = s.entity)
       and (exists (select 1 from "${USING}" u where u.entity = s.entity)
         or exists (select 1 from "${ASK}" a where a.entity = s.entity)))`
     let owed = `case when ${served} then 'pending' else 'running' end`
-    return `case
-      when ${newest} is null then 'empty'
+    return `coalesce((select case
       when ${wears(STOP_ENTRY)} then 'stopped'
       when ${wears(EXCEPTION)} then 'failed'
-      when exists (select 1 from attempt a join entry e on e.entity = a.entity where e.session = ${owner} and a.state = 'inflight') then 'running'
+      when ${inflight} then 'running'
       when exists (select 1 from dispatch d where d.entity = ${owner} and d.state = 'queued') then 'queued'
-      when ${wears(ERROR, " and k.code = 'interrupted'")} then case
-        when exists (select 1 from entry u join content c on c.entity = u.entity
-          where u.session = ${owner} and u.seq > (select seq from entry where entity = ${ask})
-          and not exists (select 1 from output o where o.entity = u.entity)
-          and not exists (select 1 from notice n where n.entity = u.entity)
-          and not exists (select 1 from error n where n.entity = u.entity)
-          and not exists (select 1 from exception n where n.entity = u.entity)
-          and not exists (select 1 from result n where n.entity = u.entity)
-          and not exists (select 1 from ask n where n.entity = u.entity)
-          and not exists (select 1 from call n where n.entity = u.entity)
-          and not exists (select 1 from stop n where n.entity = u.entity))
+      when ${wears(ERROR, " and k.code = 'interrupted'")} then
+        case when ${input(`(select seq from "entry" where entity = ${ask})`)}
         then 'pending' else 'failed' end
-      when ${
-      wears(ERROR)
-    } then case when ${allErrors} then 'failed' else 'pending' end
+      when ${wears(ERROR)} then
+        case when ${allErrors} then 'failed' else 'pending' end
       when ${open} then 'running'
-      when ${
-      wears(ASK)
-    } and exists (select 1 from attempt a where a.entity = ${newest} and a.state = 'completed') then 'settled'
+      when ${wears(ASK)} and exists (select 1 from "attempt" a
+        where a.entity = n.entity and a.state = 'completed') then 'settled'
       when ${wears(ASK)} or ${wears(CALL)} then 'running'
       when ${wears(RESULT)} then ${owed}
       when ${wears(OUTPUT)} then
         case when ${unread} then 'pending' else 'settled' end
-      else ${owed} end`
+      else ${owed} end
+    from "entry" n where n."session" = ${owner}
+      and not exists (select 1 from "notice" x where x.entity = n.entity)
+    order by n.seq desc limit 1), 'empty')`
   },
 }
 
