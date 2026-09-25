@@ -74,17 +74,10 @@ Deno.test('wait says still running when its own timeout passes, and names nothin
 })
 
 Deno.test('shell uses bash and inherits the harness environment', async () => {
-  let g = tracked()
-  let key = 'YAKS_SHELL_ENV_TEST'
-  let before = Deno.env.get(key)
-  Deno.env.set(key, 'inherited')
-  try {
-    let said = await named(g).shell.run({
-      command: '[[ -n "$BASH_VERSION" ]] && printf "%s" "$YAKS_SHELL_ENV_TEST"',
-    })
-    assertMatch(said, /^process \S+ exited 0\ninherited$/)
-  } finally {
-    if (before == null) Deno.env.delete(key)
-    else Deno.env.set(key, before)
-  }
+  // A variable the environment already carries, so the test sets none of the
+  // state this process shares with every other test file.
+  let said = await named(tracked()).shell.run({
+    command: '[[ -n "$BASH_VERSION" ]] && printf "%s" "$PATH"',
+  })
+  assertEquals(said, `process ${eidIn(said)} exited 0\n${Deno.env.get('PATH')}`)
 })

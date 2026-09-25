@@ -35,8 +35,12 @@ export let remote = async (
     migrationPollMs?: number
     instructions?: string
     fake?: boolean | 'stuck' | 'held' | { delayMs: number; deltas?: number }
+    /** where settings such as `HARNESS_STREAM` are read (default this
+     * process's environment); resolved here, never cloned to the worker */
+    env?: (name: string) => string | undefined
   } = {},
 ) => {
+  let { env = Deno.env.get, ...config } = options
   let worker = new Worker(
     new URL('./backend_worker.ts', import.meta.url).href,
     { type: 'module' },
@@ -117,9 +121,9 @@ export let remote = async (
   let init: { names: Record<string, string> }
   try {
     init = await request('init', [{
-      ...options,
-      streaming: streamingEnabled(options),
-      web: options.web ?? Deno.env.get('HARNESS_WEB') != '0',
+      ...config,
+      streaming: streamingEnabled(config, env),
+      web: config.web ?? env('HARNESS_WEB') != '0',
     }]) as typeof init
   } catch (e) {
     link.close()
@@ -334,7 +338,7 @@ export let remote = async (
     entry: (b) =>
       tree(transcriptViews, b, 'Transcript', vocab, {
         names: init.names,
-        inlineImages: Deno.env.get('HARNESS_GRAPHICS') == 'kitty',
+        inlineImages: env('HARNESS_GRAPHICS') == 'kitty',
         image: (eid: string) => request('image', [eid]),
       }),
     line: (b, view = 'Line', ctx = {}) =>

@@ -64,6 +64,9 @@ export type Opts = ChildLimits & NotHarness & {
   streaming?: boolean
   /** Alias for streaming. If both are supplied, streaming takes precedence. */
   stream?: boolean
+  /** where settings such as `HARNESS_STREAM` are read (default this process's
+   * environment) */
+  env?: (name: string) => string | undefined
   /** Cooperating migrations must allow at least this polling interval. */
   migrationPollMs?: number
   checkpointMs?: number
@@ -120,17 +123,18 @@ export let local = (opts: Opts = {}): Local => {
       )
     }
   }
-  let h = opts.h ?? open()
+  let env = opts.env ?? Deno.env.get
+  let h = opts.h ?? open(dbPath(env))
   let detach = diagnostics().attach(h.g)
   let report = (error: unknown, where: FailureContext) =>
     diagnostics().report(error, where)
   let cwd = opts.cwd ?? Deno.cwd()
-  let root = opts.worktrees ?? worktrees()
+  let root = opts.worktrees ?? worktrees(env)
   let model = opts.model ??
     responses({
-      credential: credential(Deno.env.get, (p) => Deno.readTextFile(p)),
+      credential: credential(env, (p) => Deno.readTextFile(p)),
       images: configuredImages(h.artifacts, opts.images),
-      web: opts.web ?? Deno.env.get('HARNESS_WEB') != '0',
+      web: opts.web ?? env('HARNESS_WEB') != '0',
     })
   const signin = signins(h)
   const mcp = mcpTools(h, signin)
@@ -166,7 +170,7 @@ export let local = (opts: Opts = {}): Local => {
     tools: opts.tools ??
       harnessTools(h.g, { ...opts, worktrees: root, artifacts: h.artifacts }),
     remote: mcp.snapshot,
-    streaming: streamingEnabled(opts),
+    streaming: streamingEnabled(opts, env),
     opening: async () => ({
       home: await homeAt(h.g, cwd),
       files: await instructionFiles(cwd),
@@ -226,7 +230,7 @@ export let local = (opts: Opts = {}): Local => {
     }),
     entry: (b: Bundle) =>
       tree(transcriptViews, b, 'Transcript', h.vocab, {
-        inlineImages: Deno.env.get('HARNESS_GRAPHICS') == 'kitty',
+        inlineImages: env('HARNESS_GRAPHICS') == 'kitty',
         image: (eid: string) => l.image(eid),
         names: a.names,
         anchor: model.anchor,

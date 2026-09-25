@@ -26,8 +26,6 @@ Deno.test('worker retrieves registered image bytes for the lazy attachment rende
   const { ansiBackend } = await import('../tui/paint.ts')
   const { render } = await import('preact')
   let directory = await Deno.makeTempDir()
-  let before = Deno.env.get('HARNESS_GRAPHICS')
-  Deno.env.set('HARNESS_GRAPHICS', 'kitty')
   let h = open(directory + '/db')
   let bytes = new Uint8Array(24)
   bytes.set([137, 80, 78, 71, 13, 10, 26, 10])
@@ -40,6 +38,8 @@ Deno.test('worker retrieves registered image bytes for the lazy attachment rende
     db: directory + '/db',
     cwd: directory,
     fake: true,
+    // A kitty terminal, without setting the variable every test file shares.
+    env: (name) => name == 'HARNESS_GRAPHICS' ? 'kitty' : Deno.env.get(name),
   })
   let screen = install(), output: string[] = []
   onPaint(() => {})
@@ -66,8 +66,6 @@ Deno.test('worker retrieves registered image bytes for the lazy attachment rende
     render(null, screen.root as unknown as Element)
     screen.free()
     await r.close()
-    if (before == null) Deno.env.delete('HARNESS_GRAPHICS')
-    else Deno.env.set('HARNESS_GRAPHICS', before)
     await Deno.remove(directory, { recursive: true })
   }
 })

@@ -65,8 +65,10 @@ export let draftVault = async (directory: string): Promise<Vault> => {
 }
 
 /** Stable per-terminal identity, overridable for moving between terminals. */
-export let openDrafts = async () => {
-  let terminal = Deno.env.get('HARNESS_FRONTEND') ?? Deno.env.get('TMUX_PANE')
+export let openDrafts = async (
+  env: (name: string) => string | undefined = Deno.env.get,
+) => {
+  let terminal = env('HARNESS_FRONTEND') ?? env('TMUX_PANE')
   if (!terminal) {
     try {
       terminal = await Deno.readLink('/proc/self/fd/0')
@@ -74,7 +76,7 @@ export let openDrafts = async () => {
       terminal = 'default'
     }
   }
-  const database = dbPath()
+  const database = dbPath(env)
   const hash = await crypto.subtle.digest(
     'SHA-256',
     new TextEncoder().encode(resolve(database) + '\n' + terminal),
@@ -84,7 +86,7 @@ export let openDrafts = async () => {
     (n) => n.toString(16).padStart(2, '0'),
   ).join('')
   const directory = join(
-    Deno.env.get('HARNESS_DRAFT_DIR') ?? join(home(), 'drafts'),
+    env('HARNESS_DRAFT_DIR') ?? join(home(env), 'drafts'),
     id,
   )
   const vault = await draftVault(directory)

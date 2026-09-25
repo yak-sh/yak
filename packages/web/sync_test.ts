@@ -11,7 +11,6 @@ import './testing.ts'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { type Change } from './types.ts'
 
-Deno.env.set('DB_PATH', ':memory:')
 let uid = () => crypto.randomUUID()
 
 // A stubbed WebSocket so mutate() can route through deliver without a server —
