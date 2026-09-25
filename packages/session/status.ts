@@ -129,9 +129,13 @@ export let served = (entries: Bundle[]): boolean =>
   entries.some((b) => USING in b || ASK in b)
 
 /** The transcripts a runner is working on: the ones the session cap counts
- * and a restart wakes. An empty session has nothing to run, and a graph holds
- * thousands of them (every session a harness's hooks recorded). */
-export let live = '.session.status=pending,running,queued'
+ * and a restart wakes. That is a transcript the daemon answers ({@link served})
+ * with something outstanding. An empty session has nothing to run, and one run
+ * outside the graph reads `running` while its own runner owes the answer; a
+ * graph holds thousands of both (every session a harness's hooks recorded).
+ * Unlike `served`, a model chosen by a notice counts as asking. */
+export let live =
+  '.session.status=pending,running,queued (.entries.using|.entries.ask)'
 
 /** The status of a transcript, from its entries in any order. */
 export let statusOf = (entries: Bundle[]): TranscriptStatus => {
