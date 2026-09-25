@@ -23,7 +23,9 @@ import { meaning } from './meant.ts'
 
 /** The components a meant query's rows carry, or `null` for every one of
  * them. A component asserted absent (`!archived`) names nothing the answer
- * could carry, and a word the vocabulary does not know asks for nothing. */
+ * could carry, and a word the vocabulary does not know asks for nothing. A lone
+ * word asked for as present (`.module`) or requested (`?module`) is the
+ * component, even where another component has a property of that name. */
 export let named = (vocab: Vocab, query: Query): Set<string> | null => {
   let { clauses } = typeof query == 'string' ? parse(query) : query
   if (clauses.some((c) => c.kind == 'every')) return null
@@ -34,7 +36,8 @@ export let named = (vocab: Vocab, query: Query): Set<string> | null => {
       (c.value == null || (c.value.kind == 'scalar' && !c.value.raw))
     if (absent) continue
     try {
-      let comp = vocab.aim(c.path.join('.'), c.op == '!')[0]?.comp
+      let comp = vocab.aim(c.path.join('.'), c.op == '!' || c.op == '?')[0]
+        ?.comp
       if (comp && comp != 'entity') want.add(comp)
     } catch { /* a word this graph never declared asks for nothing */ }
   }
