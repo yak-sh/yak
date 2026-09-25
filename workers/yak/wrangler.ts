@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env=WRANGLER_CI_OVERRIDE_NETWORK_MODE_HOST --allow-run=npm,npx,git,pgrep,kill,docker
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env=WRANGLER_CI_OVERRIDE_NETWORK_MODE_HOST --allow-run=npm,npx,git,pgrep,kill,docker,env
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak`, their `-staging` variants and the probe (probe.ts) all
 // come through here, so the pinned version is written once and `node_modules`
@@ -154,6 +154,24 @@ export let command = (args: string[]) => {
   }
 }
 
+// yak-out (outbound/) is this Worker's dispatch namespace's outbound Worker:
+// it hands every fetch an app makes back to this Worker's `Outbound`
+// entrypoint. The two are one contract, so a deploy of this Worker deploys
+// yak-out first, from the same commit and to the same environment, and no
+// Worker is ever deployed by hand. Answers that deploy's arguments, or nothing
+// when these arguments are not a deploy or already name a config of their own.
+export let outbound = (argv: string[]): string[] | undefined =>
+  command(argv) != 'deploy' ||
+    argv.some((a) => /^(-c|--config)(=|$)/.test(a))
+    ? undefined
+    : [...argv, '-c', 'outbound/wrangler.toml', '--containers-rollout=none']
+
+// What Workers Builds pins to this Worker. Inherited by another Worker's
+// deploy, the first deploys it under this Worker's name and the second fails
+// its tag check, so yak-out's deploy runs without them (bin/build-yak drops
+// them for staging the same way).
+export let PINNED = ['WRANGLER_CI_OVERRIDE_NAME', 'WRANGLER_CI_MATCH_TAG']
+
 // Every process under `pid`, children before parents. Through pgrep(1):
 // reading /proc is something Deno grants only to --allow-all.
 export let descendants = (pid: number): number[] => {
@@ -183,20 +201,17 @@ if (import.meta.main) {
       await based({ wrangler: WRANGLER, dry: argv.includes('--dry-run') })
     }
   }
-  let [cmd, ...args] = WRANGLER
-  let child = new Deno.Command(cmd, {
-    args: [...args, ...argv],
-    cwd: dir,
-  }).spawn()
+  let child: Deno.ChildProcess | undefined
   // A signal to this door reaches wrangler too; otherwise a stopped `tail`
   // leaves wrangler streaming and its reader waiting on a pipe that never
   // closes (verify-deploy.ts hung ten minutes on a three-minute tail). The
   // child is npx, which does not pass a signal to the wrangler it spawned, so
   // the whole subtree is signalled, deepest first. Through kill(1), not
   // Deno.kill: that needs the unrestricted run permission, and this door
-  // runs with an allowlist (npm, npx, git, pgrep, kill, docker).
+  // runs with an allowlist (npm, npx, git, pgrep, kill, docker, env).
   for (let signal of ['SIGINT', 'SIGTERM'] as const) {
     Deno.addSignalListener(signal, () => {
+      if (!child) return
       let pids = [...descendants(child.pid), child.pid].map(String)
       new Deno.Command('kill', {
         args: ['-s', signal.slice(3), ...pids],
@@ -204,6 +219,19 @@ if (import.meta.main) {
       }).spawn()
     })
   }
-  let { code } = await child.status
-  Deno.exit(code)
+  // env(1) execs wrangler in its own place, so the pid signalled is the same.
+  let run = async (argv: string[], unpinned = false) => {
+    let [cmd, ...args] = unpinned
+      ? ['env', ...PINNED.flatMap((v) => ['-u', v]), ...WRANGLER]
+      : WRANGLER
+    child = new Deno.Command(cmd, { args: [...args, ...argv], cwd: dir })
+      .spawn()
+    return (await child.status).code
+  }
+  let out = outbound(argv)
+  if (out) {
+    let code = await run(out, true)
+    if (code) Deno.exit(code)
+  }
+  Deno.exit(await run(argv))
 }

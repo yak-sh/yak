@@ -1,8 +1,7 @@
 # yak-out (worker.ts): the kernel's dispatch namespace's outbound Worker, which
-# hands every fetch an app's worker makes back to the kernel. Workers Builds
-# deploys only the kernel, so a change here is deployed by hand:
-# `deno task deploy:yak-out` and `deno task deploy:yak-out-staging`, before the
-# kernel that names it.
+# hands every fetch an app's worker makes back to the kernel. The kernel's own
+# deploy deploys it first, to the same environment (../wrangler.ts `outbound`),
+# so a push to main ships both.
 name = "yak-out"
 main = "worker.ts"
 account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"

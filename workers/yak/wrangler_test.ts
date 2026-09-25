@@ -9,7 +9,7 @@
 import { assertEquals } from '@std/assert'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { aliased, command, members, stale } from './wrangler.ts'
+import { aliased, command, members, outbound, stale } from './wrangler.ts'
 
 let read = (path: string) =>
   Deno.readTextFileSync(new URL(path, import.meta.url))
@@ -26,6 +26,30 @@ Deno.test('wrangler: staging keeps deploy annotations with either flag position'
   ) assertEquals(command(args), 'deploy')
   assertEquals(command(['--env', 'staging', 'dev']), 'dev')
   assertEquals(command(['secret', 'put', 'deploy']), 'secret')
+})
+
+Deno.test('wrangler: a deploy of the kernel deploys yak-out first, and nothing else does', () => {
+  let out = ['-c', 'outbound/wrangler.toml', '--containers-rollout=none']
+  assertEquals(outbound(['deploy', '--message', 'm']), [
+    'deploy',
+    '--message',
+    'm',
+    ...out,
+  ])
+  assertEquals(outbound(['deploy', '--env', 'staging']), [
+    'deploy',
+    '--env',
+    'staging',
+    ...out,
+  ])
+  for (
+    let args of [
+      ['dev'],
+      ['--env', 'staging', 'dev'],
+      ['deploy', '-c', 'other.toml'],
+      ['deploy', '--config=other.toml'],
+    ]
+  ) assertEquals(outbound(args), undefined)
 })
 
 Deno.test('every @yaks/* the checker knows is the file the bundler gets', () => {

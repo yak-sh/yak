@@ -1,9 +1,10 @@
 #!/bin/sh
 # bin/build-yak — the gate, run by Cloudflare Workers Builds before it deploys
-# the kernel Worker (T-34165). The dashboard's build and deploy commands call
-# this file (`../../bin/build-yak` and `../../bin/build-yak deploy`);
-# what that line MEANS lives here, in the repo, where it is reviewed and
-# versioned like everything else.
+# the kernel Worker (T-34165), and yak-out ahead of it (workers/yak/wrangler.ts
+# `outbound`). The dashboard's build and deploy commands call this file
+# (`../../bin/build-yak` and `../../bin/build-yak deploy`); what that line
+# MEANS lives here, in the repo, where it is reviewed and versioned like
+# everything else.
 #
 # Workers Builds is the whole deploy: the Cloudflare GitHub App watches
 # yak-sh/yak, and on a push to main it clones, runs this, then runs
