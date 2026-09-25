@@ -375,6 +375,15 @@ let secretIn = (value: unknown): string | undefined => {
     : undefined
 }
 
+// Every secret a plugin's options name, wherever in them it sits.
+let bound = (value: unknown): string[] => {
+  let name = secretIn(value)
+  if (name) return [name]
+  return value && typeof value == 'object'
+    ? Object.values(value).flatMap(bound)
+    : []
+}
+
 // `{"secret": "NAME"}` anywhere in a plugin's options reads that secret at the
 // moment the value is accessed (@yaks/secrets `peek`): the value written
 // through the graph, the 1Password value it is bound to, or else the
@@ -454,11 +463,12 @@ export let compose = async (
 ): Promise<Served> => {
   let path = dbOf(config)
   let plugins = config.plugins ?? []
-  // Where this graph's secrets are kept (./vault.ts), and every
-  // value bound to 1Password read once now, so an option naming one has it
-  // the first time a factory looks.
+  // Where this graph's secrets are kept (./vault.ts), and each secret an
+  // option names read once now, so the option has it the first time a factory
+  // looks. Only those: a secret code reads at the moment it is used (`reveal`)
+  // is fetched then, and a command does not wait on 1Password for it.
   let vault = vaultOf(path)
-  await warm(vault)
+  await warm(vault, plugins.flatMap((plug) => bound(given(plug))))
   let got = await Promise.all(
     plugins.map(async (plug) =>
       [

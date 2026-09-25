@@ -42,7 +42,7 @@
 
 import type { Bundle, Comp, Eid, Hook, Match, Plugin, Tx } from '@yaks/graph'
 import { asked, isPromise, match, over, reads, then } from '@yaks/graph'
-import type { Clause } from '@yaks/query'
+import { type Clause, eq, list } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import {
   before,
@@ -398,11 +398,15 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
             })),
       )
     }
+    // Asked about the entities this batch touched and no others: a pattern
+    // over a table of every call ever made is an index lookup, not a scan of
+    // the table with the batch picked out of it afterwards.
+    let { filter } = one[0]
+    let about = eq('eid', list(...touched))
     return then(
-      tx.read(one[0].filter),
+      tx.read({ ...filter, clauses: [...filter.clauses, about] }),
       (rows) =>
         rows
-          .filter((b) => touched.has(b.entity.eid))
           .map((b) => ({
             kind: 'matched' as Kind,
             entity: b.entity,

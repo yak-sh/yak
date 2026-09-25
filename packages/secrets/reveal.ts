@@ -126,13 +126,23 @@ export let peek = (
   return hit?.value
 }
 
-/** Read every 1Password value a vault is bound to, so a `peek` that follows
- * answers with it. A host calls this once as it starts. */
-export let warm = (vault: Vault, s: Sources = {}): Promise<unknown> =>
-  Promise.resolve(vault.all()).then((all) =>
-    Promise.all(
-      all.flatMap(([, kept]) =>
-        kept.op && kept.value == null ? [fromOp(kept.op, s.op ?? opRead())] : []
-      ),
-    )
+/** Read the 1Password values of the named secrets, so a `peek` for one that
+ * follows answers with it. A host calls this once as it starts, with the names
+ * its configuration binds: a command waits on 1Password only for a secret it
+ * will read, never for every reference the vault happens to keep. */
+export let warm = (
+  vault: Vault,
+  names: string[],
+  s: Sources = {},
+): Promise<unknown> =>
+  Promise.all(
+    names.map((name) =>
+      then(
+        vault.read(secretEid(name)),
+        (kept) =>
+          kept?.op && kept.value == null
+            ? fromOp(kept.op, s.op ?? opRead())
+            : undefined,
+      )
+    ),
   )

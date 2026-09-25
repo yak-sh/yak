@@ -273,7 +273,7 @@ Deno.test('peek answers on the spot, with 1Password values warmed first', async 
   await g.apply([sealed('A', 'plain'), sealed('B', 'op://v/item/warm')])
   assertEquals(peek(vault, 'A', none), 'plain')
   assertEquals(peek(vault, 'C', { env: () => 'env' }), 'env')
-  await warm(vault, { op })
+  await warm(vault, ['B'], { op })
   assertEquals(peek(vault, 'B', { op }), 'warm')
 })
 

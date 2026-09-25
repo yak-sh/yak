@@ -638,7 +638,7 @@ export let loadVocab = (
         throw new Ambiguous(prop, own)
       }
       if (routes.has(prop)) return { comp: prop, prop: '' }
-      if (prop == EID && routes.has(SPINE)) return { comp: SPINE, prop: EID }
+      if (prop == EID) return { comp: SPINE, prop: EID }
       throw new Unknown(prop)
     },
     // A dotted path → the hops it names, one rule per step: a segment naming a
@@ -661,7 +661,7 @@ export let loadVocab = (
       let segs = path.split('.')
       if (facet && segs.length == 1) {
         let name = segs[0]
-        let owned = owners.has(name) || (name == EID && routes.has(SPINE))
+        let owned = owners.has(name) || name == EID
         if (routes.has(name) || !owned) return [{ comp: name, prop: '' }]
       }
       let out: Hop[] = []
