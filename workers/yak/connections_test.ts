@@ -610,7 +610,7 @@ Deno.test(
   },
 )
 
-slow(
+Deno.test(
   'the secret tools the directory listed keep a key the worker reads as itself, name it, and forget it',
   async () => {
     let s = await setup()
