@@ -273,13 +273,28 @@ Deno.test('a lock naming no session at all is a warn', async () => {
   assert(said.body.includes('has no session for'), said.body)
 })
 
-Deno.test('a transcript owed an answer for hours is a warn', async () => {
+Deno.test('a transcript owed a turn for hours is a warn', async () => {
+  let g = rigged(
+    line(1, ago(9), {
+      entity: { eid: 'l1' },
+      content: { body: 'go' },
+      using: {},
+    }),
+  )
+  let said = await checkup('session_check', g)
+  assertEquals(said.level, 'warn')
+  assert(said.body.includes('has been pending since'), said.body)
+})
+
+// Nothing asked the daemon, so the turn is a harness's to take, and one that
+// never came back is owed an answer, not a turn.
+Deno.test('a harness transcript owed an answer for hours is a warn', async () => {
   let g = rigged(
     line(1, ago(9), { entity: { eid: 'l1' }, content: { body: 'go' } }),
   )
   let said = await checkup('session_check', g)
   assertEquals(said.level, 'warn')
-  assert(said.body.includes('has been pending since'), said.body)
+  assert(said.body.includes('has been running since'), said.body)
 })
 
 Deno.test('a transcript owed an answer since a moment ago is working', async () => {

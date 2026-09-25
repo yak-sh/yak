@@ -215,9 +215,16 @@ Deno.test('completion answers an open delegation call; wait rejects foreign chil
       session: {},
       spawned: { parent: 'p', call: 'call' },
     },
+    // A child's request, as children.ts writes it: the prompt and its `using`.
+    {
+      entity: { eid: 'c:input' },
+      entry: { session: 'c', seq: 1 },
+      content: { body: 'go' },
+      using: {},
+    },
     {
       entity: { eid: 'out' },
-      entry: { session: 'c', seq: 1 },
+      entry: { session: 'c', seq: 2 },
       content: { body: 'final' },
       output: { source: 'ask' },
     },
@@ -242,7 +249,7 @@ Deno.test('completion answers an open delegation call; wait rejects foreign chil
   )
   h.g.apply([{
     entity: { eid: 'more' },
-    entry: { session: 'c', seq: 2 },
+    entry: { session: 'c', seq: 3 },
     content: { body: 'more' },
   }])
   assert(

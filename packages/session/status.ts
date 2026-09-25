@@ -22,6 +22,13 @@
 //                   else pending (the daemon retries)
 //   nothing       → empty
 //
+// `pending` is the daemon's to answer, and the daemon answers only a
+// transcript that asked it: one carrying a `using` (its request) or an `ask`
+// (a turn it took). One with neither is run outside the graph — a harness's
+// session its hooks record, a run from before the daemon — so its newest input
+// is owed by that runner: running, never pending, which the daemon would
+// answer with no model to ask.
+//
 // A turn lands as one batch — the ask, the prose, and the calls together — so
 // no reader ever sees the prose without the calls that came with it.
 //
@@ -116,6 +123,11 @@ export let openCalls = (entries: Bundle[]): Bundle[] => {
   return all.filter((b) => kindOf(b) == 'call' && !answered.has(b.entity.eid))
 }
 
+/** A transcript the daemon answers: one that asked it, by a request or a turn
+ * it took. */
+export let served = (entries: Bundle[]): boolean =>
+  entries.some((b) => USING in b || ASK in b)
+
 /** The status of a transcript, from its entries in any order. */
 export let statusOf = (entries: Bundle[]): TranscriptStatus => {
   let all = ordered(entries).filter((b) => !b.notice)
@@ -158,7 +170,7 @@ export let statusOf = (entries: Bundle[]): TranscriptStatus => {
     ) return 'pending'
     return 'settled'
   }
-  return 'pending'
+  return served(all) ? 'pending' : 'running'
 }
 
 /** The `using` in force at an entry: the newest one at or before it. */
@@ -232,6 +244,13 @@ export let sessionStatus = {
         and not exists (select 1 from "ask" r where r.entity = u.entity)
         and not exists (select 1 from "call" r where r.entity = u.entity)
         and not exists (select 1 from "stop" r where r.entity = u.entity))`
+    // `served` above: the transcript asked the daemon, by a request or a turn
+    // it took.
+    let served = `exists (select 1 from "entry" s where s."session" = ${owner}
+      and not exists (select 1 from "notice" n where n.entity = s.entity)
+      and (exists (select 1 from "${USING}" u where u.entity = s.entity)
+        or exists (select 1 from "${ASK}" a where a.entity = s.entity)))`
+    let owed = `case when ${served} then 'pending' else 'running' end`
     return `case
       when ${newest} is null then 'empty'
       when ${wears(STOP_ENTRY)} then 'stopped'
@@ -258,10 +277,10 @@ export let sessionStatus = {
       wears(ASK)
     } and exists (select 1 from attempt a where a.entity = ${newest} and a.state = 'completed') then 'settled'
       when ${wears(ASK)} or ${wears(CALL)} then 'running'
-      when ${wears(RESULT)} then 'pending'
+      when ${wears(RESULT)} then ${owed}
       when ${wears(OUTPUT)} then
         case when ${unread} then 'pending' else 'settled' end
-      else 'pending' end`
+      else ${owed} end`
   },
 }
 

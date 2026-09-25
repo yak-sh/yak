@@ -30,6 +30,9 @@ let entry = (n: number, kind: Record<string, unknown>): Bundle => ({
   ...kind,
 })
 let input = (n: number) => entry(n, { content: { body: 'hi' } })
+// The input that asks the daemon: prose with the model it wants.
+let request = (n: number) =>
+  entry(n, { content: { body: 'hi' }, using: { model: M } })
 let said = (n: number, source: string) =>
   entry(n, { content: { body: 'done' }, output: { source } })
 
@@ -97,7 +100,12 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     said(6, 'e5'),
   ], 'settled'],
   ['nothing', [], 'empty'],
-  ['an input', [input(1)], 'pending'],
+  ['a request', [request(1)], 'pending'],
+  // Nothing here asked the daemon: a harness runs it, and its hooks record
+  // what was typed and what came back. The answer is the harness's to give.
+  ['an input nobody here answers', [input(1)], 'running'],
+  ['a harness turn answered', [input(1), said(2, S)], 'settled'],
+  ['a harness turn asked again', [input(1), said(2, S), input(3)], 'running'],
   ['an ask open', [input(1), entry(2, { ask: { to: M } })], 'running'],
   ['a tool call open', [
     input(1),
@@ -153,7 +161,7 @@ Deno.test('statusOf reads the newest entry', () => {
 // answer, and settled only at the last output, which asked for nothing.
 Deno.test('a turn that uses a tool is running until its last output', () => {
   let turn = [
-    input(1),
+    request(1),
     entry(2, { ask: { to: M } }),
     said(3, 'e2'), // the model's prose, before its call
     entry(4, { call: { to: T, id: 'c1', source: 'e2' } }),
@@ -218,7 +226,7 @@ Deno.test('a status filter answers only the entities wearing session', () => {
   assertEquals(eids('.session.status=empty'), [S])
   // and a session that has entries leaves the empty answer, without the
   // model and the tool ever joining it
-  g.apply([input(1)], { trusted: true })
+  g.apply([request(1)], { trusted: true })
   assertEquals(eids('.session.status=empty'), [])
   assertEquals(eids('.session.status=pending'), [S])
   // `!over`, the way the harness asks for the sessions still going
