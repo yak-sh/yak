@@ -271,7 +271,9 @@ yak serve --config yak.json --port 0 # an arbitrary free one
 ```
 
 The port and interface come from the call's `port` and `hostname` arguments,
-then from the config's, then from `PORT` (8787).
+then from the config's, then from `PORT` (8787) and `HOSTNAME` (`127.0.0.1`).
+The server answers every request it is given, so it listens on this machine
+alone unless a config names a wider interface, such as `"hostname": "0.0.0.0"`.
 
 The call is the record of the server. The runner writes the call row and marks
 it `running` before the tool starts, and writes the result when the tool returns

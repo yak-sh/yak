@@ -129,7 +129,7 @@ config file.
 | `db`       | SQLite path or `:memory:`. Required unless `$DB_PATH` is set.                                    |
 | `plugins`  | Package specifiers, optionally paired with plugin-specific options.                              |
 | `port`     | Port the `serve` tool listens on; defaults to `@yaks/api`'s `PORT`.                              |
-| `hostname` | Network interface used by `serve`.                                                               |
+| `hostname` | Network interface used by `serve`; defaults to `@yaks/api`'s `HOSTNAME`, `127.0.0.1`.            |
 | `numbers`  | Enables short entity numbers. `{ "except": [...] }` excludes entities carrying named components. |
 | `adopt`    | Preserves incoming entity numbers instead of minting new ones. Intended for store imports.       |
 | `name`     | MCP server name; defaults to `yak`.                                                              |

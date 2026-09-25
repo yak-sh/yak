@@ -62,7 +62,7 @@ Deno.test('serve answers with the host handler until the host stops', async () =
   let port = free()
   let { host, told, stopping } = fake(port)
   let call = runs(host).serve(asked(), graph) as Promise<Bundle[]>
-  assertEquals(await said(`http://localhost:${port}`), 'ok')
+  assertEquals(await said(`http://127.0.0.1:${port}`), 'ok')
   // A process that is about to stay up finishes what a crash left claimed,
   // and takes the duties in their long-running form.
   assertEquals(told.driven, 1)
@@ -70,8 +70,8 @@ Deno.test('serve answers with the host handler until the host stops', async () =
   stopping.abort()
   let [answer] = await call
   let body = (answer.content as { body: string }).body
-  assert(body.includes('http://'), body)
-  assert(body.includes(String(port)), body)
+  // Named nowhere, the interface is this machine's own.
+  assert(body.includes(`http://127.0.0.1:${port}`), body)
 })
 
 Deno.test('a host that composed no handler has nothing to serve', async () => {
@@ -89,7 +89,6 @@ Deno.test('a host that composed no handler has nothing to serve', async () => {
 })
 
 Deno.test('the call names the port, over the one the config named', async () => {
-  assertEquals(PORT, 8787)
   let port = free()
   // The config names one port and the call another: the call wins.
   let { host, stopping } = fake(PORT)

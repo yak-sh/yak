@@ -38,6 +38,12 @@ import type { Handler } from './route.ts'
  * one. */
 export let PORT = 8787
 
+/** The interface `serve` binds when neither the call nor the config names
+ * one: this machine alone. A server that answers every request as the machine
+ * itself (@yaks/cli's `doorman`) is offered to a network only when a config
+ * says so. */
+export let HOSTNAME = '127.0.0.1'
+
 /** What this tool needs from the host that composed it: the request handler to
  * answer with, the runner whose interrupted calls a process that stays up
  * finishes, the duties it takes over while it is up, and the config
@@ -68,7 +74,7 @@ export let runs = (host: Serving): Runs => ({
     if (!handler) throw new Error('serve has no handler — compose @yaks/api')
     let args = argsOf(call)
     let port = Number(args.port ?? host.config.port ?? PORT)
-    let hostname = args.hostname ?? host.config.hostname
+    let hostname = String(args.hostname ?? host.config.hostname ?? HOSTNAME)
     // What a crash left behind, settled before this process takes new
     // requests: each process that died without closing is closed for, and
     // what is left claimed and unanswered is run. A one-shot command must not
@@ -87,7 +93,7 @@ export let runs = (host: Serving): Runs => ({
     let began = Date.now()
     let server = denoListen({
       port,
-      ...(typeof hostname == 'string' ? { hostname } : {}),
+      hostname,
       onListen: (addr) => {
         at = `http://${addr.hostname}:${addr.port}`
         // The one thing printed while the call is still running, because a

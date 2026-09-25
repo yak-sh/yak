@@ -38,7 +38,8 @@ export type Config = {
   plugins?: Plug[]
   /** what `yak serve` listens on (default @yaks/api's `PORT`) */
   port?: number
-  /** which interface it binds (default the runtime's own) */
+  /** which interface it binds (default @yaks/api's `HOSTNAME`, this machine
+   * alone; `0.0.0.0` offers it to every network the machine is on) */
   hostname?: string
   /** whether the store mints a short human-readable number beside each entity
    * id. Opt-IN: left out, no entity gets one, because a number exists for a
