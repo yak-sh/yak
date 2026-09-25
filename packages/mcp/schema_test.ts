@@ -13,7 +13,7 @@ import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv
 import { z } from 'zod'
 import { argsOf } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
-import { connect, shopGraph } from './harness.ts'
+import { connect, shopGraph } from './testing.ts'
 
 // graph_apply's published input schema — the write door as a client reads it.
 let writing = async () => {

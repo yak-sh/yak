@@ -5,7 +5,7 @@ import type { Watch } from '@yaks/effects'
 import { effects } from './effects.ts'
 import { TABLE } from './ddl.ts'
 import type { Driver } from './driver.ts'
-import { shelf, shop } from './harness.ts'
+import { shelf, shop } from './testing.ts'
 
 let now = { embedder: { via: 'hash' }, after: 0 } as const
 

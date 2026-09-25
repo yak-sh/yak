@@ -2,7 +2,7 @@
 import { archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
 import { driver } from '@yaks/durable-object'
-import { durable } from '../../packages/durable-object/harness.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
 import { backfill, type Param, storage } from '@yaks/sqlite'
 import { loadVocab } from '@yaks/vocab'
 import { gitDocs, platformDocs } from './vocab.ts'

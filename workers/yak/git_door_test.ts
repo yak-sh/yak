@@ -12,7 +12,7 @@ import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { gitPlugin } from './git.ts'
 import { ledger, mint } from './grants.ts'
-import { platform } from './harness.ts'
+import { platform } from './testing.ts'
 import type { Who } from './session.ts'
 import { pinned, pins, record, sha256 } from './versions.ts'
 

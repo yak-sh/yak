@@ -3,7 +3,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { blog, blogGraph, durableBlog } from './harness.ts'
+import { blog, blogGraph, durableBlog } from './testing.ts'
 import { type Options, runs } from './tools.ts'
 
 let checkup = async (g: Graph, vocab: Vocab, options: Options = {}) => {

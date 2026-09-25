@@ -6,7 +6,7 @@ import { fields } from './fields.ts'
 import { schema, TABLE } from './ddl.ts'
 import { sweep } from './sweep.ts'
 import { vectorOf } from './near.ts'
-import { embedder, shop, stocked } from './harness.ts'
+import { embedder, shop, stocked } from './testing.ts'
 
 Deno.test('the schema is idempotent — installing twice is a no-op', async () => {
   let db = await stocked()

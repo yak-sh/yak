@@ -3,7 +3,7 @@
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
-import { clubhouse } from './harness.ts'
+import { clubhouse } from './testing.ts'
 import type { Options } from './options.ts'
 import { reSubject, runs } from './tools.ts'
 

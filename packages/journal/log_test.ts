@@ -10,10 +10,10 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { effects } from '@yaks/effects'
 import { ddl, journal, log } from './log.ts'
-import { mem } from '../sqlite/harness.ts'
+import { mem } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'
 import { graph } from '@yaks/graph'
-import { NOW, sync, wiki, wikiGraph, wikiLog } from './harness.ts'
+import { NOW, sync, wiki, wikiGraph, wikiLog } from './testing.ts'
 
 let ada = { by: 'ada' }
 let bob = { by: 'bob', via: 'cli' }

@@ -10,7 +10,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
-import { teamGraph } from './harness.ts'
+import { teamGraph } from './testing.ts'
 
 // The project the tree hangs from, and a graph holding it.
 let rooted = async () => {

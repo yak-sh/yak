@@ -7,7 +7,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { Unauthorized } from '@yaks/api'
 import { mcp } from './mount.ts'
-import { comp, shopGraph } from './harness.ts'
+import { comp, shopGraph } from './testing.ts'
 
 let ada = { by: 'm1' }
 

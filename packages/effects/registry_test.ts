@@ -9,7 +9,7 @@ import type { Bundle, Tx } from '@yaks/graph'
 import { isPromise } from '@yaks/graph'
 import { effects, type Job } from './registry.ts'
 import type { Event } from './trace.ts'
-import { blog, blogGraph } from './harness.ts'
+import { blog, blogGraph } from './testing.ts'
 
 let sync = <T>(out: T | Promise<T>): T => {
   assert(!isPromise(out), 'apply() went async over a Map')

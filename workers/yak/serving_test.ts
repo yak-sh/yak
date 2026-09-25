@@ -20,7 +20,7 @@
 // asked the same way, and the stand-in is where a home app with a worker can
 // be stood up at all (apps.ts `served`, D-34197).
 // The runtime this Worker is written against — the HTML rewriter, a Durable
-// Object's state, the bucket, the Store namespace — is harness.ts's, shared
+// Object's state, the bucket, the Store namespace — is testing.ts's, shared
 // with builder_test.ts.
 import {
   assert,
@@ -37,7 +37,7 @@ import * as dirPart from './directory.ts'
 import { scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { added, asked } from './examples/shop/cart.js'
-import { analytics, dataset, platform as inMemory } from './harness.ts'
+import { analytics, dataset, platform as inMemory } from './testing.ts'
 import { emptied, trash, trashSpace } from './erase.ts'
 import { charged, delivered, merchant, signed, stripeKey } from './probe.ts'
 import * as sell from './sell.ts'

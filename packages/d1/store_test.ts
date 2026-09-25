@@ -7,9 +7,9 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { graph } from '@yaks/graph'
 import type { Bundle } from '@yaks/graph'
-import { counted, d1, shop, store } from './harness.ts'
+import { counted, d1, shop, store } from './testing.ts'
 import { storage } from './store.ts'
-import { kitchen, PROJECTED, PROJECTED_ROW, RECIPE } from '../sqlite/harness.ts'
+import { kitchen, PROJECTED, PROJECTED_ROW, RECIPE } from '../sqlite/testing.ts'
 
 let titles = (bs: Bundle[]) =>
   bs.map((b) => (b.doc as { title?: string })?.title).sort()

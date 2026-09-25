@@ -1,7 +1,7 @@
 import { assertEquals } from '@std/assert'
 import { detached } from '@yaks/graph'
 import { effects } from './mod.ts'
-import { blog, blogGraph } from './harness.ts'
+import { blog, blogGraph } from './testing.ts'
 import type { Event } from './mod.ts'
 
 let birth: Event = {

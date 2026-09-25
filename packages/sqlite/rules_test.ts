@@ -3,7 +3,7 @@
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { match } from '@yaks/graph'
-import { mem, shop } from './harness.ts'
+import { mem, shop } from './testing.ts'
 import { storage } from './mod.ts'
 import { overlay } from './overlay.ts'
 import { matched, statement } from './rules.ts'

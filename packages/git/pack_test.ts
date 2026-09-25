@@ -22,7 +22,7 @@ import {
   ROOT_OID,
   X,
   X_OID,
-} from './harness.ts'
+} from './testing.ts'
 
 let utf8 = new TextEncoder()
 let text = new TextDecoder()

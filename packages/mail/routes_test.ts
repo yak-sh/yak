@@ -2,7 +2,7 @@ import { assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { PATH, type Posted, routes } from './routes.ts'
 import type { Options } from './options.ts'
-import { clubhouse } from './harness.ts'
+import { clubhouse } from './testing.ts'
 
 let ana = 'p-ana'
 

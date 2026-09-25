@@ -4,7 +4,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { nearest, vectorOf } from './near.ts'
 import { TABLE } from './ddl.ts'
-import { embedder, stocked } from './harness.ts'
+import { embedder, stocked } from './testing.ts'
 
 let model = embedder.model
 let names = (db: Awaited<ReturnType<typeof stocked>>, of: string, n = 8) =>

@@ -24,7 +24,7 @@ import { spawning } from './effects.ts'
 import { adopting } from './service.ts'
 import { checkoutDoc } from '@yaks/git/vocab'
 import { checkoutOf, down, speaking } from './run.ts'
-import { asking, fake, tracked, until } from './harness.ts'
+import { asking, fake, tracked, until } from './testing.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? undefined) as Comp | undefined

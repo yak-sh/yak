@@ -1,4 +1,4 @@
-// Commits: the body git writes, and the id it takes. Constants: ./harness.ts.
+// Commits: the body git writes, and the id it takes. Constants: ./testing.ts.
 
 import { assertEquals } from '@std/assert'
 import { commitBody, signature } from './commit.ts'
@@ -12,7 +12,7 @@ import {
   ROOT_OID256,
   TWO_OID,
   TWO_OID256,
-} from './harness.ts'
+} from './testing.ts'
 
 let one = { tree: ROOT_OID, author: AUTHOR, committer: COMMITTER }
 let two = { at: 1757000060000 }

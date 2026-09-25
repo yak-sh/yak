@@ -8,7 +8,7 @@
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Storage } from '@yaks/graph'
-import { shop } from '../sqlite/harness.ts'
+import { shop } from '../sqlite/testing.ts'
 import { ram, type RamOpts, type Store } from './mod.ts'
 
 // The shop numbers: its entities are things a person points at by number, and

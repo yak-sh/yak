@@ -1,7 +1,7 @@
 // Closing a space (T-33166): the pure seams — what the ticket in the letter
 // is worth, what the page and the letter say a delete would destroy, and the
 // two spaces that may not be deleted at all — then what the act takes with it
-// outside the graph over harness.ts's stand-in (T-34371), and then the whole
+// outside the graph over testing.ts's stand-in (T-34371), and then the whole
 // act held in workerd: an agent that deletes nothing, a letter that does, and
 // a slug back in circulation with none of the last space's bytes or rows
 // behind it.
@@ -35,7 +35,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { App, Host, Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { ai, platform, sandboxes } from './harness.ts'
+import { ai, platform, sandboxes } from './testing.ts'
 import { boxOf, spending } from './sandbox.ts'
 import type { Who } from './session.ts'
 import { client, connector, kernel, letters, meta, seed } from './probe.ts'

@@ -24,7 +24,7 @@ import {
 import { directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
-import { platform } from './harness.ts'
+import { platform } from './testing.ts'
 import { remember } from './memory.ts'
 import { BUILDS, monthOf } from './meter.ts'
 import type { Who } from './session.ts'
@@ -270,7 +270,7 @@ Deno.test('a tool refusal is a line the model can correct', async () => {
 })
 
 // Neither tier has a model bound in a Deno test: both run on the binding, and
-// the stand-in has none unless a test scripts one (harness.ts `ai`).
+// the stand-in has none unless a test scripts one (testing.ts `ai`).
 Deno.test('no model is bound here, and either tier says so', async () => {
   let { env, space } = await seeded()
   for (let tier of [null, 'plus' as const]) {

@@ -6,7 +6,7 @@ import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { sessionDoc } from './comp.ts'
-import { ids, locked, pages, seed, store } from './harness.ts'
+import { ids, locked, pages, seed, store } from './testing.ts'
 import { hookSession, type Options, runs } from './tools.ts'
 
 let vocab = loadVocab([docDoc, taskDoc, sessionDoc], [idKeywords])

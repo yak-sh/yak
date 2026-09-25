@@ -3,7 +3,7 @@
 // many times the Worker waits for the network — and nothing in the type system
 // or the test suite notices when a hook, a phase or a plugin quietly adds
 // another wait. So the shapes of batch the platform actually runs are counted
-// here, against the counting stand-in (harness.ts `counting`), and held to a
+// here, against the counting stand-in (testing.ts `counting`), and held to a
 // number.
 //
 // The numbers only go down. This table works like bench/baseline.json: a case
@@ -74,8 +74,8 @@
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, graph, token } from '@yaks/graph'
 import { members } from '@yaks/member'
-import { club, ids } from '../member/harness.ts'
-import { counted, type Hops, shop } from './harness.ts'
+import { club, ids } from '../member/testing.ts'
+import { counted, type Hops, shop } from './testing.ts'
 
 /** The pinned round trips per apply. Only ever revised downward — see above. */
 let PINS: Record<string, number> = {

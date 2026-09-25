@@ -5,7 +5,7 @@ import type { Bundle, Storage } from '@yaks/graph'
 import { isPromise } from '@yaks/graph'
 import { Denied } from './deny.ts'
 import type { Floors } from './guard.ts'
-import { grant, guarded, ids, setMode, store } from './harness.ts'
+import { grant, guarded, ids, setMode, store } from './testing.ts'
 
 let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
   assert(!isPromise(out), 'apply() went async over a Map')

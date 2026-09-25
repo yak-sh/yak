@@ -5,7 +5,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph } from '@yaks/graph'
 import { edges } from '@yaks/edge'
 import { tasks } from '@yaks/task'
-import { store, team } from './harness.ts'
+import { store, team } from './testing.ts'
 import { runs } from './tools.ts'
 
 // One check run, as a host would call it: the prose it answered and the level

@@ -3,7 +3,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { echo, type Frame, type Trouble } from '@yaks/sync'
 import { client, type ClientOpts } from './client.ts'
-import { box, comp, fakeDb, pair } from './harness.ts'
+import { box, comp, fakeDb, pair } from './testing.ts'
 import { wireIdb } from './idb.ts'
 import { wireStash } from './wire-vault.ts'
 

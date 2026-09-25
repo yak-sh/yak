@@ -17,7 +17,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
-import { durable } from '../../packages/durable-object/harness.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
 import { ADMIN } from './lib/bots.ts'
 import { directory, META, over, storeName } from './directory.ts'
 import { Store } from './graph.ts'

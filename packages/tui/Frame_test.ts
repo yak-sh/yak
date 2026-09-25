@@ -2,7 +2,7 @@ import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { Frame } from './Frame.ts'
 import { Scroll } from './Scroll.ts'
-import { mount } from './harness.ts'
+import { mount } from './testing.ts'
 
 let panels = [
   { title: 'One', Render: () => h('div', null, 'first') },

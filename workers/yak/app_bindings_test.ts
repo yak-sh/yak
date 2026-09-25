@@ -8,7 +8,7 @@ import * as apps from './apps.ts'
 import { resourceName, SCOPES } from './bindings.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
-import { platform } from './harness.ts'
+import { platform } from './testing.ts'
 import { meta } from './meta.ts'
 import { call, type Ctx } from './tools.ts'
 

@@ -4,7 +4,7 @@
 import { assertEquals, assertInstanceOf } from '@std/assert'
 import { type Bundle, type Comp, Stale } from '@yaks/graph'
 import { due, wakeOf } from './due.ts'
-import { HOUR, store, T0, woken } from './harness.ts'
+import { HOUR, store, T0, woken } from './testing.ts'
 import { tick } from './tick.ts'
 
 let iso = (t: number) => new Date(t).toISOString()

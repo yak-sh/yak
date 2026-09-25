@@ -10,7 +10,7 @@ import type { Meter, Space, Tier } from './directory.ts'
 import { filesOf, full, fullFiles, read, sweep } from './usage.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
-import { platform } from './harness.ts'
+import { platform } from './testing.ts'
 import type { Namespace } from './door.ts'
 import {
   atCeiling,

@@ -3,7 +3,7 @@ import { sha256 } from '@yaks/graph'
 import { address, decode, encode } from './store.ts'
 import { sqliteBlobs } from './sqlite.ts'
 import { hydrate } from './hydrate.ts'
-import { blog, mem } from './harness.ts'
+import { blog, mem } from './testing.ts'
 import { blobSchema } from './sqlite.ts'
 
 Deno.test('an address is the SHA-256 of the text, and nothing else', () => {

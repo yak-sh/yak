@@ -60,7 +60,7 @@ Deno.test('worker frontend typing stays local after its subscribed view is ready
   const { h } = await import('preact')
   const { App } = await import('./app.ts')
   const { frontend } = await import('./frontend.ts')
-  const { mount } = await import('../tui/harness.ts')
+  const { mount } = await import('../tui/testing.ts')
   let dir = await Deno.makeTempDir()
   let r = await remote({ db: ':memory:', cwd: dir, fake: true })
   let local = frontend()

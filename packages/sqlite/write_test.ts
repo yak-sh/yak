@@ -6,7 +6,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Comp } from './bundle.ts'
 import type { Driver } from './driver.ts'
-import { mem, shop, store } from './harness.ts'
+import { mem, shop, store } from './testing.ts'
 import { storage } from './mod.ts'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'

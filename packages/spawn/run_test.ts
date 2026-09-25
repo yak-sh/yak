@@ -2,7 +2,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { claude } from './adapters.ts'
 import { asked, follow } from './run.ts'
-import { asking, FAKE, tracked } from './harness.ts'
+import { asking, FAKE, tracked } from './testing.ts'
 
 // A log file and the run that wrote it, both already over: `follow` then does
 // one pass and returns, which is the whole importer without a process.

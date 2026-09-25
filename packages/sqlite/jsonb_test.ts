@@ -5,7 +5,7 @@
 
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
-import { kitchen, mem, PROJECTED, PROJECTED_ROW, RECIPE } from './harness.ts'
+import { kitchen, mem, PROJECTED, PROJECTED_ROW, RECIPE } from './testing.ts'
 import { storage } from './mod.ts'
 import { overlay } from './overlay.ts'
 

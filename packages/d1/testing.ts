@@ -28,7 +28,7 @@
 
 import { open } from '@yaks/sqlite/db'
 import type { Vocab } from '@yaks/vocab'
-import { shop } from '../sqlite/harness.ts'
+import { shop } from '../sqlite/testing.ts'
 import type { D1Like, D1Result, D1Value, Row } from './d1.ts'
 import { storage, type Store } from './store.ts'
 

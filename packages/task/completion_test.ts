@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert'
 import type { Comp } from '@yaks/graph'
-import { team, teamGraph } from './harness.ts'
+import { team, teamGraph } from './testing.ts'
 
 Deno.test('completion uses by, never a second actor property', () => {
   assertEquals(team.prop('completed', 'actor'), undefined)

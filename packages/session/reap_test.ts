@@ -2,7 +2,7 @@ import { assertEquals } from '@std/assert'
 import { detached } from '@yaks/graph'
 import type { Bundle } from '@yaks/graph'
 import { reapLeases, staleLeases } from './reap.ts'
-import { ids, locked, lockOn, seed, store } from './harness.ts'
+import { ids, locked, lockOn, seed, store } from './testing.ts'
 
 let AT = '2026-03-04T05:06:07.000Z'
 let clock = { now: () => AT }

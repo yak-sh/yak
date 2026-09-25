@@ -6,7 +6,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { applied, Final, undo, undone } from './undo.ts'
-import { sync, wikiGraph } from './harness.ts'
+import { sync, wikiGraph } from './testing.ts'
 
 let fixture = () => {
   let { g, j } = wikiGraph()

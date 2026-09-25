@@ -3,7 +3,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { fields, pieces, resolved } from './fields.ts'
-import { shop } from './harness.ts'
+import { shop } from './testing.ts'
 
 Deno.test('every text property is embedded, across components', () => {
   assertEquals(fields(shop), [

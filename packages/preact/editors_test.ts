@@ -6,7 +6,7 @@ import { render as text } from '@yaks/text'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { render } from './mod.ts'
-import { mount } from './harness.ts'
+import { mount } from './testing.ts'
 
 let vocab = loadVocab({
   $defs: {

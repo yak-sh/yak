@@ -5,7 +5,7 @@ import type { Eid, Storage } from '@yaks/graph'
 import { isPromise } from '@yaks/graph'
 import { link } from './say.ts'
 import { walk } from './walk.ts'
-import { blog, blogGraph, store } from './harness.ts'
+import { blog, blogGraph, store } from './testing.ts'
 
 // p2 → p1, p3 → p2, p4 → p3 (each cites the one before), and p9 → p1 links.
 let chain = (): Storage => {

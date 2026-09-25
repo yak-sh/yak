@@ -5,7 +5,7 @@
 
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { box } from './harness.ts'
+import { box } from './testing.ts'
 import { backoff } from './socket.ts'
 import { asking, clean, echo, echoed } from './mark.ts'
 import { durableOf, inverse, local, outward, relayed, syncOf } from './tier.ts'

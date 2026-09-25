@@ -5,7 +5,7 @@ import { joining, posting, SPACE, wiped } from './build.ts'
 import type { Space } from './directory.ts'
 import type { Namespace } from './door.ts'
 import type { Env } from './env.ts'
-import { platform } from './harness.ts'
+import { platform } from './testing.ts'
 import { type Box, boxOf, destroyed, named, type Sandboxes } from './sandbox.ts'
 import { listen, rostered, told } from './stream.ts'
 

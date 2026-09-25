@@ -28,7 +28,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import * as apps from './apps.ts'
-import { platform, type Ran, sandboxes } from './harness.ts'
+import { platform, type Ran, sandboxes } from './testing.ts'
 import { GRANT, held, ledger } from './grants.ts'
 import {
   asleep,

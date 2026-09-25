@@ -4,10 +4,10 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { type Graph, graph } from '@yaks/graph'
-import { Database } from '@yaks/sqlite/db'
 import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
 import { loadVocab } from '@yaks/vocab'
-import { comp, shop as shopVocab, shopGraph } from './harness.ts'
+import { comp, shop as shopVocab, shopGraph } from './testing.ts'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
 
 // A sink that remembers, and hands over what it has heard since last asked.
@@ -176,12 +176,8 @@ let rated = (): Graph => {
       },
     },
   }])
-  let db = new Database(':memory:')
   let store = storage(
-    {
-      query: (sql, params) => db.prepare(sql).all(...params),
-      exec: (sql) => db.exec(sql),
-    },
+    open(':memory:'),
     vocab,
     {
       derived: {

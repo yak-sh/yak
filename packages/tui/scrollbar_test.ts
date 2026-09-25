@@ -3,7 +3,7 @@ import { h } from 'preact'
 import { scrollbar } from './scrollbar.ts'
 import { VirtualList, VirtualWindow } from './VirtualList.ts'
 import { Scroll } from './Scroll.ts'
-import { mount } from './harness.ts'
+import { mount } from './testing.ts'
 import { theme as sheet } from './theme.ts'
 
 Deno.test('scrollbar has one column, three thumb rows and dims only when snapped', () => {

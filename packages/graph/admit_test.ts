@@ -4,7 +4,7 @@
 import { assertEquals, assertThrows } from '@std/assert'
 import { admit, Refused } from './admit.ts'
 import { loadVocab } from '@yaks/vocab'
-import { books } from './harness.ts'
+import { books } from './testing.ts'
 
 let one = (b: Record<string, unknown>, trusted = false) =>
   admit([b as never], books, trusted)

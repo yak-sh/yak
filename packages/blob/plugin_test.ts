@@ -2,7 +2,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph'
 import { address } from './store.ts'
-import { blog, fixture } from './harness.ts'
+import { blog, fixture } from './testing.ts'
 import { blobs } from './plugin.ts'
 
 let post = (b: Bundle) => b.post as Record<string, unknown>
@@ -177,7 +177,7 @@ Deno.test('clearing a body clears the property, not the store', () => {
 
 Deno.test('a backend may address bodies by integer keys while echoing text', async () => {
   let { blobs } = await import('./plugin.ts')
-  let { blog } = await import('./harness.ts')
+  let { blog } = await import('./testing.ts')
   let { g, driver, blobs: store } = fixture()
   g.plugins.splice(
     0,
@@ -221,7 +221,7 @@ Deno.test('zero is a reusable backend reference, not a cache miss', () => {
 
 Deno.test('property selection leaves inline body properties alone', async () => {
   let { blobs } = await import('./plugin.ts')
-  let { blog } = await import('./harness.ts')
+  let { blog } = await import('./testing.ts')
   let { g, driver, blobs: store } = fixture()
   g.plugins.splice(0, g.plugins.length, blobs(blog, store, { props: [] }))
   let out = g.apply([{

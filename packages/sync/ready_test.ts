@@ -2,7 +2,7 @@
 
 import { assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { boxGraph, pair } from './harness.ts'
+import { boxGraph, pair } from './testing.ts'
 import { sync } from './sync.ts'
 
 Deno.test('ready waits for apply, and an old completion cannot confirm a new ask', async () => {

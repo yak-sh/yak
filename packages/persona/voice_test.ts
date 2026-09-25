@@ -3,7 +3,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { said } from './harness.ts'
+import { said } from './testing.ts'
 import { voice, type Worn } from './voice.ts'
 
 let says = (eid: string, num: number | null, title: string, body: string) =>

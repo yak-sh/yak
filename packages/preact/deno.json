@@ -15,6 +15,6 @@
     "example": "deno run --allow-read --allow-net=127.0.0.1 example/serve.ts"
   },
   "publish": {
-    "exclude": ["**/*_test.ts", "harness.ts", "example/"]
+    "exclude": ["**/*_test.ts", "testing.ts", "example/"]
   }
 }

@@ -4,7 +4,7 @@
 import { assertEquals } from '@std/assert'
 import { link } from '@yaks/edge'
 import { done, gated, openDeps } from './deps.ts'
-import { teamGraph } from './harness.ts'
+import { teamGraph } from './testing.ts'
 
 Deno.test('gated reads the blocked facet, and nothing else', () => {
   assertEquals(gated({ entity: { eid: 't' }, task: {} }), false)

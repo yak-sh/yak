@@ -9,7 +9,7 @@ import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import { Refused } from './admit.ts'
 import { identityEid } from './identity.ts'
-import { comp, memory } from './harness.ts'
+import { comp, memory } from './testing.ts'
 
 let doc: VocabDoc = {
   $defs: {

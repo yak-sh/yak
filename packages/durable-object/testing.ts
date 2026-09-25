@@ -24,7 +24,7 @@
 import '../sqlite/sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import type { Vocab } from '@yaks/vocab'
-import { shop } from '../sqlite/harness.ts'
+import { shop } from '../sqlite/testing.ts'
 import { type DurableStorage, prohibited, type SqlValue } from './sql.ts'
 import { storage, type Store } from './store.ts'
 

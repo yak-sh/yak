@@ -2,7 +2,7 @@ import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import type { Key } from './input.ts'
 import { Scroll, scrolled } from './Scroll.ts'
-import { mount } from './harness.ts'
+import { mount } from './testing.ts'
 
 let v = { total: 100, height: 10 }
 

@@ -13,7 +13,7 @@
 import { IDBFactory } from 'fake-indexeddb'
 import type { Bundle } from '@yaks/graph'
 import type { Connect, Trouble } from '@yaks/sync'
-import { box, type Fake, pair, type Server } from '../sync/harness.ts'
+import { box, type Fake, pair, type Server } from '../sync/testing.ts'
 import { type Client, client, type ClientOpts } from './client.ts'
 import { idb } from './idb.ts'
 import type { Vault } from './vault.ts'
@@ -25,7 +25,7 @@ export {
   pair,
   type Server,
   server,
-} from '../sync/harness.ts'
+} from '../sync/testing.ts'
 
 /** A client under test: what {@link client} returned, plus what a test needs
  * to drive its connection to the server. */

@@ -3,7 +3,7 @@
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { chosen, embedderOf, ready } from './options.ts'
-import { shop } from './harness.ts'
+import { shop } from './testing.ts'
 
 Deno.test('the offline embedder is named like any other', () => {
   assertEquals(

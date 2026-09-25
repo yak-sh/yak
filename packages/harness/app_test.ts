@@ -3,13 +3,13 @@ import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Model } from '@yaks/model'
-import { mount } from '../tui/harness.ts'
+import { mount } from '../tui/testing.ts'
 import { App, changes } from './app.ts'
 import { panels, type UIAgent } from './panels.ts'
 import { local } from './local.ts'
 import { open } from './store.ts'
 import { repo, scratchRepo } from './testing.ts'
-import { until } from '../process/harness.ts'
+import { until } from '../process/testing.ts'
 
 let settle = async () => {
   for (let i = 0; i < 100; i++) await Promise.resolve()

@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 import { assertEquals, assertThrows } from '@std/assert'
-import { durable } from './harness.ts'
+import { durable } from './testing.ts'
 
 Deno.test('statement reuse resets rows and bindings, including after a failed step', () => {
   using d = durable()

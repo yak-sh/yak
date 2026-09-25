@@ -13,7 +13,7 @@ import {
   render,
   type Subscribe,
 } from './mod.ts'
-import { flush, mount } from './harness.ts'
+import { flush, mount } from './testing.ts'
 
 let vocab = loadVocab([{
   $defs: {

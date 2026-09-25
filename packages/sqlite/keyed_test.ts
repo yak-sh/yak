@@ -1,7 +1,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { BindOpts } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
-import { mem, seed, shop } from './harness.ts'
+import { mem, seed, shop } from './testing.ts'
 import { get, storage } from './mod.ts'
 
 Deno.test('transaction keyed gather shares whole-set projections, observes writes and rollback', () => {

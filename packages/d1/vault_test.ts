@@ -18,7 +18,7 @@ import {
   type Vault,
 } from '@yaks/secrets'
 import { loadVocab } from '@yaks/vocab'
-import { d1 } from './harness.ts'
+import { d1 } from './testing.ts'
 import { d1Vault, transient } from './vault.ts'
 
 let vocab = loadVocab([secretsDoc])

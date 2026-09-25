@@ -4,7 +4,7 @@
 import { assertEquals } from '@std/assert'
 import type { Storage } from '@yaks/graph'
 import { policy } from './policy.ts'
-import { grant, ids, setMode, store } from './harness.ts'
+import { grant, ids, setMode, store } from './testing.ts'
 
 let may = (s: Storage) => policy(s, { space: ids.club })
 

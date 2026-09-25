@@ -1,6 +1,6 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { durable } from '../../packages/durable-object/harness.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 import { Store } from './graph.ts'
 

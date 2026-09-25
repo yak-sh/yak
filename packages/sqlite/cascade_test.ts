@@ -22,7 +22,7 @@ import { ARMS, doomSql, looseSql, narrow } from '@yaks/sql'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { mem } from './harness.ts'
+import { mem } from './testing.ts'
 import { storage, type Store } from './mod.ts'
 
 let doc: VocabDoc = {

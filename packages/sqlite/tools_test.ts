@@ -7,7 +7,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import type { Driver } from './driver.ts'
-import { mem } from './harness.ts'
+import { mem } from './testing.ts'
 import { storage } from './mod.ts'
 import { runs } from './tools.ts'
 

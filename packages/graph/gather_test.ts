@@ -8,7 +8,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Plugin, Storage, Tx } from './mod.ts'
 import { about, graph } from './mod.ts'
-import { books, memory } from './harness.ts'
+import { books, memory } from './testing.ts'
 
 // The same storage, with every read door counted. A transaction's calls count
 // too — they are what `apply()` makes.

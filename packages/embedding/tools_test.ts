@@ -4,7 +4,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Driver } from './driver.ts'
-import { mem, shelf, stocked } from './harness.ts'
+import { mem, shelf, stocked } from './testing.ts'
 import { TABLE } from './ddl.ts'
 import { clean } from './mark.ts'
 import { type Options, runs } from './tools.ts'

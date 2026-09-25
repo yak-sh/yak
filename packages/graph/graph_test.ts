@@ -11,7 +11,7 @@ import type { Plugin } from './plugin.ts'
 import { Stale, token } from './guard.ts'
 import { Refused } from './admit.ts'
 import { isPromise } from './pipe.ts'
-import { books, comp, isDead, memory, slow } from './harness.ts'
+import { books, comp, isDead, memory, slow } from './testing.ts'
 
 let g = (plugins: Plugin[] = []) =>
   graph({ storage: memory(), vocab: books, plugins })

@@ -10,7 +10,7 @@ import { schema } from './ddl.ts'
 import { open } from './db.ts'
 import { storage } from './mod.ts'
 import type { Driver } from './driver.ts'
-import { mem, shop } from './harness.ts'
+import { mem, shop } from './testing.ts'
 
 let all = schema(shop).join('\n')
 

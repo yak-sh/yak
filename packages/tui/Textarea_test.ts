@@ -10,7 +10,7 @@ import {
   visualSpot,
 } from './Textarea.ts'
 import { Scroll } from './Scroll.ts'
-import { mount } from './harness.ts'
+import { mount } from './testing.ts'
 
 // Bytes typed at the box → the text and cursor they leave behind. `|` marks
 // where the cursor lands, so a row reads like the screen does.

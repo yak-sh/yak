@@ -4,7 +4,7 @@
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { memo, sync } from '@yaks/mirror'
-import { link, memory, voiced, world } from './harness.ts'
+import { link, memory, voiced, world } from './testing.ts'
 import { personaFiles, personaMirror } from './files.ts'
 
 // A project checked out at `root`, whose common persona n1 carries m1, and a

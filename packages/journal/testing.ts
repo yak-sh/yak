@@ -11,7 +11,7 @@
 
 import { type Graph, graph, isPromise, type Options } from '@yaks/graph'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { mem } from '../sqlite/harness.ts'
+import { mem } from '../sqlite/testing.ts'
 import { type Driver, storage } from '../sqlite/mod.ts'
 import { ddl, journal, type Log, log } from './log.ts'
 

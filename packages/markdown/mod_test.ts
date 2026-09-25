@@ -1,5 +1,5 @@
 import { h } from 'preact'
-import { mount } from '../preact/harness.ts'
+import { mount } from '../preact/testing.ts'
 import { assert, assertEquals } from '@std/assert'
 import { headings, Markdown, parse, render, safeHref } from './mod.ts'
 import type { H } from '@yaks/render'

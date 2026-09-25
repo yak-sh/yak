@@ -1,7 +1,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { VirtualList, VirtualWindow } from './VirtualList.ts'
 import { h } from 'preact'
-import { mount } from './harness.ts'
+import { mount } from './testing.ts'
 
 let items = (n: number) =>
   Array.from({ length: n }, (_, i) => ({ id: String(i), text: String(i) }))

@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
-import { ids, locked, seed, store } from './harness.ts'
+import { ids, locked, seed, store } from './testing.ts'
 import { QUIET, turnsOf, typedIn } from './past.ts'
 import { backfill } from './service.ts'
 

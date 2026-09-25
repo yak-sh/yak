@@ -10,7 +10,7 @@ import { detached, isPromise } from '@yaks/graph'
 import { effects } from './registry.ts'
 import { EFFECT, ledger } from './durable.ts'
 import { Elsewhere } from './lease.ts'
-import { blogGraph, durableBlog } from './harness.ts'
+import { blogGraph, durableBlog } from './testing.ts'
 
 let sync = <T>(out: T | Promise<T>): T => {
   assert(!isPromise(out), 'apply() went async over a Map')

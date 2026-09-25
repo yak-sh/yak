@@ -1,4 +1,4 @@
-// The deploy history as A repository, held end to end over harness.ts's
+// The deploy history as A repository, held end to end over testing.ts's
 // stand-in: a real directory, a real object store beside it, and real bytes in
 // the bucket. What is pinned is the four promises a clone depends on — a deploy
 // makes one commit, its tree is the manifest, the next deploy follows the last
@@ -17,7 +17,7 @@ import type { App, Space } from './directory.ts'
 import { GIT_STORE, storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { backfilled, BODY, held, MAIN, refAt, refEid } from './gitobj.ts'
-import { platform } from './harness.ts'
+import { platform } from './testing.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import type { Who } from './session.ts'
 import { pins, record, sha256 } from './versions.ts'

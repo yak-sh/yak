@@ -8,7 +8,7 @@ import { isPromise } from '@yaks/graph'
 import { keyEid } from './eid.ts'
 import { keyed, unkeyed } from './say.ts'
 import { held } from './resolve.ts'
-import { libraryGraph } from './harness.ts'
+import { libraryGraph } from './testing.ts'
 
 let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
   assert(!isPromise(out), 'apply() went async over an embedded database')

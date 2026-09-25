@@ -3,7 +3,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Graph, isPromise } from '@yaks/graph'
-import { held, link, memory, said, thin, voiced, world } from './harness.ts'
+import { held, link, memory, said, thin, voiced, world } from './testing.ts'
 import { wear } from './worn.ts'
 import type { Worn } from './voice.ts'
 

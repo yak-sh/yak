@@ -2,7 +2,7 @@
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { link, memory, voiced, world } from './harness.ts'
+import { link, memory, voiced, world } from './testing.ts'
 import { runs } from './tools.ts'
 
 let asked = (g: Graph, args: Record<string, unknown>) =>

@@ -41,7 +41,7 @@ the shape in its own types rather than importing @yaks/graph's `Bundle`, because
 one direction. A @yaks/graph bundle passes wherever this type is asked for.
 
 The query reference below uses the repository's bookshop fixture in
-[`harness.ts`](./harness.ts): two authors (`a1`, `a2`), four books (`b1`–`b4`),
+[`testing.ts`](./testing.ts): two authors (`a1`, `a2`), four books (`b1`–`b4`),
 three reviews (`r1`–`r3`), a member, a plain document and one deleted review.
 Authors precede books in the array, so `b1` has entity number 3. This fixture is
 not part of the package's public exports.

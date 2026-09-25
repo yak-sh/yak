@@ -4,7 +4,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { fields, indexName } from './fields.ts'
 import { heal, schema } from './ddl.ts'
 import { find } from './search.ts'
-import { shelf, shop, stashed } from './harness.ts'
+import { shelf, shop, stashed } from './testing.ts'
 
 let all = schema(fields(shop)).join('\n')
 let away = schema(fields(shop), stashed).join('\n')

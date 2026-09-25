@@ -5,7 +5,7 @@ import { render } from '@yaks/preact'
 import { vocab } from './store.ts'
 import type { Bundle, Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { mount } from '../tui/harness.ts'
+import { mount } from '../tui/testing.ts'
 import { transcriptViews } from './transcript.ts'
 
 Deno.test('transcript dims sequence and tool prose and colors each entry kind', async () => {

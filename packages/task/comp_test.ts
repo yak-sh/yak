@@ -5,7 +5,7 @@ import { assert, assertEquals } from '@std/assert'
 import { relations } from '@yaks/edge'
 import { CONTAINS, REQUIRES } from './comp.ts'
 import { statuses } from './words.ts'
-import { team } from './harness.ts'
+import { team } from './testing.ts'
 
 Deno.test('the components this package ships', () => {
   for (

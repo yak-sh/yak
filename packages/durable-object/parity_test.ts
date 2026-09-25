@@ -7,8 +7,8 @@
 // storage adapter.
 
 import { parity, rig } from '../sqlite/parity.ts'
-import { store as reference } from '../sqlite/harness.ts'
-import { store } from './harness.ts'
+import { store as reference } from '../sqlite/testing.ts'
+import { store } from './testing.ts'
 
 Deno.test('a durable-object graph and a sqlite graph agree, batch for batch', () => {
   parity(rig(store()), rig(reference()))

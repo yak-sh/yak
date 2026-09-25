@@ -5,7 +5,7 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { Refused } from '@yaks/graph'
 import { unroutable } from './guard.ts'
 import { MARKS } from '@yaks/task'
-import { team, teamGraph } from './harness.ts'
+import { team, teamGraph } from './testing.ts'
 
 let board = (query: string) => [{
   entity: { eid: 'b1' },

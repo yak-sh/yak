@@ -10,7 +10,7 @@ import { type Bundle, graph, who } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools'
 import { ram } from '@yaks/ram'
-import { comp, connect, result, shopGraph, text } from './harness.ts'
+import { comp, connect, result, shopGraph, text } from './testing.ts'
 import { roster } from './server.ts'
 import { rosterLine, rosterVersion } from './roster.ts'
 

@@ -2,7 +2,7 @@ import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
-import { mem } from './harness.ts'
+import { mem } from './testing.ts'
 import { mintSql, storage } from './mod.ts'
 
 let vocab = loadVocab([{

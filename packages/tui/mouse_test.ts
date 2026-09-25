@@ -5,7 +5,7 @@ import { TElement, TText } from './dom.ts'
 import { decode, feed, type Mouse } from './input.ts'
 import { hit, routeMouse } from './mouse.ts'
 import { ansiBackend } from './paint.ts'
-import { mount } from './harness.ts'
+import { mount } from './testing.ts'
 import { Scroll } from './Scroll.ts'
 
 let wheel = (x = 0, y = 0): Mouse => ({

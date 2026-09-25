@@ -7,7 +7,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
-import { NOW, sync, wikiGraph } from './harness.ts'
+import { NOW, sync, wikiGraph } from './testing.ts'
 import { journalDoc } from './vocab.ts'
 import { runs } from './tools.ts'
 

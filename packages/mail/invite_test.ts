@@ -4,7 +4,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
-import { clubhouse, noon } from './harness.ts'
+import { clubhouse, noon } from './testing.ts'
 import { invited } from './invite.ts'
 
 let club = 'sp-club'

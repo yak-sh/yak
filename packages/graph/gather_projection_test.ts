@@ -10,7 +10,7 @@ import {
   token,
   type Tx,
 } from './mod.ts'
-import { books, comp, memory } from './harness.ts'
+import { books, comp, memory } from './testing.ts'
 
 // The optional projection deliberately returns only requested facets, even
 // though this test's backing map has whole rows. Count adapter crossings.

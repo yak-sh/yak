@@ -112,7 +112,7 @@ Deno.test('elapsed tolerates unknown clocks and does not display negative durati
 
 Deno.test('runtime panel reads only while visible; navigation and feedback stay local', async () => {
   const { h: node } = await import('preact')
-  const { mount } = await import('../tui/harness.ts')
+  const { mount } = await import('../tui/testing.ts')
   const { frontend } = await import('./frontend.ts')
   const { RuntimePanel } = await import('./RuntimePanel.ts')
   const { Keyboard } = await import('./keyboard.ts')

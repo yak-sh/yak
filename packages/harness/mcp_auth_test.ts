@@ -1,7 +1,7 @@
 import { open } from './store.ts'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
-import { mount } from '../tui/harness.ts'
+import { mount } from '../tui/testing.ts'
 import { MCPAuthPanel } from './MCPAuthPanel.ts'
 import { frontend } from './frontend.ts'
 import { authorizedMCP } from './mcp_auth.ts'

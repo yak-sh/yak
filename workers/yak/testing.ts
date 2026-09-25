@@ -14,7 +14,7 @@
 // the directory, the tools, the serving door — is the kernel's own code,
 // called directly.
 import type { Wire } from '@yaks/durable-object'
-import { durable } from '../../packages/durable-object/harness.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
 import { Builder } from './build.ts'
 import type { Env } from './env.ts'
 import { Store } from './graph.ts'

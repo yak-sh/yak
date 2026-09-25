@@ -2,7 +2,7 @@
 // commit's first failure is built once more, and nothing else is.
 import { assertEquals, assertInstanceOf } from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
-import { durable } from '../../packages/durable-object/harness.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
 import { broke, BuildFailed, builds, type Built, rebuild } from './builds.ts'
 import type { Env } from './env.ts'
 import { type Door, PLATFORM_STORE } from './door.ts'

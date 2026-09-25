@@ -28,7 +28,7 @@
 //   4. `Agent extends DurableObject` from `cloudflare:workers`, which nothing
 //      outside workerd can construct: every test here would become a
 //      `wrangler dev` boot, where the object below runs in the same in-memory
-//      stand-in the Store does (harness.ts) at a millisecond apiece.
+//      stand-in the Store does (testing.ts) at a millisecond apiece.
 //
 // What it would have replaced is the forty lines under `#accept` and
 // `#frames`. The SDK is the right answer the day our pages take a build step —

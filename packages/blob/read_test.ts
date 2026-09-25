@@ -3,7 +3,7 @@
 import { assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
-import { mem } from './harness.ts'
+import { mem } from './testing.ts'
 import { blobKeywords } from './keywords.ts'
 import { blobRead, blobSchema } from './sqlite.ts'
 

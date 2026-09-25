@@ -6,7 +6,7 @@ import { assert, assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import type { Driver } from './driver.ts'
 import { adopt, fields, find, heal, schema, type Text } from './mod.ts'
-import { mem, shelf, shop } from './harness.ts'
+import { mem, shelf, shop } from './testing.ts'
 
 // A vocabulary shaped like a mailbox: a document whose body is filed under an
 // address, a log entry whose body is inline, and a letter's envelope.

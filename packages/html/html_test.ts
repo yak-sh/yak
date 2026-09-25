@@ -8,7 +8,7 @@ import { entity } from '@yaks/preact'
 import { define } from '@yaks/render'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
-import { mount } from '../preact/harness.ts'
+import { mount } from '../preact/testing.ts'
 import { render } from './mod.ts'
 
 let vocab = loadVocab([{

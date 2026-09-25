@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
-import { counter, ids, noon, shop } from '../builders/harness.ts'
+import { counter, ids, noon, shop } from '../builders/testing.ts'
 import { dreamingDoc } from './vocab.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>

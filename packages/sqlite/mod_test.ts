@@ -5,7 +5,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { type Driver, storage, type Store } from './mod.ts'
 import { open } from './db.ts'
-import { mem, shop } from './harness.ts'
+import { mem, shop } from './testing.ts'
 
 Deno.test('ddl() lists the statements install() runs', () => {
   let s = storage(mem(), shop)

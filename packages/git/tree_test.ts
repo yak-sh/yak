@@ -1,5 +1,5 @@
 // Trees: git's order, git's bytes, git's ids — and the fold from a flat
-// manifest into the nest they need. Constants: ./harness.ts.
+// manifest into the nest they need. Constants: ./testing.ts.
 
 import { assertEquals, assertThrows } from '@std/assert'
 import { oid, oid256 } from './oid.ts'
@@ -14,7 +14,7 @@ import {
   SORT_OID,
   X_OID,
   X_OID256,
-} from './harness.ts'
+} from './testing.ts'
 
 let lib = [{ name: 'a.txt', mode: FILE, oid: X_OID }]
 let root = [

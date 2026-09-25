@@ -3,7 +3,7 @@ import { h } from 'preact'
 import { frontend } from './frontend.ts'
 import { App } from './app.ts'
 import type { UIAgent } from './panels.ts'
-import { mount } from '../tui/harness.ts'
+import { mount } from '../tui/testing.ts'
 
 Deno.test('frontend graph is private, transient and query granular', async () => {
   let a = frontend(), b = frontend()

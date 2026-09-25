@@ -1,7 +1,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { due, next, ring, soonest, wakeOf } from './due.ts'
-import { HOUR, store, T0, woken } from './harness.ts'
+import { HOUR, store, T0, woken } from './testing.ts'
 
 let iso = (t: number) => new Date(t).toISOString()
 let eids = (bs: Bundle[]) => bs.map((b) => b.entity.eid)

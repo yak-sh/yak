@@ -11,7 +11,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { gitDoc } from './comp.ts'
-import { git as vocab } from './harness.ts'
+import { git as vocab } from './testing.ts'
 import { runs } from './tools.ts'
 
 let tools = runs()

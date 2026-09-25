@@ -6,7 +6,7 @@ import { parse } from '@yaks/query'
 import { compile } from '@yaks/sql'
 import { extend, rules } from './rules.ts'
 import { TABLE } from './ddl.ts'
-import { mem, shop, stocked } from './harness.ts'
+import { mem, shop, stocked } from './testing.ts'
 
 let hash = { embedder: { via: 'hash' } } as const
 

@@ -8,7 +8,7 @@ import { compile, Unsupported } from '@yaks/sql'
 import type { Bundle } from '@yaks/graph'
 import { semantic } from './compile.ts'
 import type { Driver } from './driver.ts'
-import { embedder, shop, stocked } from './harness.ts'
+import { embedder, shop, stocked } from './testing.ts'
 
 // The eids a query selects, in the order the statement yields them.
 let ask = (db: Driver, q: string, ext: ReturnType<typeof semantic>) => {

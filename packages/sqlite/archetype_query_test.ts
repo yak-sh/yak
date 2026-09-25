@@ -4,7 +4,7 @@ import { graph } from '@yaks/graph'
 import { compile } from '@yaks/sql'
 import { absent, and, or, parse, present } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
-import { mem, shop } from './harness.ts'
+import { mem, shop } from './testing.ts'
 import { type Driver, rows, storage } from './mod.ts'
 import { open, type Opened } from './db.ts'
 

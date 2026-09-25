@@ -1,11 +1,11 @@
 import { assert } from '@std/assert'
 import { h } from 'preact'
-import { mount } from '../tui/harness.ts'
+import { mount } from '../tui/testing.ts'
 import { App, changes } from './app.ts'
 import { frontend } from './frontend.ts'
 import { local } from './local.ts'
 import { open } from './store.ts'
-import { until } from '../process/harness.ts'
+import { until } from '../process/testing.ts'
 import { repo } from './testing.ts'
 
 Deno.test('mounted transcript paints partial markdown before the model returns', async () => {

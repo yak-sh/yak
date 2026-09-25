@@ -6,7 +6,7 @@ import { compile, Unsupported } from '@yaks/sql'
 import type { Bundle, Storage } from '@yaks/graph'
 import { traverse } from './sql.ts'
 import { link } from './say.ts'
-import { blog, blogGraph, store } from './harness.ts'
+import { blog, blogGraph, store } from './testing.ts'
 
 let sql = (line: string) =>
   compile(parse(line), blog, { extend: [traverse(blog)] })

@@ -8,11 +8,11 @@
 // refuses `getBookmarkForTime` and `onNextSessionRestoreBookmark` outright —
 // "This Durable Object's storage back-end does not implement point-in-time
 // recovery" — so the probe kernel (probe.ts) cannot hold this gesture either.
-// harness.ts fakes the three calls; what that buys is the bookkeeping, which
+// testing.ts fakes the three calls; what that buys is the bookkeeping, which
 // is the half that can be wrong in a way we could have prevented.
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { Store } from './graph.ts'
-import { state } from './harness.ts'
+import { state } from './testing.ts'
 import { mark, moment, oldest, putBack, recorded, WINDOW } from './recover.ts'
 
 let DAY = 24 * 60 * 60_000

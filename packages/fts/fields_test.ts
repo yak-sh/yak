@@ -3,7 +3,7 @@
 import { assertEquals } from '@std/assert'
 import { fields, indexes, indexName } from './fields.ts'
 import { loadVocab } from '@yaks/vocab'
-import { shop } from './harness.ts'
+import { shop } from './testing.ts'
 
 Deno.test('the declared text properties are indexed, whatever component holds them', () => {
   assertEquals(fields(shop), [

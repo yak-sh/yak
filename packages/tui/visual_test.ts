@@ -1,6 +1,6 @@
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
-import { mount } from './harness.ts'
+import { mount } from './testing.ts'
 import { Textarea } from './Textarea.ts'
 import { VirtualList } from './VirtualList.ts'
 import { osc52 } from './paint.ts'

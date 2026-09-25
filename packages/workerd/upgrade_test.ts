@@ -5,7 +5,7 @@
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { api } from '@yaks/api'
-import { installPair, made, req, shopGraph } from './harness.ts'
+import { installPair, made, req, shopGraph } from './testing.ts'
 import { workerUpgrade } from './upgrade.ts'
 
 let ws = () => req('/ws', { headers: { upgrade: 'websocket' } })

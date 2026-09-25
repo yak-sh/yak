@@ -1,6 +1,6 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { appendEntry } from './append.ts'
-import { locked, seed, store } from './harness.ts'
+import { locked, seed, store } from './testing.ts'
 import { transcript } from './react.ts'
 import type { Bundle, Comp } from '@yaks/graph'
 

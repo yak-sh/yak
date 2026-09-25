@@ -3,7 +3,7 @@ import { graph } from './graph.ts'
 import { detached } from './storage.ts'
 import { preflight } from './preflight.ts'
 import { then } from './pipe.ts'
-import { books, comp, memory, slow } from './harness.ts'
+import { books, comp, memory, slow } from './testing.ts'
 import type { Bundle } from './bundle.ts'
 
 for (let async of [false, true]) {

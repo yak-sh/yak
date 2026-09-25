@@ -9,7 +9,7 @@ import { ARMS, Unsupported } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import type { Driver } from './driver.ts'
-import { mem, seed, shop as vocab, store } from './harness.ts'
+import { mem, seed, shop as vocab, store } from './testing.ts'
 
 import { storage } from './mod.ts'
 

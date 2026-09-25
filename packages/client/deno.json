@@ -17,7 +17,7 @@
   "publish": {
     "exclude": [
       "**/*_test.ts",
-      "harness.ts",
+      "testing.ts",
       "./browser.json"
     ]
   }

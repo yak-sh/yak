@@ -1,4 +1,4 @@
-// The names, against git's own — see ./harness.ts for where the constants came
+// The names, against git's own — see ./testing.ts for where the constants came
 // from.
 
 import { assertEquals } from '@std/assert'
@@ -10,7 +10,7 @@ import {
   X,
   X_OID,
   X_OID256,
-} from './harness.ts'
+} from './testing.ts'
 
 let utf8 = new TextEncoder()
 

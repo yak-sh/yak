@@ -1,7 +1,7 @@
 // The branch, and the step that moves it: a manifest landed as a commit, the
 // ref patched onto it, the caller's own row written in the same batch — and
 // the same step reached through the plugin, where a release row is what wakes
-// it. Constants: ./harness.ts.
+// it. Constants: ./testing.ts.
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -9,7 +9,7 @@ import { CORE_URI, type VocabDoc } from '@yaks/vocab'
 import { commits } from './plugin.ts'
 import { commitOnto, refAt, refEid, type Repo } from './refs.ts'
 import { MAIN } from './http.ts'
-import { AUTHOR, COMMITTER, file, fixture, HELLO, X } from './harness.ts'
+import { AUTHOR, COMMITTER, file, fixture, HELLO, X } from './testing.ts'
 
 let APP = 'a0000000-0000-4000-8000-00000000000a'
 

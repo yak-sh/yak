@@ -6,7 +6,7 @@
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import { EXIT } from './comp.ts'
-import { tracked } from './harness.ts'
+import { tracked } from './testing.ts'
 import { type ShellOpts, shellTools } from './tools.ts'
 
 let opts = (): ShellOpts => ({

@@ -1,7 +1,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import type { Bundle } from '@yaks/graph'
-import { mount } from '../tui/harness.ts'
+import { mount } from '../tui/testing.ts'
 import { type Context, panels, type UIAgent } from './panels.ts'
 
 let panel = panels.find((p) => p.title == 'Context usage')!

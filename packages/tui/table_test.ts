@@ -3,7 +3,7 @@ import { h } from 'preact'
 import { Markdown } from '@yaks/markdown'
 import { TElement, TText } from './dom.ts'
 import { VirtualWindow } from './VirtualList.ts'
-import { mount } from './harness.ts'
+import { mount } from './testing.ts'
 import { ansi, type Line, screenful } from './paint.ts'
 
 let el = (tag: string, ...children: (TElement | string)[]): TElement => {

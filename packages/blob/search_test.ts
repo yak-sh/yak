@@ -12,7 +12,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { fields, find, schema } from '@yaks/fts'
 import { blobRead, blobText } from './sqlite.ts'
-import { blog, fixture } from './harness.ts'
+import { blog, fixture } from './testing.ts'
 
 let text = fields(blog)
 

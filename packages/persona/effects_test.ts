@@ -1,7 +1,7 @@
 // The effects facet writes files, so it is off unless a config turns it on.
 
 import { assertEquals } from '@std/assert'
-import { said, world } from './harness.ts'
+import { said, world } from './testing.ts'
 import { effects } from './effects.ts'
 
 let host = { graph: world(), vocab: said }

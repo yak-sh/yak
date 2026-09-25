@@ -5,7 +5,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { arm, scheduled } from './cloudflare.ts'
 import { loop } from './deno.ts'
-import { store, T0, woken } from './harness.ts'
+import { store, T0, woken } from './testing.ts'
 
 let iso = (t: number) => new Date(t).toISOString()
 let advance = async (time: FakeTime, ms: number) => {

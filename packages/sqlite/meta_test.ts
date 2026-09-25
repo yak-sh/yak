@@ -5,7 +5,7 @@ import { META, schema } from './ddl.ts'
 import { EPOCH, epoch, meta } from './meta.ts'
 import { storage } from './mod.ts'
 import type { Driver } from './driver.ts'
-import { mem, shop } from './harness.ts'
+import { mem, shop } from './testing.ts'
 
 // A store over a fresh database, installed — what a host has after boot.
 let installed = (d: Driver = mem()) => {

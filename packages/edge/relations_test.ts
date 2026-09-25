@@ -4,7 +4,7 @@ import { assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { edgeKeywords } from './keywords.ts'
 import { names, relations } from './relations.ts'
-import { blog } from './harness.ts'
+import { blog } from './testing.ts'
 
 Deno.test('a relation is whatever the vocabulary says is one', () => {
   assertEquals(relations(blog), { cites: 'cites', linked: 'links' })

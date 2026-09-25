@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { edgeEid, link } from '@yaks/edge'
-import { counter, ids, noon, shop, workshop } from './harness.ts'
+import { counter, ids, noon, shop, workshop } from './testing.ts'
 import { type Desk, type Open, output } from './build.ts'
 import { effects, watches } from './effects.ts'
 import { runs } from './tools.ts'

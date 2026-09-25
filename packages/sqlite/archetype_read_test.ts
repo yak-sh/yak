@@ -2,7 +2,7 @@ import { assert, assertEquals } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
-import { mem, shop } from './harness.ts'
+import { mem, shop } from './testing.ts'
 import { get, storage } from './mod.ts'
 import { get as census } from './fixtures/census.ts'
 

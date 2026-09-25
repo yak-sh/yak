@@ -4,7 +4,7 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { Unauthorized } from '@yaks/api'
 import { bearer, cookies, door } from './door.ts'
-import { req } from './harness.ts'
+import { req } from './testing.ts'
 
 let carrying = (headers: Record<string, string>) => req('/query', { headers })
 

@@ -3,7 +3,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { taskDoc } from './comp.ts'
 import { statusOf } from './status.ts'
-import { teamGraph } from './harness.ts'
+import { teamGraph } from './testing.ts'
 import { listing, runs } from './tools.ts'
 
 // The runs, built the way a host builds them: a facet is a factory.

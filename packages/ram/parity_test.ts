@@ -9,7 +9,7 @@
 // batches, and read back the same entities, batch for batch.
 
 import { parity, rig } from '../sqlite/parity.ts'
-import { shop, store } from '../sqlite/harness.ts'
+import { shop, store } from '../sqlite/testing.ts'
 import { ram } from './mod.ts'
 
 Deno.test('a ram graph and a sqlite graph agree, batch for batch', () => {

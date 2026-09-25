@@ -9,7 +9,7 @@ import { token } from '@yaks/graph'
 import type { Authenticate } from './actor.ts'
 import { api } from './route.ts'
 import { Unauthorized } from './refuse.ts'
-import { comp, post, req, shopGraph } from './harness.ts'
+import { comp, post, req, shopGraph } from './testing.ts'
 
 let ada = { eid: 'm1' }
 // The same person as the door names her: an actor is `by` whoever is writing.

@@ -5,7 +5,7 @@ import { fields } from './fields.ts'
 import { prune, sources, stale, sweep } from './sweep.ts'
 import { vectorOf } from './near.ts'
 import { TABLE } from './ddl.ts'
-import { embedder, shelf, shop } from './harness.ts'
+import { embedder, shelf, shop } from './testing.ts'
 
 let text = fields(shop)
 let count = (db: ReturnType<typeof shelf>) =>

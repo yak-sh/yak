@@ -5,7 +5,7 @@
 import { assertEquals } from '@std/assert'
 import { human } from '@yaks/id'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
-import { team } from './harness.ts'
+import { team } from './testing.ts'
 
 // @yaks/mail's `email` and @yaks/persona's `role`, as far as the display cares:
 // each a kind with a letter of its own, alphabetically ahead of `project`.

@@ -3,7 +3,7 @@ import { argsFor, commandFor, unique } from '@yaks/cli'
 import { compose } from '@yaks/cli/host'
 import { argsOf, type Bundle, namedTool, offered } from '@yaks/graph'
 import { answerOf, toolEid, worded } from '@yaks/tools'
-import { connect } from '../mcp/harness.ts'
+import { connect } from '../mcp/testing.ts'
 import { open } from './store.ts'
 
 let reads = { file: () => '', stdin: () => '' }

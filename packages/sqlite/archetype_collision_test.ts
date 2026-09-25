@@ -5,7 +5,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { backfill, storage } from './mod.ts'
 import { open } from './db.ts'
-import { mem } from './harness.ts'
+import { mem } from './testing.ts'
 
 // Fleet's text blobs are entities wearing blob + blob_text; exercise the same
 // physical shape, including text equal to old/new descriptor hash preimages.

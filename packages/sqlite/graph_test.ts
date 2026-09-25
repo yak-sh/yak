@@ -6,7 +6,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { isPromise, Stale, token } from '@yaks/graph'
-import { shopGraph } from './harness.ts'
+import { shopGraph } from './testing.ts'
 
 let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
   assert(!isPromise(out), 'apply() went async over an embedded database')

@@ -3,7 +3,7 @@
 // and the `/ws` route that wires one to a graph through the host's upgrade.
 
 import { assert, assertEquals } from '@std/assert'
-import { fake, req, shopGraph } from './harness.ts'
+import { fake, req, shopGraph } from './testing.ts'
 import { api } from './route.ts'
 import { attach } from './socket.ts'
 import { subscriptions } from './subs.ts'

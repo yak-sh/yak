@@ -3,7 +3,7 @@
 // whole and unopened.
 
 import { assertEquals } from '@std/assert'
-import { namespace, post } from './harness.ts'
+import { namespace, post } from './testing.ts'
 import { forward } from './stub.ts'
 
 Deno.test('a request reaches the object for its name, unopened', async () => {

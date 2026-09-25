@@ -4,7 +4,7 @@
 // what the server owns was never this vault's business.
 
 import { assertEquals } from '@std/assert'
-import { boxClient, comp, fakeDb, fakeIdb } from './harness.ts'
+import { boxClient, comp, fakeDb, fakeIdb } from './testing.ts'
 import { stash, type Vault } from './vault.ts'
 
 // One page load, then the next, over the same vault.

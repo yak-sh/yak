@@ -5,7 +5,7 @@
 
 import { assertEquals } from '@std/assert'
 import { match } from '@yaks/graph'
-import { mem, shop } from './harness.ts'
+import { mem, shop } from './testing.ts'
 import { type Overlay, overlay } from './overlay.ts'
 import { matched } from './rules.ts'
 import { read } from './read.ts'

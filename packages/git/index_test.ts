@@ -1,5 +1,5 @@
 // The index: a manifest in, git's own objects out, and the rows a pack walks.
-// Constants: ./harness.ts.
+// Constants: ./testing.ts.
 
 import { assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -21,7 +21,7 @@ import {
   ROOT_OID256,
   TWO_OID,
   X,
-} from './harness.ts'
+} from './testing.ts'
 
 let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
 

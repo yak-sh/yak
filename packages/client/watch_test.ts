@@ -5,7 +5,7 @@
 
 import { assertEquals } from '@std/assert'
 import { type Bundle, transient } from '@yaks/graph'
-import { boxClient, server, titles } from './harness.ts'
+import { boxClient, server, titles } from './testing.ts'
 import type { Hold, Make } from './watch.ts'
 
 let dal = (eid = 'r1', serves = 4): Bundle => ({

@@ -6,7 +6,7 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { loadVocab, type PropSchema } from '@yaks/vocab'
 import { proseOf, schemaOf } from '@yaks/graph'
-import { connect, shop, text } from './harness.ts'
+import { connect, shop, text } from './testing.ts'
 
 type Answer = { $defs: Record<string, PropSchema> }
 

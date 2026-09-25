@@ -5,7 +5,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { sha256 } from '@yaks/graph'
 import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
-import { state } from './harness.ts'
+import { state } from './testing.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { keyed, Pending } from './writes.ts'
 

@@ -19,7 +19,7 @@ import {
   ONE_OID,
   TWO_OID,
   X,
-} from './harness.ts'
+} from './testing.ts'
 
 let text = new TextDecoder()
 let V2 = { 'git-protocol': 'version=2' }

@@ -90,11 +90,11 @@ Deno.test('worker pages retained graph data and keeps initial transfer independe
 
 Deno.test('mounted bounded transcript navigates beyond loaded edges and restores a detached session anchor', async () => {
   const { h: element } = await import('preact')
-  const { mount } = await import('../tui/harness.ts')
+  const { mount } = await import('../tui/testing.ts')
   const { pressTo } = await import('../tui/screen.ts')
   const { App } = await import('./app.ts')
   const { frontend } = await import('./frontend.ts')
-  const { until } = await import('../process/harness.ts')
+  const { until } = await import('../process/testing.ts')
   let store = open(':memory:')
   await store.g.apply([
     { entity: { eid: 's' }, session: {} },
@@ -226,7 +226,7 @@ Deno.test('usage panel reads latest inherited ask metadata without transcript bo
 })
 
 Deno.test('bounded worker subscriptions deliver transient text before final completion', async () => {
-  const { until } = await import('../process/harness.ts')
+  const { until } = await import('../process/testing.ts')
   let dir = await Deno.makeTempDir()
   let r = await remote({
     db: ':memory:',

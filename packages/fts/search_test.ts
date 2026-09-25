@@ -7,7 +7,7 @@ import { fields } from './fields.ts'
 import { search } from './compile.ts'
 import { find, hits } from './search.ts'
 import { CLOSE, OPEN } from './term.ts'
-import { shelf, shop } from './harness.ts'
+import { shelf, shop } from './testing.ts'
 
 let text = fields(shop)
 

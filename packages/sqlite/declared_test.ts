@@ -6,7 +6,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { effects } from '@yaks/effects'
 import { graph, invoked } from '@yaks/graph'
 import type { Bundle } from '@yaks/graph'
-import { mem, shop } from './harness.ts'
+import { mem, shop } from './testing.ts'
 import { storage } from './mod.ts'
 
 let at = (out: Bundle[], eid: string, name: string) =>

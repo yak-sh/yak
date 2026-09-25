@@ -5,7 +5,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { door } from './door.ts'
-import { installPair, made, post, req, shopGraph } from './harness.ts'
+import { installPair, made, post, req, shopGraph } from './testing.ts'
 import { worker } from './worker.ts'
 
 type Env = { DB: string }

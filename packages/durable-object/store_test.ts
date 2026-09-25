@@ -6,9 +6,9 @@
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { durable, shop, store } from './harness.ts'
+import { durable, shop, store } from './testing.ts'
 import { storage } from './store.ts'
-import { kitchen, PROJECTED, PROJECTED_ROW, RECIPE } from '../sqlite/harness.ts'
+import { kitchen, PROJECTED, PROJECTED_ROW, RECIPE } from '../sqlite/testing.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Record<string, unknown>
 

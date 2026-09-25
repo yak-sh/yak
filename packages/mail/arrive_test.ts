@@ -2,7 +2,7 @@ import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, type Eid, Refused } from '@yaks/graph'
 import { arrived, type Book, known, named, routed, wearer } from './arrive.ts'
 import type { Received } from './inbound.ts'
-import { clubhouse } from './harness.ts'
+import { clubhouse } from './testing.ts'
 
 let ana = 'p-ana'
 let pile = 'p-triage'

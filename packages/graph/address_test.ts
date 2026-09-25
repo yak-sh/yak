@@ -8,7 +8,7 @@ import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import type { Plugin } from './plugin.ts'
 import { Refused } from './admit.ts'
-import { books, comp, memory } from './harness.ts'
+import { books, comp, memory } from './testing.ts'
 
 // What @yaks/id is to a graph that numbers its entities: `B-7` is the book
 // `dune`, and every other `B-` id is written its way and names nothing.

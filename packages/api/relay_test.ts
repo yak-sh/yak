@@ -6,7 +6,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
-import { shopGraph } from './harness.ts'
+import { shopGraph } from './testing.ts'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
 
 let ear = () => {

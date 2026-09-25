@@ -8,7 +8,7 @@ import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import type { Rule } from './rules.ts'
 import { isPromise } from './pipe.ts'
-import { books, comp, memory } from './harness.ts'
+import { books, comp, memory } from './testing.ts'
 
 let held = (one: ReturnType<typeof graph>, eid = 'b1') =>
   (one.storage.tx((tx) => tx.get([eid])) as Bundle[])[0]

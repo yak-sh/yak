@@ -6,7 +6,7 @@ import { fields } from './fields.ts'
 import { schema } from './ddl.ts'
 import { sweep } from './sweep.ts'
 import { clean, dirty, mark, state } from './mark.ts'
-import { embedder, mem, shelf, shop, stocked } from './harness.ts'
+import { embedder, mem, shelf, shop, stocked } from './testing.ts'
 
 Deno.test('a fresh mark is dirty: an index never built is owed one', () => {
   assertEquals(dirty(shelf()), true)

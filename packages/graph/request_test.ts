@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from '@std/assert'
-import { books, memory } from './harness.ts'
+import { books, memory } from './testing.ts'
 import { graph } from './graph.ts'
 import { Refused } from './admit.ts'
 

@@ -6,7 +6,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { Unauthorized as Refuse } from '@yaks/api'
 import { mcp } from '@yaks/mcp'
-import { shopGraph } from '../mcp/harness.ts'
+import { shopGraph } from '../mcp/testing.ts'
 import { argsFor, type Reads } from './args.ts'
 import { doorUrl, initialize, rpc, timed, Unauthorized } from './rpc.ts'
 import { saidBy } from './roster.ts'

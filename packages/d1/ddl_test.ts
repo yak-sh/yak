@@ -5,7 +5,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { schema } from '@yaks/sqlite'
-import { d1 } from './harness.ts'
+import { d1 } from './testing.ts'
 import { storage } from './store.ts'
 
 let strict = loadVocab({

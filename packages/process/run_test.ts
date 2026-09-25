@@ -6,7 +6,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { EXIT, PROCESS } from './comp.ts'
-import { gone, tracked } from './harness.ts'
+import { gone, tracked } from './testing.ts'
 import { adopt, launch, watch } from './run.ts'
 import { store } from './store.ts'
 

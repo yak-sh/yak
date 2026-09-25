@@ -4,7 +4,7 @@
 
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { box, boxClient, comp, COOK, server, titles } from './harness.ts'
+import { box, boxClient, comp, COOK, server, titles } from './testing.ts'
 import { client } from './client.ts'
 import { stash } from './vault.ts'
 

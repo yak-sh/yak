@@ -7,7 +7,7 @@ import {
   type VisualState,
 } from '@yaks/tui'
 import type { Comp } from '@yaks/graph'
-import { mount } from '../tui/harness.ts'
+import { mount } from '../tui/testing.ts'
 import { frontend } from './frontend.ts'
 import { Keyboard } from './keyboard.ts'
 import { useKeys } from '../tui/screen.ts'

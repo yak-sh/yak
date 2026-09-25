@@ -4,7 +4,7 @@ import { local } from './local.ts'
 import { remote } from './remote.ts'
 import type { Bundle } from '@yaks/graph'
 import { h as node } from 'preact'
-import { mount } from '../tui/harness.ts'
+import { mount } from '../tui/testing.ts'
 import { App } from './app.ts'
 import { frontend } from './frontend.ts'
 

@@ -9,7 +9,7 @@ import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
 import { isHandle } from '@yaks/secrets'
 import type { D1Like } from '@yaks/d1'
-import { d1 } from '../../packages/d1/harness.ts'
+import { d1 } from '../../packages/d1/testing.ts'
 import {
   CALLBACK,
   connecting,
@@ -19,7 +19,7 @@ import {
 } from './connections.ts'
 import { directory, over, storeName } from './directory.ts'
 import { PLATFORM_STORE } from './door.ts'
-import { platform } from './harness.ts'
+import { platform } from './testing.ts'
 import { KERNEL, meta } from './meta.ts'
 import { outbound, outboundPlugin } from './outbound.ts'
 import { answered, routed } from './plugin.ts'

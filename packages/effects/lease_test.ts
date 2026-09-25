@@ -2,7 +2,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Comp } from '@yaks/graph'
-import { blogGraph, durableBlog } from './harness.ts'
+import { blogGraph, durableBlog } from './testing.ts'
 import {
   drop,
   held,

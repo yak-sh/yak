@@ -18,7 +18,7 @@ import { projectDoc } from '@yaks/project'
 import { edgeDoc, edgeKeywords, link, traverse } from '@yaks/edge'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { matcher, rows } from './match.ts'
-import { bundles, corpus, DEAD, NOW, shop } from './harness.ts'
+import { bundles, corpus, DEAD, NOW, shop } from './testing.ts'
 
 // Bundles in a fresh in-memory database, read through the vocabulary they were
 // written under and whatever computed properties it declares.

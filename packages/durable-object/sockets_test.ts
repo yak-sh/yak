@@ -8,7 +8,7 @@ import { assert, assertEquals } from '@std/assert'
 import { subscriptions } from '@yaks/api'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import type { Frame } from '@yaks/api'
-import { shop, store } from './harness.ts'
+import { shop, store } from './testing.ts'
 import { type Sockets, sockets, type Wire } from './sockets.ts'
 
 // A socket, faked: what it was sent, and the attachment it carries across a

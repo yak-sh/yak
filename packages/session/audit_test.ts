@@ -1,7 +1,7 @@
 import { assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { Bounced } from './bounce.ts'
-import { ids, locked, store } from './harness.ts'
+import { ids, locked, store } from './testing.ts'
 
 let AT = '2026-03-04T05:06:07.000Z'
 let opts = { now: () => AT, mint: () => 'c1' }

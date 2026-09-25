@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert'
 import { bodies, isBody } from './props.ts'
-import { blog, plain } from './harness.ts'
+import { blog, plain } from './testing.ts'
 
 Deno.test('the body properties are the ones declaring store: blob', () => {
   assertEquals(bodies(blog), [{ comp: 'post', prop: 'body' }])

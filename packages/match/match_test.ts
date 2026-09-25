@@ -6,7 +6,7 @@ import { assert, assertEquals, assertFalse, assertThrows } from '@std/assert'
 import { Unsupported } from '@yaks/sql'
 import { absent, and, eq, pred, present } from '@yaks/query'
 import { filter, matcher } from './match.ts'
-import { bundles, NOW, shop } from './harness.ts'
+import { bundles, NOW, shop } from './testing.ts'
 
 let sel = (q: string): string[] =>
   matcher(q, shop, { now: NOW })(bundles).map((b) => b.entity.eid)

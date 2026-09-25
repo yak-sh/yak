@@ -9,7 +9,7 @@ import type { Bundle } from './bundle.ts'
 import type { Phase, Plugin } from './plugin.ts'
 import { type Rule, stands } from './rules.ts'
 import { isPromise } from './pipe.ts'
-import { books, comp, memory } from './harness.ts'
+import { books, comp, memory } from './testing.ts'
 
 let g = (plugins: Plugin[] = []) =>
   graph({ storage: memory(), vocab: books, plugins })

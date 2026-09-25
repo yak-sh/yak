@@ -12,7 +12,7 @@
 // stamp already matches and no DDL runs — never a first boot. Runtime work
 // (restoring the object, a cold isolate loading the bundle) is outside it.
 // Gated by bin/bench-gate.ts, which ratchets each ratio down.
-import { durable } from '../../packages/durable-object/harness.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
 import type { Wire } from '@yaks/durable-object'
 import { PLATFORM_STORE } from './door.ts'
 import { Store } from './graph.ts'

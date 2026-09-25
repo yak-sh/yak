@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 import { assertEquals, assertThrows } from '@std/assert'
-import { boxGraph, pair } from './harness.ts'
+import { boxGraph, pair } from './testing.ts'
 import { land, snapshot } from './inbound.ts'
 import { sync } from './sync.ts'
 import { type Frame, wire } from './socket.ts'

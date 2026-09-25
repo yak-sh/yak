@@ -5,7 +5,7 @@ import { parse } from '@yaks/query'
 import { compile } from '@yaks/sql'
 import { fields } from './fields.ts'
 import { search } from './compile.ts'
-import { shelf, shop } from './harness.ts'
+import { shelf, shop } from './testing.ts'
 
 let text = fields(shop)
 let sql = (line: string) =>

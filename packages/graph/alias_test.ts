@@ -8,7 +8,7 @@ import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import { Refused } from './admit.ts'
 import { sha256 } from './sha256.ts'
-import { books, comp, memory } from './harness.ts'
+import { books, comp, memory } from './testing.ts'
 
 // A predictable mint, so a test can say which id came out.
 let ids = () => {

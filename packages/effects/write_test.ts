@@ -8,13 +8,13 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Graph, Tx } from '@yaks/graph'
 import { detached, graph, isPromise } from '@yaks/graph'
 import { ddl, journal, log } from '@yaks/journal'
-import { mem } from '../sqlite/harness.ts'
+import { mem } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import { effects } from './registry.ts'
 import { ledger } from './durable.ts'
 import { generation, ORIGIN } from './write.ts'
-import { blog, blogGraph, durableBlog } from './harness.ts'
+import { blog, blogGraph, durableBlog } from './testing.ts'
 
 let sync = <T>(out: T | Promise<T>): T => {
   assert(!isPromise(out), 'apply() went async over a Map')

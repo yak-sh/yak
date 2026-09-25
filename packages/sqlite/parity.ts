@@ -19,7 +19,7 @@
 import { assertEquals } from '@std/assert'
 import type { Bundle, Graph, Plugin, Storage } from '@yaks/graph'
 import { each, graph, then, token } from '@yaks/graph'
-import { shop } from './harness.ts'
+import { shop } from './testing.ts'
 
 /** A bookmark is content-addressed: its eid is derived from what it marks, so
  * two writers recording the same bookmark land on one entity. This is what

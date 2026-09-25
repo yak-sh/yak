@@ -23,7 +23,7 @@ import {
   uiMeta,
 } from './tools.ts'
 import { sha256 } from './versions.ts'
-import { platform } from './harness.ts'
+import { platform } from './testing.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { inApp } from './tool.ts'

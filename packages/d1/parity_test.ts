@@ -13,8 +13,8 @@
 import { assert } from '@std/assert'
 import { isPromise } from '@yaks/graph'
 import { parity, rig } from '../sqlite/parity.ts'
-import { store as reference } from '../sqlite/harness.ts'
-import { store } from './harness.ts'
+import { store as reference } from '../sqlite/testing.ts'
+import { store } from './testing.ts'
 
 Deno.test('a d1 graph and a sqlite graph agree, batch for batch', async () => {
   let out = parity(rig(await store()), rig(reference()))

@@ -9,7 +9,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, identityEid } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
-import { durable } from '../../packages/durable-object/harness.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
 import { Store } from './graph.ts'
 import { type App, appStore, type Space } from './directory.ts'
 import type { Env } from './env.ts'

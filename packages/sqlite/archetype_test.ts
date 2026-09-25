@@ -11,7 +11,7 @@ import {
   schema,
   storage,
 } from './mod.ts'
-import { mem } from './harness.ts'
+import { mem } from './testing.ts'
 
 let domain = {
   $defs: {

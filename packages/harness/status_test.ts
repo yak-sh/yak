@@ -56,7 +56,7 @@ Deno.test('sidebar indicator queries cover states and owner joins', () => {
 
 Deno.test('status indicators paint colored single-column glyphs in the sidebar', async () => {
   let { h } = await import('preact')
-  let { mount } = await import('../tui/harness.ts')
+  let { mount } = await import('../tui/testing.ts')
   let { panels } = await import('./panels.ts')
   let sessions: Bundle[] = [{
     entity: { eid: 's' },

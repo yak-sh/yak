@@ -17,7 +17,7 @@ import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { processDoc, processes, selfEid } from '@yaks/process'
 import { spawning } from './effects.ts'
-import { fake, slow, until } from './harness.ts'
+import { fake, slow, until } from './testing.ts'
 import { every, runs } from './tools.ts'
 import { spawnDoc } from './vocab.ts'
 

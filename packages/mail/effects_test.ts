@@ -10,7 +10,7 @@ import { docs } from '@yaks/doc'
 import { effects, post } from './effects.ts'
 import type { Transport } from './options.ts'
 import { mailbox } from './plugin.ts'
-import { club, noon } from './harness.ts'
+import { club, noon } from './testing.ts'
 import { PENDING, type Sender, sending } from './send.ts'
 import { stash } from './stash.ts'
 

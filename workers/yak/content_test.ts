@@ -13,7 +13,7 @@ import type { Bundle } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import content from './content.vocab.json' with { type: 'json' }
-import { memory } from '../../packages/graph/harness.ts'
+import { memory } from '../../packages/graph/testing.ts'
 
 // The spine and the words a page shares with everything else, so the bundle in
 // a file can be applied whole. The store this stands in for is a real one

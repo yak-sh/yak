@@ -7,7 +7,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, dead, Refused } from '@yaks/graph'
-import { at, client, comp, COOK, server } from './harness.ts'
+import { at, client, comp, COOK, server } from './testing.ts'
 
 let dal = (eid = 'r1'): Bundle => ({
   entity: { eid },
