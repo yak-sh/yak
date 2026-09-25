@@ -159,10 +159,32 @@ for (let r of ended) {
     ...as,
   }], { now: r.at })
 }
+// Each batch holds the write lock while it runs, and every other writer waits
+// at most `busy_timeout` (5s, @yaks/cli host.ts) for it. A rewrite is cheap
+// and goes in batches cut to finish well inside that; a delete pays a fixed
+// ~7s reverse-reference read per batch (@yaks/graph cascade), so the deletes
+// go last, in few large batches.
 let bundles = rows.map((r) => ({ ...plan(r), ...as }))
-for (let i = 0; i < bundles.length; i += 20) {
-  await g.apply(bundles.slice(i, i + 20))
+let batched = async (all: Bundle[], size: number) => {
+  for (let i = 0; i < all.length; i += size) {
+    let t = performance.now()
+    await g.apply(all.slice(i, i + size))
+    let ms = Math.round(performance.now() - t)
+    console.log(
+      `${
+        i + size > all.length ? all.length : i + size
+      } of ${all.length}: ${ms}ms`,
+    )
+  }
 }
+await batched(
+  bundles.filter((b) => !b.$delete),
+  Number(Deno.env.get('REWRITE') ?? 100),
+)
+await batched(
+  bundles.filter((b) => b.$delete),
+  Number(Deno.env.get('DELETE') ?? 2000),
+)
 let after = await statuses()
 let moved = sessions.filter((s) =>
   before.get(s) != after.get(s) && after.get(s) != 'stopped'
