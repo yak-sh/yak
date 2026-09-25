@@ -139,14 +139,20 @@ let makeClient = () =>
     frame: (subs, f, reset) => {
       if (replacing) return
       let changes = changesOf(f.bundles ?? [])
+      // An aggregate answers whole, every time: a count under the empty key.
+      let agg = f.count != null
+        ? { '': f.count }
+        : f.tally ??
+          (f.distinct && Object.fromEntries(f.distinct.map((v) => [v, 1])))
       batch(() => {
         for (let sub of subs) {
           landSubFrame({
             sub,
-            replace: reset,
+            replace: reset || !!agg,
             changes,
             drop: f.gone,
             error: f.refused?.message,
+            ...agg ? { agg } : {},
           })
         }
       })

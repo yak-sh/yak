@@ -51,6 +51,27 @@ Deno.test('a commit pushes what the query selects, and nothing else', () => {
   assertEquals(take(), [])
 })
 
+Deno.test('an aggregate is answered with its value, and again when it moves', () => {
+  let graph = shop()
+  graph.apply([{ entity: { eid: 'b1' }, book: { status: 'shelved' } }])
+  let subs = subscriptions(graph)
+  let { to, take } = ear()
+  subs.open(to, 'n', '.book!&.count!')
+  subs.open(to, 'by', '.book!&.tally=status')
+  assertEquals(take(), [
+    { id: 'n', count: 1 },
+    { id: 'by', tally: { shelved: 1 } },
+  ])
+  graph.apply([{ entity: { eid: 'b2' }, book: { status: 'sold' } }])
+  assertEquals(take(), [
+    { id: 'n', count: 2 },
+    { id: 'by', tally: { shelved: 1, sold: 1 } },
+  ])
+  // a commit that leaves the value where it was says nothing
+  graph.apply([{ entity: { eid: 'b2' }, book: { price: 9 } }])
+  assertEquals(take(), [])
+})
+
 // `*` asks which components an answer carries, not which entities belong, so a
 // line wearing it subscribes exactly as the line without it does — incremental,
 // judged per bundle. Read as a text term instead, it matched nothing and the

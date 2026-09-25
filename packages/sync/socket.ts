@@ -81,6 +81,11 @@ export type Frame = {
   relay?: Bundle[]
   /** why the subscription was refused, when it was */
   refused?: { error: string; message: string; [k: string]: unknown }
+  /** an aggregate query's answer, in place of bundles: `.count!`,
+   * `.distinct=prop` and `.tally=prop` (@yaks/api) */
+  count?: number
+  distinct?: string[]
+  tally?: Record<string, number>
   /** the first frame after a reopen: the set as it now stands, whole */
   reset?: boolean
 }

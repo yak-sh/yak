@@ -159,6 +159,7 @@ socket.send(
 → { unsubscribe: "<id>" }
 → { relay: Bundle[] }
 ← { id, bundles: Bundle[], gone?: Eid[] }
+← { id, count: n } | { id, distinct: […] } | { id, tally: {…} }
 ← { id, relay: Bundle[] }
 ← { id, transient: TransientFrame[] }
 ← { id, refused: { error, message, … } }
@@ -166,7 +167,10 @@ socket.send(
 
 Query updates contain current bundles for matching entities and `gone` IDs for
 entities that were deleted or stopped matching. A refreshed query can return its
-whole current set. `subscribe: true` selects the committed-change feed, with no
+whole current set. An aggregate query (`.count!`, `.distinct=prop`,
+`.tally=prop`) is answered with its value in the shape `/query` answers it,
+first when it opens and again after a commit that changes it; it carries no
+bundles. `subscribe: true` selects the committed-change feed, with no
 initial snapshot: each message contains the combined transaction changes, like
 the JSON `/apply` result.
 

@@ -38,6 +38,7 @@ import { comps } from '@yaks/graph'
 import { type Filter, filter } from '@yaks/match'
 import { bare, type Clause, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
+import { type Agg, aggregate, type Reduced, reduced } from './aggregate.ts'
 import { fault, type Refusal, refusal } from './refuse.ts'
 import { type Relay, relay as relaying, type Timer } from './relay.ts'
 
@@ -68,7 +69,7 @@ export type Frame = {
   relay?: Bundle[]
   /** why the subscription was refused, when it was */
   refused?: Refusal
-}
+} & Partial<Reduced>
 
 /** Where a subscriber's frames go. One sink per client — the socket layer
  * makes one per connection, and the registry keys subscriptions by it. */
@@ -116,6 +117,9 @@ type Sub = {
   /** the per-bundle test, or `null` when this subscription runs its query
    * again instead */
   test: Filter | null
+  /** the reduction an aggregate query asks for, and its last answer */
+  agg?: Agg
+  answer?: string
 }
 
 // Whether a clause can be decided against one entity on its own: a property of
@@ -223,7 +227,10 @@ export let subscriptions = (graph: Graph, opts: {
       // Parsed here, outside `judge`, so a query that cannot be parsed is
       // refused rather than quietly demoted to a subscription that runs it
       // again on every commit forever.
-      sub.test = judge(parse(line), line, graph.vocab)
+      let ast = parse(line)
+      sub.agg = aggregate(ast)
+      if (sub.agg) return tell(sub, true)
+      sub.test = judge(ast, line, graph.vocab)
       return then(graph.read(line, { durable: true }), (bundles) => {
         for (let b of bundles) sub.members.add(b.entity.eid)
         rememberFields(sub, bundles)
@@ -243,9 +250,22 @@ export let subscriptions = (graph: Graph, opts: {
     })
   }
 
+  // An aggregate's answer, sent when it is new: always on open, and after a
+  // commit only when the value moved. A count or a tally is a question about
+  // the whole set, so it is asked again after every commit.
+  let tell = (sub: Sub, first = false) =>
+    then(graph.rows(parse(sub.query), { durable: true }), (rows) => {
+      let value = reduced(sub.agg!, rows)
+      let answer = JSON.stringify(value)
+      if (!first && answer == sub.answer) return
+      sub.answer = answer
+      sub.sink({ id: sub.id, ...value })
+    })
+
   // One query subscription against the entities a transaction changed, read
   // whole.
   let push = (sub: Sub, now: Bundle[], touched: Eid[]) => {
+    if (sub.agg) return tell(sub)
     let test = sub.test
     if (test) {
       let bundles: Bundle[] = []

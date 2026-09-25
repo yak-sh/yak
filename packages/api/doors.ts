@@ -11,8 +11,9 @@
 // whole in memory.
 
 import { type Bundle, type Graph, Refused } from '@yaks/graph'
-import type { Actor, Row } from '@yaks/graph'
-import { parse, type Query } from '@yaks/query'
+import type { Actor } from '@yaks/graph'
+import { parse } from '@yaks/query'
+import { aggregate, reduced } from './aggregate.ts'
 import { signed } from './actor.ts'
 import { fault, json, refusal } from './refuse.ts'
 
@@ -206,29 +207,6 @@ let lineOf = (body: unknown): string | null => {
     return typeof body.q == 'string' ? body.q : null
   }
   return null
-}
-
-/** The three query clauses that reduce a selection to a value instead of
- * naming its members. A query carrying one is asking a different question, so
- * `/query` reads it off the parsed query before anything gathers a bundle
- * nobody asked for. */
-type Agg = 'count' | 'distinct' | 'tally'
-let AGGS = new Set(['count', 'distinct', 'tally'])
-let aggregate = (ast: Query): Agg | undefined =>
-  ast.clauses.find((c) => AGGS.has(c.kind))?.kind as Agg | undefined
-
-/** An aggregate's rows as the JSON response body. The compiled statement
- * returns one `{value, n}` row per value (`.count!` under the empty key,
- * since no tally keeps an empty one), and each clause has its own shape: a
- * count is the number, a distinct the values, a tally the map. Sorted by
- * value, so two stores answering the same question answer in the same
- * order. */
-let reduced = (op: Agg, rows: Row[]): unknown => {
-  if (op == 'count') return { count: Number(rows[0]?.n ?? 0) }
-  let values = rows.map((r) => String(r.value)).sort()
-  if (op == 'distinct') return { distinct: values }
-  let at = new Map(rows.map((r) => [String(r.value), Number(r.n ?? 0)]))
-  return { tally: Object.fromEntries(values.map((v) => [v, at.get(v)])) }
 }
 
 /**
