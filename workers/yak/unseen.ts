@@ -140,22 +140,26 @@ export type Breaks = (bundles: Bundle[]) => Promise<unknown>
 export let metaBreaks = (env: Env): Breaks => (bundles) =>
   meta(env).apply(bundles, KERNEL)
 
-export let noted = async (breaks: Breaks, broke: {
+/** What a break is noted as: the `exception` component, stamped now. */
+export let exceptionOf = (broke: {
   request: string
   version?: number | null
   message: string
   stack?: string
-}, at?: { env: Env; space: Space; app: App }) => {
-  await breaks([{
-    entity: { eid: '$broke' },
-    exception: {
-      at: new Date().toISOString(),
-      request: broke.request,
-      version: broke.version ?? null,
-      message: broke.message,
-      stack: broke.stack ?? '',
-    },
-  }])
+}) => ({
+  at: new Date().toISOString(),
+  request: broke.request,
+  version: broke.version ?? null,
+  message: broke.message,
+  stack: broke.stack ?? '',
+})
+
+export let noted = async (
+  breaks: Breaks,
+  broke: Parameters<typeof exceptionOf>[0],
+  at?: { env: Env; space: Space; app: App },
+) => {
+  await breaks([{ entity: { eid: '$broke' }, exception: exceptionOf(broke) }])
   if (!at || hushed(at.space, at.app)) return
   try {
     let dir = directory(bound(at.env.DIRECTORY, dirPart.fetch, at.env))

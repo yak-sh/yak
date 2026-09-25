@@ -2,7 +2,7 @@
 // subscription writes to the `yak-builds` queue (wrangler.toml
 // `[[queues.consumers]]`), and a failed build is a fault like any other:
 // Sentry hears it, and the meta store keeps it beside every other break of
-// ours (unseen.ts `fault`). The version already live keeps serving through a
+// ours (unseen.ts). The version already live keeps serving through a
 // failed build, so what breaks is only that the fix in it never arrives, and
 // nothing about the site says so. Each build is its own Sentry issue, so each
 // one is news rather than another event on an issue already seen.
@@ -12,16 +12,22 @@
 // Builds deploys (README "Workers Builds"): nothing it built was on its way
 // to production.
 //
-// A failed build of a push is built once more, because most failures are the
-// network's (a download that 404s for a minute, a registry push that times
-// out) and a commit nothing is pushed after would otherwise never deploy. The
-// second build is started by the deploy hook, so it is not a push's and its
-// own failure is filed without another try: a commit that fails twice holds a
-// fault, and Sentry already has it.
+// A failed build is built once more, because most failures are the network's
+// (a download that 404s for a minute, a registry push that times out) and a
+// commit nothing is pushed after would otherwise never deploy. Once per commit,
+// and never for a build that names none: the deploy hook's own builds carry
+// an empty commit while their event still says `push_event`, so the trigger
+// source cannot tell a retry from a push, and a retry that retried its own
+// failure would never stop. The meta store holds the once: a failure is noted as the commit's own entity, on the
+// condition (`$was`) that the commit holds no break yet, so the queue
+// delivering one failure twice notes it once, and only the note that lands
+// earns the retry.
 
 import { withScope } from '@sentry/core'
+import { Stale } from '@yaks/graph'
 import type { Env } from './env.ts'
-import { fault } from './unseen.ts'
+import { caught, defect } from './sentry.ts'
+import { type Breaks, exceptionOf, metaBreaks } from './unseen.ts'
 
 /** The part of a Workers Builds event this reads. */
 export type Built = {
@@ -30,7 +36,6 @@ export type Built = {
   payload?: {
     buildUuid?: string
     buildTriggerMetadata?: {
-      buildTriggerSource?: string
       branch?: string
       commitHash?: string
       commitMessage?: string
@@ -51,19 +56,47 @@ export let PRODUCTION = 'main'
 export let broke = (b: Built) => {
   if (b.type != 'cf.workersBuilds.worker.build.failed') return null
   let worker = b.source?.workerName ?? 'yak'
-  let { branch, commitHash, commitMessage, buildTriggerSource } =
-    b.payload?.buildTriggerMetadata ?? {}
+  let { branch, commitHash, commitMessage } = b.payload?.buildTriggerMetadata ??
+    {}
   if (branch && branch != PRODUCTION) return null
-  let commit = commitHash?.slice(0, 8) ?? 'unknown'
+  let short = commitHash?.slice(0, 8) || 'unknown'
   return {
-    build: b.payload?.buildUuid ?? commit,
-    request: `BUILD ${worker} ${commit}`,
+    build: b.payload?.buildUuid ?? short,
+    commit: commitHash || undefined,
+    request: `BUILD ${worker} ${short}`,
     error: new BuildFailed(
-      `the Workers Build of ${worker} at ${commit} (${branch ?? '?'}) ` +
+      `the Workers Build of ${worker} at ${short} (${branch ?? '?'}) ` +
         `failed, so it never deployed: ${commitMessage ?? ''}`.trim(),
     ),
     tags: { worker, commit: commitHash, branch },
-    again: buildTriggerSource == 'push_event',
+  }
+}
+
+type Broke = NonNullable<ReturnType<typeof broke>>
+
+/** Note a failed build in the meta store, and say whether it earns a retry:
+ * only the first note of a commit does. A build with no commit is noted under
+ * an id of its own and earns none. */
+export let first = async (breaks: Breaks, b: Broke): Promise<boolean> => {
+  let exception = exceptionOf({
+    request: b.request,
+    message: b.error.message,
+    stack: b.error.stack,
+  })
+  if (!b.commit) {
+    await breaks([{ entity: { eid: '$broke' }, exception }])
+    return false
+  }
+  try {
+    await breaks([{
+      entity: { eid: b.commit },
+      $was: { exception: { request: null } },
+      exception,
+    }])
+    return true
+  } catch (e) {
+    if (e instanceof Stale) return false
+    throw e
   }
 }
 
@@ -84,16 +117,22 @@ export let rebuild = async (env: Env): Promise<string> => {
 
 type Batch = { messages: readonly { body: Built; ack(): void }[] }
 
-/** The queue handler: build each failed push again, file each failed build
- * with what the retry came to, acknowledge every message. */
+/** The queue handler: note each failed build, build a commit's first
+ * failure again, send each to Sentry with what the retry came to, and
+ * acknowledge every message. A note that fails is telemetry and earns no
+ * retry: a retry nobody recorded is how the loop starts. */
 export let builds = async (batch: Batch, env: Env) => {
   for (let m of batch.messages) {
     let b = broke(m.body)
     if (b) {
-      let retry = b.again ? await rebuild(env) : undefined
-      await withScope((scope) => {
+      let once = await first(metaBreaks(env), b).catch((why) => {
+        caught(why, { request: `file ${b.request}` })
+        return false
+      })
+      let retry = once ? await rebuild(env) : undefined
+      withScope((scope) => {
         scope.setFingerprint(['build failed', b.build])
-        return fault(env, b.request, b.error, { ...b.tags, retry })
+        defect(b.error, { request: b.request, ...b.tags, retry })
       })
     }
     m.ack()
