@@ -119,11 +119,16 @@ addEventListener('error', (e) => {
   })
 }, true)
 
+// A refusal from ./api/client.js that the page never caught carries the
+// answer's status, and goes to the door as the fetch below sends it: the door
+// judges a no somebody meant, and only a break draws over the page.
 addEventListener('unhandledrejection', (e) => {
-  broke({
+  let status = e.reason && e.reason.status
+  ;(status < 500 ? send : broke)({
     message: `unhandled rejection: ${said(e.reason)}`,
     stack: e.reason && e.reason.stack,
     url: location.href,
+    status,
   })
 })
 

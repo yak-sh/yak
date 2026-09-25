@@ -170,6 +170,16 @@ slow('a refusal the door meant is not a break', async () => {
       })).status,
       204,
     )
+    // The same no, left uncaught by the page: the rejection carries the
+    // status client.js threw it with, and is the same no.
+    assertEquals(
+      (await report({
+        message: 'unhandled rejection: sign in to change this app',
+        url: 'https://club.yaks.app/runs/',
+        status: 401,
+      })).status,
+      204,
+    )
 
     // And the same rule for a no the app answered (C-32869 item 5, T-32874):
     // the app's worker asked an outside service with a key its owner
@@ -198,6 +208,7 @@ slow('a refusal the door meant is not a break', async () => {
 
     let told = await agent.tool('app_errors', app)
     assert(!told.includes('not_a_writer'), 'the refusal filed nothing')
+    assert(!told.includes('unhandled rejection'), 'nor its uncaught throw')
     assert(!told.includes('refused our key'), "the app's own no filed nothing")
     assertMatch(told, /boom is not a function/)
     assertMatch(told, /undefined is not an object/)

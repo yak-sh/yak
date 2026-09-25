@@ -278,6 +278,9 @@ slow('the served client: a page saves, lists and watches', async () => {
       (strangers as Error & { signIn: string }).signIn,
       /^https:\/\/yaks\.app\/login\?return=/,
     )
+    // And the status it came with, so the reporter can tell a no the page
+    // never caught from a break (report.js).
+    assertEquals((strangers as Error & { status: number }).status, 401)
     await assertRejects(
       () => store.query('work=build'),
       Error,

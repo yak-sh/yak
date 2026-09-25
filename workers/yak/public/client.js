@@ -59,7 +59,9 @@
 // When signing in is the way through, the kernel also names where: the throw
 // carries `signIn`, the login page already holding this page as its return
 // address, so `catch (e) { if (e.signIn) location = e.signIn }` sends them
-// and brings them back (T-32593).
+// and brings them back (T-32593). It carries the answer's `status` too, so a
+// refusal the page never caught reaches the reporter as the no it was
+// (report.js).
 let refused = (r, body) => {
   let said = null
   try {
@@ -71,6 +73,7 @@ let refused = (r, body) => {
     said?.message ?? said?.code ?? `${r.status} ${line || r.statusText}`,
   )
   if (said?.signIn) e.signIn = said.signIn
+  e.status = r.status
   return e
 }
 
