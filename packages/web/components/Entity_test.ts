@@ -191,3 +191,17 @@ Deno.test('a pending proposal keeps deletion named as deletion', () => {
   assertEquals(labels().includes('delete'), true)
   cache.value = {}
 })
+
+Deno.test('a role keeps its face without lifecycle actions', () => {
+  cache.value = {
+    role: {
+      entity: { eid: 'role', num: 7 },
+      doc: { eid: 'role', title: 'Coordinator', body: '' },
+      role: { eid: 'role', state: 'running', surface: 'native', scope: null },
+    },
+  }
+  let role = ent('role')
+  assertEquals(resolve(role).view, 'Role')
+  assertEquals(actionsFor(role).some((a) => a.label.includes('role')), false)
+  cache.value = {}
+})
