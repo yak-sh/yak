@@ -105,8 +105,8 @@ separate shell commands, so deploy mode restores Deno's path before it runs
 commit. `yak admin deploys --owner` estimates older, unannotated versions from
 commit times and marks that estimate in its output.
 
-The incident commands, using only this box’s Wrangler/GitHub login. An agent
-names the act with `--admin` and it is recorded as the platform’s admin person
+The incident commands, using this box’s Wrangler/GitHub login. An agent names
+the act with `--admin` and it is recorded as the platform’s admin person
 (`admin@bot.yak.sh`, seeded into the directory); Jeff names it with `--owner`
 and it is his. Same commands, same credentials — the flag says whose act it is,
 and the banner on stderr says so out loud.
@@ -126,9 +126,11 @@ session is kept beside the owner’s and is never the remembered default.
 `migrate.ts` (`MARKS` in older commits). Rollback retains every boundary main
 has carried, even after its deployment ages out of Cloudflare’s history. This
 conservatively includes failed builds. An inferred commit or incomplete
-migration history cannot authorize rollback. `errors` first tries Workers Logs
-with Wrangler’s local token; if unavailable it says so and tails the **next**
-requested duration, rather than claiming historical coverage. Live tails use the
+migration history cannot authorize rollback. `errors` reads the preceding window
+from Workers Logs. Wrangler’s login cannot (its OAuth has no Workers
+Observability scope), so it reads with a read-only API token kept in this box’s
+vault as `cloudflare observability`, an `op://` reference, and refuses with the
+line that keeps one when there is none. `tail` watches live traffic, using the
 box’s GNU `timeout` to stop Wrangler and its launcher together.
 
 `revert` requires main to match its remote, gates a fresh worktree, and uses the

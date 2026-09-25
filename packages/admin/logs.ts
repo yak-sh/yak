@@ -1,5 +1,11 @@
-// The owner's view of yaks.app logs. Wrangler holds this box's login; a
-// historical query may use that same token, but never a deployment secret.
+// The owner's view of yaks.app logs: `tail` watches live traffic through
+// Wrangler's login, and `errors` reads the past from Workers Logs. That
+// login cannot read the past: Wrangler's OAuth offers no Workers
+// Observability scope, and the query answers its token 403. So history reads
+// with a read-only API token this box's vault keeps as `cloudflare
+// observability`, an op:// reference, never a deployment secret. Without one,
+// `errors` refuses and says how to keep it; it never watches the future in
+// place of the past.
 import { parse } from '@std/toml'
 import { CallError } from '@yaks/tools'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
@@ -209,7 +215,6 @@ let live = async (
   root: string,
   receive: (row: Row) => void,
   note: Note,
-  seconds = 0,
 ) => {
   // GNU timeout owns a process group: stopping only npx leaves its Wrangler
   // child alive with the pipe open. Zero means tail until the owner stops it.
@@ -217,7 +222,7 @@ let live = async (
     args: [
       '--signal=INT',
       '--kill-after=5s',
-      `${seconds}s`,
+      '0s',
       ...WRANGLER,
       'tail',
       '--format',
@@ -243,16 +248,12 @@ let live = async (
       parser.push(chunk)
     }
     let status = await child.status
-    if (status.code != 0 && status.code != 124 && !stopped) return status.code
+    if (status.code != 0 && !stopped) return status.code
     try {
       parser.finish()
     } catch (error) {
-      if (status.code != 124 && !stopped) throw error
+      if (!stopped) throw error
       note('tail stopped during an event; that partial event was omitted')
-    }
-    if (seconds && status.code != 124 && !stopped) {
-      note('wrangler tail ended before the observation window finished')
-      return 1
     }
     return stopped ? 130 : 0
   } finally {
@@ -265,6 +266,13 @@ let live = async (
 
 // The query API uses a separate row per log or exception. Adapt it to the
 // tail shape, so both feeds share exactly the same signature computation.
+// The invocation itself is a row of its own (`cf-worker-event`), marked error
+// when it threw and carrying only its trigger as a message, so it is counted
+// and never a fault: what it threw arrives as the rows beside it. An
+// exception row keeps its message beside the exception, not in it.
+export let invocation = (row: Row) =>
+  object(row.$metadata).type == 'cf-worker-event'
+
 export let queried = (row: Row): Row => {
   let meta = object(row.$metadata)
   let worker = object(row.$workers)
@@ -273,12 +281,15 @@ export let queried = (row: Row): Row => {
   let message = source.message ?? meta.error ?? meta.message ?? row.source
   let exception = source.exception ??
     (typeof source.error == 'object' ? source.error : undefined)
-  let exceptions = Array.isArray(source.exceptions)
+  let exceptions = invocation(row)
+    ? []
+    : Array.isArray(source.exceptions)
     ? source.exceptions
     : exception
-    ? [exception]
+    ? [{ message: source.message, ...object(exception) }]
     : []
-  let bad = !!meta.error || meta.level == 'error' || source.level == 'error'
+  let bad = !invocation(row) &&
+    (!!meta.error || meta.level == 'error' || source.level == 'error')
   return {
     ...worker,
     eventTimestamp: timestamp,
@@ -296,25 +307,32 @@ export let queried = (row: Row): Row => {
   }
 }
 
-let history = async (root: string, seconds: number): Promise<Row[] | null> => {
-  // Capture the token without ever printing stdout or stderr. This command
-  // also refreshes Wrangler's OAuth login; no second credential is needed.
-  let [cmd, ...args] = WRANGLER
-  let auth = await new Deno.Command(cmd, {
-    args: [...args, 'auth', 'token', '--json'],
-    cwd: `${root}/workers/yak`,
-    stdin: 'null',
-    stdout: 'piped',
-    stderr: 'null',
-  }).output()
-  if (!auth.success) return null
-  let credential = object(JSON.parse(new TextDecoder().decode(auth.stdout)))
-  if (typeof credential.token != 'string') return null
+// The name the history token is kept under in this box's vault.
+export let OBSERVABILITY = 'cloudflare observability'
+
+// Said when there is no token, or Cloudflare refuses the one kept: the one
+// line that keeps a reference to it, and the door for live traffic.
+let keepIt = (why: string) =>
+  new CallError(
+    'observability',
+    `${why}. Workers Logs needs a Cloudflare API token that can read Workers ` +
+      'Observability, which a Wrangler login cannot carry. Keep an op:// ' +
+      `reference to one in this box's vault, once:\n  yak graph apply ` +
+      `--change '[{"entity":{"eid":"$s"},"secret":{"name":"${OBSERVABILITY}",` +
+      `"value":"op://<vault>/<item>/<field>"}}]'\nLive traffic is ` +
+      '`yak admin tail --admin`.',
+  )
+
+let history = async (
+  root: string,
+  seconds: number,
+  token: string,
+): Promise<Row[]> => {
   let config = parse(
     await Deno.readTextFile(`${root}/workers/yak/wrangler.toml`),
   )
   let account = text(config.account_id)
-  if (!account) return null
+  if (!account) throw new Error('workers/yak/wrangler.toml names no account')
   let end = Date.now()
   let rows: Row[] = [], offset: string | undefined
   let seen = new Set<string>()
@@ -325,7 +343,7 @@ let history = async (root: string, seconds: number): Promise<Row[] | null> => {
       {
         method: 'POST',
         headers: {
-          authorization: `Bearer ${credential.token}`,
+          authorization: `Bearer ${token}`,
           'content-type': 'application/json',
         },
         signal: AbortSignal.timeout(15_000),
@@ -350,19 +368,28 @@ let history = async (root: string, seconds: number): Promise<Row[] | null> => {
         }),
       },
     )
+    if (res.status == 401 || res.status == 403) {
+      await res.body?.cancel()
+      throw keepIt(
+        `Cloudflare refused the ${OBSERVABILITY} token (${res.status})`,
+      )
+    }
     if (!res.ok) {
       await res.body?.cancel()
-      return null
+      throw new Error(`the Workers Logs query answered ${res.status}`)
     }
     let body = object(await res.json())
-    let result = object(body.result)
-    let events = object(result.events)
-    if (body.success === false || !Array.isArray(events.events)) return null
+    let events = object(object(body.result).events)
+    if (body.success === false || !Array.isArray(events.events)) {
+      throw new Error('the Workers Logs query answered no events')
+    }
     let page = events.events.map(object)
     rows.push(...page)
     if (page.length < 2000) return rows
     offset = text(object(page.at(-1)?.$metadata).id)
-    if (!offset || seen.has(offset)) return null
+    if (!offset || seen.has(offset)) {
+      throw new Error('the Workers Logs query repeated a page')
+    }
     seen.add(offset)
   }
 }
@@ -370,30 +397,19 @@ let history = async (root: string, seconds: number): Promise<Row[] | null> => {
 export let tail = (root: string, out: Note, note: Note): Promise<number> =>
   live(root, (row) => out(eventLine(row)), note)
 
+// The preceding window, or a refusal: never the next one in its place.
 export let errors = async (
   root: string,
   since: string | undefined,
+  token: string | undefined,
   out: Note,
   note: Note,
-): Promise<number> => {
+): Promise<void> => {
   let seconds = duration(since)
-  let rows = await history(root, seconds).catch(() => null)
-  let faults: Fault[] = [], code = 0, count = 0
-  let receive = (row: Row) => {
-    count++
-    faults.push(...faultsOf(row))
-  }
-  if (rows) {
-    note(
-      `Workers Logs query: preceding ${seconds}s; stored logs may be sampled`,
-    )
-    rows.forEach((row) => receive(queried(row)))
-  } else {
-    note(
-      `Workers Logs query unavailable with this box's login. Watching the NEXT ${seconds}s through wrangler tail; this is live traffic, not historical logs.`,
-    )
-    code = await live(root, receive, note, seconds)
-  }
+  if (!token) throw keepIt(`No ${OBSERVABILITY} token is kept on this box`)
+  let rows = await history(root, seconds, token)
+  note(`Workers Logs query: preceding ${seconds}s; stored logs may be sampled`)
+  let faults = rows.flatMap((row) => faultsOf(queried(row)))
   let groups = grouped(faults)
   out('COUNT  FIRST SEEN  LAST SEEN  VERSION  ENTRYPOINT  MESSAGE / TOP FRAME')
   for (let group of groups) {
@@ -409,6 +425,9 @@ export let errors = async (
       ].map(line).join('  '),
     )
   }
-  out(`${count} events, ${faults.length} errors, ${groups.length} signatures`)
-  return code
+  out(
+    `${
+      rows.filter(invocation).length
+    } events, ${faults.length} errors, ${groups.length} signatures`,
+  )
 }

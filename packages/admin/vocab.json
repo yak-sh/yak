@@ -259,7 +259,7 @@
       "noun": "admin",
       "verb": "errors",
       "title": "Group yaks.app errors by signature",
-      "description": "yaks.app exceptions and error logs grouped by signature: count, first and last seen, entrypoint and version. Uses Workers Logs when available; otherwise observes the next window by tail. --admin or --owner is required.",
+      "description": "yaks.app exceptions and error logs from the preceding window, grouped by signature: count, first and last seen, entrypoint and version. Reads Workers Logs with the `cloudflare observability` token this box's vault keeps, and refuses without it; `admin tail` watches live traffic. --admin or --owner is required.",
       "input": {
         "since": {
           "type": "string",

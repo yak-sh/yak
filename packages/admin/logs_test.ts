@@ -1,10 +1,12 @@
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { CallError } from '@yaks/tools'
 import {
   duration,
+  errors,
   eventLine,
   faultsOf,
   grouped,
+  invocation,
   queried,
   records,
 } from './logs.ts'
@@ -184,7 +186,36 @@ Deno.test('Workers Logs rows use the same signature as console errors in tail', 
   )
 })
 
-Deno.test('since accepts seconds, minutes or hours and bounds live observation', () => {
+Deno.test('a Workers Logs invocation row is counted, never a fault; its exception keeps the message beside it', () => {
+  let meta = { level: 'error', origin: 'alarm' }
+  let workers = { entrypoint: 'Store', scriptVersion: { id: 'v2' } }
+  let thrown = {
+    timestamp: 5000,
+    $metadata: { ...meta, type: 'cf-worker', error: 'reset' },
+    $workers: workers,
+    source: {
+      message: 'reset',
+      exception: { name: 'Error', stack: '    at Object.tx (index.js:1:2)' },
+    },
+  }
+  let summary = {
+    timestamp: 5000,
+    $metadata: { ...meta, type: 'cf-worker-event', error: 'Fri Sep 25 2026' },
+    $workers: { ...workers, outcome: 'exception' },
+    source: { level: 'error', message: 'Fri Sep 25 2026' },
+  }
+  assertEquals(invocation(summary), true)
+  assertEquals(faultsOf(queried(summary)), [])
+  assertEquals(faultsOf(queried(thrown)), [{
+    message: 'Error: reset',
+    frame: 'at Object.tx (index.js:1:2)',
+    timestamp: 5000,
+    entrypoint: 'Store',
+    version: 'v2',
+  }])
+})
+
+Deno.test('since accepts seconds, minutes or hours, up to a day', () => {
   for (
     let [input, expected] of [['10m', 600], ['1h', 3600], ['7', 7], [
       '30s',
@@ -195,4 +226,22 @@ Deno.test('since accepts seconds, minutes or hours and bounds live observation',
   for (let input of ['0', '-1', '1.5m', 'forever', '25h']) {
     assertThrows(() => duration(input), CallError, '--since')
   }
+})
+
+Deno.test('errors without a kept token refuses with the fix, and never tails forward', async () => {
+  let said: string[] = []
+  let refusal = await assertRejects(
+    () =>
+      errors(
+        '/nowhere',
+        '30m',
+        undefined,
+        (l) => said.push(l),
+        (l) => said.push(l),
+      ),
+    CallError,
+    'cloudflare observability',
+  )
+  assertEquals(said, [])
+  assertEquals(/yak graph apply .*op:\/\/<vault>/.test(refusal.message), true)
 })

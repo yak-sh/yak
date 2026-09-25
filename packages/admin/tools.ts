@@ -23,14 +23,22 @@
 // graph too, where @yaks/mail files the letter.
 //
 // The platform verbs (deploys, errors, tail, rollback, revert) act on this
-// checkout and this box's Cloudflare and GitHub logins, and print as they go:
+// checkout and this box's Cloudflare and GitHub logins (errors reads with the
+// read-only token this graph's vault keeps, ./logs.ts), and print as they go:
 // a tail runs until it is interrupted, and a revert reports each step of a
 // wait that can take twenty minutes.
 
 import { fileURLToPath } from 'node:url'
 import { argsOf, type Bundle, type Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import { isOpRef, type Local, opRead, sealed, unsealed } from '@yaks/secrets'
+import {
+  isOpRef,
+  type Local,
+  opRead,
+  reveal,
+  sealed,
+  unsealed,
+} from '@yaks/secrets'
 import { CallError } from '@yaks/tools'
 import { ADMIN, BOT, isTestAddress } from '../../workers/yak/lib/bots.ts'
 import {
@@ -68,7 +76,7 @@ import {
   zone,
 } from './api.ts'
 import { deploys, rollback, table } from './deploys.ts'
-import { errors, tail } from './logs.ts'
+import { errors, OBSERVABILITY, tail } from './logs.ts'
 import { revert } from './revert.ts'
 
 type Args = Record<string, unknown>
@@ -426,12 +434,11 @@ export let runs = (host: { vault: Local; state?: string }): Runs => {
       return [said(call, table(await deploys(root)))]
     }),
 
-    admin_errors: verb(async (call) => {
+    admin_errors: verb(async (call, vault) => {
       platform(argsOf(call))
-      return ended(
-        'errors',
-        await errors(root, word(argsOf(call), 'since') ?? '10m', out, note),
-      )
+      let token = await reveal(vault, OBSERVABILITY, { env: () => undefined })
+      await errors(root, word(argsOf(call), 'since'), token, out, note)
+      return []
     }),
 
     admin_tail: verb(async (call) => {
