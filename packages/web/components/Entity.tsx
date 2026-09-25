@@ -179,15 +179,15 @@ define([
   },
   {
     view: 'Summary',
-    match: parse('.entry .prompt .message'),
+    match: parse('.entry .prompt .content'),
     Render: PromptSummary,
   },
   { view: 'Summary', match: parse('.entry .result'), Render: ResultSummary },
-  { view: 'Summary', match: parse('.entry .message'), Render: MessageSummary },
+  { view: 'Summary', match: parse('.entry .content'), Render: MessageSummary },
   { view: 'Summary', match: parse('.entry'), Render: EntrySummary },
   { view: 'Full', match: parse('.entry .call .bash'), Render: CommandFull },
   { view: 'Full', match: parse('.entry .result'), Render: ResultFull },
-  { view: 'Full', match: parse('.entry .message'), Render: MessageFull },
+  { view: 'Full', match: parse('.entry .content'), Render: MessageFull },
   {
     view: 'Entry.Debug',
     match: parse('.entry'),

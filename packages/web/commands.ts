@@ -645,10 +645,10 @@ export let commands: Record<string, Command> = {
       let g = graphOf(ctx)
       let me = ctx.session ? g.session(ctx.session) : undefined
       if (!me) throw new Error('meta: run under a session')
-      // The newest message entry of my session — the transcript position the
+      // The newest prose entry of my session — the transcript position the
       // memo anchors to. The db reader answers entries in seq order already;
       // the sort makes the cache reader agree, so .at(-1) is newest either way.
-      let anchor = g.select(`.entry.session=${me.eid} .message.role!`)
+      let anchor = g.select(`.entry.session=${me.eid} .content!`)
         .sort((a, b) =>
           Number(a.comps.entry?.seq ?? 0) - Number(b.comps.entry?.seq ?? 0)
         )

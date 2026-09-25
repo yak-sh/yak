@@ -4,13 +4,22 @@ import { identityEid } from '@yaks/graph'
 import { h, render } from 'preact'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { cache, deps, ent, landSub, repoUrl, useRoute } from '../../live.ts'
+import {
+  cache,
+  deps,
+  ent,
+  landSub,
+  repoUrl,
+  resetSignals,
+  useRoute,
+} from '../../live.ts'
 import { type Ent } from '../../types.ts'
 import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
 import {
   mentionSig,
   resolveMentions,
+  Session,
   SessionContext,
   SessionDiagnostics,
   SessionEntry,
@@ -544,5 +553,94 @@ Deno.test('session lifecycle shares the task summary lane', () => {
     cache.value = {}
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+Deno.test('Session explains loading, ready-empty, rows, and read failure', async () => {
+  let priorRoute = useRoute(() => {})
+  let session = (
+    eid: string,
+    num: number,
+    status: 'running' | 'settled',
+  ) => {
+    cache.value = {
+      [eid]: {
+        entity: { eid, num },
+        session: { eid, id: eid, status },
+      },
+    }
+    resetSignals()
+    return ent(eid)
+  }
+  let state = (m: ReturnType<typeof mount>) =>
+    m.root.querySelector('.Session_EntryState')?.textContent
+  let mounted: ReturnType<typeof mount> | undefined
+  try {
+    let e = session('session-loading-copy', 7101, 'running')
+    mounted = mount(<Session e={e} />)
+    assertEquals(state(mounted), 'Loading entries for S-7101…')
+
+    landSub({ sub: `entries:${e.eid}`, changes: [], replace: true })
+    await Promise.resolve()
+    assertEquals(state(mounted), 'No entries yet')
+
+    // A person's input and the model's answer, as @yaks/session writes them.
+    let line = (
+      eid: string,
+      seq: number,
+      comps: [string, Record<string, unknown>][],
+    ) => [
+      { eid, name: 'entry', comp: { session: e.eid, seq } },
+      ...comps.map(([name, comp]) => ({ eid, name, comp })),
+    ]
+    landSub({
+      sub: `entries:${e.eid}`,
+      replace: true,
+      changes: [
+        ...line('said', 1, [['content', { body: 'what a person said' }]]),
+        ...line('answer', 2, [
+          ['content', { body: 'what the model said' }],
+          ['output', { source: 'ask' }],
+        ]),
+      ],
+    })
+    await Promise.resolve()
+    assertEquals(state(mounted), undefined)
+    let log = mounted.root.querySelector('.Session_Log')!
+    assertEquals(
+      log.querySelector('.Entry-user')?.textContent.trim(),
+      'what a person said',
+    )
+    assertEquals(
+      log.querySelector('.Entry-agent')?.textContent.trim(),
+      'what the model said',
+    )
+    mounted.free()
+    mounted = undefined
+
+    e = session('session-ended-copy', 7103, 'settled')
+    landSub({ sub: `entries:${e.eid}`, changes: [], replace: true })
+    mounted = mount(<Session e={e} />)
+    assertEquals(state(mounted), 'No entries recorded')
+    mounted.free()
+    mounted = undefined
+
+    e = session('session-failed-copy', 7104, 'settled')
+    landSub({
+      sub: `entries:${e.eid}`,
+      changes: [],
+      replace: true,
+      error: 'source unreadable',
+    })
+    mounted = mount(<Session e={e} />)
+    assertEquals(
+      state(mounted),
+      `Entries could not be loaded: source unreadable [entries:${e.eid}] retry`,
+    )
+  } finally {
+    mounted?.free()
+    useRoute(priorRoute)
+    cache.value = {}
+    resetSignals()
   }
 })

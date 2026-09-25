@@ -6,6 +6,7 @@
 //   .doc.title=Hello    the explicit spelling, for collisions (pin/camera
 //                       geometry) or clarity
 // Values that look like numbers become numbers.
+import { kindOf as entryKind } from '@yaks/session/status'
 import { IdError } from './types.ts'
 import { ownsSessionBranch } from './session_worktree.ts'
 import {
@@ -1587,21 +1588,14 @@ export let taskBlock = (
   return out
 }
 
-// The owner's own words: a user-role message entry of a session a human sat
-// at — one with a terminal pane. Not a managed run (its user turns are the
-// brief and injected comments), not a subagent (its user turns are the
-// parent's prompts), and not a scripted run (a cron sweep's `claude -p` has
-// no pane; its one user turn is the launcher's prompt). Within a session the
-// `prompt` tag is the mark: ingest puts it on the turns the human typed
-// (transcript origin.kind 'human'), and never on what the harness injects as
-// the user role — hook feedback, notifications, wrappers, the compaction
-// summary. Entries from before the tag existed get it from
-// `task backfill prompt`.
-export let spoken = (r: Row, s?: Row) =>
-  !!r.comps.prompt && r.comps.message?.role == 'user' &&
-  !!String(r.comps.content?.body ?? '').trim() &&
-  !!s?.comps.session?.pane &&
-  s.comps.session.origin != 'managed' && s.comps.session.agent_type == null
+// The owner's own words: an input entry (prose with no `output`, and not
+// instructions or passive context the harness admitted) that a person wrote.
+// The same `created.by` stamp that says who made anything else says who typed
+// a turn.
+let spoken = (r: Row, person: (stamp?: Record<string, unknown>) => boolean) =>
+  entryKind({ entity: { eid: r.eid }, ...r.comps }) == 'input' &&
+  !!String(r.comps.content?.body ?? '').trim() && !r.comps.prompt &&
+  !r.comps.notice && person(r.comps.created)
 
 let when = (at: string) => at.slice(5, 16).replace('T', ' ')
 
@@ -1676,7 +1670,7 @@ export let authored = (rows: Row[], byEid: Map<string, Row>): Said[] => {
   for (let r of rows) {
     if (r.comps.entry) {
       let s = byEid.get(String(r.comps.entry.session))
-      if (spoken(r, s)) {
+      if (spoken(r, by)) {
         out.push({
           at: bornAt(r),
           act: 'turn',

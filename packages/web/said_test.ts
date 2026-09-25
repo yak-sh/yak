@@ -1,9 +1,8 @@
 // `## owner said` / `task said` — everything a person authored, on one
 // timeline, ahead of the fleet's noise (M-31946): typed turns, and every act
-// the stamps attribute to a person. A managed run's user turns are its brief,
-// a subagent's are its parent's prompts, an unmarked user turn is the
-// harness's, and a gesture the web writes in the owner's name is not
-// authorship.
+// the stamps attribute to a person. A typed turn is an input entry a person
+// signed; one nobody signed is the harness's, and a gesture the web writes in
+// the owner's name is not authorship.
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { contextDigest, rows, saidLines } from './client.ts'
@@ -14,20 +13,17 @@ let J = 'aaaaaaaa-0000-4000-8000-000000000007'
 let A = 'aaaaaaaa-0000-4000-8000-000000000008' // an agent actor
 let T = 'aaaaaaaa-0000-4000-8000-000000000002'
 let M = 'cccccccc-0000-4000-8000-000000000001'
-let SUB = 'cccccccc-0000-4000-8000-000000000002'
-let CRON = 'cccccccc-0000-4000-8000-000000000003'
 
 let entry = (
   eid: string,
   session: string,
   body: string,
-  at: string,
+  created: { at: string; by?: string },
   extra: Record<string, Record<string, unknown>> = {},
 ) => [
   { eid, name: 'entry', comp: { session, seq: 1 } },
-  { eid, name: 'message', comp: { role: 'user' } },
   { eid, name: 'content', comp: { body } },
-  { eid, name: 'created', comp: { at } },
+  { eid, name: 'created', comp: created },
   ...Object.entries(extra).map(([name, comp]) => ({ eid, name, comp })),
 ]
 
@@ -36,21 +32,13 @@ let base: Snapshot = {
     { eid: J, name: 'entity', comp: { eid: J, num: 7, created_at: '' } },
     { eid: J, name: 'person', comp: {} },
     { eid: S, name: 'entity', comp: { eid: S, num: 1, created_at: '' } },
-    { eid: S, name: 'session', comp: { id: 'sess-x', cwd: '/w', pane: '%1' } },
+    { eid: S, name: 'session', comp: { id: 'sess-x' } },
     { eid: T, name: 'entity', comp: { eid: T, num: 2, created_at: '' } },
     { eid: T, name: 'doc', comp: { title: 'First', body: '' } },
     { eid: T, name: 'task', comp: { status: 'wip' } },
     { eid: T, name: 'filed', comp: { priority: 0 } },
-    { eid: CRON, name: 'entity', comp: { eid: CRON, num: 8, created_at: '' } },
-    {
-      eid: CRON,
-      name: 'session',
-      comp: { id: 'sess-cron', origin: 'external' },
-    },
     { eid: M, name: 'entity', comp: { eid: M, num: 9, created_at: '' } },
-    { eid: M, name: 'session', comp: { id: 'sess-m', origin: 'managed' } },
-    { eid: SUB, name: 'entity', comp: { eid: SUB, num: 10, created_at: '' } },
-    { eid: SUB, name: 'session', comp: { id: 'sess-sub', agent_type: 'x' } },
+    { eid: M, name: 'session', comp: { id: 'sess-m' } },
   ],
   deps: [],
 }
@@ -58,26 +46,32 @@ let base: Snapshot = {
 let spoke: Snapshot = {
   changes: [
     ...base.changes,
-    ...entry('e-2', S, 'second thing\nmore', '2026-09-01T19:40:00.000Z', {
-      prompt: {},
+    ...entry('e-2', S, 'second thing\nmore', {
+      at: '2026-09-01T19:40:00.000Z',
+      by: J,
     }),
-    ...entry('e-1', S, 'first thing', '2026-09-01T19:25:00.000Z', {
-      prompt: {},
+    ...entry('e-1', S, 'first thing', {
+      at: '2026-09-01T19:25:00.000Z',
+      by: J,
     }),
-    // A user turn without the prompt tag is one the harness injected.
-    ...entry('e-hook', S, 'Stop hook feedback: x', '2026-09-01T19:32:00.000Z'),
-    ...entry('e-tool', S, 'tool output', '2026-09-01T19:27:00.000Z', {
-      result: {},
+    // An input nobody signed is one the harness injected.
+    ...entry('e-hook', S, 'Stop hook feedback: x', {
+      at: '2026-09-01T19:32:00.000Z',
     }),
-    ...entry('e-brief', M, 'you are a coder', '2026-09-01T19:28:00.000Z', {
-      prompt: {},
-    }),
-    ...entry('e-sub', SUB, 'parent prompt', '2026-09-01T19:29:00.000Z', {
-      prompt: {},
-    }),
-    ...entry('e-cron', CRON, 'sweep mode', '2026-09-01T19:30:00.000Z', {
-      prompt: {},
-    }),
+    // Not inputs, whoever wrote them: a tool's result, the model's answer,
+    // and instructions admitted into the transcript.
+    ...entry('e-tool', S, 'tool output', {
+      at: '2026-09-01T19:27:00.000Z',
+      by: J,
+    }, { result: { call: 'c' } }),
+    ...entry('e-answer', S, 'on it', {
+      at: '2026-09-01T19:31:00.000Z',
+      by: J,
+    }, { output: { source: 'a' } }),
+    ...entry('e-brief', M, 'you are a coder', {
+      at: '2026-09-01T19:28:00.000Z',
+      by: J,
+    }, { prompt: { scope: 'local' } }),
     // A comment the owner wrote on T, a task he filed, a memory an agent
     // wrote from his feedback, a design he decided, a task an agent filed
     // that he later edited, and his cursor — a gesture, not an act.

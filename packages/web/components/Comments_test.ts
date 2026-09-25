@@ -22,10 +22,9 @@ Deno.test('viaName names a session by its chip id, never its harness uuid', () =
   cache.value = {}
 })
 
-Deno.test('graph-native prose is one ordered user entry', () => {
+Deno.test('graph-native prose is one ordered input entry', () => {
   assertEquals(composerChanges('session', 'keep going', true, 'input'), [
     { eid: 'input', name: 'entry', comp: { session: 'session' } },
-    { eid: 'input', name: 'message', comp: { role: 'user' } },
     { eid: 'input', name: 'content', comp: { body: 'keep going' } },
   ])
   assertEquals(

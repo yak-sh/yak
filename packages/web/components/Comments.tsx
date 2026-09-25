@@ -122,8 +122,8 @@ export let prompt = (e: Ent, entry = false, model?: string) => {
     : 'comment…'
 }
 
-// Session entries are already a wire vocabulary: the browser names the
-// partition and message; apply() mints order and freezes the whole batch.
+// Session entries are already a wire vocabulary: an input is an entry with
+// `content` and no `output` (@yaks/session); apply() mints its order.
 export let composerChanges = (
   eid: string,
   body: string,
@@ -133,7 +133,6 @@ export let composerChanges = (
   entry && !orderIn(body.split('\n')[0])
     ? [
       { eid: id, name: 'entry', comp: { session: eid } },
-      { eid: id, name: 'message', comp: { role: 'user' } },
       { eid: id, name: 'content', comp: { body } },
     ]
     : [

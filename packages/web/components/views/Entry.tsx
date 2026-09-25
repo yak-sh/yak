@@ -77,6 +77,8 @@ let more = (show: (() => void) | undefined, text: string, open = false) =>
     </More>
   )
 let body = (e: Ent) => e.content?.body ?? ''
+// Who a prose entry is from: a model's output wears `output` (@yaks/session).
+let said = (e: Ent) => e.output ? 'agent' : 'user'
 let failed = (e: Ent) =>
   (e.exit?.code != null && e.exit.code != 0) || !!e.error || !!e.exception ||
   (e.response?.status != null && e.response.status >= 400)
@@ -326,7 +328,7 @@ export let ResultSummary = (
 export let MessageSummary = ({ e }: { e: Ent }) => {
   let repo = useRepoUrl(e)
   return (
-    <Frame mod={e.message?.role}>
+    <Frame mod={said(e)}>
       <Markdown text={body(e)} repo={repo} />
     </Frame>
   )
@@ -376,7 +378,7 @@ export let ResultFull = ({ e }: { e: Ent }) => (
 export let MessageFull = ({ e }: { e: Ent }) => {
   let repo = useRepoUrl(e)
   return (
-    <Frame mod={e.message?.role}>
+    <Frame mod={said(e)}>
       <Markdown text={body(e)} repo={repo} />
     </Frame>
   )

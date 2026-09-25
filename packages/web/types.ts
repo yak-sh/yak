@@ -1131,6 +1131,9 @@ export type Model = {
   grade?: string | null
 }
 
+// A tool a transcript's calls name (@yaks/tools `tool`).
+export type Tool = { eid: string; name?: string | null }
+
 // A distilled fact the fleet keeps: content in the doc, provenance in
 // created, scope in scope (the project it belongs to; absent = a
 // principle every operator carries). last_confirmed_at is the last explicit
@@ -1325,6 +1328,7 @@ export type EntCore = {
   feedback?: Feedback
   persona?: Persona
   model?: Model
+  tool?: Tool
   recall?: Recall
   created?: Created
   updated?: Updated

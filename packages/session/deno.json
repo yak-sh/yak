@@ -10,7 +10,8 @@
     "./routes": "./routes.ts",
     "./views": "./views.ts",
     "./service": "./service.ts",
-    "./turn": "./turn.ts"
+    "./turn": "./turn.ts",
+    "./status": "./status.ts"
   },
   "license": "Apache-2.0",
   "description": "Represents sessions as graph transcripts, derives status from their entries, manages claims, and runs a daemon that responds to new entries.",

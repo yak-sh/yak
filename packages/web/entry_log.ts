@@ -1,6 +1,10 @@
-// The provider-neutral face of a graph-native Session partition. Ordered
-// entry facets become the same LogRow vocabulary the process-backed adapters
-// serve, while readiness remains derived from leases and outcomes.
+// A session's transcript as the page draws it. Each entry is one yak entry
+// (packages/session/README.md#the-transcript): what kind it is, and whether the
+// transcript is still working, are @yaks/session's own reads (`kindOf`,
+// `statusOf`, `openCalls`), so the page and the host never disagree about them.
+// A model or a tool is a referenced entity; `name` turns its eid into words.
+import { kindOf, openCalls, statusOf, textOf } from '@yaks/session/status'
+import type { Bundle } from '@yaks/graph'
 import { type LogRow } from './types.ts'
 
 export type EntryRow = {
@@ -19,14 +23,12 @@ export type GraphLogEntry = {
 
 export type GraphLog = {
   entries: GraphLogEntry[]
-  busy: boolean
-  terminal: boolean
-  latest: number
-  activity?: { kind: 'tool' | 'model' | 'runner' | 'working'; label: string }
-  model?: string
-  stderr?: string
+  activity?: { kind: 'tool' | 'model' | 'runner'; label: string }
   context?: number
 }
+
+/** The words for a referenced entity (a model, a tool), when they're held. */
+export type Names = (eid: string) => string | undefined
 
 let text = (value: unknown) => String(value ?? '')
 let clip = (value: unknown, limit = 240) => {
@@ -34,286 +36,160 @@ let clip = (value: unknown, limit = 240) => {
   return out.length > limit ? `${out.slice(0, limit - 1)}…` : out
 }
 
-let toolName = (comps: EntryRow['comps']) =>
-  comps.bash
-    ? 'shell'
-    : comps.patch
-    ? 'apply_patch'
-    : comps.task_context
-    ? 'task_context'
-    : comps.graph_query
-    ? 'graph_query'
-    : comps.apply
-    ? 'graph_apply'
-    : comps.tool_use
-    ? text(comps.tool_use.name)
-    : 'tool'
+let bundle = (row: EntryRow): Bundle => ({
+  entity: { eid: row.eid },
+  ...row.comps,
+})
 
-let detail = (comps: EntryRow['comps']) =>
-  comps.patch
-    ? text(comps.patch.path || '.')
-    : comps.graph_query
-    ? clip(comps.graph_query.query)
-    : comps.apply
-    ? clip(comps.apply.changes)
-    : undefined
-
-let usage = (comps: EntryRow['comps']) =>
-  comps.usage
-    ? JSON.stringify({
-      input_tokens: Number(comps.usage.input ?? 0),
-      cached_input_tokens: Number(comps.usage.cached ?? 0),
-      output_tokens: Number(comps.usage.output ?? 0),
-      reasoning_tokens: Number(comps.usage.reasoning ?? 0),
-    })
-    : undefined
-
-// Busy is a lifecycle fact; activity says which unresolved edge owns it. A
-// lease distinguishes work an executor has picked up from work still queued.
-let activityOf = (rows: EntryRow[]) => {
-  let cancelled = new Set(
-    rows.flatMap((row) =>
-      row.comps.cancel?.target ? [text(row.comps.cancel.target)] : []
-    ),
-  )
-  let results = new Set(
-    rows.flatMap((row) =>
-      row.comps.result?.call ? [text(row.comps.result.call)] : []
-    ),
-  )
-  let outputs = new Set(
-    rows.flatMap((row) =>
-      row.comps.output?.source ? [text(row.comps.output.source)] : []
-    ),
-  )
-  let call = rows.findLast((row) =>
-    row.comps.call && !row.comps.failed && !cancelled.has(row.eid) &&
-    !results.has(row.eid)
-  )
-  if (call) {
-    let name = toolName(call.comps)
-    return {
-      kind: 'tool' as const,
-      label: call.comps.lease ? `running ${name}…` : `waiting for ${name}…`,
-    }
+// Token counts as the turn row serializes them. A provider reports either
+// spelling (@yaks/model `usage`), so each count reads whichever is present.
+let usage = (u?: Record<string, unknown>) => {
+  if (!u) return undefined
+  let n = (a: string, b: string) => Number(u[a] ?? u[b] ?? 0)
+  return {
+    input: n('input', 'input_tokens'),
+    json: JSON.stringify({
+      input_tokens: n('input', 'input_tokens'),
+      cached_input_tokens: n('cached', 'cached_tokens'),
+      output_tokens: n('output', 'output_tokens'),
+      reasoning_tokens: n('reasoning', 'reasoning_tokens'),
+    }),
   }
-  let generation = rows.findLast((row) =>
-    row.comps.generation && !row.comps.failed && !cancelled.has(row.eid) &&
-    !row.comps.delivered && !outputs.has(row.eid)
-  )
-  if (generation) {
-    return generation.comps.lease
-      ? { kind: 'model' as const, label: 'waiting for model…' }
-      : { kind: 'runner' as const, label: 'waiting for runner…' }
-  }
-  return rows.some((row) => row.comps.lease)
-    ? { kind: 'working' as const, label: 'working…' }
-    : undefined
 }
+
+let toolOf = (c: EntryRow['comps'], name: Names) =>
+  name(text(c.call?.to)) || 'tool'
+
+let failure = (c: EntryRow['comps']) =>
+  c.exception
+    ? text(c.exception.message) || text(c.content?.body) || 'exception'
+    : c.error
+    ? [text(c.error.code), text(c.content?.body)].filter(Boolean).join(': ')
+    : undefined
 
 let shown = (
   row: EntryRow,
   byEid: Map<string, EntryRow>,
+  name: Names,
 ): LogRow | undefined => {
   let c = row.comps
-  if (c.failed) return { kind: 'error', text: text(c.failed.message) }
-  if (c.message) {
-    return {
-      kind: 'say',
-      role: c.message.role == 'user' ? 'user' : 'agent',
-      text: text(c.content?.body),
-    }
+  let b = bundle(row)
+  let kind = kindOf(b)
+  if (kind == 'exception' || kind == 'error') {
+    return { kind: 'error', text: failure(c)! }
   }
-  if (c.reasoning) {
-    let body = text(c.content?.body)
-    return body ? { kind: 'reason', text: body } : undefined
-  }
-  if (c.generation) {
-    let model = text(c.generation.serving_model || c.generation.model)
-    if (c.delivered || c.usage) {
-      return { kind: 'turn', model, usage: usage(c) }
-    }
-    return { kind: 'sys', tag: 'generation', text: model }
-  }
-  if (c.attention) return { kind: 'sys', tag: 'attention' }
-  if (c.call) {
-    if (c.bash) {
-      return {
-        kind: 'exec',
-        command: text(c.bash.command),
-        desc: 'Command',
+  if (kind == 'stop') return { kind: 'sys', tag: 'stop' }
+  if (kind == 'ask') {
+    let model = name(text(c.ask?.to)) ?? name(text(c.using?.model))
+    let u = usage(c.usage)
+    return u
+      ? {
+        kind: 'turn',
+        model,
+        usage: u.json,
+        ...u.input ? { context: u.input } : {},
       }
-    }
-    return {
-      kind: 'tool',
-      name: toolName(c),
-      detail: c.tool_use ? clip(c.tool_use.detail) : detail(c),
-    }
+      : { kind: 'sys', tag: 'ask', ...model ? { text: model } : {} }
   }
-  if (c.result) {
-    let call = byEid.get(text(c.result.call))
-    let name = call ? toolName(call.comps) : 'tool'
-    let body = clip(c.content?.body)
-    let stderr = clip(c.stderr?.text)
+  if (kind == 'call') {
+    let args = (c.call?.args ?? {}) as Record<string, unknown>
+    let tool = toolOf(c, name)
+    return typeof args.command == 'string'
+      ? { kind: 'exec', command: args.command, desc: tool }
+      : { kind: 'tool', name: tool, detail: clip(JSON.stringify(args)) }
+  }
+  if (kind == 'result') {
+    let call = byEid.get(text(c.result?.call))
+    let body = clip(textOf(b))
     let code = c.exit?.code == null ? undefined : Number(c.exit.code)
     return {
       kind: 'tool',
-      name: `↳ ${name}`,
+      name: `↳ ${call ? toolOf(call.comps, name) : 'tool'}`,
       ...body ? { detail: body } : {},
       ...code == null ? {} : { ok: code == 0 },
-      ...stderr ? { error: stderr } : {},
     }
-  }
-  if (c.checkpoint) {
-    return { kind: 'sys', tag: 'checkpoint', text: clip(c.content?.body) }
   }
   if (c.cancel) {
     return { kind: 'sys', tag: 'cancel', text: text(c.cancel.target) }
   }
-  if (c.opaque) {
-    let format = text(c.opaque.format)
-    return format.startsWith('openai:failed:')
-      ? undefined
-      : { kind: 'sys', tag: format }
+  if (c.checkpoint) return { kind: 'sys', tag: 'checkpoint' }
+  if (c.attention) return { kind: 'sys', tag: 'attention' }
+  let body = textOf(b)
+  if (kind == 'output') {
+    if (c.reasoning) return body ? { kind: 'reason', text: body } : undefined
+    return { kind: 'say', role: 'agent', text: body }
+  }
+  if (kind == 'input') {
+    // Instructions admitted into the transcript (@yaks/context `prompt`) and
+    // passive context (`notice`) are the harness's, not something said.
+    if (c.prompt) return { kind: 'sys', tag: 'instructions', text: clip(body) }
+    if (c.notice) return { kind: 'sys', tag: 'notice', text: clip(body) }
+    return { kind: 'say', role: 'user', text: body }
   }
   return undefined
 }
 
-let raw = (row: EntryRow) =>
-  JSON.stringify({ eid: row.eid, seq: row.seq, ...row.comps })
-
-// The busy/terminal FACT a SessionDot needs, computed WITHOUT the entries
-// build — the per-row raw()/shown() mapping in graphLog that dominated the
-// 157ms dot render. busy and terminal are mutually exclusive (terminal
-// requires !busy), so one enum captures the log-derived standing: `busy` (a
-// generation/call in flight), `terminal` (the turn returned, failed, or was
-// interrupted with nothing pending), or `idle` (neither). graphLog reuses this,
-// so the dot's O(1) read and the full log can never drift. A server can
-// materialize this onto the session (a facet) so the dot never scans.
-export type SessionEnd = 'completed' | 'failed' | 'interrupted'
-
-export let sessionStateOf = (
-  source: EntryRow[],
-): { standing: 'busy' | 'terminal' | 'idle'; end?: SessionEnd } => {
-  let rows = source.toSorted((a, b) => a.seq - b.seq)
-  let cancelled = new Set(
-    rows.flatMap((row) =>
-      row.comps.cancel?.target ? [text(row.comps.cancel.target)] : []
-    ),
-  )
-  let results = new Set(
-    rows.flatMap((row) =>
-      row.comps.result?.call ? [text(row.comps.result.call)] : []
-    ),
-  )
-  let outputs = new Set(
-    rows.flatMap((row) =>
-      row.comps.output?.source ? [text(row.comps.output.source)] : []
-    ),
-  )
-  let busy = rows.some((row) => {
-    let c = row.comps
-    if (c.lease) return true
-    if (c.failed || cancelled.has(row.eid)) return false
-    if (c.generation) {
-      return !c.delivered && !outputs.has(row.eid)
+// What the transcript is waiting on, when it's working: a call no result has
+// answered yet, the model, or the daemon that has an input to ask about.
+let activityOf = (
+  bundles: Bundle[],
+  name: Names,
+): GraphLog['activity'] => {
+  let status = statusOf(bundles)
+  if (status != 'running' && status != 'pending') return undefined
+  let call = openCalls(bundles).at(-1)
+  if (call) {
+    let tool = toolOf(call as EntryRow['comps'], name)
+    let running = (call.execution as { state?: unknown } | undefined)?.state ==
+      'running'
+    return {
+      kind: 'tool',
+      label: running ? `running ${tool}…` : `waiting for ${tool}…`,
     }
-    return !!c.call && !results.has(row.eid)
-  })
-  if (busy) return { standing: 'busy' }
-  let generation = rows.filter((row) => row.comps.generation).at(-1)
-  let edge =
-    rows.find((row) => row.eid == generation?.comps.generation?.through)?.seq ??
-      generation?.seq ?? 0
-  let stopped = generation
-    ? rows.findLast((row) => row.comps.cancel?.target == generation.eid)?.seq ??
-      0
-    : 0
-  let input = rows.some((row) =>
-    row.seq > Math.max(edge, stopped) && (row.comps.attention ||
-      (row.comps.message?.role == 'user' && !row.comps.output))
-  )
-  if (stopped && !input) return { standing: 'terminal', end: 'interrupted' }
-  // Match advanceable(): a healthy generation that asked for tools still
-  // owes the model their outcomes, even when a call failed or was cancelled.
-  // Between settling the last call and appending the next generation there
-  // is no lease, but this is NOT a terminal turn (not even if prose beside
-  // the calls was labelled final_answer). Boot recovery exposes this gap.
-  if (
-    generation && !generation.comps.failed && !stopped &&
-    rows.some((row) =>
-      row.comps.call && row.comps.output?.source == generation.eid
-    )
-  ) return { standing: 'idle' }
-  let completed = !input &&
-    rows.some((row) =>
-      row.comps.output?.source == generation?.eid &&
-      row.comps.output?.phase == 'final_answer' &&
-      row.comps.message?.role == 'agent'
-    )
-  if (completed) return { standing: 'terminal', end: 'completed' }
-  if (input) return { standing: 'idle' }
-  let turn = rows.filter((row) => row.seq >= edge)
-  let turnEids = new Set(turn.map((row) => row.eid))
-  if (
-    turn.some((row) =>
-      row.comps.cancel?.target &&
-      (row.comps.cancel.target == generation?.eid ||
-        turnEids.has(String(row.comps.cancel.target)))
-    )
-  ) return { standing: 'terminal', end: 'interrupted' }
-  if (turn.some((row) => row.comps.failed)) {
-    return { standing: 'terminal', end: 'failed' }
   }
-  return { standing: 'idle' }
+  return status == 'running'
+    ? { kind: 'model', label: 'waiting for model…' }
+    : { kind: 'runner', label: 'waiting for runner…' }
 }
 
-export let standingOf = (source: EntryRow[]) => sessionStateOf(source).standing
-
-export let graphLog = (source: EntryRow[]): GraphLog => {
+export let graphLog = (
+  source: EntryRow[],
+  name: Names = () => undefined,
+): GraphLog => {
   let rows = source.toSorted((a, b) => a.seq - b.seq)
   let byEid = new Map(rows.map((row) => [row.eid, row]))
-  let stand = standingOf(rows)
-  let busy = stand == 'busy'
-  let terminal = stand == 'terminal'
-  let activity = busy ? activityOf(rows) : undefined
-  let generation = rows.filter((row) => row.comps.generation).at(-1)
-  let model = generation?.comps.generation
+  let bundles = rows.map(bundle)
   let entries = rows.map((source) => {
-    let row = shown(source, byEid)
+    let row = shown(source, byEid, name)
     let at = text(source.comps.created?.at)
     if (row && at && !row.at) row = { ...row, at }
-    if (row?.kind == 'turn' && source.comps.usage) {
-      let context = Number(source.comps.usage.input ?? 0)
-      if (context > 0) row = { ...row, context }
-    }
     return {
       eid: source.eid,
       ...(source.comps.result?.call
         ? { call: text(source.comps.result.call) }
         : {}),
       seq: source.seq,
-      line: raw(source),
+      line: JSON.stringify({
+        eid: source.eid,
+        seq: source.seq,
+        ...source.comps,
+      }),
       ...(row ? { row } : {}),
     }
   })
   let context = entries.findLast((entry) => entry.row?.context)?.row?.context
+  let activity = activityOf(bundles, name)
   return {
     entries,
-    busy,
-    terminal,
-    latest: rows.at(-1)?.seq ?? 0,
     ...(activity ? { activity } : {}),
     ...(context ? { context } : {}),
-    ...model ? { model: text(model.serving_model || model.model) } : {},
   }
 }
 
 // Bound a rendered log's ENTRIES to an output page. graphLog must see the WHOLE
-// partition to resolve call↔result and derive busy/latest/model, so a page
-// bounds only what a reader returns, never what it reads: `tail` takes the last
-// N rendered rows, else `after` is a seq cursor and `limit` a cap. A reader
-// spreads it back over its GraphLog — `{ ...log, entries: pageEntries(...) }`.
+// partition to resolve call↔result, so a page bounds only what a reader
+// returns, never what it reads: `tail` takes the last N rendered rows, else
+// `after` is a seq cursor and `limit` a cap.
 export let pageEntries = (
   entries: GraphLogEntry[],
   p: { after?: number; tail?: number; limit?: number },
@@ -325,22 +201,4 @@ export let pageEntries = (
     ? entries.slice(-tail)
     : entries.filter((entry) => entry.seq > after)
   return limit > 0 ? picked.slice(0, limit) : picked
-}
-
-// The token context (input tokens of the latest turn) for a PROCESS-BACKED
-// session, read from the session's `usage_json` facet — the graph already holds
-// it (adapters stamp it each turn.completed), so no rollout-file read. A
-// graph-native session derives context from its usage entries instead
-// (graphLog above); this covers the substrate whose usage never becomes an
-// entry (ingest routes token counts to the summary).
-export let contextOf = (usage_json?: string | null): number | undefined => {
-  if (!usage_json) return undefined
-  try {
-    let n = Number(
-      (JSON.parse(usage_json) as { input_tokens?: unknown }).input_tokens ?? 0,
-    )
-    return n > 0 ? n : undefined
-  } catch {
-    return undefined // a torn or foreign usage shape carries no context
-  }
 }

@@ -15,6 +15,7 @@ import {
   EntrySummary,
   mergeTools,
   MessageSummary,
+  PromptSummary,
   ResultFull,
   ResultSummary,
 } from './Entry.tsx'
@@ -141,13 +142,45 @@ Deno.test('generic entry summaries are metadata variants', () =>
 
 Deno.test('message summaries preserve who spoke', () =>
   withDom((root) => {
+    let entry = { session: '00000000-0000-4000-8000-000000000001', seq: 3 }
     let e = {
       eid: '00000000-0000-4000-8000-000000000004',
-      message: { role: 'user' },
+      entry,
       content: { body: 'hello' },
     } as Ent
+    assertEquals(resolve(e, 'Entry.Summary').Render, MessageSummary)
     render(<MessageSummary e={e} />, root)
     assertEquals(root.querySelector('.Entry-user')?.textContent.trim(), 'hello')
+    render(
+      <MessageSummary e={{ ...e, output: { source: 'ask' } } as Ent} />,
+      root,
+    )
+    assertEquals(
+      root.querySelector('.Entry-agent')?.textContent.trim(),
+      'hello',
+    )
+  }))
+
+Deno.test('session prompts are collapsed persona entries', () =>
+  withDom((root) => {
+    let e: Ent = {
+      eid: 'prompt',
+      num: 1,
+      kind: 'entry',
+      refs: [],
+      kids: [],
+      entry: { eid: 'prompt', session: 'session', seq: 1 },
+      prompt: { eid: 'prompt', scope: 'local' },
+      content: { eid: 'prompt', body: 'one\ntwo' },
+    }
+    assertEquals(resolve(e, 'Entry.Summary').Render, PromptSummary)
+    render(<PromptSummary e={e} />, root)
+    let details = root.querySelector('details.Prompt')!
+    assertEquals(details.hasAttribute('open'), false)
+    assertEquals(
+      details.querySelector('.Prompt_Gist')?.textContent,
+      'persona · 2 lines',
+    )
   }))
 
 Deno.test('normalized tools and shell calls share compact entry rows', () =>
