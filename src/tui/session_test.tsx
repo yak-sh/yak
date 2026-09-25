@@ -4,6 +4,7 @@
 // the words don't. This mounts the shared entry renderer through the fake DOM
 // (the very seam the web and TUI share) and asserts the bodies paint, while the
 // control-char boundary still neutralizes anything a body tries to speak.
+import '../../packages/web/testing.ts' // learns the vocabulary
 import './dom.ts' // installs the fake document — before anything renders
 import { render } from 'preact'
 import { assertEquals, assertStringIncludes } from '@std/assert'

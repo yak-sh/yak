@@ -1,6 +1,7 @@
 // The Configuration client keeps the two planes honest: a non-secret setting is
 // edited by a graph write and confirmed by re-reading its effective source; a
 // secret never carries a value, only its state.
+import '../packages/web/testing.ts' // learns the vocabulary
 import { assert, assertEquals } from '@std/assert'
 import type { Change } from './types.ts'
 import type { SettingRow } from './config.ts'

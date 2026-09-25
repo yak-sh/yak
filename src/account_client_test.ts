@@ -1,5 +1,6 @@
 // The account clients trust one server state, retain ceremonies only in
 // memory, and ignore replies from an action the user already superseded.
+import '../packages/web/testing.ts' // learns the vocabulary
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import {
   account,

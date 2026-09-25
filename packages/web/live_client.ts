@@ -13,7 +13,9 @@ import { type Change, keywords, vocab } from './types.ts'
 import type { Sub } from './live.ts'
 
 // Server-derived columns are ordinary received data in a browser replica.
-// Their derivation/writability remains the server's responsibility.
+// Their derivation/writability remains the server's responsibility, and so do
+// their values: a computed enum names what can be written, and a derivation may
+// read wider (a claimed task's status is `wip`, contributed by the claim).
 let browserVocab = () => {
   let docs = structuredClone(vocab.docs)
   for (let doc of docs) {
@@ -22,6 +24,7 @@ let browserVocab = () => {
       def.properties ??= {}
       def.properties.eid = { type: 'string' }
       for (let prop of Object.values(def.properties ?? {})) {
+        if (prop.computed) delete prop.enum
         prop.computed = false
       }
     }

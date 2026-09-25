@@ -70,6 +70,16 @@ Deno.test('a frame lands in the box and is reported to every name, first as a re
   assertEquals(c.box.ent('x')?.doc, { title: 'Two' })
 })
 
+Deno.test('a derived value wider than its enum still lands', () => {
+  let { c, sent, say } = replica()
+  c.open('a', '.task!')
+  say({
+    id: String(sent[0].id),
+    bundles: [{ entity: { eid: 'x', num: 1 }, task: { status: 'wip' } }],
+  })
+  assertEquals(c.box.ent('x')?.task, { status: 'wip' })
+})
+
 Deno.test('a refusal is reported, and lands no rows', () => {
   let { c, frames, sent, say } = replica()
   c.open('a', '.nope!')
