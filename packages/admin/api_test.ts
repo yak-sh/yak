@@ -295,7 +295,7 @@ Deno.test("an app store's refusal keeps its code, rather than becoming a defect"
   }
 })
 
-Deno.test("an app store's HTML 404 is a missing refusal, not a defect", async () => {
+Deno.test("a missing app's HTML 404 is a missing refusal, not a defect", async () => {
   let stub = answering({
     ...fee(),
     ok: false,
@@ -308,7 +308,7 @@ Deno.test("an app store's HTML 404 is a missing refusal, not a defect", async ()
   })
   try {
     let error = await assertRejects(
-      () => storeQuery('someone.token', 'sbx37901', ['.entity']),
+      () => storeQuery('someone.token', 'sbx37901/nosuchapp', ['.entity']),
       CallError,
       '404 Nothing here yet. There are no apps at this address yet.',
     )
