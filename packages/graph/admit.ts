@@ -42,6 +42,28 @@ export class Refused extends Error {
   }
 }
 
+/**
+ * The change as bundles, refused unless it is one: an array whose every
+ * member is an object whose `entity` names an eid. Every door hands `apply()`
+ * what arrived, and the first phase reads each bundle's eid, so the shape is
+ * refused here, before anything reads it, naming the bundle by its place.
+ */
+export let formed = (change: unknown): Bundle[] => {
+  if (!Array.isArray(change)) {
+    throw new Refused('a change is an array of bundles')
+  }
+  change.forEach((b, i) => {
+    let eid = b && typeof b == 'object' ? b.entity?.eid : undefined
+    if (typeof eid != 'string' || !eid) {
+      throw new Refused(
+        `bundle ${i} needs an entity: {entity: {eid}} — an eid you mint, or ` +
+          `'$name' to have the graph mint one`,
+      )
+    }
+  })
+  return change
+}
+
 // The properties a caller may write on a component: the client-writable ones,
 // plus the server-owned ones when the caller is trusted. A computed property
 // (`computed: true`) is in neither — it is derived, so there is nothing to

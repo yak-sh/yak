@@ -54,7 +54,7 @@ import type { Hook, Phase, Plugin, Tracker, WriteHook } from './plugin.ts'
 import { type Derive, isAlias, resolve, substitute } from './alias.ts'
 import { identified, identities } from './identity.ts'
 import { mint as fresh } from './mint.ts'
-import { admit, known, Refused } from './admit.ts'
+import { admit, formed, known, Refused } from './admit.ts'
 import { requested } from './request.ts'
 import { composed } from './compose.ts'
 import { type Ask, complete, gather, holding, reached } from './gather.ts'
@@ -611,7 +611,7 @@ export let graph = (opts: Options): Graph => {
         inside,
         composed,
       ],
-      owned(bundles),
+      owned(formed(bundles)),
       (b, step) => step(b),
     )
   }

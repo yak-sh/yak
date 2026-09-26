@@ -38,7 +38,7 @@ import type { Graph } from './graph.ts'
 import type { Tool } from './plugin.ts'
 import { argsOf, type NamedTool, toolName } from './tool.ts'
 import { graphDoc } from './vocab.ts'
-import { Refused } from './admit.ts'
+import { formed, Refused } from './admit.ts'
 import { detached } from './storage.ts'
 import { type Guide, proseOf, schemaOf } from './schema.ts'
 
@@ -114,25 +114,6 @@ let num = (v: unknown): number | undefined =>
 let strings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x) => typeof x == 'string') : []
 
-// The bundles `graph_apply` was handed, checked before anything is applied. The
-// input schema is the vocabulary itself (@yaks/mcp `bundleSchema` at `write`),
-// so a client knows every component, every writable property and every type
-// before it writes one — this is the check the schema cannot make, the identity
-// every bundle must carry.
-let batch = (v: unknown): Bundle[] => {
-  if (!Array.isArray(v)) throw new Refused('change must be an array of bundles')
-  return v.map((b, i) => {
-    let eid = b && typeof b == 'object' ? b.entity?.eid : undefined
-    if (typeof eid != 'string' || !eid) {
-      throw new Refused(
-        `bundle ${i} needs an entity: {entity: {eid}} — an eid you mint, or ` +
-          `'$name' to have the graph mint one`,
-      )
-    }
-    return b
-  })
-}
-
 /**
  * The implementations behind ./vocab.json — the generic tier, every one of
  * them taking bundles in and returning bundles out. `search` appears only
@@ -152,7 +133,7 @@ export let runs = (seams: Seams = {}): Runs => {
     // the runner signed as the caller, and the batch as applied is what comes
     // back. `check: true` makes the call a rehearsal, which the runner answers
     // with what a kept write would have returned (@yaks/tools).
-    graph_apply: (call) => batch(argsOf(call).change),
+    graph_apply: (call) => formed(argsOf(call).change),
     // The one concession to typing by hand is the query line: `.status=shelved`
     // is the grammar @yaks/query owns, so this takes it as a string and the
     // optional `filters` list is joined onto it with `&`. A line that asks for

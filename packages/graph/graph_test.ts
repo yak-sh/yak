@@ -114,6 +114,22 @@ Deno.test('a write naming a component the graph does not declare lands nothing',
   assertEquals(one.storage.tx((tx) => tx.get(['b1'])), [])
 })
 
+Deno.test('a bundle that names no entity is refused by its place, and lands nothing', () => {
+  let one = g()
+  for (let bad of [{ doc: { title: 'Dune' } }, { entity: {} }, null]) {
+    assertThrows(
+      () =>
+        one.apply([
+          { entity: { eid: 'b1' }, doc: { title: 'Dune' } },
+          bad as unknown as Bundle,
+        ]),
+      Refused,
+      'bundle 1 needs an entity',
+    )
+  }
+  assertEquals(one.storage.tx((tx) => tx.get(['b1'])), [])
+})
+
 Deno.test('a replica lands what it declares and leaves the rest out', () => {
   let one = g()
   sync(one.apply([
