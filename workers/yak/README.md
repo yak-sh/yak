@@ -28,8 +28,9 @@ migrated keeps its data, even when older code is deployed.
 
 A push to `main` deploys, through Cloudflare Workers Builds — not through a
 GitHub Actions workflow. Builds clones the repo itself and mints its own API
-token, so no Cloudflare credential exists in this repo, on the Actions runner,
-or in a GitHub secret.
+token, so no Cloudflare credential that can deploy exists in this repo, on the
+Actions runner, or in a GitHub secret. The runner holds one read-only token
+(Workers Scripts Read), so the gate can time the deploy.
 
 Nothing gates that push. `.github/workflows/gate.yml` runs `deno task check` and
 `deno task test`, the workerd tests included, and it reports what it finds: a
@@ -141,8 +142,8 @@ inspection. Neither a rollback nor a revert undoes migrated data.
 
 Push-to-upload observations, the version-confirmed live timer, the deploy
 ratchet, and the build profile are in [deploy timing](../../bench/deploys.md).
-Run `deno task deploy:time <sha>` on the box alongside each push; Actions reads
-the committed record through `deno task deploy:gate` after worker tests.
+The gate runs `deno task deploy:time <sha>` first on each push to main, and
+reads the committed record through `deno task deploy:gate` after the tests.
 
 ## Everything set by hand
 
@@ -379,12 +380,13 @@ tool, and three minutes of `wrangler tail` with zero 5xx — what was done by ha
 after the last two deploys (T-33808, T-34085).
 
 It is **not** wired into CI, on purpose. Builds runs the build command _before_
-the deploy, so there is nothing to verify at that point; and the Actions runner
-holds no Cloudflare token — Builds mints its own — so `wrangler tail`, the half
-that actually catches a 5xx, cannot run there. A gate-side check would also race
-the Builds deploy and verify whichever version happened to be live, which is a
-green that means nothing. So it stays one command, run after a Builds deploy
-goes green. `--tail 0` skips the tail and needs no credential at all.
+the deploy, so there is nothing to verify at that point; and the Actions
+runner's one Cloudflare token only reads versions — Builds mints its own — so
+`wrangler tail`, the half that actually catches a 5xx, cannot run there. A
+gate-side check would also race the Builds deploy and verify whichever version
+happened to be live, which is a green that means nothing. So it stays one
+command, run after a Builds deploy goes green. `--tail 0` skips the tail and
+needs no credential at all.
 
 ## App archetype indexing
 

@@ -2,19 +2,22 @@
 #
 # It does not deploy. The kernel Worker ships through Cloudflare Workers Builds,
 # which runs its own build (bin/build-yak) and mints its own token — see
-# workers/yak/README.md. Nothing here holds a Cloudflare credential: the one
-# step that reads Cloudflare (deploy time) runs wrangler against the box's own
-# login under $HOME, the way the box does by hand.
+# workers/yak/README.md. Nothing here can change Cloudflare: the one step that
+# reads it (deploy time) runs wrangler with the runner's read-only token.
 #
-# Runs on THIS box, not GitHub's — we buy no Actions minutes (M-9560). The
-# runner is a `systemd --user` unit (~/.config/systemd/user/actions-runner.service
-# on the box, which says how it was installed). `runs-on` names the custom
-# label `yak`, so a workflow can never silently fall back to a hosted runner.
+# Runs on our own runner, not GitHub's — we buy no Actions minutes (M-9560).
+# It is gh-runner (LXC 112 on the homelab's pve, beside two other repos'
+# runners), as user `yak-runner` in /opt/actions-runner/yak, under the system
+# unit actions.runner.yak-sh-yak.gh-runner-yak.service. The homelab repo's
+# docs/PROXMOX.md says how it was installed. Its environment (the runner's own
+# .env) carries STRIPE_KEY, a Workers Scripts Read token as
+# CLOUDFLARE_API_TOKEN, and DENO_SQLITE_PATH. `runs-on` names the custom label
+# `yak`, so a workflow can never silently fall back to a hosted runner.
 #
-#   systemctl --user status actions-runner    # is it listening
+#   ssh pve 'pct exec 112 -- systemctl status actions.runner.yak-sh-yak.gh-runner-yak'
 #   gh api repos/yak-sh/yak/actions/runners   # does GitHub agree
 #
-# The repo is public, so a fork PR must never reach this box: the `if` below
+# The repo is public, so a fork PR must never reach the runner: the `if` below
 # refuses one, and the repository requires approval before a fork PR workflow
 # runs at all (`actions/permissions/fork-pr-contributor-approval` =
 # all_external_contributors).
@@ -36,6 +39,11 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, yak]
     timeout-minutes: 30
+    # What deploy time's `gh api` reads: events, gate runs, check suites.
+    permissions:
+      contents: read
+      actions: read
+      checks: read
     defaults:
       run:
         shell: deno run -A bin/suite-time.ts --ci bash --noprofile --norc -eo pipefail {0}
@@ -53,8 +61,9 @@ jobs:
       # The commit under test times its own deploy. Push only: a PR has no main
       # push to time. A push outside the Worker's watch paths deploys nothing,
       # and the recorder says so instead of waiting (workers/yak/README.md). No
-      # Actions secret is added — the recorder uses the box's own gh and
-      # wrangler logins under $HOME. Nothing here pushes, so the row lands in
+      # Actions secret is added — gh reads GitHub with this job's own token,
+      # and wrangler reads versions with the runner's read-only
+      # CLOUDFLARE_API_TOKEN. Nothing here pushes, so the row lands in
       # this run's checkout and in the job summary; commit it with the next
       # change, like bench-gate's baseline. A bench-row commit on main would
       # start another Workers Build and another gate.
@@ -62,6 +71,7 @@ jobs:
         if: github.event_name == 'push'
         env:
           SUITE_STEP: deploy time
+          GH_TOKEN: ${{ github.token }}
         run: deno task deploy:time ${{ github.sha }}
 
       - name: deno task check

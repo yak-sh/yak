@@ -2,10 +2,12 @@
 // Run on the credentialed box as soon as a push starts its build:
 //   deno task deploy:time [sha]
 // Historical uploads: deno task deploy:time --backfill 3
-// The gate workflow runs this on the same box before deploy-gate judges, so
-// every push times its own deploy (T-35336); it reads the box's gh and
-// wrangler logins under $HOME and never an Actions secret. deploy-gate itself
-// stays credential-free and makes no live call.
+// The gate workflow runs this before deploy-gate judges, so every push times
+// its own deploy (T-35336). `gh` reads GitHub as whoever runs it (the job's
+// own GH_TOKEN in the gate) and wrangler reads versions with whatever
+// Cloudflare credential it finds (the runner's read-only CLOUDFLARE_API_TOKEN
+// in the gate); never an Actions secret. deploy-gate itself stays
+// credential-free and makes no live call.
 import {
   type Deploy,
   readRecords,
