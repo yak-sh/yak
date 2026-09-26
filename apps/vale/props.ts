@@ -10,7 +10,7 @@ import { DEEP } from './props/deep.ts'
 import { FIRE } from './props/fire.ts'
 import { FROST } from './props/frost.ts'
 import { HILLS } from './props/hills.ts'
-import type { Kind } from './props/kit.ts'
+import type { Kind, Model } from './props/kit.ts'
 import { MARSH } from './props/marsh.ts'
 import { SANDS } from './props/sands.ts'
 import { VALE } from './props/vale.ts'
@@ -30,12 +30,22 @@ export let KINDS: Record<string, Kind> = {
   ...FIRE,
 }
 
-// Which of its kind's shapes a prop is, as `kind:shape`, and the shape.
+// Which of its kind's shapes a prop is, as `kind:shape`, and the shape, built
+// once.
 let shapeOf = (kind: string, seed: number) => {
   let k = KINDS[kind]
   let n = k.shapes ? seed % k.shapes : seed
-  return { id: `${kind}:${n}`, shape: () => k.make(n * 7919 + 17) }
+  let id = `${kind}:${n}`
+  return {
+    id,
+    shape: () => {
+      let got = made.get(id)
+      if (!got) made.set(id, got = k.make(n * 7919 + 17))
+      return got
+    },
+  }
 }
+let made = new Map<string, Model>()
 
 let meshed = new Map<string, Out>()
 

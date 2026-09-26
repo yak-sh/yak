@@ -9,7 +9,8 @@ export type Model = { vox: Vox; size: number }
 /** A kind of prop: how to build one of its shapes from a seed, and how many
  * shapes it has. What a walker makes of it: `solid` all through, as wide and
  * tall as it is drawn, so a jump can land on one low enough; or a trunk or a
- * post `girth` metres wide at its foot; or nothing. How much ground it takes
+ * post `girth` metres wide at its foot, or a row of them `row` metres either
+ * way along x (a wall, a log), as tall as it is drawn; or nothing. How much ground it takes
  * (`foot`, a radius in metres, where nothing else grows), and the ground a
  * structure stands on (`span`, metres east–west and north–south, a
  * foundation filling below). A `small` one grows underfoot: drawn only near,
@@ -19,6 +20,7 @@ export type Kind = {
   shapes?: number
   solid?: boolean
   girth?: number
+  row?: number
   foot?: number
   span?: [number, number]
   small?: boolean

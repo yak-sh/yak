@@ -558,12 +558,12 @@ let wallsOf = (v: Vale): Wall[] => {
     if (k.solid) {
       let { r, tall } = bulk(p.kind, p.seed)
       walls.push({ x: p.x, z: p.z, r, top: y + tall })
-      continue
-    }
-    if (k.girth) walls.push({ x: p.x, z: p.z, r: k.girth, top: y + 3 })
-    if (p.kind == 'ruin') {
-      for (let dx = -1.2; dx <= 1.2; dx += 0.6) {
-        walls.push({ x: p.x + dx, z: p.z, r: 0.4, top: y + 3 })
+    } else if (k.girth) {
+      // A trunk or a post is too tall to jump; a row as tall as it is drawn.
+      let tall = k.row ? bulk(p.kind, p.seed).tall : 3
+      let row = k.row ?? 0
+      for (let dx = -row; dx <= row + 1e-9; dx += k.girth) {
+        walls.push({ x: p.x + dx, z: p.z, r: k.girth, top: y + tall })
       }
     }
     if (SHELL[p.kind]) {

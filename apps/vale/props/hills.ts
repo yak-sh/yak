@@ -82,5 +82,5 @@ export let HILLS: Record<string, Kind> = {
   heather: { make: heather, shapes: 5, small: true },
   menhir: { make: menhir, shapes: 5, solid: true, foot: 1 },
   pillar: { make: pillar, shapes: 6, solid: true, foot: 1.2 },
-  ruin: { make: ruin, shapes: 4, foot: 2.8 },
+  ruin: { make: ruin, shapes: 4, girth: 0.4, row: 1.2, foot: 2.8 },
 }
