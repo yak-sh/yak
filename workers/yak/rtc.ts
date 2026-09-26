@@ -99,7 +99,7 @@ export let voice: Answer = async (asked) => {
       )
     }
   }
-  // Read past the directory's cache, so a spend counts on the one before it.
+  // Read past the directory's cache, so a refusal reads the spend before it.
   let dir = directoryOf(env.STORE)
   return answer({
     req,
@@ -107,8 +107,7 @@ export let voice: Answer = async (asked) => {
     store: kept(door),
     meter: {
       refused: () => refusedSpend(dir, space, 'realtime', env),
-      spend: async (dollars) =>
-        countedRealtime(env, (await dir.space(space.slug)) ?? space, dollars),
+      spend: (dollars) => countedRealtime(env, space, dollars),
     },
     realtime,
     rates: RATES,

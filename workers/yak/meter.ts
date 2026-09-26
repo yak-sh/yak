@@ -57,8 +57,23 @@ export let meterPlugin: Plugin = {
         await metered(env as unknown as Env, new Date(Now.at))
       })
     },
+  }, {
+    // A spend, added to the month's meter inside the write's own transaction
+    // and taken off again (vocab.ts `spend`): the sum is the directory's, never
+    // a caller's, so two spends at once both count.
+    name: 'spend',
+    phase: 'rules',
+    match: '+meter, *spend',
+    run: ({ meter, spend }) => ({
+      meter: added(props(meter), props(spend)),
+      spend: null,
+    }),
   }],
 }
+
+// A component as the rule is handed it, read as its properties.
+let props = (c: unknown): Record<string, unknown> =>
+  c && typeof c == 'object' ? Object.fromEntries(Object.entries(c)) : {}
 
 // What one store did, as the analytics answer them (usage.ts `read`). Bytes
 // come from the store itself, and the month and the letters from the row being
@@ -276,6 +291,36 @@ export let spent = (space: Space, now = new Date()) =>
       ...empty(monthOf(now), space.meter?.built ?? 0),
       files: space.meter?.files ?? 0,
     }
+
+/**
+ * A meter with a spend added, as the patch that writes it: onto what it holds
+ * when it holds the spend's month, and onto a fresh month when it holds
+ * another. `built` counts every build ever, so a new month carries it.
+ *
+ * ```ts
+ * import { added } from './meter.ts'
+ *
+ * let sep = { month: '2026-09', models: 0.5, built: 3 }
+ * added(sep, { month: '2026-09', models: 0.25 })
+ * // { month: '2026-09', models: 0.75 }
+ * added(sep, { month: '2026-10', builds: 1 }).built // 4
+ * added(sep, { month: '2026-10', builds: 1 }).models // 0
+ * ```
+ */
+export let added = (
+  meter: Record<string, unknown> | undefined,
+  spend: Record<string, unknown>,
+): Record<string, unknown> => {
+  let n = (v: unknown) => Number(v ?? 0)
+  let month = String(spend.month)
+  let held = meter?.month == month ? meter : undefined
+  let out: Record<string, unknown> = held
+    ? { month }
+    : empty(month, n(meter?.built))
+  for (let k of SPENDS) if (n(spend[k])) out[k] = n(held?.[k]) + n(spend[k])
+  if (n(spend.builds)) out.built = n(meter?.built) + n(spend.builds)
+  return out
+}
 
 /** The serving quota uses the existing hourly reading, not a per-hit write.
  * Keep refusing an over-limit reading until the UTC month turns or the plan
@@ -522,27 +567,34 @@ export let tooManySpaces = (held: Space[], env: Host = {}) =>
 // never refused, because turning a letter away at the door loses somebody
 // else's words.
 //
-// The month turning is a fresh row here as it is in the sweep: the counters
-// that are the analytics' to answer wait for the next reading rather than
-// carrying last month's numbers under this month's name.
+// Every count is a `spend` the directory adds to the meter in its own
+// transaction ({@link added}), never a sum written back: two counts for one
+// space at once, or one landing while the sweep runs, would otherwise each
+// write their own total and the later would erase the earlier. The month
+// turning is a fresh row there, as it is in the sweep: the counters that are
+// the analytics' to answer wait for the next reading rather than carrying last
+// month's numbers under this month's name.
 
-/** One letter, on the space's month: the count, one higher. */
-export let counted = async (
+/** What a space spent, sent for the directory to add to its month. */
+let spending = async (
   env: { STORE: Namespace },
-  space: Space,
-  now = new Date(),
-) => {
-  let month = monthOf(now)
-  let held = thisMonth(space.meter, month)
+  space: Pick<Space, 'eid'>,
+  spend: Partial<Record<Spend, number>>,
+  now: Date,
+) =>
   await stamp(env, {
     entities: [{
       entity: { eid: space.eid },
-      meter: held
-        ? { month, emails: held.emails + 1 }
-        : { ...empty(month), emails: 1 },
+      spend: { month: monthOf(now), ...spend },
     }],
   })
-}
+
+/** One letter, on the space's month: the count, one higher. */
+export let counted = (
+  env: { STORE: Namespace },
+  space: Pick<Space, 'eid'>,
+  now = new Date(),
+) => spending(env, space, { emails: 1 }, now)
 
 // ---- the bytes --------------------------------------------------------------
 //
@@ -580,37 +632,14 @@ export let weighed = async (
  * (sandbox.ts `released`). A build that was refused never reaches it, so a
  * refusal costs a person nothing — not a build, and not the model call of the
  * sentence that turned it down.
- *
- * The seconds ride here rather than in a second call because both figures are
- * derived from one reading of the space: on a month with no row yet each
- * write starts from `empty()`, and the second would put the first one's
- * properties back at zero.
  */
-export let countedBuild = async (
+export let countedBuild = (
   env: { STORE: Namespace },
-  space: Space,
+  space: Pick<Space, 'eid'>,
   cost: number,
   seconds = 0,
   now = new Date(),
-) => {
-  let month = monthOf(now)
-  let held = thisMonth(space.meter, month)
-  let built = (space.meter?.built ?? 0) + 1
-  await stamp(env, {
-    entities: [{
-      entity: { eid: space.eid },
-      meter: held
-        ? {
-          month,
-          builds: held.builds + 1,
-          models: held.models + cost,
-          seconds: held.seconds + seconds,
-          built,
-        }
-        : { ...empty(month), builds: 1, models: cost, seconds, built },
-    }],
-  })
-}
+) => spending(env, space, { builds: 1, models: cost, seconds }, now)
 
 // ---- the workbench (T-34264) ------------------------------------------------
 //
@@ -632,51 +661,29 @@ export let countedBuild = async (
  * model calls cost the same whether or not they ended in a deploy — and for a
  * lone sandbox tool call somebody's own agent made over the connector
  * (tools.ts `bench`). Where a build is being counted both go with it
- * ({@link countedBuild}), so that one reading of the space makes one write.
+ * ({@link countedBuild}).
  */
 export let countedSpend = async (
   env: { STORE: Namespace },
-  space: Space,
+  space: Pick<Space, 'eid'>,
   cost: number,
   seconds: number,
   now = new Date(),
 ) => {
   if (cost <= 0 && seconds <= 0) return
-  let month = monthOf(now)
-  let held = thisMonth(space.meter, month)
-  await stamp(env, {
-    entities: [{
-      entity: { eid: space.eid },
-      meter: held
-        ? {
-          month,
-          models: held.models + cost,
-          seconds: held.seconds + seconds,
-        }
-        : { ...empty(month, space.meter?.built ?? 0), models: cost, seconds },
-    }],
-  })
+  await spending(env, space, { models: cost, seconds }, now)
 }
 
 /** The dollars an app's voices received, weighed at a lease's renewal
  * (rtc.ts), on the space's month. */
 export let countedRealtime = async (
   env: { STORE: Namespace },
-  space: Space,
+  space: Pick<Space, 'eid'>,
   cost: number,
   now = new Date(),
 ) => {
   if (cost <= 0) return
-  let month = monthOf(now)
-  let held = thisMonth(space.meter, month)
-  await stamp(env, {
-    entities: [{
-      entity: { eid: space.eid },
-      meter: held
-        ? { month, realtime: held.realtime + cost }
-        : { ...empty(month, space.meter?.built ?? 0), realtime: cost },
-    }],
-  })
+  await spending(env, space, { realtime: cost }, now)
 }
 
 /**
@@ -773,8 +780,7 @@ export let metered = (
       output_tokens: n.output_tokens ?? guess(answer),
       cached_tokens: n.cached_tokens,
     })
-    // Read again, so two calls a moment apart each add to the other's count.
-    await countedSpend({ STORE: ns }, (await spaceOf(dir)) ?? space, cost, 0)
+    await countedSpend({ STORE: ns }, space, cost, 0)
     return answer
   },
 })

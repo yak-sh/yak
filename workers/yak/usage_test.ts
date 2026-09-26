@@ -11,11 +11,12 @@ import { filesOf, full, fullFiles, read, sweep } from './usage.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { platform } from './testing.ts'
-import type { Namespace } from './door.ts'
+import type { Env } from './env.ts'
 import {
   atCeiling,
   BUILDS,
   ceilings,
+  counted,
   countedBuild,
   countedRealtime,
   countedSpend,
@@ -388,36 +389,38 @@ let refusedBuild = (s: Space, now: Date) =>
 // written once by the loop that finished one (`countedBuild`) and read before
 // it starts (`refusedBuild`).
 
-// The store that count is written to: what a Durable Object binding is to the
-// two lines of meta.ts that reach it, and no more.
-type Patch = { entity: { eid: string }; meter: Record<string, number | string> }
-let writes = () => {
-  let sent: Patch[] = []
-  let ns = {
-    idFromName: (name: string) => name,
-    get: () => ({
-      fetch: async (req: Request) => {
-        sent.push(...(await req.json() as Patch[]))
-        return new Response('[]')
-      },
-    }),
+// The directory that count is written to, in memory, holding one space `jeff`
+// with the meter given, and that space as the directory has it now.
+let counting = async (meter?: Partial<Meter>, vars: Partial<Env> = {}) => {
+  let { env } = platform('counting', vars)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  await dir.apply({
+    entities: [{
+      entity: { eid: '$space' },
+      space: { slug: 'jeff' },
+      ...(meter ? { meter } : {}),
+    }],
+  }, { 'x-yak-role': 'owner' })
+  let held = async () => (await dir.space('jeff'))!
+  // The figures named, as the directory's meter for the space holds them.
+  let read = async (...names: (keyof Meter)[]) => {
+    let m = (await held()).meter
+    return Object.fromEntries(names.map((k) => [k, m?.[k]]))
   }
-  return { sent, env: { STORE: ns as unknown as Namespace } }
+  return { env, dir, space: await held(), held, read }
 }
 
 Deno.test('a free space gets five builds each month regardless of lifetime use', async () => {
   for (let builds of [0, 1, 4]) {
     assertEquals(await refusedBuild(space({ builds, built: 40 }), NOW), null)
   }
-  let { sent, env } = writes()
-  await countedBuild(env, space(), 0.25, 0, NOW)
-  assertEquals(sent[0].meter, {
-    month: '2026-09',
-    builds: 1,
-    models: 0.25,
-    seconds: 0,
-    built: 1,
-  })
+  let c = await counting()
+  await countedBuild(c.env, c.space, 0.25, 0, NOW)
+  let one = { month: '2026-09', builds: 1, models: 0.25, seconds: 0, built: 1 }
+  assertEquals(
+    await c.read('month', 'builds', 'models', 'seconds', 'built'),
+    one,
+  )
 
   let after = space({ builds: 5, models: 0.25, built: 45 })
   let no = (await refusedBuild(after, NOW))!
@@ -429,7 +432,10 @@ Deno.test('a free space gets five builds each month regardless of lifetime use',
   // A refusal costs them nothing — not the build, and not the sentence: the
   // count is written by the loop that finished one, and this one never ran.
   assertEquals(usedBuilds(after, NOW), 5)
-  assertEquals(sent.length, 1)
+  assertEquals(
+    await c.read('month', 'builds', 'models', 'seconds', 'built'),
+    one,
+  )
 
   // The monthly allowance resets; the lifetime figure remains available.
   let october = new Date('2026-10-02T00:00:00Z')
@@ -450,18 +456,16 @@ Deno.test('a paid space counts its builds down, and the month gives them back', 
   assertEquals(await refusedBuild(plus(BUILDS.plus, '2026-08'), NOW), null)
 
   // What its model cost is the month's, added to what the space's other
-  // model calls spent, in dollars.
-  let { sent, env } = writes()
-  await countedBuild(
-    env,
-    space({ builds: 2, models: 0.5, built: 40 }, 'plus'),
-    0.25,
-    // And the container seconds ride the same write, because both are derived
-    // from one reading of the space (sandbox.ts, T-34264).
-    12,
-    NOW,
-  )
-  assertEquals(sent[0].meter, {
+  // model calls spent, in dollars, and its container seconds beside them
+  // (sandbox.ts, T-34264).
+  let c = await counting({
+    month: '2026-09',
+    builds: 2,
+    models: 0.5,
+    built: 40,
+  })
+  await countedBuild(c.env, c.space, 0.25, 12, NOW)
+  assertEquals(await c.read('month', 'builds', 'models', 'seconds', 'built'), {
     month: '2026-09',
     builds: 3,
     models: 0.75,
@@ -717,12 +721,60 @@ Deno.test('a free space answers to the free spaces its owner owns, summed', asyn
 })
 
 Deno.test('a conversation that shipped nothing pays for its model and seconds', async () => {
-  let { sent, env } = writes()
-  let held = space({ models: 0.5, seconds: 2, built: 3 })
-  await countedSpend(env, held, 0.25, 5, NOW)
-  assertEquals(sent[0].meter, { month: '2026-09', models: 0.75, seconds: 7 })
-  await countedSpend(env, space(), 0, 0, NOW)
-  assertEquals(sent.length, 1)
+  let c = await counting({
+    month: '2026-09',
+    models: 0.5,
+    seconds: 2,
+    built: 3,
+  })
+  let after = { models: 0.75, seconds: 7, built: 3 }
+  await countedSpend(c.env, c.space, 0.25, 5, NOW)
+  assertEquals(await c.read('models', 'seconds', 'built'), after)
+  await countedSpend(c.env, c.space, 0, 0, NOW)
+  assertEquals(await c.read('models', 'seconds', 'built'), after)
+})
+
+// The meter is the directory's to add up (meter.ts `spend`): a count that
+// lands beside another, or while the hourly sweep is reading, is never
+// written over by a total somebody else worked out.
+Deno.test('spends counted at once all count, and the sweep keeps them', async () => {
+  let c = await counting({ month: '2026-08', models: 0.5, emails: 12 }, {
+    CF_ACCOUNT: 'account',
+    CF_ANALYTICS_TOKEN: 'read-only',
+  })
+  await Promise.all([
+    countedSpend(c.env, c.space, 0.25, 0, NOW),
+    countedSpend(c.env, c.space, 0.25, 0, NOW),
+    countedRealtime(c.env, c.space, 0.125, NOW),
+    counted(c.env, c.space, NOW),
+  ])
+  let spends = { month: '2026-09', models: 0.5, realtime: 0.125, emails: 1 }
+  assertEquals(await c.read('month', 'models', 'realtime', 'emails'), spends)
+  // One more lands while the sweep lists the space's files.
+  let list = c.env.BLOBS.list.bind(c.env.BLOBS)
+  c.env.BLOBS.list = async (o) => {
+    c.env.BLOBS.list = list
+    await counted(c.env, c.space, NOW)
+    return list(o)
+  }
+  let was = globalThis.fetch
+  let groups = {
+    durableObjectsInvocationsAdaptiveGroups: [],
+    durableObjectsPeriodicGroups: [],
+  }
+  globalThis.fetch = () =>
+    Promise.resolve(
+      Response.json({ data: { viewer: { accounts: [groups] } } }),
+    )
+  try {
+    await sweep(c.env, NOW)
+  } finally {
+    globalThis.fetch = was
+  }
+  assertEquals(await c.read('month', 'models', 'realtime', 'emails'), {
+    ...spends,
+    emails: 2,
+  })
 })
 
 Deno.test('models and voice spend one allowance, each counted apart', async () => {
@@ -732,7 +784,10 @@ Deno.test('models and voice spend one allowance, each counted apart', async () =
   assert(await refusedSpend(alone, both, 'realtime', {}, 0, NOW))
   let voice = space({ realtime: half })
   assertEquals(await refusedSpend(alone, voice, 'models', {}, 0, NOW), null)
-  let { sent, env } = writes()
-  await countedRealtime(env, voice, 0.25, NOW)
-  assertEquals(sent[0].meter, { month: '2026-09', realtime: half + 0.25 })
+  let c = await counting({ month: '2026-09', realtime: half })
+  await countedRealtime(c.env, c.space, 0.25, NOW)
+  assertEquals(await c.read('realtime', 'models'), {
+    realtime: half + 0.25,
+    models: 0,
+  })
 })

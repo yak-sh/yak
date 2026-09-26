@@ -8,8 +8,9 @@
 // The sweep is the meter plugin's effect rule (meter.ts), matching `fired`
 // on its hourly directory wake: one GraphQL call for the month so far and one
 // write into the meta store — `meter` on each app, `meter` on each space (its
-// apps summed, its letters left where the mail doors count them), and
-// `plan{free}` on a space that has none yet. The write carries the kernel
+// apps summed, what it spent left where meter.ts `spend` adds it up), and
+// `plan{free}` on a space that has none yet — after a spend of nothing on
+// each space whose meter is on another month. The write carries the kernel
 // flag, because a person never states their own bill. It asks no store
 // anything: a request to one would be a request the next reading counts.
 //
@@ -177,6 +178,7 @@ export let sweep = async (env: Env, now = new Date()) => {
     : null
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let entities: Bundle[] = []
+  let turned: Bundle[] = []
   for (let space of await dir.all()) {
     let files = await filesOf(env, space)
     // R2 accounting does not depend on the analytics credential. Leave the
@@ -208,29 +210,23 @@ export let sweep = async (env: Env, now = new Date()) => {
       total.rows_written += got.rows_written
       total.bytes += held(app)
     }
-    // The space's own reading: its apps summed, and the figures counted where
-    // they happen left alone — the mail doors count the letters and the
-    // builder counts its builds (mail and a build ride no store), and this
-    // sweep starts them over when the month turns. `spent` preserves the
-    // lifetime total in `built` across that reset (meter.ts).
-    let was = spent(space, now)
-    let meter = {
-      month,
-      ...total,
-      emails: was.emails,
-      builds: was.builds,
-      models: was.models,
-      realtime: was.realtime,
-      seconds: was.seconds,
-      built: was.built,
-      at,
+    // The space's own reading: its apps summed, and nothing it spent. What a
+    // space spends (letters, builds, models, voice, seconds) is counted where
+    // it happens and added up by the directory (meter.ts `spend`), and a
+    // reading that carried it back would write over a count that landed
+    // while the sweep ran. A space whose meter is on another month is turned
+    // to this one first, by a spend of nothing (`turned`), in the directory's
+    // own transaction, which starts the month over without losing a count.
+    let meter = { month, ...total, at }
+    if (!thisMonth(space.meter, month)) {
+      turned.push({ entity: { eid: space.eid }, spend: { month } })
     }
     // A space that has just crossed a line — or fallen back under one — has
     // something new to hear, so the mark that it was told goes (unseen.ts
     // `ceiling` writes it back). A level that has not moved keeps its mark,
     // which is what makes the line ride one reply.
-    let moved = level({ ...space, meter }, apps.length, now) !=
-      level(space, apps.length, now)
+    let after = { ...space, meter: { ...spent(space, now), ...meter } }
+    let moved = level(after, apps.length, now) != level(space, apps.length, now)
     entities.push({
       entity: { eid: space.eid },
       meter,
@@ -240,6 +236,7 @@ export let sweep = async (env: Env, now = new Date()) => {
       ...(space.tier ? {} : { plan: { tier: 'free' } }),
     })
   }
+  if (turned.length) await stamp(env, { entities: turned })
   if (entities.length) await stamp(env, { entities })
   return entities.length
 }

@@ -540,8 +540,8 @@ These are the names, all of them:
     project provider provisional published quarantined questions quote reads
     recalled ref referenced report repository requires restored result retired
     revision rtc satisfies secret seeded serves session session_run sfu
-    signed_in signin space stop stripe supersedes supervises sweep task theme
-    tool trashed tree_entry tunnel updated usage uses using wake wants web
+    signed_in signin space spend stop stripe supersedes supervises sweep task
+    theme tool trashed tree_entry tunnel updated usage uses using wake wants web
     worked worktree
 
 When your first choice is taken, ask what the component is _for_ and name that:

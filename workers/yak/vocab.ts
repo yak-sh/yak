@@ -888,12 +888,13 @@ export let platformDoc: VocabDoc = {
         at: owned(time),
       },
     },
-    // What the hourly sweep read off Cloudflare (usage.ts). Written by the
-    // sweep, through the kernel's door — and not stamped, because the fleet
-    // contract does not stamp it (src/types.ts `comps`) and the meta space's
-    // own graph tier is how a reading is planted or corrected by hand. Nobody
-    // but an owner of `yak` reaches that door at all (directory.ts), which is
-    // what keeps a customer from writing their own bill.
+    // What the hourly sweep read off Cloudflare (usage.ts), beside what the
+    // space spent (`spend`). Written through the kernel's door — and not
+    // stamped, because the fleet contract does not stamp it (src/types.ts
+    // `comps`) and the meta space's own graph tier is how a reading is planted
+    // or corrected by hand. Nobody but an owner of `yak` reaches that door at
+    // all (directory.ts), which is what keeps a customer from writing their
+    // own bill.
     meter: {
       component: true,
       type: 'object',
@@ -911,6 +912,22 @@ export let platformDoc: VocabDoc = {
         seconds: num,
         built: num,
         at: time,
+      },
+    },
+    // What a space just spent on its month: a letter, a build, a model call, a
+    // voice's lease, container seconds. The directory adds it to the `meter`
+    // inside the write's own transaction (meter.ts `spend`), so two spends at
+    // once both count, and takes it off again: it is never kept.
+    spend: {
+      component: true,
+      type: 'object',
+      properties: {
+        month: text,
+        emails: num,
+        builds: num,
+        models: num,
+        realtime: num,
+        seconds: num,
       },
     },
     signin: {
