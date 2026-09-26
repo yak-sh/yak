@@ -15,6 +15,7 @@
 // ground around it and builds itself there. Paths run from the village out to
 // every place and every portal.
 import { type Level, LEVELS, type Spot } from './levels.ts'
+import { bulk } from './props.ts'
 import { fbm, hash, lerp, rand, smooth } from './rand.ts'
 
 export type { Spot }
@@ -393,21 +394,25 @@ let build = (lv: Level, V: number): Vale => {
 }
 
 // What a walker bumps into: trunks, rocks, the village's buildings, and a
-// portal's two posts. A building is a row of circles along each wall, so its
-// door is a gap.
+// portal's two posts. A rock is as wide and as tall as it is drawn, so a jump
+// can land on it. A building is a row of circles along each wall, so its door
+// is a gap.
 let wallsOf = (v: Vale): Wall[] => {
   let walls: Wall[] = []
   for (let p of v.props) {
-    let r = p.kind == 'rock'
-      ? 0.7 + (p.seed % 3) * 0.3
-      : p.kind == 'oak' || p.kind == 'pine' || p.kind == 'birch'
+    let y = standAt(v, p)
+    if (p.kind == 'rock') {
+      let { r, tall } = bulk(p.kind, p.seed)
+      walls.push({ x: p.x, z: p.z, r, top: y + tall })
+      continue
+    }
+    let r = p.kind == 'oak' || p.kind == 'pine' || p.kind == 'birch'
       ? 0.45
       : p.kind == 'well' || p.kind == 'fire'
       ? 1.2
       : p.kind == 'board' || p.kind == 'lamp'
       ? 0.35
       : 0
-    let y = standAt(v, p)
     if (r) walls.push({ x: p.x, z: p.z, r, top: y + 3 })
     if (p.kind == 'portal') {
       for (let dx of [-1.3, 1.3]) {

@@ -161,7 +161,8 @@ let B = 512
 export let key = (x: number, y: number, z: number) =>
   ((x + B) * 1024 + (y + B)) * 1024 + (z + B)
 
-let unkey = (k: number): Vec => [
+/** A key's coordinates. */
+export let unkey = (k: number): Vec => [
   Math.floor(k / 1048576) - B,
   (Math.floor(k / 1024) % 1024) - B,
   (k % 1024) - B,

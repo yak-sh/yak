@@ -1,7 +1,8 @@
 // What stands on the ground: trees, rocks, flowers, the village, and the
 // portals between levels. Each is a small voxel model built by hand out of
 // balls and boxes, meshed once per variant and copied wherever a level places
-// one (terrain.ts `props`).
+// one (terrain.ts `props`), and measured, so what a walker bumps into or
+// stands on is the size it is drawn (`bulk`).
 import {
   ball,
   blob,
@@ -9,6 +10,7 @@ import {
   key,
   type Out,
   out,
+  unkey,
   type Vec,
   type Vox,
 } from './mesh.ts'
@@ -291,18 +293,49 @@ let VARIANTS: Record<string, number> = {
   mushroom: 3,
 }
 
+// Which of its kind's shapes a prop is, as `kind:variant`, and the shape.
+let variantOf = (kind: string, seed: number) => {
+  let n = VARIANTS[kind] ? seed % VARIANTS[kind] : seed
+  return { id: `${kind}:${n}`, shape: () => BUILD[kind](n * 7919 + 17) }
+}
+
 let meshed = new Map<string, Out>()
 
 /** A prop's triangles, placed with the middle of its base at the origin. */
 export let model = (kind: string, seed: number): Out => {
-  let variant = VARIANTS[kind] ? seed % VARIANTS[kind] : seed
-  let id = `${kind}:${variant}`
+  let { id, shape } = variantOf(kind, seed)
   let o = meshed.get(id)
   if (o) return o
-  let { vox, size } = BUILD[kind](variant * 7919 + 17)
+  let { vox, size } = shape()
   o = blob(out(), vox, size, [-size / 2, 0, -size / 2])
   meshed.set(id, o)
   return o
+}
+
+let measured = new Map<string, { r: number; tall: number }>()
+
+/** How much room a prop's model takes, in metres: the radius of the circle
+ * its voxels stand in, and how tall it stands.
+ *
+ * ```ts
+ * import { assert } from '@std/assert'
+ * let { r, tall } = bulk('rock', 3)
+ * assert(r > 0.5 && r < 2.5 && tall >= 1 && tall <= 1.5)
+ * ```
+ */
+export let bulk = (kind: string, seed: number) => {
+  let { id, shape } = variantOf(kind, seed)
+  let got = measured.get(id)
+  if (got) return got
+  let { vox, size } = shape()
+  let r = 0, tall = 0
+  for (let k of vox.keys()) {
+    let [x, y, z] = unkey(k)
+    r = Math.max(r, Math.hypot(x, z) * size + size / 2)
+    tall = Math.max(tall, (y + 1) * size)
+  }
+  measured.set(id, got = { r, tall })
+  return got
 }
 
 // What a vertex carries besides where it is: copied as it stands.

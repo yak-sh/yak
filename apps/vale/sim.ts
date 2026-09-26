@@ -76,9 +76,34 @@ export let fits = (v: Vale, x: number, z: number, y: number, r = RADIUS) => {
   if (g > y + STEP || g < WATER - 0.7) return false
   for (let w of wallsNear(v, x, z)) {
     let dx = w.x - x, dz = w.z - z, reach = w.r + r
-    if (dx * dx + dz * dz < reach * reach && y < w.top) return false
+    if (dx * dx + dz * dz < reach * reach && w.top > y + STEP) return false
   }
   return true
+}
+
+/** What a walker whose feet are at `y` stands on at (x, z): the ground, or
+ * the top of a wall no more than a step above its feet, as it steps up onto
+ * ground.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { flat } from './terrain.ts'
+ * // A rock a metre tall at (10, 10), on ground 5 m up.
+ * let v = flat(5, [{ x: 10, z: 10, r: 1, top: 6 }])
+ * assertEquals(floorAt(v, 10, 10, 6), 6) // on it
+ * assertEquals(floorAt(v, 10.5, 10, 5.6), 6) // a jump comes down on it
+ * assertEquals(floorAt(v, 14, 10, 6), 5) // past it
+ * ```
+ */
+export let floorAt = (v: Vale, x: number, z: number, y: number) => {
+  let g = groundAt(v, x, z)
+  for (let w of wallsNear(v, x, z)) {
+    let dx = w.x - x, dz = w.z - z, reach = w.r + RADIUS
+    if (w.top > g && w.top <= y + STEP && dx * dx + dz * dz < reach * reach) {
+      g = w.top
+    }
+  }
+  return g
 }
 
 /** Turn from angle `a` toward `b` by at most `k`, the short way round. */
@@ -100,6 +125,19 @@ export let turn = (a: number, b: number, k: number) => {
  * assertEquals([slid.x, slid.z > 20], [20, true])
  * // A jump leaves the ground.
  * assertEquals(walk(v, b, { x: 0, z: 0, jump: true }, 0.1, 5).gait, 'jump')
+ * // Run at a rock a metre tall and jump: up onto it. Two voxels of ground
+ * // are the same.
+ * let run = (at: ReturnType<typeof flat>) => {
+ *   let c = b
+ *   for (let f = 0; f < 32; f++) {
+ *     c = walk(at, c, { x: 1, z: 0, jump: f == 2 }, 1 / 60, 5)
+ *   }
+ *   return [c.x > 22, c.y]
+ * }
+ * assertEquals(run(flat(5, [{ x: 22.5, z: 20, r: 0.8, top: 6 }])), [true, 6])
+ * let ledge = flat(5)
+ * for (let i = 43; i < ledge.cols; i++) ledge.h[i + 40 * ledge.cols] = 12
+ * assertEquals(run(ledge), [true, 6])
  * ```
  */
 export let walk = (
@@ -133,7 +171,7 @@ export let walk = (
   let yaw = Math.hypot(push.x, push.z) > 0.05
     ? turn(b.yaw, Math.atan2(push.x, push.z), dt * 14)
     : b.yaw
-  let g = groundAt(v, x, z)
+  let g = floorAt(v, x, z, b.y)
   let vy = b.vy, y = b.y
   if (!air && push.jump) {
     vy = JUMP
