@@ -213,6 +213,43 @@ Deno.test("an app's vocab.json is read back as the document it means", async () 
   })
 })
 
+Deno.test('stores holding different words each wake speaking their own', async () => {
+  let kitchen = state(), yard = state()
+  await cookbook(kitchen)
+  await cookbook(
+    yard,
+    JSON.stringify({
+      $defs: {
+        plant: {
+          component: true,
+          properties: { height: { type: 'number' } },
+        },
+      },
+    }),
+  )
+  // A freshly woken object, written one component.
+  let wrote = async (ctx: ReturnType<typeof state>, words: object) =>
+    (await post(
+      new Store(ctx),
+      '/apply',
+      [{ ...words, entity: { eid: CAKE } }],
+      owner,
+    ))
+      .status
+  let recipe = { recipe: { serves: 2 } }
+  let plant = { plant: { height: 3 } }
+  for (let _ of [1, 2]) {
+    assertEquals([await wrote(kitchen, recipe), await wrote(kitchen, plant)], [
+      200,
+      400,
+    ])
+    assertEquals([await wrote(yard, plant), await wrote(yard, recipe)], [
+      200,
+      400,
+    ])
+  }
+})
+
 Deno.test('a manifest the vocabulary refuses leaves the store as it was', async () => {
   let store = await cookbook()
   let was = await words(store)

@@ -87,6 +87,7 @@ import {
   col,
   count,
   type CreateTable,
+  type Derived,
   type Driver,
   eq,
   notNull,
@@ -95,7 +96,7 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { reclassifyAll } from '@yaks/sqlite'
+import { reclassifyAll, schema } from '@yaks/sqlite'
 import {
   driver,
   type DurableSql,
@@ -111,7 +112,13 @@ import { secrets } from '@yaks/secrets'
 import { edges } from '@yaks/edge'
 import { keys } from '@yaks/key'
 import { aliases } from '@yaks/alias'
-import { fields, find, schema as ftsSchema, search } from '@yaks/fts'
+import {
+  type Field,
+  fields,
+  find,
+  schema as ftsSchema,
+  search,
+} from '@yaks/fts'
 import {
   type ApplyOpts,
   type Bundle,
@@ -241,6 +248,49 @@ export let vocabOfStore = (name: string, declared: unknown = {}): Vocab =>
     : name == GIT_STORE
     ? gitVocab()
     : appVocab(declared)
+
+/** What a store raises out of its words (`#build`): the words, whether it is
+ * one of the platform's own two stores rather than an app, what its storage
+ * reads a stored value through, which properties are searched, and the schema
+ * as one word. */
+type Shape = {
+  vocab: Vocab
+  own: boolean
+  derived: Derived
+  searchable: Field[]
+  stamp: string
+}
+
+// The shapes this isolate has raised, the most recent few. A shape is pure in
+// which store it is and the `vocab.json` it holds, and one isolate wakes many
+// objects, so a wake under words it has seen loads, renders and hashes nothing.
+let shapes = new Map<string, Shape>()
+let SHAPES = 16
+
+let shapeOf = (name: string, declared: string | null): Shape => {
+  // Neither the directory nor the git object graph is an app: each speaks its
+  // own words whatever it holds, so its name is the whole key.
+  let own = name == PLATFORM_STORE || name == GIT_STORE
+  let key = own ? name : declared == null ? 'app' : `app ${declared}`
+  let held = shapes.get(key)
+  if (held) return held
+  let vocab = vocabOfStore(name, declared ?? {})
+  let read = blobRead(vocab)
+  let derived = { ...read, ...(own ? {} : appDerived()) }
+  let searchable = fields(vocab)
+  // The blob table first: the `doc_value` view and the search triggers read a
+  // body's text out of it, so it has to be standing before they are.
+  let ddl = [
+    ...blobSchema(),
+    ...schema(vocab, derived),
+    ...ftsSchema(searchable, read),
+  ]
+  let stamp = sha256(ddl.map((s) => render(s).sql).join('\n'))
+  let shape = { vocab, own, derived, searchable, stamp }
+  shapes.set(key, shape)
+  if (shapes.size > SHAPES) shapes.delete(shapes.keys().next().value!)
+  return shape
+}
 
 /**
  * The slice of a `DurableObjectState` this object needs: its storage, and its
@@ -593,43 +643,37 @@ export class Store {
     // declared.
     let name = this.#get('name') ?? ''
     let meta = name == PLATFORM_STORE
-    // Neither of the two is an app, which is what the app-shaped extras below
-    // are for: `task.status` is an expression over words a git object graph
-    // does not have, and `vocab.json` is not a sentence to say to a caller of
-    // either one.
-    let own = meta || name == GIT_STORE
-    let vocab = vocabOfStore(name, this.#get('vocab') ?? {})
+    // Neither of the platform's own two stores is an app, which is what the
+    // app-shaped extras below are for: `task.status` is an expression over
+    // words a git object graph does not have, and `vocab.json` is not a
+    // sentence to say to a caller of either one.
+    let { vocab, own, derived, searchable, stamp } = shapeOf(
+      name,
+      this.#get('vocab'),
+    )
     let drive = this.#sql = driver(ctx.storage)
     let bytes = sqliteBlobs(drive)
-    // The vocabulary says which prose is searched — @yaks/doc declares its
-    // title and body, and an app's own vocab.json declares `"search": true` on
-    // whatever of its words it wants found. sqlite owns no index.
-    let searchable = fields(vocab)
     let store = storage(ctx.storage, vocab, {
       // A number is @yaks/id's, and only the platform's own stores loaded it
       // (vocab.ts): the directory's memories are ordered by the number it
       // minted, while an app's entities are pointed at by the eid its client
       // minted and never by a number, so nothing mints one for them.
       number: numbered(vocab),
+      // The vocabulary says which prose is searched — @yaks/doc declares its
+      // title and body, and an app's own vocab.json declares `"search": true`
+      // on whatever of its words it wants found. sqlite owns no index.
       extend: [search(searchable)],
       // A body is stored as its address (@yaks/blob `store: "blob"`), so the
       // reads and the `doc_value` view resolve it as prose. The FTS schema
-      // below receives the same resolution, keeping hashes out of the index
+      // receives the same resolution, keeping hashes out of the index
       // (T-33978).
-      derived: { ...blobRead(vocab), ...(own ? {} : appDerived()) },
+      derived,
     })
-    // Every index the vocabulary declares is already in `store.ddl()` — the
-    // directory's uniques included, since they are words of `platformDoc`.
-    // The blob table first: the `doc_value` view and the search triggers read
-    // a body's text out of it, so it has to be standing before they are.
-    let ddl = [
-      ...blobSchema(),
-      ...store.ddl(),
-      ...ftsSchema(searchable, blobRead(vocab)),
-    ]
-    // The schema this object stands at, as one word: a wake under the same
-    // vocabulary runs no DDL at all, and a deploy that added a component
-    // raises its table on the next request.
+    // The schema this object stands at is one word (`shapeOf`): a wake under
+    // the same vocabulary runs no DDL at all, and a deploy that added a
+    // component raises its table on the next request. Every index the
+    // vocabulary declares is in it — the directory's uniques included, since
+    // they are words of `platformDoc`.
     //
     // A brand-new object raises nothing yet: it does not know which store it
     // is until its first request says so, and planting an app's core into what
@@ -637,7 +681,6 @@ export class Store {
     // vocabulary names. `#learn` reboots the moment the name arrives, and every
     // door runs after it.
     let named = !!this.#get('name') || !!this.#get('schema')
-    let stamp = sha256(ddl.map((s) => render(s).sql).join('\n'))
     let held = this.#get('schema')
     if (named && held != stamp) {
       // A definition cannot be altered by replaying it. `create ... if not
