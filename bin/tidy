@@ -1,0 +1,147 @@
+#!/bin/sh
+# Tidy the box: reap headless browsers that outlived their probes, remove the
+# profile directories nothing uses, and collect agent worktrees that can lose
+# nothing. Cron runs it every 15 minutes (T-40652, T-40654); each thing removed
+# is one line on stdout, anything that went wrong is on stderr.
+#
+# A worktree under <repo>/.claude/worktrees is collected only when all hold:
+# - it is not locked (Claude Code locks an agent's worktree while it runs);
+# - its git index is untouched for 3 hours;
+# - its HEAD is on origin/main;
+# - it has no changes and no untracked files.
+# Then `git worktree remove` (which re-checks for changes itself) and
+# `git branch -d` on its branch, which refuses a branch main lacks. A worktree
+# whose agent comes back can be recreated; a lost commit cannot, so every doubt
+# keeps it.
+#
+# A browser is the processes naming one `--user-data-dir` under /tmp, headless
+# when any of them says `--headless`. One older than an hour is a leftover: a
+# probe drives a page for seconds to minutes, while a forgotten one holds a
+# core in swiftshader for as long as it lives. Every process whose command line
+# names its profile directory gets TERM, then KILL, and the directory goes only
+# once pgrep finds none. A `cdp-*` directory under /tmp (or one level down,
+# where TMPDIR points) that no process names and nothing has written for an
+# hour goes too.
+#
+# YAK_TIDY_REPO, YAK_TIDY_TMP and YAK_TIDY_AGE (seconds) point it elsewhere;
+# the tests use them to keep off the live box.
+#
+# No `set -e`: one thing that fails to go must not stop the rest. Each step
+# checks what it needs, and any doubt keeps the thing.
+set -u
+export PATH="/usr/local/bin:/usr/bin:/bin"
+
+# Bounded and in the background: a run that hangs must not stack under the
+# next one, and a run must never be why the box is slow.
+if [ -z "${YAK_TIDY_BOUND:-}" ]; then
+  YAK_TIDY_BOUND=1 exec timeout -k 30 "${YAK_TIDY_TIMEOUT:-600}" \
+    nice -n 19 ionice -c3 "$0" "$@"
+fi
+
+common=$(git -C "$(dirname "$0")" rev-parse --path-format=absolute \
+  --git-common-dir) || exit 1
+repo=${YAK_TIDY_REPO:-$(dirname "$common")}
+tmp=$(realpath -e "${YAK_TIDY_TMP:-/tmp}") || exit 1
+age=${YAK_TIDY_AGE:-3600}
+idle=10800
+now=$(date +%s)
+
+exec 9>"$repo/.git/yak-tidy.lock"
+flock -n 9 || exit 0
+
+say() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) tidy: $*"; }
+
+# Whether path $1 is unmodified for $2 seconds; a path that is gone is not.
+old() { m=$(stat -c %Y -- "$1" 2>/dev/null) && [ $((now - m)) -ge "$2" ]; }
+
+# An extended regex matching a command line that names $1 as a whole path.
+names() {
+  re=$(printf '%s' "$1" | sed 's/[][\\.*^$+?(){}|]/\\&/g')
+  printf '(^|[ ="'\''])%s(/|[ "'\'']|$)' "$re"
+}
+
+# Whether any process names $1. A pgrep that fails says yes: a doubt keeps.
+named() { pgrep -f "$(names "$1")" >/dev/null && return; [ $? -ne 1 ]; }
+
+# Every process of ours naming $1 gets TERM, then KILL; true once none is left.
+kill_all() {
+  for sig in TERM KILL; do
+    pkill "-$sig" -u "$(id -u)" -f "$(names "$1")"
+    i=0
+    while named "$1"; do
+      [ $((i += 1)) -le 50 ] || continue 2
+      sleep 0.1
+    done
+    return 0
+  done
+  return 1
+}
+
+# Headless browsers under $tmp and each one's age: the oldest process that
+# names the same profile directory.
+browsers() {
+  ps -e -ww -o pid=,etimes=,args= | awk -v tmp="$tmp/" -v age="$age" '
+    {
+      dir = ""; headless = 0
+      for (i = 3; i <= NF; i++)
+        if (index($i, "--user-data-dir=") == 1) dir = substr($i, 17)
+        else if ($i == "--headless" || index($i, "--headless=") == 1)
+          headless = 1
+      if (index(dir, tmp) != 1) next
+      if ($2 + 0 >= old[dir]) old[dir] = $2 + 0
+      if (headless) seen[dir] = 1
+    }
+    END { for (d in seen) if (old[d] >= age) print old[d] " " d }'
+}
+
+# A profile directory may already be gone while its browser runs on.
+browsers | while read -r secs dir; do
+  real=$(realpath -m -- "$dir") || continue
+  case $real in "$tmp"/*) ;; *) continue ;; esac
+  n=$(pgrep -c -f "$(names "$dir")")
+  if ! kill_all "$dir"; then
+    echo "tidy: kept $dir: its processes outlived KILL" >&2
+  elif rm -rf -- "$real"; then
+    say "reaped browser $dir ($n processes, $((secs / 60)) min old)"
+  fi
+done
+
+find "$tmp" -mindepth 1 -maxdepth 2 -type d -name 'cdp-*' -user "$(id -u)" \
+  -prune 2>/dev/null | while read -r dir; do
+  old "$dir" "$age" && ! named "$dir" && rm -rf -- "$dir" &&
+    say "removed profile $dir"
+done
+
+# Worktrees under .claude/worktrees that are neither locked nor missing, as
+# "path<TAB>branch" (an empty branch is a detached HEAD).
+worktrees() {
+  git -C "$repo" worktree list --porcelain | awk -v root="$repo/.claude/worktrees/" '
+    function out() {
+      if (index(path, root) == 1 && !held) print path "\t" branch
+      path = ""
+    }
+    /^worktree / { out(); path = substr($0, 10); branch = ""; held = 0 }
+    /^branch refs\/heads\// { branch = substr($0, 19) }
+    /^(locked|prunable)/ { held = 1 }
+    END { out() }'
+}
+
+# The index is read before any git command that could refresh it, and status
+# never writes it (--no-optional-locks), so looking does not make it busy.
+collect() {
+  index=$(git -C "$1" rev-parse --path-format=absolute --git-path index) ||
+    return 0
+  old "$index" "$idle" || return 0
+  git -C "$1" merge-base --is-ancestor HEAD origin/main 2>/dev/null || return 0
+  [ -z "$(git -C "$1" --no-optional-locks status --porcelain \
+    --untracked-files=normal)" ] || return 0
+  head=$(git -C "$1" rev-parse --short HEAD)
+  git -C "$repo" worktree remove "$1" || return 0
+  say "removed worktree $1 (${2:-detached HEAD} at $head)"
+  [ -z "$2" ] || git -C "$repo" branch -q -d "$2"
+}
+
+tab=$(printf '\t')
+worktrees | while IFS=$tab read -r path branch; do
+  collect "$path" "$branch"
+done
