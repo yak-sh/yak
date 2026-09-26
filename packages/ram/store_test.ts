@@ -8,6 +8,7 @@
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Storage } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
 import { shop } from '../sqlite/testing.ts'
 import { ram, type RamOpts, type Store } from './mod.ts'
 
@@ -236,4 +237,35 @@ Deno.test('a real delete after payload eviction still makes death permanent', ()
   put(s, { entity: { eid: 'p1' }, doc: { title: 'late snapshot' } })
   assertEquals(at(s, 'p1').tombstone, {})
   assertEquals(at(s, 'p1').entity.num, 1)
+})
+
+// A property the vocabulary declares but never stores is answered by the rule
+// the store is handed, and refused by name without one.
+Deno.test('a computed property is read through the rule the store is given', () => {
+  let vocab = loadVocab({
+    $defs: {
+      lamp: {
+        type: 'object',
+        component: true,
+        properties: {
+          watts: { type: 'number' },
+          glow: { type: 'string', computed: true },
+        },
+      },
+    },
+  })
+  let lamps = [
+    { entity: { eid: 'l1' }, lamp: { watts: 60 } },
+    { entity: { eid: 'l2' }, lamp: { watts: 5 } },
+  ]
+  let lit = ram(vocab, {
+    computed: {
+      'lamp.glow': (b) => Number(comp(b, 'lamp').watts) > 40 ? 'bright' : 'dim',
+    },
+  })
+  put(lit, ...lamps)
+  assertEquals(lit.read('.lamp.glow=bright').map((b) => b.entity.eid), ['l1'])
+  let dark = ram(vocab)
+  put(dark, ...lamps)
+  assertThrows(() => dark.read('.lamp.glow=bright'), Error, 'lamp.glow')
 })

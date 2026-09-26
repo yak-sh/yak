@@ -102,6 +102,11 @@ Options are:
   components with `{ except: ['componentName'] }`. Numbering is off by default.
 - `adopt`: accept numbers supplied by another store. Off by default. See below
   for how this interacts with `number`.
+- `computed`: `comp.prop` → a function of one bundle, for each property the
+  vocabulary declares computed and never stores. A package that declares one
+  ships its rule, so a task graph passes `computed: compute()` from
+  [@yaks/task](../task) and `.task.status=open` is answered in memory. Without a
+  rule, a query on a computed property throws `Unsupported`, naming it.
 
 ### Writes are patches
 
@@ -147,12 +152,12 @@ values have the same meaning in query matching. RAM also preserves JavaScript
 value types; a SQL adapter may return an integer for a stored boolean.
 
 Unsupported queries throw `Unsupported` from `@yaks/match`. Examples include
-`.near`, `.edges`, and computed properties. Aggregates (`.count`, `.distinct`,
-`.tally`) are answered through `rows()`, not `read()`. See the
-[matcher documentation](../match/README.md) for the supported subset. Text
-search matches tokens in stored text without a full-text index or relevance
-ranking; it does not promise the tokenization of every database's full-text
-engine.
+`.near`, `.edges`, and a computed property no `computed` rule was given for.
+Aggregates (`.count`, `.distinct`, `.tally`) are answered through `rows()`, not
+`read()`. See the [matcher documentation](../match/README.md) for the supported
+subset. Text search matches tokens in stored text without a full-text index or
+relevance ranking; it does not promise the tokenization of every database's
+full-text engine.
 
 RAM does not implement `Tx.bindings`, so the graph's multi-entity declarative
 rules are skipped with this adapter. Ordinary graph hooks and per-entity rules

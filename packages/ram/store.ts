@@ -22,7 +22,7 @@
 
 import type { Bundle, Comp, Eid, Entity, ReadOpts, Row } from '@yaks/graph'
 import { comps, isPromise, tombstoned } from '@yaks/graph'
-import { matcher, type Query, rows as answer } from '@yaks/match'
+import { type Computed, matcher, type Query, rows as answer } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
 
 export type { Query }
@@ -44,6 +44,12 @@ export type RamOpts = {
    * `{ except: [comp, …] }` turns numbering on while leaving the entities of
    * the named components unnumbered. */
   number?: boolean | { except: readonly string[] }
+  /** `comp.prop` → the value for one bundle, for each property the vocabulary
+   * declares computed and never stores: what `.task.status=open` is answered
+   * with here, the way @yaks/sql answers it with a `derived` expression. A
+   * package that declares one ships the rule (@yaks/task `compute`). Left out,
+   * a query on a computed property is refused, naming it. */
+  computed?: Computed
 }
 
 /**
@@ -138,13 +144,19 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let all = (): Bundle[] => [...rows.values()].map(bundleOf)
 
   let read = (query: Query, opts: ReadOpts = {}): Bundle[] =>
-    matcher(query, vocab, { now: opts.now ?? base.now })(all())
+    matcher(query, vocab, {
+      now: opts.now ?? base.now,
+      computed: base.computed,
+    })(all())
 
   // The raw-rows path: one `{ eid }` per match, or an aggregate's rows in the
   // shape @yaks/sql returns, so a caller reads the same shape from either
   // storage.
   let raw = (query: Query, opts: ReadOpts = {}): Row[] =>
-    answer(query, vocab, { now: opts.now ?? base.now })(all())
+    answer(query, vocab, {
+      now: opts.now ?? base.now,
+      computed: base.computed,
+    })(all())
 
   // The number an identity gets: the one it arrived with when this store
   // mirrors another graph (none until it is told), else the next one this
