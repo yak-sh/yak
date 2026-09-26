@@ -290,7 +290,7 @@ export let world = (v: Vale, drawn: Chunk[]): World => {
       p.z + lit.at[2],
     ]
     let lantern = new THREE.MeshBasicMaterial({
-      color: 0xffc860,
+      color: lit.color ?? 0xffc860,
       transparent: true,
       opacity: 0,
       blending: THREE.AdditiveBlending,
@@ -301,7 +301,7 @@ export let world = (v: Vale, drawn: Chunk[]): World => {
     box.position.set(x, y, z)
     let glow = new THREE.SpriteMaterial({
       map: halo,
-      color: 0xffb84a,
+      color: lit.color ?? 0xffb84a,
       transparent: true,
       opacity: 0,
       blending: THREE.AdditiveBlending,

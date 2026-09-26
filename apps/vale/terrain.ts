@@ -119,9 +119,16 @@ let GLADE = 9
 
 // How strongly a point belongs to each of a level's kinds of place (the
 // strongest of its places of that kind, and how far that one's middle is),
-// and to the mountains at the rim. A level's `holder` reads every point into
-// the one Hold it keeps, so growing a level makes nothing new per column.
-type Hold = { rim: number; fs: Feature[]; k: Float64Array; far: Float64Array }
+// and to the mountains at the rim, and what clothes them (levels.ts `rim`). A
+// level's `holder` reads every point into the one Hold it keeps, so growing a
+// level makes nothing new per column.
+type Hold = {
+  rim: number
+  edge?: Feature
+  fs: Feature[]
+  k: Float64Array
+  far: Float64Array
+}
 let holder = (lv: Level) => {
   let places = Object.values(lv.places).filter((p) => FEATURES[p.kind])
   let kinds = [...new Set(places.map((p) => p.kind))]
@@ -129,6 +136,7 @@ let holder = (lv: Level) => {
   let at = places.map((p) => ({ i: kinds.indexOf(p.kind), at: p.at }))
   let w: Hold = {
     rim: 0,
+    edge: lv.rim ? FEATURES[lv.rim] : undefined,
     fs,
     k: new Float64Array(fs.length),
     far: new Float64Array(fs.length),
@@ -172,7 +180,8 @@ let coverOf = (w: Hold, n: number, x: number, z: number) => {
 }
 
 // Of the kinds that say `what` grows, the one holding a point strongest, and
-// more than the rim does; `h` picks among what it grows.
+// more than the rim does; else, up on the rim, what clothes it; `h` picks
+// among what it grows.
 let pickOf = (
   w: Hold,
   what: 'grows' | 'stones',
@@ -180,7 +189,7 @@ let pickOf = (
   rest: string,
 ) => {
   let i = lead(w, Math.max(0.35, w.rim), (f) => f[what])
-  let xs = w.fs[i]?.[what]
+  let xs = w.fs[i]?.[what] ?? (w.rim > 0.3 ? w.edge?.[what] : undefined)
   return xs ? xs[h % xs.length] : rest
 }
 

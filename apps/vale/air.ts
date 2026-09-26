@@ -1,6 +1,6 @@
 // What drifts in a level's air (levels.ts `look.air`): snow, rain, ash, embers
 // rising, spores, wisps, fireflies, midges, petals, reed down, dust, glints of
-// salt. Each kind of air is a row: what colour its bits are and whether they
+// salt, the shimmer off crystal. Each kind of air is a row: what colour its bits are and whether they
 // glow, how many a second, where round the hero they start (`spread` metres
 // out, `low` to `high` metres up), and how they move: flung out at `speed`,
 // `up` at the start (down if less than nothing), pulled down by `fall`, gone
@@ -101,6 +101,15 @@ export let AIRS: Record<string, Air> = {
     speed: 0.1,
     life: 2.5,
     size: 0.05,
+  }),
+  shimmer: air(0xd8f8ff, 16, {
+    glow: true,
+    low: 0,
+    high: 5,
+    up: 0.3,
+    speed: 0.15,
+    life: 4,
+    size: 0.04,
   }),
   glints: air(0xffffff, 18, {
     glow: true,

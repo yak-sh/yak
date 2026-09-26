@@ -50,6 +50,9 @@ export type Level = {
   places: Record<string, Place>
   /** the level each side's road leads to */
   roads: Partial<Record<Side, string>>
+  /** the kind of place whose trees and stones stand on the mountains at the
+   * rim; pines and rock if none */
+  rim?: string
   look?: Look
 }
 
@@ -82,8 +85,8 @@ let ROWS: Record<string, Row> = {
 }
 
 /** Every level, by its id. Every road has a road back on the side across,
- * every level is reached from Mossvale, and every place is a kind of ground
- * terrain.ts grows.
+ * every level is reached from Mossvale, and every place, and what clothes
+ * each rim, is a kind of ground terrain.ts grows.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -99,6 +102,7 @@ let ROWS: Record<string, Row> = {
  *   Object.values(lv.places).filter((p) => !FEATURES[p.kind])
  * )
  * assertEquals(unknown, [])
+ * assertEquals(lvs.filter((lv) => lv.rim && !FEATURES[lv.rim]), [])
  * assertEquals(lvs.filter((lv) => !lv.places[lv.arrive]), [])
  * ```
  */

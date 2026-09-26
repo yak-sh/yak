@@ -15,7 +15,8 @@ export type Model = { vox: Vox; size: number }
  * structure stands on (`span`, metres east–west and north–south, a
  * foundation filling below). A `small` one grows underfoot: drawn only near,
  * and casting no shadow. One that `glow`s is lit at dusk: a lantern `at`
- * metres from its foot (east, up, south), in a halo `size` metres across. */
+ * metres from its foot (east, up, south), in a halo `size` metres across, of
+ * lamplight or its own `color`. */
 export type Kind = {
   make: (seed: number) => Model
   shapes?: number
@@ -25,7 +26,7 @@ export type Kind = {
   foot?: number
   span?: [number, number]
   small?: boolean
-  glow?: { at: [number, number, number]; size: number }
+  glow?: { at: [number, number, number]; size: number; color?: number }
 }
 
 export let pickOf = <T>(r: () => number, xs: T[]) =>
