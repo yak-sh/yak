@@ -1,0 +1,43 @@
+/* Who is here, and the time of day. On a phone held upright the time is its
+   icon alone. */
+.Who {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--round);
+  background: var(--glass);
+  box-shadow: var(--lift);
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.Who_Dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--moss);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--moss) 30%, transparent);
+}
+
+.Who_Clock {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--line);
+  font-weight: 500;
+  color: var(--muted);
+
+  & .Glyph {
+    width: 1rem;
+    height: 1rem;
+  }
+}
+
+@media (orientation: portrait) {
+  .Who_Clock span {
+    display: none;
+  }
+}

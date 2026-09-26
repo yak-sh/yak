@@ -1,0 +1,275 @@
+/* The glass over the game: one grid inside the phone's safe areas, whose
+   areas no two parts share, so nothing on it overlaps at any size. It is laid
+   out three ways: upright (a phone held tall), on its side (a phone held
+   wide), and on a desktop, where the thumbs' buttons become a bar with keys.
+   Over all of it lie the scene's labels (Hud_Layer), the thumbstick, fainting
+   and the panels (Panel.css).
+
+   The areas: the hero's vitals, the quest tracked and the foe; nav, the
+   compass, who is here and the tray of buttons; note, the toasts; feed, the
+   chat; pads, the buttons for the thumbs; move, kept clear for the
+   thumbstick; and the talk panel, over the thumbs' row, which it hides. */
+.Hud {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  gap: var(--gap);
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  pointer-events: none;
+
+  /* A desktop, or anything wide with a mouse. */
+  grid-template-columns: minmax(0, 18rem) minmax(0, 1fr) minmax(0, 18rem);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'vitals foe nav'
+    'track note nav'
+    'feed note nav'
+    'feed pads nav';
+
+  &[hidden] {
+    display: none;
+  }
+
+  & > .Vitals {
+    grid-area: vitals;
+  }
+
+  & > .Track {
+    grid-area: track;
+  }
+
+  & > .Foe {
+    grid-area: foe;
+    justify-self: center;
+    width: min(20rem, 100%);
+  }
+
+  & > .Hud_Nav {
+    grid-area: nav;
+  }
+
+  & > .Hud_Toasts {
+    grid-area: note;
+  }
+
+  & > .Chat {
+    grid-area: feed;
+    align-self: end;
+  }
+
+  & > .Hud_Pads {
+    grid-area: pads;
+  }
+
+  & > .Talk {
+    grid-area: pads;
+    justify-self: center;
+    align-self: end;
+  }
+
+  /* While someone is talked to, the thumbs rest. */
+  &:has(> .Talk:not([hidden])) > :is(.Hud_Pads, .Stick) {
+    display: none;
+  }
+}
+
+/* The scene's labels, under everything else on the glass. */
+.Hud_Layer {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+}
+
+/* The compass, who is here, and the tray of round buttons. */
+.Hud_Nav {
+  display: grid;
+  grid-template-areas: 'who' 'rose' 'tray';
+  grid-template-rows: auto auto minmax(0, 1fr);
+  justify-items: end;
+  align-content: start;
+  gap: var(--gap);
+  min-height: 0;
+
+  & > .Who {
+    grid-area: who;
+  }
+
+  & > .Rose {
+    grid-area: rose;
+  }
+}
+
+.Hud_Tray {
+  grid-area: tray;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+/* The toasts, newest last. */
+.Hud_Toasts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 0;
+}
+
+/* On a desktop the thumbs' buttons are a bar along the bottom. */
+.Hud_Pads {
+  display: flex;
+  align-items: end;
+  justify-self: center;
+  align-self: end;
+  gap: var(--gap);
+}
+
+/* Upright: everything down the left, the compass and the tray down the
+   right, the toasts over the thumbs, and the thumbs at the bottom. The tray
+   sits low in its column, nearer the thumb. */
+@media (orientation: portrait) {
+  .Hud {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'vitals nav'
+      'track nav'
+      'foe nav'
+      'feed nav'
+      'note note'
+      'pads pads';
+
+    & > :is(.Vitals, .Track, .Foe) {
+      justify-self: start;
+      width: min(18rem, 100%);
+    }
+
+    & > .Chat {
+      align-self: start;
+    }
+  }
+
+  .Hud_Tray {
+    align-self: end;
+  }
+}
+
+/* A phone, or anything touched: the thumbstick at the bottom left and the
+   buttons in rings about strike at the bottom right, each in its own slot, so
+   one never moves when another comes or goes. */
+@media (pointer: coarse) {
+  .Hud {
+    & > .Chat {
+      align-self: start;
+    }
+
+    & > .Talk {
+      grid-area: auto;
+      grid-row: -2;
+      grid-column: 1 / -1;
+    }
+  }
+
+  .Hud_Pads {
+    --reach: calc(var(--strike) / 2 + var(--ring2) + var(--pad) / 2);
+    position: relative;
+    display: block;
+    justify-self: end;
+    width: var(--reach);
+    height: var(--reach);
+
+    & > .Pad {
+      /* The slot: which way from strike, 180deg left and 270deg up, and how
+         far. */
+      --a: 0deg;
+      --r: 0rem;
+      --base: calc(var(--strike) / 2 - var(--size) / 2);
+      position: absolute;
+      right: calc(var(--base) - var(--r) * cos(var(--a)));
+      bottom: calc(var(--base) - var(--r) * sin(var(--a)));
+    }
+
+    & > .Pad-dodge {
+      --a: 180deg;
+      --r: var(--ring1);
+    }
+
+    /* The abilities (bar.ts): the weapon's two beside strike, the other
+       hand's further out. */
+    & > .Pad-ability1 {
+      --a: 225deg;
+      --r: var(--ring1);
+    }
+
+    & > .Pad-ability2 {
+      --a: 270deg;
+      --r: var(--ring1);
+    }
+
+    & > .Pad-jump {
+      --a: 180deg;
+      --r: var(--ring2);
+    }
+
+    & > .Pad-ability3 {
+      --a: 210deg;
+      --r: var(--ring2);
+    }
+
+    & > .Pad-drink {
+      --a: 240deg;
+      --r: var(--ring2);
+    }
+
+    /* Whatever is near enough to use: someone to talk to, or a node or a
+       station to work (hud.ts `work`). One shows at a time. */
+    & > :is(.Pad-talk, .Pad-gather) {
+      --a: 270deg;
+      --r: var(--ring2);
+    }
+  }
+}
+
+@media (pointer: coarse) and (orientation: portrait) {
+  .Hud {
+    grid-template-areas:
+      'vitals nav'
+      'track nav'
+      'foe nav'
+      'feed nav'
+      'note note'
+      'move pads';
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto minmax(
+      var(--stick),
+      auto
+    );
+  }
+}
+
+/* On its side: the vitals and the quest at the top left with the chat under
+   them, the foe and the toasts at the top in the middle, the compass with the
+   tray beside it at the top right, and the thumbs' row at the bottom. */
+@media (pointer: coarse) and (orientation: landscape) {
+  .Hud {
+    grid-template-columns: minmax(0, 14rem) minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) minmax(var(--stick), auto);
+    grid-template-areas:
+      'vitals foe nav'
+      'track note nav'
+      'feed note pads'
+      'move move pads';
+  }
+
+  .Hud_Nav {
+    grid-template-areas: 'who who' 'tray rose';
+    grid-template-rows: auto auto;
+    grid-template-columns: auto auto;
+    align-items: center;
+  }
+
+  .Hud_Tray {
+    flex-direction: row;
+  }
+}

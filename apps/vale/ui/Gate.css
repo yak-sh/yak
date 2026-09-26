@@ -1,0 +1,61 @@
+/* The gate: the card over the scene before playing, where a hero is chosen
+   (a grid of them, Hero.css) or made (Make.css). */
+.Gate {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  overflow-y: auto;
+  background: radial-gradient(
+    circle at 50% 35%,
+    rgba(255, 255, 255, 0.35),
+    rgba(47, 70, 40, 0.45)
+  );
+}
+
+.Gate_Card {
+  width: min(24rem, 100%);
+  padding: 1.6rem 1.5rem 1.4rem;
+  border-radius: 22px;
+  background: var(--paper);
+  box-shadow: 0 0.5rem 0 #d9ceb0, 0 1.2rem 2.5rem rgba(20, 30, 15, 0.35);
+  text-align: center;
+}
+
+.Gate_Title {
+  margin: 0;
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--deep);
+}
+
+.Gate_Lede {
+  margin: 0.3rem 0 1.1rem;
+  color: var(--muted);
+}
+
+.Gate_Busy {
+  margin: 0.5rem 0 0;
+  color: var(--faint);
+}
+
+.Gate_Note {
+  margin: 1rem 0 0;
+  font-size: 0.85rem;
+  color: var(--faint);
+
+  & a {
+    font-weight: 600;
+    color: var(--deep);
+  }
+}
+
+.Gate_Heroes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+}

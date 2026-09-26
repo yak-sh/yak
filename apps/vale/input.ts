@@ -15,14 +15,10 @@ export type Intent = {
   /** work the node near enough to work (work.ts) */
   gather: boolean
   drink: boolean
-  /** open the pack, or fold it away */
-  bag: boolean
   /** swing the camera behind the hero */
   snap: boolean
   /** the camera follows the hero, or stops following */
   follow: boolean
-  /** open the map, or fold it away */
-  map: boolean
   /** turn the microphone on, or off */
   mic: boolean
   /** how far the view was turned since the last read: yaw, pitch */
@@ -41,12 +37,11 @@ export type Action =
   | 'talk'
   | 'gather'
   | 'drink'
-  | 'bag'
   | 'snap'
   | 'follow'
-  | 'map'
   | 'mic'
 
+// The keys for each action; the panels' keys are their own (hud.ts).
 let KEYS: Record<string, Action> = {
   Space: 'jump',
   KeyF: 'strike',
@@ -59,13 +54,21 @@ let KEYS: Record<string, Action> = {
   Digit2: 'ability2',
   Digit3: 'ability3',
   KeyQ: 'drink',
-  KeyB: 'bag',
-  KeyI: 'bag',
   KeyC: 'snap',
   KeyV: 'follow',
-  KeyM: 'map',
   KeyT: 'mic',
 }
+
+/** The keys that press `a`, as `KeyboardEvent.code`s, the first the one a
+ * button shows.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(keysOf('strike'), ['KeyF', 'KeyJ'])
+ * ```
+ */
+export let keysOf = (a: Action): string[] =>
+  Object.keys(KEYS).filter((k) => KEYS[k] == a)
 
 let AXES: Record<string, [number, number]> = {
   KeyW: [0, 1],
@@ -208,10 +211,8 @@ export let listen = (
         talk: pressed.has('talk'),
         gather: pressed.has('gather'),
         drink: pressed.has('drink'),
-        bag: pressed.has('bag'),
         snap: pressed.has('snap'),
         follow: pressed.has('follow'),
-        map: pressed.has('map'),
         mic: pressed.has('mic'),
         orbit: [orbit[0], orbit[1]],
         zoom,

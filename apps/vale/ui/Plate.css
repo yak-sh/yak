@@ -1,0 +1,82 @@
+/* A label that rides over someone in the scene (fx.ts, cast.ts): their name
+   and level, and their health while it is not whole. */
+.Plate {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.Plate_In {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  translate: -50% 0;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: var(--text-shadow);
+  white-space: nowrap;
+
+  & em {
+    padding: 0 0.3em;
+    border-radius: var(--round);
+    background: rgba(0, 0, 0, 0.35);
+    font-size: 0.65rem;
+    font-style: normal;
+  }
+}
+
+.Plate-friend .Plate_In b {
+  color: #dff5c8;
+}
+
+.Plate-boss .Plate_In b {
+  font-size: 0.95rem;
+  color: #ffb08a;
+}
+
+.Plate_Bar {
+  --fill: var(--ember);
+  position: relative;
+  display: block;
+  width: 3.4rem;
+  height: 0.35rem;
+  overflow: hidden;
+  border-radius: var(--round);
+  background: rgba(0, 0, 0, 0.35);
+
+  & i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: calc(var(--k) * 100%);
+    background: var(--fill);
+  }
+}
+
+.Plate_Bar-friend {
+  --fill: #7fd65c;
+}
+
+.Plate_Bar-work {
+  --fill: #9fe07a;
+  width: 4rem;
+}
+
+/* A node to gather (nodes.ts), and one the hero's trade does not reach yet. */
+.Plate-node .Plate_In b {
+  color: #fff3c4;
+}
+
+.Plate-locked .Plate_In {
+  opacity: 0.75;
+}

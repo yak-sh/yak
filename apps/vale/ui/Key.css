@@ -1,0 +1,31 @@
+/* A key on the keyboard, as a little cap: on a button it presses, at its
+   corner, and only where there is a keyboard to press it on. */
+.Key {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 0.3em;
+  border-radius: 5px;
+  background: var(--paper);
+  box-shadow: 0 1px 0 var(--rim), inset 0 0 0 1px var(--line);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--ink);
+  text-shadow: none;
+  white-space: nowrap;
+
+  :is(.Orb, .Pad, .Rose) > & {
+    position: absolute;
+    right: -0.25rem;
+    bottom: -0.25rem;
+    pointer-events: none;
+  }
+}
+
+@media (pointer: coarse) {
+  :is(.Orb, .Pad, .Rose) > .Key {
+    display: none;
+  }
+}

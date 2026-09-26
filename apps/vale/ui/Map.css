@@ -1,0 +1,143 @@
+/* The map (map.ts): the level's chart, as big as the panel has room for, and
+   who is where over it. A road's label sits inside the edge it leaves by. */
+.Map {
+  position: relative;
+  width: min(36rem, 100cqw - 2rem, 100cqh - 5rem);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: var(--radius-small);
+  box-shadow: inset 0 0 0 2px var(--line);
+}
+
+.Map_Ground {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.Map_Marks {
+  position: absolute;
+  inset: 0;
+
+  & > * {
+    position: absolute;
+    translate: -50% -50%;
+    font-style: normal;
+  }
+}
+
+.Map_Me {
+  z-index: 1;
+  width: 0;
+  height: 0;
+  border: 0.5rem solid transparent;
+  border-top: 0;
+  border-bottom: 1.15rem solid var(--ember);
+  rotate: var(--turn);
+  filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+}
+
+.Map_Other {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: #3f7fd8;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.Map_Giver {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: #fff3c4;
+  box-shadow: 0 0 0 2px var(--deep);
+  font-size: 0;
+}
+
+.Map_Giver-quest {
+  display: grid;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  background: var(--gold);
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #5a3a0a;
+}
+
+/* A node to gather, in its trade's colour; hollow while spent, faint while
+   the hero's trade does not reach it. */
+.Map_Node {
+  --c: #8a5a2a;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 2px;
+  rotate: 45deg;
+  background: var(--c);
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85);
+}
+
+.Map_Node-ore {
+  --c: #6a7a8e;
+}
+
+.Map_Node-herb {
+  --c: #4fa83a;
+}
+
+.Map_Node-fish {
+  --c: #2a8ad8;
+}
+
+.Map_Node-spent {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--c);
+}
+
+.Map_Node-far {
+  opacity: 0.45;
+}
+
+.Map_Road {
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--round);
+  background: color-mix(in srgb, var(--ink) 78%, transparent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.Map_Road-north {
+  translate: -50% 0.3rem;
+
+  &::before {
+    content: '↑ ';
+  }
+}
+
+.Map_Road-south {
+  translate: -50% calc(-100% - 0.3rem);
+
+  &::before {
+    content: '↓ ';
+  }
+}
+
+.Map_Road-west {
+  translate: 0.3rem -50%;
+
+  &::before {
+    content: '← ';
+  }
+}
+
+.Map_Road-east {
+  translate: calc(-100% - 0.3rem) -50%;
+
+  &::after {
+    content: ' →';
+  }
+}

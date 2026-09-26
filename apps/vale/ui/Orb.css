@@ -1,0 +1,72 @@
+/* A round button with an icon: the tray's, and a panel's close. On while
+   what it opens is open or what it turns on is on, faded while it is off,
+   dotted when there is something new behind it, and calling when it wants
+   pressing. */
+.Orb {
+  --size: var(--orb);
+  --face: var(--glass);
+  --tint: var(--deep);
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--size);
+  height: var(--size);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--face);
+  color: var(--tint);
+  box-shadow: 0 3px 0 var(--lip), 0 6px 16px rgba(20, 30, 15, 0.16);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+
+  & .Glyph {
+    width: 48%;
+    height: 48%;
+  }
+
+  &:active {
+    translate: 0 2px;
+    box-shadow: 0 1px 0 var(--lip);
+  }
+}
+
+.Orb-small {
+  --size: 2.1rem;
+  --face: var(--well);
+  box-shadow: none;
+}
+
+.Orb-on {
+  --face: var(--deep);
+  --tint: var(--paper);
+}
+
+.Orb-off {
+  opacity: 0.55;
+}
+
+.Orb-new::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--ember);
+  box-shadow: 0 0 0 2px var(--paper);
+}
+
+.Orb-call {
+  animation: call 1s ease-in-out infinite;
+}
+
+@keyframes call {
+  50% {
+    scale: 1.15;
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold) 65%, transparent);
+  }
+}

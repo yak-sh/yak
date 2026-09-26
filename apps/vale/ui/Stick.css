@@ -1,0 +1,50 @@
+/* The thumbstick (input.ts), under the thumb that put it there, and resting
+   in the bottom left corner, which Hud.css keeps clear for it. Only where
+   there are thumbs. */
+.Stick {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 6;
+  display: none;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: -3.5rem;
+    top: -3.5rem;
+    width: 7rem;
+    height: 7rem;
+    border: 3px solid color-mix(in srgb, var(--paper) 70%, transparent);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--paper) 25%, transparent);
+  }
+}
+
+.Stick-rest {
+  transform: translate(
+    calc(var(--safe-l) + 4rem),
+    calc(100dvh - var(--safe-b) - 4rem)
+  );
+  opacity: 0.45;
+}
+
+.Stick_Knob {
+  position: absolute;
+  left: -1.6rem;
+  top: -1.6rem;
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--paper) 90%, transparent);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+
+@media (pointer: coarse) {
+  .Stick {
+    display: block;
+  }
+}

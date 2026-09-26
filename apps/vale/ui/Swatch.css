@@ -1,0 +1,16 @@
+/* A colour to choose, round, ringed when it is chosen. */
+.Swatch {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 0 2px var(--line);
+  cursor: pointer;
+}
+
+.Swatch-on {
+  box-shadow: 0 0 0 3px var(--deep);
+  scale: 1.08;
+}

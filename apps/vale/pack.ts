@@ -1,15 +1,15 @@
-// The hero's pack, a sheet over the glass: what they wear in each slot, how
-// they fight in it and the abilities it gives them, everything else they
-// carry, and by a village's fire, the rack of plain arms anyone may take to
-// try. Tap a thing to see what it is, the abilities it gives, and what
+// The hero's pack, drawn into its panel (panel.ts): what they wear in each
+// slot, how they fight in it and the abilities it gives them, everything else
+// they carry, and by a village's fire, the rack of plain arms anyone may take
+// to try. Tap a thing to see what it is, the abilities it gives, and what
 // wearing it would change, then wear it, take it off, or take it from the
-// rack. B or the bag opens it; B, Escape, a tap beside it or its
-// close button folds it away. It is written again only when what it shows
-// changed.
+// rack. B or the tray's bag opens it. It is written again only when what it
+// shows changed.
 import { ABILITIES, GIVES } from './abilities.ts'
 import { HANDLES, type Slot, SLOT_NAMES, SLOTS, sortOf } from './arms.ts'
 import { kitOf, RACK, type Worn } from './gear.ts'
 import { ITEMS, type Thing } from './items.ts'
+import type { Panel } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { maxHp, power } from './rules.ts'
 
@@ -87,30 +87,18 @@ let pips = (t?: Thing) =>
     }</i>`
     : ''
 
-/** The pack, folded away until asked for, in `root`. */
-export let pack = (root: HTMLElement, acts: Acts) => {
-  let box = document.createElement('div')
-  box.className = 'Pack'
-  box.hidden = true
-  root.append(box)
+/** The pack, drawn into its panel (panel.ts). */
+export let pack = (panel: Panel, acts: Acts) => {
+  let box = panel.body
   // What is picked: a slot worn, a kind in the bag, or a kind on the rack.
   let picked: { from: 'worn' | 'bag' | 'rack'; key: string } | null = null
   let sheet: Sheet | null = null
   let was: unknown[] = []
-  let close = () => {
-    box.hidden = true
-    picked = null
-  }
-  box.addEventListener('pointerdown', (e) => {
-    e.stopPropagation()
-    if (e.target == box) close()
-  })
   box.addEventListener('click', (e) => {
     let t = e.target instanceof Element ? e.target : null
     let s = sheet
     let pick = t?.closest<HTMLElement>('[data-pick]')?.dataset.pick
     let act = t?.closest<HTMLElement>('[data-do]')?.dataset.do
-    if (act == 'close') return close()
     if (pick) {
       let [from, key] = pick.split(':') as ['worn' | 'bag' | 'rack', string]
       picked = picked?.from == from && picked.key == key ? null : { from, key }
@@ -131,9 +119,6 @@ export let pack = (root: HTMLElement, acts: Acts) => {
       }
     }
     was = []
-  })
-  addEventListener('keydown', (e) => {
-    if (e.code == 'Escape' && !box.hidden) close()
   })
 
   // What the hero carries beyond what they wear, a stack for each kind: arms
@@ -195,15 +180,15 @@ export let pack = (root: HTMLElement, acts: Acts) => {
       : ''
     let held = s.bag.some((h) => h.kind == kind)
     let act = from == 'worn'
-      ? `<button class=Btn data-do=off>Take it off</button>`
+      ? `<button class="Btn Btn-small" data-do=off>Take it off</button>`
       : from == 'rack'
       ? f.rack
         ? held
           ? `<span class=Pack_Hint>You have one.</span>`
-          : `<button class="Btn Btn-go" data-do=take>Take it</button>`
+          : `<button class="Btn Btn-go Btn-small" data-do=take>Take it</button>`
         : ''
       : t.slot
-      ? `<button class="Btn Btn-go" data-do=wear>${
+      ? `<button class="Btn Btn-go Btn-small" data-do=wear>${
         t.slot == 'main' || t.slot == 'off' ? 'Hold it' : 'Wear it'
       }</button>`
       : ''
@@ -233,9 +218,9 @@ export let pack = (root: HTMLElement, acts: Acts) => {
     ) => `<span class=Pack_Num>${icon} ${say(n[k])}</span>`).join('') +
       s.abilities.map((id, i) =>
         ABILITIES[id]
-          ? `<span class=Pack_Num><kbd>${i + 1}</kbd> ${ABILITIES[id].icon} ${
-            esc(ABILITIES[id].name)
-          }</span>`
+          ? `<span class=Pack_Num><kbd class=Key>${i + 1}</kbd> ${
+            ABILITIES[id].icon
+          } ${esc(ABILITIES[id].name)}</span>`
           : ''
       ).join('')
     let bag = stacks(s).map(([k, count]) =>
@@ -247,7 +232,7 @@ export let pack = (root: HTMLElement, acts: Acts) => {
       )
     ).join('')
     let rack = f.rack
-      ? `<h4 class=Pack_Head>By the fire: plain arms for anyone to try</h4><div class=Pack_Grid>${
+      ? `<h3 class=Pack_Head>By the fire: plain arms for anyone to try</h3><div class=Pack_Grid>${
         RACK.map((k) =>
           tile(
             `rack:${k}`,
@@ -259,29 +244,27 @@ export let pack = (root: HTMLElement, acts: Acts) => {
         ).join('')
       }</div>`
       : ''
-    box.innerHTML = `<div class=Pack_Sheet>` +
-      `<div class=Pack_Top><b>${
-        esc(s.name)
-      }</b><span class=Card_Lvl>Level ${s.lvl}</span><button class=Map_Close data-do=close title="Close (B)">✕</button></div>` +
+    panel.head(`${esc(s.name)} <span class=Badge>Level ${s.lvl}</span>`)
+    box.innerHTML = `<div class=Pack>` +
       `<div class=Pack_Worn>${worn}</div>` +
       `<div class=Pack_Nums>${stats}</div>` +
       `<div class=Pack_Pick>${card(s, f)}</div>` +
-      `<h4 class=Pack_Head>In your bag</h4>` +
+      `<h3 class=Pack_Head>In your bag</h3>` +
       `<div class=Pack_Grid>${
         bag || '<span class=Pack_Hint>Your bag is empty.</span>'
       }</div>${rack}</div>`
   }
 
   return {
-    get open() {
-      return !box.hidden
-    },
-    toggle: () => box.hidden ? box.hidden = false : close(),
-    close,
-    /** show this frame's sheet, when the pack is open and it changed */
+    /** show this frame's sheet, when the pack is open and it changed; what
+     * was picked is let go once it folds away */
     show: (f: Frame) => {
       sheet = f.sheet
-      if (box.hidden) return
+      if (!panel.open) {
+        picked = null
+        was = []
+        return
+      }
       let key = [f.sheet, f.rack, picked]
       if (key.every((k, i) => k === was[i])) return
       was = key

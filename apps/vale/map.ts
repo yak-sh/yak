@@ -5,10 +5,10 @@
 // colour of a roof (`paint`). Over it, who is where, written only while it is
 // open: the hero's arrow, the other players, the people with a quest, the
 // nodes to gather (work.ts), coloured by their trade and hollow while spent,
-// and the level each road leads to. M or the compass opens it; M, Escape, a tap
-// beside it or its close button folds it away.
+// and the level each road leads to. M or the compass opens its panel.
 import { paletteOf } from './ground.ts'
 import { LEVELS } from './levels.ts'
+import type { Panel } from './panel.ts'
 import type { Frame } from './play.ts'
 import { bulk, KINDS } from './props.ts'
 import { clamp } from './rand.ts'
@@ -108,28 +108,12 @@ let pct = (m: number) => `${(clamp(m / SIZE, 0, 1) * 100).toFixed(2)}%`
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
-/** The map, folded away until asked for, in `root`. */
-export let map = (root: HTMLElement) => {
-  let box = document.createElement('div')
-  box.className = 'Map'
-  box.hidden = true
-  box.innerHTML =
-    `<div class=Map_Sheet><div class=Map_Head><b class=Map_Name></b>` +
-    `<button class=Map_Close title="Close the map (M)">✕</button></div>` +
-    `<div class=Map_Chart><canvas class=Map_Ground></canvas><div class=Map_Marks></div></div></div>`
-  root.append(box)
-  let name = box.querySelector<HTMLElement>('.Map_Name')!
-  let canvas = box.querySelector('canvas')!
-  let marks = box.querySelector<HTMLElement>('.Map_Marks')!
-  let close = () => box.hidden = true
-  box.addEventListener('pointerdown', (e) => {
-    e.stopPropagation()
-    let t = e.target
-    if (t == box || (t instanceof Element && t.closest('.Map_Close'))) close()
-  })
-  addEventListener('keydown', (e) => {
-    if (e.code == 'Escape' && !box.hidden) close()
-  })
+/** The map, drawn into its panel (panel.ts). */
+export let map = (panel: Panel) => {
+  panel.body.innerHTML =
+    `<div class=Map><canvas class=Map_Ground></canvas><div class=Map_Marks></div></div>`
+  let canvas = panel.body.querySelector('canvas')!
+  let marks = panel.body.querySelector<HTMLElement>('.Map_Marks')!
 
   // What the chart shows: the level it was painted for, at its voxel size.
   let painted: Vale | null = null
@@ -140,19 +124,14 @@ export let map = (root: HTMLElement) => {
     canvas.width = canvas.height = v.cols
     let ctx = canvas.getContext('2d')!
     ctx.putImageData(new ImageData(paint(v), v.cols, v.cols), 0, 0)
-    name.textContent = v.level.name
+    panel.head(esc(v.level.name))
     was = ''
   }
 
   return {
-    get open() {
-      return !box.hidden
-    },
-    toggle: () => box.hidden = !box.hidden,
-    close,
     /** mark who is where this frame, and the nodes, when the map is open */
     show: (f: Frame, v: Vale, nodes: Seen[] = []) => {
-      if (box.hidden) return
+      if (!panel.open) return
       draw(v)
       let at = (x: number, z: number) => `left:${pct(x)};top:${pct(z)}`
       let html =

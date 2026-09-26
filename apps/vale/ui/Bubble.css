@@ -1,0 +1,52 @@
+/* Words over a speaker's head, above the name over it, fading as they go
+   (chatbox.ts). */
+.Plate-said .Plate_In {
+  bottom: 2.3rem;
+  width: max-content;
+  max-width: 14rem;
+  white-space: normal;
+}
+
+.Bubble {
+  position: relative;
+  display: block;
+  padding: 0.3rem 0.65rem;
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--lip);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: center;
+  color: var(--ink);
+  text-shadow: none;
+  overflow-wrap: anywhere;
+  animation: said 5s ease-out forwards;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -0.35rem;
+    border: 0.4rem solid transparent;
+    border-bottom: 0;
+    border-top-color: var(--paper);
+    translate: -50% 0;
+  }
+}
+
+@keyframes said {
+  0% {
+    opacity: 0;
+    transform: translateY(0.4rem) scale(0.9);
+  }
+
+  5%,
+  80% {
+    opacity: 1;
+    transform: none;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}

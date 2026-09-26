@@ -1,0 +1,54 @@
+/* A button with words on it, on a lip: plain, or `Btn-go` for the one to
+   press. */
+.Btn {
+  --face: var(--well);
+  --tint: var(--ink);
+  --edge-lip: var(--rim);
+  display: inline-block;
+  padding: 0.55rem 1.1rem;
+  border: 0;
+  border-radius: var(--round);
+  background: var(--face);
+  box-shadow: 0 3px 0 var(--edge-lip);
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  color: var(--tint);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+
+  &:active {
+    translate: 0 2px;
+    box-shadow: 0 1px 0 var(--edge-lip);
+  }
+
+  &[hidden] {
+    display: none;
+  }
+
+  /* One that cannot be pressed yet looks it, and does not give. */
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+    translate: none;
+    box-shadow: 0 3px 0 var(--edge-lip);
+  }
+}
+
+.Btn-go {
+  --face: var(--moss);
+  --tint: #fff;
+  --edge-lip: var(--deep);
+}
+
+.Btn-small {
+  padding: 0.35rem 0.9rem;
+  font-size: 0.9rem;
+}
+
+.Btn-big {
+  padding: 0.7rem 1.2rem;
+  font-size: 1.15rem;
+}

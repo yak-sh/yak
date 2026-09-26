@@ -1,0 +1,62 @@
+/* The compass, which opens the map: up is the way the camera looks, and each
+   letter stands where its way lies, turned by --turn, the bearing (hud.ts).
+   The notch on its rim marks ahead. */
+.Rose {
+  --turn: 0deg;
+  --r: calc(var(--rose) * 0.34);
+  position: relative;
+  width: var(--rose);
+  height: var(--rose);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--glass);
+  box-shadow: 0 2px 0 var(--lip), inset 0 0 0 2px var(--line);
+  cursor: pointer;
+  pointer-events: auto;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: -0.2rem;
+    translate: -50% 0;
+    border: 0.24rem solid transparent;
+    border-top: 0.36rem solid var(--deep);
+    border-bottom: 0;
+  }
+
+  &:active {
+    translate: 0 2px;
+  }
+}
+
+.Rose_Mark,
+.Rose_Tick {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(calc(var(--at) - var(--turn)))
+    translateY(calc(-1 * var(--r))) rotate(calc(var(--turn) - var(--at)));
+}
+
+.Rose_Mark {
+  font-size: 0.8rem;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.Rose_Mark-n {
+  font-size: 1rem;
+  color: var(--ember);
+}
+
+.Rose_Tick {
+  --r: calc(var(--rose) * 0.36);
+  width: 0.24rem;
+  height: 0.22rem;
+  border-radius: 50%;
+  background: var(--rim);
+}

@@ -1,0 +1,59 @@
+/* A number a blow throws up, floating up and fading (fx.ts). */
+.Float {
+  --tint: #fff;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  display: flex;
+  justify-content: center;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--tint);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45), 0 0 3px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  will-change: transform;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.Float-great {
+  --tint: var(--gold);
+  font-size: 1.6rem;
+}
+
+.Float-ally {
+  --tint: #e8e2d0;
+  font-size: 0.9rem;
+}
+
+.Float-hurt {
+  --tint: #ff8a70;
+}
+
+.Float-heal {
+  --tint: #9ff07a;
+}
+
+.Float-xp {
+  --tint: var(--xp);
+  font-size: 0.95rem;
+}
+
+.Float-dodge {
+  --tint: var(--xp);
+  font-size: 1.3rem;
+  font-style: italic;
+}
+
+.Float-ability {
+  font-size: 1.05rem;
+  white-space: nowrap;
+}
+
+.Float-ward {
+  --tint: #9fd8ff;
+}

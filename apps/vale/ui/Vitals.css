@@ -1,0 +1,26 @@
+/* The hero's vitals: their name and level over their health and the xp to
+   the next level. */
+.Vitals {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.55rem 0.75rem 0.65rem;
+  border-radius: var(--radius);
+  background: var(--glass);
+  box-shadow: var(--lift);
+}
+
+.Vitals_Top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.Vitals_Name {
+  overflow: hidden;
+  font-size: 1.1rem;
+  color: var(--deep);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

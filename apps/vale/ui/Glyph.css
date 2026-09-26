@@ -1,0 +1,11 @@
+/* A line icon (glyphs.ts), in the colour of the text around it. */
+.Glyph {
+  display: block;
+  width: 1.2em;
+  height: 1.2em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

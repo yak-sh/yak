@@ -1,0 +1,36 @@
+/* What just happened, for a moment: a level, a thing found, a quest taken. */
+.Toast {
+  --tint: var(--ink);
+  max-width: min(26rem, 100%);
+  padding: 0.4rem 0.9rem;
+  border-radius: var(--radius);
+  background: var(--glass);
+  box-shadow: var(--lift);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--tint);
+  animation: toast-in 0.25s ease-out;
+  transition: opacity 0.5s, translate 0.5s;
+}
+
+.Toast-big {
+  --tint: var(--deep);
+  font-size: 1.15rem;
+}
+
+.Toast-loot {
+  --tint: #8a5a10;
+}
+
+.Toast-out {
+  opacity: 0;
+  translate: 0 -0.5rem;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.6rem) scale(0.96);
+  }
+}

@@ -1,0 +1,13 @@
+/* A little pill beside a name: a level. */
+.Badge {
+  --face: var(--deep);
+  flex: none;
+  padding: 0.05rem 0.5rem;
+  border-radius: var(--round);
+  background: var(--face);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #fff;
+  white-space: nowrap;
+}

@@ -1,0 +1,101 @@
+/* The chat (chatbox.ts): the last lines said in this level, each fading a
+   while after it was said and all shown while the box is open, and the line
+   being written. The newest lines stay in sight when there is room for only a
+   few. */
+.Chat {
+  --tint: #dff5c8;
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 0.35rem;
+  width: min(24rem, 100%);
+  max-height: 100%;
+  min-height: 0;
+}
+
+.Chat_Log {
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  align-items: start;
+  gap: 0.2rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  font-size: 0.9rem;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.Chat_Line {
+  flex: none;
+  max-width: 100%;
+  padding: 0.12rem 0.6rem;
+  border-radius: var(--radius-small);
+  background: var(--shade);
+  overflow-wrap: anywhere;
+  /* Each delay is chatbox.ts's: when the line was said, and when it fades. */
+  animation:
+    toast-in 0.25s ease-out,
+    fade var(--fade) ease-in forwards;
+
+  .Chat-open & {
+    animation: toast-in 0.25s ease-out;
+  }
+}
+
+.Chat_Line-wait {
+  opacity: 0.7;
+}
+
+@keyframes fade {
+  to {
+    opacity: 0;
+  }
+}
+
+.Chat_Name {
+  margin-right: 0.4em;
+  color: color-mix(in srgb, var(--tint) 55%, #fff);
+}
+
+.Chat_Say {
+  flex: none;
+  width: 100%;
+  pointer-events: auto;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.Chat_Input {
+  width: 100%;
+  padding: 0.5rem 0.8rem;
+  border: 2px solid var(--moss);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--paper) 96%, transparent);
+  font: inherit;
+  /* Any smaller and a phone zooms in when it is tapped. */
+  font-size: max(16px, 1rem);
+  color: var(--ink);
+  -webkit-user-select: text;
+  user-select: text;
+
+  &:focus {
+    outline: none;
+    border-color: var(--deep);
+  }
+}
+
+.Chat_Ask {
+  flex: none;
+}
+
+@media (pointer: coarse) {
+  .Chat_Log {
+    font-size: 0.85rem;
+  }
+}

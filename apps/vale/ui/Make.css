@@ -1,0 +1,48 @@
+/* Making a hero, at the gate: a name, and the colours of their tunic, hair
+   and skin (Swatch.css). */
+.Make {
+  display: grid;
+  gap: 0.45rem;
+  text-align: left;
+
+  & .Btn-go {
+    margin-top: 0.7rem;
+  }
+}
+
+.Make_Name {
+  display: grid;
+  gap: 0.25rem;
+  font-weight: 600;
+  color: var(--deep);
+
+  & input {
+    padding: 0.5rem 0.8rem;
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    font: inherit;
+    font-size: max(16px, 1.1rem);
+    color: var(--ink);
+    -webkit-user-select: text;
+    user-select: text;
+
+    &:focus {
+      outline: none;
+      border-color: var(--moss);
+    }
+  }
+}
+
+.Make_Label {
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--faint);
+}
+
+.Make_Row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}

@@ -1,0 +1,80 @@
+/* A panel (panel.ts): a sheet over the glass, the world dimmed behind it, its
+   title and close button over a body its owner draws, which scrolls when it
+   is long. On a phone held upright it rises from the bottom, where the thumbs
+   are; otherwise it stands in the middle. It keeps inside the safe areas, and
+   is as wide as what is in it, up to the room there is. A body sizes itself
+   against the panel's room with container units (cqw, cqh). */
+.Panel {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  background: var(--scrim);
+  pointer-events: auto;
+  container: panel / size;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.Panel_Sheet {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: fit-content;
+  min-width: min(18rem, 100%);
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-big);
+  background: color-mix(in srgb, var(--paper) 97%, transparent);
+  box-shadow: 0 3px 0 var(--lip), 0 12px 30px rgba(20, 30, 15, 0.3);
+  animation: panel-in 0.18s ease-out;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    translate: 0 0.8rem;
+  }
+}
+
+.Panel_Head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 0.55rem 0.6rem 0.45rem 1rem;
+}
+
+.Panel_Title {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--gap);
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 1.15rem;
+  color: var(--deep);
+  white-space: nowrap;
+}
+
+.Panel_Body {
+  min-height: 0;
+  padding: 0 1rem 1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  .Panel {
+    place-items: end stretch;
+  }
+
+  .Panel_Sheet {
+    width: 100%;
+    max-height: 90%;
+  }
+}

@@ -1,9 +1,9 @@
-// The sheet at a village's station (craft.ts): what can be made there, a tier
-// at a time, what each thing asks and how much of it the bag holds, and the
-// button that makes it, filling while the hero works. Tap a thing to see what
-// it asks. It opens when the hero works the station (E, or the button), and
-// folds away at Escape, a tap beside it, its close button, or when the hero
-// walks off. It is written again only when what it shows changed.
+// A village's station (craft.ts), drawn into the crafting panel (panel.ts):
+// what can be made there, a tier at a time, what each thing asks and how much
+// of it the bag holds, and the button that makes it, filling while the hero
+// works. Tap a thing to see what it asks. It opens when the hero works the
+// station (E, G, or the button), and folds away as any panel does, or when the
+// hero walks off. It is written again only when what it shows changed.
 import {
   able,
   have,
@@ -18,6 +18,7 @@ import {
 } from './craft.ts'
 import { sortOf } from './arms.ts'
 import { ITEMS } from './items.ts'
+import type { Panel } from './panel.ts'
 import type { Sheet } from './play.ts'
 import { type Craft, least, tradeNeed, TRADES, type Trades } from './trades.ts'
 import type { Job } from './work.ts'
@@ -26,31 +27,18 @@ let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 export type Acts = { make: (recipe: string) => void }
 
-/** The station's sheet, folded away until a station is worked, in `root`. */
-export let station = (root: HTMLElement, acts: Acts) => {
-  let box = document.createElement('div')
-  box.className = 'Pack Craft'
-  box.hidden = true
-  root.append(box)
+/** The station's sheet, in its `panel`, until a station is worked. */
+export let station = (panel: Panel, acts: Acts) => {
+  let box = panel.body
   let at: Craft | null = null
   let tier = 1
   let picked: string | null = null
   let was: unknown[] = []
-  let close = () => {
-    box.hidden = true
-    at = null
-    picked = null
-  }
-  box.addEventListener('pointerdown', (e) => {
-    e.stopPropagation()
-    if (e.target == box) close()
-  })
   box.addEventListener('click', (e) => {
     let t = e.target instanceof Element ? e.target : null
     let pick = t?.closest<HTMLElement>('[data-pick]')?.dataset.pick
     let tab = t?.closest<HTMLElement>('[data-tier]')?.dataset.tier
     let act = t?.closest<HTMLElement>('[data-do]')?.dataset.do
-    if (act == 'close') return close()
     if (tab) {
       tier = Number(tab)
       picked = null
@@ -58,9 +46,6 @@ export let station = (root: HTMLElement, acts: Acts) => {
     if (pick) picked = picked == pick ? null : pick
     if (act == 'make' && picked) acts.make(picked)
     was = []
-  })
-  addEventListener('keydown', (e) => {
-    if (e.code == 'Escape' && !box.hidden) close()
   })
 
   let tiers = (c: Craft) =>
@@ -145,10 +130,12 @@ export let station = (root: HTMLElement, acts: Acts) => {
           esc(t?.name ?? r.makes)
         }"><i>${t?.icon ?? '•'}</i></button>`
       }).join('')
-    box.innerHTML = `<div class=Pack_Sheet>` +
-      `<div class=Pack_Top><b>${
+    panel.head(
+      `${
         STATIONS[c].name
-      }</b><span class=Card_Lvl>${trade.icon} ${trade.name} ${mine.lvl}</span><small class=Craft_Xp>${mine.xp} / ${next} xp</small><button class=Map_Close data-do=close title="Close (Esc)">✕</button></div>` +
+      } <span class=Badge>${trade.icon} ${trade.name} ${mine.lvl}</span><small class=Craft_Xp>${mine.xp} / ${next} xp</small>`,
+    )
+    box.innerHTML = `<div class="Pack Craft">` +
       `<div class=Craft_Tiers>${tabs}</div>` +
       `<div class=Pack_Grid>${tiles}</div>` +
       `<div class=Pack_Pick>${card(s, trades, job)}</div></div>`
@@ -157,20 +144,20 @@ export let station = (root: HTMLElement, acts: Acts) => {
   return {
     /** which station the sheet is open at, if it is */
     get at() {
-      return at
+      return panel.open ? at : null
     },
     /** open the sheet at a station, at the best tier the hero may make */
     open: (c: Craft, trades: Trades) => {
       at = c
       picked = null
       tier = Math.max(1, ...tiers(c).filter((n) => trades[c].lvl >= least(n)))
-      box.hidden = false
+      panel.show()
       was = []
     },
-    close,
+    close: panel.close,
     /** show this frame, when the sheet is open and what it shows changed */
     show: (s: Sheet, job: Job) => {
-      if (box.hidden || !at) return
+      if (!panel.open || !at) return
       let k = job.doing?.recipe ? job.doing.k.toFixed(2) : ''
       let key = [s, job.trades, k, at, tier, picked]
       if (key.every((v, i) => v === was[i])) return

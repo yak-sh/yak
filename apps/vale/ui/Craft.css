@@ -1,0 +1,62 @@
+/* A station's crafting (station.ts), a pack showing what can be made there:
+   its tiers as tabs, and what the thing picked asks, each line red while the
+   bag is short of it. The button fills as it is made. */
+.Craft_Xp {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--faint);
+}
+
+.Craft_Tiers {
+  display: flex;
+  gap: 0.3rem;
+
+  & .Pack_Tile {
+    width: auto;
+    height: 2rem;
+    padding: 0 0.75rem;
+    font-weight: 700;
+  }
+}
+
+.Craft_Needs {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+}
+
+.Craft_Need {
+  --have: #3f8f2a;
+  display: grid;
+  grid-template-columns: 1.5rem 1fr auto;
+  align-items: center;
+  column-gap: 0.3rem;
+
+  & i,
+  & em {
+    font-style: normal;
+  }
+
+  & em {
+    font-weight: 700;
+    color: var(--have);
+  }
+
+  & small {
+    grid-column: 2 / -1;
+    font-size: 0.72rem;
+    color: var(--faint);
+  }
+}
+
+.Craft_Need-short {
+  --have: #c0442a;
+}
+
+.Craft_Go {
+  background: linear-gradient(
+    90deg,
+    var(--deep) calc(var(--k, 0) * 100%),
+    var(--moss) calc(var(--k, 0) * 100%)
+  );
+}

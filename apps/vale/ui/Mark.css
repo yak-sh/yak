@@ -1,0 +1,23 @@
+/* The mark over someone with a quest: ! for one on offer, ? for one done. */
+.Mark {
+  --tint: var(--gold);
+  --under: #9a6a1c;
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--tint);
+  text-shadow: 0 2px 0 var(--under), 0 0 8px rgba(0, 0, 0, 0.35);
+  animation: bob 1.2s ease-in-out infinite;
+}
+
+.Mark-ready {
+  --tint: #9fe07a;
+  --under: var(--deep);
+}
+
+@keyframes bob {
+  50% {
+    transform: translateY(-4px);
+  }
+}

@@ -3,10 +3,11 @@
 // while it opens the store and asks who you are and which of your heroes to
 // play, and then runs the frame: the player's hands (input.ts), a step of the
 // game on the graph (play.ts), the work at the nodes and the stations
-// (work.ts, station.ts), the stage (cast.ts, nodes.ts), the bits and numbers
-// (fx.ts), the glass (hud.ts, and the action bar, bar.ts), what was said
-// (chatbox.ts) and the map (map.ts). When the hero walks off the end of a
-// road, the page grows the level beyond and carries on there.
+// (work.ts), the stage (cast.ts, nodes.ts), the bits and numbers (fx.ts), the
+// glass (hud.ts, and its action bar, bar.ts), what was said (chatbox.ts) and
+// the panels over it (map.ts, pack.ts, station.ts, menu.ts). When the hero
+// walks off the end of a road, the page grows the level beyond and carries on
+// there.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { ABILITIES, type Ability } from './abilities.ts'
@@ -17,10 +18,11 @@ import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
 import { deals } from './deals.ts'
 import { map } from './map.ts'
+import { menu } from './menu.ts'
 import { BUILDS, type Figure, hero, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { ahead, type Grown, grown } from './grown.ts'
-import { hud } from './hud.ts'
+import { type Clock, hud } from './hud.ts'
 import { pack } from './pack.ts'
 import { listen } from './input.ts'
 import { nodes } from './nodes.ts'
@@ -30,7 +32,7 @@ import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { type Event, type Frame, game, type Vec3 } from './play.ts'
 import { sound } from './sound.ts'
 import { station } from './station.ts'
-import { type Mic, voices } from './voicebox.ts'
+import { voices } from './voicebox.ts'
 import { groundAt, SIZE, VOXEL } from './terrain.ts'
 import { TRADES } from './trades.ts'
 import { world } from './world.ts'
@@ -123,14 +125,17 @@ let asking = net.me().then(async (me) => ({
 }))
 
 let typing = false
-let hands = listen(canvas, glass, () => typing || h.talking || chat.typing)
-let h = hud(glass, hands.press)
+// The keyboard is someone else's while a name or a line is written, or while
+// someone is talked to.
+let elsewhere = () => typing || h.talking || chat.typing
+let hands = listen(canvas, glass, elsewhere)
+let h = hud(glass, hands.press, elsewhere)
 let marks = overlay(h.layer, camera)
-let chat = chatbox(glass, net, marks, folk)
-let m = map(glass)
-let p = pack(glass, { wear: g.wear, take: g.take })
-let bench = station(glass, { make: toil.make })
-let actions = bar(glass, hands.press)
+let chat = chatbox(glass, h.orbs.chat, net, marks, folk)
+let m = map(h.panels.map)
+let p = pack(h.panels.pack, { wear: g.wear, take: g.take })
+let bench = station(h.panels.craft, { make: toil.make })
+let actions = bar(h.acts)
 
 // The level on show, and what is drawn of it: grown again when the hero goes
 // off the end of a road, while the frame waits (`away`).
@@ -185,43 +190,17 @@ let cam: Cam = {
 }
 let target = new THREE.Vector3()
 
-let mute = document.createElement('button')
-mute.className = 'Mute'
-let muteLabel = () => mute.textContent = sound.muted ? '🔇' : '🔊'
-muteLabel()
-mute.addEventListener('click', () => {
-  sound.toggle()
-  muteLabel()
+// The microphone (voicebox.ts): off until the player turns it on, from the
+// tray's button, whose tap the browser may ask the player about.
+let voice = voices(net, h.mic)
+h.orbs.mic.addEventListener('click', () => void voice.toggle())
+// The menu: the vale's sound, and whether the camera follows.
+let settings = menu(h.panels.menu, {
+  muted: () => sound.muted,
+  mute: () => sound.toggle(),
+  follows: () => cam.follow,
+  follow: () => hands.press('follow'),
 })
-let eye = document.createElement('button')
-eye.className = 'Mute Mute-eye'
-eye.textContent = '🎥'
-let eyeLabel = () => {
-  eye.classList.toggle('Mute-off', !cam.follow)
-  eye.title = cam.follow
-    ? 'The camera follows you (V). C swings it behind you.'
-    : 'The camera stays where you turn it (V). C swings it behind you.'
-}
-eyeLabel()
-eye.addEventListener('click', () => hands.press('follow'))
-// The microphone (voicebox.ts): off until the player turns it on.
-let mic = document.createElement('button')
-mic.className = 'Mute Mute-mic Mute-off'
-mic.textContent = '🎙️'
-let MICS: Record<Mic, string> = {
-  off: 'Your microphone is off (T): turn it on and heroes near you hear you',
-  starting: 'Asking for your microphone…',
-  on: 'Heroes near you hear you (T turns your microphone off)',
-  denied: 'The browser did not give the vale your microphone',
-  spent: "This space's voice is spent for the month",
-}
-let voice = voices(net, (m) => {
-  mic.classList.toggle('Mute-off', m != 'on')
-  mic.title = MICS[m]
-})
-mic.title = MICS.off
-mic.addEventListener('click', () => void voice.toggle())
-glass.append(mute, eye, mic)
 
 // Where the hearth is, or the middle of a level without one: where the gate's
 // camera looks, and embers rise.
@@ -284,8 +263,8 @@ let make = (who: Me, back: (() => void) | null) => {
       <span class=Make_Label>Skin</span>${swatches('skin', SKINS)}
       ${
     who.writes
-      ? '<button class="Btn Btn-go">Enter the vale</button>'
-      : `<a class="Btn Btn-go" href="${
+      ? '<button class="Btn Btn-go Btn-big">Enter the vale</button>'
+      : `<a class="Btn Btn-go Btn-big" href="${
         esc(who.signIn ?? '')
       }">Sign in to play</a>`
   }
@@ -334,7 +313,7 @@ let choose = (who: Me, heroes: Hero[]) => {
     <p class=Gate_Lede>Welcome back${
     who.name ? `, ${esc(who.name.split(/\s/)[0])}` : ''
   }. Who walks the vale today?</p>
-    <div class=Heroes>${
+    <div class=Gate_Heroes>${
     heroes.map((o) =>
       `<button class=Hero data-eid="${esc(o.eid)}" style="--tint:${
         esc(o.tint)
@@ -359,14 +338,8 @@ let choose = (who: Me, heroes: Hero[]) => {
   )
 }
 
-let clockOf = (d: number) =>
-  d < 0.22 || d > 0.8
-    ? '🌙 Night'
-    : d < 0.3
-    ? '🌅 Dawn'
-    : d < 0.7
-    ? '☀️ Day'
-    : '🌇 Dusk'
+let clockOf = (d: number): Clock =>
+  d < 0.22 || d > 0.8 ? 'night' : d < 0.3 ? 'dawn' : d < 0.7 ? 'day' : 'dusk'
 
 // An ability's shape drawn in dust and light where it is done: a sweep
 // before the hero, a ring about them, a flare for what they do to
@@ -572,10 +545,7 @@ let worked = (e: Work) => {
     if (!wet) cam.shake = Math.max(cam.shake, 0.04)
   } else if (e.type == 'station') {
     if (bench.at == e.craft) bench.close()
-    else if (job) {
-      p.close()
-      bench.open(e.craft, job.trades)
-    }
+    else if (job) bench.open(e.craft, job.trades)
   } else if (e.type == 'got') {
     let t = ITEMS[e.item]
     h.toast(
@@ -681,11 +651,6 @@ let loop = (t: number) => {
   // While the level beyond a road grows, the one left behind stands still.
   if (playing && net.hero && !away) {
     let i = hands.read()
-    if (i.map) m.toggle()
-    if (i.bag) {
-      p.toggle()
-      bench.close()
-    }
     if (i.mic) void voice.toggle()
     if (h.talking) {
       Object.assign(i, {
@@ -699,7 +664,6 @@ let loop = (t: number) => {
     let following = cam.follow
     steer(cam, i, last?.body.yaw ?? cam.yaw + Math.PI, dt)
     if (cam.follow != following) {
-      eyeLabel()
       try {
         localStorage.setItem('mossvale.cam', cam.follow ? 'follow' : 'free')
       } catch { /* kept for this page only */ }
@@ -764,7 +728,7 @@ let loop = (t: number) => {
         )
       }
       let here = 1 + f.others.length
-      h.show(f, here, clockOf(w.day), bearing(cam.yaw), p.open)
+      h.show(f, here, clockOf(w.day), bearing(cam.yaw))
       actions.show(f)
       // A ward shimmers about the hero while it holds.
       if (f.ward > 0 && Math.random() < 0.5) {
@@ -794,6 +758,7 @@ let loop = (t: number) => {
       // Walked off from the station its sheet is open at: it folds away.
       if (bench.at && job.bench?.craft != bench.at) bench.close()
       bench.show(f.sheet, job)
+      settings.show()
       w.focus.set(f.body.x, f.body.y, f.body.z)
       // Near a road's end, the level beyond starts growing.
       let road = v.roads.find((r) =>
@@ -915,7 +880,7 @@ let ready = async (watch: { ready: boolean }) => {
 if (!me.reads) {
   gateCard.innerHTML = `${TITLE}<p class=Gate_Lede>This vale is private.</p>${
     me.signIn
-      ? `<a class="Btn Btn-go" href="${esc(me.signIn)}">Sign in</a>`
+      ? `<a class="Btn Btn-go Btn-big" href="${esc(me.signIn)}">Sign in</a>`
       : ''
   }`
 } else if (me.person) {

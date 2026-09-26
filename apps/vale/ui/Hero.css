@@ -1,0 +1,40 @@
+/* One of your heroes at the gate: a little face in their colours, and their
+   name. */
+.Hero {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 0.7rem 0.4rem 0.6rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: #f1eadb;
+  box-shadow: 0 3px 0 #ddd2b4;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+
+  &:active {
+    translate: 0 2px;
+    box-shadow: 0 1px 0 #ddd2b4;
+  }
+
+  & b {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.Hero_Face {
+  width: 2.6rem;
+  height: 3rem;
+  border-radius: 8px;
+  background: linear-gradient(
+    var(--hair) 0 28%,
+    var(--skin) 28% 62%,
+    var(--tint) 62%
+  );
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.12);
+}

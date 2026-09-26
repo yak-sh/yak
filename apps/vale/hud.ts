@@ -1,18 +1,41 @@
-// Everything on the glass: the hero's card (health, level, the xp to the
-// next), the quest being followed, the foe's health, who else is here, the
-// compass, the bag, which opens the pack (pack.ts), the buttons a phone
-// needs (one of them to gather, ringed with how far the work has come), the
-// words of whoever you talk to, and the toasts that say what just happened.
-// Each part is written only when what it shows changed.
-import type { Action } from './input.ts'
+// The glass over the game, in one layout where nothing overlaps at any size
+// (ui/Hud.css): the hero's vitals, the quest being followed and the foe at the
+// top left, the compass, who is here and the tray of buttons at the top
+// right, the toasts that say what just happened, the chat (chatbox.ts), and
+// at the bottom the buttons for the thumbs, or the words of whoever you talk
+// to. Each part is written only when what it shows changed.
+//
+// How a panel plugs in. Every sheet that opens over the glass is a panel
+// (panel.ts), one open at a time: the map, the pack, a station's crafting,
+// the menu, and the ones standing ready below. A panel is a row of SHEETS;
+// `h.panels.<id>` hands its owner a `body` to draw into and `open` to say
+// whether to. Draw only while it is open and only when what it shows changed,
+// as map.ts and pack.ts do. Give it keys to open it, and a tray button with
+// `tray(...)` below if it needs one; one opened from where it is used (a
+// station, a villager) calls `show()`. Style its body in ui/<Name>.css, one
+// block, from ui/theme.css's tokens; the sheet around it (head, close,
+// scrolling, safe areas) is ui/Panel.css's and is never restyled per panel.
+//
+// How a button for the thumbs plugs in. `pad(action, icon, title)` adds one,
+// pressing its action (input.ts). On a phone each sits in its own slot of the
+// ring around strike (ui/Hud.css, `.Hud_Pads`): the abilities (bar.ts) with
+// the first two beside strike and the third further out, dodge, jump and the
+// tonic. On a desktop they line up along the bottom with their keys.
+// `Pad-none` hides a pad, `Pad-off` dims it, `--k` from 0 to 1 rings it with
+// progress, and `--cd` sweeps a cooldown over it. Talking and gathering (or
+// working a station) share one slot, and only one of them shows at a time.
+import { type Action, keysOf } from './input.ts'
 import type { Frame, Sheet } from './play.ts'
 import type { Job } from './work.ts'
 import { BEASTS } from './beasts.ts'
+import { type Glyph, glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import { LEVELS } from './levels.ts'
+import { cap, type Panel, panels, type Spec } from './panel.ts'
 import { GIVERS, type Quest } from './quests.ts'
 import { need } from './rules.ts'
 import { TRADES } from './trades.ts'
+import type { Mic } from './voicebox.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -38,14 +61,53 @@ export type Talk = {
   hears?: boolean
 }
 
-/** Build the HUD into `root`. `press` sends a button's action to the game. */
-export let hud = (root: HTMLElement, press: (a: Action) => void) => {
-  let card = el('Card')
+/** The time of day, as the glass shows it. */
+export type Clock = 'night' | 'dawn' | 'day' | 'dusk'
+
+let CLOCKS: Record<Clock, [Glyph, string]> = {
+  night: ['moon', 'Night'],
+  dawn: ['sunrise', 'Dawn'],
+  day: ['sun', 'Day'],
+  dusk: ['sunset', 'Dusk'],
+}
+
+let MICS: Record<Mic, string> = {
+  off: 'Your microphone is off: turn it on and heroes near you hear you',
+  starting: 'Asking for your microphone…',
+  on: 'Heroes near you hear you',
+  denied: 'The browser did not give the vale your microphone',
+  spent: "This space's voice is spent for the month",
+}
+
+/** The panels the glass holds, and the keys that open them. Crafting opens
+ * at a station (station.ts). Skills (T-40741) and trade (T-40758) stand
+ * ready, empty and out of reach until their work lands. */
+export let SHEETS = {
+  map: { title: 'Map', keys: ['KeyM'] },
+  pack: { title: 'Pack', keys: ['KeyB', 'KeyI'] },
+  menu: { title: 'Menu', keys: ['Escape'] },
+  skills: { title: 'Skills' },
+  craft: { title: 'Crafting' },
+  trade: { title: 'Trade' },
+} satisfies Record<string, Spec>
+
+/** Build the HUD into `root`. `press` sends a button's action to the game;
+ * `busy` says when the keyboard belongs to something else. */
+export let hud = (
+  root: HTMLElement,
+  press: (a: Action) => void,
+  busy: () => boolean,
+) => {
+  let layer = el('Hud_Layer')
+  let vitals = el('Vitals')
   let quest = el('Track')
   let foe = el('Foe')
+  foe.hidden = true
+  let nav = el('Hud_Nav')
   let who = el('Who')
+  let trayBox = el('Hud_Tray')
   // The compass, which opens the map. Up is the way the camera looks, and
-  // each letter stands where its way lies: style.css turns them by
+  // each letter stands where its way lies: ui/Rose.css turns them by
   // `--turn`, the bearing.
   let rose = el(
     'Rose',
@@ -53,40 +115,13 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
       `<i class="Rose_Mark${k ? '' : ' Rose_Mark-n'}" style="--at:${
         k * 90
       }deg">${d}</i><i class=Rose_Tick style="--at:${k * 90 + 45}deg"></i>`
-    ).join(''),
+    ).join('') + `<kbd class=Key>${cap(SHEETS.map.keys[0])}</kbd>`,
     'button',
   )
-  rose.title = 'The map (M)'
-  rose.addEventListener('pointerdown', (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    press('map')
-  })
-  // The bag: what is carried that is not worn, and a tap opens the pack.
-  let bag = el('Bag', '', 'button')
-  bag.title = 'Your pack (B)'
-  bag.addEventListener('pointerdown', (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    press('bag')
-  })
-  // Said once, to a hero by a fire with nothing in hand.
-  let nudged = false
-  // Arms or armour found since the pack was last open.
-  let fresh = false
-  let keys = el(
-    'Keys',
-    '<span><kbd>WASD</kbd> move</span><span><kbd>Space</kbd> jump</span>' +
-      '<span><kbd>F</kbd> or click: strike</span>' +
-      '<span><kbd>Shift</kbd> or right-click: dodge</span><span><kbd>E</kbd> talk, gather</span>' +
-      '<span><kbd>C</kbd> camera behind</span><span><kbd>M</kbd> map</span>' +
-      '<span><kbd>Enter</kbd> chat</span><span><kbd>T</kbd> microphone</span>' +
-      '<span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> abilities</span>' +
-      '<span><kbd>B</kbd> pack</span><span><kbd>Q</kbd> tonic</span>' +
-      '<span>drag: look</span>',
-  )
-  let pads = el('Pads')
-  let toasts = el('Toasts')
+  rose.title = `The map (${cap(SHEETS.map.keys[0])})`
+  nav.append(who, rose, trayBox)
+  let toasts = el('Hud_Toasts')
+  let pads = el('Hud_Pads')
   let talk = el('Talk')
   talk.hidden = true
   let faint = el(
@@ -94,9 +129,76 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     '<div class=Faint_Card><b>You fainted.</b><span>You will wake by the fire, patched up.</span></div>',
   )
   faint.hidden = true
-  let layer = el('Layer')
-  let pad = (a: Action, label: string, cls = '') => {
-    let b = el(`Pad Pad-${a} ${cls}`, label, 'button')
+  root.append(layer, vitals, quest, foe, nav, toasts, pads, talk, faint)
+
+  let shelf = panels(root, busy)
+  let sheet = (id: keyof typeof SHEETS) => shelf.add(id, SHEETS[id])
+  let panel = {
+    map: sheet('map'),
+    pack: sheet('pack'),
+    menu: sheet('menu'),
+    skills: sheet('skills'),
+    craft: sheet('craft'),
+    trade: sheet('trade'),
+  }
+  rose.addEventListener('click', panel.map.toggle)
+
+  // A round button in the tray, and on a desktop its key; one that opens a
+  // panel is marked while it is open.
+  let marked: [HTMLElement, Panel][] = []
+  let tray = (
+    name: string,
+    icon: Glyph,
+    title: string,
+    key: string,
+    click: () => void,
+    opens?: Panel,
+  ) => {
+    let b = el(
+      `Orb Orb-${name}`,
+      `${glyph(icon)}<kbd class=Key>${key}</kbd>`,
+      'button',
+    )
+    b.title = `${title} (${key})`
+    b.addEventListener('click', click)
+    trayBox.append(b)
+    if (opens) marked.push([b, opens])
+    return b
+  }
+  let chat = tray('chat', 'chat', 'Chat', 'Enter', () => {})
+  let bag = tray(
+    'pack',
+    'backpack',
+    'Your pack',
+    cap(SHEETS.pack.keys[0]),
+    panel.pack.toggle,
+    panel.pack,
+  )
+  let micKey = cap(keysOf('mic')[0])
+  let mic = tray('mic', 'micOff', MICS.off, micKey, () => {})
+  tray(
+    'menu',
+    'menu',
+    'Menu',
+    cap(SHEETS.menu.keys[0]),
+    panel.menu.toggle,
+    panel.menu,
+  )
+
+  // Said once, to a hero by a fire with nothing in hand.
+  let nudged = false
+  // Arms or armour found since the pack was last open.
+  let fresh = false
+
+  // A button for the thumbs, and on a desktop its key.
+  let pad = (a: Action, icon: string, title: string) => {
+    let key = keysOf(a).map(cap)[0]
+    let b = el(
+      `Pad Pad-${a}`,
+      icon + (key ? `<kbd class=Key>${key}</kbd>` : ''),
+      'button',
+    )
+    b.title = key ? `${title} (${key})` : title
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault()
       e.stopPropagation()
@@ -105,39 +207,23 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     pads.append(b)
     return b
   }
-  pad(
-    'strike',
-    '<svg viewBox="0 0 24 24"><path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2"/></svg>',
+  pad('strike', glyph('strike'), 'Strike')
+  // The abilities' slots, which bar.ts paints.
+  let abilities = (['ability1', 'ability2', 'ability3'] as const).map((a) =>
+    pad(a, '<span class=Pad_Icon></span><b class=Pad_Left></b>', 'Ability')
   )
-  pad('jump', '<svg viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg>')
-  pad(
-    'dodge',
-    '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>',
-  )
-  let talkPad = pad(
-    'talk',
-    '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
-  )
-  let gatherPad = pad('gather', '<span class=Pad_Icon></span>')
-  let gatherIcon = gatherPad.querySelector<HTMLElement>('.Pad_Icon')!
+  pad('dodge', glyph('dodge'), 'Dodge')
+  pad('jump', glyph('jump'), 'Jump')
   let drinkPad = pad(
     'drink',
     '<span class=Pad_Icon>🧪</span><span class=Pad_N></span>',
+    'Drink a tonic',
   )
-  root.append(
-    layer,
-    card,
-    quest,
-    foe,
-    who,
-    rose,
-    bag,
-    keys,
-    pads,
-    toasts,
-    talk,
-    faint,
-  )
+  let talkPad = pad('talk', glyph('talk'), 'Talk')
+  let gatherPad = pad('gather', '<span class=Pad_Icon></span>', 'Gather')
+  let gatherIcon = gatherPad.querySelector<HTMLElement>('.Pad_Icon')!
+  let gatherKey = cap(keysOf('gather')[0])
+  gatherPad.classList.add('Pad-none')
 
   let was: Record<string, string> = {}
   let put = (key: string, e: HTMLElement, html: string) => {
@@ -151,7 +237,7 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     toasts.append(t)
     setTimeout(() => t.classList.add('Toast-out'), 2600)
     setTimeout(() => t.remove(), 3200)
-    while (toasts.children.length > 4) toasts.firstElementChild?.remove()
+    while (toasts.children.length > 3) toasts.firstElementChild?.remove()
   }
 
   // The quest being followed: one taken, or else one on offer, the nearest
@@ -187,18 +273,19 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     }</span>`
   }
 
-  // What is carried and not worn: arms and armour, then the rest.
-  let stacks = (s: Sheet) => {
-    let by = new Map<string, number>()
-    for (let h of s.bag) {
-      if (ITEMS[h.kind]?.slot) continue
-      by.set(h.kind, (by.get(h.kind) ?? 0) + h.n)
-    }
-    return [...by].sort(([a], [b]) => a.localeCompare(b))
-  }
+  let hush = () => talk.hidden = true
+  addEventListener('keydown', (e) => {
+    if (e.code == 'Escape' && !talk.hidden) hush()
+  })
 
   return {
     layer,
+    /** the tray's buttons that others answer: chat (chatbox.ts), and the
+     * microphone (voicebox.ts), whose tap the browser may ask about */
+    orbs: { chat, mic },
+    panels: panel,
+    /** the strike and the abilities' pads, for the action bar (bar.ts) */
+    acts: [pads.querySelector<HTMLElement>('.Pad-strike')!, ...abilities],
     toast,
     /** someone's words, or none */
     talk: (t: Talk | null, accept: () => void, handIn: () => void) => {
@@ -226,18 +313,18 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
         }</p><p class=Talk_Reward>${t.have} / ${q.count} so far.</p>`
       }
       if (t.hears) {
-        html += `<p class=Talk_Hint>💬 Say something, and ${
+        html += `<p class=Talk_Hint>Say something, and ${
           esc(t.name)
         } will answer.</p>`
       }
       talk.innerHTML = `<div class=Talk_Who>${
         esc(t.name)
-      }</div>${html}<div class=Talk_Acts>${act}<button class=Btn data-do=close>Farewell</button></div>`
+      }</div><div class=Talk_Body>${html}</div><div class=Talk_Acts>${act}<button class=Btn data-do=close>Farewell</button></div>`
       talk.querySelectorAll<HTMLButtonElement>('button').forEach((b) =>
         b.addEventListener('click', () => {
           if (b.dataset.do == 'accept') accept()
           if (b.dataset.do == 'hand') handIn()
-          talk.hidden = true
+          hush()
         })
       )
     },
@@ -254,6 +341,7 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
       gatherPad.classList.toggle('Pad-none', !trade)
       if (!trade) return
       put('gather', gatherIcon, TRADES[trade].icon)
+      gatherPad.title = `${TRADES[trade].name} (${gatherKey})`
       gatherPad.classList.toggle('Pad-off', !!n && (n.spent || !n.able))
       let k = job?.doing ? job.doing.k.toFixed(3) : '0'
       if (was.gatherK != k) {
@@ -261,24 +349,26 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
         gatherPad.style.setProperty('--k', k)
       }
     },
-    /** paint this frame, the camera looking `facing` degrees from north;
-     * `looking` while the pack is open */
-    show: (
-      f: Frame,
-      here: number,
-      clock: string,
-      facing: number,
-      looking: boolean,
-    ) => {
+    /** how the microphone stands (voicebox.ts) */
+    mic: (m: Mic) => {
+      mic.querySelector('.Glyph')!.outerHTML = glyph(
+        m == 'on' ? 'mic' : 'micOff',
+      )
+      mic.classList.toggle('Orb-off', m == 'denied' || m == 'spent')
+      mic.classList.toggle('Orb-on', m == 'on')
+      mic.title = `${MICS[m]} (${micKey})`
+    },
+    /** paint this frame, the camera looking `facing` degrees from north */
+    show: (f: Frame, here: number, clock: Clock, facing: number) => {
       let s = f.sheet
       let hp = f.vitals.hp
       let from = need(s.lvl), to = need(s.lvl + 1)
       put(
-        'card',
-        card,
-        `<div class=Card_Top><b class=Card_Name>${
+        'vitals',
+        vitals,
+        `<div class=Vitals_Top><b class=Vitals_Name>${
           esc(s.name)
-        }</b><span class=Card_Lvl>Level ${s.lvl}</span></div>` +
+        }</b><span class=Badge>Level ${s.lvl}</span></div>` +
           meter(hp / s.max, 'Bar-hp', `${hp} / ${s.max}`) +
           meter(
             (s.xp - from) / Math.max(1, to - from),
@@ -298,48 +388,45 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
             meter(m.hp / m.most, 'Bar-foe', `${Math.ceil(m.hp)} / ${m.most}`)
           }`,
         )
+        foe.classList.toggle('Foe-boss', !!b.boss)
       }
+      let [icon, word] = CLOCKS[clock]
       put(
         'who',
         who,
-        `<span class=Who_Dot></span>${here} here<span class=Who_Clock>${clock}</span>`,
+        `<span class=Who_Dot></span><span class=Who_N>${here} here</span><span class=Who_Clock title="${word}">${
+          glyph(icon)
+        }<span>${word}</span></span>`,
       )
       if (was.rose != String(facing)) {
         was.rose = String(facing)
         rose.style.setProperty('--turn', `${facing}deg`)
       }
-      let st = stacks(s)
-      let hand = ITEMS[s.worn.main?.kind ?? '']
-      put(
-        'bag',
-        bag,
-        `<span class=Bag_Open><i>🎒</i>${hand ? hand.icon : ''}</span>` +
-          st.map(([k, n]) =>
-            `<span class=Bag_Item title="${esc(ITEMS[k]?.name ?? k)}"><i>${
-              ITEMS[k]?.icon ?? '•'
-            }</i>${n > 1 ? n : ''}</span>`
-          ).join(''),
-      )
+      for (let [b, p] of marked) b.classList.toggle('Orb-on', p.open)
       // Arms or armour found mark the bag, until the pack is opened.
-      fresh = !looking &&
+      fresh = !panel.pack.open &&
         (fresh ||
           f.events.some((e) => e.type == 'loot' && ITEMS[e.item]?.slot))
-      bag.classList.toggle('Bag-new', fresh)
+      bag.classList.toggle('Orb-new', fresh)
       // Nothing in hand by a fire: the rack there has arms to try.
       let bare = f.rack && !s.worn.main
-      bag.classList.toggle('Bag-call', bare)
+      bag.classList.toggle('Orb-call', bare)
       if (bare && !nudged) {
         nudged = true
         toast('The rack by the fire has arms to try. Open your pack (B).')
       }
-      let tonics = st.find(([k]) => k == 'tonic')?.[1] ?? 0
+      // Whatever mends, which drinking takes (play.ts).
+      let tonics = s.bag.reduce(
+        (n, h) => n + (ITEMS[h.kind]?.heals ? h.n : 0),
+        0,
+      )
       put(
         'tonic',
         drinkPad.querySelector('.Pad_N')!,
         tonics ? String(tonics) : '',
       )
       drinkPad.classList.toggle('Pad-off', !tonics)
-      talkPad.classList.toggle('Pad-off', !f.talk)
+      talkPad.classList.toggle('Pad-none', !f.talk)
       faint.hidden = !f.down
     },
   }

@@ -1,0 +1,63 @@
+/* The vale's look, as tokens every component reads: moss and paper, a lip
+   under whatever can be pressed, round corners. A component declares its own
+   variables from these and a variant re-points one; nothing below this file
+   names a colour of its own unless it is the colour of a thing in the world. */
+:root {
+  color-scheme: light;
+
+  --ink: #2f3a2c;
+  --muted: #5b6555;
+  --faint: #7a8570;
+  --paper: #fbf7ea;
+  --well: #efe6ca;
+  --line: #e2d8bc;
+  --rim: #d3c7a4;
+  --moss: #6fae4d;
+  --deep: #3f6f3a;
+  --ember: #e0703f;
+  --char: #a8492a;
+  --gold: #f2c14e;
+  --amber: #9a6a1c;
+  --hp: #e0573f;
+  --xp: #7fc6f2;
+  --shade: rgba(28, 36, 26, 0.55);
+  --scrim: rgba(20, 30, 15, 0.38);
+
+  /* A thing on the glass: paper you can nearly see through, on a lip. */
+  --glass: color-mix(in srgb, var(--paper) 93%, transparent);
+  --lip: color-mix(in srgb, var(--rim) 75%, transparent);
+  --lift: 0 3px 0 var(--lip), 0 8px 22px rgba(20, 30, 15, 0.18);
+  --text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);
+
+  --radius: 14px;
+  --radius-small: 10px;
+  --radius-big: 18px;
+  --round: 999px;
+  --gap: 0.5rem;
+
+  /* The glass keeps this far from each edge, or from what the phone keeps
+     for itself there (the notch, the home bar), whichever is further. */
+  --edge: 10px;
+  --safe-t: max(var(--edge), env(safe-area-inset-top));
+  --safe-r: max(var(--edge), env(safe-area-inset-right));
+  --safe-b: max(var(--edge), env(safe-area-inset-bottom));
+  --safe-l: max(var(--edge), env(safe-area-inset-left));
+
+  /* How big the things a thumb presses are. */
+  --orb: 2.75rem;
+  --pad: 3.3rem;
+  --strike: 4.9rem;
+  --rose: 3.6rem;
+  /* The rings of buttons about strike, from its middle to theirs. */
+  --ring1: 5rem;
+  --ring2: 8.75rem;
+  /* Where the thumbstick rests, kept clear of everything else. */
+  --stick: 8rem;
+}
+
+/* A phone, either way up: everything a size smaller. */
+@media (max-width: 640px), (max-height: 540px) {
+  :root {
+    font-size: 14px;
+  }
+}

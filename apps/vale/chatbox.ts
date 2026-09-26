@@ -1,9 +1,9 @@
 // The chat box on the glass: the last lines said in the level the hero is in,
 // each fading a while after it was said and all shown while the box is open,
-// the line being written (Enter opens it, or the 💬 button), and the words
-// over the heads of whoever said them nearby. A guest reads, and is asked to
-// sign in to speak. Which lines count is chat.ts's rule over the rows the
-// store stamped; this only draws them.
+// the line being written (Enter opens it, or the tray's chat button), and the
+// words over the heads of whoever said them nearby. A guest reads, and is
+// asked to sign in to speak. Which lines count is chat.ts's rule over the rows
+// the store stamped; this only draws them.
 //
 // A line goes to the store with the rows the hero earns (net.ts `keep`), so
 // saying something costs no write of its own. Lines go one at a time, further
@@ -64,9 +64,11 @@ let el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string) => {
   return e
 }
 
-/** Build the chat box into `glass`, the bubbles into `marks`. */
+/** Build the chat box into `glass`, opened by `opener`, and the bubbles into
+ * `marks`. */
 export let chatbox = (
   glass: HTMLElement,
+  opener: HTMLElement,
   net: Net,
   marks: ReturnType<typeof overlay>,
   folk: Village,
@@ -82,14 +84,10 @@ export let chatbox = (
   input.setAttribute('aria-label', 'Say something to everyone here')
   form.append(input)
   form.hidden = true
-  let button = el('button', 'Chat_Open')
-  button.type = 'button'
-  button.textContent = '💬'
-  button.title = 'Chat (Enter)'
-  let ask = el('a', 'Chat_Ask')
+  let ask = el('a', 'Btn Btn-small Chat_Ask')
   ask.textContent = 'Sign in to chat'
   ask.hidden = true
-  box.append(log, form, button, ask)
+  box.append(log, form, ask)
   box.style.setProperty('--fade', `${FADE}ms`)
   glass.append(box)
 
@@ -156,7 +154,7 @@ export let chatbox = (
     }
     open = true
     form.hidden = false
-    button.hidden = true
+    opener.classList.add('Orb-on')
     box.classList.add('Chat-open')
     input.focus()
   }
@@ -165,7 +163,7 @@ export let chatbox = (
     open = false
     shut = net.now()
     form.hidden = true
-    button.hidden = false
+    opener.classList.remove('Orb-on')
     box.classList.remove('Chat-open')
     input.blur()
   }
@@ -180,7 +178,9 @@ export let chatbox = (
     if (e.key == 'Escape') hide()
   })
   input.addEventListener('blur', hide)
-  button.addEventListener('click', show)
+  // The opener keeps the line's focus, so a second tap folds it away.
+  opener.addEventListener('pointerdown', (e) => e.preventDefault())
+  opener.addEventListener('click', () => open ? hide() : show())
   form.addEventListener('submit', (e) => {
     e.preventDefault()
     let text = clean(input.value)
@@ -258,7 +258,7 @@ export let chatbox = (
     /** who is looking: a person signed in speaks, a guest is asked to */
     me: (who: Me) => {
       me = who
-      box.classList.toggle('Chat-guest', !speaks())
+      opener.classList.toggle('Orb-off', !speaks())
     },
     /** this frame: the level's lines, and the words over heads near me */
     tick: (f: Frame, head: (eid: string) => THREE.Vector3 | null) => {

@@ -1,0 +1,17 @@
+/* The quest being followed: its title, and how far it has come. */
+.Track {
+  display: grid;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--glass);
+  box-shadow: var(--lift);
+  font-size: 0.85rem;
+
+  & b {
+    color: var(--amber);
+  }
+
+  & span {
+    color: var(--muted);
+  }
+}

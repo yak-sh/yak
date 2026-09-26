@@ -1,0 +1,65 @@
+/* The words of whoever you talk to, where the thumbs' buttons were: their
+   name on a tab, what they say, and what you can answer. Long words scroll,
+   and the answers stay put under them. */
+.Talk {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: min(32rem, 100%);
+  max-height: min(24rem, 100%);
+  margin-top: 0.8rem;
+  padding: 0.9rem 1.1rem 1rem;
+  border-radius: var(--radius-big);
+  background: var(--glass);
+  box-shadow: var(--lift);
+  pointer-events: auto;
+
+  &[hidden] {
+    display: none;
+  }
+
+  & h3 {
+    margin: 0.3rem 0 0.2rem;
+    color: var(--amber);
+  }
+
+  & p {
+    margin: 0.3rem 0;
+  }
+}
+
+.Talk_Who {
+  position: absolute;
+  top: -0.8rem;
+  left: 1rem;
+  padding: 0.1rem 0.7rem;
+  border-radius: var(--round);
+  background: var(--deep);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.Talk_Body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.Talk_Reward {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.Talk_Hint {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.Talk_Acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--gap);
+  margin-top: 0.5rem;
+}
