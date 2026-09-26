@@ -1,7 +1,16 @@
 // The two words a component says about its own state, read off a declaration.
 
 import { assertEquals } from '@std/assert'
-import { durableOf, kept, lives, loadVocab, ms, said, syncOf } from './mod.ts'
+import {
+  durableOf,
+  kept,
+  lives,
+  loadVocab,
+  ms,
+  paceOf,
+  said,
+  syncOf,
+} from './mod.ts'
 
 Deno.test('a declaration answers with its word, or with the default', () => {
   assertEquals(said('peers'), 'peers')
@@ -41,6 +50,7 @@ Deno.test('a component that says nothing syncs to the server, forever', () => {
         type: 'object',
         sync: 'peers',
         durable: 'connection',
+        pace: '100ms',
         properties: { x: { type: 'number' } },
       },
     },
@@ -50,9 +60,14 @@ Deno.test('a component that says nothing syncs to the server, forever', () => {
     'peers',
     'connection',
   ])
+  assertEquals([paceOf(v, 'presence'), paceOf(v, 'task')], [100, null])
   // A component this vocabulary never heard of answers like an undeclared one.
-  assertEquals([syncOf(v, 'ghost'), durableOf(v, 'ghost')], [
-    'server',
-    'forever',
-  ])
+  assertEquals(
+    [syncOf(v, 'ghost'), durableOf(v, 'ghost'), paceOf(v, 'ghost')],
+    [
+      'server',
+      'forever',
+      null,
+    ],
+  )
 })

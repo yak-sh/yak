@@ -235,6 +235,18 @@ Deno.test('a relay owns nothing, so it cannot keep a value forever', () => {
   ])
 })
 
+Deno.test('a pace is how often a relay is sent, so only a relay has one', () => {
+  let one = (comp: PropSchema) => storable(doc({ presence: comp }))
+  let peers = { type: 'object', sync: 'peers', durable: 'connection' }
+  assertEquals(one({ ...peers, pace: '100ms' }), [])
+  assertEquals(one({ ...peers, pace: 'often' }), [
+    'presence is paced "often" — say a duration such as "100ms" or "1s"',
+  ])
+  assertEquals(one({ type: 'object', pace: '100ms' }), [
+    'presence is paced but does not sync to peers — a pace is how often a relayed value is sent; say "sync": "peers", or drop the pace',
+  ])
+})
+
 Deno.test('a $defs entry says what it is, or it is no table', () => {
   // The ordinary JSON Schema use of $defs: a subschema something $refs. It
   // declares no properties, so nothing here has anything to say about it.

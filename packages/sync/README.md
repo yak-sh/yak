@@ -137,6 +137,29 @@ are sent and how they should be retained:
 | `"connection"`        | Memory associated with the writing connection.                           |
 | `"5s"`, `"2m"`        | Connection-associated memory with an expiry timer renewed on each write. |
 
+A `sync: peers` component can also declare `pace`, how often it is sent:
+
+```json
+{
+  "presence": {
+    "type": "object",
+    "component": true,
+    "sync": "peers",
+    "durable": "connection",
+    "pace": "100ms",
+    "properties": { "x": { "type": "number" }, "z": { "type": "number" } }
+  }
+}
+```
+
+A page that moves something every frame can write it every frame: the local
+graph takes each write at once, and the plugin sends the latest value per entity
+at most once a pace. The first write after a quiet spell is sent at once, the
+writes inside a pace fold into one patch sent when it runs out, so the last
+value always arrives, and a clear (the component set to `null`) is sent at once,
+taking the folded patch with it. Values one message carried are paced together,
+so their next values also share a message.
+
 `syncOf(vocab, name)` and `durableOf(vocab, name)` read these keywords.
 `local(vocab, name)` returns `'vault'` for local-only persistent state,
 `'memory'` for other local-only state, and `null` for state sent to the server.
@@ -202,7 +225,8 @@ connection; old cached rows do not make a subscription ready.
 `fetch` accepts a `Request` and returns a `Response` or promise, so an
 `@yaks/api` handler can be used directly in a test. `connect` accepts a socket
 URL and returns the package's `Socket` interface. Defaults use global `fetch`
-and `WebSocket`; `timer` defaults to `setTimeout`.
+and `WebSocket`; `timer`, which times reconnects and paces, defaults to
+`setTimeout`.
 
 ```ts ignore
 const link = sync(g, {

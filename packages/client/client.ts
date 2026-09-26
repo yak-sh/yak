@@ -54,7 +54,8 @@ export type ClientOpts = {
   fetch?: Fetch
   /** how the WebSocket is opened (default: the global `WebSocket`) */
   connect?: Connect
-  /** how a reconnect is scheduled (default: `setTimeout`) */
+  /** how a timer is set — a reconnect, a relayed value's pace (default:
+   * `setTimeout`) */
   timer?: Timer
   /** headers added to every `POST /apply` — an `authorization`, say */
   headers?: Record<string, string>

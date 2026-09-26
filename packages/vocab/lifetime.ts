@@ -1,21 +1,26 @@
-// Two things a component declares about its own state, where an earlier
-// keyword covered both. The old `persist` conflated them: its value `wire`
+// What a component declares about its own state, where an earlier keyword
+// covered the first two. The old `persist` conflated them: its value `wire`
 // meant a value the server owns and stores, and there was no way to declare
 // "send this to the other clients, but do not store it".
 //
 //   sync     who is told about a write — nobody, the server, or the peers
 //   durable  how long the value lives, asked of whoever owns it
+//   pace     how often a relayed value is sent: a page that moves something
+//            every frame writes every frame, and the peers hear the latest
+//            value once a pace (@yaks/sync pace.ts)
 //
-// They are independent. A cursor position is `sync: peers, durable:
-// connection` — everybody watching sees it, nobody stores it, and it goes away
-// with the tab that wrote it. A saved draft is `sync: none, durable: forever` —
-// no one else is told about it, and this browser keeps it across a reload. A
-// task is the default, `sync: server, durable: forever`.
+// `sync` and `durable` are independent. A cursor position is `sync: peers,
+// durable: connection` — everybody watching sees it, nobody stores it, and it
+// goes away with the tab that wrote it. A saved draft is `sync: none, durable:
+// forever` — no one else is told about it, and this browser keeps it across a
+// reload. A task is the default, `sync: server, durable: forever`. `pace`
+// belongs beside `sync: peers` only: a relayed value is the one a page may
+// write sixty times a second.
 //
-// Both keywords are core, not @yaks/sync's, because the server reads them: the
-// write allowlist, the subscription registry and the store all decide from
-// them, and a keyword only a browser package declared would not be on the
-// meta-schema a server validates against.
+// The keywords are core, not @yaks/sync's: the write allowlist, the
+// subscription registry and the store all decide from `sync` and `durable`,
+// and a server validates every document against the meta-schema, which a
+// keyword only a browser package declared would not be on.
 
 /** Who is told about a write to a component. */
 export type Sync = 'none' | 'server' | 'peers'
@@ -57,3 +62,8 @@ export let ms = (durable: string): number | null => {
  * two named spans, or a duration. */
 export let lives = (durable: string): boolean =>
   durable == 'forever' || durable == 'connection' || ms(durable) != null
+
+/** A `pace` value in milliseconds — `null` when a component declares none, or
+ * none a clock can count, and every write is sent as it is made. */
+export let paced = (pace: unknown): number | null =>
+  typeof pace == 'string' ? ms(pace) || null : null

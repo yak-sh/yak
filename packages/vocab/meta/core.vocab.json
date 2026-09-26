@@ -64,6 +64,10 @@
       "type": "string",
       "default": "forever"
     },
+    "pace": {
+      "description": "How often a relayed (\"sync\": \"peers\") value of this component is sent, as a duration (\"100ms\"). The writer's own graph takes every write at once; the peers hear the latest value at most once a pace, the last one always, and a clear at once. Absent, every write is sent as it is made.",
+      "type": "string"
+    },
     "computed": {
       "description": "true = this property is derived, never stored: no column holds it, nobody writes it, a reader still sees it (a query-only rank, an aggregate, a status read off marks). Default false \u2014 a property nobody declares so is stored.",
       "type": "boolean",

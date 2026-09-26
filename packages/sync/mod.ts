@@ -40,7 +40,9 @@
  * `sync` declares who is told about a write — `server` (the default) and
  * `peers` are sent, `none` stays here — and `durable` declares how long the
  * value lives: `forever` (the default) is the vault, `connection` or a
- * duration is memory. All of them go through the same `apply()`.
+ * duration is memory. All of them go through the same `apply()`. A `peers`
+ * component may also declare a `pace` (`"100ms"`): each write lands here at
+ * once, and the latest leaves at most once a pace, the last one always.
  *
  * ## Reading is a subscription
  * {@link Sync.subscribe} opens a stored query on the server's `/ws`. Its

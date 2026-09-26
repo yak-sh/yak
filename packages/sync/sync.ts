@@ -26,6 +26,7 @@ import { dead, then } from '@yaks/graph'
 import { asking, clean, ECHO, echoed, SENT } from './mark.ts'
 import { type Fetch, post, type Report } from './outbound.ts'
 import { relayed } from './tier.ts'
+import { pacer } from './pace.ts'
 import { land } from './inbound.ts'
 import {
   type Ask,
@@ -65,7 +66,8 @@ export type SyncOpts = {
   fetch?: Fetch
   /** how the socket is opened (default: the global `WebSocket`) */
   connect?: Connect
-  /** how a reconnect is scheduled (default: `setTimeout`) */
+  /** how a reconnect, and a relayed value's pace, is timed (default:
+   * `setTimeout`) */
   timer?: Timer
   /** headers on every `POST /apply` — an authorization, say */
   headers?: Record<string, string>
@@ -127,6 +129,7 @@ let warn: Report = (t) =>
  */
 export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   let report = opts.report ?? warn
+  let timer: Timer = opts.timer ?? ((fn, ms) => setTimeout(fn, ms))
   let sending: Promise<void> = Promise.resolve()
   let asks = new Map<string, Ask>()
   let members = new Map<string, Set<Eid>>()
@@ -195,8 +198,8 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
           // The `sync: peers` half is sent over the socket instead: the
           // server holds it under this connection and clears it when the
           // connection closes, so the connection has to be the one that wrote
-          // it.
-          w.relay(relayed(bundles, graph.vocab))
+          // it. It leaves at the component's pace (./pace.ts).
+          relay(relayed(bundles, graph.vocab))
         }
         return bundles.map(clean)
       },
@@ -207,7 +210,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   let w: Wire = wire({
     url: opts.url,
     connect: opts.connect,
-    timer: opts.timer,
+    timer,
     wait: opts.wait,
     most: opts.most,
     pending,
@@ -261,6 +264,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     },
     report: (error) => report({ sent: [], error, reverted: false }),
   })
+  let relay = pacer(graph.vocab, w.relay, timer)
 
   let serial = 0
   return {

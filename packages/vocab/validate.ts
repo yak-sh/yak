@@ -15,7 +15,7 @@
 
 import type { Composite, PropSchema, VocabDoc } from './types.ts'
 import { composite, jsonb, TYPES, typesOf } from './vocab.ts'
-import { lives, SYNC, type Sync } from './lifetime.ts'
+import { lives, paced, SYNC, type Sync } from './lifetime.ts'
 
 let NAME = /^[a-z][a-z0-9_]{0,39}$/
 
@@ -133,11 +133,12 @@ let signed = (comp: string, s: PropSchema): string[] => {
   )
 }
 
-// What a component declares about its own state, checked as a pair. Each
+// What a component declares about its own state, checked together. Each
 // keyword is legal on its own — the meta-schema already rejects an unknown
-// value — but one combination is a contradiction: a relay does not own durable
+// value — but two combinations are contradictions: a relay does not own durable
 // data, so a component cannot ask the server both to forward a value without
-// storing it and to keep it forever.
+// storing it and to keep it forever; and a pace is how often a relayed value is
+// sent, so a component nobody relays has nothing to pace.
 let lived = (comp: string, s: PropSchema): string[] => {
   let errs: string[] = []
   if (s.sync != null && !SYNC.includes(s.sync as Sync)) {
@@ -153,6 +154,16 @@ let lived = (comp: string, s: PropSchema): string[] => {
   if (s.sync == 'peers' && s.durable == 'forever') {
     errs.push(
       `${comp} syncs to peers and is durable forever — a relay hands a value on without owning it, so it has nowhere to keep one; say "connection" or a duration, or sync to the server`,
+    )
+  }
+  if (s.pace != null && !paced(s.pace)) {
+    errs.push(
+      `${comp} is paced "${s.pace}" — say a duration such as "100ms" or "1s"`,
+    )
+  }
+  if (s.pace != null && s.sync != 'peers') {
+    errs.push(
+      `${comp} is paced but does not sync to peers — a pace is how often a relayed value is sent; say "sync": "peers", or drop the pace`,
     )
   }
   return errs

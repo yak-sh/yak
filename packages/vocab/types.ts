@@ -109,6 +109,9 @@ export type CompInfo = {
   /** how long one of its values lives: `forever`, `connection`, or a duration
    * (lifetime.ts `ms` reads the span out of one) */
   durable: string
+  /** how often a relayed value is sent, in milliseconds — `null` sends every
+   * write as it is made (lifetime.ts `paced`) */
+  pace: number | null
   /** the text an entity carrying this component is found by, as `comp.prop`
    * names of another component's properties — the component's `search` list,
    * [] for most (@yaks/fts indexes it, @yaks/embedding embeds it) */
@@ -208,10 +211,11 @@ export type PropSchema = {
   // On a computed property: the components on other entities it reads.
   reads?: string[]
   stamped?: boolean
-  // On a component: who is told about a write, and how long the value lives
-  // (lifetime.ts).
+  // On a component: who is told about a write, how long the value lives, and
+  // how often a relayed value is sent (lifetime.ts).
   sync?: string
   durable?: string
+  pace?: string
   // On a property, true = this text property is full-text indexed (@yaks/fts
   // reads it). On a component, the `comp.prop` names of the text its entities
   // are found by.

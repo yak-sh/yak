@@ -25,7 +25,7 @@ import type {
   VocabDoc,
 } from './types.ts'
 import type { Keywords } from './keywords.ts'
-import { kept, said, type Sync } from './lifetime.ts'
+import { kept, paced, said, type Sync } from './lifetime.ts'
 import { kindOrder as deriveKindOrder } from './order.ts'
 
 /** A name this vocabulary does not know. One error for every caller, raised
@@ -534,6 +534,12 @@ export let cast = (
 export let durableOf = (v: Vocab, comp: string): string =>
   v.comp(comp)?.durable ?? 'forever'
 
+/** How often a relayed value of a component is sent, in milliseconds — `null`
+ * for a component that declares no pace, or that this vocabulary does not
+ * declare, and every write is sent as it is made. */
+export let paceOf = (v: Vocab, comp: string): number | null =>
+  v.comp(comp)?.pace ?? null
+
 export let loadVocab = (
   input: VocabDoc | VocabDoc[],
   keywords: Keywords[] = [],
@@ -639,6 +645,7 @@ export let loadVocab = (
       stamped: entries.filter((p) => props(name)[p].stamped),
       sync: said(d.sync),
       durable: kept(d.durable),
+      pace: paced(d.pace),
       search: lists[name],
       keywords: carried(d, compWords),
     }

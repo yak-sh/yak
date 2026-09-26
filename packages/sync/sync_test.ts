@@ -343,3 +343,50 @@ Deno.test('a reconnect clears a value that stopped while it was away', async () 
   a.wire.close()
   b.wire.close()
 })
+
+// `a` scrolling through the recipe `b` is watching: `reading` is paced at
+// 100ms. `said()` counts the relay messages `a` has sent, and `heard()` is
+// where `b` last heard `a` was.
+let reading = async () => {
+  let { a, b } = await pointing()
+  let read = (n: number | null) =>
+    a.graph.apply([{
+      entity: { eid: 'r1' },
+      reading: n == null ? null : { line: n },
+    }])
+  let said = () =>
+    a.socket()!.sent.filter((m) => (m as { relay?: unknown }).relay).length
+  let heard = async () => {
+    await a.idle()
+    await b.idle()
+    return comp(at(b.graph, 'r1'), 'reading')
+  }
+  let done = () => [a, b].forEach((x) => x.wire.close())
+  return { a, read, said, heard, done }
+}
+
+Deno.test('a paced value is sent about once a pace, and the last always arrives', async () => {
+  let { a, read, said, heard, done } = await reading()
+  for (let n = 0; n < 60; n++) {
+    read(n)
+    assertEquals(comp(at(a.graph, 'r1'), 'reading'), { line: n }) // here, at once
+    a.pass(1000 / 60)
+  }
+  a.pass(100)
+  assert(said() >= 10 && said() <= 11, `${said()} sent in a second at 100ms`)
+  assertEquals(await heard(), { line: 59 }) // stopped, and heard there
+  done()
+})
+
+Deno.test('a clear is sent at once, and what it cleared never follows', async () => {
+  let { a, read, said, heard, done } = await reading()
+  read(1)
+  read(2) // inside the pace: waiting
+  assertEquals(await heard(), { line: 1 })
+  read(null)
+  assertEquals(await heard(), {})
+  let sent = said()
+  a.pass(1000)
+  assertEquals([said(), await heard()], [sent, {}])
+  done()
+})

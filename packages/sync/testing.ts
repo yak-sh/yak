@@ -14,7 +14,7 @@ import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { api, type Handler } from '@yaks/api'
 import { marks } from './mark.ts'
-import type { Connect, Socket } from './socket.ts'
+import type { Connect, Socket, Timer } from './socket.ts'
 import { type Sync, sync } from './sync.ts'
 import type { Trouble } from './outbound.ts'
 
@@ -78,6 +78,16 @@ let doc: VocabDoc = {
       sync: 'peers',
       durable: 'connection',
       properties: { x: { type: 'number' }, y: { type: 'number' } },
+    },
+    // How far down the recipe this cook has read: it moves every frame while
+    // they scroll, and the others hear where it is ten times a second.
+    reading: {
+      component: true,
+      type: 'object',
+      sync: 'peers',
+      durable: 'connection',
+      pace: '100ms',
+      properties: { line: { type: 'number' } },
     },
     created: {
       component: true,
@@ -207,15 +217,18 @@ export let server = (): Server => {
 }
 
 /** A client graph connected to a server, with both transports pointed at an
- * in-process handler and no timers of its own: `fire()` is what runs a
- * scheduled reconnect. */
+ * in-process handler and a clock of its own that moves only when told:
+ * `fire()` runs the next timer, a scheduled reconnect say, and `pass(ms)` runs
+ * every timer due within that span. */
 export type Client = {
   graph: Graph
   wire: Sync
   /** everything the sync reported */
   trouble: Trouble[]
-  /** run the pending reconnect, if one is scheduled */
+  /** run the next timer, if one is scheduled */
   fire: () => void
+  /** move the clock on, running each timer that falls due on the way */
+  pass: (ms: number) => void
   /** the socket this client currently holds */
   socket: () => Fake | undefined
   /** resolves when every write in flight has been answered and every frame
@@ -227,7 +240,18 @@ export type Client = {
 export let client = (srv: Server): Client => {
   let g = boxGraph(true)
   let trouble: Trouble[] = []
-  let timers: (() => void)[] = []
+  let now = 0
+  let due: { at: number; fn: () => void }[] = []
+  let timer: Timer = (fn, ms) => {
+    due.push({ at: now + ms, fn })
+    due.sort((x, y) => x.at - y.at) // stable: a tie runs in the order set
+  }
+  let fire = () => {
+    let next = due.shift()
+    if (!next) return
+    now = Math.max(now, next.at)
+    next.fn()
+  }
   let opening: Promise<unknown> = Promise.resolve()
   let mine: Fake | undefined
   let connect: Connect = () => {
@@ -248,14 +272,19 @@ export let client = (srv: Server): Client => {
     url: 'http://box.test',
     fetch: (request) => srv.handler(request),
     connect,
-    timer: (fn) => timers.push(fn),
+    timer,
     report: (t) => trouble.push(t),
   })
   return {
     graph: g,
     wire,
     trouble,
-    fire: () => timers.shift()?.(),
+    fire,
+    pass: (ms) => {
+      let until = now + ms
+      while (due.length && due[0].at <= until) fire()
+      now = until
+    },
     socket: () => mine,
     idle: async () => {
       await opening

@@ -80,6 +80,7 @@ component table needs on top:
 | `wire`      | comp  | `false` = a component clients read but cannot write                     |
 | `sync`      | comp  | who is told about a write: `none` \| `server` (default) \| `peers`      |
 | `durable`   | comp  | how long a value lives: `forever` (default) \| `connection` \| `5s`     |
+| `pace`      | comp  | with `sync: peers`: a relayed value is sent at most once per `100ms`    |
 
 Storage adapters interpret the loaded metadata: `type: integer` stores with
 integer affinity where a plain `number` uses SQLite REAL affinity, `enum`
@@ -307,14 +308,18 @@ deletes the referencing entity, `detach` clears its reference property,
 `release` removes its referencing component, and `keep` retains the reference
 without a foreign-key constraint.
 
-`syncOf(vocab, comp)` and `durableOf(vocab, comp)` read state-lifetime metadata,
-including defaults for unknown components. `sync` selects server
-synchronization, peer relay, or local-only data; `durable` selects permanent
-storage, connection-lifetime memory, or a duration. `ms('5s')` returns `5000`;
-`ms('forever')` and `ms('connection')` return `null`. `lives()` validates
-lifetime strings; `said()` and `kept()` normalize the two declarations. Storage
-and sync packages implement these policies; this package does not retain or
-expire data.
+`syncOf(vocab, comp)`, `durableOf(vocab, comp)` and `paceOf(vocab, comp)` read
+state-lifetime metadata, including defaults for unknown components. `sync`
+selects server synchronization, peer relay, or local-only data; `durable`
+selects permanent storage, connection-lifetime memory, or a duration. `pace`,
+beside `sync: peers` only, is how often a relayed value is sent: the writer's
+own graph takes every write at once, and [@yaks/sync](../sync/README.md) sends
+the latest value per entity at most once a pace, the last one always, and a
+clear at once. `paceOf` answers in milliseconds, `null` when every write is
+sent. `ms('5s')` returns `5000`; `ms('forever')` and `ms('connection')` return
+`null`. `lives()` validates lifetime strings; `said()`, `kept()` and `paced()`
+normalize the three declarations. Storage and sync packages implement these
+policies; this package does not retain, expire or pace data.
 
 See `vocab_test.ts` and `validate_test.ts` for vocabulary loading and validation
 examples.
