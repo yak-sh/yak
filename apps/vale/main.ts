@@ -19,7 +19,7 @@ import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { type Event, type Frame, game } from './play.ts'
 import { clamp } from './rand.ts'
 import { sound } from './sound.ts'
-import { groundAt, inside, type Vale, vale } from './terrain.ts'
+import { groundAt, inside, SIZE, type Vale, vale, VOXEL } from './terrain.ts'
 import { type World, world } from './world.ts'
 
 let TINTS = [
@@ -56,6 +56,12 @@ let NAMES = [
 ]
 // Where a new hero first stands.
 let HOME = 'mossvale'
+// The voxel edge the vale is grown at, in metres: `?voxel=0.25` grows it
+// finer, to compare. Any edge that divides the vale's side will do.
+let asked = Number(new URLSearchParams(location.search).get('voxel'))
+let VOX = asked >= 0.125 && asked <= 2 && Number.isInteger(SIZE / asked)
+  ? asked
+  : VOXEL
 
 let pick = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)]
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -100,7 +106,7 @@ let marks = overlay(h.layer, camera)
 
 // The level on show, and what is drawn of it: grown again when the hero goes
 // through a portal.
-let v: Vale = vale(HOME)
+let v: Vale = vale(HOME, VOX)
 let w: World = world(v)
 let stage = cast(w.scene, v, marks)
 let dust = bits(w.scene, true, 400)
@@ -109,7 +115,7 @@ let smallShadows = phone
 if (phone) w.sun.shadow.mapSize.set(1024, 1024)
 let grow = (id: string) => {
   w.dispose()
-  v = vale(id)
+  v = vale(id, VOX)
   w = world(v)
   if (smallShadows) w.sun.shadow.mapSize.set(1024, 1024)
   if (!renderer.shadowMap.enabled) w.sun.castShadow = false

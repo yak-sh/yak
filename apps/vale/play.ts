@@ -874,7 +874,7 @@ export let game = (net: Net) => {
       let portal = v.portals.find((p) => dist(p, body) < PORTAL)
       if (portal && !down) {
         level = portal.to
-        body = arrival(vale(portal.to), lv)
+        body = arrival(vale(portal.to, v.voxel), lv)
         events.push({ type: 'travel', to: portal.to })
       }
 

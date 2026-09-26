@@ -24,7 +24,7 @@ export type Look =
   }
 
 /** Where a creature lives: around each place of a kind (terrain.ts
- * `FEATURES`), between `beyond` and `within` columns of it, `apart` columns
+ * `FEATURES`), between `beyond` and `within` metres of it, `apart` metres
  * from its own kind, wandering `roam` metres from home. */
 export type Haunt = {
   near: string
@@ -77,9 +77,9 @@ export let BEASTS: Record<string, Beast> = {
       {
         near: 'village',
         count: 16,
-        beyond: 34,
-        within: 80,
-        apart: 12,
+        beyond: 17,
+        within: 40,
+        apart: 6,
         roam: 5,
       },
     ],
@@ -98,7 +98,7 @@ export let BEASTS: Record<string, Beast> = {
     loot: [['tusk', 0.65], ['coin', 0.7], ['tonic', 0.12]],
     size: 1.1,
     dust: 0x8a5a3c,
-    haunts: [{ near: 'woods', count: 11, within: 40, apart: 11, roam: 7 }],
+    haunts: [{ near: 'woods', count: 11, within: 20, apart: 5.5, roam: 7 }],
     look: {
       plan: 'quadruped',
       hide: 0x8a5a3c,
@@ -122,7 +122,7 @@ export let BEASTS: Record<string, Beast> = {
     loot: [['shard', 0.6], ['coin', 0.9], ['tonic', 0.25]],
     size: 1.5,
     dust: 0x9a9890,
-    haunts: [{ near: 'crags', count: 7, within: 36, apart: 12, roam: 5 }],
+    haunts: [{ near: 'crags', count: 7, within: 18, apart: 6, roam: 5 }],
     look: {
       plan: 'crag',
       stone: 0x8e8c84,
@@ -144,7 +144,7 @@ export let BEASTS: Record<string, Beast> = {
     loot: [['crown', 1], ['coin', 1], ['tonic', 1]],
     size: 2.4,
     dust: 0x7a3f2f,
-    haunts: [{ near: 'ridge', count: 1, within: 6, apart: 1, roam: 5 }],
+    haunts: [{ near: 'ridge', count: 1, within: 3, apart: 0.5, roam: 5 }],
     look: {
       plan: 'quadruped',
       hide: 0x7a3f2f,

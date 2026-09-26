@@ -1,13 +1,14 @@
 // Where each creature of a level lives: for every kind (beasts.ts) and every
 // place of the kind it haunts, homes picked around the place from the level's
 // own numbers, where a creature can stand: dry, level, clear of trunks and
-// rocks, and nearer that place than any place of another kind. The same list
-// on every page, and each creature's eid is named by where it lives, so no
-// page has to be told what another grew.
+// rocks, and nearer that place than any place of another kind. Picked on the
+// level's smooth ground (terrain.ts `rise`), so the homes are the same at
+// every voxel size. The same list on every page, and each creature's eid is
+// named by where it lives, so no page has to be told what another grew.
 import { BEASTS } from './beasts.ts'
 import { hashOf, rand, uuidOf } from './rand.ts'
 import { wallsNear } from './sim.ts'
-import { N, SEA, type Spot, spot, type Vale } from './terrain.ts'
+import { rise, SHORE, SIZE, type Spot, steep, type Vale } from './terrain.ts'
 
 export type Home = {
   eid: string
@@ -26,21 +27,9 @@ let listed = new WeakMap<Vale, Home[]>()
 export let homesOf = (v: Vale): Home[] => {
   let got = listed.get(v)
   if (got) return got
-  let at = (i: number, k: number) => i + k * N
-  let slope = (i: number, k: number) => {
-    let c = v.h[at(i, k)]
-    return Math.max(
-      ...[[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) =>
-        Math.abs(v.h[at(i + a, k + b)] - c)
-      ),
-    )
-  }
-  let blocked = (i: number, k: number) => {
-    let [x, z] = spot([i, k])
-    return wallsNear(v, x, z).some((w) =>
-      Math.hypot(w.x - x, w.z - z) < w.r + 1.5
-    )
-  }
+  let height = rise(v.level)
+  let blocked = (x: number, z: number) =>
+    wallsNear(v, x, z).some((w) => Math.hypot(w.x - x, w.z - z) < w.r + 1.5)
   let places = Object.entries(v.level.places)
   let out: Home[] = []
   for (let [kind, beast] of Object.entries(BEASTS)) {
@@ -50,32 +39,33 @@ export let homesOf = (v: Vale): Home[] => {
         if (place.kind != haunt.near) continue
         let key = `${v.level.id}/${kind}/${name}`
         let salt = hashOf(key)
-        let own = (i: number, k: number) => {
-          let d = Math.hypot(i - place.at[0], k - place.at[1])
+        let own = (x: number, z: number) => {
+          let d = Math.hypot(x - place.at[0], z - place.at[1])
           return d <= haunt.within && d >= (haunt.beyond ?? 0) &&
             places.every(([, p]) =>
               p.kind == place.kind ||
-              Math.hypot(i - p.at[0], k - p.at[1]) > d
+              Math.hypot(x - p.at[0], z - p.at[1]) > d
             )
         }
         let n = 0
         let r = haunt.within
         for (let tries = 0; n < haunt.count && tries < 4000; tries++) {
-          let i = Math.round(place.at[0] + (rand(tries, salt, 1) * 2 - 1) * r)
-          let k = Math.round(place.at[1] + (rand(tries, salt, 2) * 2 - 1) * r)
-          if (i < 8 || k < 8 || i >= N - 8 || k >= N - 8 || !own(i, k)) continue
-          if (v.h[at(i, k)] <= SEA + 1 || slope(i, k) > 1 || blocked(i, k)) {
+          let x = place.at[0] + (rand(tries, salt, 1) * 2 - 1) * r
+          let z = place.at[1] + (rand(tries, salt, 2) * 2 - 1) * r
+          if (x < 4 || z < 4 || x > SIZE - 4 || z > SIZE - 4 || !own(x, z)) {
             continue
           }
-          if (mine.some(([a, b]) => Math.hypot(a - i, b - k) < haunt.apart)) {
+          if (height(x, z) <= SHORE || steep(height, x, z) > 1) continue
+          if (blocked(x, z)) continue
+          if (mine.some(([a, b]) => Math.hypot(a - x, b - z) < haunt.apart)) {
             continue
           }
-          mine.push([i, k])
+          mine.push([x, z])
           let eid = uuidOf(`${key}/${n++}`)
           out.push({
             eid,
             kind,
-            home: spot([i, k]),
+            home: [x, z],
             roam: haunt.roam,
             seed: hashOf(eid),
           })

@@ -1,12 +1,13 @@
 // The levels: each a place of its own, grown from its seed and its places by
 // terrain.ts, so every page grows the same one and none of it is stored. A
 // place is a kind of ground (terrain.ts `FEATURES`: a village, woods, crags,
-// a ridge, a lake, fields) at a column; the creatures that live around each
+// a ridge, a lake, fields) at a point; the creatures that live around each
 // kind come from beasts.ts, the people who stand at them from quests.ts.
-// Portals join levels: walking through one arrives at the portal on the far side
-// that leads back. A new level is a row here.
+// Portals join levels: walking through one arrives at the portal on the far
+// side that leads back. A new level is a row here.
 
-/** A column of the 256 × 256 grid, `[east, south]`. */
+/** A point on a level's ground, in metres `[east, south]` from its corner; a
+ * level is 128 m on a side (terrain.ts `SIZE`). */
 export type Spot = [number, number]
 
 export type Place = { kind: string; at: Spot }
@@ -31,14 +32,14 @@ export let LEVELS: Record<string, Level> = {
     seed: 0,
     arrive: 'plaza',
     places: {
-      crags: { kind: 'crags', at: [60, 196] },
-      ridge: { kind: 'ridge', at: [204, 200] },
-      woods: { kind: 'woods', at: [132, 50] },
-      lake: { kind: 'lake', at: [52, 98] },
-      fields: { kind: 'fields', at: [198, 104] },
-      plaza: { kind: 'village', at: [128, 128] },
+      crags: { kind: 'crags', at: [30, 98] },
+      ridge: { kind: 'ridge', at: [102, 100] },
+      woods: { kind: 'woods', at: [66, 25] },
+      lake: { kind: 'lake', at: [26, 49] },
+      fields: { kind: 'fields', at: [99, 52] },
+      plaza: { kind: 'village', at: [64, 64] },
     },
-    portals: [{ at: [168, 142], to: 'birchmere' }],
+    portals: [{ at: [84, 71], to: 'birchmere' }],
   },
   birchmere: {
     id: 'birchmere',
@@ -46,12 +47,12 @@ export let LEVELS: Record<string, Level> = {
     seed: 7,
     arrive: 'green',
     places: {
-      mere: { kind: 'lake', at: [96, 150] },
-      woods: { kind: 'woods', at: [170, 70] },
-      east: { kind: 'woods', at: [196, 170] },
-      fields: { kind: 'fields', at: [80, 70] },
-      green: { kind: 'village', at: [138, 124] },
+      mere: { kind: 'lake', at: [48, 75] },
+      woods: { kind: 'woods', at: [85, 35] },
+      east: { kind: 'woods', at: [98, 85] },
+      fields: { kind: 'fields', at: [40, 35] },
+      green: { kind: 'village', at: [69, 62] },
     },
-    portals: [{ at: [150, 150], to: 'mossvale' }],
+    portals: [{ at: [75, 75], to: 'mossvale' }],
   },
 }

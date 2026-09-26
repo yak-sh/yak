@@ -3,12 +3,12 @@
 // keeps each mover's values in its graph (`position` and `motion`) and calls
 // these once a frame.
 //
-// The ground is a heightfield of half-metre voxels. A walker climbs one voxel
-// without a thought, needs a jump for two, and cannot pass a wall (a trunk, a
-// rock, a house), deep water, or the edge of the world.
+// The ground is a heightfield of voxels, whatever their size. A walker steps
+// up half a metre without a thought, needs a jump for more, and cannot pass a
+// wall (a trunk, a rock, a house), deep water, or the edge of the world.
 import { type Beast } from './beasts.ts'
 import { wander } from './rules.ts'
-import { groundAt, N, V, type Vale, type Wall, WATER } from './terrain.ts'
+import { groundAt, SIZE, type Vale, type Wall, WATER } from './terrain.ts'
 
 /** A mover as a frame steps it: where it is, how fast it rises, which way it
  * faces, how fast it went, and its gait. */
@@ -26,7 +26,6 @@ export type Body = {
  * whether it jumps. */
 export type Push = { x: number; z: number; jump: boolean }
 
-let SIZE = N * V
 let STEP = 0.55
 let GRAVITY = 24
 let JUMP = 7.6
@@ -64,7 +63,7 @@ export let wallsNear = (v: Vale, x: number, z: number): Wall[] => {
  * import { assertEquals } from '@std/assert'
  * import { flat } from './terrain.ts'
  * // Flat ground 5 m up, and a trunk at (10, 10).
- * let v = flat(10, [{ x: 10, z: 10, r: 0.5, top: 9 }])
+ * let v = flat(5, [{ x: 10, z: 10, r: 0.5, top: 9 }])
  * assertEquals(fits(v, 20, 20, 5), true)
  * assertEquals(fits(v, 10.3, 10, 5), false) // in the trunk
  * assertEquals(fits(v, 20, 20, 4), false) // ground over a step above its feet
@@ -94,7 +93,7 @@ export let turn = (a: number, b: number, k: number) => {
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { flat } from './terrain.ts'
- * let v = flat(10, [{ x: 21, z: 20, r: 0.5, top: 9 }])
+ * let v = flat(5, [{ x: 21, z: 20, r: 0.5, top: 9 }])
  * let b = { x: 20, y: 5, z: 20, vy: 0, yaw: 0, speed: 0, gait: 'idle' }
  * // A trunk ahead: pushed into it at a slant, the walker slides along it.
  * let slid = walk(v, b, { x: 0.7, z: 0.7, jump: false }, 0.1, 5)
@@ -174,7 +173,7 @@ export let walk = (
  * ```ts
  * import { assert, assertEquals } from '@std/assert'
  * import { flat } from './terrain.ts'
- * let v = flat(10)
+ * let v = flat(5)
  * let a = rest(v, [60, 60], 5, 7, 1000)
  * assertEquals(a, rest(v, [60, 60], 5, 7, 1000))
  * assert(Math.hypot(a.x - 60, a.z - 60) <= 5)

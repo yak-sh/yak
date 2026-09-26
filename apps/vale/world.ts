@@ -13,9 +13,9 @@ import { geometry, soft } from './soft.ts'
 import {
   foundation,
   groundAt,
-  N,
   type Prop,
-  V,
+  SIZE,
+  standAt,
   type Vale,
   WATER,
 } from './terrain.ts'
@@ -169,15 +169,15 @@ void main() {
  * a page builds the ones near the player first. */
 export let world = (v: Vale): World => {
   let scene = new THREE.Scene()
-  let size = N * V
+  let size = SIZE
   let fog = new THREE.Fog(0xcfe6f2, 40, 110)
   scene.fog = fog
 
   let ground = soft({ speckle: 0.1 })
   let byChunk = new Map<number, Prop[]>()
-  let per = N / CHUNK
+  let per = SIZE / CHUNK
   for (let p of v.props) {
-    let c = Math.floor(p.i / CHUNK) + Math.floor(p.k / CHUNK) * per
+    let c = Math.floor(p.x / CHUNK) + Math.floor(p.z / CHUNK) * per
     if (!byChunk.has(c)) byChunk.set(c, [])
     byChunk.get(c)!.push(p)
   }
@@ -189,11 +189,10 @@ export let world = (v: Vale): World => {
       let o = groundChunk(v, ci, ck, out())
       let small = out()
       for (let p of byChunk.get(ci + ck * per) ?? []) {
-        let h = v.h[p.i + p.k * N]
         place(DECOR.has(p.kind) ? small : o, model(p.kind, p.seed), [
-          (p.i + 0.5) * V,
-          h * V,
-          (p.k + 0.5) * V,
+          p.x,
+          standAt(v, p),
+          p.z,
         ])
         let base = foundation(v, p)
         if (base) cuboid(o, base[0], base[1], FOUND, 0.25, 0.04)
@@ -210,8 +209,8 @@ export let world = (v: Vale): World => {
       scene.add(bits)
       decor.push({
         mesh: bits,
-        x: (ci + 0.5) * CHUNK * V,
-        z: (ck + 0.5) * CHUNK * V,
+        x: (ci + 0.5) * CHUNK,
+        z: (ck + 0.5) * CHUNK,
       })
     }
   }
@@ -306,8 +305,8 @@ export let world = (v: Vale): World => {
   }[] = []
   for (let p of v.props) {
     if (p.kind != 'lamp') continue
-    let x = (p.i + 0.5) * V + 0.5, z = (p.k + 0.5) * V
-    let y = v.h[p.i + p.k * N] * V + 2.5
+    let x = p.x + 0.5, z = p.z
+    let y = standAt(v, p) + 2.5
     let lantern = new THREE.MeshBasicMaterial({
       color: 0xffc860,
       transparent: true,
