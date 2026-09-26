@@ -135,7 +135,8 @@ busy.
 A model may call the app's own commands (see [Commands](/docs/tools)), but only
 the ones the app marks for it with `"model": true`. Those are the tools it is
 offered, and no others. A call runs as the person who asked for the turn, held
-to exactly what they could write on the page themselves.
+to exactly what they could write on the page themselves, and `$session` in its
+template is the transcript the turn is in, which no argument can change.
 
 ## Who may ask
 

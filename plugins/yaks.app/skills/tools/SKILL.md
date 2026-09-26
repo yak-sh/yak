@@ -404,7 +404,13 @@ turn, held to what they could write on the page themselves.
                   "description": "Say how the smith feels",
                   "input": { "feeling": { "type": "string" } },
                   "apply": { "entity": { "eid": "$m" },
-                             "mood": { "feeling": "$feeling" } } }
+                             "mood": { "feeling": "$feeling",
+                                       "of": "$session" } } }
+
+`$session` in such a command is the transcript the turn is in: here, the smith
+whose mood it is. No argument binds it, so a model cannot be talked into naming
+another transcript, and a command that uses it runs only in a model's turn:
+called through `command`, it is refused.
 
 ## The view: a page the answer is drawn in
 

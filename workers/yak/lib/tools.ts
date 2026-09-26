@@ -46,7 +46,10 @@
 //
 // And `"model": true` offers the command to the app's own models (D-40545): a
 // transcript in the app's store may call it as a tool, as the person who asked
-// for the turn. A command not marked is never a model's to call.
+// for the turn. A command not marked is never a model's to call. In one that
+// is, `$session` is the transcript whose turn called it: bound by where the
+// call runs, never by what the model sends, so a model cannot be talked into
+// naming another. Called any other way, such a command is refused.
 //
 // Nothing here reaches the store: filling a template makes the same body a
 // page's own `apply` and `query` send, and the call goes through the app's
@@ -80,6 +83,13 @@ export type ToolDef = {
 }
 
 export type Tools = Record<string, ToolDef>
+
+/** Where a call runs, as the variables it binds that no caller sends:
+ * `session`, the transcript a model's turn is in. */
+export type Context = { session?: string }
+
+// The variables a model's call binds from where it runs.
+let CONTEXT = ['session']
 
 export let TOOLS_EXAMPLE = '{"$defs": {"log_run": {"tool": true, ' +
   '"description": "Log a run", "input": {"miles": {"type": "number"}}, ' +
@@ -287,6 +297,15 @@ export let parseTools = (
     let mints = entry.apply == null ? new Set<string>() : minted(entry.apply)
     for (let held of vars(entry.apply ?? entry.query)) {
       if (held in input || mints.has(held)) continue
+      if (CONTEXT.includes(held)) {
+        if (entry.model !== true) {
+          wrong.push(
+            `${name}: $${held} is the transcript a model's turn runs in — ` +
+              `mark ${name} "model": true, or declare it in ${name}.input`,
+          )
+        }
+        continue
+      }
       wrong.push(
         `${name}: $${held} names no input and no entity here — declare it ` +
           `in ${name}.input`,
@@ -453,14 +472,35 @@ let clause = (s: string, tool: ToolDef, vals: Record<string, unknown>) =>
       !arg ? '$' : arg in vals ? encodeURIComponent(String(vals[arg])) : whole,
   )
 
+// What the call binds from where it runs: each context variable the template
+// names and no input declares, refused when the call runs nowhere that has
+// one.
+let bound = (tool: ToolDef, context: Context) =>
+  Object.fromEntries(
+    [...vars(tool.apply ?? tool.query)]
+      .filter((v) => CONTEXT.includes(v) && !(v in tool.input))
+      .map((v) => {
+        let held = context[v as keyof Context]
+        if (held == null) {
+          throw new CallError(
+            'arguments',
+            `$${v} is the transcript a model's turn runs in, and this call ` +
+              "runs in none: only the app's own models call this command",
+          )
+        }
+        return [v, held]
+      }),
+  )
+
 // The act this call makes: the bundle to write, or the filter line to read,
 // with the caller's arguments in it. A clause whose argument the caller left
 // out drops out of the line, and the rest of it still reads.
 export let filled = (
   tool: ToolDef,
   sent: Record<string, unknown>,
+  context: Context = {},
 ): { apply?: unknown; query?: string } => {
-  let vals = args(tool, sent)
+  let vals = { ...bound(tool, context), ...args(tool, sent) }
   if (tool.query != null) {
     // A query that is nothing but one variable is a whole filter line passed
     // through, so it keeps its `&`s rather than being read as one clause.

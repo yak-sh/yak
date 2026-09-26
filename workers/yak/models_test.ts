@@ -203,14 +203,17 @@ Deno.test('a model calls only the commands marked for it, as the person who aske
       mood: {
         component: true,
         type: 'object',
-        properties: { feeling: { type: 'string' } },
+        properties: { feeling: { type: 'string' }, of: { type: 'string' } },
       },
       set_mood: {
         tool: true,
         model: true,
         description: 'Say how the smith feels',
         input: { feeling: { type: 'string' } },
-        apply: { entity: { eid: '$m' }, mood: { feeling: '$feeling' } },
+        apply: {
+          entity: { eid: '$m' },
+          mood: { feeling: '$feeling', of: '$session' },
+        },
       },
       moods: {
         tool: true,
@@ -238,7 +241,8 @@ Deno.test('a model calls only the commands marked for it, as the person who aske
   let offered = v.asked[0].input.tools as { function: { name: string } }[]
   assertEquals(offered.map((t) => t.function.name), ['set_mood'])
   let [mood] = await v.read('.mood&*')
-  assertEquals(mood.mood, { feeling: 'glad' })
+  // `$session` is the transcript whose turn made the call.
+  assertEquals(mood.mood, { feeling: 'glad', of: s })
   assertEquals((mood.created as Comp).by, ADA)
 })
 

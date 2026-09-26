@@ -204,7 +204,8 @@ let asker = (ctx?: ToolContext): string | null => {
  * The commands an app marks `"model": true`, as the tools its models may call
  * (lib/tools.ts). A command runs as the person who asked for the turn, held to
  * what they may write here: a model can do what they could do on the page, and
- * never more. A query answers what it reads.
+ * never more. Its `$session` is the transcript the turn is in. A query answers
+ * what it reads.
  */
 export let tooled = (at: Stored): Tool[] =>
   Object.entries(at.commands()).filter(([, def]) => def.model).map((
@@ -214,7 +215,7 @@ export let tooled = (at: Stored): Tool[] =>
     description: def.description,
     parameters: schemaOf(def),
     run: async (args, ctx) => {
-      let act = filled(def, args)
+      let act = filled(def, args, { session: ctx?.session })
       if (act.query != null) return worded(await at.graph.read(act.query))
       let bundles = Array.isArray(act.apply) ? act.apply : [act.apply]
       return worded(await at.as(asker(ctx), bundles as Bundle[]))

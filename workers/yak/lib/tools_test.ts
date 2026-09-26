@@ -227,6 +227,33 @@ Deno.test('a variable nobody bound is the alias it looks like', () => {
   })
 })
 
+Deno.test("$session is the transcript a model's turn runs in", () => {
+  let say = (model: boolean) => ({
+    say: {
+      description: 'Say something',
+      input: { words: TEXT },
+      ...(model ? { model: true } : {}),
+      apply: { entity: { eid: '$s' }, jog: { who: '$session', how: '$words' } },
+    },
+  })
+  let tools = parsed(say(true))
+  assertEquals(
+    filled(tools.say, { words: 'hi', session: 'not mine' }, { session: 's1' })
+      .apply,
+    { entity: { eid: '$s' }, jog: { who: 's1', how: 'hi' } },
+  )
+  // Called from anywhere but a model's turn, there is no transcript to name.
+  assertStringIncludes(
+    assertThrows(() => filled(tools.say, { words: 'hi' }), Error).message,
+    "only the app's own models call this command",
+  )
+  // Only a command the models call knows it.
+  assertStringIncludes(
+    assertThrows(() => parsed(say(false)), Error).message,
+    "say: $session is the transcript a model's turn runs in — mark say",
+  )
+})
+
 Deno.test('a manifest written with the {{arg}} hole no longer deploys', () => {
   // Refused in the sentence that says what to write instead.
   assertStringIncludes(
