@@ -14,7 +14,7 @@
 // write 30 times a minute, and a busy fight earns more rows than that. Until
 // they are sent, `mine` counts them already, so nothing on screen waits.
 import { type Client, client, type Watch } from '@yaks/client'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import words from './vocab.json' with { type: 'json' }
 
 export type Bundle = NonNullable<ReturnType<Client['ent']>>
@@ -49,7 +49,40 @@ export type Hero = {
   skin: string
 }
 
-export let vocab = loadVocab([words])
+// The words the store speaks, as it serves them (./api/vocab.json): this app's
+// own and every word the platform gives it, the byline `created` among them,
+// so the client asks and writes what the store takes. Loaded at the top of the
+// module, so everything that imports it evaluates with them. A page that cannot
+// reach the door still plays on its own words; only the gate's heroes wait for
+// the next load.
+let spoken = async (): Promise<VocabDoc[]> => {
+  try {
+    let r = await fetch(new URL('api/vocab.json', document.baseURI))
+    if (r.ok) return await r.json()
+    console.warn('mossvale store: no words,', r.status)
+  } catch (e) {
+    console.warn('mossvale store: no words,', e)
+  }
+  return [words]
+}
+
+export let vocab = loadVocab(await spoken())
+
+/** One of a person's heroes, off the row the store holds for it. */
+let heroOf = (b: Bundle): Hero => {
+  let p = comp(b, 'player')
+  return {
+    eid: b.entity.eid,
+    name: str(p.name, 'Wanderer'),
+    tint: str(p.tint, '#c95f4a'),
+    hair: str(p.hair, '#5a3a26'),
+    skin: str(p.skin, '#e7b996'),
+  }
+}
+
+// How long the gate waits for the store to answer before it lists what it
+// holds.
+let PATIENCE = 8000
 
 // How long rows wait to be sent together: under the door's 30 a minute.
 let PACE = 2100
@@ -157,32 +190,28 @@ export let connect = (base: URL) => {
       tab.set(eid)
       follow(eid)
     },
-    /** the heroes a person made, as the store answers now.
-     *
-     * TODO: a watch on the client, once a page's client can know the store's
-     * whole vocabulary. The store stamps `created` in the platform's own words
-     * (workers/yak/vocab.ts `coreDoc`), which no door serves and no package
-     * exports, so this page's vocabulary lacks `created` and the client
-     * refuses to route `created.by`. Until then the store's query door
-     * answers it. */
-    heroes: async (person: string): Promise<Hero[]> => {
-      let q = `.player&.created.by=${JSON.stringify(person)}`
-      let r = await fetch(new URL(`query?${encodeURIComponent(q)}`, base))
-      let rows: unknown = r.ok ? await r.json() : []
-      return (Array.isArray(rows) ? rows : []).flatMap((row) => {
-        let eid = row?.entity?.eid
-        let p = row?.player
-        return typeof eid == 'string' && p && typeof p == 'object'
-          ? [{
-            eid,
-            name: str(p.name, 'Wanderer'),
-            tint: str(p.tint, '#c95f4a'),
-            hair: str(p.hair, '#5a3a26'),
-            skin: str(p.skin, '#e7b996'),
-          }]
-          : []
-      })
-    },
+    /** the heroes a person made, once the store has answered */
+    heroes: (person: string): Promise<Hero[]> =>
+      new Promise((done) => {
+        let w: Watch
+        try {
+          w = c.watch(`.player&.created.by=${JSON.stringify(person)}`)
+        } catch (e) {
+          console.warn('mossvale store:', e)
+          return done([])
+        }
+        let off = () => {}
+        let settle = () => {
+          off()
+          clearTimeout(late)
+          let found = w.value.map(heroOf)
+          w.close()
+          done(found)
+        }
+        let late = setTimeout(settle, PATIENCE)
+        if (w.ready) return settle()
+        off = w.subscribe(() => w.ready && settle())
+      }),
     /** my rows of one kind: what the store holds, and what is waiting */
     mine: (name: string): Bundle[] =>
       join(name, own[name]?.value ?? none, name),
