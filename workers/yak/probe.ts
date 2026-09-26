@@ -12,7 +12,7 @@
 // `script` below runs a Worker that is not the kernel at all — the modules an
 // app's own script is made of — in the same workerd, beside it.
 import { apex } from './host.ts'
-import { ask } from './billing.ts'
+import { ask } from './stripe.ts'
 import { b64u } from './mcp-probe.ts'
 import { until } from '../../bin/testing.ts'
 import { COOKIE, sign, verify } from './lib/token.ts'
@@ -1078,7 +1078,7 @@ export let stripeKey = () => {
   return key
 }
 
-/** One call to Stripe on the sandbox `key`: billing.ts `ask`, the platform's
+/** One call to Stripe on the sandbox `key`: stripe.ts `ask`, the platform's
  * own client, so the probe asks as the product does and retries as it does. */
 export let charged = (
   key: string,

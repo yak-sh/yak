@@ -8,7 +8,7 @@
 // fee comes out of their money, the customer's statement says their name, and
 // a refund or a dispute is theirs to answer and theirs to pay. We are not in
 // the middle of it. What we do is act on their account with our own platform
-// key — one `Stripe-Account` header (billing.ts `ask`) — and name an
+// key — one `Stripe-Account` header (stripe.ts `ask`) — and name an
 // `application_fee_amount` that Stripe moves to us out of the same payment.
 //
 // So the platform holds three facts about a seller and no more (vocab.ts
@@ -36,7 +36,8 @@
 // and the webhook's filing is capped so a stranger posting garbage at a public
 // door cannot write rows without end.
 import { sha256 } from '@yaks/graph'
-import { ask, moved } from './billing.ts'
+import { moved } from './billing.ts'
+import { ask } from './stripe.ts'
 import { refusal } from '@yaks/hook'
 import { fault } from './unseen.ts'
 import * as dirPart from './directory.ts'
