@@ -1,6 +1,6 @@
 {
   "name": "@yaks/git",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "exports": {
     ".": "./mod.ts",
     "./cites": "./cites.ts",

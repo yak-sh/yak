@@ -55,6 +55,7 @@
   "@yaks/query",
   "@yaks/ram",
   "@yaks/render",
+  "@yaks/rtc",
   "@yaks/secrets",
   "@yaks/session",
   "@yaks/spawn",
