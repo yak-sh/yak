@@ -39,11 +39,13 @@ import {
   ordered,
   OUTPUT,
   SESSION,
+  sessionFor,
   statusOf,
   textOf,
   views,
 } from '@yaks/session'
 import { render } from '@yaks/text'
+import { CallError } from '@yaks/tools'
 import { spelling } from './run.ts'
 
 /** What config can set for these tools. */
@@ -108,9 +110,8 @@ let entriesOf = async (graph: Graph, session: string): Promise<Bundle[]> =>
 // on a task is a wait that would never end.
 let sessionAt = async (call: Bundle, graph: Graph): Promise<Bundle> => {
   let said = str(argsOf(call).session)
-  let [eid] = await addressed(graph, [said])
-  let row = await one(graph, eid)
-  if (!row?.[SESSION]) throw new Error(`not a session: ${said}`)
+  let row = await sessionFor(graph, said)
+  if (!row) throw new CallError('session', `not a session: ${said}`)
   return row
 }
 

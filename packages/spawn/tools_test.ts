@@ -1,4 +1,9 @@
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
@@ -15,6 +20,7 @@ import { taskDoc } from '@yaks/task'
 import { modelDoc } from '@yaks/model'
 import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { CallError } from '@yaks/tools'
 import { processDoc, processes } from '@yaks/process'
 import { spawning } from './effects.ts'
 import { fake, until } from './testing.ts'
@@ -153,10 +159,10 @@ Deno.test('a spawn refuses what is not a provider, and work that is not there', 
   )
 })
 
-Deno.test('a peek is the transcript, and a wait on a stopped one is its ending', async () => {
+Deno.test('a run is reached by its graph id or its provider id', async () => {
   let { g } = host()
   await g.apply([
-    { entity: { eid: 's' }, session: {} },
+    { entity: { eid: 's' }, session: { id: 'provider-run' } },
     { entity: { eid: 'e1' }, entry: { session: 's' }, content: { body: 'go' } },
     {
       entity: { eid: 'e2' },
@@ -167,7 +173,9 @@ Deno.test('a peek is the transcript, and a wait on a stopped one is its ending',
     { entity: { eid: 'e3' }, entry: { session: 's' }, stop: {} },
     { entity: { eid: 's' }, brief: { text: 'shipped it' } },
   ])
-  let seen = body(await tools.session_peek!(...asked(g, { session: 's' })))
+  let seen = body(
+    await tools.session_peek!(...asked(g, { session: 'provider-run' })),
+  )
   assertStringIncludes(seen, 'stopped')
   assertStringIncludes(seen, 'done')
   assertEquals(seen.split('\n').length, 4) // the head, and one line per entry
@@ -196,10 +204,11 @@ Deno.test('a peek shows the last lines, and refuses what is not a session', asyn
   assertStringIncludes(seen, 'line 4')
   assert(!seen.includes('line 1'))
 
-  let said = await Promise.resolve(
-    tools.session_wait!(...asked(g, { session: 't' })),
-  ).then(() => '', (e: Error) => e.message)
-  assertStringIncludes(said, 'not a session')
+  await assertRejects(
+    () => Promise.resolve(tools.session_wait!(...asked(g, { session: 't' }))),
+    CallError,
+    'not a session',
+  )
 })
 
 Deno.test('a wait answers "still running" rather than killing anything', async () => {
