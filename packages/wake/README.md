@@ -226,7 +226,7 @@ wakes.
 - `due(storage, now)` returns overdue wake bundles, oldest first.
 - `ring(bundle, now)` creates the firing change without applying it.
 - `soonest(storage, now)` returns the earliest future instant.
-- `pace(graph, wake, now)` returns the cadence of the first `while` condition
+- `cadence(graph, wake, now)` returns the cadence of the first `while` condition
   that holds, or `null`.
 - `starting(options)` returns the normalization hook used by `wakes()`.
 - `wakeDoc`, also available from `@yaks/wake/vocab`, declares the components.

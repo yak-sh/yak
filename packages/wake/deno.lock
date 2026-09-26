@@ -1,0 +1,444 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@hexagon/croner@^10.0.1": "10.0.1"
+  },
+  "jsr": {
+    "@hexagon/croner@10.0.1": {
+      "integrity": "95120f312b5e63afaaa4861838fe2d7b42f32554d2af96b7524b072abf63dabd"
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@hexagon/croner@^10.0.1"
+    ],
+    "links": {
+      "jsr:@yaks/admin@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/alias@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/api@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/archetype@0.2.4": {},
+      "jsr:@yaks/blob@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/builders@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/canvas@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/cli@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:preact@^10.29.1"
+        ]
+      },
+      "jsr:@yaks/client@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:fake-indexeddb@^6.2.2"
+        ]
+      },
+      "jsr:@yaks/code@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/connections@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/context@0.2.4": {},
+      "jsr:@yaks/d1@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@cloudflare/workers-types@^4.20260702.1"
+        ]
+      },
+      "jsr:@yaks/design@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/doc@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/dreaming@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/durable-object@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@cloudflare/workers-types@^4.20260702.1"
+        ]
+      },
+      "jsr:@yaks/edge@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/effects@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/egress@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/embedding@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/esbuild@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@cloudflare/worker-bundler@0.2.4",
+          "npm:es-module-lexer@2.3.2",
+          "npm:semver@7.8.5",
+          "npm:sucrase@3.35.1"
+        ]
+      },
+      "jsr:@yaks/fts@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/git@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/goal@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/graph@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/harness@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "jsr:@std/path@1",
+          "npm:@preact/signals@^2.9.0",
+          "npm:preact@^10.29.1",
+          "npm:zod-to-json-schema@^3.25.1",
+          "npm:zod@^3.24.0"
+        ]
+      },
+      "jsr:@yaks/heal@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/hook@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/html@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:linkedom@~0.18.12",
+          "npm:preact-render-to-string@6.7.0",
+          "npm:preact@^10.29.1"
+        ]
+      },
+      "jsr:@yaks/id@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/journal@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/kernel@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/key@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/mail@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/markdown@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:marked@18.0.6",
+          "npm:preact@^10.29.1"
+        ]
+      },
+      "jsr:@yaks/match@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/mcp-client@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@modelcontextprotocol/sdk@^1.29.0"
+        ]
+      },
+      "jsr:@yaks/mcp@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@modelcontextprotocol/sdk@^1.29.0",
+          "npm:zod-to-json-schema@^3.25.1",
+          "npm:zod@^3.24.0"
+        ]
+      },
+      "jsr:@yaks/member@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/memory@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/mirror@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/model@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/names@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/notify@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/oauth@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/openai@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/openrouter@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/page@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:linkedom@~0.18.12"
+        ]
+      },
+      "jsr:@yaks/persona@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/platform@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/preact@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:linkedom@~0.18.12",
+          "npm:preact@^10.29.1",
+          "npm:sucrase@^3.35.0"
+        ]
+      },
+      "jsr:@yaks/process@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/project@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/query@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/ram@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/render@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/secrets@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/session@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/spawn@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/sql@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/sqlite@0.2.4": {
+        "dependencies": [
+          "jsr:@db/sqlite@0.13.0",
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/sync@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/task@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/text@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:linkedom@~0.18.12",
+          "npm:marked@18.0.6",
+          "npm:preact@^10.29.1"
+        ]
+      },
+      "jsr:@yaks/tmux@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/tools@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/tui@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@preact/signals@^2.9.0",
+          "npm:preact@^10.29.1"
+        ]
+      },
+      "jsr:@yaks/tunnel@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/vocab@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@cfworker/json-schema@4.1.1",
+          "npm:ajv@^8.17.1"
+        ]
+      },
+      "jsr:@yaks/web@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@preact/signals@^2.9.0",
+          "npm:highlight.js@11.11.1",
+          "npm:lucide@1.31.0",
+          "npm:marked@18.0.6",
+          "npm:preact@^10.29.1"
+        ]
+      },
+      "jsr:@yaks/workerd@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/workers-ai@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "jsr:@yaks/yaml@0.2.4": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "jsr:@std/yaml@^1.2.0"
+        ]
+      },
+      "npm:yak": {
+        "dependencies": [
+          "npm:@cfworker/json-schema@4.1.1",
+          "npm:@cloudflare/sandbox@0.12.9",
+          "npm:@cloudflare/worker-bundler@0.2.4",
+          "npm:@cloudflare/workers-oauth-provider@0.10.3",
+          "npm:@jsr/std__csv@1.0.6",
+          "npm:@jsr/std__yaml@1.2.0",
+          "npm:@modelcontextprotocol/sdk@1.29.0",
+          "npm:@sentry/cloudflare@10.75.0",
+          "npm:@sentry/core@10.75.0",
+          "npm:croner@10.0.1",
+          "npm:es-module-lexer@2.3.2",
+          "npm:lucide@1.31.0",
+          "npm:marked@18.0.6",
+          "npm:postal-mime@3.0.0",
+          "npm:preact-render-to-string@6.7.0",
+          "npm:preact@10.29.7",
+          "npm:semver@7.8.5",
+          "npm:sucrase@3.35.1",
+          "npm:zod-to-json-schema@3.25.2",
+          "npm:zod@3.25.76"
+        ]
+      }
+    }
+  }
+}

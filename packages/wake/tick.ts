@@ -7,7 +7,7 @@
 
 import { type Bundle, type Graph, token } from '@yaks/graph'
 import { due, ring, wakeOf } from './due.ts'
-import { pace } from './pace.ts'
+import { cadence } from './while.ts'
 
 /** The part of the graph API a driver needs, also satisfied by a client for a
  * remote graph over HTTP. */
@@ -45,7 +45,7 @@ export let tick = async (
   for (let wake of await due(graph, now)) {
     let w = wakeOf(wake) ?? {}
     try {
-      let every = (await pace(graph, w, now)) ?? w.every
+      let every = (await cadence(graph, w, now)) ?? w.every
       let applied = await graph.apply([{
         ...ring(wake, now, {}, every),
         $was: {

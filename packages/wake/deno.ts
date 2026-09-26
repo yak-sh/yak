@@ -8,7 +8,7 @@
  */
 
 import { soonest } from './due.ts'
-import { rouse } from './pace.ts'
+import { rouse } from './while.ts'
 import { type Driver, tick, type Ticked } from './tick.ts'
 
 /** The loop's lifetime, its maximum sleep, and a callback run after each

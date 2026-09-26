@@ -4,7 +4,7 @@
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
 import { soonest, wakeOf } from './due.ts'
-import { rouse } from './pace.ts'
+import { rouse } from './while.ts'
 import { home, HOUR, store, T0, woken } from './testing.ts'
 import { tick } from './tick.ts'
 import { wakes } from './plugin.ts'

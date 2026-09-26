@@ -9,7 +9,7 @@
 //
 // The check is `precondition`'s: a `while` condition is a query, and a query
 // that does not parse, or names a word the graph does not speak, is refused
-// when it is written rather than found out at a firing (./pace.ts
+// when it is written rather than found out at a firing (./while.ts
 // `conditions`).
 //
 // The plugin starts no timer. The application calls `tick`, which writes
@@ -21,7 +21,7 @@ import type { Bundle, Hook, Plugin } from '@yaks/graph'
 import { type Clock, wakeOf } from './due.ts'
 import { after } from './every.ts'
 import { WAKE, wakeDoc } from './comp.ts'
-import { conditions } from './pace.ts'
+import { conditions } from './while.ts'
 
 /** How the plugin reads a schedule, and where it gets the current time. */
 export type Opts = Clock & {

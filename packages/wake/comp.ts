@@ -20,7 +20,7 @@
 // what an additive migration produces.
 //
 // `while` makes the recurrence conditional: `{match, every}` in order, the
-// first whose query finds anything setting the cadence (./pace.ts). A wake
+// first whose query finds anything setting the cadence (./while.ts). A wake
 // none of them holds, with no `every` of its own, sleeps until a write makes
 // one hold.
 //
@@ -57,7 +57,7 @@ export type Wake = {
   /** how it recurs while something holds: in order, a query over the whole
    * graph and the cadence it asks for while that query finds anything; the
    * first that holds wins, else `every` does, else the wake sleeps
-   * (see {@link https://jsr.io/@yaks/wake/doc/~/pace | pace}) */
+   * (see {@link https://jsr.io/@yaks/wake/doc/~/cadence | cadence}) */
   while?: { match: string; every: string }[] | null
   /** what the wake is about — the entity carrying it, when absent */
   target?: Eid | null

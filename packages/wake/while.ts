@@ -6,7 +6,7 @@
 //
 // Two moments decide it, and each is a function over a graph:
 //
-//   a firing   `tick` asks `pace` which cadence the next instant is counted
+//   a firing   `tick` asks `cadence` which one the next instant is counted
 //              in, so a world somebody is in keeps coming back, and one
 //              nobody is in fires its last and sleeps
 //   a write    `rouse` arms a wake whose condition a write made hold, when
@@ -46,12 +46,12 @@ let probe = (match: string): Query => {
  * `while` entry whose query finds anything, or `null` when none does.
  *
  * ```ts
- * import { pace } from '@yaks/wake'
+ * import { cadence } from '@yaks/wake'
  *
- * // await pace(graph, { while: [{ match: '.player', every: '5m' }] }, now)
+ * // await cadence(graph, { while: [{ match: '.player', every: '5m' }] }, now)
  * ```
  */
-export let pace = async (
+export let cadence = async (
   graph: Pick<Driver, 'read'>,
   wake: Wake,
   now: number,
@@ -92,7 +92,7 @@ export let rouse = async (
   for (let wake of await graph.read(`.${WAKE}.while`, { now })) {
     let w = wakeOf(wake) ?? {}
     try {
-      let every = await pace(graph, w, now)
+      let every = await cadence(graph, w, now)
       let at = every == null ? null : after(every, now, now)
       if (at == null || (w.at && Date.parse(w.at) <= at)) continue
       let applied = await graph.apply([{
