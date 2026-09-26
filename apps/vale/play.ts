@@ -7,7 +7,8 @@
 //
 // Who decides what:
 //   - A player's own page moves them, swings their blade, takes the bites
-//     aimed at them, and says how they fare.
+//     aimed at them, and says how they fare. A page moves what it moves every
+//     frame and says where it is ten times a second (`PACE`).
 //   - One page moves each creature: of the players near its home, the one
 //     whose eid sorts first. Its position and hunt are relayed from there, and
 //     every other page draws what it hears. A creature nobody is near, or
@@ -211,12 +212,22 @@ let bodyOf = (p: Where, m: ReturnType<typeof motion>): Body => ({
 
 // A mover's components as they should be written: rounded, so a mover that
 // has not moved writes nothing.
-let placed = (level: string, b: Body, gait = b.gait) => ({
+type Placed = ReturnType<typeof placed>
+let placed = (level: string, b: Body) => ({
   position: { level, x: round(b.x), y: round(b.y), z: round(b.z) },
-  motion: { yaw: round(b.yaw, 100), gait, vy: round(b.vy, 100) },
+  motion: { yaw: round(b.yaw, 100), gait: b.gait, vy: round(b.vy, 100) },
 })
 let same = (a: Record<string, unknown>, b: Record<string, unknown>) =>
   Object.keys(a).every((k) => a[k] === b[k])
+
+// How often, in ms, a page says where a mover it moves is: it moves them
+// every frame, and tells the others ten times a second.
+//
+// TODO: the relay's pace, declared once on the component in vocab.json and
+// kept by the client, so a page writes every frame and its own graph holds
+// every write while the peers hear the latest at most that often. Until the
+// platform has one, a page keeps its movers in memory between sayings.
+let PACE = 100
 
 /** Where a hero stands on arriving in a level: in front of the portal that
  * leads back to where they came from, or by the village fire, or at the
@@ -259,6 +270,39 @@ export let game = (net: Net) => {
   let wasDown = new Set<string>()
   let last = new Map<string, Body>()
   let anchored = new Set<string>()
+
+  // Each mover this page moves (its hero, the creatures it owns): where it is
+  // in this page's memory, and what was last said of it and when. While the
+  // graph still holds what was said, the memory is the mover; a place this
+  // page did not say (someone else moved it) wins.
+  let moved = new Map<
+    string,
+    { level: string; body: Body; said: Placed; at: number }
+  >()
+  let recall = (eid: string, e: Bundle | undefined) => {
+    let m = moved.get(eid)
+    return m && same(m.said.position, comp(e, 'position')) &&
+        same(m.said.motion, comp(e, 'motion'))
+      ? m
+      : null
+  }
+  let say = (eid: string, level: string, body: Body, change: Bundle[]) => {
+    let t = performance.now()
+    let m = moved.get(eid)
+    let p = placed(level, body)
+    let quiet = m && (t - m.at < PACE ||
+      same(p.position, m.said.position) && same(p.motion, m.said.motion))
+    if (m && quiet) Object.assign(m, { level, body })
+    else {
+      moved.set(eid, { level, body, said: p, at: t })
+      change.push({ entity: { eid }, ...p })
+    }
+  }
+  // A creature back on its wandering: nothing to say about where it is.
+  let hush = (eid: string, change: Bundle[]) => {
+    moved.delete(eid)
+    change.push({ entity: { eid }, position: null, motion: null, hunt: null })
+  }
 
   // The sheet, worked out again only when one of its rows changed.
   let sheetKey: unknown[] = []
@@ -402,13 +446,15 @@ export let game = (net: Net) => {
       ]
       anchor(v)
 
-      // Me, as the graph has me: a hero with no position here (just come,
-      // back after a reload) stands at the level's arrival.
+      // Me, as this page has me, or as the graph does when someone else moved
+      // me: a hero with no place here (just come, back after a reload)
+      // stands at the level's arrival.
       let pos = where(row)
-      let mo = motion(row)
-      let here = pos?.level == lv ? pos : null
-      let body = here ? bodyOf(here, mo) : arrival(v)
-      let down = !!here && mo.gait == 'down'
+      let held = recall(me, row) ??
+        (pos && { level: pos.level, body: bodyOf(pos, motion(row)) })
+      let here = held?.level == lv ? held.body : null
+      let body = here ? { ...here } : arrival(v)
+      let down = here?.gait == 'down'
       if (down) body.gait = 'idle'
       let vit = vitals(row)
       let hp = vit?.hp ?? s.max
@@ -492,13 +538,13 @@ export let game = (net: Net) => {
         if (fallen) wasDown.add(eid)
         else wasDown.delete(eid)
         let p = where(e)
-        let cm = motion(e)
         let hu = hunt(e)
+        let held = recall(eid, e)?.body ?? (p && bodyOf(p, motion(e)))
         let moving = p?.level == lv && !up
-        // Where it is: where it is said to be, or where it lay down, or
-        // where its wandering has it.
-        let mb = p && moving
-          ? bodyOf(p, cm)
+        // Where it is: where I have it, or where it is said to be, or where
+        // it lay down, or where its wandering has it.
+        let mb = held && moving
+          ? { ...held }
           : fallen && last.has(eid)
           ? last.get(eid)!
           : rest(v, h.home, h.roam, h.seed, now)
@@ -561,25 +607,11 @@ export let game = (net: Net) => {
             let next = prowl(v, mb, beast, h.home, h.roam, h.seed, now, dt, qs)
             let back = rest(v, h.home, h.roam, h.seed, now)
             if (!quarry && !knocked && dist(next, back) < 0.3) {
-              // Back on its wandering: nothing to say about where it is.
-              if (p || hu.player) {
-                change.push({
-                  entity: { eid },
-                  position: null,
-                  motion: null,
-                  hunt: null,
-                })
-              }
+              if (p || hu.player) hush(eid, change)
               mb = back
             } else {
               mb = next
-              let to = placed(lv, mb)
-              if (
-                !same(to.position, comp(e, 'position')) ||
-                !same(to.motion, comp(e, 'motion'))
-              ) {
-                change.push({ entity: { eid }, ...to })
-              }
+              say(eid, lv, mb, change)
             }
           }
           let bite = hu.bite
@@ -594,14 +626,7 @@ export let game = (net: Net) => {
           }
         }
         // Up again after a fall: back to its wandering, from home.
-        if (owner == me && up && (p || hu.player)) {
-          change.push({
-            entity: { eid },
-            position: null,
-            motion: null,
-            hunt: null,
-          })
-        }
+        if (owner == me && up && (p || hu.player)) hush(eid, change)
         // A bite: the one aimed at me is mine to take.
         let seen = bitten.get(eid)
         if (seen === undefined) bitten.set(eid, hu.bite)
@@ -854,13 +879,7 @@ export let game = (net: Net) => {
       }
 
       // What I am, for the others.
-      let meNow = placed(level, body, down ? 'down' : body.gait)
-      if (!same(meNow.position, comp(row, 'position'))) {
-        change.push({ entity: { eid: me }, position: meNow.position })
-      }
-      if (!same(meNow.motion, comp(row, 'motion'))) {
-        change.push({ entity: { eid: me }, motion: meNow.motion })
-      }
+      say(me, level, { ...body, gait: down ? 'down' : body.gait }, change)
       let vitalsNow = {
         hp: Math.max(0, Math.round(hp)),
         max: s.max,
