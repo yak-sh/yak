@@ -388,9 +388,11 @@ export let standing = (
       free.apps == null ? '' : `an app past ${free.apps}, `
     }a build past ${count(builds(space.tier))}, data past ${
       size(free.bytes)
-    }, files past ${size(free.files)}, or the ${
+    }, files past ${size(free.files)}, model use past ${
+      dollars(allowance('models', space.tier))
+    }, or the ${
       count(letters(space.tier) + 1)
-    }st letter SENT is — a letter that ` +
+    }st letter sent is refused — a letter that ` +
     `arrives always lands. Plan settings: ${planSettings(space.slug, env)}`
   let head = `${space.slug} (${
     space.tier ?? 'free'

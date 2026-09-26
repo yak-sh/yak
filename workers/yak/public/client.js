@@ -295,10 +295,11 @@ let named = (row, { refs = [], names = {} }) => {
 //
 // Two rules, and no more. Three riders the page writes bare are dotted words
 // there (`id=` is an address, so it is `.eid=`), and the platform's own rows —
-// the breaks it noted, the person row a store mints for each writer — are left
-// out of the question unless the filter names one.
+// the breaks it noted, the person row a store mints for each writer, the
+// models it may ask — are left out of the question unless the filter names
+// one (listing.ts `PLATFORM`, which this list is a copy of).
 let RIDERS = { id: '.eid', limit: '.limit', after: '.after' }
-let SCREEN = ['exception', 'error', 'person']
+let SCREEN = ['exception', 'error', 'person', 'provider', 'model', 'serves']
 let OPERATOR = /^([A-Za-z_.\-[\]][\w.\-[\]]*)(!=|~=|<=|>=|<|>|=)/
 
 let plain = (v) => {
