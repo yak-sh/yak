@@ -14,7 +14,7 @@ import { type Act, beast, type Figure, hero, person } from './figures.ts'
 import type { overlay } from './fx.ts'
 import { ITEMS } from './items.ts'
 import { LEVELS } from './levels.ts'
-import { cuboid, out } from './mesh.ts'
+import { cuboid, out, pack } from './mesh.ts'
 import type { Frame } from './play.ts'
 import { geometry, soft } from './soft.ts'
 import { groundAt, type Vale } from './terrain.ts'
@@ -382,7 +382,7 @@ export let cast = (
             for (let [min, size, hex] of (ITEMS[d.kind] ?? ITEMS.coin).look) {
               cuboid(o, min, size, hex, 0.05, 0.02)
             }
-            g = geometry(o)
+            g = geometry(pack(o))
             lootGeo.set(d.kind, g)
           }
           mesh = new THREE.Mesh(g, lootMat)

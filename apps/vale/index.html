@@ -16,17 +16,24 @@
     href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
   <link rel=stylesheet href=style.css>
   <link rel=stylesheet href=chat.css>
-  <!-- @yaks/client, @yaks/rtc and @yaks/vocab as JSR holds them, built by esm.sh; the
-       app's own code and three.js are compiled from main.ts at deploy. -->
+  <!-- @yaks/client, @yaks/rtc and @yaks/vocab as JSR holds them, each
+       bundled by esm.sh with what it imports, so it arrives in one file rather
+       than a chain of them; the app's own code and three.js are compiled from
+       main.ts at deploy. Each is fetched while main.ts is, and so are the
+       store's words, which main.ts waits for. -->
   <script type=importmap>
   {
     "imports": {
-      "@yaks/client": "https://esm.sh/jsr/@yaks/client@0.2.5",
-      "@yaks/rtc": "https://esm.sh/jsr/@yaks/rtc@0.2.5",
-      "@yaks/vocab": "https://esm.sh/jsr/@yaks/vocab@0.2.5"
+      "@yaks/client": "https://esm.sh/jsr/@yaks/client@0.2.5?bundle",
+      "@yaks/rtc": "https://esm.sh/jsr/@yaks/rtc@0.2.5?bundle",
+      "@yaks/vocab": "https://esm.sh/jsr/@yaks/vocab@0.2.5?bundle"
     }
   }
   </script>
+  <link rel=modulepreload href="https://esm.sh/jsr/@yaks/client@0.2.5?bundle">
+  <link rel=modulepreload href="https://esm.sh/jsr/@yaks/rtc@0.2.5?bundle">
+  <link rel=modulepreload href="https://esm.sh/jsr/@yaks/vocab@0.2.5?bundle">
+  <link rel=preload href=api/vocab.json as=fetch crossorigin>
   <canvas class=Stage></canvas>
   <div class=Hud hidden></div>
   <div class=Gate>

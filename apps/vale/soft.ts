@@ -17,22 +17,19 @@
 //   stipple, pixels left out in an even pattern, so nothing needs sorting.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { Out } from './mesh.ts'
+import type { Packed } from './mesh.ts'
 
-/** A geometry from what a mesher wrote. */
-export let geometry = (o: Out): THREE.BufferGeometry => {
+/** A geometry over what a mesher wrote, packed (mesh.ts `pack`): the arrays
+ * become the geometry's own, uncopied. */
+export let geometry = (p: Packed): THREE.BufferGeometry => {
   let g = new THREE.BufferGeometry()
-  g.setAttribute('position', new THREE.Float32BufferAttribute(o.pos, 3))
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(o.nrm, 3))
-  g.setAttribute('color', new THREE.Float32BufferAttribute(o.col, 3))
-  g.setAttribute('face', new THREE.Float32BufferAttribute(o.uv, 2))
-  g.setAttribute('rim', new THREE.Float32BufferAttribute(o.rim, 4))
-  g.setAttribute('bw', new THREE.Float32BufferAttribute(o.bw, 3))
-  g.setIndex(
-    o.pos.length / 3 > 65535
-      ? new THREE.Uint32BufferAttribute(o.idx, 1)
-      : new THREE.Uint16BufferAttribute(o.idx, 1),
-  )
+  g.setAttribute('position', new THREE.BufferAttribute(p.pos, 3))
+  g.setAttribute('normal', new THREE.BufferAttribute(p.nrm, 3))
+  g.setAttribute('color', new THREE.BufferAttribute(p.col, 3))
+  g.setAttribute('face', new THREE.BufferAttribute(p.uv, 2))
+  g.setAttribute('rim', new THREE.BufferAttribute(p.rim, 4))
+  g.setAttribute('bw', new THREE.BufferAttribute(p.bw, 3))
+  g.setIndex(new THREE.BufferAttribute(p.idx, 1))
   g.computeBoundingSphere()
   g.computeBoundingBox()
   return g

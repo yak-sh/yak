@@ -1,10 +1,11 @@
 // Mossvale, a little voxel RPG that whoever is here plays together. This is
-// the page: it grows the level the hero is in, opens the store, asks who you
-// are and which of your heroes to play, and then runs the frame: the player's
-// hands (input.ts), a step of the game on the graph (play.ts), the stage
-// (cast.ts), the bits and numbers (fx.ts), the glass (hud.ts), what was said
-// (chatbox.ts) and the map (map.ts). When the hero walks off the end of a road, the page
-// grows the level beyond and carries on there.
+// the page: it grows the level the hero is in off its own thread (grown.ts)
+// while it opens the store and asks who you are and which of your heroes to
+// play, and then runs the frame: the player's hands (input.ts), a step of the
+// game on the graph (play.ts), the stage (cast.ts), the bits and numbers
+// (fx.ts), the glass (hud.ts), what was said (chatbox.ts) and the map
+// (map.ts). When the hero walks off the end of a road, the page grows the
+// level beyond and carries on there.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { BEASTS } from './beasts.ts'
@@ -14,6 +15,7 @@ import { chatbox } from './chatbox.ts'
 import { map } from './map.ts'
 import { type Figure, hero } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
+import { type Grown, grown } from './grown.ts'
 import { hud } from './hud.ts'
 import { listen } from './input.ts'
 import { ITEMS } from './items.ts'
@@ -22,8 +24,8 @@ import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { type Event, type Frame, game } from './play.ts'
 import { sound } from './sound.ts'
 import { type Mic, voices } from './voicebox.ts'
-import { groundAt, SIZE, type Vale, vale, VOXEL } from './terrain.ts'
-import { type World, world } from './world.ts'
+import { groundAt, SIZE, VOXEL } from './terrain.ts'
+import { world } from './world.ts'
 
 let TINTS = [
   '#c9503f',
@@ -63,10 +65,12 @@ let asked = Number(new URLSearchParams(location.search).get('voxel'))
 let VOX = asked >= 0.125 && asked <= 2 && Number.isInteger(SIZE / asked)
   ? asked
   : VOXEL
+// The first level starts growing before anything else, since it takes
+// longest. It is let go once drawn, so a level the hero has left is not kept.
+let first: Promise<Grown> | null = grown(HOME, VOX)
 
 let pick = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)]
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
-let frame = () => new Promise(requestAnimationFrame)
 
 let canvas = document.querySelector<HTMLCanvasElement>('.Stage')!
 let gate = document.querySelector<HTMLElement>('.Gate')!
@@ -94,11 +98,13 @@ let fit = () => {
 fit()
 addEventListener('resize', fit)
 
-// The gate paints before the level grows, which takes a moment.
-await frame()
-await frame()
 let net = connect(new URL('api/', document.baseURI))
 let g = game(net)
+// Who you are and your heroes, asked while the level grows.
+let asking = net.me().then(async (me) => ({
+  me,
+  heroes: me.person ? await net.heroes(me.person) : [],
+}))
 
 let typing = false
 let hands = listen(canvas, glass, () => typing || h.talking || chat.typing)
@@ -108,18 +114,22 @@ let chat = chatbox(glass, net, marks)
 let m = map(glass)
 
 // The level on show, and what is drawn of it: grown again when the hero goes
-// off the end of a road.
-let v: Vale = vale(HOME, VOX)
-let w: World = world(v)
+// off the end of a road, while the frame waits (`away`).
+let shown = ({ v, drawn }: Grown) => ({ v, w: world(v, drawn) })
+let { v, w } = shown(await first)
+first = null
 let stage = cast(w.scene, v, marks)
 let dust = bits(w.scene, true, 400)
 let glow = bits(w.scene, false, 300)
 let smallShadows = phone
 if (phone) w.sun.shadow.mapSize.set(1024, 1024)
-let grow = (id: string) => {
+let away = false
+let grow = async (id: string) => {
+  away = true
+  let next = shown(await grown(id, VOX))
   w.dispose()
-  v = vale(id, VOX)
-  w = world(v)
+  ;({ v, w } = next)
+  away = false
   if (smallShadows) w.sun.shadow.mapSize.set(1024, 1024)
   if (!renderer.shadowMap.enabled) w.sun.castShadow = false
   stage = cast(w.scene, v, marks)
@@ -488,7 +498,8 @@ let loop = (t: number) => {
   then = t
   let now = net.now()
   w.tick(now / 1000, dt)
-  if (playing && net.hero) {
+  // While the level beyond a road grows, the one left behind stands still.
+  if (playing && net.hero && !away) {
     let i = hands.read()
     if (i.map) m.toggle()
     if (i.mic) void voice.toggle()
@@ -555,7 +566,7 @@ let loop = (t: number) => {
       m.show(f, v)
       w.focus.set(f.body.x, f.body.y, f.body.z)
     }
-  } else {
+  } else if (!away) {
     // At the gate: the camera drifts around the fire, and the new hero stands
     // by it in the colours being chosen.
     let a = t / 9000
@@ -646,7 +657,7 @@ Object.assign(globalThis, {
 
 let busy = gate.querySelector('.Gate_Busy')
 if (busy) busy.textContent = 'Finding the others…'
-let me = await net.me()
+let { me, heroes } = await asking
 chat.me(me)
 let ready = async (watch: { ready: boolean }) => {
   for (let i = 0; i < 40 && !watch.ready; i++) {
@@ -662,7 +673,6 @@ if (!me.reads) {
 } else if (me.person) {
   // Signed in: your heroes, wherever you made them.
   look.name = me.name?.split(/\s/)[0] ?? ''
-  let heroes = await net.heroes(me.person)
   let played = net.played()
   if (played && heroes.some((o) => o.eid == played)) begin(played)
   else if (heroes.length) choose(me, heroes)

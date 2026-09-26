@@ -61,6 +61,43 @@ export let place = (into: Out, from: Out, at: Vec) => {
   for (let i of from.idx) into.idx.push(i + base)
 }
 
+/** What a mesher wrote, in the typed arrays a GPU takes: what a worker hands
+ * the page without a copy (grow.ts). */
+export type Packed = {
+  pos: Float32Array<ArrayBuffer>
+  nrm: Float32Array<ArrayBuffer>
+  col: Float32Array<ArrayBuffer>
+  uv: Float32Array<ArrayBuffer>
+  rim: Float32Array<ArrayBuffer>
+  bw: Float32Array<ArrayBuffer>
+  idx: Uint16Array<ArrayBuffer> | Uint32Array<ArrayBuffer>
+}
+
+/** Triangles packed, with indices as narrow as the vertex count allows.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let p = pack(cuboid(out(), [0, 0, 0], [1, 1, 1], 0xffffff))
+ * assertEquals([p.pos.length / 3, p.idx.length / 3], [24, 12])
+ * assertEquals(p.idx instanceof Uint16Array, true)
+ * ```
+ */
+export let pack = (o: Out): Packed => ({
+  pos: new Float32Array(o.pos),
+  nrm: new Float32Array(o.nrm),
+  col: new Float32Array(o.col),
+  uv: new Float32Array(o.uv),
+  rim: new Float32Array(o.rim),
+  bw: new Float32Array(o.bw),
+  idx: o.pos.length / 3 > 65535
+    ? new Uint32Array(o.idx)
+    : new Uint16Array(o.idx),
+})
+
+/** The buffers a packed mesh is made of, to hand over rather than copy. */
+export let buffers = (p: Packed): ArrayBuffer[] =>
+  [p.pos, p.nrm, p.col, p.uv, p.rim, p.bw, p.idx].map((a) => a.buffer)
+
 /** A face's two in-plane axes, by the axis its normal lies on: x → (z, y),
  * y → (x, z), z → (x, y). soft.ts derives the same pair from the normal. */
 export let axes = (axis: number): [number, number] =>

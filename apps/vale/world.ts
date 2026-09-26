@@ -1,25 +1,17 @@
 // A level as a three.js scene: the ground and everything standing on it in
-// chunks (thinning away where they come between the camera and the hero),
-// each structure on a foundation down to the ground, the water, the sky, the
-// village fire and lamps, and the light that moves across it all through the
-// day. Built once per level; `tick` moves the sun, the water and the flames.
+// chunks, meshed off the page's thread (chunks.ts) and thinning away where
+// they come between the camera and the hero, the water, the sky, the village
+// fire and lamps, and the light that moves across it all through the day.
+// Built once per level; `tick` moves the sun, the water and the flames.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { airOf } from './air.ts'
-import { CHUNK, groundChunk, paletteOf } from './ground.ts'
-import { cuboid, out, place } from './mesh.ts'
-import { KINDS, model } from './props.ts'
+import type { Chunk } from './chunks.ts'
+import { CHUNK, paletteOf } from './ground.ts'
+import { KINDS } from './props.ts'
 import { lerp, smooth } from './rand.ts'
 import { geometry, sight, soft } from './soft.ts'
-import {
-  foundation,
-  groundAt,
-  type Prop,
-  SIZE,
-  standAt,
-  type Vale,
-  WATER,
-} from './terrain.ts'
+import { groundAt, SIZE, standAt, type Vale, WATER } from './terrain.ts'
 
 export type World = {
   scene: THREE.Scene
@@ -37,8 +29,6 @@ export type World = {
   dispose: () => void
 }
 
-// The stone a structure's foundation is laid in.
-let FOUND = 0x8e8b82
 // How near a chunk's middle must be for its flowers and grass to be drawn.
 let NEAR = 52
 
@@ -167,9 +157,8 @@ void main() {
   #include <fog_vertex>
 }`
 
-/** Build the vale's scene. `chunks` says which chunks to build, all by default:
- * a page builds the ones near the player first. */
-export let world = (v: Vale): World => {
+/** Build the vale's scene over its chunks, meshed (chunks.ts). */
+export let world = (v: Vale, drawn: Chunk[]): World => {
   let scene = new THREE.Scene()
   let size = SIZE
   // The level's own look: its haze, its water, the colour its sky leans to,
@@ -180,45 +169,25 @@ export let world = (v: Vale): World => {
   scene.fog = fog
 
   let ground = soft({ speckle: 0.1, see: true })
-  let byChunk = new Map<number, Prop[]>()
-  let per = SIZE / CHUNK
-  for (let p of v.props) {
-    let c = Math.floor(p.x / CHUNK) + Math.floor(p.z / CHUNK) * per
-    if (!byChunk.has(c)) byChunk.set(c, [])
-    byChunk.get(c)!.push(p)
-  }
   // Each chunk is two meshes: the ground and what stands on it, which cast
   // shadows, and the flowers and grass, which are only drawn near the player.
   let decor: { mesh: THREE.Mesh; x: number; z: number }[] = []
-  for (let ck = 0; ck < per; ck++) {
-    for (let ci = 0; ci < per; ci++) {
-      let o = groundChunk(v, ci, ck, out())
-      let small = out()
-      for (let p of byChunk.get(ci + ck * per) ?? []) {
-        place(KINDS[p.kind].small ? small : o, model(p.kind, p.seed), [
-          p.x,
-          standAt(v, p),
-          p.z,
-        ])
-        let base = foundation(v, p)
-        if (base) cuboid(o, base[0], base[1], FOUND, 0.25, 0.04)
-      }
-      let mesh = new THREE.Mesh(geometry(o), ground)
-      mesh.castShadow = true
-      mesh.receiveShadow = true
-      mesh.matrixAutoUpdate = false
-      scene.add(mesh)
-      if (!small.idx.length) continue
-      let bits = new THREE.Mesh(geometry(small), ground)
-      bits.receiveShadow = true
-      bits.matrixAutoUpdate = false
-      scene.add(bits)
-      decor.push({
-        mesh: bits,
-        x: (ci + 0.5) * CHUNK,
-        z: (ck + 0.5) * CHUNK,
-      })
-    }
+  for (let { ci, ck, solid, small } of drawn) {
+    let mesh = new THREE.Mesh(geometry(solid), ground)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.matrixAutoUpdate = false
+    scene.add(mesh)
+    if (!small) continue
+    let bits = new THREE.Mesh(geometry(small), ground)
+    bits.receiveShadow = true
+    bits.matrixAutoUpdate = false
+    scene.add(bits)
+    decor.push({
+      mesh: bits,
+      x: (ci + 0.5) * CHUNK,
+      z: (ck + 0.5) * CHUNK,
+    })
   }
 
   // The lake: one plane at the water line, drawn over the ground beneath it.

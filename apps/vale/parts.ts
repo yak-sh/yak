@@ -10,7 +10,7 @@
 // many joints it bends at.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import { cuboid, type Out, out, place, type Vec } from './mesh.ts'
+import { cuboid, type Out, out, pack, place, type Vec } from './mesh.ts'
 import { geometry } from './soft.ts'
 
 /** One box of a part: its low corner and its size, in metres from the part's
@@ -78,7 +78,7 @@ export let knit = (root: THREE.Object3D, material: THREE.Material) => {
       weight.push(1, 0, 0, 0)
     }
   }
-  let g = geometry(all)
+  let g = geometry(pack(all))
   g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(index, 4))
   g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weight, 4))
   let mesh = new THREE.SkinnedMesh(g, material)
