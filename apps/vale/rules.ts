@@ -124,46 +124,76 @@ export let fallOf = (
   return { down: !!fell && now < fell + respawn * 1000, fell }
 }
 
-/** A player's fight: the creature, which of its lives, and the damage they
- * have dealt it in that life (the `fight` component). */
-export type Fight = { foe: string; life: number; dmg: number }
+/** What one player has dealt one creature in one of its lives, and until
+ * when their blows hold it still, in ms. A player's `fight` component lists
+ * one for each creature they are hurting. */
+export type Dealt = { foe: string; life: number; dmg: number; held: number }
 
-/** A creature's hit points: its most, less what every player is dealing it in
+/** Every player's dealings, each saying whose it is. */
+export type Dealing = Dealt & { by: string }
+
+/** A creature's hit points: its most, less what every player has dealt it in
  * this life.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * let a = { foe: 'c1', life: 5, dmg: 10 }, b = { foe: 'c1', life: 5, dmg: 4 }
- * assertEquals(hpOf('c1', 32, 5, [a, b]), 18)
- * assertEquals(hpOf('c1', 32, 9, [a, b]), 32) // a new life starts whole
+ * let d = (by: string, dmg: number, life = 5) => ({ by, foe: 'c1', life, dmg, held: 0 })
+ * assertEquals(hpOf('c1', 32, 5, [d('a', 10), d('b', 4)]), 18)
+ * assertEquals(hpOf('c1', 32, 9, [d('a', 10), d('b', 4)]), 32) // a new life starts whole
  * ```
  */
 export let hpOf = (
   eid: string,
   most: number,
   life: number,
-  fights: Fight[],
+  dealt: Dealing[],
 ): number => {
-  let dealt = 0
-  for (let f of fights) if (f.foe == eid && f.life == life) dealt += f.dmg
-  return Math.max(0, most - dealt)
+  let n = 0
+  for (let d of dealt) if (d.foe == eid && d.life == life) n += d.dmg
+  return Math.max(0, most - n)
 }
 
-/** Who a creature is after: the player dealing it most in this life. */
+/** Who a creature is after: the player who has dealt it most in this life.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let d = (by: string, dmg: number) => ({ by, foe: 'c1', life: 5, dmg, held: 0 })
+ * assertEquals(hunter('c1', 5, [d('a', 10), d('b', 14)]), 'b')
+ * assertEquals(hunter('c1', 6, [d('a', 10)]), null)
+ * ```
+ */
 export let hunter = (
   eid: string,
   life: number,
-  fights: [string, Fight][],
+  dealt: Dealing[],
 ): string | null => {
   let best: string | null = null, most = 0
-  for (let [who, f] of fights) {
-    if (f.foe == eid && f.life == life && f.dmg > most) {
-      most = f.dmg
-      best = who
+  for (let d of dealt) {
+    if (d.foe == eid && d.life == life && d.dmg > most) {
+      most = d.dmg
+      best = d.by
     }
   }
   return best
 }
+
+/** Whether anyone's blow holds a creature still at `now`: pinned, stunned,
+ * knocked senseless. It neither moves nor bites while it is held.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let d = { by: 'a', foe: 'c1', life: 5, dmg: 3, held: 2000 }
+ * assertEquals(heldOf('c1', 5, [d], 1500), true)
+ * assertEquals(heldOf('c1', 5, [d], 2500), false)
+ * assertEquals(heldOf('c1', 9, [d], 1500), false)
+ * ```
+ */
+export let heldOf = (
+  eid: string,
+  life: number,
+  dealt: Dealing[],
+  now: number,
+): boolean => dealt.some((d) => d.foe == eid && d.life == life && d.held > now)
 
 // How often a fall leaves a piece of gear of its country's tier (arms.ts); a
 // boss always does.

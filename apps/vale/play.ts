@@ -7,16 +7,16 @@
 //
 // Who decides what:
 //   - A player's own page moves them, swings their weapon or looses its
-//     shots, rolls them clear, takes the bites aimed at them through their
-//     armour, and says how they fare and what they wear (`gear`). A page
-//     moves what it moves every frame and writes where it is whenever that
-//     changed; the peers hear it ten times a second at most (`pace` in
-//     vocab.json). It says when, to the second (`BEAT`), so a page that plays
-//     says so once a second even standing still, and the others can tell it
-//     from one that sleeps.
+//     shots, does their abilities (abilities.ts), rolls them clear, takes
+//     the bites aimed at them through their armour, and says how they fare
+//     and what they wear (`gear`). A page moves what it moves every frame
+//     and writes where it is whenever that changed; the peers hear it ten
+//     times a second at most (`pace` in vocab.json). It says when, to the
+//     second (`BEAT`), so a page that plays says so once a second even
+//     standing still, and the others can tell it from one that sleeps.
 //   - A bite is said before it lands (`hunt.bite` is when), and the creature
 //     winds up for it meanwhile. The bitten player's page decides it when it
-//     lands: rolled through, stepped clear, or taken.
+//     lands: rolled through, blocked, stepped clear, or taken.
 //   - One page moves each creature: of the players near its home whose pages
 //     play, the one whose eid sorts first. When that page goes quiet (its tab
 //     hidden, or frozen), the next one takes the creature from where it was
@@ -25,8 +25,10 @@
 //     that is only wandering, has no position: its wandering says where it
 //     is (sim.ts `rest`), the same on every page.
 //   - A creature's health is its most, less what the fights say was dealt it
-//     in this life (rules.ts `hpOf`). A fall is a `slain` row, one per player
-//     who helped, and the loot it leaves is each player's own.
+//     in this life (rules.ts `hpOf`), and one that a fight says is held
+//     neither moves nor bites (`heldOf`). A fall is a `slain` row, one per
+//     player who helped, and the loot it leaves is each player's own.
+import { ABILITIES, abilitiesOf } from './abilities.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import { firsts, type Kit, kitOf, RACK, type Worn, wornOf } from './gear.ts'
@@ -37,9 +39,11 @@ import { type Bundle, comp, type Net, num, str } from './net.ts'
 import { GIVERS, type Quest, QUESTS } from './quests.ts'
 import {
   blow,
+  type Dealing,
+  type Dealt,
   fallOf,
-  type Fight,
   type Held,
+  heldOf,
   hpOf,
   hunter,
   levelOf,
@@ -53,7 +57,7 @@ import {
   xpOf,
 } from './rules.ts'
 import { type Body, inVillage, prowl, rest, turn, walk } from './sim.ts'
-import { aimOf, FLIGHT, LAND, landOf } from './strike.ts'
+import { aimOf, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
 import { groundAt, type Vale } from './terrain.ts'
 
 export type Vec3 = [number, number, number]
@@ -82,6 +86,13 @@ export type Event =
   | { type: 'travel'; to: string }
   | { type: 'say'; text: string }
   | { type: 'wear'; item: string }
+  /** someone did an ability: `at` their feet, facing `yaw` */
+  | { type: 'ability'; id: string; by: string; at: Vec3; yaw: number }
+  /** an ability of mine lands over `r` metres about `at`, in `ms` */
+  | { type: 'burst'; id: string; at: Vec3; r: number; ms: number }
+  | { type: 'held'; at: Vec3 }
+  | { type: 'block'; at: Vec3 }
+  | { type: 'ward'; n: number; at: Vec3 }
   | {
     type: 'shot'
     kind: 'arrow' | 'bolt'
@@ -104,6 +115,8 @@ export type Sheet = {
   kit: Kit
   /** what to put on in the slots they never chose for (gear.ts `firsts`) */
   firsts: { slot: Slot; item: string }[]
+  /** the abilities on the bar's three slots, by id, or empty */
+  abilities: string[]
   quests: ReturnType<typeof questsOf>
 }
 
@@ -128,6 +141,8 @@ export type Mob = {
   /** how near, middle to middle, its bite takes whoever is there */
   reach: number
   near: number
+  /** held still by someone's blow: it neither moves nor bites */
+  held: boolean
 }
 
 /** Another player in this level, as this frame sees them. */
@@ -189,8 +204,16 @@ export type Frame = {
   foe: Mob | null
   /** by a village's fire, where its rack of plain arms stands */
   rack: boolean
-  /** how far through a blow, 0 to 1, or -1 */
+  /** how far through a blow or an ability, 0 to 1, or -1 */
   swing: number
+  /** the ability being done, or empty */
+  doing: string
+  /** how long until each ability on the bar can be done again, in ms */
+  cool: Record<string, number>
+  /** bites are turned aside */
+  guard: boolean
+  /** how much of a ward is left, 0 to 1 */
+  ward: number
   /** how far through a dodge, 0 to 1, or -1 */
   roll: number
   events: Event[]
@@ -213,8 +236,21 @@ let BITE = 1500
 let WINDUP = 600
 // How far past its reach a creature's bite still takes someone: it lunges.
 let LUNGE = 0.6
-// A blow this soon after rolling through a bite is always a great one.
+// A blow this soon after rolling through a bite, or blocking one, is always
+// a great one.
 let RIPOSTE = 1200
+// A ward lasts this long; the blows of an ability that lands more than once
+// land this far apart; and a bleed or a burn lands this many times, a second
+// apart. A boss is held a third as long.
+let WARD = 8000
+let HITS = 130
+let BLEEDS = 4
+let BOSS_HELD = 1 / 3
+// A lunge covers its ground this fast, in metres a second.
+let DASH = 24
+// What a fight says of a creature is kept this long after it falls, so every
+// page has the fall's row before its health comes back.
+let KEPT = 15_000
 let DOWN = 5000
 let LEASH = 26
 let PICK = 1.3
@@ -256,13 +292,32 @@ let vitals = (b: Bundle | undefined): Vitals | null => {
     ? null
     : { hp: num(t.hp), max: num(t.max, 1), lvl: num(t.lvl, 1) }
 }
-let fight = (b: Bundle | undefined): Fight & { swing: number } => {
+let rec = (v: unknown): Record<string, unknown> =>
+  v && typeof v == 'object' ? Object.fromEntries(Object.entries(v)) : {}
+// TODO(T-37988): a fight's dealings ride as JSON text until an app may
+// declare an array property; then they are the array itself.
+let dealtOf = (text: unknown): Dealt[] => {
+  let list: unknown
+  try {
+    list = JSON.parse(str(text, '[]'))
+  } catch {
+    list = []
+  }
+  return (Array.isArray(list) ? list : []).map(rec).map((d) => ({
+    foe: str(d.foe),
+    life: num(d.life),
+    dmg: num(d.dmg),
+    held: num(d.held),
+  }))
+}
+let fight = (b: Bundle | undefined) => {
   let f = comp(b, 'fight')
   return {
     foe: str(f.foe),
-    life: num(f.life),
-    dmg: num(f.dmg),
+    dealt: dealtOf(f.dealt),
     swing: num(f.swing),
+    ability: str(f.ability),
+    abilities: num(f.abilities),
   }
 }
 let hunt = (b: Bundle | undefined) => {
@@ -339,10 +394,27 @@ export let game = (
   let c = net.client
   let drops = c.watch('.drop', { remote: false })
   let swingAt = -1e9
+  // How long the blow or ability begun at `swingAt` keeps the weapon busy,
+  // and the ability, if it is one.
+  let busy = 0
+  let doing = ''
   let struck = true
   // The creature my blow was aimed at as I swung.
   let aimed = ''
   let askedAt = -1e9
+  // The ability asked for, by its slot, and when.
+  let asked = { slot: 0, at: -1e9 }
+  // When each ability can be done again.
+  let ready = new Map<string, number>()
+  let guardUntil = -1e9
+  let ward = { left: 0, of: 1, until: -1e9 }
+  // A lunge under way: which way, and how far it has still to go.
+  let dash: { x: number; z: number; left: number } | null = null
+  let said = -1e9
+  // How many abilities each other player had used, as last seen.
+  let acts = new Map<string, number>()
+  // What the others had dealt each creature, as last seen.
+  let othersWas = new Map<string, number>()
   let rollAt = -1e9
   let rollTo = { x: 0, z: 0 }
   let riposte = -1e9
@@ -423,6 +495,7 @@ export let game = (
       worn,
       kit,
       firsts: firsts(rows, bag),
+      abilities: abilitiesOf(worn),
       quests: questsOf(QUESTS, entries, kills, bag),
     }
     return sheet
@@ -452,9 +525,15 @@ export let game = (
       equip: { player: me, slot, item, at: net.now() },
     })
 
-  // Shots on their way: the creature each was loosed at, the blow it
-  // carries, and when it lands.
-  let shots: { eid: string; lands: number; dmg: number; great: boolean }[] = []
+  // Blows on their way: a shot in flight, the next stab of a flurry, a
+  // bleed. Each lands on its creature when it is due, and may hold it.
+  let blows: {
+    eid: string
+    lands: number
+    dmg: number
+    great: boolean
+    held: number
+  }[] = []
 
   let spend = (me: string, eid: string, now: number) =>
     net.keep({
@@ -559,7 +638,7 @@ export let game = (
       let vit = vitals(row)
       let hp = Math.min(vit?.hp ?? s.max, s.max)
       let mine = fight(row)
-      let fought = { ...mine }
+      let fought = { ...mine, dealt: mine.dealt.map((d) => ({ ...d })) }
       if (lvlWas && s.lvl > lvlWas) {
         events.push({ type: 'level', lvl: s.lvl })
         hp = s.max
@@ -582,8 +661,8 @@ export let game = (
           jump: intent.jump,
         }
         // A dodge rolls the way I am going, or back from where I face when I
-        // am still, facing the same way throughout, and cuts short a blow not
-        // yet landed.
+        // am still, facing the same way throughout, and cuts short a blow or
+        // an ability not yet landed.
         let len = Math.hypot(push.x, push.z)
         if (
           intent.dodge && body.gait != 'jump' && now - rollAt > ROLL_AGAIN
@@ -595,6 +674,9 @@ export let game = (
           if (len >= 0.2) body.yaw = Math.atan2(rollTo.x, rollTo.z)
           swingAt = -1e9
           struck = true
+          doing = ''
+          dash = null
+          guardUntil = -1e9
           events.push({ type: 'roll', at: at(body, 0.2) })
         }
         if (now - rollAt < ROLL) {
@@ -604,13 +686,29 @@ export let game = (
             yaw: body.yaw,
             gait: n.gait == 'jump' ? 'jump' : 'roll',
           }
+        } else if (dash) {
+          // A lunge: straight at what it was aimed at, facing it, until it
+          // gets there or something is in the way; its blow lands then.
+          let step = Math.min(dash.left, DASH * dt)
+          let n = walk(
+            v,
+            body,
+            { x: dash.x, z: dash.z, jump: false },
+            dt,
+            step / dt,
+          )
+          dash.left -= step
+          if (
+            dash.left <= 0 || Math.hypot(n.x - body.x, n.z - body.z) < step / 2
+          ) dash = null
+          body = { ...n, yaw: body.yaw }
         } else body = walk(v, body, push, dt, SPEED * (1 + s.kit.speed))
       }
       let rolling = body.gait == 'roll'
 
       // The others in this level, as relayed.
       let others: Other[] = []
-      let fights: [string, Fight][] = [[me, fought]]
+      let theirs: Dealing[] = []
       let spots = new Map<
         string,
         { x: number; z: number; prey: boolean; awake: boolean }
@@ -646,7 +744,18 @@ export let game = (
           swing: f.swing,
           roll: Math.min(1, rolled),
         })
-        fights.push([eid, f])
+        theirs.push(...f.dealt.map((d) => ({ ...d, by: eid })))
+        let was = acts.get(eid)
+        acts.set(eid, f.abilities)
+        if (was != null && f.abilities > was && ABILITIES[f.ability]) {
+          events.push({
+            type: 'ability',
+            id: f.ability,
+            by: eid,
+            at: at(p, 0),
+            yaw: m.yaw,
+          })
+        }
         spots.set(eid, {
           x: p.x,
           z: p.z,
@@ -655,6 +764,12 @@ export let game = (
         })
       }
       let falls = fallsBy()
+      // Everyone's dealings: the others', and mine as they stand.
+      let dealing = (): Dealing[] => [
+        ...theirs,
+        ...fought.dealt.map((d) => ({ ...d, by: me })),
+      ]
+      let all = dealing()
 
       // The creatures.
       let mobs: Mob[] = []
@@ -666,15 +781,14 @@ export let game = (
         let home = { x: h.home[0], z: h.home[1] }
         let f = fallOf(falls.get(eid) ?? [], beast.respawn, now)
         let life = f.fell
-        let hpNow = f.down
-          ? 0
-          : hpOf(eid, beast.hp, life, fights.map(([, f]) => f))
+        let hpNow = f.down ? 0 : hpOf(eid, beast.hp, life, all)
         let wasHp = hpWas.get(eid) ?? beast.hp
         hpWas.set(eid, hpNow)
         let fallen = f.down || hpNow <= 0
         if (fallen && !sinking.has(eid)) sinking.set(eid, f.down ? f.fell : now)
         if (!fallen) sinking.delete(eid)
         let up = wasDown.has(eid) && !fallen
+        let stuck = !fallen && heldOf(eid, life, all, now)
         if (fallen) wasDown.add(eid)
         else wasDown.delete(eid)
         let p = where(e)
@@ -695,24 +809,26 @@ export let game = (
           if (!sp.awake || dist(sp, home) > ACTIVE) continue
           if (!owner || who < owner) owner = who
         }
-        if (!fallen && hpNow < wasHp) {
-          if (mine.foe != eid) {
-            events.push({
-              type: 'struck',
-              eid,
-              at: at(mb, beast.size + 0.3),
-              dmg: wasHp - hpNow,
-            })
-          }
-          hitAt.set(eid, now)
+        // Struck by someone else's blow.
+        let byOthers = beast.hp - hpOf(eid, beast.hp, life, theirs)
+        let byOthersWas = othersWas.get(eid) ?? byOthers
+        othersWas.set(eid, byOthers)
+        if (!fallen && byOthers > byOthersWas) {
+          events.push({
+            type: 'struck',
+            eid,
+            at: at(mb, beast.size + 0.3),
+            dmg: byOthers - byOthersWas,
+          })
         }
+        if (!fallen && hpNow < wasHp) hitAt.set(eid, now)
         if (owner == me && !fallen) {
           // Whom it is after: whoever is hurting it most, while they stay
           // near its home; else, if it is the kind that minds, whoever comes
           // close. Never someone fainted, or whose page sleeps and so takes
           // no bites.
           let quarry = ''
-          let hn = hunter(eid, life, fights)
+          let hn = hunter(eid, life, all)
           let hs = hn ? spots.get(hn) : undefined
           if (hn && hs?.prey && dist(hs, home) < h.roam + LEASH) quarry = hn
           else if (beast.aggro) {
@@ -725,9 +841,10 @@ export let game = (
             }
           }
           let qs = quarry ? spots.get(quarry) ?? null : null
-          // Struck: knocked back from whoever is nearest.
+          // Struck: knocked back from whoever is nearest. Held, it stays
+          // where it is.
           let knocked = false
-          if (hpNow < wasHp) {
+          if (hpNow < wasHp && !stuck) {
             let from: { x: number; z: number } | null = null
             for (let sp of spots.values()) {
               if (
@@ -745,7 +862,8 @@ export let game = (
               knocked = true
             }
           }
-          if (quarry || moving || knocked) {
+          if (stuck && !moving) say(eid, lv, mb, change)
+          if (!stuck && (quarry || moving || knocked)) {
             let next = prowl(v, mb, beast, h.home, h.roam, h.seed, now, dt, qs)
             let back = rest(v, h.home, h.roam, h.seed, now)
             if (!quarry && !knocked && dist(next, back) < 0.3) {
@@ -757,8 +875,11 @@ export let game = (
             }
           }
           // Near enough to bite: it winds up, and says when the bite lands.
+          // Held, a bite it was winding up comes to nothing.
           let bite = hu.bite
-          if (
+          if (stuck) {
+            if (hu.bite > now) bite = now - BITE
+          } else if (
             qs && dist(qs, mb) <= beast.reach + 0.4 &&
             now - hu.bite > BITE - WINDUP
           ) bite = now + WINDUP
@@ -772,25 +893,37 @@ export let game = (
         // Up again after a fall: back to its wandering, from home.
         if (owner == me && up && (p || hu.player)) hush(eid, change)
         // A bite, once it lands: the one aimed at me is mine to take, unless
-        // I rolled through it or stepped out of its reach. Rolling through
-        // one leaves the creature open.
+        // I rolled through it, blocked it, or stepped out of its reach, or it
+        // was held. Rolling through one or blocking it leaves the creature
+        // open. A ward takes what it can of the rest.
         let seen = bitten.get(eid) ?? Math.min(hu.bite, now)
         bitten.set(eid, seen)
         if (hu.bite > seen && hu.bite <= now) {
           bitten.set(eid, hu.bite)
           let near = dist(mb, body) <= beast.reach + LUNGE
-          if (hu.player == me && !down && !fallen && near) {
+          if (hu.player == me && !down && !fallen && near && !stuck) {
             if (rolling) {
               riposte = now
               events.push({ type: 'dodge', at: at(body, 2) })
+            } else if (now < guardUntil) {
+              riposte = now
+              events.push({ type: 'block', at: at(body, 2) })
             } else {
               let dmg = through(
                 Math.round(beast.dmg * (0.85 + Math.random() * 0.3)),
                 s.kit.armour,
               )
-              hp -= dmg
-              hurtAt = now
-              events.push({ type: 'hurt', dmg, at: at(body, 2) })
+              let soak = now < ward.until ? Math.min(ward.left, dmg) : 0
+              if (soak) {
+                ward.left -= soak
+                dmg -= soak
+                events.push({ type: 'ward', n: soak, at: at(body, 2.3) })
+              }
+              if (dmg) {
+                hp -= dmg
+                hurtAt = now
+                events.push({ type: 'hurt', dmg, at: at(body, 2) })
+              }
             }
           }
         }
@@ -812,6 +945,7 @@ export let game = (
           aim: hu.player == me,
           reach: beast.reach + LUNGE,
           near: dist(mb, body),
+          held: stuck,
         })
       }
 
@@ -854,15 +988,15 @@ export let game = (
         })
       }
 
-      // A blow landing on a creature: my fight with it, in this life of it.
-      let land = (m: Mob, dmg: number, great: boolean) => {
+      // A blow landing on a creature: what I have dealt it in this life of
+      // it, and, when the blow holds it, until when.
+      let land = (m: Mob, dmg: number, great: boolean, held = 0) => {
         let beast = BEASTS[m.kind]
         let life = fallOf(falls.get(m.eid) ?? [], beast.respawn, now).fell
-        if (fought.foe != m.eid || fought.life != life) {
-          Object.assign(fought, { foe: m.eid, life, dmg: 0 })
-        }
-        fought.dmg += dmg
-        m.hp = hpOf(m.eid, beast.hp, life, fights.map(([, f]) => f))
+        let d = fought.dealt.find((d) => d.foe == m.eid && d.life == life)
+        if (!d) fought.dealt.push(d = { foe: m.eid, life, dmg: 0, held: 0 })
+        d.dmg += dmg
+        m.hp = hpOf(m.eid, beast.hp, life, dealing())
         hitAt.set(m.eid, now)
         m.hurt = 0
         events.push({
@@ -878,69 +1012,203 @@ export let game = (
           m.since = now
           sinking.set(m.eid, now)
           fell(m, life, now)
+        } else if (held) {
+          d.held = Math.max(d.held, now + held * (beast.boss ? BOSS_HELD : 1))
+          m.held = true
+          events.push({ type: 'held', at: at(m.body, beast.size + 1) })
         }
       }
 
-      // My weapon, when it is free and I am not rolling: I turn toward what
-      // it is aimed at, and a moment in, it lands, or its shot is loosed.
+      // My weapon, when it is free and I am not rolling: an ability asked
+      // for, when it is ready, or else a blow. I turn toward what it is aimed
+      // at, and a moment in, it lands, or its shot is loosed.
       let k = s.kit
+      let might = power(s.lvl, k.dmg) * (1 + k.force)
+      let face = (m: Mob) =>
+        body.yaw = turn(
+          body.yaw,
+          Math.atan2(m.body.x - body.x, m.body.z - body.z),
+          1.9,
+        )
       if (intent.strike) askedAt = now
+      if (intent.ability) asked = { slot: intent.ability, at: now }
       if (
-        !down && !rolling && now - askedAt < EARLY && now - swingAt > k.pace
+        !down && !rolling && !dash && now - swingAt > busy &&
+        now - asked.at < k.pace + EARLY
+      ) {
+        let id = s.abilities[asked.slot - 1] ?? ''
+        let a = ABILITIES[id]
+        asked = { slot: 0, at: -1e9 }
+        let far = a?.dash ??
+          (a?.shape == 'one' || a?.shape == 'arc' ? a.far ?? 0 : 0)
+        let aim = a ? aimOf(mobs, body, k, fought.foe, far) : null
+        if (!a || (ready.get(id) ?? 0) > now) {
+          // Nothing in that slot, or not ready: the bar shows which.
+        } else if (!aim && (a.shape == 'one' || a.shape == 'burst')) {
+          if (now - said > 2000) {
+            said = now
+            events.push({
+              type: 'say',
+              text: `${a.icon} ${a.name}: nothing in reach.`,
+            })
+          }
+        } else {
+          swingAt = now
+          busy = a.time ?? k.pace
+          doing = id
+          struck = false
+          guardUntil = -1e9
+          askedAt = -1e9
+          aimed = aim?.eid ?? ''
+          ready.set(id, now + a.cool)
+          fought.swing++
+          fought.ability = id
+          fought.abilities++
+          if (aim) face(aim)
+          if (aim && a.dash) {
+            let gap = BEASTS[aim.kind].size * 0.5 + 0.9
+            let ang = Math.atan2(aim.body.x - body.x, aim.body.z - body.z)
+            if (a.behind) {
+              // Behind it, facing it.
+              body.x = aim.body.x + Math.sin(ang) * gap
+              body.z = aim.body.z + Math.cos(ang) * gap
+              body.y = groundAt(v, body.x, body.z)
+              body.yaw = ang + Math.PI
+            } else {
+              body.yaw = ang
+              dash = {
+                x: Math.sin(ang),
+                z: Math.cos(ang),
+                left: Math.max(0, aim.near - gap),
+              }
+            }
+          }
+          if (a.guard) guardUntil = now + a.guard
+          if (a.ward) {
+            let n = Math.round(s.max * a.ward)
+            ward = { left: n, of: n, until: now + WARD }
+          }
+          if (a.heal) {
+            let n = Math.min(s.max - hp, Math.round(s.max * a.heal))
+            hp += n
+            if (n) events.push({ type: 'heal', n, at: at(body, 2) })
+          }
+          events.push({
+            type: 'ability',
+            id,
+            by: me,
+            at: at(body, 0),
+            yaw: body.yaw,
+          })
+        }
+      }
+      if (
+        !down && !rolling && !dash && now - askedAt < EARLY &&
+        now - swingAt > busy
       ) {
         askedAt = -1e9
         swingAt = now
+        busy = k.pace
+        doing = ''
         struck = false
+        guardUntil = -1e9
         fought.swing++
         let aim = aimOf(mobs, body, k, fought.foe)
         aimed = aim?.eid ?? ''
-        if (aim) {
-          body.yaw = turn(
-            body.yaw,
-            Math.atan2(aim.body.x - body.x, aim.body.z - body.z),
-            1.9,
-          )
+        if (aim) face(aim)
+      }
+      if (!struck && !dash && now - swingAt >= k.pace * LAND) {
+        struck = true
+        let a = ABILITIES[doing]
+        let aim = mobs.find((m) => m.eid == aimed) ?? null
+        let taken = a
+          ? takenBy(a, mobs, body, k, aim)
+          : [landOf(mobs, body, k, aimed)].flatMap((m) => m ? [m] : [])
+        let sure = taken.length > 0 && now - riposte < RIPOSTE
+        if (sure) riposte = -1e9
+        let lead = taken.find((m) => m.eid == aimed) ?? taken[0]
+        if (lead) fought.foe = lead.eid
+        // A shot flies at the creature it was aimed at, or straight on at
+        // nothing, and what it takes, it takes when it gets there.
+        let to = lead ? at(lead.body, BEASTS[lead.kind].size * 0.6) : at({
+          x: body.x + Math.sin(body.yaw) * k.reach,
+          y: body.y,
+          z: body.z + Math.cos(body.yaw) * k.reach,
+        })
+        let flies = !a || a.shape == 'one' || a.shape == 'burst'
+          ? k.shot
+          : undefined
+        let ms = flies
+          ? (Math.hypot(to[0] - body.x, to[2] - body.z) / FLIGHT[flies]) * 1000
+          : 0
+        for (let i = 0; flies && i < (a?.shots ?? 1); i++) {
+          let r = i ? (a?.far ?? 0) * Math.sqrt(Math.random()) : 0
+          let t = Math.random() * Math.PI * 2
+          events.push({
+            type: 'shot',
+            kind: flies,
+            from: at(body),
+            to: [to[0] + Math.cos(t) * r, to[1], to[2] + Math.sin(t) * r],
+            ms: ms * (1 + i * 0.07),
+          })
+        }
+        if (a?.shape == 'burst') {
+          events.push({ type: 'burst', id: doing, at: to, r: a.far ?? 0, ms })
+        }
+        if (!taken.length && a?.shape != 'self') events.push({ type: 'whiff' })
+        for (let [j, m] of taken.entries()) {
+          let hits = a?.hits ?? 1
+          for (let i = 0; i < hits; i++) {
+            let last = i == hits - 1
+            let { dmg, great } = blow(
+              might * (a?.dmg ?? 1),
+              Math.random(),
+              (sure && !j && !i) || (!!a?.sure && last),
+              k.luck,
+            )
+            blows.push({
+              eid: m.eid,
+              lands: now + ms + i * HITS,
+              dmg,
+              great,
+              held: i ? 0 : a?.held ?? 0,
+            })
+          }
+          let bleed = Math.round((might * (a?.bleed ?? 0)) / BLEEDS)
+          for (let i = 1; bleed && i <= BLEEDS; i++) {
+            blows.push({
+              eid: m.eid,
+              lands: now + ms + i * 1000,
+              dmg: bleed,
+              great: false,
+              held: 0,
+            })
+          }
         }
       }
-      if (!struck && now - swingAt >= k.pace * LAND) {
-        struck = true
-        let m = landOf(mobs, body, k, aimed)
-        let sure = !!m && now - riposte < RIPOSTE
-        if (sure) riposte = -1e9
-        let might = power(s.lvl, k.dmg) * (1 + k.force)
-        let { dmg, great } = blow(might, Math.random(), sure, k.luck)
-        if (k.shot) {
-          // Loosed: it flies at the creature, or straight on at nothing.
-          let to = m ? at(m.body, BEASTS[m.kind].size * 0.6) : at({
-            x: body.x + Math.sin(body.yaw) * k.reach,
-            y: body.y,
-            z: body.z + Math.cos(body.yaw) * k.reach,
-          })
-          let ms = (Math.hypot(to[0] - body.x, to[2] - body.z) /
-            FLIGHT[k.shot]) * 1000
-          events.push({ type: 'shot', kind: k.shot, from: at(body), to, ms })
-          if (m) shots.push({ eid: m.eid, lands: now + ms, dmg, great })
-          else events.push({ type: 'whiff' })
-        } else if (!m) events.push({ type: 'whiff' })
-        else land(m, dmg, great)
-      }
-      // Shots arriving.
-      shots = shots.filter((sh) => {
-        if (sh.lands > now) return true
-        let m = mobs.find((m) => m.eid == sh.eid)
-        if (m && !m.down) land(m, sh.dmg, sh.great)
+      // Blows arriving.
+      blows = blows.filter((b) => {
+        if (b.lands > now) return true
+        let m = mobs.find((m) => m.eid == b.eid)
+        if (m && !m.down) land(m, b.dmg, b.great, b.held)
         return false
       })
 
-      // Someone else's blow felled what I was fighting: my share.
-      if (fought.foe && fought.dmg > 0) {
-        let m = mobs.find((m) => m.eid == fought.foe)
-        if (m) {
-          let f = fallOf(falls.get(m.eid) ?? [], BEASTS[m.kind].respawn, now)
-          if (f.down && f.fell > fought.life) fell(m, fought.life, f.fell)
-          else if (m.down && f.fell == fought.life) fell(m, fought.life, now)
-        }
+      // Someone else's blow felled what I was hurting: my share.
+      for (let d of fought.dealt) {
+        let m = d.dmg > 0 && mobs.find((m) => m.eid == d.foe)
+        if (!m) continue
+        let f = fallOf(falls.get(m.eid) ?? [], BEASTS[m.kind].respawn, now)
+        if (f.down && f.fell > d.life) fell(m, d.life, f.fell)
+        else if (m.down && f.fell == d.life) fell(m, d.life, now)
       }
+      // What I say I dealt each creature, kept while it lives, and a while
+      // after it falls.
+      fought.dealt = fought.dealt.filter((d) => {
+        let m = mobs.find((m) => m.eid == d.foe)
+        let f = m && fallOf(falls.get(d.foe) ?? [], BEASTS[m.kind].respawn, now)
+        return !!f && (f.fell == d.life || now - f.fell < KEPT)
+      })
 
       // A tonic.
       if (intent.drink && !down) {
@@ -1084,8 +1352,11 @@ export let game = (
       if (!same(vitalsNow, comp(row, 'vitals'))) {
         change.push({ entity: { eid: me }, vitals: vitalsNow })
       }
-      if (!same(fought, mine)) {
-        change.push({ entity: { eid: me }, fight: fought })
+      if (JSON.stringify(fought) != JSON.stringify(mine)) {
+        change.push({
+          entity: { eid: me },
+          fight: { ...fought, dealt: JSON.stringify(fought.dealt) },
+        })
       }
       net.move(change)
       net.tick()
@@ -1107,7 +1378,16 @@ export let game = (
         talk,
         foe,
         rack: !down && inVillage(v, body.x, body.z),
-        swing: now - swingAt < k.pace ? (now - swingAt) / k.pace : -1,
+        swing: now - swingAt < busy ? (now - swingAt) / busy : -1,
+        doing: now - swingAt < busy ? doing : '',
+        cool: Object.fromEntries(
+          s.abilities.filter((id) => id).map((id) => [
+            id,
+            Math.max(0, (ready.get(id) ?? 0) - now),
+          ]),
+        ),
+        guard: now < guardUntil,
+        ward: now < ward.until ? ward.left / ward.of : 0,
         roll: rolling ? (now - rollAt) / ROLL : -1,
         events,
         now,

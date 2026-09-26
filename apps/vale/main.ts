@@ -3,11 +3,14 @@
 // while it opens the store and asks who you are and which of your heroes to
 // play, and then runs the frame: the player's hands (input.ts), a step of the
 // game on the graph (play.ts), the work at the nodes and the stations
-// (work.ts, station.ts), the stage (cast.ts, nodes.ts), the bits and numbers (fx.ts), the glass
-// (hud.ts), what was said (chatbox.ts) and the map (map.ts). When the hero walks off the end of a road, the page grows the
-// level beyond and carries on there.
+// (work.ts, station.ts), the stage (cast.ts, nodes.ts), the bits and numbers
+// (fx.ts), the glass (hud.ts, and the action bar, bar.ts), what was said
+// (chatbox.ts) and the map (map.ts). When the hero walks off the end of a
+// road, the page grows the level beyond and carries on there.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { ABILITIES, type Ability } from './abilities.ts'
+import { bar } from './bar.ts'
 import { BEASTS } from './beasts.ts'
 import { aim, bearing, type Cam, steer } from './cam.ts'
 import { cast } from './cast.ts'
@@ -127,6 +130,7 @@ let chat = chatbox(glass, net, marks, folk)
 let m = map(glass)
 let p = pack(glass, { wear: g.wear, take: g.take })
 let bench = station(glass, { make: toil.make })
+let actions = bar(glass, hands.press)
 
 // The level on show, and what is drawn of it: grown again when the hero goes
 // off the end of a road, while the frame waits (`away`).
@@ -364,6 +368,70 @@ let clockOf = (d: number) =>
     ? '☀️ Day'
     : '🌇 Dusk'
 
+// An ability's shape drawn in dust and light where it is done: a sweep
+// before the hero, a ring about them, a flare for what they do to
+// themselves, a puff where a dash sets off.
+let flourish = (a: Ability, at: THREE.Vector3, yaw: number) => {
+  let spot = (ang: number, r: number) =>
+    new THREE.Vector3(
+      at.x + Math.sin(ang) * r,
+      at.y + 0.6,
+      at.z + Math.cos(ang) * r,
+    )
+  let tint = a.tint ?? 0xf4ecd8
+  if (a.shape == 'arc') {
+    for (let i = -4; i <= 4; i++) {
+      dust.emit(
+        spot(yaw + (i / 4) * (a.arc ?? 1.2), 1.6 + (a.far ?? 0)),
+        tint,
+        2,
+        {
+          speed: 1.2,
+          up: 1,
+          life: 0.4,
+          size: 0.1,
+        },
+      )
+    }
+  }
+  if (a.shape == 'ring') ring(at, a.far ?? 2, tint)
+  if (a.shape == 'self') {
+    glow.emit(at.clone().setY(at.y + 1), tint, 26, {
+      speed: 1.6,
+      up: 1.5,
+      life: 0.8,
+      size: 0.08,
+      fall: -0.5,
+    })
+  }
+  if (a.dash) {
+    dust.emit(at.clone().setY(at.y + 0.2), tint, 10, {
+      speed: 2,
+      up: 1,
+      life: 0.4,
+      size: 0.12,
+    })
+  }
+}
+// Dust thrown up in a ring `r` about `at`.
+let ring = (at: THREE.Vector3, r: number, tint: number) => {
+  for (let i = 0; i < 18; i++) {
+    let a = (i / 18) * Math.PI * 2
+    dust.emit(
+      new THREE.Vector3(
+        at.x + Math.sin(a) * r,
+        at.y + 0.3,
+        at.z + Math.cos(a) * r,
+      ),
+      tint,
+      2,
+      { speed: 1.5, up: 2, life: 0.5, size: 0.12 },
+    )
+  }
+}
+// Abilities of mine landing over a place, once their shots get there.
+let bursts: { at: THREE.Vector3; r: number; tint: number; when: number }[] = []
+
 let react = (e: Event, heroAt: THREE.Vector3) => {
   let p = (a: [number, number, number]) => new THREE.Vector3(...a)
   let float = (text: string, at: THREE.Vector3, kind: Kind) =>
@@ -463,7 +531,27 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
   } else if (e.type == 'shot') {
     stage.fly(e.kind, e.from, e.to, e.ms)
     sound.whiff(net.hero)
-  }
+  } else if (e.type == 'ability') {
+    let a = ABILITIES[e.id]
+    if (e.by != net.hero) stage.doing(e.by, e.id)
+    let foot = p(e.at)
+    float(`${a.icon} ${a.name}`, foot.clone().setY(foot.y + 2.5), 'ability')
+    flourish(a, foot, e.yaw)
+    if (a.shape == 'self') sound.heal(e.by)
+    else sound.whiff(e.by)
+  } else if (e.type == 'burst') {
+    bursts.push({
+      at: p(e.at),
+      r: e.r,
+      tint: ABILITIES[e.id]?.tint ?? 0xf4ecd8,
+      when: performance.now() + e.ms,
+    })
+  } else if (e.type == 'held') float('Held!', p(e.at), 'dodge')
+  else if (e.type == 'block') {
+    float('Blocked!', p(e.at), 'dodge')
+    sound.dodge(net.hero)
+    glow.emit(heroAt, 0xffe08a, 12, { speed: 2, up: 1, life: 0.4, size: 0.07 })
+  } else if (e.type == 'ward') float(`Warded ${e.n}`, p(e.at), 'ward')
 }
 
 // What the work at a node or a station did: chips flying at each stroke, and
@@ -603,6 +691,7 @@ let loop = (t: number) => {
       Object.assign(i, {
         move: [0, 0],
         strike: false,
+        ability: 0,
         dodge: false,
         jump: false,
       })
@@ -633,7 +722,7 @@ let loop = (t: number) => {
         v,
         f,
         i.gather || (i.talk && !f.talk),
-        i.strike || i.dodge || i.jump,
+        i.strike || i.dodge || i.jump || i.ability > 0,
       )
       let d = job.doing
       stage.tick(
@@ -676,6 +765,29 @@ let loop = (t: number) => {
       }
       let here = 1 + f.others.length
       h.show(f, here, clockOf(w.day), bearing(cam.yaw), p.open)
+      actions.show(f)
+      // A ward shimmers about the hero while it holds.
+      if (f.ward > 0 && Math.random() < 0.5) {
+        let a = Math.random() * Math.PI * 2
+        glow.emit(
+          new THREE.Vector3(
+            f.body.x + Math.sin(a) * 0.7,
+            f.body.y + 0.3 + Math.random() * 1.3,
+            f.body.z + Math.cos(a) * 0.7,
+          ),
+          0x9fd8ff,
+          1,
+          { speed: 0.3, up: 0.6, life: 0.7, size: 0.06, fall: -0.3 },
+        )
+      }
+      let t = performance.now()
+      bursts = bursts.filter((b) => {
+        if (b.when > t) return true
+        ring(b.at, b.r, b.tint)
+        glow.emit(b.at, b.tint, 16, { speed: 3, up: 2, life: 0.5, size: 0.08 })
+        cam.shake = Math.max(cam.shake, 0.1)
+        return false
+      })
       h.work(f.talk ? null : job)
       m.show(f, v, job.nodes)
       p.show(f)

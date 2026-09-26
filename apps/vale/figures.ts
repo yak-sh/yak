@@ -15,9 +15,12 @@
 // what they wear: their weapon in the right hand, what goes with it in the
 // left, and their armour over their tunic, each drawn from the item's own
 // look (items.ts). How they swing is their weapon's: up and over for a blade,
-// a stab for a dagger, a draw and a loose for a bow, a thrust for a staff.
+// a stab for a dagger, a draw and a loose for a bow, a thrust for a staff. An
+// ability may pose them its own way (abilities.ts `Pose`): a turn all the way
+// round, the other hand raised before them, or both hands up.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import type { Pose } from './abilities.ts'
 import { BEASTS, type Look, type Plans } from './beasts.ts'
 import { ITEMS } from './items.ts'
 import { biped } from './bodies/biped.ts'
@@ -53,6 +56,8 @@ export type Act = {
   air: boolean
   /** how far through a blow or a bite, 0 to 1, or -1 for none */
   swing: number
+  /** how a hero's blow is posed, when not their weapon's own */
+  pose?: Pose
   /** how freshly struck, 1 just now to 0 */
   hurt: number
   /** how far through a roll, 0 to 1, or -1 for none */
@@ -415,6 +420,32 @@ export let person = (
       armL.rotation.x = lerp(-0.3, 0.3, up)
     }
   }
+  // An ability's own poses, `w` of the way through: arms out for a turn all
+  // the way round, the other hand raised before them, both hands up.
+  let POSES: Partial<Record<Pose, (w: number) => void>> = {
+    spin: (w) => {
+      body.rotation.y = ease(w) * Math.PI * 2
+      armR.rotation.x = -1.3
+      armR.rotation.z = 0.5
+      foreR.rotation.x = -0.2
+      armL.rotation.z = -0.9
+    },
+    guard: (w) => {
+      let k = Math.min(1, w / 0.1, (1 - w) / 0.1)
+      armL.rotation.x = -1.35 * k
+      armL.rotation.z = 0.35 * k
+      foreL.rotation.x = -1.1 * k
+      torso.rotation.y = -0.25 * k
+    },
+    cast: (w) => {
+      let k = Math.sin(Math.PI * Math.min(1, w * 1.4))
+      armL.rotation.x = armR.rotation.x = -2.7 * k
+      armL.rotation.z = -0.3 * k
+      armR.rotation.z = 0.3 * k
+      foreL.rotation.x = foreR.rotation.x = -0.3 * k
+      head.rotation.x = -0.3 * k
+    },
+  }
   let phase = 0
   return sewn({
     root,
@@ -461,7 +492,8 @@ export let person = (
         toward(torso, 0.4, k)
         toward(head, 0.3, k)
       }
-      if (a.swing >= 0) swing(a.swing)
+      body.rotation.y = 0
+      if (a.swing >= 0) (POSES[a.pose ?? 'swing'] ?? swing)(a.swing)
       if (a.down) {
         body.rotation.x = -Math.PI / 2 + 0.1
         body.position.y = 0.22

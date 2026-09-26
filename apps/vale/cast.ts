@@ -4,13 +4,15 @@
 // ground its bite takes. As a bite winds up, a red disc grows from its middle
 // and fills the ring the moment the bite lands. Red means a bite and nothing
 // else: the creature I have targeted wears a pale mark at its feet instead.
-// Each hero is drawn in what they wear, and swings at their weapon's pace;
-// an arrow or a bolt flies from whoever looses it to what it was loosed at.
+// Each hero is drawn in what they wear, and swings at their weapon's pace,
+// posed as the ability they do asks (`pose`); an arrow or a bolt flies from
+// whoever looses it to what it was loosed at.
 // A figure is made when someone arrives and dropped when they go; each frame
 // moves it to where the frame says it is, smoothing what arrives in steps (a
 // peer's position comes when their page sends it, not on this page's beat).
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { ABILITIES } from './abilities.ts'
 import { HANDLES } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import {
@@ -46,6 +48,8 @@ type Actor = {
   tumble: number
   swingAt: number
   swings: number
+  /** the ability they are doing, and since when */
+  doing: { id: string; at: number } | null
   hp: number
   hurtAt: number
   seen: boolean
@@ -208,6 +212,7 @@ export let cast = (
         tumble: 0,
         swingAt: -1e9,
         swings: -1,
+        doing: null,
         hp: -1,
         hurtAt: -1e9,
         seen: true,
@@ -315,7 +320,8 @@ export let cast = (
         {
           air: f.body.gait == 'jump',
           roll: f.roll,
-          swing: f.swing >= 0 ? f.swing : work?.swing ?? -1,
+          swing: f.swing >= 0 ? f.swing : f.guard ? 0.5 : work?.swing ?? -1,
+          pose: f.swing < 0 && f.guard ? 'guard' : ABILITIES[f.doing]?.pose,
           hurt: Math.max(0, 1 - (now - mine.hurtAt) / 250),
           down: f.down,
         },
@@ -348,12 +354,18 @@ export let cast = (
         a.swings = o.swing
         if (a.hp >= 0 && o.vitals.hp < a.hp) a.hurtAt = now
         a.hp = o.vitals.hp
+        // An ability takes its own time, and is posed its own way.
+        let d = a.doing, ab = d ? ABILITIES[d.id] : undefined
+        let took = ab?.guard ?? ab?.time ?? h.pace
+        let since = now - (d && ab ? d.at : a.swingAt)
+        if (d && since >= took) a.doing = null
         play(
           a,
           {
             air: b.gait == 'jump',
             roll: o.roll,
-            swing: now - a.swingAt < h.pace ? (now - a.swingAt) / h.pace : -1,
+            swing: since < took ? since / took : -1,
+            pose: ab?.pose,
             hurt: Math.max(0, 1 - (now - a.hurtAt) / 250),
             down: b.gait == 'down',
           },
@@ -536,6 +548,11 @@ export let cast = (
       }
     },
     /** an arrow or a bolt, from where it was loosed to where it lands */
+    /** someone else begins an ability: they are posed for it */
+    doing: (eid: string, id: string) => {
+      let a = actors.get(eid)
+      if (a) a.doing = { id, at: performance.now() }
+    },
     fly: (
       kind: 'arrow' | 'bolt',
       from: [number, number, number],

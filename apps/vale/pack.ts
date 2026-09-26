@@ -1,10 +1,12 @@
 // The hero's pack, a sheet over the glass: what they wear in each slot, how
-// they fight in it, everything else they carry, and by a village's fire, the
-// rack of plain arms anyone may take to try. Tap a thing to see what it is
-// and what wearing it would change, then wear it, take it off, or take it
-// from the rack. B or the bag opens it; B, Escape, a tap beside it or its
+// they fight in it and the abilities it gives them, everything else they
+// carry, and by a village's fire, the rack of plain arms anyone may take to
+// try. Tap a thing to see what it is, the abilities it gives, and what
+// wearing it would change, then wear it, take it off, or take it from the
+// rack. B or the bag opens it; B, Escape, a tap beside it or its
 // close button folds it away. It is written again only when what it shows
 // changed.
+import { ABILITIES, GIVES } from './abilities.ts'
 import { HANDLES, type Slot, SLOT_NAMES, SLOTS, sortOf } from './arms.ts'
 import { kitOf, RACK, type Worn } from './gear.ts'
 import { ITEMS, type Thing } from './items.ts'
@@ -62,6 +64,20 @@ let trying = (worn: Worn, kind: string): Worn => {
 // What the hero would wear with a slot taken off.
 let bare = (worn: Worn, slot: string): Worn =>
   Object.fromEntries(Object.entries(worn).filter(([s]) => s != slot))
+
+// The abilities a weapon or a thing for the other hand gives, and what each
+// does.
+let gives = (t: Thing) => {
+  let ids = t.slot == 'main' || t.slot == 'off'
+    ? (GIVES[t.family ?? ''] ?? []).slice(0, t.slot == 'main' ? 2 : 1)
+    : []
+  return ids.map((id) => {
+    let a = ABILITIES[id]
+    return `<span class=Pack_Ability><i>${a.icon}</i><b>${esc(a.name)}</b> ${
+      esc(a.says)
+    }</span>`
+  }).join('')
+}
 
 // A thing's tier, as pips in its tier's colour.
 let pips = (t?: Thing) =>
@@ -191,11 +207,12 @@ export let pack = (root: HTMLElement, acts: Acts) => {
         t.slot == 'main' || t.slot == 'off' ? 'Hold it' : 'Wear it'
       }</button>`
       : ''
+    let can = gives(t)
     return `<div class=Pack_Card><i class=Pack_Big>${t.icon}</i><div><b>${
       esc(t.name)
     }</b><span>${esc(what)}</span></div>${act}</div>${
-      diff ? `<div class=Pack_Nums>${diff}</div>` : ''
-    }`
+      can ? `<div class=Pack_Abilities>${can}</div>` : ''
+    }${diff ? `<div class=Pack_Nums>${diff}</div>` : ''}`
   }
 
   let draw = (s: Sheet, f: Frame) => {
@@ -213,7 +230,14 @@ export let pack = (root: HTMLElement, acts: Acts) => {
     }).join('')
     let stats = LINES.filter(([k]) => k != 'speed' || n.speed).map((
       [k, icon, say],
-    ) => `<span class=Pack_Num>${icon} ${say(n[k])}</span>`).join('')
+    ) => `<span class=Pack_Num>${icon} ${say(n[k])}</span>`).join('') +
+      s.abilities.map((id, i) =>
+        ABILITIES[id]
+          ? `<span class=Pack_Num><kbd>${i + 1}</kbd> ${ABILITIES[id].icon} ${
+            esc(ABILITIES[id].name)
+          }</span>`
+          : ''
+      ).join('')
     let bag = stacks(s).map(([k, count]) =>
       tile(
         `bag:${k}`,

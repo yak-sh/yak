@@ -100,20 +100,28 @@
       "type": "object",
       "sync": "peers",
       "durable": "connection",
-      "description": "A player's fight: the creature, which of its lives, the damage they have dealt it in that life, and how many blows they have swung. A creature's health is its most less what every fight says was dealt it.",
+      "description": "A player's fight: the creature they fight, what they have dealt each creature they are hurting, how many blows they have swung, and the last ability they used, counted, so a page sees each one. A creature's health is its most less what every fight says was dealt it in this life, and one held by anyone's blow neither moves nor bites.",
       "properties": {
-        "foe": { "type": "string", "description": "The creature." },
-        "life": {
-          "type": "number",
-          "description": "Which life of the creature: when it last fell, in ms."
+        "foe": {
+          "type": "string",
+          "description": "The creature they fight."
         },
-        "dmg": {
-          "type": "number",
-          "description": "The damage dealt it in this life."
+        "dealt": {
+          "type": "string",
+          "format": "json",
+          "description": "What they have dealt each creature they are hurting, as JSON text: a list of {foe, life, dmg, held}, the creature, which life of it (when it last fell, in ms), the damage dealt it in that life, and until when their blows hold it still, in ms (rules.ts `Dealt`)."
         },
         "swing": {
           "type": "number",
           "description": "Counts their blows, so a page sees each one."
+        },
+        "ability": {
+          "type": "string",
+          "description": "The last ability they used (abilities.ts)."
+        },
+        "abilities": {
+          "type": "number",
+          "description": "Counts the abilities they have used."
         }
       }
     },

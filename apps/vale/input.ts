@@ -8,6 +8,8 @@ export type Intent = {
   move: [number, number]
   jump: boolean
   strike: boolean
+  /** the ability asked for, by its slot on the bar, 1 to 3, or 0 */
+  ability: number
   dodge: boolean
   talk: boolean
   /** work the node near enough to work (work.ts) */
@@ -32,6 +34,9 @@ export type Intent = {
 export type Action =
   | 'jump'
   | 'strike'
+  | 'ability1'
+  | 'ability2'
+  | 'ability3'
   | 'dodge'
   | 'talk'
   | 'gather'
@@ -50,7 +55,9 @@ let KEYS: Record<string, Action> = {
   ShiftRight: 'dodge',
   KeyE: 'talk',
   KeyG: 'gather',
-  Digit1: 'drink',
+  Digit1: 'ability1',
+  Digit2: 'ability2',
+  Digit3: 'ability3',
   KeyQ: 'drink',
   KeyB: 'bag',
   KeyI: 'bag',
@@ -195,6 +202,8 @@ export let listen = (
         move: [x, y],
         jump: pressed.has('jump') || (!busy() && held.has('Space')),
         strike: pressed.has('strike'),
+        ability: [1, 2, 3].find((n) => pressed.has(`ability${n}` as Action)) ??
+          0,
         dodge: pressed.has('dodge'),
         talk: pressed.has('talk'),
         gather: pressed.has('gather'),

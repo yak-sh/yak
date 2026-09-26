@@ -930,6 +930,96 @@ body {
   display: none;
 }
 
+/* The action bar (bar.ts): the strike and three abilities, each with its key
+   and what is left of its cooldown swept over it. Above the keys on a
+   desk; on a phone, a column beside the thumb's buttons. */
+.Acts {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 2.2rem);
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.5rem;
+}
+
+.Act {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 3.4rem;
+  height: 3.4rem;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(251, 247, 234, 0.9);
+  box-shadow: 0 4px 0 rgba(120, 105, 70, 0.55), 0 8px 18px rgba(20, 30, 15,
+    0.25);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.Act:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(120, 105, 70, 0.55);
+}
+
+.Act::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(rgba(30, 40, 28, 0.62) calc(var(--cd, 0) * 1turn),
+    transparent 0);
+}
+
+.Act_Icon {
+  font-size: 1.6rem;
+  font-style: normal;
+}
+
+.Act_Key {
+  position: absolute;
+  left: 0.3rem;
+  top: 0.2rem;
+  font: 700 0.7rem/1 inherit;
+  color: var(--deep);
+}
+
+.Act_Left {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  font-size: 1.15rem;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+.Act_Left:empty,
+.Act-empty .Act_Key {
+  display: none;
+}
+
+.Act-empty {
+  background: rgba(251, 247, 234, 0.35);
+}
+
+.Act-doing {
+  box-shadow: inset 0 0 0 3px var(--ember), 0 4px 0 rgba(120, 105, 70, 0.55);
+}
+
+.Act-ready {
+  animation: ready 0.5s ease-out;
+}
+
+@keyframes ready {
+  30% {
+    transform: scale(1.12);
+    background: #fff4c8;
+  }
+}
+
 .Toasts {
   position: absolute;
   top: calc(max(12px, env(safe-area-inset-top)) + 4.4rem);
@@ -1206,6 +1296,15 @@ body {
   font-style: italic;
 }
 
+.Float-ability {
+  font-size: 1.05rem;
+  white-space: nowrap;
+}
+
+.Float-ward {
+  color: #9fd8ff;
+}
+
 /* The pack: a sheet over the glass, like the map's. What is worn, six
    slots in a grid; the numbers they make; the thing picked, and what it
    would change; then the bag, and by a fire the rack (pack.ts). */
@@ -1357,6 +1456,26 @@ body {
 .Pack_Num em {
   font-style: normal;
   font-weight: 700;
+}
+
+.Pack_Num kbd {
+  font: inherit;
+  font-weight: 700;
+  padding: 0 0.3rem;
+  border-radius: 5px;
+  background: rgba(63, 111, 58, 0.15);
+}
+
+.Pack_Abilities {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.4rem 0;
+  font-size: 0.85rem;
+}
+
+.Pack_Ability i {
+  font-style: normal;
+  margin-right: 0.3rem;
 }
 
 .Pack_Up {
@@ -1560,6 +1679,26 @@ body {
 
   .Pads {
     display: block;
+  }
+
+  .Acts {
+    left: auto;
+    right: calc(max(14px, env(safe-area-inset-right)) + 10.9rem);
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 0.2rem);
+    transform: none;
+    flex-direction: column-reverse;
+    gap: 0.4rem;
+  }
+
+  .Act {
+    width: 3.3rem;
+    height: 3.3rem;
+    border-radius: 50%;
+  }
+
+  .Act-strike,
+  .Act_Key {
+    display: none;
   }
 }
 

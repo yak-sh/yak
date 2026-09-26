@@ -98,7 +98,16 @@ export let bits = (scene: THREE.Scene, lit: boolean, most = 500) => {
   }
 }
 
-export type Kind = 'hit' | 'great' | 'ally' | 'hurt' | 'heal' | 'xp' | 'dodge'
+export type Kind =
+  | 'hit'
+  | 'great'
+  | 'ally'
+  | 'hurt'
+  | 'heal'
+  | 'xp'
+  | 'dodge'
+  | 'ability'
+  | 'ward'
 
 /** The labels over the scene: plates that follow someone, and numbers that
  * float up and fade. */
