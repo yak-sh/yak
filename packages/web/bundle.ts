@@ -57,9 +57,8 @@ export let sweep = async (base: string) => {
 // TODO(T-38240): the tries stand in for a fix in Deno. Its 2.9.1 bundler
 // sometimes never finishes: `deno bundle` stops reading its esbuild service,
 // whose stdout pipe fills (61 KB unread, esbuild blocked writing, deno idle in
-// epoll). About one bundle in eight hung with eight at once on this box, where
-// the app's barrel import of lucide-preact makes esbuild ask about 3,500
-// modules. A try that hangs is killed and the bundle tried again.
+// epoll). About one bundle in eight hung with eight at once on this box. A try
+// that hangs is killed and the bundle tried again.
 
 /** How long one try may take: a bundle takes a few seconds, eight at once. */
 let TRY = 20_000

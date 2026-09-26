@@ -1,21 +1,21 @@
-// The public pages' icon vocabulary, drawn from Lucide's SVG nodes. Named
-// imports keep the Worker bundle small; inline icons and the style guide's
-// external sprite share the same paths without any browser JavaScript.
-import {
-  Bot,
-  ChartNoAxesColumnIncreasing,
-  Check,
-  ChevronRight,
-  CreditCard,
-  Download,
-  ExternalLink,
-  type IconNode,
-  LayoutGrid,
-  Plug,
-  Plus,
-  Settings2,
-  Trash2,
-} from 'lucide'
+// The public pages' icon vocabulary, drawn from Lucide's SVG nodes. Each icon
+// is its own module, imported by path: the package's barrel re-exports all
+// ~1,800 icons, and every module that reaches this one (the kernel does) would
+// load them all. Inline icons and the style guide's external sprite share the
+// same paths without any browser JavaScript.
+import type { IconNode } from 'lucide'
+import Bot from 'lucide/dist/esm/icons/bot.mjs'
+import ChartNoAxesColumnIncreasing from 'lucide/dist/esm/icons/chart-no-axes-column-increasing.mjs'
+import Check from 'lucide/dist/esm/icons/check.mjs'
+import ChevronRight from 'lucide/dist/esm/icons/chevron-right.mjs'
+import CreditCard from 'lucide/dist/esm/icons/credit-card.mjs'
+import Download from 'lucide/dist/esm/icons/download.mjs'
+import ExternalLink from 'lucide/dist/esm/icons/external-link.mjs'
+import LayoutGrid from 'lucide/dist/esm/icons/layout-grid.mjs'
+import Plug from 'lucide/dist/esm/icons/plug.mjs'
+import Plus from 'lucide/dist/esm/icons/plus.mjs'
+import Settings2 from 'lucide/dist/esm/icons/settings-2.mjs'
+import Trash2 from 'lucide/dist/esm/icons/trash-2.mjs'
 
 export let icons = {
   'layout-grid': LayoutGrid,
