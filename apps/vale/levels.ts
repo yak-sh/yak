@@ -505,8 +505,8 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       oasis: { kind: 'oasis', at: [90, 40] },
     },
     portals: [
-      { at: [46, 72], to: 'sunscar' },
-      { at: [70, 88], to: 'palmwell' },
+      { at: [44, 70], to: 'sunscar' },
+      { at: [66, 96], to: 'palmwell' },
       { at: [84, 58], to: 'tombsands' },
     ],
   },
@@ -632,7 +632,7 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       { at: [56, 82], to: 'emberfall' },
       { at: [82, 56], to: 'tombsands' },
       { at: [68, 42], to: 'ashkeep' },
-      { at: [86, 74], to: 'maw' },
+      { at: [79, 74], to: 'maw' },
     ],
   },
   ashkeep: {
