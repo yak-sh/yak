@@ -720,8 +720,8 @@ let mapping = (v: unknown): Record<string, string> | undefined => {
 // What a CSV is read as (csv.ts): the component a row becomes, and the type
 // each of its properties takes. The words are the platform's own plus this
 // app's, each property as the word that names its type (vocab.ts
-// `wordsOf`) — an app declares scalars, and a core property that is a reference
-// or a closed set holds the text a cell has anyway.
+// `wordsOf`) — a core property that is a reference or a closed set holds the
+// text a cell has anyway, and an object or a list is a cell of JSON.
 let sheetOf = async (
   store: Door,
   as: string,

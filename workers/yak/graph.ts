@@ -148,7 +148,7 @@ import {
   reads,
 } from '@yaks/member'
 import { parse } from '@yaks/query'
-import { jsonb, type Vocab, type VocabDoc } from '@yaks/vocab'
+import type { Vocab, VocabDoc } from '@yaks/vocab'
 import { reconcile, type Runner, runner } from '@yaks/tools'
 import { commands, type Tools } from './lib/tools.ts'
 import { rouse, soonest, tick, type Ticked, wakes } from '@yaks/wake'
@@ -221,26 +221,6 @@ import {
   teach,
   unsaid,
 } from './vocab.ts'
-
-/**
- * The properties of a manifest that hold a JSON value (type object, array or a
- * union), which a deploy may not plant yet.
- *
- * TODO(T-37988): delete once this build is the one before. It reads such a
- * property, but the build before it refuses the whole vocabulary at load, so a
- * store that planted one would stop serving if production rolled back
- * (D-37972).
- */
-let unplantable = (doc: VocabDoc): string[] =>
-  Object.entries(doc.$defs ?? {}).flatMap(([name, s]) =>
-    Object.entries(s?.properties ?? {})
-      .filter(([, c]) => jsonb(c))
-      .map(([prop]) =>
-        `vocab.json: ${name}.${prop} holds a JSON value (type object, array ` +
-        'or a union), which an app cannot declare yet — keep it as JSON ' +
-        'text for now: "type": "string", "format": "json"'
-      )
-  )
 
 /**
  * Which words an object wakes with, from the one thing that decides it: which
@@ -639,8 +619,8 @@ export class Store {
   // rebuilt from the remembered vocabulary, which is why a deploy is a write
   // and a reboot rather than a migration: a table the store has never seen is
   // created, a column a word grew is added, and what changed is which words the
-  // graph admits. Nothing is retyped, and only a word that holds nothing is
-  // dropped, by `prepare` (the vocab door).
+  // graph admits. Only a word that holds nothing is dropped or retyped, by
+  // `prepare` (the vocab door).
   #boot(prepare = () => {}) {
     this.#atomic(() => {
       prepare()
@@ -2153,18 +2133,18 @@ export class Store {
       try {
         let was = appDoc(this.#get('vocab') ?? '{}')
         let next = unsaid(appDoc(body), was)
-        let held = unplantable(next)
-        if (held.length) throw new Error(held.join('; '))
-        let { doc, dropped, added, kept } = grew(
+        let { doc, dropped, added, kept, retyped } = grew(
           was,
           next,
           (name, prop) => this.#rows(name, prop),
         )
         appVocab(doc)
         // The declaration and its DDL must roll back together on boot failure.
+        // A retyped property's column held nothing, and goes for the boot to
+        // raise again at its new type.
         this.#boot(() => {
           this.#put('vocab', JSON.stringify(doc))
-          for (let name of dropped) {
+          for (let name of [...dropped, ...retyped]) {
             let [comp, prop] = name.split('.')
             if (prop) shed(this.#sql, comp, prop)
             else {

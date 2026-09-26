@@ -214,6 +214,12 @@ shown beside it:
   (`.jotting.written>=2026-04-01`).
 - `url` — `{"type": "string", "format": "uri"}`, an address out on the web; text
   with a link's face.
+- `object` — `{"type": "object"}`, a JSON object, written and read back whole:
+  `{"amount": 2, "unit": "loaf"}`.
+- `array` — `{"type": "array"}`, a JSON list, written and read back whole:
+  `["bread", "vegan"]`.
+- a union — `{"type": ["string", "number"]}`, any one of the types it lists, and
+  `"null"` may be one of them. It is kept the way an object is.
 - `eid` — a reference to another entity. The platform's own components have
   these; a `vocab.json` cannot declare one (below).
 - a closed set of values — the platform's alone; a refusal lists the set,
@@ -229,9 +235,9 @@ Every property says its `type`; `app_deploy` refuses one that does not. A string
 property keeps what it is sent as a string: a number written to a `text`
 property comes back as `"5"`.
 
-The first five are the ones a `vocab.json` may declare. References, closed sets
-and content-addressed bodies each need machinery a store cannot plant from a
-name alone — a foreign key, a set to enforce, a hash.
+Every type above `eid` is one a `vocab.json` may declare. References, closed
+sets and content-addressed bodies each need machinery a store cannot plant from
+a name alone — a foreign key, a set to enforce, a hash.
 
 **No eid property of your own**, then: a component of yours cannot point at
 another entity by declaring one. Where a row of yours needs to be about another
@@ -385,6 +391,30 @@ platform's:
 reference. It costs nothing: it holds the eid `upload` answered with, and
 `./api/blob/<eid>` serves the bytes.
 
+**A list, or a small record, in one property.** A value that only ever travels
+whole — a recipe's tags, what one batch makes — is declared `array` or `object`
+and written as itself: no `JSON.stringify` on the way in, no `JSON.parse` on the
+way out.
+
+    { "$defs": {
+        "recipe": { "properties": {
+          "tags":  { "type": "array", "items": { "type": "string" } },
+          "makes": { "type": "object", "properties": {
+            "amount": { "type": "number" },
+            "unit":   { "type": "string" } } } } } } }
+
+    await apply({ entity: { eid: '$r' }, doc: { title: 'Focaccia' },
+      recipe: { tags: ['bread', 'vegan'], makes: { amount: 1, unit: 'tray' } } })
+
+    let tagged = await query('.recipe.tags&?doc')
+
+A filter asks one thing of it: whether it is there. `.recipe.tags` is every
+recipe with tags; a filter on what it holds (`.recipe.tags=vegan`) or an order
+by it is refused, naming the property. A value you will want to find rows by is
+a property of its own. The store holds the value to its type, so a list sent
+where an object is declared is refused; `items` and `properties` say what it
+holds for whoever reads the manifest, and the store does not look inside it.
+
 **A searched property.** A property can declare more than its type.
 `"search": true` is the one to know: it puts that property's text in the search
 index, so `search` finds a row by what is written there, the way it already
@@ -445,10 +475,13 @@ declares the same name, which is the next page.
 The rule is short: **a word leaves when nothing is stored under it.**
 
 - **Adding a property** is a deploy. It reports `added: recipe.source`.
-- **A property that already exists is never retyped.** Declare `pages` as `text`
-  where it was `number` and the deploy is refused:
+- **A property keeps its type while any row holds a value under it.** Declare
+  `pages` as `text` where it was `number`, with pages already written, and the
+  deploy is refused:
   `vocab.json: book.pages is
   already number — a property keeps the type its rows were written under`.
+  One that holds nothing takes the new type, and the deploy reports it as
+  `added`.
 - **A property the new manifest stops naming stays while any row holds a value
   under it.** The deploy reports it:
 

@@ -17,14 +17,15 @@
 //                    means and a generated one only says what it holds
 // A redeploy regenerates them from the manifest as it then reads, so a property
 // added to a kind is an argument added to its two tools.
-import type { PropSchema, VocabDoc } from '@yaks/vocab'
+import { jsonb, type PropSchema, type VocabDoc } from '@yaks/vocab'
 import type { Arg, ToolDef, Tools } from './lib/tools.ts'
 
 // What an argument takes from the property it fills: the type the column
-// holds and the words saying what it is. Nothing else rides across — a
-// property's `default` is what a row gets when nobody wrote it, and as an
-// argument's it would put a filter in every find the caller never asked for.
-let ARG = ['type', 'format', 'enum', 'description']
+// holds, what an object or a list holds, and the words saying what it is.
+// Nothing else rides across — a property's `default` is what a row gets when
+// nobody wrote it, and as an argument's it would put a filter in every find the
+// caller never asked for.
+let ARG = ['type', 'format', 'enum', 'items', 'properties', 'description']
 
 let argOf = (s: PropSchema): Arg =>
   Object.fromEntries(
@@ -97,9 +98,12 @@ let add = (kind: string, at: string, schema: PropSchema): ToolDef => {
 // Reading them back: the words for the title and body, an equality for every
 // property, and how many. Every one is optional, and a clause whose argument
 // the caller left out drops out of the filter line — so the tool with no
-// arguments at all is "everything of this kind".
+// arguments at all is "everything of this kind". A property holding a JSON
+// value is no argument here: a filter asks only whether one is there.
 let find = (kind: string, at: string, schema: PropSchema): ToolDef => {
-  let props = propsOf(schema)
+  let props = Object.fromEntries(
+    Object.entries(propsOf(schema)).filter(([, s]) => !jsonb(s)),
+  )
   return {
     description: `Find ${plural(kind)} in ${at}${means(schema)}. Words match ` +
       'the title and body; leave out any filter you do not have',

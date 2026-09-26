@@ -234,9 +234,9 @@ app_deploy:
     component or a property this manifest no longer names, and that holds
     nothing, is dropped. It reports the properties it added and the
     properties the store still has values under that this manifest did not
-    name: a property is never renamed or retyped, so a new name is added
-    beside the old one, which keeps every row already written under it until
-    those values move. A seed.json beside index.html (a list of
+    name: a property that holds values is never renamed or retyped, so a new
+    name is added beside the old one, which keeps every row already written
+    under it until those values move. A seed.json beside index.html (a list of
     bundles, each a JSON object holding an entity id and its components, or
     a seed/ folder of *.json files when there are many) is written into the
     app's store here, once per store and after the components, so the app
@@ -274,7 +274,8 @@ store_load:
     {"eid": "$a"}, "doc": {"title": "…"}}]. A CSV is a spreadsheet, and `as`
     names the component one row becomes: as: "city" with headers
     name,country writes city{name, country} per row, values converted to the
-    property types the app's vocab.json schema declares. `title` and `body`
+    property types the app's vocab.json schema declares (an object or array
+    cell is JSON). `title` and `body`
     columns go into the row's doc component; an `id` (or `alias`) column is
     the row's name, stored as alias{name}, which resolves to the entity
     already holding that name, so loading the file again patches those rows

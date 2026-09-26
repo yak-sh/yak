@@ -55,6 +55,7 @@ import {
   pick,
   type PropSchema,
   storable,
+  typesOf,
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
@@ -1093,32 +1094,56 @@ export let RESERVED: string[] = [
   ...new Set(componentsOf([...coreDocs, ...platformDocs, ...gitDocs])),
 ].sort()
 
-// The five words that name a property's type, and the JSON Schema each
-// is. A manifest writes the schema; these are for reading one back in a
-// sentence — a refusal saying what a property already is, the types a CSV's
-// cells are coerced to (csv.ts).
-export type Word = 'text' | 'number' | 'bool' | 'time' | 'url'
+// The words that name a property's type, and the JSON Schema each is. A
+// manifest writes the schema; these are for reading one back in a sentence — a
+// refusal saying what a property already is, the types a CSV's cells are
+// coerced to (csv.ts).
+export type Word =
+  | 'text'
+  | 'number'
+  | 'bool'
+  | 'time'
+  | 'url'
+  | 'object'
+  | 'array'
 export let WORDS: Record<Word, PropSchema> = {
   text: { type: 'string' },
   number: { type: 'number' },
   bool: { type: 'boolean' },
   time: { type: 'string', format: 'date-time' },
   url: { type: 'string', format: 'uri' },
+  object: { type: 'object' },
+  array: { type: 'array' },
 }
 
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
 /** The word that names a declared property's type: the one its type and
- * format name, else the one its type alone names — a `priority` is a number —
- * else `text`, which is what anything else stores as. */
+ * format name, else the one its type alone names — a `priority` is a number,
+ * and so is an `integer` — else `text`, which is what anything else stores as.
+ * A union is its members' words, `number or text`, in one order however the
+ * manifest listed them, and may hold `null` besides. */
 export let wordOf = (s: PropSchema): string => {
+  let types = typesOf(s)
+  if (types.length > 1) {
+    return [...new Set(types.map((type) => wordOf({ ...s, type })))].sort()
+      .join(' or ')
+  }
+  let type = s.type == 'integer' ? 'number' : s.type
   let words = Object.entries(WORDS)
   let named =
-    words.find(([, one]) => one.type == s.type && one.format == s.format) ??
-      words.find(([, one]) => one.type == s.type && !one.format)
-  return named?.[0] ?? 'text'
+    words.find(([, one]) => one.type == type && one.format == s.format) ??
+      words.find(([, one]) => one.type == type && !one.format)
+  return named?.[0] ?? (type == 'null' ? 'null' : 'text')
 }
+
+// Whether two declarations of one property store the same thing: the same JSON
+// types, in any order, and the same format. A union is an array, so it is
+// compared by what it holds.
+let same = (a: PropSchema, b: PropSchema) =>
+  a.format == b.format &&
+  typesOf(a).sort().join() == typesOf(b).sort().join()
 
 /**
  * A document as `{comp: {prop: word}}` — every component's properties as the
@@ -1143,17 +1168,20 @@ export let wordsOf = (doc: VocabDoc): Record<string, Record<string, string>> =>
  * naming — a whole component, or one property of a component it still names —
  * leaves when nothing is stored under it, so the store holds one shape and not
  * the old one beside the new (M-17871); a word something is stored under stays
- * declared, because those values are the record of what it is. A property
- * whose type changed is refused, because the values already stored were
- * written under the old word. `rows` counts what a component holds, or with a
- * property, how many of its rows hold a value there — the store's question,
- * since only it has the tables.
+ * declared, because those values are the record of what it is. A type is held
+ * the same way: a property whose type changed is refused while any row holds a
+ * value there, because those values were written under the old type, and one
+ * that holds nothing takes the new type. `rows` counts what a component holds,
+ * or with a property, how many of its rows hold a value there — the store's
+ * question, since only it has the tables.
  *
  * It also says what moved, because a rename is otherwise silent: the manifest
  * reads as one word while the store holds two until the old one's values have
- * moved (C-32652 item 4). `added` is every property this manifest planted;
- * `kept` is every property the store still declares that this manifest did not
- * name; `dropped` is every component and `comp.prop` that left.
+ * moved (C-32652 item 4). `added` is every property this manifest planted, a
+ * retyped one included; `kept` is every property the store still declares that
+ * this manifest did not name; `dropped` is every component and `comp.prop`
+ * that left; `retyped` is every empty `comp.prop` whose column the store sheds
+ * so it stands again at its new type.
  */
 export let grew = (
   was: VocabDoc,
@@ -1164,12 +1192,14 @@ export let grew = (
   dropped: string[]
   added: string[]
   kept: string[]
+  retyped: string[]
 } => {
   let mine = was.$defs ?? {}
   let theirs = next.$defs ?? {}
   let dropped = Object.keys(mine).filter((n) => !(n in theirs) && !rows(n))
   let defs: Record<string, PropSchema> = { ...mine }
   let added: string[] = []
+  let retyped: string[] = []
   for (let name of dropped) delete defs[name]
   for (let [name, schema] of Object.entries(theirs)) {
     let props: Record<string, PropSchema> = { ...mine[name]?.properties }
@@ -1180,16 +1210,19 @@ export let grew = (
     }
     for (let [prop, s] of Object.entries(schema.properties ?? {})) {
       let had = props[prop]
-      if (had && (had.type != s.type || had.format != s.format)) {
-        throw refuse(
-          'arguments',
-          `vocab.json: ${name}.${prop} is already ${
-            wordOf(had)
-          } — a property ` +
-            'keeps the type its rows were written under',
-        )
+      if (had && !same(had, s)) {
+        if (rows(name, prop)) {
+          throw refuse(
+            'arguments',
+            `vocab.json: ${name}.${prop} is already ${
+              wordOf(had)
+            } — a property ` +
+              'keeps the type its rows were written under',
+          )
+        }
+        retyped.push(`${name}.${prop}`)
       }
-      if (!had) added.push(`${name}.${prop}`)
+      if (!had || !same(had, s)) added.push(`${name}.${prop}`)
       props[prop] = s
     }
     defs[name] = { ...schema, properties: props }
@@ -1199,7 +1232,7 @@ export let grew = (
       .filter((prop) => !(prop in (theirs[name]?.properties ?? {})))
       .map((prop) => `${name}.${prop}`)
   )
-  return { doc: { ...next, $defs: defs }, dropped, added, kept }
+  return { doc: { ...next, $defs: defs }, dropped, added, kept, retyped }
 }
 
 /**
@@ -1243,7 +1276,7 @@ export let homed = (next: VocabDoc, homes: Homes) => {
     let add: Record<string, PropSchema> = {}
     for (let [prop, s] of Object.entries(schema.properties ?? {})) {
       let had = home.props[prop]
-      if (had && (had.type != s.type || had.format != s.format)) {
+      if (had && !same(had, s)) {
         throw refuse(
           'arguments',
           `vocab.json: ${name}.${prop} is ${wordOf(s)} here and ${

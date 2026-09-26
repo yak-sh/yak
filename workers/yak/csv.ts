@@ -45,11 +45,45 @@ let DOC = ['title', 'body']
 let YES = ['true', 'yes', '1']
 let NO = ['false', 'no', '0']
 
+/** The words a cell's text is kept as. */
+let TEXTS = ['text', 'time', 'url']
+
+// The word a JSON value is, as `wordOf` (vocab.ts) names a type.
+let wordIn = (v: unknown) =>
+  Array.isArray(v)
+    ? 'array'
+    : v === null
+    ? 'null'
+    : typeof v == 'boolean'
+    ? 'bool'
+    : typeof v == 'string'
+    ? 'text'
+    : typeof v
+
+// A cell of an object, a list or a union, which is JSON — `["a","b"]`,
+// `{"x": 1}` — when it parses as one of the words the property takes. A union
+// that takes text keeps a cell that does not as the text it is.
+let json = (words: string[], cell: string): unknown => {
+  let v: unknown
+  try {
+    v = JSON.parse(cell)
+  } catch { /* text, or nothing this property takes */ }
+  return v !== undefined && words.includes(wordIn(v))
+    ? v
+    : words.some((w) => TEXTS.includes(w))
+    ? cell
+    : undefined
+}
+
 // One cell as its property's type. `undefined` means it will not coerce, which
 // the caller turns into a refusal naming the row and the header — this has no
 // idea which row it is looking at.
 let value = (type: string, cell: string): unknown => {
   let said = cell.trim()
+  let words = type.split(' or ')
+  if (words.length > 1 || type == 'object' || type == 'array') {
+    return json(words, cell)
+  }
   if (type == 'number') {
     let n = Number(said)
     return Number.isFinite(n) ? n : undefined
@@ -145,9 +179,9 @@ export let sheet = (file: string, text: string, spec?: Sheet): Sown[] => {
       if (got === undefined) {
         throw refuse(
           'arguments',
-          `${where}: ${headers[i]} is ${
-            JSON.stringify(cell)
-          }, not a ${to.type}`,
+          `${where}: ${headers[i]} is ${JSON.stringify(cell)}, not ${
+            /^[aeiou]/.test(to.type) ? 'an' : 'a'
+          } ${to.type}`,
         )
       }
       parts[to.comp] = { ...parts[to.comp], [to.prop]: got }

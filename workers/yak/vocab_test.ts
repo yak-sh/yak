@@ -461,6 +461,26 @@ Deno.test('a word the space already has is a use, not a home', () => {
   ).message
   assertStringIncludes(why, 'book.pages is text here and number in')
   assertStringIncludes(why, 'reading-list, where book lives')
+
+  // A union is the same type whatever order it lists its members in.
+  let tagged = {
+    book: {
+      at: 'reading-list',
+      props: { tags: { type: ['string', 'array'] } } as Record<
+        string,
+        PropSchema
+      >,
+    },
+  }
+  let again = says({ book: { tags: { type: ['array', 'string'] } } })
+  assertEquals(homed(appDoc(again), tagged).grows, {})
+  assertStringIncludes(
+    assertThrows(
+      () => homed(appDoc(says({ book: { tags: txt } })), tagged),
+      Error,
+    ).message,
+    'book.tags is text here and array or text in',
+  )
 })
 
 // The `search` keyword is the property's, and a property the platform refuses
@@ -480,6 +500,22 @@ Deno.test('a word the manifest stopped naming leaves once it holds nothing', () 
   ])
   // Asked nothing, a store keeps every word: nothing may leave unseen.
   assertEquals(grew(was, next).dropped, [])
+})
+
+Deno.test('a property takes a new type only while it holds nothing', () => {
+  let was = says({ fight: { dealt: { type: 'string', format: 'json' } } })
+  let next = says({ fight: { dealt: { type: 'array' } } })
+  let r = grew(was, next, () => 0)
+  assertEquals([r.added, r.retyped], [['fight.dealt'], ['fight.dealt']])
+  assertEquals(r.doc.$defs!.fight.properties!.dealt, { type: 'array' })
+  assertStringIncludes(
+    assertThrows(() => grew(was, next), Error).message,
+    'fight.dealt is already text',
+  )
+  // The same union, listed in another order, is no change at all.
+  let union = (type: string[]) => says({ dish: { size: { type } } })
+  let same = grew(union(['string', 'number']), union(['number', 'string']))
+  assertEquals([same.added, same.retyped], [[], []])
 })
 
 Deno.test('a searched property that holds no prose is refused', () => {

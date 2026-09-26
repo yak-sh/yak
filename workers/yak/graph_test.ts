@@ -265,25 +265,91 @@ Deno.test('a manifest the vocabulary refuses leaves the store as it was', async 
   assertEquals(await words(store), was)
 })
 
-Deno.test('a property says its type, and a JSON value waits a release', async () => {
+Deno.test('a property says its type', async () => {
   let store = await cookbook()
   let was = await words(store)
-  let said = async (prop: string) => {
-    let no = await post(
-      store,
-      '/vocab',
-      `{"$defs": {"dish": {"properties": {"c": ${prop}}}}}`,
-      owner,
-    )
-    assertEquals(no.status, 400)
-    return (await no.json()).message as string
-  }
-  assertStringIncludes(await said('{"enum": ["a"]}'), 'dish.c declares no type')
-  assertStringIncludes(
-    await said('{"type": "array"}'),
-    'dish.c holds a JSON value',
+  let no = await post(
+    store,
+    '/vocab',
+    '{"$defs": {"dish": {"properties": {"c": {"enum": ["a"]}}}}}',
+    owner,
   )
+  assertEquals(no.status, 400)
+  assertStringIncludes((await no.json()).message, 'dish.c declares no type')
   assertEquals(await words(store), was)
+})
+
+// A query's answer from a store, whatever its status.
+let asked = async (store: Store, q: string) => {
+  let r = await get(store, `/query?q=${encodeURIComponent(q)}`, owner)
+  return { status: r.status, body: await r.json() }
+}
+
+// An object, a list and a union are written and read back as themselves, and a
+// filter asks only whether one is there (docs/components.md).
+Deno.test('an app keeps objects and arrays, and asks only whether one is there', async () => {
+  let store = await cookbook(
+    state(),
+    JSON.stringify({
+      $defs: {
+        dish: {
+          properties: {
+            tags: { type: 'array', items: { type: 'string' } },
+            makes: { type: 'object' },
+            size: { type: ['string', 'number'] },
+          },
+        },
+      },
+    }),
+  )
+  let dish = {
+    tags: ['bread', 'vegan'],
+    makes: { amount: 1, unit: 'tray' },
+    size: 'large',
+  }
+  let wrote = await post(store, '/apply', [
+    { entity: { eid: CAKE }, dish },
+    { entity: { eid: APP }, dish: { size: 4 } },
+  ], owner)
+  assertEquals(wrote.status, 200)
+  let tagged = await asked(store, '.dish.tags')
+  assertEquals(tagged.body.map((r: Bundle) => r.dish), [dish])
+  assertEquals((await asked(store, '.dish.size')).body.length, 2)
+  for (let q of ['.dish.tags=vegan', '.dish.makes~=tray', 'order=dish.tags']) {
+    let no = await asked(store, q)
+    assertEquals(no.status, 400, q)
+    assertStringIncludes(no.body.message, 'holds a JSON value', q)
+  }
+  // The value is held to its type, and a list is not an object.
+  let wrong = await post(store, '/apply', [
+    { entity: { eid: CAKE }, dish: { makes: ['tray'] } },
+  ], owner)
+  assertEquals(wrong.status, 400)
+  assertStringIncludes((await wrong.json()).message, 'dish.makes is an object')
+})
+
+// A property's type is kept by the values written under it: one that holds
+// nothing takes a new type, and one that holds values keeps its own.
+Deno.test('a property that holds nothing may change its type', async () => {
+  let dish = (tags: object) =>
+    JSON.stringify({
+      $defs: { dish: { properties: { tags, n: { type: 'number' } } } },
+    })
+  let store = await cookbook(state(), dish({ type: 'string', format: 'json' }))
+  let redeploy = await post(store, '/vocab', dish({ type: 'array' }), owner)
+  assertEquals(redeploy.status, 200)
+  assertEquals((await redeploy.json()).added, ['dish.tags'])
+  let wrote = await post(store, '/apply', [
+    { entity: { eid: CAKE }, dish: { tags: ['a'], n: 1 } },
+  ], owner)
+  assertEquals(wrote.status, 200)
+  assertEquals((await asked(store, '.dish')).body[0].dish, {
+    tags: ['a'],
+    n: 1,
+  })
+  let no = await post(store, '/vocab', dish({ type: 'object' }), owner)
+  assertEquals(no.status, 400)
+  assertStringIncludes((await no.json()).message, 'dish.tags is already array')
 })
 
 {

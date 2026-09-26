@@ -456,15 +456,16 @@ its properties.
 `store_load(app, path: 'data/menu.csv', as: 'recipe')` writes those two as
 `recipe{name, serves}`, each value coerced to the type `vocab.json` declares for
 the property — `serves` is a number, a `bool` accepts true/yes/1 either way
-round, and an empty cell is left unwritten rather than written null. A `title`
-or `body` header lands in the row's `doc`; an `id` (or `alias`) column is the
-row's name — `alias{name}`, which lands on the entity already holding it, so
-loading the file again patches the same rows instead of minting a second set of
-them, and the name works wherever an eid does. Leave it out and every load mints
-new rows. A header the component has no property for is refused by name: rename
-it with `map {"Serves how many": "serves"}`, or declare the property in
-`vocab.json`. A cell that will not coerce is refused naming the row and the
-header, and the whole file is one batch, exactly as a JSON load is.
+round, an `object` or `array` cell is JSON (`["bread","vegan"]`), and an empty
+cell is left unwritten rather than written null. A `title` or `body` header
+lands in the row's `doc`; an `id` (or `alias`) column is the row's name —
+`alias{name}`, which lands on the entity already holding it, so loading the file
+again patches the same rows instead of minting a second set of them, and the
+name works wherever an eid does. Leave it out and every load mints new rows. A
+header the component has no property for is refused by name: rename it with
+`map {"Serves how many": "serves"}`, or declare the property in `vocab.json`. A
+cell that will not coerce is refused naming the row and the header, and the
+whole file is one batch, exactly as a JSON load is.
 
 ## The HTTP endpoints underneath
 

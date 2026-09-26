@@ -114,6 +114,32 @@ Deno.test('find is a filter line, one clause per argument given', () => {
   assertEquals(filled(find, {}).query, '.recipe&?doc')
 })
 
+Deno.test('a list is written whole, and is no filter to find by', () => {
+  let tags = { type: 'array', items: { type: 'string' } }
+  let tagged = tools({
+    $defs: {
+      recipe: {
+        component: true,
+        properties: { serves: { type: 'number' }, tags },
+      },
+    },
+  })
+  assertEquals(schemaOf(tagged.add_recipe).properties.tags, tags)
+  assertEquals(
+    filled(tagged.add_recipe, { title: 'Focaccia', tags: ['bread'] }).apply,
+    {
+      entity: { eid: '$recipe' },
+      doc: { title: 'Focaccia' },
+      recipe: { tags: ['bread'] },
+    },
+  )
+  assertEquals(Object.keys(schemaOf(tagged.find_recipe).properties), [
+    'words',
+    'serves',
+    'limit',
+  ])
+})
+
 Deno.test('an app declines them, or declares one itself', () => {
   // The manifest says so.
   assertEquals(withKinds({}, appDoc({ ...box, tools: false }), 'a/b'), {})

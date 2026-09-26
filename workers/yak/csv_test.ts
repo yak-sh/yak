@@ -43,6 +43,30 @@ Deno.test('a bool is written either way round', () => {
   for (let nope of ['false', 'No', '0']) assertEquals(said(nope), false, nope)
 })
 
+Deno.test('an object, a list or a union is a cell of JSON', () => {
+  let dish: Sheet = {
+    as: 'dish',
+    props: { tags: 'array', makes: 'object', size: 'number or text' },
+  }
+  let said = (cells: string) =>
+    bundles(`tags,makes,size\n${cells}\n`, dish)[0].dish
+  assertEquals(said('"[""a"",""b""]","{""n"": 1}",4'), {
+    tags: ['a', 'b'],
+    makes: { n: 1 },
+    size: 4,
+  })
+  // A union that takes text keeps a cell that is no JSON as its text.
+  assertEquals(said(',,large'), { size: 'large' })
+  assertStringIncludes(
+    no('tags\nbread\n', dish),
+    'tags is "bread", not an array',
+  )
+  assertStringIncludes(
+    no('makes\n[1]\n', dish),
+    'makes is "[1]", not an object',
+  )
+})
+
 Deno.test('map renames a header that does not match a property', () => {
   assertEquals(
     bundles('City,How many\nOslo,709037\n', {
