@@ -556,9 +556,9 @@ export let game = (net: Net) => {
       let fights: [string, Fight][] = [[me, fought]]
       let spots = new Map<
         string,
-        { x: number; z: number; alive: boolean; awake: boolean }
+        { x: number; z: number; prey: boolean; awake: boolean }
       >()
-      spots.set(me, { x: body.x, z: body.z, alive: !down, awake: true })
+      spots.set(me, { x: body.x, z: body.z, prey: !down, awake: true })
       for (let b of net.watches.players.value) {
         let eid = b.entity.eid
         if (eid == me) continue
@@ -589,7 +589,7 @@ export let game = (net: Net) => {
         spots.set(eid, {
           x: p.x,
           z: p.z,
-          alive: m.gait != 'down',
+          prey: m.gait != 'down' && now - p.at < ASLEEP,
           awake: now - p.at < ASLEEP,
         })
       }
@@ -648,15 +648,16 @@ export let game = (net: Net) => {
         if (owner == me && !fallen) {
           // Whom it is after: whoever is hurting it most, while they stay
           // near its home; else, if it is the kind that minds, whoever comes
-          // close.
+          // close. Never someone fainted, or whose page sleeps and so takes
+          // no bites.
           let quarry = ''
           let hn = hunter(eid, life, fights)
           let hs = hn ? spots.get(hn) : undefined
-          if (hn && hs?.alive && dist(hs, home) < h.roam + LEASH) quarry = hn
+          if (hn && hs?.prey && dist(hs, home) < h.roam + LEASH) quarry = hn
           else if (beast.aggro) {
             let best = beast.aggro * (hu.player ? 1.8 : 1)
             for (let [w, sp] of spots) {
-              if (!sp.alive || inVillage(v, sp.x, sp.z)) continue
+              if (!sp.prey || inVillage(v, sp.x, sp.z)) continue
               if (dist(sp, home) > h.roam + LEASH) continue
               let d = dist(sp, mb)
               if (d < best) [best, quarry] = [d, w]
