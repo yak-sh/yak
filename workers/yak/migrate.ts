@@ -4,7 +4,8 @@
 // {@link rebuild}), a column its vocabulary stopped naming dropped ({@link
 // shed}), and each slot the object remembers rewritten into the one shape a
 // deploy takes now ({@link documented}, {@link unholed}, {@link unworded},
-// {@link respelled}). {@link BOUNDARIES} names the stored shapes this code
+// {@link respelled}), and the directory's builder tokens made dollars
+// ({@link dollared}). {@link BOUNDARIES} names the stored shapes this code
 // reads, for `yak admin deploys`.
 import { fields, schema as ftsSchema } from '@yaks/fts'
 import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
@@ -15,8 +16,11 @@ import {
   type Driver,
   eq,
   type Expr,
+  fn,
+  gt,
   lit,
   notNull,
+  op,
   select,
   table,
   tally,
@@ -306,6 +310,40 @@ export let shed = (d: Driver, name: string, prop: string) => {
     d.query({ t: 'drop', kind: 'index', name: String(i.name), ifExists: true })
   }
   d.query(unseat(name, prop))
+}
+
+/** What a builder token is taken to have cost, in dollars, now that the meter
+ * counts dollars: GLM 5.3 Flash's input price (models.ts), frozen here for the
+ * reason {@link WAS} is. A token was input and output summed, and a build
+ * reads far more than it writes, so this is the least one cost: no space is
+ * charged more than it spent. */
+let TOKEN = 0.15 / 1e6
+
+/**
+ * The directory's builder tokens as the dollars its meter counts now
+ * (T-40676): each space's tokens this month added to its `models`, and the
+ * `tokens` column dropped. A month behind is nothing spent (meter.ts
+ * `thisMonth`), so its tokens go with the column. Nothing names it, no index,
+ * trigger or view, so it drops as it stands, with none of what {@link shed}
+ * takes down first. False where there is no such column: every app's store,
+ * and the directory after one wake.
+ */
+export let dollared = (d: Driver, month: string): boolean => {
+  if (!columns(d, 'meter').includes('tokens')) return false
+  d.query({
+    t: 'update',
+    table: 'meter',
+    set: {
+      models: op(
+        '+',
+        fn('coalesce', col('models'), lit(0)),
+        op('*', col('tokens'), lit(TOKEN)),
+      ),
+    },
+    where: and(eq(col('month'), val(month)), gt(col('tokens'), lit(0))),
+  })
+  d.query(unseat('meter', 'tokens'))
+  return true
 }
 
 /** Every full-text index refilled from the content it mirrors — what a freshly

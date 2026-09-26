@@ -146,8 +146,9 @@
         "builds": {
           "type": "number"
         },
-        "tokens": {
-          "type": "number"
+        "models": {
+          "type": "number",
+          "description": "dollars spent on models this month, each call weighed by its model's price"
         },
         "seconds": {
           "type": "number"

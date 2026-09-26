@@ -169,7 +169,7 @@ import { ledger } from './ledger.ts'
 import { doorOf, GIT_STORE, type Namespace, PLATFORM_STORE } from './door.ts'
 import { type Meta, metaOf } from './meta.ts'
 import { caught, defect } from './sentry.ts'
-import { weighed } from './meter.ts'
+import { monthOf, weighed } from './meter.ts'
 import { directoryOf } from './directory.ts'
 import { vaultOf } from './vault.ts'
 import {
@@ -193,6 +193,7 @@ import {
 import { apex, url } from './host.ts'
 import {
   documented,
+  dollared,
   install,
   rebuild,
   recut,
@@ -600,7 +601,22 @@ export class Store {
     // whose graph cannot boot still keeps what it is sent (writes.ts).
     this.#sql.query(WRITES)
     this.#reshaping()
+    this.#dollaring()
     this.#boot()
+  }
+
+  // The directory's builder tokens, as the dollars its meter counts now
+  // (T-40676, migrate.ts `dollared`), once. Its own transaction: a failure
+  // leaves the column standing, which nothing reads, and the store serving.
+  #dollaring() {
+    if (this.#get('name') != PLATFORM_STORE) return
+    try {
+      this.#ctx.storage.transactionSync(() =>
+        dollared(this.#sql, monthOf(new Date()))
+      )
+    } catch (e) {
+      defect(e, { request: 'meter tokens', store: PLATFORM_STORE })
+    }
   }
 
   // What an object keeps is in the one shape a deploy takes now. A store that

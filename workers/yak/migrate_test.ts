@@ -3,7 +3,7 @@
 // doors: what the object remembers rewritten into the one shape a deploy takes
 // now, a schema that moves re-cut and refilled, and a schema that will not
 // stand refused at every door and heard by Sentry.
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
 import {
   createTransport,
   type ErrorEvent,
@@ -332,6 +332,32 @@ Deno.test('a schema that moves re-cuts its definitions and refills', async () =>
   assertEquals(grew.status, 200)
   assertEquals((await now.query('limes', APP)).length, 1)
   assertEquals((await now.query('lemons', APP)).length, 1)
+})
+
+Deno.test("the directory's builder tokens become this month's model dollars", async () => {
+  let ctx = state()
+  let month = new Date().toISOString().slice(0, 7)
+  let was = newer(ctx, PLATFORM_STORE)
+  await was.apply([
+    { entity: { eid: ONE }, meter: { month, models: 0.05 } },
+    { entity: { eid: TWO }, meter: { month: '2020-01', models: 0.01 } },
+  ])
+  run(
+    ctx,
+    { t: 'alter table', table: 'meter', add: { name: 'tokens', type: 'real' } },
+    every('meter', { tokens: 2_000_000 }),
+  )
+  let now = newer(ctx, PLATFORM_STORE)
+  let models = Object.fromEntries(
+    (await now.query('.meter')).map((b) => [
+      b.entity.eid,
+      (b.meter as { models: number }).models,
+    ]),
+  )
+  assertAlmostEquals(models[ONE], 0.35)
+  assertEquals(models[TWO], 0.01)
+  let cols = db(ctx).query({ t: 'pragma', name: 'table_info', arg: 'meter' })
+  assert(!cols.some((c) => c.name == 'tokens'))
 })
 
 Deno.test('a kind the vocabulary stopped listing is written beside the rows it kept', async () => {
