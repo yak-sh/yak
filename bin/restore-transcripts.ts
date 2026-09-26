@@ -14,8 +14,10 @@
 // importer has passed over those lines ever since, and restoring the eid
 // restores the entry.
 //
-// For each session that lost entries, the log is read again and the entries it
-// holds and the ones it lost are put in the log's order. The held ones' `seq`
+// For each session that lost entries, or whose log goes on past the last line
+// it holds (lines written while this script held the importer off, which an
+// earlier run of it counted read), the log is read again and the entries it
+// holds and the ones it lacks are put in the log's order. The held ones' `seq`
 // moves to that order beneath the graph (apply never moves a `seq`), the lost
 // ones' tombstones are cleared, and they are written in again through apply at
 // the positions between: dated by their line, signed where a person typed them.
@@ -101,14 +103,21 @@ let paced = async <T>(work: () => T | Promise<T>): Promise<T> => {
   }
 }
 
-// The entities among these that stand bare: an identity with no components,
-// neither held nor deleted.
-let bare = async (eids: Eid[]): Promise<Eid[]> =>
-  eids.length
-    ? (await g.get(eids))
-      .filter((r) => r && r[TOMBSTONE] == null && Object.keys(r).length == 1)
-      .map((r) => r!.entity.eid)
-    : []
+// The entities among these the graph holds nothing of, and has not deleted:
+// standing bare (an identity with no components), or, among `unread`, never
+// written.
+let unheld = async (eids: Eid[], unread: Set<Eid>): Promise<Eid[]> => {
+  if (!eids.length) return []
+  let rows = new Map(
+    (await g.get(eids)).filter(Boolean).map((r) => [r.entity.eid, r]),
+  )
+  return eids.filter((e) => {
+    let r = rows.get(e)
+    return r
+      ? r[TOMBSTONE] == null && Object.keys(r).length == 1
+      : unread.has(e)
+  })
+}
 
 // Every eid the migration deleted.
 let lost = new Set(
@@ -181,11 +190,17 @@ let found = new Set<Eid>()
 let shared = new Set<Eid>()
 let t = performance.now()
 for (let [session, files] of logs) {
-  let orders = files.map((f) => orderOf(logOf(session, f.path).lines))
-  let held = await g.read(`.entry.session=${session}&?entry`)
+  let read = files.map((f) => logOf(session, f.path).lines)
+  let orders = read.map(orderOf)
+  let held = await g.read(`.entry.session=${session}&?entry&?imported`)
   let kept = new Set(held.map((b) => b.entity.eid))
-  let orphans = await bare(
+  let top = Math.max(
+    0,
+    ...held.map((b) => Number((b.imported as { line?: number })?.line ?? 0)),
+  )
+  let orphans = await unheld(
     orders.flat().filter((e) => !lost.has(e) && !kept.has(e)),
+    new Set(orderOf(read.flat().filter((l) => l.line > top))),
   )
   orphans.forEach((e) => lost.add(e))
   let here = orders.flat().filter((e) => lost.has(e))
@@ -197,7 +212,7 @@ for (let [session, files] of logs) {
   }
   here.forEach((e) => found.add(e))
   affected.push({ ...files[0], session })
-  if (orphans.length) console.log(`${session}: ${orphans.length} bare`)
+  if (orphans.length) console.log(`${session}: ${orphans.length} unheld`)
   let off = astray(orders[0], held).length
   if (off) console.log(`${session}: ${off} held entries the log does not place`)
 }
