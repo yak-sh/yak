@@ -329,10 +329,12 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
         up: 3,
       },
     )
-    sound.hit(e.great)
+    sound.hit(e.eid, e.great)
     cam.shake = Math.max(cam.shake, e.great ? 0.22 : 0.08)
-  } else if (e.type == 'struck') float(String(e.dmg), p(e.at), 'ally')
-  else if (e.type == 'whiff') sound.whiff()
+  } else if (e.type == 'struck') {
+    float(String(e.dmg), p(e.at), 'ally')
+    sound.struck(e.eid)
+  } else if (e.type == 'whiff') sound.whiff(net.hero)
   else if (e.type == 'roll') {
     dust.emit(p(e.at), 0xc9b896, 6, {
       speed: 1.4,
@@ -340,13 +342,13 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
       life: 0.5,
       size: 0.12,
     })
-    sound.roll()
+    sound.roll(net.hero)
   } else if (e.type == 'dodge') {
     float('Dodged!', p(e.at), 'dodge')
-    sound.dodge()
+    sound.dodge(net.hero)
   } else if (e.type == 'hurt') {
     float(`-${e.dmg}`, p(e.at), 'hurt')
-    sound.hurt()
+    sound.hurt(net.hero)
     cam.shake = Math.max(cam.shake, 0.18)
   } else if (e.type == 'fall') {
     dust.emit(p(e.at), BEASTS[e.beast]?.dust ?? 0xaaaaaa, 22, {
@@ -355,7 +357,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
       life: 0.9,
       size: 0.16,
     })
-    sound.fall()
+    sound.fall(e.eid)
   } else if (e.type == 'xp') float(`+${e.n} xp`, p(e.at), 'xp')
   else if (e.type == 'loot') {
     let t = ITEMS[e.item]
@@ -370,7 +372,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
       size: 0.07,
       fall: 2,
     })
-    sound.pick()
+    sound.pick(e.at)
   } else if (e.type == 'level') {
     h.toast(`Level ${e.lvl}! You feel stronger.`, 'Toast-big')
     glow.emit(heroAt, 0xffd45a, 40, {
@@ -390,8 +392,8 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
       size: 0.07,
       fall: -1,
     })
-    sound.heal()
-  } else if (e.type == 'faint') sound.fall()
+    sound.heal(net.hero)
+  } else if (e.type == 'faint') sound.fall(net.hero)
   else if (e.type == 'rise') h.toast('Back on your feet, by the fire.')
   else if (e.type == 'travel') {
     h.toast(`${LEVELS[e.to]?.name ?? e.to}`, 'Toast-big')
@@ -553,6 +555,7 @@ let loop = (t: number) => {
   }
   aim(cam, camera, target, v, dt)
   w.see(camera.position, target)
+  sound.listen(camera, v, playing ? last : null, net.hero, dt)
   // Embers off the fire, and at night fireflies about the player.
   if (v.hearth && Math.random() < 0.5) {
     let [hx, hz] = v.hearth
@@ -612,6 +615,7 @@ Object.assign(globalThis, {
     renderer,
     camera,
     cam,
+    sound,
   },
 })
 
