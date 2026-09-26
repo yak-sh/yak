@@ -126,6 +126,11 @@ export let VILLAGE: Record<string, Kind> = {
   well: { make: well, girth: 1.2, foot: 1.2, span: [2.2, 2.2] },
   fire: { make: fire, girth: 1.2, foot: 1.5, span: [2.6, 2.6] },
   board: { make: board, girth: 0.35, foot: 0.8, span: [2.2, 0.5] },
-  lamp: { make: lamp, girth: 0.35, foot: 0.3 },
+  lamp: {
+    make: lamp,
+    girth: 0.35,
+    foot: 0.3,
+    glow: { at: [0.5, 2.5, 0], size: 3.2 },
+  },
   signpost: { make: signpost, girth: 0.3, foot: 1 },
 }

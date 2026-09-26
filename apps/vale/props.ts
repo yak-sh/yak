@@ -6,6 +6,7 @@
 // and measured, so what a walker bumps into or stands on is the size it is
 // drawn (`bulk`).
 import { blob, type Out, out, unkey } from './mesh.ts'
+import { COAST } from './props/coast.ts'
 import { DEEP } from './props/deep.ts'
 import { FIRE } from './props/fire.ts'
 import { FROST } from './props/frost.ts'
@@ -22,6 +23,7 @@ export type { Kind }
 export let KINDS: Record<string, Kind> = {
   ...VILLAGE,
   ...VALE,
+  ...COAST,
   ...MARSH,
   ...HILLS,
   ...SANDS,

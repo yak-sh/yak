@@ -35,19 +35,21 @@ export let crest = (n: number) => 1 - Math.abs(2 * n - 1)
  * (`hold`). A place that shapes `last` flattens what the others raised.
  *
  * Where it holds a point, a place decides what the ground is topped with:
- * `cover`, from noise `n` in [0, 1) and the distance to its middle, or none
- * to leave it to the next place; `shore` where the ground is low and `cliff`
- * where it is steep. It decides how much likelier a tree or a rock is there
- * (`trees`, `rocks`), which ones grow (`grows`, `stones`), and what grows
- * underfoot (`decor`: each kind with its chance in a half-metre cell). What
- * it `builds` stands around its middle, by where from it. Heights are in
+ * `cover`, from noise `n` in [0, 1), the distance to its middle and where the
+ * point is, or none to leave it to the next place; `shore` where the ground
+ * is low and `cliff` where it is steep. It decides how much likelier a tree
+ * or a rock is there (`trees`, `rocks`), which ones grow (`grows`, `stones`),
+ * and what grows underfoot (`decor`: each kind with its chance in a
+ * half-metre cell), on green ground only unless it lies `strewn` over sand
+ * and stone as well (shells, weed at the tide). What it `builds` stands
+ * around its middle, by where from it. Heights are in
  * metres. A kind of place one level has alone is `like` a kind more have
  * (a heather fell is a moor), so what lives in the one lives in the other. */
 export type Feature = {
   shape: (h: number, d: number, x: number, z: number, s: number) => number
   hold: (d: number) => number
   last?: boolean
-  cover?: (n: number, d: number) => number | undefined
+  cover?: (n: number, d: number, x: number, z: number) => number | undefined
   shore?: number
   cliff?: number
   trees?: number
@@ -55,6 +57,7 @@ export type Feature = {
   grows?: string[]
   stones?: string[]
   decor?: [string, number][]
+  strewn?: boolean
   builds?: Prop[]
   like?: string
 }

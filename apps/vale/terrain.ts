@@ -18,7 +18,7 @@
 // hero arrives out to the middle of each side that leads somewhere, on a bed
 // of its own: level enough to walk, dry over water, and through the
 // mountains at the rim by a pass.
-import { type Feature, FEATURES, Top } from './features.ts'
+import { type Feature, FEATURES, isA, Top } from './features.ts'
 import { type Level, LEVELS, type Side, type Spot } from './levels.ts'
 import { bulk, KINDS } from './props.ts'
 import { clamp, fbm, hash, lerp, rand, smooth } from './rand.ts'
@@ -164,9 +164,9 @@ let lead = (
 
 // What the kinds holding a point cover it with, strongest first; none if
 // none of them says.
-let coverOf = (w: Hold, n: number) => {
+let coverOf = (w: Hold, n: number, x: number, z: number) => {
   for (let i = lead(w, 0.42); i >= 0; i = lead(w, 0.42, undefined, w.k[i])) {
-    let t = w.fs[i].cover?.(n, w.far[i])
+    let t = w.fs[i].cover?.(n, w.far[i], x, z)
     if (t != null) return t
   }
 }
@@ -350,7 +350,7 @@ export let steep = (
 
 // The lanes that run from the village out to each place.
 let lanesOf = (lv: Level): Course[] => {
-  let home = Object.values(lv.places).find((p) => p.kind == 'village')
+  let home = Object.values(lv.places).find((p) => isA(p.kind, 'village'))
   if (!home) return []
   return Object.values(lv.places)
     .filter((p) => dist(p.at[0], p.at[1], home.at) >= 1)
@@ -437,14 +437,14 @@ let build = (lv: Level, V: number): Vale => {
         ? most?.shore ?? Top.sand
         : roads[at(i, k)] < ROAD || lanes[at(i, k)] < 0.85 && w.rim < 0.4
         ? Top.path
-        : coverOf(w, fbm(x / 3, z / 3, 11 + s, 2)) ??
+        : coverOf(w, fbm(x / 3, z / 3, 11 + s, 2), x, z) ??
           (w.rim > 0.45 ? Top.dry : Top.grass)
     }
   }
 
   // Each village paved where people gather; what each place builds round its
   // middle; and each road's signpost, where a hero coming in by it stands.
-  let villages = Object.values(lv.places).filter((p) => p.kind == 'village')
+  let villages = Object.values(lv.places).filter((p) => isA(p.kind, 'village'))
   let built: Prop[] = []
   for (let vil of villages) {
     for (let k = 0; k < n; k++) {
@@ -505,19 +505,19 @@ let build = (lv: Level, V: number): Vale => {
 
   // Flowers, grass, reeds and the like, one chance per cell of the grid:
   // what the strongest place holding it says, or on green ground, flowers and
-  // grass.
+  // grass; on sand and stone only what a place strews there.
   let cells = SIZE / GRID
   for (let ck = 1; ck < cells - 1; ck++) {
     for (let ci = 1; ci < cells - 1; ci++) {
       let x = (ci + 0.5) * GRID, z = (ck + 0.5) * GRID
       let j = at(Math.floor(x / V), Math.floor(z / V))
       let t = top[j]
-      if (BARE.has(t) || taken(x, z, lanes[j], roads[j])) continue
+      if (t == Top.path || taken(x, z, lanes[j], roads[j])) continue
       let roll = rand(ci, ck, 9 + s)
       if (roll >= LUSH) continue
-      let w = hold(x, z)
-      let list = w.fs[lead(w, 0.42, (f) => f.decor)]?.decor ??
-        (GREEN.has(t) ? DECOR : [])
+      let w = hold(x, z), f = w.fs[lead(w, 0.42, (f) => f.decor)]
+      if (BARE.has(t) && !f?.strewn) continue
+      let list = f?.decor ?? (GREEN.has(t) ? DECOR : [])
       let sum = 0
       for (let [kind, chance] of list) {
         if (roll < (sum += chance)) {

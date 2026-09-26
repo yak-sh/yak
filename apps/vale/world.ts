@@ -305,16 +305,21 @@ export let world = (v: Vale): World => {
     return m
   })
 
-  // The village's lamps, lit at dusk: a bright lantern in a round halo.
+  // What glows at dusk, the village's lamps and the like: a bright lantern
+  // in a round halo.
   let halo = glowTexture()
   let lamps: {
     lantern: THREE.MeshBasicMaterial
     halo: THREE.SpriteMaterial
   }[] = []
   for (let p of v.props) {
-    if (p.kind != 'lamp') continue
-    let x = p.x + 0.5, z = p.z
-    let y = standAt(v, p) + 2.5
+    let lit = KINDS[p.kind].glow
+    if (!lit) continue
+    let [x, y, z] = [
+      p.x + lit.at[0],
+      standAt(v, p) + lit.at[1],
+      p.z + lit.at[2],
+    ]
     let lantern = new THREE.MeshBasicMaterial({
       color: 0xffc860,
       transparent: true,
@@ -322,7 +327,8 @@ export let world = (v: Vale): World => {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     })
-    let box = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.56, 0.56), lantern)
+    let side = lit.size * 0.175
+    let box = new THREE.Mesh(new THREE.BoxGeometry(side, side, side), lantern)
     box.position.set(x, y, z)
     let glow = new THREE.SpriteMaterial({
       map: halo,
@@ -334,7 +340,7 @@ export let world = (v: Vale): World => {
     })
     let sprite = new THREE.Sprite(glow)
     sprite.position.set(x, y, z)
-    sprite.scale.setScalar(3.2)
+    sprite.scale.setScalar(lit.size)
     scene.add(box, sprite)
     lamps.push({ lantern, halo: glow })
   }
