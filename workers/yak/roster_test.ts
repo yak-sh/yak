@@ -137,12 +137,14 @@ Deno.test(
       // release check, so they are printed only when asked for.
       let called = new Set<string>()
       let heard: string[] = []
-      let tool = async (name: string, args: Record<string, unknown> = {}) => {
+      let answer = async (name: string, args: Record<string, unknown> = {}) => {
         called.add(name)
-        let said = await agent.tool(name, args)
-        heard.push(`${name}: ${said.split('\n')[0].slice(0, 90)}`)
+        let said = await agent.answer(name, args)
+        heard.push(`${name}: ${said.text.split('\n')[0].slice(0, 90)}`)
         return said
       }
+      let tool = async (name: string, args: Record<string, unknown> = {}) =>
+        (await answer(name, args)).text
 
       // ---- the handshake ------------------------------------------------
       let init = await agent.call('initialize', HELLO)
@@ -192,9 +194,9 @@ Deno.test(
       let theirs = `roster-${tag()}`
       let eids: Record<string, string> = {}
       for (let slug of [mine, theirs]) {
-        let made = await tool('space_new', { slug, title: slug })
-        assertStringIncludes(made, `space ${slug} (`)
-        eids[slug] = /\(([0-9a-f-]{36})\)/.exec(made)![1]
+        let made = await answer('space_new', { slug, title: slug })
+        assertStringIncludes(made.text, `space ${slug} (`)
+        eids[slug] = String(made.value?.eid)
         spaces.push(slug)
       }
       assertStringIncludes(

@@ -7,7 +7,8 @@ import { assertStringIncludes } from '@std/assert'
 import { until } from '../../bin/testing.ts'
 import { connector, kernel, meta, plus, signIn } from './probe.ts'
 
-let eidIn = (said: string) => /\(([0-9a-f-]{36})\)/.exec(said)![1]
+let eidIn = (said: { value?: Record<string, unknown> }) =>
+  String(said.value?.eid)
 
 Deno.test('free allowances hold per person, not per space', async () => {
   let k = await kernel()
@@ -20,7 +21,7 @@ Deno.test('free allowances hold per person, not per space', async () => {
     let his = connector(k, bob.cookie)
     let tag = crypto.randomUUID().slice(0, 6)
     let make = (n: number) =>
-      hers.tool('space_new', { slug: `a${tag}${n}`, title: `A${n}` })
+      hers.answer('space_new', { slug: `a${tag}${n}`, title: `A${n}` })
 
     // Signing in made her one; three more is four.
     let made = [await make(1), await make(2), await make(3)].map(eidIn)

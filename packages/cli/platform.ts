@@ -91,8 +91,7 @@ export let printed = async (
   args: Record<string, unknown> = {},
   wrote = false,
 ): Promise<number> => {
-  let read = saidBy(said)
-  let { text, stale } = read
+  let { text, stale } = saidBy(said)
   // What this result reported about the tool list this client is holding
   // (roster.ts). A staleness notice alone is enough to drop the cache; a
   // caller holding no list has nothing of its own to keep fresh, and must not
@@ -101,7 +100,7 @@ export let printed = async (
     forget(c.host, c.state)
     c.note(stale)
   } else if (roster) {
-    let next = rosterAfter(roster, name, read)
+    let next = rosterAfter(roster, name, said)
     if (!next) forget(c.host, c.state)
     else if (next != roster) remember(c.host, next, c.state)
   }

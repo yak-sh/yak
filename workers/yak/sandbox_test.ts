@@ -179,7 +179,7 @@ Deno.test('the machine tools write, run and read, and a ship copies out', async 
   assertEquals([...box.alive], [`build-${space.eid}`])
 })
 
-Deno.test('sandbox_exec, as the directory listed it, runs its cmd and answers the code first', async () => {
+Deno.test('sandbox_exec, as the directory listed it, runs its cmd and answers as sandbox_shell does', async () => {
   let { ctx, box } = await bench(() => ({
     stdout: 'Finished\n',
     stderr: 'error: no main\n',
@@ -189,7 +189,7 @@ Deno.test('sandbox_exec, as the directory listed it, runs its cmd and answers th
     cmd: 'cargo build',
     timeout: 30,
   })
-  assertEquals(ran.text, 'code 101\n\nFinished\nerror: no main')
+  assertStringIncludes(ran.text, 'exited 101\nFinished\nerror: no main')
   assertEquals(box.ran, ['cargo build'])
 })
 

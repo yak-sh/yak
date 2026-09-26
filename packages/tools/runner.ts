@@ -78,6 +78,7 @@ import { derivedEid, identityEid } from '@yaks/graph'
 import { effectsIn } from '@yaks/vocab'
 import { CallError, parsed, resolved, validated } from './args.ts'
 import { toolsDoc } from './vocab.ts'
+import { valueIn } from './value.ts'
 
 // What each call is doing right now in this process, keyed per graph, not per
 // runner: a second runner over the same graph that is asked for a call in
@@ -292,26 +293,6 @@ let measured = (answer: Bundle[], most: number) => {
     }
   }
 }
-
-/**
- * The `output{value}` an answer carries: the same answer as data, beside the
- * words a person reads. A caller that wants the answer's facts reads them here,
- * never out of the words, which may carry more than the answer.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * let said = { entity: { eid: '$said' }, content: { body: 'a.txt' } }
- * let files = { files: [{ path: 'a.txt' }] }
- * assertEquals(valueIn([{ ...said, output: { value: files } }]), files)
- * assertEquals(valueIn([said]), undefined)
- * ```
- */
-export let valueIn = (
-  answer: Bundle[],
-): Record<string, unknown> | undefined =>
-  answer
-    .map((b) => (b.output as Comp | undefined)?.value)
-    .find((v): v is Record<string, unknown> => !!v && typeof v == 'object')
 
 /**
  * A tool's answer as data, for a reader that parses rather than reads: the

@@ -51,9 +51,14 @@ Deno.test('the dashboard is at the apex, whatever serves the space', async () =>
     // `manage` is reserved now (route.ts RESERVED), and an app that held the
     // name before that keeps it: made under another slug, then renamed in
     // the directory the way it stood before the reservation.
-    let held = /\(([0-9a-f-]{36})\)/.exec(
-      await agent.tool('app_new', { space: slug, slug: 'held', title: 'held' }),
-    )![1]
+    let held = String(
+      (await agent.answer('app_new', {
+        space: slug,
+        slug: 'held',
+        title: 'held',
+      }))
+        .value?.eid,
+    )
     await dir.apply([{ entity: { eid: held }, app: { slug: 'manage' } }])
     await agent.tool('app_set', { space: slug, app: 'site', home: true })
     await agent.tool('app_set', {

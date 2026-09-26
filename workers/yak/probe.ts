@@ -18,7 +18,9 @@ import { b64u } from './mcp-probe.ts'
 import { until } from '../../bin/testing.ts'
 import { COOKIE, sign, verify } from './lib/token.ts'
 import type { Custom } from './domains.ts'
+import type { Command } from './declared.ts'
 import type { Bundle } from '@yaks/graph'
+import { valueIn } from '@yaks/tools/value'
 import { parse } from '@std/toml'
 
 /** What the run's kernel checks a Stripe event against, at both doors
@@ -466,21 +468,13 @@ export let connector = (
     return reply.result
   }
   // A reply's two readers: the words a person reads, and the same answer as
-  // data, which is what a program reads — the words carry more than the
-  // answer. The data is the `output{value}` on the answer's bundles, read here
-  // as @yaks/tools `valueIn` reads it: the test run's own process loads this
-  // module to start a kernel, without the npm packages @yaks/tools imports.
+  // data (@yaks/tools `valueIn`), which is what a program reads — the words
+  // carry more than the answer.
   let answer = async (name: string, args: unknown = {}) => {
     let out = await call('tools/call', { name, arguments: args })
     let text = String(out.content[0].text)
     if (out.isError) throw new Error(text)
-    let said = (out.structuredContent?.result ?? []) as Bundle[]
-    let value = said
-      .map((b) => (b.output as { value?: unknown } | undefined)?.value)
-      .find((v) => v && typeof v == 'object') as
-        | Record<string, unknown>
-        | undefined
-    return { text, value }
+    return { text, value: valueIn(out.structuredContent?.result ?? []) }
   }
   let tool = async (name: string, args: unknown = {}) =>
     (await answer(name, args)).text
@@ -644,54 +638,27 @@ export let meta = (k: Kernel, cookie = k.owner.cookie) => {
   }
 }
 
-// The two shapes a tool's words carry, read back out of them. A tool answers
-// bundles now, so what a probe used to pick off `structuredContent` is in the
-// prose — and every test that wants it wants it the same way.
+// What `commands` and `command` answer as data (tools.ts, declared.ts `ran`),
+// read off the answer: its words are for a model, and carry more.
 
-/** One line of what `commands` answers (tools.ts). */
-export type Listed = {
-  /** `<space>/<app>`, off the header the app's commands sit under */
-  at: string
-  name: string
-  /** its arguments as the listing writes them: `who, miles, pace?` */
-  args: string
-  /** `writes` rather than `reads` */
-  writes: boolean
-  description: string
+type Agent = ReturnType<typeof connector>
+
+/** Every command the agent can reach, or the ones of the app `args` names. */
+export let commandsOf = async (
+  agent: Agent,
+  args: Record<string, unknown> = {},
+): Promise<Command[]> =>
+  (await agent.answer('commands', args)).value?.commands as Command[]
+
+/** A command's arguments: every one it takes, and the ones it needs. */
+export let argsIn = (c: Command) => {
+  let s = c.input as { properties?: object; required?: string[] }
+  return { all: Object.keys(s.properties ?? {}), need: s.required ?? [] }
 }
 
-export let commandsIn = (said: string): Listed[] => {
-  let at = ''
-  let out: Listed[] = []
-  for (let line of said.split('\n')) {
-    let head = /^## (\S+)$/.exec(line)
-    if (head) {
-      at = head[1]
-      continue
-    }
-    let one = /^(\w+)\(([^)]*)\) (reads|writes) — (.+)$/.exec(line)
-    if (one) {
-      out.push({
-        at,
-        name: one[1],
-        args: one[2],
-        writes: one[3] == 'writes',
-        description: one[4],
-      })
-    }
-  }
-  return out
-}
-
-/**
- * The rows a query command answered, from under its sentence: `command` says
- * `<name>: N rows in <at>` and then the rows (declared.ts `ran`), with the
- * unseen block after them where the caller has a space to be told about.
- */
-export let rowsIn = <T>(said: string): T[] =>
-  JSON.parse(
-    said.slice(said.indexOf('\n\n') + 2).split('\n\n## ')[0],
-  ) as T[]
+/** The rows a query command answered. */
+export let rowsOf = <T>(said: { value?: Record<string, unknown> }): T[] =>
+  said.value?.rows as T[]
 
 // An app's `vocab.json`, as a probe writes one: the document, without every
 // test writing out `$defs` and `properties` around two properties. A property
@@ -726,21 +693,18 @@ export let seed = async (
 ) => {
   let them = await signIn(k)
   let agent = connector(k, them.cookie)
-  // Each of those tools names what it made as `slug (eid)`.
-  let idOf = (said: string) => {
-    let hit = /\(([0-9a-f-]{36})\)/.exec(said)
-    if (!hit) throw new Error(`no eid in: ${said}`)
-    return hit[1]
-  }
+  // Each of those tools answers the eid of what it made.
+  let made = async (tool: string, args: Record<string, unknown>) =>
+    String((await agent.answer(tool, args)).value?.eid)
   let eids: Record<string, string> = {}
   for (let s of spaces) {
-    eids[s.slug] = idOf(
-      await agent.tool('space_new', { slug: s.slug, title: s.slug }),
-    )
+    eids[s.slug] = await made('space_new', { slug: s.slug, title: s.slug })
     for (let a of s.apps) {
-      eids[`${s.slug}/${a}`] = idOf(
-        await agent.tool('app_new', { space: s.slug, slug: a, title: a }),
-      )
+      eids[`${s.slug}/${a}`] = await made('app_new', {
+        space: s.slug,
+        slug: a,
+        title: a,
+      })
     }
   }
   return { ...them, eids }

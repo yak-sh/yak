@@ -21,28 +21,45 @@ Deno.test('the roster line is news about this program, not the answer', () => {
   )
 })
 
-Deno.test('an about answer names the list it served', () => {
-  assertEquals(
-    versionIn('The tools here right now, roster 1a2b3c4d:\nabout, search'),
-    '1a2b3c4d',
-  )
-  assertEquals(versionIn('nothing of the sort'), undefined)
+// A reply as the server sends one: its words, and the answer as data.
+let reply = (text: string, value?: Record<string, unknown>, more?: string) => ({
+  content: [
+    { type: 'text', text },
+    ...more ? [{ type: 'text', text: more }] : [],
+  ],
+  structuredContent: {
+    result: [{
+      entity: { eid: '$said' },
+      content: { body: text },
+      ...value ? { output: { value } } : {},
+    }],
+  },
+})
+let about = (version: string) =>
+  reply(`The tools here right now, roster ${version}`, {
+    roster: { version, names: ['about'] },
+  })
+
+Deno.test('an about answer names the list it served, as data', () => {
+  assertEquals(versionIn(about('1a2b3c4d')), '1a2b3c4d')
+  // Words that look like a version are words.
+  assertEquals(versionIn(reply('roster 1a2b3c4d')), undefined)
 })
 
 Deno.test('a cached list is dropped on the news, and never asked about', () => {
   // An ordinary answer says nothing about the list — the cache stands.
-  assertEquals(rosterAfter(held, 'graph_query', { text: '[]' }), held)
+  assertEquals(rosterAfter(held, 'graph_query', reply('[]')), held)
   // The roster line says the list moved: drop it and list again.
-  assertEquals(rosterAfter(held, 'graph_query', { text: '[]', stale }), null)
-  // An `about` naming this version confirms it; naming another drops it.
-  assertEquals(rosterAfter(held, 'about', { text: 'roster 1a2b3c4d' }), held)
-  assertEquals(rosterAfter(held, 'about', { text: 'roster ffffffff' }), null)
-  // A list nobody has stamped yet takes the version it just heard.
   assertEquals(
-    rosterAfter({ tools: [] }, 'about', { text: 'roster 1a2b3c4d' }),
-    {
-      tools: [],
-      version: '1a2b3c4d',
-    },
+    rosterAfter(held, 'graph_query', reply('[]', undefined, stale)),
+    null,
   )
+  // An `about` naming this version confirms it; naming another drops it.
+  assertEquals(rosterAfter(held, 'about', about('1a2b3c4d')), held)
+  assertEquals(rosterAfter(held, 'about', about('ffffffff')), null)
+  // A list nobody has stamped yet takes the version it just heard.
+  assertEquals(rosterAfter({ tools: [] }, 'about', about('1a2b3c4d')), {
+    tools: [],
+    version: '1a2b3c4d',
+  })
 })

@@ -4,6 +4,7 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
+    "./value": "./value.ts",
     "./views": "./views.ts"
   },
   "license": "Apache-2.0",

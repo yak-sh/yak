@@ -14,6 +14,7 @@
 // about this program, so `saidBy` separates it from the result: the caller
 // prints it on stderr and stdout stays exactly what was asked for.
 
+import { valueIn } from '@yaks/tools/value'
 import type { Roster } from './store.ts'
 
 /** A tool result, as much of it as this client reads. */
@@ -37,9 +38,15 @@ export let saidBy = (out: Result): { text: string; stale?: string } => {
   }
 }
 
-/** The roster version an `about` result names (workers/yak `tools.ts`). */
-export let versionIn = (text: string): string | undefined =>
-  /\broster ([0-9a-f]{8})\b/.exec(text)?.[1]
+/** The roster version an `about` result names (workers/yak `tools.ts`), off
+ * the answer as data: its words are for a person. */
+export let versionIn = (out: Result): string | undefined => {
+  let result = (out.structuredContent as { result?: unknown } | undefined)
+    ?.result
+  let roster = Array.isArray(result) ? valueIn(result)?.roster : undefined
+  let version = (roster as { version?: unknown } | undefined)?.version
+  return typeof version == 'string' ? version : undefined
+}
 
 /**
  * The roster to keep after a result: the same one, the same one stamped with
@@ -47,17 +54,25 @@ export let versionIn = (text: string): string | undefined =>
  * `tools/list` again.
  *
  * ```ts
- * rosterAfter({ tools: [] }, 'about', { text: 'roster 1a2b3c4d' })
+ * let about = {
+ *   structuredContent: {
+ *     result: [{
+ *       entity: { eid: '$said' },
+ *       output: { value: { roster: { version: '1a2b3c4d' } } },
+ *     }],
+ *   },
+ * }
+ * rosterAfter({ tools: [] }, 'about', about)
  * // { tools: [], version: '1a2b3c4d' }
  * ```
  */
 export let rosterAfter = (
   roster: Roster,
   name: string,
-  said: { text: string; stale?: string },
+  out: Result,
 ): Roster | null => {
-  if (said.stale) return null
-  let seen = name == 'about' ? versionIn(said.text) : undefined
+  if (saidBy(out).stale) return null
+  let seen = name == 'about' ? versionIn(out) : undefined
   if (!seen) return roster
   if (!roster.version) return { ...roster, version: seen }
   return roster.version == seen ? roster : null

@@ -38,8 +38,8 @@ export {
   structured,
   toolEid,
   UnfinishedCall,
-  valueIn,
   WOKEN,
   worded,
   WORDS,
 } from './runner.ts'
+export { valueIn } from './value.ts'

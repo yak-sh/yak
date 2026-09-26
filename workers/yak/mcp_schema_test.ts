@@ -9,11 +9,12 @@ import { Ajv } from 'ajv'
 import { until } from '../../bin/testing.ts'
 import {
   accepted,
-  commandsIn,
+  argsIn,
+  commandsOf,
   connector,
   kernel,
   num,
-  rowsIn,
+  rowsOf,
   signIn,
   txt,
   vocabFile,
@@ -74,8 +75,8 @@ Deno.test('an app declares its own commands, and command runs them', async () =>
 
     // What the app can be asked to do, said by the one fixed tool (T-34541):
     // the commands, the app each belongs to, and the arguments each takes.
-    let commands = async (args: Record<string, unknown> = {}) =>
-      commandsIn(await agent.tool('commands', args))
+    let commands = (args: Record<string, unknown> = {}) =>
+      commandsOf(agent, args)
     let all = await commands()
     // The two it declared, and the two its `jog` is worth (kinds.ts).
     assertEquals(all.map((c) => c.name), [
@@ -90,16 +91,16 @@ Deno.test('an app declares its own commands, and command runs them', async () =>
     // the person called it, and a model choosing reads the words.
     assertStringIncludes(log.description, 'Run club')
     assertStringIncludes(log.description, `${space}.yaks.app/runs/`)
-    // Its arguments as the listing writes them, required ones bare.
-    assertEquals(log.args, 'who, miles')
-    assert(log.writes, 'logging a run is a write')
+    // Its arguments, as the JSON Schema `command` fills `args` by.
+    assertEquals(argsIn(log), { all: ['who', 'miles'], need: ['who', 'miles'] })
+    assert(!log.readOnly, 'logging a run is a write')
 
     // The app's own MCP App view (T-32687): the command names the page, the
     // door serves it out of the app's own files under the profile, and a
     // `<base>` at the app's address keeps the stylesheet beside it working.
     let view = `ui://${space}/runs/leaderboard.html`
     let board0 = all.find((c) => c.name == 'leaderboard')!
-    assert(!board0.writes, 'a leaderboard only reads')
+    assert(board0.readOnly, 'a leaderboard only reads')
     let listed = (await agent.call('resources/list')).resources
       .find((r: { uri: string }) => r.uri == view)
     assertEquals(listed.mimeType, 'text/html;profile=mcp-app')
@@ -161,11 +162,11 @@ Deno.test('an app declares its own commands, and command runs them', async () =>
     assertEquals(rows[0].created.by, { eid: jeff.person, name: jeff.name })
     // And the read half answers the listing a page gets — the same byline,
     // through the declared tool's own query.
-    let board = await agent.tool('command', { name: 'leaderboard' })
-    assertStringIncludes(board, 'leaderboard: 1 row')
-    // The rows are said once, under the sentence, and they still carry who
+    let board = await agent.answer('command', { name: 'leaderboard' })
+    assertStringIncludes(board.text, 'leaderboard: 1 row')
+    // The rows ride as data beside the sentence, and they still carry who
     // wrote them: a command runs as the person who asked for it.
-    assertEquals(rowsIn<Run>(board)[0].created.by, {
+    assertEquals(rowsOf<Run>(board)[0].created.by, {
       eid: jeff.person,
       name: jeff.name,
     })
@@ -313,7 +314,7 @@ Deno.test(
 
       // They are ordinary declared commands: the app's title and address on the
       // sentence, and the read half marked read-only.
-      let listed = async () => commandsIn(await agent.tool('commands'))
+      let listed = () => commandsOf(agent)
       let all = await listed()
       let add = all.find((t) => t.name == 'add_recipe')!
       let find = all.find((t) => t.name == 'find_recipe')!
@@ -323,13 +324,15 @@ Deno.test(
           `${space}.yaks.app/box/`,
       )
       assertStringIncludes(find.description, `Find recipes in ${space}/box.`)
-      assert(add.writes, 'adding a recipe writes it')
-      assert(!find.writes, 'finding them does not')
-      // The kind's own properties are the arguments, and only the title is owed —
-      // the optional ones wear the `?` the listing marks them with.
-      assertEquals(add.args, 'title, body?, alias?, serves?, cuisine?')
-      // Nothing at all is owed to the find: every argument it takes wears `?`.
-      assertEquals(find.args.split(', ').filter((a) => !a.endsWith('?')), [])
+      assert(!add.readOnly, 'adding a recipe writes it')
+      assert(find.readOnly, 'finding them does not')
+      // The kind's own properties are the arguments, and only the title is owed.
+      assertEquals(argsIn(add), {
+        all: ['title', 'body', 'alias', 'serves', 'cuisine'],
+        need: ['title'],
+      })
+      // Nothing at all is owed to the find.
+      assertEquals(argsIn(find).need, [])
 
       // Adding writes the row: the kind, the title, the properties given — and
       // the name it answers to afterwards.
@@ -354,8 +357,8 @@ Deno.test(
         args: { title: 'Toast' },
       })
       let found = async (args: Record<string, unknown>) =>
-        rowsIn<{ doc: { title: string } }>(
-          await agent.tool('command', { name: 'find_recipe', args }),
+        rowsOf<{ doc: { title: string } }>(
+          await agent.answer('command', { name: 'find_recipe', args }),
         )
       assertEquals((await found({})).map((r) => r.doc.title), [
         'Lemon cake',
@@ -487,8 +490,7 @@ Deno.test(
 
       // What differs is the commands, which are a caller's own: his app's, and
       // nothing of hers — her app is in her space, and he is nobody there.
-      let commands = async (agent: ReturnType<typeof connector>) =>
-        commandsIn(await agent.tool('commands'))
+      let commands = (agent: ReturnType<typeof connector>) => commandsOf(agent)
       // Each app's own, and the two every word it declares is worth beside
       // them (kinds.ts).
       assertEquals((await commands(club.agent)).map((c) => c.name), [

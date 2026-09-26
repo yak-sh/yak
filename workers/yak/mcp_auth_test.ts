@@ -391,10 +391,14 @@ Deno.test('the door before anyone signs in', async () => {
     // and the version naming it (T-34277), which is the answer to "is my tool
     // list still the tool list". Nobody signed in has a roster to be told
     // about — the public list is this one tool.
-    let ours = await agent.tool('about')
+    let { text: ours, value } = await agent.answer('about')
     assertStringIncludes(ours, said)
     assertMatch(ours, /The tools here right now, roster [0-9a-f]{8}:/)
     for (let name of full) assertStringIncludes(ours, name)
+    // And the same as data, which is what a client keeps its list by.
+    let roster = value?.roster as { version: string; names: string[] }
+    assertMatch(roster.version, /^[0-9a-f]{8}$/)
+    assertEquals(roster.names, full)
     let mine = ((await agent.call('resources/list')).resources as {
       uri: string
     }[]).map((r) => r.uri)

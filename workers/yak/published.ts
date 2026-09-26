@@ -115,8 +115,8 @@ let linksOf = async (read: Read, app: string) =>
 
 let ROWS: Row[] = [
   // sandbox_shell, under the name, arguments and seconds it was listed with,
-  // answered code first. Its two streams arrive as one, as sandbox_shell
-  // prints them.
+  // answering what sandbox_shell answers: the exit code and the last lines
+  // the command printed, which is what the listing promised.
   {
     name: 'sandbox_exec',
     destructive: true,
@@ -136,20 +136,14 @@ let ROWS: Row[] = [
       },
       required: ['cmd'],
     },
-    run: async (ctx, args) => {
+    run: (ctx, args) => {
       let secs = Number(args.timeout ?? 0)
-      let out = await call(ctx, 'sandbox_shell', {
+      return call(ctx, 'sandbox_shell', {
         space: args.space,
         command: text(args.cmd, 'cmd'),
         cwd: args.cwd ?? CWD,
         timeout: secs > 0 ? Math.min(secs * 1000, TIMEOUT) : TIMEOUT,
       })
-      let [head, ...said] = out.text.split('\n')
-      let code = /exited (-?\d+)$/.exec(head)?.[1]
-      return code == null ? out : {
-        ...out,
-        text: `code ${code}\n\n${said.join('\n') || '(nothing)'}`,
-      }
     },
   },
   // A secret is a connection now: a key of the app's own, handed to its

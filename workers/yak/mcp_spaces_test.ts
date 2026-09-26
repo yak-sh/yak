@@ -9,7 +9,7 @@ import { until } from '../../bin/testing.ts'
 import {
   accepted,
   client,
-  commandsIn,
+  commandsOf,
   connector,
   kernel,
   letters,
@@ -414,8 +414,7 @@ Deno.test('an app goes to the trash, and app_restore brings it back', async () =
     let at = { space: 'binlab49', app: 'notes' }
     // What the app can be asked to do — its commands leave every list the day
     // it goes in the trash and come back with it (T-34430, T-34541).
-    let listed = async () =>
-      commandsIn(await agent.tool('commands')).map((c) => c.name)
+    let listed = async () => (await commandsOf(agent)).map((c) => c.name)
     let page = () => k.at('binlab49.yaks.app', '/notes/')
 
     await agent.tool('app_new', { ...at, slug: 'notes', title: 'Notes' })
@@ -521,8 +520,7 @@ Deno.test(
       let them = await seed(k, [{ slug: 'binspace50', apps: [] }])
       let agent = connector(k, them.cookie)
       let at = { space: 'binspace50', app: 'notes' }
-      let listed = async () =>
-        commandsIn(await agent.tool('commands')).map((c) => c.name)
+      let listed = async () => (await commandsOf(agent)).map((c) => c.name)
       let page = (path = '/notes/') => k.at('binspace50.yaks.app', path)
 
       await agent.tool('app_new', { ...at, slug: 'notes', title: 'Notes' })

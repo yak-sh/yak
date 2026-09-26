@@ -1719,8 +1719,8 @@ export let uiMeta = (domain: string, csp: Csp = {}) => ({
 // an agent chooses one (guide.ts `brief`).
 // One command's arguments, as a signature a model reads: the required ones,
 // then the optional ones marked `?`. It is the same JSON Schema `command`
-// takes in `args` (lib/tools.ts `schemaOf`), said the short way — which is
-// the only way it is said, since an answer is bundles and carries no schema.
+// takes in `args` (lib/tools.ts `schemaOf`), said the short way; the schema
+// itself rides in the answer's data.
 let argsOf = (input: unknown) => {
   let s = (input ?? {}) as {
     properties?: Record<string, unknown>
@@ -1822,9 +1822,11 @@ let OURS: Row[] = [
         ],
       }, vouched({ person: ctx.person, role: 'owner' }))
       let space = (await ctx.dir.space(s))!
+      let at = `https://${spaceHost(ctx.env, s)}/`
       return {
-        text: `space ${s} (${space.eid}): https://${spaceHost(ctx.env, s)}/`,
+        text: `space ${s} (${space.eid}): ${at}`,
         space,
+        value: { eid: space.eid, url: at },
       }
     },
   },
@@ -2192,13 +2194,14 @@ let OURS: Row[] = [
       let front = await ctx.dir.home(space)
       await ctx.dir.apply({ entities }, vouched(who))
       let app = (await ctx.dir.app(space, s))!
+      let at = url(space, app, ctx.env)
       return {
-        text:
-          `app ${space.slug}/${s} (${app.eid}): ${url(space, app, ctx.env)}` +
+        text: `app ${space.slug}/${s} (${app.eid}): ${at}` +
           ` — ${told(app.access)}. https://${spaceHost(ctx.env, space.slug)}/ ${
             front ? `opens ${front.slug}` : "lists the space's apps"
           } — app_set(app, home: true) makes this one the front page there`,
         space,
+        value: { eid: app.eid, url: at },
       }
     },
   },
@@ -3374,8 +3377,12 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let said = args.app == null ? '' : text(args.app, 'app')
       let all = await listCommands(ctx, said)
+      // Each command whole, for a program: the words below are the same list
+      // said for a model, grouped and shortened.
+      let value = { commands: all }
       if (!all.length) {
         return {
+          value,
           text: said
             ? `${said} declares no commands — app_deploy plants the two every ` +
               'word in its vocab.json is worth, and a $defs entry marked ' +
@@ -3399,8 +3406,7 @@ let OURS: Row[] = [
         }
         // Whether it reads or writes, in the line: half of these commands
         // mutate and half do not, and a model choosing between them is owed
-        // that before it picks. It used to ride as a field on the answer, and
-        // an answer is bundles now, so it is said in the words like the rest.
+        // that before it picks.
         lines.push(
           `${one.name}(${argsOf(one.input)}) ${
             one.readOnly ? 'reads' : 'writes'
@@ -3408,6 +3414,7 @@ let OURS: Row[] = [
         )
       }
       return {
+        value,
         text: `${lines.join('\n')}\n\nRun one with command(name, args) — and ` +
           'app too where two apps spell the same command.',
       }
@@ -4628,10 +4635,12 @@ let OURS: Row[] = [
     // the version naming that list (T-34277) — so an agent whose cached list
     // is old has one call that settles what it has, without reconnecting.
     // Before signing in the same words are said with neither (preauth.ts): the
-    // public list is one tool, and it is this one.
+    // public list is one tool, and it is this one. The roster is answered as
+    // data too, since a client keeps its cached list by that version.
     run: async (ctx) => ({
       text: publics(ctx.env).find((one) => one.name == t.name)!.text +
         await whoami(ctx) + said(ctx) + rostered(ctx),
+      ...ctx.roster ? { value: { roster: ctx.roster } } : {},
     }),
   })),
   // And the gallery (gallery.ts, T-34478), which is the same list to a
