@@ -1095,7 +1095,7 @@ export let game = (
             said = now
             events.push({
               type: 'say',
-              text: `${a.icon} ${a.name}: nothing in reach.`,
+              text: `${a.name}: nothing in reach.`,
             })
           }
         } else {

@@ -6,6 +6,7 @@
 // (skills.ts) wears a star. A slot nothing fills is not shown.
 // Each slot is written only when what it shows changed.
 import { HANDLES } from './arms.ts'
+import { type Glyph, glyph } from './glyphs.ts'
 import { type Action, keysOf } from './input.ts'
 import { cap } from './panel.ts'
 import type { Frame } from './play.ts'
@@ -15,9 +16,17 @@ import { formOf, SKILLS } from './skills.ts'
 let ACTS: Action[] = ['strike', 'ability1', 'ability2', 'ability3']
 let keyOf = (i: number) => cap(keysOf(ACTS[i])[0])
 
-// What a slot shows: its icon, what it says, and what is left of its
+// What a slot shows: its glyph, what it says, and what is left of its
 // cooldown, 0 to 1, and in whole seconds.
-let slotOf = (f: Frame, i: number) => {
+type Slot = {
+  id: string
+  icon: Glyph | ''
+  says: string
+  cd: number
+  s: number
+  strong: boolean
+}
+let slotOf = (f: Frame, i: number): Slot => {
   let k = f.sheet.kit
   if (!i) {
     let h = HANDLES[k.family]
@@ -69,7 +78,7 @@ export let bar = (pads: HTMLElement[]) => {
         let key = JSON.stringify([s, doing])
         if (key == sl.was) continue
         sl.was = key
-        if (sl.icon) sl.icon.textContent = s.icon
+        if (sl.icon) sl.icon.innerHTML = s.icon ? glyph(s.icon) : ''
         sl.b.title = s.says
         sl.b.setAttribute('aria-label', s.says)
         sl.b.style.setProperty('--cd', String(s.cd))

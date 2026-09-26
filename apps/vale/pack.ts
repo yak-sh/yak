@@ -8,7 +8,7 @@
 import { ABILITIES, GIVES } from './abilities.ts'
 import { HANDLES, type Slot, SLOT_NAMES, SLOTS, sortOf } from './arms.ts'
 import { kitOf, RACK, type Worn } from './gear.ts'
-import { type Glyph, glyph } from './glyphs.ts'
+import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
 import { icon } from './sprites.ts'
 import type { Panel } from './panel.ts'
@@ -76,9 +76,9 @@ let gives = (t: Thing) => {
     : []
   return ids.map((id) => {
     let a = ABILITIES[id]
-    return `<span class=Pack_Ability><i>${a.icon}</i><b>${esc(a.name)}</b> ${
-      esc(a.says)
-    }</span>`
+    return `<span class=Pack_Ability>${glyphText(a.icon)}<b>${
+      esc(a.name)
+    }</b> ${esc(a.says)}</span>`
   }).join('')
 }
 
@@ -176,7 +176,9 @@ export let pack = (panel: Panel, acts: Acts) => {
         let good = more ? d > 0 : d < 0
         let sign = d > 0 ? '+' : '−'
         let shown = k == 'pace' ? `${Math.abs(d).toFixed(2)} s` : Math.abs(d)
-        return `<span class=Pack_Num>${glyph(mark)} ${say(b[k])} <em class="${
+        return `<span class=Pack_Num>${glyphText(mark)} ${
+          say(b[k])
+        } <em class="${
           good ? 'Pack_Up' : 'Pack_Down'
         }">${sign}${shown}</em></span>`
       }).join('')
@@ -218,11 +220,13 @@ export let pack = (panel: Panel, acts: Acts) => {
     }).join('')
     let stats = LINES.filter(([k]) => k != 'speed' || n.speed).map((
       [k, mark, say],
-    ) => `<span class=Pack_Num>${glyph(mark)} ${say(n[k])}</span>`).join('') +
+    ) => `<span class=Pack_Num>${glyphText(mark)} ${say(n[k])}</span>`).join(
+      '',
+    ) +
       s.abilities.map((id, i) =>
         ABILITIES[id]
           ? `<span class=Pack_Num><kbd class=Key>${i + 1}</kbd> ${
-            ABILITIES[id].icon
+            glyphText(ABILITIES[id].icon)
           } ${esc(ABILITIES[id].name)}</span>`
           : ''
       ).join('')

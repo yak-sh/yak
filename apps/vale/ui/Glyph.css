@@ -9,3 +9,11 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* One set in a line of text: a letter's size, seated on its baseline. */
+.Glyph-text {
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.2em;
+}

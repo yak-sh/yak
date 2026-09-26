@@ -114,10 +114,6 @@
   white-space: nowrap;
 
   & .Glyph {
-    display: inline-block;
-    width: 1.05em;
-    height: 1.05em;
-    vertical-align: -0.2em;
     color: var(--amber);
   }
 
@@ -220,7 +216,7 @@
   font-size: 0.85rem;
 }
 
-.Pack_Ability i {
+.Pack_Ability .Glyph {
   margin-right: 0.3rem;
-  font-style: normal;
+  color: var(--deep);
 }

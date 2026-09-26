@@ -1,6 +1,7 @@
 /* The creature being fought: one slim bar of its health, its name and level
-   written on it. */
+   written at its start and its health at its end. */
 .Foe {
+  align-self: start;
   padding: 0.25rem;
   border-radius: var(--round);
   background: var(--glass);
@@ -11,20 +12,36 @@
   }
 
   & .Bar {
-    --tall: 1.2rem;
+    --tall: 1.4rem;
   }
 
   & .Bar > span {
-    overflow: hidden;
-    padding-inline: 0.6rem;
-    text-overflow: ellipsis;
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    padding-inline: 0.7rem;
     white-space: nowrap;
   }
 
+  & b {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   & em {
+    flex: none;
+    font-size: 0.85em;
     font-style: normal;
     font-weight: 400;
     opacity: 0.85;
+  }
+
+  & small {
+    flex: none;
+    margin-left: auto;
+    font-size: inherit;
+    font-variant-numeric: tabular-nums;
   }
 }
 

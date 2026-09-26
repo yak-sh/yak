@@ -24,6 +24,7 @@ import { map } from './map.ts'
 import { menu } from './menu.ts'
 import { BUILDS, type Figure, hero, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
+import { glyphText } from './glyphs.ts'
 import { ahead, type Grown, grown } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
 import { guide, journal, tasksOf } from './journal.ts'
@@ -36,6 +37,7 @@ import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { type Event, type Frame, game, type Vec3 } from './play.ts'
 import { formOf, SKILLS } from './skills.ts'
 import { sound } from './sound.ts'
+import { icon } from './sprites.ts'
 import { station } from './station.ts'
 import { voices } from './voicebox.ts'
 import { groundAt, SIZE, VOXEL } from './terrain.ts'
@@ -135,7 +137,7 @@ let typing = false
 let elsewhere = () => typing || h.talking || chat.typing
 let hands = listen(canvas, glass, elsewhere)
 let h = hud(glass, hands.press, elsewhere)
-let marks = overlay(h.layer, camera)
+let marks = overlay(h.layer, camera, h.under)
 let chat = chatbox(glass, h.orbs.chat, net, marks, folk)
 let m = map(h.panels.map)
 let p = pack(h.panels.pack, { wear: g.wear, take: g.take })
@@ -486,7 +488,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     h.toast(
       `${t?.name ?? e.item}${e.n > 1 ? ` ×${e.n}` : ''}`,
       'Toast-loot',
-      e.item,
+      icon(e.item),
     )
     glow.emit(p(e.at), 0xffe08a, 8, {
       speed: 1.5,
@@ -528,7 +530,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
       h.toast(
         `${t.slot == 'main' || t.slot == 'off' ? 'In hand' : 'On'}: ${t.name}`,
         'Toast-loot',
-        e.item,
+        icon(e.item),
       )
     }
   } else if (e.type == 'shot') {
@@ -541,7 +543,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
       ABILITIES[e.id]
     if (!mine) stage.doing(e.by, e.id)
     let foot = p(e.at)
-    float(`${a.icon} ${a.name}`, foot.clone().setY(foot.y + 2.5), 'ability')
+    float(a.name, foot.clone().setY(foot.y + 2.5), 'ability')
     flourish(a, foot, e.yaw)
     if (a.shape == 'self') sound.heal(e.by)
     else sound.whiff(e.by)
@@ -584,7 +586,7 @@ let worked = (e: Work) => {
     h.toast(
       `${t?.name ?? e.item}${e.n > 1 ? ` ×${e.n}` : ''}`,
       'Toast-loot',
-      e.item,
+      icon(e.item),
     )
     marks.float(
       `+${e.xp} ${TRADES[e.trade].name}`,
@@ -595,7 +597,7 @@ let worked = (e: Work) => {
     sound.pick(net.hero)
   } else if (e.type == 'trade') {
     let t = TRADES[e.trade]
-    h.toast(`${t.icon} ${t.name} ${e.lvl}!`, 'Toast-big')
+    h.toast(`${t.name} ${e.lvl}!`, 'Toast-big', glyphText(t.icon))
     glow.emit(target, 0x9fe07a, 24, {
       speed: 2,
       up: 2.5,

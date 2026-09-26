@@ -109,14 +109,30 @@ export type Kind =
   | 'ability'
   | 'ward'
 
+/** Whether a box on the screen, `w` by `h` from its top left at `x`, `y`,
+ * lies under the glass, where the scene's labels do not show. */
+export type Under = (x: number, y: number, w: number, h: number) => boolean
+
 /** The labels over the scene: plates that follow someone, and numbers that
- * float up and fade. */
-export let overlay = (layer: HTMLElement, camera: THREE.Camera) => {
+ * float up and fade. A label that would be `under` the glass is not shown. */
+export let overlay = (
+  layer: HTMLElement,
+  camera: THREE.Camera,
+  under: Under = () => false,
+) => {
   let at = new THREE.Vector3()
   let floats: { el: HTMLElement; p: THREE.Vector3; born: number }[] = []
+  // Each plate's size is read once it shows, after what it holds changed.
   let plates = new Map<
     string,
-    { el: HTMLElement; body: HTMLElement; html: string; seen: boolean }
+    {
+      el: HTMLElement
+      body: HTMLElement
+      html: string
+      seen: boolean
+      w: number
+      h: number
+    }
   >()
   let screen = (p: THREE.Vector3): [number, number] | null => {
     at.copy(p).project(camera)
@@ -125,10 +141,13 @@ export let overlay = (layer: HTMLElement, camera: THREE.Camera) => {
     }
     return [(at.x + 1) / 2 * innerWidth, (1 - at.y) / 2 * innerHeight]
   }
-  let place = (el: HTMLElement, p: THREE.Vector3) => {
+  // Put `el` over `p`, unless `p` is off the screen or what `el` shows, `w`
+  // by `h` and standing on the point, would be under the glass.
+  let place = (el: HTMLElement, p: THREE.Vector3, w = 0, h = 0) => {
     let s = screen(p)
-    el.hidden = !s
-    if (s) {
+    let shown = !!s && !under(s[0] - w / 2, s[1] - h, w, h)
+    el.hidden = !shown
+    if (s && shown) {
       el.style.transform = `translate(${s[0].toFixed(1)}px, ${
         s[1].toFixed(1)
       }px)`
@@ -157,15 +176,20 @@ export let overlay = (layer: HTMLElement, camera: THREE.Camera) => {
         body.className = 'Plate_In'
         el.append(body)
         layer.append(el)
-        pl = { el, body, html: '', seen: true }
+        pl = { el, body, html: '', seen: true, w: 0, h: 0 }
         plates.set(key, pl)
       }
       if (pl.html != html) {
         pl.body.innerHTML = html
         pl.html = html
+        pl.w = pl.h = 0
+      }
+      if (!pl.w && !pl.el.hidden) {
+        pl.w = pl.body.offsetWidth
+        pl.h = pl.body.offsetHeight
       }
       pl.seen = true
-      place(pl.el, p)
+      place(pl.el, p, pl.w, pl.h)
     },
     tick: () => {
       let t = performance.now()

@@ -1,5 +1,5 @@
 // Players talking (D-40615): the microphone stays off until the player turns
-// it on (T, or the 🎙 button), and every hero on the level within earshot who
+// it on (T, or the tray's microphone), and every hero on the level within earshot who
 // has theirs on is heard where they stand, through the one spatial engine
 // (sound.ts `keep`), as their footsteps are.
 //

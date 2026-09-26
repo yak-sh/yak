@@ -5,7 +5,7 @@
 // be forgotten, free, to spend the points again. K or the tray's sparkles
 // opens it. It is written again only when what it shows changed.
 import { ABILITIES } from './abilities.ts'
-import { glyph } from './glyphs.ts'
+import { glyph, glyphText } from './glyphs.ts'
 import type { Panel } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { canLearn, DISCIPLINES, SKILLS } from './skills.ts'
@@ -67,10 +67,9 @@ export let board = (panel: Panel, acts: Learning) => {
     if (!k) {
       return `<p class=Pack_Hint>Tap a skill to see what it does. Deeper ones need the one above them first.</p>`
     }
-    let what = k.ability
-      ? `${ABILITIES[k.ability]?.icon ?? ''} ${
-        esc(ABILITIES[k.ability]?.name ?? '')
-      }, made stronger`
+    let a = k.ability ? ABILITIES[k.ability] : undefined
+    let what = a
+      ? `${glyphText(a.icon)} ${esc(a.name)}, made stronger`
       : 'Always on'
     let need = k.after && !s.learned.includes(k.after)
       ? `<span class=Pack_Hint>Needs ${esc(SKILLS[k.after].name)} first.</span>`

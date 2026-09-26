@@ -10,6 +10,7 @@
 // in reach; an `arc` sweeps everything before the hero; a `ring` takes
 // everything about them; a `burst` lands on the creature aimed at and
 // everything about it; `self` takes nothing, and does its work on the hero.
+import type { Glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Worn } from './gear.ts'
 
@@ -21,7 +22,7 @@ export type Pose = 'swing' | 'spin' | 'guard' | 'cast'
 
 export type Ability = {
   name: string
-  icon: string
+  icon: Glyph
   /** what it does, in a few words, for the bar and the pack */
   says: string
   shape: Shape
@@ -67,7 +68,7 @@ export type Ability = {
 export let ABILITIES: Record<string, Ability> = {
   haymaker: {
     name: 'Haymaker',
-    icon: '👊',
+    icon: 'handFist',
     says: 'A big swing that knocks the foe senseless for a second.',
     shape: 'one',
     pose: 'swing',
@@ -77,7 +78,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   cleave: {
     name: 'Cleave',
-    icon: '🌙',
+    icon: 'axe',
     says: 'A wide sweep through everything in front of you.',
     shape: 'arc',
     pose: 'swing',
@@ -88,7 +89,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   lunge: {
     name: 'Lunge',
-    icon: '⚡',
+    icon: 'zap',
     says: 'Dash at a foe a few strides off and run it through.',
     shape: 'one',
     pose: 'swing',
@@ -98,7 +99,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   whirl: {
     name: 'Whirl',
-    icon: '🌀',
+    icon: 'tornado',
     says: 'Spin round, striking everything about you.',
     shape: 'ring',
     pose: 'spin',
@@ -108,7 +109,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   rend: {
     name: 'Rend',
-    icon: '🩸',
+    icon: 'droplet',
     says: 'A deep cut. The foe bleeds for four seconds.',
     shape: 'one',
     pose: 'swing',
@@ -119,7 +120,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   quake: {
     name: 'Quake',
-    icon: '💥',
+    icon: 'activity',
     says: 'Slam the ground. Everything about you is stunned for 2 s.',
     shape: 'ring',
     pose: 'swing',
@@ -131,7 +132,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   crush: {
     name: 'Crush',
-    icon: '💢',
+    icon: 'hammer',
     says: 'One enormous overhead blow, more than twice as hard.',
     shape: 'one',
     pose: 'swing',
@@ -140,7 +141,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   flurry: {
     name: 'Flurry',
-    icon: '🗡️',
+    icon: 'blow',
     says: 'Three quick stabs, the last a sure great blow.',
     shape: 'one',
     pose: 'swing',
@@ -152,7 +153,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   shadowstep: {
     name: 'Shadowstep',
-    icon: '👤',
+    icon: 'mask',
     says: 'Step behind a foe a few strides off and stab it: a sure great blow.',
     shape: 'one',
     pose: 'swing',
@@ -165,7 +166,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   volley: {
     name: 'Volley',
-    icon: '🌧️',
+    icon: 'cloudRain',
     says: 'Rain arrows on your foe and everything within 3 m of it.',
     shape: 'burst',
     pose: 'swing',
@@ -176,7 +177,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   pin: {
     name: 'Pinning shot',
-    icon: '📌',
+    icon: 'locateFixed',
     says: 'An arrow that pins the foe where it stands for 3 s.',
     shape: 'one',
     pose: 'swing',
@@ -186,7 +187,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   blaze: {
     name: 'Blaze',
-    icon: '🔥',
+    icon: 'flame',
     says: 'A bolt that bursts into flame on your foe and all about it.',
     shape: 'burst',
     pose: 'swing',
@@ -197,7 +198,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   ward: {
     name: 'Ward',
-    icon: '🔮',
+    icon: 'shieldCheck',
     says: 'A ward of light that takes the next bites for you, for 8 s.',
     shape: 'self',
     pose: 'cast',
@@ -207,7 +208,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   block: {
     name: 'Block',
-    icon: '🛡️',
+    icon: 'shield',
     says:
       'Raise your shield: bites are turned, and leave the biter open to a great blow.',
     shape: 'self',
@@ -219,7 +220,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   mend: {
     name: 'Mend',
-    icon: '💚',
+    icon: 'handHeart',
     says: 'Read a word of healing: a third of your health back.',
     shape: 'self',
     pose: 'cast',
@@ -229,7 +230,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
   scorch: {
     name: 'Scorch',
-    icon: '☄️',
+    icon: 'flameKindling',
     says: 'Sweep the flame before you. What it catches burns for 4 s.',
     shape: 'arc',
     pose: 'swing',

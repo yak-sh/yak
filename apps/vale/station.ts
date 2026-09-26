@@ -17,6 +17,7 @@ import {
   stuffName,
 } from './craft.ts'
 import { sortOf } from './arms.ts'
+import { glyphText } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Panel } from './panel.ts'
 import { icon } from './sprites.ts'
@@ -116,7 +117,9 @@ export let station = (panel: Panel, acts: Acts) => {
     let tabs = tiers(c).map((n) =>
       `<button class="Pack_Tile${
         n == tier ? ' Pack_Tile-on' : ''
-      }" data-tier=${n}>${mine.lvl >= least(n) ? '' : '🔒'}${n}</button>`
+      }" data-tier=${n}><span>${
+        mine.lvl >= least(n) ? '' : glyphText('lock')
+      }${n}</span></button>`
     ).join('')
     let tiles = Object.values(RECIPES)
       .filter((r) => r.at == c && r.tier == tier)
@@ -130,9 +133,9 @@ export let station = (panel: Panel, acts: Acts) => {
         }"><i>${icon(r.makes) || '•'}</i></button>`
       }).join('')
     panel.head(
-      `${
-        STATIONS[c].name
-      } <span class=Badge>${trade.icon} ${trade.name} ${mine.lvl}</span><small class=Panel_Note>${mine.xp} / ${next} xp</small>`,
+      `${STATIONS[c].name} <span class=Badge>${
+        glyphText(trade.icon)
+      } ${trade.name} ${mine.lvl}</span><small class=Panel_Note>${mine.xp} / ${next} xp</small>`,
     )
     box.innerHTML = `<div class="Pack Craft">` +
       `<div class=Craft_Tiers>${tabs}</div>` +

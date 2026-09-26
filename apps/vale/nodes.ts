@@ -15,6 +15,7 @@ import * as THREE from 'three'
 import type { bits, overlay } from './fx.ts'
 import { STATIONS } from './craft.ts'
 import { chipOf, GATHER, type Look } from './gather.ts'
+import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import {
   ball,
@@ -322,8 +323,8 @@ export let nodes = (
     `<span class="Plate_Bar Plate_Bar-work"><i style="--k:${
       Math.min(1, k).toFixed(3)
     }"></i></span>`
-  let hint = (icon: string, verb: string) =>
-    `<em>${icon} ${verb}${phone ? '' : ' · E'}</em>`
+  let hint = (mark: Glyph, verb: string) =>
+    `<em>${glyphText(mark)} ${verb}${phone ? '' : ' · E'}</em>`
 
   let plate = (n: Seen, job: Job) => {
     let doing = job.doing?.node?.eid == n.eid ? job.doing : null

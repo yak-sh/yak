@@ -2,6 +2,7 @@
 // make things by at a village's stations (craft.ts). Each grows by use, a
 // level at a time, and is counted again from the hero's own rows: what each
 // gathering and each making was worth to its trade.
+import type { Glyph } from './glyphs.ts'
 
 /** A trade a hero gathers by. */
 export type Gather = 'wood' | 'ore' | 'herb' | 'fish'
@@ -9,15 +10,15 @@ export type Gather = 'wood' | 'ore' | 'herb' | 'fish'
 export type Craft = 'forge' | 'bench' | 'cauldron'
 export type Trade = Gather | Craft
 
-/** Each trade's name and icon, the gathering ones first. */
-export let TRADES: Record<Trade, { name: string; icon: string }> = {
-  wood: { name: 'Woodcutting', icon: '🪓' },
-  ore: { name: 'Mining', icon: '⛏️' },
-  herb: { name: 'Herbalism', icon: '🌿' },
-  fish: { name: 'Fishing', icon: '🎣' },
-  forge: { name: 'Smithing', icon: '⚒️' },
-  bench: { name: 'Woodworking', icon: '🪚' },
-  cauldron: { name: 'Brewing', icon: '⚗️' },
+/** Each trade's name and glyph, the gathering ones first. */
+export let TRADES: Record<Trade, { name: string; icon: Glyph }> = {
+  wood: { name: 'Woodcutting', icon: 'axe' },
+  ore: { name: 'Mining', icon: 'pickaxe' },
+  herb: { name: 'Herbalism', icon: 'sprout' },
+  fish: { name: 'Fishing', icon: 'fish' },
+  forge: { name: 'Smithing', icon: 'anvil' },
+  bench: { name: 'Woodworking', icon: 'hammer' },
+  cauldron: { name: 'Brewing', icon: 'flask' },
 }
 
 /** Every trade, in the order a sheet lists them. */

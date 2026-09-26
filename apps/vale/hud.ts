@@ -25,6 +25,7 @@
 // progress, and `--cd` sweeps a cooldown over it. Talking and gathering (or
 // working a station) share one slot, and only one of them shows at a time.
 import { type Action, keysOf } from './input.ts'
+import type { Under } from './fx.ts'
 import type { Frame } from './play.ts'
 import type { Job } from './work.ts'
 import { BEASTS } from './beasts.ts'
@@ -137,6 +138,26 @@ export let hud = (
   )
   faint.hidden = true
   root.append(layer, vitals, quest, foe, nav, toasts, pads, talk, faint)
+
+  // The glass at the top, which the scene's labels hide under (fx.ts), and
+  // a gap's width round each card, so none shows between two. Where each
+  // lies is read again only after one of them, or the glass, changed size.
+  let panes = [vitals, quest, foe, who, rose, trayBox]
+  let rects: DOMRect[] | null = null
+  let gap = 0
+  let moved = new ResizeObserver(() => rects = null)
+  for (let e of [root, ...panes]) moved.observe(e)
+  let under: Under = (x, y, w, h) => {
+    if (!rects) {
+      rects = panes.map((e) => e.getBoundingClientRect())
+        .filter((r) => r.width > 0)
+      gap = parseFloat(getComputedStyle(root).rowGap) || 0
+    }
+    return rects.some((r) =>
+      x < r.right + gap && x + w > r.left - gap &&
+      y < r.bottom + gap && y + h > r.top - gap
+    )
+  }
 
   let shelf = panels(root, busy)
   let sheet = (id: keyof typeof SHEETS) => shelf.add(id, SHEETS[id])
@@ -263,9 +284,10 @@ export let hud = (
     e.innerHTML = html
   }
 
-  // What just happened, and the thing it was about, if one (sprites.ts).
-  let toast = (text: string, cls = '', kind = '') => {
-    let t = el(`Toast ${cls}`, `${icon(kind)} ${esc(text)}`)
+  // What just happened, after a picture of what it was about, if one: a
+  // thing's sprite (sprites.ts) or a glyph in the text (glyphs.ts).
+  let toast = (text: string, cls = '', face = '') => {
+    let t = el(`Toast ${cls}`, `${face} ${esc(text)}`)
     toasts.append(t)
     setTimeout(() => t.classList.add('Toast-out'), 2600)
     setTimeout(() => t.remove(), 3200)
@@ -315,6 +337,8 @@ export let hud = (
 
   return {
     layer,
+    /** whether a label of the scene's would be under the glass */
+    under,
     /** the tray's buttons that others answer: chat (chatbox.ts), and the
      * microphone (voicebox.ts), whose tap the browser may ask about */
     orbs: { chat, mic },
@@ -375,7 +399,7 @@ export let hud = (
       let trade = job?.doing?.trade ?? n?.lode.trade ?? job?.bench?.craft
       gatherPad.classList.toggle('Pad-none', !trade)
       if (!trade) return
-      put('gather', gatherIcon, TRADES[trade].icon)
+      put('gather', gatherIcon, glyph(TRADES[trade].icon))
       gatherPad.title = `${TRADES[trade].name} (${gatherKey})`
       gatherPad.classList.toggle('Pad-off', !!n && (n.spent || !n.able))
       let k = job?.doing ? job.doing.k.toFixed(3) : '0'
@@ -433,9 +457,9 @@ export let hud = (
           meter(
             m.hp / m.most,
             'Bar-foe',
-            `<b>${esc(b.name)}</b> <em>level ${b.lvl}</em> ${
+            `<b>${esc(b.name)}</b><em>level ${b.lvl}</em><small>${
               Math.ceil(m.hp)
-            } / ${m.most}`,
+            } / ${m.most}</small>`,
           ),
         )
         foe.classList.toggle('Foe-boss', !!b.boss)
