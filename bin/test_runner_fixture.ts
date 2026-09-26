@@ -1,5 +1,5 @@
 import { tick, until } from './testing.ts'
-import { runTestCommands, type TestCommand } from './test.ts'
+import { runTestCommands, type TestCommand } from './phases.ts'
 
 if (import.meta.main) {
   let [mode, phase, dir, codeText] = Deno.args
