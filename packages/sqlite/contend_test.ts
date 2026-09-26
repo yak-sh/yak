@@ -62,18 +62,3 @@ Deno.test('an open beside a writer goes on without it, and keeps its wait', () =
     timeout: 5000,
   })
 })
-
-Deno.test('a second open leaves a file its first open analyzed as it is', () => {
-  let dir = Deno.makeTempDirSync()
-  let d = open(`${dir}/graph.db`)
-  try {
-    let version = () => d.query({ t: 'pragma', name: 'schema_version' })[0]
-    storage(d, shop).install()
-    let was = version()
-    storage(d, shop).install()
-    assertEquals(version(), was)
-  } finally {
-    d.close()
-    Deno.removeSync(dir, { recursive: true })
-  }
-})

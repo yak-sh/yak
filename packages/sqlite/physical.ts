@@ -1,13 +1,13 @@
 import {
+  among,
   as,
   by,
   col,
   count,
   type Driver,
+  each,
   eq,
   fn,
-  lit,
-  ne,
   type Param,
   type Row,
   select,
@@ -47,9 +47,14 @@ export let columns = (driver: Driver, name: string): string[] =>
  * Virtual/FTS shadow tables and infrastructure are not component tables. A
  * component table has an integer entity primary key. Tombstone and archetype
  * are component tables (the latter's own archetype is the one-element fixed
- * point).
+ * point). `known` names tables the caller already accounts for: they are left
+ * out without being asked about.
  */
-export function componentTables(driver: Driver): string[] {
+export function componentTables(
+  driver: Driver,
+  known: readonly string[] = [],
+): string[] {
+  let skip = new Set(['entity', 'journal', 'hit', ...known])
   let ordinary = new Set(
     driver.query({ t: 'pragma', name: 'table_list' })
       .filter((r) => r.schema == 'main' && r.type == 'table')
@@ -57,7 +62,7 @@ export function componentTables(driver: Driver): string[] {
   )
   return tables(driver)
     .filter((name) =>
-      ordinary.has(name) && !['entity', 'journal', 'hit'].includes(name) &&
+      ordinary.has(name) && !skip.has(name) &&
       !name.startsWith('sqlite_') && !/^_+cf_/i.test(name)
     )
     .filter((name) =>
@@ -70,21 +75,22 @@ export function componentTables(driver: Driver): string[] {
 }
 
 /**
- * How many objects the file's schema holds and how long their definitions run
- * together: what moves when any table, index, view or trigger is created,
- * dropped or altered, by any connection. Read from `sqlite_schema`, since a
- * Durable Object's SQLite refuses `pragma schema_version`. SQLite's own
- * tables (`sqlite_stat1`, which the first analyze creates, and the like) are
- * derived and left out, so gathering statistics is not a schema change.
+ * How many of the named objects the file's schema holds and how long their
+ * definitions run together: what moves when one of them is created, dropped
+ * or altered, by any connection. Read from `sqlite_schema`, since a Durable
+ * Object's SQLite refuses `pragma schema_version`. Only the named objects
+ * count, so what is kept beside them (a search index and its triggers, a
+ * plugin's own table, the `sqlite_stat1` the first analyze creates) is no
+ * change to them.
  */
-export let shape = (driver: Driver): string => {
+export let shape = (driver: Driver, names: readonly string[]): string => {
   let [row] = driver.query(select({
     cols: [
       as(count(), 'n'),
       as(fn('total', fn('length', col('sql'))), 'bytes'),
     ],
     from: table('sqlite_schema'),
-    where: ne(fn('substr', col('name'), lit(1), lit(7)), lit('sqlite_')),
+    where: among(col('name'), each(names)),
   }))
   return `${row.n}/${row.bytes}`
 }

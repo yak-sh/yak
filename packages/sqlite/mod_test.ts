@@ -3,8 +3,8 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { type Driver, render } from '@yaks/sql'
-import { storage, type Store } from './mod.ts'
+import { col, type Driver, render } from '@yaks/sql'
+import { objects, storage, type Store } from './mod.ts'
 import { open } from './db.ts'
 import { mem, shop, spy } from './testing.ts'
 
@@ -34,6 +34,73 @@ Deno.test('a second store over an installed file leaves its schema alone', () =>
   let before = version()
   storage(d, shop).install()
   assertEquals(version(), before)
+})
+
+// One graph file, opened `times` times: each open installs the shop, then
+// `beside` does what else a host does to the file → whether each install
+// changed the schema.
+let reopened = (times: number, beside: (d: Driver) => void) => {
+  let dir = Deno.makeTempDirSync()
+  try {
+    return Array.from({ length: times }, () => {
+      let d = open(`${dir}/graph.db`)
+      try {
+        let version = () =>
+          d.query({ t: 'pragma', name: 'schema_version' })[0].schema_version
+        let was = version()
+        storage(d, shop).install()
+        let moved = version() != was
+        beside(d)
+        return moved
+      } finally {
+        d.close()
+      }
+    })
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+}
+
+Deno.test('an open of a file its schema is current in installs nothing', () => {
+  // What a host's plugins keep beside the store's tables once it has
+  // installed: a table of their own keyed by entity (@yaks/embedding's
+  // vectors), and a trigger on doc that fills it (@yaks/fts).
+  let plugins = (d: Driver) => {
+    d.query({
+      t: 'create table',
+      name: 'vector',
+      ifNot: true,
+      cols: [{ name: 'entity', type: 'integer', pk: true }, {
+        name: 'title',
+        type: 'text',
+      }],
+    })
+    d.query({
+      t: 'create trigger',
+      name: 'vector_doc_insert',
+      ifNot: true,
+      timing: 'after',
+      event: 'insert',
+      on: 'doc',
+      body: [{
+        t: 'insert',
+        into: 'vector',
+        cols: ['entity', 'title'],
+        rows: [[col('entity', 'new'), col('title', 'new')]],
+      }],
+    })
+  }
+  assertEquals(reopened(3, plugins), [true, false, false])
+})
+
+Deno.test('an open puts back what another hand dropped from the schema', () => {
+  let found: number[] = []
+  let dropped = (d: Driver) => {
+    found.push(objects(d, { name: 'shelf_aisle_height' }).length)
+    d.query({ t: 'drop', kind: 'index', name: 'shelf_aisle_height' })
+  }
+  assertEquals(reopened(2, dropped), [true, true])
+  assertEquals(found, [1, 1])
 })
 
 Deno.test('a driver that owns transactions is asked for them', () => {

@@ -65,7 +65,7 @@ import { doom, read, rows } from './read.ts'
 import { keyed } from './keyed.ts'
 import { unit } from './unit.ts'
 import { backfill } from './archetype.ts'
-import { shape, tables as listed } from './physical.ts'
+import { componentTables, shape, tables as listed } from './physical.ts'
 import { patch, remove, revive } from './write.ts'
 import { bindings } from './rules.ts'
 
@@ -199,22 +199,31 @@ export type Opts = BindOpts & {
   adopt?: boolean
 }
 
-// The fingerprint of the statements `install()` runs, rendered and hashed once
-// per vocabulary and read overrides. Over a current file the rendering and the
-// hashing were most of what an install cost, and neither moves while a process
-// holds the same vocabulary: a Vocab is a value nobody mutates once it is
-// loaded, so the object itself is the key.
-let prints = new WeakMap<Vocab, WeakMap<Derived, string>>()
+// What `install()` runs, known once per vocabulary and read overrides: the
+// fingerprint of its statements, and the objects they create. Over a current
+// file the rendering and the hashing were most of what an install cost, and
+// neither moves while a process holds the same vocabulary: a Vocab is a value
+// nobody mutates once it is loaded, so the object itself is the key.
+type Plan = { print: string; made: string[] }
+let plans = new WeakMap<Vocab, WeakMap<Derived, Plan>>()
 let NONE: Derived = {}
-let fingerprint = (vocab: Vocab, derived: Derived = NONE): string => {
-  let by = prints.get(vocab) ?? new WeakMap<Derived, string>()
-  prints.set(vocab, by)
-  let print = by.get(derived) ?? sha256(
-    [...tabled(vocab, derived), ...indexed(vocab)]
-      .map((s) => render(s).sql).join(';\n'),
-  )
-  by.set(derived, print)
-  return print
+let plan = (vocab: Vocab, derived: Derived = NONE): Plan => {
+  let by = plans.get(vocab) ?? new WeakMap<Derived, Plan>()
+  plans.set(vocab, by)
+  let known = by.get(derived)
+  if (known) return known
+  let stmts = [...tabled(vocab, derived), ...indexed(vocab)]
+  let fresh = {
+    print: sha256(stmts.map((s) => render(s).sql).join(';\n')),
+    made: stmts.flatMap((s) =>
+      s.t == 'create table' || s.t == 'create index' ||
+        s.t == 'create view' || s.t == 'create trigger'
+        ? [s.name]
+        : []
+    ),
+  }
+  by.set(derived, fresh)
+  return fresh
 }
 
 /**
@@ -246,12 +255,22 @@ export let storage = (
       // installed it is left as it is. Every statement below is a no-op there
       // but two: the doc view is recreated, which changes the schema and makes
       // every other connection re-read it, and the archetype backfill reads
-      // every descriptor. The mark is the statements' fingerprint beside the
-      // file's own schema shape (physical.ts `shape`), so a vocabulary that
-      // says anything new installs, and so does a file whose tables or
-      // indexes another hand changed.
-      let mark = () => `${fingerprint(vocab, base.derived)} ${shape(driver)}`
-      if (installed(driver) != mark()) {
+      // every descriptor.
+      //
+      // The mark is the statements' fingerprint, then the shape (physical.ts
+      // `shape`) of the objects they make and of the component tables beyond
+      // the vocabulary that the backfill classified, then those tables' names.
+      // So a vocabulary that says anything new installs, and so does a file
+      // where another hand changed one of those objects or dropped one of
+      // those tables. What joins the file afterwards (the search index the
+      // host adopts once this returns, a plugin's own tables and triggers) is
+      // not measured: it would move the shape after the mark was written, and
+      // the next open would install again.
+      let { print, made } = plan(vocab, base.derived)
+      let mark = (strays: string[]) =>
+        [print, shape(driver, [...made, ...strays]), ...strays].join(' ')
+      let was = installed(driver)
+      if (was != mark(was?.split(' ').slice(2) ?? [])) {
         // What stood before: only those tables can be behind the vocabulary,
         // so a fresh file is asked nothing about its columns or its keys.
         let held = new Set(listed(driver))
@@ -291,7 +310,7 @@ export let storage = (
               : base.number,
           )
         }
-        meta(driver).set(SCHEMA, mark())
+        meta(driver).set(SCHEMA, mark(componentTables(driver, made)))
       }
       // And the sizes those tables are read with (ddl.ts `analyzed`), which
       // drift with the rows, not the schema. An index the planner cannot size
