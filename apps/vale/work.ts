@@ -1,27 +1,36 @@
-// A hero's work at the nodes of the level they are in (gather.ts): which node
-// is near enough to work, the work under way, and what it yields. The frame
-// (play.ts) moves the hero; this reads where they stand and what they asked
-// for, and when a node's work is done writes the item it gave, wearing the
-// `gathered` row that spends the node for everyone until it grows back. The
-// work stops when the hero walks off, strikes, rolls, jumps or faints, or
-// someone else gathers the node first.
+// A hero's work: at the nodes of the level they are in (gather.ts), and at a
+// village's stations (craft.ts). This reads where the hero stands and what
+// they asked for: which node or station is near enough to work, the work
+// under way, and what it yields. When a node's work is done it writes the
+// item it gave, wearing the `gathered` row that spends the node for everyone
+// until it grows back; when a thing is made, the item made, wearing its
+// `crafted` row, with `used` rows for what it took, in one write. The work
+// stops when the hero walks off, strikes, rolls, jumps or faints, or someone
+// else gathers the node first.
+import { isStation, madeXp, plan, RECIPES, spare, STATIONS } from './craft.ts'
 import {
+  chipOf,
   effort,
+  GATHER,
+  gatherXp,
   haulOf,
-  least,
   type Lode,
   LODES,
   nodesOf,
-  type Trade,
-  TRADES,
-  type Trades,
-  tradesOf,
-  tradeXp,
 } from './gather.ts'
 import { type Bundle, comp, type Net, num, str } from './net.ts'
 import type { Frame, Vec3 } from './play.ts'
 import { fallOf } from './rules.ts'
 import { groundAt, type Vale, WATER } from './terrain.ts'
+import {
+  ALL,
+  type Craft,
+  least,
+  type Trade,
+  TRADES,
+  type Trades,
+  tradesOf,
+} from './trades.ts'
 
 /** A node as this frame sees it: which, where it stands on the ground or the
  * water, whether it is spent and for how many ms more, how far from the hero
@@ -37,13 +46,18 @@ export type Seen = {
   able: boolean
 }
 
+/** A station near enough to work: which, where, and how far off. */
+export type Bench = { craft: Craft; at: Vec3; near: number }
+
 /** What happened at the work this frame, for the eyes and ears: a stroke
- * landing (a chop, a clink, a rustle, a splash), a node gathered, a trade
- * grown a level, or something to tell the player. */
+ * landing (a chop, a clink, a rustle, a splash, a hammer on the anvil), with
+ * the colour of what it throws up; a thing gathered or made, and what it was
+ * worth to its trade; a station worked, to open its sheet; a trade grown a
+ * level; or something to tell the player. */
 export type Work =
-  | { type: 'stroke'; eid: string; trade: Trade; at: Vec3; kind: string }
+  | { type: 'stroke'; eid: string; trade: Trade; at: Vec3; chip: number }
   | {
-    type: 'gathered'
+    type: 'got'
     eid: string
     item: string
     n: number
@@ -51,17 +65,27 @@ export type Work =
     xp: number
     at: Vec3
   }
+  | { type: 'station'; craft: Craft }
   | { type: 'trade'; trade: Trade; lvl: number }
   | { type: 'say'; text: string }
 
-/** The work as this frame has it: the level's nodes, the one near enough to
- * work, the one being worked and how far through, 0 to 1, with how far
- * through the stroke it is (the hero's swing, or -1 while a line waits in the
- * water), the hero's trades, and what happened. */
+/** The work as this frame has it: the level's nodes, the node and the station
+ * near enough to work, the work under way (at a node, or on a recipe) and how
+ * far through, 0 to 1, with how far through the stroke it is (the hero's
+ * swing, or -1 while a line waits in the water), the hero's trades, and what
+ * happened. */
 export type Job = {
   nodes: Seen[]
   near: Seen | null
-  doing: { node: Seen; k: number; swing: number } | null
+  bench: Bench | null
+  doing: {
+    trade: Trade
+    at: Vec3
+    node: Seen | null
+    recipe: string | null
+    k: number
+    swing: number
+  } | null
   trades: Trades
   events: Work[]
 }
@@ -74,6 +98,9 @@ let STROKE: Record<Trade, number> = {
   ore: 600,
   herb: 700,
   fish: 900,
+  forge: 480,
+  bench: 620,
+  cauldron: 760,
 }
 let LANDS = 0.33
 let CAST = 520
@@ -87,16 +114,34 @@ let secs = (ms: number) => {
     : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-/** A hero's gathering over one store. */
-export let gathering = (net: Net) => {
+// How long making a thing of `tier` takes, in ms.
+let making = (tier: number) => 1400 + 300 * tier
+
+// What an item row was worth to a trade: its gathering, or its making.
+let worth = (b: Bundle): [Trade, number][] => {
+  let lode = LODES[str(comp(b, 'gathered').kind)]
+  let r = RECIPES[str(comp(b, 'crafted').recipe)]
+  let out: [Trade, number][] = []
+  if (lode) out.push([lode.trade, gatherXp(lode.tier)])
+  if (r) out.push([r.at, madeXp(r.tier)])
+  return out
+}
+
+/** A hero's work over one store. */
+export let working = (net: Net) => {
   let job: {
+    trade: Trade
+    at: Vec3
     eid: string
+    recipe: string | null
     from: number
     until: number
     x: number
     z: number
     strokes: number
   } | null = null
+  // A recipe the sheet asked to make, taken up at the next frame.
+  let asked: string | null = null
 
   // My trades, worked out again only when my items changed; and the last
   // ones, to see a level gained.
@@ -107,10 +152,7 @@ export let gathering = (net: Net) => {
     let items = net.mine('item')
     if (items == itemsWas) return trades
     itemsWas = items
-    trades = tradesOf(items.flatMap((b) => {
-      let g = comp(b, 'gathered')
-      return g.kind == null ? [] : [str(g.kind)]
-    }))
+    trades = tradesOf(items.flatMap(worth))
     return trades
   }
 
@@ -130,26 +172,89 @@ export let gathering = (net: Net) => {
     return by
   }
 
+  // A node's work done: the item it gave, wearing the row that spends it.
+  let gather = (n: Seen, me: string, now: number, mine: Trades): Work => {
+    let count = haulOf(n.eid, now, me, n.kind, mine[n.lode.trade].lvl)
+    net.keep({
+      entity: { eid: crypto.randomUUID() },
+      item: { kind: n.lode.gives, n: count, owner: me, at: now },
+      gathered: { node: n.eid, kind: n.kind, at: now },
+    })
+    return {
+      type: 'got',
+      eid: n.eid,
+      item: n.lode.gives,
+      n: count,
+      trade: n.lode.trade,
+      xp: gatherXp(n.lode.tier),
+      at: n.at,
+    }
+  }
+
+  // A thing made, from what the bag holds now: the item, wearing the row
+  // that says how, what it took spent, and what was left of a stack taken
+  // whole given back.
+  let make = (
+    key: string,
+    me: string,
+    now: number,
+    at: Vec3,
+    f: Frame,
+  ): Work => {
+    let r = RECIPES[key]
+    let took = plan(r, spare(f.sheet.bag, Object.values(f.sheet.worn)))
+    if (!took) {
+      return { type: 'say', text: 'You no longer have all it asks.' }
+    }
+    net.keep(
+      {
+        entity: { eid: crypto.randomUUID() },
+        item: { kind: r.makes, n: 1, owner: me, at: now },
+        crafted: { recipe: key, at: now },
+      },
+      ...took.spend.map((eid) => ({
+        entity: { eid: crypto.randomUUID() },
+        used: { item: eid, by: me, at: now },
+      })),
+      ...took.change.map(([kind, n]) => ({
+        entity: { eid: crypto.randomUUID() },
+        item: { kind, n, owner: me, at: now },
+      })),
+    )
+    return {
+      type: 'got',
+      eid: '',
+      item: r.makes,
+      n: 1,
+      trade: r.at,
+      xp: madeXp(r.tier),
+      at,
+    }
+  }
+
   return {
-    /** A frame of work: `want` is the player asking to gather, `stop` their
-     * doing something else. */
+    /** make a thing by a recipe, at the station the hero stands at */
+    make: (recipe: string) => {
+      asked = recipe
+    },
+    /** A frame of work: `want` is the player asking to work what is near,
+     * `stop` their doing something else. */
     tick: (v: Vale, f: Frame, want: boolean, stop: boolean): Job => {
       let me = net.hero
       let now = f.now
       let events: Work[] = []
       let mine = tradesOfMine()
-      if (was) {
-        for (let t of Object.keys(mine) as Trade[]) {
-          if (mine[t].lvl > was[t].lvl) {
-            events.push({ type: 'trade', trade: t, lvl: mine[t].lvl })
-          }
+      let before = was ?? mine
+      for (let t of ALL) {
+        if (mine[t].lvl > before[t].lvl) {
+          events.push({ type: 'trade', trade: t, lvl: mine[t].lvl })
         }
       }
       was = mine
       let rows = gatherings()
       let nodes = nodesOf(v).map((n): Seen => {
         let lode = LODES[n.lode]
-        let respawn = TRADES[lode.trade].respawn * 1000
+        let respawn = GATHER[lode.trade].respawn * 1000
         let fall = fallOf(rows.get(n.eid) ?? [], respawn / 1000, now)
         let y = lode.trade == 'fish' ? WATER : groundAt(v, n.x, n.z)
         return {
@@ -164,17 +269,25 @@ export let gathering = (net: Net) => {
         }
       })
       let near = nodes
-        .filter((n) => n.near <= TRADES[n.lode.trade].reach)
+        .filter((n) => n.near <= GATHER[n.lode.trade].reach)
         .sort((a, b) => a.near - b.near)[0] ?? null
+      let bench = v.built.flatMap((p): Bench[] => {
+        if (!isStation(p.kind)) return []
+        let d = Math.hypot(p.x - f.body.x, p.z - f.body.z)
+        return d <= STATIONS[p.kind].reach
+          ? [{ craft: p.kind, at: [p.x, groundAt(v, p.x, p.z), p.z], near: d }]
+          : []
+      }).sort((a, b) => a.near - b.near)[0] ?? null
 
       // Work stops when the hero does something else, or the node is gone.
       if (job) {
         let eid = job.eid
-        let n = nodes.find((n) => n.eid == eid)
+        let n = job.recipe ? null : nodes.find((n) => n.eid == eid)
         let strayed = Math.hypot(f.body.x - job.x, f.body.z - job.z) > STRAY
-        if (!n || stop || f.down || strayed || f.level != v.level.id) {
+        let gone = !job.recipe && !n
+        if (gone || stop || f.down || strayed || f.level != v.level.id) {
           job = null
-        } else if (n.spent) {
+        } else if (n?.spent) {
           job = null
           events.push({
             type: 'say',
@@ -183,10 +296,12 @@ export let gathering = (net: Net) => {
         }
       }
 
-      // Asked to gather: the nearest node, if it is whole and the hero's
-      // trade reaches it.
+      // Asked to work: the nearest node, if it is whole and the hero's trade
+      // reaches it; else the station there, whose sheet opens.
       if (want && !job && !f.down && me) {
-        if (!near) {
+        if (!near && bench) {
+          events.push({ type: 'station', craft: bench.craft })
+        } else if (!near) {
           events.push({ type: 'say', text: 'Nothing to gather here.' })
         } else if (near.spent) {
           events.push({
@@ -205,9 +320,39 @@ export let gathering = (net: Net) => {
           })
         } else {
           job = {
+            trade: near.lode.trade,
+            at: near.at,
             eid: near.eid,
+            recipe: null,
             from: now,
             until: now + effort(near.lode, mine[near.lode.trade].lvl),
+            x: f.body.x,
+            z: f.body.z,
+            strokes: 0,
+          }
+        }
+      }
+
+      // Asked to make a thing: at its station, with the trade and the stuff
+      // it asks.
+      let r = asked ? RECIPES[asked] : null
+      asked = null
+      if (r && !job && !f.down && me && bench?.craft == r.at) {
+        if (mine[r.at].lvl < least(r.tier)) {
+          events.push({
+            type: 'say',
+            text: `That asks ${TRADES[r.at].name} ${least(r.tier)}.`,
+          })
+        } else if (!plan(r, spare(f.sheet.bag, Object.values(f.sheet.worn)))) {
+          events.push({ type: 'say', text: 'You have not got all it asks.' })
+        } else {
+          job = {
+            trade: r.at,
+            at: bench.at,
+            eid: '',
+            recipe: r.makes,
+            from: now,
+            until: now + making(r.tier),
             x: f.body.x,
             z: f.body.z,
             strokes: 0,
@@ -218,43 +363,30 @@ export let gathering = (net: Net) => {
       // The work under way: a stroke landing, and at the end what it gave.
       let doing: Job['doing'] = null
       if (job && me) {
-        let eid = job.eid
-        let n = nodes.find((n) => n.eid == eid)!
-        let trade = n.lode.trade
+        let { trade, at, eid, recipe } = job
+        let n = recipe ? null : nodes.find((n) => n.eid == eid) ?? null
         let stroke = STROKE[trade]
         let into = now - job.from
         let landed = Math.floor(into / stroke - LANDS) + 1
         if (landed > job.strokes) {
           job.strokes = landed
-          events.push({
-            type: 'stroke',
-            eid: n.eid,
-            trade,
-            at: n.at,
-            kind: n.kind,
-          })
+          let chip = n
+            ? chipOf(n.lode.look)
+            : isStation(trade)
+            ? STATIONS[trade].chip
+            : 0xffffff
+          events.push({ type: 'stroke', eid, trade, at, chip })
         }
         if (now >= job.until) {
-          let lvl = mine[trade].lvl
-          let count = haulOf(n.eid, now, me, n.kind, lvl)
-          net.keep({
-            entity: { eid: crypto.randomUUID() },
-            item: { kind: n.lode.gives, n: count, owner: me, at: now },
-            gathered: { node: n.eid, kind: n.kind, at: now },
-          })
-          events.push({
-            type: 'gathered',
-            eid: n.eid,
-            item: n.lode.gives,
-            n: count,
-            trade,
-            xp: tradeXp(n.lode.tier),
-            at: n.at,
-          })
           job = null
+          if (n) events.push(gather(n, me, now, mine))
+          else if (recipe) events.push(make(recipe, me, now, at, f))
         } else {
           doing = {
+            trade,
+            at,
             node: n,
+            recipe,
             k: into / (job.until - job.from),
             swing: trade != 'fish'
               ? (into % stroke) / stroke
@@ -264,7 +396,7 @@ export let gathering = (net: Net) => {
           }
         }
       }
-      return { nodes, near, doing, trades: mine, events }
+      return { nodes, near, bench, doing, trades: mine, events }
     },
   }
 }

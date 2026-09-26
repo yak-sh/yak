@@ -263,10 +263,10 @@ export let sound = {
   pick: (from: From) => make(from, voices.pick),
   fall: (from: From) => make(from, voices.fall),
   heal: (from: From) => make(from, voices.heal),
-  /** A stroke of work at a node, by its trade (gather.ts). */
+  /** A stroke of work at a node or a station, by its trade (trades.ts). */
   stroke: (from: From, trade: string) =>
     make(from, voices.stroke[trade] ?? voices.whiff),
-  /** A node's work done, by its trade. */
+  /** Work done at a node or a station, by its trade. */
   done: (from: From, trade: string) =>
     make(from, voices.done[trade] ?? voices.pick),
   /** A level gained: the player's own news, straight to the ears. */

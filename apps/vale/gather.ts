@@ -8,10 +8,10 @@
 //
 // Working a node writes an item wearing a `gathered` row: the item is what the
 // hero gets, and the row spends the node for everyone until it grows back, the
-// way a `slain` row fells a creature (rules.ts `fallOf`). A hero's trades are
-// counted from the gathered rows on their items: each is xp in its node's
-// trade, and a node of a higher tier asks a trade that high before it can be
-// worked.
+// way a `slain` row fells a creature (rules.ts `fallOf`). A hero's trades
+// (trades.ts) are counted from the gathered rows on their items: each is xp in
+// its node's trade, and a node of a higher tier asks a trade that high before
+// it can be worked.
 import { isA } from './features.ts'
 import { HOPS } from './levels.ts'
 import { hashOf, rand, uuidOf } from './rand.ts'
@@ -25,17 +25,14 @@ import {
   type Vale,
   WATER,
 } from './terrain.ts'
+import { type Gather, least } from './trades.ts'
 
-export type Trade = 'wood' | 'ore' | 'herb' | 'fish'
-
-/** Each trade: its name, its icon, what working a node of it is called, how
- * near a hero must stand to work one, in metres, and how long the work takes
+/** How each gathering trade works a node: what working one is called, how
+ * near a hero must stand to work it, in metres, and how long the work takes
  * against a tree's; and how its nodes grow: how many around each place, within
  * how many metres of it, how far apart, and how many seconds a spent one takes
  * to grow back. */
-export let TRADES: Record<Trade, {
-  name: string
-  icon: string
+export let GATHER: Record<Gather, {
   verb: string
   reach: number
   work: number
@@ -45,8 +42,6 @@ export let TRADES: Record<Trade, {
   respawn: number
 }> = {
   wood: {
-    name: 'Woodcutting',
-    icon: '🪓',
     verb: 'Chop',
     reach: 2.4,
     work: 1,
@@ -56,8 +51,6 @@ export let TRADES: Record<Trade, {
     respawn: 150,
   },
   ore: {
-    name: 'Mining',
-    icon: '⛏️',
     verb: 'Mine',
     reach: 2.2,
     work: 1.15,
@@ -67,8 +60,6 @@ export let TRADES: Record<Trade, {
     respawn: 180,
   },
   herb: {
-    name: 'Herbalism',
-    icon: '🌿',
     verb: 'Pick',
     reach: 1.9,
     work: 0.7,
@@ -78,8 +69,6 @@ export let TRADES: Record<Trade, {
     respawn: 100,
   },
   fish: {
-    name: 'Fishing',
-    icon: '🎣',
     verb: 'Fish',
     reach: 3.4,
     work: 1.5,
@@ -111,13 +100,24 @@ export type Look =
  * `HOPS`). */
 export type Lode = {
   name: string
-  trade: Trade
+  trade: Gather
   tier: number
   gives: string
   near: string[]
   hops: [number, number]
   look: Look
 }
+
+/** The colour of the bits a stroke knocks off a node: chips of wood, grit of
+ * the ore, leaves, spray. */
+export let chipOf = (look: Look): number =>
+  look.plan == 'tree'
+    ? look.wood
+    : look.plan == 'seam'
+    ? look.vein
+    : look.plan == 'herb'
+    ? look.leaf
+    : 0xe8f4ff
 
 let tree = (prop: string, bark: number, wood: number): Look => ({
   plan: 'tree',
@@ -210,14 +210,23 @@ export let LODES: Record<string, Lode> = {
     hops: [6, 8],
     look: tree('chartree', 0x2a2624, 0xe8622a),
   },
-  iron: {
-    name: 'Iron seam',
+  copper: {
+    name: 'Copper seam',
     trade: 'ore',
     tier: 1,
-    gives: 'ore',
+    gives: 'copper',
     near: ['crags', 'ridge'],
     hops: [0, 1],
     look: seam([0x8f8e86, 0xa3a198, 0x7f7e77], 0xc8783a),
+  },
+  iron: {
+    name: 'Iron seam',
+    trade: 'ore',
+    tier: 2,
+    gives: 'ore',
+    near: ['crags', 'ridge'],
+    hops: [2, 3],
+    look: seam([0x6e6c68, 0x7e7c76, 0x5e5c58], 0xa86a4a),
   },
   silver: {
     name: 'Silver seam',
@@ -481,7 +490,7 @@ export let nodesOf = (v: Vale): Node[] => {
     )
   for (let [kind, lode] of Object.entries(LODES)) {
     if (hops < lode.hops[0] || hops > lode.hops[1]) continue
-    let t = TRADES[lode.trade]
+    let t = GATHER[lode.trade]
     let fits = lode.trade == 'fish' ? wet : dry
     for (let [name, place] of places) {
       if (!lode.near.some((near) => isA(place.kind, near))) continue
@@ -528,57 +537,8 @@ export let nodesOf = (v: Vale): Node[] => {
   return out
 }
 
-/** The xp a level of a trade takes, counted from nothing.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * assertEquals([tradeNeed(1), tradeNeed(2), tradeNeed(3)], [0, 10, 40])
- * assertEquals(tradeLevel(tradeNeed(5)), 5)
- * assertEquals(tradeLevel(tradeNeed(5) - 1), 4)
- * ```
- */
-export let tradeNeed = (lvl: number): number => 10 * (lvl - 1) ** 2
-
-export let tradeLevel = (xp: number): number => {
-  let l = 1
-  while (xp >= tradeNeed(l + 1)) l++
-  return l
-}
-
-/** The least level of its trade a node of `tier` asks: a tier every two
- * levels. */
-export let least = (tier: number): number => 2 * tier - 1
-
 /** What working a node of `tier` is worth to its trade. */
-export let tradeXp = (tier: number): number => 5 * tier
-
-export type Trades = Record<Trade, { xp: number; lvl: number }>
-
-/** A hero's trades, from the kinds of node their gathered rows name: a
- * handful of oaks makes a woodcutter who can fell pines.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * let t = tradesOf([...Array(8).fill('oak'), 'perch', 'nothing'])
- * assertEquals(t.wood, { xp: 40, lvl: 3 })
- * assertEquals(t.fish, { xp: 5, lvl: 1 })
- * assertEquals(t.wood.lvl >= least(LODES.pine.tier), true)
- * ```
- */
-export let tradesOf = (kinds: string[]): Trades => {
-  let xp: Record<Trade, number> = { wood: 0, ore: 0, herb: 0, fish: 0 }
-  for (let k of kinds) {
-    let l = LODES[k]
-    if (l) xp[l.trade] += tradeXp(l.tier)
-  }
-  let at = (t: Trade) => ({ xp: xp[t], lvl: tradeLevel(xp[t]) })
-  return {
-    wood: at('wood'),
-    ore: at('ore'),
-    herb: at('herb'),
-    fish: at('fish'),
-  }
-}
+export let gatherXp = (tier: number): number => 5 * tier
 
 /** How long working a node takes a hero whose trade is at `lvl`, in ms: a
  * moment more for each tier, as long again for a shoal to bite, and less the
@@ -593,7 +553,7 @@ export let tradesOf = (kinds: string[]): Trades => {
  */
 export let effort = (lode: Lode, lvl: number): number =>
   Math.round(
-    (1300 + 300 * lode.tier) * TRADES[lode.trade].work *
+    (1300 + 300 * lode.tier) * GATHER[lode.trade].work *
       Math.max(2 / 3, 1 - (lvl - least(lode.tier)) * 0.05),
   )
 

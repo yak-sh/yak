@@ -1,6 +1,7 @@
 // What a village builds, at a quarter of a ground voxel: cottages and a hall,
-// the well, the fire, the notice board and the lamps; and the signpost at the
-// head of every road. A village's houses are built of what is to hand where
+// the well, the fire, the notice board and the lamps, and the forge, bench and
+// cauldron a hero makes things at (craft.ts); and the signpost at the head of
+// every road. A village's houses are built of what is to hand where
 // it stands: plaster in Mossvale, birch at Birchmere, turf-roofed logs in
 // Fernwood, whitewash and slate at Gullwick, driftwood at Driftwood Bay,
 // quarried stone at Stonestep.
@@ -169,6 +170,76 @@ let lamp = (): Model => {
   return { vox: v, size: 0.25 }
 }
 
+// The smith's forge (craft.ts): a stone hearth of glowing coals under its
+// hood and chimney, and an anvil on a stump beside it, a hammer laid on it.
+let forge = (): Model => {
+  let v: Vox = new Map()
+  for (let y = 0; y <= 3; y++) {
+    box(v, [-7, y, -3], [-1, y, 3], y & 1 ? 0x8a887f : FOUND)
+  }
+  box(v, [-7, 4, 3], [-1, 10, 3], 0x7a7870)
+  box(v, [-7, 11, 0], [-1, 11, 3], 0x6e6c66)
+  box(v, [-5, 12, 1], [-3, 16, 3], 0x6e6c66)
+  box(v, [-6, 4, -2], [-2, 4, 2], 0x2a2220)
+  for (let [x, z] of [[-5, -1], [-4, 1], [-3, 0], [-5, 1], [-3, -2]]) {
+    v.set(key(x, 5, z), (x + z) & 1 ? 0xff7a2a : 0xffc050)
+  }
+  box(v, [2, 0, -1], [4, 3, 1], 0x5a3e2a)
+  box(v, [1, 4, -1], [5, 4, 1], 0x3a3a40)
+  box(v, [2, 5, -1], [4, 6, 1], 0x4a4a52)
+  box(v, [5, 6, 0], [6, 6, 0], 0x4a4a52)
+  box(v, [2, 7, 1], [5, 7, 1], TIMBER)
+  box(v, [2, 7, 0], [2, 8, 1], 0x5a5a62)
+  return { vox: v, size: 0.25 }
+}
+
+// The joiner's bench: a board on four legs with a shelf under it, a vice at
+// one end, a plank being planed, and a saw beside it.
+let bench = (): Model => {
+  let v: Vox = new Map()
+  for (let x of [-5, 5]) {
+    for (let z of [-2, 2]) box(v, [x, 0, z], [x, 3, z], 0x7a5236)
+  }
+  box(v, [-5, 1, -2], [5, 1, 2], 0x8a6240)
+  box(v, [-6, 4, -2], [6, 4, 2], 0xb08a5a)
+  box(v, [5, 5, -1], [6, 6, 1], 0x4a4a52)
+  box(v, [-4, 5, -1], [2, 5, 0], 0xe8c890)
+  v.set(key(-1, 6, 0), 0x6e4a31)
+  box(v, [-2, 6, -1], [0, 6, -1], 0x9aa2aa)
+  box(v, [3, 5, 1], [4, 5, 2], 0xc8ccd0)
+  v.set(key(4, 5, 2), 0x6e4a31)
+  for (let [x, z] of [[-3, 3], [0, 3], [2, -3], [-6, 3]]) {
+    v.set(key(x, 0, z), 0xe8d0a0)
+  }
+  return { vox: v, size: 0.25 }
+}
+
+// The cauldron: a black pot on a ring of stones, a fire under it, and a green
+// brew in it.
+let cauldron = (): Model => {
+  let v: Vox = new Map()
+  for (let a = 0; a < 10; a++) {
+    let t = (a / 10) * Math.PI * 2
+    let x = Math.round(Math.cos(t) * 3.5), z = Math.round(Math.sin(t) * 3.5)
+    v.set(key(x, 0, z), a % 3 ? 0x8f8d85 : 0x7a7870)
+  }
+  box(v, [-2, 0, 0], [2, 0, 0], 0x6e4a31)
+  v.set(key(0, 0, 1), 0xff7a2a)
+  v.set(key(1, 0, -1), 0xffc050)
+  ball(
+    v,
+    [0, 2, 0],
+    2.6,
+    (x, y, z) =>
+      y < 1
+        ? null
+        : y == 4
+        ? x * x + z * z < 3 ? (x + z) & 1 ? 0x7ae09a : 0x5ac07a : 0x5a5862
+        : 0x44424a,
+  )
+  return { vox: v, size: 0.25 }
+}
+
 // A fingerpost at the head of a road: a timber post on a cairn of stones,
 // its arms pointing every way, and a lantern hung from it.
 let signpost = (): Model => {
@@ -209,4 +280,21 @@ export let VILLAGE: Record<string, Kind> = {
     glow: { at: [0.5, 2.5, 0], size: 3.2 },
   },
   signpost: { make: signpost, girth: 0.3, foot: 1 },
+  forge: {
+    make: forge,
+    girth: 1.2,
+    row: 1,
+    foot: 2,
+    span: [3.6, 1.8],
+    glow: { at: [-1, 1.4, 0], size: 3, color: 0xff7a2a },
+    aside: true,
+  },
+  bench: { make: bench, girth: 1, row: 1.2, foot: 1.8, aside: true },
+  cauldron: {
+    make: cauldron,
+    girth: 1.3,
+    foot: 1.4,
+    glow: { at: [0, 1.3, 0], size: 2.4, color: 0x9fe0a0 },
+    aside: true,
+  },
 }

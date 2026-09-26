@@ -124,8 +124,9 @@ export let quest = voice(
     ),
 )
 
-/** A stroke of work at a node, by its trade (gather.ts): an axe biting wood,
- * a pick ringing on stone, leaves pulled, a float plopping. */
+/** A stroke of work, by its trade (trades.ts): an axe biting wood, a pick
+ * ringing on stone, leaves pulled, a float plopping; a hammer on the anvil, a
+ * plane over a board, a ladle in the cauldron. */
 export let stroke: Record<string, Voice> = {
   wood: voice(0.2, 0.14, (o) => {
     tone(o, vary(190), 0.1, 'triangle', 0.16, 90)
@@ -141,10 +142,25 @@ export let stroke: Record<string, Voice> = {
     tone(o, vary(520), 0.12, 'sine', 0.06, 180)
     hiss(o, 0.25, 1400, 0.05, 0.9)
   }),
+  forge: voice(0.5, 0.13, (o) => {
+    tone(o, vary(1250), 0.4, 'triangle', 0.07, 1240)
+    tone(o, 3100, 0.25, 'sine', 0.03, 3080)
+    hiss(o, 0.04, 4200, 0.07, 1.5)
+  }),
+  bench: voice(0.3, 0.09, (o) => {
+    hiss(o, 0.2, vary(3200), 0.08, 2.5)
+    tone(o, vary(240), 0.06, 'triangle', 0.06, 160, 0.18)
+  }),
+  cauldron: voice(0.45, 0.08, (o) => {
+    tone(o, vary(300), 0.1, 'sine', 0.05, 520)
+    tone(o, vary(380), 0.1, 'sine', 0.04, 640, 0.14)
+    hiss(o, 0.3, 900, 0.03, 0.6)
+  }),
 }
 
-/** A node's work done, by its trade: a tree crashing down, a seam
- * crumbling, a clump pulled up, a fish hauled out with a splash. */
+/** Work done, by its trade: a tree crashing down, a seam crumbling, a clump
+ * pulled up, a fish hauled out with a splash; hot iron quenched, a last tap
+ * of the mallet, a brew poured off with a chime. */
 export let done: Record<string, Voice> = {
   wood: voice(0.9, 0.2, (o) => {
     tone(o, 320, 0.35, 'sawtooth', 0.03, 260, 0, 900)
@@ -162,6 +178,20 @@ export let done: Record<string, Voice> = {
   fish: voice(0.6, 0.12, (o) => {
     hiss(o, 0.5, 1800, 0.12, 0.8)
     tone(o, 300, 0.2, 'sine', 0.08, 140)
+  }),
+  forge: voice(0.9, 0.12, (o) => {
+    hiss(o, 0.8, 5200, 0.1, 0.5)
+    tone(o, 1250, 0.5, 'triangle', 0.05, 1200)
+  }),
+  bench: voice(0.5, 0.1, (o) => {
+    tone(o, 260, 0.08, 'triangle', 0.08, 170)
+    tone(o, 300, 0.08, 'triangle', 0.07, 190, 0.16)
+  }),
+  cauldron: voice(0.7, 0.1, (o) => {
+    hiss(o, 0.4, 1200, 0.05, 0.7)
+    for (let [i, f] of [523, 784, 1047].entries()) {
+      tone(o, f, 0.3, 'sine', 0.04, f, 0.12 + i * 0.08)
+    }
   }),
 }
 

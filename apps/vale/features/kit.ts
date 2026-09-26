@@ -72,9 +72,17 @@ export let ring = (kind: string, r: number, n: number, gone: number[] = []) =>
     seed: i,
   })).filter((_, i) => !gone.includes(i))
 
+/** Where a village makes things (craft.ts): a forge, a bench and a cauldron
+ * round its square. */
+export let STATIONS: Prop[] = [
+  { kind: 'forge', x: -6.5, z: -0.5, seed: 8 },
+  { kind: 'bench', x: 0.5, z: -6.5, seed: 9 },
+  { kind: 'cauldron', x: 6.5, z: 1.5, seed: 10 },
+]
+
 /** A village's buildings round its fire: four `house`s, `middle` in its
  * square (a well, or what stands for one), its notice board and four
- * `lamp`s, and `more`. */
+ * `lamp`s, the stations, and `more`. */
 export let hamlet = (
   house: string,
   middle = 'well',
@@ -92,5 +100,6 @@ export let hamlet = (
   { kind: lamp, x: 4.5, z: 4.5, seed: 5 },
   { kind: lamp, x: -5, z: 5.5, seed: 6 },
   { kind: lamp, x: 5.5, z: -5, seed: 7 },
+  ...STATIONS,
   ...more,
 ]

@@ -8,11 +8,11 @@ import type { Action } from './input.ts'
 import type { Frame, Sheet } from './play.ts'
 import type { Job } from './work.ts'
 import { BEASTS } from './beasts.ts'
-import { TRADES } from './gather.ts'
 import { ITEMS } from './items.ts'
 import { LEVELS } from './levels.ts'
 import { GIVERS, type Quest } from './quests.ts'
 import { need } from './rules.ts'
+import { TRADES } from './trades.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -244,14 +244,16 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
       return !talk.hidden
     },
     /** the gather button, for this frame's work: its trade's icon while a node
-     * is near enough to work, dim while it cannot be, and ringed with how far
-     * the work has come; none while someone is near enough to talk to */
+     * or a station is near enough to work, dim while a node cannot be, and
+     * ringed with how far the work has come; none while someone is near
+     * enough to talk to */
     work: (job: Job | null) => {
       let n = job?.doing?.node ?? job?.near
-      gatherPad.classList.toggle('Pad-none', !n)
-      if (!n) return
-      put('gather', gatherIcon, TRADES[n.lode.trade].icon)
-      gatherPad.classList.toggle('Pad-off', n.spent || !n.able)
+      let trade = job?.doing?.trade ?? n?.lode.trade ?? job?.bench?.craft
+      gatherPad.classList.toggle('Pad-none', !trade)
+      if (!trade) return
+      put('gather', gatherIcon, TRADES[trade].icon)
+      gatherPad.classList.toggle('Pad-off', !!n && (n.spent || !n.able))
       let k = job?.doing ? job.doing.k.toFixed(3) : '0'
       if (was.gatherK != k) {
         was.gatherK = k

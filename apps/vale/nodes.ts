@@ -7,12 +7,14 @@
 // water once fished. A node shakes at each stroke of its work, a felled tree
 // topples away from whoever felled it, and whatever grows back swells up out
 // of the ground. Over the nodes near the hero a plate says what each is and
-// what it asks, and over the one being worked, how far the work has come. What
-// a node gives flies from it to the hero.
+// what it asks, and over the one being worked, how far the work has come; so
+// does one over a village's station while the hero stands at it. What a node
+// gives, or a station makes, flies from it to the hero.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { bits, overlay } from './fx.ts'
-import { least, type Look, TRADES } from './gather.ts'
+import { STATIONS } from './craft.ts'
+import { chipOf, GATHER, type Look } from './gather.ts'
 import { ITEMS } from './items.ts'
 import {
   ball,
@@ -30,6 +32,7 @@ import type { Vec3 } from './play.ts'
 import { model } from './props.ts'
 import { hashOf, noise, rand, stream } from './rand.ts'
 import { geometry, sight, soft } from './soft.ts'
+import { least, TRADES } from './trades.ts'
 import type { Job, Seen } from './work.ts'
 
 /** How many shapes each kind of node is drawn in. */
@@ -211,17 +214,6 @@ export let modelOf = (look: Look, whole: boolean, shape: number): Out => {
     : out()
 }
 
-/** The colour of the bits a stroke knocks off a node: chips of wood, grit of
- * the ore, leaves, spray. */
-export let chipOf = (look: Look): number =>
-  look.plan == 'tree'
-    ? look.wood
-    : look.plan == 'seam'
-    ? look.vein
-    : look.plan == 'herb'
-    ? look.leaf
-    : 0xe8f4ff
-
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 let secs = (ms: number) => {
@@ -325,22 +317,26 @@ export let nodes = (
     for (let r of b.rings ?? []) r.material.dispose()
   }
 
+  // How far the work has come, as a bar under a plate's name.
+  let bar = (k: number) =>
+    `<span class="Plate_Bar Plate_Bar-work"><i style="--k:${
+      Math.min(1, k).toFixed(3)
+    }"></i></span>`
+  let hint = (icon: string, verb: string) =>
+    `<em>${icon} ${verb}${phone ? '' : ' · E'}</em>`
+
   let plate = (n: Seen, job: Job) => {
-    let doing = job.doing?.node.eid == n.eid ? job.doing : null
+    let doing = job.doing?.node?.eid == n.eid ? job.doing : null
     let t = TRADES[n.lode.trade]
     let name = `<b>${esc(n.lode.name)}</b>`
     let html = doing
-      ? `<span>${name}</span><span class="Plate_Bar Plate_Bar-work"><i style="--k:${
-        Math.min(1, doing.k).toFixed(3)
-      }"></i></span>`
+      ? `<span>${name}</span>${bar(doing.k)}`
       : n.spent
       ? `<span>${name} <em>back in ${secs(n.back)}</em></span>`
       : !n.able
       ? `<span>${name} <em>${t.name} ${least(n.lode.tier)}</em></span>`
       : job.near?.eid == n.eid
-      ? `<span>${name} <em>${t.icon} ${t.verb}${
-        phone ? '' : ' · E'
-      }</em></span>`
+      ? `<span>${name} ${hint(t.icon, GATHER[n.lode.trade].verb)}</span>`
       : `<span>${name}</span>`
     let [x, y, z] = n.at
     plates.plate(
@@ -352,6 +348,24 @@ export let nodes = (
   }
 
   let v3 = (a: Vec3, up = 0) => new THREE.Vector3(a[0], a[1] + up, a[2])
+
+  // The station the hero stands at: what it is, and how far a making there
+  // has come.
+  let bench = (job: Job) => {
+    let b = job.bench
+    if (!b || job.near) return
+    let s = STATIONS[b.craft], t = TRADES[b.craft]
+    let doing = job.doing?.recipe ? job.doing : null
+    let name = `<b>${esc(s.name)}</b>`
+    plates.plate(
+      `bench:${b.at.join()}`,
+      v3(b.at, 1.9),
+      doing
+        ? `<span>${name}</span>${bar(doing.k)}`
+        : `<span>${name} ${hint(t.icon, t.name)}</span>`,
+      'Plate Plate-node',
+    )
+  }
 
   return {
     /** Draw this frame's nodes, with the hero at `hero`. */
@@ -459,12 +473,13 @@ export let nodes = (
             { speed: 0.2, up: 0.4, life: 0.5, size: 0.05, fall: 0 },
           )
         }
-        if (n.near < LABEL || job.doing?.node.eid == n.eid) plate(n, job)
+        if (n.near < LABEL || job.doing?.node?.eid == n.eid) plate(n, job)
       }
+      bench(job)
 
-      // What a gathering gave flies from its node to the hero.
+      // What was gathered or made flies from its node or station to the hero.
       for (let e of job.events) {
-        if (e.type != 'gathered') continue
+        if (e.type != 'got') continue
         let obj = thing(e.item)
         obj.scale.setScalar(1.8)
         scene.add(obj)

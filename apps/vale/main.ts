@@ -2,8 +2,8 @@
 // the page: it grows the level the hero is in off its own thread (grown.ts)
 // while it opens the store and asks who you are and which of your heroes to
 // play, and then runs the frame: the player's hands (input.ts), a step of the
-// game on the graph (play.ts), the work at the nodes to gather (work.ts), the
-// stage (cast.ts, nodes.ts), the bits and numbers (fx.ts), the glass
+// game on the graph (play.ts), the work at the nodes and the stations
+// (work.ts, station.ts), the stage (cast.ts, nodes.ts), the bits and numbers (fx.ts), the glass
 // (hud.ts), what was said (chatbox.ts) and the map (map.ts). When the hero walks off the end of a road, the page grows the
 // level beyond and carries on there.
 // @ts-types="npm:@types/three@^0.186.0"
@@ -16,22 +16,23 @@ import { deals } from './deals.ts'
 import { map } from './map.ts'
 import { BUILDS, type Figure, hero, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
-import { LODES, TRADES } from './gather.ts'
 import { ahead, type Grown, grown } from './grown.ts'
 import { hud } from './hud.ts'
 import { pack } from './pack.ts'
 import { listen } from './input.ts'
-import { chipOf, nodes } from './nodes.ts'
+import { nodes } from './nodes.ts'
 import { ITEMS } from './items.ts'
 import { HOME, LEVELS } from './levels.ts'
 import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { type Event, type Frame, game, type Vec3 } from './play.ts'
 import { sound } from './sound.ts'
+import { station } from './station.ts'
 import { type Mic, voices } from './voicebox.ts'
 import { groundAt, SIZE, VOXEL } from './terrain.ts'
+import { TRADES } from './trades.ts'
 import { world } from './world.ts'
 import { village } from './village.ts'
-import { gathering, type Job, type Work } from './work.ts'
+import { type Job, type Work, working } from './work.ts'
 
 let TINTS = [
   '#c9503f',
@@ -111,7 +112,7 @@ let net = connect(new URL('api/', document.baseURI))
 let trade = deals(net)
 let folk = village(net, trade.holds)
 let g = game(net, folk.at)
-let gather = gathering(net)
+let toil = working(net)
 // Who you are and your heroes, asked while the level grows.
 let asking = net.me().then(async (me) => ({
   me,
@@ -125,6 +126,7 @@ let marks = overlay(h.layer, camera)
 let chat = chatbox(glass, net, marks, folk)
 let m = map(glass)
 let p = pack(glass, { wear: g.wear, take: g.take })
+let bench = station(glass, { make: toil.make })
 
 // The level on show, and what is drawn of it: grown again when the hero goes
 // off the end of a road, while the frame waits (`away`).
@@ -464,21 +466,29 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
   }
 }
 
-// What the work at a node did: chips flying at each stroke, and what it gave
-// flying to the hero with the xp it was to their trade.
+// What the work at a node or a station did: chips flying at each stroke, and
+// what it gave or made flying to the hero with the xp it was to their trade;
+// and a station worked opens its sheet, or folds it away.
 let worked = (e: Work) => {
-  let p = (a: Vec3, up: number) => new THREE.Vector3(a[0], a[1] + up, a[2])
+  let v3 = (a: Vec3, up: number) => new THREE.Vector3(a[0], a[1] + up, a[2])
   if (e.type == 'stroke') {
-    let fish = e.trade == 'fish'
-    dust.emit(p(e.at, fish ? 0.05 : 0.6), chipOf(LODES[e.kind].look), 6, {
-      speed: fish ? 1.2 : 2,
-      up: fish ? 3 : 2.5,
+    let wet = e.trade == 'fish' || e.trade == 'cauldron'
+    let up = e.trade == 'fish' ? 0.05 : e.trade == 'cauldron' ? 1 : 0.6
+    dust.emit(v3(e.at, up), e.chip, 6, {
+      speed: wet ? 1.2 : 2,
+      up: wet ? 3 : 2.5,
       life: 0.5,
       size: 0.08,
     })
     sound.stroke(e.at, e.trade)
-    if (!fish) cam.shake = Math.max(cam.shake, 0.04)
-  } else if (e.type == 'gathered') {
+    if (!wet) cam.shake = Math.max(cam.shake, 0.04)
+  } else if (e.type == 'station') {
+    if (bench.at == e.craft) bench.close()
+    else if (job) {
+      p.close()
+      bench.open(e.craft, job.trades)
+    }
+  } else if (e.type == 'got') {
     let t = ITEMS[e.item]
     h.toast(
       `${t?.icon ?? ''} ${t?.name ?? e.item}${e.n > 1 ? ` ×${e.n}` : ''}`,
@@ -584,7 +594,10 @@ let loop = (t: number) => {
   if (playing && net.hero && !away) {
     let i = hands.read()
     if (i.map) m.toggle()
-    if (i.bag) p.toggle()
+    if (i.bag) {
+      p.toggle()
+      bench.close()
+    }
     if (i.mic) void voice.toggle()
     if (h.talking) {
       Object.assign(i, {
@@ -616,7 +629,7 @@ let loop = (t: number) => {
         hair: str(player.hair, look.hair),
         skin: str(player.skin, look.skin),
       }
-      job = gather.tick(
+      job = toil.tick(
         v,
         f,
         i.gather || (i.talk && !f.talk),
@@ -628,7 +641,7 @@ let loop = (t: number) => {
         net.hero,
         dressed,
         dt,
-        d ? { swing: d.swing, x: d.node.at[0], z: d.node.at[2] } : null,
+        d ? { swing: d.swing, x: d.at[0], z: d.at[2] } : null,
       )
       bounty.tick(job, [f.body.x, f.body.y, f.body.z], dt)
       folk.tick(f)
@@ -666,6 +679,9 @@ let loop = (t: number) => {
       h.work(f.talk ? null : job)
       m.show(f, v, job.nodes)
       p.show(f)
+      // Walked off from the station its sheet is open at: it folds away.
+      if (bench.at && job.bench?.craft != bench.at) bench.close()
+      bench.show(f.sheet, job)
       w.focus.set(f.body.x, f.body.y, f.body.z)
       // Near a road's end, the level beyond starts growing.
       let road = v.roads.find((r) =>

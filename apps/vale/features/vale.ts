@@ -4,7 +4,7 @@
 // Elderglade's elders, Greypine's grey pines, Wolfden's hollow and dens.
 import { fbm, lerp, smooth } from '../rand.ts'
 import type { Prop } from '../terrain.ts'
-import { bump, type Feature, hamlet, Top } from './kit.ts'
+import { bump, type Feature, hamlet, STATIONS, Top } from './kit.ts'
 
 /** A village's buildings, by where each stands from the village's middle. */
 let VILLAGE: Prop[] = [
@@ -19,6 +19,7 @@ let VILLAGE: Prop[] = [
   { kind: 'lamp', x: 4.5, z: 4.5, seed: 5 },
   { kind: 'lamp', x: -5, z: 5.5, seed: 6 },
   { kind: 'lamp', x: 5.5, z: -5, seed: 7 },
+  ...STATIONS,
 ]
 
 let BASE: Record<string, Feature> = {

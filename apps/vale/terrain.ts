@@ -46,6 +46,13 @@ let norm = (x: number, z: number) => Math.sqrt(x * x + z * z)
 let dist = (x: number, z: number, [a, b]: Spot) => norm(x - a, z - b)
 let snap = (x: number) => (Math.floor(x / GRID) + 0.5) * GRID
 
+// Every step a build standing aside may take from where it was planned, a
+// cell of the grid at a time, up to 8 metres either way, shortest first.
+let STEPS: Spot[] = Array.from({ length: 33 * 33 }, (_, j): Spot => [
+  (j % 33 - 16) * GRID,
+  (Math.floor(j / 33) - 16) * GRID,
+]).sort((p, q) => norm(p[0], p[1]) - norm(q[0], q[1]))
+
 /** A prop: something standing on the ground that is part of the level's
  * shape (a tree, a rock, a flower, a house, a signpost), at (x, z) metres. */
 export type Prop = {
@@ -524,10 +531,45 @@ let build = (lv: Level, V: number): Vale => {
       }
     }
   }
-  for (let p of Object.values(lv.places)) {
-    for (let b of FEATURES[p.kind]?.builds ?? []) {
-      built.push({ ...b, x: p.at[0] + b.x, z: p.at[1] + b.z })
+  // A build that stands aside (props/kit.ts) takes the nearest step from
+  // where it was planned (STEPS) where none of the ground it takes is paved and
+  // a metre parts it from what was built before it; failing that, where a
+  // metre parts them. The ground a build takes is a box square to the axes, as
+  // structures are built (foundation): its span, or the trunk or row a walker
+  // meets, or its foot.
+  let paved = (x: number, z: number) =>
+    toRoad(ways, x, z) < ROAD || toLane(paths, x, z) < 0.85
+  let half = (kind: string): [number, number] => {
+    let { span, girth, row = 0, foot = 0 } = KINDS[kind]
+    return span
+      ? [span[0] / 2, span[1] / 2]
+      : girth
+      ? [row + girth / 2, girth / 2]
+      : [foot, foot]
+  }
+  let clear = (kind: string, x: number, z: number, road: boolean) => {
+    let [w, d] = half(kind)
+    return built.every((q) => {
+      let [qw, qd] = half(q.kind)
+      return Math.abs(x - q.x) >= w + qw + 1 || Math.abs(z - q.z) >= d + qd + 1
+    }) &&
+      (!road ||
+        [-1, 0, 1].every((u) =>
+          [-1, 0, 1].every((t) => !paved(x + u * (w + 0.5), z + t * (d + 0.5)))
+        ))
+  }
+  let stand = (b: Prop, [cx, cz]: Spot): Prop => {
+    let x0 = snap(cx + b.x), z0 = snap(cz + b.z)
+    for (let road of KINDS[b.kind].aside ? [true, false] : []) {
+      for (let [dx, dz] of STEPS) {
+        let x = x0 + dx, z = z0 + dz
+        if (clear(b.kind, x, z, road)) return { ...b, x, z }
+      }
     }
+    return { ...b, x: cx + b.x, z: cz + b.z }
+  }
+  for (let p of Object.values(lv.places)) {
+    for (let b of FEATURES[p.kind]?.builds ?? []) built.push(stand(b, p.at))
   }
   let out = ways.map(({ side, to, c }): Road => {
     let [x, z] = EDGE[side], len = Math.hypot(c.dx, c.dz)

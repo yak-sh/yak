@@ -47,6 +47,7 @@ export let MATERIALS: Record<string, Thing> = {
   sprucelog: row('Old spruce log', '🌲', log(0x3e2e22, 0xd8b880)),
   charwood: row('Charwood', '🔥', log(0x221e1c, 0xe8622a)),
   // Ores.
+  copper: row('Copper ore', '🟤', lump(0x7a6a5a, 0xc8783a)),
   silver: row('Silver ore', '⚪', lump(0x6a6a70, 0xe0e4ea)),
   gold: row('Gold ore', '🟡', lump(0x7a6a58, 0xf2c14e)),
   gleamstone: row('Gleamstone', '💠', lump(0x4a4a6a, 0x9ad8ff)),
