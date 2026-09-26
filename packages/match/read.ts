@@ -46,11 +46,12 @@ export type Bundle = {
 /**
  * The bundles one run is answered from. `list` and `of` are every source's: a
  * scan, and a lookup by id, which is how a reference is followed. A store that
- * keeps its entities apart by component or by value offers `wearing` and
- * `keyed` as well, and a query that can only match entities wearing a component
- * (or holding a value) reads those instead of scanning `list` — the way a
- * database reads an index instead of the table. Either way every candidate is
- * still tested, so an index only decides how much is read, never what matches.
+ * keeps its entities apart by component or by value offers `wearing`, `keyed`
+ * and `ranged` as well, and a query that can only match entities wearing a
+ * component (or holding a value, or a number between two bounds) reads those
+ * instead of scanning `list` — the way a database reads an index instead of the
+ * table. Either way every candidate is still tested, so an index only decides
+ * how much is read, never what matches.
  */
 export type Index = {
   /** every bundle, in the order given */
@@ -62,6 +63,15 @@ export type Index = {
   /** the bundles whose `comp.prop` files under this key ({@link keyOf}), by
    * id */
   keyed?: (comp: string, prop: string, key: string) => ReadonlyMap<Eid, Bundle>
+  /** Groups of bundles, by id, that between them hold every bundle whose
+   * `comp.prop`, read as a number, lies from `lo` to `hi` inclusive; a group
+   * may hold others too. */
+  ranged?: (
+    comp: string,
+    prop: string,
+    lo: number,
+    hi: number,
+  ) => ReadonlyMap<Eid, Bundle>[]
 }
 
 /**

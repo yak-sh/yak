@@ -29,7 +29,7 @@ import {
   reader,
   wears,
 } from './read.ts'
-import { check, EXISTS } from './value.ts'
+import { check, EXISTS, numeric } from './value.ts'
 import { search } from './text.ts'
 
 /** The package name an `Unsupported` error carries, so a refusal reports which
@@ -51,7 +51,8 @@ export type Ctx = { v: Vocab; now: number; computed: Computed }
 
 /**
  * A set every entity a clause can select is inside of: the entities wearing a
- * component, the ones whose property files under one of some keys, or a list of
+ * component, the ones whose property files under one of some keys, the ones
+ * whose number lies between two bounds (an open end is infinite), or a list of
  * ids. A compiled clause states these as it builds its test, from the test
  * itself, so a store with an index reads one of them rather than scanning
  * everything — and still runs the test on each, so a need only ever narrows
@@ -60,6 +61,7 @@ export type Ctx = { v: Vocab; now: number; computed: Computed }
 export type Need =
   | { comp: string }
   | { comp: string; prop: string; keys: string[] }
+  | { comp: string; prop: string; range: [number, number] }
   | { eids: string[] }
 
 /** A compiled clause: its test, the sets its matches must lie inside, and
@@ -115,6 +117,31 @@ let keys = (op: string, value: string, tag: string): string[] | null => {
   return out.every(Boolean) ? [...new Set(out)] : null
 }
 
+// The bounds a number property's value lies within when a comparison, a range
+// or one number holds, where an index over the property's numbers can answer
+// it. Anything else (a list, an absence, an operand that is not a number) has
+// no bounds.
+let BANDED = ['number', 'priority']
+let band = (
+  op: string,
+  value: string,
+  tag: string,
+): [number, number] | null => {
+  if (!BANDED.includes(tag)) return null
+  let n = (s: string) => numeric(s) ? Number(s) : NaN
+  let r = op == '' ? value.match(/^(.*?)\.\.\.?(.*)$/s) : null
+  let [lo, hi] = op == '<' || op == '<='
+    ? [-Infinity, n(value)]
+    : op == '>' || op == '>='
+    ? [n(value), Infinity]
+    : op != ''
+    ? [NaN, NaN]
+    : r
+    ? [n(r[1]), n(r[2])]
+    : [n(value), n(value)]
+  return Number.isNaN(lo) || Number.isNaN(hi) ? null : [lo, hi]
+}
+
 // A test over a property read off one entity, or a refusal naming the
 // predicate. A test that fails on an absent value can only pass on an entity
 // wearing the component, which is its need; an equality a keyed index answers
@@ -157,6 +184,8 @@ let scalar = (
     needs.push({ comp: hop.comp })
     let ks = read.stored && keys(op, value, read.tag)
     if (ks) needs.push({ comp: hop.comp, prop: hop.prop, keys: ks })
+    let range = read.stored && band(op, value, read.tag)
+    if (range) needs.push({ comp: hop.comp, prop: hop.prop, range })
   }
   return { hit: (b) => hit(b ? read.read(b) : null), needs }
 }

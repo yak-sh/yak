@@ -45,6 +45,7 @@ import { BY, compile, type Ctx, type Need, type Test } from './clause.ts'
 import {
   type Bundle,
   type Computed,
+  type Eid,
   type Index,
   index,
   live,
@@ -225,20 +226,26 @@ let newest = (a: Bundle, b: Bundle) =>
 let candidates = (needs: Need[], among: Index): Iterable<Bundle> => {
   let best: Iterable<Bundle> | undefined
   let size = Infinity
+  // Several groups read as one, when together they are the smallest yet.
+  let groups = (sets: ReadonlyMap<Eid, Bundle>[]) => {
+    let total = sets.reduce((sum, s) => sum + s.size, 0)
+    if (total >= size) return
+    size = total
+    best = sets.length == 1 ? sets[0].values() : sets.flatMap((s) => [
+      ...s.values(),
+    ])
+  }
   for (let n of needs) {
     if ('eids' in n) {
       if (n.eids.length >= size) continue
       size = n.eids.length
       best = n.eids.flatMap((eid) => among.of(eid) ?? [])
     } else if ('keys' in n) {
-      if (!among.keyed) continue
-      let sets = n.keys.map((k) => among.keyed!(n.comp, n.prop, k))
-      let total = sets.reduce((sum, s) => sum + s.size, 0)
-      if (total >= size) continue
-      size = total
-      best = sets.length == 1 ? sets[0].values() : sets.flatMap((s) => [
-        ...s.values(),
-      ])
+      if (among.keyed) {
+        groups(n.keys.map((k) => among.keyed!(n.comp, n.prop, k)))
+      }
+    } else if ('range' in n) {
+      if (among.ranged) groups(among.ranged(n.comp, n.prop, ...n.range))
     } else if (among.wearing) {
       let set = among.wearing(n.comp)
       if (set.size >= size) continue

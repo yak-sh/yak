@@ -157,6 +157,30 @@ Deno.test('a read by value follows the value through writes and a rollback', () 
   assertEquals(s.read('.status=sold').map((b) => b.entity.eid), ['p1'])
 })
 
+Deno.test('a range of numbers follows each value through writes and a rollback', () => {
+  let s = shopRam()
+  let cheap = () => s.read('.price=0..9').map((b) => b.entity.eid)
+  let under = () => s.read('.price<=9.5').map((b) => b.entity.eid)
+  put(s, { entity: { eid: 'p1' }, product: { price: 5 } })
+  put(s, { entity: { eid: 'p2' }, product: { price: 50 } })
+  assertEquals(cheap(), ['p1'])
+  put(s, { entity: { eid: 'p1' }, product: { price: 9.5 } })
+  put(s, { entity: { eid: 'p2' }, product: { price: 7 } })
+  assertEquals(cheap(), ['p2'])
+  assertEquals(under().sort(), ['p1', 'p2'])
+  assertThrows(() =>
+    s.tx((tx) => {
+      tx.patch([{ entity: { eid: 'p1' }, product: { price: 1 } }])
+      tx.patch([{ entity: { eid: 'p2' }, product: { price: null } }])
+      throw new Error('refused')
+    })
+  )
+  assertEquals(cheap(), ['p2'])
+  s.tx((tx) => tx.remove([{ eid: 'p2' }]))
+  assertEquals(cheap(), [])
+  assertEquals(under(), ['p1'])
+})
+
 Deno.test('a throwing transaction leaves the map exactly as it was', () => {
   let s = shopRam()
   put(s, { entity: { eid: 'p1' }, product: { price: 12 } })

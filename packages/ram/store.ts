@@ -113,9 +113,9 @@ let empty = (b: Bundle): boolean => {
   return true
 }
 let NONE: ReadonlyMap<Eid, Bundle> = new Map()
-let file = (
-  byKey: Map<string, Map<Eid, Bundle>>,
-  key: string,
+let file = <K>(
+  byKey: Map<K, Map<Eid, Bundle>>,
+  key: K,
   eid: Eid,
   b: Bundle,
 ) => {
@@ -123,6 +123,21 @@ let file = (
   if (!at) byKey.set(key, at = new Map())
   at.set(eid, b)
 }
+let unfile = <K>(byKey: Map<K, Map<Eid, Bundle>>, key: K, eid: Eid) => {
+  let at = byKey.get(key)
+  if (at?.delete(eid) && !at.size) byKey.delete(key)
+}
+// The band a value files under in a number index: the whole number at or below
+// it, read the way a number comparison reads it (@yaks/match), so every value a
+// range selects is in one of the bands the range spans.
+let bandOf = (v: unknown): number | undefined => {
+  if (v == null) return undefined
+  let n = Math.floor(Number(v))
+  return Number.isNaN(n) ? undefined : n
+}
+// One property of a record, or undefined.
+let valueOf = (b: Bundle | undefined, comp: string, prop: string): unknown =>
+  (b?.[comp] as Comp | undefined)?.[prop]
 
 /**
  * A store over a Map of bundles, bound to a vocabulary once. It is the storage
@@ -147,9 +162,14 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let cold = new Map<Eid, Entity>()
   // What a query reads instead of every row: the entities wearing each
   // component, and — for each property a query has asked for by value — the
-  // entities by the key their value files under (@yaks/match `keyOf`).
+  // entities by the key their value files under (@yaks/match `keyOf`), or for
+  // each number a query has asked for a range of, by band (`bandOf`).
   let worn = new Map<string, Map<Eid, Bundle>>()
   let filed = new Map<string, [string, string, Map<string, Map<Eid, Bundle>>]>()
+  let banded = new Map<
+    string,
+    [string, string, Map<number, Map<Eid, Bundle>>]
+  >()
   let next = 1
   // The undo log: for each entity a transaction is about to change, the record
   // it held first. Replayed backwards, it is the rollback.
@@ -178,10 +198,16 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       }
     }
     for (let [comp, prop, byKey] of filed.values()) {
-      let from = keyOf((was?.[comp] as Comp | undefined)?.[prop])
-      let to = keyOf((b?.[comp] as Comp | undefined)?.[prop])
-      if (from !== undefined && from !== to) byKey.get(from)?.delete(eid)
+      let from = keyOf(valueOf(was, comp, prop))
+      let to = keyOf(valueOf(b, comp, prop))
+      if (from !== undefined && from !== to) unfile(byKey, from, eid)
       if (to !== undefined) file(byKey, to, eid, b!)
+    }
+    for (let [comp, prop, byBand] of banded.values()) {
+      let from = bandOf(valueOf(was, comp, prop))
+      let to = bandOf(valueOf(b, comp, prop))
+      if (from !== undefined && from !== to) unfile(byBand, from, eid)
+      if (to !== undefined) file(byBand, to, eid, b!)
     }
   }
 
@@ -194,10 +220,43 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     let byKey = new Map<string, Map<Eid, Bundle>>()
     filed.set(at, [comp, prop, byKey])
     for (let [eid, b] of worn.get(comp) ?? NONE) {
-      let key = keyOf((b[comp] as Comp)[prop])
+      let key = keyOf(valueOf(b, comp, prop))
       if (key !== undefined) file(byKey, key, eid, b)
     }
     return byKey
+  }
+
+  // The number index over one property, filed the same way the first time a
+  // query asks for a range of it.
+  let bands = (comp: string, prop: string): Map<number, Map<Eid, Bundle>> => {
+    let at = `${comp}.${prop}`
+    let held = banded.get(at)
+    if (held) return held[2]
+    let byBand = new Map<number, Map<Eid, Bundle>>()
+    banded.set(at, [comp, prop, byBand])
+    for (let [eid, b] of worn.get(comp) ?? NONE) {
+      let band = bandOf(valueOf(b, comp, prop))
+      if (band !== undefined) file(byBand, band, eid, b)
+    }
+    return byBand
+  }
+
+  // The bands a range spans: counted off one by one when there are fewer of
+  // them than bands filed, else picked out of the ones filed.
+  let ranged = (comp: string, prop: string, lo: number, hi: number) => {
+    let byBand = bands(comp, prop)
+    let a = Math.floor(lo)
+    let z = Math.floor(hi)
+    let out: ReadonlyMap<Eid, Bundle>[] = []
+    if (z - a < byBand.size) {
+      for (let k = a; k <= z; k++) {
+        let at = byBand.get(k)
+        if (at) out.push(at)
+      }
+    } else {
+      for (let [k, at] of byBand) if (k >= a && k <= z) out.push(at)
+    }
+    return out
   }
 
   // What one read sees: every row, by id, by component and by value. A fresh
@@ -212,6 +271,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       of: (eid) => rows.get(eid),
       wearing: (comp) => worn.get(comp) ?? NONE,
       keyed: (comp, prop, key) => keys(comp, prop).get(key) ?? NONE,
+      ranged,
     }
   }
 

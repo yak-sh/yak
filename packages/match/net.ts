@@ -103,7 +103,7 @@ let flat = (cs: readonly Clause[]): Clause[] =>
 // an entity can reach it through), then an id list, then a component.
 let entry = (needs: Need[]): Need | undefined =>
   needs.find((n) => 'keys' in n) ?? needs.find((n) => 'eids' in n) ??
-    needs[0]
+    needs.find((n) => 'comp' in n && !('prop' in n))
 
 let into = <A, B>(m: Map<A, B>, k: A, make: () => B): B => {
   let v = m.get(k)

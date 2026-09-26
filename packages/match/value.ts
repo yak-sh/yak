@@ -35,7 +35,9 @@ export let EXISTS = 'exists'
 
 // The three tags that compare as numbers. Everything else compares as text.
 let NUMERIC: Tag[] = ['number', 'priority', 'bool']
-let numeric = (s: string): boolean => /^-?\d+(\.\d+)?$/.test(s)
+/** Whether an operand is written as a number, which is how a number property
+ * compares it. */
+export let numeric = (s: string): boolean => /^-?\d+(\.\d+)?$/.test(s)
 
 // One comparison, over two values of the same type. The four ordered operators
 // plus the equality a time instant asks for.

@@ -123,13 +123,15 @@ when it is asked (`.released=today`) is compiled again for each moment.
 
 A compiled query also knows the sets its matches must lie inside: the entities
 wearing a component it requires, the entities whose text, enum or reference
-property equals a value it names, or the ids it lists. A caller that keeps its
+property equals a value it names, the entities whose number lies between the
+bounds a comparison or range sets, or the ids it lists. A caller that keeps its
 bundles indexed passes an `Index` in place of the array: `list` and `of(eid)`,
-plus `wearing(comp)` and `keyed(comp, prop, key)` (a value's key is `keyOf`).
-The run then reads the smallest of those sets instead of every bundle, and still
-tests each candidate, so the index decides how much is read and never what
-matches. [@yaks/ram](../ram/README.md) is such a caller. Without an ordering,
-the order of the result is the order the source yields.
+plus `wearing(comp)`, `keyed(comp, prop, key)` (a value's key is `keyOf`) and
+`ranged(comp, prop, lo, hi)`. The run then reads the smallest of those sets
+instead of every bundle, and still tests each candidate, so the index decides
+how much is read and never what matches. [@yaks/ram](../ram/README.md) is such a
+caller. Without an ordering, the order of the result is the order the source
+yields.
 
 Both functions take an options object. `opts.now` is the millisecond timestamp
 that relative time phrases (`today`, `1 hour ago`) resolve against; it defaults
