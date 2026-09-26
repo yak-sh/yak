@@ -175,8 +175,14 @@ export type Graph = {
    * not eids already (see {@link Plugin.address}). Only the ids that changed
    * are in the returned map, so a caller reads it as `at.get(id) ?? id`; with
    * no plugin resolving names, every id is itself and this costs nothing. An
-   * id a plugin recognised and found naming nothing is refused. */
-  address: (ids: string[]) => Map<string, Eid> | Promise<Map<string, Eid>>
+   * id a plugin recognised and found naming nothing is refused. `kind` is the
+   * component the ids are meant to name, where the caller knows it (a tool
+   * argument declared `ref: 'session'`): a plugin may answer to a key only
+   * that kind has, such as a transcript's own id. */
+  address: (
+    ids: string[],
+    kind?: string,
+  ) => Map<string, Eid> | Promise<Map<string, Eid>>
   /** apply bundles in one transaction → the bundles as applied, one per
    * entity, plus everything the pipeline generated */
   apply: (bundles: Bundle[], opts?: ApplyOpts) => Bundle[] | Promise<Bundle[]>
@@ -624,13 +630,14 @@ export let graph = (opts: Options): Graph => {
   // reads it back as an eid and a write mints an entity whose eid is `T-998`.
   let address = (
     ids: string[],
+    kind?: string,
   ): Map<string, Eid> | Promise<Map<string, Eid>> => {
     let asks = plugins.flatMap((p) => p.address ?? [])
     if (!asks.length || !ids.length) return new Map<string, Eid>()
     let outside = detached(storage)
     let asked = each(asks, new Map<string, Eid | null>(), (at, ask) =>
       then(
-        ask(outside, ids.filter((id) => at.get(id) == null)),
+        ask(outside, ids.filter((id) => at.get(id) == null), kind),
         (more) => new Map([...at, ...more]),
       ))
     return then(asked, (at) => {

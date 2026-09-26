@@ -7,7 +7,7 @@
 // tool returns one new entity carrying both components, and the tool runner
 // commits it signed as whoever called it.
 
-import { addressed, argsOf, type Bundle } from '@yaks/graph'
+import { argsOf, type Bundle } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 
 /** The implementations of the tools ./vocab.json declares. A function that
@@ -15,13 +15,12 @@ import type { Runs } from '@yaks/graph/tools'
  * from the server: what an implementation reads arrives on the call it is
  * handed. */
 export let runs = (): Runs => ({
-  comment_new: async (call, graph): Promise<Bundle[]> => {
+  comment_new: (call): Bundle[] => {
     let args = argsOf(call)
-    let [target] = await addressed(graph, [String(args.target)])
     return [{
       entity: { eid: '$comment' },
       doc: { body: String(args.body) },
-      comment: { target },
+      comment: { target: String(args.target) },
     }]
   },
 })

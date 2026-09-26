@@ -141,7 +141,9 @@ entity. For persistent, idempotent names, compose
 resolve names to eids, and a write asks it about every id the write names. An id
 a plugin recognises as its own form and finds naming nothing (`T-998` where
 there is no T-998) is refused rather than taken for an eid. It does not replace
-ordinary reference validation.
+ordinary reference validation. `g.address(ids, kind)` also says which component
+the ids are meant to name, so a plugin may answer to a key only that kind has:
+@yaks/session resolves a run's own harness id only when a session is meant.
 
 ## Plugins and transactions
 

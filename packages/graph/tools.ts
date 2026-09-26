@@ -133,18 +133,6 @@ let batch = (v: unknown): Bundle[] => {
   })
 }
 
-// The entities asked for, each one whole and each one once, and nothing
-// else: what points at them is a query of its own (`.refs=<id>`), asked by
-// whoever wants it.
-let gather = async (graph: Graph, said: string[]): Promise<Bundle[]> => {
-  // What the caller typed, as the eids it names: an id that is an entity is
-  // itself, and anything else is whatever a plugin declares it addresses — a name,
-  // where @yaks/alias is composed in. Nothing composed, nothing to resolve.
-  let at = await graph.address(said)
-  let ids = [...new Set(said.map((id) => at.get(id) ?? id))]
-  return await detached(graph.storage).get(ids)
-}
-
 /**
  * The implementations behind ./vocab.json — the generic tier, every one of
  * them taking bundles in and returning bundles out. `search` appears only
@@ -190,9 +178,13 @@ export let runs = (seams: Seams = {}): Runs => {
     },
     graph_show: async (call, graph) => {
       let args = argsOf(call)
+      // The entities asked for, each one whole and each one once, and nothing
+      // else: what points at them is a query of its own (`.refs=<id>`). The
+      // ids arrive as the eids they name (@yaks/tools resolves every
+      // declared reference).
       let ids = strings(args.ids)
       if (!ids.length) throw new Refused('graph_show needs at least one id')
-      return await gather(graph, ids)
+      return await detached(graph.storage).get([...new Set(ids)])
     },
     graph_schema: (call, graph) => {
       let args = argsOf(call)

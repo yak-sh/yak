@@ -18,7 +18,7 @@
 // acting for, and an owner's approval is recorded as the owner's only when the
 // owner is the one calling.
 
-import { addressed, argsOf, type Bundle, type Comp } from '@yaks/graph'
+import { argsOf, type Bundle, type Comp } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 
 // The text a person reads. A body nobody supplied is omitted rather than
@@ -33,11 +33,9 @@ let docIn = (args: Record<string, unknown>): Comp => ({
  * every such module, although this one needs nothing from the server: each
  * implementation reads what it needs from the call it is handed. */
 export let runs = (): Runs => ({
-  design_new: async (call, graph): Promise<Bundle[]> => {
+  design_new: (call): Bundle[] => {
     let args = argsOf(call)
-    let project = args.project == null
-      ? undefined
-      : (await addressed(graph, [String(args.project)]))[0]
+    let project = args.project == null ? undefined : String(args.project)
     return [{
       entity: { eid: '$design' },
       design: {},
@@ -47,11 +45,10 @@ export let runs = (): Runs => ({
     }]
   },
 
-  design_decide: async (call, graph): Promise<Bundle[]> => {
+  design_decide: (call): Bundle[] => {
     let args = argsOf(call)
-    let [eid] = await addressed(graph, [String(args.design)])
     return [{
-      entity: { eid },
+      entity: { eid: String(args.design) },
       decided: { verdict: String(args.verdict) },
     }]
   },

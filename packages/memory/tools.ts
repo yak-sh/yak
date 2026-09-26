@@ -51,16 +51,11 @@ let comp = (b: Bundle | undefined, name: string): Comp =>
 let ids = (v: unknown): string[] =>
   Array.isArray(v) ? v.map(str).filter(Boolean) : []
 
-// The arguments that name an entity, resolved to eids. A person types `P-19`,
-// never an eid, and one call resolves every id the arguments carried.
-let at = async (
-  graph: Graph,
-  said: Record<string, string>,
-): Promise<Record<string, string>> => {
-  let keys = Object.keys(said).filter((k) => said[k])
-  let found = await addressed(graph, keys.map((k) => said[k]))
-  return Object.fromEntries(keys.map((k, i) => [k, found[i]]))
-}
+// Who gave a correction, as the eid they are: `feedback` takes a name or an
+// id and may be empty, so it is not a declared reference the runner resolves
+// the way it resolves `id`, `scope` and `near` (@yaks/tools).
+let byWhom = async (graph: Graph, said: string): Promise<string> =>
+  said ? (await addressed(graph, [said]))[0] : ''
 
 // A memory as it stands right now, for a patch to be judged against: the
 // entity the caller named, or nothing where it names no memory of this graph.
@@ -83,24 +78,21 @@ export let runs = (): Runs => ({
   memory_save: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let named = str(args.id)
+    let scope = str(args.scope)
     let feedback = args.feedback
-    let eids = await at(graph, {
-      id: named,
-      scope: str(args.scope),
-      by: str(feedback),
-    })
+    let by = await byWhom(graph, str(feedback))
     if (!named) {
       return saved({
         eid: '$memory',
         said: str(args.said),
         title: str(args.title),
         context: str(args.context),
-        ...(eids.scope ? { scope: eids.scope } : {}),
+        ...(scope ? { scope } : {}),
         about: str(args.about),
-        ...(feedback == null ? {} : { feedback: eids.by || true }),
+        ...(feedback == null ? {} : { feedback: by || true }),
       })
     }
-    let was = await held(graph, eids.id)
+    let was = await held(graph, named)
     if (!was) throw new Error(`no memory: ${named}`)
     // The words, and the one precondition that matters. A patch that leaves
     // them alone needs no token; one that replaces words the memory actually
@@ -112,16 +104,14 @@ export let runs = (): Runs => ({
     let said = args.said != null
     if (said && words != null && !args.was) throw new Error(unread(named))
     let memory: Comp = {}
-    if (eids.scope) memory.scope = eids.scope
+    if (scope) memory.scope = scope
     if (args.context != null) memory.context = str(args.context)
     if (args.about != null) memory.about = str(args.about)
     return [{
-      entity: { eid: eids.id },
+      entity: { eid: named },
       ...(Object.keys(doc).length ? { doc } : {}),
       ...(Object.keys(memory).length ? { [MEMORY]: memory } : {}),
-      ...(feedback == null
-        ? {}
-        : { [FEEDBACK]: eids.by ? { by: eids.by } : {} }),
+      ...(feedback == null ? {} : { [FEEDBACK]: by ? { by } : {} }),
       ...(said ? { $was: { doc: { body: str(args.was) || null } } } : {}),
     }]
   },
@@ -129,15 +119,13 @@ export let runs = (): Runs => ({
   memory_recall: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let named = ids(args.ids)
-    let eids = await at(graph, {
-      near: str(args.near),
-      scope: str(args.scope),
-    })
+    let near = str(args.near)
+    let scope = str(args.scope)
     let asked: Asked = {
       limit: Number(args.limit ?? LIMIT),
       said: str(args.said),
-      ...(eids.near ? { near: eids.near } : {}),
-      ...(eids.scope ? { scope: eids.scope } : {}),
+      ...(near ? { near } : {}),
+      ...(scope ? { scope } : {}),
       ...(args.feedback ? { feedback: true } : {}),
       ...(named.length ? { eids: await addressed(graph, named) } : {}),
     }

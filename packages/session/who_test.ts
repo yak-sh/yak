@@ -9,6 +9,7 @@ import { ids } from '@yaks/id/rules'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { sessionDoc } from './comp.ts'
 import { sessionFor, speaking } from './who.ts'
+import { sessions } from './plugin.ts'
 
 let spine: VocabDoc = {
   $defs: {
@@ -65,4 +66,15 @@ Deno.test('a run writes for whoever it speaks as, through itself', () => {
     speaking({ entity: { eid: 's2' }, session: { id: 'def' } }),
     { by: 's2', via: 's2' },
   )
+})
+
+Deno.test("a run's own name addresses it when a session is meant, and only then", async () => {
+  let s = ram(vocab, { number: true })
+  let g = graph({ storage: s, vocab, plugins: [ids(vocab), sessions()] })
+  await g.apply([{ entity: { eid: 's1' }, session: { id: 'abc' } }])
+  assertEquals(
+    await g.address(['abc', 's1'], 'session'),
+    new Map([['abc', 's1']]),
+  )
+  assertEquals(await g.address(['abc']), new Map())
 })

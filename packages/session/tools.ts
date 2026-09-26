@@ -46,7 +46,6 @@
 // copy of it.
 
 import {
-  addressed,
   argsOf,
   type Bundle,
   type Comp,
@@ -168,9 +167,8 @@ export let runs = (
 ): Runs => ({
   claim_take: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
-    let [on] = await addressed(graph, [str(args.target)])
     return [{
-      entity: { eid: on },
+      entity: { eid: str(args.target) },
       [CLAIM]: { session: await asking(call, graph) },
     }]
   },
@@ -198,11 +196,10 @@ export let runs = (
     return []
   },
 
-  claim_release: async (call, graph): Promise<Bundle[]> => {
-    let args = argsOf(call)
-    let [on] = await addressed(graph, [str(args.target)])
-    return [{ entity: { eid: on }, [CLAIM]: null }]
-  },
+  claim_release: (call): Bundle[] => [{
+    entity: { eid: str(argsOf(call).target) },
+    [CLAIM]: null,
+  }],
 
   session_brief: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
@@ -233,7 +230,7 @@ export let runs = (
     let id = idIn(args)
     if (!id) return []
     let found = await sessionFor(graph, id)
-    let [actor] = args.actor ? await addressed(graph, [str(args.actor)]) : []
+    let actor = str(args.actor)
     let eid = found?.entity.eid ?? '$session'
     // A fresh transcript holds nothing: it has no entity yet, so nothing in
     // the graph can name it as a holder.

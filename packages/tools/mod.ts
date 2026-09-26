@@ -24,9 +24,9 @@ export {
   type Finding,
   type Level,
 } from './check.ts'
+export { CallError } from './args.ts'
 export {
   answerOf,
-  CallError,
   faulted,
   type Opts,
   READY,

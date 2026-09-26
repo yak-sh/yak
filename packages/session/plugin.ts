@@ -14,10 +14,11 @@ import { sequencing } from './append.ts'
 
 import type { Hook, Plugin } from '@yaks/graph'
 import { then } from '@yaks/graph'
-import { sessionDoc } from './comp.ts'
+import { SESSION, sessionDoc } from './comp.ts'
 import { auditing, type AuditOpts } from './audit.ts'
 import { leasing } from './lease.ts'
 import { naming } from './naming.ts'
+import { runners } from './who.ts'
 
 /** The plugin's two injection points: a clock for both stamps, and the eid a
  * conflict row is minted under. */
@@ -60,5 +61,9 @@ export let sessions = (opts: SessionOpts = {}): Plugin => {
     name: '@yaks/session',
     vocab: [sessionDoc],
     hooks: { precondition, audit: auditing(opts) },
+    // An id meant to name a session may be the runner's own id for it, the
+    // one a harness hands out (`$CLAUDE_CODE_SESSION_ID`). Only when the
+    // caller says it means a session: every other id is left alone.
+    address: (tx, ids, kind) => kind == SESSION ? runners(tx, ids) : new Map(),
   }
 }

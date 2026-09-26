@@ -12,14 +12,7 @@
 // are a session's first entry and an empty output, and a caller wants their
 // ids, not their dump.
 
-import {
-  addressed,
-  argsOf,
-  type Bundle,
-  type Comp,
-  signed,
-  who,
-} from '@yaks/graph'
+import { argsOf, type Bundle, type Comp, signed, who } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { CallError } from '@yaks/tools'
 import { OUTPUT } from '@yaks/session'
@@ -46,11 +39,9 @@ export let runs = (host: { vocab: Vocab }, options: Options = {}): Runs => ({
       )
     }
     let args = argsOf(call)
-    let id = async (v: unknown) =>
-      str(v) && (await addressed(graph, [str(v)]))[0]
-    let builder = await id(args.builder)
-    let provider = await id(args.provider)
-    let model = await id(args.model)
+    let builder = str(args.builder)
+    let provider = str(args.provider)
+    let model = str(args.model)
     let desk = {
       ...options.desk,
       ...(provider ? { provider } : {}),

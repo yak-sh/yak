@@ -9,18 +9,11 @@ import { listing, runs } from './tools.ts'
 // The runs, built the way a host builds them: a facet is a factory.
 let tools = runs()
 
-// A call, and a graph that knows the ids in `at` and answers a read with the
-// query it was asked.
-let asked = (
-  args: Record<string, unknown>,
-  at: Record<string, string> = {},
-): [Bundle, Graph] => [
+// A call, and a graph that answers a read with the query it was asked. The
+// ids arrive as eids: the runner resolves what a person typed (@yaks/tools).
+let asked = (args: Record<string, unknown>): [Bundle, Graph] => [
   { entity: { eid: 'c1' }, call: { args } },
-  {
-    address: (ids: string[]) =>
-      new Map(ids.filter((i) => at[i]).map((i) => [i, at[i]])),
-    read: (q: string) => [{ entity: { eid: q } }],
-  } as unknown as Graph,
+  { read: (q: string) => [{ entity: { eid: q } }] } as unknown as Graph,
 ]
 
 let comp = (b: Bundle, name: string) => b[name] as Comp
@@ -35,9 +28,7 @@ Deno.test('every task tool is declared and implemented', () => {
 
 Deno.test('a new task is task{} plus the words, filed where the line said', async () => {
   let [said] = await tools.task_new!(
-    ...asked({ title: 'ship it', project: 'P-19', priority: 2 }, {
-      'P-19': 'p19',
-    }),
+    ...asked({ title: 'ship it', project: 'p19', priority: 2 }),
   ) as Bundle[]
   assertEquals(comp(said, 'task'), {})
   assertEquals(comp(said, 'doc'), { title: 'ship it' })

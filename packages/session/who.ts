@@ -26,9 +26,31 @@ import {
   detached,
   type Eid,
   type Graph,
+  then,
   TOMBSTONE,
+  type Tx,
 } from '@yaks/graph'
 import { SESSION } from './comp.ts'
+
+/**
+ * The transcripts these ids are the runner's own ids of (`session.id`), each
+ * to its eid: the key only a session has, which is how an id meant to name a
+ * session resolves where no plugin knows it as an eid or a name (the
+ * plugin's `address`, asked with the kind `session`).
+ */
+export let runners = (
+  tx: Pick<Tx, 'read'>,
+  ids: string[],
+): Map<string, Eid> | Promise<Map<string, Eid>> =>
+  ids.reduce<Map<string, Eid> | Promise<Map<string, Eid>>>(
+    (at, id) =>
+      then(at, (found) =>
+        then(
+          tx.read(`.${SESSION}.id=${JSON.stringify(id)}`),
+          ([b]) => b ? new Map([...found, [id, b.entity.eid]]) : found,
+        )),
+    new Map(),
+  )
 
 /**
  * The transcript an id names: the entity it addresses, else the one carrying it
@@ -43,7 +65,8 @@ export let sessionFor = async (
   let [eid] = await addressed(g, [said])
   let [row] = await detached(g.storage).get([eid])
   if (row?.[SESSION] && row[TOMBSTONE] == null) return row
-  return (await g.read(`.${SESSION}.id=${JSON.stringify(said)}&*`))[0]
+  let run = (await runners(g, [said])).get(said)
+  return run ? (await detached(g.storage).get([run]))[0] : undefined
 }
 
 /**

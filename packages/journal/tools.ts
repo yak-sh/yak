@@ -15,7 +15,7 @@
 // a write, and one a server has to decide it offers — and a feed is a cursor a
 // consumer holds, not a question anybody types.
 
-import { addressed, argsOf, type Bundle, type Comp, Refused } from '@yaks/graph'
+import { argsOf, type Bundle, type Comp, Refused } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import type { Driver } from '@yaks/sql'
 import type { Batch } from './batch.ts'
@@ -42,14 +42,13 @@ let said = (b: Batch): Bundle[] =>
 export let runs = (host: { sql: Driver }): Runs => {
   let j = logFor(host)
   return {
-    history: async (call, graph): Promise<Bundle[]> => {
+    history: (call): Bundle[] => {
       let args = argsOf(call)
       let asked = String(args.entity ?? '').trim()
       if (!asked) throw new Refused('history needs an entity')
-      let [eid] = await addressed(graph, [asked])
       let n = args.limit == null ? undefined : Number(args.limit)
       // Newest first: a history is read back from where the entity got to.
-      return j.history(eid, n).reverse().flatMap(said)
+      return j.history(asked, n).reverse().flatMap(said)
     },
   }
 }

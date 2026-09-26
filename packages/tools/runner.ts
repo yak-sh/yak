@@ -7,7 +7,8 @@
 // `execution{state}` recording that a run is in flight.
 //
 // The call a tool is handed is the stored one, completed: its arguments
-// checked against the tool's schema, `created{by, via}` saying who asked even
+// checked against the tool's schema and the entities they name resolved to
+// eids (./args.ts), `created{by, via}` saying who asked even
 // where the graph stamps nothing, and `process{pid, command, cwd}` naming the
 // program running it where the caller named one. That is a bundle, not a row —
 // the stored call never wears `process`.
@@ -75,7 +76,7 @@ import {
 } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph'
 import { effectsIn } from '@yaks/vocab'
-import { validateToolInput } from '@yaks/vocab/tools'
+import { CallError, parsed, resolved, validated } from './args.ts'
 import { toolsDoc } from './vocab.ts'
 
 // What each call is doing right now in this process, keyed per graph, not per
@@ -91,14 +92,6 @@ export class UnfinishedCall extends Error {
   constructor(public call: Eid) {
     super('Call execution was started without a recorded result: ' + call)
     this.name = 'UnfinishedCall'
-  }
-}
-
-/** Expected invocation failures, not programming defects. */
-export class CallError extends Error {
-  constructor(public code: string, message: string) {
-    super(message)
-    this.name = 'CallError'
   }
 }
 
@@ -241,42 +234,6 @@ export let faulted = (landed: Bundle[]): boolean =>
  */
 export let answerOf = (landed: Bundle[]): Bundle[] =>
   landed.filter((b) => !b.result && !b.execution)
-
-// A call's arguments as stored: an object, or none at all, which asks with
-// none.
-let parsed = (args: unknown): Record<string, unknown> => {
-  if (args == null) return {}
-  if (typeof args != 'object' || Array.isArray(args)) {
-    throw new CallError('arguments', 'Tool arguments must be an object')
-  }
-  return args as Record<string, unknown>
-}
-
-// A tool's arguments, validated against the JSON Schema on its declaration, or
-// against the legacy per-property schemas that parse themselves.
-let checked = (
-  tool: NamedTool,
-  args: Record<string, unknown>,
-): Record<string, unknown> => {
-  try {
-    if (tool.inputSchema && tool.input) {
-      throw new Error('Tool cannot declare both input and inputSchema')
-    }
-    if (tool.inputSchema) return validateToolInput(tool, args)
-    let out = { ...args }
-    for (let [key, schema] of Object.entries(tool.input ?? {})) {
-      let parser = schema as { parse?: (value: unknown) => unknown }
-      if (!parser?.parse) {
-        throw new Error('Legacy schema requires a parse adapter: ' + key)
-      }
-      out[key] = parser.parse(out[key])
-    }
-    return out
-  } catch (error) {
-    if (error instanceof CallError) throw error
-    throw new CallError('arguments', String(error))
-  }
-}
 
 /**
  * Build a runner over a graph.
@@ -537,7 +494,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       return keeps ? landed : [...made, ...landed]
     }
     try {
-      let args = checked(tool, parsed(c.args))
+      let args = await resolved(tool, validated(tool, parsed(c.args)), host)
       let actor = who(call)
       let asking: Bundle = {
         ...call,

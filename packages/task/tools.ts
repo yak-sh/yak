@@ -19,37 +19,20 @@
 // (@yaks/edge) — applied in one transaction, and `graph_apply` with `check`
 // rehearses it before it is written. See the README.
 
-import {
-  addressed,
-  argsOf,
-  type Bundle,
-  type Comp,
-  type Graph,
-} from '@yaks/graph'
+import { argsOf, type Bundle, type Comp } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 
-// Where the work is filed, as arguments. The two that name an entity are
-// resolved to eids by `addressed`; a person types `P-19`, never an eid.
+// Where the work is filed, as arguments. The two that name an entity arrive
+// as eids: a person types `P-19`, and the runner resolves every argument the
+// declaration marks `ref` before a tool sees it (@yaks/tools).
 let PLACES = ['project', 'assignee', 'priority', 'domain'] as const
-let REFS = new Set(['project', 'assignee'])
 
-let filedIn = async (
-  graph: Graph,
-  args: Record<string, unknown>,
-): Promise<Comp | undefined> => {
+let filedIn = (args: Record<string, unknown>): Comp | undefined => {
   let said = PLACES.filter((k) => args[k] != null)
   if (!said.length) return undefined
-  let refs = said.filter((k) => REFS.has(k))
-  let at = await addressed(graph, refs.map((k) => String(args[k])))
-  let filed: Comp = {}
-  for (let k of said) {
-    filed[k] = REFS.has(k)
-      ? at[refs.indexOf(k)]
-      : k == 'priority'
-      ? Number(args[k])
-      : String(args[k])
-  }
-  return filed
+  return Object.fromEntries(
+    said.map((k) => [k, k == 'priority' ? Number(args[k]) : String(args[k])]),
+  )
 }
 
 // The text a person reads, as arguments. An argument nobody passed is left out
@@ -97,9 +80,9 @@ export let listing = (query?: unknown, limit?: unknown): string => {
  * like every subpath export in these packages, though this one needs nothing
  * from the server: everything a call reads arrives on the call it is handed. */
 export let runs = (): Runs => ({
-  task_new: async (call, graph): Promise<Bundle[]> => {
+  task_new: (call): Bundle[] => {
     let args = argsOf(call)
-    let filed = await filedIn(graph, args)
+    let filed = filedIn(args)
     let doc = docIn(args)
     return [{
       entity: { eid: '$task' },
@@ -112,13 +95,12 @@ export let runs = (): Runs => ({
   task_list: (call, graph) =>
     graph.read(listing(argsOf(call).query, argsOf(call).limit)),
 
-  task_update: async (call, graph): Promise<Bundle[]> => {
+  task_update: (call): Bundle[] => {
     let args = argsOf(call)
-    let [eid] = await addressed(graph, [String(args.task)])
-    let filed = await filedIn(graph, args)
+    let filed = filedIn(args)
     let doc = docIn(args)
     return [{
-      entity: { eid },
+      entity: { eid: String(args.task) },
       ...(args.status ? marked[String(args.status)] : {}),
       ...(doc ? { doc } : {}),
       ...(filed ? { filed } : {}),

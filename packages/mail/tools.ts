@@ -100,22 +100,25 @@ let prop = (c: Comp | undefined, k: string): string => str(c?.[k])
 let one = async (graph: Graph, eid: Eid): Promise<Bundle | undefined> =>
   (await detached(graph.storage).get([eid]))[0]
 
-// The eid an argument names, whatever form a person typed it in.
+// The eid a recipient argument names, whatever form a person typed it in:
+// `to` takes an address or an id, so it is not a declared reference the
+// runner resolves the way it resolves `who`, `item`, `letter` and `about`
+// (@yaks/tools).
 let at = async (graph: Graph, said: unknown): Promise<Eid> =>
   (await addressed(graph, [str(said)]))[0]
 
 // The letter an argument names, rejected unless it carries `mail`.
 let letterIn = async (graph: Graph, said: unknown): Promise<Bundle> => {
-  let found = await one(graph, await at(graph, said))
+  let found = await one(graph, str(said))
   if (!comp(found, MAIL)) throw new Error(`not a letter: ${str(said)}`)
   return found!
 }
 
 /** Whose inbox this is: the entity the arguments named, else whoever is
  * asking. */
-export let reader = async (call: Bundle, graph: Graph): Promise<Eid> => {
+export let reader = (call: Bundle): Eid => {
   let asked = argsOf(call).who
-  if (asked != null) return await at(graph, asked)
+  if (asked != null) return str(asked)
   let me = who(call)?.by
   if (!me) throw new Error('nobody is asking — say --who')
   return me
@@ -262,14 +265,14 @@ let page = (id: (b: Bundle) => string, letter: Bundle, thread: Bundle[]) => {
 export let runs = (_host?: unknown, options: Options = {}): Runs => ({
   inbox_list: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
-    let who = await reader(call, graph)
+    let who = reader(call)
     let address = prop(comp(await one(graph, who), EMAIL), 'address')
     let n = args.limit == null ? PAGE : Number(args.limit)
     return await graph.read(inbox(who, address, !!args.all, n))
   },
 
-  inbox_archive: async (call, graph): Promise<Bundle[]> => [{
-    entity: { eid: await at(graph, argsOf(call).item) },
+  inbox_archive: (call): Bundle[] => [{
+    entity: { eid: str(argsOf(call).item) },
     [ARCHIVED]: {},
   }],
 
@@ -348,7 +351,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
           'asking an `email.address`',
       )
     }
-    let target = args.about == null ? '' : await at(graph, args.about)
+    let target = str(args.about)
     return [
       ...far.made,
       {

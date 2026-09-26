@@ -21,24 +21,16 @@ let fixture = () => {
   }
 }
 
-// What a host hands a run: the call, and a graph that says what an id
-// addresses. `P-1` stands for a human id nothing else resolves.
-let asked = (
-  args: Record<string, unknown>,
-  at: Record<string, string> = {},
-): [Bundle, Graph] => [
-  { entity: { eid: 'c1' }, call: { args } },
-  {
-    address: (ids: string[]) =>
-      new Map(ids.filter((i) => at[i]).map((i) => [i, at[i]])),
-  } as unknown as Graph,
-]
-
+// What a host hands a run: the call, its entity already the eid it names (the
+// runner resolves what a person typed, @yaks/tools), and the graph.
 let history = async (
   tools: ReturnType<typeof runs>,
   args: Record<string, unknown>,
-  at: Record<string, string> = {},
-) => await tools.history!(...asked(args, at)) as Bundle[]
+) =>
+  await tools.history!(
+    { entity: { eid: 'c1' }, call: { args } },
+    {} as Graph,
+  ) as Bundle[]
 
 let comp = (b: Bundle, name: string) => b[name] as Comp
 
@@ -89,13 +81,6 @@ Deno.test('a death answers as the death it was', async () => {
   let [said] = await history(f.tools, { entity: 'p1' })
   assertEquals(said.$delete, true)
   assert(!said.page, 'a death carries no properties forward')
-})
-
-Deno.test('an id is whatever the graph says it addresses', async () => {
-  let f = fixture()
-  f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
-  let said = await history(f.tools, { entity: 'P-1' }, { 'P-1': 'p1' })
-  assertEquals(said.map((b) => comp(b, 'page')), [{ title: 'Kickoff' }])
 })
 
 Deno.test('nothing ever written about has no history, and no entity is a refusal', async () => {

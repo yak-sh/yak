@@ -39,19 +39,24 @@ export let who = (call: Bundle): Actor | null => {
 
 /**
  * The ids a caller passed, resolved to the eids they refer to — through
- * whatever a plugin resolves (a name, a human-readable id), and left as they
- * are when no plugin resolves them, since an eid needs no resolution.
+ * whatever a plugin resolves (a name, a human-readable id, a key only `kind`
+ * has), and left as they are when no plugin resolves them, since an eid needs
+ * no resolution.
  *
- * Every tool that takes an id owes its caller this: an argument is what a
- * person types, not what the store happens to key rows by.
+ * A tool's arguments declared as references are resolved before the tool is
+ * handed them (@yaks/tools); this is for an id that arrives any other way.
  */
 export let addressed = async (
   graph: {
-    address: (ids: string[]) => Map<string, Eid> | Promise<Map<string, Eid>>
+    address: (
+      ids: string[],
+      kind?: string,
+    ) => Map<string, Eid> | Promise<Map<string, Eid>>
   },
   ids: string[],
+  kind?: string,
 ): Promise<Eid[]> => {
-  let at = await graph.address(ids)
+  let at = await graph.address(ids, kind)
   return ids.map((id) => at.get(id) ?? id)
 }
 

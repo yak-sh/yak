@@ -20,7 +20,14 @@ import { taskDoc } from '@yaks/task'
 import { modelDoc } from '@yaks/model'
 import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
-import { CallError } from '@yaks/tools'
+import {
+  answerOf,
+  CallError,
+  faulted,
+  runner,
+  toolEid,
+  worded,
+} from '@yaks/tools'
 import { processDoc, processes } from '@yaks/process'
 import { spawning } from './effects.ts'
 import { fake, until } from './testing.ts'
@@ -76,6 +83,23 @@ let asked = (g: Graph, args: Record<string, unknown>): [Bundle, Graph] => [
 
 let tools = runs({ graph: undefined as unknown as Graph }, { poll: 20 })
 
+// A call the way a host makes one: through the runner, which resolves every
+// argument the declaration marks a reference before the tool is handed it.
+let through = async (
+  g: Graph,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<Bundle[]> => {
+  let r = runner(g, { tools: loadTools(spawnDoc, tools) })
+  await r.ensure()
+  let records = await r.call({
+    entity: { eid: '$call' },
+    call: { to: toolEid(name), args },
+  })
+  if (faulted(records)) throw new Error(worded(answerOf(records)))
+  return answerOf(records)
+}
+
 let body = (bundles: Bundle[]) =>
   String(comp(bundles[0], 'content')?.body ?? '')
 
@@ -98,14 +122,12 @@ Deno.test('a duration is what a person says', () => {
 Deno.test('a spawn lands the session, the request and the lease', async () => {
   let { g } = host()
   await g.apply(shelf)
-  let said = await tools.session_spawn!(
-    ...asked(g, {
-      task: 'T-3',
-      provider: P,
-      model: M,
-      effort: 'high',
-    }),
-  ) as Bundle[]
+  let said = await through(g, 'session_spawn', {
+    task: 'T-3',
+    provider: P,
+    model: M,
+    effort: 'high',
+  })
 
   let [session] = await g.read('.session&*')
   assertStringIncludes(body(said), 'spawned')
@@ -130,7 +152,7 @@ Deno.test('a spawn refuses what is not a provider, and work that is not there', 
   await g.apply(shelf)
   let refused = async (args: Record<string, unknown>) => {
     try {
-      await tools.session_spawn!(...asked(g, args))
+      await through(g, 'session_spawn', args)
     } catch (e) {
       return (e as Error).message
     }
@@ -138,7 +160,7 @@ Deno.test('a spawn refuses what is not a provider, and work that is not there', 
   }
   assertStringIncludes(
     await refused({ task: 'the-task', provider: M }),
-    'not a provider',
+    'names no provider',
   )
   assertStringIncludes(
     await refused({ task: 'T-404', provider: P }),
@@ -146,7 +168,7 @@ Deno.test('a spawn refuses what is not a provider, and work that is not there', 
   )
   assertStringIncludes(
     await refused({ task: 'the-task', provider: P, model: P }),
-    'not a model',
+    'names no model',
   )
   await g.apply([{ entity: { eid: '$other' }, model: { name: 'other' } }])
   assertStringIncludes(

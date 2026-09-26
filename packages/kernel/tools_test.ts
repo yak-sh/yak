@@ -10,15 +10,9 @@ let tools = runs()
 // A tool is a function from the call to bundles: hand it the call and read
 // what it answered. Nothing here opens a store — what the answer lands as is
 // the runner's, tested where the runner is.
-let asked = (
-  args: Record<string, unknown>,
-  at: Record<string, string> = {},
-): [Bundle, Graph] => [
+let asked = (args: Record<string, unknown>): [Bundle, Graph] => [
   { entity: { eid: 'c1' }, call: { args } },
-  {
-    address: (ids: string[]) =>
-      new Map(ids.filter((i) => at[i]).map((i) => [i, at[i]])),
-  } as unknown as Graph,
+  {} as Graph,
 ]
 
 let comp = (b: Bundle, name: string) => b[name] as Comp
@@ -29,16 +23,9 @@ Deno.test('every kernel tool is declared and implemented', () => {
 
 Deno.test('a comment is a doc aimed at an entity', async () => {
   let [said] = await tools.comment_new!(
-    ...asked({ target: 'T-7', body: 'looks right' }, { 'T-7': 'seven' }),
+    ...asked({ target: 'seven', body: 'looks right' }),
   ) as Bundle[]
   assertEquals(comp(said, 'comment').target, 'seven')
   assertEquals(comp(said, 'doc').body, 'looks right')
   assert(said.entity.eid.startsWith('$'), said.entity.eid)
-})
-
-Deno.test('an id nothing addresses is taken as the eid it is', async () => {
-  let [said] = await tools.comment_new!(
-    ...asked({ target: 'abc', body: 'hi' }),
-  ) as Bundle[]
-  assertEquals(comp(said, 'comment').target, 'abc')
 })

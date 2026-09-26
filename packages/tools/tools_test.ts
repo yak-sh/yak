@@ -8,6 +8,7 @@ import {
   argsOf,
   type Bundle,
   type Comp,
+  detached,
   graph,
   Refused,
   type Tool,
@@ -359,6 +360,73 @@ Deno.test('a refused argument is an error code, not an exception', async () => {
   await r.ensure()
   let answer = await r.call(called('example_echo'))
   assertEquals((answer.find((b) => b.error)!.error as Comp).code, 'arguments')
+})
+
+// A tool whose argument names a person, and whose answer says which eid it
+// was handed. `readOnly` makes it a read of the same shape.
+let mark = (readOnly = false): Tool => ({
+  noun: 'person',
+  verb: 'mark',
+  description: 'Mark a person',
+  readOnly,
+  inputSchema: {
+    type: 'object',
+    properties: { who: { type: 'string', ref: 'person' } },
+  },
+  run: (call) => [{
+    entity: { eid: '$said' },
+    content: { body: String(argsOf(call).who) },
+    output: { source: call.entity.eid },
+  }],
+})
+
+// A graph where `Ada` is a name for p1 — and only when a person is meant.
+let named = (tools: Tool[]) => {
+  let vocab = words()
+  let g = graph({
+    vocab,
+    storage: ram(vocab),
+    plugins: [{
+      name: 'names',
+      address: (_, ids, kind) =>
+        new Map(
+          ids.filter((id) => id == 'Ada' && kind == 'person').map(
+            (id) => [id, 'p1'],
+          ),
+        ),
+    }],
+  })
+  return { g, r: runner(g, { tools, report: () => {} }) }
+}
+
+Deno.test('a reference arrives as the eid it names, of the kind it declares', async () => {
+  let { g, r } = named([mark()])
+  await r.ensure()
+  await g.apply([{ entity: { eid: 'p1' }, person: {} }])
+  let answer = await r.call(called('person_mark', { who: 'Ada' }))
+  assertEquals(body(answer.find((b) => b.output)), 'p1')
+})
+
+Deno.test('a write naming nothing of its kind is refused, and mints nothing', async () => {
+  let { g, r } = named([mark()])
+  await r.ensure()
+  await g.apply([{ entity: { eid: 'c1' }, content: { body: 'not a person' } }])
+  for (let who of ['ghost', 'c1']) {
+    let answer = await r.call(called('person_mark', { who }))
+    assertEquals((answer.find((b) => b.error)!.error as Comp).code, 'arguments')
+    assertEquals(
+      body(answer.find((b) => b.error)),
+      `CallError: who: ${who} names no person`,
+    )
+  }
+  assertEquals(await detached(g.storage).get(['ghost']), [])
+})
+
+Deno.test('a read is answered about whatever its reference names', async () => {
+  let { r } = named([mark(true)])
+  await r.ensure()
+  let answer = await r.call(called('person_mark', { who: 'ghost' }))
+  assertEquals(body(answer.find((b) => b.output)), 'ghost')
 })
 
 Deno.test("a tool writes in the CALLER's name, never the runner's", async () => {

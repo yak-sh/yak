@@ -204,6 +204,13 @@ repeat an external side effect if the process stopped after that effect but
 before committing the result, so the package provides at-most-once claiming, not
 an exactly-once execution guarantee.
 
+An argument declared as naming an entity (`ref`, or `items.ref` for a list)
+reaches the tool as the eid it names: the runner resolves what the caller typed
+(an eid, `T-7`, a name) through `g.address`, once, for every tool. A tool that
+writes is refused with `CallError('arguments', …)` before it runs when such an
+argument names nothing of the declared kind, so a stray eid never becomes a new
+entity. A read-only tool is answered about whatever the id names.
+
 Throw `CallError(code, message)` for an expected refusal. The runner stores an
 `error{code}` bundle, marks the execution failed, and returns a result. Other
 thrown values produce an `exception` bundle and are also passed to `report`.

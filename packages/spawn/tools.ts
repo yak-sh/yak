@@ -22,7 +22,6 @@
 // as still going and left alone; killing it is what `stop` is for.
 
 import {
-  addressed,
   argsOf,
   type Bundle,
   type Comp,
@@ -175,30 +174,15 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
 
   return {
     session_spawn: async (call, graph): Promise<Bundle[]> => {
+      // The task, the provider and the model arrive as the eids they name,
+      // each already found to be one (@yaks/tools resolves every declared
+      // reference); what is left to ask is whether this provider serves this
+      // model.
       let args = argsOf(call)
-      let [task, provider, model] = await addressed(graph, [
-        str(args.task),
-        str(args.provider),
-        str(args.model),
-      ])
-      // Match by eid, never by position: a read returns only the rows it
-      // found, so a missing id would otherwise shift its neighbour into its
-      // place and the error would name the wrong argument.
-      let found = new Map(
-        (await graph.storage.tx((tx) =>
-          tx.get([task, provider, model].filter(Boolean))
-        )).map((b) => [b.entity.eid, b]),
-      )
-      let [on, serves, served] = [task, provider, model].map((e) =>
-        found.get(e)
-      )
-      if (!on) throw new Error(`no such task: ${str(args.task)}`)
-      if (!comp(serves, 'provider')?.name) {
-        throw new Error(`not a provider: ${str(args.provider)}`)
-      }
-      if (model && !served?.model) {
-        throw new Error(`not a model: ${str(args.model)}`)
-      }
+      let task = str(args.task)
+      let provider = str(args.provider)
+      let model = str(args.model)
+      let on = (await one(graph, task))!
       if (model && await spelling(graph, provider, model) == null) {
         throw new Error(
           `${str(args.provider)} does not serve ${str(args.model)}`,

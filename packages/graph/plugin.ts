@@ -293,10 +293,14 @@ export type Plugin = {
    * belongs to a plugin rather than the core because "what name refers to an
    * entity" is a question about a component —
    * {@link https://jsr.io/@yaks/alias | @yaks/alias}'s `alias{name}` is the
-   * component that answers it. */
+   * component that answers it. `kind`, when the caller knows it, is the
+   * component the ids are meant to name, so a key only that kind has (a
+   * transcript's own id, @yaks/session) is looked up for it and for nothing
+   * else. */
   address?: (
     tx: Tx,
     ids: string[],
+    kind?: string,
   ) => Map<string, Eid | null> | Promise<Map<string, Eid | null>>
 }
 

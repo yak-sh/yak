@@ -155,7 +155,7 @@ export let runs = (host: Seams = {}): Runs => ({
     let cwd = checkout(call, 'checking citations')
     let id = human(graph.vocab)
     let of = str(args.of)
-    let [scope] = of ? await addressed(graph, [of]) : []
+    let scope = of || undefined
     let path = str(args.path)
     let cites = await graph.read(and(present(CITES), want('edge')))
     // Both ends of every citation in one read: a finding names who cites what,
@@ -208,7 +208,7 @@ export let runs = (host: Seams = {}): Runs => ({
         'verify needs a citation, or an entity whose citations to verify',
       )
     }
-    let [asked] = await addressed(graph, [cite || of])
+    let asked = cite || of
     let found = cite
       ? (await detached(graph.storage).get([asked])).filter((b) => b[CITES])
       : (await graph.read(and(present(CITES), want('edge'))))
