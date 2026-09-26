@@ -25,16 +25,15 @@
 // progress, and `--cd` sweeps a cooldown over it. Talking and gathering (or
 // working a station) share one slot, and only one of them shows at a time.
 import { type Action, keysOf } from './input.ts'
-import type { Frame, Sheet } from './play.ts'
+import type { Frame } from './play.ts'
 import type { Job } from './work.ts'
-import { nameOf } from './dealbox.ts'
-import type { View } from './deals.ts'
 import { BEASTS } from './beasts.ts'
 import { type Glyph, glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
-import { LEVELS } from './levels.ts'
+import { next, type Task, told, toward } from './journal.ts'
+import type { Spot } from './levels.ts'
 import { cap, type Panel, panels, type Spec } from './panel.ts'
-import { GIVERS, type Quest } from './quests.ts'
+import type { Quest } from './quests.ts'
 import { need } from './rules.ts'
 import { icon } from './sprites.ts'
 import { TRADES } from './trades.ts'
@@ -89,6 +88,7 @@ export let SHEETS = {
   pack: { title: 'Pack', keys: ['KeyB', 'KeyI'] },
   menu: { title: 'Menu', keys: ['Escape'] },
   skills: { title: 'Skills', keys: ['KeyK'] },
+  journal: { title: 'Journal', keys: ['KeyL'] },
   craft: { title: 'Crafting' },
   deal: { title: 'Deals' },
 } satisfies Record<string, Spec>
@@ -102,7 +102,7 @@ export let hud = (
 ) => {
   let layer = el('Hud_Layer')
   let vitals = el('Vitals')
-  let quest = el('Track')
+  let quest = el('Track', '', 'button')
   let foe = el('Foe')
   foe.hidden = true
   let nav = el('Hud_Nav')
@@ -117,10 +117,15 @@ export let hud = (
       `<i class="Rose_Mark${k ? '' : ' Rose_Mark-n'}" style="--at:${
         k * 90
       }deg">${d}</i><i class=Rose_Tick style="--at:${k * 90 + 45}deg"></i>`
-    ).join('') + `<kbd class=Key>${cap(SHEETS.map.keys[0])}</kbd>`,
+    ).join('') +
+      `<i class=Rose_Goal hidden></i><kbd class=Key>${
+        cap(SHEETS.map.keys[0])
+      }</kbd>`,
     'button',
   )
   rose.title = `The map (${cap(SHEETS.map.keys[0])})`
+  // Where the first quest tracked goes next, on the compass's rim.
+  let aim = rose.querySelector<HTMLElement>('.Rose_Goal')!
   nav.append(who, rose, trayBox)
   let toasts = el('Hud_Toasts')
   let pads = el('Hud_Pads')
@@ -140,10 +145,13 @@ export let hud = (
     pack: sheet('pack'),
     menu: sheet('menu'),
     skills: sheet('skills'),
+    journal: sheet('journal'),
     craft: sheet('craft'),
     deal: sheet('deal'),
   }
   rose.addEventListener('click', panel.map.toggle)
+  quest.addEventListener('click', panel.journal.toggle)
+  quest.title = `Your journal (${cap(SHEETS.journal.keys[0])})`
 
   // A round button in the tray, and on a desktop its key; one that opens a
   // panel is marked while it is open.
@@ -175,6 +183,14 @@ export let hud = (
     cap(SHEETS.pack.keys[0]),
     panel.pack.toggle,
     panel.pack,
+  )
+  tray(
+    'journal',
+    'journal',
+    'Your journal',
+    cap(SHEETS.journal.keys[0]),
+    panel.journal.toggle,
+    panel.journal,
   )
   // The skill board (board.ts), dotted while a point waits to be spent.
   let skills = tray(
@@ -256,47 +272,40 @@ export let hud = (
     while (toasts.children.length > 3) toasts.firstElementChild?.remove()
   }
 
-  // The quest being followed: a deal a villager made up on the spot and the
-  // hero agreed to, else one taken, or else one on offer, the nearest
-  // giver's first.
-  let tracking = (s: Sheet, f: Frame, d: View | null) => {
-    if (d) {
-      let who = esc(d.giver.name)
-      return `<b>${who}’s ask</b><span>${
-        d.ready
-          ? `Done! Back to ${who}.`
-          : d.steps.map((x) => `${esc(nameOf(x.kind))} ${x.have} / ${x.n}`)
-            .join(' · ')
-      }</span>`
+  // The quests tracked (journal.ts): each pinned one under way, its title
+  // over the step it is on. With none pinned, how many are under way; with
+  // none under way, who has one on offer, the nearest first.
+  let line = (title: string, says: string) =>
+    `<span class=Track_Quest><b>${title}</b><span>${says}</span></span>`
+  let tracking = (tasks: Task[], f: Frame) => {
+    let on = tasks.filter((t) => t.state == 'taken')
+    let pinned = on.filter((t) => t.pinned).slice(0, 3)
+    if (pinned.length) {
+      return pinned.map((t) => {
+        let s = next(t)
+        return line(
+          esc(t.title),
+          s
+            ? esc(told(s, f.level)) +
+              (s.need ? ` <em>${s.have ?? 0} / ${s.need}</em>` : '')
+            : 'Done!',
+        )
+      }).join('')
+    }
+    let key = cap(SHEETS.journal.keys[0])
+    if (on.length) {
+      return line(`${on.length} under way`, `Open your journal (${key})`)
     }
     let near = new Set(f.givers.map((g) => g.id))
-    let open = s.quests.filter((q) => q.state == 'open')
-    let q = s.quests.find((q) => q.state == 'taken') ??
-      open.find((q) => near.has(q.quest.giver)) ?? open[0]
-    if (!q) {
-      return '<b>The vale is at peace.</b><span>Every quest is done. Well walked.</span>'
+    let open = tasks.filter((t) => t.state == 'open')
+    let t = open.find((t) => near.has(t.giver)) ?? open[0]
+    if (!t) {
+      return line('The vale is at peace.', 'Every quest is done. Well walked.')
     }
-    let giver = GIVERS.find((g) => g.id == q.quest.giver)
-    let who = giver?.name ?? 'Someone'
-    let where = giver && !near.has(giver.id)
-      ? ` in ${LEVELS[giver.level]?.name ?? giver.level}`
-      : ''
-    if (q.state == 'open') {
-      return `<b>${esc(who)} has a job for you</b><span>${
-        f.talk?.id == q.quest.giver
-          ? 'Say hello.'
-          : `Find ${esc(who)}${esc(where)}.`
-      }</span>`
-    }
-    let done = q.have >= q.quest.count
-    let what = q.quest.goal == 'slay'
-      ? `${BEASTS[q.quest.target]?.name ?? q.quest.target}s felled`
-      : `${ITEMS[q.quest.target]?.name ?? q.quest.target} gathered`
-    return `<b>${esc(q.quest.title)}</b><span>${
-      done
-        ? `Done! Back to ${esc(who)}${esc(where)}.`
-        : `${what}: ${q.have} / ${q.quest.count}`
-    }</span>`
+    return line(
+      `${esc(t.from)} has a job for you`,
+      f.talk?.id == t.giver ? 'Say hello.' : esc(told(t.steps[0], f.level)),
+    )
   }
 
   let hush = () => talk.hidden = true
@@ -385,13 +394,15 @@ export let hud = (
       mic.title = `${MICS[m]} (${micKey})`
     },
     /** paint this frame, the camera looking `facing` degrees from north,
-     * following `deal` if the hero agreed to one (deals.ts) */
+     * tracking the hero's `tasks` (journal.ts), the compass pointing to `goal`,
+     * where the first one tracked goes next */
     show: (
       f: Frame,
       here: number,
       clock: Clock,
       facing: number,
-      deal: View | null = null,
+      tasks: Task[],
+      goal: Spot | null,
     ) => {
       let s = f.sheet
       let hp = f.vitals.hp
@@ -411,7 +422,7 @@ export let hud = (
             `${s.xp - from} / ${to - from} xp`,
           ),
       )
-      put('quest', quest, tracking(s, f, deal))
+      put('quest', quest, tracking(tasks, f))
       let m = f.foe
       foe.hidden = !m
       if (m) {
@@ -419,9 +430,13 @@ export let hud = (
         put(
           'foe',
           foe,
-          `<b>${esc(b.name)}</b><em>Level ${b.lvl}</em>${
-            meter(m.hp / m.most, 'Bar-foe', `${Math.ceil(m.hp)} / ${m.most}`)
-          }`,
+          meter(
+            m.hp / m.most,
+            'Bar-foe',
+            `<b>${esc(b.name)}</b> <em>level ${b.lvl}</em> ${
+              Math.ceil(m.hp)
+            } / ${m.most}`,
+          ),
         )
         foe.classList.toggle('Foe-boss', !!b.boss)
       }
@@ -436,6 +451,12 @@ export let hud = (
       if (was.rose != String(facing)) {
         was.rose = String(facing)
         rose.style.setProperty('--turn', `${facing}deg`)
+      }
+      let way = goal ? String(toward([f.body.x, f.body.z], goal)) : ''
+      if (was.aim != way) {
+        was.aim = way
+        aim.hidden = !goal
+        aim.style.setProperty('--at', `${way || 0}deg`)
       }
       for (let [b, p] of marked) b.classList.toggle('Orb-on', p.open)
       // Arms or armour found mark the bag, until the pack is opened.

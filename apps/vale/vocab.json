@@ -283,14 +283,17 @@
     "journal": {
       "component": true,
       "type": "object",
-      "description": "A step in a player's quest: taken, then done.",
+      "description": "A step in a player's quest: taken, then done; pinned or unpinned in between, the latest counting.",
       "properties": {
         "player": { "type": "string", "index": true },
         "quest": {
           "type": "string",
           "description": "The quest, by the app's list of quests."
         },
-        "step": { "type": "string", "enum": ["taken", "done"] },
+        "step": {
+          "type": "string",
+          "enum": ["taken", "done", "pinned", "unpinned"]
+        },
         "at": { "type": "number" }
       }
     },

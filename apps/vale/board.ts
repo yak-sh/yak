@@ -5,6 +5,7 @@
 // be forgotten, free, to spend the points again. K or the tray's sparkles
 // opens it. It is written again only when what it shows changed.
 import { ABILITIES } from './abilities.ts'
+import { glyph } from './glyphs.ts'
 import type { Panel } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { canLearn, DISCIPLINES, SKILLS } from './skills.ts'
@@ -55,7 +56,7 @@ export let board = (panel: Panel, acts: Learning) => {
       : 'shut'
     return `<button class="Board_Skill Board_Skill-${state}${
       picked == id ? ' Board_Skill-on' : ''
-    }" data-skill=${id} title="${esc(k.name)}"><i>${k.icon}</i><span>${
+    }" data-skill=${id} title="${esc(k.name)}"><i>${glyph(k.icon)}</i><span>${
       esc(k.name)
     }</span></button>`
   }
@@ -80,16 +81,18 @@ export let board = (panel: Panel, acts: Learning) => {
       ? `<button class="Btn Btn-go Btn-small" data-do=learn>Learn it</button>`
       : need ||
         `<span class=Pack_Hint>No points left. A level brings one.</span>`
-    return `<div class=Pack_Card><i class=Pack_Big>${k.icon}</i><div><b>${
-      esc(k.name)
-    }</b><span>${esc(k.says)} ${what}.</span></div>${act}</div>`
+    return `<div class=Pack_Card><i class=Pack_Big>${
+      glyph(k.icon)
+    }</i><div><b>${esc(k.name)}</b><span>${
+      esc(k.says)
+    } ${what}.</span></div>${act}</div>`
   }
 
   let draw = (s: Sheet, f: Frame) => {
     let cols = COLS.map((c) =>
-      `<div class=Board_Col><div class=Board_Head><b>${c.icon} ${c.name}</b><small>${
-        esc(c.says)
-      }</small></div>${
+      `<div class=Board_Col><div class=Board_Head><b>${
+        glyph(c.icon)
+      }${c.name}</b><small>${esc(c.says)}</small></div>${
         c.rows.map((row) =>
           `<div class=Board_Row>${row.map((id) => tile(s, id)).join('')}</div>`
         ).join('')

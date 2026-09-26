@@ -1,9 +1,10 @@
 /* The hero's vitals: their name and level over their health and the xp to
-   the next level. */
+   the next level. Where there are thumbs, the xp is a thin line, its numbers
+   in the pack. */
 .Vitals {
   display: grid;
-  gap: 0.35rem;
-  padding: 0.55rem 0.75rem 0.65rem;
+  gap: 0.25rem;
+  padding: 0.4rem 0.6rem 0.5rem;
   border-radius: var(--radius);
   background: var(--glass);
   box-shadow: var(--lift);
@@ -19,8 +20,18 @@
 
 .Vitals_Name {
   overflow: hidden;
-  font-size: 1.1rem;
+  font-size: 1rem;
   color: var(--deep);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (pointer: coarse) {
+  .Vitals .Bar-xp {
+    --tall: 0.4rem;
+
+    & > span {
+      display: none;
+    }
+  }
 }

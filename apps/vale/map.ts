@@ -5,8 +5,10 @@
 // colour of a roof (`paint`). Over it, who is where, written only while it is
 // open: the hero's arrow, the other players, the people with a quest, the
 // nodes to gather (work.ts), coloured by their trade and hollow while spent,
-// and the level each road leads to. M or the compass opens its panel.
+// the level each road leads to, and a ring where each quest tracked goes next
+// (journal.ts). M or the compass opens its panel.
 import { paletteOf } from './ground.ts'
+import type { Mark } from './journal.ts'
 import { LEVELS } from './levels.ts'
 import type { Panel } from './panel.ts'
 import type { Frame } from './play.ts'
@@ -129,12 +131,18 @@ export let map = (panel: Panel) => {
   }
 
   return {
-    /** mark who is where this frame, and the nodes, when the map is open */
-    show: (f: Frame, v: Vale, nodes: Seen[] = []) => {
+    /** mark who is where this frame, the nodes, and where each quest tracked
+     * goes next, when the map is open */
+    show: (f: Frame, v: Vale, nodes: Seen[] = [], goals: Mark[] = []) => {
       if (!panel.open) return
       draw(v)
       let at = (x: number, z: number) => `left:${pct(x)};top:${pct(z)}`
       let html =
+        goals.map((g) =>
+          `<i class=Map_Goal style="${at(...g.at)}" title="${
+            esc(g.title)
+          }"></i>`
+        ).join('') +
         nodes.map((n) =>
           `<i class="Map_Node Map_Node-${n.lode.trade}${
             n.spent ? ' Map_Node-spent' : ''

@@ -1,0 +1,161 @@
+/* The journal (journal.ts): each quest under way a card, its title and pin
+   over who asked it, its steps as a list with how far each has come, and
+   what the giver said; then the ones on offer and the ones done, as lines.
+   A pinned card wears the tracker's amber on its edge. */
+.Journal {
+  display: grid;
+  gap: 0.5rem;
+  width: min(34rem, 100cqw - 2rem);
+  margin: 0 auto;
+}
+
+.Journal_Head {
+  margin: 0.4rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.Journal_None {
+  margin: 0;
+  color: var(--muted);
+}
+
+.Journal_Task {
+  --edge: var(--rim);
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.55rem 0.7rem 0.6rem;
+  border-radius: var(--radius-small);
+  background: var(--well);
+  box-shadow: inset 3px 0 0 var(--edge);
+}
+
+.Journal_Task-pinned {
+  --edge: var(--amber);
+}
+
+.Journal_Top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.Journal_Title {
+  flex: 1;
+  min-width: 0;
+  color: var(--deep);
+  text-wrap: balance;
+}
+
+.Journal_Pin {
+  flex: none;
+  --size: 1.9rem;
+
+  &[aria-pressed='true'] {
+    --face: var(--amber);
+    --tint: var(--paper);
+  }
+}
+
+.Journal_From {
+  margin: -0.2rem 0 0;
+  font-size: 0.75rem;
+  color: var(--faint);
+}
+
+.Journal_Steps {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.Journal_Step {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--ink);
+
+  & .Glyph {
+    flex: none;
+    width: 1em;
+    height: 1em;
+    color: var(--faint);
+  }
+
+  & span {
+    flex: 1;
+    min-width: 0;
+  }
+
+  & em {
+    font-style: normal;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--deep);
+  }
+}
+
+.Journal_Step-done {
+  color: var(--faint);
+
+  & span {
+    text-decoration: line-through;
+  }
+
+  & .Glyph,
+  & em {
+    color: var(--moss);
+  }
+}
+
+.Journal_Says {
+  margin: 0;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.Journal_Offers,
+.Journal_Done {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.Journal_Offer {
+  display: grid;
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-small);
+  background: var(--well);
+
+  & b {
+    color: var(--deep);
+  }
+
+  & span {
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+}
+
+.Journal_Done li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+
+  & .Glyph {
+    width: 1em;
+    height: 1em;
+    color: var(--moss);
+  }
+}

@@ -52,7 +52,9 @@ import {
   power,
   questsOf,
   type Slain,
+  type Standing,
   through,
+  unpinnedOf,
   worth,
   xpOf,
 } from './rules.ts'
@@ -122,7 +124,9 @@ export type Sheet = {
    * they have still to spend */
   learned: string[]
   points: number
-  quests: ReturnType<typeof questsOf>
+  quests: Standing[]
+  /** the quests and deals they unpinned, by id (journal.ts) */
+  unpinned: Set<string>
 }
 
 export type Vitals = { hp: number; max: number; lvl: number }
@@ -186,7 +190,7 @@ export type Giver = {
   greets: string
   look: { tint: string; hair: string; skin: string }
   staff: boolean
-  next: ReturnType<typeof questsOf>[number] | null
+  next: Standing | null
   mark: '' | '!' | '?'
   near: number
 }
@@ -506,6 +510,7 @@ export let game = (
       learned,
       points: pointsOf(lvl) - learned.length,
       quests: questsOf(QUESTS, entries, kills, bag),
+      unpinned: unpinnedOf(entries),
     }
     return sheet
   }
@@ -606,6 +611,20 @@ export let game = (
       net.keep({
         entity: { eid: crypto.randomUUID() },
         journal: { player: me, quest: q.id, step: 'taken', at: net.now() },
+      })
+    },
+    /** pin a quest taken, so the glass tracks it, or unpin it */
+    pin: (quest: string, on: boolean) => {
+      let me = net.hero
+      if (!me) return
+      net.keep({
+        entity: { eid: crypto.randomUUID() },
+        journal: {
+          player: me,
+          quest,
+          step: on ? 'pinned' : 'unpinned',
+          at: net.now(),
+        },
       })
     },
     /** hand a finished quest in: what it asked for goes, the gift comes */

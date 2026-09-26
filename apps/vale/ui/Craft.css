@@ -1,12 +1,6 @@
 /* A station's crafting (station.ts), a pack showing what can be made there:
    its tiers as tabs, and what the thing picked asks, each line red while the
    bag is short of it. The button fills as it is made. */
-.Craft_Xp {
-  font-size: 0.75rem;
-  font-weight: 400;
-  color: var(--faint);
-}
-
 .Craft_Tiers {
   display: flex;
   gap: 0.3rem;

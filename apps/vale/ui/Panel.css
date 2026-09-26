@@ -29,7 +29,7 @@
   max-height: 100%;
   overflow: hidden;
   border-radius: var(--radius-big);
-  background: color-mix(in srgb, var(--paper) 97%, transparent);
+  background: var(--paper);
   box-shadow: 0 3px 0 var(--lip), 0 12px 30px rgba(20, 30, 15, 0.3);
   animation: panel-in 0.18s ease-out;
 }
@@ -59,6 +59,15 @@
   font-size: 1.15rem;
   color: var(--deep);
   white-space: nowrap;
+}
+
+/* A word beside the title, in small: the xp to the next level. */
+.Panel_Note {
+  overflow: hidden;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--faint);
+  text-overflow: ellipsis;
 }
 
 .Panel_Body {

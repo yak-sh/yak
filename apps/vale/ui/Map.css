@@ -39,6 +39,23 @@
   filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
 }
 
+/* Where a quest tracked goes next (journal.ts): an amber ring that
+   breathes, under whoever stands there. */
+.Map_Goal {
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--amber) 25%, transparent);
+  box-shadow: 0 0 0 2.5px var(--amber), 0 0 0 4px rgba(255, 255, 255, 0.7);
+  animation: Map_Goal 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes Map_Goal {
+  to {
+    scale: 1.3;
+  }
+}
+
 .Map_Other {
   width: 0.6rem;
   height: 0.6rem;

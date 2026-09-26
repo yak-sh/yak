@@ -32,7 +32,8 @@
 }
 
 .Rose_Mark,
-.Rose_Tick {
+.Rose_Tick,
+.Rose_Goal {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -51,6 +52,16 @@
 .Rose_Mark-n {
   font-size: 1rem;
   color: var(--ember);
+}
+
+/* Where the first quest tracked goes next (journal.ts), on the rim. */
+.Rose_Goal {
+  --r: calc(var(--rose) * 0.5 - 0.05rem);
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 2px var(--paper), 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .Rose_Tick {

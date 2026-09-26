@@ -83,13 +83,6 @@
   display: none;
 }
 
-/* An ability's slot that nothing fills yet: it says, when asked, what
-   would. */
-.Pad-empty {
-  --face: color-mix(in srgb, var(--paper) 40%, transparent);
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--paper) 70%, transparent);
-}
-
 /* The ability being done. */
 .Pad-doing {
   box-shadow: inset 0 0 0 3px var(--ember), 0 4px 0 var(--edge-lip);

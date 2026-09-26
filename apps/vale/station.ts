@@ -132,7 +132,7 @@ export let station = (panel: Panel, acts: Acts) => {
     panel.head(
       `${
         STATIONS[c].name
-      } <span class=Badge>${trade.icon} ${trade.name} ${mine.lvl}</span><small class=Craft_Xp>${mine.xp} / ${next} xp</small>`,
+      } <span class=Badge>${trade.icon} ${trade.name} ${mine.lvl}</span><small class=Panel_Note>${mine.xp} / ${next} xp</small>`,
     )
     box.innerHTML = `<div class="Pack Craft">` +
       `<div class=Craft_Tiers>${tabs}</div>` +

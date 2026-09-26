@@ -1,10 +1,8 @@
-/* The creature being fought: its name and level over its health. */
+/* The creature being fought: one slim bar of its health, its name and level
+   written on it. */
 .Foe {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.2rem var(--gap);
-  padding: 0.45rem 0.75rem 0.55rem;
-  border-radius: var(--radius);
+  padding: 0.25rem;
+  border-radius: var(--round);
   background: var(--glass);
   box-shadow: var(--lift);
 
@@ -12,23 +10,24 @@
     display: none;
   }
 
-  & b {
+  & .Bar {
+    --tall: 1.2rem;
+  }
+
+  & .Bar > span {
     overflow: hidden;
+    padding-inline: 0.6rem;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   & em {
-    font-size: 0.8rem;
     font-style: normal;
-    color: var(--faint);
-  }
-
-  & .Bar {
-    grid-column: 1 / -1;
+    font-weight: 400;
+    opacity: 0.85;
   }
 }
 
-.Foe-boss b {
-  color: var(--char);
+.Foe-boss .Bar {
+  --fill: var(--char);
 }

@@ -5,9 +5,10 @@
 // game on the graph (play.ts), the work at the nodes and the stations
 // (work.ts), the stage (cast.ts, nodes.ts), the bits and numbers (fx.ts), the
 // glass (hud.ts, and its action bar, bar.ts), what was said (chatbox.ts) and
-// the panels over it (map.ts, pack.ts, board.ts, station.ts, menu.ts, and
-// the deals with a villager, dealbox.ts). When the hero walks off the end of
-// a road, the page grows the level beyond and carries on there.
+// the panels over it (map.ts, pack.ts, board.ts, journal.ts, station.ts,
+// menu.ts, and the deals with a villager, dealbox.ts). When the hero walks
+// off the end of a road, the page grows the level beyond and carries on
+// there.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { ABILITIES, type Ability } from './abilities.ts'
@@ -25,11 +26,12 @@ import { BUILDS, type Figure, hero, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { ahead, type Grown, grown } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
+import { guide, journal, tasksOf } from './journal.ts'
 import { pack } from './pack.ts'
 import { listen } from './input.ts'
 import { nodes } from './nodes.ts'
 import { ITEMS } from './items.ts'
-import { HOME, LEVELS } from './levels.ts'
+import { HOME, LEVELS, type Spot } from './levels.ts'
 import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { type Event, type Frame, game, type Vec3 } from './play.ts'
 import { formOf, SKILLS } from './skills.ts'
@@ -142,7 +144,7 @@ let actions = bar(h.acts)
 let skills = board(h.panels.skills, {
   learn: (id) => {
     g.learn(id)
-    h.toast(`${SKILLS[id].icon} ${SKILLS[id].name} learned`, 'Toast-loot')
+    h.toast(`${SKILLS[id].name} learned`, 'Toast-loot')
     sound.quest()
   },
   respec: () => {
@@ -150,6 +152,7 @@ let skills = board(h.panels.skills, {
     h.toast('Every skill forgotten. Spend the points again.')
   },
 })
+let log = journal(h.panels.journal, { pin: g.pin })
 // What the hero chose about a deal with a villager.
 let dealt = dealbox(h.panels.deal, (a, v) => {
   if (a == 'refuse') return deal.refuse(v.giver.id, v.eid)
@@ -774,13 +777,19 @@ let loop = (t: number) => {
         )
       }
       let here = 1 + f.others.length
-      h.show(
-        f,
-        here,
-        clockOf(w.day),
-        bearing(cam.yaw),
-        views.filter((v) => v.state == 'taken').at(-1),
+      // The hero's quests and deals, and where the ones tracked go next.
+      let tasks = tasksOf(f.sheet, views)
+      let way = guide(
+        tasks,
+        f.level,
+        Object.fromEntries(
+          f.givers.map((n): [string, Spot] => [n.id, [n.x, n.z]]),
+        ),
+        v.roads,
+        [f.body.x, f.body.z],
       )
+      h.show(f, here, clockOf(w.day), bearing(cam.yaw), tasks, way.aim)
+      log.show(tasks, f.level)
       actions.show(f)
       // A ward shimmers about the hero while it holds.
       if (f.ward > 0 && Math.random() < 0.5) {
@@ -805,7 +814,7 @@ let loop = (t: number) => {
         return false
       })
       h.work(f.talk ? null : job)
-      m.show(f, v, job.nodes)
+      m.show(f, v, job.nodes, way.marks)
       p.show(f)
       skills.show(f)
       // Walked off from the station its sheet is open at: it folds away.

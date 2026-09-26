@@ -13,7 +13,7 @@ import { ITEMS, type Thing } from './items.ts'
 import { icon } from './sprites.ts'
 import type { Panel } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
-import { maxHp, power } from './rules.ts'
+import { maxHp, need, power } from './rules.ts'
 import { skilled } from './skills.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -247,7 +247,14 @@ export let pack = (panel: Panel, acts: Acts) => {
         ).join('')
       }</div>`
       : ''
-    panel.head(`${esc(s.name)} <span class=Badge>Level ${s.lvl}</span>`)
+    let from = need(s.lvl), to = need(s.lvl + 1)
+    panel.head(
+      `${
+        esc(s.name)
+      } <span class=Badge>Level ${s.lvl}</span><small class=Panel_Note>${
+        s.xp - from
+      } / ${to - from} xp</small>`,
+    )
     box.innerHTML = `<div class=Pack>` +
       `<div class=Pack_Worn>${worn}</div>` +
       `<div class=Pack_Nums>${stats}</div>` +

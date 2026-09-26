@@ -12,22 +12,23 @@
 // for a skill they could not learn then counts for nothing.
 import { ABILITIES, type Ability } from './abilities.ts'
 import type { Kit } from './gear.ts'
+import type { Glyph } from './glyphs.ts'
 
 export type Discipline = 'might' | 'finesse' | 'arcana'
 
 export let DISCIPLINES: Record<
   Discipline,
-  { name: string; icon: string; says: string }
+  { name: string; icon: Glyph; says: string }
 > = {
   might: {
     name: 'Might',
-    icon: '💪',
+    icon: 'bicepsFlexed',
     says: 'Heavy weapons, armour and health',
   },
-  finesse: { name: 'Finesse', icon: '🎯', says: 'Blades, bows and speed' },
+  finesse: { name: 'Finesse', icon: 'target', says: 'Blades, bows and speed' },
   arcana: {
     name: 'Arcana',
-    icon: '✨',
+    icon: 'sparkles',
     says: 'Staves, tomes, healing and wards',
   },
 }
@@ -45,7 +46,7 @@ export type Boon = {
 
 export type Skill = {
   name: string
-  icon: string
+  icon: Glyph
   /** what it does, in a few words */
   says: string
   discipline: Discipline
@@ -68,7 +69,7 @@ let HEAVY = ['hammer', 'axe']
 export let SKILLS: Record<string, Skill> = {
   brawn: {
     name: 'Brawn',
-    icon: '❤️',
+    icon: 'heartPlus',
     says: '10% more health.',
     discipline: 'might',
     row: 1,
@@ -76,7 +77,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   heft: {
     name: 'Heft',
-    icon: '🔨',
+    icon: 'hammer',
     says: 'Hammers and axes hit 12% harder.',
     discipline: 'might',
     row: 1,
@@ -85,7 +86,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   hide: {
     name: 'Iron hide',
-    icon: '🦺',
+    icon: 'shieldPlus',
     says: 'Your armour turns 25% more of every bite.',
     discipline: 'might',
     row: 2,
@@ -94,7 +95,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   aftershock: {
     name: 'Aftershock',
-    icon: '💥',
+    icon: 'activity',
     says: 'Quake shakes further, and stuns for 3 s.',
     discipline: 'might',
     row: 2,
@@ -104,7 +105,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   butcher: {
     name: "Butcher's cut",
-    icon: '🩸',
+    icon: 'droplet',
     says: 'Rend bleeds twice as hard.',
     discipline: 'might',
     row: 2,
@@ -114,7 +115,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   bulwark: {
     name: 'Bulwark',
-    icon: '🛡️',
+    icon: 'shield',
     says: 'Block holds for 2.5 s, and is ready again sooner.',
     discipline: 'might',
     row: 3,
@@ -124,7 +125,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   momentum: {
     name: 'Momentum',
-    icon: '⚙️',
+    icon: 'cog',
     says: 'Hammers and axes swing 12% quicker.',
     discipline: 'might',
     row: 3,
@@ -134,7 +135,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   cyclone: {
     name: 'Cyclone',
-    icon: '🌀',
+    icon: 'tornado',
     says: 'Whirl reaches further, hits harder, and is ready sooner.',
     discipline: 'might',
     row: 3,
@@ -144,7 +145,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   titan: {
     name: 'Titan',
-    icon: '🗿',
+    icon: 'mountain',
     says: '15% more health, and armour turns 15% more.',
     discipline: 'might',
     row: 4,
@@ -153,7 +154,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   earthbreaker: {
     name: 'Earthbreaker',
-    icon: '💢',
+    icon: 'pickaxe',
     says: 'Crush lands harder still, and leaves the foe senseless.',
     discipline: 'might',
     row: 4,
@@ -164,7 +165,7 @@ export let SKILLS: Record<string, Skill> = {
 
   fleet: {
     name: 'Fleet',
-    icon: '💨',
+    icon: 'wind',
     says: 'Run 8% faster.',
     discipline: 'finesse',
     row: 1,
@@ -172,7 +173,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   keen: {
     name: 'Keen edge',
-    icon: '🔪',
+    icon: 'slice',
     says: 'Swords and daggers hit 12% harder.',
     discipline: 'finesse',
     row: 1,
@@ -181,7 +182,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   steady: {
     name: 'Steady hand',
-    icon: '🏹',
+    icon: 'bowArrow',
     says: 'Bows hit 12% harder.',
     discipline: 'finesse',
     row: 1,
@@ -190,7 +191,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   sweep: {
     name: 'Wide sweep',
-    icon: '🌙',
+    icon: 'rainbow',
     says: 'Cleave sweeps wider and cuts deeper.',
     discipline: 'finesse',
     row: 2,
@@ -200,7 +201,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   cuts: {
     name: 'Thousand cuts',
-    icon: '🗡️',
+    icon: 'strike',
     says: 'Flurry stabs five times.',
     discipline: 'finesse',
     row: 2,
@@ -210,7 +211,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   deadeye: {
     name: 'Deadeye',
-    icon: '🍀',
+    icon: 'eye',
     says: 'With a bow, great blows come 10% more often.',
     discipline: 'finesse',
     row: 2,
@@ -220,7 +221,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   nimble: {
     name: 'Nimble',
-    icon: '🦶',
+    icon: 'footprints',
     says: 'Run 8% faster, and great blows come 5% more often.',
     discipline: 'finesse',
     row: 3,
@@ -229,7 +230,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   charge: {
     name: 'Charge',
-    icon: '⚡',
+    icon: 'zap',
     says: 'Lunge reaches a foe further off, and lands harder.',
     discipline: 'finesse',
     row: 3,
@@ -239,7 +240,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   rain: {
     name: 'Rain of arrows',
-    icon: '🌧️',
+    icon: 'cloudRain',
     says: 'Volley looses more arrows over a wider place, harder.',
     discipline: 'finesse',
     row: 3,
@@ -249,7 +250,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   assassin: {
     name: 'Assassin',
-    icon: '👤',
+    icon: 'mask',
     says: 'Shadowstep stabs harder, and is ready sooner.',
     discipline: 'finesse',
     row: 4,
@@ -259,7 +260,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   pinpoint: {
     name: 'Pinpoint',
-    icon: '📌',
+    icon: 'locateFixed',
     says: 'Pinning shot holds for 4.5 s, harder, and is ready sooner.',
     discipline: 'finesse',
     row: 4,
@@ -270,7 +271,7 @@ export let SKILLS: Record<string, Skill> = {
 
   focus: {
     name: 'Focus',
-    icon: '🪄',
+    icon: 'wand',
     says: 'Staves hit 12% harder.',
     discipline: 'arcana',
     row: 1,
@@ -279,7 +280,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   kindness: {
     name: 'Kindness',
-    icon: '💚',
+    icon: 'handHeart',
     says: 'Mend gives back almost half your health.',
     discipline: 'arcana',
     row: 1,
@@ -288,7 +289,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   inferno: {
     name: 'Inferno',
-    icon: '🔥',
+    icon: 'flame',
     says: 'Blaze bursts wider and burns harder.',
     discipline: 'arcana',
     row: 2,
@@ -298,7 +299,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   wildfire: {
     name: 'Wildfire',
-    icon: '☄️',
+    icon: 'flameKindling',
     says: 'Scorch reaches further, and what it catches burns twice as hard.',
     discipline: 'arcana',
     row: 2,
@@ -308,7 +309,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   aegis: {
     name: 'Aegis',
-    icon: '🔮',
+    icon: 'shieldCheck',
     says: 'Ward takes half your health in bites.',
     discipline: 'arcana',
     row: 2,
@@ -318,7 +319,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   flow: {
     name: 'Flow',
-    icon: '🌊',
+    icon: 'infinity',
     says: 'Staves strike 12% quicker.',
     discipline: 'arcana',
     row: 3,
@@ -328,7 +329,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   vigil: {
     name: 'Vigil',
-    icon: '🕯️',
+    icon: 'lamp',
     says: '10% more health, and armour turns 10% more.',
     discipline: 'arcana',
     row: 3,
@@ -337,7 +338,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   archmage: {
     name: 'Archmage',
-    icon: '🌟',
+    icon: 'star',
     says: 'Every blow lands 10% harder.',
     discipline: 'arcana',
     row: 4,
@@ -346,7 +347,7 @@ export let SKILLS: Record<string, Skill> = {
   },
   sanctuary: {
     name: 'Sanctuary',
-    icon: '⛲',
+    icon: 'heartPulse',
     says: 'Mend gives back more still, and is ready sooner.',
     discipline: 'arcana',
     row: 4,

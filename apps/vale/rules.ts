@@ -252,9 +252,42 @@ export let wander = (
 export type Entry = { quest: string; step: string; at: number }
 export type Held = { eid: string; kind: string; n: number }
 
-/** Where one player stands with each quest, in the order given: done, taken
- * (with how far along), open to take once the quest it comes after is done,
- * or not yet.
+/** Where one player stands with a quest: done, taken (with how far along),
+ * open to take once the quest it comes after is done, or not yet; and, while
+ * taken, whether it is pinned, which it is until the player unpins it. */
+export type Standing = {
+  quest: Quest
+  state: 'done' | 'taken' | 'open' | 'locked'
+  have: number
+  pinned: boolean
+}
+
+/** The quests and deals a player has unpinned, by id: each whose latest
+ * word in their journal, pinned or unpinned, is unpinned.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let e = (quest: string, step: string, at: number) => ({ quest, step, at })
+ * assertEquals([...unpinnedOf([e('c', 'unpinned', 2)])], ['c'])
+ * // the latest word wins, whatever order the rows come in
+ * assertEquals(
+ *   [...unpinnedOf([e('c', 'pinned', 4), e('c', 'unpinned', 3)])],
+ *   [],
+ * )
+ * ```
+ */
+export let unpinnedOf = (journal: Entry[]): Set<string> => {
+  let last = new Map<string, Entry>()
+  for (let e of journal) {
+    let was = last.get(e.quest)
+    if (/pinned$/.test(e.step) && (!was || was.at <= e.at)) last.set(e.quest, e)
+  }
+  return new Set(
+    [...last.values()].filter((e) => e.step == 'unpinned').map((e) => e.quest),
+  )
+}
+
+/** Where one player stands with each quest, in the order given.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -271,6 +304,13 @@ export type Held = { eid: string; kind: string; n: number }
  *   states([{ quest: 'a', step: 'taken', at: 1 }, { quest: 'a', step: 'done', at: 2 }]),
  *   ['a:done:1', 'b:open:1', 'c:open:1'],
  * )
+ * // taken is pinned, until unpinned
+ * let pins = (journal: Entry[]) =>
+ *   questsOf(quests, journal, [], []).filter((s) => s.pinned)
+ *     .map((s) => s.quest.id)
+ * let took = { quest: 'c', step: 'taken', at: 1 }
+ * assertEquals(pins([took]), ['c'])
+ * assertEquals(pins([took, { quest: 'c', step: 'unpinned', at: 2 }]), [])
  * ```
  */
 export let questsOf = (
@@ -278,15 +318,16 @@ export let questsOf = (
   journal: Entry[],
   kills: Slain[],
   bag: Held[],
-) => {
+): Standing[] => {
   let taken = new Map<string, number>()
   let done = new Set<string>()
+  let off = unpinnedOf(journal)
   for (let e of journal) {
     if (e.step == 'taken') taken.set(e.quest, e.at)
     if (e.step == 'done') done.add(e.quest)
   }
   return quests.map((q) => {
-    let state = done.has(q.id)
+    let state: Standing['state'] = done.has(q.id)
       ? 'done'
       : taken.has(q.id)
       ? 'taken'
@@ -297,7 +338,12 @@ export let questsOf = (
     let have = q.goal == 'slay'
       ? kills.filter((k) => k.kind == q.target && k.at >= since).length
       : bag.filter((b) => b.kind == q.target).reduce((n, b) => n + b.n, 0)
-    return { quest: q, state, have: Math.min(have, q.count) }
+    return {
+      quest: q,
+      state,
+      have: Math.min(have, q.count),
+      pinned: state == 'taken' && !off.has(q.id),
+    }
   })
 }
 

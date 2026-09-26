@@ -3,7 +3,7 @@
 // glass's pads (hud.ts), which on a phone sit under the right thumb about the
 // strike. What is left of an ability's cooldown is swept over it, with the
 // seconds, and it flashes when it is ready again; one a skill made stronger
-// (skills.ts) wears a star. A slot nothing fills says what would fill it.
+// (skills.ts) wears a star. A slot nothing fills is not shown.
 // Each slot is written only when what it shows changed.
 import { HANDLES } from './arms.ts'
 import { type Action, keysOf } from './input.ts'
@@ -32,14 +32,7 @@ let slotOf = (f: Frame, i: number) => {
   }
   let id = f.sheet.abilities[i - 1] ?? ''
   let a = formOf(id, f.sheet.learned)
-  if (!a) {
-    let says = i < 3
-      ? 'Hold a weapon: each kind gives two abilities.'
-      : k.hands == 2
-      ? 'Both hands are on your weapon.'
-      : 'A shield, a tome or a torch in your other hand gives one more.'
-    return { id, icon: '', says, cd: 0, s: 0, strong: false }
-  }
+  if (!a) return { id, icon: '', says: '', cd: 0, s: 0, strong: false }
   let left = f.cool[id] ?? 0
   let by = f.sheet.learned.filter((k) => SKILLS[k].ability == id)
     .map((k) => SKILLS[k].name)
@@ -81,7 +74,7 @@ export let bar = (pads: HTMLElement[]) => {
         sl.b.setAttribute('aria-label', s.says)
         sl.b.style.setProperty('--cd', String(s.cd))
         if (sl.left) sl.left.textContent = s.s ? String(s.s) : ''
-        sl.b.classList.toggle('Pad-empty', !!i && !s.icon)
+        sl.b.classList.toggle('Pad-none', !!i && !s.icon)
         sl.b.classList.toggle('Pad-doing', doing)
         sl.b.classList.toggle('Pad-strong', s.strong)
         // Ready again: a flash.
