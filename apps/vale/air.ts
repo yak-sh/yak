@@ -43,8 +43,14 @@ let air = (
 
 /** Every kind of air, by its name. */
 export let AIRS: Record<string, Air> = {
-  snow: air(0xf6f8fb, 60),
-  blizzard: air(0xf2f6fa, 170, { speed: 4, up: -2, life: 4, spread: 14 }),
+  snow: air(0x9aa0a8, 60, { glow: true }),
+  blizzard: air(0x9aa0a8, 170, {
+    glow: true,
+    speed: 4,
+    up: -2,
+    life: 4,
+    spread: 14,
+  }),
   rain: air(0xa9bccc, 260, { up: -14, speed: 0.2, life: 0.8, size: 0.05 }),
   ash: air(0x7a746e, 45, { up: -0.6, speed: 0.4, life: 9, size: 0.06 }),
   embers: air(0xff7a2a, 40, {
