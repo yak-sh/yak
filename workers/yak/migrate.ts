@@ -49,15 +49,11 @@
 //                 directory does not split — its vocabulary declares the three
 //                 seats itself (vocab.ts `platformDoc`), so its rows copy whole.
 //
-// ## The passes after it
-// A store that has carried can still hold a fact in a place the vocabulary no
-// longer names — SQLite's schema is additive, so a column a word lost is still
-// standing with its values in it. That is a second kind of migration and it is
-// numbered ({@link MARKS}): {@link homed} is version 2, `space.home` becoming
-// `home{}` on the app (T-34227); {@link addressed} is version 3, the
-// directory's app addresses moving out of the table the core word `alias` now
-// owns and into `former` (T-34390). Same two steps, same order — one
-// transaction, then reconcile — over the new schema rather than the old one.
+// ## Beside the copy
+// The same transaction lands the facts the fleet kept where the vocabulary no
+// longer looks: `space.home` as `home{}` on the app it named (T-34227), the
+// directory's app addresses in `former` (T-34390), a domain's target in
+// `hostname.serves` (T-34596), and a task's filing in `filed`.
 //
 // ## What cannot be carried
 // The fleet's other ~100 words (`card`, `pin`, `mail`, `session`, the journal…)
@@ -69,17 +65,13 @@
 import { fields, schema as ftsSchema } from '@yaks/fts'
 import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
 import { edgeEid } from '@yaks/edge'
-import { entryEid, TREE_ENTRY } from '@yaks/git'
-import { identityEid, sha256 } from '@yaks/graph'
+import { sha256 } from '@yaks/graph'
 import {
-  among,
   and,
   as,
   col,
-  count,
   type Derived,
   type Driver,
-  each,
   eq,
   type Expr,
   fn,
@@ -88,21 +80,16 @@ import {
   join,
   left,
   lit,
-  ne,
   notNull,
-  op,
   or,
-  type Query,
-  type Select,
   select,
   sub,
   table,
   tally,
   val,
 } from '@yaks/sql'
-import { backfill, fold, grown, indexed, pointers, tabled } from '@yaks/sqlite'
+import { backfill, grown, indexed, tabled } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
-import { handle } from './directory.ts'
 
 /** The object's own key-value slots beside its SQL — where the old store kept
  * everything it remembered (its name, the app's `vocab.json`, the words it
@@ -307,95 +294,25 @@ export let respelled = (text: string): string | null => {
   return now == text ? null : now
 }
 
-/** The marker written when a pass reconciles, so it never runs twice. The
- * number is the version an object stands at: {@link MARK} is the move off the
- * fleet-shaped store, and each one after it a pass over the new schema
- * ({@link MARKS}). An object is at the last marker it wrote, and a pass whose
- * marker is already there does not run. */
+/** The marker written when the pass reconciles, so it never runs twice: the
+ * move off the fleet-shaped store. */
 export let MARK = 'yak/store/packages/1'
 
-/** The second pass (T-34227): `space.home` — the property that said which app a
- * space opens at — becomes `home{}` worn by that app. The directory's alone;
- * no other object has a `space` table. */
-export let HOMED = 'yak/store/home/2'
-
-/** The third pass (T-34390): the directory's app addresses — `{slug, slugs}`,
- * named `alias` until that word became every store's (@yaks/alias) — move to
- * `former`. The directory's alone; no other object has a row of them. */
-export let FORMER = 'yak/store/former/3'
-
-/** The fourth pass (T-34596): a domain's target — the property that said which
- * app a hostname opens — becomes `serves`, which names the app or the whole
- * space. The directory's alone; no other object has a hostname. */
-export let SERVES = 'yak/store/serves/4'
-
-/** The fifth pass (T-34657): an app's handle — the string its Durable Object,
- * its script and its analytics rows are named by — becomes a property of its
- * own, `app.store`, instead of being read back off the address it was born at.
- * The directory's alone; no other object has an app row. */
-export let HANDLED = 'yak/store/handle/5'
-
-/** The sixth pass: portfolio fields move off task into optional filed. */
-export let FILED = 'yak/store/filed/6'
-
-/** The seventh pass (D-37943): a tool is its name. `tool.name` is the tool's
- * identity, so its entity takes the id the name derives. */
-export let TOOLED = 'yak/store/tool/7'
-
-/** The eighth pass (C-37980): a copy of somebody else's app runs like the
- * space's own apps unless its owner sandboxed it (`installed.sandboxed`),
- * where it used to run sandboxed until they trusted it (`installed.trusted`).
- * Each copy that is not sandboxed is stamped trusted as well, so the build
- * before this one serves it the same way. The directory's alone; no other
- * object has an install. */
-export let SANDBOXED = 'yak/store/sandboxed/8'
-
-/** The ninth pass: a sent letter's Message-ID moves out of `delivered.via`,
- * where the transport's receipt was kept, onto `mail.message_id`, where an
- * arrival's is — so a reply to either threads the same way. Any store that
- * sends mail. */
-export let SENT = 'yak/store/sent/9'
-
-/** The tenth pass: a tree's link to a child is a `tree_entry`, at the id that
- * tag derives. The git object store's alone; no other object has a `gitobj`
- * table. */
-export let ENTERED = 'yak/store/entered/10'
-
-/** The eleventh pass (T-38042): a call's arguments are the object they spell,
- * kept as SQLite's binary JSON, where they were that object's JSON text. Any
- * store a tool is called in. */
-export let ARGUED = 'yak/store/args/11'
-
-/** Every marker in order, so "is this object caught up" is one comparison and
- * a new pass is one line here. */
-export let MARKS = [
-  MARK,
-  HOMED,
-  FORMER,
-  SERVES,
-  HANDLED,
-  FILED,
-  TOOLED,
-  SANDBOXED,
-  SENT,
-  ENTERED,
-  ARGUED,
-]
-
-/** Passes that change stored shape, read per commit by `yak admin deploys`.
- * A refused pass leaves stored data and its marker unchanged, so adds no
- * boundary. Nor does an expanding pass the build before it reads correctly:
- * SANDBOXED and SENT write only properties that build already reads, and
- * ENTERED moves rows it never read into the table it does. */
+/** The stored shapes this code reads, each named by the pass that moved stores
+ * into it, read per commit by `yak admin deploys`: a rollback across one would
+ * serve rows the build before it cannot read. Every pass after the first ran on
+ * every store and was deleted, so only its name is left here. The shape it made
+ * is the one this code reads, and code without the name is code from before
+ * it. */
 export let BOUNDARIES = [
   MARK,
-  HOMED,
-  FORMER,
-  SERVES,
-  HANDLED,
-  FILED,
-  TOOLED,
-  ARGUED,
+  'yak/store/home/2',
+  'yak/store/former/3',
+  'yak/store/serves/4',
+  'yak/store/handle/5',
+  'yak/store/filed/6',
+  'yak/store/tool/7',
+  'yak/store/args/11',
 ]
 
 /** The two tables the two layouts spell identically, and so never move. */
@@ -411,19 +328,8 @@ let ASIDE = 'yak_old_'
 
 /** What the directory's app addresses were called before T-34390 — and what
  * the core word is called now, which is why their rows have to move out of it
- * ({@link addressed}). */
+ * ({@link formerly}). */
 let FORMERLY = 'alias'
-
-/** How many rows a query answers, as its `n`. */
-let n = (d: Driver, q: Query): number => Number(d.query(q)[0]?.n ?? 0)
-
-/** How many rows a query selects. */
-let many = (d: Driver, q: Query): number =>
-  n(d, select({ cols: [as(count(), 'n')], from: { t: 'from', q } }))
-
-/** Whether a query selects a row at all. */
-let found = (d: Driver, q: Select): boolean =>
-  d.query({ ...q, limit: lit(1) }).length > 0
 
 /** The schema's own catalogue, narrowed to one type of object. */
 let catalogued = (type: string, also?: Expr) =>
@@ -565,32 +471,22 @@ export let rebuild = (d: Driver) => {
 let stands = (d: Driver, name: string): boolean =>
   d.query(catalogued('table', eq(col('name'), val(name)))).length > 0
 
-/** Existing rows need a preparing pass before gaining a unique constraint.
- * Empty tables can acquire it now without changing what old rows must satisfy.
- * `migrated` is the object's marker: a pass it has not reached, over rows it
- * still has to prepare, raises its own index once they satisfy it. */
+/** The schema a vocabulary implies, raised over whatever the object holds.
+ * Only the tables that stood before it can be missing a column (@yaks/sqlite
+ * `grown`), so a fresh object is asked nothing about its columns. Existing rows
+ * need a preparing migration before gaining a unique constraint; empty tables
+ * can acquire it now without changing what old rows must satisfy. */
 export let install = (
   storage: DurableStorage,
   vocab: Vocab,
   derived: Derived = {},
-  migrated: string | null = null,
   classify = true,
 ) => {
   let d = driver(storage)
+  let stood = new Set(named(d, 'table').map((t) => t.name))
   for (let stmt of tabled(vocab, derived)) d.query(stmt)
-  for (let stmt of grown(d, vocab)) d.query(stmt)
+  for (let stmt of grown(d, vocab, stood)) d.query(stmt)
   let held = new Set(named(d, 'index').map((i) => i.name))
-  // HANDLED assigns and reconciles handles before it raises `app_store`;
-  // TOOLED moves and merges tools before it raises `tool_name`.
-  let prepared: Record<string, [string, (s: DurableStorage) => boolean]> = {
-    app_store: [HANDLED, unhandled],
-    tool_name: [TOOLED, mistooled],
-  }
-  let deferred = (name: string) => {
-    let [mark, holds] = prepared[name] ?? []
-    return !!mark && !!holds &&
-      MARKS.indexOf(migrated ?? '') < MARKS.indexOf(mark) && holds(storage)
-  }
   let ready = {
     ...vocab,
     indexes: (table: string) =>
@@ -598,7 +494,6 @@ export let install = (
         let name = `${table}_${i.props.join('_')}`
         if (held.has(name)) return false
         if (!i.unique || !tally(d, table)) return true
-        if (deferred(name)) return false
         throw new Error(
           `skipped unique index ${name}: existing rows require a preparing migration`,
         )
@@ -659,12 +554,6 @@ let FILING = ['priority', 'project', 'assignee', 'domain']
 let filingCols = (d: Driver, from: string) =>
   FILING.filter((c) => columns(d, from).includes(c))
 
-export let unfiled = (storage: DurableStorage): boolean => {
-  let d = driver(storage)
-  return stands(d, 'task') && stands(d, 'filed') &&
-    filingCols(d, 'task').length > 0
-}
-
 // Refuse conflicting facts rather than pick a winner. Reconcile values, not
 // only counts, before the caller can remove the old place or advance a marker.
 let fileward = (d: Driver, from: string): number => {
@@ -712,447 +601,11 @@ let fileward = (d: Driver, from: string): number => {
   return rows.length
 }
 
-/** Run inside transactionSync, like every numbered pass. */
-export let filed = (
-  storage: DurableStorage,
-  o: { store: string; app: string | null },
-): Report => {
-  let d = driver(storage)
-  let moved = fileward(d, 'task')
-  let notes: string[] = []
-  // Dead columns are tidying, not the move (the same rule as homed). A
-  // platform SQLite version that cannot drop one must not lose its data or
-  // rerun this pass; the marker and copied rows commit together.
-  for (let c of filingCols(d, 'task')) {
-    try {
-      d.query(unseat('task', c))
-    } catch (e) {
-      notes.push(`${c} remains dead: ${String(e)}`)
-    }
-  }
-  return {
-    ...o,
-    at: new Date().toISOString(),
-    ok: true,
-    mark: FILED,
-    moved: [{
-      table: 'filed',
-      from: moved,
-      to: moved,
-      note: `task filing preserved${
-        notes.length ? '; ' + notes.join('; ') : ''
-      }`,
-    }],
-    dropped: [],
-  }
-}
-
-// ---- a tool is its name (D-37943) ------------------------------------------
-//
-// A call points at a `tool` entity, and the id of one was the hash of
-// `tool:<name>`. The vocabulary now declares `tool.name` its identity, so the
-// id is the one @yaks/graph derives from the name, and a tool row standing at
-// the old id would refuse the runner's next planting of the same name. The
-// integer id stays, so every call keeps pointing at its tool; only the eid it
-// is called by moves.
-
-// Each tool row, with the eid it stands at and the one its name derives,
-// oldest first.
-let toolIds = (d: Driver) =>
-  stands(d, 'tool')
-    ? d.query(select({
-      cols: [col('id', 'e'), col('eid', 'e'), col('name', 't')],
-      from: table('tool', 't'),
-      joins: [
-        join(table('entity', 'e'), eq(col('id', 'e'), col('entity', 't'))),
-      ],
-      where: notNull(col('name', 't')),
-      order: [col('id', 'e')],
-    })).map((r) => ({
-      id: Number(r.id),
-      eid: String(r.eid),
-      named: identityEid('tool', [String(r.name)]),
-    }))
-    : []
-
-// The unique index the vocabulary raises over `tool.name`, its identity, by
-// the name @yaks/sqlite gives it (`<comp>_<props>`).
-let TOOL_NAME = 'tool_name'
-
-/** Whether the tools are not yet their names: a row standing at an id its name
- * does not derive, or rows the identity's unique index has not been raised
- * over. */
-export let mistooled = (storage: DurableStorage): boolean => {
-  let d = driver(storage)
-  let rows = toolIds(d)
-  return rows.some((t) => t.eid != t.named) ||
-    (rows.length > 0 && !named(d, 'index').some((i) => i.name == TOOL_NAME))
-}
-
-/**
- * Each tool onto the id its name derives, synchronously, inside
- * `transactionSync` like every numbered pass, and then the identity's unique
- * index, which `install()` leaves to this pass.
- *
- * Tools sharing a name are one tool: the newest row stays, the others fold
- * into it (@yaks/sqlite `fold`) with every reference repointed, and it takes
- * the derived id. It refuses, moving nothing, when the derived id is another
- * entity's, or when a link touches a tool — a link's id is derived from its
- * ends, and no store has one to a tool.
- */
-export let tooled = (
-  storage: DurableStorage,
-  o: { store: string; app: string | null; vocab: Vocab },
-): Report => {
-  let d = driver(storage)
-  let rows = toolIds(d)
-  let report = (
-    ok: boolean,
-    moved: number,
-    merged: number,
-    message?: string,
-  ): Report => ({
-    store: o.store,
-    app: o.app,
-    at: new Date().toISOString(),
-    ok,
-    message,
-    mark: TOOLED,
-    moved: [{
-      table: 'tool',
-      from: rows.length,
-      to: rows.length - merged,
-      note: `${moved} tools called by the id their name derives, ` +
-        `${merged} merged into the newest of their name`,
-    }],
-    dropped: [],
-  })
-  let byName = Map.groupBy(rows, (t) => t.named)
-  let moving = [...byName.values()]
-    .filter((ts) => ts.length > 1 || ts[0].eid != ts[0].named).flat()
-  let ids = each(moving.map((t) => t.id))
-  let linked = stands(d, 'edge') && moving.length
-    ? tally(d, 'edge', or(among(col('from'), ids), among(col('to'), ids)))
-    : 0
-  if (linked) {
-    throw new Refused(report(false, 0, 0, `${linked} links touch a tool`))
-  }
-  let into = fold(d, pointers(d, o.vocab))
-  let moved = 0
-  let merged = 0
-  for (let [eid, ts] of byName) {
-    let keep = ts[ts.length - 1]
-    for (let t of ts.slice(0, -1)) {
-      into(t.id, keep.id)
-      merged++
-    }
-    if (keep.eid == eid) continue
-    if (d.query(byEid(eid)).length) {
-      throw new Refused(
-        report(false, 0, 0, `${eid} is already another entity's id`),
-      )
-    }
-    d.query(readdress(keep.id, eid))
-    moved++
-  }
-  if (rows.length) {
-    d.query({
-      t: 'create index',
-      name: TOOL_NAME,
-      on: 'tool',
-      cols: [col('name')],
-      unique: true,
-      ifNot: true,
-    })
-  }
-  if (mistooled(storage)) {
-    throw new Refused(
-      report(false, 0, 0, 'a tool still stands at an old id'),
-    )
-  }
-  return report(true, moved, merged)
-}
-
-// ---- a copy runs like the space's own apps (C-37980) -----------------------
-//
-// Expand, not contract (D-37972): `installed.sandboxed` is the word now, and
-// empty on every copy, since the space is the trust boundary and no owner had
-// asked for a sandbox.
-// The build before this one read `installed.trusted` the other way round, so
-// a copy it would still sandbox is stamped trusted here, and tools.ts writes
-// both from now on (installed.ts `sandboxing`). A later release drops it.
-
-// The copies the build before this one would sandbox and this one does not.
-let UNTRUSTED = and(isNull(col('sandboxed')), isNull(col('trusted')))
-
-/** Whether a copy stands that the two builds would serve differently. */
-export let untrusted = (storage: DurableStorage): boolean => {
-  let d = driver(storage)
-  return stands(d, 'installed') &&
-    ['sandboxed', 'trusted'].every((c) =>
-      columns(d, 'installed').includes(c)
-    ) &&
-    found(
-      d,
-      select({ cols: [lit(1)], from: table('installed'), where: UNTRUSTED }),
-    )
-}
-
-/** Every such copy stamped trusted, inside `transactionSync` like every
- * numbered pass. */
-export let trusting = (
-  storage: DurableStorage,
-  o: { store: string; app: string | null },
-): Report => {
-  let d = driver(storage)
-  let rest = () => tally(d, 'installed', UNTRUSTED)
-  let from = rest()
-  let at = new Date().toISOString()
-  d.query({
-    t: 'update',
-    table: 'installed',
-    set: { trusted: val(at) },
-    where: UNTRUSTED,
-  })
-  let to = from - rest()
-  return {
-    ...o,
-    at,
-    ok: to == from,
-    mark: SANDBOXED,
-    moved: [{
-      table: 'installed',
-      from,
-      to,
-      note: 'copies stamped trusted, so the build before this serves them ' +
-        'unsandboxed too',
-    }],
-    dropped: [],
-  }
-}
-
-// ---- a sent letter's Message-ID → `mail.message_id` ------------------------
-//
-// Expand, not contract: the build before this one kept the Message-ID the
-// transport gave a letter in `delivered.via`, beside `local` for a letter
-// delivered by writing it and the address it went to when the transport gave
-// none. Only the Message-ID moves, onto `mail.message_id`, where an arrival's
-// already is. The build before reads `mail.message_id` first when it threads a
-// reply, so it serves the moved letters the same; the column stays until no
-// build writes it.
-
-// The letters whose Message-ID is still only in `delivered.via`.
-let UNSENT = select({
-  cols: [col('entity', 'm')],
-  from: table('mail', 'm'),
-  joins: [
-    join(table('delivered', 'd'), eq(col('entity', 'd'), col('entity', 'm'))),
-  ],
-  where: and(
-    isNull(col('message_id', 'm')),
-    notNull(col('via', 'd')),
-    ne(col('via', 'd'), lit('local')),
-    op('is not', col('via', 'd'), col('to', 'm')),
-  ),
-})
-
-/** Whether a sent letter's Message-ID is still only in `delivered.via`. */
-export let unsent = (storage: DurableStorage): boolean => {
-  let d = driver(storage)
-  return stands(d, 'mail') && stands(d, 'delivered') &&
-    columns(d, 'delivered').includes('via') &&
-    found(d, UNSENT)
-}
-
-/** Each such Message-ID copied onto its letter, inside `transactionSync` like
- * every numbered pass. */
-export let sent = (
-  storage: DurableStorage,
-  o: { store: string; app: string | null },
-): Report => {
-  let d = driver(storage)
-  let rest = () => many(d, UNSENT)
-  let from = rest()
-  d.query({
-    t: 'update',
-    table: 'mail',
-    set: {
-      message_id: sub(select({
-        cols: [col('via')],
-        from: table('delivered'),
-        where: eq(col('entity', 'delivered'), col('entity', 'mail')),
-      })),
-    },
-    where: among(col('entity'), UNSENT),
-  })
-  let to = from - rest()
-  return {
-    ...o,
-    at: new Date().toISOString(),
-    ok: to == from,
-    mark: SENT,
-    moved: [{
-      table: 'mail',
-      from,
-      to,
-      note: 'sent letters given the Message-ID delivered.via held',
-    }],
-    dropped: [],
-  }
-}
-
-// ---- a tree's link to a child → `tree_entry` -------------------------------
-//
-// @yaks/git tagged a tree's link `entry` until it took git's own two words
-// (76058ad2), and a link's id is derived from its tag, its tree and its name
-// (`entryEid`). The trees minted before that stayed under the old tag, where
-// the walk that builds a pack never looks, so a clone of any history reaching
-// one arrived without that tree's files. Each link takes the tag and the id it
-// has now; a link the same tree was minted again under since is the same
-// link, and the old row folds into it. Then the old table goes.
-
-/** The tag a tree's link wore before, and the table its rows are still in. */
-let ENTRY = 'entry'
-
-// Each link still under the old tag, with the id its tree and name derive now.
-let entries = (d: Driver) =>
-  d.query(select({
-    cols: [
-      as(col('entity', 'n'), 'id'),
-      col('name', 'n'),
-      col('mode', 'n'),
-      as(col('eid', 't'), 'tree'),
-    ],
-    from: table(ENTRY, 'n'),
-    joins: [
-      join(table('edge', 'e'), eq(col('entity', 'e'), col('entity', 'n'))),
-      join(table('entity', 't'), eq(col('id', 't'), col('from', 'e'))),
-    ],
-  })).map((r) => ({
-    id: Number(r.id),
-    name: String(r.name),
-    mode: String(r.mode),
-    eid: entryEid(String(r.tree), String(r.name)),
-  }))
-
-/** Whether the git object store still has the old tag's table. */
-export let misentered = (storage: DurableStorage): boolean => {
-  let d = driver(storage)
-  return stands(d, 'gitobj') && stands(d, ENTRY)
-}
-
-/** Each old link onto `tree_entry` at its derived id, inside `transactionSync`
- * like every numbered pass, and the old table dropped. A row with no edge
- * beside it names no tree, so it has nowhere to go and goes with the table. */
-export let entered = (
-  storage: DurableStorage,
-  o: { store: string; app: string | null; vocab: Vocab },
-): Report => {
-  let d = driver(storage)
-  let from = tally(d, ENTRY)
-  let had = tally(d, TREE_ENTRY)
-  let into = fold(d, pointers(d, o.vocab))
-  let moved = 0
-  let merged = 0
-  for (let r of entries(d)) {
-    let [same] = d.query(byEid(r.eid))
-    if (same) {
-      into(r.id, Number(same.id))
-      merged++
-      continue
-    }
-    d.query({
-      t: 'insert',
-      into: TREE_ENTRY,
-      cols: ['entity', 'name', 'mode'],
-      rows: [[val(r.id), val(r.name), val(r.mode)]],
-    })
-    d.query(readdress(r.id, r.eid))
-    moved++
-  }
-  d.query({ t: 'drop', kind: 'table', name: ENTRY })
-  return {
-    store: o.store,
-    app: o.app,
-    at: new Date().toISOString(),
-    ok: tally(d, TREE_ENTRY) == had + moved,
-    mark: ENTERED,
-    moved: [{
-      table: TREE_ENTRY,
-      from,
-      to: moved,
-      note: `${moved} tree links retagged from "${ENTRY}", ` +
-        `${merged} folded into the same link minted since, ` +
-        `${from - moved - merged} with no edge dropped`,
-    }],
-    dropped: [{ table: ENTRY, rows: from }],
-  }
-}
-
-// ---- a call's arguments → the object they spell (T-38042) -----------------
-//
-// `call.args` was the arguments' JSON text, and is the object: @yaks/tools
-// hands a tool the call with its arguments in place, and a jsonb property is
-// kept as SQLite's binary JSON (@yaks/sqlite ./jsonb.ts). SQLite never retypes
-// a column, so the text stays text until it is rewritten. Text that is not
-// JSON becomes the JSON string holding it: nothing is lost, and the runner
-// refuses it as arguments, as it refused the text.
-
-// The calls whose arguments are still text.
-let TEXTUAL = eq(fn('typeof', col('args')), lit('text'))
-let TEXT_ARGS = select({
-  cols: [col('entity')],
-  from: table('call'),
-  where: TEXTUAL,
-})
-
-/** Whether a call's arguments are still their JSON text. */
-export let unargued = (storage: DurableStorage): boolean => {
-  let d = driver(storage)
-  return stands(d, 'call') && columns(d, 'call').includes('args') &&
-    found(d, TEXT_ARGS)
-}
-
-/** Each call's arguments rewritten as binary JSON, inside `transactionSync`
- * like every numbered pass. */
-export let argued = (
-  storage: DurableStorage,
-  o: { store: string; app: string | null },
-): Report => {
-  let d = driver(storage)
-  let rest = () => many(d, TEXT_ARGS)
-  let from = rest()
-  let args = col('args')
-  d.query({
-    t: 'update',
-    table: 'call',
-    set: {
-      args: fn(
-        'jsonb',
-        iff(fn('json_valid', args), args, fn('json_quote', args)),
-      ),
-    },
-    where: TEXTUAL,
-  })
-  let to = from - rest()
-  return {
-    ...o,
-    at: new Date().toISOString(),
-    ok: to == from,
-    mark: ARGUED,
-    moved: [{ table: 'call', from, to, note: 'arguments kept as binary JSON' }],
-    dropped: [],
-  }
-}
-
 // ---- `space.home` → `home{}` (T-34227) -------------------------------------
 //
 // The fact "this app is the space's front page" was a property of the space and
-// is now a word the app wears (vocab.ts). It moves in both passes, because a
-// store reaches it from either side: one carrying now finds the column in the
-// table renamed aside, one that carried before this word existed finds it
-// standing in `space` itself — SQLite never drops a column a vocabulary stopped
-// declaring. Same insert either way, so it is said once.
+// is now a word the app wears (vocab.ts). The pass finds the column in the
+// table renamed aside.
 
 /** The stamping: one `home` row per space that named an app. Answers how many
  * spaces named one and how many apps came to wear it, which is what the
@@ -1174,91 +627,6 @@ let homeward = (
   return { named, stamped: tally(d, 'home') - before }
 }
 
-/**
- * Whether this object still says which app a space opens in the old place: a
- * `space` table with a `home` column. False for every app store — no `space`
- * table at all — and for a directory {@link homed} has already been over, since
- * that pass drops the column.
- *
- * SQLite never drops a column a vocabulary stopped declaring (the schema is
- * additive, graph.ts `#boot`), which is exactly why the values are still there
- * to be read after the word is gone from vocab.ts.
- */
-export let housed = (storage: DurableStorage): boolean => {
-  let d = driver(storage)
-  return stands(d, 'space') && stands(d, 'home') &&
-    columns(d, 'space').includes('home')
-}
-
-/**
- * `space.home` → `home{}` on the app it named (T-34227), synchronously — run it
- * inside `transactionSync` for the same reason {@link carry} is: a throw is how
- * it refuses and the rollback is how it leaves nothing behind.
- *
- * The rule: one `home` row per space that named an app, and not one more. A
- * count that does not match is two spaces naming one app, or a row the insert
- * would not take, and neither is a directory to go on serving from — so it
- * refuses, and the column keeps the fact.
- */
-export let homed = (
-  storage: DurableStorage,
-  o: { store: string; app: string | null },
-): Report => {
-  let d = driver(storage)
-  let at = new Date().toISOString()
-  let moved: Moved[] = []
-  let report = (ok: boolean, message?: string): Report => ({
-    store: o.store,
-    app: o.app,
-    at,
-    ok,
-    message,
-    mark: HOMED,
-    moved,
-    dropped: [],
-  })
-  let spaces = tally(d, 'space')
-  let { named, stamped } = homeward(d, 'space')
-  moved.push({
-    table: 'home',
-    from: 0,
-    to: stamped,
-    note: `${named} spaces named a front page`,
-  })
-  if (stamped != named) {
-    throw new Refused(report(
-      false,
-      `${named} spaces named a front page and ${stamped} apps wear home: ` +
-        'two spaces cannot open the same app',
-    ))
-  }
-  // The old place, swept up. Tidying, not the move: the fact is already on the
-  // apps, the vocabulary no longer declares this column, and nothing selects
-  // it — so a drop the engine will not do leaves a dead column and a working
-  // directory. Refusing over it would answer 503 to the whole platform for a
-  // column nobody reads, so it is noted in the report and the pass stands.
-  let swept = ''
-  try {
-    d.query(unseat('space', 'home'))
-  } catch (e) {
-    swept = `the home column would not drop: ${
-      e instanceof Error ? e.message : String(e)
-    } — it is dead, nothing selects it`
-  }
-  let kept = tally(d, 'space')
-  moved.push({
-    table: 'space',
-    from: spaces,
-    to: kept,
-    note: swept || 'the home column dropped',
-  })
-  // The rows themselves are the move, and losing one is not tidying.
-  if (kept != spaces) {
-    throw new Refused(report(false, `space ${spaces}→${kept}`))
-  }
-  return report(true)
-}
-
 // ---- the app's addresses → `former` (T-34390) ------------------------------
 //
 // The directory's record of every address an app has answered at — its birth
@@ -1271,7 +639,7 @@ export let homed = (
 // declares no properties, so its table is `alias(entity)` — and `create table
 // if not exists` over a directory that already has `alias(entity, slug, slugs)`
 // leaves the old columns standing under the new word, with the addresses still
-// in them. The rows move to `former` and the dead columns are swept.
+// in them. The rows move to `former`.
 
 /** The addresses moved out of one table and into `former`. Answers how many
  * rows named an address and how many landed, which is what the reconciliation
@@ -1306,83 +674,6 @@ let addressing = (d: Driver, name: string): boolean =>
   stands(d, name) && columns(d, name).includes('slug') &&
   columns(d, name).includes('slugs') && tally(d, name, SLUGGED) > 0
 
-/** Whether this object still keeps app addresses under the core word's table.
- * False for every app store — no addresses — and for a directory
- * {@link addressed} has already been over. */
-export let slugged = (storage: DurableStorage): boolean => {
-  let d = driver(storage)
-  return stands(d, 'former') && addressing(d, FORMERLY)
-}
-
-/**
- * The app addresses out of `alias` and into `former` (T-34390), synchronously —
- * run it inside `transactionSync` for the same reason {@link carry} is: a throw
- * is how it refuses and the rollback is how it leaves nothing behind.
- *
- * The rule: every address carries across. One that does not is an address an
- * app answers at and the directory can no longer find, which is a rename that
- * strands every open page — so it refuses, and the rows stay where they are.
- */
-export let addressed = (
-  storage: DurableStorage,
-  o: { store: string; app: string | null },
-): Report => {
-  let d = driver(storage)
-  let at = new Date().toISOString()
-  let moved: Moved[] = []
-  let report = (ok: boolean, message?: string): Report => ({
-    store: o.store,
-    app: o.app,
-    at,
-    ok,
-    message,
-    mark: FORMER,
-    moved,
-    dropped: [],
-  })
-  let { rows, moved: landed } = formerly(d, FORMERLY)
-  moved.push({
-    table: 'former',
-    from: 0,
-    to: landed,
-    note: `${rows} apps had an address of their own`,
-  })
-  if (landed != rows) {
-    throw new Refused(report(
-      false,
-      `${rows} addresses to move and ${landed} landed in former`,
-    ))
-  }
-  d.query({ t: 'delete', from: FORMERLY, where: SLUGGED })
-  // The old place, swept up. Tidying, not the move: the addresses are in
-  // `former`, the vocabulary declares neither column, and nothing selects
-  // them — so a drop the engine will not do leaves two dead columns and a
-  // working directory. The unique index goes first because SQLite will not
-  // drop a column an index stands on, and that index is the old word's.
-  let swept = ''
-  try {
-    d.query({
-      t: 'drop',
-      kind: 'index',
-      name: `${FORMERLY}_slug`,
-      ifExists: true,
-    })
-    d.query(unseat(FORMERLY, 'slug'))
-    d.query(unseat(FORMERLY, 'slugs'))
-  } catch (e) {
-    swept = `the address columns would not drop: ${
-      e instanceof Error ? e.message : String(e)
-    } — they are dead, nothing selects them`
-  }
-  moved.push({
-    table: FORMERLY,
-    from: rows,
-    to: 0,
-    note: swept || 'the slug and slugs columns dropped',
-  })
-  return report(true)
-}
-
 // ---- a domain's target: `hostname.app` → `hostname.serves` (T-34596) --------
 //
 // A hostname used to name the one app it opened. It now names the place it
@@ -1393,313 +684,8 @@ export let addressed = (
 // nothing: a live customer domain would stop serving at the deploy. The eids
 // move across, and each one still points at the same app.
 
-/** Whether this object still keeps a domain's target under the old column: the
- * hostname table with an `app` beside `serves`. False for every app store — no
- * hostnames — and for a directory {@link served} has already been over. */
+/** A hostname with a target. */
 let AIMED = notNull(col('serves'))
-
-export let aimedOld = (storage: DurableStorage): boolean => {
-  let d = driver(storage)
-  return stands(d, 'hostname') && columns(d, 'hostname').includes('app')
-}
-
-/**
- * The target out of `app` and into `serves` (T-34596), synchronously — run it
- * inside `transactionSync` for the same reason {@link carry} is: a throw is how
- * it refuses and the rollback is how it leaves nothing behind.
- *
- * The rule: every hostname keeps a target. One left without is a domain the
- * platform serves nothing at — a customer's own address answering the branded
- * "still connecting" page for good — so it refuses, and the eids stay where
- * they are.
- */
-export let served = (
-  storage: DurableStorage,
-  o: { store: string; app: string | null },
-): Report => {
-  let d = driver(storage)
-  let at = new Date().toISOString()
-  let moved: Moved[] = []
-  let report = (ok: boolean, message?: string): Report => ({
-    store: o.store,
-    app: o.app,
-    at,
-    ok,
-    message,
-    mark: SERVES,
-    moved,
-    dropped: [],
-  })
-  let rows = tally(d, 'hostname')
-  d.query({
-    t: 'update',
-    table: 'hostname',
-    set: { serves: col('app') },
-    where: and(isNull(col('serves')), notNull(col('app'))),
-  })
-  let aimed = tally(d, 'hostname', AIMED)
-  moved.push({
-    table: 'hostname',
-    from: rows,
-    to: aimed,
-    note: `${rows} domains, each aimed at the app it already served`,
-  })
-  if (aimed != rows) {
-    throw new Refused(report(
-      false,
-      `${rows} domains and ${aimed} with a target: one would serve nothing`,
-    ))
-  }
-  // The old place, swept up. Tidying, not the move: the targets are in
-  // `serves`, the vocabulary no longer declares this column, and nothing
-  // selects it — so a drop the engine will not do leaves a dead column and a
-  // working directory.
-  let swept = ''
-  try {
-    d.query(unseat('hostname', 'app'))
-  } catch (e) {
-    swept = `the app column would not drop: ${
-      e instanceof Error ? e.message : String(e)
-    } — it is dead, nothing selects it`
-  }
-  moved.push({
-    table: 'hostname',
-    from: rows,
-    to: tally(d, 'hostname'),
-    note: swept || 'the app column dropped',
-  })
-  return report(true)
-}
-
-// ---- an app's handle: `former.slug` → `app.store` (T-34657) -----------------
-//
-// An app's store, script and analytics rows were named by the address it was
-// born at, kept in `former.slug`. That made the platform's own object names a
-// projection of a string a person picks — so an address could never be freed
-// and reused, and renaming the space was not a thing that could be offered at
-// all. The handle moves into a property of the app's own, `app.store`. An
-// unambiguous name stays put; apps sharing one are separated without copying
-// any bytes, and the report names which app keeps the rows.
-//
-// And `former` is left as what it now only is — address history — with the
-// space prefix taken off each entry, so the history is in the space's own
-// namespace and a space rename leaves it standing (T-34658).
-
-/** Whether this object still names its apps by their birth address: an app row
- * with no handle of its own. False for every app store — no app table — and for
- * a directory {@link handled} has already been over. */
-export let unhandled = (storage: DurableStorage): boolean => {
-  let d = driver(storage)
-  return stands(d, 'app') && columns(d, 'app').includes('store') &&
-    tally(d, 'app', isNull(col('store'))) > 0
-}
-
-/** One address with the space prefix taken off it: `ada/cookbook` is
- * `cookbook`, and a bare `cookbook` is already itself. A slug holds no slash
- * (route.ts slug), so the seam is never in doubt. */
-let bare = (address: string) => address.slice(address.indexOf('/') + 1)
-
-/**
- * The handle out of `former.slug` and into `app.store` (T-34657), synchronously
- * — run it inside `transactionSync` for the same reason {@link carry} is: a
- * throw is how it refuses and the rollback is how it leaves nothing behind.
- *
- * The rule: every app ends with a handle, and no two share one. An app left
- * without is an app whose store nothing can open — every recipe in it gone from
- * the platform's point of view — so it refuses, and the rows stay where they
- * are.
- *
- * An app with no `former` row at all (one born before addresses were kept) gets
- * the name it is already answering to, `<space>/<app>` as the rows stand, which
- * is what the code fell back to for it anyway.
- *
- * A shared name belongs to the oldest entity num: creation order survives a
- * rename, whereas the current slug does not establish who was born there.
- * Existing handles stay reserved. Every other claimant gets app_new's handle
- * at its current address; its old rows stay in the shared store. Reserve all
- * bare names before minting suffixes so a suffix cannot take another's store.
- */
-export let handled = (
-  storage: DurableStorage,
-  o: { store: string; app: string | null },
-): Report => {
-  let d = driver(storage)
-  let at = new Date().toISOString()
-  let moved: Moved[] = []
-  let report = (ok: boolean, message?: string): Report => ({
-    store: o.store,
-    app: o.app,
-    at,
-    ok,
-    message,
-    mark: HANDLED,
-    moved,
-    dropped: [],
-  })
-  try {
-    let former = stands(d, 'former')
-    let apps = d.query(select({
-      cols: [
-        col('entity', 'a'),
-        col('eid', 'e'),
-        col('slug', 'a'),
-        as(col('slug', 's'), 'space'),
-        col('store', 'a'),
-        as(former ? col('slug', 'f') : lit(null), 'birth'),
-      ],
-      from: table('app', 'a'),
-      joins: [
-        join(table('entity', 'e'), eq(col('id', 'e'), col('entity', 'a'))),
-        left(table('space', 's'), eq(col('entity', 's'), col('space', 'a'))),
-        ...(former
-          ? [
-            left(
-              table('former', 'f'),
-              eq(col('entity', 'f'), col('entity', 'a')),
-            ),
-          ]
-          : []),
-      ],
-      order: [col('num', 'e'), col('id', 'e')],
-    })).map((r) => {
-      let space = r.space == null ? null : String(r.space)
-      let slug = r.slug == null ? null : String(r.slug)
-      let store = r.store == null ? null : String(r.store)
-      let birth = r.birth == null ? null : String(r.birth)
-      return {
-        id: Number(r.entity),
-        eid: String(r.eid),
-        space,
-        slug,
-        store,
-        next: store ?? birth ?? (space && slug ? `${space}/${slug}` : null),
-      }
-    })
-    let owners = new Map<string, typeof apps[number]>()
-    for (let app of apps) {
-      if (app.store != null) owners.set(app.store, app)
-    }
-    let split: {
-      app: typeof apps[number]
-      was: string
-      owner: typeof apps[number]
-    }[] = []
-    for (let app of apps) {
-      if (app.store != null || app.next == null) continue
-      let owner = owners.get(app.next)
-      if (owner) split.push({ app, was: app.next, owner })
-      else owners.set(app.next, app)
-    }
-    let notes: string[] = []
-    let named = (app: typeof apps[number]) =>
-      `${app.space}/${app.slug} (${app.eid})`
-    for (let { app, was, owner } of split) {
-      app.next = app.space && app.slug
-        ? handle({ slug: app.space }, app.slug, app.eid)
-        : null
-      notes.push(
-        `${named(app)}: ${was} -> ${app.next ?? 'no handle'}; ` +
-          `previous rows stay in ${was}, kept by ${named(owner)}; ` +
-          'the new handle opens an empty store; no data copied',
-      )
-    }
-    let held = apps.filter((a) => a.next != null).length
-    let distinct = new Set(
-      apps.map((a) => a.next).filter((s) => s != null),
-    ).size
-    moved.push({
-      table: 'app',
-      from: apps.length,
-      to: held,
-      note: [`${held} handles planned, ${split.length} disambiguated`, ...notes]
-        .join('\n'),
-    })
-    if (held != apps.length || distinct != apps.length) {
-      throw new Refused(report(
-        false,
-        `${apps.length} apps, ${held} with a handle and ${distinct} distinct: one ` +
-          'would open the wrong store or none',
-      ))
-    }
-    for (let app of apps) {
-      if (app.store != null) continue
-      d.query({
-        t: 'update',
-        table: 'app',
-        set: { store: val(app.next) },
-        where: eq(col('entity'), val(app.id)),
-      })
-    }
-    let [counts] = d.query(select({
-      cols: [
-        as(count(), 'apps'),
-        as(fn('count', col('store')), 'held'),
-        as(
-          { t: 'fn', name: 'count', args: [col('store')], distinct: true },
-          'names',
-        ),
-      ],
-      from: table('app'),
-    }))
-    if (
-      counts.apps != apps.length || counts.held != apps.length ||
-      counts.names != apps.length
-    ) {
-      throw new Refused(report(false, 'the written handles did not reconcile'))
-    }
-    d.query({
-      t: 'create index',
-      name: 'app_store',
-      on: 'app',
-      cols: [col('store')],
-      unique: true,
-      ifNot: true,
-    })
-    // The unique index the old name was decided by. It stands on `former.slug`,
-    // and that column is address history now — two apps may hold one address a
-    // year apart, which is the whole point of freeing one (T-34659) — so the
-    // index has to come down or the second app could never be born. Its name is
-    // the vocabulary's own (@yaks/sqlite `indexDdl`), which is why it can be
-    // named here at all.
-    d.query({ t: 'drop', kind: 'index', name: 'former_slug', ifExists: true })
-    // The addresses, unqualified. `former` is the app's history within its space
-    // now, so the space's name has no business in it: leave it and a space rename
-    // strands every redirect the space's apps ever earned.
-    let rows = stands(d, 'former')
-      ? d.query(select({
-        cols: [col('entity'), col('slug'), col('slugs')],
-        from: table('former'),
-      }))
-      : []
-    let stripped = 0
-    for (let r of rows) {
-      let slug = r.slug == null ? null : bare(String(r.slug))
-      let slugs = r.slugs == null
-        ? null
-        : String(r.slugs).split(/\s+/).filter(Boolean).map(bare).join(' ')
-      if (slug == r.slug && slugs == r.slugs) continue
-      stripped++
-      d.query({
-        t: 'update',
-        table: 'former',
-        set: { slug: val(slug), slugs: val(slugs) },
-        where: eq(col('entity'), val(r.entity as number)),
-      })
-    }
-    moved.push({
-      table: 'former',
-      from: rows.length,
-      to: rows.length,
-      note:
-        `${stripped} address histories now read in the space's own namespace`,
-    })
-    return report(true)
-  } catch (e) {
-    if (e instanceof Refused) throw e
-    // Keep the assignment report even if an index or trigger refuses a write.
-    throw new Refused(report(false, e instanceof Error ? e.message : String(e)))
-  }
-}
 
 /**
  * The whole pass, synchronously — run it inside `transactionSync`, because a
@@ -1897,10 +883,9 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
     })
   }
 
-  // `space.home` → `home{}` on the app it named (T-34227). A store carrying now
-  // arrives at version 2 in the same breath, so {@link homed} has nothing left
-  // to do for it — and the column is not among the ones `space` copies across,
-  // since the new vocabulary does not declare it.
+  // `space.home` → `home{}` on the app it named (T-34227). The column is not
+  // among the ones `space` copies across, since the new vocabulary does not
+  // declare it.
   if (there('space') && words.includes('home') && !carried.has('home')) {
     let { named, stamped } = homeward(d, aside('space'))
     carried.add('home')
@@ -1918,10 +903,8 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
     }
   }
 
-  // The app addresses → `former` (T-34390). A store carrying now arrives at
-  // version 3 in the same breath, so {@link addressed} has nothing left to do
-  // for it: the rows land under the new word and the old table goes with the
-  // rest of the ones set aside.
+  // The app addresses → `former` (T-34390): the rows land under the new word
+  // and the old table goes with the rest of the ones set aside.
   if (
     there(FORMERLY) && words.includes('former') &&
     addressing(d, aside(FORMERLY))
@@ -1946,8 +929,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // old `app` column behind, since the new vocabulary does not declare it, so
   // the eids are read back out of the table set aside and land in the column
   // that names them now. The integer `entity` is the spine's and never moved,
-  // which is what joins the two. A store carrying now arrives at version 4 in
-  // the same breath, so {@link served} has nothing left to do for it.
+  // which is what joins the two.
   // The directory's alone: an app store's old schema has the table and the new
   // vocabulary does not declare it, so there is nothing to update into.
   if (

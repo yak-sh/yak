@@ -176,50 +176,18 @@ import {
 } from './writes.ts'
 import { apex, url } from './host.ts'
 import {
-  addressed,
-  aimedOld,
-  ARGUED,
-  argued,
   carry,
   documented,
-  ENTERED,
-  entered,
-  FILED,
-  filed,
-  FORMER,
-  HANDLED,
-  handled,
-  HOMED,
-  homed,
-  housed,
   install,
   MARK,
-  MARKS,
-  misentered,
-  mistooled,
   rebuild,
   recut,
   Refused as Unreconciled,
-  type Report,
   respelled,
-  SANDBOXED,
-  SENT,
-  sent,
-  served,
-  SERVES,
   shed,
   type Slots,
-  slugged,
   stale,
-  TOOLED,
-  tooled,
-  trusting,
-  unargued,
-  unfiled,
-  unhandled,
   unholed,
-  unsent,
-  untrusted,
   unworded,
 } from './migrate.ts'
 import {
@@ -520,10 +488,6 @@ export class Store {
   // the new schema over the old tables is exactly what must not happen — so the
   // first request runs the pass and everything is raised after it.
   #pending = false
-  // Whether this object is behind the latest migration (migrate.ts `MARKS`):
-  // one that never carried, or one that carried before a later pass existed.
-  // Decided once, here, rather than read off the storage on every request.
-  #behind = false
   #passing: Promise<void> | null = null
   // Why the pass refused, when it did. The rows are the old ones, untouched.
   #refused: string | null = null
@@ -578,19 +542,6 @@ export class Store {
     this.#reshaping()
     this.#pending = !this.#get('migrated') && stale(ctx.storage)
     if (!this.#pending) this.#boot()
-    if (this.#refused) return
-    // The passes after the first read and write the new schema, so they are
-    // asked after the boot — and only of an object that is not already at the
-    // last marker (migrate.ts `MARKS`), with one question per pass: an object
-    // that stopped at an older marker because it had nothing to move for it
-    // still has to be asked about the ones added since.
-    this.#behind = this.#pending ||
-      (this.#get('migrated') != ARGUED &&
-        (housed(ctx.storage) || slugged(ctx.storage) ||
-          aimedOld(ctx.storage) || unhandled(ctx.storage) ||
-          unfiled(ctx.storage) || mistooled(ctx.storage) ||
-          untrusted(ctx.storage) || unsent(ctx.storage) ||
-          misentered(ctx.storage) || unargued(ctx.storage)))
   }
 
   // What an object keeps is in the one shape a deploy takes now. A store that
@@ -700,13 +651,7 @@ export class Store {
       // first time: there is no older shape to be wearing.
       if (held) recut(drive)
       for (let stmt of blobSchema()) drive.query(stmt)
-      install(
-        ctx.storage,
-        vocab,
-        blobRead(vocab),
-        this.#get('migrated') ?? null,
-        !this.#pending,
-      )
+      install(ctx.storage, vocab, blobRead(vocab), !this.#pending)
       if (held) rebuild(drive)
       this.#put('schema', stamp)
     }
@@ -1264,7 +1209,7 @@ export class Store {
     // after a deploy too. The oldest one's own request names the object for
     // a migration pass still ahead of it.
     let kept = oldest(this.#sql)
-    if (kept && this.#behind) await this.#pass(replayed(kept))
+    if (kept && this.#pending) await this.#pass(replayed(kept))
     if (this.#refused || this.#pending) {
       if (kept) await this.#retry()
       return
@@ -1386,10 +1331,10 @@ export class Store {
     }
   }
 
-  // ---- the passes (T-33809, T-34227) ---------------------------------------
+  // ---- the pass (T-33809) --------------------------------------------------
 
-  /** The migrations, at most once per object however many requests arrive at
-   * once: the runtime's gate holds every other request while they run, and the
+  /** The migration, at most once per object however many requests arrive at
+   * once: the runtime's gate holds every other request while it runs, and the
    * promise is kept so a second caller inside this incarnation waits on the
    * first rather than starting a second pass. */
   #pass(request: Request): Promise<void> {
@@ -1397,9 +1342,9 @@ export class Store {
     // request, and a rejected runtime gate would restart the object.
     let go = () => {
       try {
-        this.#passes(request)
+        this.#carrying(request)
       } catch (e) {
-        this.#failed(e, this.#pending ? MARK : 'schema')
+        this.#failed(e, MARK)
       }
       return Promise.resolve()
     }
@@ -1408,117 +1353,12 @@ export class Store {
       : go()
   }
 
-  /** Every pass this object is behind, oldest first: the move off the
-   * fleet-shaped store, then each one after it. A refusal stops the line —
-   * a later pass reads what an earlier one wrote. */
-  #passes(request: Request) {
-    if (this.#pending) this.#carrying(request)
-    // The second (T-34227): `space.home` becomes `home{}` on the app it named.
-    if (!this.#refused) {
-      this.#after(request, HOMED, housed, homed)
-    }
-    // The third (T-34390): the app addresses move out of the table the core
-    // word `alias` now owns and into `former`.
-    if (!this.#refused) {
-      this.#after(request, FORMER, slugged, addressed)
-    }
-    // The fourth (T-34596): a domain's target moves out of `app`, which named
-    // the one app it opened, and into `serves`, which names the app or the
-    // whole space. Only the directory has a hostname to move.
-    if (!this.#refused) {
-      this.#after(request, SERVES, aimedOld, served)
-    }
-    // The fifth (T-34657): an app's handle — what its store and its script are
-    // named by — becomes a property of its own instead of the address it was
-    // born at. Only the directory has an app row to name.
-    if (!this.#refused) {
-      this.#after(request, HANDLED, unhandled, handled)
-    }
-    if (!this.#refused) {
-      this.#after(request, FILED, unfiled, filed)
-    }
-    // The seventh (D-37943): a tool takes the id its name derives.
-    if (!this.#refused) {
-      this.#after(
-        request,
-        TOOLED,
-        mistooled,
-        (storage, o) => tooled(storage, { ...o, vocab: this.#graph.vocab }),
-      )
-    }
-    // The eighth (C-37980): a copy runs like the space's own apps unless
-    // sandboxed, and the build before this one reads it the same way.
-    if (!this.#refused) {
-      this.#after(request, SANDBOXED, untrusted, trusting)
-    }
-    // The ninth: a sent letter's Message-ID moves onto `mail.message_id`.
-    if (!this.#refused) {
-      this.#after(request, SENT, unsent, sent)
-    }
-    // The tenth: a tree's link to a child takes the `tree_entry` tag, at the
-    // id that tag derives. Only the git object store has a tree.
-    if (!this.#refused) {
-      this.#after(
-        request,
-        ENTERED,
-        misentered,
-        (storage, o) => entered(storage, { ...o, vocab: this.#graph.vocab }),
-      )
-    }
-    // The eleventh (T-38042): a call's arguments are the object they spell.
-    if (!this.#refused) {
-      this.#after(request, ARGUED, unargued, argued)
-    }
-    this.#behind = false
-  }
-
-  /**
-   * One pass after the first, whichever it is (migrate.ts `MARKS`): the move is
-   * one transaction, and the marker is written only when it reconciles. An
-   * object with nothing to move writes the marker and nothing else, so it is
-   * never asked again — which is every app store for every one of these. The
-   * restore path is the Durable Object's point-in-time recovery.
-   *
-   * The passes differ in three words each, so they are three arguments and not
-   * copies of this: what the object still holds, the move, and the marker it
-   * earns.
-   */
-  #after(
-    request: Request,
-    mark: string,
-    holds: (storage: State['storage']) => boolean,
-    move: (
-      storage: State['storage'],
-      o: { store: string; app: string | null },
-    ) => Report,
-  ) {
-    let ctx = this.#ctx
-    let name = request.headers.get('x-store') ?? ''
-    let app = request.headers.get('x-yak-app')
-    try {
-      name ||= this.#get('name') ?? ''
-      if (MARKS.indexOf(this.#get('migrated') ?? '') >= MARKS.indexOf(mark)) {
-        return
-      }
-      if (!holds(ctx.storage)) return void this.#put('migrated', mark)
-      ctx.storage.transactionSync(() => {
-        let report = move(ctx.storage, { store: name, app })
-        // Legacy passes write physical tables directly, outside graph tracking.
-        // Reclassify their rows before any presence-based reads can observe them.
-        if (this.#graph.vocab.comp('archetype')) reclassifyAll(this.#sql)
-        if (!report.ok) throw new Unreconciled(report)
-        // A marker and its rows must commit together, including on write failure.
-        this.#put('migrated', mark)
-      })
-    } catch (e) {
-      this.#failed(e, mark, name)
-    }
-  }
-
   /**
    * Carry, then reconcile — in that order, because the order is the safety.
    * The carry is one transaction that either lands whole or leaves the object
-   * exactly as it was.
+   * exactly as it was, and the marker is written in it only when it
+   * reconciles. The restore path is the Durable Object's point-in-time
+   * recovery.
    */
   #carrying(request: Request) {
     let ctx = this.#ctx
@@ -1536,19 +1376,26 @@ export class Store {
     // short type map (migrate.ts `documented`): the carry raises the new schema
     // out of it, so it is the document before anything reads it.
     this.#reshaping()
-    this.#after(
-      request,
-      MARK,
-      () => true,
-      (storage, o) =>
-        carry(storage, {
-          ...o,
+    try {
+      ctx.storage.transactionSync(() => {
+        let report = carry(ctx.storage, {
+          store: name,
+          app: request.headers.get('x-yak-app'),
           vocab: vocabOfStore(name, this.#get('vocab') ?? {}),
           // A build failure must unwind the whole carry transaction.
           plant: () => this.#build(),
           grantEid,
-        }),
-    )
+        })
+        // The pass writes physical tables directly, outside graph tracking.
+        // Reclassify its rows before any presence-based reads can observe them.
+        if (this.#graph.vocab.comp('archetype')) reclassifyAll(this.#sql)
+        if (!report.ok) throw new Unreconciled(report)
+        // A marker and its rows must commit together, including on write failure.
+        this.#put('migrated', MARK)
+      })
+    } catch (e) {
+      this.#failed(e, MARK, name)
+    }
     this.#pending = false
   }
 
@@ -1559,7 +1406,6 @@ export class Store {
     } catch { /* a thrown value need not be printable */ }
     this.#refused = message
     this.#pending = false
-    this.#behind = false
     // A refused store answers nothing, so it is a defect, not an answer:
     // Sentry hears it named by the store and the pass.
     let named = store
@@ -1614,7 +1460,7 @@ export class Store {
     // inside the runtime's own gate, so every other request waits on it rather
     // than racing it, and it runs from a request rather than the constructor
     // because the kernel's vouch is what names this object and the app it holds.
-    if (this.#behind) await this.#pass(request)
+    if (this.#pending) await this.#pass(request)
     if (this.#refused) return this.#stalled()
     this.#learn(request)
     if (this.#refused) return this.#stalled()

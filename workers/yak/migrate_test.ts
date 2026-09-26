@@ -22,12 +22,10 @@ import {
   setCurrentClient,
 } from '@sentry/core'
 import { blobSchema } from '@yaks/blob'
-import { type Bundle, derivedEid } from '@yaks/graph'
-import { toolEid } from '@yaks/tools'
+import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { edgeEid } from '@yaks/edge'
-import { entryEid, objects } from '@yaks/git'
 import {
   among,
   as,
@@ -37,11 +35,8 @@ import {
   eq,
   fn,
   insert,
-  isNull,
   lit,
   not,
-  notNull,
-  raise,
   scan,
   select,
   type Stmt,
@@ -49,45 +44,21 @@ import {
   table,
   tally,
 } from '@yaks/sql'
-import { columns, objects as catalogue, schema } from '@yaks/sqlite'
+import { objects as catalogue, schema } from '@yaks/sqlite'
 import { Store } from './graph.ts'
 import {
   carry,
   documented,
-  ENTERED,
-  FILED,
-  FORMER,
-  HANDLED,
-  handled,
-  HOMED,
   MARK,
-  MARKS,
   Refused as Unreconciled,
-  type Report,
   respelled,
-  SANDBOXED,
-  SENT,
-  SERVES,
-  TOOLED,
   unholed,
   unworded,
 } from './migrate.ts'
 import legacy from './fixtures/legacy_store.json' with { type: 'json' }
-import { GIT_STORE, PLATFORM_STORE } from './door.ts'
+import { PLATFORM_STORE } from './door.ts'
 import { appVocab } from './vocab.ts'
-import {
-  db,
-  every,
-  grow,
-  id,
-  keep,
-  named,
-  owners,
-  patch,
-  row,
-  slot,
-} from './testing.ts'
-import { slugsOf } from './directory.ts'
+import { db, every, grow, id, keep, named, slot } from './testing.ts'
 
 // One object's whole state, kept across incarnations: its storage, the key-value
 // slots the old store remembered everything in, and the socket list the runtime
@@ -118,8 +89,6 @@ let SPACE = 'c0000000-0000-4000-8000-0000000000c5'
 let APP = 'd0000000-0000-4000-8000-0000000000ab'
 let ONE = '10000000-0000-4000-8000-000000000001'
 let TWO = '20000000-0000-4000-8000-000000000002'
-let THREE = '33000000-0000-4000-8000-000000000033'
-let FOUR = '44000000-0000-4000-8000-000000000044'
 let GONE = '30000000-0000-4000-8000-000000000003'
 
 // The old store's birth and its writes, over one object's storage, as the
@@ -286,7 +255,7 @@ Deno.test('an app store carries every row across, and reconciles', async () => {
 
   // The dead stay dead, and every pass is done.
   assertEquals(tally(db(ctx), 'tombstone'), 1)
-  assertEquals(marker(ctx), LATEST)
+  assertEquals(marker(ctx), MARK)
 
   // The fleet's other words have no table on the packages, the journal among
   // them.
@@ -316,7 +285,7 @@ Deno.test("the runtime's own table is not the object's to move", async () => {
 
   let now = newer(ctx, 'ada/cookbook')
   assertEquals((await now.query('.doc', APP)).length, 3)
-  assertEquals(marker(ctx), LATEST)
+  assertEquals(marker(ctx), MARK)
 
   // And it is standing where the runtime left it, with its row — proof the pass
   // neither dropped it nor renamed it aside.
@@ -525,7 +494,7 @@ Deno.test('the second boot is a no-op', async () => {
   await seedApp(ctx)
   let first = newer(ctx, 'ada/cookbook')
   assertEquals((await first.query('.doc', APP)).length, 3)
-  assertEquals(marker(ctx), LATEST)
+  assertEquals(marker(ctx), MARK)
 
   // A fresh incarnation over the same storage: the marker is written, the
   // journal is gone, so nothing runs a second time.
@@ -616,11 +585,8 @@ Deno.test('an app store splits the seat from the level', async () => {
 
 // ---- `space.home` → `home{}` (T-34227) -------------------------------------
 
-// A directory reaches version 2 from either side, so both are held here: the
-// store that carries with the column still in the fleet-shaped tables, and the
-// one that carried before the word existed, which is where every deployed
-// directory is — its `space` table still standing with a `home` column in it,
-// because SQLite never drops a column a vocabulary stopped declaring.
+// A directory that carries with the front page still named in the
+// fleet-shaped `space` table.
 let seedHomes = async (ctx: State) => {
   let old = older(ctx, PLATFORM_STORE)
   await old.apply([
@@ -640,20 +606,11 @@ let wearing = async (now: ReturnType<typeof newer>) =>
   (await now.query('.home&.app'))
     .map((r) => (r.app as { slug: string }).slug)
 
-// The version marker this object stands at (migrate.ts `MARKS`), out of its
-// own memory.
+// The marker this object wrote when its pass reconciled, out of its own
+// memory.
 let marker = (ctx: State) => slot(ctx, 'migrated')
 
-// The marker an object caught up with every pass stands at.
-let LATEST = MARKS[MARKS.length - 1]
-
-/**
- * A directory as a deployed one stands right now: carried to version 1 and no
- * further, its `space` table still holding the `home` column with the front
- * page named in it. Built over the new store, because that is what version 1
- * leaves behind — the column outlives the word that declared it, which is the
- * whole reason there is a second pass.
- */
+// A directory already on the packages, carried and marked.
 let carriedOne = async (ctx: State) => {
   let now = newer(ctx, PLATFORM_STORE)
   await now.door('/apply', {
@@ -661,20 +618,9 @@ let carriedOne = async (ctx: State) => {
     headers: { 'x-yak-kernel': '1' },
     body: JSON.stringify([
       { entity: { eid: SPACE }, space: { slug: 'ada' }, doc: { title: 'Ada' } },
-      { entity: { eid: APP }, app: { slug: 'cookbook', space: SPACE } },
-      { entity: { eid: ONE }, app: { slug: 'garden', space: SPACE } },
       { entity: { eid: TWO }, space: { slug: 'ben' } },
     ]),
   })
-  run(
-    ctx,
-    ...grow('space', {
-      name: 'home',
-      type: 'integer',
-      ref: { table: 'entity', cols: ['id'] },
-    }),
-    patch('space', SPACE, { home: id(APP) }),
-  )
   keep(ctx, 'migrated', MARK)
   return now
 }
@@ -688,26 +634,7 @@ Deno.test(
     // One row per space that named one — `ben` named none and gets none.
     assertEquals(await wearing(now), ['cookbook'])
     assertEquals(tally(db(ctx), 'home'), 1)
-    // Every pass in the same breath, so none of them has anything to do.
-    assertEquals(marker(ctx), LATEST)
-  },
-)
-
-Deno.test(
-  'a directory that already carried moves the column on next touch',
-  async () => {
-    let ctx = state()
-    await carriedOne(ctx)
-
-    // A fresh incarnation over the same object — a deploy, in other words — and
-    // the first request carries it the rest of the way.
-    let now = newer(ctx, PLATFORM_STORE)
-    assertEquals(await wearing(now), ['cookbook'])
-    assertEquals(tally(db(ctx), 'home'), 1)
-    // The old place is gone, so nothing can read the fact from two places.
-    assertEquals(columns(db(ctx), 'space').includes('home'), false)
-    // And it does not run again: the marker is written.
-    assertEquals(marker(ctx), LATEST)
+    assertEquals(marker(ctx), MARK)
   },
 )
 
@@ -722,399 +649,6 @@ Deno.test(
     assert(said.includes('2 spaces named a front page'), said)
   },
 )
-
-// ---- the app's addresses → `former` (T-34390) ------------------------------
-
-// A directory reaches version 3 from either side too: the store that carries
-// with the addresses still in the fleet-shaped `alias` table, and the one that
-// carried before @yaks/alias took that word — whose `alias` table is standing
-// with the addresses in it and the core tag now writing rows of its own there.
-let seedFormer = async (ctx: State) => {
-  let old = older(ctx, PLATFORM_STORE)
-  await old.apply([
-    { entity: { eid: SPACE }, space: { slug: 'ada' } },
-    {
-      entity: { eid: APP },
-      app: { slug: 'cookbook', space: SPACE },
-      alias: { slug: 'ada/cookbook' },
-    },
-    // The app that has been renamed: born at `garden`, answering there still.
-    {
-      entity: { eid: ONE },
-      app: { slug: 'orchard', space: SPACE },
-      alias: { slug: 'ada/garden', slugs: 'ada/plot' },
-    },
-    // A space wears no address of its own, which is the row that must not move.
-    { entity: { eid: TWO }, space: { slug: 'ben' } },
-  ])
-  return old
-}
-
-// Every address the directory holds, by the app that answers at it.
-let answering = async (now: ReturnType<typeof newer>) =>
-  (await now.query('.former&.app'))
-    .map((r) => [
-      (r.app as { slug: string }).slug,
-      (r.former as { slug: string; slugs?: string }).slug,
-      (r.former as { slugs?: string }).slugs ?? '',
-    ])
-    .sort()
-
-/**
- * A directory as a deployed one stands right now: carried past the front-page
- * pass and no further, its app addresses still in the table `alias` — which the
- * core word owns as of T-34390, so the columns are standing under a word that
- * declares neither.
- */
-let carriedTwo = async (ctx: State) => {
-  let now = newer(ctx, PLATFORM_STORE)
-  await now.door('/apply', {
-    method: 'POST',
-    headers: { 'x-yak-kernel': '1' },
-    body: JSON.stringify([
-      { entity: { eid: SPACE }, space: { slug: 'ada' } },
-      { entity: { eid: APP }, app: { slug: 'cookbook', space: SPACE } },
-      { entity: { eid: ONE }, app: { slug: 'orchard', space: SPACE } },
-    ]),
-  })
-  run(
-    ctx,
-    ...grow('alias', { name: 'slug', type: 'text' }, {
-      name: 'slugs',
-      type: 'text',
-    }),
-    {
-      t: 'create index',
-      name: 'alias_slug',
-      on: 'alias',
-      unique: true,
-      cols: [col('slug')],
-    },
-    row('alias', APP, { slug: 'ada/cookbook', slugs: null }),
-    row('alias', ONE, { slug: 'ada/garden', slugs: 'ada/plot' }),
-  )
-  keep(ctx, 'migrated', HOMED)
-  return now
-}
-
-Deno.test('a store carrying now arrives with the addresses moved', async () => {
-  let ctx = state()
-  await seedFormer(ctx)
-  let now = newer(ctx, PLATFORM_STORE)
-  assertEquals(await answering(now), [
-    ['cookbook', 'cookbook', ''],
-    ['orchard', 'garden', 'plot'],
-  ])
-  // The core word's table is planted and empty: an address is not a name tag,
-  // so nothing was copied into it on the way past.
-  assertEquals(tally(db(ctx), 'alias'), 0)
-  // Every pass in the same breath, so none of the later ones has anything left.
-  assertEquals(marker(ctx), LATEST)
-})
-
-Deno.test('a directory that already carried moves them on next touch', async () => {
-  let ctx = state()
-  await carriedTwo(ctx)
-
-  // A fresh incarnation over the same object — a deploy, in other words — and
-  // the first request carries it the rest of the way.
-  let now = newer(ctx, PLATFORM_STORE)
-  assertEquals(await answering(now), [
-    ['cookbook', 'cookbook', ''],
-    ['orchard', 'garden', 'plot'],
-  ])
-
-  // The old place is gone — the columns and the unique index the old word
-  // declared — so the core word has the table to itself.
-  assertEquals(columns(db(ctx), 'alias'), ['entity'])
-  assertEquals(tally(db(ctx), 'alias'), 0)
-
-  // And it does not run again: the marker is written.
-  assertEquals(marker(ctx), LATEST)
-})
-
-// ---- a domain's target: `hostname.app` → `hostname.serves` (T-34596) --------
-//
-// A directory as a deployed one stands: carried past the addresses and no
-// further, its domains still aimed by the old column, which the vocabulary no
-// longer declares. Nothing selects it, so a domain left there would serve
-// nobody — a customer's own address answering the branded page for good.
-let carriedThree = async (ctx: State) => {
-  let now = newer(ctx, PLATFORM_STORE)
-  await now.door('/apply', {
-    method: 'POST',
-    headers: { 'x-yak-kernel': '1' },
-    body: JSON.stringify([
-      { entity: { eid: SPACE }, space: { slug: 'ada' } },
-      { entity: { eid: APP }, app: { slug: 'cookbook', space: SPACE } },
-      { entity: { eid: ONE }, hostname: { name: 'herbusiness.com' } },
-    ]),
-  })
-  run(
-    ctx,
-    ...grow('hostname', { name: 'app', type: 'text' }),
-    patch('hostname', ONE, { app: id(APP) }),
-  )
-  keep(ctx, 'migrated', FORMER)
-  return now
-}
-
-Deno.test('a domain aimed by the old column is aimed by the new one', async () => {
-  let ctx = state()
-  await carriedThree(ctx)
-
-  // A fresh incarnation over the same object — a deploy — and the first
-  // request carries it the rest of the way.
-  let now = newer(ctx, PLATFORM_STORE)
-  let [row] = await now.query('.hostname')
-  assertEquals(
-    (row.hostname as { name: string; serves: { eid: string } }).name,
-    'herbusiness.com',
-  )
-  let aimed = (row.hostname as { serves: { eid: string } | string }).serves
-  assertEquals(typeof aimed == 'string' ? aimed : aimed.eid, APP)
-
-  // The old column is gone with its values, so nothing can aim a domain two
-  // ways.
-  let cols = columns(db(ctx), 'hostname')
-  assert(!cols.includes('app'), cols.join(', '))
-
-  // And it does not run again.
-  assertEquals(marker(ctx), LATEST)
-})
-
-// ---- an app's handle: `former.slug` → `app.store` (T-34657) -----------------
-//
-// A directory as a deployed one stands: carried past the domains and no
-// further, its apps still named by the address each was born at. The handle
-// each app ends up with is the string it was already stored under, which is
-// what makes this a migration nothing moves for.
-let carriedFour = async (ctx: State) => {
-  let now = newer(ctx, PLATFORM_STORE)
-  await now.door('/apply', {
-    method: 'POST',
-    headers: { 'x-yak-kernel': '1' },
-    body: JSON.stringify([
-      { entity: { eid: SPACE }, space: { slug: 'ada' } },
-      {
-        entity: { eid: APP },
-        app: { slug: 'cookbook', space: SPACE },
-        former: { slug: 'ada/cookbook' },
-      },
-      // Renamed once: born at `garden`, living at `orchard`, answering at both.
-      {
-        entity: { eid: ONE },
-        app: { slug: 'orchard', space: SPACE },
-        former: { slug: 'ada/garden', slugs: 'ada/plot' },
-      },
-      // And one from before addresses were kept at all: no `former` row.
-      { entity: { eid: TWO }, app: { slug: 'shed', space: SPACE } },
-    ]),
-  })
-  keep(ctx, 'migrated', SERVES)
-  return now
-}
-
-// Every app, by the handle it is stored under and the addresses it answers at.
-let handling = async (now: ReturnType<typeof newer>) =>
-  (await now.query('.app&?former'))
-    .map((r) => [
-      (r.app as { slug: string; store?: string }).slug,
-      (r.app as { store?: string }).store ?? '',
-      slugsOf(r.former as { slug?: string; slugs?: string }).join(' '),
-    ])
-    .sort()
-
-Deno.test('an app named by its birth address is named by a handle', async () => {
-  let ctx = state()
-  await carriedFour(ctx)
-
-  // A fresh incarnation over the same object — a deploy — and the first
-  // request carries it the rest of the way.
-  let now = newer(ctx, PLATFORM_STORE)
-  // Each app holds the exact string it was already stored under, so no object
-  // is renamed and no byte moves; the addresses are the app's own history now,
-  // read in the space's namespace rather than through the space's name.
-  assertEquals(await handling(now), [
-    ['cookbook', 'ada/cookbook', 'cookbook'],
-    ['orchard', 'ada/garden', 'garden plot'],
-    ['shed', 'ada/shed', ''],
-  ])
-
-  // The unique index the birth address was decided by is down, which is what
-  // lets one address be held by two apps a year apart (T-34659).
-  let indexes = named(ctx, { type: 'index' })
-  assert(!indexes.includes('former_slug'), indexes.join(', '))
-  assert(indexes.includes('app_store'), indexes.join(', '))
-
-  // And it does not run again.
-  assertEquals(marker(ctx), LATEST)
-})
-
-Deno.test('two apps may hold one address, and be two stores', async () => {
-  let ctx = state()
-  await carriedFour(ctx)
-  let now = newer(ctx, PLATFORM_STORE)
-  // `garden` is an address `orchard` left behind. A new app born there is a
-  // write the index used to refuse; what keeps the two apart is the handle,
-  // and the handle is not the address.
-  await now.door('/apply', {
-    method: 'POST',
-    headers: { 'x-yak-kernel': '1' },
-    body: JSON.stringify([{
-      entity: { eid: THREE },
-      app: { slug: 'garden', space: SPACE, store: 'ada/garden.f00d99' },
-      former: { slug: 'garden' },
-    }]),
-  })
-  assertEquals(await handling(now), [
-    ['cookbook', 'ada/cookbook', 'cookbook'],
-    ['garden', 'ada/garden.f00d99', 'garden'],
-    ['orchard', 'ada/garden', 'garden plot'],
-    ['shed', 'ada/shed', ''],
-  ])
-  // The handle is still the one thing no two apps may share.
-  let no = await now.door('/apply', {
-    method: 'POST',
-    headers: { 'x-yak-kernel': '1' },
-    body: JSON.stringify([{
-      entity: { eid: FOUR },
-      app: { slug: 'shed-two', space: SPACE, store: 'ada/garden.f00d99' },
-    }]),
-  })
-  assert(!no.ok, 'a second app took a handle that was already held')
-})
-
-let collision = async (ctx: State, source = 'fallback') => {
-  await carriedFour(ctx)
-  run(
-    ctx,
-    { t: 'drop', kind: 'index', name: 'former_slug', ifExists: true },
-    patch('former', ONE, { slug: 'ada/shed' }),
-  )
-  if (source == 'former') run(ctx, row('former', TWO, { slug: 'ada/shed' }))
-}
-
-let disambiguated = (report: Report) => {
-  let note = report.moved.find((m) => m.table == 'app')?.note ?? ''
-  for (
-    let text of [
-      'ada/shed',
-      TWO,
-      'ada/shed.000002',
-      'ada/orchard',
-      ONE,
-      'empty store',
-      'no data copied',
-    ]
-  ) {
-    assert(note.includes(text), note)
-  }
-}
-
-for (let source of ['former', 'fallback']) {
-  Deno.test(
-    `colliding handles from ${source} keep the oldest app's store`,
-    async () => {
-      let ctx = state()
-      await collision(ctx, source)
-      let now = newer(ctx, PLATFORM_STORE)
-      let rows = [
-        ['cookbook', 'ada/cookbook', 'cookbook'],
-        ['orchard', 'ada/shed', 'shed plot'],
-        ['shed', 'ada/shed.000002', source == 'former' ? 'shed' : ''],
-      ]
-      assertEquals(await handling(now), rows)
-      assertEquals(marker(ctx), LATEST)
-      assertEquals(await handling(newer(ctx, PLATFORM_STORE)), rows)
-    },
-  )
-}
-
-Deno.test('a handle already assigned stays with its app', async () => {
-  let ctx = state()
-  await collision(ctx)
-  run(ctx, patch('app', TWO, { store: 'ada/shed' }))
-  let now = newer(ctx, PLATFORM_STORE)
-  assertEquals(await handling(now), [
-    ['cookbook', 'ada/cookbook', 'cookbook'],
-    ['orchard', 'ada/orchard.000001', 'shed plot'],
-    ['shed', 'ada/shed', ''],
-  ])
-  assertEquals(marker(ctx), LATEST)
-})
-
-Deno.test('a directory grows the handle column before indexing it', async () => {
-  let ctx = state()
-  await collision(ctx)
-  // A directory from before app.store existed must reach the migration too.
-  run(
-    ctx,
-    { t: 'drop', kind: 'index', name: 'app_store' },
-    { t: 'alter table', table: 'app', drop: 'store' },
-  )
-  keep(ctx, 'schema', 'before handles')
-  let now = newer(ctx, PLATFORM_STORE)
-  assertEquals(await handling(now), [
-    ['cookbook', 'ada/cookbook', 'cookbook'],
-    ['orchard', 'ada/shed', 'shed plot'],
-    ['shed', 'ada/shed.000002', ''],
-  ])
-  assertEquals(marker(ctx), LATEST)
-  assertEquals(
-    db(ctx).query({ t: 'pragma', name: 'index_info', arg: 'app_store' })[0]
-      .name,
-    'store',
-  )
-})
-
-for (let conflict of ['suffix', 'index']) {
-  Deno.test(
-    `a handle ${conflict} conflict refuses with the assignment report`,
-    async () => {
-      let ctx = state()
-      await collision(ctx)
-      let d = db(ctx)
-      if (conflict == 'suffix') {
-        // A generated suffix must not take another app's historical store.
-        d.query(patch('former', APP, { slug: 'ada/shed.000002' }))
-      } else {
-        // The writes can still fail after planning: keep the report and rollback.
-        let held = notNull(col('store'))
-        d.query({
-          t: 'create index',
-          name: 'refused_handles',
-          on: 'app',
-          unique: true,
-          cols: [held],
-          where: held,
-        })
-      }
-      let before = scan(d, 'app')
-      let history = scan(d, 'former')
-      let no = assertThrows(
-        () =>
-          ctx.storage.transactionSync(() =>
-            handled(ctx.storage, { store: PLATFORM_STORE, app: null })
-          ),
-        Unreconciled,
-      )
-      disambiguated(no.report)
-      if (conflict == 'index') {
-        assert(/unique/i.test(no.message), no.message)
-      }
-
-      let now = newer(ctx, PLATFORM_STORE)
-      let read = await now.door('/query?q=.app')
-      assertEquals(read.status, 503)
-      assertEquals(read.headers.get('x-yak-migration'), 'refused')
-      assertEquals((await read.json()).error, 'Refused')
-      assertEquals(scan(d, 'app'), before)
-      assertEquals(scan(d, 'former'), history)
-      assertEquals(marker(ctx), SERVES)
-    },
-  )
-}
 
 // ---- the refusals ----------------------------------------------------------
 
@@ -1142,30 +676,6 @@ let refused = async (now: ReturnType<typeof newer>, message: string) => {
   }
 }
 
-Deno.test('a raw constraint failure in a pass refuses once and rolls back', async () => {
-  let ctx = state()
-  await carriedOne(ctx)
-  run(ctx, {
-    t: 'create trigger',
-    name: 'refuse_home',
-    timing: 'before',
-    event: 'insert',
-    on: 'home',
-    body: [select({
-      cols: [raise('abort', 'UNIQUE constraint failed: home.entity')],
-    })],
-  })
-  let now = newer(ctx, PLATFORM_STORE)
-  await refused(now, 'UNIQUE constraint failed')
-  assertEquals(marker(ctx), MARK)
-  assertEquals(tally(db(ctx), 'home'), 0)
-  await refused(
-    newer(ctx, PLATFORM_STORE),
-    'UNIQUE constraint failed',
-  )
-  assertEquals(marker(ctx), MARK)
-})
-
 Deno.test('a declared index failure refuses constructor boot', async () => {
   let ctx = state()
   await carriedOne(ctx)
@@ -1179,33 +689,6 @@ Deno.test('a declared index failure refuses constructor boot', async () => {
   await refused(now, 'skipped unique index space_slug')
   assertEquals(marker(ctx), MARK)
   assertEquals(slot(ctx, 'schema'), 'older schema')
-})
-
-Deno.test('boot leaves a populated table constraint for its preparing pass', async () => {
-  let ctx = state()
-  await carriedFour(ctx)
-  run(ctx, { t: 'drop', kind: 'index', name: 'app_store' })
-  keep(ctx, 'schema', 'older schema')
-  let sql = ctx.storage.sql
-  let exec = sql.exec.bind(sql)
-  let created = false
-  sql.exec = (query, ...params) => {
-    if (query.startsWith('create unique index if not exists "app_store"')) {
-      assertEquals(tally(db(ctx), 'app', isNull(col('store'))), 0)
-      created = true
-    }
-    return exec(query, ...params)
-  }
-  let now = newer(ctx, PLATFORM_STORE)
-  assertEquals(created, false)
-  assertEquals((await now.door('/query?q=.app')).status, 200)
-  assertEquals(created, true)
-  assertEquals(marker(ctx), LATEST)
-  assertThrows(
-    () => db(ctx).query(every('app', { store: 'same' })),
-    Error,
-    'UNIQUE',
-  )
 })
 
 Deno.test('a raw index creation failure still refuses an empty store', async () => {
@@ -1222,20 +705,21 @@ Deno.test('a raw index creation failure still refuses an empty store', async () 
   assertEquals(marker(ctx), null)
 })
 
-Deno.test('a marker write failure rolls back its pass, even for a thrown value', async () => {
+Deno.test('a marker write failure rolls back the pass, even for a thrown value', async () => {
   let ctx = state()
-  await carriedOne(ctx)
+  await seedHomes(ctx)
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
   ctx.storage.sql.exec = (query, ...params) => {
-    if (query.startsWith('insert into "yak_kv"') && params[1] == HOMED) {
+    if (query.startsWith('insert into "yak_kv"') && params[1] == MARK) {
       throw 'marker unavailable'
     }
     return exec(query, ...params)
   }
   let now = newer(ctx, PLATFORM_STORE)
   await refused(now, 'marker unavailable')
-  assertEquals(marker(ctx), MARK)
-  assertEquals(tally(db(ctx), 'home'), 0)
+  assertEquals(marker(ctx), null)
+  // The fleet's tables are standing as they were.
+  assertEquals(named(ctx, { name: 'journal_tx' }), ['journal_tx'])
 })
 
 for (let door of ['constructor', 'vocab']) {
@@ -1565,80 +1049,6 @@ Deno.test('a doc_value-backed legacy index upgrades to the composed FTS schema',
   assertEquals((await newer(ctx, 'ada/cookbook').query('limes', APP)).length, 1)
 })
 
-// An already-package-shaped app deployed before the task/filed split. Plant
-// current tables, then restore the exact former task columns through SQLite.
-let beforeFiling = async (ctx: State) => {
-  let now = newer(ctx, 'ada/cookbook')
-  let r = await now.door('/apply', {
-    method: 'POST',
-    headers: { 'x-yak-kernel': '1' },
-    body: JSON.stringify([
-      { entity: { eid: ADA }, person: {} },
-      { entity: { eid: SPACE }, project: {} },
-      { entity: { eid: ONE }, task: {}, doc: { title: 'Water plants' } },
-    ]),
-  })
-  assert(r.ok, await r.text())
-  run(
-    ctx,
-    ...grow(
-      'task',
-      { name: 'priority', type: 'real' },
-      { name: 'project', type: 'integer' },
-      { name: 'assignee', type: 'integer' },
-      { name: 'domain', type: 'text' },
-    ),
-    every('task', {
-      priority: 2,
-      project: id(SPACE),
-      assignee: id(ADA),
-      domain: 'Garden',
-    }),
-  )
-  keep(ctx, 'migrated', HANDLED)
-}
-
-Deno.test('app filing preserves every value and never resurrects a cleared filing', async () => {
-  let ctx = state()
-  await beforeFiling(ctx)
-  let now = newer(ctx, 'ada/cookbook')
-  let [row] = await now.query('.task&?filed')
-  assertEquals(row.task, { status: 'open' })
-  let filing = row.filed as Record<string, unknown>
-  assertEquals(filing.priority, 2)
-  assertEquals(filing.domain, 'Garden')
-  // The Store returns canonical reference identities (the app decorates them).
-  assertEquals(filing.project, SPACE)
-  assertEquals(filing.assignee, ADA)
-  assertEquals(marker(ctx), LATEST)
-  let r = await now.door('/apply', {
-    method: 'POST',
-    headers: { 'x-yak-kernel': '1' },
-    body: JSON.stringify([{ entity: { eid: ONE }, filed: null }]),
-  })
-  assert(r.ok, await r.text())
-  assertEquals(await newer(ctx, 'ada/cookbook').query('.filed'), [])
-})
-
-Deno.test('app filing rolls back a conflicting destination', async () => {
-  let ctx = state()
-  await beforeFiling(ctx)
-  // The first row is copied before the second conflicts; both changes must
-  // roll back, not just the offending row.
-  run(
-    ctx,
-    insert('entity', { eid: TWO, num: 99 }),
-    row('task', TWO, { priority: 2 }),
-    row('filed', TWO, { priority: 9 }),
-  )
-  await refused(newer(ctx, 'ada/cookbook'), 'conflicts with filed.priority')
-  assertEquals(marker(ctx), HANDLED)
-  let priorities = (name: string) =>
-    scan(db(ctx), name, undefined, ['priority'])
-  assertEquals(priorities('task'), [{ priority: 2 }, { priority: 2 }])
-  assertEquals(priorities('filed'), [{ priority: 9 }])
-})
-
 Deno.test(
   'a fleet-shaped app carries filing from the former task columns',
   async () => {
@@ -1661,236 +1071,9 @@ Deno.test(
     let [row] = await now.query('.task&?filed')
     assertEquals((row.filed as { priority: number }).priority, 2)
     assertEquals((row.filed as { domain: string }).domain, 'Garden')
-    assertEquals(marker(ctx), LATEST)
+    assertEquals(marker(ctx), MARK)
   },
 )
-
-// An app store as the code before D-37943 left it (jill/coaches, 2026-09-22):
-// tool rows at the ids `tool:<name>` hashed to, no unique index over the
-// name, a schema stamp the new vocabulary moves, and the marker one pass
-// behind. `twins` names tools written twice — a row at the old id and a
-// newer one at the derived id, which a planting over the unindexed table
-// writes — and a call aimed at each row.
-let toolsOld = async (ctx: State, names: string[], twins: string[] = []) => {
-  await newer(ctx, 'ada/cookbook').query('.tool')
-  run(ctx, { t: 'drop', kind: 'index', name: 'tool_name' })
-  let tool = (eid: string, name: string, call: string) =>
-    run(
-      ctx,
-      insert('entity', { eid }, { eid: call }),
-      row('tool', eid, { name }),
-      row('call', call, { to: id(eid) }),
-    )
-  for (let name of names) tool(derivedEid(`tool:${name}`), name, `c-${name}`)
-  for (let name of twins) tool(toolEid(name), name, `c2-${name}`)
-  keep(ctx, 'schema', 'older schema')
-  keep(ctx, 'migrated', FILED)
-}
-
-let tooling = (ctx: State) => db(ctx).query(owners('tool', ['name'], 'name'))
-
-Deno.test('a store with tools at old ids and twins boots, merges and indexes', async () => {
-  let ctx = state()
-  await toolsOld(ctx, ['add_chore', 'find_chore'], ['add_chore'])
-  let now = newer(ctx, 'ada/cookbook')
-  let calls = await now.query('.call')
-  assertEquals(calls.length, 3)
-  assertEquals(
-    calls.map((c) => (c.call as { to: string }).to).sort(),
-    [toolEid('add_chore'), toolEid('add_chore'), toolEid('find_chore')].sort(),
-  )
-  assertEquals(tooling(ctx), [
-    { eid: toolEid('add_chore'), name: 'add_chore' },
-    { eid: toolEid('find_chore'), name: 'find_chore' },
-  ])
-  assertEquals(marker(ctx), LATEST)
-  assertThrows(
-    () => db(ctx).query(every('tool', { name: 'add_chore' })),
-    Error,
-    'UNIQUE',
-  )
-})
-
-// A directory one pass behind (C-37980): a copy the build before sandboxed by
-// default, one its owner trusted, and one sandboxed on purpose. Only the
-// first moves, stamped trusted so both builds serve it unsandboxed.
-Deno.test('a copy the build before would sandbox is stamped trusted', async () => {
-  let ctx = state()
-  let was = '2026-09-01T00:00:00.000Z'
-  let pin = (more = {}) => ({ of: APP, version: 1, ...more })
-  let r = await newer(ctx, PLATFORM_STORE).door('/apply', {
-    method: 'POST',
-    headers: { 'x-yak-kernel': '1' },
-    body: JSON.stringify([
-      { entity: { eid: SPACE }, space: { slug: 'ada' } },
-      { entity: { eid: APP }, app: { slug: 'cookbook', space: SPACE } },
-      { entity: { eid: ONE }, installed: pin() },
-      { entity: { eid: TWO }, installed: pin({ trusted: was }) },
-      { entity: { eid: THREE }, installed: pin({ sandboxed: was }) },
-    ]),
-  })
-  assert(r.ok, await r.text())
-  keep(ctx, 'migrated', TOOLED)
-  await newer(ctx, PLATFORM_STORE).query('.installed')
-  let [one, two, three] = db(ctx).query(
-    owners('installed', ['sandboxed', 'trusted']),
-  ) as { sandboxed: string | null; trusted: string | null }[]
-  assertEquals(one.sandboxed, null)
-  assert(one.trusted && one.trusted > was, one.trusted ?? 'unstamped')
-  assertEquals([two.sandboxed, two.trusted], [null, was])
-  assertEquals([three.sandboxed, three.trusted], [was, null])
-  assertEquals(marker(ctx), LATEST)
-})
-
-// An app's store one pass behind: three letters the build before sent, whose
-// `delivered.via` held a Message-ID, the address it went to (the transport gave
-// no id), and `local`; and one that arrived. Only the Message-ID moves.
-Deno.test("a sent letter's Message-ID moves onto the letter", async () => {
-  let ctx = state()
-  let letter = (eid: string, mail: Record<string, string>) => ({
-    entity: { eid },
-    mail: { from: 'hi@ada.example', ...mail },
-  })
-  let r = await newer(ctx, 'ada/cookbook').door('/apply', {
-    method: 'POST',
-    headers: { 'x-yak-kernel': '1' },
-    body: JSON.stringify([
-      letter(ONE, { to: 'ann@x.example' }),
-      letter(TWO, { to: 'bo@x.example' }),
-      letter(THREE, { to: 'cy@ada.example' }),
-      letter(FOUR, { to: 'hi@ada.example', message_id: 'a1@x.example' }),
-    ]),
-  }, APP)
-  assert(r.ok, await r.text())
-  if (!columns(db(ctx), 'delivered').includes('via')) {
-    run(ctx, ...grow('delivered', { name: 'via', type: 'text' }))
-  }
-  for (
-    let [eid, via] of [
-      [ONE, 'm1@yaks.app'],
-      [TWO, 'bo@x.example'],
-      [THREE, 'local'],
-    ]
-  ) {
-    run(ctx, row('delivered', eid, { at: '2026-09-01T00:00:00.000Z', via }))
-  }
-  keep(ctx, 'migrated', SANDBOXED)
-  await newer(ctx, 'ada/cookbook').query('.mail', APP)
-  let ids = db(ctx).query(owners('mail', ['message_id']))
-    .map((r) => r.message_id)
-  assertEquals(ids, ['m1@yaks.app', null, null, 'a1@x.example'])
-  assertEquals(marker(ctx), LATEST)
-})
-
-// The git object store one pass behind: a tree whose links were minted under
-// `entry`, @yaks/git's tag before `tree_entry`, and a tree with one link under
-// each, the same link minted again since. A clone walks `tree_entry` alone.
-Deno.test("a tree's links under the old tag are reached again", async () => {
-  let ctx = state()
-  let [OLD, BOTH, PAGE, WORDS] = ['1', '2', 'a', 'b'].map((c) => c.repeat(40))
-  let obj = (eid: string, type: string) => ({
-    entity: { eid },
-    gitobj: { type, size: 1 },
-    blob: { sha: eid },
-  })
-  let r = await newer(ctx, GIT_STORE).door('/apply', {
-    method: 'POST',
-    headers: { 'x-yak-kernel': '1' },
-    body: JSON.stringify([
-      obj(OLD, 'tree'),
-      obj(BOTH, 'tree'),
-      obj(PAGE, 'blob'),
-      obj(WORDS, 'blob'),
-      {
-        entity: { eid: entryEid(BOTH, 'index.html') },
-        edge: { from: BOTH, to: PAGE, ord: 0 },
-        tree_entry: { name: 'index.html', mode: '100644' },
-      },
-    ]),
-  })
-  assert(r.ok, await r.text())
-  run(ctx, {
-    t: 'create table',
-    name: 'entry',
-    cols: [
-      {
-        name: 'entity',
-        type: 'integer',
-        pk: true,
-        ref: { table: 'entity', cols: ['id'] },
-      },
-      { name: 'name', type: 'text' },
-      { name: 'mode', type: 'text' },
-    ],
-  })
-  let entry = (tree: string, name: string, to: string, ord: number) => {
-    let eid = derivedEid(`entry|${tree}|${name}`)
-    run(
-      ctx,
-      insert('entity', { eid }),
-      row('edge', eid, { from: id(tree), to: id(to), ord }),
-      row('entry', eid, { name, mode: '100644' }),
-    )
-  }
-  entry(OLD, 'index.html', PAGE, 0)
-  entry(OLD, 'vocab.json', WORDS, 1)
-  entry(BOTH, 'index.html', PAGE, 0)
-  keep(ctx, 'migrated', SENT)
-  let now = newer(ctx, GIT_STORE)
-  let read = (line: unknown) => now.query(String(line))
-  assertEquals(await objects({ read }, {} as never).reach([OLD, BOTH]), [
-    OLD,
-    BOTH,
-    PAGE,
-    WORDS,
-  ])
-  assertEquals(
-    (await now.query(`.tree_entry&.edge.from=${OLD},${BOTH}`))
-      .map((l) => l.entity.eid).sort(),
-    [
-      entryEid(OLD, 'index.html'),
-      entryEid(OLD, 'vocab.json'),
-      entryEid(BOTH, 'index.html'),
-    ].sort(),
-  )
-  assertEquals(tally(db(ctx), 'edge'), 3)
-  assertEquals(columns(db(ctx), 'entry'), [])
-  assertEquals(marker(ctx), LATEST)
-})
-
-// An app's store one pass behind: two calls whose arguments the build before
-// kept as text, one of them text that is not JSON. Both come back as values,
-// kept as binary JSON: the object, and the string the text was.
-Deno.test("a call's arguments become the object they spell", async () => {
-  let ctx = state()
-  let r = await newer(ctx, 'ada/cookbook').door('/apply', {
-    method: 'POST',
-    headers: { 'x-yak-kernel': '1' },
-    body: JSON.stringify([
-      { entity: { eid: ONE }, call: { args: {} } },
-      { entity: { eid: TWO }, call: { args: {} } },
-    ]),
-  }, APP)
-  assert(r.ok, await r.text())
-  for (let [eid, text] of [[ONE, '{"name":"sweep"}'], [TWO, '{']]) {
-    run(ctx, patch('call', eid, { args: text }))
-  }
-  keep(ctx, 'migrated', ENTERED)
-  let calls = await newer(ctx, 'ada/cookbook').query('.call', APP)
-  let args = new Map(
-    calls.map((c) => [c.entity.eid, (c.call as { args: unknown }).args]),
-  )
-  assertEquals([args.get(ONE), args.get(TWO)], [{ name: 'sweep' }, '{'])
-  assertEquals(
-    db(ctx).query(select({
-      distinct: true,
-      cols: [as(fn('typeof', col('args')), 't')],
-      from: table('call'),
-    })),
-    [{ t: 'blob' }],
-  )
-  assertEquals(marker(ctx), LATEST)
-})
 
 Deno.test('a refused migration reaches Sentry, tagged with its store', async () => {
   let seen: ErrorEvent[] = []
@@ -1907,22 +1090,17 @@ Deno.test('a refused migration reaches Sentry, tagged with its store', async () 
   setCurrentClient(client)
   client.init()
   let ctx = state()
-  await toolsOld(ctx, ['add_chore'])
-  // A link to a tool is the one shape the pass refuses.
-  let tool = sub(select({ cols: [col('entity')], from: table('tool') }))
-  run(
-    ctx,
-    insert('entity', { eid: 'link' }),
-    row('edge', 'link', { from: tool, to: tool }),
-  )
+  await seedApp(ctx)
+  // A body the blob table no longer holds is one the pass refuses to lose.
+  run(ctx, { t: 'delete', from: 'blob_text' })
   let now = newer(ctx, 'ada/cookbook')
-  await refused(now, 'links touch a tool')
+  await refused(now, 'address a body')
   await client.flush(1000)
   assertEquals(seen.length, 1)
   assertEquals(seen[0].tags, {
     request: 'migration',
     store: 'ada/cookbook',
-    mark: TOOLED,
+    mark: MARK,
   })
-  assertEquals(marker(ctx), FILED)
+  assertEquals(marker(ctx), null)
 })
