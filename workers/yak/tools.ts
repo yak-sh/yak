@@ -141,7 +141,15 @@ import {
   ticket as ticketFor,
 } from './gallery.ts'
 import type { Caller } from './identity.ts'
-import { DEFAULT, HOURS, ledger, mint, revoke } from './grants.ts'
+import {
+  DEFAULT,
+  GRANT,
+  held as granted,
+  HOURS,
+  ledger,
+  mint,
+  revoke,
+} from './grants.ts'
 import { GRAPH, mail } from './mail.ts'
 import { PAGES, uriOf, whole } from './guide.ts'
 import { asset, EITHER, NO_ARGS, PUBLIC, publics } from './preauth.ts'
@@ -4320,12 +4328,47 @@ let OURS: Row[] = [
             "space's apps and nothing else of the person's",
         ),
         revoke: str(
-          'revoke a token instead of creating one: its id, or a prefix of ' +
-            'one. Every other argument is ignored when this is given',
+          'revoke a token instead of creating one: its id, a prefix of ' +
+            'one, or the token itself. Every other argument is ignored when ' +
+            'this is given',
         ),
       },
     },
     run: async (ctx, args) => {
+      let secret = ctx.env.SESSION_SECRET
+      let book = ledger(ctx.env.OAUTH_KV)
+      if (!secret || !book) {
+        throw refuse('unavailable', 'grants are not switched on here')
+      }
+      if (args.revoke != null) {
+        let said = text(args.revoke, 'revoke')
+        // The token itself names its grant: what `yak logout` hands back, so
+        // a terminal ends the token it holds without ever reading its id.
+        // Never said back, since the answer is kept where a token must not be.
+        let token = said.startsWith(GRANT)
+        let named = token ? (await granted(said, secret, book))?.id : said
+        // A grant ends itself and nothing else: one that leaked must not be
+        // able to sign the person out of every other terminal.
+        if (ctx.who?.via == 'grant' && named != ctx.who.grant) {
+          throw refuse(
+            'access',
+            'This call is signed in with a grant, and a grant can revoke ' +
+              'only itself. Revoke others where you signed in — the ' +
+              'connector, or the browser.',
+          )
+        }
+        let gone = named ? await revoke(book, ctx.person, named) : []
+        return {
+          text: gone.length
+            ? `Revoked ${gone.join(', ')}. Whatever was holding ` +
+              `${gone.length > 1 ? 'those tokens' : 'that token'} is signed ` +
+              'out within the minute.'
+            : token
+            ? 'That token is not live: it expired, or was revoked already.'
+            : `Nothing of yours is named ${said}. A grant is gone the moment ` +
+              'it expires, so an old one needs no revoking.',
+        }
+      }
       // A grant cannot mint a grant. Otherwise a token that leaked would keep
       // minting itself a fresh one for as long as anybody held it, and a
       // short life that renews itself is not a short life. One comes from
@@ -4337,23 +4380,6 @@ let OURS: Row[] = [
             'another. Ask for one where you signed in — the connector, or ' +
             'the browser.',
         )
-      }
-      let secret = ctx.env.SESSION_SECRET
-      let book = ledger(ctx.env.OAUTH_KV)
-      if (!secret || !book) {
-        throw refuse('unavailable', 'grants are not switched on here')
-      }
-      if (args.revoke != null) {
-        let said = text(args.revoke, 'revoke')
-        let gone = await revoke(book, ctx.person, said)
-        return {
-          text: gone.length
-            ? `Revoked ${gone.join(', ')}. Whatever was holding ` +
-              `${gone.length > 1 ? 'those tokens' : 'that token'} is signed ` +
-              'out within the minute.'
-            : `Nothing of yours is named ${said}. A grant is gone the moment ` +
-              'it expires, so an old one needs no revoking.',
-        }
       }
       // Naming a space they cannot reach is refused here, where the refusal
       // can say which — a grant is never more than the person, so a narrowing

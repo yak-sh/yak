@@ -39,7 +39,8 @@ import { bundlesIn, chunks } from './apply.ts'
 import { appStray, appTools } from './commands.ts'
 import { cli, type Command, type Ctx, helpTool, type Opts } from './run.ts'
 import { listed } from './platform.ts'
-import { forgetToken, saveToken } from './store.ts'
+import { forgetToken, saveToken, tokenFor } from './store.ts'
+import { type Result, saidBy } from './roster.ts'
 import { ownConfig } from './config.ts'
 import { starter } from './init.ts'
 import { listen, winding } from './signal.ts'
@@ -98,6 +99,37 @@ let applied = async (
     if (code) break
   }
   return code
+}
+
+// Signing out ends the token, not just this machine's copy of it: a token
+// forgotten here is still a live credential wherever else it was pasted. A
+// host that mints tokens takes one back with its `grant` tool, handed the
+// token itself (yaks.app, T-39755); a host with no such tool refuses the call,
+// and the token is forgotten here all the same, with the refusal said.
+let ended = async (_args: Record<string, unknown>, c: Ctx) => {
+  let token = tokenFor(c.host, c.state)
+  if (!token) {
+    c.out(`no bearer token for ${c.host} to end`)
+    return 0
+  }
+  let told = await c.ask('tools/call', {
+    name: 'grant',
+    arguments: { revoke: token },
+  }).then(
+    (r) => ({ ok: !(r as Result).isError, text: saidBy(r as Result).text }),
+    (e) => ({ ok: false, text: (e as Error).message }),
+  )
+  forgetToken(c.host, c.state)
+  c.out(
+    told.ok
+      ? `${told.text} Forgot it here too.`
+      : `${c.host} did not revoke it (${told.text}); forgot it here.`,
+  )
+  // The environment's token outlives a file this machine forgot.
+  if (tokenFor(c.host, c.state)) {
+    c.note('YAKS_TOKEN still names a token in this shell: unset it')
+  }
+  return told.ok ? 0 : 1
 }
 
 // The graph this command opened, when it opened one. Imported only when the
@@ -202,7 +234,9 @@ export let own: Command[] = [
   },
   {
     name: 'login',
-    description: 'save a bearer token for this host',
+    description: 'save a bearer token for this host. yaks.app mints one ' +
+      'with its `grant` tool: ask an assistant connected to yaks.app for a ' +
+      'CLI token, and paste the `yak login …` line it answers',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -221,13 +255,10 @@ export let own: Command[] = [
   },
   {
     name: 'logout',
-    description: 'forget the saved bearer token',
+    description: 'end the bearer token for this host: the host revokes it, ' +
+      'and this machine forgets it',
     inputSchema: { type: 'object', additionalProperties: false },
-    run: (_args, c) => {
-      forgetToken(c.host, c.state)
-      c.out(`forgot the bearer token for ${c.host}`)
-      return 0
-    },
+    run: ended,
   },
   {
     name: 'apply',

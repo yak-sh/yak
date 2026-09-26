@@ -242,6 +242,28 @@ Deno.test(
         'mcp 401',
       )
       assert(await only.call('tools/list'))
+
+      // A grant ends itself, handed back the way `yak logout` hands it — and
+      // ends nothing else, so one that leaked cannot sign the person out of
+      // every other terminal.
+      let third = /^yak login (\S+)$/m.exec(await agent.tool('grant', {}))![1]
+      assertStringIncludes(
+        (await assertRejects(
+          () => only.tool('grant', { revoke: third }),
+          Error,
+        )).message,
+        'can revoke only itself',
+      )
+      let onlyToken = /^yak login (\S+)$/m.exec(narrow)![1]
+      assertStringIncludes(
+        await only.tool('grant', { revoke: onlyToken }),
+        'Revoked',
+      )
+      assertStringIncludes(
+        (await assertRejects(() => only.call('tools/list'), Error)).message,
+        'mcp 401',
+      )
+      assert(await connector(k, undefined, third).call('tools/list'))
     } finally {
       await k.stop()
     }

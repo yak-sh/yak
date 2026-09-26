@@ -237,6 +237,35 @@ Deno.test('a line that opened a graph asks no host about a word the graph lacks'
   assert(printed.join('\n').includes('here.json has nothing called show'))
 })
 
+Deno.test('a word the graph found at home lacks is the host’s, run as the host’s', async () => {
+  // The graph here lists `mine`; the host lists `theirs`. `more` answers by
+  // where it was aimed, the way yak.ts's table does.
+  let aimedAt: (string | undefined)[] = []
+  let more: Opts['more'] = (c) => {
+    aimedAt.push(c.config)
+    return [{
+      name: c.config ? 'mine' : 'theirs',
+      description: '',
+      run: (_args, c) => (printed.push(`ran at ${c.config ?? c.host}`), 0),
+    }]
+  }
+  let home = (name: string) => name == 'YAK_CONFIG' ? 'home.json' : undefined
+  assertEquals(await ran([], ['theirs'], { more, env: home }), 0)
+  assertEquals(printed, ['ran at yaks.test'])
+  assertEquals(await ran([], ['mine'], { more, env: home }), 0)
+  assertEquals(printed, ['ran at home.json'])
+  // A word neither has is a usage error naming both.
+  assertEquals(await ran([], ['nobody'], { more, env: home }), 2)
+  assert(printed.join('\n').includes('neither home.json nor yaks.test'))
+  // A config the line named is the one place it means: no host is asked.
+  aimedAt = []
+  assertEquals(
+    await ran([], ['--config', 'here.json', 'theirs'], { more, env: home }),
+    2,
+  )
+  assertEquals(aimedAt.includes(undefined), false)
+})
+
 Deno.test('an argument that is not key=value is a usage error, not a round trip', async () => {
   assertEquals(await ran(appTools, ['command', 'add_recipe', 'lemon']), 2)
   assert(printed.join('\n').includes('key=value'), printed.join('\n'))

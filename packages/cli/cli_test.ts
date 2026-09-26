@@ -129,10 +129,8 @@ Deno.test('a tool that refused says so, and the words are what is printed', asyn
 
 Deno.test('a 401 is one sentence a person can act on', async () => {
   let err = await assertRejects(() => client(false)('tools/list'), Unauthorized)
-  assertEquals(
-    err.message,
-    'not signed in — run `yaks login <token>`, or set YAKS_TOKEN',
-  )
+  // It names the command that signs in, as the command is spelled.
+  assert(err.message.includes('`yak login <token>`'), err.message)
 })
 
 Deno.test('help is drawn from the schema the server published', async () => {

@@ -337,15 +337,22 @@ export let globals = (
  * program came with. A host name comes back either way, because it is also the
  * name a bearer token is stored under.
  *
+ * A config the line named is the one place the line means. A config found in
+ * the environment or at home is only the first place in the order, so a word
+ * its graph lacks goes `onward`, to the host: `yak app_list` on a machine that
+ * keeps a graph of its own still reaches the platform.
+ *
  * ```ts
  * aimed({ host: 'yaks.app' }) // { host: 'yaks.app' }
+ * aimed({}, 'yaks.app', (n) => n == 'YAK_CONFIG' ? 'yak.json' : undefined)
+ * // { config: 'yak.json', host: 'yaks.app', onward: true }
  * ```
  */
 export let aimed = (
   said: { host?: string; config?: string },
   dflt = 'yaks.app',
   env: Env = own,
-): { config?: string; host: string } => {
+): { config?: string; host: string; onward?: boolean } => {
   if (said.host && said.config) {
     throw new Usage('--host and --config name two places — a line names one')
   }
@@ -353,7 +360,7 @@ export let aimed = (
   let door = said.host ?? env('YAKS_HOST')
   if (door) return { host: door }
   let path = configPath(undefined, env)
-  return path ? { config: path, host: dflt } : { host: dflt }
+  return path ? { config: path, host: dflt, onward: true } : { host: dflt }
 }
 
 /**
@@ -394,7 +401,7 @@ export let cli = async (
     // Where this command runs: a file it opens, or an MCP server it calls. A
     // command line naming both is refused here, like any other that means two
     // things.
-    let { config, host } = aimed(said, opts.host ?? 'yaks.app', env)
+    let { config, host, onward } = aimed(said, opts.host ?? 'yaks.app', env)
     let state = stateDir(env)
     // A list that cannot be fetched is a reason printed on the page, not a
     // page nobody gets: `yak` with no argument is what a person types when
@@ -445,9 +452,13 @@ export let cli = async (
       out(await c.page())
       return 0
     }
-    // A stray is asked of the host, so a line that opened a graph of its own
+    // A stray is asked of the host, so a line that named a graph of its own
     // has none: it names that graph, and a word the graph lacks is a word
-    // the graph lacks, not an app somewhere else.
+    // the graph lacks, not an app somewhere else. A graph the line did not
+    // name was only first in the order (`aimed`), so a word it lacks is
+    // asked of the host, exactly as a line aimed there would ask it.
+    let far: Ctx = { ...c, config: undefined }
+    let at = c
     let found = commandFor(tools, rest) ??
       commandFor(await fetched(), rest) ??
       commandFor(await fetched(true), rest) ??
@@ -460,6 +471,24 @@ export let cli = async (
           ? undefined
           : await opts.stray?.(rest[0], rest.slice(1), c)
         return hit ? { verb: hit, args: rest.slice(1) } : undefined
+      })() ??
+      await (async () => {
+        if (!onward || !opts.more) return undefined
+        let theirs: Command[]
+        try {
+          theirs = [...await opts.more(far, {})]
+        } catch (e) {
+          throw new Error(
+            `${config} has nothing called ${rest[0]}, and ${host} could ` +
+              `not be asked: ${(e as Error).message}`,
+          )
+        }
+        let hit = commandFor(theirs, rest) ?? await (async () => {
+          let stray = await opts.stray?.(rest[0], rest.slice(1), far)
+          return stray ? { verb: stray, args: rest.slice(1) } : undefined
+        })()
+        if (hit) at = far
+        return hit
       })()
     if (!found) {
       // A noun on its own is a question, not a mistake: `yak graph` (and
@@ -470,10 +499,11 @@ export let cli = async (
         out(page)
         return 0
       }
+      let where = onward && opts.more
+        ? `neither ${config} nor ${host} has anything`
+        : `${config ?? host} has nothing`
       throw new Usage(
-        `${config ?? host} has nothing called ${rest[0]} — try \`${
-          opts.name ?? 'yak'
-        } help\``,
+        `${where} called ${rest[0]} — try \`${opts.name ?? 'yak'} help\``,
       )
     }
     if (help) {
@@ -482,7 +512,7 @@ export let cli = async (
     }
     return await found.verb.run(
       await argsFor(found.verb, found.args, c.reads),
-      c,
+      at,
     )
   } catch (e) {
     note(`${opts.name ?? 'yak'}: ${(e as Error).message}`)

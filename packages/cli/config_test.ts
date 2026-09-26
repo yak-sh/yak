@@ -29,10 +29,13 @@ Deno.test('a line says where it runs: a config it opens, or a door it talks to',
     Usage,
   )
   // The environment says the same two things, and the line beats either.
+  // One found in the environment is only first in the order: a word its
+  // graph lacks goes onward, to the host.
   env = envOf({ YAK_CONFIG: '/srv/yak.json', HOME: bare })
   assertEquals(aimed({}, 'yaks.app', env), {
     config: '/srv/yak.json',
     host: 'yaks.app',
+    onward: true,
   })
   assertEquals(aimed({ host: 'graph.test' }, 'yaks.app', env), {
     host: 'graph.test',
@@ -62,7 +65,11 @@ Deno.test('a box that keeps a graph of its own is where a bare line runs', () =>
   Deno.mkdirSync(own.slice(0, own.lastIndexOf('/')), { recursive: true })
   Deno.writeTextFileSync(own, '{"db": "./yak.db"}')
   assertEquals(configPath(undefined, env), own)
-  assertEquals(aimed({}, 'yaks.app', env), { config: own, host: 'yaks.app' })
+  assertEquals(aimed({}, 'yaks.app', env), {
+    config: own,
+    host: 'yaks.app',
+    onward: true,
+  })
   // And everything said still beats it.
   assertEquals(aimed({ host: 'graph.test' }, 'yaks.app', env), {
     host: 'graph.test',

@@ -70,7 +70,9 @@ let eventData = (body: string): string =>
     .map((l) => l.slice(5).trim())
     .join('')
 
-let SIGN_IN = 'not signed in — run `yaks login <token>`, or set YAKS_TOKEN'
+let SIGN_IN =
+  'not signed in — run `yak login <token>` (`yak help login` says ' +
+  'where a token comes from), or set YAKS_TOKEN'
 
 /** A client of one MCP server. Request ids count up within the process; the
  * session id, if the server issued one, is sent on every request after the

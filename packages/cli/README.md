@@ -85,6 +85,11 @@ The CLI chooses its target in this order:
 | `~/.yak/yak.json` | The local graph described by this file, if it exists |
 | None of the above | `https://yaks.app/mcp`                               |
 
+A config named on the line is the one place that line means. A config found
+through `$YAK_CONFIG` or at `~/.yak/yak.json` is only first in the order: a
+command its graph does not have is asked of the host next, so `yak app_list`
+reaches yaks.app from a machine that keeps a graph of its own.
+
 Local and remote tool invocations both create a call entity and run it through
 `@yaks/tools`. Tool calls made by people and agents therefore use the same
 validation, rules, effects, attribution, and stored record. Their answers are
@@ -406,9 +411,13 @@ input, it groups bundles into batches of 50; `--dry-run` validates and reports
 the result while rolling back the transaction.
 
 Remote authentication uses `$YAKS_TOKEN` when set. Otherwise,
-`yak login <token>` stores a token for the selected host and `yak logout`
-removes it. Tokens and cached tool lists are stored separately under
-`$YAKS_HOME`, or the platform config directory followed by `/yaks`:
+`yak login <token>` stores a token for the selected host. yaks.app mints one
+with its `grant` tool: ask an assistant connected to yaks.app for a CLI token,
+and paste the `yak login …` line it answers. `yak logout` ends the token: it
+hands the token back to the host's `grant` tool to revoke, then removes it here,
+and says so when the host could not revoke it. Tokens and cached tool lists are
+stored separately under `$YAKS_HOME`, or the platform config directory followed
+by `/yaks`:
 
 | File         | Contents                                                                |
 | ------------ | ----------------------------------------------------------------------- |
