@@ -10,7 +10,7 @@
 // this one published the rest of it is exactly as new, and a bundler waiting a
 // day for it would find none.
 
-import { released, scopeOf } from '@yaks/cli/release'
+import { released } from '@yaks/cli/release'
 
 // A bundler ends when it finishes, or when kept.ts aborts it: past its limit,
 // or as its host closes. Only a host killed outright leaves one behind, with
@@ -96,12 +96,10 @@ let once = async (stop: AbortSignal, entry: URL): Promise<string> => {
   await sweep(dir.slice(0, dir.lastIndexOf('/')))
   try {
     let to = `${dir}/app.js`
-    let scope = scopeOf(entry)
-    if (scope) {
-      let config = JSON.stringify(await released(scope))
-      await Deno.writeTextFile(`${dir}/deno.json`, config)
-    }
     let local = entry.protocol == 'file:'
+    if (!local) {
+      await Deno.writeTextFile(`${dir}/deno.json`, JSON.stringify(released))
+    }
     let run = await new Deno.Command(Deno.execPath(), {
       args: [
         'bundle',

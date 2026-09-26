@@ -426,7 +426,7 @@ by `/yaks`:
 The tool cache avoids an MCP round trip for ordinary calls. A server response
 that reports a changed roster invalidates or updates the cache.
 
-The package exports five entry points:
+The package exports six entry points:
 
 - `@yaks/cli` exports command parsing, schema conversion, display and completion
   helpers, MCP transport, token and roster storage, config reading, remote tool
@@ -434,6 +434,9 @@ The package exports five entry points:
   values used by the installed command.
 - `@yaks/cli/yak` exports the executable `main`, built-in commands, and
   defaults. Run it directly or pass additional commands to `main(argv, extra)`.
+- `@yaks/cli/config` reads a config file: where its graph is, the plugins it
+  names, and the release a plugin named without a version comes from. It imports
+  no plugin, for a command that only needs to know where the graph is.
 - `@yaks/cli/host` exports config and host types, the facet loader, `compose`,
   and supporting host functions for programs that assemble a graph.
 - `@yaks/cli/install` is the installer: run it and `yak` is on PATH at the

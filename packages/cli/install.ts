@@ -7,13 +7,13 @@
 // pinned to the new one has every plugin it names refused until the day is
 // out, since a global install's command keeps none of the flags it was
 // installed with. What it does keep is a config, copied beside the command,
-// so the config written here is the release's `exempt`.
+// so the config written here is the release's (./release.ts `released`).
 //
 // Run it with `--minimum-dependency-age=0` to install the release published
 // today; without, it installs the newest release a day old, whole.
 
 import cli from './deno.json' with { type: 'json' }
-import { released, SCOPE } from './release.ts'
+import { released } from './release.ts'
 
 /** The `deno` arguments that install `yak` at `version` under `config`.
  *
@@ -31,14 +31,14 @@ export let install = (version: string, config: string): string[] => [
   'yak',
   '--config',
   config,
-  `jsr:@${SCOPE}/cli@${version}/yak`,
+  `jsr:${cli.name}@${version}/yak`,
 ]
 
 if (import.meta.main) {
   let dir = await Deno.makeTempDir({ prefix: 'yak-install-' })
   try {
     let config = `${dir}/deno.json`
-    await Deno.writeTextFile(config, JSON.stringify(await released(SCOPE)))
+    await Deno.writeTextFile(config, JSON.stringify(released))
     // Run from the empty directory, since `deno install` also folds in the
     // dependencies of any package.json it finds above where it runs.
     let { code } = await new Deno.Command(Deno.execPath(), {

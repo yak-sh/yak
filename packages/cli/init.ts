@@ -4,8 +4,9 @@
 // which of the @yaks packages compose before their first command works.
 //
 // The set is the graph, its tasks and projects, the people and sessions that
-// work on them — so Claude Code or any MCP agent can join through hooks and
-// `/mcp` — and the web canvas `yak serve` answers with. Everything else is one
+// work on them and the processes a session runs in — so Claude Code or any MCP
+// agent can join through hooks and `/mcp` — and the web canvas `yak serve`
+// answers with, whose session tray reads those processes. Everything else is one
 // line added to `plugins` later. Pure data: yak.ts writes it and opens the
 // graph it names.
 
@@ -27,6 +28,7 @@ export let STARTER = [
   '@yaks/project',
   '@yaks/persona',
   '@yaks/memory',
+  '@yaks/process',
   '@yaks/session',
   '@yaks/api',
   '@yaks/mcp',

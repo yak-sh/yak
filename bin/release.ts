@@ -13,7 +13,9 @@
 //   deno run --allow-read --allow-write --allow-run=git --allow-net=api.jsr.io \
 //     bin/release.ts 0.1.0
 //
-// It writes, commits and tags — it does not push, and it does not publish.
+// It writes the version, and the list of packages the release publishes
+// (`LIST`, which @yaks/cli ships), then commits and tags — it does not push,
+// and it does not publish.
 // It refuses to cut a release while a package it would publish has no page on
 // jsr.io (`unlisted`): CI publishes under GitHub's identity, which JSR accepts
 // only for a package that exists and is linked to this repository, so such a
@@ -64,6 +66,14 @@ let publishing = async (root = '.'): Promise<string[]> => {
   return out
 }
 
+// Where a release records the packages it publishes, so whatever resolves it
+// from JSR exempts them from Deno's day-long wait (packages/cli/release.ts).
+export let LIST = 'packages/cli/release.json'
+
+/// list(['@yaks/web', '@yaks/cli']) -> '[\n  "@yaks/cli",\n  "@yaks/web"\n]\n'
+export let list = (names: string[]) =>
+  JSON.stringify(names.toSorted(), null, 2) + '\n'
+
 /** The packages a release would publish that jsr.io has no page for. */
 export let unlisted = async (
   root = '.',
@@ -94,7 +104,8 @@ export let release = async (version: string, root = '.') => {
   for (let path of paths) {
     await Deno.writeTextFile(path, bump(await Deno.readTextFile(path), version))
   }
-  await run('-C', root, 'add', ...paths)
+  await Deno.writeTextFile(`${root}/${LIST}`, list(await publishing(root)))
+  await run('-C', root, 'add', ...paths, `${root}/${LIST}`)
   await run('-C', root, 'commit', '-m', `Release v${version}`)
   await run('-C', root, 'tag', `v${version}`)
   console.log(`v${version}: ${paths.length} packages, committed and tagged.`)
