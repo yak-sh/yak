@@ -35,7 +35,7 @@ export type World = {
 }
 
 // What is too small to matter far off, or to cast a shadow.
-let DECOR = new Set(['flower', 'tuft', 'mushroom'])
+let DECOR = new Set(['flower', 'tuft', 'mushroom', 'reed', 'heather'])
 // The stone a structure's foundation is laid in.
 let FOUND = 0x8e8b82
 // How near a chunk's middle must be for its flowers and grass to be drawn.

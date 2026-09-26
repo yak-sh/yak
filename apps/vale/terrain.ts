@@ -10,13 +10,15 @@
 // creatures' homes) is decided on the smooth height and a half-metre grid,
 // never on the voxels, so it is the same at every voxel size.
 //
-// A level's places (levels.ts) shape it, each by its kind (`FEATURES`): woods
-// roll, crags heap up, a ridge stands, a lake sinks, a village flattens the
-// ground around it and builds itself there. Paths run from the village out to
-// every place and every portal.
+// A level's places (levels.ts) shape it, each by its kind (features.ts): woods
+// roll, crags heap up, a lake sinks, dunes crest, a village flattens the
+// ground around it and builds itself there. Each kind also says what the
+// ground is topped with where it holds, and what grows and stands there.
+// Paths run from the village out to every place and every portal.
+import { type Feature, FEATURES, Top } from './features.ts'
 import { type Level, LEVELS, type Spot } from './levels.ts'
 import { bulk } from './props.ts'
-import { fbm, hash, lerp, rand, smooth } from './rand.ts'
+import { fbm, hash, rand, smooth } from './rand.ts'
 
 export type { Spot }
 
@@ -34,55 +36,8 @@ let MID = SIZE / 2
 // What stands on the ground stands on a grid this fine, in metres.
 let GRID = 0.5
 
-/** What a column is topped with. */
-export let Top = {
-  grass: 0,
-  lush: 1,
-  dry: 2,
-  sand: 3,
-  stone: 4,
-  path: 5,
-  snow: 6,
-}
-
 let dist = (x: number, z: number, [a, b]: Spot) => Math.hypot(x - a, z - b)
-let bump = (d: number, r: number) => Math.exp(-(d * d) / (r * r))
 let snap = (x: number) => (Math.floor(x / GRID) + 0.5) * GRID
-
-/** A kind of place: how it shapes the ground `d` metres from its middle, at
- * (x, z) (`s` salts its noise), and how strongly a point there is its own,
- * which decides what the ground is topped with and what grows (`build`). A
- * village shapes last, flattening what the others raised. Heights are in
- * metres. */
-export type Feature = {
-  shape: (h: number, d: number, x: number, z: number, s: number) => number
-  hold: (d: number) => number
-  last?: boolean
-}
-
-export let FEATURES: Record<string, Feature> = {
-  crags: {
-    shape: (h, d, x, z, s) =>
-      h + bump(d, 25) * (1.5 + fbm(x / 6.5, z / 6.5, 3 + s) * 12),
-    hold: (d) => bump(d, 23),
-  },
-  ridge: {
-    shape: (h, d) => h + smooth(18, 10, d) * 6,
-    hold: (d) => bump(d, 15),
-  },
-  woods: {
-    shape: (h, d, x, z, s) =>
-      h + bump(d, 28) * (fbm(x / 8, z / 8, 7 + s) - 0.35) * 3.5,
-    hold: (d) => bump(d, 26),
-  },
-  lake: { shape: (h, d) => h - bump(d, 12.5) * 6, hold: (d) => bump(d, 15) },
-  fields: { shape: (h) => h, hold: () => 0 },
-  village: {
-    shape: (h, d) => lerp(h, 6.5, smooth(14, 7.5, d)),
-    hold: (d) => bump(d, 13),
-    last: true,
-  },
-}
 
 /** A prop: something standing on the ground that is part of the level's
  * shape (a tree, a rock, a flower, a house, a portal), at (x, z) metres. */
@@ -109,7 +64,8 @@ export type Vale = {
   /** how green, lush or dry each column is: a gentle colour drift */
   hue: Float32Array
   props: Prop[]
-  /** the props that are built: every village's buildings, and the portals */
+  /** the props that are built: what places build (a village, ruins, standing
+   * stones), and the portals */
   built: Prop[]
   walls: Wall[]
   /** each place's middle */
@@ -120,22 +76,8 @@ export type Vale = {
   portals: { x: number; z: number; to: string }[]
 }
 
-/** A village's buildings, by where each stands from the village's middle. */
-export let VILLAGE: Prop[] = [
-  { kind: 'fire', x: 0, z: 0, seed: 1 },
-  { kind: 'cottage', x: -8, z: -8, seed: 11 },
-  { kind: 'cottage', x: 9, z: -9, seed: 12 },
-  { kind: 'hall', x: 9, z: 9.5, seed: 13 },
-  { kind: 'cottage', x: -9, z: 9, seed: 14 },
-  { kind: 'well', x: 4, z: -2, seed: 2 },
-  { kind: 'board', x: -3.5, z: 2.5, seed: 3 },
-  { kind: 'lamp', x: -4, z: -4, seed: 4 },
-  { kind: 'lamp', x: 4.5, z: 4.5, seed: 5 },
-  { kind: 'lamp', x: -5, z: 5.5, seed: 6 },
-  { kind: 'lamp', x: 5.5, z: -5, seed: 7 },
-]
-
-// How much room each building takes, as a radius.
+// How much room each building takes, as a radius: a portal's is the ground
+// before it, where a hero steps out (play.ts `arrival`).
 let FOOT: Record<string, number> = {
   fire: 1.5,
   cottage: 4.5,
@@ -143,26 +85,110 @@ let FOOT: Record<string, number> = {
   well: 1.2,
   board: 0.8,
   lamp: 0.3,
-  portal: 1.5,
+  portal: 3,
+  pillar: 1.2,
+  ruin: 2.8,
+  menhir: 1,
 }
 
-// How strongly a point belongs to each kind of place: the strongest of the
-// level's places of that kind, and the mountains at the rim.
-type Hold = { rim: number; kinds: Record<string, number> }
-let holds = (lv: Level, x: number, z: number): Hold => {
-  let kinds: Record<string, number> = {}
-  for (let p of Object.values(lv.places)) {
-    let f = FEATURES[p.kind]
-    if (f) {
-      kinds[p.kind] = Math.max(kinds[p.kind] ?? 0, f.hold(dist(x, z, p.at)))
-    }
+// How strongly a point belongs to each of a level's kinds of place (the
+// strongest of its places of that kind, and how far that one's middle is),
+// and to the mountains at the rim. A level's `holder` reads every point into
+// the one Hold it keeps, so growing a level makes nothing new per column.
+type Hold = { rim: number; fs: Feature[]; k: Float64Array; far: Float64Array }
+let holder = (lv: Level) => {
+  let places = Object.values(lv.places).filter((p) => FEATURES[p.kind])
+  let kinds = [...new Set(places.map((p) => p.kind))]
+  let fs = kinds.map((k) => FEATURES[k])
+  let at = places.map((p) => ({ i: kinds.indexOf(p.kind), at: p.at }))
+  let w: Hold = {
+    rim: 0,
+    fs,
+    k: new Float64Array(fs.length),
+    far: new Float64Array(fs.length),
   }
-  return {
-    rim: smooth(0.72, 0.9, Math.hypot(x - MID, z - MID) / MID),
-    kinds,
+  return (x: number, z: number): Hold => {
+    w.k.fill(-1)
+    for (let p of at) {
+      let d = dist(x, z, p.at), k = fs[p.i].hold(d)
+      if (k > w.k[p.i]) [w.k[p.i], w.far[p.i]] = [k, d]
+    }
+    w.rim = smooth(0.72, 0.9, Math.hypot(x - MID, z - MID) / MID)
+    return w
   }
 }
-let of = (w: Hold, kind: string) => w.kinds[kind] ?? 0
+
+// Of the kinds holding a point more than `min` and less than `below` whose
+// feature `has` what is asked, the strongest; -1 if none.
+let lead = (
+  w: Hold,
+  min: number,
+  has: (f: Feature) => unknown = () => true,
+  below = Infinity,
+) => {
+  let best = -1
+  for (let i = 0; i < w.fs.length; i++) {
+    let k = w.k[i]
+    if (k > min && k < below && (best < 0 || k > w.k[best]) && has(w.fs[i])) {
+      best = i
+    }
+  }
+  return best
+}
+
+// What the kinds holding a point cover it with, strongest first; none if
+// none of them says.
+let coverOf = (w: Hold, n: number) => {
+  for (let i = lead(w, 0.42); i >= 0; i = lead(w, 0.42, undefined, w.k[i])) {
+    let t = w.fs[i].cover?.(n, w.far[i])
+    if (t != null) return t
+  }
+}
+
+// Of the kinds that say `what` grows, the one holding a point strongest, and
+// more than the rim does; `h` picks among what it grows.
+let pickOf = (
+  w: Hold,
+  what: 'grows' | 'stones',
+  h: number,
+  rest: string,
+) => {
+  let i = lead(w, Math.max(0.35, w.rim), (f) => f[what])
+  let xs = w.fs[i]?.[what]
+  return xs ? xs[h % xs.length] : rest
+}
+
+// A sum over the kinds holding a point, each weighted by `by`.
+let weigh = (w: Hold, by: (f: Feature) => number | undefined) => {
+  let sum = 0
+  for (let i = 0; i < w.fs.length; i++) sum += (by(w.fs[i]) ?? 0) * w.k[i]
+  return sum
+}
+
+// What grows underfoot where no place says: flowers and grass on green
+// ground. Nothing does on these tops unless a place asks for it.
+let DECOR: [string, number][] = [
+  ['flower', 0.018],
+  ['tuft', 0.032],
+  ['mushroom', 0.002],
+]
+let GREEN = new Set([Top.grass, Top.lush, Top.dry])
+// The most that grows underfoot anywhere: a roll over it grows nothing.
+let LUSH = Math.max(
+  ...[DECOR, ...Object.values(FEATURES).map((f) => f.decor ?? [])].map((l) =>
+    l.reduce((a, [, c]) => a + c, 0)
+  ),
+)
+let BARE = new Set([
+  Top.path,
+  Top.stone,
+  Top.snow,
+  Top.sand,
+  Top.ice,
+  Top.ash,
+  Top.ember,
+  Top.clay,
+])
 
 /** A level's ground: its height at (x, z), in metres, before a vale rounds
  * it to its voxels. */
@@ -228,14 +254,6 @@ let toLane = (lanes: [Spot, Spot][], s: number, x: number, z: number) => {
   return best
 }
 
-// A tree's kind by where it grows.
-let treeOf = (w: Hold, r: number) =>
-  of(w, 'crags') > 0.4 || w.rim > 0.3
-    ? 'pine'
-    : of(w, 'lake') > 0.3 && r < 0.5
-    ? 'birch'
-    : 'oak'
-
 /** A level's ground, grown at a voxel edge of `voxel` metres, which must
  * divide SIZE. Deterministic, and cached: call it as often as you like. */
 export let vale = (id: string, voxel = VOXEL): Vale => {
@@ -277,31 +295,31 @@ let build = (lv: Level, V: number): Vale => {
       Math.abs(get(i, k - 1) - c),
     )
   }
+  // What each column is topped with: snow up high, stone where it is steep,
+  // sand at the water, a path where one runs, and elsewhere whatever the
+  // places holding it cover it with, strongest first.
+  let hold = holder(lv)
   let top = new Uint8Array(n * n)
   for (let k = 0; k < n; k++) {
     for (let i = 0; i < n; i++) {
       let x = mid(i), z = mid(k)
-      let c = h[at(i, k)] * V, w = holds(lv, x, z)
+      let c = h[at(i, k)] * V, w = hold(x, z)
+      let most = w.fs[lead(w, 0.42)]
       top[at(i, k)] = c >= 19
         ? Top.snow
         : slope(i, k) >= 3
-        ? Top.stone
+        ? most?.cliff ?? Top.stone
         : c <= SHORE
-        ? Top.sand
+        ? most?.shore ?? Top.sand
         : lanes[at(i, k)] < 0.85 && w.rim < 0.4
         ? Top.path
-        : of(w, 'crags') > 0.42 && fbm(x / 3, z / 3, 11 + s, 2) > 0.62
-        ? Top.stone
-        : of(w, 'crags') > 0.42 || w.rim > 0.45
-        ? Top.dry
-        : of(w, 'woods') > 0.42
-        ? Top.lush
-        : Top.grass
+        : coverOf(w, fbm(x / 3, z / 3, 11 + s, 2)) ??
+          (w.rim > 0.45 ? Top.dry : Top.grass)
     }
   }
 
-  // Each village, paved where people gather, and built up around its fire;
-  // and each portal.
+  // Each village paved where people gather; what each place builds round its
+  // middle; and each portal.
   let villages = Object.values(lv.places).filter((p) => p.kind == 'village')
   let built: Prop[] = []
   for (let vil of villages) {
@@ -312,8 +330,10 @@ let build = (lv: Level, V: number): Vale => {
         if (dist(x, z, vil.at) < 4.75 + ragged * 0.75) top[at(i, k)] = Top.path
       }
     }
-    for (let b of VILLAGE) {
-      built.push({ ...b, x: vil.at[0] + b.x, z: vil.at[1] + b.z })
+  }
+  for (let p of Object.values(lv.places)) {
+    for (let b of FEATURES[p.kind]?.builds ?? []) {
+      built.push({ ...b, x: p.at[0] + b.x, z: p.at[1] + b.z })
     }
   }
   lv.portals.forEach((g, i) =>
@@ -337,38 +357,41 @@ let build = (lv: Level, V: number): Vale => {
       let y = height(x, z)
       if (y <= SHORE || y >= 18 || steep(height, x, z) >= 2) continue
       if (taken(x, z, toLane(paths, s, x, z))) continue
-      let w = holds(lv, x, z), r = Math.hypot(x - MID, z - MID) / MID
-      let tree = 0.04 + of(w, 'woods') * 0.75 + of(w, 'lake') * 0.2 +
-        w.rim * 0.3 - of(w, 'crags') * 0.05 - of(w, 'village') * 0.3
-      let rock = 0.03 + of(w, 'crags') * 0.45 + w.rim * 0.12 +
-        of(w, 'ridge') * 0.2
-      let roll = rand(ci, ck, 3 + s)
+      let w = hold(x, z)
+      let tree = 0.04 + w.rim * 0.3 + weigh(w, (f) => f.trees)
+      let rock = 0.03 + w.rim * 0.12 + weigh(w, (f) => f.rocks)
+      let roll = rand(ci, ck, 3 + s), pick = hash(ci, ck, 6 + s)
       if (roll < tree) {
-        props.push({ kind: treeOf(w, r), x, z, seed: hash(ci, ck, 4 + s) })
+        let kind = pickOf(w, 'grows', pick, w.rim > 0.3 ? 'pine' : 'oak')
+        props.push({ kind, x, z, seed: hash(ci, ck, 4 + s) })
       } else if (roll < tree + rock) {
-        props.push({ kind: 'rock', x, z, seed: hash(ci, ck, 5 + s) })
+        let kind = pickOf(w, 'stones', pick, 'rock')
+        props.push({ kind, x, z, seed: hash(ci, ck, 5 + s) })
       }
     }
   }
 
-  // Flowers, grass and mushrooms, one chance per cell of the grid, where the
-  // ground under it is green.
+  // Flowers, grass, reeds and the like, one chance per cell of the grid:
+  // what the strongest place holding it says, or on green ground, flowers and
+  // grass.
   let cells = SIZE / GRID
   for (let ck = 1; ck < cells - 1; ck++) {
     for (let ci = 1; ci < cells - 1; ci++) {
       let x = (ci + 0.5) * GRID, z = (ck + 0.5) * GRID
       let j = at(Math.floor(x / V), Math.floor(z / V))
       let t = top[j]
-      if (t != Top.grass && t != Top.lush && t != Top.dry) continue
-      if (taken(x, z, lanes[j])) continue
+      if (BARE.has(t) || taken(x, z, lanes[j])) continue
       let roll = rand(ci, ck, 9 + s)
-      let w = holds(lv, x, z)
-      if (roll < 0.018 - of(w, 'crags') * 0.012) {
-        props.push({ kind: 'flower', x, z, seed: hash(ci, ck, 10 + s) })
-      } else if (roll < 0.05) {
-        props.push({ kind: 'tuft', x, z, seed: hash(ci, ck, 11 + s) })
-      } else if (roll < 0.052 + of(w, 'woods') * 0.01 && t == Top.lush) {
-        props.push({ kind: 'mushroom', x, z, seed: hash(ci, ck, 12 + s) })
+      if (roll >= LUSH) continue
+      let w = hold(x, z)
+      let list = w.fs[lead(w, 0.42, (f) => f.decor)]?.decor ??
+        (GREEN.has(t) ? DECOR : [])
+      let sum = 0
+      for (let [kind, chance] of list) {
+        if (roll < (sum += chance)) {
+          props.push({ kind, x, z, seed: hash(ci, ck, 10 + s) })
+          break
+        }
       }
     }
   }
@@ -393,30 +416,57 @@ let build = (lv: Level, V: number): Vale => {
   return v
 }
 
-// What a walker bumps into: trunks, rocks, the village's buildings, and a
-// portal's two posts. A rock is as wide and as tall as it is drawn, so a jump
-// can land on it. A building is a row of circles along each wall, so its door
-// is a gap.
+// What is solid all through, a boulder or a standing stone: as wide and as
+// tall as it is drawn, so a jump can land on one low enough.
+let SOLID = new Set([
+  'rock',
+  'sandstone',
+  'cinder',
+  'basalt',
+  'crystal',
+  'serac',
+  'menhir',
+  'pillar',
+])
+// How wide anything else that stands is at its foot, in metres, for a walker
+// to bump into.
+let GIRTH: Record<string, number> = {
+  oak: 0.45,
+  pine: 0.45,
+  birch: 0.45,
+  spruce: 0.45,
+  palm: 0.4,
+  deadtree: 0.35,
+  cactus: 0.4,
+  toadstool: 0.6,
+  well: 1.2,
+  fire: 1.2,
+  board: 0.35,
+  lamp: 0.35,
+}
+
+// What a walker bumps into: trunks, stones, the village's buildings, a ruin's
+// walls, and a portal's two posts. A building is a row of circles along each
+// wall, so its door is a gap.
 let wallsOf = (v: Vale): Wall[] => {
   let walls: Wall[] = []
   for (let p of v.props) {
     let y = standAt(v, p)
-    if (p.kind == 'rock') {
+    if (SOLID.has(p.kind)) {
       let { r, tall } = bulk(p.kind, p.seed)
       walls.push({ x: p.x, z: p.z, r, top: y + tall })
       continue
     }
-    let r = p.kind == 'oak' || p.kind == 'pine' || p.kind == 'birch'
-      ? 0.45
-      : p.kind == 'well' || p.kind == 'fire'
-      ? 1.2
-      : p.kind == 'board' || p.kind == 'lamp'
-      ? 0.35
-      : 0
+    let r = GIRTH[p.kind] ?? 0
     if (r) walls.push({ x: p.x, z: p.z, r, top: y + 3 })
     if (p.kind == 'portal') {
       for (let dx of [-1.3, 1.3]) {
         walls.push({ x: p.x + dx, z: p.z, r: 0.4, top: y + 4 })
+      }
+    }
+    if (p.kind == 'ruin') {
+      for (let dx = -1.2; dx <= 1.2; dx += 0.6) {
+        walls.push({ x: p.x + dx, z: p.z, r: 0.4, top: y + 3 })
       }
     }
     if (SHELL[p.kind]) {

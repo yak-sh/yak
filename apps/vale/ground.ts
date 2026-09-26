@@ -6,7 +6,8 @@
 // A chunk is a square of ground a fixed number of metres across, however many
 // columns that is at the vale's voxel size.
 import { type Out, quad, rgb, type Vec } from './mesh.ts'
-import { Top, type Vale } from './terrain.ts'
+import { Top } from './features.ts'
+import { type Vale } from './terrain.ts'
 
 /** A chunk's side, in metres. */
 export let CHUNK = 16
@@ -19,14 +20,27 @@ let TOPS: Record<number, number> = {
   [Top.stone]: 0xa19f96,
   [Top.path]: 0xd2aa70,
   [Top.snow]: 0xf3f5f8,
+  [Top.mud]: 0x7f6b4c,
+  [Top.heath]: 0x9c8290,
+  [Top.spore]: 0x9486c9,
+  [Top.ash]: 0x5d5a57,
+  [Top.ember]: 0xe0602c,
+  [Top.clay]: 0xcd7a4c,
+  [Top.ice]: 0xcbe6f3,
 }
 
-// What shows on a column's sides: its top layer, then what lies beneath.
+// What shows on a column's sides: its top layer, then what lies beneath, and
+// under that the rock.
 let BAND: Record<number, number> = {
   ...TOPS,
   [Top.grass]: 0x7db653,
   [Top.lush]: 0x55933f,
   [Top.dry]: 0xa7ab5a,
+  [Top.mud]: 0x6f5d40,
+  [Top.heath]: 0x8a707e,
+  [Top.spore]: 0x8174b6,
+  [Top.ember]: 0xb4401e,
+  [Top.ice]: 0xb6dbee,
 }
 let EARTH: Record<number, number> = {
   [Top.grass]: 0x9c6d47,
@@ -36,6 +50,19 @@ let EARTH: Record<number, number> = {
   [Top.stone]: 0x8f8d85,
   [Top.path]: 0x9c6d47,
   [Top.snow]: 0x9a988f,
+  [Top.mud]: 0x5f4b34,
+  [Top.heath]: 0x7a5a48,
+  [Top.spore]: 0x5e4a6c,
+  [Top.ash]: 0x46423f,
+  [Top.ember]: 0x4a2a20,
+  [Top.clay]: 0xb8683f,
+  [Top.ice]: 0xa4cde4,
+}
+let ROCK: Record<number, number> = {
+  [Top.ash]: 0x3c3836,
+  [Top.ember]: 0x3c3836,
+  [Top.clay]: 0xa65c3a,
+  [Top.ice]: 0x8fbdd9,
 }
 let STONE = 0x8a8983
 // A face no corner of which is shaded.
@@ -72,7 +99,7 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
       let shaded = H(i - 1, k) > h || H(i + 1, k) > h || H(i, k - 1) > h ||
         H(i, k + 1) > h || H(i - 1, k - 1) > h || H(i + 1, k - 1) > h ||
         H(i - 1, k + 1) > h || H(i + 1, k + 1) > h
-      if (open && !shaded) merge[di + dk * C] = h * 8 + v.top[at(i, k)]
+      if (open && !shaded) merge[di + dk * C] = h * 32 + v.top[at(i, k)]
       else single.push([i, k])
     }
   }
@@ -168,7 +195,7 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
         let layers: [number, number, number][] = [
           [h - band, h, BAND[t]],
           [h - earth, h - band, EARTH[t]],
-          [-999, h - earth, STONE],
+          [-999, h - earth, ROCK[t] ?? STONE],
         ]
         // The two columns beside this face, along it: a corner is rounded
         // where the one past it is lower still.
