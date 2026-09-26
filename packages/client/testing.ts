@@ -36,6 +36,10 @@ export type Box = Client & {
   fire: () => void
   /** the socket this client currently holds */
   socket: () => Fake | undefined
+  /** lose the connection on this side only, as a dropped network does: the
+   * page hears it close and the server does not. Returns the server's half,
+   * still open, for the test to close when the server finally hears it. */
+  cut: () => Fake | undefined
   /** wait until this browser's stored components are loaded, every POST has
    * been answered, and every frame has been handled */
   idle: () => Promise<void>
@@ -49,6 +53,7 @@ export let boxClient = (srv?: Server, opts: ClientOpts = {}): Box => {
   let timers: (() => void)[] = []
   let opening: Promise<unknown> = Promise.resolve()
   let mine: Fake | undefined
+  let theirs: Fake | undefined
 
   // The request handler is given the server half of the socket pair and
   // attaches to it; both ends open once it has, which is when the queued
@@ -56,6 +61,7 @@ export let boxClient = (srv?: Server, opts: ClientOpts = {}): Box => {
   let connect: Connect = () => {
     let { client: c, server: s } = pair()
     mine = c
+    theirs = s
     srv!.offer(s)
     opening = Promise.resolve(srv!.handler(
       new Request('http://box.test/ws', { headers: { upgrade: 'websocket' } }),
@@ -80,6 +86,11 @@ export let boxClient = (srv?: Server, opts: ClientOpts = {}): Box => {
     trouble,
     fire: () => timers.shift()?.(),
     socket: () => mine,
+    cut: () => {
+      mine!.readyState = 3
+      mine!.emit('close')
+      return theirs
+    },
     idle: async () => {
       await c.ready
       for (let i = 0; i < 2; i++) {

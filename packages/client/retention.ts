@@ -473,7 +473,7 @@ export let retention = (
       trim(old ? [...payloads(old)] : [])
       sweep()
     },
-    land: (frame) => {
+    land: (frame, mine) => {
       let sub = subscriptions.get(frame.id)
       if (!sub || frame.refused) return []
       if (
@@ -556,7 +556,7 @@ export let retention = (
             ...frame,
             bundles: bundles.filter((b) => !pins.has(b.entity.eid)),
             gone: [],
-          })
+          }, mine)
           : then(
             receive(bundles, sub.members),
             (out) =>
@@ -567,7 +567,7 @@ export let retention = (
                   hear(graph, {
                     ...frame,
                     relay: frame.relay?.filter((b) => owns(b.entity.eid)),
-                  }),
+                  }, mine),
                   (heard) => [...out, ...rode, ...heard],
                 )),
           ),

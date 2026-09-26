@@ -143,3 +143,54 @@ Deno.test('a replica can leave provenance exclusively to its authority', () => {
     c.close()
   }
 })
+
+// `a` pointing at the dinner `b` is watching. `seen()` is where `a` has its
+// own finger, and where `b` last heard it was.
+let pointing = async () => {
+  let srv = server()
+  let a = boxClient(srv), b = boxClient(srv)
+  a.watch('.course=dinner')
+  b.watch('.course=dinner&?pointing')
+  a.mutate([dal()])
+  let seen = async () => {
+    for (let i = 0; i < 2; i++) await Promise.all([a.idle(), b.idle()])
+    return [comp(a.ent('r1'), 'pointing'), comp(b.ent('r1'), 'pointing')]
+  }
+  let point = (xy: Record<string, number>) =>
+    a.mutate([{ entity: { eid: 'r1' }, pointing: xy }])
+  await seen()
+  return { a, point, seen, done: () => [a, b].forEach((c) => c.close()) }
+}
+
+Deno.test('a watch opened later leaves what this page is saying', async () => {
+  let { a, point, seen, done } = await pointing()
+  point({ x: 3, y: 9 })
+  await seen()
+  a.watch('.recipe')
+  assertEquals(await seen(), [{ x: 3, y: 9 }, { x: 3, y: 9 }])
+  done()
+})
+
+Deno.test('a reconnect keeps what this page is saying, and the peers hear it again', async () => {
+  let { a, point, seen, done } = await pointing()
+  point({ x: 3, y: 9 })
+  await seen()
+  a.socket()!.close()
+  a.fire()
+  assertEquals(await seen(), [{ x: 3, y: 9 }, { x: 3, y: 9 }])
+  done()
+})
+
+Deno.test("a page's newer value is never replaced by an older one of its own", async () => {
+  let { a, point, seen, done } = await pointing()
+  point({ x: 1, y: 1 })
+  await seen()
+  // The page loses its socket; the server still holds the old one open.
+  let old = a.cut()!
+  point({ x: 2, y: 2 })
+  a.fire()
+  assertEquals(await seen(), [{ x: 2, y: 2 }, { x: 2, y: 2 }])
+  old.close() // and at last the server hears it
+  assertEquals(await seen(), [{ x: 2, y: 2 }, { x: 2, y: 2 }])
+  done()
+})

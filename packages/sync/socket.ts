@@ -12,7 +12,9 @@
 // answers with the set as it stands and reports nothing about what left while
 // the client was away. This module therefore tracks each subscription's members
 // itself and treats the first frame after a reopen as a reset: whatever it was
-// holding and did not hear about again is reported as gone.
+// holding and did not hear about again is reported as gone. The relayed values
+// this side is saying are said again first, since the server held them under
+// the connection that closed.
 
 import type { Bundle, Eid } from '@yaks/graph'
 import type { Coverage } from './coverage.ts'
@@ -107,6 +109,9 @@ export type WireOpts = {
   land: (frame: Frame) => void
   /** a subscription needs a fresh answer: opened, re-pointed or disconnected */
   pending?: (id: string) => void
+  /** the `sync: peers` values this side is saying, said again on every
+   * connection before its subscriptions (./saying.ts) */
+  again?: () => Bundle[]
   /** anything that went wrong on the socket */
   report: (err: unknown) => void
 }
@@ -124,8 +129,8 @@ export type Wire = {
    * sent over the socket rather than posted, and it goes here because its
    * lifetime is this socket's: the server holds it under this connection and
    * clears it when the connection closes. A relay message sent while the socket
-   * is down is dropped, never queued — this state is short-lived, there is no
-   * backlog worth replaying, and the next write carries the current value.
+   * is down is dropped, never queued: there is no backlog worth replaying, and
+   * the next connection is told what is being said as it stands (`again`).
    */
   relay: (bundles: Bundle[]) => void
   /** whether the socket is open right now */
@@ -214,6 +219,9 @@ export let wire = (opts: WireOpts): Wire => {
     s.addEventListener('open', () => {
       if (socket != s || closed) return
       wait = first // the server is reachable: retry promptly after the next drop
+      // Said before anything is asked, so no answer hands back an older copy.
+      let said = opts.again?.() ?? []
+      if (said.length) s.send(JSON.stringify({ relay: said }))
       for (let [id, query] of asks) {
         resetting.add(id) // its answer will be the whole set, as it now stands
         s.send(JSON.stringify({ subscribe: query, id }))

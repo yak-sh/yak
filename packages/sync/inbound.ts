@@ -20,6 +20,7 @@
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { comps, dead, then, transient } from '@yaks/graph'
 import { replicate } from './mark.ts'
+import type { Mine } from './saying.ts'
 import type { Frame } from './socket.ts'
 import { type Coverage, covers } from './coverage.ts'
 import { outbound, stored, syncOf } from './tier.ts'
@@ -54,11 +55,12 @@ export let strip = (
  * One frame from the server, applied: the bundles it carries go in whole and
  * trusted, and the entities it lists as gone have their components removed. A
  * refused subscription changes nothing in the graph — it is reported, not
- * applied.
+ * applied. `mine` is what this node is saying itself, as {@link hear} takes it.
  */
 export let land = (
   graph: Graph,
   frame: Frame,
+  mine: Mine = none,
 ): Bundle[] | Promise<Bundle[]> => {
   if (frame.refused) return []
   if (frame.coverage || frame.peerCoverage || frame.peers || frame.peerGone) {
@@ -75,22 +77,31 @@ export let land = (
       return then(
         gone.length ? strip(graph, gone) : [],
         (out) =>
-          then(hear(graph, frame), (heard) => [...applied, ...out, ...heard]),
+          then(
+            hear(graph, frame, mine),
+            (heard) => [...applied, ...out, ...heard],
+          ),
       )
     },
   )
 }
+
+// Saying nothing: a graph whose sync is not relaying anything of its own.
+let none: Mine = () => false
 
 /**
  * The relayed values a frame carries, applied: each peer's `sync: peers`
  * components, and nothing else, as the patches they were sent as. A reset
  * frame is the whole set as it now stands, relay included, so a peer value
  * this copy still holds for one of its members and the frame does not repeat
- * went away while this connection was not listening, and is cleared.
+ * went away while this connection was not listening, and is cleared. What
+ * this node is saying itself (`mine`) is the exception: a connection is never
+ * told its own values, so the frame leaving them out says nothing about them.
  */
 export let hear = (
   graph: Graph,
   frame: Frame,
+  mine: Mine = none,
 ): Bundle[] | Promise<Bundle[]> => {
   let peer = (name: string) => syncOf(graph.vocab, name) == 'peers'
   let said = new Map<Eid, Bundle>()
@@ -106,11 +117,13 @@ export let hear = (
   if (!frame.reset || !frame.bundles?.length) return landed()
   return then(graph.get(frame.bundles.map((b) => b.entity.eid)), (held) => {
     for (let b of held) {
+      let eid = b.entity.eid
       for (let [name] of comps(b)) {
-        if (!peer(name) || name in (said.get(b.entity.eid) ?? {})) continue
-        let out = said.get(b.entity.eid) ?? { entity: { eid: b.entity.eid } }
+        if (!peer(name) || mine(eid, name)) continue
+        if (name in (said.get(eid) ?? {})) continue
+        let out = said.get(eid) ?? { entity: { eid } }
         out[name] = null
-        said.set(b.entity.eid, out)
+        said.set(eid, out)
       }
     }
     return landed()

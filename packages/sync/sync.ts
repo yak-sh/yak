@@ -27,6 +27,7 @@ import { asking, clean, ECHO, echoed, SENT } from './mark.ts'
 import { type Fetch, post, type Report } from './outbound.ts'
 import { relayed } from './tier.ts'
 import { pacer } from './pace.ts'
+import { type Mine, saying } from './saying.ts'
 import { land } from './inbound.ts'
 import {
   type Ask,
@@ -42,7 +43,9 @@ import {
 export type Replica = {
   subscribe: (id: string, query: Ask, opts?: SubscribeOpts) => void
   unsubscribe: (id: string) => void
-  land: (frame: Frame) => Bundle[] | Promise<Bundle[]>
+  /** apply one frame; `mine` is what this node is saying itself, which a
+   * reset frame leaves out (inbound.ts `hear`) */
+  land: (frame: Frame, mine?: Mine) => Bundle[] | Promise<Bundle[]>
   protect: (eids: Eid[]) => () => void
 }
 
@@ -145,6 +148,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     states.set(id, { ready: false })
     if (was) notify(id, false)
   }
+  let said = saying()
 
   // Post one write on the chain. `held` means it was never applied locally, so
   // a refusal has nothing to revert and an unanswered request has nothing to
@@ -198,8 +202,11 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
           // The `sync: peers` half is sent over the socket instead: the
           // server holds it under this connection and clears it when the
           // connection closes, so the connection has to be the one that wrote
-          // it. It leaves at the component's pace (./pace.ts).
-          relay(relayed(bundles, graph.vocab))
+          // it. It leaves at the component's pace (./pace.ts), and is kept as
+          // what this node is saying, for the next connection (./saying.ts).
+          let peers = relayed(bundles, graph.vocab)
+          said.wrote(peers, w.connected())
+          relay(peers)
         }
         return bundles.map(clean)
       },
@@ -214,6 +221,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     wait: opts.wait,
     most: opts.most,
     pending,
+    again: said.again,
     land: (frame: Frame) => {
       if (frame.refused) {
         pending(frame.id)
@@ -223,6 +231,8 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
           reverted: false,
         })
       }
+      // Another connection's word on a value takes it over (./saying.ts).
+      said.heard(frame.relay ?? [])
       let state = states.get(frame.id)
       let safe = frame
       // With a working-set policy, ownership lives there, not in a duplicate
@@ -248,7 +258,9 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         }
       }
       let out = then(
-        opts.replica ? opts.replica.land(frame) : land(graph, safe),
+        opts.replica
+          ? opts.replica.land(frame, said.mine)
+          : land(graph, safe, said.mine),
         () => {
           if (state && states.get(frame.id) === state && !state.ready) {
             state.ready = true

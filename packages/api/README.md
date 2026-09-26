@@ -189,8 +189,10 @@ marked `sync: peers`, such as cursor position or typing status. They are
 validated and forwarded to other subscribers watching those entities without
 entering storage. Raw subscribers receive all relays. An entity that joins a
 subscription's set arrives with the values peers are already relaying for it, as
-a subscription that opens does. Values clear when their writer clears them, its
-connection closes, or the vocabulary's duration, such as `durable: "5s"`,
+a subscription that opens does. The relay holds one value per entity and
+component, under the connection that last wrote it, and never sends a connection
+what it holds itself. Values clear when a writer clears them, the connection
+holding them closes, or the vocabulary's duration, such as `durable: "5s"`,
 expires; a clear is sent as a component set to `null`.
 
 The registry observes the graph's `effect` phase, including writes made directly

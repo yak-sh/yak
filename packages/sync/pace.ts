@@ -19,13 +19,14 @@ import { comps } from '@yaks/graph'
 import { paceOf, type Vocab } from '@yaks/vocab'
 import type { Timer } from './socket.ts'
 
-// One relayed component on one entity, and what is said about it.
-type Said = [eid: Eid, comp: string, patch: Comp | null]
+/** One relayed component on one entity, and what is said about it. */
+export type Said = [eid: Eid, comp: string, patch: Comp | null]
 
-let key = (eid: Eid, comp: string) => eid + ' ' + comp
+/** The key one relayed component on one entity is known by. */
+export let key = (eid: Eid, comp: string): string => eid + ' ' + comp
 
-// Said values, one bundle per entity, in the order they were said.
-let bundled = (said: Said[]): Bundle[] => {
+/** Said values, one bundle per entity, in the order they were said. */
+export let bundled = (said: Said[]): Bundle[] => {
   let out = new Map<Eid, Bundle>()
   for (let [eid, comp, patch] of said) {
     let b = out.get(eid) ?? { entity: { eid } }

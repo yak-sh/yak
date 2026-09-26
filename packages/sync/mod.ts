@@ -77,6 +77,7 @@ export {
   type Trouble,
 } from './outbound.ts'
 export { hear, land, snapshot, strip } from './inbound.ts'
+export { type Mine } from './saying.ts'
 export {
   type Ask,
   backoff,

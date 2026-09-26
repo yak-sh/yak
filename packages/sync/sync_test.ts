@@ -344,6 +344,19 @@ Deno.test('a reconnect clears a value that stopped while it was away', async () 
   b.wire.close()
 })
 
+Deno.test('a reconnect keeps what this page is saying, and the others hear it again', async () => {
+  let { a, b, finger, point } = await pointing()
+  await point({ x: 3, y: 9 })
+  a.socket()!.close()
+  a.fire()
+  await a.idle()
+  await b.idle()
+  assertEquals(comp(at(a.graph, 'r1'), 'pointing'), { x: 3, y: 9 })
+  assertEquals(finger(), { x: 3, y: 9 })
+  a.wire.close()
+  b.wire.close()
+})
+
 // `a` scrolling through the recipe `b` is watching: `reading` is paced at
 // 100ms. `said()` counts the relay messages `a` has sent, and `heard()` is
 // where `b` last heard `a` was.

@@ -128,6 +128,25 @@ Deno.test('a closed connection stops saying everything it was saying', () => {
   assertEquals(relayed(two.take()), [{ entity: { eid: 'b1' }, browsing: null }])
 })
 
+Deno.test('a value another connection took over outlives the first closing', () => {
+  let graph = shop()
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let subs = subscriptions(graph)
+  let one = ear(), two = ear(), three = ear()
+  for (let e of [one, two, three]) subs.open(e.to, 's', '.book')
+  subs.relay(one.to, [{ entity: { eid: 'b1' }, browsing: { x: 1, y: 1 } }])
+  subs.relay(two.to, [{ entity: { eid: 'b1' }, browsing: { x: 2 } }])
+  three.take()
+
+  subs.drop(one.to)
+  assertEquals(relayed(three.take()), [])
+  let four = ear()
+  subs.open(four.to, 's', '.book')
+  assertEquals(four.take()[0].relay, [
+    { entity: { eid: 'b1' }, browsing: { x: 2, y: 1 } },
+  ])
+})
+
 Deno.test('a durable duration clears itself, and each write restarts it', () => {
   let clock = stopped()
   let graph = shop()

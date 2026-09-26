@@ -8,16 +8,22 @@
 // shaped like a patch.
 //
 // What makes it more than a broadcast is the lifetime the component declares
-// (@yaks/vocab `durable`). The relay holds the last value per (entity,
-// component) under the connection that sent it, so three things are possible
-// that a plain broadcast cannot do:
+// (@yaks/vocab `durable`). The relay holds one value per (entity, component),
+// the one every client holds too, under the connection that last wrote it, so
+// three things are possible that a plain broadcast cannot do:
 //
 //   a subscriber that connects late is sent what is already there
-//   a connection that closes clears every value it was relaying
+//   a connection that closes clears every value it still holds
 //   a value with a duration clears itself, its timer restarted on each write
 //
 // All three send the same thing — a `{comp: null}` bundle to the other
 // connections — so this file implements it once.
+//
+// A write from another connection takes a value over, so a close clears only
+// what its connection said last. That is what lets a page move to a new
+// connection: it says its values again there, and then the old connection's
+// close, whenever the server hears it, clears none of them, and no answer
+// hands the page back an older copy of its own (@yaks/sync saying.ts).
 //
 // The connection is a type parameter. This module never asks what one IS: the
 // subscription registry keys by its `Sink`, and a test keys by a string.
@@ -42,22 +48,25 @@ export type Holding = { eid: Eid; comp: string; patch: Comp }
 /** The relay over one graph's vocabulary. */
 export type Relay<C> = {
   /**
-   * Relayed bundles from one connection: held, and returned as the bundles
-   * to forward. Components that do not declare `sync: peers` are dropped —
-   * the relay forwards, it does not store, so a durable component sent here
-   * would silently vanish.
+   * Relayed bundles from one connection: held under it, taking over any value
+   * another connection said of the same component, and returned as the
+   * bundles to forward. A clear clears the value whoever said it. Components
+   * that do not declare `sync: peers` are dropped — the relay forwards, it
+   * does not store, so a durable component sent here would silently vanish.
    */
   write: (conn: C, bundles: Bundle[]) => Bundle[]
   /** What one connection is holding, as `"<eid> <comp>"` keys — small enough
    * to store somewhere that survives losing this process's memory. */
   holds: (conn: C) => string[]
   /** Take those keys back, without their values, so a close can still clear
-   * them. */
+   * them. A key another connection holds stays with it. */
   adopt: (conn: C, keys: string[]) => void
-  /** What a subscriber connecting now should be sent: every other
-   * connection's held values, for the entities it can see. */
+  /** What a subscriber connecting now should be sent: every value another
+   * connection holds, for the entities it can see. What it holds itself, it
+   * already has. */
   snapshot: (mine: C, sees: (eid: Eid) => boolean) => Bundle[]
-  /** A connection went away: forget it, and return the nulls to forward. */
+  /** A connection went away: forget it, and return the nulls to forward for
+   * what it still held. */
   drop: (conn: C) => Bundle[]
   /** Cancel every timer — for a shutdown, so nothing is left running. */
   close: () => void
@@ -87,21 +96,33 @@ export let relay = <C>(
   expire: (bundles: Bundle[]) => void,
   timer: Timer = clock,
 ): Relay<C> => {
-  // conn → key → the value it last sent. A Map per connection, so forgetting
-  // a connection is one delete and the iteration order is the write order.
-  let held = new Map<C, Map<string, Comp | null>>()
-  // conn → key → cancel. Separate because most values have no timer at all.
-  let timers = new Map<C, Map<string, () => void>>()
+  // key → the connection that said it last, and the value as it now stands:
+  // null when it was adopted after a lost memory, and only its key is known.
+  let held = new Map<string, { conn: C; patch: Comp | null }>()
+  // conn → the keys it holds, in the order it first said them.
+  let saying = new Map<C, Set<string>>()
+  // key → cancel. Separate because most values have no timer at all.
+  let timers = new Map<string, () => void>()
 
-  let cancel = (conn: C, k: string) => {
-    let mine = timers.get(conn)
-    mine?.get(k)?.()
-    mine?.delete(k)
+  let cancel = (k: string) => {
+    timers.get(k)?.()
+    timers.delete(k)
   }
 
-  let forget = (conn: C, k: string) => {
-    cancel(conn, k)
-    held.get(conn)?.delete(k)
+  let forget = (k: string) => {
+    cancel(k)
+    let was = held.get(k)
+    if (was) saying.get(was.conn)?.delete(k)
+    held.delete(k)
+  }
+
+  let hold = (conn: C, k: string, patch: Comp | null) => {
+    let was = held.get(k)
+    if (was && was.conn !== conn) saying.get(was.conn)?.delete(k)
+    held.set(k, { conn, patch })
+    let mine = saying.get(conn) ?? new Set<string>()
+    saying.set(conn, mine)
+    mine.add(k)
   }
 
   let write = (conn: C, bundles: Bundle[]): Bundle[] => {
@@ -114,31 +135,27 @@ export let relay = <C>(
       for (let [name, patch] of comps(b)) {
         if (syncOf(vocab, name) != 'peers') continue
         let k = key(eid, name)
-        let mine = held.get(conn)
+        said = true
         if (patch == null) {
-          forget(conn, k)
+          forget(k)
           sent[name] = null
-          said = true
           continue
         }
-        if (!mine) held.set(conn, mine = new Map())
         // A relayed value is a PATCH like any other: what is held is the
-        // merge, what is forwarded is only what this write carried.
-        mine.set(k, { ...mine.get(k), ...patch })
+        // merge onto the value as it stands, whoever said it, as every client
+        // merges it; what is forwarded is only what this write carried.
+        hold(conn, k, { ...held.get(k)?.patch, ...patch })
         sent[name] = patch
-        said = true
         // The timer restarts on every write: a cursor that keeps moving keeps
         // its value alive, and one that stops is cleared after the declared
         // duration.
-        cancel(conn, k)
+        cancel(k)
         let span = ms(durableOf(vocab, name))
         if (span == null) continue
-        let clocks = timers.get(conn) ?? new Map<string, () => void>()
-        timers.set(conn, clocks)
-        clocks.set(
+        timers.set(
           k,
           timer(() => {
-            forget(conn, k)
+            forget(k)
             expire([cleared(eid, name)])
           }, span),
         )
@@ -150,42 +167,41 @@ export let relay = <C>(
 
   return {
     write,
-    holds: (conn) => [...held.get(conn)?.keys() ?? []],
+    holds: (conn) => [...saying.get(conn) ?? []],
     adopt: (conn, keys) => {
       // Stored without values on purpose: this is what is left after the
       // process forgot what it was holding, and clearing a component needs no
       // value.
-      let mine = held.get(conn) ?? new Map<string, Comp | null>()
-      held.set(conn, mine)
-      for (let k of keys) if (!mine.has(k)) mine.set(k, null)
+      for (let k of keys) if (!held.has(k)) hold(conn, k, null)
     },
     snapshot: (mine, sees) => {
       let out = new Map<Eid, Bundle>()
-      for (let [conn, values] of held) {
+      for (let [k, { conn, patch }] of held) {
         if (conn === mine) continue
-        for (let [k, patch] of values) {
-          // adopted after a restart, so its value is not known any more
-          if (patch == null) continue
-          let [eid, comp] = split(k)
-          if (!sees(eid)) continue
-          let b = out.get(eid) ?? { entity: { eid } }
-          b[comp] = patch
-          out.set(eid, b)
-        }
+        // adopted after a restart, so its value is not known any more
+        if (patch == null) continue
+        let [eid, comp] = split(k)
+        if (!sees(eid)) continue
+        let b = out.get(eid) ?? { entity: { eid } }
+        b[comp] = patch
+        out.set(eid, b)
       }
       return [...out.values()]
     },
     drop: (conn) => {
-      let mine = held.get(conn)
-      held.delete(conn)
-      for (let off of timers.get(conn)?.values() ?? []) off()
-      timers.delete(conn)
-      return [...mine?.keys() ?? []].map((k) => cleared(...split(k)))
+      let mine = [...saying.get(conn) ?? []]
+      saying.delete(conn)
+      for (let k of mine) {
+        cancel(k)
+        held.delete(k)
+      }
+      return mine.map((k) => cleared(...split(k)))
     },
     close: () => {
-      for (let mine of timers.values()) for (let off of mine.values()) off()
+      for (let off of timers.values()) off()
       timers.clear()
       held.clear()
+      saying.clear()
     },
   }
 }
