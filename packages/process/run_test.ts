@@ -140,14 +140,17 @@ Deno.test('an exit-code file read before it is written is waited for, never read
 })
 
 // And a wrapper slowed past the poll budget still has its code read: it is
-// waited for for as long as it is alive, not for a fixed number of polls.
+// waited for for as long as it is alive, not for a fixed number of polls. Like
+// the wrapper, the stand-in writes the code and then exits, so however a load
+// stretches its sleep, the file is final once it is gone.
 Deno.test('a wrapper slow to write the code is waited for while it lives', async () => {
   let g = tracked()
   let d = dir()
-  let wrapper = new Deno.Command('sleep', { args: ['0.3'] }).spawn()
+  let wrapper = new Deno.Command('sh', {
+    args: ['-c', 'sleep 0.3; echo 3 > "$1"', 'sh', `${d}/p1.code`],
+  }).spawn()
   await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: await reaped() } }])
   Deno.writeTextFileSync(`${d}/p1.pid`, `${wrapper.pid} ${await reaped()}\n`)
-  setTimeout(() => Deno.writeTextFileSync(`${d}/p1.code`, '3\n'), 200)
   let [run] = await watch(store(g), { dir: d, poll: 5 })
   assertEquals(await run.done, 3)
   await wrapper.status
