@@ -365,6 +365,11 @@ grouped approximately by function, **not** by dependency order.
   `installed`, `plan`, `meter`, `signin` and `report`. Membership of a space is
   [@yaks/member](./member)'s `member`, and the access level on top of it is its
   `grant` — two separate facts, not one enum.
+- **[@yaks/esbuild](./esbuild)** — compiles a web app's TypeScript and npm
+  imports at deploy: `plan` reads an app's files and says what must be compiled
+  (the server source, each page's module scripts), or nothing, and `./workerd`
+  is the Worker that compiles it with @cloudflare/worker-bundler, pinned by
+  `package-lock.json`.
 - **[@yaks/api](./api)** — the HTTP layer: a plain `Request` → `Response`
   handler over a graph, serving `/apply`, `/query` and the `/ws` WebSocket
   endpoint. It authenticates the writer, and a subscription is a saved query

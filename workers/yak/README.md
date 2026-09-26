@@ -9,8 +9,10 @@ Deploy is one command, from the repo root:
 deno task deploy:yak   # dev:yak for a local wrangler dev
 ```
 
-A deploy of the kernel deploys `yak-out` (`outbound/`, the dispatch namespace's
-outbound Worker) first, from the same commit and to the same environment.
+A deploy of the kernel deploys its sibling Workers first, from the same commit
+and to the same environment: `yak-out` (`outbound/`, the dispatch namespace's
+outbound Worker) and `yak-esbuild` (`esbuild/`, the compiler `app_deploy` asks
+for an app's TypeScript and npm imports, @yaks/esbuild).
 
 Never `wrangler deploy` by hand. Both tasks go through `wrangler.ts`, which runs
 `npm ci` when `node_modules` is behind `package-lock.json` — wrangler bundles

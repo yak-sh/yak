@@ -154,21 +154,26 @@ export let command = (args: string[]) => {
   }
 }
 
-// yak-out (outbound/) is this Worker's dispatch namespace's outbound Worker:
-// it hands every fetch an app makes back to this Worker's `Outbound`
-// entrypoint. The two are one contract, so a deploy of this Worker deploys
-// yak-out first, from the same commit and to the same environment, and no
-// Worker is ever deployed by hand. Answers that deploy's arguments, or nothing
-// when these arguments are not a deploy or already name a config of their own.
-export let outbound = (argv: string[]): string[] | undefined =>
+// The Workers this one is a contract with, each deployed first, from the same
+// commit and to the same environment, so no Worker is ever deployed by hand:
+// yak-out (outbound/) is this Worker's dispatch namespace's outbound Worker,
+// handing every fetch an app makes back to this Worker's `Outbound`
+// entrypoint, and yak-esbuild (esbuild/) is what the ESBUILD binding compiles
+// an app with at deploy (@yaks/esbuild). Both exist before this Worker's
+// bindings name them.
+export let SIBLINGS = ['outbound/wrangler.toml', 'esbuild/wrangler.toml']
+
+// Each sibling's deploy arguments, or none when these arguments are not a
+// deploy or already name a config of their own.
+export let siblings = (argv: string[]): string[][] =>
   command(argv) != 'deploy' ||
     argv.some((a) => /^(-c|--config)(=|$)/.test(a))
-    ? undefined
-    : [...argv, '-c', 'outbound/wrangler.toml', '--containers-rollout=none']
+    ? []
+    : SIBLINGS.map((c) => [...argv, '-c', c, '--containers-rollout=none'])
 
 // What Workers Builds pins to this Worker. Inherited by another Worker's
 // deploy, the first deploys it under this Worker's name and the second fails
-// its tag check, so yak-out's deploy runs without them (bin/build-yak drops
+// its tag check, so each sibling's deploy runs without them (bin/build-yak drops
 // them for staging the same way).
 export let PINNED = ['WRANGLER_CI_OVERRIDE_NAME', 'WRANGLER_CI_MATCH_TAG']
 
@@ -356,9 +361,8 @@ if (import.meta.main) {
       .spawn()
     return (await child.status).code
   }
-  let out = outbound(argv)
-  if (out) {
-    let code = await run(out, true)
+  for (let args of siblings(argv)) {
+    let code = await run(args, true)
     if (code) Deno.exit(code)
   }
   Deno.exit(await run(argv))

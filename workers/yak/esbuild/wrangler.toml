@@ -1,0 +1,41 @@
+# yak-esbuild (@yaks/esbuild/workerd, D-40376): compiles an app's TypeScript
+# and npm imports at app_deploy. It is its own Worker because
+# @cloudflare/worker-bundler runs esbuild as a 13.9 MB WebAssembly module that
+# only workerd loads, and a build of three.js holds tens of megabytes of heap:
+# in the kernel that would be memory every request shares. Here a build that
+# runs out fails that one deploy.
+#
+# No routes, no bindings, no secrets: the kernel's ESBUILD service binding is
+# the one way in, and the npm registry the one way out. The kernel's deploy
+# deploys it first, to the same environment (../wrangler.ts `siblings`).
+name = "yak-esbuild"
+main = "../../../packages/esbuild/worker.ts"
+account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"
+compatibility_date = "2026-06-01"
+# `node:module`'s isBuiltin tells a worker's Node import from a package it
+# forgot to install.
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+preview_urls = false
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+# esbuild walks up from packages/esbuild/ and finds no node_modules there, so
+# each npm name the package imports points into the kernel directory's own,
+# which `npm ci` fills (../package.json). What those import resolves from
+# their own directory there.
+[alias]
+"@cloudflare/worker-bundler" = "../node_modules/@cloudflare/worker-bundler/dist/index.js"
+"es-module-lexer/js" = "../node_modules/es-module-lexer/dist/lexer.asm.js"
+"semver" = "../node_modules/semver/index.js"
+
+[env.staging]
+name = "yak-esbuild-staging"
+workers_dev = false
+preview_urls = false
+
+[env.staging.observability.logs]
+enabled = true
+invocation_logs = true

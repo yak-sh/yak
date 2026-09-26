@@ -66,6 +66,7 @@ import {
   WRAPPER,
 } from './wrangler_app.ts'
 import { refuse } from './tool.ts'
+import { modules } from '@yaks/esbuild'
 export { WORKER } from './wrangler_app.ts'
 
 // The namespace the account holds (`wrangler dispatch-namespace create
@@ -602,76 +603,32 @@ let ESM = TYPES.js
 export let moduleType = (name: string) =>
   TYPES[name.slice(name.lastIndexOf('.') + 1)] ?? 'application/octet-stream'
 
-// The two shapes a static specifier sits in: after `from` (`import x from
-// './y'`, `export * from './y'`) and after `import` itself (a bare
-// `import './y'`, and `import('./y')` with a literal). Over-matching costs
-// nothing — a word in a string that reads like an import names a file the app
-// does not have, and a file that is not there is skipped — while missing one
-// would leave a module out of the upload, which is the bug this ends.
-let FROM = /\bfrom\s*(['"])([^'"\n]+)\1/g
-let IMPORT = /\bimport\s*\(?\s*(['"])([^'"\n]+)\1/g
-
-// In the order the file names them, so the module list is the app's own
-// reading order and not an artefact of which pattern matched first. Only the
-// app's own files: a bare specifier is the runtime's (`cloudflare:`, `node:`),
-// and it resolves without us.
-let specifiers = (source: string) =>
-  [...source.matchAll(FROM), ...source.matchAll(IMPORT)]
-    .sort((a, b) => a.index - b.index)
-    .map((m) => m[2])
-    .filter((s) => s.startsWith('./') || s.startsWith('../'))
-
-// A specifier against the module that named it, the way the runtime resolves
-// one: module names are the app's own paths, so `./lib.wasm` from `worker.js`
-// is `lib.wasm` and `../lib.wasm` from `a/b.js` is `lib.wasm`. Walking it by
-// hand rather than through URL keeps the name spelled exactly as the file
-// store holds it, and `..` past the top pops nothing, so no specifier can
-// name a file outside the app.
-let resolved = (from: string, spec: string) => {
-  let at = from.split('/').slice(0, -1)
-  for (let seg of spec.split('/')) {
-    if (seg == '.' || seg == '') continue
-    if (seg == '..') at.pop()
-    else at.push(seg)
-  }
-  return at.join('/')
-}
-
 /**
- * The modules the script carries: the app source (default `worker.js`), its imports, and
- * everything those import, read out of the app's own files by `read`.
+ * The modules the script carries: the app source (default `worker.js`), its
+ * imports, and everything those import, read out of the app's own files by
+ * `read` the way the runtime links them (@yaks/esbuild `modules`).
  *
  * A specifier naming a file the app never wrote is left out, and Cloudflare
  * refuses the upload naming the module it cannot find — a better sentence
- * than any this could invent, and the deploy is refused either way.
+ * than any this could invent, and the deploy is refused either way. A
+ * specifier naming one of the upload's own parts is refused as the walk
+ * reaches it, whether or not the app wrote that file.
  */
 export let carried = async (
   read: (path: string) => Promise<Uint8Array<ArrayBuffer> | null>,
   main = WORKER,
 ): Promise<Module[]> => {
-  let out: Module[] = []
-  let seen = new Set<string>()
-  let walk = async (name: string) => {
-    if (seen.has(name)) return
+  let unreserved = (name: string) => {
     if (name == WRAPPER || name == 'metadata') {
       throw refuse(
         'arguments',
         `refused module ${name}: reserved for the platform upload`,
       )
     }
-    seen.add(name)
-    let bytes = await read(name)
-    if (!bytes) return
-    out.push({ name, bytes })
-    // Only a JavaScript module has imports to follow; a wasm module's own
-    // imports are satisfied by the JavaScript that instantiates it.
-    if (moduleType(name) != ESM) return
-    for (let spec of specifiers(new TextDecoder().decode(bytes))) {
-      await walk(resolved(name, spec))
-    }
+    return read(name)
   }
-  await walk(main)
-  return out
+  let { files } = await modules(unreserved, main)
+  return [...files].map(([name, bytes]) => ({ name, bytes }))
 }
 
 // The app's worker into the namespace, wearing the shim. Multipart: one

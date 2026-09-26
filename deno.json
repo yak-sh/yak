@@ -178,7 +178,8 @@
     "./packages/connections",
     "./packages/egress",
     "./packages/admin",
-    "./packages/heal"
+    "./packages/heal",
+    "./packages/esbuild"
   ],
   "exclude": [
     "packages/workerd/conform.ts",

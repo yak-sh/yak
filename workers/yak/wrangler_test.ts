@@ -13,8 +13,9 @@ import {
   aliased,
   command,
   members,
-  outbound,
   seen,
+  SIBLINGS,
+  siblings,
   stale,
   superseded,
 } from './wrangler.ts'
@@ -36,20 +37,12 @@ Deno.test('wrangler: staging keeps deploy annotations with either flag position'
   assertEquals(command(['secret', 'put', 'deploy']), 'secret')
 })
 
-Deno.test('wrangler: a deploy of the kernel deploys yak-out first, and nothing else does', () => {
-  let out = ['-c', 'outbound/wrangler.toml', '--containers-rollout=none']
-  assertEquals(outbound(['deploy', '--message', 'm']), [
-    'deploy',
-    '--message',
-    'm',
-    ...out,
-  ])
-  assertEquals(outbound(['deploy', '--env', 'staging']), [
-    'deploy',
-    '--env',
-    'staging',
-    ...out,
-  ])
+Deno.test('wrangler: a deploy of the kernel deploys its siblings first, and nothing else does', () => {
+  let each = (argv: string[]) =>
+    SIBLINGS.map((c) => [...argv, '-c', c, '--containers-rollout=none'])
+  for (
+    let argv of [['deploy', '--message', 'm'], ['deploy', '--env', 'staging']]
+  ) assertEquals(siblings(argv), each(argv))
   for (
     let args of [
       ['dev'],
@@ -57,7 +50,7 @@ Deno.test('wrangler: a deploy of the kernel deploys yak-out first, and nothing e
       ['deploy', '-c', 'other.toml'],
       ['deploy', '--config=other.toml'],
     ]
-  ) assertEquals(outbound(args), undefined)
+  ) assertEquals(siblings(args), [])
 })
 
 Deno.test('every @yaks/* the checker knows is the file the bundler gets', () => {

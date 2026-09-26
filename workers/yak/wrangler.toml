@@ -413,6 +413,15 @@ binding = "FILES"
 service = "yak"
 entrypoint = "Files"
 
+# What compiles an app's TypeScript and npm imports at app_deploy
+# (esbuild.ts, @yaks/esbuild): yak-esbuild (esbuild/), a Worker of its own so
+# a build's memory is never the kernel's. This Worker's deploy deploys it
+# first (wrangler.ts `siblings`). Absent under `wrangler dev` and the workerd
+# probes, where a deploy that needs compiling is refused in a sentence.
+[[services]]
+binding = "ESBUILD"
+service = "yak-esbuild"
+
 # The OAuth provider's own store (identity.ts): registered clients, grants,
 # and tokens. `wrangler dev` simulates it and ignores the id.
 [[kv_namespaces]]
@@ -662,6 +671,10 @@ enabled = true
 binding = "FILES"
 service = "yak-staging"
 entrypoint = "Files"
+
+[[env.staging.services]]
+binding = "ESBUILD"
+service = "yak-esbuild-staging"
 
 [[env.staging.kv_namespaces]]
 binding = "OAUTH_KV"
