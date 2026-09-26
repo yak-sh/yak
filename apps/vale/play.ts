@@ -49,7 +49,7 @@ import {
   xpOf,
 } from './rules.ts'
 import { type Body, inVillage, prowl, rest, turn, walk } from './sim.ts'
-import { groundAt, type Vale, vale } from './terrain.ts'
+import { groundAt, type Vale } from './terrain.ts'
 
 export type Vec3 = [number, number, number]
 
@@ -149,7 +149,8 @@ export type Giver = {
 }
 
 export type Frame = {
-  /** the level the hero is in */
+  /** the level the hero is in, or on the frame they walk off a road's end, the
+   * level beyond */
   level: string
   body: Body
   vitals: Vitals
@@ -328,6 +329,9 @@ export let game = (net: Net) => {
   let wasDown = new Set<string>()
   let last = new Map<string, Body>()
   let anchored = new Set<string>()
+  // The level the hero last walked off by a road, until a frame plays in the
+  // level beyond.
+  let arriving: string | null = null
 
   // Where a mover this page moves is (its hero, the creatures it owns),
   // written when it differs from what the graph holds.
@@ -484,11 +488,12 @@ export let game = (net: Net) => {
       ]
       anchor(v)
 
-      // Me, as the graph has me: a hero with no place here (just come, back
-      // after a reload) stands at the level's arrival.
+      // Me, as the graph has me: a hero with no place here (just come by a
+      // road, back after a reload) stands at the level's arrival.
       let pos = where(row)
       let here = pos?.level == lv ? bodyOf(pos, motion(row)) : null
-      let body = here ? { ...here } : arrival(v)
+      let body = here ? { ...here } : arrival(v, arriving ?? undefined)
+      arriving = null
       let down = here?.gait == 'down'
       if (down) body.gait = 'idle'
       let vit = vitals(row)
@@ -969,17 +974,19 @@ export let game = (net: Net) => {
         .filter((g) => g.near < TALK)
         .sort((a, b) => a.near - b.near)[0] ?? null
 
-      // Off the end of a road: on to the level beyond, on the road back.
+      // Off the end of a road: on to the level beyond. The page grows it, and
+      // the first frame played there stands the hero on the road back
+      // (`arriving`); until then the others see the hero at this road's end.
       let level = lv
       let road = v.roads.find((r) => dist(r, body) < OFF)
       if (road && !down) {
         level = road.to
-        body = arrival(vale(road.to, v.voxel), lv)
+        arriving = lv
         events.push({ type: 'travel', to: road.to })
       }
 
       // What I am, for the others.
-      say(me, level, { ...body, gait: down ? 'down' : body.gait }, change)
+      say(me, lv, { ...body, gait: down ? 'down' : body.gait }, change)
       let vitalsNow = {
         hp: Math.max(0, Math.round(hp)),
         max: s.max,

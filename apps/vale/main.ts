@@ -15,7 +15,7 @@ import { chatbox } from './chatbox.ts'
 import { map } from './map.ts'
 import { type Figure, hero } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
-import { type Grown, grown } from './grown.ts'
+import { ahead, type Grown, grown } from './grown.ts'
 import { hud } from './hud.ts'
 import { listen } from './input.ts'
 import { ITEMS } from './items.ts'
@@ -124,6 +124,9 @@ let glow = bits(w.scene, false, 300)
 let smallShadows = phone
 if (phone) w.sun.shadow.mapSize.set(1024, 1024)
 let away = false
+// How near a road's end, in metres, the level beyond starts growing: some
+// seconds' run from it.
+let AHEAD = 24
 let grow = async (id: string) => {
   away = true
   let next = shown(await grown(id, VOX))
@@ -565,6 +568,11 @@ let loop = (t: number) => {
       h.show(f, here, clockOf(w.day), bearing(cam.yaw))
       m.show(f, v)
       w.focus.set(f.body.x, f.body.y, f.body.z)
+      // Near a road's end, the level beyond starts growing.
+      let road = v.roads.find((r) =>
+        Math.hypot(r.x - f.body.x, r.z - f.body.z) < AHEAD
+      )
+      if (road) ahead(road.to, VOX)
     }
   } else if (!away) {
     // At the gate: the camera drifts around the fire, and the new hero stands
