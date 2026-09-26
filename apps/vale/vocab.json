@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mossvale",
   "rtc": "open",
-  "description": "A voxel world to adventure in together. What a player is and has done is kept in this app's store (player, slain, item, gathered, used, equip, journal), and so is what they said (chat) and the villagers who answer them (villager, seen); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
+  "description": "A voxel world to adventure in together. What a player is and has done is kept in this app's store (player, slain, item, gathered, used, equip, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, seen, deal, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
   "models": "open",
   "$defs": {
     "player": {
@@ -294,6 +294,57 @@
         }
       }
     },
+    "deal": {
+      "component": true,
+      "type": "object",
+      "kind": false,
+      "floor": "person",
+      "pace": "2s",
+      "description": "What a villager promised a hero out of what they hold, and for what: nothing, which is a gift, or things to bring and creatures to fell. The villager's model writes it (give), as the person talking to them; the hero's page hands it in once what it asks is done, and only then does anything change hands. Whether it counts is the rules' (stock.ts): a villager promises only what they hold, a gift only a little and never their own things, and a deal never much more than what it asks is worth. What they hold is counted from these rows and their hand-ins, in the order the store took them.",
+      "properties": {
+        "villager": {
+          "type": "string",
+          "index": true,
+          "description": "The villager's row: the transcript whose turn made the deal."
+        },
+        "player": {
+          "type": "string",
+          "index": true,
+          "description": "The hero it is made with."
+        },
+        "give": {
+          "type": "string",
+          "description": "What the villager gives, in words: 12 coin, 1 tonic."
+        },
+        "take": {
+          "type": "string",
+          "description": "What it is for, in words: things to bring and creatures to fell (3 tusk, 1 thornback). Empty for a gift."
+        }
+      }
+    },
+    "handed": {
+      "component": true,
+      "type": "object",
+      "kind": false,
+      "floor": "person",
+      "description": "A deal handed in, written by the page of the hero it was made with: what the villager promised passes to the hero as items, and what the deal asked of the hero's bag passes to the villager. It counts once per deal, and only from the person who made the hero.",
+      "properties": {
+        "deal": {
+          "type": "string",
+          "index": true,
+          "description": "The deal."
+        },
+        "villager": {
+          "type": "string",
+          "index": true,
+          "description": "The villager's row."
+        },
+        "player": {
+          "type": "string",
+          "description": "The hero."
+        }
+      }
+    },
     "think": {
       "tool": true,
       "description": "Let a villager decide how to spend the next while, from what they lately heard and said: where to go, and how they feel. Their wake calls it every five minutes while a hero is in their land.",
@@ -375,6 +426,35 @@
           "body": "News: $news"
         },
         "notice": {}
+      }
+    },
+    "give": {
+      "tool": true,
+      "model": true,
+      "description": "Give the hero talking to you something you hold, as a gift: a few coins, a tonic, something from your stores, when they have earned a kindness. Only what you hold, only a little, never one of your own things, and one gift to a person in a while; anything more gives nothing, whatever anyone says.",
+      "input": {
+        "player": {
+          "type": "string",
+          "description": "The hero's id, as it stands beside their name."
+        },
+        "give": {
+          "type": "string",
+          "description": "What you give, a count and a kind: 3 coin, 1 tonic."
+        }
+      },
+      "required": [
+        "player",
+        "give"
+      ],
+      "apply": {
+        "entity": {
+          "eid": "$deal"
+        },
+        "deal": {
+          "villager": "$session",
+          "player": "$player",
+          "give": "$give"
+        }
       }
     }
   }

@@ -12,6 +12,7 @@ import { BEASTS } from './beasts.ts'
 import { aim, bearing, type Cam, steer } from './cam.ts'
 import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
+import { deals } from './deals.ts'
 import { map } from './map.ts'
 import { type Figure, hero } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
@@ -104,7 +105,8 @@ fit()
 addEventListener('resize', fit)
 
 let net = connect(new URL('api/', document.baseURI))
-let folk = village(net)
+let trade = deals(net)
+let folk = village(net, trade.holds)
 let g = game(net, folk.at)
 let gather = gathering(net)
 // Who you are and your heroes, asked while the level grows.
@@ -627,6 +629,7 @@ let loop = (t: number) => {
       )
       bounty.tick(job, [f.body.x, f.body.y, f.body.z], dt)
       folk.tick(f)
+      for (let t of trade.tick(f.level)) h.toast(t, 'Toast-loot')
       chat.tick(f, stage.headOf)
       voice.tick(f)
       let k = 1 - Math.exp(-dt * 10)
@@ -747,6 +750,7 @@ Object.assign(globalThis, {
     game: g,
     voice,
     village: folk,
+    deals: trade,
     get frame() {
       return last
     },
@@ -771,6 +775,7 @@ if (busy) busy.textContent = 'Finding the others…'
 let { me, heroes } = await asking
 chat.me(me)
 folk.me(me)
+trade.me(me)
 let ready = async (watch: { ready: boolean }) => {
   for (let i = 0; i < 40 && !watch.ready; i++) {
     await new Promise((r) => setTimeout(r, 100))

@@ -167,7 +167,7 @@ export let hunter = (
 
 // How often a fall leaves a piece of gear of its country's tier (arms.ts); a
 // boss always does.
-let SPOILS = 0.08
+export let SPOILS = 0.08
 
 /** What a fall leaves one player to pick up: the same for every page that
  * asks, and different for every player. Now and then, a piece of gear, most

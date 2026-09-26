@@ -2,8 +2,9 @@
 // the store's row for each one in the level the hero is in, added the first
 // time a hero comes; what they said back and where they chose to go, off
 // their transcripts; the line a hero says beside one, which asks them to
-// answer; the news of a quest handed in; and the mark on the hero that keeps
-// a level's villagers awake while somebody plays in it.
+// answer, told what they hold (deals.ts); the news of a quest handed in; and
+// the mark on the hero that keeps a level's villagers awake while somebody
+// plays in it.
 //
 // A guest reads what villagers say and is not heard by them: only a person
 // signed in speaks (chat.ts), and only their hero's row is theirs to mark.
@@ -19,6 +20,7 @@ import {
   CHAT,
   deeds,
   eidOf,
+  hears,
   persona,
   said,
   where,
@@ -37,8 +39,12 @@ let HEARD = 60
 
 export type Village = ReturnType<typeof village>
 
-/** The villagers of whatever level the hero is in, over the store. */
-export let village = (net: Net) => {
+/** The villagers of whatever level the hero is in, over the store; `holds`
+ * says what one holds free to give. */
+export let village = (
+  net: Net,
+  holds: (id: string) => Map<string, number>,
+) => {
   let byEid = new Map(GIVERS.map((g) => [eidOf(g.id), g]))
   let byId = new Map(GIVERS.map((g) => [g.id, g]))
   let watch = (q: string): Watch | null => {
@@ -154,7 +160,8 @@ export let village = (net: Net) => {
       let g = f?.talk && byId.get(f.talk.id)
       if (!f || !g || !held(g.id) || !me?.person) return null
       let instructions = persona(g, {
-        hero: { name: f.sheet.name, lvl: f.sheet.lvl },
+        hero: { eid: net.hero ?? '', name: f.sheet.name, lvl: f.sheet.lvl },
+        holds: holds(g.id),
         quests: f.sheet.quests.filter((q) => q.quest.giver == g.id),
         deeds: deeds(falls(f), net.now() - LATELY),
         here: f.others.map((o) => o.name),
@@ -168,12 +175,7 @@ export let village = (net: Net) => {
     /** a villager hears news without answering it: a quest handed in */
     news: (id: string, text: string) => {
       if (!me?.writes || !held(id)) return
-      write([{
-        entity: { eid: crypto.randomUUID() },
-        entry: { session: eidOf(id) },
-        content: { body: text },
-        notice: {},
-      }])
+      write([hears(id, text)])
     },
     /** what the level's villagers said, oldest first, as lines over their
      * heads */
