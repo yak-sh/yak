@@ -40,7 +40,10 @@ let MID = SIZE / 2
 // What stands on the ground stands on a grid this fine, in metres.
 let GRID = 0.5
 
-let dist = (x: number, z: number, [a, b]: Spot) => Math.hypot(x - a, z - b)
+// How long (x, z) is. Not Math.hypot, which takes several times as long, and
+// a level measures a distance for every column several times over.
+let norm = (x: number, z: number) => Math.sqrt(x * x + z * z)
+let dist = (x: number, z: number, [a, b]: Spot) => norm(x - a, z - b)
 let snap = (x: number) => (Math.floor(x / GRID) + 0.5) * GRID
 
 /** A prop: something standing on the ground that is part of the level's
@@ -106,6 +109,10 @@ let DOOR = 9
 // in metres.
 let ROAD = 1.5
 let EASE = 3.5
+// How far round a lane, as a share of its width there, and round a road, in
+// metres, nothing grows or stands.
+let LANE = 1.3
+let CLEAR = ROAD + 1.5
 // How far from a road the mountains at the rim stand back, rising from the
 // first to the second, in metres, so a road leaves by a pass.
 let PASS: [number, number] = [4, 13]
@@ -134,7 +141,9 @@ let holder = (lv: Level) => {
   let places = Object.values(lv.places).filter((p) => FEATURES[p.kind])
   let kinds = [...new Set(places.map((p) => p.kind))]
   let fs = kinds.map((k) => FEATURES[k])
-  let at = places.map((p) => ({ i: kinds.indexOf(p.kind), at: p.at }))
+  let own = places.map((p) => kinds.indexOf(p.kind))
+  let holds = places.map((p) => FEATURES[p.kind].hold)
+  let ats = places.map((p) => p.at)
   let w: Hold = {
     rim: 0,
     wild: lv.wild ? FEATURES[lv.wild] : undefined,
@@ -144,11 +153,14 @@ let holder = (lv: Level) => {
   }
   return (x: number, z: number): Hold => {
     w.k.fill(-1)
-    for (let p of at) {
-      let d = dist(x, z, p.at), k = fs[p.i].hold(d)
-      if (k > w.k[p.i]) [w.k[p.i], w.far[p.i]] = [k, d]
+    for (let j = 0; j < ats.length; j++) {
+      let d = dist(x, z, ats[j]), k = holds[j](d), i = own[j]
+      if (k > w.k[i]) {
+        w.k[i] = k
+        w.far[i] = d
+      }
     }
-    w.rim = smooth(0.72, 0.9, Math.hypot(x - MID, z - MID) / MID)
+    w.rim = smooth(0.72, 0.9, norm(x - MID, z - MID) / MID)
     return w
   }
 }
@@ -238,15 +250,20 @@ export let rise = (lv: Level) => {
   let ways = waysOf(lv)
   let land = landOf(lv)
   return (x: number, z: number): number => {
+    // A road further off than its pass changes nothing here, nor do the
+    // mountains inside where they start to rise.
     let h = land(x, z), open = 0
     for (let { c, bed } of ways) {
+      if (!near(c, x, z, PASS[1])) continue
       let t = along(c, x, z), d = off(c, x, z, t)
       h = lerp(h, bedAt(bed, t), 1 - smooth(ROAD, ROAD + EASE, d))
       open = Math.max(open, 1 - smooth(PASS[0], PASS[1], d))
     }
-    let r = Math.hypot(x - MID, z - MID) / MID
-    h += smooth(0.78, 1.0, r) * (1 - open) *
-      (12 + fbm(x / 4.5, z / 4.5, 9 + s) * 9)
+    let r = norm(x - MID, z - MID) / MID
+    if (r > 0.78) {
+      h += smooth(0.78, 1.0, r) * (1 - open) *
+        (12 + fbm(x / 4.5, z / 4.5, 9 + s) * 9)
+    }
     return clamp(h, 0.5, 30)
   }
 }
@@ -260,10 +277,12 @@ let landOf = (lv: Level) => {
     ...places.filter((p) => !FEATURES[p.kind].last),
     ...places.filter((p) => FEATURES[p.kind].last),
   ]
+  let shapes = order.map((p) => FEATURES[p.kind].shape)
+  let ats = order.map((p) => p.at)
   return (x: number, z: number): number => {
     let h = 6.5 + (fbm(x / 22, z / 22, 1 + s) - 0.5) * 4.5
-    for (let p of order) {
-      h = FEATURES[p.kind].shape(h, dist(x, z, p.at), x, z, s)
+    for (let i = 0; i < shapes.length; i++) {
+      h = shapes[i](h, dist(x, z, ats[i]), x, z, s)
     }
     return h
   }
@@ -277,6 +296,7 @@ type Course = {
   dz: number
   xs: Float64Array
   zs: Float64Array
+  box: [number, number, number, number]
 }
 let course = (a: Spot, b: Spot, s: number, wob = 7, straight = 0): Course => {
   let dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz) || 1
@@ -290,8 +310,18 @@ let course = (a: Spot, b: Spot, s: number, wob = 7, straight = 0): Course => {
     xs[i] = a[0] + dx * t - (dz / len) * w
     zs[i] = a[1] + dz * t + (dx / len) * w
   }
-  return { a, dx, dz, xs, zs }
+  let box: Course['box'] = [
+    Math.min(...xs),
+    Math.min(...zs),
+    Math.max(...xs),
+    Math.max(...zs),
+  ]
+  return { a, dx, dz, xs, zs, box }
 }
+// Whether (x, z) may lie within `r` metres of a course: it does not when it
+// lies further than that outside the box round the course's middle.
+let near = ({ box }: Course, x: number, z: number, r: number) =>
+  x > box[0] - r && x < box[2] + r && z > box[1] - r && z < box[3] + r
 // How far along a course (x, z) lies, from 0 at its start to 1 at its end;
 // and how far it is from the course's middle there, in metres.
 let along = (c: Course, x: number, z: number) =>
@@ -303,7 +333,7 @@ let along = (c: Course, x: number, z: number) =>
 let off = (c: Course, x: number, z: number, t: number) => {
   let f = t * (c.xs.length - 1)
   let i = Math.min(c.xs.length - 2, Math.floor(f)), u = f - i
-  return Math.hypot(
+  return norm(
     x - (c.xs[i] + (c.xs[i + 1] - c.xs[i]) * u),
     z - (c.zs[i] + (c.zs[i + 1] - c.zs[i]) * u),
   )
@@ -373,20 +403,27 @@ let lanesOf = (lv: Level): Course[] => {
 }
 
 // How far a point is from the nearest lane, as a share of the lane's width
-// there: a lane widens as it goes.
+// there: a lane widens as it goes, to 1.6 times as wide. Only a lane it may
+// lie within LANE of is measured; further off, how far does not matter.
 let toLane = (lanes: Course[], x: number, z: number) => {
   let best = Infinity
   for (let c of lanes) {
+    if (!near(c, x, z, LANE * 1.6)) continue
     let t = along(c, x, z)
     best = Math.min(best, off(c, x, z, t) / (0.6 + t))
   }
   return best
 }
 
-// How far a point is from the middle of the nearest road, in metres.
+// How far a point is from the middle of the nearest road, in metres. Only a
+// road it may lie within CLEAR of is measured.
 let toRoad = (ways: Way[], x: number, z: number) => {
   let best = Infinity
-  for (let { c } of ways) best = Math.min(best, off(c, x, z, along(c, x, z)))
+  for (let { c } of ways) {
+    if (near(c, x, z, CLEAR)) {
+      best = Math.min(best, off(c, x, z, along(c, x, z)))
+    }
+  }
   return best
 }
 
@@ -460,9 +497,16 @@ let build = (lv: Level, V: number): Vale => {
   // middle; and each road's signpost, where a hero coming in by it stands.
   let villages = Object.values(lv.places).filter((p) => isA(p.kind, 'village'))
   let built: Prop[] = []
+  // The first and last column less than `r` metres either side of `c`.
+  let span = (c: number, r: number): [number, number] => [
+    Math.max(0, Math.floor((c - r) / V)),
+    Math.min(n - 1, Math.floor((c + r) / V)),
+  ]
   for (let vil of villages) {
-    for (let k = 0; k < n; k++) {
-      for (let i = 0; i < n; i++) {
+    // Paved at most 4.75 + 0.75 metres out.
+    let [i0, i1] = span(vil.at[0], 5.5), [k0, k1] = span(vil.at[1], 5.5)
+    for (let k = k0; k <= k1; k++) {
+      for (let i = i0; i <= i1; i++) {
         let x = mid(i), z = mid(k)
         let ragged = rand(Math.floor(x / GRID), Math.floor(z / GRID), 5 + s)
         if (dist(x, z, vil.at) < 4.75 + ragged * 0.75) top[at(i, k)] = Top.path
@@ -487,7 +531,7 @@ let build = (lv: Level, V: number): Vale => {
   let taken = (x: number, z: number, lane: number, road: number) =>
     built.some((p) => dist(x, z, [p.x, p.z]) < (KINDS[p.kind].foot ?? 0) + 1) ||
     villages.some((p) => dist(x, z, p.at) < 6) ||
-    lane < 1.3 || road < ROAD + 1.5
+    lane < LANE || road < CLEAR
 
   // Trees and rocks, one chance per cell of a jittered grid, decided on the
   // smooth ground so they stand in the same places at every voxel size; none
@@ -525,11 +569,11 @@ let build = (lv: Level, V: number): Vale => {
   for (let ck = 1; ck < cells - 1; ck++) {
     for (let ci = 1; ci < cells - 1; ci++) {
       let x = (ci + 0.5) * GRID, z = (ck + 0.5) * GRID
+      let roll = rand(ci, ck, 9 + s)
+      if (roll >= LUSH) continue
       let j = at(Math.floor(x / V), Math.floor(z / V))
       let t = top[j]
       if (t == Top.path || taken(x, z, lanes[j], roads[j])) continue
-      let roll = rand(ci, ck, 9 + s)
-      if (roll >= LUSH) continue
       let w = hold(x, z), f = w.fs[lead(w, 0.42, (f) => f.decor)]
       if (BARE.has(t) && !f?.strewn) continue
       let list = f?.decor ?? w.wild?.decor ?? (GREEN.has(t) ? DECOR : [])
