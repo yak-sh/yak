@@ -504,7 +504,7 @@ let loop = (t: number) => {
       cam.x += (f.body.x - cam.x) * k
       cam.y += (f.body.y - cam.y) * (1 - Math.exp(-dt * 6))
       cam.z += (f.body.z - cam.z) * k
-      target.set(cam.x, cam.y + 1.4, cam.z)
+      target.set(cam.x, cam.y + 1, cam.z)
       for (let e of f.events) react(e, target)
       if (i.talk && f.talk) talkTo()
       if (h.talking && !f.talk) h.talk(null, () => {}, () => {})

@@ -7,6 +7,9 @@
 // doing (`Act`) every frame and poses itself; it keeps no state of the world.
 // Each figure is drawn as one skinned mesh, its parts the bones (parts.ts
 // `knit`).
+//
+// People are small beside the vale, the way they are in Portal Knights, and
+// no rounder for it: a hero stands 1.4 m.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { BEASTS, type Look, type Plans } from './beasts.ts'
@@ -47,6 +50,9 @@ export type Figure = {
   animate: (a: Act, dt: number) => void
 }
 
+// How much smaller than life the people of the vale are drawn.
+let SMALL = 0.72
+
 // Stitch a figure's parts into the one mesh it is drawn as.
 let sewn = (f: Figure): Figure => {
   knit(f.root, f.material)
@@ -67,6 +73,7 @@ let heroOf = (
   let skin = new THREE.Color(look.skin).getHex()
   let pants = shade(0x5b4a3e, 1), boots = 0x5a3c28, belt = 0x3d2c20
   let root = new THREE.Group()
+  root.scale.setScalar(SMALL)
   let body = new THREE.Group()
   root.add(body)
   let hips = new THREE.Group()
@@ -131,9 +138,10 @@ let heroOf = (
   return {
     root,
     material: m,
-    height: 2.15,
+    height: 2.15 * SMALL,
     animate: (a, dt) => {
-      phase += dt * (2 + a.speed * 1.9)
+      // Shorter legs step quicker to keep up.
+      phase += dt * (2 + (a.speed * 1.9) / SMALL)
       let amp = Math.min(1, a.speed / 4.5) * 0.85
       let s = Math.sin(phase)
       legL.rotation.x = s * amp
