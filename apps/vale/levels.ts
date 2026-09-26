@@ -675,9 +675,7 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
  *   lv.portals.filter((g) => !LEVELS[g.to]?.portals.some((b) => b.to == lv.id))
  * )
  * assertEquals(oneWay, [])
- * let seen = new Set(['mossvale'])
- * for (let id of seen) for (let g of LEVELS[id].portals) seen.add(g.to)
- * assertEquals(seen.size, lvs.length)
+ * assertEquals(Object.keys(HOPS).length, lvs.length)
  * let unknown = lvs.flatMap((lv) =>
  *   Object.values(lv.places).filter((p) => !FEATURES[p.kind])
  * )
@@ -688,3 +686,27 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
 export let LEVELS: Record<string, Level> = Object.fromEntries(
   Object.entries(ROWS).map(([id, lv]) => [id, { id, ...lv }]),
 )
+
+/** Where a new hero first stands. */
+export let HOME = 'mossvale'
+
+/** How many portals each level lies from home, and so how dangerous it is:
+ * the creatures that live in it climb with it (homes.ts `suits`).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals([HOPS.mossvale, HOPS.birchmere, HOPS.ashkeep], [0, 1, 8])
+ * ```
+ */
+export let HOPS: Record<string, number> = ((hops: Record<string, number>) => {
+  let queue = Object.keys(hops)
+  for (let id of queue) {
+    for (let { to } of LEVELS[id].portals) {
+      if (hops[to] == undefined) {
+        hops[to] = hops[id] + 1
+        queue.push(to)
+      }
+    }
+  }
+  return hops
+})({ [HOME]: 0 })

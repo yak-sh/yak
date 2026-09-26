@@ -6,11 +6,11 @@ import type { Beast } from '../beasts.ts'
 export let FROST: Record<string, Beast> = {
   snowhare: {
     name: 'Snow hare',
-    lvl: 6,
-    hp: 170,
-    dmg: 9,
+    lvl: 9,
+    hp: 298,
+    dmg: 13,
     speed: 5,
-    xp: 90,
+    xp: 152,
     reach: 1,
     aggro: 0,
     respawn: 25,
@@ -18,8 +18,8 @@ export let FROST: Record<string, Beast> = {
     size: 0.6,
     dust: 0xf4f6f8,
     haunts: [
-      { near: 'snowfield', count: 3, within: 28, apart: 6, roam: 6 },
-      { near: 'glacier', count: 2, within: 22, apart: 6, roam: 6, odds: 0.5 },
+      { near: 'snowfield', count: 4, within: 28, apart: 6, roam: 6 },
+      { near: 'glacier', count: 4, within: 22, apart: 6, roam: 6, odds: 0.7 },
     ],
     look: {
       plan: 'hopper',
@@ -45,8 +45,8 @@ export let FROST: Record<string, Beast> = {
     size: 1.1,
     dust: 0xc8ecff,
     haunts: [
-      { near: 'snowfield', count: 2, within: 26, apart: 7, roam: 4, odds: 0.6 },
-      { near: 'glacier', count: 2, within: 22, apart: 7, roam: 4, odds: 0.6 },
+      { near: 'snowfield', count: 4, within: 26, apart: 7, roam: 4, odds: 0.8 },
+      { near: 'glacier', count: 4, within: 22, apart: 7, roam: 4, odds: 0.8 },
     ],
     look: {
       plan: 'slime',
@@ -70,8 +70,8 @@ export let FROST: Record<string, Beast> = {
     size: 1.6,
     dust: 0xd8ecf8,
     haunts: [
-      { near: 'glacier', count: 1, within: 20, apart: 8, roam: 4, odds: 0.7 },
-      { near: 'snowfield', count: 1, within: 24, apart: 8, roam: 4, odds: 0.3 },
+      { near: 'glacier', count: 2, within: 20, apart: 8, roam: 4, odds: 0.9 },
+      { near: 'snowfield', count: 2, within: 24, apart: 8, roam: 4, odds: 0.8 },
     ],
     look: {
       plan: 'crag',
@@ -97,8 +97,9 @@ export let FROST: Record<string, Beast> = {
     size: 1.2,
     dust: 0xe8f0f4,
     haunts: [
-      { near: 'snowfield', count: 2, within: 26, apart: 6, roam: 7, odds: 0.6 },
-      { near: 'glacier', count: 2, within: 22, apart: 6, roam: 7, odds: 0.5 },
+      { near: 'snowfield', count: 4, within: 26, apart: 6, roam: 7, odds: 0.8 },
+      { near: 'glacier', count: 4, within: 22, apart: 6, roam: 7, odds: 0.7 },
+      { near: 'pinewood', count: 4, within: 24, apart: 6, roam: 7, odds: 0.8 },
     ],
     look: {
       plan: 'quadruped',
@@ -131,11 +132,11 @@ export let FROST: Record<string, Beast> = {
     haunts: [
       {
         near: 'snowfield',
-        count: 1,
+        count: 2,
         within: 24,
         apart: 12,
         roam: 8,
-        odds: 0.5,
+        odds: 0.7,
       },
     ],
     look: {
@@ -233,5 +234,41 @@ export let FROST: Record<string, Beast> = {
       scale: 3.4,
     },
     boss: true,
+  },
+  yeti: {
+    name: 'Yeti',
+    lvl: 16,
+    hp: 1792,
+    dmg: 46,
+    speed: 3.6,
+    xp: 847,
+    reach: 2.4,
+    aggro: 9,
+    respawn: 90,
+    loot: [['pelt', 1], ['frost', 0.5], ['fang', 0.3], ['draught', 0.2]],
+    size: 1.8,
+    dust: 0xe8eef2,
+    haunts: [
+      {
+        near: 'snowfield',
+        count: 2,
+        within: 24,
+        apart: 14,
+        roam: 6,
+        odds: 0.9,
+      },
+      { near: 'glacier', count: 2, within: 20, apart: 14, roam: 6, odds: 0.9 },
+    ],
+    look: {
+      plan: 'biped',
+      skin: 0x9ab0c0,
+      garb: 0xeef4f8,
+      eye: 0x3a7ab8,
+      build: [1.5, 1.45],
+      head: 'horns',
+      top: 0xc8d0d8,
+      long: true,
+      stoop: 0.2,
+    },
   },
 }

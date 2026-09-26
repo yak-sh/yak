@@ -1,13 +1,14 @@
-// Where each creature of a level lives: for every kind (beasts.ts) and every
-// place of the kind it haunts, or the share of them its odds pick (`dens`),
+// Where each creature of a level lives: for every kind (beasts.ts) that suits
+// the level's danger, and every place of the kind it haunts, or the share of
+// them its odds pick (`dens`),
 // homes picked around the place from the level's own numbers, where a
 // creature can stand: dry, level, clear of trunks and rocks, and nearer that
 // place than any place of another kind. Picked on the level's smooth ground
 // (terrain.ts `rise`), so the homes are the same at every voxel size. The same
 // list on every page, and each creature's eid is named by where it lives, so
 // no page has to be told what another grew.
-import { BEASTS, type Haunt } from './beasts.ts'
-import type { Level, Place } from './levels.ts'
+import { type Beast, BEASTS, type Haunt } from './beasts.ts'
+import { HOPS, type Level, type Place } from './levels.ts'
 import { hashOf, rand, uuidOf } from './rand.ts'
 import { wallsNear } from './sim.ts'
 import { rise, SHORE, SIZE, type Spot, steep, type Vale } from './terrain.ts'
@@ -16,10 +17,29 @@ import { rise, SHORE, SIZE, type Spot, steep, type Vale } from './terrain.ts'
  * haunts. */
 export type Den = { kind: string; haunt: Haunt; name: string; place: Place }
 
+/** Whether a creature belongs in a level `hops` portals from home: the
+ * danger climbs two creature levels a hop, from 1 to 5 at home to 15 to 21
+ * eight hops out, and a boss may stand four above the rest.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { BEASTS } from './beasts.ts'
+ * let at = (kind: string, hops: number) => suits(BEASTS[kind], hops)
+ * assertEquals([at('slime', 0), at('slime', 6), at('thornback', 0)], [
+ *   true,
+ *   false,
+ *   true,
+ * ])
+ * ```
+ */
+export let suits = (b: Beast, hops: number): boolean =>
+  b.lvl >= 2 * hops - 1 && b.lvl <= 2 * hops + 5 + (b.boss ? 4 : 0)
+
 /**
- * Every place of a level each kind of creature lives around: each place of a
- * kind it haunts, or the share of them its odds pick, each by its own name.
- * Only the level's rows are read, so asking is cheap.
+ * Every place of a level each kind of creature lives around: for each kind
+ * that suits the level, each place of a kind it haunts, or the share of them
+ * its odds pick, each by its own name. Only the level's rows are read, so
+ * asking is cheap.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -32,14 +52,16 @@ export type Den = { kind: string; haunt: Haunt; name: string; place: Place }
  */
 export let dens = (lv: Level): Den[] =>
   Object.entries(BEASTS).flatMap(([kind, beast]) =>
-    beast.haunts.flatMap((haunt) =>
-      Object.entries(lv.places).flatMap(([name, place]) =>
-        place.kind == haunt.near &&
-          rand(hashOf(`${lv.id}/${kind}/${name}`), 7) < (haunt.odds ?? 1)
-          ? [{ kind, haunt, name, place }]
-          : []
+    !suits(beast, HOPS[lv.id] ?? 0)
+      ? []
+      : beast.haunts.flatMap((haunt) =>
+        Object.entries(lv.places).flatMap(([name, place]) =>
+          place.kind == haunt.near &&
+            rand(hashOf(`${lv.id}/${kind}/${name}`), 7) < (haunt.odds ?? 1)
+            ? [{ kind, haunt, name, place }]
+            : []
+        )
       )
-    )
   )
 
 export type Home = {

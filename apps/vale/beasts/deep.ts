@@ -6,11 +6,11 @@ import type { Beast } from '../beasts.ts'
 export let DEEP: Record<string, Beast> = {
   capling: {
     name: 'Capling',
-    lvl: 2,
-    hp: 48,
-    dmg: 5,
+    lvl: 5,
+    hp: 146,
+    dmg: 10,
     speed: 2.2,
-    xp: 24,
+    xp: 72,
     reach: 1.2,
     aggro: 0,
     respawn: 20,
@@ -41,11 +41,11 @@ export let DEEP: Record<string, Beast> = {
   },
   stoolbrute: {
     name: 'Toadstool brute',
-    lvl: 6,
-    hp: 280,
-    dmg: 17,
+    lvl: 9,
+    hp: 490,
+    dmg: 24,
     speed: 2.4,
-    xp: 110,
+    xp: 186,
     reach: 2,
     aggro: 5,
     respawn: 40,
@@ -55,11 +55,11 @@ export let DEEP: Record<string, Beast> = {
     haunts: [
       {
         near: 'shroomwood',
-        count: 1,
+        count: 2,
         within: 20,
         apart: 10,
         roam: 4,
-        odds: 0.6,
+        odds: 0.8,
       },
     ],
     look: {
@@ -76,11 +76,11 @@ export let DEEP: Record<string, Beast> = {
   },
   sporeling: {
     name: 'Sporeling',
-    lvl: 8,
-    hp: 320,
-    dmg: 20,
+    lvl: 10,
+    hp: 440,
+    dmg: 24,
     speed: 2.8,
-    xp: 154,
+    xp: 206,
     reach: 1.5,
     aggro: 7,
     respawn: 40,
@@ -90,11 +90,11 @@ export let DEEP: Record<string, Beast> = {
     haunts: [
       {
         near: 'shroomwood',
-        count: 2,
+        count: 4,
         within: 26,
         apart: 8,
         roam: 6,
-        odds: 0.6,
+        odds: 0.8,
       },
     ],
     look: {
@@ -108,11 +108,11 @@ export let DEEP: Record<string, Beast> = {
   },
   glimmer: {
     name: 'Glimmer wisp',
-    lvl: 4,
-    hp: 120,
-    dmg: 12,
+    lvl: 6,
+    hp: 202,
+    dmg: 17,
     speed: 3,
-    xp: 63,
+    xp: 105,
     reach: 1.4,
     aggro: 6,
     respawn: 30,
@@ -129,7 +129,6 @@ export let DEEP: Record<string, Beast> = {
         roam: 7,
         odds: 0.5,
       },
-      { near: 'crystals', count: 2, within: 20, apart: 10, roam: 7, odds: 0.5 },
     ],
     look: {
       plan: 'wisp',
@@ -153,7 +152,7 @@ export let DEEP: Record<string, Beast> = {
     size: 1.2,
     dust: 0x9ad8f8,
     haunts: [
-      { near: 'crystals', count: 3, within: 20, apart: 6, roam: 5 },
+      { near: 'crystals', count: 4, within: 20, apart: 6, roam: 5 },
     ],
     look: {
       plan: 'crawler',
@@ -181,7 +180,7 @@ export let DEEP: Record<string, Beast> = {
     size: 1.5,
     dust: 0x9ad4ff,
     haunts: [
-      { near: 'crystals', count: 1, within: 18, apart: 8, roam: 5 },
+      { near: 'crystals', count: 2, within: 18, apart: 8, roam: 5 },
     ],
     look: {
       plan: 'crag',

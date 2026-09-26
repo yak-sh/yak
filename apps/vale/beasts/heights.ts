@@ -43,7 +43,6 @@ export let HEIGHTS: Record<string, Beast> = {
     dust: 0xd8d0c0,
     haunts: [
       { near: 'crags', count: 2, within: 20, apart: 6, roam: 6 },
-      { near: 'mesa', count: 2, within: 22, apart: 6, roam: 6, odds: 0.6 },
     ],
     look: {
       plan: 'quadruped',
@@ -102,9 +101,6 @@ export let HEIGHTS: Record<string, Beast> = {
     dust: 0x8a8a5a,
     haunts: [
       { near: 'crags', count: 2, within: 20, apart: 6, roam: 5, odds: 0.7 },
-      { near: 'mesa', count: 2, within: 22, apart: 6, roam: 5, odds: 0.6 },
-      { near: 'dunes', count: 2, within: 26, apart: 6, roam: 5, odds: 0.6 },
-      { near: 'oasis', count: 2, within: 20, apart: 6, roam: 5, odds: 0.5 },
     ],
     look: {
       plan: 'crawler',
@@ -133,7 +129,6 @@ export let HEIGHTS: Record<string, Beast> = {
     dust: 0xa85a3a,
     haunts: [
       { near: 'crags', count: 3, within: 18, apart: 5, roam: 5, odds: 0.5 },
-      { near: 'mesa', count: 2, within: 20, apart: 5, roam: 5, odds: 0.4 },
       { near: 'ruins', count: 2, within: 16, apart: 5, roam: 5, odds: 0.4 },
     ],
     look: {
@@ -162,8 +157,8 @@ export let HEIGHTS: Record<string, Beast> = {
     size: 2,
     dust: 0x8e8c84,
     haunts: [
-      { near: 'crags', count: 1, within: 16, apart: 10, roam: 4, odds: 0.4 },
-      { near: 'ruins', count: 1, within: 14, apart: 10, roam: 4, odds: 0.4 },
+      { near: 'crags', count: 2, within: 16, apart: 10, roam: 4, odds: 0.6 },
+      { near: 'ruins', count: 2, within: 14, apart: 10, roam: 4, odds: 0.6 },
     ],
     look: {
       plan: 'biped',
@@ -178,11 +173,11 @@ export let HEIGHTS: Record<string, Beast> = {
   },
   scorpion: {
     name: 'Rock scorpion',
-    lvl: 6,
-    hp: 216,
-    dmg: 16,
+    lvl: 10,
+    hp: 440,
+    dmg: 25,
     speed: 3.6,
-    xp: 106,
+    xp: 206,
     reach: 1.6,
     aggro: 8,
     respawn: 35,
@@ -190,10 +185,9 @@ export let HEIGHTS: Record<string, Beast> = {
     size: 1,
     dust: 0xa8804a,
     haunts: [
-      { near: 'crags', count: 2, within: 20, apart: 7, roam: 5, odds: 0.4 },
-      { near: 'mesa', count: 2, within: 22, apart: 7, roam: 5, odds: 0.5 },
-      { near: 'dunes', count: 3, within: 28, apart: 7, roam: 5, odds: 0.7 },
-      { near: 'ashfield', count: 2, within: 26, apart: 7, roam: 5, odds: 0.4 },
+      { near: 'crags', count: 4, within: 20, apart: 7, roam: 5, odds: 0.6 },
+      { near: 'mesa', count: 4, within: 22, apart: 7, roam: 5, odds: 0.7 },
+      { near: 'dunes', count: 4, within: 28, apart: 7, roam: 5, odds: 0.9 },
     ],
     look: {
       plan: 'crawler',
@@ -221,8 +215,8 @@ export let HEIGHTS: Record<string, Beast> = {
     size: 2,
     dust: 0x4a6a3a,
     haunts: [
-      { near: 'crags', count: 1, within: 12, apart: 10, roam: 5, odds: 0.25 },
-      { near: 'ruins', count: 1, within: 12, apart: 10, roam: 5, odds: 0.2 },
+      { near: 'crags', count: 2, within: 12, apart: 10, roam: 5, odds: 0.45 },
+      { near: 'ruins', count: 2, within: 12, apart: 10, roam: 5, odds: 0.6 },
     ],
     look: {
       plan: 'serpent',
@@ -251,8 +245,8 @@ export let HEIGHTS: Record<string, Beast> = {
     size: 1.8,
     dust: 0x8a8680,
     haunts: [
-      { near: 'crags', count: 1, within: 18, apart: 10, roam: 5, odds: 0.35 },
-      { near: 'mesa', count: 1, within: 20, apart: 10, roam: 5, odds: 0.4 },
+      { near: 'crags', count: 2, within: 18, apart: 10, roam: 5, odds: 0.55 },
+      { near: 'mesa', count: 2, within: 20, apart: 10, roam: 5, odds: 0.6 },
     ],
     look: {
       plan: 'serpent',
@@ -309,7 +303,6 @@ export let HEIGHTS: Record<string, Beast> = {
     haunts: [
       { near: 'ridge', count: 2, within: 18, apart: 7, roam: 8, odds: 0.7 },
       { near: 'moor', count: 2, within: 26, apart: 7, roam: 8, odds: 0.6 },
-      { near: 'mesa', count: 2, within: 22, apart: 7, roam: 8, odds: 0.5 },
       { near: 'crags', count: 1, within: 18, apart: 7, roam: 8, odds: 0.4 },
     ],
     look: {
@@ -340,8 +333,7 @@ export let HEIGHTS: Record<string, Beast> = {
     size: 2,
     dust: 0xd8b060,
     haunts: [
-      { near: 'ridge', count: 1, within: 14, apart: 10, roam: 7, odds: 0.3 },
-      { near: 'mesa', count: 1, within: 16, apart: 10, roam: 7, odds: 0.3 },
+      { near: 'mesa', count: 2, within: 16, apart: 10, roam: 7, odds: 0.5 },
     ],
     look: {
       plan: 'bird',
@@ -359,11 +351,11 @@ export let HEIGHTS: Record<string, Beast> = {
   },
   ridgeram: {
     name: 'Ridge ram',
-    lvl: 6,
-    hp: 230,
-    dmg: 16,
+    lvl: 8,
+    hp: 341,
+    dmg: 21,
     speed: 4.2,
-    xp: 106,
+    xp: 154,
     reach: 1.8,
     aggro: 6,
     respawn: 35,
@@ -371,9 +363,8 @@ export let HEIGHTS: Record<string, Beast> = {
     size: 1.2,
     dust: 0x8a7a6a,
     haunts: [
-      { near: 'ridge', count: 3, within: 18, apart: 7, roam: 6, odds: 0.6 },
-      { near: 'moor', count: 2, within: 26, apart: 7, roam: 6, odds: 0.6 },
-      { near: 'snowfield', count: 2, within: 26, apart: 7, roam: 6, odds: 0.4 },
+      { near: 'moor', count: 4, within: 26, apart: 7, roam: 6, odds: 0.8 },
+      { near: 'snowfield', count: 4, within: 26, apart: 7, roam: 6, odds: 0.6 },
     ],
     look: {
       plan: 'quadruped',
@@ -405,7 +396,6 @@ export let HEIGHTS: Record<string, Beast> = {
     size: 1,
     dust: 0xc8a070,
     haunts: [
-      { near: 'ridge', count: 1, within: 18, apart: 8, roam: 7, odds: 0.5 },
       { near: 'crags', count: 1, within: 18, apart: 8, roam: 7, odds: 0.3 },
       { near: 'pinewood', count: 1, within: 24, apart: 8, roam: 7, odds: 0.6 },
       { near: 'snowfield', count: 1, within: 26, apart: 8, roam: 7, odds: 0.4 },
@@ -422,6 +412,37 @@ export let HEIGHTS: Record<string, Beast> = {
       legs: 1.3,
       build: [0.8, 0.85, 0.95],
       muzzle: 1.3,
+    },
+  },
+  wight: {
+    name: 'Barrow wight',
+    lvl: 14,
+    hp: 1456,
+    dmg: 41,
+    speed: 3.2,
+    xp: 709,
+    reach: 2,
+    aggro: 9,
+    respawn: 90,
+    loot: [['bone', 0.6], ['coin', 1], ['gem', 0.1], ['elixir', 0.05]],
+    size: 1.3,
+    dust: 0x9aa8b0,
+    haunts: [
+      { near: 'moor', count: 2, within: 20, apart: 12, roam: 5, odds: 0.8 },
+      { near: 'ruins', count: 2, within: 14, apart: 10, roam: 5, odds: 0.9 },
+      { near: 'marsh', count: 2, within: 24, apart: 12, roam: 5, odds: 0.8 },
+    ],
+    look: {
+      plan: 'biped',
+      skin: 0xa8b4bc,
+      garb: 0x2a2e38,
+      eye: 0x9af0ff,
+      build: [0.95, 1.15],
+      head: 'crown',
+      top: 0xb89a50,
+      club: 0x7a8088,
+      long: true,
+      stoop: 0.25,
     },
   },
 }

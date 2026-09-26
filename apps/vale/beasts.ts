@@ -6,10 +6,11 @@
 // fire. A new creature is a row there, and a new body plan, when none of the
 // existing ones will do, is one more file in bodies/.
 //
-// Where it lives is by the kind of place (`haunts`): every level that has a
-// place of that kind (levels.ts) grows that many of it around each one, or
-// around the share of them its odds pick (homes.ts), so a new creature
-// appears wherever it belongs without any level naming it.
+// Where it lives is by the kind of place (`haunts`) and by its level: every
+// level whose danger it suits (homes.ts `suits`, two creature levels for each
+// portal from home) and that has a place of that kind (levels.ts) grows that
+// many of it around each one, or around the share of them its odds pick, so
+// a new creature appears wherever it belongs without any level naming it.
 import { DEEP } from './beasts/deep.ts'
 import { FIRE } from './beasts/fire.ts'
 import { FROST } from './beasts/frost.ts'
@@ -49,7 +50,7 @@ export type Look = {
   [P in keyof Plans]: { plan: P; scale?: number } & Plans[P]
 }[keyof Plans]
 
-/** Where a creature lives: around each place of a kind (terrain.ts
+/** Where a creature lives: around each place of a kind (features.ts
  * `FEATURES`), between `beyond` and `within` metres of it, `apart` metres
  * from its own kind, wandering `roam` metres from home. With `odds`, only
  * around that share of the places of the kind, each place picked by its own

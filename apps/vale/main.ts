@@ -14,7 +14,7 @@ import { bits, type Kind, overlay } from './fx.ts'
 import { hud } from './hud.ts'
 import { listen } from './input.ts'
 import { ITEMS } from './items.ts'
-import { LEVELS } from './levels.ts'
+import { HOME, LEVELS } from './levels.ts'
 import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { type Event, type Frame, game } from './play.ts'
 import { clamp } from './rand.ts'
@@ -54,8 +54,6 @@ let NAMES = [
   'Quill',
   'Hazel',
 ]
-// Where a new hero first stands.
-let HOME = 'mossvale'
 // The voxel edge the vale is grown at, in metres: `?voxel=0.25` grows it
 // finer, to compare. Any edge that divides the vale's side will do.
 let asked = Number(new URLSearchParams(location.search).get('voxel'))

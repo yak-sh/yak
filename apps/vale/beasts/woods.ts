@@ -44,7 +44,6 @@ export let WOODS: Record<string, Beast> = {
     dust: 0xb85a2a,
     haunts: [
       { near: 'woods', count: 2, within: 24, apart: 6, roam: 5 },
-      { near: 'pinewood', count: 2, within: 26, apart: 6, roam: 5 },
     ],
     look: {
       plan: 'hopper',
@@ -70,7 +69,6 @@ export let WOODS: Record<string, Beast> = {
     dust: 0xb88a58,
     haunts: [
       { near: 'woods', count: 2, beyond: 8, within: 26, apart: 8, roam: 8 },
-      { near: 'pinewood', count: 2, within: 26, apart: 8, roam: 8, odds: 0.5 },
     ],
     look: {
       plan: 'quadruped',
@@ -173,14 +171,14 @@ export let WOODS: Record<string, Beast> = {
     size: 1.7,
     dust: 0x4a4a52,
     haunts: [
-      { near: 'woods', count: 1, within: 12, apart: 10, roam: 7, odds: 0.3 },
+      { near: 'woods', count: 2, within: 12, apart: 10, roam: 7, odds: 0.5 },
       {
         near: 'pinewood',
-        count: 1,
+        count: 2,
         within: 14,
         apart: 10,
         roam: 7,
-        odds: 0.35,
+        odds: 0.55,
       },
     ],
     look: {
@@ -200,11 +198,11 @@ export let WOODS: Record<string, Beast> = {
   },
   bear: {
     name: 'Brown bear',
-    lvl: 7,
-    hp: 400,
-    dmg: 20,
+    lvl: 8,
+    hp: 481,
+    dmg: 23,
     speed: 3.8,
-    xp: 150,
+    xp: 178,
     reach: 2,
     aggro: 5,
     respawn: 45,
@@ -212,8 +210,8 @@ export let WOODS: Record<string, Beast> = {
     size: 1.6,
     dust: 0x6a4a30,
     haunts: [
-      { near: 'woods', count: 1, within: 22, apart: 12, roam: 8, odds: 0.45 },
-      { near: 'pinewood', count: 1, within: 24, apart: 12, roam: 8, odds: 0.5 },
+      { near: 'woods', count: 2, within: 22, apart: 12, roam: 8, odds: 0.65 },
+      { near: 'pinewood', count: 2, within: 24, apart: 12, roam: 8, odds: 0.7 },
     ],
     look: {
       plan: 'quadruped',
@@ -246,15 +244,6 @@ export let WOODS: Record<string, Beast> = {
     haunts: [
       { near: 'woods', count: 2, within: 20, apart: 6, roam: 5, odds: 0.6 },
       { near: 'pinewood', count: 2, within: 22, apart: 6, roam: 5, odds: 0.4 },
-      {
-        near: 'shroomwood',
-        count: 2,
-        within: 24,
-        apart: 6,
-        roam: 5,
-        odds: 0.5,
-      },
-      { near: 'ruins', count: 2, within: 16, apart: 6, roam: 5, odds: 0.5 },
     ],
     look: {
       plan: 'crawler',
@@ -282,14 +271,14 @@ export let WOODS: Record<string, Beast> = {
     size: 2,
     dust: 0x2a2030,
     haunts: [
-      { near: 'woods', count: 1, within: 10, apart: 10, roam: 5, odds: 0.25 },
+      { near: 'woods', count: 2, within: 10, apart: 10, roam: 5, odds: 0.45 },
       {
         near: 'shroomwood',
-        count: 1,
+        count: 2,
         within: 12,
         apart: 10,
         roam: 5,
-        odds: 0.25,
+        odds: 0.45,
       },
     ],
     look: {
@@ -456,11 +445,11 @@ export let WOODS: Record<string, Beast> = {
   },
   goblin: {
     name: 'Bramble goblin',
-    lvl: 4,
-    hp: 128,
-    dmg: 11,
+    lvl: 5,
+    hp: 170,
+    dmg: 13,
     speed: 4,
-    xp: 63,
+    xp: 83,
     reach: 1.5,
     aggro: 8,
     respawn: 30,
@@ -496,8 +485,8 @@ export let WOODS: Record<string, Beast> = {
     size: 1.4,
     dust: 0x5a7a2a,
     haunts: [
-      { near: 'woods', count: 1, within: 10, apart: 10, roam: 5, odds: 0.25 },
-      { near: 'ruins', count: 1, within: 10, apart: 10, roam: 5, odds: 0.3 },
+      { near: 'woods', count: 2, within: 10, apart: 10, roam: 5, odds: 0.45 },
+      { near: 'ruins', count: 2, within: 10, apart: 10, roam: 5, odds: 0.5 },
     ],
     look: {
       plan: 'biped',
@@ -553,8 +542,6 @@ export let WOODS: Record<string, Beast> = {
     dust: 0x4a3a44,
     haunts: [
       { near: 'woods', count: 2, within: 22, apart: 6, roam: 7, odds: 0.5 },
-      { near: 'ruins', count: 2, within: 18, apart: 6, roam: 7, odds: 0.6 },
-      { near: 'crystals', count: 2, within: 20, apart: 6, roam: 7, odds: 0.4 },
     ],
     look: {
       plan: 'flier',
