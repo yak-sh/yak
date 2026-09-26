@@ -11,6 +11,7 @@ transaction.
 ```sh
 deno install -gAf jsr:@yaks/cli/yak
 
+yak init Ada                    # Start this machine's own graph, as Ada.
 yak --config yak.json task list # Open a local graph, run a tool, and exit.
 yak land                        # Run a tool against the selected graph.
 yak serve --config yak.json     # Run that graph's serve tool: HTTP.
@@ -22,11 +23,12 @@ implementation. `yak` turns each tool in the selected graph into a subcommand.
 Its arguments and help come from the tool's input schema, so a new tool does not
 require a new CLI release.
 
-`yak` provides four commands itself: `help`, `login`, `logout`, and `apply`. Its
-other commands come from either a graph opened in the current process or an MCP
-server queried at run time. `yak serve` is one of those tools rather than a
-command of this package: [@yaks/api](../api/README.md) declares and implements
-it, so a config listing that package is a config whose graph can be served.
+`yak` provides five commands itself: `help`, `init`, `login`, `logout`, and
+`apply`. Its other commands come from either a graph opened in the current
+process or an MCP server queried at run time. `yak serve` is one of those tools
+rather than a command of this package: [@yaks/api](../api/README.md) declares
+and implements it, so a config listing that package is a config whose graph can
+be served.
 
 The package has two main responsibilities:
 
@@ -90,20 +92,31 @@ shown the same way too: through the views of the packages that declared the
 components, where this machine has them. A remote server's vocabulary, and the
 package behind each component, come from its `graph_schema`, asked once and
 cached beside its tool list; a reply that carries no entities prints as its
-text. CLI-only commands such as `help`, `login`, `logout`, and `apply` use their
-own command implementations.
+text. CLI-only commands such as `help`, `init`, `login`, `logout`, and `apply`
+use their own command implementations.
 
 ## The config
 
-Pass a config path with `--config`, set `$YAK_CONFIG`, or place the file at
-`~/.yak/yak.json`:
+`yak init <your name>` starts a machine's own graph: it writes `~/.yak/yak.json`
+(or the path `--config` names) with the plugins a graph, its tasks, sessions,
+`/mcp` and the web canvas need, and makes you the graph's `person`. It never
+replaces a config that is already there.
+
+A config is plain JSON, so a plugin is one more line. Pass another with
+`--config`, or set `$YAK_CONFIG`. This one adds @yaks/mail, with its options:
 
 ```json
 {
   "db": "graph.db",
   "plugins": [
+    "@yaks/kernel",
+    "@yaks/id",
+    "@yaks/secrets",
+    "@yaks/doc",
+    "@yaks/effects",
+    "@yaks/tools",
+    "@yaks/task",
     "@yaks/api",
-    "@yaks/harness",
     {
       "use": "@yaks/mail",
       "with": {
@@ -114,9 +127,9 @@ Pass a config path with `--config`, set `$YAK_CONFIG`, or place the file at
           "token": { "secret": "CF_EMAIL_TOKEN" }
         }
       }
-    },
-    "@yaks/secrets"
+    }
   ],
+  "numbers": true,
   "port": 8787
 }
 ```
@@ -124,17 +137,18 @@ Pass a config path with `--config`, set `$YAK_CONFIG`, or place the file at
 Relative database paths and plugin specifiers are resolved relative to the
 config file.
 
-| Field      | Meaning                                                                                          |
-| ---------- | ------------------------------------------------------------------------------------------------ |
-| `db`       | SQLite path or `:memory:`. Required unless `$DB_PATH` is set.                                    |
-| `plugins`  | Package specifiers, optionally paired with plugin-specific options.                              |
-| `port`     | Port the `serve` tool listens on; defaults to `@yaks/api`'s `PORT`.                              |
-| `hostname` | Network interface used by `serve`; defaults to `@yaks/api`'s `HOSTNAME`, `127.0.0.1`.            |
-| `numbers`  | Enables short entity numbers. `{ "except": [...] }` excludes entities carrying named components. |
-| `adopt`    | Preserves incoming entity numbers instead of minting new ones. Intended for store imports.       |
-| `name`     | MCP server name; defaults to `yak`.                                                              |
-| `lease`    | Duty lease duration in milliseconds; defaults to `30000`.                                        |
-| `duties`   | Whether this process runs its duties; defaults to `true`.                                        |
+| Field      | Meaning                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------- |
+| `db`       | SQLite path or `:memory:`. Required unless `$DB_PATH` is set.                                     |
+| `plugins`  | Package specifiers, optionally paired with plugin-specific options.                               |
+| `port`     | Port the `serve` tool listens on; defaults to `@yaks/api`'s `PORT`.                               |
+| `hostname` | Network interface used by `serve`; defaults to `@yaks/api`'s `HOSTNAME`, `127.0.0.1`.             |
+| `numbers`  | Enables short entity numbers. `{ "except": [...] }` excludes entities carrying named components.  |
+| `adopt`    | Preserves incoming entity numbers instead of minting new ones. Intended for store imports.        |
+| `name`     | MCP server name; defaults to `yak`.                                                               |
+| `person`   | Who works at this machine, as any id the graph resolves; a command typed at a terminal is theirs. |
+| `lease`    | Duty lease duration in milliseconds; defaults to `30000`.                                         |
+| `duties`   | Whether this process runs its duties; defaults to `true`.                                         |
 
 There is no default database path. `compose` throws unless `db` or `$DB_PATH` is
 present.

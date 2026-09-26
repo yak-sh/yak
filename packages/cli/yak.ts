@@ -1,8 +1,8 @@
-// The `yak` command. It has four subcommands of its own — `help`, `login`,
-// `logout`, `apply` — and every other subcommand is a tool: one of the tools
+// The `yak` command. It has five subcommands of its own — `help`, `init`,
+// `login`, `logout`, `apply` — and every other subcommand is a tool: one of the tools
 // of the graph this command opens (local.ts), or one an MCP server lists
 // (platform.ts), with the apps' own commands (commands.ts) beside them. Either
-// list costs something to gather, so run.ts asks for it only when the four
+// list costs something to gather, so run.ts asks for it only when the five
 // built-in subcommands did not match.
 //
 // `serve` is one of those tools, not one of these four: @yaks/api declares it
@@ -40,6 +40,8 @@ import { appStray, appTools } from './commands.ts'
 import { cli, type Command, type Ctx, helpTool, type Opts } from './run.ts'
 import { listed } from './platform.ts'
 import { forgetToken, saveToken } from './store.ts'
+import { ownConfig } from './config.ts'
+import { starter } from './init.ts'
 import { listen, winding } from './signal.ts'
 
 /** The platform this command talks to when it opens no graph of its own. */
@@ -123,10 +125,81 @@ export let YAK: Opts = {
   stray: appStray,
 }
 
-/** The command's own four subcommands, which shadow a tool of the same name
+// Whether this CLI imports a package by its bare name: every workspace package
+// in a checkout, and only its own dependencies in a JSR install.
+let mapped = (name: string): boolean => {
+  try {
+    import.meta.resolve(name)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// `init` is the one command that runs before there is a graph: it writes the
+// config a machine's own graph starts from (./init.ts) and makes the person
+// who works there, so what they type is signed as them from the first command.
+// It never replaces a config: one already there is somebody's graph.
+let init = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
+  let path = c.config ?? Deno.env.get('YAK_CONFIG') ?? ownConfig()
+  if (!path) {
+    throw new Usage('no $HOME to keep a config in — name one with --config')
+  }
+  let name = String(args.name).trim()
+  if (!name) throw new Usage('yak init <your name>')
+  let person = crypto.randomUUID()
+  let dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.'
+  Deno.mkdirSync(dir, { recursive: true })
+  try {
+    Deno.writeTextFileSync(
+      path,
+      JSON.stringify(starter(person, mapped), null, 2) + '\n',
+      { createNew: true },
+    )
+  } catch (error) {
+    if (!(error instanceof Deno.errors.AlreadyExists)) throw error
+    c.note(`a config is already at ${path} — yak init never replaces one`)
+    return 1
+  }
+  try {
+    let host = await (local ??= await import('./local.ts'))
+      .opened(path, ['graph'], false)
+    await host.graph.apply([
+      { entity: { eid: person }, person: {}, doc: { title: name } },
+    ])
+  } catch (error) {
+    // A config naming a person its graph never made is worse than none: the
+    // next `yak init` could not replace it.
+    Deno.removeSync(path)
+    throw error
+  }
+  c.out(`wrote ${path}, a graph worked at by ${name}`)
+  c.out('next: yak task new "a first task", then yak serve')
+  return 0
+}
+
+/** The command's own five subcommands, which shadow a tool of the same name
  * from either list. */
 export let own: Command[] = [
   helpTool(YAK),
+  {
+    name: 'init',
+    description:
+      "start this machine's own graph: write its config and make you its person",
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['name'],
+      properties: {
+        name: {
+          type: 'string',
+          description: 'your name, as the graph will know you',
+        },
+      },
+    },
+    options: { positional: ['name'] },
+    run: init,
+  },
   {
     name: 'login',
     description: 'save a bearer token for this host',
@@ -183,7 +256,7 @@ export let own: Command[] = [
 ]
 
 /** What a plain install carries, in precedence order. The apps' commands come
- * after this command's own four and before the graph's tools, because one of
+ * after this command's own five and before the graph's tools, because one of
  * those tools is `command` itself: the graph's version takes the app's
  * arguments as a JSON object, and the one here takes them the way a person
  * types them. */

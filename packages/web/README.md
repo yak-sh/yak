@@ -7,14 +7,25 @@ card on screen is live: an edit anywhere reaches the page over the socket.
 ## Use
 
 List it in a `yak serve` config beside @yaks/api, whose doors the page reads and
-writes through:
+writes through, and @yaks/canvas, whose canvas `/` opens. `yak init` writes a
+config that has both. The least one that serves the page:
 
 ```json
 {
-  "name": "yak",
-  "plugins": ["@yaks/id", "@yaks/doc", "@yaks/task", "@yaks/api", "@yaks/web"]
+  "db": "yak.db",
+  "plugins": [
+    "@yaks/kernel",
+    "@yaks/id",
+    "@yaks/doc",
+    "@yaks/task",
+    "@yaks/canvas",
+    "@yaks/api",
+    "@yaks/web"
+  ]
 }
 ```
+
+A graph with no canvas yet makes its first when `/` is opened.
 
 The routes facet (`@yaks/web/routes`, routes.ts) answers:
 

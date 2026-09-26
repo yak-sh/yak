@@ -79,6 +79,15 @@ export type Config = {
 /** Where a machine keeps the config for its own graph. */
 export let OWN_CONFIG = '.yak/yak.json'
 
+/** Where this machine keeps the config for its own graph, whether or not it
+ * has one yet: under `$HOME`, or nowhere for a process that has none. */
+export let ownConfig = (
+  env: (name: string) => string | undefined = Deno.env.get,
+): string | undefined => {
+  let home = env('HOME')
+  return home ? `${home}/${OWN_CONFIG}` : undefined
+}
+
 /** The config a command opens: the path it was given, else `$YAK_CONFIG`,
  * else the one this machine keeps for its own graph. A machine that has a
  * graph is the ordinary case, so a bare `yak task list` there reads from it
@@ -90,9 +99,8 @@ export let configPath = (
 ): string | undefined => {
   let named = said ?? env('YAK_CONFIG')
   if (named) return named
-  let home = env('HOME')
-  if (!home) return undefined
-  let own = `${home}/${OWN_CONFIG}`
+  let own = ownConfig(env)
+  if (!own) return undefined
   // The command may be running without read permission at all; that is no
   // config.
   try {

@@ -52,3 +52,34 @@ Deno.test('a dry run is the tool’s check, and nothing else moves', async () =>
   let [wet] = await ran(['apply', '--change', change])
   assertEquals(wet.arguments.check, undefined)
 })
+
+// `init` starts a graph where there was none: a config that opens, naming a
+// person the graph holds under the name given. A second `init` on the same
+// path is refused and leaves the first alone.
+Deno.test('init writes a config whose graph knows its person', async () => {
+  let dir = Deno.makeTempDirSync()
+  let path = `${dir}/yak.json`
+  let line = (argv: string[]) =>
+    cli(own, {
+      ...YAK,
+      argv: [...argv, '--config', path],
+      env: () => undefined,
+      reads: { file: () => '', stdin: () => '' },
+      out: () => {},
+      note: () => {},
+    })
+  try {
+    assertEquals(await line(['init', 'Ada']), 0)
+    let first = Deno.readTextFileSync(path)
+    let { person } = JSON.parse(first)
+    let { opened, close } = await import('./local.ts')
+    let host = await opened(path, ['graph'], false)
+    let [me] = await host.graph.read(`.eid=${person}&.person&.doc`)
+    assertEquals((me?.doc as { title?: string } | undefined)?.title, 'Ada')
+    await close(0)
+    assertEquals(await line(['init', 'Bob']), 1)
+    assertEquals(Deno.readTextFileSync(path), first)
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
