@@ -2,7 +2,8 @@
 // platform's environment started once per run (M-39441):
 //
 // - deno: every `*_test.ts`, and every example in a doc comment or a README
-//   (`deno test --doc`), sharded across processes;
+//   (`deno test --doc`), sharded across processes, and each shard's test
+//   files, save the web app's, loaded into one runtime (bin/shard.ts);
 // - workerd: every `*_workerd_test.ts`, against the one kernel
 //   workers/yak/probe-suite.ts starts for the run.
 //
@@ -95,6 +96,25 @@ let common = [
   // first one turns a red run into a single symptom, and the shard that never
   // ran is indistinguishable from a green one.
 ]
+
+/** The module a shard's test files load through, into one runtime. */
+let SHARD = `${import.meta.dirname}/shard.ts`
+
+// The web app is one tab's state held in its modules — the live cache, the
+// view registry, the route — and its tests each set that state up as a tab
+// would. Their files keep a runtime each, as a tab has.
+let ALONE = ['packages/web/']
+let alone = (file: string) => ALONE.some((dir) => file.includes(dir))
+
+/** One shard's arguments to `deno test`: the files that keep a runtime of
+ * their own, then the rest through {@link SHARD}, into one. */
+export let loads = (files: string[]) => {
+  let shared = files.filter((f) => !alone(f))
+  return [
+    ...files.filter(alone),
+    ...(shared.length ? [SHARD, '--', ...shared] : []),
+  ]
+}
 
 /** The examples in `pages`, run as tests; the test files are the shards'. */
 let examples = (pages: string[]) => [
@@ -376,7 +396,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let files = args.filter((a) => !a.startsWith('--doc='))
   let jobs = Number(Deno.env.get('DENO_JOBS') ?? navigator.hardwareConcurrency)
   let runs = [
-    ...shards(files, jobs).map((f) => [...common, ...f]),
+    ...shards(files, jobs).map((f) => [...common, ...loads(f)]),
     ...shards(docs, jobs).map(examples),
   ]
   let children = runs.map((args) =>

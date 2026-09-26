@@ -1,6 +1,6 @@
 import { until } from './testing.ts'
 import { fileURLToPath } from 'node:url'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { pages, RUN, shards } from './test.ts'
 
 Deno.test('examples come from the packages, and never a module by name', async () => {
@@ -34,6 +34,35 @@ Deno.test('a run started inside a run refuses at once', async () => {
   }).output()
   assertEquals(out.code, 2)
   assertEquals(/refused/.test(new TextDecoder().decode(out.stderr)), true)
+})
+
+Deno.test('a file that cannot load fails as a test of its own, and the rest run', async () => {
+  let dir = await Deno.makeTempDir({ prefix: 'test-shard-' })
+  try {
+    await Deno.writeTextFile(`${dir}/broken_test.ts`, "import './gone.ts'")
+    await Deno.writeTextFile(
+      `${dir}/fine_test.ts`,
+      "Deno.test('fine', () => {})",
+    )
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'test',
+        '--no-check',
+        '-A',
+        fileURLToPath(new URL('./shard.ts', import.meta.url)),
+        '--',
+        `${dir}/broken_test.ts`,
+        `${dir}/fine_test.ts`,
+      ],
+      env: { NO_COLOR: '1' },
+    }).output()
+    let text = new TextDecoder().decode(out.stdout)
+    assertEquals(out.code, 1, text)
+    assertMatch(text, /broken_test\.ts loads \.\.\. FAILED/)
+    assertMatch(text, /^fine \.\.\. ok/m)
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
 })
 
 Deno.test('bulk shards are bounded, deterministic and run every module once', () => {
