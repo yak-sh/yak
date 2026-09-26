@@ -62,12 +62,19 @@ export type Need =
   | { comp: string; prop: string; keys: string[] }
   | { eids: string[] }
 
-/** A compiled clause: its test, and the sets its matches must lie inside. */
-export type Arm = { test: Test; needs: Need[] }
+/** A compiled clause: its test, the sets its matches must lie inside, and
+ * whether it is a question about the entity alone — false when it follows a
+ * reference, reads a backlink or walks, so its answer can change when another
+ * entity does. */
+export type Arm = { test: Test; needs: Need[]; alone: boolean }
 
 let YES: Test = () => true
 let NO: Test = () => false
-let arm = (test: Test, needs: Need[] = []): Arm => ({ test, needs })
+let arm = (test: Test, needs: Need[] = [], alone = true): Arm => ({
+  test,
+  needs,
+  alone,
+})
 let wearing = (comp: string): Need[] => comp == 'entity' ? [] : [{ comp }]
 
 // A structured value flattened back to the single string ./value.ts re-parses —
@@ -222,10 +229,14 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Arm => {
   // The leaf is a component rather than a property: does the target have it?
   if (!leaf.prop) {
     let present = op == '~' || op == EXISTS
-    return arm((b, among) => {
-      let t = follow(b, among)
-      return (!!t && wears(t, leaf.comp)) == present
-    }, present ? wearing(root.comp) : [])
+    return arm(
+      (b, among) => {
+        let t = follow(b, among)
+        return (!!t && wears(t, leaf.comp)) == present
+      },
+      present ? wearing(root.comp) : [],
+      false,
+    )
   }
   let { hit } = scalar(ctx, leaf, p)
   // For the operators only a present value can satisfy, the entity must also
@@ -238,6 +249,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Arm => {
   return arm(
     (b, among) => (!rooted || wears(b, root.comp)) && hit(follow(b, among)),
     rooted ? wearing(root.comp) : [],
+    false,
   )
 }
 
@@ -498,10 +510,14 @@ let words = (ctx: Ctx, value: string): Test => {
 let all = (arms: Arm[]): Arm => {
   let ts = arms.map((a) => a.test)
   let n = ts.length
-  return arm((b, among) => {
-    for (let i = 0; i < n; i++) if (!ts[i](b, among)) return false
-    return true
-  }, arms.flatMap((a) => a.needs))
+  return arm(
+    (b, among) => {
+      for (let i = 0; i < n; i++) if (!ts[i](b, among)) return false
+      return true
+    },
+    arms.flatMap((a) => a.needs),
+    arms.every((a) => a.alone),
+  )
 }
 
 /**
@@ -515,11 +531,16 @@ export let compile = (ctx: Ctx, c: Clause): Arm => {
   if (c.kind == 'text') return arm(words(ctx, c.value))
   if (c.kind == 'and') return all(c.clauses.map((x) => compile(ctx, x)))
   if (c.kind == 'or') {
-    let ts = c.clauses.map((x) => clause(ctx, x))
-    return arm((b, among) => ts.some((t) => t(b, among)))
+    let arms = c.clauses.map((x) => compile(ctx, x))
+    let ts = arms.map((a) => a.test)
+    return arm(
+      (b, among) => ts.some((t) => t(b, among)),
+      [],
+      arms.every((a) => a.alone),
+    )
   }
-  if (c.kind == 'refs') return arm(refs(ctx, c))
-  if (c.kind == 'walk') return arm(walk(ctx, c))
+  if (c.kind == 'refs') return arm(refs(ctx, c), [], false)
+  if (c.kind == 'walk') return arm(walk(ctx, c), [], false)
   if (c.kind == 'pred') {
     if (c.path[0] == 'kind' && c.path.length == 1) {
       return kindScope(ctx, flat(c.value))
@@ -528,7 +549,7 @@ export let compile = (ctx: Ctx, c: Clause): Arm => {
     // far side of a reference; anything else is resolved forward through the
     // vocabulary.
     let assoc = ctx.v.assoc(c.path[0])
-    if (assoc) return arm(reverse(ctx, c.path[0], assoc, c))
+    if (assoc) return arm(reverse(ctx, c.path[0], assoc, c), [], false)
     if (c.not || c.where) {
       throw new Unsupported('a reverse association', c.path.join('.'), BY)
     }

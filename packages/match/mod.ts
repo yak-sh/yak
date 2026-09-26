@@ -65,6 +65,7 @@ export {
   type Select,
   type Source,
 } from './match.ts'
+export { type Net, net, type NetOpts } from './net.ts'
 export {
   type Bundle,
   type Computed,

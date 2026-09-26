@@ -9,10 +9,13 @@
 //
 // Two modes, chosen when the subscription opens:
 //
-//   Incremental  the query asks only about each entity itself, so
-//                @yaks/match's `filter` decides membership one bundle at a
-//                time — the query is never run again, however large the set
-//                is.
+//   Routed       the query asks only about each entity itself, so it joins
+//                the registry's network (@yaks/match `net`), which every
+//                subscription of that kind shares. A changed entity moves
+//                through the network once, into the subscriptions it matches
+//                and out of the ones it left — the query is never run again,
+//                however large the set is, and a commit costs what it
+//                changed, not how many subscriptions are open.
 //   Refresh      the query follows a reference, counts, orders or limits, so
 //                its result can change when an entity the query never named
 //                does. These run the query again and compare it against the
@@ -43,9 +46,8 @@ import {
   reduced,
   wanted,
 } from '@yaks/graph'
-import { type Filter, filter } from '@yaks/match'
-import { bare, type Clause, parse } from '@yaks/query'
-import type { Vocab } from '@yaks/vocab'
+import { net } from '@yaks/match'
+import { parse } from '@yaks/query'
 import { cares, type Interest, interest } from './interest.ts'
 import { fault, type Refusal, refusal } from './refuse.ts'
 import { type Relay, relay as relaying, type Timer } from './relay.ts'
@@ -122,9 +124,9 @@ type Sub = {
   /** the entities currently in the set */
   members: Set<Eid>
   fields: Map<Eid, Set<string>>
-  /** the per-bundle test, or `null` when this subscription runs its query
-   * again instead */
-  test: Filter | null
+  /** true when the registry's network decides membership, false when this
+   * subscription runs its query again instead */
+  routed: boolean
   /** the components its rows carry, or `null` for every one (@yaks/graph
    * `wanted`), so a pushed bundle is cut the way the first answer was */
   want?: Set<string> | null
@@ -135,6 +137,10 @@ type Sub = {
    * commit can move it */
   reads?: Interest | null
 }
+
+// What one commit did to one routed subscription: the entities now in its set,
+// and the ones that left it.
+type Moved = { bundles: Bundle[]; gone: Eid[] }
 
 // What one commit did to each entity it touched: the components its patches
 // named, and the ones it wears now, or `null` once it is deleted.
@@ -164,30 +170,6 @@ let moved = (sub: Sub, touch: Touch) =>
     sub.members.has(eid) || !t.worn || cares(sub.reads!, t.named, t.worn)
   )
 
-// Whether a clause can be decided against one entity on its own: a property of
-// the entity itself, a term in its own text, nothing at all. A path that hops
-// through a reference or a backlink, an ordering, a limit or an aggregate is
-// a question about the set, and answering it means running the query again.
-// `*` selects which components a result carries — it is not a question about
-// membership at all — so it leaves a subscription incremental.
-let local = (c: Clause, v: Vocab): boolean =>
-  c.kind == 'and' || c.kind == 'or'
-    ? c.clauses.every((k) => local(k, v))
-    : c.kind == 'pred'
-    ? v.aim(c.path.join('.'), bare(c)).length == 1
-    : c.kind == 'text' || c.kind == 'never' || c.kind == 'every'
-
-// The per-bundle test for a parsed query, or null to run the query again
-// instead. Both a query that reaches beyond a single entity and one
-// @yaks/match refuses to compile fall back to running it again.
-let judge = (ast: Clause, query: string, vocab: Vocab): Filter | null => {
-  try {
-    return local(ast, vocab) ? filter(query, vocab) : null
-  } catch {
-    return null
-  }
-}
-
 /**
  * A subscription registry over a graph. It registers an `effect` hook on that
  * graph, so every transaction that commits — through this API or not —
@@ -211,12 +193,19 @@ export let subscriptions = (graph: Graph, opts: {
 } = {}): Subs => {
   let held = new Map<Sink, Map<string, Sub>>()
   let all = () => [...held.values()].flatMap((m) => [...m.values()])
+  let routed = net<Sub>(graph.vocab)
+  // A subscription let go of, by its sink closing it or by a new one under
+  // its id: the network lets go of it too.
+  let forget = (sub: Sub | undefined) => {
+    if (sub?.routed) routed.drop(sub)
+  }
 
   // A subscription whose query is refused is closed, not kept: a query the
   // graph cannot answer would otherwise throw on every commit for the life of
   // the socket.
   let cut = (sub: Sub, err: unknown) => {
     held.get(sub.sink)?.delete(sub.id)
+    forget(sub)
     fault(err, 'subscription')
     sub.sink({ id: sub.id, refused: refusal(err) })
   }
@@ -260,23 +249,26 @@ export let subscriptions = (graph: Graph, opts: {
       query: line,
       members: new Set(),
       fields: new Map(),
-      test: null,
+      routed: false,
     }
+    forget(mine.get(id))
     mine.set(id, sub)
     // a raw feed carries whole transactions, not a membership set
     if (sub.raw) return
     return attempt(sub, () => {
-      // Parsed here, outside `judge`, so a query that cannot be parsed is
-      // refused rather than quietly demoted to a subscription that runs it
-      // again on every commit forever.
+      // Parsed here, before the network is asked, so a query that cannot be
+      // parsed is refused rather than quietly demoted to a subscription that
+      // runs it again on every commit forever.
       let ast = parse(line)
       sub.reads = interest(ast, graph.vocab)
       sub.agg = aggregate(ast)
       if (sub.agg) return tell(sub, true)
-      sub.test = judge(ast, line, graph.vocab)
       sub.want = wanted(graph.vocab, line)
       return then(graph.read(line, { durable: true }), (bundles) => {
         for (let b of bundles) sub.members.add(b.entity.eid)
+        if (held.get(sink)?.get(id) === sub) {
+          sub.routed = routed.add(sub, ast, sub.members)
+        }
         rememberFields(sub, bundles)
         const snapshots = live.snapshots().filter((f) => visible(sub, f))
         // The relayed values other connections already hold for this set, so
@@ -306,33 +298,21 @@ export let subscriptions = (graph: Graph, opts: {
       sub.sink({ id: sub.id, ...value })
     })
 
-  // One query subscription against the entities a transaction changed, read
-  // whole for the test and sent cut to what the query names.
-  let push = (sub: Sub, now: Bundle[], touched: Eid[]) => {
+  // What a commit did to one routed subscription, sent cut to what the query
+  // names.
+  let send = (sub: Sub, moved?: Moved) => {
+    if (!moved) return
+    let { bundles, gone } = moved
+    rememberFields(sub, bundles)
+    for (const eid of gone) sub.fields.delete(eid)
+    if (bundles.length || gone.length) sub.sink({ id: sub.id, bundles, gone })
+  }
+
+  // One query subscription the network does not hold, against the entities a
+  // transaction changed: an aggregate answers again, and anything else is a
+  // question about the whole set, so it runs its query again.
+  let push = (sub: Sub, touched: Eid[]) => {
     if (sub.agg) return tell(sub)
-    let test = sub.test
-    if (test) {
-      let bundles: Bundle[] = []
-      let gone: Eid[] = []
-      let seen = new Set(now.map((b) => b.entity.eid))
-      for (let b of now) {
-        let eid = b.entity.eid
-        if (test(b, now)) {
-          sub.members.add(eid)
-          bundles.push(only(sub.want ?? null)(b))
-        } else if (sub.members.delete(eid)) gone.push(eid)
-      }
-      // An entity storage no longer holds at all has left the set too.
-      for (let eid of touched) {
-        if (!seen.has(eid) && sub.members.delete(eid)) gone.push(eid)
-      }
-      rememberFields(sub, bundles)
-      for (const eid of gone) sub.fields.delete(eid)
-      if (bundles.length || gone.length) sub.sink({ id: sub.id, bundles, gone })
-      return
-    }
-    // Refresh: the result is a property of the whole set, so run the query
-    // again.
     return then(graph.read(sub.query, { durable: true }), (set) => {
       let ids = new Set(set.map((b) => b.entity.eid))
       let gone = [...sub.members].filter((e) => !ids.has(e))
@@ -365,6 +345,7 @@ export let subscriptions = (graph: Graph, opts: {
     let touched = [...new Set(applied.map((b) => b.entity.eid))]
     return then(graph.get(touched), (now) => {
       let touch = touches(applied, now)
+      let routing = route(now, touched)
       return then(
         over(queries, (s) =>
           attempt(s, () => {
@@ -373,16 +354,52 @@ export let subscriptions = (graph: Graph, opts: {
                 let ids = new Set(set.map((b) => b.entity.eid))
                 let gone = [...s.members].filter((id) => !ids.has(id))
                 s.members = ids
+                if (s.routed) routed.add(s, s.query, ids)
                 rememberFields(s, set)
                 s.sink({ id: s.id, bundles: set, gone })
               })
             }
-            if (!s.test && !moved(s, touch)) return
-            return push(s, now, touched)
+            if (s.routed) return send(s, routing.get(s))
+            if (!moved(s, touch)) return
+            return push(s, touched)
           })),
         () => undefined,
       )
     })
+  }
+
+  // The entities a transaction changed, read whole, each moved through the
+  // network once: what joined and what left every routed subscription.
+  let route = (now: Bundle[], touched: Eid[]): Map<Sub, Moved> => {
+    let out = new Map<Sub, Moved>()
+    let of = (s: Sub) => {
+      let m = out.get(s)
+      if (!m) out.set(s, m = { bundles: [], gone: [] })
+      return m
+    }
+    let seen = new Set<Eid>()
+    for (let b of now) {
+      let eid = b.entity.eid
+      seen.add(eid)
+      let { into, out: left } = routed.move(b)
+      for (let s of left) {
+        s.members.delete(eid)
+        of(s).gone.push(eid)
+      }
+      for (let s of into) {
+        s.members.add(eid)
+        of(s).bundles.push(only(s.want ?? null)(b))
+      }
+    }
+    // An entity storage no longer holds at all has left every set too.
+    for (let eid of touched) {
+      if (seen.has(eid)) continue
+      for (let s of routed.forget(eid)) {
+        s.members.delete(eid)
+        of(s).gone.push(eid)
+      }
+    }
+    return out
   }
 
   // The relay, and how a value reaches the clients watching. A relayed value
@@ -441,10 +458,12 @@ export let subscriptions = (graph: Graph, opts: {
     open,
     close: (sink, id) => {
       pending.get(sink)?.delete(id)
+      forget(held.get(sink)?.get(id))
       held.get(sink)?.delete(id)
     },
     drop: (sink) => {
       pending.delete(sink)
+      for (let sub of held.get(sink)?.values() ?? []) forget(sub)
       held.delete(sink)
       // Every value this connection was relaying stops being true when the
       // connection goes.

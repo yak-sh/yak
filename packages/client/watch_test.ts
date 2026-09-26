@@ -92,9 +92,20 @@ Deno.test('a watch stops after close', () => {
   c.close()
 })
 
+Deno.test('a watch carries what its query names, after a change as at first', () => {
+  let c = boxClient()
+  c.mutate([dal()])
+  let dinners = c.watch('.course=dinner')
+  let carried = () => Object.keys(dinners.value[0]).sort()
+  assertEquals(carried(), ['entity', 'recipe'])
+  c.mutate([{ entity: { eid: 'r1' }, recipe: { serves: 8 } }])
+  assertEquals(carried(), ['entity', 'recipe'])
+  c.close()
+})
+
 Deno.test('one listener stops without stopping the watch', () => {
   let c = boxClient()
-  let dinners = c.watch('.course=dinner')
+  let dinners = c.watch('.course=dinner&?doc')
   let heard = 0
   let stop = dinners.subscribe(() => heard++)
   stop()
@@ -150,7 +161,7 @@ Deno.test('a signal factory backs the value', () => {
     return held
   }
   let c = boxClient(undefined, { signal })
-  let dinners = c.watch('.course=dinner')
+  let dinners = c.watch('.course=dinner&?doc')
   assertEquals(made.length, 2)
 
   c.mutate([dal()])
@@ -202,8 +213,8 @@ Deno.test('local ready is reactive and an empty asynchronous answer notifies', a
 
 Deno.test('identical local watches share evaluation but not listener ownership', () => {
   let c = boxClient()
-  let a = c.watch('.recipe')
-  let b = c.watch('.recipe', { remote: false })
+  let a = c.watch('.recipe&?doc')
+  let b = c.watch('.recipe&?doc', { remote: false })
   assertEquals(c.watches.size(), 1)
   assertEquals(a.ready, true)
   let heard = 0

@@ -9,27 +9,30 @@
 // of the whole store.
 //
 // A commit is handled the way a server handles a subscription: read the
-// changed entities once, whole, then test them once per watch, in one of two
-// modes chosen when the watch opens.
+// changed entities once, whole, then work out which watches each one moved, in
+// one of two ways chosen when the watch opens.
 //
-//   Incremental  the query asks only about each entity itself, so
-//                @yaks/match's `filter` decides membership one bundle at a
-//                time and the result is edited in place — the query is never
-//                run again, however large the store is.
-//   Refresh      the query follows a reference, orders, limits or counts, so
-//                its result can change when an entity it never named does.
-//                These run the query again and compare.
+//   Routed    the query asks only about each entity itself, so it joins the
+//             registry's network (@yaks/match `net`), which every watch of
+//             that kind shares. A changed entity walks the network once, to
+//             exactly the watches it now matches; the ones it matched before
+//             are remembered per entity. So a commit costs what it changed,
+//             not what is watched, and the query is never run again.
+//   Refresh   the query follows a reference, orders, limits or counts, so its
+//             result can change when an entity it never named does. These run
+//             the query again and compare.
 //
-// An incremental result keeps first-match order: the order the entities were
-// read in, with a new match appended at the end. A query that cares about
-// order states it (`.order=title`), and stating it puts the watch in refresh
-// mode, where the order is the one the store returned.
+// A routed result keeps first-match order: the order the entities were read
+// in, with a new match appended at the end. A query that cares about order
+// states it (`.order=title`), and stating it puts the watch in refresh mode,
+// where the order is the one the store returned. Either way a watch's rows
+// carry what its query names, the answer `graph.read` gives (@yaks/graph
+// `only`).
 
 import type { Bundle, Eid, Graph } from '@yaks/graph'
-import { over, then, transient } from '@yaks/graph'
-import { type Filter, filter } from '@yaks/match'
-import { bare, type Clause, parse } from '@yaks/query'
-import type { Vocab } from '@yaks/vocab'
+import { only, over, then, transient, wanted } from '@yaks/graph'
+import { type Net, net } from '@yaks/match'
+import { parse } from '@yaks/query'
 
 /** Something with a `value` that can be replaced: the one thing this package
  * needs from a signal. A `@preact/signals` signal is one; so is `{ value }`. */
@@ -93,9 +96,11 @@ export type Watches = {
 type Live = {
   query: string
   now?: number
-  /** the per-bundle test, or `null` when this watch runs its query again
-   * instead */
-  test: Filter | null
+  /** true when the registry's network decides this watch's membership, false
+   * when the watch runs its query again instead */
+  routed: boolean
+  /** what one of its rows carries */
+  cut: (b: Bundle) => Bundle
   /** the result, by eid, in the order it is published */
   members: Map<Eid, Bundle>
   hold: Hold<Bundle[]>
@@ -104,31 +109,6 @@ type Live = {
 }
 
 let plain: Make = <T>(value: T) => ({ value })
-
-// Whether a clause can be decided against one entity on its own: a property of
-// its own, a term in its own text, nothing at all. A path that hops through a
-// reference, an ordering, a limit or an aggregate is a question about the
-// set, and answering it means running the query again.
-let alone = (c: Clause, v: Vocab): boolean =>
-  c.kind == 'and' || c.kind == 'or'
-    ? c.clauses.every((k) => alone(k, v))
-    : c.kind == 'pred'
-    ? v.aim(c.path.join('.'), bare(c)).length == 1
-    : c.kind == 'text' || c.kind == 'never'
-
-// The per-bundle test for a query, or null to run the query again instead.
-// Both a query that reaches beyond a single entity and one @yaks/match
-// refuses to compile fall back to running it again. Parsing happens outside
-// the `try`, so a query that cannot be parsed is refused here rather than
-// quietly demoted.
-let judge = (query: string, vocab: Vocab, now?: number): Filter | null => {
-  let ast = parse(query)
-  try {
-    return alone(ast, vocab) ? filter(query, vocab, { now }) : null
-  } catch {
-    return null
-  }
-}
 
 /**
  * The watches on a graph. Building one registers an `effect` hook on that
@@ -148,35 +128,58 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
   let held = new Set<Live>()
   let closed = false
   let make = base.signal ?? plain
+  // The routed watches: one network per reference moment, since a watch may
+  // name its own.
+  let nets = new Map<number | undefined, Net<Live>>()
+  let netFor = (now?: number) => {
+    let n = nets.get(now)
+    if (!n) nets.set(now, n = net<Live>(graph.vocab, { now }))
+    return n
+  }
 
   let publish = (w: Live, value: Bundle[]) => {
     w.hold.value = value
     for (let fn of w.listeners) fn(value)
   }
 
-  // One watch against the entities a transaction changed, read whole.
-  let push = (w: Live, now: Bundle[], touched: Eid[]) => {
-    let test = w.test
-    if (test) {
-      let moved = false
-      let seen = new Set(now.map((b) => b.entity.eid))
-      for (let b of now) {
-        let eid = b.entity.eid
-        if (test(b, now)) {
-          w.members.set(eid, b)
-          moved = true
-        } else if (w.members.delete(eid)) moved = true
+  // The routed watches against the entities a transaction changed, read
+  // whole: each entity moves through the network once, into the watches it
+  // matches and out of the ones it has left.
+  let route = (now: Bundle[], touched: Eid[]) => {
+    let moved = new Set<Live>()
+    let seen = new Set<Eid>()
+    for (let b of now) {
+      let eid = b.entity.eid
+      seen.add(eid)
+      for (let n of nets.values()) {
+        let { into, out } = n.move(b)
+        for (let w of out) {
+          w.members.delete(eid)
+          moved.add(w)
+        }
+        for (let w of into) {
+          w.members.set(eid, w.cut(b))
+          moved.add(w)
+        }
       }
-      // An entity the store no longer holds at all has left the result too.
-      for (let eid of touched) {
-        if (!seen.has(eid) && w.members.delete(eid)) moved = true
-      }
-      if (moved) publish(w, live.project([...w.members.values()]))
-      return
     }
-    // Refresh: the result is a property of the whole set, so run the query
-    // again.
-    return then(graph.read(w.query, { now: w.now, durable: true }), (set) => {
+    // An entity the store no longer holds at all has left every result too.
+    for (let eid of touched) {
+      if (seen.has(eid)) continue
+      for (let n of nets.values()) {
+        for (let w of n.forget(eid)) {
+          w.members.delete(eid)
+          moved.add(w)
+        }
+      }
+    }
+    for (let w of moved) publish(w, live.project([...w.members.values()]))
+  }
+
+  // Refresh: the result is a property of the whole set, so run the query
+  // again.
+  let refresh = (w: Live, touched: Eid[]) =>
+    then(graph.read(w.query, { now: w.now, durable: true }), (set) => {
       let ids = new Set(set.map((b) => b.entity.eid))
       let left = [...w.members.keys()].some((eid) => !ids.has(eid))
       w.members = new Map(set.map((b) => [b.entity.eid, b]))
@@ -184,7 +187,6 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
         publish(w, live.project(set))
       }
     })
-  }
 
   const live = transient(graph)
   const offLive = live.subscribe((f) => {
@@ -198,11 +200,11 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
   let commit = (applied: Bundle[]) => {
     if (!held.size) return
     let touched = [...new Set(applied.map((b) => b.entity.eid))]
-    return then(
-      graph.get(touched),
-      (now) =>
-        then(over([...held], (w) => push(w, now, touched)), () => undefined),
-    )
+    return then(graph.get(touched), (now) => {
+      route(now, touched)
+      let again = [...held].filter((w) => !w.routed)
+      return then(over(again, (w) => refresh(w, touched)), () => undefined)
+    })
   }
 
   graph.use({
@@ -212,12 +214,16 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
 
   let watch = (query: string, opts: WatchOpts = {}): Watch => {
     if (closed) throw new Error('watch registry is closed')
+    // A query that cannot be parsed is refused here, out of `watch()`.
+    parse(query)
     let active = true
     let now = opts.now ?? base.now
+    let want = wanted(graph.vocab, query)
     let w: Live = {
       query,
       now,
-      test: judge(query, graph.vocab, now),
+      routed: false,
+      cut: only(want),
       members: new Map(),
       hold: make<Bundle[]>([]),
       ready: make(false),
@@ -229,11 +235,16 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
     then(graph.read(query, { now, durable: true }), (set) => {
       if (!active || closed) return
       w.members = new Map(set.map((b) => [b.entity.eid, b]))
+      w.routed = netFor(now).add(w, query, w.members.keys())
       w.hold.value = live.project(set)
       w.ready.value = true
       held.add(w)
       for (let fn of w.listeners) fn(w.hold.value)
     })
+    let forget = () => {
+      held.delete(w)
+      if (w.routed) nets.get(now)?.drop(w)
+    }
     return {
       query,
       get value() {
@@ -249,7 +260,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
       },
       close: () => {
         active = false
-        held.delete(w)
+        forget()
         w.listeners.clear()
       },
     }
@@ -264,6 +275,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
       closed = true
       for (let w of held) w.listeners.clear()
       held.clear()
+      nets.clear()
     },
   }
 }
