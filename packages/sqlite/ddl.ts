@@ -476,6 +476,12 @@ export let fit = (driver: Driver, vocab: Vocab, was: Standing): Error[] =>
     })
   })
 
+/** Where a store tells what it outlived when its caller names nowhere else:
+ * one line on the console. It is the state of the data, not a defect in the
+ * code, so a stack says nothing, and it repeats on every open until fixed. */
+export let logged = (e: Error): void =>
+  console.error(`@yaks/sqlite: ${e.message}`)
+
 /** What is reported of a table whose rebuild ({@link refit}) the engine
  * refused, `e` being its refusal: the table is as it stood. */
 export let unfit = (comp: string, e: unknown): Error =>

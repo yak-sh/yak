@@ -65,6 +65,7 @@ import {
   fit,
   grown,
   indexed,
+  logged,
   schema,
   standing,
   tabled,
@@ -100,6 +101,7 @@ export {
   fitting,
   grown,
   indexed,
+  logged,
   META,
   refit,
   schema,
@@ -229,8 +231,8 @@ export type Opts = BindOpts & {
    * its own numbering. */
   adopt?: boolean
   /** Where a failure the store outlives is told: a table that stood and could
-   * not be fitted to the vocabulary, left as it was (ddl.ts `fit`). The
-   * console, by default. */
+   * not be fitted to the vocabulary, left as it was (ddl.ts `fit`). One
+   * line on the console, by default (ddl.ts `logged`). */
   report?: (error: Error) => void
 }
 
@@ -275,7 +277,7 @@ export let storage = (
   base: Opts = {},
 ): Store => {
   let identity = keyed(driver, vocab, base)
-  let report = base.report ?? console.error
+  let report = base.report ?? logged
   let tx: Tx = {
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
     get: identity,

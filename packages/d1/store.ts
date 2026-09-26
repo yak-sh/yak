@@ -82,6 +82,7 @@ import {
   grown,
   heard,
   indexed,
+  logged,
   minted,
   mintSql,
   numberSql,
@@ -179,7 +180,7 @@ let deadly = (v: Vocab): Set<string> =>
 export type Opts = BindOpts & {
   number?: boolean | { except: readonly string[] }
   /** Where a failure the store outlives is told, as @yaks/sqlite's `report`:
-   * the console, by default. */
+   * one line on the console, by default. */
   report?: (error: Error) => void
 }
 
@@ -189,7 +190,7 @@ export let storage = <S extends Prepared<S>>(
   base: Opts = {},
 ): Store => {
   let bears = deadly(vocab)
-  let report = base.report ?? console.error
+  let report = base.report ?? logged
   let prep = (s: Stmt): S => prepare(db, s)
 
   // One statement, one round trip.
