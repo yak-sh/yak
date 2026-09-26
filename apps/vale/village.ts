@@ -2,7 +2,8 @@
 // the store's row for each one in the level the hero is in, added the first
 // time a hero comes; what they said back and where they chose to go, off
 // their transcripts; the line a hero says beside one, which asks them to
-// answer, told what they hold (deals.ts); the news of a quest handed in; and
+// answer, told what they hold and what deals stand between them and the hero
+// (deals.ts); the news of a quest handed in; and
 // the mark on the hero that keeps a level's villagers awake while somebody
 // plays in it.
 //
@@ -10,10 +11,12 @@
 // signed in speaks (chat.ts), and only their hero's row is theirs to mark.
 import type { Watch } from '@yaks/client'
 import { type Line, writer } from './chat.ts'
+import type { Deals } from './deals.ts'
 import { type Bundle, comp, type Me, type Net, num, str } from './net.ts'
 import type { Frame } from './play.ts'
 import type { Spot } from './levels.ts'
 import { GIVERS } from './quests.ts'
+import { wares } from './stock.ts'
 import {
   answered,
   born,
@@ -39,12 +42,9 @@ let HEARD = 60
 
 export type Village = ReturnType<typeof village>
 
-/** The villagers of whatever level the hero is in, over the store; `holds`
- * says what one holds free to give. */
-export let village = (
-  net: Net,
-  holds: (id: string) => Map<string, number>,
-) => {
+/** The villagers of whatever level the hero is in, over the store; `deal`
+ * says what one holds free to give, and what deals stand with the hero. */
+export let village = (net: Net, deal: Deals) => {
   let byEid = new Map(GIVERS.map((g) => [eidOf(g.id), g]))
   let byId = new Map(GIVERS.map((g) => [g.id, g]))
   let watch = (q: string): Watch | null => {
@@ -159,9 +159,20 @@ export let village = (
       let f = last
       let g = f?.talk && byId.get(f.talk.id)
       if (!f || !g || !held(g.id) || !me?.person) return null
+      let has = wares(g.level), bag = new Map<string, number>()
+      for (let h of f.sheet.bag) {
+        if (has.has(h.kind)) bag.set(h.kind, (bag.get(h.kind) ?? 0) + h.n)
+      }
       let instructions = persona(g, {
         hero: { eid: net.hero ?? '', name: f.sheet.name, lvl: f.sheet.lvl },
-        holds: holds(g.id),
+        holds: deal.holds(g.id),
+        bag,
+        dealt: deal.standing(f.sheet, g.id).map((v) => ({
+          give: v.give,
+          take: v.take,
+          taken: v.state == 'taken',
+          steps: v.steps,
+        })),
         quests: f.sheet.quests.filter((q) => q.quest.giver == g.id),
         deeds: deeds(falls(f), net.now() - LATELY),
         here: f.others.map((o) => o.name),

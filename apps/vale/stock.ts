@@ -5,13 +5,15 @@
 // things slowest of all.
 //
 // A deal is what a villager promised a hero out of that stock, and for what:
-// nothing, which is a gift; things to bring; creatures to fell. The villager's
-// model writes it (vocab.json `give`), the hero's page hands it in once what
-// it asks is done, and only then do things change hands. Whether a deal
-// counts is decided here, never by the words that talked a villager into it:
-// a villager promises only what it holds, and never more than the deal is
-// worth. What a villager holds is counted from its deals and hand-ins in the
-// order the store took them, so every page reaches the same answer.
+// nothing, which is a gift; things from the hero's bag; creatures of the land
+// to fell, a quest of their own making. The villager's model writes it
+// (vocab.json `give` and `offer`); the hero agrees to it, and hands it in once
+// every step it asks is done, and only then do things change hands. Whether a
+// deal counts is decided here, never by the words that talked a villager into
+// it: a villager promises only what it holds, asks only what its land has,
+// and never gives much more than what it asks is worth. What a villager holds
+// is counted from its deals and the heroes' replies in the order the store
+// took them, so every page reaches the same answer.
 import { tierOf } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import { isA } from './features.ts'
@@ -22,13 +24,17 @@ import { ITEMS } from './items.ts'
 import { HOPS, LEVELS } from './levels.ts'
 import type { Giver } from './quests.ts'
 import { hashOf, stream } from './rand.ts'
-import { SPOILS, worth } from './rules.ts'
+import { type Held, SPOILS, worth } from './rules.ts'
 
 let MIN = 60_000
 let HOUR = 60 * MIN
 
-/** How long a deal stands before what it promised goes back on the shelf. */
-export let LAST = 2 * HOUR
+/** How long an offer stands before what it promised goes back on the
+ * shelf, unless the hero agrees to it. */
+export let OFFER = 15 * MIN
+
+/** How long a deal a hero agreed to stands. */
+export let LAST = 24 * HOUR
 
 /** How long a person waits for another gift from the same villager. */
 export let GAP = 30 * MIN
@@ -163,9 +169,8 @@ export let lvlOf = (level: string): number => 2 * (HOPS[level] ?? 0) + 2
 let bred = (level: string): string[] =>
   LEVELS[level] ? [...new Set(dens(LEVELS[level]).map((d) => d.kind))] : []
 
-// What a land yields: what its creatures leave and its nodes give, bar coin,
-// potions and gear.
-let yields = (level: string): string[] => {
+// What a land's creatures leave, and what its nodes give.
+let found = (level: string): string[] => {
   let hops = HOPS[level] ?? 0
   let places = Object.values(LEVELS[level]?.places ?? {})
   let gathered = Object.values(LODES).filter((l) =>
@@ -177,7 +182,48 @@ let yields = (level: string): string[] => {
       ...bred(level).flatMap((k) => BEASTS[k].loot.map(([kind]) => kind)),
       ...gathered,
     ]),
-  ].filter((k) => k != 'coin' && !ITEMS[k]?.slot && !ITEMS[k]?.heals)
+  ]
+}
+
+// What a land yields: what it gives, bar coin, potions and gear.
+let yields = (level: string): string[] =>
+  found(level).filter((k) => k != 'coin' && !ITEMS[k]?.slot && !ITEMS[k]?.heals)
+
+let POTIONS = ['tonic', 'tonic', 'draught', 'draught', 'elixir']
+
+// The potion a land's villagers keep.
+let potion = (level: string) => POTIONS[tierOf(lvlOf(level)) - 1]
+
+let WARES = new Map<string, Set<string>>()
+
+/**
+ * What a deal in a land may ask for: its creatures to fell, and what a hero
+ * comes by there: what its creatures leave, the gear of their tiers, what its
+ * nodes give, coin and its potion.
+ *
+ * ```ts
+ * import { assert } from '@std/assert'
+ * let vale = wares('mossvale')
+ * assert(vale.has('thornback') && vale.has('tusk') && vale.has('sword2'))
+ * assert(!vale.has('frostwolf') && !vale.has('pearl'))
+ * ```
+ */
+export let wares = (level: string): Set<string> => {
+  let had = WARES.get(level)
+  if (had) return had
+  let tiers = new Set(bred(level).map((k) => tierOf(BEASTS[k].lvl)))
+  let gear = Object.keys(ITEMS).filter((k) =>
+    ITEMS[k].slot && tiers.has(ITEMS[k].tier ?? 0)
+  )
+  let all = new Set([
+    ...bred(level),
+    ...found(level),
+    ...gear,
+    'coin',
+    potion(level),
+  ])
+  WARES.set(level, all)
+  return all
 }
 
 // What each land's creatures teach, on average: a gift's measure.
@@ -208,11 +254,30 @@ export let worthOf = (g: Goods, level: string): number =>
     0,
   )
 
+/** What one of a kind is worth in a land, in coin: a thing by its price, a
+ * creature by what felling it teaches a hero there. */
+export let priceIn = (kind: string, level: string): number =>
+  Math.round(worthOf([{ kind, n: 1 }], level) / valueOf('coin'))
+
+/** What a deal in a land is likeliest to ask for, dearest first: its
+ * creatures worth felling, the things it yields and its potion, and the
+ * tiers of the gear its creatures leave. */
+export let wants = (level: string, most = 6) => {
+  let dear = (kinds: string[]) =>
+    kinds.map((kind) => ({ kind, price: priceIn(kind, level) }))
+      .filter((w) => w.price > 0).sort((a, b) => b.price - a.price)
+      .slice(0, most)
+  return {
+    creatures: dear(bred(level)),
+    things: dear([...yields(level), potion(level)]),
+    tiers: [...new Set(bred(level).map((k) => tierOf(BEASTS[k].lvl)))].sort(),
+  }
+}
+
 /** One shelf of a villager's stock: a kind, the most of it they keep, how
  * long each one takes to come back, in ms, and whether it is their own. */
 export type Shelf = { kind: string; most: number; every: number; own?: boolean }
 
-let POTIONS = ['tonic', 'tonic', 'draught', 'draught', 'elixir']
 let FAMILIES = ['sword', 'axe', 'hammer', 'dagger', 'bow', 'staff']
 
 /**
@@ -239,7 +304,7 @@ export let stockOf = (g: Giver): Shelf[] => {
   let family = g.staff ? 'staff' : FAMILIES[Math.floor(r() * FAMILIES.length)]
   return [
     { kind: 'coin', most: 20 * t, every: 3 * MIN / t },
-    { kind: POTIONS[t - 1], most: 2, every: 40 * MIN },
+    { kind: potion(g.level), most: 2, every: 40 * MIN },
     ...[...pick(), ...pick()].map((kind) => ({
       kind,
       most: 4,
@@ -255,66 +320,77 @@ export let stockOf = (g: Giver): Shelf[] => {
 }
 
 /** A deal as the store holds it: the villager's row, the hero's, what the
- * villager gives and what for, in words (`goods`), who wrote it and when the
- * store took it, in ms. */
+ * villager gives and what for, in words (`goods`), who wrote it, what it came
+ * through (the transcript of the turn whose command wrote it, which the store
+ * stamps and no page can) and when the store took it, in ms. */
 export type Deal = {
   eid: string
+  villager: string
   player: string
   give: string
   take: string
   by: string
+  via: string
   at: number
 }
 
-/** A deal handed in: which, by which hero, who wrote it, and when. */
-export type Hand = {
+/** A hero's reply to a deal, written by their page: they agreed to it, or
+ * handed it in; who wrote it, and when. */
+export type Reply = {
   eid: string
   deal: string
   player: string
+  did: 'agreed' | 'handed'
   by: string
   at: number
 }
 
-/** What became of a deal: never counted, standing, handed in, or gone back
- * (lapsed, or replaced by a newer one to the same hero). */
-export type State = 'void' | 'open' | 'done' | 'gone'
+/** What became of a deal: never counted, standing, agreed to, handed in, or
+ * gone back (lapsed, or replaced by a newer offer to the same hero). */
+export type State = 'void' | 'open' | 'taken' | 'done' | 'gone'
 
 /** What a villager's rows come to at a moment: each deal's state, what each
- * counted deal promised and asked, what the villager holds free to promise,
- * by kind, and what they have set aside for deals still standing. */
+ * counted deal promised and asked, when the hero agreed to each they took
+ * up, why each that never counted did not, what the villager holds free to
+ * promise, by kind, and what they have set aside for deals still standing. */
 export type Book = {
   states: Map<string, State>
   terms: Map<string, { give: Goods; take: Goods }>
+  since: Map<string, number>
+  why: Map<string, string>
   holds: Map<string, number>
   aside: Map<string, number>
 }
 
 type Event =
   | { at: number; eid: string; deal: Deal }
-  | { at: number; eid: string; hand: Hand }
-  | { at: number; eid: string; lapse: Deal }
+  | { at: number; eid: string; reply: Reply }
+  | { at: number; eid: string; lapse: Deal; from: State; since?: number }
 
-let rank = (e: Event) => 'deal' in e ? 0 : 'hand' in e ? 1 : 2
+let rank = (e: Event) =>
+  'deal' in e ? 0 : 'reply' in e ? (e.reply.did == 'agreed' ? 1 : 2) : 3
 
 let order = (a: Event, b: Event) =>
   a.at - b.at || rank(a) - rank(b) || (a.eid < b.eid ? -1 : +(a.eid > b.eid))
 
 /**
- * What a villager's deals and hand-ins come to at `now`, taken in the order
- * the store took them. A deal counts only if the villager held what it gives
- * when it was made; a gift only if it is small, none of their own things, and
- * the person's first from them in a while; any other deal only if it asks for
- * what the land has and pays no more than half again what that is worth.
- * What a counted deal gives is set aside at once, still theirs, so it does
- * not come back on the shelf; a hand-in by the hero's own person passes it
- * over, and takes what was brought; a deal left standing lapses, or gives way
- * to a newer one to the same hero, and what it set aside is free again.
- * `owner` names who made a hero.
+ * What a villager's deals and the heroes' replies come to at `now`, taken
+ * in the order the store took them. A deal counts only if the villager made
+ * it, in a turn of their own, and held what it gives when they made it; a
+ * gift only if it is small, none of their
+ * own things, and the person's first from them in a while; any other deal
+ * only if it asks for what the land has and gives no more than half again
+ * what that is worth. What a counted deal gives is set aside at once, still
+ * theirs, so it does not come back on the shelf. The hero's own person
+ * agrees to a deal, which then stands a while, or hands it in, which passes
+ * what it gives over and takes what was brought; an offer nobody agreed to
+ * lapses soon, or gives way to a newer one to the same hero, and what a deal
+ * set aside is free again once it is gone. `owner` names who made a hero.
  */
 export let ledger = (
   g: Giver,
   deals: Deal[],
-  hands: Hand[],
+  replies: Reply[],
   owner: (hero: string) => string | null,
   now: number,
 ): Book => {
@@ -336,38 +412,73 @@ export let ledger = (
   }
   let free = (kind: string) =>
     Math.floor(held.get(kind) ?? 0) - (aside.get(kind) ?? 0)
-  let land = new Set(bred(g.level))
+  let has = wares(g.level)
   let byEid = new Map(deals.map((d) => [d.eid, d]))
   let states = new Map<string, State>()
   let terms = new Map<string, { give: Goods; take: Goods }>()
-  let standing = new Map<string, Deal>()
+  let since = new Map<string, number>()
+  let why = new Map<string, string>()
+  let offered = new Map<string, string>()
   let gifted = new Map<string, number>()
   let back = (d: Deal) => {
     states.set(d.eid, 'gone')
     add(aside, terms.get(d.eid)!.give, -1)
   }
-  // Whether a deal is one the villager would make, whatever they hold.
-  let fair = (d: Deal, give: Goods, take: Goods) =>
+  let worthy = (x: Goods) => worthOf(x, g.level)
+  // Why a deal is not one the villager would make, whatever they hold.
+  let unfair = (d: Deal, give: Goods, take: Goods) =>
     !take.length
-      ? worthOf(give, g.level) <= most(g.level) &&
-        give.every((x) => !shelves.get(x.kind)?.own) &&
-        !(d.at - (gifted.get(d.by) ?? -Infinity) < GAP)
-      : take.every((x) => !BEASTS[x.kind] || land.has(x.kind)) &&
-        worthOf(give, g.level) <= BAND * worthOf(take, g.level)
+      ? worthy(give) > most(g.level)
+        ? 'a gift that large is more than you can spare'
+        : give.some((x) => shelves.get(x.kind)?.own)
+        ? 'your own things are not for giving away'
+        : d.at - (gifted.get(d.by) ?? -Infinity) < GAP
+        ? 'you gave them something a short while ago'
+        : null
+      : !take.every((x) => has.has(x.kind))
+      ? 'it asks for what your land does not have'
+      : worthy(give) > BAND * worthy(take)
+      ? 'what you give is worth far more than what you ask'
+      : null
   let events: Event[] = [
     ...deals.map((d) => ({ at: d.at, eid: d.eid, deal: d })),
-    ...hands.map((h) => ({ at: h.at, eid: h.eid, hand: h })),
-    ...deals.map((d) => ({ at: d.at + LAST, eid: d.eid, lapse: d })),
+    ...replies.map((r) => ({ at: r.at, eid: r.eid, reply: r })),
+    ...deals.map((d) => ({
+      at: d.at + OFFER,
+      eid: d.eid,
+      lapse: d,
+      from: 'open' as State,
+    })),
+    ...replies.flatMap((r) => {
+      let d = byEid.get(r.deal)
+      return d && r.did == 'agreed'
+        ? [{
+          at: r.at + LAST,
+          eid: d.eid,
+          lapse: d,
+          from: 'taken' as State,
+          since: r.at,
+        }]
+        : []
+    }),
   ].filter((e) => e.at <= now).sort(order)
   for (let e of events) {
     fill(e.at)
     if ('deal' in e) {
       let d = e.deal, give = goods(d.give), take = goods(d.take)
-      if (
-        !give?.length || !take || !fair(d, give, take) ||
-        !give.every((x) => free(x.kind) >= x.n)
-      ) {
+      let no = d.via != d.villager
+        ? 'it was not yours'
+        : !give?.length
+        ? 'it names nothing you could give'
+        : !take
+        ? 'it asks for something the world does not have'
+        : unfair(d, give, take) ??
+          (give.every((x) => free(x.kind) >= x.n)
+            ? null
+            : 'you do not have that to give')
+      if (no || !give || !take) {
         states.set(d.eid, 'void')
+        why.set(d.eid, no ?? '')
         continue
       }
       states.set(d.eid, 'open')
@@ -375,22 +486,30 @@ export let ledger = (
       add(aside, give, 1)
       if (!take.length) gifted.set(d.by, d.at)
       else {
-        let was = standing.get(d.player)
+        let was = byEid.get(offered.get(d.player) ?? '')
         if (was && states.get(was.eid) == 'open') back(was)
-        standing.set(d.player, d)
+        offered.set(d.player, d.eid)
       }
-    } else if ('hand' in e) {
-      let h = e.hand, d = byEid.get(h.deal)
-      if (
-        !d || states.get(d.eid) != 'open' || h.player != d.player ||
-        h.by != owner(d.player)
-      ) continue
-      let { give, take } = terms.get(d.eid)!
-      states.set(d.eid, 'done')
-      add(aside, give, -1)
-      add(held, give, -1)
-      add(held, take, 1)
-    } else if (states.get(e.lapse.eid) == 'open') back(e.lapse)
+    } else if ('reply' in e) {
+      let r = e.reply, d = byEid.get(r.deal)
+      let state = d && states.get(d.eid)
+      if (!d || r.player != d.player || r.by != owner(d.player)) continue
+      let { give, take } = terms.get(d.eid) ?? { give: [], take: [] }
+      if (r.did == 'agreed') {
+        if (state != 'open' || !take.length) continue
+        states.set(d.eid, 'taken')
+        since.set(d.eid, r.at)
+        if (offered.get(d.player) == d.eid) offered.delete(d.player)
+      } else if (state == 'open' || state == 'taken') {
+        states.set(d.eid, 'done')
+        add(aside, give, -1)
+        add(held, give, -1)
+        add(held, take, 1)
+      }
+    } else if (
+      states.get(e.lapse.eid) == e.from &&
+      (e.from == 'open' || since.get(e.lapse.eid) == e.since)
+    ) back(e.lapse)
   }
   fill(Math.max(now, t0))
   let holds = new Map(
@@ -398,5 +517,79 @@ export let ledger = (
       .filter(([, n]) => n > 0),
   )
   for (let [k, n] of aside) if (!n) aside.delete(k)
-  return { states, terms, holds, aside }
+  return { states, terms, since, why, holds, aside }
+}
+
+/** One step of what a deal asks, and how far a hero has come with it: a
+ * creature to fell, counted from their falls since they agreed, or a thing
+ * to bring, counted in their bag. */
+export type Step = { kind: string; n: number; have: number; deed: boolean }
+
+/**
+ * How far a hero has come with each step of what a deal asks.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let kills = [{ kind: 'thornback', at: 5 }, { kind: 'thornback', at: 1 }]
+ * let bag = [{ eid: 'a', kind: 'tusk', n: 1 }]
+ * assertEquals(steps(goods('1 thornback, 2 tusk')!, 3, kills, bag), [
+ *   { kind: 'thornback', n: 1, have: 1, deed: true },
+ *   { kind: 'tusk', n: 2, have: 1, deed: false },
+ * ])
+ * ```
+ */
+export let steps = (
+  take: Goods,
+  since: number,
+  kills: { kind: string; at: number }[],
+  bag: Held[],
+): Step[] =>
+  take.map(({ kind, n }) => {
+    let deed = !!BEASTS[kind]
+    let have = deed
+      ? kills.filter((k) => k.kind == kind && k.at >= since).length
+      : bag.filter((b) => b.kind == kind).reduce((s, b) => s + b.n, 0)
+    return { kind, n, have: Math.min(have, n), deed }
+  })
+
+/**
+ * What in a bag pays the things a deal asks for: the rows to spend, the
+ * ones a hero is not wearing first, and what comes back from the last heap
+ * broken into. Nothing when the bag does not hold it all.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let bag = [
+ *   { eid: 'c1', kind: 'coin', n: 8 },
+ *   { eid: 'c2', kind: 'coin', n: 8 },
+ *   { eid: 's1', kind: 'sword2', n: 1 },
+ *   { eid: 's2', kind: 'sword2', n: 1 },
+ * ]
+ * assertEquals(pay(bag, goods('10 coin, 1 sword2')!, new Set(['s1'])), {
+ *   spend: ['c1', 'c2', 's2'],
+ *   back: [{ kind: 'coin', n: 6 }],
+ * })
+ * assertEquals(pay(bag, goods('20 coin')!), null)
+ * ```
+ */
+export let pay = (
+  bag: Held[],
+  take: Goods,
+  worn: Set<string> = new Set(),
+): { spend: string[]; back: Goods } | null => {
+  let spend: string[] = [], back: Goods = []
+  for (let { kind, n } of take) {
+    if (BEASTS[kind]) continue
+    let left = n
+    let rows = bag.filter((b) => b.kind == kind)
+      .sort((a, b) => +worn.has(a.eid) - +worn.has(b.eid))
+    for (let b of rows) {
+      if (left <= 0) break
+      spend.push(b.eid)
+      left -= b.n
+    }
+    if (left > 0) return null
+    if (left < 0) back.push({ kind, n: -left })
+  }
+  return { spend, back }
 }

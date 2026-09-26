@@ -5,9 +5,9 @@
 // game on the graph (play.ts), the work at the nodes and the stations
 // (work.ts), the stage (cast.ts, nodes.ts), the bits and numbers (fx.ts), the
 // glass (hud.ts, and its action bar, bar.ts), what was said (chatbox.ts) and
-// the panels over it (map.ts, pack.ts, board.ts, station.ts, menu.ts). When
-// the hero walks off the end of a road, the page grows the level beyond and
-// carries on there.
+// the panels over it (map.ts, pack.ts, board.ts, station.ts, menu.ts, and
+// the deals with a villager, dealbox.ts). When the hero walks off the end of
+// a road, the page grows the level beyond and carries on there.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { ABILITIES, type Ability } from './abilities.ts'
@@ -17,6 +17,7 @@ import { BEASTS } from './beasts.ts'
 import { aim, bearing, type Cam, steer } from './cam.ts'
 import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
+import { dealbox } from './dealbox.ts'
 import { deals } from './deals.ts'
 import { map } from './map.ts'
 import { menu } from './menu.ts'
@@ -116,8 +117,8 @@ fit()
 addEventListener('resize', fit)
 
 let net = connect(new URL('api/', document.baseURI))
-let trade = deals(net)
-let folk = village(net, trade.holds)
+let deal = deals(net)
+let folk = village(net, deal)
 let g = game(net, folk.at)
 let toil = working(net)
 // Who you are and your heroes, asked while the level grows.
@@ -148,6 +149,19 @@ let skills = board(h.panels.skills, {
     g.respec()
     h.toast('Every skill forgotten. Spend the points again.')
   },
+})
+// What the hero chose about a deal with a villager.
+let dealt = dealbox(h.panels.deal, (a, v) => {
+  if (a == 'refuse') return deal.refuse(v.giver.id, v.eid)
+  let s = last?.sheet
+  let said = a == 'agree'
+    ? deal.agree(v.giver.id, v.eid)
+    : s
+    ? deal.hand(v.giver.id, v.eid, s)
+    : null
+  if (!said) return
+  h.toast(said, a == 'hand' ? 'Toast-loot' : 'Toast-big')
+  sound.quest()
 })
 
 // The level on show, and what is drawn of it: grown again when the hero goes
@@ -593,6 +607,10 @@ let talkTo = () => {
   let giver = last?.talk
   if (!giver) return
   let next = giver.next
+  // A deal standing between them opens over their words.
+  if (last && deal.standing(last.sheet, giver.id).length) {
+    dealt.open(giver.id, giver.name)
+  }
   h.talk(
     {
       quest: next?.quest ?? null,
@@ -714,7 +732,18 @@ let loop = (t: number) => {
       )
       bounty.tick(job, [f.body.x, f.body.y, f.body.z], dt)
       folk.tick(f)
-      for (let t of trade.tick(f.level)) h.toast(t, 'Toast-loot')
+      // An offer from the villager the hero is beside opens the deals.
+      let talk = f.talk
+      for (let n of deal.tick(f.level)) {
+        h.toast(n.text, 'Toast-loot')
+        if (talk && n.offer == talk.id) dealt.open(talk.id, talk.name)
+      }
+      let views = deal.standing(f.sheet)
+      dealt.paint(
+        views.filter((v) => v.giver.id == talk?.id),
+        talk?.id ?? null,
+        net.now(),
+      )
       chat.tick(f, stage.headOf)
       voice.tick(f)
       let k = 1 - Math.exp(-dt * 10)
@@ -744,7 +773,13 @@ let loop = (t: number) => {
         )
       }
       let here = 1 + f.others.length
-      h.show(f, here, clockOf(w.day), bearing(cam.yaw))
+      h.show(
+        f,
+        here,
+        clockOf(w.day),
+        bearing(cam.yaw),
+        views.filter((v) => v.state == 'taken').at(-1),
+      )
       actions.show(f)
       // A ward shimmers about the hero while it holds.
       if (f.ward > 0 && Math.random() < 0.5) {
@@ -863,7 +898,7 @@ Object.assign(globalThis, {
     game: g,
     voice,
     village: folk,
-    deals: trade,
+    deals: deal,
     get frame() {
       return last
     },
@@ -888,7 +923,7 @@ if (busy) busy.textContent = 'Finding the others…'
 let { me, heroes } = await asking
 chat.me(me)
 folk.me(me)
-trade.me(me)
+deal.me(me)
 let ready = async (watch: { ready: boolean }) => {
   for (let i = 0; i < 40 && !watch.ready; i++) {
     await new Promise((r) => setTimeout(r, 100))

@@ -1,0 +1,67 @@
+/* A deal with a villager (dealbox.ts), in the deals panel: what they give,
+   each step it asks with how far along it is, ticked once done, how long it
+   stands, and what the hero can do about it. */
+.Deal {
+  --done: var(--deep);
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.6rem 0.2rem 0.8rem;
+
+  & + & {
+    border-top: 1px solid var(--line);
+  }
+
+  & p {
+    margin: 0;
+  }
+}
+
+.Deal_Steps {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.Deal_Step {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap);
+
+  &::before {
+    content: '○';
+    margin-right: 0.4rem;
+    color: var(--faint);
+  }
+
+  & span {
+    margin-left: auto;
+    color: var(--muted);
+  }
+}
+
+.Deal_Step-done {
+  color: var(--done);
+
+  &::before {
+    content: '✓';
+    color: var(--done);
+  }
+}
+
+.Deal_Ends,
+.Deal_None {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.Deal_Acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+
+  & .Btn-go {
+    margin: 0;
+  }
+}

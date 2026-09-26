@@ -27,6 +27,8 @@
 import { type Action, keysOf } from './input.ts'
 import type { Frame, Sheet } from './play.ts'
 import type { Job } from './work.ts'
+import { nameOf } from './dealbox.ts'
+import type { View } from './deals.ts'
 import { BEASTS } from './beasts.ts'
 import { type Glyph, glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
@@ -80,15 +82,14 @@ let MICS: Record<Mic, string> = {
 }
 
 /** The panels the glass holds, and the keys that open them. Crafting opens
- * at a station (station.ts). Trade (T-40758) stands ready, empty and out of
- * reach until its work lands. */
+ * at a station (station.ts), and the deals beside a villager (dealbox.ts). */
 export let SHEETS = {
   map: { title: 'Map', keys: ['KeyM'] },
   pack: { title: 'Pack', keys: ['KeyB', 'KeyI'] },
   menu: { title: 'Menu', keys: ['Escape'] },
   skills: { title: 'Skills', keys: ['KeyK'] },
   craft: { title: 'Crafting' },
-  trade: { title: 'Trade' },
+  deal: { title: 'Deals' },
 } satisfies Record<string, Spec>
 
 /** Build the HUD into `root`. `press` sends a button's action to the game;
@@ -139,7 +140,7 @@ export let hud = (
     menu: sheet('menu'),
     skills: sheet('skills'),
     craft: sheet('craft'),
-    trade: sheet('trade'),
+    deal: sheet('deal'),
   }
   rose.addEventListener('click', panel.map.toggle)
 
@@ -253,9 +254,19 @@ export let hud = (
     while (toasts.children.length > 3) toasts.firstElementChild?.remove()
   }
 
-  // The quest being followed: one taken, or else one on offer, the nearest
+  // The quest being followed: a deal a villager made up on the spot and the
+  // hero agreed to, else one taken, or else one on offer, the nearest
   // giver's first.
-  let tracking = (s: Sheet, f: Frame) => {
+  let tracking = (s: Sheet, f: Frame, d: View | null) => {
+    if (d) {
+      let who = esc(d.giver.name)
+      return `<b>${who}’s ask</b><span>${
+        d.ready
+          ? `Done! Back to ${who}.`
+          : d.steps.map((x) => `${esc(nameOf(x.kind))} ${x.have} / ${x.n}`)
+            .join(' · ')
+      }</span>`
+    }
     let near = new Set(f.givers.map((g) => g.id))
     let open = s.quests.filter((q) => q.state == 'open')
     let q = s.quests.find((q) => q.state == 'taken') ??
@@ -371,8 +382,15 @@ export let hud = (
       mic.classList.toggle('Orb-on', m == 'on')
       mic.title = `${MICS[m]} (${micKey})`
     },
-    /** paint this frame, the camera looking `facing` degrees from north */
-    show: (f: Frame, here: number, clock: Clock, facing: number) => {
+    /** paint this frame, the camera looking `facing` degrees from north,
+     * following `deal` if the hero agreed to one (deals.ts) */
+    show: (
+      f: Frame,
+      here: number,
+      clock: Clock,
+      facing: number,
+      deal: View | null = null,
+    ) => {
       let s = f.sheet
       let hp = f.vitals.hp
       let from = need(s.lvl), to = need(s.lvl + 1)
@@ -391,7 +409,7 @@ export let hud = (
             `${s.xp - from} / ${to - from} xp`,
           ),
       )
-      put('quest', quest, tracking(s, f))
+      put('quest', quest, tracking(s, f, deal))
       let m = f.foe
       foe.hidden = !m
       if (m) {
