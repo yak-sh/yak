@@ -28,13 +28,7 @@
 // host with @yaks/journal's tables can answer, and a host without them gets
 // `unknown` rather than a wrong answer.
 
-import {
-  argsOf,
-  type Bundle,
-  type Comp,
-  type Eid,
-  Refused,
-} from '@yaks/graph'
+import { argsOf, type Bundle, type Comp, type Eid, Refused } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { and, present, want } from '@yaks/query'
 import { human } from '@yaks/id'
