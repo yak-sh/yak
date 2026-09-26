@@ -19,7 +19,9 @@
  * `@yaks/cli/yak`.
  *
  * A program that is not `yak` at all calls `cli(commands, opts)` — its
- * subcommands, and the name it goes by.
+ * subcommands, and the name it goes by. One whose commands run tools on a
+ * graph it opened itself draws each answer the way `yak` does: `registry` of
+ * the plugins' views, and `show`.
  *
  * @module
  */
@@ -36,6 +38,7 @@ export {
   valueOf,
 } from './args.ts'
 export { bundlesIn, CHUNK, chunks } from './apply.ts'
+export { registry, show, type Source, type Views } from './answer.ts'
 export { complete, type Lookup } from './complete.ts'
 export {
   type Door,
