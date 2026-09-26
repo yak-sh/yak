@@ -840,6 +840,7 @@ export let compose = async (
       write: (b) => host.graph.apply(b, { trusted: true }),
       owner: host.me,
       lease: config.lease,
+      gone: host.gone,
       nudge: opts.thread?.nudge,
     })
     let rules = ruled.flatMap(([r, options]) => r.rules?.(host, options) ?? [])

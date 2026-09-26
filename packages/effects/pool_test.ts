@@ -8,6 +8,8 @@ import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { until } from '../../bin/testing.ts'
 import { effects, type Handler, type Opts } from './registry.ts'
+import { leaseEid } from './lease.ts'
+import { POOL } from './pool.ts'
 import { pooledBlog } from './testing.ts'
 
 let store = () => ram(pooledBlog, { number: true })
@@ -255,4 +257,41 @@ Deno.test("a run's write owes a generation on, and the chain stops at depth", as
   // post that one wrote is past the depth and owes nothing.
   assertEquals(a.ran.sort(), ['p', 'p+'])
   assertEquals((await rows(a.g, '.post')).length, 3)
+})
+
+// What a process that died left behind: its presence and a claim, both still
+// standing for an hour. `dead` is what the next process knows of it.
+let orphaned = async (dead: string[]) => {
+  let s = store()
+  let bare = graph({ storage: s, vocab: pooledBlog })
+  let hour = new Date(Date.now() + 3_600_000).toISOString()
+  await bare.apply([post('p1'), {
+    entity: { eid: leaseEid(`${POOL}/w1`) },
+    lease: { name: `${POOL}/w1`, holder: 'w1', until: hour },
+  }, {
+    entity: { eid: 'run1' },
+    effect: {
+      handler: 'post_note',
+      target: 'p1',
+      comp: 'post',
+      kind: 'created',
+      state: 'pending',
+      attempts: 1,
+      at: hour,
+      generation: 0,
+      lease_owner: 'w1',
+      lease_token: 't1',
+      lease_expiry: hour,
+    },
+  }], { trusted: true })
+  let next = proc(s, { owner: 'w2', gone: (w) => dead.includes(w) })
+  next.fx.handle(every(next.note))
+  await next.fx.work(next.g)
+  await next.fx.idle()
+  return next.ran
+}
+
+Deno.test('what a process that ended left claimed is run at once, not waited out', async () => {
+  assertEquals(await orphaned([]), [])
+  assertEquals(await orphaned(['w1']), ['created p1'])
 })

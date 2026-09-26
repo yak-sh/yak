@@ -11,12 +11,13 @@
 // because the run was committed with the write. Any number of processes work
 // the pool, and a row is run by the one that claims it.
 //
-// A claim is the row's own lease — owner, token, expiry — taken with the
-// graph's precondition (@yaks/graph `guard`): the claim lands only if the
-// token and the attempt count are still the ones the claimant read, inside one
-// transaction, so two workers reaching for one row settle it there and the
+// A claim is the row's own lease — owner, token, expiry — written through the
+// graph's own `apply()` with its precondition (@yaks/graph `$was`): the claim
+// lands only if the token and the attempt count are still the ones the
+// claimant read, so two workers reaching for one row settle it there and the
 // loser moves on. A worker renews the claims it is running; one that dies
-// leaves claims that expire, and the next pass takes them.
+// leaves claims that expire, and the next pass takes them — at once, where the
+// dead worker is known to have ended ({@link PoolOpts.gone}).
 //
 // A process working the pool claims the rows its own commits owe as it writes
 // them, and starts them once the commit is done: nothing another process could
@@ -47,7 +48,7 @@
 // that one, and says nothing about the rest.
 
 import type { Bundle, Comp, Eid, Graph, Tx } from '@yaks/graph'
-import { detached, guard, Stale, then, token } from '@yaks/graph'
+import { derivedEid, detached, Stale, then, token } from '@yaks/graph'
 import { and, eq } from '@yaks/query'
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
@@ -102,7 +103,16 @@ export type PoolOpts = {
   now?: () => number
   /** ids for the rows it writes (default: `crypto.randomUUID()`) */
   mint?: () => Eid
+  /** whether a process is known to have ended without letting go (@yaks/process
+   * `vanishedOne`): its claims and its presence are passed at once rather
+   * than waited out (default: nobody is known to be) */
+  gone?: (holder: Eid) => boolean | Promise<boolean>
 }
+
+// The row a sweep owes `handler`'s run on `target` in: one per pair, so
+// workers sweeping at once meet on it. It is never deleted, only owed again.
+let sweptEid = (handler: string, target: Eid): Eid =>
+  derivedEid(`${EFFECT}|sweep|${handler}|${target}`)
 
 /** A run this process claimed as it wrote it, to start after the commit. */
 export type Owed = { eid: Eid; row: Comp }
@@ -144,19 +154,29 @@ export type Pool = {
 }
 
 /** Whether a process that stays up is working the pool over `g`: a presence
- * lease other than `except`'s, still standing. */
+ * lease other than `except`'s, still standing, held by a process not known
+ * to be gone. */
 export let working = async (
   g: Graph,
-  except?: Eid,
-  now: number = Date.now(),
+  o: {
+    /** the asking process, whose own presence does not count */
+    except?: Eid
+    /** the clock, in milliseconds (default: `Date.now()`) */
+    now?: number
+    gone?: PoolOpts['gone']
+  } = {},
 ): Promise<boolean> => {
   if (!g.vocab.comp(LEASE)) return false
+  let now = o.now ?? Date.now()
   let rows = (await g.read(`.${LEASE}`)) as Bundle[]
-  return rows.some((b) => {
-    let l = b[LEASE] as Comp | undefined
-    return String(l?.name ?? '').startsWith(`${POOL}/`) && !!l?.holder &&
-      l.holder != except && Date.parse(String(l.until)) > now
-  })
+  for (let b of rows) {
+    let l = (b[LEASE] ?? {}) as Comp
+    let holder = l.holder as Eid | undefined
+    if (!holder || holder == o.except || l.name != `${POOL}/${holder}`) continue
+    if (Date.parse(String(l.until)) <= now) continue
+    if (!await o.gone?.(holder)) return true
+  }
+  return false
 }
 
 // What a handler threw, as the row can keep it.
@@ -202,30 +222,25 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let free = { lease_owner: null, lease_token: null, lease_expiry: null }
 
   // Compare and set: the patch lands only if the row's claim and attempt count
-  // are still the ones read — the graph's own precondition, in one
-  // transaction.
+  // are still the ones read — the graph's own precondition, riding on the
+  // write like any other (@yaks/graph `$was`).
   let swap = async (
     g: Graph,
     eid: Eid,
     was: Comp,
     patch: Comp,
   ): Promise<boolean> => {
-    let guarded: Bundle = {
-      entity: { eid },
-      $was: {
-        [EFFECT]: {
-          lease_token: token(was.lease_token ?? null),
-          attempts: token(was.attempts ?? null),
-        },
-      },
-    }
     try {
-      await g.storage.tx((tx) =>
-        then(
-          guard([guarded], tx, g.vocab),
-          () => tx.patch([{ entity: { eid }, [EFFECT]: patch }]),
-        )
-      )
+      await g.apply([{
+        entity: { eid },
+        [EFFECT]: patch,
+        $was: {
+          [EFFECT]: {
+            lease_token: token(was.lease_token ?? null),
+            attempts: token(was.attempts ?? null),
+          },
+        },
+      }], { trusted: true })
       return true
     } catch (error) {
       if (error instanceof Stale) return false
@@ -292,15 +307,27 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let pass = async (g: Graph): Promise<Promise<void>[]> => {
     let now = clock()
     let started: Promise<void>[] = []
-    let rows = await detached(g.storage)
-      .read(and(eq(`${EFFECT}.state`, 'pending')))
+    // Asked once a pass per owner: a process that ended without letting go
+    // holds nothing, whatever its claims' expiry says.
+    let asked = new Map<string, Promise<boolean>>()
+    let gone = (owner: string) => {
+      if (owner == me) return Promise.resolve(false)
+      let known = asked.get(owner)
+      if (!known) {
+        asked.set(owner, known = Promise.resolve(opts.gone?.(owner) ?? false))
+      }
+      return known
+    }
+    let rows = await g.read(and(eq(`${EFFECT}.state`, 'pending')))
     for (let b of rows) {
       let eid = b.entity.eid
       let row = (b[EFFECT] ?? {}) as Comp
       let s = handled(String(row.handler))
       if (!s || running.has(eid)) continue
       let expiry = row.lease_expiry ? Date.parse(String(row.lease_expiry)) : 0
-      if (row.lease_owner && expiry > now) continue
+      if (
+        row.lease_owner && expiry > now && !await gone(String(row.lease_owner))
+      ) continue
       if (row.next && Date.parse(String(row.next)) > now) continue
       let attempts = Number(row.attempts ?? 0)
       // Every attempt spent: left failed, with the last error beside it.
@@ -337,9 +364,56 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   }
 
   // What a declaration's `sweep` selects, owed a run again unless one is
-  // already owed: how a worker coming up finds what nobody wrote down. The
-  // check and the write are one transaction, so two workers coming up at once
-  // owe one run, not two.
+  // already owed: how a worker coming up finds what nobody wrote down. A swept
+  // run is one row per effect and target (`sweptEid`), owed again by
+  // each sweep that finds it settled, and every write is guarded on the state
+  // it was read in — so two workers coming up at once owe one run, not two:
+  // the second finds its precondition moved, reads again, and has nothing
+  // left to owe.
+  let swept = async (
+    g: Graph,
+    s: Slot,
+    query: string,
+    tries = 3,
+  ): Promise<void> => {
+    let found = (await g.read(query)) as Bundle[]
+    if (!found.length) return
+    let held = await g.read(and(
+      eq(`${EFFECT}.handler`, s.id),
+      eq(`${EFFECT}.state`, 'pending'),
+    ))
+    let owed = new Set(held.map((b) => String((b[EFFECT] as Comp).target)))
+    let due = found.filter((b) => !owed.has(b.entity.eid))
+    let eids = due.map((b) => sweptEid(s.id, b.entity.eid))
+    let was = new Map(
+      (await g.get(eids)).map((b) => [b.entity.eid, b[EFFECT] as Comp]),
+    )
+    let at = stamp(clock())
+    let rows: Bundle[] = due.map((b, i) => ({
+      entity: { eid: eids[i] },
+      [EFFECT]: {
+        handler: s.id,
+        target: b.entity.eid,
+        comp: s.effect!.created![0],
+        kind: 'created',
+        state: 'pending',
+        attempts: 0,
+        at,
+        generation: 0,
+        error: null,
+        next: null,
+        ...free,
+      },
+      $was: { [EFFECT]: { state: token(was.get(eids[i])?.state ?? null) } },
+    }))
+    if (!rows.length) return
+    try {
+      await g.apply(rows, { trusted: true })
+    } catch (error) {
+      if (!(error instanceof Stale) || tries <= 1) throw error
+      return swept(g, s, query, tries - 1)
+    }
+  }
   let sweep = async (g: Graph) => {
     let seen = new Set<string>()
     for (let s of ctx.slots()) {
@@ -348,38 +422,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       seen.add(s.id)
       let comp = s.effect!.created![0]
       try {
-        let found = (await g.read(query)) as Bundle[]
-        if (!found.length) continue
-        await g.storage.tx((tx) =>
-          then(
-            tx.read(and(
-              eq(`${EFFECT}.handler`, s.id),
-              eq(`${EFFECT}.state`, 'pending'),
-            )),
-            (held) => {
-              let owed = new Set(
-                held.map((b) => String((b[EFFECT] as Comp).target)),
-              )
-              let at = stamp(clock())
-              let rows = found
-                .filter((b) => !owed.has(b.entity.eid))
-                .map((b) => ({
-                  entity: { eid: mint() },
-                  [EFFECT]: {
-                    handler: s.id,
-                    target: b.entity.eid,
-                    comp,
-                    kind: 'created',
-                    state: 'pending',
-                    attempts: 0,
-                    at,
-                    generation: 0,
-                  },
-                }))
-              return rows.length ? tx.patch(rows) : undefined
-            },
-          )
-        )
+        await swept(g, s, query)
       } catch (err) {
         ctx.report(err, {
           handler: s.id,
@@ -482,7 +525,9 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     work: async (g, signal = AbortSignal.abort()) => {
       graph = g
       if (signal.aborted) {
-        if (await working(g, me, clock())) return
+        if (await working(g, { except: me, now: clock(), gone: opts.gone })) {
+          return
+        }
         await join(g)
         await Promise.all(await pass(g))
         return

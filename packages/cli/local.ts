@@ -96,19 +96,21 @@ let taken = (lease: Lease | undefined, me: Eid, now: number): boolean =>
 
 /** The duty roles no live process is serving: the effect pool where no
  * process that stays up is working it (@yaks/effects `working`), and each
- * service whose lease nobody live holds. */
+ * service whose lease nobody live holds. A holder known to have ended without
+ * letting go (`gone`) serves nothing. */
 export let unserved = async (
   g: Graph,
   roles: readonly Role[],
   me: Eid,
   now: number = Date.now(),
+  gone?: (holder: Eid) => boolean | Promise<boolean>,
 ): Promise<Role[]> => {
   let busy = await Promise.all(
-    roles.map(async (r) =>
-      r == 'effects'
-        ? await working(g, me, now)
-        : taken(await held(g, r), me, now)
-    ),
+    roles.map(async (r) => {
+      if (r == 'effects') return await working(g, { except: me, now, gone })
+      let lease = await held(g, r)
+      return taken(lease, me, now) && !await gone?.(lease!.holder as Eid)
+    }),
   )
   return roles.filter((_, i) => !busy[i])
 }
@@ -135,7 +137,13 @@ let open = async (
   try {
     let duties = dutiesOf(host.vocab, config, roles)
     aside.plan({ config: path, roles: duties, me: host.me })
-    let idle = await unserved(host.graph, duties, host.me)
+    let idle = await unserved(
+      host.graph,
+      duties,
+      host.me,
+      Date.now(),
+      host.gone,
+    )
     if (idle.length) aside.start(idle)
   } catch (error) {
     await host.close()

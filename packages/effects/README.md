@@ -234,10 +234,13 @@ await fx.work(g) // or one pass, on the way through
 An `effect` row records the effect's name (`handler`), the target, the
 component, the event kind, the state, the attempt count, the error, the next
 attempt time, the generation and the claim. A claim is the row's own lease —
-owner, token, expiry — taken with the graph's precondition, so two workers
-reaching for one row settle it in one transaction and the loser moves on. A
-worker renews the claims it is running; one that dies leaves claims that expire,
-and the next pass takes them.
+owner, token, expiry — written through the graph's `apply()` with its `$was`
+precondition, so two workers reaching for one row settle it there and the loser
+moves on. A worker renews the claims it is running; one that dies leaves claims
+that expire, and the next pass takes them — at once, where the pool is told the
+worker has ended (`gone`, such as @yaks/process `vanishedOne`). A sweep owes
+each target one row, named for the effect and the target, so workers coming up
+at once owe it one run.
 
 A process working the pool claims the runs its own commits owe as it writes
 them, and starts them once the commit is done. What another process wrote is
@@ -277,12 +280,14 @@ await holding(g, 'refresh-index', { holder: me, signal }, async (stopping) => {
 the callback finishes. The callback should honor its signal, which also aborts
 when a renewal finds another process holding the lease; `holding()` then waits
 to take it back. Renewals run on timers, so the callback must yield to them more
-often than a third of the hold. A take or renewal the store fails is reported
-(`report`, default `console.error`) and asked again. With no signal, or an
-already aborted signal, it makes one attempt and returns if another process owns
-the duty. `until(signal)` lets completed startup work retain the lease until
-shutdown. A terminated holder's lease eventually expires; an asker that can tell
-it is gone (`gone`, such as @yaks/process `vanishedOne`) takes it at once.
+often than a third of the hold. It answers what the callback last answered. A
+take or renewal the store fails is reported (`report`, default `console.error`)
+and asked again. With no signal, an already aborted signal, or `wait: false`, it
+makes one attempt and returns if another process owns the duty; not waiting, a
+take the store fails is thrown for the caller to retry. `until(signal)` lets
+completed startup work retain the lease until shutdown. A terminated holder's
+lease eventually expires; an asker that can tell it is gone (`gone`, such as
+@yaks/process `vanishedOne`) takes it at once.
 
 `take`, `drop`, `held`, `released` and `leaseEid` expose the individual
 operations. The default hold duration is 30 seconds. Without a `lease`
