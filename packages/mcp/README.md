@@ -53,7 +53,7 @@ let vocab = loadVocab([toolsDoc, {
   },
 }])
 let shop = graph({ vocab, storage: ram(vocab) })
-Deno.serve({ port: 8000 }, mcp({ graph: shop }))
+if (import.meta.main) Deno.serve({ port: 8000 }, mcp({ graph: shop }))
 ```
 
 This example permits unauthenticated access and loses its data when the process
