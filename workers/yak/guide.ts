@@ -430,6 +430,7 @@ let COVERS: Record<string, string[]> = {
   files: ['artifact', 'image', 'attachment'],
   components: ['doc', 'task', 'filed', 'project', 'comment', 'favorite', 'web'],
   wakes: ['wake', 'fired'],
+  models: ['session', 'entry', 'using', 'questions', 'answer', 'model'],
 }
 
 let PAGE_OF: Record<string, string> = Object.fromEntries(

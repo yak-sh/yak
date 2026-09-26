@@ -53,9 +53,10 @@ Deno.test("the kernel's own rows are not the person's", () => {
 // beside it lists — a person the store minted wears a `doc` title now, and
 // would otherwise be one more recipe (T-32627).
 Deno.test("the platform's rows are left out of the question too", () => {
-  assertEquals(asking('?.doc'), '?.doc&!exception&!error&!person')
+  let words = ['error', 'person']
+  assertEquals(asking('?.doc', words), '?.doc&!error&!person')
   // Naming one asks for it, and an address asks for its row whatever it is.
-  assertEquals(asking('?.person'), '?.person&!exception&!error')
+  assertEquals(asking('?.person', words), '?.person&!error')
   assertEquals(asking('?id=abc'), '?id=abc')
   // An empty ask selects nothing; a screen would not change that.
   assertEquals(asking('?'), '?')

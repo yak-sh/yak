@@ -27,8 +27,9 @@
 //            own post-commit registry (@yaks/effects, graph.ts `#boot`)
 //   wakes    rows seeded once in the directory: when to write `fired`, with
 //            the tags the plugin's effect rules match beside it
-//   installs rows the directory holds as the plugin ships them, written as
-//            the kernel whenever they differ (graph.ts `#sow`)
+//   installs rows a store holds as the plugin ships them, written as the
+//            kernel whenever they differ (graph.ts `#sow`): the directory's
+//            built integrations, every app store's model catalogue
 //   pins     the pinned bytes it still names, so the retention sweep keeps
 //            them (versions.ts `pruned`)
 //
@@ -42,7 +43,7 @@
 // (plugins.ts) is the one list, and the host modules read that list instead of
 // naming a domain each.
 import type { Effects as Registry } from '@yaks/effects'
-import type { Bundle, Query, Rule } from '@yaks/graph'
+import type { Bundle, Graph, Query, Rule } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Wake as Schedule } from '@yaks/wake'
 import type { Objects } from '@yaks/blob'
@@ -56,6 +57,7 @@ import type { Bindings } from './graph.ts'
 import type { Page } from './guide.ts'
 import type { Who } from './session.ts'
 import type { Tool } from './tool.ts'
+import type { Tools } from './lib/tools.ts'
 import { caught } from './sentry.ts'
 
 /**
@@ -124,21 +126,23 @@ export type Watch = (v: Visit) => void
 /** A directory row a plugin seeds once, wearing the tags its rules match. */
 export type Wake = Bundle & { wake: Schedule }
 
-/** The change that brings the rows a plugin ships up to date in the
- * directory, given a read of it: nothing where they already match
- * (@yaks/connections `install`). */
+/** The change that brings the rows a plugin ships up to date in a store,
+ * given a read of it and which store it is: nothing where they already match
+ * (@yaks/connections `install`), and nothing in a store they are not for. */
 export type Install = (
   read: (query: Query) => Bundle[] | Promise<Bundle[]>,
+  at: Stored,
 ) => Bundle[] | Promise<Bundle[]>
 
 /**
  * The store an effect is being registered in, said as what a plugin may know
  * about it (graph.ts `#boot`): the Worker's bindings, whether this is the
- * platform's own directory store rather than an app's, and the app it holds.
+ * platform's own directory store rather than an app's, the app it holds, and
+ * its two ways of writing.
  *
- * `mail` is a function because the object learns its own address from the
- * requests it answers — a registration reads it when the effect runs, never at
- * boot, or a store told its address after it woke would send from nowhere.
+ * `mail` and `commands` are functions because the object learns them after it
+ * wakes — its address from the requests it answers, its commands from a
+ * deploy — so a registration reads them when the effect runs, never at boot.
  */
 export type Stored = {
   env: Bindings
@@ -148,6 +152,17 @@ export type Stored = {
   app: string | null
   /** the address a letter leaves this store under, asked at send time */
   mail: () => string | null
+  /** the store's graph, whose writes are the kernel's own: the platform's
+   * bookkeeping, which no person's level is asked about */
+  graph: Graph
+  /** a write as somebody (null: nobody signed in), held to what they may
+   * write here as if they had sent it themselves */
+  as: (who: string | null, bundles: Bundle[]) => Promise<Bundle[]>
+  /** the app's own commands, as its manifest declares them now
+   * (lib/tools.ts) */
+  commands: () => Tools
+  /** a failure noted in the app's break log and reported, never thrown */
+  broke: (what: string, error: unknown) => void
 }
 
 /**
@@ -264,7 +279,7 @@ export let pinsOf = async (
 export let wakesOf = (plugins: Plugin[]): Wake[] =>
   plugins.flatMap((p) => p.wakes ?? [])
 
-/** Every install, in plugin order, for the directory's first request. */
+/** Every install, in plugin order, for a store's first request. */
 export let installsOf = (plugins: Plugin[]): Install[] =>
   plugins.flatMap((p) => p.installs ?? [])
 

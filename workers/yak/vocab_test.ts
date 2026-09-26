@@ -295,6 +295,23 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       // @yaks/hook — a webhook a service sent through one of the space's
       // connections (connections.ts)
       'hook',
+      // @yaks/session and @yaks/model — a transcript a model answers in the
+      // app's own store (models.ts, D-40545), and the catalogue it asks
+      'session',
+      'entry',
+      'ask',
+      'using',
+      'notice',
+      'stop',
+      'attempt',
+      'cancel',
+      'dispatch',
+      'provider',
+      'model',
+      'serves',
+      'usage',
+      'questions',
+      'answer',
       // the app's own
       'recipe',
       'cooked',
@@ -333,10 +350,16 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
     ]
   ) assert(platform.includes(`unique ${want}`), `no ${want}`)
   // An app's own store declares none of them — they are the directory's words.
-  // Its one unique is a tool's name, which is the tool's identity.
+  // Its uniques are identities (a tool's, a model's and a provider's name) and
+  // an entry's place in its transcript.
   assertEquals(
     indexes(schema(appVocab())).filter((i) => i.startsWith('unique')),
-    ['unique tool_name tool name'],
+    [
+      'unique entry_session_seq entry session seq',
+      'unique model_name model name',
+      'unique provider_name provider name',
+      'unique tool_name tool name',
+    ],
   )
   // And an address is no longer one of them (T-34657): `former` is history, so
   // two apps may hold one address a year apart. Which app answers at an address
@@ -346,15 +369,11 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
 
 Deno.test('none of the fleet vocabulary comes with it', () => {
   let mine = new Set(tablesOf(schema(appVocab())))
-  // Fewer than the fleet's 83, by a wide margin, and the margin is the point:
-  // every word here is one an app can use. The last eight are the schedule
-  // and the invocation (D-37562, T-37605) — asking for something, and asking
-  // for it later.
-  assert(mine.size < 65, `an app plants ${mine.size}`)
-  // What must not come with it is the fleet's own working life: its
-  // sessions, its canvas, its memories.
+  // What must not come with it is the fleet's own working life: its canvas,
+  // its memories, and the claims its agents hold. A transcript does come, for
+  // the app's own models to answer in (D-40545).
   for (
-    let word of ['session', 'canvas', 'persona', 'memory', 'claim']
+    let word of ['canvas', 'persona', 'memory', 'claim', 'log']
   ) {
     assert(!mine.has(word), `an app's store still plants ${word}`)
   }

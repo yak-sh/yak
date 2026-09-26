@@ -7,8 +7,9 @@
 // slot nobody filled contributes nothing.
 import { assert, assertEquals } from '@std/assert'
 import type { Effects as Registry } from '@yaks/effects'
-import type { Rule } from '@yaks/graph'
-import type { VocabDoc } from '@yaks/vocab'
+import { graph, type Rule } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import {
@@ -103,11 +104,16 @@ let registry = () => {
   return { fx, on }
 }
 
+let none = loadVocab([])
 let stored = (at: Partial<Stored> = {}): Stored => ({
   env: {},
   meta: false,
   app: 'an-app',
   mail: () => 'one.app@yaks.app',
+  graph: graph({ storage: ram(none), vocab: none }),
+  as: (_, bundles) => Promise.resolve(bundles),
+  commands: () => ({}),
+  broke: () => {},
   ...at,
 })
 

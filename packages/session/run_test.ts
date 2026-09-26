@@ -18,7 +18,8 @@ import {
 import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/testing.ts'
 import { effectDoc, effects } from '@yaks/effects'
-import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { loadVocab, pick, type VocabDoc } from '@yaks/vocab'
+import { taskDoc } from '@yaks/task/vocab'
 import { type Model, modelDoc, type Request } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
@@ -303,6 +304,46 @@ Deno.test('a withdrawn streamed request is aborted', async () => {
   let entries = await transcript(p.g, 's1')
   let last = entries.findLast((b) => !b.notice)!
   assertEquals((last.error as Comp | undefined)?.code, 'interrupted')
+})
+
+// An app's store has tasks and no claims: a task finishing there owes a run
+// (`completed` is one of `session_run`'s triggers) that no transcript could be
+// holding, and a transcript asked for a turn is answered all the same.
+Deno.test('a graph with tasks and no claims runs its transcripts', async () => {
+  let words = loadVocab([
+    pick(sessionDoc, [
+      'session',
+      'entry',
+      'ask',
+      'using',
+      'notice',
+      'stop',
+      'attempt',
+      'cancel',
+      'dispatch',
+      'session_run',
+    ]),
+    pick(taskDoc, ['task', 'completed', 'cancelled']),
+    toolsDoc,
+    modelDoc,
+  ])
+  let s = storage(mem(), words, { derived: sessionDerived })
+  s.install()
+  let reported: unknown[] = []
+  let fx = effects(words, { report: (e) => void reported.push(e) })
+  let g = graph({ storage: s, vocab: words, plugins: [sessions(), fx] })
+  let { model, asked } = fake()
+  fx.handle(running(g, { holder: 'w1', model, tools: [] }))
+  await g.apply([
+    { entity: { eid: P }, provider: { name: 'fake' } },
+    { entity: { eid: M }, model: { name: 'fake-1' } },
+    { entity: { eid: 't1' }, task: {} },
+  ], { trusted: true })
+  await g.apply([{ entity: { eid: 't1' }, completed: {} }])
+  await g.apply(ask('s1'))
+  assertEquals(reported, [])
+  assertEquals(asked.length, 1)
+  assertEquals(statusOf(await transcript(g, 's1')), 'settled')
 })
 
 Deno.test('a worker coming up runs what a restart left owed', async () => {

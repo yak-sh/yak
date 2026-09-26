@@ -169,9 +169,10 @@ are MCP resources, and `notifications/resources/list_changed` announces it.
 ## The parts of an entry
 
 `"tool": true`, a `description`, its arguments (`input` and `required`), exactly
-one action (`apply` or `query`), and an optional `view`. Any other key is
-refused by name rather than ignored, so a mistyped key is an error at deploy
-time and not a command that quietly does half of what was meant.
+one action (`apply` or `query`), an optional `view`, and an optional
+`"model": true`. Any other key is refused by name rather than ignored, so a
+mistyped key is an error at deploy time and not a command that quietly does half
+of what was meant.
 
 ### description
 
@@ -363,15 +364,15 @@ back in one message** — an agent that could only fix one problem per deploy
 would give up after the second:
 
     vocab.json: bad: screen — a tool says tool, description, input, required,
-    apply, query, view; bad: $who names no input and no entity here — declare
-    it in bad.input
+    apply, query, view, model; bad: $who names no input and no entity here —
+    declare it in bad.input
 
 Nothing is installed when it refuses: the commands the app already had keep
 working exactly as before. What it checks:
 
 - the command name and every argument name (`a-z`, `0-9`, `_`, starting with a
   letter)
-- an entry has no keys but those seven, a `description` that is a sentence, an
+- an entry has no keys but those eight, a `description` that is a sentence, an
   `input` whose every argument is a JSON Schema, and a `required` naming only
   its inputs
 - exactly one action; `query` a string, `apply` an object or a list of them
@@ -390,6 +391,20 @@ do:
 
 Components are installed before commands, so a command may write a component
 declared by this very release.
+
+## A command the app's own models may call
+
+`"model": true` offers a command to the app's own models as a tool: when a
+transcript in the app's store asks a model for a turn (see
+[Models](/docs/models)), the commands marked this way are the tools it is
+offered, and no others. The model's call runs as the person who asked for the
+turn, held to what they could write on the page themselves.
+
+    "set_mood": { "tool": true, "model": true,
+                  "description": "Say how the smith feels",
+                  "input": { "feeling": { "type": "string" } },
+                  "apply": { "entity": { "eid": "$m" },
+                             "mood": { "feeling": "$feeling" } } }
 
 ## The view: a page the answer is drawn in
 

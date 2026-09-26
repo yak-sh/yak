@@ -75,8 +75,11 @@ import {
 } from '@yaks/kernel/vocab'
 import { mailDoc } from '@yaks/mail'
 import { memberDoc } from '@yaks/member'
+import { modelDoc } from '@yaks/model/vocab'
 import { personaDoc } from '@yaks/persona/vocab'
 import { projectDoc } from '@yaks/project/vocab'
+import { sessionDoc } from '@yaks/session/vocab'
+import { sessionDerived } from '@yaks/session/status'
 import { derived as statuses, taskDoc } from '@yaks/task/vocab'
 import { toolsDoc } from '@yaks/tools'
 import { tunnelDoc } from '@yaks/tunnel'
@@ -369,23 +372,69 @@ export let appsDoc: VocabDoc = {
   },
 }
 
+/** A document whose `names` clients read and never write (`wire: false`):
+ * the rows only the platform writes. */
+let sealed = (doc: VocabDoc, names: string[]): VocabDoc => ({
+  ...doc,
+  $defs: Object.fromEntries(
+    Object.entries(doc.$defs ?? {}).map(([name, definition]) => [
+      name,
+      names.includes(name) ? { ...definition, wire: false } : definition,
+    ]),
+  ),
+})
+
+/**
+ * The words a transcript is made of (@yaks/session, D-40545): a `session`, its
+ * entries and the kinds of entry a store's own runner reads and writes, and
+ * `session_run`, the effect that runs one when an entry asks for a turn. What
+ * a runner on a machine keeps beside them (a claim, a log, a spawned child) is
+ * left out: nothing here runs a process.
+ */
+let transcriptDoc: VocabDoc = pick(sessionDoc, [
+  'session',
+  'entry',
+  'ask',
+  'using',
+  'notice',
+  'stop',
+  'attempt',
+  'cancel',
+  'dispatch',
+  'session_run',
+])
+
+/**
+ * What a transcript asks, and what comes back (@yaks/model): the provider and
+ * the models it serves, which the platform plants from its catalogue
+ * (models.ts) and nobody else writes, and the usage, the typed questions and
+ * the answers an entry carries.
+ */
+let askingDoc: VocabDoc = sealed(
+  pick(modelDoc, [
+    'provider',
+    'model',
+    'serves',
+    'usage',
+    'questions',
+    'answer',
+  ]),
+  ['provider', 'model', 'serves'],
+)
+
 /**
  * The properties an app's store reads rather than stores, as the SQL that
- * reads them (@yaks/sql `Derived`), from the packages that declare them. One
- * today: a task's `status`, which @yaks/task reads off the marks the entity
- * wears.
+ * reads them (@yaks/sql `Derived`), from the packages that declare them: a
+ * task's `status`, which @yaks/task reads off the marks the entity wears, and
+ * a transcript's, which @yaks/session reads off its newest entry.
  */
-export let appDerived = (): Derived => statuses()
+export let appDerived = (): Derived => ({ ...statuses(), ...sessionDerived })
 
 /** Derived classification metadata is readable but never client-authored. */
-export const classificationDoc: VocabDoc = {
-  ...archetypeDoc,
-  $defs: Object.fromEntries(
-    Object.entries(archetypeDoc.$defs ?? {}).map(
-      ([name, definition]) => [name, { ...definition, wire: false }],
-    ),
-  ),
-}
+export const classificationDoc: VocabDoc = sealed(
+  archetypeDoc,
+  Object.keys(archetypeDoc.$defs ?? {}),
+)
 
 /**
  * The words an invocation is made of (@yaks/tools): what was asked, what came
@@ -454,6 +503,8 @@ export let coreDocs: VocabDoc[] = storeDocs([
   mailDoc,
   invocationDoc,
   hookDoc,
+  transcriptDoc,
+  askingDoc,
 ])
 
 // ---- the platform's own store (T-33814) -------------------------------------
@@ -1244,10 +1295,13 @@ let mine = (schema: PropSchema): PropSchema => ({
  * `.yml` (tools.ts `spelled`), and the sentence has to name the file they are
  * looking at.
  *
- * `"tools": false` is the one word a manifest says about itself rather than
- * about a component — no tools synthesized for its kinds (kinds.ts, T-34513) —
- * so it is lifted off and carried on the document. A boolean tells it from a
- * component named `tools`, which is an object of properties like any other.
+ * `"tools": false` and `"models": "open"` are the two words a manifest says
+ * about itself rather than about a component, so each is lifted off and
+ * carried on the document. `tools: false` synthesizes no tools for its kinds
+ * (kinds.ts, T-34513); a boolean tells it from a component named `tools`,
+ * which is an object of properties like any other. `models: "open"` lets
+ * anyone who may write the app ask its models, where only its members may
+ * otherwise (graph.ts `FLOORS`, D-40545).
  *
  * A `$defs` entry marked `"tool": true` is one of the app's commands, not a
  * component: it is left out here and read by lib/tools.ts `parseTools`, so a
@@ -1267,9 +1321,20 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
     throw refuse('arguments', `${file} is an object — ${EXAMPLE}`)
   }
   let off = typeof held.tools == 'boolean' ? held.tools : undefined
-  let body = off === undefined
-    ? held
-    : Object.fromEntries(Object.entries(held).filter(([k]) => k != 'tools'))
+  let models = held.models
+  if (models !== undefined && models !== 'open' && models !== 'members') {
+    throw refuse(
+      'arguments',
+      `${file}: "models" is "open" (anyone who may write this app may ask ` +
+        `its models) or "members" (only its members may, which is what ` +
+        `leaving it out says)`,
+    )
+  }
+  let body = Object.fromEntries(
+    Object.entries(held).filter(([k]) =>
+      !(k == 'tools' && off !== undefined) && k != 'models'
+    ),
+  )
   let keys = Object.keys(body)
   if (keys.length && !keys.some((k) => k.startsWith('$'))) {
     throw refuse(
@@ -1292,6 +1357,7 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
     }
   }
   if (off !== undefined) doc = { ...doc, tools: off }
+  if (models !== undefined) doc = { ...doc, models }
   let errs = storable(doc)
   if (errs.length) throw refuse('arguments', `${file}: ${errs.join('; ')}`)
   return doc

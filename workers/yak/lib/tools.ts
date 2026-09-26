@@ -44,6 +44,10 @@
 // `ui://<space>/<app>/<file>` and named beside the command in what `commands`
 // answers. The app writes that page the way it writes any other.
 //
+// And `"model": true` offers the command to the app's own models (D-40545): a
+// transcript in the app's store may call it as a tool, as the person who asked
+// for the turn. A command not marked is never a model's to call.
+//
 // Nothing here reaches the store: filling a template makes the same body a
 // page's own `apply` and `query` send, and the call goes through the app's
 // ordinary doors with the caller's identity and the app's access rule
@@ -71,6 +75,8 @@ export type ToolDef = {
   apply?: unknown
   query?: string
   view?: string
+  /** offered to the app's own models as a tool */
+  model?: boolean
 }
 
 export type Tools = Record<string, ToolDef>
@@ -91,6 +97,7 @@ let KEYS = [
   'apply',
   'query',
   'view',
+  'model',
 ]
 
 // A `view` names a page in the app's OWN files (T-32687) — a relative path
@@ -261,6 +268,9 @@ export let parseTools = (
         )
       }
     }
+    if (entry.model != null && typeof entry.model != 'boolean') {
+      wrong.push(`${name}.model is true, to offer it to the app's models`)
+    }
     if (entry.query != null && typeof entry.query != 'string') {
       wrong.push(`${name}.query is a filter line, like ".run"`)
     }
@@ -299,6 +309,7 @@ export let parseTools = (
       ...(typeof entry.view == 'string' && VIEW.test(entry.view)
         ? { view: entry.view }
         : {}),
+      ...(entry.model === true ? { model: true } : {}),
     }
   }
   if (wrong.length) {

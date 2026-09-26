@@ -33,7 +33,10 @@ export let KERNEL = ['exception', 'error']
 // app's store: the directory's own graph is made of people, and the agent tier
 // reads that through the same listing. So a person is screened out of the
 // question, which only a page's doors ask, and never out of an answer.
-export let PLATFORM = [...KERNEL, 'person']
+//
+// And the models a store may ask (models.ts `catalogued`): planted in every
+// app's store by the platform, and saved by nobody.
+export let PLATFORM = [...KERNEL, 'person', 'provider', 'model', 'serves']
 
 export type Row = Record<string, unknown>
 

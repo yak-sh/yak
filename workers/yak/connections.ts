@@ -875,7 +875,8 @@ export let connectionsPlugin: Plugin = {
     provisionalDoc,
     { title: 'content', $defs: { content: toolsDoc.$defs!.content } },
   ],
-  installs: [install],
+  // The built integrations are the directory's rows, and no app's.
+  installs: [(read, at) => at.meta ? install(read) : []],
   tools: CONNECTIONS.map(worded),
   routes: [callback, hook],
   answers: [own],

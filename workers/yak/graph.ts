@@ -132,6 +132,8 @@ import {
   then,
 } from '@yaks/graph'
 import { DELIVER, MAIL, mailbox } from '@yaks/mail'
+import { models } from '@yaks/model'
+import { sessions } from '@yaks/session'
 import {
   actorOf,
   Denied,
@@ -152,7 +154,13 @@ import { commands, type Tools } from './lib/tools.ts'
 import { rouse, soonest, tick, type Ticked, wakes } from '@yaks/wake'
 import { type Alarm, arm } from '@yaks/wake/cloudflare'
 import { mentions, named, type Names, type Row } from './listing.ts'
-import { effected, installsOf, rulesOf, wakesOf } from './plugin.ts'
+import {
+  effected,
+  installsOf,
+  rulesOf,
+  type Stored,
+  wakesOf,
+} from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import type { Env } from './env.ts'
 import { resumed, seeded } from './wake.ts'
@@ -499,12 +507,24 @@ let NO_PITR =
  *            name — an open app with no floor here is an open relay, and the
  *            first spam run would take the zone's reputation with it. Writing
  *            the letter is not held to anything; a draft is ordinary data.
+ *   using    the ask for a model's turn, which the space pays for (D-40545):
+ *            its members' to make, unless the app's manifest says
+ *            `"models": "open"` ({@link floorsOf}), and then its visitors keep
+ *            the pace every write of theirs keeps (apps.ts `visiting`).
  */
 export let FLOORS: Floors = {
   product: 'editor',
   order: 'owner',
   [DELIVER]: 'editor',
+  using: 'editor',
 }
+
+/** The floors an app's own manifest leaves standing: every one, less the
+ * floor on asking its models where it opens them to anyone who may write. */
+export let floorsOf = (manifest: VocabDoc): Floors =>
+  manifest.models == 'open'
+    ? Object.fromEntries(Object.entries(FLOORS).filter(([k]) => k != 'using'))
+    : FLOORS
 
 /** The id a mirrored grant is filed under: one per (app, person), derived, so
  * the same vouch lands on one row however often it is said. */
@@ -750,10 +770,13 @@ export class Store {
         aliases(),
         blobs(vocab, bytes),
         wakes(),
+        // A transcript's rules, in an app's store (D-40545): a model named by
+        // its name, an entry's place in its transcript allocated as it lands.
+        ...(own ? [] : [models(), sessions()]),
         fx,
         // Before the guard, because it is what the guard reads.
         this.#vouching,
-        ...(app ? [this.#guarding(app)] : []),
+        ...(app ? [this.#guarding(app, meant(this.#get('vocab')))] : []),
         // The post room. `mailbox()` is @yaks/mail's own plugin: the address
         // canonicalizer, so a mailbox is stored in one spelling and only one.
         // @yaks/doc is composed beside it rather than inside it, and here a
@@ -823,12 +846,7 @@ export class Store {
         this.#runner(g).rules.map((r) => [r.rule.name, due]),
       ),
     )
-    effected(PLUGINS, fx, {
-      env: this.#bind,
-      meta,
-      app,
-      mail: () => this.#get('mail'),
-    })
+    effected(PLUGINS, fx, this.#stored(g))
     this.#vocab = vocab
     this.#graph = g
     // One per incarnation, like the graph: directory.ts seeds once per Meta.
@@ -1122,8 +1140,8 @@ export class Store {
    * The rule itself stays @yaks/member's. Only who it is asked about is ours,
    * and which of this platform's words ask a level of their own (`FLOORS`).
    */
-  #guarding(app: string): Plugin {
-    let plugin = members({ app, floors: FLOORS })
+  #guarding(app: string, manifest: VocabDoc): Plugin {
+    let plugin = members({ app, floors: floorsOf(manifest) })
     let guard = plugin.hooks?.precondition
     return {
       ...plugin,
@@ -1157,6 +1175,22 @@ export class Store {
     }
   }
 
+  // What a plugin may know about this store (plugin.ts `Stored`), over the
+  // graph it is built with. Its kernel door is `#asIs`, as the runner's is,
+  // and a write as somebody goes through `apply()` the way their own request
+  // would, guard and all.
+  #stored = (g: Graph): Stored => ({
+    env: this.#bind,
+    meta: this.#get('name') == PLATFORM_STORE,
+    app: this.#get('app'),
+    mail: () => this.#get('mail'),
+    graph: { ...g, apply: (change, opts) => this.#asIs(change, opts) },
+    as: async (who, bundles) =>
+      await this.#graph.apply(signed(bundles, who ? { by: who } : null)),
+    commands: () => JSON.parse(this.#get('tools') || '{}'),
+    broke: (what, error) => void this.#broke(what, error),
+  })
+
   #patch(bundles: Bundle[]) {
     this.#graph.storage.tx((tx) => tx.patch(bundles))
   }
@@ -1181,6 +1215,9 @@ export class Store {
           {
             host: g,
             tools: commands(declared),
+            // A call in a transcript is the transcript runner's, run in the
+            // order its model asked (@yaks/session, models.ts).
+            takes: (call) => !call.entry,
             report: (error) => void this.#broke('tool', error),
           },
         ),
@@ -1323,17 +1360,17 @@ export class Store {
   // resumes one they paused, and the stamp means a store that already holds
   // them asks its storage once rather than its graph three times.
   #sow = async (): Promise<void> => {
-    // First, the rows the platform ships (@yaks/connections' built
-    // integrations), brought up to date before this object answers anything:
-    // written as the kernel, their one writer, and only where they moved.
-    if (this.#get('name') == PLATFORM_STORE) {
-      for (let install of installsOf(PLUGINS)) {
-        try {
-          let change = await install((q) => this.#graph.read(q))
-          if (change.length) await this.#trust(change, null)
-        } catch (e) {
-          await this.#broke('install', e)
-        }
+    // First, the rows the platform ships (the directory's built
+    // integrations, an app's model catalogue), brought up to date before this
+    // object answers anything: written as the kernel, their one writer, and
+    // only where they moved. Each install says which stores it is for.
+    let at = this.#stored(this.#graph)
+    for (let install of installsOf(PLUGINS)) {
+      try {
+        let change = await install((q) => this.#graph.read(q), at)
+        if (change.length) await this.#trust(change, null)
+      } catch (e) {
+        await this.#broke('install', e)
       }
     }
     try {

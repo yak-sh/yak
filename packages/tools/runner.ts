@@ -142,6 +142,11 @@ export type Opts = {
   /** what answers a call naming a tool this runner does not have. Omitted,
    * nothing does: the call is left for whichever runner has that tool. */
   otherwise?: Tool
+  /** which calls are this runner's to run. One it does not take is left
+   * alone, the way a call naming a tool it lacks is: a transcript's calls,
+   * say, which the transcript's own runner runs in the order the model asked
+   * (@yaks/session). Omitted, it takes every call it has a tool for. */
+  takes?: (call: Bundle) => boolean
   /** the clock `result.ms` is measured with (default: `performance.now`) */
   now?: () => number
   /** the most characters an answer may take as JSON; past it the call is
@@ -439,7 +444,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   // and failing the call here would be this runner's verdict on somebody
   // else's work.
   let toolOf = (call: Bundle): NamedTool | undefined =>
-    by.get(String((call.call as Comp).to)) ?? otherwise
+    opts.takes && !opts.takes(call)
+      ? undefined
+      : by.get(String((call.call as Comp).to)) ?? otherwise
   // One promise per call in flight in this process, in the map before the
   // work starts, so nothing the work sets off finds the call untaken.
   let tracked = (id: Eid, go: () => Promise<Bundle[]>): Promise<Bundle[]> => {

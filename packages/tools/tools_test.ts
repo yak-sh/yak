@@ -552,6 +552,27 @@ Deno.test('a call for a tool this runner has no word for is left alone', async (
   assertEquals((await g.read('.execution&*')).length, 0)
 })
 
+Deno.test('a call this runner does not take is left alone', async () => {
+  let vocab = words()
+  let g = graph({ vocab, storage: ram(vocab) })
+  let r = runner(g, {
+    tools: [echo],
+    takes: (call) => call.entity.eid != 'theirs',
+    report: () => {},
+  })
+  await r.ensure()
+  let asked = (eid: string) => ({
+    entity: { eid },
+    call: { to: toolEid('example_echo'), args: { value: eid } },
+  })
+  await g.apply([asked('theirs'), asked('mine')])
+  await r.drive()
+  assertEquals(
+    (await g.read('.execution&*')).map((b) => b.entity.eid),
+    ['mine'],
+  )
+})
+
 let clock = {
   wake: {
     component: true,

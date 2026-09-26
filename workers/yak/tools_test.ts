@@ -379,6 +379,11 @@ Deno.test('view metadata leaves portable sandbox selection to the host', () => {
   assertEquals(its['openai/widgetCSP'].connect_domains, [])
 })
 
+// Every app's store opened once. A store's first boot plants the models it may
+// ask (models.ts `planting`) and tells the directory what that weighs: the
+// store's cost, once, and not what the gesture measured after it costs.
+let booted = (ctx: Ctx) => call(ctx, 'app_list', {})
+
 // How many round trips a deploy took, on its own answer (timing.ts, hops.ts):
 // `hops` is the store doors it went through (door.ts) and `r2` the bucket
 // operations it made (lib/objects.ts `counted`), both counted where they are made.
@@ -394,6 +399,7 @@ Deno.test('a deploy says how many round trips it took', async () => {
   let setup: Ctx = { env, dir, person: ADA }
   await call(setup, 'space_new', { slug: 'ada', title: 'Ada' })
   await call(setup, 'app_new', { space: 'ada', slug: 'recipes', title: 'R' })
+  await booted(setup)
 
   // A request is one Ctx and one clock (mcp.ts), so each gesture below gets
   // its own — a per-request memo shared across two calls would count the
@@ -440,6 +446,7 @@ Deno.test('a listing asks the directory a fixed number of times', async () => {
       await call(setup, 'app_new', { space, slug: `${app}-app`, title: app })
     }
   }
+  await booted(setup)
   let costs = async (args: Record<string, unknown>) => {
     let c = clock()
     await c.counting(() =>

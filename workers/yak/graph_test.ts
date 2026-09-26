@@ -596,8 +596,9 @@ Deno.test('a named row written twice is one entity, and answers to its name', as
 Deno.test('the object plants core + member + edge + the app, and nothing else', async () => {
   let ctx = state()
   await cookbook(ctx)
+  // Less the search indexes (a doc's words, a transcript's) and SQLite's own.
   let tables = named(ctx, { type: 'table' })
-    .filter((n) => !n.startsWith('doc_fts') && !n.startsWith('sqlite_'))
+    .filter((n) => !/^(doc|entry)_fts/.test(n) && !n.startsWith('sqlite_'))
     .sort()
   assertEquals(
     tables,
@@ -674,6 +675,23 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       // @yaks/hook — a webhook a service sent through one of the space's
       // connections (connections.ts)
       'hook',
+      // @yaks/session and @yaks/model — a transcript a model answers in the
+      // app's own store (models.ts, D-40545), and the catalogue it asks
+      'session',
+      'entry',
+      'ask',
+      'using',
+      'notice',
+      'stop',
+      'attempt',
+      'cancel',
+      'dispatch',
+      'provider',
+      'model',
+      'serves',
+      'usage',
+      'questions',
+      'answer',
       // the app's own
       'recipe',
     ].sort(),

@@ -113,6 +113,19 @@ fixed and the same for everyone.
 Deeper: <https://yaks.app/docs/tools.md> — the whole reference for a command,
 and the view protocol.
 
+## Asking a model
+
+An app asks a model with rows, not a key: a page writes an `entry` in a
+transcript (any entity wearing `session`) with `using { model, instructions }`,
+the app's own store asks the model, and the reply lands in the same transcript
+for any page subscribed to see. `questions` beside the entry are answered by Jev
+as `answer` rows (a choice, a yes-or-no, a score), and a command marked
+`"model": true` is one the model may call. Every call spends the space's monthly
+model allowance, weighed in dollars by the model's price.
+
+Deeper: <https://yaks.app/docs/models.md> — the rows that ask and the rows that
+come back, typed questions, who may ask, and the models and their prices.
+
 ## The notes an app keeps
 
 A rule the person wants followed every time goes in a `NOTES.md` beside

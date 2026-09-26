@@ -84,6 +84,13 @@ export let PAGES: Record<string, Page> = {
       "memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, how a memory differs from the notes an app keeps, and where a document you wrote goes instead: project documents, written into the app's store as entities and found again with search.",
     'brief': 'the words a person wants remembered',
   },
+  'models': {
+    'slug': 'models',
+    'title': 'Asking a model',
+    'description':
+      "A transcript in the app's own store: a page writes an entry naming a model, the store asks it, and the answer lands beside the ask for any page subscribed to see. Instructions, typed questions answered as rows (a choice, a yes-or-no, a score), the commands a model may call, who may ask, the models there are and what each costs against the space's monthly model allowance.",
+    'brief': "an app's own store asks a model, and the answer lands as rows",
+  },
   'notes': {
     'slug': 'notes',
     'title': 'The notes an app keeps',

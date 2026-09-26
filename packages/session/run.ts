@@ -36,6 +36,7 @@ import { HOLD, holding } from '@yaks/effects'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { active, admitNext, queue, swap } from './admission.ts'
 import { type ChildLimits, deliverChild } from './children.ts'
+import { CLAIM } from './comp.ts'
 import { STOP_ENTRY } from './native.ts'
 import { type Deps, react, type Step, transcript } from './react.ts'
 import {
@@ -85,9 +86,14 @@ let newest = async (g: Graph, session: Eid): Promise<number> => {
   return last ? seqOf(last) : 0
 }
 
+// Whether transcripts here can hold tasks at all: a graph that has tasks and
+// no claims (an app's store) has no task a transcript could be holding.
+let holds = (g: Graph) =>
+  g.vocab.comps.includes('task') && g.vocab.comps.includes(CLAIM)
+
 // A task this transcript holds was cancelled: the transcript is stopped, once.
 let quit = async (g: Graph, session: Eid, entries: Bundle[]) => {
-  if (!g.vocab.comps.includes('task')) return entries
+  if (!holds(g)) return entries
   let held = await g.read(`.task&.claim.session=${session}&.cancelled`)
   if (!held.length || statusOf(entries) == 'stopped') return entries
   await g.apply([{
@@ -311,7 +317,7 @@ let about = async (g: Graph, e: Event): Promise<Eid[]> => {
   let b = await one(g, e.entity.eid)
   if (b?.entry) return b.ask ? [] : [String(comp(b, 'entry')?.session)]
   if (b?.session) return [b.entity.eid]
-  if (!g.vocab.comps.includes('task')) return []
+  if (!holds(g)) return []
   let tasks = new Set<Eid>()
   if (b?.task) tasks.add(b.entity.eid)
   let edge = comp(b, 'edge')

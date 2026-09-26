@@ -459,18 +459,19 @@ whole:
 
 These are the names, all of them:
 
-    about access alias app archetype archived attachment binding blob bounced
-    call call_ready call_woken cancelled checkout cites comment commit compat
-    completed connection contains content created delegates deliver delivered
-    deploy doc edge email entity error exception execution favorite fee feedback
-    file filed fired former gallery gitobj grant home hook hostname image
-    installed integration integration_install invite inviting key lines mail
-    mail_post member memory meter notified opened order output parent person
-    plan product project provisional published quarantined quote reads recalled
-    ref referenced report repository requires restored result retired revision
-    satisfies secret seeded signed_in signin space stripe supersedes supervises
-    sweep task theme tool trashed tree_entry tunnel updated uses wake wants web
-    worked worktree
+    about access alias answer app archetype archived ask attachment attempt
+    binding blob bounced call call_ready call_woken cancel cancelled checkout
+    cites comment commit compat completed connection contains content created
+    delegates deliver delivered deploy dispatch doc edge email entity entry
+    error exception execution favorite fee feedback file filed fired former
+    gallery gitobj grant home hook hostname image installed integration
+    integration_install invite inviting key lines mail mail_post member memory
+    meter model notice notified opened order output parent person plan product
+    project provider provisional published quarantined questions quote reads
+    recalled ref referenced report repository requires restored result retired
+    revision satisfies secret seeded serves session session_run signed_in signin
+    space stop stripe supersedes supervises sweep task theme tool trashed
+    tree_entry tunnel updated usage uses using wake wants web worked worktree
 
 When your first choice is taken, ask what the component is _for_ and name that:
 the taken name is the general one, yours is the specific one. Not `comment` but

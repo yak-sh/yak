@@ -29,6 +29,10 @@ import type { Plugin } from './plugin.ts'
 import { mailedTo } from './post.ts'
 import { reporting } from './wake.ts'
 import { refuse } from './tool.ts'
+import { ModelError } from '@yaks/model'
+import { LIMIT } from '@yaks/session/status'
+import { type Binding, usageOf } from '@yaks/workers-ai'
+import { CATALOGUE, guess, priceOf, weigh } from './models.ts'
 
 /** The hourly reading: `fired` on this tagged wake runs the existing meter. */
 export let meterPlugin: Plugin = {
@@ -663,5 +667,62 @@ export let metering = (
     let receipt = await sender.send(m)
     await counted({ STORE: ns }, space)
     return receipt
+  },
+})
+
+// ---- the models (D-40545) ---------------------------------------------------
+//
+// A model call is counted where it happens, like a letter and for the same
+// reason: nothing in the analytics knows which space asked. The allowance is
+// read before the call and the call weighed after it, by its model's price in
+// the catalogue (models.ts), so the call that crosses the line still
+// completes: a soft ceiling, like the others.
+
+/**
+ * The AI binding an app reaches Workers AI through, and the only one: the
+ * store's runner is lent it (models.ts), and so is `./api/ai/run`. A model the
+ * catalogue does not offer is refused before anything is spent, and so is a
+ * call that could not be counted — no namespace to count it in, no space to
+ * count it against — since nothing reaches the account's AI unmetered.
+ *
+ * Over the allowance it throws a `ModelError` coded `limit` carrying the
+ * ceiling's sentence, which a transcript comes to rest on (@yaks/session
+ * `LIMIT`) and the direct door answers 429 with.
+ */
+export let metered = (
+  bind: { AI?: Binding; STORE?: Namespace } & Host,
+  spaceOf: (dir: Directory) => Promise<Space | null>,
+): Binding => ({
+  run: async (model, input) => {
+    let price = priceOf(model)
+    if (!price?.offered) {
+      throw new ModelError(
+        'model',
+        `${model} is not a model an app here can ask — it can ask ` +
+          CATALOGUE.filter((r) => r.offered).map((r) => r.name).join(', '),
+      )
+    }
+    let ns = bind.STORE
+    let dir = ns ? directoryOf(ns) : null
+    let space = dir ? await spaceOf(dir) : null
+    if (!bind.AI || !ns || !dir || !space) {
+      throw new ModelError(
+        'unbound',
+        'No model can be asked here: nothing binds this store to Workers AI ' +
+          'and to the space that pays for it',
+      )
+    }
+    let no = await refusedSpend(dir, space, 'models', bind)
+    if (no) throw new ModelError(LIMIT, no)
+    let answer = await bind.AI.run(model, input)
+    let n = usageOf(answer)
+    let cost = weigh(price, {
+      input_tokens: n.input_tokens ?? guess(input),
+      output_tokens: n.output_tokens ?? guess(answer),
+      cached_tokens: n.cached_tokens,
+    })
+    // Read again, so two calls a moment apart each add to the other's count.
+    await countedSpend({ STORE: ns }, (await spaceOf(dir)) ?? space, cost, 0)
+    return answer
   },
 })
