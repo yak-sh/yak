@@ -21,7 +21,8 @@ let Line = block('a', 'Inline', { Title: 'span' })
 let { Title } = Line
 
 // A settled task's title is struck — the sentence says whether the entity
-// still binds, wherever it's said (the Dependency read, now universal).
+// still binds, wherever it's said (the Dependency read, now universal). An
+// entity with no title is called by its id, as every door calls it.
 // The literal spaces are for the TUI painter: the web's flex layout
 // suppresses whitespace-only items and spaces via gap instead.
 export let Inline = ({ e, dot }: { e: Ent; dot?: boolean }) => (
@@ -34,7 +35,7 @@ export let Inline = ({ e, dot }: { e: Ent; dot?: boolean }) => (
     )}
     <Title
       mod={settled(statusOf(e)) && 'settled'}
-      {...title(e.doc?.title ?? e.kind)}
+      {...title(e.doc?.title || idOf(e))}
     />
   </Line>
 )

@@ -1,7 +1,8 @@
 import { type JSX } from 'preact'
 import { highlight, type Token } from '../highlight.ts'
 import { commitUrl } from '../md.ts'
-import { EID, prefix, SHORT } from '../types.ts'
+import { SHORT } from '@yaks/id'
+import { EID, prefix } from '../types.ts'
 
 // Markdown for the terminal: the tiny common subset parsed into spans the
 // sheet knows how to dress — ANSI bold/italic/strike, colored code, and

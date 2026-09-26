@@ -1,7 +1,8 @@
 // Human-facing graph addresses. Transport stays local through TASKS_HOST;
 // anything handed to a person uses the board's stable public door.
 
-import { EID, SHORT } from './types.ts'
+import { SHORT } from '@yaks/id'
+import { EID } from './types.ts'
 
 let origin = 'https://tasks.yak.sh'
 

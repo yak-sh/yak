@@ -165,6 +165,11 @@ Deno.test('formatProp: every semantic type has one face', () => {
     }),
     'T-3 — Ship',
   )
+  // a reference nothing describes reads as its target's handle
+  assertEquals(
+    formatProp(p('target', { eid: '', death: 'keep' }), id),
+    '#aaaaaaaa00',
+  )
   assertEquals(formatProp(p('note', 'text'), ''), '')
   assertEquals(formatProp(p('x', 'number'), null), null)
 })

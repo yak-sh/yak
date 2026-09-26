@@ -353,7 +353,7 @@ let boot = async () => {
     stop()
     let f = fetched()
     let now = new Map(y.everything().map((b) => [b.entity.eid, b]))
-    let name = (eid) => now.has(eid) ? y.id(now.get(eid)) : eid
+    let name = (eid) => now.has(eid) ? y.id(now.get(eid)) : y.short(eid)
     let seed = y.seeded.map((b) => {
       let e = now.get(b.entity.eid) ?? b
       let rel = Object.keys(e).find((k) =>

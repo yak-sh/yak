@@ -61,7 +61,7 @@ export let graphPane = (body, count, y) => {
     let by = new Map(all.map((b) => [b.entity.eid, b]))
     let name = (eid) => {
       let b = by.get(eid)
-      return b ? y.id(b) : String(eid ?? '?').slice(0, 8)
+      return b ? y.id(b) : eid ? y.short(eid) : '?'
     }
     let counted = Object.fromEntries(COUNTED.map((c) => [c, 0]))
     let kinds = new Map()

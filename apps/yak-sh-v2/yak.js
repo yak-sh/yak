@@ -23,7 +23,7 @@ import { compute, taskDoc, tasks } from '@yaks/task'
 import { runs } from '@yaks/task/tools'
 import { views as taskViews } from '@yaks/task/views'
 import { projectDoc } from '@yaks/project'
-import { human, idKeywords } from '@yaks/id'
+import { human, idKeywords, short } from '@yaks/id'
 import { idDoc } from '@yaks/id/vocab'
 import { ids } from '@yaks/id/rules'
 import { modelDoc } from '@yaks/model'
@@ -177,6 +177,10 @@ export let everything = () => storage.read('*')
 
 /** The id a person types for an entity: `T-7`, or its short eid. */
 export let id = human(vocab)
+
+/** What an entity the page no longer holds is called: its short eid handle,
+ * `#3b5bc70420`, as the `yak` command calls it. */
+export { short }
 
 /** The kind an entity prints as: the component that names what it is. */
 export let kind = (b) => vocab.kindOf(b) ?? 'entity'

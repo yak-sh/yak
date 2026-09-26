@@ -26,7 +26,8 @@ import {
   uuid,
   verdictName,
 } from './types.ts'
-import { aliasOf, idOf, shortHex, shortId } from './types.ts'
+import { aliasOf, idOf, shortHex } from './types.ts'
+import { short } from '@yaks/id'
 import { moves, typeOf } from './edge.ts'
 import { fieldOp, parseProp, propAt, refOf } from './props.ts'
 import { local } from './time.ts'
@@ -251,7 +252,7 @@ export let ledger = (entries: JournalEntry[], all: Row[]): string[] => {
     return r
       ? `${idOf(r)} ${cut(r.comps.doc?.title ?? r.comps.session?.id ?? '', 48)}`
         .trim()
-      : shortId(String(eid))
+      : short(String(eid))
   }
   let lines: string[] = []
   for (let e of [...entries].reverse()) { // oldest first: the day as lived
@@ -1645,7 +1646,7 @@ let whereOf = (r: Row, byEid: Map<string, Row>) => {
   )
   if (!ref) return ''
   let at = byEid.get(ref)
-  return at ? idOf(at) : shortId(ref)
+  return at ? idOf(at) : short(ref)
 }
 
 // Everything a person authored, as acts on one timeline: a turn typed at a

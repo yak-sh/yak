@@ -18,7 +18,8 @@
 // board query does (query.ts). Platform-local verbs (the TUI's :q, the
 // web's :zoom) ride in run()'s `local` table — the shared list is the
 // language both faces speak, and each adds only what the other can't do.
-import { EID, SHORT } from './types.ts'
+import { SHORT } from '@yaks/id'
+import { EID } from './types.ts'
 import { type Change, type Dep, idOf, uuid } from './types.ts'
 import {
   cascade,

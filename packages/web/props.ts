@@ -9,6 +9,7 @@ import {
   spineProps,
   stamped,
 } from './types.ts'
+import { short } from '@yaks/id'
 import { timeInstant } from '@yaks/query'
 import { local } from './time.ts'
 import { normalize } from './url.ts'
@@ -243,8 +244,10 @@ export let formatProp = (
   if (tag(p.type) == 'bool') return parsed ? 'true' : 'false'
   // A stamp is stored Zulu but SHOWN local — one door for every face.
   if (tag(p.type) == 'time') return local(String(parsed))
+  // A reference nothing here can describe (its target not loaded) reads as
+  // the target's short handle, as the CLI prints it — never the bare uuid.
   if (tag(p.type) == 'eid') {
-    return ctx.describe?.(String(parsed)) ?? String(parsed)
+    return ctx.describe?.(String(parsed)) ?? short(String(parsed))
   }
   return String(parsed)
 }

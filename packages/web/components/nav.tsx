@@ -18,7 +18,8 @@ import {
   trail,
 } from '../live.ts'
 import { type Action, actionsFor, resolve } from './registry.ts'
-import { type Change, type Ent, IdError, idOf, SHORT } from '../types.ts'
+import { SHORT } from '@yaks/id'
+import { type Change, type Ent, IdError, idOf } from '../types.ts'
 import { dragData } from './drag.ts'
 import { cursorEid } from '../edge.ts'
 

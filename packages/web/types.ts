@@ -17,6 +17,7 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
+import { idOf as idsOf, prefixes, SHORT } from '@yaks/id'
 import { idKeywords } from '@yaks/id/vocab'
 import { nameKeywords } from '@yaks/names'
 import { edgeKeywords } from '@yaks/edge/vocab'
@@ -114,8 +115,13 @@ export let kindOrder: string[] = []
 // Kinds whose doc title is a NAME a caller can type (near.ts).
 export let byName = new Set<string>()
 
-// Display prefixes: kindOf() chooses one when a num exists.
+// The letter each component's ids wear (@yaks/id `prefixes`): `T` for a task.
 export let prefix: Record<string, string> = {}
+
+// An entity's id as a person reads it: `T-9` once the store numbers it, its
+// short handle `#3b5bc70420` until then. @yaks/id's, the one every door reads
+// an id through.
+export let idOf = idsOf(vocab)
 
 let irregular: Record<string, string> = {
   person: 'people',
@@ -171,7 +177,6 @@ export let learn = (docs: VocabDoc[]): Vocab => {
   let st: typeof stamped = {}
   let log: typeof sessionComps = {}
   let ix: typeof indexes = {}
-  let px: typeof prefix = {}
   let names = new Set<string>()
   let relations: string[] = []
   let parts: typeof partition = {}
@@ -183,7 +188,6 @@ export let learn = (docs: VocabDoc[]): Vocab => {
     let def = (v.def(name) ?? {}) as {
       bare?: boolean
       edge?: string
-      prefix?: string
       by_name?: boolean
       index?: string[][]
       unique?: string[][]
@@ -204,8 +208,6 @@ export let learn = (docs: VocabDoc[]): Vocab => {
       ...(def.index ?? []).map((cols) => ({ cols })),
     ].filter((r) => Array.isArray(r.cols))
     if (rows.length) ix[name] = rows
-    let letter = v.comp(name)?.keywords?.prefix ?? def.prefix
-    if (typeof letter == 'string') px[name] = letter
     if (def.by_name) names.add(name)
     if (typeof def.edge == 'string') relations.push(def.edge)
     if (v.comp(name)?.keywords?.lazy) parts[name] = 'lazy'
@@ -215,7 +217,8 @@ export let learn = (docs: VocabDoc[]): Vocab => {
   stamped = st
   sessionComps = log
   indexes = ix
-  prefix = px
+  prefix = prefixes(v)
+  idOf = idsOf(v)
   byName = names
   edges = relations
   partition = parts
@@ -490,16 +493,9 @@ export let plurals = new Set(kindOrder.flatMap((k) => [plural(k), `${k}s`]))
 export let kindWord = (word: string) =>
   kindOrder.find((k) => k == word || plural(k) == word || `${k}s` == word)
 
-// Short eid handles are explicitly sigilled: never confuse a decimal fragment
-// with a num, or a bare hex word with a git commit. They carry no letter
-// (@yaks/id `short`): the hex names the entity, whatever it is.
-export let shortId = (eid: string) =>
-  `#${eid.replaceAll('-', '').slice(0, 10).toLowerCase()}`
-export let prefixOf = (kind: string) =>
-  prefix[kind] ?? kind.slice(0, 1).toUpperCase()
-export let SHORT = /^#[0-9a-f]{6,64}$/i
 // Identity refusals must not become a saved query's ordinary "not loaded" miss.
 export class IdError extends Error {}
+// The hex a short handle (@yaks/id `SHORT`, `#3b5bc70420`) names.
 export let shortHex = (id: string) =>
   SHORT.test(id) ? id.slice(1).toLowerCase() : undefined
 // A WHOLE eid, in every shape a client may name an entity by: the uuid it
@@ -509,8 +505,6 @@ export let shortHex = (id: string) =>
 // (props.ts reference, client.ts minting).
 export let EID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^[0-9a-f]{40}$|^[0-9a-f]{64}$/i
-export let idOf = (e: { eid: string; kind: string; num?: number | null }) =>
-  e.num ? `${prefixOf(e.kind)}-${e.num}` : shortId(e.eid)
 
 // A model's short name — 'claude-fable-5' is fable, 'gpt-5.6-sol' is sol:
 // drop the vendor word and anything wearing a digit, keep what's left.

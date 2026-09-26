@@ -443,6 +443,26 @@ Deno.test('document meta names its creator and editor after their ages', () => {
   }
 })
 
+Deno.test('meta names a creator it has not loaded by its handle', () => {
+  let by = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  let at = new Date().toISOString()
+  cache.value = {
+    doc: {
+      entity: { eid: 'doc', num: 1 },
+      doc: { eid: 'doc', title: 'Made by a process', body: '' },
+      created: { eid: 'doc', at, by },
+    },
+  }
+  let e = ent('doc')
+  let { root, free } = mount(h(resolve(e, 'Meta').Render, { e }))
+  try {
+    assertEquals(root.querySelector('.Stamp a')?.textContent, '#bbbbbbbbbb')
+  } finally {
+    free()
+    cache.value = {}
+  }
+})
+
 Deno.test('the full face paints the body for a viewer with no actor', () => {
   cache.value = {
     doc: {

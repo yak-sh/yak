@@ -30,7 +30,8 @@
 // difference (how a ref becomes an href), so neither can drift.
 // `mdInline` is the title face: no block wrapper, links/images flattened
 // because the surrounding title is usually the link.
-import { EID, SHORT } from './types.ts'
+import { SHORT } from '@yaks/id'
+import { EID } from './types.ts'
 import { Marked, type RendererThis, type Tokens } from 'marked'
 import { highlight } from './highlight.ts'
 import { prefix } from './types.ts'

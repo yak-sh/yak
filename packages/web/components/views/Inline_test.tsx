@@ -67,3 +67,17 @@ Deno.test('a projected peer paints its settled status', () => {
     cache.value = {}
   }
 })
+
+Deno.test('an entity with no title and no number is called by its handle', () => {
+  let eid = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  cache.value = {}
+  applyLocal([{ eid, name: 'process', comp: { pid: 1 } }])
+  let e = ent(eid)
+  let { root, free } = mount(h(resolve(e, 'Inline').Render, { e }))
+  try {
+    assertEquals(root.textContent, '#bbbbbbbbbb')
+  } finally {
+    free()
+    cache.value = {}
+  }
+})

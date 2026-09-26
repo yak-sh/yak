@@ -4,7 +4,8 @@
 // known eid, or shaped like a task, does the obvious; anything else becomes
 // a task — first line title, rest body.
 import { base, cache, findEid, uuid } from './live.ts'
-import { type Change, EID, SHORT } from './types.ts'
+import { SHORT } from '@yaks/id'
+import { type Change, EID } from './types.ts'
 
 // What a paste resolves to: comps to mint (none for existing entities),
 // the entity a card should target, and optionally how to show it.
