@@ -90,9 +90,14 @@ export let born = (g: Giver, think: string) => ({
 export let said = (hero: string, words: string) => `${hero}: ${words}`
 
 /** A line a villager hears without answering it: news of a quest handed in,
- * or what came of a deal they made. */
-export let hears = (id: string, text: string) => ({
-  entity: { eid: crypto.randomUUID() },
+ * or what came of a deal they made. `eid` names it when two pages may say
+ * the same thing, so it is heard once. */
+export let hears = (
+  id: string,
+  text: string,
+  eid: string = crypto.randomUUID(),
+) => ({
+  entity: { eid },
   entry: { session: eidOf(id) },
   content: { body: text },
   notice: {},

@@ -257,6 +257,7 @@ export let deals = (net: Net) => {
               `(You found you could not ${gift ? 'give' : 'offer'} ${d.give}${
                 gift ? '' : ` for ${d.take}`
               } to ${name}: ${book.why.get(d.eid)}.)`,
+              uuidOf(`heard/void/${d.eid}`),
             )])
           } else if (state == 'open' && terms && !gift) {
             told.add(d.eid)
@@ -319,6 +320,7 @@ export let deals = (net: Net) => {
           `(${nameOf(hero)} agreed to your offer: ${said(f.take)} for your ${
             said(f.give)
           }.)`,
+          uuidOf(`heard/agreed/${eid}`),
         ),
       ])
       return `You agreed: ${said(f.take)} for ${f.g.name}'s ${said(f.give)}.`
@@ -350,6 +352,7 @@ export let deals = (net: Net) => {
           id,
           `(${nameOf(hero)} handed in your deal: ${said(f.take)}, and you ` +
             `gave them ${said(f.give)}.)`,
+          uuidOf(`heard/handed/${eid}`),
         ),
       ])
       return `${f.g.name} gives you ${said(f.give)}.`
@@ -364,6 +367,7 @@ export let deals = (net: Net) => {
         `(${nameOf(hero)} turned down your offer of ${said(f.give)} for ${
           said(f.take)
         }.)`,
+        uuidOf(`heard/refused/${eid}`),
       )])
     },
   }
