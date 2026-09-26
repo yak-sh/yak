@@ -1,10 +1,11 @@
 // What drifts in a level's air (levels.ts `look.air`): snow, rain, ash, embers
-// rising, spores, wisps, fireflies, midges, petals, reed down, dust, heat off
-// the sand, glints of salt, the shimmer off crystal. Each kind of air is a row: what colour its bits are and whether they
-// glow, how many a second, where round the hero they start (`spread` metres
-// out, `low` to `high` metres up), and how they move: flung out at `speed`,
-// `up` at the start (down if less than nothing), pulled down by `fall`, gone
-// after `life` seconds. None of it is state.
+// rising, sparks, spores, wisps, fireflies, midges, petals, reed down, dust,
+// heat off the sand, glints of salt, the shimmer off crystal. Each kind of air
+// is a row: what colour its bits are and whether they glow, how many a
+// second, where round the hero they start (`spread` metres out, `low` to
+// `high` metres up), and how they move: flung out at `speed`, `up` at the
+// start (down if less than nothing), pulled down by `fall`, gone after `life`
+// seconds. None of it is state.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { bits } from './fx.ts'
@@ -116,6 +117,15 @@ export let AIRS: Record<string, Air> = {
     speed: 0.15,
     life: 4,
     size: 0.04,
+  }),
+  sparks: air(0xffc860, 40, {
+    glow: true,
+    low: 0,
+    high: 3,
+    up: 3,
+    speed: 0.6,
+    life: 1.4,
+    size: 0.035,
   }),
   heat: air(0xfff4d8, 24, {
     low: 0,
