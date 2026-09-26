@@ -679,24 +679,27 @@ export type Asking = Opts & {
 }
 
 /**
- * Whether one process is among the {@link vanished}: running by its row, on
- * this machine, and its pid gone. What a process contending for something the
- * other one holds asks (@yaks/effects `take`), since a holder that is gone has
- * nothing left to do with it.
+ * Whether a process is over, so nothing it held is held any more: its row
+ * records an `exit`, or it is among the {@link vanished}. A Worker thread is a
+ * row of its own in the pid it runs in (./self.ts), and that pid outlives it;
+ * the `exit` the process that ended it writes is what says it is over. What a
+ * process contending for something another holds asks (@yaks/effects `take`).
+ * `me`, the process asking, is never over to itself.
  *
  * ```ts
- * import { selfEid, store, vanishedOne } from '@yaks/process'
+ * import { gone, selfEid, store } from '@yaks/process'
  *
- * // if (await vanishedOne(store(graph), holder, { me: selfEid() })) …
+ * // if (await gone(store(graph), holder, { me: selfEid() })) …
  * ```
  */
-export let vanishedOne = async (
+export let gone = async (
   store: Store,
   eid: string,
   o: Asking = {},
 ): Promise<boolean> => {
-  let b = (await store.running()).find((b) => b.entity.eid == eid)
-  return !!b && await dead(b, o)
+  if (eid == o.me) return false
+  let [b] = await store.get([eid])
+  return !!b?.[EXIT] || (!!b?.[PROCESS] && await dead(b, o))
 }
 
 // A running row whose pid is gone. A run this package launched is not one:

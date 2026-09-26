@@ -22,6 +22,10 @@ import { transcriptViews } from './transcript.ts'
 import type { UIAgent } from './panels.ts'
 import { diagnostics } from './diagnostics.ts'
 
+/** How long a Worker being ended where it stands has to write its own ending
+ * before it is let go anyway (ms). */
+let ENDING = 1_000
+
 export let remote = async (
   options: {
     provider?: string
@@ -120,6 +124,16 @@ export let remote = async (
     worker.removeEventListener('messageerror', fatal)
     if (!lent) worker.terminate()
   }
+  // A Worker of its own that did not drain is ended where it stands, and its
+  // pid is this process's, which goes on: nothing but an ending in the graph
+  // says it is over. So it is asked to write its own first (backend_worker.ts
+  // `end`), and nobody waits out what it held. Bounded, since a Worker wedged
+  // past answering can only be let go.
+  let ending: Promise<void> | undefined
+  let end = () =>
+    ending ??= (lent ? Promise.resolve() : link.request('end', [], {
+      timeout: ENDING,
+    }).then(() => {}, () => {})).finally(release)
   let closing = false
   let shutdown: Promise<{ drained: boolean }> | undefined
   let forceExit!: () => void
@@ -389,15 +403,16 @@ export let remote = async (
       closing = true
       forceExit()
       detachDiagnostics()
-      release()
+      void end()
     },
     close: (options: { timeout?: number | null } = {}) =>
       shutdown ??= (async () => {
         closing = true
         listeners.clear()
         let timer: ReturnType<typeof setTimeout> | undefined
+        let result = { drained: false }
         try {
-          return await Promise.race([
+          return result = await Promise.race([
             request('close').then(() => ({ drained: true })),
             forced,
             new Promise<{ drained: boolean }>((resolve) => {
@@ -410,7 +425,8 @@ export let remote = async (
           ])
         } finally {
           clearTimeout(timer)
-          release()
+          if (result.drained) release()
+          else await end()
           await queued
           replica.close()
           detachDiagnostics()

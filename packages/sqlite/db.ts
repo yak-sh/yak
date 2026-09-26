@@ -12,7 +12,7 @@
 
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
-import type { Driver } from '@yaks/sql'
+import { type Driver, render } from '@yaks/sql'
 import { driver } from './native.ts'
 
 /** A database this process opened: its {@link Driver}, and the way to close
@@ -43,6 +43,12 @@ export let open = (path: string): Opened => {
     if (dir) Deno.mkdirSync(dir, { recursive: true })
   }
   let db = new Database(path)
+  // The busy timeout before anything else: the driver reads the schema as it
+  // is built, and a file another connection holds locked (its last checkpoint,
+  // as it closes) is waited for, never refused.
+  if (path != ':memory:') {
+    db.exec(render({ t: 'pragma', name: 'busy_timeout', value: 5000 }).sql)
+  }
   let d = driver(db)
   let set = (name: string, value: string | number) =>
     d.query({ t: 'pragma', name, value })
@@ -50,7 +56,6 @@ export let open = (path: string): Opened => {
   if (path != ':memory:') {
     set('journal_mode', 'wal')
     set('synchronous', 'normal')
-    set('busy_timeout', 5000)
   }
   return { ...d, close: () => db.close() }
 }

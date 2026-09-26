@@ -24,6 +24,9 @@ export type Harness = {
   vocab: Vocab
   /** the process row this graph is worked by: what a run's lease names */
   me: Eid
+  /** whether a lease's holder is over, so what it held is had now rather than
+   * at its expiry (@yaks/cli `Host.gone`) */
+  gone: (holder: Eid) => Promise<boolean>
   /** where this graph's secrets are kept — its sign-ins among them */
   vault: Vault
   /** where its artifacts' bytes are kept (@yaks/blob): the `images` directory
@@ -55,6 +58,7 @@ export let hosted = (
     fx: host.fx,
     vocab: host.vocab,
     me: host.me,
+    gone: host.gone,
     vault: host.vault,
     artifacts: artifactsAt(path),
     migrations: migrations(host.sql),

@@ -38,9 +38,9 @@
 // from the moment it exists. A call left `running` by a process that died has
 // no result, so the same rules still select it, and `reconcile()` at boot runs
 // it again, claiming over the stale `running`. `by` records whose claim it is:
-// a runner leaves a live process's claim alone, its own process's included,
-// since a claim this runner is not running is running in another of the
-// process's threads. That is also what a transcript imported from another
+// a runner leaves a live process's claim alone, its own owner's included,
+// since a claim this runner is not running is running in another runner under
+// the same name. That is also what a transcript imported from another
 // machine needs: every call in it arrives already executed. The exception is
 // a holder that has finished: a process
 // writes its `exit` row in the last transaction it will ever write, so a call
@@ -144,7 +144,7 @@ export type Opts = {
    * process that made the calls, and no boot pass here re-runs it. A holder
    * that has written an `exit` row holds nothing: its calls are free. A claim
    * naming this owner that this runner is not running is left alone too: it
-   * is running in another thread of the same process. Omitted, this runner
+   * is running in another runner under the same name. Omitted, this runner
    * claims anonymously and takes any call nobody else holds. */
   owner?: Eid
   /** the program running these calls on this machine, as @yaks/process
@@ -359,11 +359,11 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   // each started: what an interruption ends.
   let held = new Map<Eid, { call: Bundle; started: number }>()
   // Whose claim a call carries, as this runner reads it. Unclaimed, or claimed
-  // with no owner named, is `free`. This process's own claim is `mine`: one
-  // this runner is not running is running in another thread of this process,
-  // or failed there, and either way the process is not over. Another process's
-  // claim is `theirs` — unless that process wrote an `exit` row, which makes
-  // the claim `lapsed`: nothing is coming back to finish the call, so it is
+  // with no owner named, is `free`. This owner's own claim is `mine`: one
+  // this runner is not running is running in another runner under the same
+  // name, or failed there, and either way the owner is not over. Another's
+  // claim is `theirs` — unless its row records an `exit`, which makes the
+  // claim `lapsed`: nothing is coming back to finish the call, so it is
   // taken the way a re-run takes one, claiming over `running`. The holder
   // entity is fetched whole rather than queried by `.exit`, so a graph that
   // tracks no processes simply never finds one — this package reads a
@@ -480,8 +480,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let held = await recalled(id)
     if (held.length) return held
     // A live process's claim is not this runner's to take, redrive or not,
-    // this process's own included: a claim this runner is not running is
-    // running in another of its threads. A lapsed one is taken here and now,
+    // its own owner's included: a claim this runner is not running is running
+    // in another runner under the same name. A lapsed one is taken here and now,
     // without waiting for a boot sweep.
     let hold = await whose(call)
     if (hold == 'theirs' || hold == 'mine') return []

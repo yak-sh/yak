@@ -269,9 +269,9 @@ owner, token, expiry — written through the graph's `apply()` with its `$was`
 precondition, so two workers reaching for one row settle it there and the loser
 moves on. A worker renews the claims it is running; one that dies leaves claims
 that expire, and the next pass takes them — at once, where the pool is told the
-worker has ended (`gone`, such as @yaks/process `vanishedOne`). A sweep owes
-each target one row, named for the effect and the target, so workers coming up
-at once owe it one run.
+worker is over (`gone`, such as @yaks/process `gone`). A sweep owes each target
+one row, named for the effect and the target, so workers coming up at once owe
+it one run.
 
 A process working the pool claims the runs its own commits owe as it writes
 them, and starts them once the commit is done. What another process wrote is
@@ -332,8 +332,8 @@ and asked again. With no signal, an already aborted signal, or `wait: false`, it
 makes one attempt and returns if another process owns the duty; not waiting, a
 take the store fails is thrown for the caller to retry. `until(signal)` lets
 completed startup work retain the lease until shutdown. A terminated holder's
-lease eventually expires; an asker that can tell it is gone (`gone`, such as
-@yaks/process `vanishedOne`) takes it at once.
+lease eventually expires; an asker that can tell it is over (`gone`, such as
+@yaks/process `gone`) takes it at once.
 
 `take`, `drop`, `held`, `released` and `leaseEid` expose the individual
 operations. The default hold duration is 30 seconds. Without a `lease`

@@ -23,8 +23,8 @@
  * rendering, which are its own (./run.ts, ./answer.ts), and reaches the graph
  * either through a server or by composing the graph role here itself
  * (local.ts), with the duty roles composed again in a thread of the same
- * process (./thread.ts, ./worker.ts) that {@link ComposeOpts} `joins`. A role
- * this process does not serve costs it nothing: its facets
+ * process (./thread.ts, ./worker.ts), a host of its own. A role this process
+ * does not serve costs it nothing: its facets
  * are never imported, so a command that opens the graph to read it never loads
  * a line of HTTP, and a process that serves no `web` never asks a plugin for a
  * route.
@@ -72,12 +72,12 @@ import {
 import {
   ended,
   EXIT,
+  gone,
   PROCESS,
   selfEid,
   started,
   store as machine,
   vanished,
-  vanishedOne,
 } from '@yaks/process'
 import type { Derived, Driver, Extension } from '@yaks/sql'
 import { migrations, storage, type Store } from '@yaks/sqlite'
@@ -192,16 +192,22 @@ export type Host = {
    * narrows them to those duty roles: a pass over the ones nobody else is
    * serving. */
   duties: (signal?: AbortSignal, only?: readonly Role[]) => Promise<void>
-  /** What {@link Served.close} would have written for each process on this
-   * machine that ended without running it (@yaks/process `vanished`): its
-   * calls ended as interrupted, its leases released, its `exit` stamped with
-   * no code. What a process about to stay up does before it reconciles
-   * (@yaks/api `serve`), so a crash leaves nothing held by the dead. Answers
-   * the processes it closed. */
+  /** What {@link Served.close} would have written for a process or a thread
+   * that will not write it itself: its calls ended as interrupted, saying
+   * `why`, its leases released, its `exit` stamped with no code. What this
+   * process writes for a thread of its own that it ended where it stood, or
+   * that failed (./thread.ts), and a thread for itself when it is about to be
+   * ended so (@yaks/harness), so nobody waits out what it held. */
+  end: (holder: Eid, why: string) => Promise<void>
+  /** {@link Host.end} for each process on this machine that ended without
+   * closing (@yaks/process `vanished`). What a process about to stay up does
+   * before it reconciles (@yaks/api `serve`), so a crash leaves nothing held
+   * by the dead. Answers the processes it closed. */
   bury: () => Promise<Bundle[]>
-  /** Whether a lease's holder is a process on this machine that ended without
-   * letting go (@yaks/process `vanishedOne`): what a take asks before waiting
-   * out a holder's expiry (@yaks/effects `HoldOpts.gone`). */
+  /** Whether a lease's holder is over (@yaks/process `gone`): a process on
+   * this machine whose pid is gone, or one whose row records its `exit`, as a
+   * thread its process ended does. What a take asks before waiting out a
+   * holder's expiry (@yaks/effects `HoldOpts.gone`). */
   gone: (holder: Eid) => Promise<boolean>
 
   /** This process, as an entity (@yaks/process `started`): the row it wrote on
@@ -421,8 +427,13 @@ export type Served = Host & {
 
 /** Duties this process runs in a thread of its own (./thread.ts): started with
  * the host's own by {@link Host.duties}, told when this process has written
- * runs down for it, and finished before the host closes. */
+ * runs down for it, and finished before the host closes. Either of those
+ * failing means the thread is gone without closing — ended where it stood, or
+ * failed — and its ending is then this host's to write ({@link Host.end}). */
 export type Thread = {
+  /** the thread, as the entity it runs as: a host of its own, whose `process`
+   * row its leases and claims name */
+  me: Eid
   /** the duties the thread took: one pass where `signal` has already
    * aborted, else for as long as it has not */
   duties: (signal: AbortSignal) => Promise<void>
@@ -434,10 +445,6 @@ export type Thread = {
 
 /** How a host is composed, beyond its roles. */
 export type ComposeOpts = {
-  /** this host joins a process that already wrote itself in — a thread the
-   * process started (./worker.ts, with @yaks/process `become`) — so it writes
-   * no `process` row of its own on the way in and no `exit` on the way out */
-  joins?: boolean
   /** the thread running the duties this host hands off */
   thread?: Thread
 }
@@ -791,26 +798,29 @@ export let compose = async (
         if (!doing) throw new Error('the duties are not built yet')
         return doing(signal, only)
       },
+      end: async (holder, why) => {
+        // A thread that failed before it wrote itself in holds nothing.
+        if (!self || !g || !(await g.get([holder])).length) return
+        await calls?.interrupt(why, holder)
+        await g.apply([
+          ...await released(g, holder),
+          { entity: { eid: holder }, [EXIT]: {} },
+        ])
+      },
       bury: async () => {
         if (!self || !g) return []
         let dead = await vanished(machine(g), { me: selfEid() })
         for (let b of dead) {
-          let eid = b.entity.eid
           let pid = (b[PROCESS] as Comp | undefined)?.pid
-          await calls?.interrupt(
+          await host.end(
+            b.entity.eid,
             `interrupted: process ${pid} ended without closing`,
-            eid,
           )
-          await g.apply([
-            ...await released(g, eid),
-            { entity: { eid }, [EXIT]: {} },
-          ])
         }
         return dead
       },
       gone: async (holder) =>
-        !!self && !!g &&
-        await vanishedOne(machine(g), holder, { me: selfEid() }),
+        !!self && !!g && await gone(machine(g), holder, { me: selfEid() }),
     }
     authenticate = doorman(ruled, host, self)
     // The clause compilers belong to the store, so they are gathered before it
@@ -990,16 +1000,23 @@ export let compose = async (
     // A config that turned them off (`duties: false`, `yak --no-duties`)
     // takes no lease, works no effects and runs none of them, in either form:
     // what it commits is left written down for a process that does.
+    //
+    // A thread gone without closing — ended where it stood, or failed — ran in
+    // this process's pid, which goes on, so nobody can tell it is over until
+    // this host writes its ending: once, however many of its promises say so.
+    let ending: Promise<void> | undefined
+    let lose = (error: unknown) => {
+      console.error('the duty thread failed —', error)
+      return ending ??= host.end(
+        opts.thread!.me,
+        'interrupted: its thread ended before it closed',
+      ).catch((e) => console.error('ending the duty thread failed —', e))
+    }
     doing = config.duties == false ? async () => {} : (signal, only) => {
       let until = signal ?? stopping.signal
       let mine = (role: Role) => !only || only.includes(role)
       return Promise.all([
-        ...(opts.thread
-          ? [
-            opts.thread.duties(until)
-              .catch((e) => console.error('the duty thread failed —', e)),
-          ]
-          : []),
+        ...(opts.thread ? [opts.thread.duties(until).catch(lose)] : []),
         ...(effecting && mine('effects')
           ? [
             fx.work(g!, until)
@@ -1023,8 +1040,8 @@ export let compose = async (
     // commits. First among the writes, because everything after is attributed
     // to it and `created.by` is a reference: a process attributing writes to an
     // entity nothing created would store a dangling id on its very first
-    // write. A host joining a process that wrote itself in writes none.
-    if (self && !opts.joins) await g.apply([started()])
+    // write.
+    if (self) await g.apply([started()])
     return {
       ...host,
       graph: g,
@@ -1042,14 +1059,14 @@ export let compose = async (
       // thread beside it finishes, running what this process wrote down; the
       // effects this process started are let finish, and it leaves the pool,
       // so what its last transaction owes is left written down for another.
-      // A host that joined another process stamps no ending: the process is
-      // not over when one of its threads is. The calls this process was still
-      // running are ended first, as interrupted, so none is left to lapse.
+      // A thread that does not close, this host writes the ending of. The
+      // calls this process was still running are ended first, as interrupted,
+      // so none is left to lapse.
       stop: () => stopping.abort(),
       close: async (code?: number) => {
         stopping.abort()
-        await opts.thread?.close()
-          .catch((e) => console.error('the duty thread failed —', e))
+        await opts.thread?.close().catch(lose)
+        await ending
         await fx.stop()
         let shut = () => {
           try {
@@ -1067,11 +1084,7 @@ export let compose = async (
         ).catch((e) => console.error('interrupting its calls failed —', e))
         if (!self) return shut()
         try {
-          let last = [
-            ...await released(g!, selfEid()),
-            ...opts.joins ? [] : [ended(code)],
-          ]
-          if (last.length) await g!.apply(last)
+          await g!.apply([...await released(g!, selfEid()), ended(code)])
         } catch { /* the file is going either way */ }
         shut()
       },

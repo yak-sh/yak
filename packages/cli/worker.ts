@@ -1,8 +1,8 @@
 /// <reference no-default-lib="true" />
 /// <reference lib="deno.worker" />
 // The other side of ./thread.ts: a worker that composes the graph a config
-// names for the duty roles it is handed, as the process that started it, and
-// runs those duties until it is told to close.
+// names for the duty roles it is handed, as a host of its own under the name
+// the process gave it, and runs those duties until it is told to close.
 //
 // On the way in it runs one pass of each role nobody else serves, which is all
 // a command passing through asks for; told to go live, it keeps at every one
@@ -44,7 +44,7 @@ self.onmessage = async ({ data }: MessageEvent<Said>) => {
     become(me)
     every = roles
     mine = idle ?? roles
-    host = compose(read(config), ['graph', ...roles], facet, { joins: true })
+    host = compose(read(config), ['graph', ...roles], facet)
     going = host.then((h) => h.duties(AbortSignal.abort(), mine))
       .then(() => tell({ passed: true }), failed)
   } else if ('live' in data) {

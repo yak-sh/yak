@@ -64,9 +64,9 @@ await watch(processes)
 start. `watch()` resumes monitoring every stored process without an `exit`.
 `vanished()` finds the rows without an `exit` whose pid is gone from this
 machine and that this package did not launch: a process that ended without
-writing its own ending, for whoever cleans up after it; `vanishedOne()` asks the
-same of one process. `launch()` passes only the environment supplied in its
-specification.
+writing its own ending, for whoever cleans up after it. `gone()` asks whether
+one process is over: its row records an `exit`, or it is among the vanished.
+`launch()` passes only the environment supplied in its specification.
 
 Launched processes run through a short-lived launcher and a wrapper in a session
 and process group of its own. The wrapper writes a pidfile and an exit-code
@@ -92,6 +92,11 @@ that records the host's process entity, `ended()` records its exit, and
 can sign writes with this entity, so `created.by` identifies the specific
 program run that wrote a row. A `created(process)` event for the host also gives
 effects a normal post-commit event on which to perform startup recovery.
+
+A Worker thread that opens a graph is a host of its own, with its own row in the
+pid it runs in. The pid lives on after the thread, so its `exit` is what
+`gone()` reads: a process that ends its thread where it stands names it first
+with `become(eid)`, and writes that `exit` for it.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -121,8 +126,9 @@ always refuses the supervisor's own command.
 
 `Store` is the minimal persistence interface used by launch and supervision:
 `apply()` writes a **batch** (a list of changes committed in one transaction),
-`running()` reads processes without an exit, and `services()` reads service
-entities. `store(graph)` implements it with graph queries.
+`get()` reads given rows, `running()` reads processes without an exit, and
+`services()` reads service entities. `store(graph)` implements it with graph
+reads.
 
 ## Exports
 
@@ -132,10 +138,10 @@ The main module exports:
 
 - vocabulary: `processDoc`, `SERVICE`, `PROCESS`, `EXIT`, and their TypeScript
   types;
-- host identity: `selfEid()`, `started()`, and `ended()`;
+- host identity: `selfEid()`, `become()`, `started()`, and `ended()`;
 - storage: `Store`, `store()`, `RUNNING`, and `SERVICES`;
 - graph integration: `processes()`;
 - process operations: `dirOf()`, `paths()`, `launch()`, `adopt()`, `watch()`,
-  `vanished()`, `vanishedOne()`, `signal()`, and `supervise()`.
+  `vanished()`, `gone()`, `signal()`, and `supervise()`.
 
 Additional entry points are `@yaks/process/vocab` and `@yaks/process/rules`.

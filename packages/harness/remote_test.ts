@@ -245,15 +245,11 @@ Deno.test('worker exit drains a burst and is idempotent', async () => {
 Deno.test('stuck model deadline is an expected bounded exit, not a crash', async () => {
   let dir = await Deno.makeTempDir()
   let db = dir + '/shutdown.db'
-  // A backend that is killed holds its run until the take runs out, and the
-  // next one takes it over then: a short take keeps that wait short.
-  let hold = 300
   let r = await remote({
     config: at(db),
     cwd: dir,
     fake: 'stuck',
     streaming: true,
-    hold,
   })
   try {
     await r.agent.start('stuck')
@@ -272,17 +268,14 @@ Deno.test('stuck model deadline is an expected bounded exit, not a crash', async
       await time.tickAsync(1)
       assertEquals(await closing, { drained: false })
     }
-    // Its worker ended, but a worker shares this process's pid, so nothing
-    // says its holder is gone: its takes run out `hold` after their last
-    // renewal, and the next backend comes up once they have.
-    await new Promise((done) => setTimeout(done, hold))
+    // Its Worker was ended where it stood, and wrote its ending first: the
+    // next backend takes over what it held at once.
     let resumed = await remote({
       worker: worker(),
       config: at(db),
       cwd: dir,
       fake: true,
       streaming: true,
-      hold,
     })
     try {
       await resumed.resume()

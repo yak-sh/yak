@@ -66,8 +66,8 @@ process, not a sandbox or a separate fault-isolated process.
   shutdown message and accepts only another Ctrl+C. Frontend refresh loops stop
   scheduling reads, and a read already awaiting another stage cannot overwrite
   that message with an expected shutdown refusal. Other failures still enter
-  diagnostics. There is no automatic deadline. A second Ctrl+C terminates the
-  worker immediately, preserving the last durable checkpoints; independent
+  diagnostics. There is no automatic deadline. A second Ctrl+C ends the worker
+  where it stands, preserving the last durable checkpoints; independent
   supervised processes remain running. OS SIGINT follows the same two-stage
   path. Programmatic `remote.close()` retains its two-second default;
   `close({timeout: null})` drains indefinitely, and `force()` releases that wait
@@ -79,7 +79,11 @@ process, not a sandbox or a separate fault-isolated process.
   packet can only be detected by request timeout; there is no heartbeat/restart.
 - Native SQLite close never races callbacks in graceful shutdown. Deadline exit
   terminates the worker rather than calling SQLite close beneath a live
-  callback.
+  callback. First the worker is asked to write its own ending (`end`): its pid
+  is the frontend's, which goes on, so only its `exit` in the graph says it is
+  over, and the next backend takes over what it held at once. A worker wedged
+  past answering within a second is terminated regardless, and what it held is
+  had once its leases lapse.
 - No live-provider test or production-database experiment was performed.
 
 ## Measurements

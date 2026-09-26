@@ -102,9 +102,16 @@ export let seed = (
 }
 
 /** What an agent runs over: a graph, the effects its commits raise, the
- * vocabulary it reads them with, and the process working it, which a run's
- * lease names as its holder. */
-export type Host = { g: Graph; fx: Effects; vocab: Vocab; me: Eid }
+ * vocabulary it reads them with, the process working it, which a run's lease
+ * names as its holder, and, where the host can tell, whether another holder is
+ * over, so a run it held is taken over now rather than at its expiry. */
+export type Host = {
+  g: Graph
+  fx: Effects
+  vocab: Vocab
+  me: Eid
+  gone?: (holder: Eid) => boolean | Promise<boolean>
+}
 
 /** Where a defect happened: what was running, and in which transcript. */
 export type Where = { phase: string; session?: Eid }
@@ -323,6 +330,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
   } = opts
   return {
     holder: h.me,
+    gone: h.gone,
     taskDefaults,
     maxChildren,
     maxSessions,

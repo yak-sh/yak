@@ -8,7 +8,7 @@ import { ids } from '@yaks/id/rules'
 import { blobKeywords, blobRead } from '@yaks/blob'
 import { rules as blobRules } from '@yaks/blob/rules'
 import { processDoc, selfEid } from '@yaks/process'
-import { effectDoc, leaseEid } from '@yaks/effects'
+import { effectDoc, held, leaseEid, take } from '@yaks/effects'
 import { runs as effectRuns } from '@yaks/effects/tools'
 import {
   compose as composing,
@@ -916,6 +916,63 @@ Deno.test('a pass over some duty roles leaves the others to whoever serves them'
     // The pool is somebody else's: a pass over the other roles leaves it.
     await host.duties(AbortSignal.abort(), ['shop'])
     assertEquals(ran, [])
+    await host.duties(AbortSignal.abort(), ['effects'])
+    assertEquals(ran, ['b1'])
+  } finally {
+    await host.close()
+  }
+})
+
+Deno.test('a thread its process ended holds nothing, though the pid it ran in lives on', async () => {
+  let ran: string[] = []
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'] },
+    only({
+      shop: pooled({
+        effects: () => ({
+          book_seen: (event) => void ran.push(String(event.entity.eid)),
+        }),
+      }),
+    }),
+  )
+  try {
+    // A Worker of this process, as it wrote itself in: a row of its own in
+    // this pid, holding a transcript's run and a claimed effect for an hour.
+    let thread = crypto.randomUUID()
+    let hour = new Date(Date.now() + 3_600_000).toISOString()
+    let run = (holder: string) =>
+      take(host.graph, 'run/t1', { holder, hold: 3_600_000, gone: host.gone })
+    await host.graph.apply([{
+      entity: { eid: thread },
+      process: { pid: Deno.pid },
+    }])
+    await run(thread)
+    await detached(host.storage).patch([
+      { entity: { eid: 'b1' }, book: { title: 'One', price: 1 } },
+      {
+        entity: { eid: 'r1' },
+        effect: {
+          handler: 'book_seen',
+          target: 'b1',
+          comp: 'book',
+          kind: 'created',
+          state: 'pending',
+          attempts: 1,
+          lease_owner: thread,
+          lease_token: 't1',
+          lease_expiry: hour,
+        },
+      },
+    ])
+    // Alive, by all anybody can tell.
+    assertEquals(await run(host.me), false)
+    // Its process ends it where it stands, and writes its ending.
+    await host.end(thread, 'interrupted: ended')
+    assertEquals((await held(host.graph, 'run/t1'))?.holder, null)
+    // A renewal that raced its ending takes the run back in its name…
+    assertEquals(await run(thread), true)
+    // …and is passed at once, as is the effect it claimed.
+    assertEquals(await run(host.me), true)
     await host.duties(AbortSignal.abort(), ['effects'])
     assertEquals(ran, ['b1'])
   } finally {

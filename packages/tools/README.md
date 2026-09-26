@@ -212,9 +212,9 @@ sweep can take it. This also prevents imported call histories from being
 executed again merely because another runner reads them.
 
 A claim naming this runner's own owner that this runner is not running belongs
-to another thread of the same process, and is left to it, redrive and all: a
-process's own claims are taken again only once it has exited. Calling `run()`
-for a call that has a `running` claim with no owner and no result throws
+to another runner under the same name, and is left to it, redrive and all: an
+owner's own claims are taken again only once it has exited. Calling `run()` for
+a call that has a `running` claim with no owner and no result throws
 `UnfinishedCall`. `reconcile()` retries such calls during startup. Retrying can
 repeat an external side effect if the process stopped after that effect but
 before committing the result, so the package provides at-most-once claiming, not

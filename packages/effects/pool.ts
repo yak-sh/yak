@@ -103,9 +103,9 @@ export type PoolOpts = {
   now?: () => number
   /** ids for the rows it writes (default: `crypto.randomUUID()`) */
   mint?: () => Eid
-  /** whether a process is known to have ended without letting go (@yaks/process
-   * `vanishedOne`): its claims and its presence are passed at once rather
-   * than waited out (default: nobody is known to be) */
+  /** whether a process is known to be over (@yaks/process `gone`): its claims
+   * and its presence are passed at once rather than waited out (default:
+   * nobody is known to be) */
   gone?: (holder: Eid) => boolean | Promise<boolean>
 }
 

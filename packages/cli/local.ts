@@ -136,7 +136,7 @@ let open = async (
   let host = await compose(config, roles, facet, { thread: aside })
   try {
     let duties = dutiesOf(host.vocab, config, roles)
-    aside.plan({ config: path, roles: duties, me: host.me })
+    aside.plan({ config: path, roles: duties })
     let idle = await unserved(
       host.graph,
       duties,

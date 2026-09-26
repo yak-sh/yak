@@ -16,7 +16,7 @@ import type { ImageOptions } from './images.ts'
  * what escapes all of them. */
 import { portLink } from '@yaks/sync'
 import { subscriptions } from '@yaks/api'
-import { compose, type Config } from '@yaks/cli/host'
+import { compose, type Config, type Served } from '@yaks/cli/host'
 import { type Local, local } from './local.ts'
 import { hosted } from './store.ts'
 import { diagnostics, uncaught } from './diagnostics.ts'
@@ -27,6 +27,7 @@ uncaught(diagnostics(), self)
  * after it, until its `close`. */
 let serve = (port: MessagePort) => {
   let closing = false
+  let host: Served | undefined
   let a: Local | undefined
   let subs: ReturnType<typeof subscriptions> | undefined
   let active = new Set<Promise<unknown>>()
@@ -46,6 +47,17 @@ let serve = (port: MessagePort) => {
     // Releasing the test provider must also work while close drains its turn.
     if (method == 'fakeRelease' && fake) {
       released.resolve()
+      return true
+    }
+    // Ended where it stands, while a close may still be draining: the
+    // frontend is about to let this Worker go, and its pid goes on, so it
+    // writes its own ending first (@yaks/cli `Host.end`) — its leases
+    // released, its `exit` stamped — and what it held is had at once.
+    if (method == 'end') {
+      await host?.end(
+        host.me,
+        'interrupted: its backend was ended where it stood',
+      )
       return true
     }
     if (closing) throw new Error('Worker is shutting down')
@@ -69,12 +81,12 @@ let serve = (port: MessagePort) => {
       // The graph role alone: this worker handles the one effect it lends code
       // (the session runner, below), and leaves every other run the graph owes
       // to a process serving the effects role.
-      let host = await compose(
+      let served = host = await compose(
         { ...options.config, ...options.hold ? { lease: options.hold } : {} },
         ['graph'],
       )
       a = local({
-        h: hosted(host, () => host.close()),
+        h: hosted(served, () => served.close()),
         hold: options.hold,
         cwd: options.cwd,
         streaming: options.streaming,
@@ -128,7 +140,7 @@ let serve = (port: MessagePort) => {
       // terminal too: the pool working a transcript's turn elsewhere, a `yak`
       // command run beside it. The feed stops when the host closes.
       let fed = subs
-      host.feed((applied) => fed.commit(applied))
+      served.feed((applied) => fed.commit(applied))
       return { names: a.names }
     }
     if (!a || !subs) throw new Error('Worker not initialized')

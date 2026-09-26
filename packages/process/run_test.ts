@@ -7,8 +7,8 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { EXIT, PROCESS } from './comp.ts'
-import { gone, launchers, tracked, until } from './testing.ts'
-import { adopt, launch, vanished, vanishedOne, watch } from './run.ts'
+import { launchers, reaped, tracked, until } from './testing.ts'
+import { adopt, gone, launch, vanished, watch } from './run.ts'
 import { store } from './store.ts'
 
 let dir = () => Deno.makeTempDirSync({ prefix: 'yaks-process-' })
@@ -79,7 +79,7 @@ Deno.test('a machine with no launcher is refused before anything starts', async 
 
 Deno.test('adopting a pid that is already gone stamps the ending, code unknown', async () => {
   let g = tracked()
-  let run = await adopt(store(g), await gone(), { dir: dir(), poll: 5 })
+  let run = await adopt(store(g), await reaped(), { dir: dir(), poll: 5 })
   assertEquals(await run.done, null)
   let row = (await g.read(`.${PROCESS}&*`))[0]
   assertEquals(comp(row, PROCESS)?.pid, run.pid)
@@ -89,7 +89,7 @@ Deno.test('adopting a pid that is already gone stamps the ending, code unknown',
 
 Deno.test('watch picks up an unfinished row and stamps the one already gone', async () => {
   let g = tracked()
-  let dead = await gone()
+  let dead = await reaped()
   await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: dead } }])
   let runs = await watch(store(g), { dir: dir(), poll: 5 })
   assertEquals(runs.map((r) => r.eid), ['p1'])
@@ -103,25 +103,26 @@ Deno.test('a run that ended without saying so is found; a live one, a launched o
   let g = tracked()
   let at = dir()
   Deno.writeTextFileSync(`${at}/launched.started`, '1')
-  await g.apply(['me', 'dead', 'live', 'launched'].map((eid) => ({
+  await g.apply(['me', 'dead', 'live', 'launched', 'ended'].map((eid) => ({
     entity: { eid },
-    [PROCESS]: { pid: eid == 'live' ? Deno.pid : 99 },
+    [PROCESS]: { pid: eid == 'live' || eid == 'ended' ? Deno.pid : 99 },
+    // A thread its process ended: its pid runs on, and its row says it is
+    // over.
+    ...eid == 'ended' ? { [EXIT]: {} } : {},
   })))
-  let found = await vanished(store(g), {
+  let asking = {
     dir: at,
     me: 'me',
-    running: (pid) => Promise.resolve(pid == Deno.pid),
-  })
+    running: (pid: number) => Promise.resolve(pid == Deno.pid),
+  }
+  let found = await vanished(store(g), asking)
   assertEquals(found.map((b) => b.entity.eid), ['dead'])
-  let one = (eid: string) =>
-    vanishedOne(store(g), eid, {
-      dir: at,
-      me: 'me',
-      running: (pid) => Promise.resolve(pid == Deno.pid),
-    })
+  let over = (eid: string) => gone(store(g), eid, asking)
   assertEquals(
-    await Promise.all(['dead', 'live', 'launched', 'me', 'nobody'].map(one)),
-    [true, false, false, false, false],
+    await Promise.all(
+      ['dead', 'ended', 'live', 'launched', 'me', 'nobody'].map(over),
+    ),
+    [true, true, false, false, false, false],
   )
 })
 
@@ -131,7 +132,7 @@ Deno.test('a run that ended without saying so is found; a live one, a launched o
 Deno.test('an exit-code file read before it is written is waited for, never read as 0', async () => {
   let g = tracked()
   let d = dir()
-  await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: await gone() } }])
+  await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: await reaped() } }])
   Deno.writeTextFileSync(`${d}/p1.code`, '')
   setTimeout(() => Deno.writeTextFileSync(`${d}/p1.code`, '3\n'), 30)
   let [run] = await watch(store(g), { dir: d, poll: 5 })
@@ -144,8 +145,8 @@ Deno.test('a wrapper slow to write the code is waited for while it lives', async
   let g = tracked()
   let d = dir()
   let wrapper = new Deno.Command('sleep', { args: ['0.3'] }).spawn()
-  await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: await gone() } }])
-  Deno.writeTextFileSync(`${d}/p1.pid`, `${wrapper.pid} ${await gone()}\n`)
+  await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: await reaped() } }])
+  Deno.writeTextFileSync(`${d}/p1.pid`, `${wrapper.pid} ${await reaped()}\n`)
   setTimeout(() => Deno.writeTextFileSync(`${d}/p1.code`, '3\n'), 200)
   let [run] = await watch(store(g), { dir: d, poll: 5 })
   assertEquals(await run.done, 3)

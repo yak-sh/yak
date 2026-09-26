@@ -317,10 +317,11 @@ replay preserves ID and fork boundary. `await a.close()` stops admission, lets
 the step in flight finish, leaves the pool and closes the harness database; it
 does not empty the persisted queue or complete assigned tasks. Independent
 supervised processes are untouched. A transcript is run under a lease named for
-it, renewed while it runs: one process runs it at a time, and one that died
-holding it holds it up until the take runs out (`hold`). The lease is not a
-security boundary against arbitrary graph writes. Provider limits still
-constrain model throughput.
+it, renewed while it runs: one process runs it at a time. A holder known to be
+over (its pid gone, or its `exit` written, as a backend Worker ended where it
+stood writes its own) is passed at once; one nobody can tell is over holds it up
+until the take runs out (`hold`). The lease is not a security boundary against
+arbitrary graph writes. Provider limits still constrain model throughput.
 
 `tools` replaces the default table when supplied. `sessionTools(graph, limits)`
 from `@yaks/session` is the standalone delegation table (its scheduling queries

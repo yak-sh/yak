@@ -46,7 +46,7 @@ export let until = async <T>(
 /** A pid that certainly is not running: a child started, waited on, and
  * exited. The number is free again, so this is the closest a test gets to a
  * dead process. */
-export let gone = async (): Promise<number> => {
+export let reaped = async (): Promise<number> => {
   let child = new Deno.Command('sh', {
     args: ['-c', 'exit 0'],
     stdout: 'null',

@@ -73,7 +73,7 @@ export let harness = async (
  * `stop()` leaves the pool once what it started has settled. */
 export let working = (h: Harness, deps: Omit<Runner, 'holder'>) => {
   let leave = new AbortController()
-  h.fx.handle(running(h.g, { holder: h.me, ...deps }))
+  h.fx.handle(running(h.g, { holder: h.me, gone: h.gone, ...deps }))
   let work = h.fx.work(h.g, leave.signal)
   return {
     stop: async () => {
