@@ -306,17 +306,15 @@ export let EXAMPLE =
   '{"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}'
 
 /** Where the whole of it is written, and what an app's store says when it is
- * asked for a word nobody declared — the same sentence at the write door and
- * the read door, because it is the same missing act. The fleet's own store
- * says it too (src/store/vocab.ts `TEACH`); it is written again here because
- * the Store carries the packages' vocabulary and never the fleet's. */
+ * asked for a word nobody declared — the same sentence at the write door
+ * (@yaks/graph's `teach`) and the read door (graph.ts `#taught`), because it is
+ * the same missing act. */
 export let GUIDE = url({}, '/docs.md')
 export let teach = (env: Host = {}) =>
   ' — a component of your own is declared in vocab.json ' +
   'and planted by app_deploy: ' +
   `${EXAMPLE} · call guide with page ` +
   `components, or ${url(env, '/docs.md')}`
-export let TEACH = teach()
 
 /**
  * The words the platform gives every app to reach for rather than invent

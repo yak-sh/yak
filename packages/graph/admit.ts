@@ -104,12 +104,14 @@ export let known = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
  * vocabulary does not declare. A bundle whose components were all dropped is
  * removed from the change — it asked for nothing this caller may write.
  * `trusted` admits server-owned properties; it is the calling program's
- * decision, never a client's.
+ * decision, never a client's. `teach` ends the refusal of an undeclared
+ * component (@yaks/vocab `unknownComps`).
  */
 export let admit = (
   bundles: Bundle[],
   vocab: Vocab,
   trusted = false,
+  teach?: string,
 ): Bundle[] => {
   let alien = [
     ...new Set(
@@ -118,7 +120,7 @@ export let admit = (
       ),
     ),
   ]
-  if (alien.length) throw new Refused(unknownComps(alien))
+  if (alien.length) throw new Refused(unknownComps(alien, teach))
   return bundles.flatMap((b) => {
     let sent = comps(b)
     if (!sent.length) return [b]

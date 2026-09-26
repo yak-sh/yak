@@ -466,19 +466,25 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string =>
 /**
  * The refusal for components this vocabulary does not declare. A component is
  * a whole word, not a slip inside one, so the sentence says where words come
- * from rather than listing every word there is.
+ * from rather than listing every word there is. A program whose callers have
+ * words of their own to declare says where, in `teach`.
  *
  * ```ts
  * import { unknownComps } from '@yaks/vocab'
  * unknownComps(['recipy'])
  * // 'unknown component: recipy — nothing this vocabulary was loaded from declares it'
+ * unknownComps(['recipy'], ' — declare it in vocab.json')
+ * // 'unknown component: recipy — declare it in vocab.json'
  * ```
  */
-export let unknownComps = (comps: string[]): string =>
+export let unknownComps = (comps: string[], teach?: string): string =>
   `unknown ${comps.length > 1 ? 'components' : 'component'}: ${
     comps.join(', ')
-  } — nothing this vocabulary was loaded from declares ${
-    comps.length > 1 ? 'them' : 'it'
+  }${
+    teach ??
+      ` — nothing this vocabulary was loaded from declares ${
+        comps.length > 1 ? 'them' : 'it'
+      }`
   }`
 
 /**

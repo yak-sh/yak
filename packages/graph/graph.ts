@@ -152,6 +152,11 @@ export type Options = {
   /** how to generate an id for an entity written under an alias, when no
    * component derives its own id (default: `mint()` from the id package) */
   mint?: () => Eid
+  /** how a refusal of a component this vocabulary does not declare ends: where
+   * a caller's own word would come from, for a graph whose callers declare
+   * words of their own (default: that nothing this vocabulary was loaded from
+   * declares it; @yaks/vocab `unknownComps`) */
+  teach?: string
 }
 
 /** A live graph: what it knows, and what you can do with it. */
@@ -592,6 +597,7 @@ export let graph = (opts: Options): Graph => {
               ),
               vocab,
               o.trusted,
+              opts.teach,
             ),
         ),
         // Derive the id, then check it still matches: an id derived from a

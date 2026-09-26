@@ -448,7 +448,7 @@ Deno.test('a store that is not the directory is still an app', async () => {
   )
   // `space` is not a word an app's store has, and an app's store says where a
   // word of its own would come from rather than dropping it (graph.ts
-  // `#teaching`).
+  // `teach`).
   assertEquals(no.status, 400)
   let why = (await no.json()).message as string
   assertEquals(why.startsWith('unknown component: space'), true)

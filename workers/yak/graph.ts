@@ -741,6 +741,11 @@ export class Store {
       vocab,
       report: (error, { phase, plugin }) =>
         defect(error, { request: `${plugin} ${phase}`, store: name }),
+      // An app's own words are its `vocab.json`, so a word nobody declared is
+      // refused with where one comes from — the sentence the read door says
+      // too (`#taught`). The directory says nothing of the kind: its words
+      // are the platform's own and its callers are the kernel's own.
+      ...(own ? {} : { teach: teach(this.#bind) }),
       // The guard is added last and only when this object knows which app it
       // holds: @yaks/member refuses a write by an actor with no level, so a
       // store that cannot name its app has no access question to ask and the
@@ -749,11 +754,6 @@ export class Store {
         this.#logging,
         ...(vault ? [secrets(vault, (b) => this.#trust(b, null))] : []),
         ...(vocab.comp('archetype') ? [archetypes()] : []),
-        // First, before anything reads a word that is not there. The directory
-        // is left out: its words are the platform's own, its callers are the
-        // kernel's own, and `vocab.json` is not a sentence to say to any of
-        // them.
-        ...(own ? [] : [this.#teaching]),
         // Before every check, because it is about the shape a value arrived in.
         this.#lowering,
         edges(vocab),
@@ -973,56 +973,6 @@ export class Store {
   #vouched = new Map<string, Vouch>()
   #told = new Map<string, string>()
 
-  /**
-   * Who this store knows, from what the kernel vouched: the person as an
-   * entity of its own (so a byline resolves to somebody), the name to call
-   * them by, and the level the platform says they hold on this app.
-   *
-   * It is a write-path plugin rather than a door's own step, because there is
-   * more than one door — @yaks/api's `/apply`, @yaks/mcp's tools, whatever
-   * mounts next — and the guard that reads these rows would otherwise hold
-   * for one of them and not the others. `precondition` is where it belongs:
-   * inside the batch's transaction, before @yaks/member's guard runs, so the
-   * platform's word is a row by the time the rule asks for one, and a refused
-   * batch rolls the row back with everything else it wrote.
-   *
-   * A read writes nothing at all: an app learns who its members are when one
-   * of them writes to it, not when one of them looks at it.
-   */
-  /**
-   * A word nobody declared, refused in the platform's own words.
-   *
-   * @yaks/graph refuses an unknown component at admission too; this says it
-   * first, because an app's own words are its `vocab.json`, and the sentence
-   * that helps is where a word of your own comes from — the same sentence the
-   * read door says it in (`#taught`).
-   */
-  #teaching: Plugin = {
-    name: 'yak/teach',
-    hooks: {
-      normalize: (bundles) => {
-        for (let b of bundles) {
-          for (let [name] of comps(b)) {
-            if (!this.#vocab.all.includes(name)) {
-              throw new Refused(
-                `unknown component: ${name}${teach(this.#bind)}`,
-              )
-            }
-          }
-        }
-        return bundles
-      },
-    },
-  }
-
-  /**
-   * A row read back, handed straight back. A reference reads as `{eid, name}`
-   * (`#speak`) because outputs speak human, and the shape a door hands out must
-   * be a shape it takes: a page that read a byline and writes it into a
-   * property of its own is doing the ordinary thing, and refusing it would make
-   * every such page carry a `.eid` of its own. So the object is lowered to the
-   * eid it carries, on the way in, before anything checks a value.
-   */
   #lowering: Plugin = {
     name: 'yak/lower',
     hooks: {
@@ -1049,6 +999,22 @@ export class Store {
     },
   }
 
+  /**
+   * Who this store knows, from what the kernel vouched: the person as an
+   * entity of its own (so a byline resolves to somebody), the name to call
+   * them by, and the level the platform says they hold on this app.
+   *
+   * It is a write-path plugin rather than a door's own step, because there is
+   * more than one door — @yaks/api's `/apply`, @yaks/mcp's tools, whatever
+   * mounts next — and the guard that reads these rows would otherwise hold
+   * for one of them and not the others. `precondition` is where it belongs:
+   * inside the batch's transaction, before @yaks/member's guard runs, so the
+   * platform's word is a row by the time the rule asks for one, and a refused
+   * batch rolls the row back with everything else it wrote.
+   *
+   * A read writes nothing at all: an app learns who its members are when one
+   * of them writes to it, not when one of them looks at it.
+   */
   #vouching: Plugin = {
     name: 'yak/vouch',
     // The two rows the hook below writes — a person and their grant. Naming
@@ -1980,7 +1946,7 @@ export class Store {
     })
   }
 
-  // The read door's half of `#teaching`: `unknown prop: .recipe` is true and
+  // The read door's half of the graph's `teach`: `unknown prop: .recipe` is true and
   // useless on its own, so the store that holds the vocabulary adds where a
   // word of your own comes from. The directory says nothing of the kind — its
   // callers are the kernel's own.
