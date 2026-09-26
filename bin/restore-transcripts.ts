@@ -6,10 +6,13 @@
 // The migration (bin/reimport-transcripts.ts, run and gone) lost the session
 // duty's lease partway through, and the new importer read logs in while the
 // migration was still emptying their sessions; a later run of the migration
-// deleted what it had read. An imported entry's eid is derived from its session
-// and line, storage never writes to a deleted eid again, and an imported entry
-// carries no number, so the eid is its whole identity: the importer has passed
-// over those lines ever since, and restoring the eid restores the entry.
+// deleted what it had read. Then the session duty's strip, whose `!content`
+// read as a property of the same name until be61330e, deleted the prose of the
+// quiet sessions read in since. An imported entry's eid is derived from its
+// session and line, storage never writes to a deleted eid again, and an
+// imported entry carries no number, so the eid is its whole identity: the
+// importer has passed over those lines ever since, and restoring the eid
+// restores the entry.
 //
 // For each session that lost entries, the log is read again and the entries it
 // holds and the ones it lost are put in the log's order. The held ones' `seq`
@@ -28,14 +31,12 @@
 //   deno run -A bin/restore-transcripts.ts <config> [--write]
 
 import { DatabaseSync } from 'node:sqlite'
-import type { Bundle, Eid } from '@yaks/graph'
+import { type Bundle, type Eid, TOMBSTONE } from '@yaks/graph'
 import { holding } from '@yaks/effects'
 import {
   among,
-  and,
   col,
   ge,
-  le,
   render,
   select,
   type Stmt,
@@ -54,10 +55,10 @@ import {
   transcripts,
 } from '../packages/session/service.ts'
 
-// The migration's deletes, from its first run to its last; the strip's began
-// after.
+// Where the deletes began: the migration's first run. Every derived eid a log
+// makes that was deleted since is restored, and one whose tombstone a stopped
+// run of this script cleared, which stands bare.
 let FROM = '2026-09-25T23:17:00Z'
-let UNTIL = '2026-09-26T00:18:42Z'
 let OFFSET = 1_000_000_000
 
 let [path, ...flags] = Deno.args
@@ -80,13 +81,34 @@ let exec = (s: Stmt) => {
   st.run(...params)
 }
 
-// A write, then the lock left free as long as the write held it.
+let nap = (ms: number) => new Promise((go) => setTimeout(go, ms))
+
+// A write, tried again while another process holds the lock past the busy
+// timeout (a server opening the file analyzes it), then the lock left free as
+// long as the write held it.
 let paced = async <T>(work: () => T | Promise<T>): Promise<T> => {
-  let t = performance.now()
-  let out = await work()
-  await new Promise((go) => setTimeout(go, performance.now() - t))
-  return out
+  for (let tries = 1;; tries++) {
+    let t = performance.now()
+    try {
+      let out = await work()
+      await nap(performance.now() - t)
+      return out
+    } catch (e) {
+      if (tries == 10 || !String(e).includes('database is locked')) throw e
+      console.log(`locked, again (${tries})`)
+      await nap(2000)
+    }
+  }
 }
+
+// The entities among these that stand bare: an identity with no components,
+// neither held nor deleted.
+let bare = async (eids: Eid[]): Promise<Eid[]> =>
+  eids.length
+    ? (await g.storage.tx((tx) => tx.get(eids)))
+      .filter((r) => r && r[TOMBSTONE] == null && Object.keys(r).length == 1)
+      .map((r) => r!.entity.eid)
+    : []
 
 // Every eid the migration deleted.
 let lost = new Set(
@@ -98,10 +120,7 @@ let lost = new Set(
       select({
         cols: [col('entity')],
         from: table('tombstone'),
-        where: and(
-          ge(col('deleted_at'), val(FROM)),
-          le(col('deleted_at'), val(UNTIL)),
-        ),
+        where: ge(col('deleted_at'), val(FROM)),
       }),
     ),
   })).map((r) => String(r.eid)),
@@ -163,6 +182,12 @@ let shared = new Set<Eid>()
 let t = performance.now()
 for (let [session, files] of logs) {
   let orders = files.map((f) => orderOf(logOf(session, f.path).lines))
+  let held = await g.read(`.entry.session=${session}&?entry`)
+  let kept = new Set(held.map((b) => b.entity.eid))
+  let orphans = await bare(
+    orders.flat().filter((e) => !lost.has(e) && !kept.has(e)),
+  )
+  orphans.forEach((e) => lost.add(e))
   let here = orders.flat().filter((e) => lost.has(e))
   if (!here.length) continue
   if (files.length > 1) {
@@ -172,7 +197,7 @@ for (let [session, files] of logs) {
   }
   here.forEach((e) => found.add(e))
   affected.push({ ...files[0], session })
-  let held = await g.read(`.entry.session=${session}&?entry`)
+  if (orphans.length) console.log(`${session}: ${orphans.length} bare`)
   let off = astray(orders[0], held).length
   if (off) console.log(`${session}: ${off} held entries the log does not place`)
 }
@@ -229,18 +254,20 @@ let restore = async (f: Found & { session: Eid }): Promise<number> => {
   // The lost ones' tombstones, and then the lost ones, a line at a time.
   let here = order.filter((e) => lost.has(e))
   for (let i = 0; i < here.length; i += 500) {
-    exec({
-      t: 'delete',
-      from: 'tombstone',
-      where: among(
-        col('entity'),
-        select({
-          cols: [col('id')],
-          from: table('entity'),
-          where: among(col('eid'), here.slice(i, i + 500).map(val)),
-        }),
-      ),
-    })
+    await paced(() =>
+      exec({
+        t: 'delete',
+        from: 'tombstone',
+        where: among(
+          col('entity'),
+          select({
+            cols: [col('id')],
+            from: table('entity'),
+            where: among(col('eid'), here.slice(i, i + 500).map(val)),
+          }),
+        ),
+      })
+    )
   }
   let tools = new Set<Eid>()
   let n = 0
@@ -268,12 +295,12 @@ let restore = async (f: Found & { session: Eid }): Promise<number> => {
       g.apply(out, { trusted: true, ...(l.at ? { now: l.at } : {}) })
     )
   }
-  await g.apply([{
-    entity: { eid: session },
-    session: { consumed: log.count },
-  }], {
-    trusted: true,
-  })
+  await paced(() =>
+    g.apply([{
+      entity: { eid: session },
+      session: { consumed: log.count },
+    }], { trusted: true })
+  )
   return n
 }
 
