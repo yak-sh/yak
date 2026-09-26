@@ -26,11 +26,12 @@
 // here: @yaks/tools lands a reading tool's bookkeeping alone and hands its
 // bundles straight back, so a query is never a patch of the rows it found.
 //
-// It speaks the door's whole vocabulary rather than a bare one, so a word it
-// forwards is a word it can admit in the first place. Two that the platform
-// and @yaks/tools both spell — `error` and `exception` — are declared here as
-// the UNION of both meanings, so a refusal's `code` and a break row's
-// `message` both land instead of one of them refusing the other.
+// It speaks the invocation and the stamps on it, since nothing else is ever
+// written here, so its vocabulary is loaded once per isolate and not once per
+// door. Two words the platform and @yaks/tools both spell — `error` and
+// `exception` — are declared as the union of both meanings, so a refusal's
+// `code` and a break row's `message` both land instead of one of them refusing
+// the other.
 
 import {
   type ApplyOpts,
@@ -40,14 +41,9 @@ import {
   graph,
 } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import {
-  loadVocab,
-  type PropSchema,
-  type Vocab,
-  type VocabDoc,
-} from '@yaks/vocab'
+import { loadVocab, type PropSchema, type VocabDoc } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools'
-import { appKeywords } from './vocab.ts'
+import { appKeywords, coreDoc } from './vocab.ts'
 
 /** The words an invocation is made of: what stays in the ledger. */
 let INVOCATION = [
@@ -99,26 +95,14 @@ let both: Record<string, PropSchema> = {
   }),
 }
 
-// The ledger's own vocabulary: the door's words, with the invocation's added
-// and the two they share declared once, widely enough for both.
-// The invocation as the ledger declares it: @yaks/tools' own words and rules,
-// with the two both vocabularies spell widened to mean both things.
-let invocationDoc: VocabDoc = {
+// The ledger's whole vocabulary: @yaks/tools' own words and rules, with the
+// two both vocabularies spell widened to mean both things, over the core
+// stamps — a call's `created{by, via}` is who asked, and the tool runs as them
+// (@yaks/graph `who`).
+let VOCAB = loadVocab([coreDoc, {
   title: 'invocation',
   $defs: { ...without(toolsDoc, SHARED).$defs, ...both },
-}
-
-let speaking = (speaks: Vocab): Vocab =>
-  loadVocab([
-    // Every word of the invocation comes from that one document, including
-    // the ones the door's own vocabulary now carries: an app's store speaks
-    // `call`, `result` and the two rules itself (vocab.ts `invocationDoc`),
-    // and a word may only be declared once.
-    ...speaks.docs.map((d) =>
-      without(d, Object.keys(invocationDoc.$defs ?? {}))
-    ),
-    invocationDoc,
-  ], appKeywords)
+}], appKeywords)
 
 // Is this bundle the invocation's own? A bundle that says nothing at all — a
 // bare delete — is the caller's, since what it deletes is their data.
@@ -128,13 +112,12 @@ let mine = (b: Bundle): boolean => {
 }
 
 /**
- * One door's call ledger: an in-memory graph speaking this door's words plus
- * the invocation vocabulary, for @yaks/mcp to record its calls in
- * (`Options.calls`). What a tool wrote passes through to `host`.
+ * One door's call ledger: an in-memory graph speaking the invocation, for
+ * @yaks/mcp to record its calls in (`Options.calls`). What a tool wrote passes
+ * through to `host`.
  */
 export let ledger = (host: Graph): Graph => {
-  let vocab = speaking(host.vocab)
-  let self = graph({ vocab, storage: ram(vocab) })
+  let self = graph({ vocab: VOCAB, storage: ram(VOCAB) })
   let door: Graph = {
     ...self,
     use: (plugin) => (self.use(plugin), door),

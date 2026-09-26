@@ -56,7 +56,7 @@ import {
 import { ceiling, serve, unseenBlock } from './unseen.ts'
 import { appVocab, PLATFORM_APART, wordOf } from './vocab.ts'
 import { bare, lined } from './wire.ts'
-import { type Host, hosted } from './host.ts'
+import { apex, type Host, hosted } from './host.ts'
 import { refuse } from './tool.ts'
 
 // One JSON Schema property as Zod. The tool table declares plain shapes — a
@@ -172,23 +172,44 @@ export let running =
 let metaOf = (t: Sugar): Pick<Tool, 'meta'> =>
   t.security ? { meta: { securitySchemes: t.security } } : {}
 
+// What one of the platform's tools says about itself: the same for every
+// caller of one deployment, so it is built once per tool per apex and not on
+// every call — the Zod its input becomes was a tenth of what a call cost.
+let described = new WeakMap<Sugar, Map<string, Omit<Tool, 'run'>>>()
+let said = (t: Sugar, env: Host): Omit<Tool, 'run'> => {
+  let by = described.get(t) ?? new Map<string, Omit<Tool, 'run'>>()
+  described.set(t, by)
+  let at = apex(env)
+  let hit = by.get(at)
+  if (!hit) {
+    by.set(
+      at,
+      hit = {
+        name: t.name,
+        title: t.title,
+        description: hosted(t.description, env),
+        input: inputOf(t.input, env),
+        // What it does, carried whole — the transport turns these four into
+        // the MCP annotations (@yaks/mcp `annotated`), and a hint dropped here
+        // is a tool the host mis-prompts about.
+        ...(t.readOnly ? { readOnly: true } : {}),
+        ...(t.destructive == null ? {} : { destructive: t.destructive }),
+        ...(t.idempotent ? { idempotent: true } : {}),
+        ...(t.openWorld ? { openWorld: true } : {}),
+        // The page a host renders this answer in (MCP Apps): the tool names
+        // it, the transport hands it over verbatim, and a host without views
+        // ignores it.
+        ...metaOf(t),
+      },
+    )
+  }
+  return hit
+}
+
 /** One of the platform's own tools, as a graph `Tool`. The answer is the same
  * sentence it always was, worn as the one bundle that carries words. */
 export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
-  name: t.name,
-  title: t.title,
-  description: hosted(t.description, ctx.env),
-  input: inputOf(t.input, ctx.env),
-  // What it does, carried whole — the transport turns these four into the
-  // MCP annotations (@yaks/mcp `annotated`), and a hint dropped here is a
-  // tool the host mis-prompts about.
-  ...(t.readOnly ? { readOnly: true } : {}),
-  ...(t.destructive == null ? {} : { destructive: t.destructive }),
-  ...(t.idempotent ? { idempotent: true } : {}),
-  ...(t.openWorld ? { openWorld: true } : {}),
-  // The page a host renders this answer in (MCP Apps): the tool names it, the
-  // transport hands it over verbatim, and a host without views ignores it.
-  ...metaOf(t),
+  ...said(t, ctx.env),
   // The runner hands a tool the call and the graph; what a platform verb reads
   // is its arguments, which the runner has already checked, and the call it is
   // answering.
