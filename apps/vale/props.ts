@@ -1,6 +1,6 @@
 // What stands on the ground: trees, rocks, flowers, the village, ruins and
-// standing stones, and the portals between levels. Each is a small voxel
-// model built by hand out of balls and boxes, meshed once per variant and
+// standing stones, and the signpost at the head of each road. Each is a small
+// voxel model built by hand out of balls and boxes, meshed once per variant and
 // copied wherever a level places one (terrain.ts `props`), and measured, so
 // what a walker bumps into or stands on is the size it is drawn (`bulk`).
 import {
@@ -507,30 +507,26 @@ let lamp = (): Model => {
   return { vox: v, size: 0.25 }
 }
 
-// A portal to another level: two mossy stone pillars and a lintel, with the
-// way through left open for the glow world.ts hangs in it.
-let portal = (): Model => {
+// A fingerpost at the head of a road: a timber post on a cairn of stones,
+// its arms pointing every way, and a lantern hung from it.
+let signpost = (): Model => {
   let v: Vox = new Map()
-  let stone = [0x8f8d85, 0xa3a198, 0x7f7e77]
-  for (let x of [-6, 5]) {
-    for (let y = 0; y < 15; y++) {
-      for (let dx = 0; dx < 2; dx++) {
-        for (let z = -1; z <= 0; z++) {
-          v.set(key(x + dx, y, z), stone[(x + dx + y + z) & 1 ? 0 : y % 3])
-        }
-      }
-    }
-    box(v, [x - 1, 0, -2], [x + 2, 1, 1], 0x7a7870)
-  }
-  box(v, [-7, 15, -1], [6, 16, 0], 0x9a988f)
-  box(v, [-5, 17, -1], [4, 17, 0], 0x6f9a48)
-  for (let x of [-7, -3, 2, 6]) v.set(key(x, 15 + (x & 1), 1), 0x6f9a48)
-  box(v, [-1, 14, 0], [0, 14, 0], 0x9ad8ff)
+  box(v, [-1, 0, -1], [1, 1, 1], 0x8f8d85)
+  box(v, [0, 2, 0], [0, 12, 0], TIMBER)
+  box(v, [-4, 10, 0], [4, 11, 0], 0xb08a5a)
+  v.set(key(5, 10, 0), 0xb08a5a)
+  box(v, [0, 7, -4], [0, 8, 4], 0xa07c4e)
+  v.set(key(0, 7, 5), 0xa07c4e)
+  box(v, [0, 13, 0], [0, 13, 0], 0xc2573e)
+  box(v, [1, 12, 0], [2, 12, 0], 0x4b3a2c)
+  box(v, [2, 10, 0], [2, 11, 0], 0xffd37a)
+  v.set(key(-1, 0, 1), 0x6f9a48)
+  v.set(key(1, 1, -1), 0x6f9a48)
   return { vox: v, size: 0.25 }
 }
 
 let BUILD: Record<string, (seed: number) => Model> = {
-  portal,
+  signpost,
   oak,
   pine,
   birch,

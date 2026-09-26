@@ -1,6 +1,6 @@
 // Who is on stage: a figure for every player and creature the frame knows,
 // the people who give quests, loot on the ground, the plates over heads and
-// over portals, and under each creature on my trail a red ring round the
+// over signposts, and under each creature on my trail a red ring round the
 // ground its bite takes. As a bite winds up, a red disc grows from its middle
 // and fills the ring the moment the bite lands.
 // A figure is made when someone arrives and dropped when they go; each frame
@@ -342,16 +342,19 @@ export let cast = (
         )
       }
 
-      // Each portal, named for where it leads.
-      v.portals.forEach((p, i) => {
-        if (Math.hypot(p.x - f.body.x, p.z - f.body.z) > 30) return
+      // Each road's signpost, named for the way it goes and where it leads.
+      for (let r of v.roads) {
+        let [x, z] = r.sign
+        if (Math.hypot(x - f.body.x, z - f.body.z) > 30) continue
         plates.plate(
-          `portal:${i}`,
-          at.set(p.x, groundAt(v, p.x, p.z) + 4.6, p.z),
-          `<b>To ${esc(LEVELS[p.to]?.name ?? p.to)}</b>`,
+          `road:${r.side}`,
+          at.set(x, groundAt(v, x, z) + 3.4, z),
+          `${r.side[0].toUpperCase() + r.side.slice(1)} road to <b>${
+            esc(LEVELS[r.to]?.name ?? r.to)
+          }</b>`,
           'Plate Plate-npc',
         )
-      })
+      }
 
       // Loot.
       let lying = new Set<string>()

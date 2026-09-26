@@ -6,27 +6,40 @@
 // kind that spreads over a whole level (a marsh, a moor, dunes, snow, ash)
 // sets its mood, and the smaller places stand in it.
 //
-// Portals join levels: walking through one arrives at the portal on the far
-// side that leads back. Every level is reached from Mossvale, and the further
-// from it, the wilder. A new level is a row here.
+// Roads join levels. Each runs from where a hero arrives out to the middle of
+// one side of the level, and walking off the end of it comes in on the road
+// back, at the middle of the opposite side of the level beyond: the east road
+// leads to a level whose west road leads back. Every level is reached from
+// Mossvale, and the further from it, the wilder. A new level is a row here.
 
-/** A point on a level's ground, in metres `[east, south]` from its corner; a
- * level is 128 m on a side (terrain.ts `SIZE`). */
+/** A point on a level's ground, in metres `[east, south]` from its
+ * north-west corner; a level is 128 m on a side (terrain.ts `SIZE`). */
 export type Spot = [number, number]
 
 export type Place = { kind: string; at: Spot }
 
-export type Portal = { at: Spot; to: string }
+/** A side of a level. */
+export type Side = 'north' | 'east' | 'south' | 'west'
+
+/** Each side of a level, and the side across from it. */
+export let ACROSS: Record<Side, Side> = {
+  north: 'south',
+  east: 'west',
+  south: 'north',
+  west: 'east',
+}
 
 export type Level = {
   id: string
   name: string
   /** what the noise is salted with; 0 grows Mossvale as it always was */
   seed: number
-  /** where a new hero first stands: one of the places */
+  /** where a new hero first stands, and where the roads start: one of the
+   * places */
   arrive: string
   places: Record<string, Place>
-  portals: Portal[]
+  /** the level each side's road leads to */
+  roads: Partial<Record<Side, string>>
 }
 
 // Each level as written, by its id.
@@ -44,12 +57,12 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       fields: { kind: 'fields', at: [99, 52] },
       plaza: { kind: 'village', at: [64, 64] },
     },
-    portals: [
-      { at: [84, 71], to: 'birchmere' },
-      { at: [44, 72], to: 'reedmarsh' },
-      { at: [58, 42], to: 'fernwood' },
-      { at: [64, 88], to: 'stonestep' },
-    ],
+    roads: {
+      north: 'fernwood',
+      east: 'reedmarsh',
+      south: 'stonestep',
+      west: 'birchmere',
+    },
   },
   birchmere: {
     name: 'Birchmere',
@@ -62,11 +75,11 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       fields: { kind: 'fields', at: [40, 35] },
       green: { kind: 'village', at: [69, 62] },
     },
-    portals: [
-      { at: [75, 75], to: 'mossvale' },
-      { at: [52, 50], to: 'clovermead' },
-      { at: [90, 62], to: 'gullwick' },
-    ],
+    roads: {
+      north: 'clovermead',
+      east: 'mossvale',
+      west: 'gullwick',
+    },
   },
   clovermead: {
     name: 'Clovermead',
@@ -78,10 +91,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       pond: { kind: 'lake', at: [90, 86] },
       copse: { kind: 'woods', at: [98, 40] },
     },
-    portals: [
-      { at: [76, 58], to: 'birchmere' },
-      { at: [48, 74], to: 'fernwood' },
-    ],
+    roads: {
+      east: 'fernwood',
+      south: 'birchmere',
+    },
   },
   // North: the green woods, then the pines, and the snow beyond.
   fernwood: {
@@ -95,12 +108,12 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       pond: { kind: 'lake', at: [90, 90] },
       glade: { kind: 'village', at: [62, 66] },
     },
-    portals: [
-      { at: [64, 86], to: 'mossvale' },
-      { at: [42, 62], to: 'clovermead' },
-      { at: [82, 54], to: 'greypine' },
-      { at: [54, 44], to: 'elderglade' },
-    ],
+    roads: {
+      north: 'elderglade',
+      east: 'greypine',
+      south: 'mossvale',
+      west: 'clovermead',
+    },
   },
   elderglade: {
     name: 'Elderglade',
@@ -113,10 +126,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       pool: { kind: 'lake', at: [38, 90] },
       meadow: { kind: 'meadow', at: [92, 36] },
     },
-    portals: [
-      { at: [62, 88], to: 'fernwood' },
-      { at: [74, 40], to: 'glowcap' },
-    ],
+    roads: {
+      south: 'fernwood',
+      west: 'glowcap',
+    },
   },
   greypine: {
     name: 'Greypine',
@@ -128,10 +141,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       crags: { kind: 'crags', at: [34, 92] },
       high: { kind: 'pinewood', at: [96, 34] },
     },
-    portals: [
-      { at: [56, 84], to: 'fernwood' },
-      { at: [82, 52], to: 'wolfden' },
-    ],
+    roads: {
+      east: 'wolfden',
+      west: 'fernwood',
+    },
   },
   wolfden: {
     name: 'Wolfden',
@@ -143,10 +156,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       scree: { kind: 'crags', at: [44, 96] },
       tarn: { kind: 'lake', at: [94, 90] },
     },
-    portals: [
-      { at: [64, 78], to: 'greypine' },
-      { at: [70, 34], to: 'frostmoor' },
-    ],
+    roads: {
+      east: 'frostmoor',
+      west: 'greypine',
+    },
   },
   // West: the wetlands, sinking into bog.
   reedmarsh: {
@@ -160,10 +173,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       woods: { kind: 'woods', at: [96, 90] },
       stilts: { kind: 'village', at: [70, 56] },
     },
-    portals: [
-      { at: [86, 64], to: 'mossvale' },
-      { at: [48, 68], to: 'mirewood' },
-    ],
+    roads: {
+      south: 'mirewood',
+      west: 'mossvale',
+    },
   },
   mirewood: {
     name: 'Mirewood',
@@ -175,10 +188,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       west: { kind: 'woods', at: [36, 36] },
       pool: { kind: 'lake', at: [88, 92] },
     },
-    portals: [
-      { at: [65, 83], to: 'reedmarsh' },
-      { at: [52, 46], to: 'fenhollow' },
-    ],
+    roads: {
+      north: 'reedmarsh',
+      south: 'fenhollow',
+    },
   },
   fenhollow: {
     name: 'Fenhollow',
@@ -190,10 +203,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       pool: { kind: 'lake', at: [92, 86] },
       moor: { kind: 'moor', at: [94, 38] },
     },
-    portals: [
-      { at: [66, 86], to: 'mirewood' },
-      { at: [82, 58], to: 'sunkenkirk' },
-    ],
+    roads: {
+      north: 'mirewood',
+      south: 'sunkenkirk',
+    },
   },
   sunkenkirk: {
     name: 'Sunken Kirk',
@@ -206,11 +219,11 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       pool: { kind: 'lake', at: [36, 86] },
       mere: { kind: 'lake', at: [34, 40] },
     },
-    portals: [
-      { at: [78, 70], to: 'fenhollow' },
-      { at: [46, 64], to: 'bogheart' },
-      { at: [80, 34], to: 'oldwall' },
-    ],
+    roads: {
+      north: 'fenhollow',
+      east: 'bogheart',
+      west: 'oldwall',
+    },
   },
   bogheart: {
     name: 'Bogheart',
@@ -222,10 +235,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       mere: { kind: 'lake', at: [34, 38] },
       toadstools: { kind: 'shroomwood', at: [94, 40] },
     },
-    portals: [
-      { at: [75, 69], to: 'sunkenkirk' },
-      { at: [64, 42], to: 'sporefen' },
-    ],
+    roads: {
+      east: 'sporefen',
+      west: 'sunkenkirk',
+    },
   },
   // East: the sea, its cliffs and its islands.
   gullwick: {
@@ -233,31 +246,31 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
     seed: 47,
     arrive: 'harbour',
     places: {
-      coast: { kind: 'coast', at: [108, 64] },
+      coast: { kind: 'coast', at: [66, 14] },
       meadow: { kind: 'meadow', at: [36, 40] },
       woods: { kind: 'woods', at: [36, 92] },
       harbour: { kind: 'village', at: [60, 62] },
     },
-    portals: [
-      { at: [40, 66], to: 'birchmere' },
-      { at: [76, 86], to: 'saltreach' },
-      { at: [74, 40], to: 'driftwood' },
-    ],
+    roads: {
+      east: 'birchmere',
+      south: 'saltreach',
+      west: 'driftwood',
+    },
   },
   saltreach: {
     name: 'Saltreach',
     seed: 53,
     arrive: 'moor',
     places: {
-      coast: { kind: 'coast', at: [64, 110] },
+      coast: { kind: 'coast', at: [108, 76] },
       moor: { kind: 'moor', at: [62, 56] },
       crags: { kind: 'crags', at: [30, 50] },
       head: { kind: 'crags', at: [98, 44] },
     },
-    portals: [
-      { at: [50, 70], to: 'gullwick' },
-      { at: [80, 72], to: 'shellstrand' },
-    ],
+    roads: {
+      north: 'gullwick',
+      south: 'shellstrand',
+    },
   },
   shellstrand: {
     name: 'Shellstrand',
@@ -268,10 +281,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       coast: { kind: 'coast', at: [100, 96] },
       meadow: { kind: 'meadow', at: [36, 40] },
     },
-    portals: [
-      { at: [44, 52], to: 'saltreach' },
-      { at: [72, 52], to: 'stormhead' },
-    ],
+    roads: {
+      north: 'saltreach',
+      east: 'stormhead',
+    },
   },
   driftwood: {
     name: 'Driftwood Bay',
@@ -283,10 +296,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       meadow: { kind: 'meadow', at: [92, 92] },
       wharf: { kind: 'village', at: [68, 66] },
     },
-    portals: [
-      { at: [80, 84], to: 'gullwick' },
-      { at: [88, 62], to: 'dustmere' },
-    ],
+    roads: {
+      east: 'gullwick',
+      south: 'dustmere',
+    },
   },
   stormhead: {
     name: 'Stormhead',
@@ -298,9 +311,9 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       crags: { kind: 'crags', at: [38, 84] },
       head: { kind: 'crags', at: [96, 80] },
     },
-    portals: [
-      { at: [50, 50], to: 'shellstrand' },
-    ],
+    roads: {
+      west: 'shellstrand',
+    },
   },
   // South: the moors and the ruins of an old kingdom, then the fire.
   stonestep: {
@@ -314,10 +327,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       woods: { kind: 'woods', at: [96, 92] },
       steps: { kind: 'village', at: [60, 64] },
     },
-    portals: [
-      { at: [60, 44], to: 'mossvale' },
-      { at: [84, 70], to: 'heatherfell' },
-    ],
+    roads: {
+      north: 'mossvale',
+      south: 'heatherfell',
+    },
   },
   heatherfell: {
     name: 'Heatherfell',
@@ -329,10 +342,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       scree: { kind: 'crags', at: [36, 92] },
       tarn: { kind: 'lake', at: [38, 40] },
     },
-    portals: [
-      { at: [48, 72], to: 'stonestep' },
-      { at: [80, 72], to: 'oldwall' },
-    ],
+    roads: {
+      north: 'stonestep',
+      south: 'oldwall',
+    },
   },
   oldwall: {
     name: 'Oldwall',
@@ -345,11 +358,11 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       woods: { kind: 'woods', at: [96, 94] },
       tarn: { kind: 'lake', at: [30, 40] },
     },
-    portals: [
-      { at: [48, 72], to: 'heatherfell' },
-      { at: [82, 76], to: 'kingsbarrow' },
-      { at: [70, 36], to: 'sunkenkirk' },
-    ],
+    roads: {
+      north: 'heatherfell',
+      east: 'sunkenkirk',
+      west: 'kingsbarrow',
+    },
   },
   kingsbarrow: {
     name: 'Kingsbarrow',
@@ -362,10 +375,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       crags: { kind: 'crags', at: [34, 34] },
       scree: { kind: 'crags', at: [36, 94] },
     },
-    portals: [
-      { at: [52, 80], to: 'oldwall' },
-      { at: [84, 60], to: 'giantsteps' },
-    ],
+    roads: {
+      east: 'oldwall',
+      west: 'giantsteps',
+    },
   },
   giantsteps: {
     name: 'Giantsteps',
@@ -378,10 +391,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       fell: { kind: 'crags', at: [96, 34] },
       scree: { kind: 'crags', at: [34, 94] },
     },
-    portals: [
-      { at: [56, 78], to: 'kingsbarrow' },
-      { at: [76, 52], to: 'emberfall' },
-    ],
+    roads: {
+      east: 'kingsbarrow',
+      west: 'emberfall',
+    },
   },
   // Under the old woods: giant toadstools, then crystal.
   glowcap: {
@@ -394,11 +407,11 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       mere: { kind: 'lake', at: [36, 90] },
       hollow: { kind: 'village', at: [56, 70] },
     },
-    portals: [
-      { at: [72, 88], to: 'elderglade' },
-      { at: [38, 58], to: 'sporefen' },
-      { at: [84, 62], to: 'gleamdeep' },
-    ],
+    roads: {
+      east: 'elderglade',
+      south: 'sporefen',
+      west: 'gleamdeep',
+    },
   },
   sporefen: {
     name: 'Sporefen',
@@ -410,10 +423,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       east: { kind: 'shroomwood', at: [96, 36] },
       pool: { kind: 'lake', at: [30, 40] },
     },
-    portals: [
-      { at: [80, 70], to: 'glowcap' },
-      { at: [48, 74], to: 'bogheart' },
-    ],
+    roads: {
+      north: 'glowcap',
+      west: 'bogheart',
+    },
   },
   gleamdeep: {
     name: 'Gleamdeep',
@@ -425,10 +438,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       deep: { kind: 'crystals', at: [90, 86] },
       pool: { kind: 'lake', at: [92, 36] },
     },
-    portals: [
-      { at: [56, 80], to: 'glowcap' },
-      { at: [76, 48], to: 'shardvault' },
-    ],
+    roads: {
+      north: 'shardvault',
+      east: 'glowcap',
+    },
   },
   shardvault: {
     name: 'Shardvault',
@@ -441,10 +454,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       east: { kind: 'crystals', at: [92, 88] },
       north: { kind: 'crystals', at: [96, 36] },
     },
-    portals: [
-      { at: [50, 80], to: 'gleamdeep' },
-      { at: [82, 58], to: 'icefall' },
-    ],
+    roads: {
+      east: 'icefall',
+      south: 'gleamdeep',
+    },
   },
   // Beyond the sea: the desert, its mesas and its tombs.
   dustmere: {
@@ -457,11 +470,11 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       oasis: { kind: 'oasis', at: [90, 88] },
       well: { kind: 'village', at: [58, 62] },
     },
-    portals: [
-      { at: [40, 72], to: 'driftwood' },
-      { at: [78, 48], to: 'sunscar' },
-      { at: [78, 74], to: 'palmwell' },
-    ],
+    roads: {
+      north: 'driftwood',
+      south: 'sunscar',
+      west: 'palmwell',
+    },
   },
   palmwell: {
     name: 'Palmwell',
@@ -473,10 +486,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       mesa: { kind: 'mesa', at: [96, 96] },
       camp: { kind: 'village', at: [72, 72] },
     },
-    portals: [
-      { at: [84, 56], to: 'dustmere' },
-      { at: [48, 80], to: 'redmesa' },
-    ],
+    roads: {
+      east: 'dustmere',
+      south: 'redmesa',
+    },
   },
   sunscar: {
     name: 'Sunscar Dunes',
@@ -488,10 +501,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       buried: { kind: 'ruins', at: [40, 40] },
       mesa: { kind: 'mesa', at: [96, 94] },
     },
-    portals: [
-      { at: [52, 68], to: 'dustmere' },
-      { at: [80, 62], to: 'redmesa' },
-    ],
+    roads: {
+      north: 'dustmere',
+      west: 'redmesa',
+    },
   },
   redmesa: {
     name: 'Redmesa',
@@ -504,11 +517,11 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       east: { kind: 'mesa', at: [94, 92] },
       oasis: { kind: 'oasis', at: [90, 40] },
     },
-    portals: [
-      { at: [44, 70], to: 'sunscar' },
-      { at: [66, 96], to: 'palmwell' },
-      { at: [84, 58], to: 'tombsands' },
-    ],
+    roads: {
+      north: 'palmwell',
+      east: 'sunscar',
+      west: 'tombsands',
+    },
   },
   tombsands: {
     name: 'Tombsands',
@@ -520,10 +533,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       sunken: { kind: 'ruins', at: [38, 86] },
       mesa: { kind: 'mesa', at: [96, 92] },
     },
-    portals: [
-      { at: [48, 68], to: 'redmesa' },
-      { at: [82, 72], to: 'cinderreach' },
-    ],
+    roads: {
+      east: 'redmesa',
+      south: 'cinderreach',
+    },
   },
   // The far north: snow, then ice.
   frostmoor: {
@@ -536,10 +549,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       tarn: { kind: 'lake', at: [92, 86] },
       glacier: { kind: 'glacier', at: [96, 36] },
     },
-    portals: [
-      { at: [52, 78], to: 'wolfden' },
-      { at: [82, 62], to: 'rimeholt' },
-    ],
+    roads: {
+      south: 'rimeholt',
+      west: 'wolfden',
+    },
   },
   rimeholt: {
     name: 'Rimeholt',
@@ -552,11 +565,11 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       glacier: { kind: 'glacier', at: [96, 34] },
       holt: { kind: 'village', at: [62, 62] },
     },
-    portals: [
-      { at: [44, 70], to: 'frostmoor' },
-      { at: [80, 82], to: 'frostpine' },
-      { at: [78, 46], to: 'icefall' },
-    ],
+    roads: {
+      north: 'frostmoor',
+      east: 'frostpine',
+      south: 'icefall',
+    },
   },
   frostpine: {
     name: 'Frostpine',
@@ -568,9 +581,9 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       east: { kind: 'pinewood', at: [92, 84] },
       tarn: { kind: 'lake', at: [36, 86] },
     },
-    portals: [
-      { at: [56, 76], to: 'rimeholt' },
-    ],
+    roads: {
+      west: 'rimeholt',
+    },
   },
   icefall: {
     name: 'Icefall',
@@ -583,11 +596,11 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       south: { kind: 'glacier', at: [36, 92] },
       tarn: { kind: 'lake', at: [94, 90] },
     },
-    portals: [
-      { at: [60, 80], to: 'rimeholt' },
-      { at: [66, 52], to: 'whitepeak' },
-      { at: [48, 64], to: 'shardvault' },
-    ],
+    roads: {
+      north: 'rimeholt',
+      east: 'whitepeak',
+      west: 'shardvault',
+    },
   },
   whitepeak: {
     name: 'Whitepeak',
@@ -599,9 +612,9 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       west: { kind: 'glacier', at: [34, 38] },
       east: { kind: 'glacier', at: [96, 94] },
     },
-    portals: [
-      { at: [64, 86], to: 'icefall' },
-    ],
+    roads: {
+      west: 'icefall',
+    },
   },
   // The far south: ash and fire, and the Maw at the end of it.
   emberfall: {
@@ -614,10 +627,10 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       moor: { kind: 'moor', at: [30, 40] },
       forge: { kind: 'village', at: [58, 70] },
     },
-    portals: [
-      { at: [40, 78], to: 'giantsteps' },
-      { at: [80, 76], to: 'cinderreach' },
-    ],
+    roads: {
+      east: 'giantsteps',
+      west: 'cinderreach',
+    },
   },
   cinderreach: {
     name: 'Cinderreach',
@@ -628,12 +641,12 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       volcano: { kind: 'volcano', at: [38, 38] },
       cone: { kind: 'volcano', at: [96, 92] },
     },
-    portals: [
-      { at: [56, 82], to: 'emberfall' },
-      { at: [82, 56], to: 'tombsands' },
-      { at: [68, 42], to: 'ashkeep' },
-      { at: [79, 74], to: 'maw' },
-    ],
+    roads: {
+      north: 'tombsands',
+      east: 'emberfall',
+      south: 'ashkeep',
+      west: 'maw',
+    },
   },
   ashkeep: {
     name: 'Ashkeep',
@@ -645,9 +658,9 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       gate: { kind: 'ruins', at: [90, 88] },
       volcano: { kind: 'volcano', at: [36, 90] },
     },
-    portals: [
-      { at: [60, 80], to: 'cinderreach' },
-    ],
+    roads: {
+      north: 'cinderreach',
+    },
   },
   maw: {
     name: 'The Maw',
@@ -658,21 +671,23 @@ let ROWS: Record<string, Omit<Level, 'id'>> = {
       maw: { kind: 'volcano', at: [64, 50] },
       cone: { kind: 'volcano', at: [30, 88] },
     },
-    portals: [
-      { at: [64, 88], to: 'cinderreach' },
-    ],
+    roads: {
+      east: 'cinderreach',
+    },
   },
 }
 
-/** Every level, by its id. Every portal has a portal back, every level is
- * reached from Mossvale, and every place is a kind of ground terrain.ts grows.
+/** Every level, by its id. Every road has a road back on the side across,
+ * every level is reached from Mossvale, and every place is a kind of ground
+ * terrain.ts grows.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { FEATURES } from './features.ts'
  * let lvs = Object.values(LEVELS)
+ * let roads = (lv: Level) => Object.entries(lv.roads) as [Side, string][]
  * let oneWay = lvs.flatMap((lv) =>
- *   lv.portals.filter((g) => !LEVELS[g.to]?.portals.some((b) => b.to == lv.id))
+ *   roads(lv).filter(([side, to]) => LEVELS[to]?.roads[ACROSS[side]] != lv.id)
  * )
  * assertEquals(oneWay, [])
  * assertEquals(Object.keys(HOPS).length, lvs.length)
@@ -690,7 +705,7 @@ export let LEVELS: Record<string, Level> = Object.fromEntries(
 /** Where a new hero first stands. */
 export let HOME = 'mossvale'
 
-/** How many portals each level lies from home, and so how dangerous it is:
+/** How many roads each level lies from home, and so how dangerous it is:
  * the creatures that live in it climb with it (homes.ts `suits`).
  *
  * ```ts
@@ -701,7 +716,7 @@ export let HOME = 'mossvale'
 export let HOPS: Record<string, number> = ((hops: Record<string, number>) => {
   let queue = Object.keys(hops)
   for (let id of queue) {
-    for (let { to } of LEVELS[id].portals) {
+    for (let to of Object.values(LEVELS[id].roads)) {
       if (hops[to] == undefined) {
         hops[to] = hops[id] + 1
         queue.push(to)

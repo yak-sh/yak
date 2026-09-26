@@ -1,8 +1,8 @@
 // A level as a three.js scene: the ground and everything standing on it in
-// chunks (thinning away where they come between the camera and the hero), each structure on a foundation down to the ground, the water, the
-// sky, the village fire and lamps, the glow in each portal, and the light that
-// moves across it all through the day. Built once per level; `tick` moves the
-// sun, the water and the flames.
+// chunks (thinning away where they come between the camera and the hero),
+// each structure on a foundation down to the ground, the water, the sky, the
+// village fire and lamps, and the light that moves across it all through the
+// day. Built once per level; `tick` moves the sun, the water and the flames.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { CHUNK, groundChunk } from './ground.ts'
@@ -333,24 +333,6 @@ export let world = (v: Vale): World => {
     lamps.push({ lantern, halo: glow })
   }
 
-  // The way through each portal: a pale glow hung between its pillars, which
-  // breathes.
-  let doors = v.portals.map((p) => {
-    let glow = new THREE.SpriteMaterial({
-      map: halo,
-      color: 0x8fd0ff,
-      transparent: true,
-      opacity: 0.7,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    })
-    let sprite = new THREE.Sprite(glow)
-    sprite.position.set(p.x, groundAt(v, p.x, p.z) + 1.9, p.z)
-    sprite.scale.set(2.6, 3.8, 1)
-    scene.add(sprite)
-    return { glow, sprite }
-  })
-
   let focus = new THREE.Vector3(size / 2, 6, size / 2)
   let w: World = {
     scene,
@@ -408,11 +390,6 @@ export let world = (v: Vale): World => {
         m.scale.set(s * (2 - lick), s * lick * 1.3, s * (2 - lick))
         m.position.y = floor + 0.3 + i * 0.24 + s * lick * 0.5
         m.rotation.y = t * (0.8 + i * 0.5) + i
-      })
-      doors.forEach((d, i) => {
-        let breath = Math.sin(t * 1.7 + i)
-        d.glow.opacity = 0.55 + breath * 0.15
-        d.sprite.scale.set(2.5 + breath * 0.12, 3.7 + breath * 0.18, 1)
       })
       sky.position.copy(focus)
       for (let d of decor) {

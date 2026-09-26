@@ -201,8 +201,9 @@ let ACTIVE = 45
 // one that has said nothing for this long sleeps.
 let BEAT = 1000
 let ASLEEP = 3500
-// How near a portal's middle a walker must come to go through it.
-let PORTAL = 1.1
+// How near the end of a road, where it meets the level's edge, a walker must
+// come to walk on along it into the level beyond.
+let OFF = 2.2
 
 let round = (v: number, k = 1000) => Math.round(v * k) / k
 let dist = (a: { x: number; z: number }, b: { x: number; z: number }) =>
@@ -268,12 +269,24 @@ let placed = (level: string, b: Body, now: number) => ({
 let same = (a: Record<string, unknown>, b: Record<string, unknown>) =>
   Object.keys(a).every((k) => a[k] === b[k])
 
-/** Where a hero stands on arriving in a level: in front of the portal that
- * leads back to where they came from, or by the village fire, or at the
- * level's arrival place. */
+/** Where a hero stands on arriving in a level: on the road back to where
+ * they came from, facing in, or by the village fire, or at the level's
+ * arrival place.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { vale } from './terrain.ts'
+ * // Mossvale's west road leads to Birchmere, and comes in by its east road,
+ * // facing west.
+ * assertEquals(vale('mossvale', 4).roads.find((r) => r.side == 'west')?.to, 'birchmere')
+ * let v = vale('birchmere', 4), b = arrival(v, 'mossvale')
+ * let east = v.roads.find((r) => r.side == 'east')!
+ * assertEquals([east.to, Math.round(b.x), Math.round(Math.sin(b.yaw))], ['mossvale', 119, -1])
+ * ```
+ */
 export let arrival = (v: Vale, from?: string): Body => {
-  let back = v.portals.find((p) => p.to == from)
-  let [x, z] = back ? [back.x, back.z + 2.6] : v.hearth
+  let back = v.roads.find((r) => r.to == from)
+  let [x, z] = back ? back.door : v.hearth
     ? [
       v.hearth[0] - 1.5 + Math.random() * 3,
       v.hearth[1] + 3.5 + Math.random() * 1.5,
@@ -284,7 +297,7 @@ export let arrival = (v: Vale, from?: string): Body => {
     y: groundAt(v, x, z),
     z,
     vy: 0,
-    yaw: Math.PI,
+    yaw: back ? Math.atan2(x - back.x, z - back.z) : Math.PI,
     speed: 0,
     gait: 'idle',
   }
@@ -950,13 +963,13 @@ export let game = (net: Net) => {
         .filter((g) => g.near < TALK)
         .sort((a, b) => a.near - b.near)[0] ?? null
 
-      // Through a portal: on to the level beyond, in front of the portal back.
+      // Off the end of a road: on to the level beyond, on the road back.
       let level = lv
-      let portal = v.portals.find((p) => dist(p, body) < PORTAL)
-      if (portal && !down) {
-        level = portal.to
-        body = arrival(vale(portal.to, v.voxel), lv)
-        events.push({ type: 'travel', to: portal.to })
+      let road = v.roads.find((r) => dist(r, body) < OFF)
+      if (road && !down) {
+        level = road.to
+        body = arrival(vale(road.to, v.voxel), lv)
+        events.push({ type: 'travel', to: road.to })
       }
 
       // What I am, for the others.

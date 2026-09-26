@@ -14,13 +14,16 @@
 // roll, crags heap up, a lake sinks, dunes crest, a village flattens the
 // ground around it and builds itself there. Each kind also says what the
 // ground is topped with where it holds, and what grows and stands there.
-// Paths run from the village out to every place and every portal.
+// Paths run from the village out to every place. A road runs from where a
+// hero arrives out to the middle of each side that leads somewhere, on a bed
+// of its own: level enough to walk, dry over water, and through the
+// mountains at the rim by a pass.
 import { type Feature, FEATURES, Top } from './features.ts'
-import { type Level, LEVELS, type Spot } from './levels.ts'
+import { type Level, LEVELS, type Side, type Spot } from './levels.ts'
 import { bulk } from './props.ts'
-import { fbm, hash, rand, smooth } from './rand.ts'
+import { clamp, fbm, hash, lerp, rand, smooth } from './rand.ts'
 
-export type { Spot }
+export type { Side, Spot }
 
 /** A level's side, in metres. */
 export let SIZE = 128
@@ -40,7 +43,7 @@ let dist = (x: number, z: number, [a, b]: Spot) => Math.hypot(x - a, z - b)
 let snap = (x: number) => (Math.floor(x / GRID) + 0.5) * GRID
 
 /** A prop: something standing on the ground that is part of the level's
- * shape (a tree, a rock, a flower, a house, a portal), at (x, z) metres. */
+ * shape (a tree, a rock, a flower, a house, a signpost), at (x, z) metres. */
 export type Prop = {
   kind: string
   x: number
@@ -65,21 +68,55 @@ export type Vale = {
   hue: Float32Array
   props: Prop[]
   /** the props that are built: what places build (a village, ruins, standing
-   * stones), and the portals */
+   * stones), and the signpost at the head of each road */
   built: Prop[]
   walls: Wall[]
   /** each place's middle */
   places: Record<string, Spot>
   /** the village fire, when the level has a village */
   hearth: Spot | null
-  /** each portal's middle, and the level it leads to */
-  portals: { x: number; z: number; to: string }[]
+  roads: Road[]
 }
 
-// How far round a portal no tree or rock grows, in metres.
+/** A road out of a level: the side it leaves by and the level it leads to;
+ * where it meets the edge, in metres; where a hero coming in by it stands;
+ * and its signpost. */
+export type Road = {
+  side: Side
+  to: string
+  x: number
+  z: number
+  door: Spot
+  sign: Spot
+}
+
+/** Where each side's road meets the edge of a level, in metres. */
+export let EDGE: Record<Side, Spot> = {
+  north: [MID, 0],
+  east: [SIZE, MID],
+  south: [MID, SIZE],
+  west: [0, MID],
+}
+// How far in from the edge a road runs straight; how far in along it a hero
+// coming in stands, beside its signpost; in metres.
+let STRAIGHT = 16
+let DOOR = 9
+// A road's half-width, and how far round it its bed eases into the ground,
+// in metres.
+let ROAD = 1.5
+let EASE = 3.5
+// How far from a road the mountains at the rim stand back, rising from the
+// first to the second, in metres, so a road leaves by a pass.
+let PASS: [number, number] = [4, 13]
+// The lowest a road's bed runs, in metres: dry, a causeway over water.
+let DRY = SHORE + 0.3
+// How steep a road's bed may run, in metres a metre, and how far either way
+// along it its bed is evened out, in metres.
+let GRADE = 0.45
+let EVEN = 5
+// How far round where a hero comes in no tree or rock grows, in metres.
 let GLADE = 9
-// How much room each building takes, as a radius: a portal's is the ground
-// before it, where a hero steps out (play.ts `arrival`).
+// How much room each building takes, as a radius.
 let FOOT: Record<string, number> = {
   fire: 1.5,
   cottage: 4.5,
@@ -87,7 +124,7 @@ let FOOT: Record<string, number> = {
   well: 1.2,
   board: 0.8,
   lamp: 0.3,
-  portal: 3,
+  signpost: 1,
   pillar: 1.2,
   ruin: 2.8,
   menhir: 1,
@@ -196,20 +233,116 @@ let BARE = new Set([
  * it to its voxels. */
 export let rise = (lv: Level) => {
   let s = lv.seed * 101
+  let ways = waysOf(lv)
+  let land = landOf(lv)
+  return (x: number, z: number): number => {
+    let h = land(x, z), open = 0
+    for (let { c, bed } of ways) {
+      let t = along(c, x, z), d = off(c, x, z, t)
+      h = lerp(h, bedAt(bed, t), 1 - smooth(ROAD, ROAD + EASE, d))
+      open = Math.max(open, 1 - smooth(PASS[0], PASS[1], d))
+    }
+    let r = Math.hypot(x - MID, z - MID) / MID
+    h += smooth(0.78, 1.0, r) * (1 - open) *
+      (12 + fbm(x / 4.5, z / 4.5, 9 + s) * 9)
+    return clamp(h, 0.5, 30)
+  }
+}
+
+// A level's land as its places shape it, before its roads are laid and the
+// mountains at its rim raised.
+let landOf = (lv: Level) => {
+  let s = lv.seed * 101
   let places = Object.values(lv.places).filter((p) => FEATURES[p.kind])
   let order = [
     ...places.filter((p) => !FEATURES[p.kind].last),
     ...places.filter((p) => FEATURES[p.kind].last),
   ]
   return (x: number, z: number): number => {
-    let r = Math.hypot(x - MID, z - MID) / MID
     let h = 6.5 + (fbm(x / 22, z / 22, 1 + s) - 0.5) * 4.5
     for (let p of order) {
       h = FEATURES[p.kind].shape(h, dist(x, z, p.at), x, z, s)
     }
-    h += smooth(0.78, 1.0, r) * (12 + fbm(x / 4.5, z / 4.5, 9 + s) * 9)
-    return Math.max(0.5, Math.min(30, h))
+    return h
   }
+}
+
+// A way from `a` to `b` that wobbles as a trodden one does, by up to `wob`
+// metres, but for its last `straight` metres; its middle sampled every metre.
+type Course = {
+  a: Spot
+  dx: number
+  dz: number
+  xs: Float64Array
+  zs: Float64Array
+}
+let course = (a: Spot, b: Spot, s: number, wob = 7, straight = 0): Course => {
+  let dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz) || 1
+  let n = Math.ceil(len) + 1
+  let bend = Math.max(0.01, 1 - straight / len)
+  let xs = new Float64Array(n), zs = new Float64Array(n)
+  for (let i = 0; i < n; i++) {
+    let t = i / (n - 1)
+    let w = (fbm(t * 6, a[0] + b[0], 21 + s, 2) - 0.5) * wob *
+      Math.sin(Math.PI * Math.min(1, t / bend))
+    xs[i] = a[0] + dx * t - (dz / len) * w
+    zs[i] = a[1] + dz * t + (dx / len) * w
+  }
+  return { a, dx, dz, xs, zs }
+}
+// How far along a course (x, z) lies, from 0 at its start to 1 at its end;
+// and how far it is from the course's middle there, in metres.
+let along = (c: Course, x: number, z: number) =>
+  clamp(
+    ((x - c.a[0]) * c.dx + (z - c.a[1]) * c.dz) / (c.dx * c.dx + c.dz * c.dz),
+    0,
+    1,
+  )
+let off = (c: Course, x: number, z: number, t: number) => {
+  let f = t * (c.xs.length - 1)
+  let i = Math.min(c.xs.length - 2, Math.floor(f)), u = f - i
+  return Math.hypot(
+    x - (c.xs[i] + (c.xs[i + 1] - c.xs[i]) * u),
+    z - (c.zs[i] + (c.zs[i + 1] - c.zs[i]) * u),
+  )
+}
+
+// A level's roads, each a course from where a hero arrives out to the middle
+// of its side, and the height of its bed every metre along it: the land
+// evened out, cut down where it would climb too steeply, and never under
+// water.
+type Way = { side: Side; to: string; c: Course; bed: Float64Array }
+let waysOf = (lv: Level): Way[] => {
+  let got = laid.get(lv)
+  if (got) return got
+  let s = lv.seed * 101
+  let from = lv.places[lv.arrive].at
+  let land = landOf(lv)
+  let sides = Object.entries(lv.roads) as [Side, string][]
+  let ways = sides.map(([side, to]): Way => {
+    let c = course(from, EDGE[side], s, 7, STRAIGHT)
+    let n = c.xs.length
+    let raw = c.xs.map((x, i) => Math.max(DRY, land(x, c.zs[i])))
+    let bed = raw.map((_, i) => {
+      let lo = Math.max(0, i - EVEN), hi = Math.min(n - 1, i + EVEN)
+      let sum = 0
+      for (let j = lo; j <= hi; j++) sum += raw[j]
+      return sum / (hi - lo + 1)
+    })
+    for (let i = 1; i < n; i++) bed[i] = Math.min(bed[i], bed[i - 1] + GRADE)
+    for (let i = n - 2; i >= 0; i--) {
+      bed[i] = Math.min(bed[i], bed[i + 1] + GRADE)
+    }
+    return { side, to, c, bed: bed.map((h) => Math.max(DRY, h)) }
+  })
+  laid.set(lv, ways)
+  return ways
+}
+let laid = new WeakMap<Level, Way[]>()
+let bedAt = (bed: Float64Array, t: number) => {
+  let f = t * (bed.length - 1)
+  let i = Math.min(bed.length - 2, Math.floor(f))
+  return lerp(bed[i], bed[i + 1], f - i)
 }
 
 /** How steep a height is at (x, z): the most it rises or falls in a metre
@@ -228,31 +361,30 @@ export let steep = (
   ) / d
 }
 
-// The lanes that run from the village out to each place and portal.
-let lanesOf = (lv: Level): [Spot, Spot][] => {
+// The lanes that run from the village out to each place.
+let lanesOf = (lv: Level): Course[] => {
   let home = Object.values(lv.places).find((p) => p.kind == 'village')
   if (!home) return []
-  return [
-    ...Object.values(lv.places).filter((p) => p != home).map((p) => p.at),
-    ...lv.portals.map((g) => g.at),
-  ].map((end): [Spot, Spot] => [home.at, end])
+  return Object.values(lv.places)
+    .filter((p) => dist(p.at[0], p.at[1], home.at) >= 1)
+    .map((p) => course(home.at, p.at, lv.seed * 101))
 }
 
-// How far a point is from the nearest lane, wobbling as a trodden path does.
-let toLane = (lanes: [Spot, Spot][], s: number, x: number, z: number) => {
+// How far a point is from the nearest lane, as a share of the lane's width
+// there: a lane widens as it goes.
+let toLane = (lanes: Course[], x: number, z: number) => {
   let best = Infinity
-  for (let [[ax, az], [bx, bz]] of lanes) {
-    let dx = bx - ax, dz = bz - az
-    let t = Math.max(
-      0,
-      Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)),
-    )
-    let wob = (fbm(t * 6, ax + bx, 21 + s, 2) - 0.5) * 7 *
-      Math.sin(t * Math.PI)
-    let px = ax + dx * t + (-dz / Math.hypot(dx, dz)) * wob
-    let pz = az + dz * t + (dx / Math.hypot(dx, dz)) * wob
-    best = Math.min(best, Math.hypot(x - px, z - pz) / (0.6 + t))
+  for (let c of lanes) {
+    let t = along(c, x, z)
+    best = Math.min(best, off(c, x, z, t) / (0.6 + t))
   }
+  return best
+}
+
+// How far a point is from the middle of the nearest road, in metres.
+let toRoad = (ways: Way[], x: number, z: number) => {
+  let best = Infinity
+  for (let { c } of ways) best = Math.min(best, off(c, x, z, along(c, x, z)))
   return best
 }
 
@@ -273,15 +405,18 @@ let build = (lv: Level, V: number): Vale => {
   let mid = (i: number) => (i + 0.5) * V
   let height = rise(lv)
   let paths = lanesOf(lv)
+  let ways = waysOf(lv)
   let h = new Int16Array(n * n)
   let hue = new Float32Array(n * n)
   let lanes = new Float32Array(n * n)
+  let roads = new Float32Array(n * n)
   for (let k = 0; k < n; k++) {
     for (let i = 0; i < n; i++) {
       let x = mid(i), z = mid(k)
       h[at(i, k)] = Math.round(height(x, z) / V)
       hue[at(i, k)] = fbm(x / 11, z / 11, 31 + s, 3)
-      lanes[at(i, k)] = toLane(paths, s, x, z)
+      lanes[at(i, k)] = toLane(paths, x, z)
+      roads[at(i, k)] = toRoad(ways, x, z)
     }
   }
   let get = (i: number, k: number) =>
@@ -298,8 +433,8 @@ let build = (lv: Level, V: number): Vale => {
     )
   }
   // What each column is topped with: snow up high, stone where it is steep,
-  // sand at the water, a path where one runs, and elsewhere whatever the
-  // places holding it cover it with, strongest first.
+  // sand at the water, a path where a road or a lane runs, and elsewhere
+  // whatever the places holding it cover it with, strongest first.
   let hold = holder(lv)
   let top = new Uint8Array(n * n)
   for (let k = 0; k < n; k++) {
@@ -313,7 +448,7 @@ let build = (lv: Level, V: number): Vale => {
         ? most?.cliff ?? Top.stone
         : c <= SHORE
         ? most?.shore ?? Top.sand
-        : lanes[at(i, k)] < 0.85 && w.rim < 0.4
+        : roads[at(i, k)] < ROAD || lanes[at(i, k)] < 0.85 && w.rim < 0.4
         ? Top.path
         : coverOf(w, fbm(x / 3, z / 3, 11 + s, 2)) ??
           (w.rim > 0.45 ? Top.dry : Top.grass)
@@ -321,7 +456,7 @@ let build = (lv: Level, V: number): Vale => {
   }
 
   // Each village paved where people gather; what each place builds round its
-  // middle; and each portal.
+  // middle; and each road's signpost, where a hero coming in by it stands.
   let villages = Object.values(lv.places).filter((p) => p.kind == 'village')
   let built: Prop[] = []
   for (let vil of villages) {
@@ -338,19 +473,25 @@ let build = (lv: Level, V: number): Vale => {
       built.push({ ...b, x: p.at[0] + b.x, z: p.at[1] + b.z })
     }
   }
-  lv.portals.forEach((g, i) =>
-    built.push({ kind: 'portal', x: g.at[0], z: g.at[1], seed: i })
-  )
+  let out = ways.map(({ side, to, c }): Road => {
+    let [x, z] = EDGE[side], len = Math.hypot(c.dx, c.dz)
+    let [ux, uz] = [-c.dx / len, -c.dz / len]
+    let door: Spot = [x + ux * DOOR, z + uz * DOOR]
+    let sign: Spot = [snap(door[0] - uz * 2.75), snap(door[1] + ux * 2.75)]
+    built.push({ kind: 'signpost', x: sign[0], z: sign[1], seed: 0 })
+    return { side, to, x, z, door, sign }
+  })
 
   let props: Prop[] = [...built]
-  let taken = (x: number, z: number, lane: number) =>
+  let taken = (x: number, z: number, lane: number, road: number) =>
     built.some((p) => dist(x, z, [p.x, p.z]) < FOOT[p.kind] + 1) ||
     villages.some((p) => dist(x, z, p.at) < 6) ||
-    lane < 1.3
+    lane < 1.3 || road < ROAD + 1.5
 
   // Trees and rocks, one chance per cell of a jittered grid, decided on the
   // smooth ground so they stand in the same places at every voxel size; none
-  // in the glade round a portal, so a hero stepping out sees where they are.
+  // in the glade where a hero comes in by a road, so they see where they
+  // are.
   let CELL = 3
   for (let ck = 0; ck < SIZE / CELL; ck++) {
     for (let ci = 0; ci < SIZE / CELL; ci++) {
@@ -359,8 +500,8 @@ let build = (lv: Level, V: number): Vale => {
       if (x < 1 || z < 1 || x > SIZE - 1.5 || z > SIZE - 1.5) continue
       let y = height(x, z)
       if (y <= SHORE || y >= 18 || steep(height, x, z) >= 2) continue
-      if (taken(x, z, toLane(paths, s, x, z))) continue
-      if (lv.portals.some((g) => dist(x, z, g.at) < GLADE)) continue
+      if (taken(x, z, toLane(paths, x, z), toRoad(ways, x, z))) continue
+      if (out.some((r) => dist(x, z, r.door) < GLADE)) continue
       let w = hold(x, z)
       let tree = 0.04 + w.rim * 0.3 + weigh(w, (f) => f.trees)
       let rock = 0.03 + w.rim * 0.12 + weigh(w, (f) => f.rocks)
@@ -384,7 +525,7 @@ let build = (lv: Level, V: number): Vale => {
       let x = (ci + 0.5) * GRID, z = (ck + 0.5) * GRID
       let j = at(Math.floor(x / V), Math.floor(z / V))
       let t = top[j]
-      if (BARE.has(t) || taken(x, z, lanes[j])) continue
+      if (BARE.has(t) || taken(x, z, lanes[j], roads[j])) continue
       let roll = rand(ci, ck, 9 + s)
       if (roll >= LUSH) continue
       let w = hold(x, z)
@@ -414,7 +555,7 @@ let build = (lv: Level, V: number): Vale => {
       Object.entries(lv.places).map(([name, p]) => [name, p.at]),
     ),
     hearth: villages[0]?.at ?? null,
-    portals: lv.portals.map((g) => ({ x: g.at[0], z: g.at[1], to: g.to })),
+    roads: out,
   }
   v.walls = wallsOf(v)
   return v
@@ -448,11 +589,12 @@ let GIRTH: Record<string, number> = {
   fire: 1.2,
   board: 0.35,
   lamp: 0.35,
+  signpost: 0.3,
 }
 
-// What a walker bumps into: trunks, stones, the village's buildings, a ruin's
-// walls, and a portal's two posts. A building is a row of circles along each
-// wall, so its door is a gap.
+// What a walker bumps into: trunks, stones, posts, the village's buildings and
+// a ruin's walls. A building is a row of circles along each wall, so its door
+// is a gap.
 let wallsOf = (v: Vale): Wall[] => {
   let walls: Wall[] = []
   for (let p of v.props) {
@@ -464,11 +606,6 @@ let wallsOf = (v: Vale): Wall[] => {
     }
     let r = GIRTH[p.kind] ?? 0
     if (r) walls.push({ x: p.x, z: p.z, r, top: y + 3 })
-    if (p.kind == 'portal') {
-      for (let dx of [-1.3, 1.3]) {
-        walls.push({ x: p.x + dx, z: p.z, r: 0.4, top: y + 4 })
-      }
-    }
     if (p.kind == 'ruin') {
       for (let dx = -1.2; dx <= 1.2; dx += 0.6) {
         walls.push({ x: p.x + dx, z: p.z, r: 0.4, top: y + 3 })
@@ -504,7 +641,7 @@ export let flat = (
     walls,
     places: {},
     hearth: null,
-    portals: [],
+    roads: [],
   }
 }
 
@@ -522,7 +659,6 @@ let SPAN: Record<string, [number, number]> = {
   well: [2.2, 2.2],
   fire: [2.6, 2.6],
   board: [2.2, 0.5],
-  portal: [3.6, 1],
 }
 
 /** The points along a building's walls a walker cannot pass, in metres: the

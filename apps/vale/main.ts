@@ -3,8 +3,8 @@
 // are and which of your heroes to play, and then runs the frame: the player's
 // hands (input.ts), a step of the game on the graph (play.ts), the stage
 // (cast.ts), the bits and numbers (fx.ts) and the glass (hud.ts). When the
-// hero walks through a portal, the page grows the level beyond and carries on
-// there.
+// hero walks off the end of a road, the page grows the level beyond and
+// carries on there.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { BEASTS } from './beasts.ts'
@@ -103,7 +103,7 @@ let h = hud(glass, hands.press)
 let marks = overlay(h.layer, camera)
 
 // The level on show, and what is drawn of it: grown again when the hero goes
-// through a portal.
+// off the end of a road.
 let v: Vale = vale(HOME, VOX)
 let w: World = world(v)
 let stage = cast(w.scene, v, marks)
@@ -485,10 +485,11 @@ let loop = (t: number) => {
     let f = g.frame(v, i, cam.yaw, dt)
     last = f
     if (f && f.level != v.level.id) {
-      // Through a portal: the level beyond grows, and the next frame plays
-      // there.
+      // Off the end of a road: the level beyond grows, the camera comes round
+      // behind the hero walking in, and the next frame plays there.
       for (let e of f.events) react(e, target)
       grow(f.level)
+      cam.yaw = f.body.yaw + Math.PI
     } else if (f) {
       let player = comp(net.client.ent(net.hero), 'player')
       let dressed = {
