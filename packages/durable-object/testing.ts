@@ -46,10 +46,13 @@ let REFUSED =
 // write or drop alike — while `sqlite_master` still lists it. There is no
 // authorizer callback to hang off the engine, so the identifiers a statement
 // mentions are what is checked; the runtime names the column too, which nothing
-// here can know.
+// here can know. Every statement passes through here, so text that cannot
+// hold such a name, one without `cf_` in it, is not split into words at all.
 let WORD = /[A-Za-z_][A-Za-z0-9_$]*/g
 let refused = (query: string): string | undefined =>
-  query.replaceAll('"', ' ').match(WORD)?.find(prohibited)
+  /cf_/i.test(query)
+    ? query.replaceAll('"', ' ').match(WORD)?.find(prohibited)
+    : undefined
 
 let ok = (value: unknown): value is SqlValue =>
   value === null || typeof value == 'string' || typeof value == 'number' ||
