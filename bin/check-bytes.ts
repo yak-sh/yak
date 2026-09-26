@@ -59,30 +59,32 @@ let at = (text: string, offset: number) => {
 
 let hex = (ch: string) => '\\x' + ch.charCodeAt(0).toString(16).padStart(2, '0')
 
-let offenders: string[] = []
-for (let path of await tracked()) {
-  if (BINARY.has(ext(path))) continue
-  let bytes: Uint8Array
-  try {
-    bytes = Deno.readFileSync(path)
-  } catch {
-    continue // a submodule, or a path git knows and the tree does not
+if (import.meta.main) {
+  let offenders: string[] = []
+  for (let path of await tracked()) {
+    if (BINARY.has(ext(path))) continue
+    let bytes: Uint8Array
+    try {
+      bytes = Deno.readFileSync(path)
+    } catch {
+      continue // a submodule, or a path git knows and the tree does not
+    }
+    // latin1: every byte is one char, so an offset here is a byte offset.
+    let text = new TextDecoder('latin1').decode(bytes)
+    for (let hit of text.matchAll(CONTROL)) {
+      offenders.push(`${path}:${at(text, hit.index)}: raw ${hex(hit[0])}`)
+    }
   }
-  // latin1: every byte is one char, so an offset here is a byte offset.
-  let text = new TextDecoder('latin1').decode(bytes)
-  for (let hit of text.matchAll(CONTROL)) {
-    offenders.push(`${path}:${at(text, hit.index)}: raw ${hex(hit[0])}`)
-  }
-}
 
-if (offenders.length) {
-  console.error(
-    `raw control bytes in tracked source (write them as escapes — git calls a
-file carrying one BINARY, and a binary file cannot be merged):\n`,
-  )
-  for (let line of offenders.slice(0, 40)) console.error('  ' + line)
-  if (offenders.length > 40) {
-    console.error(`  … and ${offenders.length - 40} more`)
+  if (offenders.length) {
+    console.error(
+      `raw control bytes in tracked source (write them as escapes — git calls a
+  file carrying one BINARY, and a binary file cannot be merged):\n`,
+    )
+    for (let line of offenders.slice(0, 40)) console.error('  ' + line)
+    if (offenders.length > 40) {
+      console.error(`  … and ${offenders.length - 40} more`)
+    }
+    Deno.exit(1)
   }
-  Deno.exit(1)
 }

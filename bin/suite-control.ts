@@ -7,11 +7,13 @@ function sample(): number {
   if (s === 0) throw new Error('unreachable')
   return (performance.now() - start) / 1000
 }
-// Warm the JIT before timing the command.
-for (let i = 0; i < 5; i++) sample()
-postMessage({ ready: true })
-function tick() {
-  postMessage({ seconds: sample() })
-  setTimeout(tick, 1000)
+if (import.meta.main) {
+  // Warm the JIT before timing the command.
+  for (let i = 0; i < 5; i++) sample()
+  postMessage({ ready: true })
+  let tick = () => {
+    postMessage({ seconds: sample() })
+    setTimeout(tick, 1000)
+  }
+  tick()
 }
-tick()

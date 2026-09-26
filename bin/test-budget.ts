@@ -27,44 +27,46 @@
 let ansi = /\x1b\[[0-9;]*m/g
 let done = /^(.+?) \.\.\. ok \((\d+)ms\)$/ // a passing test's duration line
 
-let child = new Deno.Command('deno', {
-  args: ['task', 'test', '--only=deno'],
-  stdout: 'piped',
-  stderr: 'inherit',
-}).spawn()
+if (import.meta.main) {
+  let child = new Deno.Command('deno', {
+    args: ['task', 'test', '--only=deno'],
+    stdout: 'piped',
+    stderr: 'inherit',
+  }).spawn()
 
-let dec = new TextDecoder()
-let buf = ''
-let offenders: { name: string; ms: number }[] = []
+  let dec = new TextDecoder()
+  let buf = ''
+  let offenders: { name: string; ms: number }[] = []
 
-for await (let chunk of child.stdout) {
-  await Deno.stdout.write(chunk) // tee raw bytes so the run streams as usual
-  buf += dec.decode(chunk, { stream: true }).replace(ansi, '')
-  let nl
-  while ((nl = buf.indexOf('\n')) >= 0) {
-    let line = buf.slice(0, nl)
-    buf = buf.slice(nl + 1)
-    let m = line.match(done)
-    if (m && +m[2] >= 2) offenders.push({ name: m[1], ms: +m[2] })
+  for await (let chunk of child.stdout) {
+    await Deno.stdout.write(chunk) // tee raw bytes so the run streams as usual
+    buf += dec.decode(chunk, { stream: true }).replace(ansi, '')
+    let nl
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      let line = buf.slice(0, nl)
+      buf = buf.slice(nl + 1)
+      let m = line.match(done)
+      if (m && +m[2] >= 2) offenders.push({ name: m[1], ms: +m[2] })
+    }
   }
-}
 
-let { code } = await child.status
-let strict = !!Deno.env.get('TASKS_FAST_STRICT')
+  let { code } = await child.status
+  let strict = !!Deno.env.get('TASKS_FAST_STRICT')
 
-offenders.sort((a, b) => b.ms - a.ms)
-console.log(
-  `\n─── deno budget: ${offenders.length} test(s) over 1ms ───`,
-)
-for (let o of offenders) {
-  console.log(`  ${String(o.ms).padStart(5)}ms  ${o.name}`)
-}
-if (offenders.length && !strict) {
+  offenders.sort((a, b) => b.ms - a.ms)
   console.log(
-    '(advisory — db-backed tests carry production freshDb + apply() cost; set TASKS_FAST_STRICT=1 to gate locally)',
+    `\n─── deno budget: ${offenders.length} test(s) over 1ms ───`,
   )
-}
+  for (let o of offenders) {
+    console.log(`  ${String(o.ms).padStart(5)}ms  ${o.name}`)
+  }
+  if (offenders.length && !strict) {
+    console.log(
+      '(advisory — db-backed tests carry production freshDb + apply() cost; set TASKS_FAST_STRICT=1 to gate locally)',
+    )
+  }
 
-// A real test failure fails the run regardless of the budget mode.
-if (code !== 0) Deno.exit(code)
-if (strict && offenders.length) Deno.exit(1)
+  // A real test failure fails the run regardless of the budget mode.
+  if (code !== 0) Deno.exit(code)
+  if (strict && offenders.length) Deno.exit(1)
+}
