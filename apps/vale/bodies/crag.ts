@@ -70,7 +70,7 @@ export let crag = (l: Crag): Figure => {
     animate: (a, dt) => {
       phase += dt * (1 + a.speed * 2.4)
       let amp = Math.min(1, a.speed / 2.4) * 0.45
-      trot(legs, Math.sin(phase) * amp)
+      trot(legs, Math.sin(phase), Math.cos(phase), amp)
       body.rotation.z = Math.sin(phase) * 0.04 * amp
       head.position.y = 0.6 + Math.sin(a.t * 1.1) * 0.02
       if (a.swing >= 0) {

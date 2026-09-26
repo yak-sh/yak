@@ -1,7 +1,9 @@
 // The joinery every figure is built from (figures.ts, bodies/): a part is a
 // few soft boxes (mesh.ts `cuboid`) turning about a pivot, and a figure is
-// parts hung on parts. Most of a creature is left and right alike, so a box
-// can be given once and mirrored (`both`).
+// parts hung on parts. A limb is two parts bending at a knee or an elbow
+// (`limb`), its halves overlapping at the joint so a bend opens no gap. Most
+// of a creature is left and right alike, so a box can be given once and
+// mirrored (`both`).
 //
 // A part is a bone, and a figure's parts are drawn together as one skinned
 // mesh (`knit`): one draw call and one shadow for the whole figure, however
@@ -12,14 +14,22 @@ import { cuboid, type Out, out, place, type Vec } from './mesh.ts'
 import { geometry } from './soft.ts'
 
 /** One box of a part: its low corner and its size, in metres from the part's
- * pivot, and its colour. */
-export type Box = [Vec, Vec, number]
+ * pivot, its colour, and how wide the rounding of its edges is. */
+export type Box = [Vec, Vec, number, number?]
+
+/** A limb: the part at the hip or shoulder, and the one below the joint. */
+export type Limb = [THREE.Bone, THREE.Bone]
+
+/** A leg: one part, or a limb. */
+export type Leg = THREE.Object3D | Limb
 
 /** A part: boxes turning about `pivot`, tinted in voxels of edge `cell`. It
  * is drawn once its figure is knitted. */
 export let partOf = (boxes: Box[], pivot: Vec, cell = 0.1): THREE.Bone => {
   let o = out()
-  for (let [min, size, color] of boxes) cuboid(o, min, size, color, cell)
+  for (let [min, size, color, round] of boxes) {
+    cuboid(o, min, size, color, cell, round)
+  }
   let b = new THREE.Bone()
   b.position.set(...pivot)
   b.userData.part = o
@@ -40,6 +50,20 @@ export let partOf = (boxes: Box[], pivot: Vec, cell = 0.1): THREE.Bone => {
  * assertEquals([mesh.skeleton.bones.length, root.children.length], [2, 3])
  * ```
  */
+/** A limb bending partway down, at a knee or an elbow: `upper` turning at
+ * `pivot`, and `lower` hung from it, turning at `joint` in the upper's space.
+ */
+export let limb = (
+  upper: Box[],
+  lower: Box[],
+  pivot: Vec,
+  joint: Vec,
+): Limb => {
+  let a = partOf(upper, pivot), b = partOf(lower, joint)
+  a.add(b)
+  return [a, b]
+}
+
 export let knit = (root: THREE.Object3D, material: THREE.Material) => {
   let bones: THREE.Bone[] = []
   root.traverse((o) => {
@@ -82,10 +106,10 @@ export let knit = (root: THREE.Object3D, material: THREE.Material) => {
  * assertEquals(mirror([[0.25, 0, 0], [0.5, 1, 1], 7]), [[-0.75, 0, 0], [0.5, 1, 1], 7])
  * ```
  */
-export let mirror = ([[x, y, z], size, color]: Box): Box => [
+export let mirror = ([[x, y, z], size, ...rest]: Box): Box => [
   [-x - size[0], y, z],
   size,
-  color,
+  ...rest,
 ]
 
 /** A box and its mirror, right and left. */
@@ -123,8 +147,28 @@ export let ease = (t: number) => t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2
 export let lunge = (swing: number, peak = 0.4) =>
   swing < peak ? ease(swing / peak) : 1 - ease((swing - peak) / (1 - peak))
 
-/** Four legs in a walk: each diagonal pair together. */
-export let trot = (legs: THREE.Object3D[], s: number) => {
-  legs[0].rotation.x = legs[3].rotation.x = s
-  legs[1].rotation.x = legs[2].rotation.x = -s
+/** A leg's step in a walk, `s` and `c` the sine and cosine of how far
+ * through it, `amp` how far it swings: back and forth from the hip, and bent
+ * at the knee while the foot comes forward.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import * as THREE from 'three'
+ * let leg: Limb = [new THREE.Bone(), new THREE.Bone()]
+ * stride(leg, 0, -1, 0.5) // passing under the hip, coming forward
+ * assertEquals([leg[0].rotation.x, leg[1].rotation.x], [0, 0.75])
+ * stride(leg, 0, 1, 0.5) // pushing back: straight
+ * assertEquals(leg[1].rotation.x, 0)
+ * ```
+ */
+export let stride = (leg: Leg, s: number, c: number, amp: number) => {
+  let [hip, knee] = Array.isArray(leg) ? leg : [leg]
+  hip.rotation.x = s * amp
+  if (knee) knee.rotation.x = Math.max(0, -c) * amp * 1.5
 }
+
+/** Four legs in a walk: each diagonal pair together. */
+export let trot = (legs: Leg[], s: number, c: number, amp: number) =>
+  legs.forEach((l, i) =>
+    i == 1 || i == 2 ? stride(l, -s, -c, amp) : stride(l, s, c, amp)
+  )

@@ -5,7 +5,16 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Figure } from '../figures.ts'
-import { both, type Box, given, lunge, partOf, shade, trot } from '../parts.ts'
+import {
+  both,
+  type Box,
+  given,
+  limb,
+  lunge,
+  partOf,
+  shade,
+  trot,
+} from '../parts.ts'
 import { flash, soft } from '../soft.ts'
 
 export type Quadruped = {
@@ -138,33 +147,44 @@ export let quadruped = (o: Quadruped): Figure => {
     droop = d
     body.add(tail)
   }
-  let lw = 0.16 * Math.sqrt(bw)
+  let lw = 0.16 * Math.sqrt(bw), half = ll / 2
+  // A thigh, and a shin ending in a hoof or a paw, bending at the knee.
   let leg = (x: number, z: number) =>
-    partOf([
-      [[-lw / 2, -ll, -lw / 2], [lw, ll, lw], shade(hide, 0.8)],
+    limb(
+      [[[-lw / 2, -half - 0.03, -lw / 2], [lw, half + 0.06, lw], hide, 0.05]],
       [
-        [-lw / 2 - 0.005, -ll, -lw / 2 - 0.005],
-        [lw + 0.01, 0.08, lw + 0.01],
-        0x3a2a22,
+        [
+          [-lw * 0.45, -half, -lw * 0.45],
+          [lw * 0.9, half + 0.04, lw * 0.9],
+          shade(hide, 0.8),
+          0.05,
+        ],
+        [
+          [-lw / 2 - 0.005, -half, -lw / 2 - 0.005],
+          [lw + 0.01, 0.08, lw + 0.01],
+          0x3a2a22,
+        ],
       ],
-    ], [x * bw, hip, z * bl])
+      [x * bw, hip, z * bl],
+      [0, -half, 0],
+    )
   let legs = [
     leg(-0.21, 0.38),
     leg(0.21, 0.38),
     leg(-0.21, -0.4),
     leg(0.21, -0.4),
   ]
-  body.add(...legs)
-  let stride = 1 / Math.sqrt(o.legs ?? 1)
+  body.add(...legs.map(([thigh]) => thigh))
+  let pace = 1 / Math.sqrt(o.legs ?? 1)
   let phase = 0
   return {
     root,
     material: m,
     height: top + 0.41 + (o.horns == 'antler' ? 0.45 : 0),
     animate: (a, dt) => {
-      phase += dt * (1.5 + a.speed * 2.6) * stride
+      phase += dt * (1.5 + a.speed * 2.6) * pace
       let amp = Math.min(1, a.speed / 3.5) * 0.7
-      trot(legs, Math.sin(phase) * amp)
+      trot(legs, Math.sin(phase), Math.cos(phase), amp)
       body.position.y = Math.abs(Math.cos(phase)) * 0.05 * amp
       head.rotation.set(Math.sin(a.t * 1.3) * 0.05 * (1 - amp), 0, 0)
       if (tail) tail.rotation.set(droop, Math.sin(a.t * 2.4) * 0.25, 0)

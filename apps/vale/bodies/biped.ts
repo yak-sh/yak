@@ -5,7 +5,17 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Figure } from '../figures.ts'
-import { both, type Box, given, lunge, partOf, shade } from '../parts.ts'
+import {
+  both,
+  type Box,
+  given,
+  type Limb,
+  limb,
+  lunge,
+  partOf,
+  shade,
+  stride,
+} from '../parts.ts'
 import { flash, soft } from '../soft.ts'
 
 export type Biped = {
@@ -80,21 +90,35 @@ export let biped = (o: Biped): Figure => {
   let hips = new THREE.Group()
   hips.position.y = ll
   body.add(hips)
+  // A thigh, and a shin ending in a foot, bending at the knee.
+  let knee = ll / 2
   let leg = (x: number) =>
-    partOf([
-      [
-        [-0.12 * bw, -ll, -0.13 * bw],
-        [0.24 * bw, ll, 0.26 * bw],
+    limb(
+      [[
+        [-0.12 * bw, -knee - 0.03, -0.13 * bw],
+        [0.24 * bw, knee + 0.06, 0.26 * bw],
         shade(garb, 0.8),
-      ],
+        0.06,
+      ]],
       [
-        [-0.13 * bw, -ll, -0.14 * bw],
-        [0.26 * bw, 0.14, 0.32 * bw],
-        shade(skin, 0.8),
+        [
+          [-0.11 * bw, -knee, -0.12 * bw],
+          [0.22 * bw, knee + 0.04, 0.24 * bw],
+          shade(garb, 0.8),
+          0.06,
+        ],
+        [
+          [-0.13 * bw, -knee, -0.14 * bw],
+          [0.26 * bw, 0.14, 0.32 * bw],
+          shade(skin, 0.8),
+          0.06,
+        ],
       ],
-    ], [x * bw, 0, 0])
+      [x * bw, 0, 0],
+      [0, -knee, 0],
+    )
   let legL = leg(-0.15), legR = leg(0.15)
-  hips.add(legL, legR)
+  hips.add(legL[0], legR[0])
   let torso = partOf([
     [[-0.3 * bw, 0, -0.18 * bw], [0.6 * bw, tl, 0.36 * bw], garb],
     [
@@ -120,31 +144,49 @@ export let biped = (o: Biped): Figure => {
   ], [0, 0, 0])
   torso.rotation.x = o.stoop ?? 0
   hips.add(torso)
-  let arm = (x: number, club: boolean) => {
-    let a = partOf([
-      [
-        [-0.1 * bw, -al + 0.08, -0.11 * bw],
-        [0.2 * bw, al - 0.08, 0.22 * bw],
+  // An upper arm, and a forearm ending in a hand, bending at the elbow; a
+  // club, if it has one, is held out before it, head up.
+  let elbow = al / 2
+  let arm = (x: number, club: boolean): Limb => {
+    let [upper, fore] = limb(
+      [[
+        [-0.1 * bw, -elbow - 0.03, -0.11 * bw],
+        [0.2 * bw, elbow + 0.11, 0.22 * bw],
         garb,
+        0.05,
+      ]],
+      [
+        [
+          [-0.095 * bw, -elbow + 0.08, -0.105 * bw],
+          [0.19 * bw, elbow - 0.04, 0.21 * bw],
+          garb,
+          0.05,
+        ],
+        [
+          [-0.1 * bw, -elbow - 0.1, -0.1 * bw],
+          [0.2 * bw, 0.2, 0.2 * bw],
+          skin,
+          0.06,
+        ],
       ],
-      [[-0.1 * bw, -al - 0.1, -0.1 * bw], [0.2 * bw, 0.2, 0.2 * bw], skin],
-    ], [x * bw, tl - 0.08 * bt, 0])
+      [x * bw, tl - 0.08 * bt, 0],
+      [0, -elbow, 0],
+    )
     if (club && o.club != undefined) {
-      // Held out before it, head up.
       let c = partOf(
         [
           [[-0.05, -0.1, -0.05], [0.1, 0.9, 0.1], o.club],
           [[-0.09, 0.5, -0.09], [0.18, 0.36, 0.18], shade(o.club, 0.85)],
         ],
-        [0, -al - 0.02, 0.06],
+        [0, -elbow - 0.02, 0.06],
         0.05,
       )
       c.rotation.x = Math.PI / 4
-      a.add(c)
+      fore.add(c)
     }
-    return a
+    return [upper, fore]
   }
-  let armL = arm(-0.4, false), armR = arm(0.4, true)
+  let [armL, foreL] = arm(-0.4, false), [armR, foreR] = arm(0.4, true)
   torso.add(armL, armR)
   let head = partOf([
     [[-0.17, 0, -0.16], [0.34, 0.32, 0.32], skin],
@@ -162,19 +204,25 @@ export let biped = (o: Biped): Figure => {
     animate: (a, dt) => {
       phase += dt * (1.6 + a.speed * 1.9) / Math.sqrt(bt)
       let amp = Math.min(1, a.speed / 3.5) * 0.8
-      let s = Math.sin(phase)
-      legL.rotation.x = s * amp
-      legR.rotation.x = -s * amp
+      let s = Math.sin(phase), c = Math.cos(phase)
+      stride(legL, s, c, amp)
+      stride(legR, -s, -c, amp)
       armL.rotation.set(-s * amp * 0.7, 0, -0.1)
       armR.rotation.set(s * amp * 0.7, 0, 0.1)
-      body.position.y = Math.abs(Math.cos(phase)) * 0.06 * amp * bt
+      foreL.rotation.x = foreR.rotation.x = -0.25 - amp * 0.3
+      body.position.y = Math.abs(c) * 0.06 * amp * bt
       body.rotation.z = Math.sin(phase) * 0.04 * amp
       head.rotation.set(0, Math.sin(a.t * 0.6) * 0.2 * (1 - amp), 0)
       if (a.swing >= 0) {
-        // Both arms up and down on whatever is in front of it.
+        // Both arms up and down on whatever is in front of it, bent at the
+        // elbow as they rise.
         let up = lunge(a.swing, 0.45)
         armR.rotation.x = 0.4 - up * 3
-        armL.rotation.x = o.club == undefined ? 0.4 - up * 3 : -0.3
+        foreR.rotation.x = -0.2 - up * 1.1
+        if (o.club == undefined) {
+          armL.rotation.x = armR.rotation.x
+          foreL.rotation.x = foreR.rotation.x
+        } else armL.rotation.x = -0.3
         torso.rotation.x = (o.stoop ?? 0) - up * 0.25 + (1 - up) * 0.1
       } else torso.rotation.x = o.stoop ?? 0
       if (a.down) {

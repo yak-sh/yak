@@ -546,6 +546,7 @@ let loop = (t: number) => {
       air: false,
       swing: -1,
       hurt: 0,
+      roll: -1,
       down: false,
       t: t / 1000,
     }, dt)

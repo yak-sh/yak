@@ -199,6 +199,7 @@ export let cast = (
       air: false,
       swing: -1,
       hurt: 0,
+      roll: -1,
       down: false,
       t,
       ...act,
@@ -222,7 +223,8 @@ export let cast = (
       play(
         mine,
         {
-          air: f.body.gait == 'jump' || f.roll >= 0,
+          air: f.body.gait == 'jump',
+          roll: f.roll,
           swing: f.swing,
           hurt: Math.max(0, 1 - (now - mine.hurtAt) / 250),
           down: f.down,
@@ -244,7 +246,8 @@ export let cast = (
         play(
           a,
           {
-            air: b.gait == 'jump' || o.roll >= 0,
+            air: b.gait == 'jump',
+            roll: o.roll,
             swing: now - a.swingAt < 520 ? (now - a.swingAt) / 520 : -1,
             hurt: Math.max(0, 1 - (now - a.hurtAt) / 250),
             down: b.gait == 'down',
