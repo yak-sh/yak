@@ -13,8 +13,8 @@
 //    `<eid>.out` by the wrapper, and survives every restart of the server. The
 //    graph stores the transcript read out of it by @yaks/session's importer,
 //    the same one that reads an interactive harness's own transcript file:
-//    each entry records the file and the line it came from, and the session
-//    how many lines have been read, which is where a resume begins.
+//    each entry records the file and the line it came from, and the log how
+//    many of its lines have been read, which is where a resume begins.
 // 3. The request is an entry. A session asks for a provider, a model and an
 //    effort through the `using` component on its first entry, and the text next
 //    to it is the instruction. There is no HTTP endpoint that launches an agent

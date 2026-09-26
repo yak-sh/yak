@@ -159,3 +159,20 @@ Deno.test('prose alone: what was typed and what the model said', () =>
     await pull(g, t, claude, { prose: true })
     assertEquals(await told(g, ids.run1), ['content', 'content+output'])
   }))
+
+Deno.test('two logs of one session each keep their own entries and their own place', () =>
+  file(async (g, log, path) => {
+    log(typed('one'), typed('two'))
+    let other = `${path}.other`
+    Deno.writeTextFileSync(other, JSON.stringify(typed('elsewhere')) + '\n')
+    await pull(g, await tail(g, path, { session: ids.run1 }), claude)
+    await pull(g, await tail(g, other, { session: ids.run1 }), claude)
+    let said = await g.read(`.entry.session=${ids.run1}&.order=entry.seq&*`)
+    assertEquals(said.map((b) => c(b, 'content')?.body), [
+      'one',
+      'two',
+      'elsewhere',
+    ])
+    assertEquals((await tail(g, path, { session: ids.run1 })).line, 2)
+    assertEquals((await tail(g, other, { session: ids.run1 })).line, 1)
+  }))

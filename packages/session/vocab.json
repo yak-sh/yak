@@ -214,6 +214,31 @@
       },
       "description": "an entry imported from somewhere else — which source, and which line of it"
     },
+    "log": {
+      "component": true,
+      "type": "object",
+      "bare": false,
+      "properties": {
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "death": "cascade",
+          "stamped": true,
+          "description": "the session it is read into"
+        },
+        "source": {
+          "type": "string",
+          "stamped": true,
+          "description": "the file, as its entries' `imported.source` names it"
+        },
+        "consumed": {
+          "type": "number",
+          "stamped": true,
+          "description": "how many of its lines the importer has read; where a resume begins"
+        }
+      },
+      "description": "a file a session is read from, and how far it has been read"
+    },
     "notice": {
       "component": true,
       "type": "object",
@@ -277,10 +302,12 @@
           "death": "detach",
           "description": "who it speaks as — the identity that survives a /clear, where `created.via` is the run"
         },
-        "consumed": {
-          "type": "number",
+        "log": {
+          "type": "string",
+          "ref": "log",
+          "death": "detach",
           "stamped": true,
-          "description": "how many lines of its log the importer has read; where a resume begins"
+          "description": "the log it was first read from, whose entries are named by session and line alone; an entry of any other log also names the file"
         },
         "operator": {
           "type": "boolean",
