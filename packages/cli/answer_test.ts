@@ -135,6 +135,27 @@ Deno.test('a lone entity’s page asks for its links and comments, and leaves bo
   assertStringIncludes(page, 'looks good')
 })
 
+Deno.test('a write’s answer is drawn as its entities now stand', async () => {
+  let shown = async (answer: unknown[], wrote: boolean) => {
+    let lines: string[] = []
+    await show(
+      { tui: false, out: (line) => lines.push(line) },
+      views,
+      vocab,
+      answer as never,
+      {},
+      { lookup: () => [t10] as never, query: () => [] },
+      wrote,
+    )
+    return lines.join('\n').split('\n')[0]
+  }
+  let moved = { entity: { eid: t10.entity.eid }, completed: {} }
+  assertEquals(await shown([moved], true), 'task T-10 done')
+  // Nothing stands under a tombstone's eid: the answer is drawn as it came.
+  let gone = { entity: { eid: t9.entity.eid }, tombstone: {} }
+  assertEquals(await shown([gone], true), await shown([gone], false))
+})
+
 Deno.test('a link in a list reads as the sentence it states', () => {
   assertEquals(
     printed(views, vocab, [

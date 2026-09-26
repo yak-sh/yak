@@ -49,7 +49,7 @@ export type Listed = {
   title?: string
   description?: string
   inputSchema?: Schema
-  annotations?: { title?: string }
+  annotations?: { title?: string; readOnlyHint?: boolean }
   /** what MCP carries beside the schemas — where a tool's two words and its
    * command-line argument layout are sent (see {@link spelling}) */
   _meta?: Record<string, unknown>

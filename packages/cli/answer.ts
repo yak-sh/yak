@@ -359,18 +359,37 @@ export type Source = {
 
 let none: Source = { lookup: () => [], query: () => [] }
 
+/** A write's answer as a person reads it: each entity it changed as that
+ * entity now stands, where it still does. The answer itself is the change as
+ * applied — what `--json` prints — and names only what moved, so drawn as it
+ * is, `task update T-3 done` would be an entity with a `completed` mark and no
+ * title. One that no longer stands (a deletion's tombstone) is drawn as the
+ * answer has it. */
+export let standing = async (
+  answer: Bundle[],
+  from: Source,
+): Promise<Bundle[]> => {
+  let eids = answer.map((b) => b.entity.eid)
+  let now = new Map(
+    (eids.length ? await from.lookup(eids) : []).map((b) => [b.entity.eid, b]),
+  )
+  return answer.map((b) => now.get(b.entity.eid) ?? b)
+}
+
 /** An answer shown the way the command asked — held in the terminal under
  * `--tui`, drawn by `held` where the command has terminal views and a file to
  * read ({@link terminal}), painted where stdout is a terminal, and printed
- * otherwise. */
+ * otherwise. The answer of a tool that `wrote` is drawn {@link standing}. */
 export let show = async (
   c: { tui: boolean; tty?: Tty; out: (line: string) => void },
   views: Registry,
   vocab: Vocab,
-  answer: Bundle[],
+  said: Bundle[],
   held: { views?: Held; db?: string } = {},
   from: Source = none,
+  wrote = false,
 ): Promise<void> => {
+  let answer = wrote ? await standing(said, from) : said
   let [lone] = answer
   let asked = answer.length == 1 ? nearQuery(vocab, lone.entity.eid) : null
   let near = asked ? nearOf(lone.entity.eid, await from.query(asked)) : nothing

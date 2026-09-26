@@ -79,7 +79,9 @@ let vocabOf = async (c: Ctx): Promise<VocabDoc | null> => {
 /**
  * Show a tool's result, and the roster notice the server added beside it
  * (roster.ts). Returns the exit code. A caller holding no tool list passes
- * `null` — a staleness notice still drops the cache.
+ * `null` — a staleness notice still drops the cache. A tool the server did not
+ * mark read-only `wrote`, so its answer is drawn as its entities now stand
+ * (./answer.ts `standing`).
  */
 export let printed = async (
   c: Ctx,
@@ -87,6 +89,7 @@ export let printed = async (
   name: string,
   said: Result,
   args: Record<string, unknown> = {},
+  wrote = false,
 ): Promise<number> => {
   let read = saidBy(said)
   let { text, stale } = read
@@ -129,7 +132,7 @@ export let printed = async (
     await show(c, views, read, answer, {}, {
       lookup: (ids) => asked('graph_show', { ids }),
       query: (q) => asked('graph_query', { q }),
-    })
+    }, wrote)
   } else if (text) c.out(text)
   return 0
 }
@@ -160,6 +163,7 @@ let toolOf = (roster: Roster, t: Listed): Command => ({
         arguments: args,
       }) as Result,
       args,
+      !t.annotations?.readOnlyHint,
     ),
 })
 

@@ -259,6 +259,7 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
             lookup: (eids) => host.graph.storage.tx((tx) => tx.get(eids)),
             query: (q) => host.graph.read(q),
           },
+          !declared.readOnly,
         )
       }
       // A refusal is data, not an exception: the text is printed either way
