@@ -227,6 +227,13 @@ body {
   box-shadow: 0 1px 0 var(--deep);
 }
 
+/* A button that cannot be pressed yet looks it, and does not give. */
+.Btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
 /* The glass over the game. */
 .Hud {
   position: fixed;

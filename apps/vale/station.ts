@@ -109,7 +109,7 @@ export let station = (root: HTMLElement, acts: Acts) => {
     let button = !able(r, trades[r.at].lvl)
       ? `<span class=Pack_Hint>Asks ${trade.name} ${least(r.tier)}</span>`
       : making
-      ? `<button class="Btn Btn-go Craft_Go" disabled style="--k:${
+      ? `<button class="Btn Btn-go Craft_Go" style="--k:${
         making.k.toFixed(3)
       }">${STATIONS[r.at].doing}…</button>`
       : `<button class="Btn Btn-go" data-do=make${
