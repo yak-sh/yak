@@ -1084,6 +1084,14 @@ let api = async (
     >
     return Response.json({ ...r, person: who.person, role: who.role })
   }
+  // Every word this app's store speaks (graph.ts `/vocab.json`), the byline
+  // `created` as much as the app's own: what a page keeping its own copy of
+  // the store (@yaks/client) loads before it opens, so it speaks what its store
+  // speaks. A reader's, like the rows.
+  if (path == '/vocab.json') {
+    if (!mayRead) return refused('not_a_reader')
+    return store('/vocab.json', {}, headers)
+  }
   if (path == '/query') {
     if (!mayRead) return refused('not_a_reader')
     // The page writes its filter as the query string itself and the Store takes

@@ -1616,6 +1616,11 @@ export class Store {
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
     if (path == '/vocab') return this.#vocabDoor(request)
+    // Every word this store speaks, as the documents its vocabulary was loaded
+    // from: the platform's and the app's own together, where `/vocab` is the
+    // app's alone. A page's @yaks/client loads them, so it routes and admits
+    // what this store does and never declares a word again (T-40511).
+    if (path == '/vocab.json') return Response.json(this.#vocab.docs)
     // The three slots beside the vocabulary: the words this app uses but does
     // not home (T-32728), the tools it declares (T-32685), and what the object
     // weighs. None is graph data — a declaration holds no rows and a byte count

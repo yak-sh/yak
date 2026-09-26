@@ -10,6 +10,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { loadVocab } from '@yaks/vocab'
 import { SUBJECT } from './invite.ts'
 import {
   accepted,
@@ -532,6 +533,18 @@ Deno.test('an app says who may read it and who may write it', async () => {
     let shut = await k.at('club70.yaks.app', '/diary/api/query?.doc')
     assertEquals(shut.status, 401)
     assertEquals((await shut.json()).error.code, 'not_a_reader')
+    // A page loads the words its store speaks, the byline the store stamps as
+    // much as its own, and asks them as the store does; a stranger is told
+    // none of them.
+    let spoken = await k.at('club70.yaks.app', '/diary/api/vocab.json', {
+      headers: { cookie },
+    })
+    assertEquals(loadVocab(await spoken.json()).aim('created.by'), [
+      { comp: 'created', prop: 'by' },
+    ])
+    let unspoken = await k.at('club70.yaks.app', '/diary/api/vocab.json')
+    assertEquals(unspoken.status, 401)
+    await unspoken.body?.cancel()
     assertEquals((await anyone('diary').post(line('no'))).status, 401)
     assertEquals((await owner('diary').get('.doc')).length, 1)
 

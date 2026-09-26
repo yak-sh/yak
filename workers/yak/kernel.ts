@@ -71,6 +71,7 @@
 //                             page, whose address is the bare hostname
 //     /<app>/api/graph        the store's identity, plus who is asking
 //     /<app>/api/query        the filter grammar over the app's store
+//     /<app>/api/vocab.json   every word the app's store speaks, as documents
 //     /<app>/api/apply        a batch into the app's store (a writer)
 //     /<app>/api/files/<p>    PUT one file into the app's blob store (a writer)
 //     /<app>/<path>           the app's file at that path, a directory's index

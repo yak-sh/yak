@@ -504,6 +504,10 @@ directly from `curl`, from another page, or from your own `worker.js` through
     → {"person": null, "name": null, "role": null, "reads": true,
        "writes": false, "signIn": "https://yaks.app/login?return=…"}
 
+    GET ./api/vocab.json
+    → [ {"title": "spine", "$defs": {"entity": {…}, "created": {…}, …}}, …,
+        {"$defs": {"recipe": {…}}} ]
+
     POST ./api/blob
     content-type: image/jpeg          ← the file's own type
     x-yak-name: cake.jpg              ← optional, percent-encoded
@@ -513,6 +517,12 @@ directly from `curl`, from another page, or from your own `worker.js` through
 
     GET ./api/blob/<eid>
     → the bytes, with that mime, cached forever
+
+`./api/vocab.json` is every word the app's store speaks, the platform's and the
+app's own, as the JSON Schema documents the store loaded. A page that keeps a
+copy of its store in the browser (`@yaks/client`) loads them with `loadVocab`
+before it opens, so it asks and writes exactly what the store takes —
+`created.by` included.
 
 The blob endpoint accepts a 64-character lowercase hex address and nothing else;
 anything else is `no_such_file`. Bytes come back with the mime type and the
