@@ -19,8 +19,9 @@
   <!-- @yaks/client, @yaks/rtc and @yaks/vocab as JSR holds them, each
        bundled by esm.sh with what it imports, so it arrives in one file rather
        than a chain of them; the app's own code and three.js are compiled from
-       main.ts at deploy. Each is fetched while main.ts is, and so are the
-       store's words, which main.ts waits for. -->
+       main.ts at deploy. What main.ts waits for is fetched while main.ts is:
+       @yaks/client, @yaks/vocab and the store's words (api/vocab.json).
+       @yaks/rtc waits for the first voice (voicebox.ts). -->
   <script type=importmap>
   {
     "imports": {
@@ -31,7 +32,6 @@
   }
   </script>
   <link rel=modulepreload href="https://esm.sh/jsr/@yaks/client@0.2.5?bundle">
-  <link rel=modulepreload href="https://esm.sh/jsr/@yaks/rtc@0.2.6?bundle">
   <link rel=modulepreload href="https://esm.sh/jsr/@yaks/vocab@0.2.5?bundle">
   <link rel=preload href=api/vocab.json as=fetch crossorigin>
   <canvas class=Stage></canvas>
