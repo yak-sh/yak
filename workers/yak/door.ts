@@ -58,6 +58,9 @@ export let GIT_STORE = 'yak/git'
 export type Stub = { fetch(req: Request): Promise<Response> }
 export type Namespace = {
   idFromName(name: string): unknown
+  // An object by the id the runtime gave it, for one nothing names any more
+  // (orphan.ts). A stand-in namespace need not offer it.
+  idFromString?(id: string): unknown
   get(id: unknown): Stub
 }
 

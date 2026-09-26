@@ -23,7 +23,7 @@ import {
 } from '@sentry/core'
 import { blobSchema } from '@yaks/blob'
 import type { Bundle } from '@yaks/graph'
-import type { Wire } from '@yaks/durable-object'
+import { reserved, type Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { edgeEid } from '@yaks/edge'
 import {
@@ -703,6 +703,25 @@ Deno.test('a raw index creation failure still refuses an empty store', async () 
   let now = newer(ctx, PLATFORM_STORE)
   await refused(now, 'index creation failed')
   assertEquals(marker(ctx), null)
+})
+
+Deno.test('an orphan is deleted whole, and an object with a name or an entity is not', async () => {
+  let away = (now: ReturnType<typeof newer>) =>
+    now.door('/orphan', { method: 'DELETE', headers: { 'x-yak-kernel': '1' } })
+  let tables = (ctx: State) =>
+    named(ctx, { type: 'table' }).filter((t) => !reserved(t))
+  // Fleet-shaped, with nothing in it and no name left in its memory.
+  let lost = state()
+  older(lost, 'ada/cookbook')
+  lost.slots.clear()
+  assertEquals((await away(newer(lost, ''))).status, 200)
+  assertEquals(tables(lost), [])
+  let homes = state()
+  await seedHomes(homes)
+  let now = newer(homes, PLATFORM_STORE)
+  let before = tables(homes)
+  assertEquals((await away(now)).status, 409)
+  assertEquals(tables(homes), before)
 })
 
 Deno.test('a marker write failure rolls back the pass, even for a thrown value', async () => {

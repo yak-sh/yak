@@ -67,6 +67,7 @@ import {
   feeNow,
   keepClient,
   linkFor,
+  orphan,
   renewing,
   rpc,
   saidBy,
@@ -377,6 +378,25 @@ export let runs = (
         ? await feeNow(at.session)
         : await setFee(at.session, Number(bps))
       return [said(call, `${now.bps} bps — ${now.rate} of each sale`)]
+    }),
+
+    // A Store object nothing names and nothing is in, deleted whole by its id
+    // (workers/yak/orphan.ts). The platform's act, so the flag says whose.
+    admin_orphan: verb(async (call, vault, keep) => {
+      let a = argsOf(call)
+      if (a.owner !== true && a.admin !== true) {
+        throw new Refused(
+          'an orphan is the platform’s to delete: add --admin (an agent) or ' +
+            '--owner (Jeff).',
+        )
+      }
+      let id = word(a, 'id') ?? ''
+      if (!/^[0-9a-f]{64}$/.test(id)) {
+        throw new CallError('id', `not a Store object id: ${id || '(none)'}`)
+      }
+      let at = acting(vault, a, keep, host.state)
+      await orphan(at.session, id)
+      return [said(call, `deleted ${id}`)]
     }),
 
     // The tunnel a space has to a machine (workers/yak/tunnel.ts). A token the

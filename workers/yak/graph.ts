@@ -187,6 +187,7 @@ import {
   documented,
   install,
   MARK,
+  orphaned,
   rebuild,
   recut,
   Refused as Unreconciled,
@@ -1487,6 +1488,13 @@ export class Store {
    * sockets it inherited.
    */
   async fetch(request: Request): Promise<Response> {
+    // An object the fleet-shaped store left behind with no name and nothing in
+    // it, deleted whole (orphan.ts). Asked before `#ready`, which would carry
+    // it first. Kernel only: a client never writes a store's path.
+    if (
+      new URL(request.url).pathname == '/orphan' &&
+      request.headers.get('x-yak-kernel') == '1'
+    ) return this.#orphan()
     if (logged(request)) return this.#write(request)
     let no = await this.#ready(request)
     if (no) return no
@@ -2034,6 +2042,19 @@ export class Store {
     if (name) this.#put('name', name)
     this.#boot()
     if (this.#refused) return this.#stalled()
+    return Response.json({ ok: true })
+  }
+
+  // Everything in an orphan deleted, and nothing written after it, so the
+  // object ceases to exist. An object with a name or an entity is refused.
+  async #orphan(): Promise<Response> {
+    if (this.#get('name') || !orphaned(this.#ctx.storage)) {
+      return json({
+        error: 'Refused',
+        message: 'not an orphan: this object has a name or holds an entity',
+      }, 409)
+    }
+    await this.#ctx.storage.deleteAll()
     return Response.json({ ok: true })
   }
 

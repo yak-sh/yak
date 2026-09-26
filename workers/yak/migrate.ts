@@ -402,6 +402,15 @@ export type Report = {
 export let stale = (storage: DurableStorage): boolean =>
   stands(driver(storage), 'journal_tx')
 
+/** Whether this object is fleet-shaped with nothing in it and no name to carry
+ * it under: its old memory names nothing and no entity is in it. Such an
+ * object is deleted whole (graph.ts `#orphan`), never carried. */
+export let orphaned = (storage: DurableStorage & { kv?: Slots }): boolean => {
+  let d = driver(storage)
+  return stale(storage) && !storage.kv?.get('name') &&
+    (!stands(d, 'entity') || !tally(d, 'entity'))
+}
+
 /**
  * Every definition of one type that is this object's — the single place the
  * pass learns what tables there are.
