@@ -35,13 +35,7 @@ let asked = (
   {
     vocab,
     address: () => new Map(),
-    storage: {
-      tx: (run: (tx: { get: (eids: string[]) => Bundle[] }) => unknown) =>
-        run({
-          get: (eids: string[]) =>
-            rows.filter((b) => eids.includes(b.entity.eid)),
-        }),
-    },
+    get: (eids: string[]) => rows.filter((b) => eids.includes(b.entity.eid)),
     read: (q: string) =>
       rows.filter((b) =>
         Object.entries(b.$match ?? {}).every(([k]) => String(q).includes(k))

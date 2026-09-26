@@ -135,6 +135,7 @@ Deno.test('done stays async over asynchronous storage, for true and false answer
   let asyncStorage: import('@yaks/graph').Storage = {
     ...s,
     read: async (...args) => await s.read(...args),
+    get: async (eids) => await s.get(eids),
     tx: (body) => Promise.resolve(s.tx(body)),
   }
   for (

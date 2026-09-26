@@ -38,10 +38,7 @@ let heard = async (rows: Bundle[], session: string) => {
         notified: { component: true, type: 'object', properties: {} },
       },
     }], [idKeywords]),
-    storage: {
-      tx: (run: (tx: { get: () => Bundle[] }) => unknown) =>
-        run({ get: () => [] }),
-    },
+    get: () => [],
     apply: (bundles: Bundle[]) => (applied.push(...bundles), bundles),
     read: () => rows,
   } as unknown as Graph
