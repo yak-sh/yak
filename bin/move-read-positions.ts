@@ -8,10 +8,11 @@
 // A harness id can name two files. Those sessions hold no entries today: their
 // lines collided, and what was read in was deleted. The file the position
 // counts becomes the session's first log, the other gets a log of its own, and
-// both stay read to their end. Once a write to a deleted entity revives it,
-// `--reread` sets every log of a session with two back to its first line, so
-// the importer reads them in again: the first log's lines under the ids their
-// entries had, the other's under ids naming its file.
+// both stay read to their end. `--reread` then reads every log of a session
+// with two in again from its first line, its prose only, as the importer reads
+// an old log: the first log's lines under the ids their entries had, which a
+// write brings back, and the other's under ids naming its file. It holds the
+// session duty's lease meanwhile, so the importer reads none of them.
 //
 // Hold the server down while the move runs: the importers read positions.
 //
@@ -32,7 +33,9 @@ import {
 } from '@yaks/sql'
 import { read } from '../packages/cli/config.ts'
 import { close, opened } from '../packages/cli/local.ts'
-import { logOf } from '../packages/session/tail.ts'
+import { holding } from '@yaks/effects'
+import { claude } from '@yaks/session'
+import { logOf, pull, tail } from '../packages/session/tail.ts'
 import { claudeProjects, transcripts } from '../packages/session/service.ts'
 import { paths } from '../packages/process/run.ts'
 
@@ -54,7 +57,7 @@ let lines = (file: string) => {
   }
 }
 
-// The positions to move, or, to read again, every log of a session with two.
+// Each position, moved onto the log it counts.
 let move = async (): Promise<Bundle[]> => {
   let files = new Map<string, string[]>()
   for (let f of transcripts(claudeProjects()!)) {
@@ -113,39 +116,62 @@ let move = async (): Promise<Bundle[]> => {
   return out
 }
 
-let again = async (): Promise<Bundle[]> => {
-  let logs = await g.read('.log&?log')
-  let count = new Map<string, number>()
-  for (let b of logs) {
-    let s = String((b.log as { session: string }).session)
-    count.set(s, (count.get(s) ?? 0) + 1)
-  }
-  let back = logs.filter((b) =>
-    count.get(String((b.log as { session: string }).session))! > 1
+// Every log of a session with two, read in again from its first line.
+let again = async () => {
+  let logs = (await g.read('.log&?log')).map((b) =>
+    b.log as { session: Eid; source: string }
   )
+  let count = new Map<string, number>()
+  for (let l of logs) count.set(l.session, (count.get(l.session) ?? 0) + 1)
+  let back = logs.filter((l) => count.get(l.session)! > 1)
+  let held = async () =>
+    (await g.read(
+      `.entry.session=${[...new Set(back.map((l) => l.session))]}&?entry`,
+    )).length
   console.log(
     `${back.length} logs of ${
-      [...count.values()].filter((n) => n > 1).length
-    } sessions with two, read again from their first line`,
+      new Set(back.map((l) => l.session)).size
+    } sessions with two; ${await held()} entries held`,
   )
-  return back.map((b) => ({ entity: b.entity, log: { consumed: 0 } }))
+  if (!write) return
+  let said = host.config.person
+  let person = said && ((await g.address([said])).get(said) ?? said) as Eid
+  let o = {
+    holder: host.me,
+    signal: new AbortController().signal,
+    poll: 100,
+    gone: host.gone,
+  }
+  await holding(g, '@yaks/session', o, async () => {
+    for (let l of back) {
+      await g.apply([{
+        entity: { eid: logOf(l.source) },
+        log: { consumed: 0 },
+      }], {
+        trusted: true,
+      })
+      let t = await tail(g, l.source, { session: l.session })
+      await pull(g, t, claude, { prose: true, person, final: true })
+    }
+  })
+  console.log(`read in again; ${await held()} entries held`)
 }
 
-let reread = flags.includes('--reread')
-let out = reread ? await again() : await move()
-if (write) {
-  for (let i = 0; i < out.length; i += 200) {
-    await g.apply(out.slice(i, i + 200), { trusted: true })
-  }
-  if (!reread) {
+if (flags.includes('--reread')) await again()
+else {
+  let out = await move()
+  if (write) {
+    for (let i = 0; i < out.length; i += 200) {
+      await g.apply(out.slice(i, i + 200), { trusted: true })
+    }
     run({
       t: 'update',
       table: 'session',
       set: { consumed: val(null) },
       where: notNull(col('consumed')),
     })
+    console.log('written')
   }
-  console.log('written')
 }
 db.close()
 await close(0)
