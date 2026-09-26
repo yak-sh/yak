@@ -2,13 +2,14 @@
 // gives them (abilities.ts), each on its key, F, 1, 2 and 3, painted on the
 // glass's pads (hud.ts), which on a phone sit under the right thumb about the
 // strike. What is left of an ability's cooldown is swept over it, with the
-// seconds, and it flashes when it is ready again. A slot nothing fills says
-// what would fill it. Each slot is written only when what it shows changed.
-import { ABILITIES } from './abilities.ts'
+// seconds, and it flashes when it is ready again; one a skill made stronger
+// (skills.ts) wears a star. A slot nothing fills says what would fill it.
+// Each slot is written only when what it shows changed.
 import { HANDLES } from './arms.ts'
 import { type Action, keysOf } from './input.ts'
 import { cap } from './panel.ts'
 import type { Frame } from './play.ts'
+import { formOf, SKILLS } from './skills.ts'
 
 // Each slot's action, and the key it shows.
 let ACTS: Action[] = ['strike', 'ability1', 'ability2', 'ability3']
@@ -26,23 +27,29 @@ let slotOf = (f: Frame, i: number) => {
       says: `${h.name}: strike (F or click)`,
       cd: 0,
       s: 0,
+      strong: false,
     }
   }
   let id = f.sheet.abilities[i - 1] ?? ''
-  let a = ABILITIES[id]
+  let a = formOf(id, f.sheet.learned)
   if (!a) {
     let says = i < 3
       ? 'Hold a weapon: each kind gives two abilities.'
       : k.hands == 2
       ? 'Both hands are on your weapon.'
       : 'A shield, a tome or a torch in your other hand gives one more.'
-    return { id, icon: '', says, cd: 0, s: 0 }
+    return { id, icon: '', says, cd: 0, s: 0, strong: false }
   }
   let left = f.cool[id] ?? 0
+  let by = f.sheet.learned.filter((k) => SKILLS[k].ability == id)
+    .map((k) => SKILLS[k].name)
   return {
     id,
     icon: a.icon,
-    says: `${a.name} (${keyOf(i)}): ${a.says}`,
+    says: `${a.name} (${keyOf(i)}): ${a.says}${
+      by.length ? ` Made stronger by ${by.join(' and ')}.` : ''
+    }`,
+    strong: by.length > 0,
     cd: Math.round((left / a.cool) * 50) / 50,
     s: Math.ceil(left / 1000),
   }
@@ -76,6 +83,7 @@ export let bar = (pads: HTMLElement[]) => {
         if (sl.left) sl.left.textContent = s.s ? String(s.s) : ''
         sl.b.classList.toggle('Pad-empty', !!i && !s.icon)
         sl.b.classList.toggle('Pad-doing', doing)
+        sl.b.classList.toggle('Pad-strong', s.strong)
         // Ready again: a flash.
         if (sl.cd > 0 && !s.cd && s.id == sl.id) {
           sl.b.classList.remove('Pad-ready')

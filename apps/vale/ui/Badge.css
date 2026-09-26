@@ -1,6 +1,8 @@
-/* A little pill beside a name: a level. */
+/* A little pill beside a name: a level, gold while skill points wait to be
+   spent (board.ts). */
 .Badge {
   --face: var(--deep);
+  --tint: #fff;
   flex: none;
   padding: 0.05rem 0.5rem;
   border-radius: var(--round);
@@ -8,6 +10,11 @@
   font-size: 0.8rem;
   font-weight: 600;
   line-height: 1.35;
-  color: #fff;
+  color: var(--tint);
   white-space: nowrap;
+}
+
+.Badge-points {
+  --face: var(--gold);
+  --tint: var(--ink);
 }

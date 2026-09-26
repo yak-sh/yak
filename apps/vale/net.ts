@@ -173,6 +173,8 @@ export let connect = (base: URL) => {
       used: c.watch(`.used.by=${q}`),
       journal: c.watch(`.journal.player=${q}`),
       equip: c.watch(`.equip.player=${q}`),
+      learned: c.watch(`.learned.player=${q}`),
+      respec: c.watch(`.respec.player=${q}`),
     }
   }
 

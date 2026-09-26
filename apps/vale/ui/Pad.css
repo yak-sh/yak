@@ -107,6 +107,24 @@
   }
 }
 
+/* An ability a skill made stronger (skills.ts): a star at its shoulder. */
+.Pad_Star {
+  position: absolute;
+  top: -0.15rem;
+  right: -0.15rem;
+  z-index: 1;
+  display: none;
+  font-size: 0.85rem;
+  font-style: normal;
+  line-height: 1;
+  color: var(--gold);
+  text-shadow: var(--text-shadow);
+
+  .Pad-strong & {
+    display: block;
+  }
+}
+
 /* The seconds a cooldown has still to run, over the sweep. */
 .Pad_Left {
   position: absolute;

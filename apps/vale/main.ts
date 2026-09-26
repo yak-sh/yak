@@ -5,13 +5,14 @@
 // game on the graph (play.ts), the work at the nodes and the stations
 // (work.ts), the stage (cast.ts, nodes.ts), the bits and numbers (fx.ts), the
 // glass (hud.ts, and its action bar, bar.ts), what was said (chatbox.ts) and
-// the panels over it (map.ts, pack.ts, station.ts, menu.ts). When the hero
-// walks off the end of a road, the page grows the level beyond and carries on
-// there.
+// the panels over it (map.ts, pack.ts, board.ts, station.ts, menu.ts). When
+// the hero walks off the end of a road, the page grows the level beyond and
+// carries on there.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { ABILITIES, type Ability } from './abilities.ts'
 import { bar } from './bar.ts'
+import { board } from './board.ts'
 import { BEASTS } from './beasts.ts'
 import { aim, bearing, type Cam, steer } from './cam.ts'
 import { cast } from './cast.ts'
@@ -30,6 +31,7 @@ import { ITEMS } from './items.ts'
 import { HOME, LEVELS } from './levels.ts'
 import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { type Event, type Frame, game, type Vec3 } from './play.ts'
+import { formOf, SKILLS } from './skills.ts'
 import { sound } from './sound.ts'
 import { station } from './station.ts'
 import { voices } from './voicebox.ts'
@@ -136,6 +138,17 @@ let m = map(h.panels.map)
 let p = pack(h.panels.pack, { wear: g.wear, take: g.take })
 let bench = station(h.panels.craft, { make: toil.make })
 let actions = bar(h.acts)
+let skills = board(h.panels.skills, {
+  learn: (id) => {
+    g.learn(id)
+    h.toast(`${SKILLS[id].icon} ${SKILLS[id].name} learned`, 'Toast-loot')
+    sound.quest()
+  },
+  respec: () => {
+    g.respec()
+    h.toast('Every skill forgotten. Spend the points again.')
+  },
+})
 
 // The level on show, and what is drawn of it: grown again when the hero goes
 // off the end of a road, while the frame waits (`away`).
@@ -505,8 +518,11 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     stage.fly(e.kind, e.from, e.to, e.ms)
     sound.whiff(net.hero)
   } else if (e.type == 'ability') {
-    let a = ABILITIES[e.id]
-    if (e.by != net.hero) stage.doing(e.by, e.id)
+    // Mine as my skills make it; the others' as the row has it.
+    let mine = e.by == net.hero
+    let a = (mine && last ? formOf(e.id, last.sheet.learned) : undefined) ??
+      ABILITIES[e.id]
+    if (!mine) stage.doing(e.by, e.id)
     let foot = p(e.at)
     float(`${a.icon} ${a.name}`, foot.clone().setY(foot.y + 2.5), 'ability')
     flourish(a, foot, e.yaw)
@@ -755,6 +771,7 @@ let loop = (t: number) => {
       h.work(f.talk ? null : job)
       m.show(f, v, job.nodes)
       p.show(f)
+      skills.show(f)
       // Walked off from the station its sheet is open at: it folds away.
       if (bench.at && job.bench?.craft != bench.at) bench.close()
       bench.show(f.sheet, job)

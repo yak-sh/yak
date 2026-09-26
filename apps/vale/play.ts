@@ -57,6 +57,7 @@ import {
   xpOf,
 } from './rules.ts'
 import { type Body, inVillage, prowl, rest, turn, walk } from './sim.ts'
+import { canLearn, formOf, learnedOf, pointsOf, skilled } from './skills.ts'
 import { aimOf, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
 import { groundAt, type Vale } from './terrain.ts'
 
@@ -103,7 +104,7 @@ export type Event =
   }
 
 /** Where one player stands with the vale: what they have earned, carry and
- * wear, and how they fight in it. */
+ * wear, the skills they chose, and how they fight with all of it. */
 export type Sheet = {
   name: string
   xp: number
@@ -117,6 +118,10 @@ export type Sheet = {
   firsts: { slot: Slot; item: string }[]
   /** the abilities on the bar's three slots, by id, or empty */
   abilities: string[]
+  /** the skills they know, in the order learned (skills.ts), and the points
+   * they have still to spend */
+  learned: string[]
+  points: number
   quests: ReturnType<typeof questsOf>
 }
 
@@ -448,8 +453,9 @@ export let game = (
     let slain = net.mine('slain'), items = net.mine('item')
     let used = net.mine('used'), journal = net.mine('journal')
     let equip = net.mine('equip')
+    let learning = net.mine('learned'), respecs = net.mine('respec')
     let name = str(comp(c.ent(net.hero ?? ''), 'player').name, 'Wanderer')
-    let key = [slain, items, used, journal, equip, name]
+    let key = [slain, items, used, journal, equip, learning, respecs, name]
     if (sheet && key.every((k, i) => k == sheetKey[i])) return sheet
     sheetKey = key
     let kills = slain.map((b): Slain => {
@@ -478,7 +484,15 @@ export let game = (
     let xp = xpOf(kills, QUESTS, entries)
     let lvl = levelOf(xp)
     let worn = wornOf(rows, bag)
-    let kit = kitOf(worn)
+    let learned = learnedOf(
+      learning.map((b) => {
+        let l = comp(b, 'learned')
+        return { skill: str(l.skill), at: num(l.at) }
+      }),
+      respecs.map((b) => num(comp(b, 'respec').at)),
+      lvl,
+    )
+    let kit = skilled(kitOf(worn), learned, maxHp(lvl))
     sheet = {
       name,
       xp,
@@ -489,6 +503,8 @@ export let game = (
       kit,
       firsts: firsts(rows, bag),
       abilities: abilitiesOf(worn),
+      learned,
+      points: pointsOf(lvl) - learned.length,
       quests: questsOf(QUESTS, entries, kills, bag),
     }
     return sheet
@@ -564,6 +580,24 @@ export let game = (
       let me = net.hero, slot = ITEMS[kind]?.slot
       if (!me || !slot || !RACK.includes(kind)) return
       wear(me, slot, keepItem(me, kind, 1, net.now()))
+    },
+    /** spend a point on a skill, if one is left and it can be learned */
+    learn: (skill: string) => {
+      let me = net.hero, s = sheet
+      if (!me || !s || !canLearn(skill, s.learned, s.lvl)) return
+      net.keep({
+        entity: { eid: crypto.randomUUID() },
+        learned: { player: me, skill, at: net.now() },
+      })
+    },
+    /** forget every skill, to spend the points again: by a village's fire */
+    respec: () => {
+      let me = net.hero
+      if (!me) return
+      net.keep({
+        entity: { eid: crypto.randomUUID() },
+        respec: { player: me, at: net.now() },
+      })
     },
     /** take up a quest */
     accept: (q: Quest) => {
@@ -1030,7 +1064,7 @@ export let game = (
         now - asked.at < k.pace + EARLY
       ) {
         let id = s.abilities[asked.slot - 1] ?? ''
-        let a = ABILITIES[id]
+        let a = formOf(id, s.learned)
         asked = { slot: 0, at: -1e9 }
         let far = a?.dash ??
           (a?.shape == 'one' || a?.shape == 'arc' ? a.far ?? 0 : 0)
@@ -1112,7 +1146,7 @@ export let game = (
       }
       if (!struck && !dash && now - swingAt >= k.pace * LAND) {
         struck = true
-        let a = ABILITIES[doing]
+        let a = formOf(doing, s.learned)
         let aim = mobs.find((m) => m.eid == aimed) ?? null
         let taken = a
           ? takenBy(a, mobs, body, k, aim)

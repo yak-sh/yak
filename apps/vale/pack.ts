@@ -12,6 +12,7 @@ import { ITEMS, type Thing } from './items.ts'
 import type { Panel } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { maxHp, power } from './rules.ts'
+import { skilled } from './skills.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -20,10 +21,10 @@ export type Acts = {
   take: (kind: string) => void
 }
 
-// What a hero of level `lvl` wearing `worn` does, in the numbers a sheet
-// shows.
-let numbers = (lvl: number, worn: Worn) => {
-  let k = kitOf(worn)
+// What a hero would do wearing `worn`, with their level and skills, in the
+// numbers a sheet shows.
+let numbers = ({ lvl, learned }: Sheet, worn: Worn) => {
+  let k = skilled(kitOf(worn), learned, maxHp(lvl))
   return {
     blow: Math.round(power(lvl, k.dmg) * (1 + k.force)),
     pace: k.pace / 1000,
@@ -154,10 +155,10 @@ export let pack = (panel: Panel, acts: Acts) => {
     let kind = from == 'worn' ? s.worn[key as Slot]?.kind ?? '' : key
     let t = ITEMS[kind]
     if (!t) return `<p class=Pack_Hint>Nothing worn there.</p>`
-    let now = numbers(s.lvl, s.worn)
+    let now = numbers(s, s.worn)
     let then = from == 'worn'
-      ? numbers(s.lvl, bare(s.worn, key))
-      : numbers(s.lvl, trying(s.worn, kind))
+      ? numbers(s, bare(s.worn, key))
+      : numbers(s, trying(s.worn, kind))
     let sort = sortOf(t)
     let hands = HANDLES[t.family ?? '']?.hands == 2 ? ' · both hands' : ''
     let what = t.slot
@@ -201,7 +202,7 @@ export let pack = (panel: Panel, acts: Acts) => {
   }
 
   let draw = (s: Sheet, f: Frame) => {
-    let n = numbers(s.lvl, s.worn)
+    let n = numbers(s, s.worn)
     let worn = SLOTS.map((slot) => {
       let h = s.worn[slot], t = h && ITEMS[h.kind]
       let on = picked?.from == 'worn' && picked.key == slot

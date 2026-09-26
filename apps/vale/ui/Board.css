@@ -1,0 +1,89 @@
+/* The skill board (board.ts), a pack whose tiles are skills: the three
+   disciplines side by side, each skill a tile in its row, gold once learned,
+   dim until it can be. */
+.Board {
+  width: min(34rem, 100cqw - 2rem);
+}
+
+.Board_Cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.Board_Col {
+  display: grid;
+  align-content: start;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.Board_Head {
+  display: grid;
+  line-height: 1.2;
+  text-align: center;
+
+  & b {
+    color: var(--deep);
+  }
+
+  & small {
+    font-size: 0.66rem;
+    color: var(--faint);
+  }
+}
+
+.Board_Row {
+  display: flex;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.Board_Skill {
+  --face: var(--well);
+  --outline: inset 0 -3px 0 color-mix(in srgb, var(--rim) 50%, transparent);
+  display: grid;
+  flex: 1;
+  justify-items: center;
+  min-width: 0;
+  max-width: 4.2rem;
+  padding: 0.25rem 0.1rem 0.3rem;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: var(--face);
+  box-shadow: var(--outline);
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+
+  & i {
+    font-size: 1.3rem;
+    font-style: normal;
+    line-height: 1.2;
+  }
+
+  & span {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.Board_Skill-known {
+  --face: #fbe7a8;
+  --outline: inset 0 0 0 2px var(--gold),
+    inset 0 -3px 0 color-mix(in srgb, var(--amber) 35%, transparent);
+}
+
+.Board_Skill-shut {
+  opacity: 0.45;
+}
+
+.Board_Skill-on {
+  --face: #fff3c4;
+  --outline: inset 0 0 0 2px var(--deep);
+  opacity: 1;
+}

@@ -80,13 +80,13 @@ let MICS: Record<Mic, string> = {
 }
 
 /** The panels the glass holds, and the keys that open them. Crafting opens
- * at a station (station.ts). Skills (T-40741) and trade (T-40758) stand
- * ready, empty and out of reach until their work lands. */
+ * at a station (station.ts). Trade (T-40758) stands ready, empty and out of
+ * reach until its work lands. */
 export let SHEETS = {
   map: { title: 'Map', keys: ['KeyM'] },
   pack: { title: 'Pack', keys: ['KeyB', 'KeyI'] },
   menu: { title: 'Menu', keys: ['Escape'] },
-  skills: { title: 'Skills' },
+  skills: { title: 'Skills', keys: ['KeyK'] },
   craft: { title: 'Crafting' },
   trade: { title: 'Trade' },
 } satisfies Record<string, Spec>
@@ -174,6 +174,15 @@ export let hud = (
     panel.pack.toggle,
     panel.pack,
   )
+  // The skill board (board.ts), dotted while a point waits to be spent.
+  let skills = tray(
+    'skills',
+    'sparkles',
+    'Your skills',
+    cap(SHEETS.skills.keys[0]),
+    panel.skills.toggle,
+    panel.skills,
+  )
   let micKey = cap(keysOf('mic')[0])
   let mic = tray('mic', 'micOff', MICS.off, micKey, () => {})
   tray(
@@ -210,7 +219,11 @@ export let hud = (
   pad('strike', glyph('strike'), 'Strike')
   // The abilities' slots, which bar.ts paints.
   let abilities = (['ability1', 'ability2', 'ability3'] as const).map((a) =>
-    pad(a, '<span class=Pad_Icon></span><b class=Pad_Left></b>', 'Ability')
+    pad(
+      a,
+      '<span class=Pad_Icon></span><b class=Pad_Left></b><i class=Pad_Star>✦</i>',
+      'Ability',
+    )
   )
   pad('dodge', glyph('dodge'), 'Dodge')
   pad('jump', glyph('jump'), 'Jump')
@@ -366,9 +379,11 @@ export let hud = (
       put(
         'vitals',
         vitals,
-        `<div class=Vitals_Top><b class=Vitals_Name>${
-          esc(s.name)
-        }</b><span class=Badge>Level ${s.lvl}</span></div>` +
+        `<div class=Vitals_Top><b class=Vitals_Name>${esc(s.name)}</b>${
+          s.points
+            ? `<span class="Badge Badge-points" title="Skill points to spend (K)">Level ${s.lvl} · ✦ ${s.points}</span>`
+            : `<span class=Badge>Level ${s.lvl}</span>`
+        }</div>` +
           meter(hp / s.max, 'Bar-hp', `${hp} / ${s.max}`) +
           meter(
             (s.xp - from) / Math.max(1, to - from),
@@ -408,6 +423,7 @@ export let hud = (
         (fresh ||
           f.events.some((e) => e.type == 'loot' && ITEMS[e.item]?.slot))
       bag.classList.toggle('Orb-new', fresh)
+      skills.classList.toggle('Orb-new', s.points > 0 && !panel.skills.open)
       // Nothing in hand by a fire: the rack there has arms to try.
       let bare = f.rack && !s.worn.main
       bag.classList.toggle('Orb-call', bare)
