@@ -1,6 +1,7 @@
 // A resource belongs to the app's immutable store handle. The directory keeps
 // the intent before Cloudflare is called, so a lost reply can be found by name
 // on retry and a failed deploy never strands storage without an owner.
+import { token } from '@yaks/graph'
 import type { App } from './directory.ts'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
@@ -209,8 +210,15 @@ export let provision = async (
         }
       }
       try {
+        // Filled in on the row this read, naming its resource: a permanent
+        // deletion that finished meanwhile swallows the write rather than
+        // bringing the row back (@yaks/graph mutate.ts).
         await meta(env).apply([
-          { entity: { eid: b.eid }, binding: { id } },
+          {
+            entity: { eid: b.eid },
+            binding: { id },
+            $was: { binding: { resource: token(b.resource) } },
+          },
         ], KERNEL)
       } catch (e) {
         // Permanent deletion can finish while creation is in flight. The
@@ -221,8 +229,8 @@ export let provision = async (
         throw e
       }
       b = { ...b, id }
-      // Applying to a tombstoned entity can be a no-op rather than a throw.
-      // Read the ownership back before starting another create or an upload.
+      // A write that raced the deletion is swallowed, not refused. Read the
+      // ownership back before starting another create or an upload.
       if (
         !(await bindings(env, app)).some((row) =>
           row.eid == b!.eid && row.id == id

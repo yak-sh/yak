@@ -1480,8 +1480,9 @@ export let acked = (id: string) => {
 // dedups (the outbox id) and a re-apply is the same harmless value-merge —
 // so replaying from more than one hydrating tab is safe: whichever boots first
 // owns them, the rest re-add nothing (the outbox.has guard) and their sends
-// collapse on that id. A write whose entity was since tombstoned is refused by
-// apply() and settles the id like any rejection (land()'s error arm), never
+// collapse on that id. A write whose entity was since tombstoned is swallowed
+// by apply() when its `$was` was read before the delete, and otherwise brings
+// the entity back (@yaks/graph mutate.ts); either way it settles the id, never
 // crashing boot. Runs behind the socket, never ahead of it: an ack that lands
 // first is remembered in ackedEarly, and its entry is dropped here.
 export let replayOutbox = async () => {
