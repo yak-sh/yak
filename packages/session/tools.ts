@@ -52,6 +52,7 @@ import {
   type Comp,
   detached,
   type Graph,
+  Refused,
   TOMBSTONE,
   who,
 } from '@yaks/graph'
@@ -145,7 +146,7 @@ let asking = async (call: Bundle, graph: Graph): Promise<string> => {
     ? (await sessionFor(graph, said))?.entity.eid
     : str(who(call)?.via || who(call)?.by)
   if (!session) {
-    throw new Error(
+    throw new Refused(
       said
         ? `no session answers to ${said}`
         : 'nobody is asking — say --session',
@@ -184,7 +185,7 @@ export let runs = (
     let session = await asking(call, graph)
     let [row] = await detached(graph.storage).get([session])
     if (!row?.[SESSION]) {
-      throw new Error(
+      throw new Refused(
         'no session is asking — say --session, for example ' +
           '--session "$CLAUDE_CODE_SESSION_ID"',
       )
@@ -206,7 +207,7 @@ export let runs = (
   session_brief: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let id = idIn(args)
-    if (!id) throw new Error('which session? say --session')
+    if (!id) throw new Refused('which session? say --session')
     let s = await sessionFor(graph, id)
     // A transcript nobody has created yet is created here, carrying its own
     // name, the way `session_context` reifies one. Never on the word the
@@ -223,7 +224,10 @@ export let runs = (
 
   // The start of the loop: the transcript becomes an entity, and what it
   // holds comes back as the prose the harness injects. Its own id and its
-  // locks, and deliberately nothing else — see the head of this file.
+  // locks, and deliberately nothing else — see the head of this file. The id
+  // is the transcript's own line in the answer (./views.ts `tile`), drawn
+  // from what the write landed, so a transcript created here reads as the
+  // number it was just given; the locks are said beneath it.
   session_context: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let id = idIn(args)
@@ -244,19 +248,16 @@ export let runs = (
         [SESSION]: { id, ...(actor ? { actor } : {}) },
       },
       {
-        entity: { eid: '$context' },
+        entity: { eid: '$said' },
         content: {
           body: [
-            `# ${found ? line(host.vocab, found) : id}`,
-            ...(held.length
-              ? [
-                '',
-                '## claimed',
-                ...held.map((b) => `- ${line(host.vocab, b)}`),
-              ]
-              : []),
+            '## claimed',
+            ...held.length
+              ? held.map((b) => `- ${line(host.vocab, b)}`)
+              : ['nothing'],
           ].join('\n'),
         },
+        output: { source: call.entity.eid },
       },
     ]
   },

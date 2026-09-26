@@ -1,4 +1,5 @@
 import { assert, assertEquals } from '@std/assert'
+import type { Bundle } from '@yaks/render'
 import { render } from '@yaks/text'
 import { loadVocab } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -41,4 +42,17 @@ Deno.test('Body omits metadata but retains resolved target and full prose', () =
     ),
     body,
   )
+})
+
+Deno.test('a session’s line is the word that reaches it, and no status it lacks', () => {
+  let tile = (b: Bundle) =>
+    render(views, b, 'Tile', vocab, { id: () => 'S-3' }, 'plain')
+  let named = { entity: { eid: 's', num: 3 }, session: { id: 'abc' } }
+  assertEquals(tile(named), 'S-3')
+  assertEquals(
+    tile({ ...named, session: { id: 'abc', status: 'running' } }),
+    'S-3: running',
+  )
+  // Unnumbered, it is its runner's own id, which every session tool takes.
+  assertEquals(tile({ entity: { eid: 's' }, session: { id: 'abc' } }), 'abc')
 })

@@ -20,6 +20,7 @@ import {
   type Eid,
   type Graph,
   identityEid,
+  Refused,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { MODEL, PROVIDER } from '@yaks/model'
@@ -109,7 +110,7 @@ export let runs = (): Runs => ({
   session_send: async (call, graph) => {
     let args = argsOf(call)
     let s = await sessionAt(graph, String(args.session))
-    if (!s) throw new Error(`no such session: ${args.session}`)
+    if (!s) throw new Refused(`no such session: ${args.session}`)
     let using = usingBefore(await transcript(graph, s))
     await graph.apply([{
       entity: { eid: crypto.randomUUID() },
@@ -123,7 +124,8 @@ export let runs = (): Runs => ({
   model_list: async (call) => {
     let got = await found()
     if (!got) {
-      throw new Error('no credential: set OPENAI_API_KEY or sign in to Codex')
+      // Missing is the caller's to fix, so it is their no, not our fault.
+      throw new Refused('no credential: set OPENAI_API_KEY or sign in to Codex')
     }
     let head = `credential from ${got.at} → ${got.cred.base}`
     let res = await fetch(`${got.cred.base}/models`, {

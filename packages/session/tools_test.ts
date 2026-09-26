@@ -127,13 +127,13 @@ Deno.test('a hook payload names the session; anything else says nothing', () => 
   assertEquals(hookSession(undefined), '')
 })
 
-Deno.test('a session nobody has seen is minted, with its own heading', async () => {
+Deno.test('a session nobody has seen is minted, holding nothing', async () => {
   let said = await tools.session_context!(
     ...asked({ hook: '{"session_id":"abc"}', actor: 'p1' }),
   ) as Bundle[]
   assertEquals(comp(said[0], 'session'), { id: 'abc', actor: 'p1' })
   assert(said[0].entity.eid.startsWith('$'))
-  assertEquals(comp(said[1], 'content').body, '# abc')
+  assertEquals(comp(said[1], 'content').body, '## claimed\nnothing')
 })
 
 Deno.test('a session that exists is handed back what it was in the middle of', async () => {
@@ -160,7 +160,7 @@ Deno.test('a session that exists is handed back what it was in the middle of', a
   assertEquals(said[0].entity.eid, 's1')
   assertEquals(
     comp(said[1], 'content').body,
-    ['# S-3', '', '## claimed', '- T-7 — ship it'].join('\n'),
+    ['## claimed', '- T-7 — ship it'].join('\n'),
   )
 })
 

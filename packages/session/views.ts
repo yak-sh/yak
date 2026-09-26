@@ -63,6 +63,24 @@ let line: Renderer['render'] = (b, h, ctx) =>
     entryBody(b, h, ctx),
   )
 
+// A transcript as one line of a list: the word that reaches it again, which
+// every session tool takes (./who.ts `sessionFor`) — its number where it has
+// one (`S-12`), else its runner's own id — and its status where the bundle
+// carries one. A patch fresh from a write carries none, and a line that said
+// "unknown" there would be wrong about a transcript that is fine.
+let tile: Renderer['render'] = (b, h, ctx) => {
+  let id = ctx.id as ((b: Bundle) => string) | undefined
+  let status = comp(b, SESSION)?.status
+  return h(
+    'p',
+    null,
+    b.entity.num != null && id
+      ? id(b)
+      : String(comp(b, SESSION)?.id ?? b.entity.eid),
+    ...status == null ? [] : [': ', String(status)],
+  )
+}
+
 /** The transcript views: `Line` for an entry, `Status` for a transcript. The
  * context may carry `names` (model or tool eid → name), `anchor` (reads a
  * provider's anchor off an ask entry), and `entries` (the transcript, for
@@ -72,18 +90,7 @@ let line: Renderer['render'] = (b, h, ctx) =>
 export let views: Registry = define([
   { view: 'Line', match: parse('.entry'), render: line },
   { view: 'Tile', match: parse('.entry'), render: line },
-  {
-    view: 'Tile',
-    match: parse(`.${SESSION}`),
-    render: (b, h) =>
-      h(
-        'p',
-        null,
-        String(comp(b, SESSION)?.id ?? b.entity.eid),
-        ': ',
-        String(comp(b, SESSION)?.status ?? 'unknown'),
-      ),
-  },
+  { view: 'Tile', match: parse(`.${SESSION}`), render: tile },
   { view: 'Body', match: parse('.entry'), render: entryBody },
   {
     view: 'Status',
