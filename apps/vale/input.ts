@@ -17,6 +17,8 @@ export type Intent = {
   follow: boolean
   /** open the map, or fold it away */
   map: boolean
+  /** turn the microphone on, or off */
+  mic: boolean
   /** how far the view was turned since the last read: yaw, pitch */
   orbit: [number, number]
   /** how far it was pulled in or out */
@@ -32,6 +34,7 @@ export type Action =
   | 'snap'
   | 'follow'
   | 'map'
+  | 'mic'
 
 let KEYS: Record<string, Action> = {
   Space: 'jump',
@@ -45,6 +48,7 @@ let KEYS: Record<string, Action> = {
   KeyC: 'snap',
   KeyV: 'follow',
   KeyM: 'map',
+  KeyT: 'mic',
 }
 
 let AXES: Record<string, [number, number]> = {
@@ -188,6 +192,7 @@ export let listen = (
         snap: pressed.has('snap'),
         follow: pressed.has('follow'),
         map: pressed.has('map'),
+        mic: pressed.has('mic'),
         orbit: [orbit[0], orbit[1]],
         zoom,
       }

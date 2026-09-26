@@ -645,6 +645,11 @@ body {
   top: calc(max(12px, env(safe-area-inset-top)) + 9.7rem);
 }
 
+/* The microphone's button, under the camera's: faded while it is off. */
+.Mute-mic {
+  top: calc(max(12px, env(safe-area-inset-top)) + 12.2rem);
+}
+
 .Mute-off {
   opacity: 0.5;
 }

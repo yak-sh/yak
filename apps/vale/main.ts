@@ -21,6 +21,7 @@ import { HOME, LEVELS } from './levels.ts'
 import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { type Event, type Frame, game } from './play.ts'
 import { sound } from './sound.ts'
+import { type Mic, voices } from './voicebox.ts'
 import { groundAt, SIZE, type Vale, vale, VOXEL } from './terrain.ts'
 import { type World, world } from './world.ts'
 
@@ -168,7 +169,24 @@ let eyeLabel = () => {
 }
 eyeLabel()
 eye.addEventListener('click', () => hands.press('follow'))
-glass.append(mute, eye)
+// The microphone (voicebox.ts): off until the player turns it on.
+let mic = document.createElement('button')
+mic.className = 'Mute Mute-mic Mute-off'
+mic.textContent = '🎙️'
+let MICS: Record<Mic, string> = {
+  off: 'Your microphone is off (T): turn it on and heroes near you hear you',
+  starting: 'Asking for your microphone…',
+  on: 'Heroes near you hear you (T turns your microphone off)',
+  denied: 'The browser did not give the vale your microphone',
+  spent: "This space's voice is spent for the month",
+}
+let voice = voices(net, (m) => {
+  mic.classList.toggle('Mute-off', m != 'on')
+  mic.title = MICS[m]
+})
+mic.title = MICS.off
+mic.addEventListener('click', () => void voice.toggle())
+glass.append(mute, eye, mic)
 
 // Where the hearth is, or the middle of a level without one: where the gate's
 // camera looks, and embers rise.
@@ -473,6 +491,7 @@ let loop = (t: number) => {
   if (playing && net.hero) {
     let i = hands.read()
     if (i.map) m.toggle()
+    if (i.mic) void voice.toggle()
     if (h.talking) {
       Object.assign(i, {
         move: [0, 0],
@@ -505,6 +524,7 @@ let loop = (t: number) => {
       }
       stage.tick(f, net.hero, dressed, dt)
       chat.tick(f, stage.headOf)
+      voice.tick(f)
       let k = 1 - Math.exp(-dt * 10)
       if (Number.isNaN(cam.x)) {
         ;[cam.x, cam.y, cam.z] = [f.body.x, f.body.y, f.body.z]
@@ -607,6 +627,7 @@ Object.assign(globalThis, {
   mossvale: {
     net,
     game: g,
+    voice,
     get frame() {
       return last
     },

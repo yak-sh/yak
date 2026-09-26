@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mossvale",
+  "rtc": "open",
   "description": "A voxel world to adventure in together. What a player is and has done is kept in this app's store (player, slain, item, used, journal), and so is what they said (chat); what moves (where each player and creature is, how they move, how they fare in a fight) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
   "$defs": {
     "player": {

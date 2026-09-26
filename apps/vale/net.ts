@@ -156,7 +156,7 @@ export let connect = (base: URL) => {
   }
 
   let watches: Record<string, Watch> = {
-    players: c.watch('.player&?position&?motion&?vitals&?fight'),
+    players: c.watch('.player&?position&?motion&?vitals&?fight&?rtc'),
     creatures: c.watch('.creature'),
     falls: c.watch('.slain&.order=-slain.at&.limit=400'),
   }
