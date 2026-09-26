@@ -67,7 +67,7 @@
         "gait": {
           "type": "string",
           "enum": ["idle", "walk", "run", "jump", "roll", "down"],
-          "description": "How it is moving; a player who fainted is down."
+          "description": "How it is moving; a player dodging rolls, and one who fainted is down."
         },
         "vy": {
           "type": "number",
@@ -114,10 +114,13 @@
       "type": "object",
       "sync": "peers",
       "durable": "connection",
-      "description": "A creature on the hunt, as the page moving it says: the player it is after, and when it last bit them. The bitten player's page takes the bite.",
+      "description": "A creature on the hunt, as the page moving it says: the player it is after, and when its bite lands. It winds up until then. The bitten player's page decides the bite when it lands: rolled through, stepped clear of, or taken.",
       "properties": {
         "player": { "type": "string" },
-        "bite": { "type": "number", "description": "When, in ms." }
+        "bite": {
+          "type": "number",
+          "description": "When its bite lands, in ms."
+        }
       }
     },
     "slain": {

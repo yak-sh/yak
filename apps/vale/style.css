@@ -536,9 +536,14 @@ body {
   bottom: 6.2rem;
 }
 
+.Pad-dodge {
+  right: 5.3rem;
+  bottom: 4.7rem;
+}
+
 .Pad-drink {
-  right: 5.4rem;
-  bottom: 4.6rem;
+  right: 5.8rem;
+  bottom: 8.9rem;
   width: 3.1rem;
   height: 3.1rem;
 }
@@ -821,6 +826,12 @@ body {
 .Float-xp {
   font-size: 0.95rem;
   color: var(--xp);
+}
+
+.Float-dodge {
+  font-size: 1.3rem;
+  color: var(--xp);
+  font-style: italic;
 }
 
 /* The thumbstick, under the thumb that put it there. */

@@ -313,7 +313,18 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     cam.shake = Math.max(cam.shake, e.great ? 0.22 : 0.08)
   } else if (e.type == 'struck') float(String(e.dmg), p(e.at), 'ally')
   else if (e.type == 'whiff') sound.whiff()
-  else if (e.type == 'hurt') {
+  else if (e.type == 'roll') {
+    dust.emit(p(e.at), 0xc9b896, 6, {
+      speed: 1.4,
+      up: 1,
+      life: 0.5,
+      size: 0.12,
+    })
+    sound.roll()
+  } else if (e.type == 'dodge') {
+    float('Dodged!', p(e.at), 'dodge')
+    sound.dodge()
+  } else if (e.type == 'hurt') {
     float(`-${e.dmg}`, p(e.at), 'hurt')
     sound.hurt()
     cam.shake = Math.max(cam.shake, 0.18)
@@ -438,7 +449,12 @@ let loop = (t: number) => {
   if (playing && net.hero) {
     let i = hands.read()
     if (h.talking) {
-      Object.assign(i, { move: [0, 0], strike: false, jump: false })
+      Object.assign(i, {
+        move: [0, 0],
+        strike: false,
+        dodge: false,
+        jump: false,
+      })
     }
     cam.yaw += i.orbit[0]
     cam.pitch = clamp(cam.pitch + i.orbit[1], 0.1, 1.3)

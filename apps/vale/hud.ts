@@ -1,7 +1,7 @@
 // Everything on the glass: the hero's card (health, level, the xp to the
 // next), the quest being followed, the foe's health, who else is here, the
-// bag, the buttons a phone needs, the words of whoever you talk to, and the toasts that say
-// what just happened. Each part is written only when what it shows changed.
+// bag, the buttons a phone needs, the words of whoever you talk to, and the
+// toasts that say what just happened. Each part is written only when what it shows changed.
 import type { Action } from './input.ts'
 import type { Frame, Sheet } from './play.ts'
 import { BEASTS } from './beasts.ts'
@@ -42,7 +42,8 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
   let keys = el(
     'Keys',
     '<span><kbd>WASD</kbd> move</span><span><kbd>Space</kbd> jump</span>' +
-      '<span><kbd>F</kbd> or click: strike</span><span><kbd>E</kbd> talk</span>' +
+      '<span><kbd>F</kbd> or click: strike</span>' +
+      '<span><kbd>Shift</kbd> or right-click: dodge</span><span><kbd>E</kbd> talk</span>' +
       '<span><kbd>1</kbd> tonic</span><span>drag: look</span>',
   )
   let pads = el('Pads')
@@ -70,6 +71,10 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     '<svg viewBox="0 0 24 24"><path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2"/></svg>',
   )
   pad('jump', '<svg viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg>')
+  pad(
+    'dodge',
+    '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>',
+  )
   let talkPad = pad(
     'talk',
     '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',

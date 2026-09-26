@@ -1,6 +1,7 @@
 // Who is on stage: a figure for every player and creature the frame knows,
-// the people who give quests, loot on the ground, and the plates over heads
-// and over portals.
+// the people who give quests, loot on the ground, the plates over heads and
+// over portals, and a red ring closing on each creature whose bite is coming
+// for me.
 // A figure is made when someone arrives and dropped when they go; each frame
 // moves it to where the frame says it is, smoothing what arrives in steps (a
 // peer's position comes when their page sends it, not on this page's beat).
@@ -25,6 +26,10 @@ type Actor = {
   z: number
   yaw: number
   speed: number
+  /** metres a second the way it faces, back when negative */
+  ahead: number
+  /** which way a roll tumbles it: 1 forward, -1 back, 0 not yet known */
+  tumble: number
   swingAt: number
   swings: number
   hp: number
@@ -62,6 +67,24 @@ export let cast = (
   ring.rotation.x = -Math.PI / 2
   ring.visible = false
   scene.add(ring)
+  let warnMat = new THREE.MeshBasicMaterial({
+    color: 0xff3b2f,
+    transparent: true,
+    opacity: 0.85,
+    depthWrite: false,
+  })
+  let warns = new Map<string, THREE.Mesh>()
+  let warn = (eid: string) => {
+    let w = warns.get(eid)
+    if (!w) {
+      w = new THREE.Mesh(ring.geometry, warnMat)
+      w.rotation.x = -Math.PI / 2
+      scene.add(w)
+      warns.set(eid, w)
+    }
+    w.visible = true
+    return w
+  }
   let at = new THREE.Vector3()
 
   let actor = (key: string, make: () => Figure, look = ''): Actor => {
@@ -72,6 +95,7 @@ export let cast = (
     }
     if (!a) {
       let fig = make()
+      fig.root.rotation.order = 'YXZ'
       scene.add(fig.root)
       a = {
         fig,
@@ -80,6 +104,8 @@ export let cast = (
         z: 0,
         yaw: 0,
         speed: 0,
+        ahead: 0,
+        tumble: 0,
         swingAt: -1e9,
         swings: -1,
         hp: -1,
@@ -113,10 +139,30 @@ export let cast = (
     a.y += (y - a.y) * (1 - Math.exp(-dt * 20))
     a.yaw += Math.atan2(Math.sin(yaw - a.yaw), Math.cos(yaw - a.yaw)) *
       (1 - Math.exp(-dt * 12))
-    a.speed += (Math.hypot(a.x - px, a.z - pz) / Math.max(dt, 1e-3) - a.speed) *
-      0.25
+    let t = Math.max(dt, 1e-3)
+    a.speed += (Math.hypot(a.x - px, a.z - pz) / t - a.speed) * 0.25
+    let ahead = ((a.x - px) * Math.sin(a.yaw) + (a.z - pz) * Math.cos(a.yaw)) /
+      t
+    a.ahead += (ahead - a.ahead) * 0.25
     a.fig.root.position.set(a.x, a.y, a.z)
     a.fig.root.rotation.y = a.yaw
+  }
+
+  // A roll tumbles a figure head over heels about its middle, the way it is
+  // going: forward, or backward when it steps back from what it faces.
+  let tumble = (a: Actor, roll: number) => {
+    let r = a.fig.root
+    if (roll < 0) {
+      a.tumble = 0
+      r.rotation.x = 0
+      return
+    }
+    if (!a.tumble && Math.abs(a.ahead) > 2) a.tumble = Math.sign(a.ahead)
+    let th = a.tumble * roll * Math.PI * 2, c = a.fig.height * 0.3
+    r.rotation.x = th
+    r.position.y += c * (1 - Math.cos(th))
+    r.position.x -= c * Math.sin(th) * Math.sin(a.yaw)
+    r.position.z -= c * Math.sin(th) * Math.cos(a.yaw)
   }
 
   let play = (a: Actor, act: Partial<Act>, t: number, dt: number) =>
@@ -141,13 +187,14 @@ export let cast = (
       // Me.
       let mine = actor(me, () => hero(look), JSON.stringify(look))
       glide(mine, f.body.x, f.body.y, f.body.z, f.body.yaw, dt, 30)
+      tumble(mine, f.roll)
       mine.speed = f.body.speed
       let hurt = f.events.some((e) => e.type == 'hurt')
       if (hurt) mine.hurtAt = now
       play(
         mine,
         {
-          air: f.body.gait == 'jump',
+          air: f.body.gait == 'jump' || f.roll >= 0,
           swing: f.swing,
           hurt: Math.max(0, 1 - (now - mine.hurtAt) / 250),
           down: f.down,
@@ -161,6 +208,7 @@ export let cast = (
         let b = o.body
         let a = actor(o.eid, () => hero(o.look), JSON.stringify(o.look))
         glide(a, b.x, b.y, b.z, b.yaw, dt, 9)
+        tumble(a, o.roll)
         if (a.swings >= 0 && o.swing > a.swings) a.swingAt = now
         a.swings = o.swing
         if (a.hp >= 0 && o.vitals.hp < a.hp) a.hurtAt = now
@@ -168,7 +216,7 @@ export let cast = (
         play(
           a,
           {
-            air: b.gait == 'jump',
+            air: b.gait == 'jump' || o.roll >= 0,
             swing: now - a.swingAt < 520 ? (now - a.swingAt) / 520 : -1,
             hurt: Math.max(0, 1 - (now - a.hurtAt) / 250),
             down: b.gait == 'down',
@@ -189,6 +237,7 @@ export let cast = (
 
       // The creatures.
       ring.visible = false
+      for (let w of warns.values()) w.visible = false
       for (let m of f.mobs) {
         if (m.near > 75) continue
         let b = BEASTS[m.kind]
@@ -210,7 +259,7 @@ export let cast = (
         play(
           a,
           {
-            swing: m.bit < 700 ? m.bit / 700 : -1,
+            swing: m.bite,
             hurt: Math.max(0, 1 - m.hurt / 220),
             down: m.down,
             air: false,
@@ -218,6 +267,11 @@ export let cast = (
           t,
           dt,
         )
+        if (m.aim && !m.down && m.bite >= 0 && m.bite < 0.4) {
+          let w = warn(m.eid), k = m.bite / 0.4
+          w.position.set(a.x, groundAt(v, a.x, a.z) + 0.08, a.z)
+          w.scale.setScalar((0.55 + b.size * 0.6) * (1.9 - k * 0.9))
+        }
         let foe = f.foe?.eid == m.eid
         if (foe) {
           ring.visible = true
@@ -303,6 +357,9 @@ export let cast = (
         if (a.seen) continue
         scene.remove(a.fig.root)
         actors.delete(key)
+        let w = warns.get(key)
+        if (w) scene.remove(w)
+        warns.delete(key)
       }
     },
     /** where someone's head is, for what floats up from them */

@@ -6,9 +6,12 @@
 // for the eyes and ears (`Event`).
 //
 // Who decides what:
-//   - A player's own page moves them, swings their blade, takes the bites
-//     aimed at them, and says how they fare. A page moves what it moves every
-//     frame and says where it is ten times a second (`PACE`).
+//   - A player's own page moves them, swings their blade, rolls them clear,
+//     takes the bites aimed at them, and says how they fare. A page moves what
+//     it moves every frame and says where it is ten times a second (`PACE`).
+//   - A bite is said before it lands (`hunt.bite` is when), and the creature
+//     winds up for it meanwhile. The bitten player's page decides it when it
+//     lands: rolled through, stepped clear, or taken.
 //   - One page moves each creature: of the players near its home, the one
 //     whose eid sorts first. Its position and hunt are relayed from there, and
 //     every other page draws what it hears. A creature nobody is near, or
@@ -54,6 +57,8 @@ export type Event =
   }
   | { type: 'struck'; eid: string; at: Vec3; dmg: number }
   | { type: 'whiff' }
+  | { type: 'roll'; at: Vec3 }
+  | { type: 'dodge'; at: Vec3 }
   | { type: 'hurt'; dmg: number; at: Vec3 }
   | { type: 'fall'; eid: string; beast: string; at: Vec3 }
   | { type: 'loot'; item: string; n: number; at: Vec3 }
@@ -90,8 +95,10 @@ export type Mob = {
   since: number
   /** a blow landed on it this recently, in ms since */
   hurt: number
-  /** it bit this recently, in ms since */
-  bit: number
+  /** how far through a bite, 0 to 1, landing at 0.4, or -1 */
+  bite: number
+  /** its bite is aimed at me */
+  aim: boolean
   near: number
 }
 
@@ -103,6 +110,8 @@ export type Other = {
   body: Body
   vitals: Vitals
   swing: number
+  /** how far through a dodge, 0 to 1, or -1 */
+  roll: number
 }
 
 export type Drop = {
@@ -147,6 +156,8 @@ export type Frame = {
   foe: Mob | null
   /** how far through a blow, 0 to 1, or -1 */
   swing: number
+  /** how far through a dodge, 0 to 1, or -1 */
+  roll: number
   events: Event[]
   /** the store's time, in ms */
   now: number
@@ -155,6 +166,19 @@ export type Frame = {
 let SPEED = 5.6
 let SWING = 520
 let HIT_AT = 170
+// A strike asked for this soon before the blade is free is struck once it is.
+let EARLY = 250
+// A dodge: a roll this long and this fast, untouchable all through it, and
+// ready again this long after it began.
+let ROLL = 380
+let ROLL_SPEED = 9.5
+let ROLL_AGAIN = 800
+// A creature bites at most this often, and winds up this long before the bite
+// lands.
+let BITE = 1500
+let WINDUP = 600
+// A blow this soon after rolling through a bite is always a great one.
+let RIPOSTE = 1200
 let DOWN = 5000
 let LEASH = 26
 let PICK = 1.3
@@ -258,6 +282,11 @@ export let game = (net: Net) => {
   let drops = c.watch('.drop', { remote: false })
   let swingAt = -1e9
   let struck = true
+  let askedAt = -1e9
+  let rollAt = -1e9
+  let rollTo = { x: 0, z: 0 }
+  let riposte = -1e9
+  let rolls = new Map<string, number>()
   let downAt = 0
   let hurtAt = 0
   let mend = 0
@@ -481,8 +510,32 @@ export let game = (net: Net) => {
           z: -Math.sin(look) * mx - Math.cos(look) * my,
           jump: intent.jump,
         }
-        body = walk(v, body, push, dt, SPEED)
+        // A dodge rolls the way I am going, or back from where I face when I
+        // am still, facing the same way throughout, and cuts short a blow not
+        // yet landed.
+        let len = Math.hypot(push.x, push.z)
+        if (
+          intent.dodge && body.gait != 'jump' && now - rollAt > ROLL_AGAIN
+        ) {
+          rollAt = now
+          rollTo = len < 0.2
+            ? { x: -Math.sin(body.yaw), z: -Math.cos(body.yaw) }
+            : { x: push.x / len, z: push.z / len }
+          if (len >= 0.2) body.yaw = Math.atan2(rollTo.x, rollTo.z)
+          swingAt = -1e9
+          struck = true
+          events.push({ type: 'roll', at: at(body, 0.2) })
+        }
+        if (now - rollAt < ROLL) {
+          let n = walk(v, body, { ...rollTo, jump: false }, dt, ROLL_SPEED)
+          body = {
+            ...n,
+            yaw: body.yaw,
+            gait: n.gait == 'jump' ? 'jump' : 'roll',
+          }
+        } else body = walk(v, body, push, dt, SPEED)
       }
+      let rolling = body.gait == 'roll'
 
       // The others in this level, as relayed.
       let others: Other[] = []
@@ -499,6 +552,9 @@ export let game = (net: Net) => {
         let pl = comp(e, 'player')
         let f = fight(e)
         let t = vitals(e) ?? { hp: 1, max: 1, lvl: 1 }
+        if (m.gait != 'roll') rolls.delete(eid)
+        else if (!rolls.has(eid)) rolls.set(eid, now)
+        let rolled = rolls.has(eid) ? (now - rolls.get(eid)!) / ROLL : -1
         others.push({
           eid,
           name: str(pl.name, 'Wanderer'),
@@ -510,6 +566,7 @@ export let game = (net: Net) => {
           body: bodyOf(p, m),
           vitals: t,
           swing: f.swing,
+          roll: Math.min(1, rolled),
         })
         fights.push([eid, f])
         spots.set(eid, { x: p.x, z: p.z, alive: m.gait != 'down' })
@@ -614,10 +671,12 @@ export let game = (net: Net) => {
               say(eid, lv, mb, change)
             }
           }
+          // Near enough to bite: it winds up, and says when the bite lands.
           let bite = hu.bite
           if (
-            qs && dist(qs, mb) <= beast.reach + 0.4 && now - hu.bite > 1500
-          ) bite = now
+            qs && dist(qs, mb) <= beast.reach + 0.4 &&
+            now - hu.bite > BITE - WINDUP
+          ) bite = now + WINDUP
           if (quarry != hu.player || bite != hu.bite) {
             change.push({
               entity: { eid },
@@ -627,18 +686,30 @@ export let game = (net: Net) => {
         }
         // Up again after a fall: back to its wandering, from home.
         if (owner == me && up && (p || hu.player)) hush(eid, change)
-        // A bite: the one aimed at me is mine to take.
-        let seen = bitten.get(eid)
-        if (seen === undefined) bitten.set(eid, hu.bite)
-        else if (hu.bite > seen) {
+        // A bite, once it lands: the one aimed at me is mine to take, unless
+        // I rolled through it or stepped out of its reach. Rolling through
+        // one leaves the creature open.
+        let seen = bitten.get(eid) ?? Math.min(hu.bite, now)
+        bitten.set(eid, seen)
+        if (hu.bite > seen && hu.bite <= now) {
           bitten.set(eid, hu.bite)
-          if (hu.player == me && !down && !fallen) {
-            let dmg = Math.round(beast.dmg * (0.85 + Math.random() * 0.3))
-            hp -= dmg
-            hurtAt = now
-            events.push({ type: 'hurt', dmg, at: at(body, 2) })
+          let near = dist(mb, body) <= beast.reach + 0.6
+          if (hu.player == me && !down && !fallen && near) {
+            if (rolling) {
+              riposte = now
+              events.push({ type: 'dodge', at: at(body, 2) })
+            } else {
+              let dmg = Math.round(beast.dmg * (0.85 + Math.random() * 0.3))
+              hp -= dmg
+              hurtAt = now
+              events.push({ type: 'hurt', dmg, at: at(body, 2) })
+            }
           }
         }
+        let biting = now - hu.bite
+        let bite = hu.bite && biting > -WINDUP && biting < WINDUP * 1.5
+          ? (biting + WINDUP) / (WINDUP * 2.5)
+          : -1
         last.set(eid, mb)
         mobs.push({
           eid,
@@ -649,7 +720,8 @@ export let game = (net: Net) => {
           down: fallen,
           since: sinking.get(eid) ?? 0,
           hurt: now - (hitAt.get(eid) ?? -1e9),
-          bit: now - (hu.bite || -1e9),
+          bite,
+          aim: hu.player == me,
           near: dist(mb, body),
         })
       }
@@ -688,8 +760,12 @@ export let game = (net: Net) => {
         })
       }
 
-      // My blade.
-      if (!down && intent.strike && now - swingAt > SWING) {
+      // My blade, when it is free and I am not rolling.
+      if (intent.strike) askedAt = now
+      if (
+        !down && !rolling && now - askedAt < EARLY && now - swingAt > SWING
+      ) {
+        askedAt = -1e9
         swingAt = now
         struck = false
         fought.swing++
@@ -732,7 +808,9 @@ export let game = (net: Net) => {
           if (fought.foe != m.eid || fought.life != life) {
             Object.assign(fought, { foe: m.eid, life, dmg: 0 })
           }
-          let { dmg, great } = blow(s.lvl, s.edge, Math.random())
+          let sure = now - riposte < RIPOSTE
+          if (sure) riposte = -1e9
+          let { dmg, great } = blow(s.lvl, s.edge, Math.random(), sure)
           fought.dmg += dmg
           m.hp = hpOf(m.eid, beast.hp, life, fights.map(([, f]) => f))
           hitAt.set(m.eid, now)
@@ -911,6 +989,7 @@ export let game = (net: Net) => {
         talk,
         foe,
         swing: now - swingAt < SWING ? (now - swingAt) / SWING : -1,
+        roll: rolling ? (now - rollAt) / ROLL : -1,
         events,
         now,
       }

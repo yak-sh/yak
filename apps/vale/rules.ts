@@ -31,9 +31,17 @@ export let maxHp = (lvl: number): number => 90 + lvl * 16
 export let power = (lvl: number, edge = 1): number => (9 + lvl * 3) * edge
 
 /** A blow's damage: power, give or take a fifth, and now and then a great
- * one. `roll` is a number in [0, 1). */
-export let blow = (lvl: number, edge: number, roll: number) => {
-  let great = roll > 0.88
+ * one; a `sure` blow is always great. `roll` is a number in [0, 1).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(blow(1, 1, 0.95).great, true)
+ * assertEquals(blow(1, 1, 0.5).great, false)
+ * assertEquals(blow(1, 1, 0.5, true).great, true)
+ * ```
+ */
+export let blow = (lvl: number, edge: number, roll: number, sure = false) => {
+  let great = sure || roll > 0.88
   let base = power(lvl, edge) * (0.8 + (roll % 0.1) * 4)
   return { dmg: Math.round(base * (great ? 1.8 : 1)), great }
 }

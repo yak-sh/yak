@@ -8,6 +8,7 @@ export type Intent = {
   move: [number, number]
   jump: boolean
   strike: boolean
+  dodge: boolean
   talk: boolean
   drink: boolean
   /** how far the view was turned since the last read: yaw, pitch */
@@ -16,13 +17,15 @@ export type Intent = {
   zoom: number
 }
 
-export type Action = 'jump' | 'strike' | 'talk' | 'drink'
+export type Action = 'jump' | 'strike' | 'dodge' | 'talk' | 'drink'
 
 let KEYS: Record<string, Action> = {
   Space: 'jump',
   KeyF: 'strike',
   KeyJ: 'strike',
   Enter: 'strike',
+  ShiftLeft: 'dodge',
+  ShiftRight: 'dodge',
   KeyE: 'talk',
   Digit1: 'drink',
   KeyQ: 'drink',
@@ -130,10 +133,12 @@ export let listen = (
     }
     let d = drags.get(e.pointerId)
     drags.delete(e.pointerId)
-    // A click that did not drag is a blow; a tap on the right of a phone,
-    // too, where the thumb already is.
-    if (d && d.far < 8 && d.button == 0 && e.type == 'pointerup') {
-      pressed.add('strike')
+    // A click that did not drag is a blow, or a dodge from the right
+    // button; a tap on the right of a phone is a blow too, where the thumb
+    // already is.
+    if (d && d.far < 8 && e.type == 'pointerup') {
+      if (d.button == 0) pressed.add('strike')
+      if (d.button == 2) pressed.add('dodge')
     }
   }
   stage.addEventListener('pointerup', up)
@@ -161,6 +166,7 @@ export let listen = (
         move: [x, y],
         jump: pressed.has('jump') || (!busy() && held.has('Space')),
         strike: pressed.has('strike'),
+        dodge: pressed.has('dodge'),
         talk: pressed.has('talk'),
         drink: pressed.has('drink'),
         orbit: [orbit[0], orbit[1]],
