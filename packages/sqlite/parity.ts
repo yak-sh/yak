@@ -301,3 +301,69 @@ export let parity = (a: Graph, b: Graph): void | Promise<void> =>
         }))),
     () => {},
   )
+
+// ---- what a door selects ---------------------------------------------------
+//
+// Agreement cannot catch a rule every door gets wrong alike, so each door also
+// answers a few queries with the rows they mean: five products made around one
+// moment and read at it, compared with a relative time under each operator
+// (the boundaries fall exactly on two of them) and a range of them, and a
+// boolean compared with `true` and `false`.
+
+let AROUND = Date.parse('2026-03-01T12:00:00.000Z')
+let MIN = 60_000
+
+let STOCK: [eid: string, made: number, product: { available?: boolean }][] = [
+  ['ago3h', -180 * MIN, { available: true }],
+  ['ago1h', -60 * MIN, { available: false }],
+  ['ago30m', -30 * MIN, {}],
+  ['in30m', 30 * MIN, { available: true }],
+  ['in1h', 60 * MIN, { available: false }],
+]
+
+let ANSWERS: [query: string, eids: string[]][] = [
+  ['.created.at>1-hour-ago', ['ago30m', 'in1h', 'in30m']],
+  ['.created.at>=1-hour-ago', ['ago1h', 'ago30m', 'in1h', 'in30m']],
+  ['.created.at<1-hour-ago', ['ago3h']],
+  ['.created.at<=1-hour-ago', ['ago1h', 'ago3h']],
+  ['.created.at=1-hour-ago', ['ago1h', 'ago30m']],
+  ['.created.at>in-1-hour', []],
+  ['.created.at>=in-1-hour', ['in1h']],
+  ['.created.at<in-1-hour', ['ago1h', 'ago30m', 'ago3h', 'in30m']],
+  ['.created.at<=in-1-hour', ['ago1h', 'ago30m', 'ago3h', 'in1h', 'in30m']],
+  ['.created.at>now', ['in1h', 'in30m']],
+  ['.created.at<=now', ['ago1h', 'ago30m', 'ago3h']],
+  ['.created.at=2-hours-ago..now', ['ago1h', 'ago30m']],
+  ['.created.at=1-hour-ago...in-1-hour', ['ago1h', 'ago30m', 'in30m']],
+  ['.available=true', ['ago3h', 'in30m']],
+  ['.available=false', ['ago1h', 'in1h']],
+  ['.available=true,false', ['ago1h', 'ago3h', 'in1h', 'in30m']],
+  ['.available!=true', ['ago1h', 'ago30m', 'in1h']],
+]
+
+let iso = (ms: number) => new Date(ms).toISOString()
+
+/**
+ * Stock a fresh graph (build it with {@link rig}) and assert it selects, for
+ * each query, the rows that query means. Threaded like {@link parity}: `void`
+ * over a synchronous adapter, a promise over an asynchronous one.
+ */
+export let answers = (g: Graph): void | Promise<void> =>
+  then(
+    each(STOCK, null, (_, [eid, made, product]) =>
+      then(
+        g.apply([{ entity: { eid }, product }], {
+          now: iso(AROUND + made),
+        }),
+        () => null,
+      )),
+    () =>
+      then(
+        each(ANSWERS, null, (_, [q, want]) =>
+          then(g.read(q, { now: AROUND }), (bs) => {
+            assertEquals(bs.map((b) => b.entity.eid).sort(), want, q)
+            return null
+          })),
+        () => {},
+      ),
+  )

@@ -20,7 +20,7 @@
 // query excludes it.
 
 import type { Prop, Scalar, Vocab } from '@yaks/vocab'
-import { type Span as QSpan, timeSpan } from '@yaks/query'
+import { timeEdges } from '@yaks/query'
 import type { Frag } from './ast.ts'
 import { nest } from './render.ts'
 
@@ -129,6 +129,11 @@ let asText = (c: string) => `cast(${c} as text)`
 let numeric = (s: string) => /^-?\d+(\.\d+)?$/.test(s)
 let NUMERIC_TAGS: Tag[] = ['number', 'priority', 'bool']
 
+/** An operand as a property of type `tag` holds it: a boolean is stored as 0
+ * or 1, and `true` and `false` name those. Any other operand is as written. */
+export let held = (value: string, tag: Tag): string =>
+  tag != 'bool' ? value : value == 'true' ? '1' : value == 'false' ? '0' : value
+
 // A time column holds one format (an ISO timestamp), for which lexical order is
 // chronological. Restricting a comparison to the range a canonical timestamp
 // falls in excludes stored values that are not timestamps, which the JavaScript
@@ -164,9 +169,8 @@ let cmp = (
   tag: Tag,
 ): Frag | null => {
   if (NUMERIC_TAGS.includes(tag)) {
-    return numeric(value)
-      ? { sql: `${c} ${op} ?`, params: [Number(value)] }
-      : null
+    let n = held(value, tag)
+    return numeric(n) ? { sql: `${c} ${op} ?`, params: [Number(n)] } : null
   }
   if (tag == 'time') {
     return stampish(c, { sql: `${c} ${op} ?`, params: [value] })
@@ -201,8 +205,9 @@ let eq = (c: string, value: string, tag: Tag): Frag | null => {
     return frags.length == parts.length ? anyOf(frags) : null
   }
   if (NUMERIC_TAGS.includes(tag)) {
-    return numeric(value) && String(Number(value)) === value
-      ? { sql: `${c} = ?`, params: [Number(value)] }
+    let n = held(value, tag)
+    return numeric(n) && String(Number(n)) === n
+      ? { sql: `${c} = ?`, params: [Number(n)] }
       : { sql: '0', params: [] }
   }
   return { sql: `${asText(c)} = ?`, params: [value] }
@@ -233,40 +238,13 @@ let contains = (c: string, value: string): Frag | null =>
       params: [value],
     }
 
-// ---- time spans (a phrase names a range; the operator picks which end) ----
-// The span, and its ends: a span whose end equals its start is an instant, and
-// then the `= start` branch is the whole answer.
-type Span = { start: number; end: number }
-// The span parser is @yaks/query's, narrowed to the {start,end} this file
-// reads; the binder passes `now` so that a phrase resolves against one fixed
-// moment.
-let spanFn = (s: string, now: number): Span | null => {
-  let sp: QSpan | null = timeSpan(s, now)
-  return sp ? { start: sp.start, end: sp.end } : null
-}
+// ---- time phrases (@yaks/query resolves the edges; this lowers them) ----
 let iso = (ms: number) => new Date(ms).toISOString()
-let bound = (c: string, op: string, ms: number): Frag => ({
-  sql: `${c} ${op} ?`,
-  params: [iso(ms)],
-})
-let both = (a: Frag, b: Frag): Frag => ({
-  sql: `(${a.sql} and ${b.sql})`,
-  params: [...a.params, ...b.params],
-})
-let edge = (c: string, op: string, s: Span): Frag => {
-  let point = s.end <= s.start
-  return op == '<'
-    ? bound(c, '<', s.start)
-    : op == '<='
-    ? point ? bound(c, '<=', s.start) : bound(c, '<', s.end)
-    : op == '>'
-    ? point ? bound(c, '>', s.start) : bound(c, '>=', s.end)
-    : op == '>='
-    ? bound(c, '>=', s.start)
-    : point
-    ? bound(c, '=', s.start)
-    : both(bound(c, '>=', s.start), bound(c, '<', s.end))
-}
+let all = (parts: Frag[]): Frag =>
+  parts.length == 1 ? parts[0] : {
+    sql: nest(parts.map((p) => p.sql), ' and '),
+    params: parts.flatMap((p) => p.params),
+  }
 
 export let sqlite: Dialect = {
   refCol: (comp, prop) => `${q(comp)}.${q(prop)}`,
@@ -296,21 +274,23 @@ export let sqlite: Dialect = {
   cmp,
   contains,
   time: (c, op, value, now) => {
-    // A comma-separated list of phrases is any-of under `=`, and none-of
-    // under `!`; anything else is re-read as a single phrase; a value that is
-    // not a phrase at all declines, and the ordinary scalar path handles it.
-    // `op` is the operator: '' for equals, '!' for not-equals, otherwise a
-    // comparison. The span parser is @yaks/query's, resolved against `now`.
-    let phrase = (s: string): Span | null => spanFn(s, now)
-    let spans = value.split(',').map(phrase)
-    if (spans.every((s) => s) && (op == '' || op == '!')) {
-      let hit = stampish(c, anyOf(spans.map((s) => edge(c, '', s!))))
-      return op == ''
-        ? hit
-        : { sql: `(coalesce(${hit.sql}, 0) = 0)`, params: hit.params }
-    }
-    let s = phrase(value)
-    return s ? stampish(c, edge(c, op, s)) : null
+    // `op` is '' for equals, '!' for not-equals (none of what equals selects),
+    // otherwise a comparison. What each asks of a stamp is @yaks/query's
+    // `timeEdges`, resolved against `now`; an operand that is not made of
+    // phrases declines, and the ordinary scalar path handles it.
+    let arms = timeEdges(op == '' || op == '!' ? '=' : op, value, now)
+    if (!arms) return null
+    let hit = stampish(
+      c,
+      anyOf(
+        arms.map((a) =>
+          all(a.map(([o, ms]) => ({ sql: `${c} ${o} ?`, params: [iso(ms)] })))
+        ),
+      ),
+    )
+    return op == '!'
+      ? { sql: `(coalesce(${hit.sql}, 0) = 0)`, params: hit.params }
+      : hit
   },
   refEq: refEqAt('"entity"'),
   refPresent: (c, negate) => ({

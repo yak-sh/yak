@@ -10,10 +10,10 @@
 // clock in their own local zone, so the phrase stays authored (`today` must
 // advance tomorrow) and `now` rides in as a parameter tests can fix.
 
-// `forward` marks a phrase that begins at now and names its end (`in 5m`) —
-// the kind `timeInstant` reads the end of. It records how the phrase was
-// written, not anything about the numbers.
-export type Span = { start: number; end: number; forward?: boolean }
+// `at` is the moment a phrase names when it names one rather than a stretch
+// (`now`, `1 hour ago`, `in 5m`); its span then runs between now and that
+// moment.
+export type Span = { start: number; end: number; at?: number }
 
 let UNIT_MS: Record<string, number> = {
   second: 1_000,
@@ -117,7 +117,7 @@ export let timeSpan = (s: string, now: number = Date.now()): Span | null => {
         d.getMinutes(),
         d.getSeconds(),
       )
-  if (t == 'now') return { start: now, end: now }
+  if (t == 'now') return { start: now, end: now, at: now }
   if (t == 'today') return days(0, 1)
   if (t == 'yesterday') return days(-1, 0)
   if (t == 'tomorrow') return days(1, 2)
@@ -153,17 +153,15 @@ export let timeSpan = (s: string, now: number = Date.now()): Span | null => {
   m = t.match(/^(\d+) ?([a-z]+) ago$/)
   if (m && unit(m[2])) {
     let n = Number(m[1]), u = unit(m[2])!
-    return { start: UNIT_MS[u] ? now - n * UNIT_MS[u] : shift(-n, u), end: now }
+    let at = UNIT_MS[u] ? now - n * UNIT_MS[u] : shift(-n, u)
+    return { start: at, end: now, at }
   }
   // `in` and `after` name the same forward range.
   m = t.match(/^(?:in|after) (\d+) ?([a-z]+)$/)
   if (m && unit(m[2])) {
     let n = Number(m[1]), u = unit(m[2])!
-    return {
-      start: now,
-      end: UNIT_MS[u] ? now + n * UNIT_MS[u] : shift(n, u),
-      forward: true,
-    }
+    let at = UNIT_MS[u] ? now + n * UNIT_MS[u] : shift(n, u)
+    return { start: now, end: at, at }
   }
   // A clock is today unless a day word rides along. It never rolls forward:
   // past input stays visibly past for filters and schedulers.
@@ -191,11 +189,78 @@ export let timeSpan = (s: string, now: number = Date.now()): Span | null => {
 export let isTimeLiteral = (s: string, now: number = Date.now()): boolean =>
   timeSpan(s, now) != null
 
-// Forward phrases begin at now and name their end; other phrases name start.
+// A phrase naming a moment gives that moment; a stretch gives its start.
 export let timeInstant = (
   s: string,
   now: number = Date.now(),
 ): number | null => {
   let sp = timeSpan(s, now)
-  return sp ? (sp.forward ? sp.end : sp.start) : null
+  return sp ? sp.at ?? sp.start : null
+}
+
+/** One comparison a stamp must pass: an operator (`=`, `<`, `<=`, `>`, `>=`)
+ * and the moment, in epoch ms, it compares the stamp to. */
+export type Edge = [op: string, ms: number]
+
+// One phrase under one operator. A moment compares as itself: `>1 hour ago` is
+// later than an hour ago. A stretch compares as a whole: `>today` is after
+// today ends, `<=today` is before it ends. Equality selects the span, half
+// open, or the moment itself when it has no width: `=1 hour ago` is the last
+// hour.
+let edges = (op: string, s: Span): Edge[] =>
+  op == '='
+    ? s.end > s.start ? [['>=', s.start], ['<', s.end]] : [['=', s.start]]
+    : s.at != null
+    ? [[op, s.at]]
+    : op == '<'
+    ? [['<', s.start]]
+    : op == '<='
+    ? [['<', s.end]]
+    : op == '>'
+    ? [['>=', s.end]]
+    : [['>=', s.start]]
+
+let RANGE = /^(.*?)\.\.(\.?)(.*)$/s
+let OPS = ['=', '<', '<=', '>', '>=']
+
+// One item of an equality: a phrase, or `lo..hi` from `lo` through `hi` (`...`
+// stops before `hi`), each end read as that comparison reads it.
+let item = (s: string, now: number): Edge[] | null => {
+  let r = s.match(RANGE)
+  if (!r) {
+    let sp = timeSpan(s, now)
+    return sp && edges('=', sp)
+  }
+  let lo = timeSpan(r[1], now), hi = timeSpan(r[3], now)
+  return lo && hi && [...edges('>=', lo), ...edges(r[2] ? '<' : '<=', hi)]
+}
+
+/**
+ * What `op` against a time operand asks of a stamp, resolved against `now`:
+ * any of the returned arms, each a list of edges that must all hold. Equality
+ * reads a comma list of phrases or ranges of them as any-of; a comparison reads
+ * the operand as one phrase. Null when the operand is not made of phrases, so a
+ * compiler reads it by its plain rules instead.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { timeEdges } from '@yaks/query'
+ *
+ * let now = Date.parse('2026-07-15T12:00:00Z')
+ * assertEquals(timeEdges('>', '1 hour ago', now), [[['>', now - 3_600_000]]])
+ * assertEquals(timeEdges('=', 'someday', now), null)
+ * ```
+ */
+export let timeEdges = (
+  op: string,
+  value: string,
+  now: number = Date.now(),
+): Edge[][] | null => {
+  if (!OPS.includes(op)) return null
+  if (op != '=') {
+    let sp = timeSpan(value, now)
+    return sp && [edges(op, sp)]
+  }
+  let arms = value.split(',').map((s) => item(s, now))
+  return arms.every((a): a is Edge[] => a != null) ? arms : null
 }

@@ -130,7 +130,7 @@ export {
 } from './ast.ts'
 export { render } from './render.ts'
 export { type Driver, effect, type Row, scan, tally } from './driver.ts'
-export { type Tag, tagOf } from './sqlite.ts'
+export { held, type Tag, tagOf } from './sqlite.ts'
 export * from './cascade.ts'
 export * from './compound.ts'
 export * from './derived.ts'

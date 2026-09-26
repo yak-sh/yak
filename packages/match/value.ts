@@ -13,16 +13,16 @@
 //   `~`          contains, case-insensitively; an empty operand means presence.
 //   < <= > >=    comparisons, and an absent property never compares true.
 //   exists       the property has a value.
-// A time-typed property reads its operand as a time phrase first (a span, one
-// edge of which the operator picks) and falls back to the plain rules when the
-// operand is no phrase at all.
+// A time-typed property reads its operand as time phrases first (@yaks/query's
+// `timeEdges` says what each operator asks of a stamp) and falls back to the
+// plain rules when the operand is no phrase at all.
 //
 // A function here returns `null` where it cannot express the question exactly —
 // a comparison against an operand the property's type cannot hold. The caller
 // turns that into an `Unsupported` refusal rather than a wrong answer.
 
-import { type Span, timeSpan } from '@yaks/query'
-import type { Tag } from '@yaks/sql'
+import { timeEdges } from '@yaks/query'
+import { held, type Tag } from '@yaks/sql'
 
 /**
  * A test over one property's value. The value is whatever the bundle holds, or
@@ -68,9 +68,9 @@ let stamp = (v: unknown): v is string =>
  */
 export let cmp = (op: string, value: string, tag: Tag): Check | null => {
   if (NUMERIC.includes(tag)) {
-    if (!numeric(value)) return null
-    let n = Number(value)
-    return (v) => v != null && rel(Number(v), n, op)
+    let n = held(value, tag)
+    if (!numeric(n)) return null
+    return (v) => v != null && rel(Number(v), Number(n), op)
   }
   if (tag == 'time') return (v) => stamp(v) && rel(v, value, op)
   if (numeric(value)) return null
@@ -102,8 +102,9 @@ export let eq = (value: string, tag: Tag): Check | null => {
     // An operand that does not survive a round trip through number formatting
     // ('12.0' formats back as '12') can equal no stored number, so the exact
     // answer is a constant false.
-    return numeric(value) && String(Number(value)) === value
-      ? (v) => v != null && Number(v) == Number(value)
+    let n = held(value, tag)
+    return numeric(n) && String(Number(n)) === n
+      ? (v) => v != null && Number(v) == Number(n)
       : () => false
   }
   return (v) => v != null && String(v) == value
@@ -128,47 +129,26 @@ export let contains = (value: string): Check => {
   return (v) => String(v ?? '').toLowerCase().includes(needle)
 }
 
-// ---- time phrases (a phrase names a span; the operator picks one edge) ----
+// ---- time phrases (@yaks/query resolves the edges; this holds a stamp to them)
 
 let iso = (ms: number): string => new Date(ms).toISOString()
-let at = (op: string, ms: number): Check => (v) => rel(String(v), iso(ms), op)
-let both = (a: Check, b: Check): Check => (v) => a(v) && b(v)
-
-// A span whose end equals its start is an instant, where the `=` branch carries
-// the whole answer; a span with width answers `=` as a half-open interval.
-let edge = (op: string, s: Span): Check => {
-  let point = s.end <= s.start
-  return op == '<'
-    ? at('<', s.start)
-    : op == '<='
-    ? point ? at('<=', s.start) : at('<', s.end)
-    : op == '>'
-    ? point ? at('>', s.start) : at('>=', s.end)
-    : op == '>='
-    ? at('>=', s.start)
-    : point
-    ? at('=', s.start)
-    : both(at('>=', s.start), at('<', s.end))
-}
 
 /**
- * A time-typed property against a time phrase, resolved relative to `now`. A
- * comma list of phrases is any-of under equals (none-of under not-equals);
- * anything else reads the whole operand as one phrase. Returns `null` when the
- * operand is not a time phrase, so the caller falls back to the plain rules.
+ * A time-typed property against a time phrase, resolved relative to `now`, by
+ * the edges @yaks/query's `timeEdges` names: a comma list of phrases or ranges
+ * of them is any-of under equals (none-of under not-equals), and a comparison
+ * reads the operand as one phrase. Returns `null` when the operand is not made
+ * of phrases, so the caller falls back to the plain rules.
  */
 export let time = (op: string, value: string, now: number): Check | null => {
-  let phrase = (s: string) => timeSpan(s, now)
-  let spans = value.split(',').map(phrase)
-  if (spans.every((s) => s) && (op == '' || op == '!')) {
-    let arms = spans.map((s) => edge('', s!))
-    let hit: Check = (v) => stamp(v) && arms.some((a) => a(v))
-    return op == '' ? hit : (v) => !hit(v)
-  }
-  let s = phrase(value)
-  if (!s) return null
-  let arm = edge(op, s)
-  return (v) => stamp(v) && arm(v)
+  let arms = timeEdges(op == '' || op == '!' ? '=' : op, value, now)
+  if (!arms) return null
+  let tests = arms.map((all) =>
+    all.map(([o, ms]): Check => (v) => rel(String(v), iso(ms), o))
+  )
+  let hit: Check = (v) =>
+    stamp(v) && tests.some((all) => all.every((t) => t(v)))
+  return op == '!' ? (v) => !hit(v) : hit
 }
 
 /**

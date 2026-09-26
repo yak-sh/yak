@@ -159,22 +159,28 @@ with an empty operand (`.title~=`) asks for presence rather than selecting
 everything.
 
 Number, priority and boolean properties compare numerically; every other type
-compares as text. A boolean is stored as 0 or 1, so `.available=1` selects the
-books in stock and `.available=true` selects nothing. An operand no stored
-number could equal selects nothing rather than raising: `.price=12.0` is empty,
-because a stored `12` formats back as `12`. A comparison is stricter —
-`.price>cheap` is refused at compile time, because there is no number to compare
-against.
+compares as text. A boolean is stored as 0 or 1, and `true` and `false` name
+those, so `.available=true` and `.available=1` both select the books in stock.
+An operand no stored number could equal selects nothing rather than raising:
+`.price=12.0` is empty, because a stored `12` formats back as `12`. A comparison
+is stricter — `.price>cheap` is refused at compile time, because there is no
+number to compare against.
 
 ### Time properties
 
 A property the vocabulary types as a timestamp reads its operand as a time
-phrase first. A phrase defines a time interval, interpreted by the operator:
+phrase first. A phrase names a moment or a stretch of time, and the operator
+compares with it (`timeEdges` in @yaks/query):
 
-- `=` — inside the span (`.released=today`)
-- `>=` — from its start (`.released>=yesterday`)
-- `<=` — up to its end
-- `>` and `<` — strictly after, strictly before
+- A moment (`now`, `1-hour-ago`, `in-5m`) compares as itself: `>1-hour-ago` is
+  later than an hour ago, and `<=in-5m` is no later than five minutes from now.
+- A stretch (`today`, `last week`, `9am`, `2024-06-15`) compares as a whole:
+  `>=` from its start, `>` after its end, `<` before its start, `<=` before its
+  end.
+- `=` selects the stretch, or for a moment the time between now and it:
+  `.released=today`, and `.released=10-minutes-ago` for the last ten minutes.
+- `lo..hi` runs from `lo` through `hi`, and `lo...hi` stops before `hi`:
+  `.released=yesterday..today`.
 
 A comma list of phrases under `=` is any-of, and under `!=` is none-of. When the
 operand is not a phrase at all, the ordinary rules apply, so

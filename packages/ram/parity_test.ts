@@ -8,10 +8,14 @@
 // in this package's Map — and must return the same bundles, refuse the same
 // batches, and read back the same entities, batch for batch.
 
-import { parity, rig } from '../sqlite/parity.ts'
+import { answers, parity, rig } from '../sqlite/parity.ts'
 import { shop, store } from '../sqlite/testing.ts'
 import { ram } from './mod.ts'
 
+let mine = () => rig(ram(shop, { number: true }))
+
 Deno.test('a ram graph and a sqlite graph agree, batch for batch', () => {
-  parity(rig(ram(shop, { number: true })), rig(store()))
+  parity(mine(), rig(store()))
 })
+
+Deno.test('a ram graph selects what each query means', () => answers(mine()))

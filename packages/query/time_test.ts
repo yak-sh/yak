@@ -17,13 +17,18 @@ Deno.test('today names a midnight-to-midnight range', () => {
   assertEquals(s.end, +new Date(2026, 8, 3))
 })
 
-Deno.test('relative and forward phrases', () => {
-  assertEquals(timeSpan('1 hour ago', NOW)!.end, NOW)
-  assertEquals(timeSpan('1 hour ago', NOW)!.start, NOW - 3_600_000)
-  let fwd = timeSpan('in 5m', NOW)!
-  assertEquals(fwd.forward, true)
-  assertEquals(fwd.end, NOW + 5 * 60_000)
-  // A forward phrase reads its end as the instant; a plain phrase its start.
+Deno.test('a relative phrase names a moment, and spans from now to it', () => {
+  assertEquals(timeSpan('1 hour ago', NOW), {
+    start: NOW - 3_600_000,
+    end: NOW,
+    at: NOW - 3_600_000,
+  })
+  assertEquals(timeSpan('in 5m', NOW), {
+    start: NOW,
+    end: NOW + 5 * 60_000,
+    at: NOW + 5 * 60_000,
+  })
+  // The instant is the moment a phrase names, or a stretch's start.
   assertEquals(timeInstant('in 5m', NOW), NOW + 5 * 60_000)
   assertEquals(timeInstant('today', NOW), +new Date(2026, 8, 2))
 })
@@ -45,11 +50,11 @@ Deno.test('a plain word is no time literal', () => {
 // A fixed clock: Wed 2026-07-15 14:30 local. Spans come back in epoch ms.
 let THEN = new Date(2026, 6, 15, 14, 30).getTime()
 
-let spans: [string, number, number, boolean?][] = [
+let spans: [string, number, number, number?][] = [
   ['today', at(2026, 6, 15), at(2026, 6, 16)],
   ['yesterday', at(2026, 6, 14), at(2026, 6, 15)],
   ['tomorrow', at(2026, 6, 16), at(2026, 6, 17)],
-  ['now', THEN, THEN],
+  ['now', THEN, THEN, THEN],
   ['2026-07-04', at(2026, 6, 4), at(2026, 6, 5)],
   ['this week', at(2026, 6, 13), at(2026, 6, 20)], // Monday start
   ['last week', at(2026, 6, 6), at(2026, 6, 13)],
@@ -57,19 +62,20 @@ let spans: [string, number, number, boolean?][] = [
   ['next month', at(2026, 7, 1), at(2026, 8, 1)],
   ['this year', at(2026, 0, 1), at(2027, 0, 1)],
   ['this hour', at(2026, 6, 15, 14), at(2026, 6, 15, 15)],
-  ['5 minutes ago', THEN - 300_000, THEN],
-  ['1 hour ago', THEN - 3_600_000, THEN],
-  ['2 days ago', THEN - 2 * 86_400_000, THEN],
-  ['1 month ago', at(2026, 5, 15, 14, 30), THEN],
-  ['in 2 hours', THEN, THEN + 7_200_000, true],
-  ['1-hour-ago', THEN - 3_600_000, THEN], // glue for quoteless boxes
-  ['1_hour_ago', THEN - 3_600_000, THEN],
+  ['5 minutes ago', THEN - 300_000, THEN, THEN - 300_000],
+  ['1 hour ago', THEN - 3_600_000, THEN, THEN - 3_600_000],
+  ['2 days ago', THEN - 2 * 86_400_000, THEN, THEN - 2 * 86_400_000],
+  ['1 month ago', at(2026, 5, 15, 14, 30), THEN, at(2026, 5, 15, 14, 30)],
+  ['in 2 hours', THEN, THEN + 7_200_000, THEN + 7_200_000],
+  // glue for quoteless boxes
+  ['1-hour-ago', THEN - 3_600_000, THEN, THEN - 3_600_000],
+  ['1_hour_ago', THEN - 3_600_000, THEN, THEN - 3_600_000],
   // short units — what a hand types
-  ['in 60m', THEN, THEN + 3_600_000, true],
-  ['after 8h', THEN, THEN + 8 * 3_600_000, true],
-  ['after 8 hours', THEN, THEN + 8 * 3_600_000, true],
-  ['in 2d', THEN, THEN + 2 * 86_400_000, true],
-  ['30 mins ago', THEN - 1_800_000, THEN],
+  ['in 60m', THEN, THEN + 3_600_000, THEN + 3_600_000],
+  ['after 8h', THEN, THEN + 8 * 3_600_000, THEN + 8 * 3_600_000],
+  ['after 8 hours', THEN, THEN + 8 * 3_600_000, THEN + 8 * 3_600_000],
+  ['in 2d', THEN, THEN + 2 * 86_400_000, THEN + 2 * 86_400_000],
+  ['30 mins ago', THEN - 1_800_000, THEN, THEN - 1_800_000],
   // clock times: an hour named alone spans its hour, a minute its minute
   ['9am', at(2026, 6, 15, 9), at(2026, 6, 15, 10)],
   ['8pm', at(2026, 6, 15, 20), at(2026, 6, 15, 21)],
@@ -85,12 +91,12 @@ let spans: [string, number, number, boolean?][] = [
   // an ISO stamp is that moment, its precision wide
   ['2026-07-25T09:00', at(2026, 6, 25, 9), at(2026, 6, 25, 9, 1)],
 ]
-for (let [phrase, start, end, forward] of spans) {
-  // Only a forward phrase carries the flag timeInstant() reads its end by.
+for (let [phrase, start, end, moment] of spans) {
+  // Only a phrase naming a moment carries it.
   Deno.test(`span: ${phrase}`, () =>
     assertEquals(
       timeSpan(phrase, THEN),
-      forward ? { start, end, forward } : { start, end },
+      moment == null ? { start, end } : { start, end, at: moment },
     ))
 }
 Deno.test('span: a zoned stamp keeps its own zone', () =>
@@ -104,8 +110,8 @@ Deno.test('span: not phrases', () => {
   }
 })
 
-// One moment, for the callers that schedule rather than filter (a wake):
-// the range's start, except the forward phrases that begin at now.
+// One moment, for the callers that schedule rather than filter (a wake): the
+// moment a phrase names, or the start of the stretch it names.
 let moments: [string, number][] = [
   ['in 60m', THEN + 3_600_000],
   ['after 8 hours', THEN + 8 * 3_600_000],

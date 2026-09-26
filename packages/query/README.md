@@ -236,11 +236,12 @@ schema, so `parse` emits scalars and never a `time` node. The helpers below let
 a schema-aware compiler interpret scalars in time properties:
 
 ```ts
-import { isTimeLiteral, timeInstant, timeSpan } from '@yaks/query'
+import { isTimeLiteral, timeEdges, timeInstant, timeSpan } from '@yaks/query'
 
 isTimeLiteral('1 hour ago') // true
-timeSpan('1 hour ago') // { start, end, forward? } | null
-timeInstant('in 5m') // one moment (a forward-looking phrase gives its end)
+timeSpan('1 hour ago') // { start, end, at? } | null; `at` is the moment named
+timeInstant('in 5m') // one moment (a stretch like `today` gives its start)
+timeEdges('>', '1 hour ago') // [[['>', an hour ago]]]: what `>` asks of a stamp
 ```
 
 The `time(raw)` builder creates the explicit node that a promoted AST, or a

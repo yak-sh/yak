@@ -25,6 +25,8 @@ Deno.test('equality reads text, numbers, lists and ranges', () => {
   assert(hit('', '1..5', 'number', 5))
   assertFalse(hit('', '1...5', 'number', 5)) // an exclusive end
   assert(hit('', '1', 'bool', 1))
+  assert(hit('', 'true', 'bool', 1))
+  assert(hit('', 'false', 'bool', 0))
 })
 
 Deno.test('an empty operand asks for an absent property', () => {
@@ -57,12 +59,14 @@ Deno.test('presence asks only whether the property has a value', () => {
   assertFalse(hit('exists', '', 'text', null))
 })
 
-Deno.test('a time phrase names a span and the operator picks its edge', () => {
+Deno.test('a relative time compares as the moment it names', () => {
   let mins = 60_000
   assert(hit('', '1 hour ago', 'time', ago(30 * mins)))
   assertFalse(hit('', '1 hour ago', 'time', ago(90 * mins)))
   assert(hit('<', '1 hour ago', 'time', ago(90 * mins)))
   assert(hit('>=', '1 hour ago', 'time', ago(30 * mins)))
+  assert(hit('>', '1 hour ago', 'time', ago(30 * mins)))
+  assertFalse(hit('<=', '1 hour ago', 'time', ago(30 * mins)))
   assert(hit('!', '1 hour ago', 'time', ago(90 * mins)))
   // a value that is no stamp at all answers no time question
   assertFalse(hit('', '1 hour ago', 'time', 'someday'))
