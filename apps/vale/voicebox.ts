@@ -12,7 +12,7 @@
 // vale's sound is off.
 //
 // How loud each voice is heard is voice.ts's.
-import type { Call, Heard } from '@yaks/rtc'
+import type { Call, Heard, Loop } from '@yaks/rtc'
 import { comp, type Net, str } from './net.ts'
 import type { Frame } from './play.ts'
 import type { Body } from './sim.ts'
@@ -24,7 +24,8 @@ let AGAIN = 5000
 
 // @yaks/rtc, loaded the first time anyone speaks or is heard: the vale plays
 // without it, and plays on if it cannot be had.
-let rtc = () => import('@yaks/rtc')
+let lib: typeof import('@yaks/rtc') | null = null
+let rtc = () => import('@yaks/rtc').then((m) => lib = m)
 
 /** How the microphone stands, as its button shows it. */
 export type Mic = 'off' | 'starting' | 'on' | 'denied' | 'spent'
@@ -53,6 +54,29 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
   let sent: { stop: () => Promise<void> } | null = null
   let held = new Map<string, Voice>()
   let moved = (m: Mic) => told(mic = m)
+
+  // While the microphone is on, the vale plays through a loop the browser's
+  // echo canceller hears (@yaks/rtc `loopback`), so a player on speakers does
+  // not send the others back their own voices. Moved over once it plays; one
+  // that never does leaves the speakers as they were until the microphone is
+  // next turned on.
+  let loop: Loop | null = null
+  let echo = () => {
+    let ctx = sound.context
+    let want = mic == 'on' && !!ctx && !sound.muted && !!lib
+    if (want && !loop) {
+      let made = loop = lib!.loopback(ctx!)
+      made.ready.then(
+        () => loop == made && sound.play(made.into),
+        () => made.stop(),
+      )
+    }
+    if (!want && loop) {
+      sound.play(null)
+      loop.stop()
+      loop = null
+    }
+  }
 
   let drop = (eid: string) => {
     let v = held.get(eid)
@@ -125,6 +149,10 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
     get mic() {
       return mic
     },
+    /** The loop the vale plays through while the microphone is on, if any. */
+    get loop() {
+      return loop
+    },
     /** The voices heard now: whose, their stream, and how loud they play. */
     get heard() {
       return [...held].filter(([, v]) => v.heard).map(([eid, v]) => ({
@@ -161,9 +189,11 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
         moved(mic == 'spent' ? 'spent' : 'off')
       }
     },
-    /** Each frame: the voices within earshot asked for, the ones out of it
-     * let go, and each one heard placed and faded. */
+    /** Each frame: the vale played through the loop while the microphone is
+     * on, the voices within earshot asked for, the ones out of it let go, and
+     * each one heard placed and faded. */
     tick: (f: Frame) => {
+      echo()
       let want = new Map<string, { session: string; body: Body }>()
       if (!sound.muted && mic != 'spent') {
         for (let o of f.others) {

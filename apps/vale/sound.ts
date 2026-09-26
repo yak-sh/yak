@@ -60,6 +60,10 @@ let sources = new Map<string, Source>()
 let points = 0
 let heard = noises()
 
+// Where the last stop plays: the context's own speakers, or a node the page
+// hands `play` (voicebox.ts: a loop the echo canceller hears).
+let speakers: AudioNode | null = null
+
 let wake = () => {
   if (ctx || muted) return
   try {
@@ -74,6 +78,7 @@ let wake = () => {
     })
     limit.connect(ctx.destination)
     out = limit
+    speakers = ctx.destination
     loops = { fire: voices.fire(ctx), water: voices.water(ctx) }
   } catch {
     ctx = null
@@ -187,6 +192,20 @@ let noisy = (n: Noise) =>
   )
 
 export let sound = {
+  /** The vale's AudioContext, once a key or a touch has woken it. */
+  get context() {
+    return ctx
+  },
+  /** Play everything into `to` rather than the speakers, or into the
+   * speakers again with null. */
+  play: (to: AudioNode | null) => {
+    if (!ctx || !out) return
+    let next = to ?? ctx.destination
+    if (next == speakers) return
+    out.connect(next)
+    out.disconnect(speakers!)
+    speakers = next
+  },
   get muted() {
     return muted
   },
