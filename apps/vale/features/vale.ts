@@ -1,10 +1,10 @@
 // The kinds of place of the green country round Mossvale, and each of its
-// levels' own: Birchmere's birches and mere, Clovermead's clover, Fernwood's
-// ferns, Elderglade's elders, Greypine's grey pines, Wolfden's hollow and
-// dens.
+// levels' own: Birchmere's birches and mere and its village of birch,
+// Clovermead's clover, Fernwood's ferns and its turf-roofed hamlet,
+// Elderglade's elders, Greypine's grey pines, Wolfden's hollow and dens.
 import { fbm, lerp, smooth } from '../rand.ts'
 import type { Prop } from '../terrain.ts'
-import { bump, type Feature, Top } from './kit.ts'
+import { bump, type Feature, hamlet, Top } from './kit.ts'
 
 /** A village's buildings, by where each stands from the village's middle. */
 let VILLAGE: Prop[] = [
@@ -198,5 +198,17 @@ export let VALE: Record<string, Feature> = {
   lair: {
     ...dens,
     builds: [{ kind: 'lair', x: 0, z: 0, seed: 0 }],
+  },
+  // Birchmere's village on its green by the mere, built of birch.
+  mereside: {
+    ...BASE.village,
+    like: 'village',
+    builds: hamlet('birchhouse'),
+  },
+  // Fernwood's hamlet in its glade, of logs roofed with turf.
+  fernhamlet: {
+    ...BASE.village,
+    like: 'village',
+    builds: hamlet('turfhouse'),
   },
 }

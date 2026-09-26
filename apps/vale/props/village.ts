@@ -1,53 +1,120 @@
 // What a village builds, at a quarter of a ground voxel: cottages and a hall,
 // the well, the fire, the notice board and the lamps; and the signpost at the
-// head of every road.
+// head of every road. A village's houses are built of what is to hand where
+// it stands: plaster in Mossvale, birch at Birchmere, turf-roofed logs in
+// Fernwood, whitewash and slate at Gullwick, driftwood at Driftwood Bay,
+// quarried stone at Stonestep.
 import { ball, box, key, type Vox } from '../mesh.ts'
+import { rand } from '../rand.ts'
 import { FOUND, type Kind, type Model, TIMBER } from './kit.ts'
 
 let PLASTER = 0xefe3c8
 let ROOFS = [0xc2573e, 0x4f6f9e, 0x8a5a9e, 0x5c8f55]
 
-let house = (seed: number, w: number, d: number, wall: number): Model => {
-  let v: Vox = new Map()
-  let roofC = ROOFS[seed % ROOFS.length]
-  let x0 = -w / 2, x1 = w / 2 - 1, z0 = -d / 2, z1 = d / 2 - 1
-  // Stone footing, then plaster walls framed in timber.
-  box(v, [x0, 0, z0], [x1, 1, z1], FOUND)
-  for (let y = 2; y < wall; y++) {
-    for (let x = x0; x <= x1; x++) {
-      for (let z of [z0, z1]) v.set(key(x, y, z), PLASTER)
-    }
-    for (let z = z0; z <= z1; z++) {
-      for (let x of [x0, x1]) v.set(key(x, y, z), PLASTER)
-    }
-  }
-  for (let [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) {
-    box(v, [x, 2, z], [x, wall - 1, z], TIMBER)
-  }
-  box(v, [x0, wall - 1, z0], [x1, wall - 1, z0], TIMBER)
-  box(v, [x0, wall - 1, z1], [x1, wall - 1, z1], TIMBER)
-  // A door on the south side, and windows either side of it and round the back.
-  box(v, [-2, 2, z1], [1, 8, z1], 0x7b5334)
-  v.set(key(1, 5, z1 + 1), 0xe5c05a)
-  for (let x of [x0 + 3, x1 - 5]) {
-    box(v, [x, 5, z1], [x + 2, 7, z1], 0x3b5578)
-    box(v, [x, 4, z1 + 1], [x + 2, 4, z1 + 1], TIMBER)
-    box(v, [x, 5, z0], [x + 2, 7, z0], 0x3b5578)
-  }
-  // A gabled roof, stepping in a voxel for every voxel it climbs.
-  let half = Math.ceil(d / 2) + 1
-  for (let l = 0; l <= half; l++) {
-    for (let x = x0 - 1; x <= x1 + 1; x++) {
-      v.set(key(x, wall + l, z0 - 1 + l), l % 3 == 0 ? roofC - 0x101010 : roofC)
-      v.set(key(x, wall + l, z1 + 1 - l), l % 3 == 0 ? roofC - 0x101010 : roofC)
-    }
-    for (let z = z0 - 1 + l + 1; z <= z1 + 1 - l - 1; z++) {
-      for (let x of [x0, x1]) v.set(key(x, wall + l, z), PLASTER)
-    }
-  }
-  box(v, [x1 - 4, wall + 2, z0 + 3], [x1 - 3, wall + half + 2, z0 + 4], FOUND)
-  return { vox: v, size: 0.25 }
+/** What a house is built of: the colour of its walls at each voxel, the
+ * timber framing them, and its roofs, one picked by seed. */
+type Build = {
+  wall: (x: number, y: number, z: number, seed: number) => number
+  frame: number
+  roofs: number[]
 }
+
+let PLASTERED: Build = { wall: () => PLASTER, frame: TIMBER, roofs: ROOFS }
+
+let house =
+  ({ wall: at, frame, roofs }: Build) =>
+  (seed: number, w: number, d: number, wall: number): Model => {
+    let v: Vox = new Map()
+    let roofC = roofs[seed % roofs.length]
+    let x0 = -w / 2, x1 = w / 2 - 1, z0 = -d / 2, z1 = d / 2 - 1
+    // Stone footing, then walls framed at their corners and eaves.
+    box(v, [x0, 0, z0], [x1, 1, z1], FOUND)
+    for (let y = 2; y < wall; y++) {
+      for (let x = x0; x <= x1; x++) {
+        for (let z of [z0, z1]) v.set(key(x, y, z), at(x, y, z, seed))
+      }
+      for (let z = z0; z <= z1; z++) {
+        for (let x of [x0, x1]) v.set(key(x, y, z), at(x, y, z, seed))
+      }
+    }
+    for (let [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) {
+      box(v, [x, 2, z], [x, wall - 1, z], frame)
+    }
+    box(v, [x0, wall - 1, z0], [x1, wall - 1, z0], frame)
+    box(v, [x0, wall - 1, z1], [x1, wall - 1, z1], frame)
+    // A door on the south side, and windows either side of it and round the
+    // back.
+    box(v, [-2, 2, z1], [1, 8, z1], 0x7b5334)
+    v.set(key(1, 5, z1 + 1), 0xe5c05a)
+    for (let x of [x0 + 3, x1 - 5]) {
+      box(v, [x, 5, z1], [x + 2, 7, z1], 0x3b5578)
+      box(v, [x, 4, z1 + 1], [x + 2, 4, z1 + 1], frame)
+      box(v, [x, 5, z0], [x + 2, 7, z0], 0x3b5578)
+    }
+    // A gabled roof, stepping in a voxel for every voxel it climbs.
+    let half = Math.ceil(d / 2) + 1
+    for (let l = 0; l <= half; l++) {
+      for (let x = x0 - 1; x <= x1 + 1; x++) {
+        let c = l % 3 == 0 ? roofC - 0x101010 : roofC
+        v.set(key(x, wall + l, z0 - 1 + l), c)
+        v.set(key(x, wall + l, z1 + 1 - l), c)
+      }
+      for (let z = z0 - 1 + l + 1; z <= z1 + 1 - l - 1; z++) {
+        for (let x of [x0, x1]) {
+          v.set(key(x, wall + l, z), at(x, wall + l, z, seed))
+        }
+      }
+    }
+    box(v, [x1 - 4, wall + 2, z0 + 3], [x1 - 3, wall + half + 2, z0 + 4], FOUND)
+    return { vox: v, size: 0.25 }
+  }
+
+// Birchmere's: walls of birch logs, white flecked black, roofs of moss.
+let BIRCH: Build = {
+  wall: (x, y, z, s) =>
+    rand(x + z, y, s) < 0.12 ? 0x3a3a36 : y & 1 ? 0xeeeae0 : 0xe0dcd0,
+  frame: 0xb8b4a8,
+  roofs: [0x5a7a4a, 0x4e6e42, 0x66864e],
+}
+// Fernwood's: walls of dark logs, roofs of turf.
+let TURF: Build = {
+  wall: (_x, y) => y & 1 ? 0x5a3e2a : 0x6a4a31,
+  frame: 0x3e2a1c,
+  roofs: [0x4f7f3a, 0x5a8a42, 0x46743a],
+}
+// Gullwick's: whitewashed stone, frames painted the blue of the boats, roofs
+// of slate.
+let WHITEWASH: Build = {
+  wall: (x, y, z) => (x + y + z) % 5 ? 0xf4f2ec : 0xe6e4dc,
+  frame: 0x3a5a7a,
+  roofs: [0x4a5058, 0x3e444c, 0x56606a],
+}
+// Driftwood Bay's: shacks of grey boards the sea brought in, roofs tarred
+// and patched.
+let DRIFT: Build = {
+  wall: (x, y, z, s) =>
+    rand(x + z, (y >> 2) + s, 3) < 0.15
+      ? 0x7a6a58
+      : (x + z) & 1
+      ? 0x9a9488
+      : 0x8a847a,
+  frame: 0x6a645a,
+  roofs: [0x2e2c2a, 0x3a3634, 0x34302c],
+}
+// Stonestep's: coursed blocks from the quarry, roofs of stone slab.
+let STONE: Build = {
+  wall: (x, y, z) =>
+    y % 3 == 0 ? 0xb8b098 : ((x + z) >> 1) + (y >> 1) & 1 ? 0xc8c0a8 : 0xd4ccb4,
+  frame: 0x9a9280,
+  roofs: [0x7a7a78, 0x8a8a86, 0x6e6e6c],
+}
+
+// A cottage built of `build`.
+let cot = (build: Build): Kind => ({
+  make: (s) => house(build)(s, 28, 22, 10),
+  foot: 4.5,
+  span: [7, 5.5],
+})
 
 let well = (): Model => {
   let v: Vox = new Map()
@@ -121,8 +188,17 @@ let signpost = (): Model => {
 }
 
 export let VILLAGE: Record<string, Kind> = {
-  cottage: { make: (s) => house(s, 28, 22, 10), foot: 4.5, span: [7, 5.5] },
-  hall: { make: (s) => house(s, 36, 28, 12), foot: 5.5, span: [9, 7] },
+  cottage: cot(PLASTERED),
+  hall: {
+    make: (s) => house(PLASTERED)(s, 36, 28, 12),
+    foot: 5.5,
+    span: [9, 7],
+  },
+  birchhouse: cot(BIRCH),
+  turfhouse: cot(TURF),
+  fisherhouse: cot(WHITEWASH),
+  shack: cot(DRIFT),
+  stonehouse: cot(STONE),
   well: { make: well, girth: 1.2, foot: 1.2, span: [2.2, 2.2] },
   fire: { make: fire, girth: 1.2, foot: 1.5, span: [2.6, 2.6] },
   board: { make: board, girth: 0.35, foot: 0.8, span: [2.2, 0.5] },

@@ -1,14 +1,15 @@
 // The kinds of place of the hills and moors, and the ruins on them; and each
-// level's own: Stonestep's quarry and the watch-fire on its moor;
+// level's own: Stonestep's quarry, its village of the quarry's stone and the
+// watch-fire on its moor;
 // Heatherfell's heather, the stones on its fell and its scree; Oldwall's wall,
 // bracken and autumn wood; Kingsbarrow's barrow, its moor of graves and the
 // old king's hall; Giantsteps' stair of basalt and its columns.
 import { fbm, lerp, smooth } from '../rand.ts'
 import type { Prop } from '../terrain.ts'
-import { bump, crest, type Feature, ring, Top, wide } from './kit.ts'
+import { bump, crest, type Feature, hamlet, ring, Top, wide } from './kit.ts'
 import { VALE } from './vale.ts'
 
-let { crags, woods } = VALE
+let { crags, woods, village } = VALE
 
 /** A ruin: a broken ring of columns, and what stands of the walls round it. */
 let RUINS: Prop[] = [
@@ -195,4 +196,6 @@ export let HILLS: Record<string, Feature> = {
     rocks: 0.12,
     stones: ['columns', 'rock'],
   },
+  // Stonestep's village, built of the quarry's stone.
+  stonetown: { ...village, like: 'village', builds: hamlet('stonehouse') },
 }

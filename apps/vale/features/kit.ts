@@ -71,3 +71,26 @@ export let ring = (kind: string, r: number, n: number, gone: number[] = []) =>
     z: Math.round(Math.sin((i / n) * Math.PI * 2) * r * 2) / 2,
     seed: i,
   })).filter((_, i) => !gone.includes(i))
+
+/** A village's buildings round its fire: four `house`s, `middle` in its
+ * square (a well, or what stands for one), its notice board and four
+ * `lamp`s, and `more`. */
+export let hamlet = (
+  house: string,
+  middle = 'well',
+  more: Prop[] = [],
+  lamp = 'lamp',
+): Prop[] => [
+  { kind: 'fire', x: 0, z: 0, seed: 1 },
+  { kind: house, x: -8, z: -8, seed: 0 },
+  { kind: house, x: 9, z: -9, seed: 1 },
+  { kind: house, x: 9, z: 9.5, seed: 2 },
+  { kind: house, x: -9, z: 9, seed: 3 },
+  { kind: middle, x: 4, z: -2, seed: 2 },
+  { kind: 'board', x: -3.5, z: 2.5, seed: 3 },
+  { kind: lamp, x: -4, z: -4, seed: 4 },
+  { kind: lamp, x: 4.5, z: 4.5, seed: 5 },
+  { kind: lamp, x: -5, z: 5.5, seed: 6 },
+  { kind: lamp, x: 5.5, z: -5, seed: 7 },
+  ...more,
+]

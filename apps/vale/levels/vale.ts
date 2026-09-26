@@ -31,7 +31,7 @@ export let VALE: Record<string, Row> = {
       woods: { kind: 'birchwood', at: [85, 35] },
       east: { kind: 'birchwood', at: [98, 85] },
       fields: { kind: 'fields', at: [40, 35] },
-      green: { kind: 'village', at: [69, 62] },
+      green: { kind: 'mereside', at: [69, 62] },
     },
     roads: {
       north: 'clovermead',
@@ -75,7 +75,7 @@ export let VALE: Record<string, Row> = {
       deep: { kind: 'fernheart', at: [94, 42] },
       meadow: { kind: 'meadow', at: [36, 88] },
       pond: { kind: 'lake', at: [90, 90] },
-      glade: { kind: 'village', at: [62, 66] },
+      glade: { kind: 'fernhamlet', at: [62, 66] },
     },
     roads: {
       north: 'elderglade',

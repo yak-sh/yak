@@ -12,7 +12,7 @@ export let COAST: Record<string, Row> = {
       coast: { kind: 'bay', at: [66, 14] },
       meadow: { kind: 'farmland', at: [36, 40] },
       woods: { kind: 'woods', at: [36, 92] },
-      harbour: { kind: 'village', at: [60, 62] },
+      harbour: { kind: 'fishtown', at: [60, 62] },
     },
     roads: {
       east: 'birchmere',
@@ -39,7 +39,7 @@ export let COAST: Record<string, Row> = {
       coast: { kind: 'strand', at: [20, 64] },
       woods: { kind: 'shorewood', at: [92, 38] },
       meadow: { kind: 'marram', at: [92, 92] },
-      wharf: { kind: 'village', at: [68, 66] },
+      wharf: { kind: 'shacks', at: [68, 66] },
     },
     roads: {
       east: 'gullwick',

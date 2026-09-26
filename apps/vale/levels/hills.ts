@@ -13,7 +13,7 @@ export let HILLS: Record<string, Row> = {
       crags: { kind: 'quarry', at: [36, 36] },
       meadow: { kind: 'meadow', at: [36, 90] },
       woods: { kind: 'woods', at: [96, 92] },
-      steps: { kind: 'village', at: [60, 64] },
+      steps: { kind: 'stonetown', at: [60, 64] },
     },
     roads: {
       north: 'mossvale',

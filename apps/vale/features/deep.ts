@@ -3,27 +3,10 @@
 // Gleamdeep's violet caps, its amethyst and the great geode; Shardvault's
 // pale caps, its shards and its vault.
 import { fbm } from '../rand.ts'
-import type { Prop } from '../terrain.ts'
-import { bump, type Feature, ring, Top, wide } from './kit.ts'
+import { bump, type Feature, hamlet, ring, Top, wide } from './kit.ts'
 import { VALE } from './vale.ts'
 
 let { village } = VALE
-
-/** Glowcap's village: houses in the stems of toadstools round the fire, lit
- * by wisplight. */
-let CAPS: Prop[] = [
-  { kind: 'fire', x: 0, z: 0, seed: 1 },
-  { kind: 'shroomhouse', x: -8, z: -8, seed: 0 },
-  { kind: 'shroomhouse', x: 9, z: -9, seed: 1 },
-  { kind: 'shroomhouse', x: 9, z: 9.5, seed: 2 },
-  { kind: 'shroomhouse', x: -9, z: 9, seed: 0 },
-  { kind: 'well', x: 4, z: -2, seed: 2 },
-  { kind: 'board', x: -3.5, z: 2.5, seed: 3 },
-  { kind: 'wisplamp', x: -4, z: -4, seed: 4 },
-  { kind: 'wisplamp', x: 4.5, z: 4.5, seed: 5 },
-  { kind: 'wisplamp', x: -5, z: 5.5, seed: 6 },
-  { kind: 'wisplamp', x: 5.5, z: -5, seed: 7 },
-]
 
 // A wood of giant toadstools on soft violet ground.
 let shroomwood: Feature = {
@@ -64,7 +47,11 @@ export let DEEP: Record<string, Feature> = {
     decor: [['mushroom', 0.02], ['tuft', 0.02]],
   },
   // Glowcap's village, in the stems of toadstools.
-  capvillage: { ...village, like: 'village', builds: CAPS },
+  capvillage: {
+    ...village,
+    like: 'village',
+    builds: hamlet('shroomhouse', 'well', [], 'wisplamp'),
+  },
   // Gleamdeep's wood: toadstools with violet caps, amethyst underfoot.
   gleamwood: {
     ...shroomwood,

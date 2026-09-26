@@ -106,11 +106,11 @@ export let FIRE: Record<string, Row> = {
     wild: 'scorch',
     look: {
       ground: {
-        ash: 0x1e1a1a,
-        stone: 0x2a2224,
+        ash: 0x3a3232,
+        stone: 0x4a3e3e,
         ember: 0xff5a1a,
-        snow: 0x2a2020,
-        path: 0x4a3a34,
+        snow: 0x3a2e2e,
+        path: 0x6a5448,
       },
       water: [0x3a0a04, 0x6a1a08, 0xff8a3a],
       sky: 0x6a1a10,

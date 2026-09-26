@@ -5,32 +5,21 @@
 // ice; Whitepeak's peak, cornices and high snow.
 import { fbm, lerp, smooth } from '../rand.ts'
 import type { Prop } from '../terrain.ts'
-import { bump, type Feature, ring, Top, wide } from './kit.ts'
+import { bump, type Feature, hamlet, ring, Top, wide } from './kit.ts'
 import { VALE } from './vale.ts'
 
 let { village, pinewood, lake } = VALE
 
 /** Rimeholt's holt: longhouses round the fire, woodpiles, and a stockade
  * round it all, open where its roads and lanes run. */
-let HOLT: Prop[] = [
-  { kind: 'fire', x: 0, z: 0, seed: 1 },
-  { kind: 'longhouse', x: -8, z: -8, seed: 0 },
-  { kind: 'longhouse', x: 9, z: -9, seed: 1 },
-  { kind: 'longhouse', x: 9, z: 9.5, seed: 2 },
-  { kind: 'longhouse', x: -9, z: 9, seed: 3 },
-  { kind: 'well', x: 4, z: -2, seed: 2 },
-  { kind: 'board', x: -3.5, z: 2.5, seed: 3 },
+let HOLT: Prop[] = hamlet('longhouse', 'well', [
   { kind: 'woodpile', x: -4, z: -12, seed: 0 },
   { kind: 'woodpile', x: 14, z: 3, seed: 1 },
-  { kind: 'lamp', x: -4, z: -4, seed: 4 },
-  { kind: 'lamp', x: 4.5, z: 4.5, seed: 5 },
-  { kind: 'lamp', x: -5, z: 5.5, seed: 6 },
-  { kind: 'lamp', x: 5.5, z: -5, seed: 7 },
   ...ring('stake', 17, 96, [
     ...[94, 95, 0, 1, 2, 9, 10, 11, 12, 22, 23, 24, 25, 26],
     ...[57, 58, 59, 60, 70, 71, 72, 73, 74, 84, 85, 86, 87],
   ]),
-]
+])
 
 // Rolling snow, snow-laden spruce.
 let snowfield: Feature = {

@@ -6,28 +6,11 @@
 import { fbm, lerp, smooth } from '../rand.ts'
 import type { Prop } from '../terrain.ts'
 import { HILLS } from './hills.ts'
-import { bump, crest, type Feature, ring, Top, wide } from './kit.ts'
+import { bump, crest, type Feature, hamlet, ring, Top, wide } from './kit.ts'
 import { VALE } from './vale.ts'
 
 let { village } = VALE
 let { ruins } = HILLS
-
-// A village of the sands, with `house` for its houses, round `middle` (a
-// well, or a pump over one).
-let hamlet = (house: string, middle: string, more: Prop[] = []): Prop[] => [
-  { kind: 'fire', x: 0, z: 0, seed: 1 },
-  { kind: house, x: -8, z: -8, seed: 0 },
-  { kind: house, x: 9, z: -9, seed: 1 },
-  { kind: house, x: 9, z: 9.5, seed: 2 },
-  { kind: house, x: -9, z: 9, seed: 3 },
-  { kind: middle, x: 4, z: -2, seed: 2 },
-  { kind: 'board', x: -3.5, z: 2.5, seed: 3 },
-  { kind: 'lamp', x: -4, z: -4, seed: 4 },
-  { kind: 'lamp', x: 4.5, z: 4.5, seed: 5 },
-  { kind: 'lamp', x: -5, z: 5.5, seed: 6 },
-  { kind: 'lamp', x: 5.5, z: -5, seed: 7 },
-  ...more,
-]
 
 /** Tombsands' necropolis: the pyramid north-west of where the roads meet,
  * obelisks either side of the road south, and tombs in rows. */

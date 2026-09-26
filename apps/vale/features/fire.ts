@@ -6,26 +6,11 @@
 import { fbm, smooth } from '../rand.ts'
 import type { Prop } from '../terrain.ts'
 import { HILLS } from './hills.ts'
-import { bump, type Feature, Top, wide } from './kit.ts'
+import { bump, type Feature, hamlet, Top, wide } from './kit.ts'
 import { VALE } from './vale.ts'
 
 let { village } = VALE
 let { moor, ruins } = HILLS
-
-/** Emberfall's forge town: forges round the fire, the anvil among them. */
-let FORGES: Prop[] = [
-  { kind: 'fire', x: 0, z: 0, seed: 1 },
-  { kind: 'forgehouse', x: -8, z: -8, seed: 0 },
-  { kind: 'forgehouse', x: 9, z: -9, seed: 1 },
-  { kind: 'forgehouse', x: 9, z: 9.5, seed: 0 },
-  { kind: 'forgehouse', x: -9, z: 9, seed: 1 },
-  { kind: 'anvil', x: 4, z: -2, seed: 0 },
-  { kind: 'board', x: -3.5, z: 2.5, seed: 3 },
-  { kind: 'lamp', x: -4, z: -4, seed: 4 },
-  { kind: 'lamp', x: 4.5, z: 4.5, seed: 5 },
-  { kind: 'lamp', x: -5, z: 5.5, seed: 6 },
-  { kind: 'lamp', x: 5.5, z: -5, seed: 7 },
-]
 
 /** Ashkeep: its tower west of where the road comes in, its walls round the
  * court, open north to the road, and its banners. */
@@ -82,7 +67,11 @@ export let FIRE: Record<string, Feature> = {
   volcano,
   ashfield,
   // Emberfall's forge town.
-  forgetown: { ...village, like: 'village', builds: FORGES },
+  forgetown: {
+    ...village,
+    like: 'village',
+    builds: hamlet('forgehouse', 'anvil'),
+  },
   // The volcano over Emberfall, lava running down its south flank.
   lavafall: {
     ...volcano,

@@ -1,14 +1,14 @@
 // The kinds of place of the coast, and each of its levels' own: Gullwick's
-// harbour bay and the fields above it; Driftwood's strand, dunes and shore
-// pines; Saltreach's salt pans, tide line and white bluffs; Shellstrand's
+// harbour bay, its whitewashed village and the fields above it; Driftwood's
+// strand, dunes, shore pines and shacks; Saltreach's salt pans, tide line and white bluffs; Shellstrand's
 // shell isles and sea pinks; Stormhead's surf, its wind-bent moor and the
 // light on its head.
 import { fbm, lerp, smooth } from '../rand.ts'
 import { HILLS } from './hills.ts'
-import { bump, crest, type Feature, Top, wide } from './kit.ts'
+import { bump, crest, type Feature, hamlet, Top, wide } from './kit.ts'
 import { VALE } from './vale.ts'
 
-let { crags, meadow, woods } = VALE
+let { crags, meadow, woods, village } = VALE
 let { moor } = HILLS
 
 // The sea, and a beach of sand and dune grass down to it. Its middle is the
@@ -217,4 +217,8 @@ export let COAST: Record<string, Feature> = {
     ...headland,
     builds: [{ kind: 'lighthouse', x: 0, z: 0, seed: 0 }],
   },
+  // Gullwick's fishing village: whitewash and slate.
+  fishtown: { ...village, like: 'village', builds: hamlet('fisherhouse') },
+  // Driftwood Bay's shacks, built of what the sea brought in.
+  shacks: { ...village, like: 'village', builds: hamlet('shack') },
 }
