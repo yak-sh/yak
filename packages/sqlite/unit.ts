@@ -3,9 +3,12 @@ import type { Driver, Stmt } from '@yaks/sql'
 // SQLite has one transaction per connection, so nesting is done with
 // SAVEPOINTs: a store used inside a transaction the caller already opened (an
 // application's own, or another store's) still gets its own all-or-nothing
-// unit. The counter names each one uniquely — it only ever goes up, so an
-// outer savepoint can never be released by an inner one's name.
-let seq = 0
+// unit. Each is named for its depth: an inner savepoint never shares an outer
+// one's name, so it can never release it, and a connection says only a handful
+// of names, which its driver keeps prepared. A name per unit would be two
+// statements prepared for every unit and never run again, and in memory, where
+// every unit is a savepoint, they would push the statements a store does repeat
+// out of the driver's bounded cache.
 
 // How many units are open on each driver. A driver that owns a file needs to
 // know whether it is the outermost one, because that is the one that takes the
@@ -32,7 +35,7 @@ export let unit = <R>(
   if (driver.tx) return driver.tx(body)
   let held = depth.get(driver) ?? 0
   let outer = !!driver.file && held == 0
-  let name = `yaks_tx_${seq++}`
+  let name = `yaks_tx_${held}`
   driver.query(
     outer
       ? { t: 'begin', mode: mode == 'read' ? 'deferred' : 'immediate' }

@@ -1,11 +1,33 @@
-// The native driver's statement cache, under a fault only the handle itself can
-// produce.
+// The native driver's statement cache: what a store repeats stays prepared, and
+// a fault only the handle itself can produce is recovered from.
 
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { assertEquals, assertThrows } from '@std/assert'
 import { col, type Insert, render, scan, type Tx, val } from '@yaks/sql'
 import { driver } from './native.ts'
+import { storage } from './mod.ts'
+import { shop } from './testing.ts'
+
+Deno.test('a store in memory prepares nothing more for the same writes, however many units run them', () => {
+  let db = new Database(':memory:')
+  try {
+    let s = storage(driver(db), shop)
+    s.install()
+    let write = (i: number) =>
+      s.tx((tx) =>
+        tx.patch([{ entity: { eid: `p${i % 3}` }, doc: { title: `t${i}` } }])
+      )
+    for (let i = 0; i < 6; i++) write(i)
+    let prepare = db.prepare.bind(db)
+    let prepared = 0
+    db.prepare = (text: string) => (prepared++, prepare(text))
+    for (let i = 0; i < 20; i++) write(i)
+    assertEquals(prepared, 0)
+  } finally {
+    db.close()
+  }
+})
 
 let insert = (value: number): Insert => ({
   t: 'insert',
