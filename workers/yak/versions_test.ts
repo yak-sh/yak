@@ -10,11 +10,14 @@ import { assert, assertEquals } from '@std/assert'
 import type { Objects } from '@yaks/blob'
 import { counted } from './lib/objects.ts'
 import type { Tally } from './lib/hops.ts'
-import type { App, Directory } from './directory.ts'
+import * as dirPart from './directory.ts'
+import type { App, Directory, Space } from './directory.ts'
+import { type Namespace, PLATFORM_STORE } from './door.ts'
 import { carried, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import type { Plugin } from './plugin.ts'
 import type { Who } from './session.ts'
+import { platform } from './testing.ts'
 import {
   addressed,
   GRACE,
@@ -624,3 +627,64 @@ Deno.test('a renamed path carries its bytes, history and releases', async () => 
   assertEquals(kept.sha, await sha256(bytes('cups')))
   assert(await pins(blobs, PREFIX).has(kept.sha), 'pinned')
 })
+
+// Every platform deploy restarts every object, and a deploy being recorded
+// right then must still land once (T-40726). The directory commits the batch,
+// then the restart takes its answer: throws it at the caller, as the runtime
+// does, or says it in a 500, as a store going away does (@yaks/api `refuse`).
+let RESET = 'Durable Object reset because its code was updated.'
+
+let lost = {
+  throws: () => {
+    throw Object.assign(new Error(RESET), { retryable: true })
+  },
+  says: () =>
+    Response.json({ error: 'Error', message: RESET }, { status: 500 }),
+}
+
+let restarted = async (answer: () => Response) => {
+  let { env } = platform('a probe secret')
+  let store = env.STORE as unknown as Namespace
+  let once = false
+  let STORE: Namespace = {
+    idFromName: (name) => name,
+    get: (name) => ({
+      fetch: async (req: Request) => {
+        let deploy = name == PLATFORM_STORE &&
+          (await req.clone().text()).includes('"deploy"')
+        let r = await store.get(name).fetch(req)
+        if (!deploy || once) return r
+        once = true
+        return answer()
+      },
+    }),
+  }
+  let restarting = { ...env, STORE } as Env
+  let dir = dirPart.directory(
+    { fetch: (r: Request) => dirPart.fetch(r, restarting) },
+    true,
+  )
+  let ada = crypto.randomUUID()
+  await dir.apply({
+    entities: [
+      { entity: { eid: ada }, person: {}, doc: { title: 'Ada' } },
+      { entity: { eid: '$space' }, space: { slug: 'ada' } },
+      {
+        entity: { eid: '$app' },
+        app: { slug: 'recipes', space: '$space', version: 0 },
+      },
+    ],
+  }, { 'x-yak-person': ada, 'x-yak-role': 'owner' })
+  let space = (await dir.space('ada')) as Space
+  let app = (await dir.app(space, 'recipes')) as App
+  await record(dir, { person: ada, role: 'owner' }, app, 1, { a: 'b' }, '')
+  return { dir, app: (await dir.app(space, 'recipes')) as App }
+}
+
+for (let [how, answer] of Object.entries(lost)) {
+  Deno.test(`a deploy recorded as a restart ${how} its answer lands once`, async () => {
+    let { dir, app } = await restarted(answer)
+    assertEquals((await dir.deploys(app)).map((v) => v.version), [1])
+    assertEquals(app.version, 1)
+  })
+}

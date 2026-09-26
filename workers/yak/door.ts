@@ -147,6 +147,22 @@ export let evicted = (e: unknown): boolean =>
     /Durable Object instance is no longer active|Durable Object reset because/
       .test(e.message))
 
+/** An answer, with an eviction in it thrown as the runtime throws one. A store
+ * the runtime resets mid-request can still answer, and it answers the reset as
+ * it answers any error, in a 500's refusal body (@yaks/api `refuse`), so the
+ * words the runtime meant as "fetch again" would reach the caller as a failure
+ * (T-40726). */
+export let thrown = async (r: Response): Promise<Response> => {
+  if (r.status < 500) return r
+  let said: { message?: unknown; retryable?: unknown } | null = await r
+    .clone().text().then((t) => JSON.parse(t)).catch(() => null)
+  let e = typeof said?.message == 'string'
+    ? Object.assign(new Error(said.message), { retryable: said.retryable })
+    : null
+  if (evicted(e)) throw e
+  return r
+}
+
 /** Retry one evicted call, rebuilding its request and taking a fresh stub in
  * `send`. A second failure propagates unchanged. */
 export let retryOnce = async <T>(
@@ -176,14 +192,19 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
   // one to the request that created it: a door memoized for the isolate
   // (meta.ts `doors`) and reused on the next request throws "cannot perform
   // I/O on behalf of a different request". Getting one costs nothing, so an
-  // eviction is answered by taking another and building the request again
-  // from the same init. Only a streamed body cannot be sent twice; that one
-  // error passes through.
+  // eviction, thrown or answered, is answered by taking another and building
+  // the request again from the same init. Only a streamed body cannot be sent
+  // twice; that one error passes through. A write sent twice must say the same
+  // thing both times, since the first may have committed before its answer was
+  // lost: it names the entities it mints (versions.ts `record`).
   let door = doorOf(
     (req) => ns.get(ns.idFromName(name)).fetch(req),
     name,
     app,
   )
   return (path, init = {}, headers = {}) =>
-    retryOnce(() => door(path, init, headers), rebuildable(init))
+    retryOnce(
+      async () => thrown(await door(path, init, headers)),
+      rebuildable(init),
+    )
 }

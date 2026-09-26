@@ -3,7 +3,9 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { evicted, type Namespace, storeOf } from './door.ts'
 
-let ns = (answers: Array<Error | string>): Namespace & { seen: string[] } => {
+let ns = (
+  answers: Array<Error | string | Response>,
+): Namespace & { seen: string[] } => {
   let seen: string[] = []
   return {
     seen,
@@ -13,7 +15,7 @@ let ns = (answers: Array<Error | string>): Namespace & { seen: string[] } => {
         seen.push(await req.text())
         let next = answers.shift()
         if (next instanceof Error) throw next
-        return new Response(next ?? '')
+        return next instanceof Response ? next : new Response(next ?? '')
       },
     }),
   }
@@ -66,4 +68,19 @@ Deno.test('Store does not retry a streamed init or a Request with a body', async
     )
     assertEquals(n.seen, ['body'])
   }
+})
+
+// A store the runtime resets mid-request can still answer, and says the reset
+// as a refusal; that is the same eviction, and any other 500 is not.
+Deno.test('an eviction a store answers is sent again; another 500 is its answer', async () => {
+  let said = (message: string) =>
+    Response.json({ error: 'Error', message }, { status: 500 })
+  let n = ns([said(gone().message), 'ok'])
+  let res = await storeOf(n, 'jeff')('/apply', { method: 'POST', body: '[1]' })
+  assertEquals(await res.text(), 'ok')
+  assertEquals(n.seen, ['[1]', '[1]'])
+  let broke = ns([said('boot failed'), 'unexpected retry'])
+  let no = await storeOf(broke, 'jeff')('/query')
+  assertEquals([no.status, (await no.json()).message], [500, 'boot failed'])
+  assertEquals(broke.seen.length, 1)
 })

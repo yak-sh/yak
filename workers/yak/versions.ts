@@ -47,6 +47,7 @@
 // With one key space the sweep is one pass for the whole bucket rather than one
 // per app: an object another app still names is not the first app's to free.
 import type { Blobs as Pins, Objects } from '@yaks/blob'
+import { mint } from '@yaks/graph'
 import type { App, Directory } from './directory.ts'
 import { pinsOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
@@ -281,6 +282,13 @@ export let versions = (dir: Directory, app: App) => dir.deploys(app)
 // itself the reason the answer is about to change. The row and the app's
 // version counter go in one batch: the number an error names and the number a
 // rollback picks are the same number.
+//
+// The row is minted at an eid chosen here, never an alias, so the batch says
+// the same thing however often it arrives: a store restarted after it
+// committed and before it answered is asked again (door.ts `storeOf`), and
+// the second arrival finds its own row rather than a second one at that
+// version (T-40726). Another deploy racing for the same number mints another
+// eid, and the unique version refuses it.
 export let record = async (
   dir: Directory,
   who: Who,
@@ -293,7 +301,7 @@ export let record = async (
     entities: [
       { entity: { eid: app.eid }, app: { version } },
       {
-        entity: { eid: '$deploy' },
+        entity: { eid: mint() },
         deploy: {
           app: app.eid,
           version,
