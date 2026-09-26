@@ -71,6 +71,11 @@ nothing. A push's build that fails is started once more through the `BUILD_HOOK`
 deploy hook (builds.ts), since most failures are the network's; the second
 build's failure stands.
 
+Builds run one per push and finish in any order, so the deploy door
+(`wrangler.ts` `superseded`) deploys a commit only while it is main's tip and no
+live version is ahead of it. A build that loses that race deploys nothing and
+says why in its log; the newer build deploys.
+
 The sandbox image is two halves (sandbox/base.ts). `sandbox/base/Dockerfile` is
 the toolchain, pushed to the registry once per version of that file as
 `yak-sandbox:base-<its hash>`; `sandbox/Dockerfile` builds FROM that tag and

@@ -6,10 +6,18 @@
 // `deno check` reads, and the workspace (wrangler.ts `members`) is what esbuild
 // bundles by. A workers.json entry pointing anywhere else type-checks one file
 // and bundles another.
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { aliased, command, members, outbound, stale } from './wrangler.ts'
+import {
+  aliased,
+  command,
+  members,
+  outbound,
+  seen,
+  stale,
+  superseded,
+} from './wrangler.ts'
 
 let read = (path: string) =>
   Deno.readTextFileSync(new URL(path, import.meta.url))
@@ -104,4 +112,50 @@ Deno.test('stale: no stamp, an older stamp, a newer stamp', () => {
   assertEquals(stale(root), false, 'installed since')
 
   Deno.removeSync(root, { recursive: true })
+})
+
+// A repository and the remote its pushes land on, driven the way pushes to
+// main drive the one Workers Builds clones.
+let run = async (cwd: string, ...args: string[]) => {
+  let r = await new Deno.Command('git', {
+    args: ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
+    cwd,
+    stdout: 'piped',
+    stderr: 'null',
+  }).output()
+  return new TextDecoder().decode(r.stdout).trim()
+}
+
+Deno.test('wrangler: only main’s tip goes live, and never over a version ahead of it', async () => {
+  let root = Deno.makeTempDirSync({ prefix: 'yak-live-' })
+  try {
+    let origin = join(root, 'origin.git')
+    let work = join(root, 'work')
+    let thin = join(root, 'thin')
+    await run(root, 'init', '-q', '--bare', '-b', 'main', origin)
+    await run(root, 'clone', '-q', origin, work)
+    let push = async () => {
+      await run(work, 'commit', '-q', '--allow-empty', '-m', 'c')
+      await run(work, 'push', '-q', 'origin', 'HEAD:main')
+      return await run(work, 'rev-parse', 'HEAD')
+    }
+    let a = await push()
+    // Cloned the way a build is, before the next push arrives.
+    await run(root, 'clone', '-q', '--depth', '1', `file://${origin}`, thin)
+    let c = await push()
+    // The tip goes live over what is behind it.
+    assertEquals(superseded(await seen(work, [a])), null)
+    // An older build that finishes last: main has moved past it.
+    await run(work, 'checkout', '-q', a)
+    assert(superseded(await seen(work, [a])))
+    // With no remote to ask, a live version ahead of it still stops it.
+    await run(work, 'remote', 'remove', 'origin')
+    let blind = await seen(work, [c])
+    assertEquals(blind.tip, null)
+    assert(superseded(blind))
+    // A shallow clone fetches the live commit it lacks before it answers.
+    assertEquals((await seen(thin, [c])).live, [{ sha: c, ahead: true }])
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
 })

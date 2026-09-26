@@ -182,9 +182,137 @@ export let descendants = (pid: number): number[] => {
   return kids.flatMap((kid) => [...descendants(kid), kid])
 }
 
+// ---- which commit may go live ----------------------------------------------
+//
+// Workers Builds runs one build per push, and the builds finish in whatever
+// order they finish: three pushes a minute apart once went live with the
+// middle one last. So a deploy asks two things before it uploads anything —
+// is this commit still main's tip, and is no live version ahead of it — and
+// stops on either "no", leaving the newer build to deploy. A live version that
+// is neither behind nor ahead (a commit that never reached main) is replaced:
+// main is what runs. What could not be read refuses nothing, and is printed.
+
+/** What a deploy sees: its own commit, main's tip at the remote (null when the
+ * remote could not be asked), and each commit a live version was deployed
+ * from, with whether it is ahead of this one (null when git cannot tell). */
+export type Seen = {
+  head: string
+  tip: string | null
+  live: { sha: string; ahead: boolean | null }[]
+}
+
+let short = (sha: string) => sha.slice(0, 8)
+
+/** Why this commit must not go live, or null when it may. */
+export let superseded = ({ head, tip, live }: Seen): string | null => {
+  if (tip && tip != head) {
+    return `main is at ${short(tip)}, past ${short(head)}; its build deploys it`
+  }
+  let newer = live.find((l) => l.ahead)
+  return newer
+    ? `${short(newer.sha)} is live and ahead of ${short(head)}`
+    : null
+}
+
+let git = async (root: string, ...args: string[]) => {
+  let r = await new Deno.Command('git', {
+    args,
+    cwd: root,
+    stdout: 'piped',
+    stderr: 'null',
+  }).output()
+  return { code: r.code, out: new TextDecoder().decode(r.stdout).trim() }
+}
+
+let SHA = /^[0-9a-f]{40}\b/
+
+/**
+ * What a deploy from `root`'s checkout sees, given the commits live now. A
+ * live commit this clone lacks is fetched first: it was pushed after the clone
+ * was made, and a shallow clone holds only the commits it was made with.
+ */
+export let seen = async (root: string, live: string[]): Promise<Seen> => {
+  let head = (await git(root, 'rev-parse', 'HEAD')).out
+  let asked = await git(root, 'ls-remote', 'origin', 'refs/heads/main')
+  let tip = asked.code ? null : SHA.exec(asked.out)?.[0] ?? null
+  let ahead = async (sha: string) => {
+    if (sha == head) return false
+    if ((await git(root, 'cat-file', '-e', `${sha}^{commit}`)).code) {
+      await git(root, 'fetch', '--quiet', 'origin', sha)
+    }
+    let { code } = await git(root, 'merge-base', '--is-ancestor', head, sha)
+    return code == 0 ? true : code == 1 ? false : null
+  }
+  return {
+    head,
+    tip,
+    live: await Promise.all(
+      live.map(async (sha) => ({ sha, ahead: await ahead(sha) })),
+    ),
+  }
+}
+
+// A command's `--env` arguments, as it wrote them.
+let envs = (args: string[]): string[] =>
+  args.flatMap((a, i) =>
+    a == '--env' || a == '-e'
+      ? [a, args[i + 1]]
+      : a.startsWith('--env=')
+      ? [a]
+      : []
+  )
+
+/** The commits the versions live now were deployed from, as the message this
+ * door gives every version says (`--message` below), in the deploy's own
+ * environment. Anything wrangler will not answer names no commit. */
+let serving = async (env: string[]): Promise<string[]> => {
+  let read = async (args: string[]) => {
+    let r = await new Deno.Command(WRANGLER[0], {
+      args: [...WRANGLER.slice(1), ...args, ...env, '--json'],
+      cwd: dir,
+      stdout: 'piped',
+      stderr: 'null',
+    }).output()
+    try {
+      return r.success ? JSON.parse(new TextDecoder().decode(r.stdout)) : null
+    } catch {
+      return null
+    }
+  }
+  let deployments: {
+    created_on: string
+    versions: { version_id: string; percentage: number }[]
+  }[] = await read(['deployments', 'list']) ?? []
+  let now =
+    deployments.toSorted((a, b) =>
+      Date.parse(b.created_on) - Date.parse(a.created_on)
+    )[0]
+  let named = await Promise.all(
+    (now?.versions ?? []).filter((v) => v.percentage > 0).map(async (v) => {
+      let version = await read(['versions', 'view', v.version_id])
+      return SHA.exec(version?.annotations?.['workers/message'] ?? '')?.[0]
+    }),
+  )
+  return named.filter((sha) => sha != null)
+}
+
 if (import.meta.main) {
   await ready()
   let argv = [...Deno.args]
+  if (command(argv) === 'deploy' && !argv.includes('--dry-run')) {
+    let saw = await seen(dir, await serving(envs(argv)))
+    let live = saw.live.map((l) => short(l.sha) + (l.ahead == null ? '?' : ''))
+    console.log(
+      `deploy ${short(saw.head)}: main at ${
+        saw.tip ? short(saw.tip) : '(unread)'
+      }, live ${live.join(' ') || '(unread)'}`,
+    )
+    let why = superseded(saw)
+    if (why) {
+      console.log(`not deploying: ${why}`)
+      Deno.exit(0)
+    }
+  }
   if (command(argv) === 'deploy') {
     // Versions carry their commit so `yak admin deploys` need not infer it by time.
     let commit = await new Deno.Command('git', {
