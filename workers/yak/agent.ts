@@ -353,8 +353,10 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
   }
   let tx: Tx = {
     read: bundles,
-    get: (eids) =>
-      composed(ctx.env, reach, eids) as unknown as Promise<Bundle[]>,
+    get: (eids, comps) =>
+      composed(ctx.env, reach, eids, {
+        want: comps ? new Set(comps) : null,
+      }) as unknown as Promise<Bundle[]>,
     patch: nope('transaction'),
     remove: nope('transaction'),
     revive: nope('transaction'),
@@ -547,7 +549,7 @@ export let reaching = async (
     install: () => {},
     read: (q) => storage.read(q),
     rows: (q) => storage.rows(q),
-    get: (eids) => storage.get(eids),
+    get: (eids, comps) => storage.get(eids, comps),
     // A name where an eid goes (T-34390). The ladder is @yaks/alias's and it
     // is nothing but reads by id, so it works here exactly as it does inside a
     // store: `get` fans across the reach, and a name held in whichever store

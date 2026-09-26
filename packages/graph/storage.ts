@@ -58,14 +58,14 @@ export type Tx = {
    * leaves it out and `read` is used instead, which is why every read here is
    * written to work either way. */
   whole?: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
-  /** lookup by identity, not search: these entities as they stand, whole. A
-   * deleted one comes back carrying `tombstone`; one that does not exist is
-   * simply absent from the result. */
-  get: (eids: Eid[]) => Bundle[] | Promise<Bundle[]>
-  /** Identity and tombstone state plus the named components. May return more
-   * components than asked for; a caller that needs the whole entity still uses
-   * `get`. An adapter with no cheaper way to read a subset leaves this out. */
-  pick?: (eids: Eid[], names: string[]) => Bundle[] | Promise<Bundle[]>
+  /** lookup by identity, not search: these entities as they stand. A deleted
+   * one comes back carrying `tombstone`; one that does not exist is simply
+   * absent from the result. `comps` names the components to read, and each
+   * entity carries those of them it holds; left out, it carries every one. A
+   * storage reads nothing else. The transaction `apply()` hands its hooks
+   * answers from what it has already read, which may carry more
+   * (./gather.ts `holding`). */
+  get: (eids: Eid[], comps?: string[]) => Bundle[] | Promise<Bundle[]>
   /** the reverse direction: the entities whose reference properties point at
    * one of these, narrowed to the components named. Present only on the
    * transaction `apply()` hands its hooks, where the gather has already read
@@ -125,10 +125,11 @@ export type Storage = {
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: ReadOpts) => Row[] | Promise<Row[]>
-  /** these entities as they stand, whole ({@link Tx.get}), read without a
-   * write transaction: a lookup never waits on a writer and never makes one
-   * wait, the way `read` does not */
-  get: (eids: Eid[]) => Bundle[] | Promise<Bundle[]>
+  /** these entities as they stand, carrying the components `comps` names or
+   * every one ({@link Tx.get}), read without a write transaction: a lookup
+   * never waits on a writer and never makes one wait, the way `read` does
+   * not */
+  get: (eids: Eid[], comps?: string[]) => Bundle[] | Promise<Bundle[]>
   /** run `body` in a transaction: commit on return, roll back on throw. Like
    * every other member it is async or sync — an embedded adapter returns
    * whatever the body returned, an adapter over a network returns a promise
@@ -145,7 +146,7 @@ export type Storage = {
  */
 export let detached = (storage: Storage): Tx => ({
   read: (query, opts) => storage.read(query, opts),
-  get: (eids) => storage.get(eids),
+  get: (eids, comps) => storage.get(eids, comps),
   // A match is a question about committed data, which is exactly what there
   // is to ask out here: an effect registered on a pattern (@yaks/effects) asks
   // it after the change has been applied. A store that cannot evaluate one
@@ -165,11 +166,3 @@ export let detached = (storage: Storage): Tx => ({
   remove: (entities) => storage.tx((tx) => tx.remove(entities)),
   revive: (eids) => storage.tx((tx) => tx.revive(eids)),
 })
-
-/** Read only the components a check needs, or the whole entity on an adapter
- * that has no cheaper way. */
-export let pick = (
-  tx: Tx,
-  eids: Eid[],
-  names: string[],
-): Bundle[] | Promise<Bundle[]> => tx.pick ? tx.pick(eids, names) : tx.get(eids)

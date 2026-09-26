@@ -18,7 +18,7 @@
 
 import { assertEquals } from '@std/assert'
 import type { Bundle, Graph, Plugin, Storage } from '@yaks/graph'
-import { each, graph, then, token } from '@yaks/graph'
+import { each, graph, only, then, token } from '@yaks/graph'
 import { shop } from './testing.ts'
 
 /** A bookmark is content-addressed: its eid is derived from what it marks, so
@@ -200,6 +200,21 @@ let NAMED = [
   'mark:x1',
 ]
 
+// The components a lookup may name: a few, or none (identity and tombstone
+// alone). Whatever it names, it answers what the whole lookup does, cut to
+// them — asked of every adapter against its own whole answer, for a set of
+// entities and for one.
+let PICKS = [['doc', 'review'], []]
+  .flatMap((names) => [[NAMED, names], [['p1'], names]])
+
+let picked = (g: Graph, whole: Bundle[]) =>
+  each(PICKS, null, (_, [eids, names]) =>
+    then(g.get(eids, names), (got) => {
+      let want = whole.filter((b) => eids.includes(b.entity.eid))
+      assertEquals(got, want.map(only(new Set(names))), `get ${eids} ${names}`)
+      return null
+    }))
+
 // A bundle as every adapter agrees on it: nulls dropped (an absent property and
 // a cleared one are the same fact).
 let plain = (b: Bundle): Bundle => {
@@ -254,10 +269,11 @@ let state = (g: Graph) =>
     (reads) =>
       then(
         g.get(NAMED),
-        (named) => ({
-          reads,
-          named: byNum(named as Bundle[]),
-        }),
+        (named) =>
+          then(picked(g, named), () => ({
+            reads,
+            named: byNum(named as Bundle[]),
+          })),
       ),
   )
 

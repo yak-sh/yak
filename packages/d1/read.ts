@@ -58,16 +58,23 @@ export let spineSql = (v: Vocab, eid: string): Stmt =>
   spine(v, eq(col('eid', 'e'), val(eid)))
 
 /** What a gather asks about one entity: its spine, then one read per component
- * the vocabulary declares. The order is what {@link bundles} reads back. */
-export let gatherSql = (v: Vocab, eid: string, opts: BindOpts = {}): Stmt[] => [
+ * the vocabulary declares, or per one of those `names` names. The order is
+ * what {@link bundles} reads back. */
+export let gatherSql = (
+  v: Vocab,
+  eid: string,
+  opts: BindOpts = {},
+  names?: string[],
+): Stmt[] => [
   spineSql(v, eid),
-  ...comps(v).map((comp) => compSql(v, comp, eid, opts.derived)),
+  ...comps(v, names).map((comp) => compSql(v, comp, eid, opts.derived)),
 ]
 
-/** The components a gather reads, in the vocabulary's order — the spine is the
- * identity, not a component of its own. */
-export let comps = (v: Vocab): string[] =>
-  v.all.filter((name) => name != 'entity')
+/** The components a gather reads, in the vocabulary's order: every one, or
+ * those `names` names — the spine is the identity, not a component of its
+ * own. */
+export let comps = (v: Vocab, names?: string[]): string[] =>
+  v.all.filter((name) => name != 'entity' && (!names || names.includes(name)))
 
 // One entity's answers, turned back into a bundle. The results arrive in the
 // order `gatherSql` asked: the spine first, then a component per statement.
@@ -75,6 +82,7 @@ let bundleOf = (
   v: Vocab,
   eid: string,
   answers: Row[][],
+  names?: string[],
 ): Bundle | undefined => {
   let spine = answers[0][0]
   if (!spine) return undefined
@@ -84,7 +92,7 @@ let bundleOf = (
   }
   if (spine.dead != null) return tombstoned(entity)
   let out: Bundle = { entity }
-  comps(v).forEach((comp, i) => {
+  comps(v, names).forEach((comp, i) => {
     let row = answers[i + 1][0]
     if (!row) return
     delete row.present
@@ -99,12 +107,18 @@ let bundleOf = (
  * one comes back carrying `tombstone` (it is still an identity, just a dead one).
  *
  * `answers` is the flat result list `batch()` returns for
- * `eids.flatMap(gatherSql)` — one entry per statement, in order.
+ * `eids.flatMap((e) => gatherSql(v, e, opts, names))` — one entry per
+ * statement, in order.
  */
-export let bundles = (v: Vocab, eids: string[], answers: Row[][]): Bundle[] => {
-  let width = comps(v).length + 1
+export let bundles = (
+  v: Vocab,
+  eids: string[],
+  answers: Row[][],
+  names?: string[],
+): Bundle[] => {
+  let width = comps(v, names).length + 1
   return eids.flatMap((eid, i) => {
-    let b = bundleOf(v, eid, answers.slice(i * width, (i + 1) * width))
+    let b = bundleOf(v, eid, answers.slice(i * width, (i + 1) * width), names)
     return b ? [b] : []
   })
 }

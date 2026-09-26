@@ -22,7 +22,8 @@ for (let async of [false, true]) {
           store.tx((tx) => {
             let wrapped: Tx = {
               ...tx,
-              get: (ids) => Promise.resolve().then(() => tx.get(ids)),
+              get: (ids, comps) =>
+                Promise.resolve().then(() => tx.get(ids, comps)),
               patch: (b) => Promise.resolve().then(() => tx.patch(b)),
               remove: (e) => Promise.resolve().then(() => tx.remove(e)),
             }

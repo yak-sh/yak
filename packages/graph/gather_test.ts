@@ -6,7 +6,7 @@
 // asserts the tally.
 
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Plugin, Storage, Tx } from './mod.ts'
+import type { Bundle, Graph, Plugin, Storage, Tx } from './mod.ts'
 import { about, graph } from './mod.ts'
 import { books, memory } from './testing.ts'
 
@@ -16,9 +16,9 @@ let tally = (base: Storage) => {
   let n = { get: 0, read: 0 }
   let watch = (tx: Tx): Tx => ({
     ...tx,
-    get: (eids) => {
+    get: (eids, names) => {
       n.get++
-      return tx.get(eids)
+      return tx.get(eids, names)
     },
     read: (q, o) => {
       n.read++
@@ -87,10 +87,13 @@ Deno.test('what a wants forgot is read from the storage, and kept', () => {
     },
   }
   let h = graph({ storage, vocab: books, plugins: [forgetful] })
-  n.get = 0
-  h.apply([{ entity: { eid: 'b1' }, book: { pages: 500 } }])
+  let calls = (x: Graph) => {
+    n.get = 0
+    x.apply([{ entity: { eid: 'b1' }, book: { pages: 500 } }])
+    return n.get
+  }
   // One extra call for the miss, and only one: the answer is kept.
-  assertEquals(n.get, 2)
+  assertEquals(calls(h), calls(g) + 1)
   assertEquals((seen[0].doc as { title: string }).title, 'Chilton')
 })
 

@@ -138,12 +138,12 @@ not replace an application's migration plan. It initializes the store epoch and
 number sequence and runs bounded `PRAGMA optimize` for file-backed drivers, so
 the planner can use table statistics.
 
-A transaction provides `read`, `get(eids)`, `pick(eids, names)`, `patch`,
-`remove`, `revive`, `doom`, and `bindings`. `get` retrieves whole entities
-including tombstones; `pick` retrieves identity and selected components,
-potentially a superset. `patch` returns newly created identities, with `num`
-when numbering is enabled. `doom` resolves cascading deletion, and `bindings`
-evaluates rules against pending changes.
+A transaction provides `read`, `get(eids, comps?)`, `patch`, `remove`, `revive`,
+`doom`, and `bindings`. `get` retrieves entities including tombstones, whole or
+carrying only the components `comps` names, and reads no other table. `patch`
+returns newly created identities, with `num` when numbering is enabled. `doom`
+resolves cascading deletion, and `bindings` evaluates rules against pending
+changes.
 
 SQL transactions commit on callback completion and roll back on failure; a
 promise-returning callback is awaited. Nested calls use savepoints. A driver
@@ -280,7 +280,7 @@ compile their own queries must compile and execute within one read transaction,
 as this package's read path does.
 
 Whole-entity reads group entities by the component tables their archetype
-identifies and query only owners with each component. `get` and `pick` use this
+identifies and query only owners with each component. `get` uses this
 information even for single entities. Readers ignore tables outside their
 vocabulary without changing the descriptor. Only table sets are cached, allowing
 rollback, other writers, and schema changes to remain visible.

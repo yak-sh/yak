@@ -123,9 +123,10 @@ admitted in a partial copy of it, leaving out the components this vocabulary
 does not declare instead of refusing them. `g.rows(query)` returns
 adapter-specific rows for aggregates and other raw query results. `g.get(eids)`
 returns those entities whole, tombstones included, by eid rather than by query;
-a store over a shared file reads them without taking its write lock.
-`g.install()` makes the adapter ready for the vocabulary (its schema, where it
-has one).
+`g.get(eids, comps)` returns each carrying only the components `comps` names,
+and the storage reads nothing else. A store over a shared file reads them
+without taking its write lock. `g.install()` makes the adapter ready for the
+vocabulary (its schema, where it has one).
 
 Both methods work with synchronous and asynchronous adapters. Using `await` is
 safe either way; a synchronous adapter can also return values directly.

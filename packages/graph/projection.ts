@@ -17,7 +17,7 @@
 
 import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import type { Bundle } from './bundle.ts'
+import { type Bundle, reserved } from './bundle.ts'
 import type { Query } from './storage.ts'
 import { meaning } from './meant.ts'
 
@@ -50,13 +50,13 @@ export let named = (vocab: Vocab, query: Query): Set<string> | null => {
 export let wanted = (vocab: Vocab, query: Query): Set<string> | null =>
   named(vocab, meaning(vocab)(query))
 
-/** A row cut to what was asked for. The spine names it, a text query's `rank`
- * is the answer's own word about it, and `$` keys are the graph's notes on
- * the row rather than components, so those ride whatever the filter said. */
+/** A row cut to what was asked for. The spine names it, its tombstone says it
+ * is gone, a text query's `rank` is the answer's own word about it, and `$`
+ * keys are the graph's notes on the row rather than components, so those ride
+ * whatever the filter said. */
 export let only = (want: Set<string> | null) => (b: Bundle): Bundle => {
   if (!want) return b
-  let keep = (k: string) =>
-    k == 'entity' || k == 'rank' || k[0] == '$' || want.has(k)
+  let keep = (k: string) => reserved(k) || k == 'rank' || want.has(k)
   let keys = Object.keys(b)
   // A row that carries nothing else is its own answer.
   if (keys.every(keep)) return b

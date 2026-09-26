@@ -112,7 +112,7 @@ Deno.test('classified gathers select only present tables and only their owners',
   s.tx((tx) => tx.get(['a']))
   assertEquals(asked.length, 3) // spine + created + doc
   asked = []
-  s.tx((tx) => tx.pick(['a'], ['marker']))
+  s.tx((tx) => tx.get(['a'], ['marker']))
   assertEquals(asked.length, 1) // known missing; no projection probe
   asked = []
   s.rows('.doc.title=hello')

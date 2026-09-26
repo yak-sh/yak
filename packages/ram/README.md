@@ -89,21 +89,22 @@ The root export provides `ram` and the types `Store`, `Tx`, `RamOpts`, and
 `ram(vocab, options?)` returns a `Store` implementing the graph's `Storage`
 interface:
 
-| Method               | Result                                                                                   |
-| -------------------- | ---------------------------------------------------------------------------------------- |
-| `install()`          | Does nothing.                                                                            |
-| `read(query, opts?)` | Matching bundles, ordered and paginated as requested.                                    |
-| `rows(query, opts?)` | One `{ eid }` row per match, or the rows of `.count`, `.distinct` or `.tally`.           |
-| `get(eids)`          | Those entities as stored, tombstones included; an unknown id is left out.                |
-| `tx(body)`           | The callback's result; commits on success and rolls back on a throw or rejected promise. |
+| Method               | Result                                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `install()`          | Does nothing.                                                                                                            |
+| `read(query, opts?)` | Matching bundles, ordered and paginated as requested.                                                                    |
+| `rows(query, opts?)` | One `{ eid }` row per match, or the rows of `.count`, `.distinct` or `.tally`.                                           |
+| `get(eids, comps?)`  | Those entities as stored, or carrying only the components `comps` names; tombstones included; an unknown id is left out. |
+| `tx(body)`           | The callback's result; commits on success and rolls back on a throw or rejected promise.                                 |
 
-A transaction provides `read`, `get(eids)`, `patch(bundles)`, `evict(eids)`,
-`remove(entities)`, and `revive(eids)`. `get` returns complete stored bundles,
-includes tombstones, and omits unknown ids. `patch` returns the identities it
-created. `evict` removes live component data while reserving the identity for
-later reuse; `remove` tombstones the entity, keeping its eid and number;
-`revive` clears the tombstone and leaves the identity holding no component.
-Eviction does not remove tombstones.
+A transaction provides `read`, `get(eids, comps?)`, `patch(bundles)`,
+`evict(eids)`, `remove(entities)`, and `revive(eids)`. `get` returns complete
+stored bundles, or each cut to the components `comps` names, includes
+tombstones, and omits unknown ids. `patch` returns the identities it created.
+`evict` removes live component data while reserving the identity for later
+reuse; `remove` tombstones the entity, keeping its eid and number; `revive`
+clears the tombstone and leaves the identity holding no component. Eviction does
+not remove tombstones.
 
 Options are:
 

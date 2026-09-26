@@ -118,11 +118,9 @@ export type { Storage } from '@yaks/graph'
 export type Tx = {
   /** a query → the matching entities as whole bundles */
   read: (query: Query, opts?: ReadOpts) => Bundle[]
-  /** identity, not search: these entities as they stand, whole */
-  get: (eids: string[]) => Bundle[]
-  /** identity/tombstone state and selected components (may return a
-   * superset) */
-  pick: (eids: string[], names: string[]) => Bundle[]
+  /** identity, not search: these entities as they stand, carrying the
+   * components `comps` names or every one */
+  get: (eids: string[], comps?: string[]) => Bundle[]
   /** which entities are deleted along with these, and what has to release
    * them — the death cascade computed by one recursive statement rather than a
    * read per level */
@@ -172,8 +170,9 @@ export type Store = {
   read: (query: Query, opts?: BindOpts) => Bundle[]
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: BindOpts) => Row[]
-  /** these entities as they stand, read in a unit that takes no write lock */
-  get: (eids: Eid[]) => Bundle[]
+  /** these entities as they stand, carrying the components `comps` names or
+   * every one, read in a unit that takes no write lock */
+  get: (eids: Eid[], comps?: string[]) => Bundle[]
   /** run `body` in a transaction: commit on return, roll back on throw */
   tx: <R>(body: (tx: Tx) => R) => R
 }
@@ -231,8 +230,7 @@ export let storage = (
   let identity = keyed(driver, vocab, base)
   let tx: Tx = {
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
-    get: (eids) => identity(eids),
-    pick: identity,
+    get: identity,
     doom: (eids) => doom(driver, vocab, eids),
     bindings: (matches, batch, covers) =>
       bindings(driver, vocab, matches, batch, covers, base),
@@ -304,7 +302,7 @@ export let storage = (
     },
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
     rows: (query, opts) => rows(driver, vocab, query, { ...base, ...opts }),
-    get: (eids) => unit(driver, () => identity(eids), 'read'),
+    get: (eids, comps) => unit(driver, () => identity(eids, comps), 'read'),
     tx: (body) => unit(driver, () => body(tx)),
   }
 }

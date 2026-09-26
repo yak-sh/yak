@@ -88,14 +88,14 @@ does not implement the embedded adapter's full schema-upgrade procedure.
 
 The package has one import path, `@yaks/d1`. `storage` returns a `Store` with:
 
-| Method               | Result                                                    |
-| -------------------- | --------------------------------------------------------- |
-| `ddl()`              | SQL schema statements, synchronously                      |
-| `install()`          | Promise resolving after schema statements execute         |
-| `read(query, opts?)` | Promise of matching bundles                               |
-| `rows(query, opts?)` | Promise of raw rows, including aggregates and projections |
-| `get(eids)`          | Promise of those entities as stored, tombstones included  |
-| `tx(body)`           | Promise of the callback result after its writes commit    |
+| Method               | Result                                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------- |
+| `ddl()`              | SQL schema statements, synchronously                                                                    |
+| `install()`          | Promise resolving after schema statements execute                                                       |
+| `read(query, opts?)` | Promise of matching bundles                                                                             |
+| `rows(query, opts?)` | Promise of raw rows, including aggregates and projections                                               |
+| `get(eids, comps?)`  | Promise of those entities as stored, or carrying only the components `comps` names, tombstones included |
+| `tx(body)`           | Promise of the callback result after its writes commit                                                  |
 
 Read options are `@yaks/sql`'s bind options, such as `derived`, `extend`, and
 `now`; per-call options override `base`. Human numbering is opt-in through

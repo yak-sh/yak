@@ -46,7 +46,7 @@ export let keyed = (driver: Driver, vocab: Vocab, opts: BindOpts) => {
       ),
     )
   return (eids: string[], selected?: string[]): Bundle[] => {
-    if (eids.length != 1) return get(driver, vocab, eids, opts)
+    if (eids.length != 1) return get(driver, vocab, eids, opts, selected)
     let eid = eids[0]
     let row = driver.query(spine(vocab, eq(col('eid', 'e'), val(eid))))[0]
     if (!row) return []

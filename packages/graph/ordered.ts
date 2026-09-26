@@ -7,7 +7,7 @@
 import type { Bundle } from './bundle.ts'
 import { dead } from './bundle.ts'
 import type { WriteHook } from './plugin.ts'
-import { pick, type Tx } from './storage.ts'
+import type { Tx } from './storage.ts'
 import type { Vocab } from '@yaks/vocab'
 import { each, then } from './pipe.ts'
 import { mutate } from './mutate.ts'
@@ -31,7 +31,7 @@ export let ordered = (
     [] as Bundle[],
     (out, batch) =>
       then(
-        pick(held, batch.map((b) => b.entity.eid), ['tombstone']),
+        held.get(batch.map((b) => b.entity.eid), []),
         (found) => {
           let gone = new Set(found.filter(dead).map((b) => b.entity.eid))
           let live = batch.filter((b) => !gone.has(b.entity.eid))

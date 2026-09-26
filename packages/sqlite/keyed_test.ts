@@ -114,31 +114,31 @@ Deno.test('projected identities read only named facets and preserve projection/r
   ])
   let whole = s.tx((tx) => tx.get(['p']))[0]
   queries.length = 0
-  assertEquals(s.tx((tx) => tx.pick(['p'], ['product'])), [{
+  assertEquals(s.tx((tx) => tx.get(['p'], ['product'])), [{
     entity: whole.entity,
     product: whole.product,
   }])
   assertEquals(queries.length, 2)
   assert(queries.every((sql) => !sql.includes('union all')))
-  assertEquals(s.tx((tx) => tx.pick(['p'], ['doc']))[0].doc, whole.doc)
-  assertEquals(s.tx((tx) => tx.pick(['p'], ['review']))[0].review, undefined)
-  assertEquals(s.tx((tx) => tx.pick(['absent'], ['doc'])), [])
+  assertEquals(s.tx((tx) => tx.get(['p'], ['doc']))[0].doc, whole.doc)
+  assertEquals(s.tx((tx) => tx.get(['p'], ['review']))[0].review, undefined)
+  assertEquals(s.tx((tx) => tx.get(['absent'], ['doc'])), [])
   try {
     s.tx((tx) => {
       tx.patch([{ entity: { eid: 'p' }, product: { price: 9 } }])
       assertEquals(
-        (tx.pick(['p'], ['product'])[0].product as { price: number }).price,
+        (tx.get(['p'], ['product'])[0].product as { price: number }).price,
         9,
       )
       tx.remove([{ eid: 'p' }])
-      assertEquals(tx.pick(['p'], []), tx.get(['p']))
+      assertEquals(tx.get(['p'], []), tx.get(['p']))
       throw Error('rollback')
     })
   } catch (e) {
     assertEquals((e as Error).message, 'rollback')
   }
   assertEquals(
-    s.tx((tx) => tx.pick(['p'], ['product']))[0].product,
+    s.tx((tx) => tx.get(['p'], ['product']))[0].product,
     whole.product,
   )
 })

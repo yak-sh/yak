@@ -65,7 +65,7 @@ import type {
   Loose,
   Tx,
 } from '@yaks/graph'
-import { comps, tombstoned } from '@yaks/graph'
+import { comps, only, tombstoned } from '@yaks/graph'
 import { matcher } from '@yaks/match'
 import {
   type BindOpts,
@@ -108,8 +108,9 @@ export type Store = {
   read: (query: Query, opts?: BindOpts) => Promise<Bundle[]>
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: BindOpts) => Promise<Row[]>
-  /** these entities as they stand, whole: D1 holds no lock to take */
-  get: (eids: Eid[]) => Promise<Bundle[]>
+  /** these entities as they stand, carrying the components `comps` names or
+   * every one: D1 holds no lock to take */
+  get: (eids: Eid[], comps?: string[]) => Promise<Bundle[]>
   /** run `body` against a transaction: flush its writes as one atomic batch on
    * return, discard them on throw */
   tx: <R>(body: (tx: Tx) => R) => Promise<Awaited<R>>
@@ -193,18 +194,20 @@ export let storage = <S extends Prepared<S>>(
     (await one(sql(vocab, query, { ...base, ...opts })))
       .map((r) => projected(vocab, r))
 
-  // Every named entity, whole, in one batch: the gather asks each entity's
-  // spine and each of its components as separate statements and reads the
-  // answers back in the order it asked.
+  // Every named entity in one batch, whole or carrying the components `names`
+  // names: the gather asks each entity's spine and each of those components as
+  // separate statements and reads the answers back in the order it asked.
   let gather = async (
     eids: Eid[],
     opts: BindOpts = {},
+    names?: string[],
   ): Promise<Bundle[]> =>
     eids.length
       ? bundles(
         vocab,
         eids,
-        await send(eids.flatMap((e) => gatherSql(vocab, e, opts))),
+        await send(eids.flatMap((e) => gatherSql(vocab, e, opts, names))),
+        names,
       )
       : []
 
@@ -390,11 +393,14 @@ export let storage = <S extends Prepared<S>>(
           opts?.now,
           await seek(query as Query, { ...base, ...opts }),
         ),
-      get: async (eids) => {
+      // Whole, whatever was named: the overlay merges a patch onto what was
+      // read, so a transaction keeps each entity whole and cuts its answer.
+      get: async (eids, names) => {
         await learn(eids)
+        let cut = only(names ? new Set(names) : null)
         return eids.flatMap((e) => {
           let b = at(e)
-          return b ? [b] : []
+          return b ? [cut(b)] : []
         })
       },
       doom,
@@ -509,7 +515,7 @@ export let storage = <S extends Prepared<S>>(
     },
     read,
     rows,
-    get: (eids) => run((tx) => tx.get(eids)),
+    get: (eids, names) => gather(eids, base, names),
     tx: run,
   }
 }

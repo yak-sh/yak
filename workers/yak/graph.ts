@@ -1738,7 +1738,7 @@ export class Store {
       }
     }
     if (!mentioned.size) return rows
-    return then(this.#graph.get([...mentioned]), (found) => {
+    return then(this.#graph.get([...mentioned], ['person', 'doc']), (found) => {
       let names = new Map<string, string>()
       for (let b of found) {
         let title = (b.doc as { title?: string } | undefined)?.title

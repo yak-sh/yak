@@ -14,6 +14,7 @@ import type { Bundle, Comp, Eid, Entity } from './bundle.ts'
 import { comps, TOMBSTONE, tombstoned } from './bundle.ts'
 import type { Query, Row, Storage, Tx } from './storage.ts'
 import { isPromise } from './pipe.ts'
+import { only } from './projection.ts'
 
 // A bookstore: books by publishers, reviews about books, bookmarks that only
 // exist to point at something. One reference per death behavior, so the
@@ -146,7 +147,10 @@ export let memory = (): Storage => {
   }
 
   let tx: Tx = {
-    get: (eids) => eids.flatMap((e) => bundleOf(e) ?? []),
+    get: (eids, names) =>
+      eids.flatMap((e) => bundleOf(e) ?? []).map(
+        only(names ? new Set(names) : null),
+      ),
     read: (query) => {
       let any = equalities(query)
       return [...rows]
@@ -206,7 +210,7 @@ export let memory = (): Storage => {
     read: (query) => tx.read(query),
     rows: (query) =>
       (tx.read(query) as Bundle[]).map((b) => ({ eid: b.entity.eid }) as Row),
-    get: (eids) => tx.get(eids),
+    get: (eids, names) => tx.get(eids, names),
     tx: (body) => {
       let saved = snapshot()
       let undo = (e: unknown) => {
@@ -229,12 +233,12 @@ export let slow = (base: Storage): Storage => ({
   install: () => Promise.resolve(base.install()),
   read: (query, opts) => Promise.resolve(base.read(query, opts)),
   rows: (query, opts) => Promise.resolve(base.rows(query, opts)),
-  get: (eids) => Promise.resolve(base.get(eids)),
+  get: (eids, names) => Promise.resolve(base.get(eids, names)),
   tx: (body) =>
     base.tx((tx) =>
       body({
         read: (q, o) => Promise.resolve(tx.read(q, o)),
-        get: (eids) => Promise.resolve(tx.get(eids)),
+        get: (eids, names) => Promise.resolve(tx.get(eids, names)),
         patch: (bundles) => Promise.resolve(tx.patch(bundles)),
         remove: (entities) => Promise.resolve(tx.remove(entities)),
         revive: (eids) => Promise.resolve(tx.revive(eids)),

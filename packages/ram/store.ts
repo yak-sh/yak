@@ -24,7 +24,7 @@
 // exactly as they were without copying anything the write did not touch.
 
 import type { Bundle, Comp, Eid, Entity, ReadOpts, Row } from '@yaks/graph'
-import { comps, isPromise, TOMBSTONE, tombstoned } from '@yaks/graph'
+import { comps, isPromise, only, TOMBSTONE, tombstoned } from '@yaks/graph'
 import {
   type Computed,
   type Index,
@@ -70,9 +70,10 @@ export type RamOpts = {
 export type Tx = {
   /** a query → the matching entities as whole bundles */
   read: (query: Query, opts?: ReadOpts) => Bundle[]
-  /** lookup by id, not search: these entities as they stand, whole. A deleted
-   * one carries `tombstone`; an unknown one is simply absent. */
-  get: (eids: Eid[]) => Bundle[]
+  /** lookup by id, not search: these entities as they stand, carrying the
+   * components `comps` names or every one. A deleted one carries `tombstone`;
+   * an unknown one is simply absent. */
+  get: (eids: Eid[], comps?: string[]) => Bundle[]
   /** apply these patches → the entities they created, each with its `num` */
   patch: (bundles: Bundle[]) => Entity[]
   /** Evict live payloads, not identities. A later patch keeps the same number.
@@ -98,8 +99,9 @@ export type Store = {
   read: (query: Query, opts?: ReadOpts) => Bundle[]
   /** a query → one raw `{ eid }` row per match, or an aggregate's rows */
   rows: (query: Query, opts?: ReadOpts) => Row[]
-  /** these entities as they stand, whole */
-  get: (eids: Eid[]) => Bundle[]
+  /** these entities as they stand, carrying the components `comps` names or
+   * every one */
+  get: (eids: Eid[], comps?: string[]) => Bundle[]
   /** run `body` in a transaction: commit on return, roll back on throw */
   tx: <R>(body: (tx: Tx) => R) => R
 }
@@ -415,12 +417,14 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   }
 
   // The records themselves. A record is never mutated once stored, so the one a
-  // read hands back is safe to keep, and costs no copy.
-  let get = (eids: Eid[]): Bundle[] => {
+  // read hands back is safe to keep, and costs no copy; a record cut to the
+  // named components is a copy only when it carries others.
+  let get = (eids: Eid[], names?: string[]): Bundle[] => {
+    let cut = only(names ? new Set(names) : null)
     let out: Bundle[] = []
     for (let eid of eids) {
       let rec = rows.get(eid)
-      if (rec) out.push(rec)
+      if (rec) out.push(cut(rec))
     }
     return out
   }

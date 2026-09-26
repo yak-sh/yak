@@ -4,7 +4,6 @@ import {
   gather,
   graph,
   holding,
-  pick,
   type Storage,
   then,
   token,
@@ -12,8 +11,8 @@ import {
 } from './mod.ts'
 import { books, comp, memory } from './testing.ts'
 
-// The optional projection deliberately returns only requested facets, even
-// though this test's backing map has whole rows. Count adapter crossings.
+// A narrowed read returns only the requested facets. Count adapter
+// crossings: a narrowed one is a pick, a whole one is whole.
 let fixture = (async: boolean) => {
   let base = memory()
   let calls: string[] = []
@@ -21,23 +20,9 @@ let fixture = (async: boolean) => {
     async ? Promise.resolve(value) : value
   let wrap = (tx: Tx): Tx => ({
     ...tx,
-    get: (eids) => {
-      calls.push('whole')
-      return answer(tx.get(eids))
-    },
-    pick: (eids, names) => {
-      calls.push('pick')
-      return then(
-        tx.get(eids),
-        (rows) =>
-          answer(rows.map((b) =>
-            Object.fromEntries(
-              Object.entries(b).filter(([k]) =>
-                k == 'entity' || k == 'tombstone' || names.includes(k)
-              ),
-            ) as Bundle
-          )),
-      )
+    get: (eids, names) => {
+      calls.push(names ? 'pick' : 'whole')
+      return answer(tx.get(eids, names))
     },
     patch: (bs) => {
       calls.push('patch')
@@ -68,7 +53,7 @@ for (let async of [false, true]) {
     g.use({
       name: 'settle',
       beforeWrite: () => (bs, tx) =>
-        then(pick(tx, ['b'], ['book']), (held) => {
+        then(tx.get(['b'], ['book']), (held) => {
           assertEquals(comp(held[0], 'book').pages, 4)
           assertEquals(held[0].doc, undefined)
           return bs.filter((b) => comp(b, 'book').pages != 4)
@@ -101,10 +86,10 @@ for (let async of [false, true]) {
     await storage.tx(async (tx) => {
       let snap = await gather(tx, books, [{
         eids: ['b'],
-        select: ['book', 'tombstone'],
+        select: ['book'],
       }])
       let held = holding(tx, books, snap)
-      let retained = (await pick(held, ['b'], ['book']))[0]
+      let retained = (await held.get(['b'], ['book']))[0]
       assertEquals(retained.doc, undefined)
       // Even a write to a different owner must freeze the original view first.
       await held.patch([{ entity: { eid: 'other' }, doc: { title: 'Other' } }])
@@ -136,7 +121,7 @@ for (let async of [false, true]) {
     g.use({
       name: 'ordered',
       beforeWrite: () => (bs, tx) =>
-        then(pick(tx, ['b'], ['book']), (held) => {
+        then(tx.get(['b'], ['book']), (held) => {
           checks.push(Number(comp(held[0], 'book').pages))
           if (comp(bs[0], 'book').pages == 9) throw Error('late refusal')
           return bs
@@ -219,7 +204,7 @@ for (let async of [false, true]) {
         books,
         snap,
       )
-      let before = (await pick(held, ['b'], ['book']))[0]
+      let before = (await held.get(['b'], ['book']))[0]
       let whole = (await held.get(['b']))[0]
       assertEquals(whole === before, true)
       assertEquals(comp(whole, 'book').pages, 4)

@@ -219,14 +219,12 @@ export let gather = (
   // Reading a set of entities, or reading in reverse, already spreads the cost
   // of a whole read over many rows. Only the single-entity case gains anything
   // from deferring the components nobody asked for.
-  let narrow = tx.pick && named.length == 1 && !back.length &&
+  let narrow = named.length == 1 && !back.length &&
     asks.every((a) => !a.eids?.length || a.select != null)
-  let selected = new Set(['tombstone', ...asks.flatMap((a) => a.select ?? [])])
+  let selected = new Set(asks.flatMap((a) => a.select ?? []))
   let rows = !named.length
     ? []
-    : narrow
-    ? tx.pick!(named, [...selected])
-    : tx.get(named)
+    : tx.get(named, narrow ? [...selected] : undefined)
   return then(rows, (found) => {
     for (let e of named) snap.got.set(e, null)
     for (let b of found) snap.got.set(b.entity.eid, b)
@@ -321,24 +319,19 @@ export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
           if (held && dead(held)) snap.got.set(eid, { entity: held.entity })
         }
       })),
-  pick: (eids, names) => {
-    if (
-      eids.every((e) =>
-        snap.got.has(e) &&
-        (!snap.only?.has(e) || names.every((n) => snap.only!.get(e)!.has(n)))
-      )
-    ) {
-      return eids.flatMap((e) => snap.got.get(e) ?? [])
-    }
-    return holding(tx, vocab, snap).get(eids)
-  },
-  get: (eids) => {
+  // What the gather read answers any ask it covers: an entity it read whole,
+  // or one it read the named components of. Anything else is read whole, and
+  // kept.
+  get: (eids, names) => {
+    let mine = () => eids.flatMap((e) => snap.got.get(e) ?? [])
+    let read = (e: Eid) =>
+      snap.got.has(e) &&
+      (!snap.only?.has(e) || !!names?.every((n) => snap.only!.get(e)!.has(n)))
+    if (eids.every(read)) return mine()
     if (eids.some((e) => snap.only?.has(e))) {
       return then(complete(tx, snap), () => holding(tx, vocab, snap).get(eids))
     }
-    let mine = () => eids.flatMap((e) => snap.got.get(e) ?? [])
     let miss = eids.filter((e) => !snap.got.has(e))
-    if (!miss.length) return mine()
     return then(tx.get(miss), (found) => {
       for (let e of miss) snap.got.set(e, null)
       for (let b of found) snap.got.set(b.entity.eid, b)

@@ -267,18 +267,25 @@ let probe = (names: string[], owners: number[]): Compound => ({
 })
 
 /**
- * Identity, not search: these entities as they stand, whole. A tombstoned one
- * comes back carrying `tombstone` (it is still an identity, just a deleted
- * one); an eid no entity has is simply absent. This is the read `apply()` uses
- * for
- * its precondition guard, where a query would be the wrong question.
+ * Identity, not search: these entities as they stand. A tombstoned one comes
+ * back carrying `tombstone` (it is still an identity, just a deleted one); an
+ * eid no entity has is simply absent. Each carries the components `comps`
+ * names, and no other table is read; left out, it carries every one. This is
+ * the read `apply()` uses for its precondition guard, where a query would be
+ * the wrong question.
  */
 export let get = (
   driver: Driver,
   vocab: Vocab,
   eids: string[],
   opts: BindOpts = {},
+  comps?: string[],
 ): Bundle[] => {
+  // The tables this read may touch: every component's, or the named ones'.
+  let names = vocab.all.filter((c) =>
+    c != 'entity' && (!comps || comps.includes(c))
+  )
+  let asked = new Set(names)
   let found = new Map<string, Bundle>()
   // Whether a number is this store's to show. The spine table holds the column
   // in every layout, but the number is @yaks/id's word and a store that never
@@ -325,7 +332,7 @@ export let get = (
     // its owner groups. No component-table census on classified entities.
     for (let [text, group] of groups) {
       for (let comp of descriptor(driver, text).tables) {
-        if (comp == 'entity' || !vocab.comp(comp)) continue
+        if (!asked.has(comp)) continue
         let held = compOwners.get(comp)
         if (held) held.push(...group)
         else compOwners.set(comp, [...group])
@@ -343,7 +350,6 @@ export let get = (
     // census that could miss a newly populated table on this or another handle.
     // One owner already costs only one lookup; it needs no extra table probe.
     // Every membership probe uses the same bound owner set.
-    let names = vocab.all.filter((c) => c != 'entity')
     let present: string[] = []
     // One arm per table, cut to what this engine's compound SELECT carries
     // (`Driver.arms`): workerd refuses a sixth term where an embedded SQLite
