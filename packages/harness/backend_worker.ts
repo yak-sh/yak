@@ -117,6 +117,11 @@ async function handle(method: string, value: unknown): Promise<unknown> {
           'completed' in b || 'cancelled' in b || '$delete' in b
         ),
     })
+    // What other processes and threads commit to the same store reaches the
+    // terminal too: the pool working a transcript's turn elsewhere, a `yak`
+    // command run beside it. The feed stops when the host closes.
+    let fed = subs
+    host.feed((applied) => fed.commit(applied))
     return { names: a.names }
   }
   if (!a || !subs) throw new Error('Worker not initialized')

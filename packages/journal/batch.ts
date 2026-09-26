@@ -75,6 +75,9 @@ export type Entry = {
   via: Eid | null
   /** whatever the writer wrote down beside the transaction, verbatim */
   note: string | null
+  /** the host that wrote it (@yaks/journal `LogOpts.host`), or null for a
+   * transaction recorded before hosts were */
+  host: string | null
   /** what it did, in the order it did it */
   patches: Patch[]
 }

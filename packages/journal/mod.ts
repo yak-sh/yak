@@ -55,9 +55,13 @@
  *   an undo is a write like any other and undoing it is a redo. A transaction
  *   that deleted an entity is refused ({@link Final}): a deletion is final.
  * - {@link Log.since} — the transactions after a cursor, oldest first.
- *   {@link applied} turns one back into the bundles it committed, which is
- *   what a server pushes to its subscribers; a consumer that stores the cursor
- *   before it does the work runs effects at most once.
+ *   {@link applied} turns one back into the bundles it committed; a consumer
+ *   that stores the cursor before it does the work runs effects at most once.
+ * - {@link follow} — the feed as one host sees it: every transaction another
+ *   host committed to the same store since the last look, as the patches it
+ *   applied ({@link recast}). Each log writes as one host
+ *   ({@link LogOpts.host}), so a graph's subscribers can be told of the commits
+ *   its own `effect` phase never saw: another process's, another thread's.
  *
  * ## What it is not
  * It is not a backup and not a state machine: it records what moved, not the
@@ -74,3 +78,4 @@ export * from './value.ts'
 export * from './batch.ts'
 export * from './log.ts'
 export * from './undo.ts'
+export * from './feed.ts'

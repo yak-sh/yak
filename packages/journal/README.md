@@ -29,11 +29,11 @@ unless it was imported into the journal.
 
 ## What it records
 
-| Table            | Contents                                                            |
-| ---------------- | ------------------------------------------------------------------- |
-| `journal_tx`     | Transaction sequence, timestamp, actor references and optional note |
-| `journal_change` | Ordered component upserts/removals, or an entity deletion           |
-| `journal_field`  | Ordered property values after each change                           |
+| Table            | Contents                                                         |
+| ---------------- | ---------------------------------------------------------------- |
+| `journal_tx`     | Transaction sequence, timestamp, actor references, host and note |
+| `journal_change` | Ordered component upserts/removals, or an entity deletion        |
+| `journal_field`  | Ordered property values after each change                        |
 
 An empty component still has a change row. Component removal records null values
 for the fields known to the journal, keeping their history continuous across
@@ -131,7 +131,8 @@ batches with before/after deltas.
 | `j.history(eid, n?)`                                   | Latest `n` transactions for an entity, returned oldest first |
 | `j.entries(eid, n?)`                                   | Latest entries for an entity, newest first                   |
 | `j.by(via, n?)`                                        | Entries written through an instrument, newest first          |
-| `j.since(cursor?)`                                     | Entries strictly after the cursor, oldest first              |
+| `j.since(cursor?, n?)`                                 | Entries strictly after the cursor, oldest first              |
+| `j.hosts(cursor, n)`                                   | The host that wrote each transaction after the cursor        |
 | `j.at(seq)`                                            | One reconstructed `Batch`, or `undefined`                    |
 | `j.patches(seq, target?)`                              | Recorded operations, optionally restricted to one entity     |
 | `j.before(eid, seq)`                                   | Components just before a transaction                         |
@@ -150,6 +151,32 @@ returned bundles.
 The consumer owns its cursor and delivery policy. Saving the cursor before doing
 the work can lose work after a crash; saving it afterward can repeat work. The
 journal alone does not guarantee exactly-once external effects.
+
+## Other hosts' commits
+
+A graph's `effect` phase runs only for the commits that graph made. Another
+process or thread that opened the same store — a `yak` command beside
+`yak serve`, the thread working the effect pool — commits where it cannot see.
+Each log writes as one host (`log({ rows, host })`, a fresh id by default), and
+every transaction records it, so a host can follow the feed and keep only what
+someone else wrote:
+
+```ts
+let next = follow(j) // from the log's tip
+// …another host commits…
+next() // [{ seq, applied: [{ entity: { eid: 'p1' }, page: { title: 'Hi' } }] }]
+```
+
+`recast(patches)` is the shape a graph's `effect` phase is handed: one bundle
+per recorded operation, a deletion as `$delete`. In a server,
+`@yaks/journal/rules` exports `feed`, which a host offers as `host.feed(each)`:
+it looks every 200ms (`{"use": "@yaks/journal", "with": {"every": 50}}` to
+change it) and hands each commit to `each` in order. A commit `each` fails on is
+offered again at the next look, up to five times, before it is reported and
+passed over. @yaks/api feeds its `/ws` subscriptions this way.
+
+A store an older journal made gains the `host` column the next time
+`@yaks/journal/rules` opens it (`grown()`).
 
 ## Undo
 

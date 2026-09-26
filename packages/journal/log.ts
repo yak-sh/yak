@@ -106,6 +106,10 @@ export type LogOpts = {
   spine?: { table?: string; id?: string; eid?: string }
   /** content-addressed properties, if the graph has any */
   cas?: Cas
+  /** who this log writes as: the one host (a graph opened by one process or
+   * thread) whose transactions it records, so a reader can tell its own from
+   * another host's (./feed.ts). Default: a fresh id, one per log. */
+  host?: string
 }
 
 // The tables. Append-only, no eid of their own, never in a snapshot and never
@@ -113,7 +117,8 @@ export type LogOpts = {
 //
 // `tx.id` is an integer primary key, so it is the next rowid — monotonic, which
 // is what lets the total order rest on something other than a clock, and what
-// every cursor in the system holds.
+// every cursor in the system holds. `tx.host` names the host that wrote it
+// (`LogOpts.host`), so a host following the feed skips what it wrote itself.
 //
 // `change.operation` is `upsert` (the component is present; an empty one is an
 // upsert with no field rows) or `remove` (the component was removed, or the
@@ -160,6 +165,7 @@ export let ddl = (spine = 'entity'): Stmt[] => {
       { name: 'actor', ...to(spine) },
       { name: 'via', ...to(spine) },
       text('trace'),
+      text('host'),
     ]),
     created('journal_change', [
       id,
@@ -185,6 +191,17 @@ export let ddl = (spine = 'entity'): Stmt[] => {
   ]
 }
 
+/** What brings a journal a store already holds up to {@link ddl}'s shape,
+ * given the columns its `journal_tx` has now: each column it predates, added.
+ * A store opened by an older journal gains them the next time it is opened,
+ * so nothing writes a row its table cannot take. */
+export let grown = (has: string[]): Stmt[] =>
+  has.includes('host') ? [] : [{
+    t: 'alter table',
+    table: 'journal_tx',
+    add: { name: 'host', type: 'text' },
+  }]
+
 // The properties an after-image records: everything but `eid`, which is the
 // row's own identity and already the change's entity.
 let written = (value: Comp): [string, unknown][] =>
@@ -193,6 +210,8 @@ let written = (value: Comp): [string, unknown][] =>
 /** The log bound to one store: the writer, and the questions a journal is kept
  * in order to answer. */
 export type Log = {
+  /** the host this log writes as ({@link LogOpts.host}) */
+  host: string
   /** write one transaction down inside the caller's own transaction; returns
    * its seq */
   write: (
@@ -211,8 +230,12 @@ export type Log = {
   entries: (target: Eid, n?: number) => Entry[]
   /** every transaction one instrument wrote, newest first, whole */
   by: (via: Eid, n?: number) => Entry[]
-  /** the transactions after a cursor, oldest first — the feed */
-  since: (cursor?: number) => Entry[]
+  /** the transactions after a cursor, oldest first — the feed — at most `n`
+   * when given */
+  since: (cursor?: number, n?: number) => Entry[]
+  /** the host that wrote each transaction after a cursor, oldest first, at
+   * most `n` — the feed without its contents */
+  hosts: (cursor: number, n: number) => { seq: number; host: string | null }[]
   /** one transaction as a Batch, both sides of every movement */
   at: (seq: number) => Batch | undefined
   /** what happened to one entity, oldest first, as Batch */
@@ -256,6 +279,7 @@ export let log = (opts: LogOpts): Log => {
   let idCol = opts.spine?.id ?? 'id'
   let eidCol = opts.spine?.eid ?? 'eid'
   let cas = opts.cas
+  let host = opts.host ?? crypto.randomUUID()
   let jt = (c: string) => col(c, 'jt')
   let jc = (c: string) => col(c, 'jc')
   let jf = (c: string) => col(c, 'jf')
@@ -346,6 +370,7 @@ export let log = (opts: LogOpts): Log => {
     by: str(r.actor),
     via: str(r.via),
     note: str(r.trace),
+    host: str(r.host),
     patches: patches(num(r.id), target),
   })
 
@@ -368,12 +393,13 @@ export let log = (opts: LogOpts): Log => {
       one({
         t: 'insert',
         into: 'journal_tx',
-        cols: ['ts', 'actor', 'via', 'trace'],
+        cols: ['ts', 'actor', 'via', 'trace', 'host'],
         rows: [[
           val(meta.at),
           idOf(meta.by),
           idOf(meta.via),
           val(meta.note ?? null),
+          val(host),
         ]],
         returning: [col('id')],
       })?.id,
@@ -569,6 +595,7 @@ export let log = (opts: LogOpts): Log => {
         as(eidOf(jt('actor')), 'actor'),
         as(eidOf(jt('via')), 'via'),
         as(jt('trace'), 'trace'),
+        as(jt('host'), 'host'),
       ],
       from: table('journal_tx', 'jt'),
       ...s,
@@ -584,6 +611,7 @@ export let log = (opts: LogOpts): Log => {
         as(eidOf(jt('actor')), 'actor'),
         as(eidOf(jt('via')), 'via'),
         as(jt('trace'), 'trace'),
+        as(jt('host'), 'host'),
       ],
       from: table('journal_change', 'jc'),
       joins: [ofTx],
@@ -602,12 +630,27 @@ export let log = (opts: LogOpts): Log => {
       limit: val(n),
     })).map((r) => entryOf(r))
 
-  /** The transactions after a cursor, oldest first — the feed. The before-side
-   * is not derived here: a feed replays what was written, and deriving it would
-   * turn one range read into a walk of the log per entity. */
-  let since = (cursor = 0): Entry[] =>
-    rows(txs({ where: gt(jt('id'), val(cursor)), order: [jt('id')] }))
-      .map((r) => entryOf(r))
+  /** The transactions after a cursor, oldest first — the feed — at most `n` of
+   * them when a reader pages. The before-side is not derived here: a feed
+   * replays what was written, and deriving it would turn one range read into a
+   * walk of the log per entity. */
+  let since = (cursor = 0, n?: number): Entry[] =>
+    rows(txs({
+      where: gt(jt('id'), val(cursor)),
+      order: [jt('id')],
+      ...(n == null ? {} : { limit: val(n) }),
+    })).map((r) => entryOf(r))
+
+  /** Who wrote each transaction after a cursor, and nothing else: a follower
+   * reads the contents of only the ones it keeps. */
+  let hosts = (cursor: number, n: number) =>
+    rows(select({
+      cols: [col('id'), col('host')],
+      from: table('journal_tx'),
+      where: gt(col('id'), val(cursor)),
+      order: [col('id')],
+      limit: val(n),
+    })).map((r) => ({ seq: num(r.id), host: str(r.host) }))
 
   /** One transaction, whole, as a Batch — both sides of every movement, which
    * is what `undone()` reverses and `applied()` replays. */
@@ -763,11 +806,13 @@ export let log = (opts: LogOpts): Log => {
   let scrubRef = (field: number, ref: number) => scrub(field, { ref: val(ref) })
 
   return {
+    host,
     write,
     patches,
     entries,
     by,
     since,
+    hosts,
     at,
     history,
     before,

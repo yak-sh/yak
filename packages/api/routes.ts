@@ -12,7 +12,7 @@
 // It is handed the host once the graph is open and the routes are gathered,
 // unlike `authenticate` beside it, which is asked for before anything is open.
 
-import type { Graph } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
 import type { Authenticate } from './actor.ts'
 import {
   api,
@@ -23,15 +23,19 @@ import {
   routed,
 } from './route.ts'
 import { refuse } from './refuse.ts'
+import { subscriptions } from './subs.ts'
 
 /** What this facet reads off the host it is composing into: the graph its
  * endpoints answer over, who that host says is calling, every route the
- * listed plugins contributed, and every filter they put in front. */
+ * listed plugins contributed, every filter they put in front, and the commits
+ * other hosts make to the same store, which `/ws` subscribers are told of as
+ * well as this graph's own. */
 export type Hosting = {
   graph: Graph
   who: Authenticate
   routes: Route[]
   filters?: Filter[]
+  feed?: (each: (applied: Bundle[]) => void | Promise<void>) => () => void
 }
 
 // How closely a route names a path: an exact path over any prefix, and a
@@ -52,7 +56,13 @@ let reach = (r: Route) => exact(r) ? Infinity : r.path.length
  */
 export let handler = (host: Hosting): Handler => {
   let routes = host.routes
-  let door = api({ graph: host.graph, authenticate: host.who })
+  // One registry, fed twice: its own graph's `effect` phase for what this host
+  // commits, and the host's feed for what every other process or thread
+  // commits to the same store — a `yak` command beside `yak serve`, the effect
+  // pool's thread — which that phase never runs for.
+  let subs = subscriptions(host.graph)
+  host.feed?.((applied) => subs.commit(applied))
+  let door = api({ graph: host.graph, authenticate: host.who, subs })
   let answer: Handler = (request) => {
     let path = new URL(request.url).pathname
     let route = routes.filter((r) => routed(r, request.method, path))

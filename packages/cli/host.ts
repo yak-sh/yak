@@ -211,6 +211,11 @@ export type Host = {
    * plugin answers it ({@link RulesFacet.authenticate}); where it names
    * nobody, the answer is this host process itself ({@link writer}). */
   who: Authenticate
+  /** Every commit another host makes to this store, as the patches it applied
+   * ({@link RulesFacet.feed}): what a subscription registry or a cache over
+   * {@link graph} is fed so it sees the writes its graph's `effect` phase
+   * never ran for. Without a plugin that offers one, nothing arrives. */
+  feed: Feed
   /** This host shutting down, as one fact: aborted by {@link Served.close}
    * before the last transaction and before the database is closed. A plugin
    * that arms a timer — a settle, a retry, a poll — hangs it off this signal,
@@ -279,7 +284,17 @@ export type RulesFacet = {
   rules?: (host: Host, options: Options) => Plugin[]
   extend?: (host: Host, options: Options) => Extension[]
   authenticate?: (host: Host, options: Options) => Authenticate
+  /** the commits other hosts make to this store (@yaks/journal's feed) */
+  feed?: (host: Host, options: Options) => Feed
 }
+
+/** A source of the commits this host's graph did not make itself — another
+ * process's over the same store, another thread's in this one — each handed to
+ * `each` as the patches it applied, until the returned function is called or
+ * the host stops. */
+export type Feed = (
+  each: (applied: Bundle[]) => void | Promise<void>,
+) => () => void
 
 /** `<plugin>/tools` — the functions behind its `tool: true` declarations,
  * keyed by tool name.
@@ -729,6 +744,12 @@ export let compose = async (
       derived,
       me: selfEid(),
       who: (request) => authenticate(request),
+      feed: (each) => {
+        let stops = ruled.flatMap(([r, options]) =>
+          r.feed ? [r.feed(host, options)(each)] : []
+        )
+        return () => stops.forEach((stop) => stop())
+      },
       stopping: stopping.signal,
       get storage(): Store {
         if (!store) throw new Error('the store is not open yet')

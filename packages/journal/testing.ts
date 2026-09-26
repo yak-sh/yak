@@ -83,6 +83,9 @@ export let wikiLog = (): {
   g: (p?: Options['plugins']) => Graph
   j: Log
   sql: Driver
+  /** another host over the same database: a graph journaling as a log of its
+   * own, the way a second process or thread opening the file would */
+  other: () => { g: Graph; j: Log }
 } => {
   let db = mem()
   let store = storage(db, wiki)
@@ -94,16 +97,21 @@ export let wikiLog = (): {
     cols: ['eid'],
     rows: ACTORS.map((a) => [lit(a)]),
   })
+  let as = (j: Log, plugins: Options['plugins'] = []) =>
+    graph({
+      storage: store,
+      vocab: wiki,
+      plugins: [journal(j, { now: () => NOW }), ...plugins],
+    })
   let j = log({ rows: (s) => db.query(s) })
   return {
-    g: (plugins = []) =>
-      graph({
-        storage: store,
-        vocab: wiki,
-        plugins: [journal(j, { now: () => NOW }), ...plugins],
-      }),
+    g: (plugins = []) => as(j, plugins),
     j,
     sql: db,
+    other: () => {
+      let j = log({ rows: (s) => db.query(s) })
+      return { g: as(j), j }
+    },
   }
 }
 

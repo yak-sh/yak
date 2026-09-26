@@ -146,7 +146,10 @@ preconditions.
 ## Subscriptions
 
 A query subscription first receives its current result, then updates after graph
-commits. Open a socket to `/ws` and send:
+commits. Those are the graph's own commits, and, in a host whose config lists
+@yaks/journal, every commit another process or thread makes to the same store
+(`host.feed`, @yaks/journal's `feed`): a `yak` command run beside `yak serve`
+reaches an open tab too. Open a socket to `/ws` and send:
 
 ```ts
 socket.send(

@@ -25,6 +25,7 @@ import {
 } from './host.ts'
 import { sealed } from '@yaks/secrets'
 import { signer } from './local.ts'
+import { until } from '../../bin/testing.ts'
 
 // The host of these tests, as its own writes are signed: this process, whose
 // row every composition here writes on the way in.
@@ -1128,6 +1129,34 @@ Deno.test('a facet hangs its timer off the host ending, and closing cancels it',
   assert(host.stopping.aborted, 'closing the host did not say so')
   await new Promise((go) => setTimeout(go, 25))
   assertEquals(late, 0, 'a timer fired after the database was let go')
+})
+
+Deno.test('a host hears what another host commits to the same store, and not what it commits itself', async () => {
+  // Two processes over one file — `yak serve` and a `yak` command beside it —
+  // each a host of its own, with the journal listed.
+  let db = `${Deno.makeTempDirSync()}/graph.db`
+  let config: Config = {
+    db,
+    plugins: ['shop', { use: '@yaks/journal', with: { every: 5 } }],
+  }
+  let here = await compose(config, only({ shop }))
+  let there = await compose(config, only({ shop }))
+  try {
+    let heard: Bundle[] = []
+    let stop = here.feed((applied) => void heard.push(...applied))
+    await here.graph.apply([{ entity: { eid: 'mine' }, book: { title: 'A' } }])
+    await there.graph.apply([{
+      entity: { eid: 'theirs' },
+      book: { title: 'B' },
+    }])
+    await until(() => heard.some((b) => b.entity.eid == 'theirs'))
+    assert(!heard.some((b) => b.entity.eid == 'mine'), 'it heard its own')
+    stop()
+  } finally {
+    await here.close()
+    await there.close()
+    Deno.removeSync(db.slice(0, -'/graph.db'.length), { recursive: true })
+  }
 })
 
 Deno.test('an option written {secret} is that secret, read each time it is asked for', async () => {
