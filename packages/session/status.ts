@@ -20,6 +20,8 @@
 //   exception     → failed    the runner could not continue past it
 //   error         → failed once the last RETRIES entries are all errors,
 //                   else pending (the runner retries)
+//   error `limit` → failed    a ceiling refused it, and asking again would
+//                   meet the same ceiling; new input asks afresh
 //   nothing       → empty
 //
 // `pending` is the runner's to answer (./run.ts), and it answers only a
@@ -96,6 +98,11 @@ export type TranscriptStatus =
 /** How many consecutive errors the runner retries through before it leaves a
  * transcript `failed`. */
 export let RETRIES = 3
+
+/** The error code of a request refused at a ceiling (a spending allowance, a
+ * quota): final rather than retried, since the next ask meets the same
+ * ceiling. The transcript is `failed` until something new is said to it. */
+export let LIMIT = 'limit'
 
 let KINDS: [string, Kind][] = [
   [STOP_ENTRY, 'stop'],
@@ -176,6 +183,7 @@ export let statusOf = (entries: Bundle[]): TranscriptStatus => {
       ? 'pending'
       : 'failed'
   }
+  if (kind == 'error' && (newest.error as Comp)?.code == LIMIT) return 'failed'
   if (kind == 'error') {
     // failed once the last RETRIES entries are all errors
     let tail = all.slice(-RETRIES)
@@ -389,6 +397,7 @@ export let sessionStatus = {
               wears(ERROR, eq(col('code', 'k'), lit('interrupted'))),
               iff(input(asked), lit('pending'), lit('failed')),
             ],
+            [wears(ERROR, eq(col('code', 'k'), lit(LIMIT))), lit('failed')],
             [wears(ERROR), iff(allErrors, lit('failed'), lit('pending'))],
             [open, lit('running')],
             [and(wears(ASK), settled), lit('settled')],

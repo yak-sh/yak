@@ -30,10 +30,14 @@ import type {
   Tool as GraphTool,
 } from '@yaks/graph'
 import {
+  ANSWER,
+  type Answer,
   type Item,
   MODEL,
   type Model,
   ModelError,
+  QUESTIONS,
+  type Questions,
   type Reply,
   type Request,
   TOOL,
@@ -199,6 +203,30 @@ export let project = (
     }
   }
   return out
+}
+
+/** The typed questions a turn asks: those on the newest entry since the
+ * transcript's last ask that carries any, so a retry after an error asks them
+ * again and a later turn does not. */
+let questionsOf = (entries: Bundle[]): Questions | undefined => {
+  let last = newestAsk(entries)
+  let since = last ? seqOf(last) : 0
+  let asking = entries.filter((b) => QUESTIONS in b && seqOf(b) > since).at(-1)
+  let asked = asking && comp(asking, QUESTIONS)?.asked
+  return asked && typeof asked == 'object' && !Array.isArray(asked)
+    ? asked as Questions
+    : undefined
+}
+
+let two = (n: number) => String(Math.round(n * 100) / 100)
+
+/** An answer as the line a later turn reads: `plan: forge, 0.82`. */
+let saying = (question: string, a: Answer): string => {
+  let said = a.choice ?? [a.score, a.noul].find((n) => n != null)
+  let parts = [said, a.confidence]
+    .filter((p) => p != null)
+    .map((p) => typeof p == 'number' ? two(p) : p)
+  return `${question}: ${parts.join(', ')}`
 }
 
 /**
@@ -412,9 +440,11 @@ export let react = async (
       ),
     )
     : undefined
+  let questions = questionsOf(entries)
   let req: Request = {
     signal: deps.signal,
     model: spelled,
+    ...questions ? { questions } : {},
     effort: effort == null ? undefined : String(effort),
     instructions: deps.resolveInstructions
       ? deps.resolveInstructions(
@@ -593,6 +623,15 @@ export let react = async (
         args ? undefined : item.args,
       ))
     }
+  }
+  // One entry per answer, said as a line too, so a later chat turn reads what
+  // was decided and a query can match `.answer.question=plan`.
+  for (let [question, a] of Object.entries(reply.answers ?? {})) {
+    let { type: _, ...answer } = a
+    added.push(line({
+      [ANSWER]: { question, ...answer },
+      [OUTPUT]: { source: ask.entity.eid },
+    }, saying(question, a)))
   }
   for (let artifact of reply.artifacts ?? []) {
     let eid = artifact.address

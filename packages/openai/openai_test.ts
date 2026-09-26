@@ -188,6 +188,18 @@ Deno.test('a refusal, a failed stream and no credential are errors', async () =>
     'nobody home',
   )
   assertEquals(e.code, 'no_credential')
+
+  let idle = serving(200, '')
+  let questions = { plan: { type: 'noul' as const, instructions: '?' } }
+  e = await assertRejects(
+    () =>
+      responses({ credential: () => codex, fetch: idle.fetcher })({
+        ...req,
+        questions,
+      }),
+    ModelError,
+  )
+  assertEquals([e.code, idle.asked], ['questions', []])
 })
 
 Deno.test('a credential comes from the environment or a Codex auth.json', async () => {

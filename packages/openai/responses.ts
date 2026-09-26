@@ -202,6 +202,12 @@ let ask = (opts: Options) => {
     credentials: { get: opts.credential, refresh: opts.refresh },
   })
   return async (req: Request): Promise<Reply> => {
+    if (req.questions) {
+      throw new ModelError(
+        'questions',
+        'The Responses API answers no typed questions',
+      )
+    }
     try {
       // The endpoint decides support, including OAuth and custom deployments.
       // Never retry without the tool based on an ambiguous provider error.

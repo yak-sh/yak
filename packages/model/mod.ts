@@ -25,6 +25,11 @@
  * encodes those four one way; a chat-completions API encodes them another; the
  * conversation should not have to know.
  *
+ * A request may also ask typed {@link Questions} about the conversation, in
+ * Jev's terms (a `noul`, a `choice`, a `score`), and the reply answers each by
+ * name in {@link Reply.answers}. A graph records them as `questions` on the
+ * asking entry and one `answer` per question.
+ *
  * What a provider stores about a reply — an id that anchors the next request,
  * say — is that provider's own component, declared and written by its package
  * ({@link Model.mark}, {@link Model.vocab}) and read back by it
@@ -57,6 +62,8 @@ export { modelDoc }
 export let PROVIDER = 'provider'
 export let MODEL = 'model'
 export let TOOL = 'tool'
+export let QUESTIONS = 'questions'
+export let ANSWER = 'answer'
 
 /**
  * A provider or a model named where an eid is expected: `gpt-6-astra` in
@@ -126,6 +133,10 @@ export type Request = {
   instructions?: string
   items: Item[]
   tools: Tool[]
+  /** typed questions about the conversation, answered in
+   * {@link Reply.answers} rather than in prose; a model that answers none
+   * refuses the request with a {@link ModelError} coded `questions` */
+  questions?: Questions
   /** the most tokens the reply may write; the provider's own limit where
    * absent */
   tokens?: number
@@ -145,12 +156,39 @@ export type Usage = {
   reasoning_tokens?: number
 }
 
+/** One typed question, in Jev's terms: a `noul` is answered with the
+ * probability that it holds, a `choice` with one of its criteria's names, and
+ * a `score` with a number along its criteria, which are ordered. */
+export type Question = {
+  type: 'noul' | 'choice' | 'score'
+  instructions: unknown
+  /** a noul's `{true, false}`, a choice's options by name, a score's ordered
+   * list */
+  criteria?: unknown
+}
+
+/** The questions a request asks, by name. */
+export type Questions = Record<string, Question>
+
+/** A model's answer to one question: whichever of `noul`, `choice` and
+ * `score` its type calls for, how sure it is, and each option's probability. */
+export type Answer = {
+  type?: Question['type']
+  noul?: number
+  choice?: string
+  score?: number
+  confidence?: number
+  probabilities?: Record<string, number>
+}
+
 /** One reply: the provider's id, the model that served it, and the items it
  * produced. */
 export type Reply = {
   id: string
   model: string
   items: Item[]
+  /** the answer to each of the request's questions, by the question's name */
+  answers?: Record<string, Answer>
   usage?: Usage
   artifacts?: (Artifact & { call: string; revised_prompt?: string })[]
 }

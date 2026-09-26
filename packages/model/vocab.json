@@ -134,6 +134,48 @@
         }
       }
     },
+    "questions": {
+      "component": true,
+      "type": "object",
+      "description": "typed questions about the transcript, asked with the next request and answered by one `answer` entry each rather than in prose",
+      "properties": {
+        "asked": {
+          "type": "object",
+          "description": "each question by its name, in Jev's terms: {type: noul, choice or score, instructions, criteria}"
+        }
+      }
+    },
+    "answer": {
+      "component": true,
+      "type": "object",
+      "description": "a model's answer to one typed question, in the terms it was asked in",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "the name of the question it answers"
+        },
+        "noul": {
+          "type": "number",
+          "description": "for a noul, the probability that it holds"
+        },
+        "choice": {
+          "type": "string",
+          "description": "for a choice, the option chosen"
+        },
+        "score": {
+          "type": "number",
+          "description": "for a score, where along its criteria the answer falls"
+        },
+        "confidence": {
+          "type": "number",
+          "description": "how sure the model is of a choice or a score, from 0 to 1"
+        },
+        "probabilities": {
+          "type": "object",
+          "description": "each option's probability, by the option's name or place"
+        }
+      }
+    },
     "grades": {
       "enum": [
         "frontier",

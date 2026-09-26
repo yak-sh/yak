@@ -27,6 +27,8 @@ JSON object. The components beside `entry` determine its type:
 | `call{to, id, args, source}`          | a tool call requested by a model   |
 | `result{call}` with `content`         | a tool result                      |
 | `using{provider, model, effort}`      | model selection on an input or ask |
+| `questions{asked}`                    | typed questions for the next ask   |
+| `answer{question, …}` with `output`   | a model's answer to one question   |
 | `stop`                                | no further transcript work         |
 | `error{code}`                         | an expected failure                |
 | `exception`                           | an unexpected failure              |
@@ -64,8 +66,9 @@ Session status is derived from entries rather than stored. `statusOf()` returns
 property. An unanswered call from the newest model request keeps a transcript
 `running` regardless of later entries. Otherwise, input/result means `pending`,
 ask/call means `running`, output means `settled`, stop means `stopped`, and
-exception or three consecutive errors means `failed`. No entries means `empty`.
-There is no separate `input` component.
+exception, three consecutive errors, or one error coded `limit` (`LIMIT`, a
+request refused at a ceiling, which asking again would meet too) means `failed`.
+No entries means `empty`. There is no separate `input` component.
 
 Applications that run a session add components from other packages:
 `process{pid, command, cwd}` and `exit{code}` describe its program;
@@ -150,6 +153,15 @@ console.log(await transcript(g, 'session'))
 
 Replace the local function with `responses({ credential })` from `@yaks/openai`
 to use that provider; also load its `openaiDoc` vocabulary.
+
+An entry wearing `questions{asked}` (typed questions in Jev's terms, by name;
+@yaks/model `Questions`) asks them with the next turn: the runner sends them as
+`Request.questions`, and writes each of the reply's answers as its own entry,
+`answer{question, noul, choice, score, confidence, probabilities}` with
+`output{source}` naming the ask and a line saying it (`plan: forge, 0.82`), so a
+later chat turn reads what was decided and a query can match
+`.answer.question=plan&.answer.choice=forge`. A retry after an error asks them
+again; a later turn does not.
 
 A streamed request is withdrawn by an entry carrying `cancel{target}` that names
 its in-flight attempt: the run holding the transcript aborts it and records the

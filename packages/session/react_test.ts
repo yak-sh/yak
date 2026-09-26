@@ -20,7 +20,8 @@ import {
 import { toolsDoc } from '@yaks/tools/vocab'
 import { toolEid } from '@yaks/tools'
 import { sessionDoc } from './comp.ts'
-import { kindOf, statusOf } from './status.ts'
+import { kindOf, statusOf, textOf } from './status.ts'
+import { appendEntry } from './append.ts'
 import { sessions } from './plugin.ts'
 import { type Deps, react, transcript } from './react.ts'
 import { running, settle } from './run.ts'
@@ -438,4 +439,59 @@ Deno.test('an unanswered older call fails without replay or provider dispatch', 
   assertEquals(resumed.did, 'asked')
   assertEquals(recovery.asked.length, 1)
   assertEquals(runs, 0)
+})
+
+Deno.test('typed questions are asked once and answered one entry each', async () => {
+  let g = world()
+  let questions = {
+    plan: { type: 'choice' as const, instructions: 'Where next?' },
+    greet: { type: 'noul' as const, instructions: 'Greet them?' },
+  }
+  await g.apply([{
+    entity: { eid: 'e2' },
+    entry: { session: ids.s, seq: 2 },
+    content: { body: 'a stranger arrives' },
+    questions: { asked: questions },
+  }])
+  let answered: Reply = {
+    id: 'r1',
+    model: 'fake-1',
+    items: [],
+    answers: {
+      plan: { type: 'choice', choice: 'forge', confidence: 0.8249 },
+      greet: { type: 'noul', noul: 0.81 },
+    },
+  }
+  let { model, asked } = scripted([answered, says('r2', 'hello')])
+  assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'settled')
+  assertEquals(asked[0].questions, questions)
+  let said = (await transcript(g, ids.s)).filter((b) => b.answer)
+  assertEquals(said.map((b) => [b.answer, textOf(b)]), [
+    [
+      { question: 'plan', choice: 'forge', confidence: 0.8249 },
+      'plan: forge, 0.82',
+    ],
+    [{ question: 'greet', noul: 0.81 }, 'greet: 0.81'],
+  ])
+  // the next turn is a chat that reads what was decided
+  await appendEntry(g, ids.s, 'what did you decide?')
+  await rest(g, ids.s, { model, tools: [], mint })
+  assertEquals(asked[1].questions, undefined)
+  assertEquals(
+    asked[1].items.filter((i) => i.kind == 'assistant').map((i) => i.text),
+    ['plan: forge, 0.82', 'greet: 0.81'],
+  )
+})
+
+Deno.test('a request refused at its limit is not retried', async () => {
+  let g = world()
+  let asked = 0
+  let model: Model = () => {
+    asked++
+    return Promise.reject(new ModelError('limit', 'This space is at its limit'))
+  }
+  assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'failed')
+  assertEquals([asked, await kinds(g, ids.s)], [1, ['input', 'error']])
+  await appendEntry(g, ids.s, 'and now?')
+  assertEquals(statusOf(await transcript(g, ids.s)), 'pending')
 })

@@ -133,3 +133,52 @@ Deno.test('images and cancelled requests are never sent', async () => {
   await assertRejects(() => model(ask([], { signal: AbortSignal.abort() })))
   assertEquals(asked, [])
 })
+
+Deno.test('typed questions go as state and come back answered by name', async () => {
+  let questions = {
+    plan: {
+      type: 'choice' as const,
+      instructions: 'Where next?',
+      criteria: { forge: 'to work', well: 'to rest' },
+    },
+    greet: { type: 'noul' as const, instructions: 'Greet them?' },
+  }
+  let plan = {
+    type: 'choice' as const,
+    choice: 'forge',
+    confidence: 0.82,
+    probabilities: { forge: 0.82, well: 0.18 },
+  }
+  let { asked, model } = binding({
+    model: 'jev-1.13.0',
+    answers: { plan, greet: { type: 'noul', noul: 0 } },
+    usage: { input_tokens: 380, output_tokens: 45 },
+  })
+  let reply = await model(ask([{ kind: 'user', text: 'a stranger arrives' }], {
+    instructions: 'you are the smith',
+    questions,
+  }))
+  assertEquals(asked[0].input, {
+    state: [
+      { role: 'system', content: 'you are the smith' },
+      { role: 'user', content: 'a stranger arrives' },
+    ],
+    questions,
+  })
+  assertEquals(reply.items, [])
+  assertEquals(reply.answers, { plan, greet: { type: 'noul', noul: 0 } })
+  assertEquals(reply.usage, { input_tokens: 380, output_tokens: 45 })
+})
+
+Deno.test('a model that answers no questions refuses them', async () => {
+  let { model } = binding({ response: 'the forge, I think' })
+  let questions = { plan: { type: 'noul' as const, instructions: '?' } }
+  let e = await assertRejects(() => model(ask([], { questions })), ModelError)
+  assertEquals(e.code, 'questions')
+})
+
+Deno.test("a binding's own ModelError is passed on as it is", async () => {
+  let refused = new ModelError('limit', 'This space has used its allowance')
+  let e = await assertRejects(() => binding(refused).model(ask([])))
+  assertEquals(e, refused)
+})

@@ -19,10 +19,17 @@
  * OpenAI's (`choices[0].message`). Workers AI keeps nothing between requests,
  * so every request carries the whole conversation and the model has no anchor.
  *
+ * A request asking typed questions goes to a structured model such as Jev
+ * (`typesafe/jev`) as `{state, questions}`: the same messages are the state,
+ * and the questions travel as they were asked. Its answers come back by
+ * question, and a model that answered none refuses with a `ModelError` coded
+ * `questions`.
+ *
  * @module
  */
 
 import {
+  type Answer,
   type Item,
   type Model,
   ModelError,
@@ -109,15 +116,74 @@ let calls = (raw: unknown, reply: string): Item[] =>
     }
   })
 
-// The counts an answer reports; one it leaves out is unknown, not zero.
-let usage = (raw: unknown): Usage => {
+/**
+ * The counts an answer from the binding reports, read off the whole answer: a
+ * chat model's `prompt_tokens` and `completion_tokens`, or the `input_tokens`
+ * and `output_tokens` a structured model says. One it leaves out is unknown,
+ * not zero.
+ *
+ * ```ts
+ * import { usageOf } from '@yaks/workers-ai'
+ * import { assertEquals } from '@std/assert'
+ *
+ * assertEquals(
+ *   usageOf({ usage: { input_tokens: 380, output_tokens: 45 } }),
+ *   { input_tokens: 380, output_tokens: 45 },
+ * )
+ * ```
+ */
+export let usageOf = (answer: unknown): Usage => {
+  let raw = at(answer, 'usage')
   let counts: [keyof Usage, number | undefined][] = [
-    ['input_tokens', count(at(raw, 'prompt_tokens'))],
-    ['output_tokens', count(at(raw, 'completion_tokens'))],
+    [
+      'input_tokens',
+      count(at(raw, 'prompt_tokens') ?? at(raw, 'input_tokens')),
+    ],
+    [
+      'output_tokens',
+      count(at(raw, 'completion_tokens') ?? at(raw, 'output_tokens')),
+    ],
     ['total_tokens', count(at(raw, 'total_tokens'))],
     ['cached_tokens', count(at(raw, 'cached_tokens'))],
   ]
   return Object.fromEntries(counts.filter(([, n]) => n != undefined))
+}
+
+let num = (v: unknown) => typeof v == 'number' ? v : undefined
+
+let TYPES = ['noul', 'choice', 'score'] as const
+
+// One answer as the model gave it: the fields a question's type calls for, and
+// nothing else.
+let answer = (raw: unknown): Answer => {
+  let type = TYPES.find((t) => t == at(raw, 'type'))
+  let choice = at(raw, 'choice')
+  let odds = at(raw, 'probabilities')
+  let fields: Answer = {
+    type,
+    noul: num(at(raw, 'noul')),
+    choice: typeof choice == 'string' ? choice : undefined,
+    score: num(at(raw, 'score')),
+    confidence: num(at(raw, 'confidence')),
+    probabilities: odds && typeof odds == 'object' && !Array.isArray(odds)
+      ? odds as Record<string, number>
+      : undefined,
+  }
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, v]) => v !== undefined),
+  )
+}
+
+// The answers off a structured model's reply, by question. A reply without
+// them came from a model that answers no questions.
+let answers = (out: unknown, model: string): Record<string, Answer> => {
+  let raw = at(out, 'answers')
+  if (!raw || typeof raw != 'object' || Array.isArray(raw)) {
+    throw new ModelError('questions', `${model} answers no typed questions`)
+  }
+  return Object.fromEntries(
+    Object.entries(raw).map(([name, a]) => [name, answer(a)]),
+  )
 }
 
 let message = (e: unknown) => e instanceof Error ? e.message : String(e)
@@ -127,31 +193,49 @@ let message = (e: unknown) => e instanceof Error ? e.message : String(e)
 let busy = (e: unknown) =>
   /\b429\b|too many requests|rate.?limit|capacity/i.test(message(e))
 
-/**
- * A model over the binding. A rate limit is a {@link ModelError} coded
- * `busy`; anything else the binding throws is passed on as it was thrown.
- */
-export let workersAi = (ai: Binding): Model => async (req) => {
-  req.signal?.throwIfAborted()
-  let input = {
+// What the binding is asked: a chat, or a structured model's questions about
+// the same conversation.
+let input = (req: Request) =>
+  req.questions ? { state: messages(req), questions: req.questions } : {
     messages: messages(req),
     ...req.tools.length
       ? { tools: req.tools.map((f) => ({ type: 'function', function: f })) }
       : {},
     ...req.tokens ? { max_tokens: req.tokens } : {},
   }
-  let out = await ai.run(req.model, input).catch((e) => {
-    throw busy(e) ? new ModelError('busy', message(e)) : e
+
+/**
+ * A model over the binding. A rate limit is a {@link ModelError} coded
+ * `busy`, and a `ModelError` the binding throws itself (one that meters it,
+ * say) is passed on as it is; anything else the binding throws is passed on as
+ * it was thrown.
+ */
+export let workersAi = (ai: Binding): Model => async (req) => {
+  req.signal?.throwIfAborted()
+  let out = await ai.run(req.model, input(req)).catch((e) => {
+    throw e instanceof ModelError || !busy(e)
+      ? e
+      : new ModelError('busy', message(e))
   })
   req.signal?.throwIfAborted()
+  let id = str(at(out, 'id')) || crypto.randomUUID()
+  let u = usageOf(out)
+  let counted = Object.keys(u).length ? { usage: u } : {}
+  if (req.questions) {
+    return {
+      id,
+      model: req.model,
+      items: [],
+      answers: answers(out, req.model),
+      ...counted,
+    }
+  }
   // Some models in the catalog answer the binding's own shape and some
   // answer OpenAI's; both are read, so a change of model is a change of id.
   let said = at(out, 'choices', 0, 'message')
-  let id = str(at(out, 'id')) || crypto.randomUUID()
   let text = String(at(out, 'response') ?? at(said, 'content') ?? '')
   if (text) req.onText?.({ index: 0, text })
   let words: Item[] = text ? [{ kind: 'assistant', text }] : []
-  let u = usage(at(out, 'usage'))
   return {
     id,
     model: req.model,
@@ -159,6 +243,6 @@ export let workersAi = (ai: Binding): Model => async (req) => {
       ...words,
       ...calls(at(out, 'tool_calls') ?? at(said, 'tool_calls'), id),
     ],
-    ...Object.keys(u).length ? { usage: u } : {},
+    ...counted,
   }
 }

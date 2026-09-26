@@ -147,6 +147,15 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     entry(3, { error: { code: 'x' } }),
     entry(4, { error: { code: 'x' } }),
   ], 'failed'],
+  ['a request refused at its limit', [
+    request(1),
+    entry(2, { error: { code: 'limit' } }),
+  ], 'failed'],
+  ['new input after a limit', [
+    request(1),
+    entry(2, { error: { code: 'limit' } }),
+    input(3),
+  ], 'pending'],
 ]
 
 Deno.test('statusOf reads the newest entry', () => {

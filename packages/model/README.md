@@ -36,6 +36,18 @@ Three things, and no transport:
   not this vocabulary. `Tool` here is the provider-neutral TypeScript type for a
   callable tool description.
 
+A request may also carry typed `questions` about the conversation, in Jev's
+terms: each named question is a `noul` (answered with the probability that it
+holds), a `choice` (one of its criteria's names) or a `score` (a number along
+its ordered criteria), with `instructions` and `criteria`. The reply answers
+them in `answers`, by name, each with `noul`, `choice` or `score`, and
+`confidence` and `probabilities` where the model gives them. A model that
+answers no typed questions refuses such a request with `ModelError` coded
+`questions`. A graph records them with two more components: `questions{asked}`
+on the entry that asks them, and
+`answer{question, noul, choice, score, confidence, probabilities}` on one entry
+per answer; `usage` holds the counts of either kind of request.
+
 A provider package implements `Model`: [@yaks/openai](../openai) does it over
 the Responses API, and [@yaks/workers-ai](../workers-ai) over the Workers AI
 binding; an Ollama package would sit beside them. A conversation package
@@ -43,12 +55,12 @@ binding; an Ollama package would sit beside them. A conversation package
 the model. Neither imports the other.
 
 The root module exports these types, `ModelError`, `modelDoc`, the `models()`
-graph plugin, and the `PROVIDER`, `MODEL`, and `TOOL` component-name constants.
-`@yaks/model/vocab` exports `modelDoc` and `docs: [modelDoc]` for plugin
-loaders. `@yaks/model/rules` exports `rules()`, which supplies that plugin: the
-schema and the name lookup, and no other write-time behavior. The package has no
-database or conversation storage; the calling application stores the provider
-and model records if it needs them.
+graph plugin, and the `PROVIDER`, `MODEL`, `TOOL`, `QUESTIONS` and `ANSWER`
+component-name constants. `@yaks/model/vocab` exports `modelDoc` and
+`docs: [modelDoc]` for plugin loaders. `@yaks/model/rules` exports `rules()`,
+which supplies that plugin: the schema and the name lookup, and no other
+write-time behavior. The package has no database or conversation storage; the
+calling application stores the provider and model records if it needs them.
 
 A model that throws `ModelError` failed in a way the caller expects — a refusal,
 a rate limit, a missing credential. Other exceptions are unexpected failures

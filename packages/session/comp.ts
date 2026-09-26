@@ -19,7 +19,9 @@
 //                            what a model said
 //     + using{provider, model, effort, instructions}
 //                            set or switch on an input; served on an ask
+//     + questions{asked}     typed questions the next ask carries
 //     + ask{to, through}     the model was asked, from the prefix at `through`
+//     + answer{question, …}  beside output: the model's answer to one of them
 //     + call{to, id, args, source}
 //                            a tool the model asked for, from that ask
 //     + result{call}         what a tool answered
@@ -39,9 +41,10 @@
 // `error` and `exception` are @yaks/tools's — a call is the record of having
 // asked a tool, whoever asked it — and an instruction assembled from parts is
 // @yaks/context's `prompt`. What a `using` names — `provider`, `model` — is
-// @yaks/model's, and what a `call.to` names is @yaks/tools's `tool`. An
-// application whose provider returns images wants @yaks/blob too, since that is
-// what ./react.ts writes a reply's artifacts as. An application that wants a
+// @yaks/model's, as are `questions` and `answer`, and what a `call.to` names is
+// @yaks/tools's `tool`. An application whose provider returns images wants
+// @yaks/blob too, since that is what ./react.ts writes a reply's artifacts as.
+// An application that wants a
 // transcript composes those packages beside this one; that is what a plugin
 // list is for, and one component declared in two documents is a vocabulary
 // `loadVocab` refuses to load.
