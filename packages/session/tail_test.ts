@@ -117,6 +117,24 @@ Deno.test('a tail reads on from where the transcript stands, and never twice', (
     ])
   }))
 
+Deno.test('a resume starts where the log was read, whatever became of its entries', () =>
+  file(async (g, log, path) => {
+    log(typed('one'), reply(use), 'not json at all')
+    await pull(g, await tail(g, path, { session: ids.run1 }), claude, {
+      prose: true,
+    })
+    // The lines that made nothing, and an entry deleted since, stay read.
+    let [entry] = await g.read(`.entry.session=${ids.run1}`)
+    await g.apply([{ entity: entry.entity, $delete: true }])
+    assertEquals((await tail(g, path, { session: ids.run1 })).line, 3)
+    // A log that says nothing at all is read once, into a session of its own.
+    let quiet = `${path}.quiet`
+    Deno.writeTextFileSync(quiet, 'not json\n')
+    await pull(g, await tail(g, quiet, { id: 'quiet' }), claude)
+    let [s] = await g.read('.session.id=quiet')
+    assertEquals((await tail(g, quiet, { session: s.entity.eid })).line, 1)
+  }))
+
 Deno.test('prose alone: what was typed and what the model said', () =>
   file(async (g, log, path) => {
     log(

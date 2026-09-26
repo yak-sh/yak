@@ -221,10 +221,12 @@ by the session (`execution{state, by}`), so no tool runner here runs it again.
 Tool arguments and output pass through `scrub()`, which redacts the shapes a
 credential takes.
 
-Every entry carries `imported{source, line}`, and the highest line a session
-holds is where a resume starts. Entry IDs are derived from the session, the line
-and the place in it, so a line read twice writes nothing new. Each is dated when
-the harness wrote it.
+Every entry carries `imported{source, line}`, and the session carries how many
+lines of its log have been read (`session.consumed`), which is where a resume
+starts: a line that made no entry, or whose entries were deleted since, is not
+read again. Entry IDs are derived from the session, the line and the place in
+it, so a line read twice writes nothing new. Each is dated when the harness
+wrote it.
 
 `@yaks/spawn` follows a managed run's stdout with it. The
 `@yaks/session/service` duty follows Claude Code's transcript files,

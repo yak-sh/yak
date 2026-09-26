@@ -7,8 +7,11 @@
 //
 // The log is the durable record, and the graph holds the transcript read out
 // of it. Each entry carries `imported{source, line}`: the file and the line it
-// came from. That is also the read position, since the highest line a session
-// holds is where a resume begins, so there is no cursor to keep current.
+// came from. The session carries how many lines of its log have been read
+// (`session.consumed`), written in the transaction that writes each line's
+// entries, and on its own once lines that make none are read past. A resume
+// begins there, whatever has become of the entries since: a line that made
+// none, or one whose entries a strip deleted, is never read again.
 //
 // Each entry's eid is derived from its session, its line and its place in the
 // line, and a call's from the harness's own id for it, which is what its result
@@ -40,7 +43,8 @@ export type Tail = {
   /** the file */
   path: string
   /** the session; a transcript file can name one the graph has not met yet,
-   * and it is created with the first line that says something */
+   * and it is created with the first line that says something, or once the
+   * lines read say nothing */
   session?: Eid
   /** the harness's own id for the session, which a created one carries */
   id?: string
@@ -177,12 +181,10 @@ let settled = async (g: Graph, bundles: Bundle[]): Promise<Bundle[]> => {
   )
 }
 
-/** How far a session has read its log: the highest line it holds. */
+/** How far a session has read its log: the lines its `consumed` says. */
 export let consumed = async (g: Graph, session: Eid): Promise<number> => {
-  let [last] = await g.read(
-    `.imported&.entry.session=${session}&.order=-imported.line&.limit=1`,
-  )
-  return Number(comp(last, 'imported')?.line ?? 0)
+  let [s] = await g.storage.tx((tx) => tx.get([session]))
+  return Number(comp(s, 'session')?.consumed ?? 0)
 }
 
 // The byte the line after `lines` starts at. Read once, when a tail begins:
@@ -298,6 +300,8 @@ export let pull = async (
   o: Pull = {},
 ): Promise<number> => {
   let from = t.line
+  // The line the session's `consumed` stands at.
+  let marked = t.line
   let breath = performance.now()
   for (let text of lines(t, o.final)) {
     // A long read hands the event loop back every so often: the lease its duty
@@ -319,10 +323,14 @@ export let pull = async (
       source: t.path,
       line,
     })
-    if (!t.operator && kept.some(typed)) {
-      bundles.push({ entity: { eid: t.session }, session: { operator: true } })
-      t.operator = true
+    let own = {
+      consumed: line,
+      ...(!t.operator && kept.some(typed) ? { operator: true } : {}),
     }
+    let mine = bundles.find((b) => b.entity.eid == t.session)
+    if (mine) mine.session = { ...comp(mine, 'session'), ...own }
+    else bundles.push({ entity: { eid: t.session }, session: own })
+    t.operator ||= !!own.operator
     // Trusted: `imported` is server-owned, and this is the server reading a
     // file on its own machine. A line the graph refuses would be refused
     // again: it is reported and left in the file. Any other failure ends the
@@ -333,10 +341,20 @@ export let pull = async (
         trusted: true,
         ...(said.at ? { now: said.at } : {}),
       })
+      marked = line
     } catch (e) {
       if (status(e) >= 500) throw e
       ;(o.report ?? console.error)(e)
     }
+  }
+  // Lines past the last that made an entry, or refused ones: read all the
+  // same, so a resume starts after them.
+  if (t.line > marked) {
+    t.session ??= await created(g, t)
+    await g.apply([{
+      entity: { eid: t.session },
+      session: { consumed: t.line },
+    }], { trusted: true })
   }
   return t.line - from
 }

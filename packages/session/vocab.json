@@ -277,6 +277,11 @@
           "death": "detach",
           "description": "who it speaks as — the identity that survives a /clear, where `created.via` is the run"
         },
+        "consumed": {
+          "type": "number",
+          "stamped": true,
+          "description": "how many lines of its log the importer has read; where a resume begins"
+        },
         "operator": {
           "type": "boolean",
           "description": "true when a person is driving this transcript rather than an agent"
