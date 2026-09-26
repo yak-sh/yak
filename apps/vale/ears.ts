@@ -1,9 +1,10 @@
-// The ears: one pair, standing where the camera stands and turned the way it
-// looks, behind the hero while it follows them and wherever the view is when
-// it is free. Web Audio pans and fades every sound in the vale by itself
-// (sound.ts gives each source a PannerNode with `FALLOFF`); `hear` is the
-// same sum done by hand, so the page knows a sound too far off to hear before
-// it makes one, and a test can say where a sound is heard.
+// The ears: one pair, standing at the hero and turned the way the camera
+// looks, so the screen's right is theirs and a sound is as near as it is to
+// the hero. With no hero, at the gate, they stand where the camera is. Web
+// Audio pans and fades every sound in the vale by itself (sound.ts gives each
+// source a PannerNode with `FALLOFF`); `hear` is the same sum done by hand, so
+// the page knows a sound too far off to hear before it makes one, and a test
+// can say where a sound is heard.
 // @ts-types="npm:@types/three@^0.186.0"
 import type * as THREE from 'three'
 import type { Vec3 } from './play.ts'
@@ -14,18 +15,19 @@ export type Ear = { at: Vec3; forward: Vec3; up: Vec3 }
 
 /** How every source is heard. HRTF places a sound all round the head, above
  * and behind as well as left and right. Out to `refDistance` a sound is at
- * its own loudness, about where the camera stands behind the hero; beyond,
- * it halves with each doubling of the distance, as sound does in the open. */
+ * its own loudness: the hero's own, the creature they fight, the fire they
+ * stand by. Beyond, it halves with each doubling of the distance, as sound
+ * does in the open. */
 export let FALLOFF = {
   panningModel: 'HRTF',
   distanceModel: 'inverse',
-  refDistance: 6,
+  refDistance: 3,
   rolloffFactor: 1,
 } satisfies PannerOptions
 
 /** Below this loudness at the ears a sound is not made at all: a footstep
  * dies away within some 25 m, a blow carries across a level. */
-export let QUIET = 0.008
+export let QUIET = 0.004
 
 let sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 let dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
@@ -39,15 +41,16 @@ let norm = (a: Vec3): Vec3 => {
   return [a[0] / l, a[1] / l, a[2] / l]
 }
 
-/** The ears of a camera: where it stands, looking down its own -z, its +y
- * up. */
-export let ear = (eye: THREE.Object3D): Ear => {
+/** The ears for a camera: at `at`, the hero, or where the camera stands when
+ * there is no hero; turned the way the camera looks down its own -z, held
+ * level, so the ground about the hero is at the height of the ears. */
+export let ear = (eye: THREE.Object3D, at?: Vec3): Ear => {
   eye.updateMatrixWorld()
   let m = eye.matrixWorld.elements
   return {
-    at: [m[12], m[13], m[14]],
-    forward: norm([-m[8], -m[9], -m[10]]),
-    up: norm([m[4], m[5], m[6]]),
+    at: at ?? [m[12], m[13], m[14]],
+    forward: norm([-m[8], 0, -m[10]]),
+    up: [0, 1, 0],
   }
 }
 
@@ -59,32 +62,34 @@ export let ear = (eye: THREE.Object3D): Ear => {
  * ```ts
  * import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
  * import * as THREE from 'three'
- * // The camera behind and above a hero at (20, 6, 20), looking at them.
+ * // The camera behind and above a hero at (20, 6, 20), looking down at them,
+ * // and the ears at the hero.
  * let eye = new THREE.PerspectiveCamera()
  * eye.position.set(26, 10, 28)
  * eye.lookAt(20, 6, 20)
- * let e = ear(eye)
- * // Its right and ahead, as it draws them.
+ * let hero = new THREE.Vector3(20, 6, 20)
+ * let e = ear(eye, [20, 6, 20])
+ * // The camera's right as it draws it, and the way it looks, level.
  * let right = new THREE.Vector3(1, 0, 0).applyQuaternion(eye.quaternion)
- * let ahead = new THREE.Vector3(0, 0, -1).applyQuaternion(eye.quaternion)
+ * let ahead = new THREE.Vector3(-6, 0, -8).normalize()
  * let from = (dir: THREE.Vector3, d: number) => {
- *   let p = eye.position.clone().addScaledVector(dir, d)
+ *   let p = hero.clone().addScaledVector(dir, d)
  *   return hear(e, [p.x, p.y, p.z])
  * }
- * // A sound to the camera's right is heard on the right, and to its left
- * // on the left, whichever way the camera is turned.
+ * // A sound to the hero's right on the screen is heard on the right, and to
+ * // their left on the left, whichever way the camera is turned.
  * assertAlmostEquals(from(right, 5).side, 1, 1e-9)
  * assertAlmostEquals(from(right, -5).side, -1, 1e-9)
- * // The hero it looks at is dead ahead.
- * let hero = hear(e, [20, 6, 20])
- * assertAlmostEquals(hero.side, 0, 1e-9)
- * assertAlmostEquals(hero.ahead, 1, 1e-9)
- * assertAlmostEquals(from(ahead, -5).ahead, -1, 1e-9)
- * // Near the camera a sound is at its own loudness; further off it fades,
+ * // On along the camera's view is ahead of the hero; the camera is behind.
+ * assertAlmostEquals(from(ahead, 5).ahead, 1, 1e-9)
+ * assert(hear(e, [26, 10, 28]).ahead < -0.8)
+ * // Beside the hero a sound is at its own loudness; further off it fades,
  * // halving as the distance doubles.
  * assertEquals(from(right, 2).gain, 1)
  * assert(from(right, 12).gain < from(right, 8).gain)
  * assertAlmostEquals(from(ahead, 80).gain / from(ahead, 40).gain, 0.5, 1e-9)
+ * // With no hero, the ears are where the camera is.
+ * assertEquals(ear(eye).at, [26, 10, 28])
  * ```
  */
 export let hear = (e: Ear, at: Vec3) => {

@@ -1,6 +1,6 @@
 // Every sound in the vale comes from somewhere, and is heard through one pair
-// of ears where the camera stands, turned the way it looks (ears.ts). How
-// each sound is made is voices.ts; this is where it is made.
+// of ears at the hero, turned the way the camera looks (ears.ts). How each
+// sound is made is voices.ts; this is where it is made.
 //
 // A sound is made at what made it (`From`): at a hero or creature, whose
 // source follows them from frame to frame; at a point, for a find; or
@@ -40,18 +40,14 @@ type Source = {
   end?: () => void
 }
 
-// How much louder a placed sound is made than one straight to the ears, so a
-// hero's own sounds, heard from the camera behind them, are as loud as they
-// were before sounds had places.
-let NEAR = 1.6
 // How long a source is kept after its last sound: HRTF rings a moment.
 let TAIL = 0.5
 // How loud each sound a level keeps making is at its source.
-let LOOP = { fire: 0.3, water: 0.22 }
+let LOOP = { fire: 0.45, water: 0.35 }
 
 let ctx: AudioContext | null = null
-let world: GainNode | null = null
-let ui: AudioNode | null = null
+// The last stop before the speakers: every source plays into it.
+let out: AudioNode | null = null
 let loops: Record<keyof typeof LOOP, AudioBuffer> | null = null
 let muted = false
 try {
@@ -77,9 +73,7 @@ let wake = () => {
       release: 0.2,
     })
     limit.connect(ctx.destination)
-    world = new GainNode(ctx, { gain: NEAR })
-    world.connect(limit)
-    ui = limit
+    out = limit
     loops = { fire: voices.fire(ctx), water: voices.water(ctx) }
   } catch {
     ctx = null
@@ -124,7 +118,7 @@ let listenAt = (l: AudioListener, e: Ear) => {
 let panner = (id: string, at: Vec3, fixed: boolean) => {
   let pan = new PannerNode(ctx!, FALLOFF)
   move(pan, at)
-  pan.connect(world!)
+  pan.connect(out!)
   let s: Source = { pan, until: 0, fixed }
   sources.set(id, s)
   return s
@@ -133,8 +127,8 @@ let panner = (id: string, at: Vec3, fixed: boolean) => {
 /** Make `v` at `from`: not at all while muted or asleep, or when it would be
  * too faint to hear. */
 let make = (from: From, v: Voice) => {
-  if (!ctx || !ui || muted) return
-  if (from == null) return v.play(ui)
+  if (!ctx || !out || muted) return
+  if (from == null) return v.play(out)
   let id = typeof from == 'string' ? from : `@${points++}`
   let at = typeof from == 'string' ? spots.get(from) : from
   if (!at || (ears && hear(ears, at).gain * v.loud < QUIET)) return
@@ -208,9 +202,10 @@ export let sound = {
     }
     return muted
   },
-  /** Each frame: the ears go where `camera` is and turn with it, every
+  /** Each frame: the ears go to the hero `me` of the frame `f`, or to the
+   * camera when there is none, and turn the way the camera looks; every
    * source goes where what it follows now is, the level keeps up its own
-   * sounds, and what the hero `me` hears of the frame `f` is made. */
+   * sounds, and what the hero hears of the frame is made. */
   listen: (
     camera: THREE.Camera,
     v: Vale,
@@ -219,10 +214,10 @@ export let sound = {
     dt: number,
   ) => {
     if (!ctx) return
-    ears = ear(camera)
+    spots = f && me ? where(f, me) : new Map()
+    ears = ear(camera, me ? spots.get(me) : undefined)
     listenAt(ctx.listener, ears)
     let around = ambience(v, ears.at)
-    spots = f && me ? where(f, me) : new Map()
     for (let a of around) spots.set(a.id, a.at)
     let t = ctx.currentTime
     for (let [id, s] of sources) {
