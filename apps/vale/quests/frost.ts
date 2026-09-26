@@ -46,7 +46,7 @@ export let givers: Giver[] = [
     name: 'Birgit the woodcutter',
     level: 'frostpine',
     place: 'snow',
-    offset: [-20.5, -2.5],
+    offset: [-27.5, -14],
     greets: 'Pine burns hot. Remember that, when the snow comes.',
     look: { tint: '#7a3a3a', hair: '#e0d0b0', skin: '#f0c8a8' },
   },
@@ -107,7 +107,7 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'The white ones',
     body:
-      'Behind the grey wolves come the white ones, frost wolves, and they don’t scatter. Three of them. The holt at Rimeholt is up the road east, if you want a fire.',
+      'Behind the grey wolves come the white ones, frost wolves, and they don’t scatter. Three of them. The holt at Rimeholt is down the road south, if you want a fire.',
   },
   // Gudrun the ice-cutter, on the snow at Frostmoor.
   {
@@ -295,7 +295,7 @@ export let quests: Quest[] = [
     gift: 'elixir',
     title: 'The bird above the ice',
     body:
-      'The Skyreaver hunts above the ice with briar in its claws, and it plucks climbers off the ropes. Bring it down. Then climb on north to Whitepeak: somebody lives up there.',
+      'The Skyreaver hunts above the ice with briar in its claws, and it plucks climbers off the ropes. Bring it down. Then climb on east to Whitepeak: somebody lives up there.',
   },
   // Aud of the high snow, the last Greenkeeper of the north, on Whitepeak.
   {

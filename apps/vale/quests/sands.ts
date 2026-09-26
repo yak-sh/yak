@@ -302,7 +302,7 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'Deathstalkers',
     body:
-      'Better still, no more stings. The deathstalkers have come out of the mesa to hunt the salt road. Five of them. Then the road east runs to the tombs.',
+      'Better still, no more stings. The deathstalkers have come out of the mesa to hunt the salt road. Five of them. Then the road west runs to the tombs.',
   },
   // Warden Sabra, at the tombs of Tombsands.
   {
@@ -351,6 +351,6 @@ export let quests: Quest[] = [
     gift: 'elixir',
     title: 'Ink for the names',
     body:
-      'The names on the tombs are written in venom and ash, and the sand is scouring them away. One venom sac, and I will write them again. Then look south-east: the air shimmers there, and the sand turns to ash. That is where the fire starts.',
+      'The names on the tombs are written in venom and ash, and the sand is scouring them away. One venom sac, and I will write them again. Then look south: the air shimmers there, and the sand turns to ash. That is where the fire starts.',
   },
 ]

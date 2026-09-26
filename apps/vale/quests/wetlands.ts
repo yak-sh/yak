@@ -1,4 +1,4 @@
-// The people of the west road out of Mossvale: the stilt-town of
+// The people of the east road out of Mossvale: the stilt-town of
 // Reedmarsh, Mirewood and Fenhollow, the Sunken Kirk whose bell kept the
 // bog asleep, and Bogheart, where the briar has a root.
 import type { Giver, Quest } from '../quests.ts'
@@ -37,7 +37,7 @@ export let givers: Giver[] = [
     name: 'Old Sedge',
     level: 'mirewood',
     place: 'marsh',
-    offset: [-3.5, 5.5],
+    offset: [-7.5, -1],
     greets: 'The mire keeps what it takes. Mostly.',
     look: { tint: '#4a5a3a', hair: '#d8d0c0', skin: '#9a6a4a' },
     staff: true,
@@ -370,6 +370,6 @@ export let quests: Quest[] = [
     gift: 'elixir',
     title: 'The old toad',
     body:
-      'The briar has a root in Bogheart, and Old Mudjaw sits on it like an egg, a toad as big as a cart. Put him down, and when he comes back, put him down again. Then the root will wither, and that’s the west road done.',
+      'The briar has a root in Bogheart, and Old Mudjaw sits on it like an egg, a toad as big as a cart. Put him down, and when he comes back, put him down again. Then the root will wither, and the bog will sleep again.',
   },
 ]

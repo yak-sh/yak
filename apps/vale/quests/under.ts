@@ -36,7 +36,7 @@ export let givers: Giver[] = [
     name: 'Dunstan the miner',
     level: 'gleamdeep',
     place: 'toadstools',
-    offset: [-10.5, 22],
+    offset: [-9, 23.5],
     greets: 'Crystal sings if you tap it right. Most folk tap it wrong.',
     look: { tint: '#5a5a6a', hair: '#2a2a2a', skin: '#c09070' },
   },
@@ -88,7 +88,7 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'Bad spores',
     body:
-      'Sporelings drift through the hollow, and where their spores land, briar grows instead of caps. Burst four. Then take the road east, into the crystal: Dunstan at Gleamdeep will show you the way down.',
+      'Sporelings drift through the hollow, and where their spores land, briar grows instead of caps. Burst four. Then take the road west, into the crystal: Dunstan at Gleamdeep will show you the way down.',
   },
   // Nib the lamplighter, who lights the lamps of Glowcap Hollow.
   {
@@ -199,7 +199,7 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'Crystal that crawls',
     body:
-      'Worse: the crystal itself has started crawling about on legs. Shardlings, with briar in the facets. Six of them. And if you go on north-east into the Shardvault, look for the old king.',
+      'Worse: the crystal itself has started crawling about on legs. Shardlings, with briar in the facets. Six of them. And if you go on north into the Shardvault, look for the old king.',
   },
   // Ondine the seer, at the door of the Shardvault.
   {

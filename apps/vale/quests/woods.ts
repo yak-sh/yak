@@ -37,7 +37,7 @@ export let givers: Giver[] = [
     name: 'Ysolde the Greenwarden',
     level: 'elderglade',
     place: 'heart',
-    offset: [-5.5, 21.5],
+    offset: [-6, 23.5],
     greets: 'The Elder Heart still beats. Slowly, but it beats.',
     look: { tint: '#3a6b4a', hair: '#f0ead8', skin: '#b98260' },
     staff: true,
@@ -56,7 +56,7 @@ export let givers: Giver[] = [
     name: 'Brenna of the Den',
     level: 'wolfden',
     place: 'pines',
-    offset: [13, 12],
+    offset: [14.5, 20],
     greets: 'The den keeps its own. You’re welcome at the fire.',
     look: { tint: '#5a3a3a', hair: '#b0b0a8', skin: '#8a5a40' },
   },
@@ -161,7 +161,7 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'Wolves at the roots',
     body:
-      'Dire wolves have made their dens among the Elder’s roots, and they gnaw at them. Two of them. The roots run down north-east of the Heart, under the wood to Glowcap Hollow, if you ever want to follow them.',
+      'Dire wolves have made their dens among the Elder’s roots, and they gnaw at them. Two of them. The roots run west of the Heart, down under the wood to Glowcap Hollow, if you ever want to follow them.',
   },
   {
     id: 'ysolde-heartwood',
@@ -175,7 +175,7 @@ export let quests: Quest[] = [
     gift: 'blade4',
     title: 'A graft of heartwood',
     body:
-      'To mend the gnawed roots I need living heartwood, and only a Grimbark still carries any. They walk in Mirewood now, out along the west road from Mossvale. Bring me heartwood, and I will make you a blade from what the graft does not need.',
+      'To mend the gnawed roots I need living heartwood, and only a Grimbark still carries any. They walk in Mirewood now, out along the east road from Mossvale, past Reedmarsh. Bring me heartwood, and I will make you a blade from what the graft does not need.',
   },
   // Hake the trapper, in the pines of Greypine.
   {
@@ -275,6 +275,6 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'Wyrms in the rock',
     body:
-      'It was stonewyrms that drove the kobolds out of the high rocks, briar-crowned like everything else now. Three of them. Then take the road north-east into the snow: the wolves have been coming down from Frostmoor.',
+      'It was stonewyrms that drove the kobolds out of the high rocks, briar-crowned like everything else now. Three of them. Then take the road east into the snow: the wolves have been coming down from Frostmoor.',
   },
 ]

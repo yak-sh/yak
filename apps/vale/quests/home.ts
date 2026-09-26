@@ -1,5 +1,5 @@
 // The people of home: Mossvale, where every hero starts and Elder Wren
-// teaches them before sending them down the east road, and the gentle
+// teaches them before sending them down the west road, and the gentle
 // country round Birchmere and Clovermead.
 import type { Giver, Quest } from '../quests.ts'
 
@@ -11,7 +11,7 @@ export let givers: Giver[] = [
     place: 'plaza',
     offset: [-1.5, -3],
     greets:
-      'Four roads go out from the vale: north, west, south, and east to Birchmere. Every one of them has somebody on it who needs a hand.',
+      'Four roads leave the vale, one to each edge of it: north to Fernwood, east to Reedmarsh, south to Stonestep and west to Birchmere. Every one of them has somebody on it who needs a hand.',
     look: { tint: '#4f7a4a', hair: '#e9e6df', skin: '#d9a98a' },
     staff: true,
   },
@@ -122,7 +122,7 @@ export let quests: Quest[] = [
     gift: 'blade3',
     title: 'The stones that walk',
     body:
-      'Up in Craghollow, to the south-west, the rocks have started walking. Cragbacks, the old folk called them. Topple three, and this cleaver is yours. Then take the east road to Birchmere: Reeve Alder keeps an old book, and I want to know what it says about thorns.',
+      'Up in Craghollow, to the south-west, the rocks have started walking. Cragbacks, the old folk called them. Topple three, and this cleaver is yours. Then take the west road to Birchmere: Reeve Alder keeps an old book, and I want to know what it says about thorns.',
   },
   {
     id: 'wren-thornback',
@@ -239,7 +239,7 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'Four roads',
     body:
-      'Bramble goblins came up the road last night with briar in their hair. The book says the Greenkeepers set a ward at the end of each road out of Mossvale: the Elder Heart up the north road, the bell of the Sunken Kirk down the west road, the old king’s barrow down the south road, and the light on Stormhead, out past Gullwick on our own east road. Drive off five goblins, then go and see if the wards still hold.',
+      'Bramble goblins came up the road last night with briar in their hair. The book says the Greenkeepers set a ward at the end of each road out of Mossvale: the Elder Heart up the north road, the bell of the Sunken Kirk down the east road, the old king’s barrow down the south road, and the light on Stormhead, out past Gullwick on our own west road. Drive off five goblins, then go and see if the wards still hold.',
   },
   // Sorrel the herbwife, by the well in Birchmere.
   {

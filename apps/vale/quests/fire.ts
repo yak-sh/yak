@@ -176,7 +176,7 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'Fire on legs',
     body:
-      'Flamelings dance on the ash where the road runs north. Four of them, and I can walk the reach in peace. Sir Garrow holds the keep up that road, if he still lives.',
+      'Flamelings dance on the ash where the road runs south. Four of them, and I can walk the reach in peace. Sir Garrow holds the keep down that road, if he still lives.',
   },
   // Sir Garrow, the last knight of Ashkeep.
   {

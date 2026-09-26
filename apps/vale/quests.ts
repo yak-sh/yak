@@ -9,23 +9,25 @@
 //
 // The story they tell: a briar is creeping into the vale, and a beast it
 // crowns forgets it was ever gentle. Long ago the Greenkeepers planted the moss
-// and set a ward at the end of each road out of Mossvale: the Elder Heart to
-// the north, the bell of the Sunken Kirk to the west, the light on Stormhead
-// to the east, the old king's barrow to the south. Elder Wren teaches a new
-// hero and sends them down the east road to the Reeve of Birchmere, whose old
-// book names the wards; the people of each land have troubles of their own,
-// and the last of each land's asks points down the road to the next. Every
-// road ends at the Maw, where the Cinder Wyrm lies on the briar's root.
+// and set a ward at the end of each road out of Mossvale: the Elder Heart up
+// the north road, the bell of the Sunken Kirk down the east, the old king's
+// barrow down the south, and the light on Stormhead out along the west. Elder
+// Wren teaches a new hero and sends them down the west road to the Reeve of
+// Birchmere, whose old book names the wards; the people of each land have
+// troubles of their own, and the last of each land's asks points down the
+// road to the next. The story ends at the Maw, where the Cinder Wyrm lies on
+// the briar's root. Directions name a road by where it leads, or by its side
+// where levels.ts gives it one.
 //
 // The rows live in quests/, a file for each country of the world (levels.ts),
 // in the order a hero comes to them: every land has someone with something to
 // ask, and each land's first ask is open to anyone who walks in.
 
 import * as home from './quests/home.ts'
-import * as north from './quests/north.ts'
-import * as west from './quests/west.ts'
-import * as east from './quests/east.ts'
-import * as south from './quests/south.ts'
+import * as woods from './quests/woods.ts'
+import * as wetlands from './quests/wetlands.ts'
+import * as sea from './quests/sea.ts'
+import * as moors from './quests/moors.ts'
 import * as under from './quests/under.ts'
 import * as sands from './quests/sands.ts'
 import * as frost from './quests/frost.ts'
@@ -64,7 +66,7 @@ export type Quest = {
   body: string
 }
 
-let LANDS = [home, north, west, east, south, under, sands, frost, fire]
+let LANDS = [home, woods, wetlands, sea, moors, under, sands, frost, fire]
 
 export let GIVERS: Giver[] = LANDS.flatMap((l) => l.givers)
 

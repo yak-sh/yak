@@ -36,7 +36,7 @@ export let givers: Giver[] = [
     name: 'Lark the shepherdess',
     level: 'heatherfell',
     place: 'moor',
-    offset: [-19, 13],
+    offset: [-10.5, 20],
     greets: 'The heather’s in flower. Smell that.',
     look: { tint: '#9a5a7a', hair: '#e0a050', skin: '#f0c0a0' },
     staff: true,
@@ -56,7 +56,7 @@ export let givers: Giver[] = [
     name: 'Sexton Grey',
     level: 'kingsbarrow',
     place: 'barrow',
-    offset: [-4.5, 23],
+    offset: [-9.5, 31.5],
     greets: 'Quiet, now. The old king sleeps. Or he did.',
     look: { tint: '#3a3a3a', hair: '#e8e8e0', skin: '#d0b098' },
     staff: true,
@@ -66,7 +66,7 @@ export let givers: Giver[] = [
     name: 'Old Gorm the stonecaller',
     level: 'giantsteps',
     place: 'moor',
-    offset: [-12, -1],
+    offset: [0.5, -5.5],
     greets: 'Listen. The stones are talking. They’re always talking.',
     look: { tint: '#6a6a5a', hair: '#c0c0b0', skin: '#7a5a40' },
     staff: true,
@@ -109,7 +109,7 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'The old king’s road',
     body:
-      'The road east runs on to the old king’s barrow, the south ward, and a ridge lynx has taken to hunting whoever walks it. Clear the road, then walk it: Heatherfell first, then Oldwall.',
+      'The road south runs on to the old king’s barrow, the south ward, and a ridge lynx has taken to hunting whoever walks it. Clear the road, then walk it: Heatherfell first, then Oldwall.',
   },
   // Bram the smith, who shoes the wall-watch at Stonestep.
   {
@@ -196,7 +196,7 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'Standing stones that walk',
     body:
-      'Heatherfell’s stones have stood on the fell since before anyone. Two of them have got up and started walking, thorns growing out of their seams. Lay them back down. Oldwall is down the road south-east.',
+      'Heatherfell’s stones have stood on the fell since before anyone. Two of them have got up and started walking, thorns growing out of their seams. Lay them back down. Oldwall is down the road south.',
   },
   // Scholar Quill, reading the ruins of Oldwall.
   {
@@ -245,7 +245,7 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'The last line',
     body:
-      'The wall ends with a name: the last Greenkeeper king, buried at Kingsbarrow, down the road south-east. A goblin warchief squats on the last stone and won’t let me read it. Move him, then go and see the barrow.',
+      'The wall ends with a name: the last Greenkeeper king, buried at Kingsbarrow, down the road west. A goblin warchief squats on the last stone and won’t let me read it. Move him, then go and see the barrow.',
   },
   // Sexton Grey, who keeps the barrow at Kingsbarrow.
   {

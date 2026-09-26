@@ -1,4 +1,4 @@
-// The people of the east road, out past Birchmere: the harbour of
+// The people of the west road, out past Birchmere: the harbour of
 // Gullwick, the moors of Saltreach, the isles of Shellstrand, the light on
 // Stormhead, and Driftwood Bay, whose far road runs onto the sand.
 import type { Giver, Quest } from '../quests.ts'
@@ -27,7 +27,7 @@ export let givers: Giver[] = [
     name: 'Corrie the shepherd',
     level: 'saltreach',
     place: 'moor',
-    offset: [-4, 10],
+    offset: [-15.5, 5.5],
     greets: 'Sheep, wind and salt. There’s worse lives.',
     look: { tint: '#8a7a5a', hair: '#e8e0d0', skin: '#e8c0a0' },
     staff: true,
