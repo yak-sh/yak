@@ -9,7 +9,7 @@
 // The signal's backing is the store-agnostic seam (live.ts queryEids): today an
 // in-memory index, tomorrow an IDB indexed cursor — the call site never
 // changes (T-17046).
-import { useLayoutEffect, useMemo } from 'preact/hooks'
+import { useLayoutEffect, useMemo, useRef } from 'preact/hooks'
 import {
   type Backlink,
   dropLocal,
@@ -102,6 +102,24 @@ export let useQueryResult = (
     ready: !subscription || subscription.state.status == 'ready',
     loaded,
   }
+}
+
+// A window the reader grows by scrolling, a page at a time: a board's list, a
+// board's column. `line` asks for the first rows of `base`, and growing the
+// window asks the server a new line, whose answer takes a round trip. Until it
+// lands, the rows the smaller window answered stay, so the next page appends
+// under the reader instead of the list emptying and repainting from the top.
+// A different base starts from nothing: its rows are another list's.
+export let usePage = (
+  base: string,
+  line: string,
+  enabled = true,
+): QueryResult => {
+  let page = useQueryResult(line, enabled, true)
+  let shown = useRef<{ base: string; eids: string[] }>()
+  if (page.ready) shown.current = { base, eids: page.eids }
+  let kept = shown.current?.base == base ? shown.current.eids : undefined
+  return page.ready || !kept ? page : { ...page, eids: kept }
 }
 
 // The matching eids over the rows this tab holds, no server sub: for a query

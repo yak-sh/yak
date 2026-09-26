@@ -8,7 +8,7 @@ import { menuAt } from '../nav.tsx'
 import { filteredQuery, usePassOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { usePinTargets } from '../subscriptions.ts'
-import { useQueryResult } from '../useQuery.ts'
+import { usePage } from '../useQuery.ts'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
@@ -55,12 +55,11 @@ export let List = ({ e }: { e: Ent }) => {
 
 // A board as a linear FEED — its query run over the whole graph, not
 // just tasks (that's the Board face's job). The Front page (.order=hot)
-// reads as the graph-wide feed: warm first; any other board lists by
-// recency. Capped loudly — a "+N more" row, never silent truncation.
-let touchedAt = (e: Ent) => e.updated?.at ?? e.created?.at ?? ''
-let byModified = (a: Ent, b: Ent) =>
-  String(touchedAt(b)).localeCompare(String(touchedAt(a))) ||
-  (b.num - a.num)
+// reads as the graph-wide feed: warm first; any other board lists newest
+// first. Either way the rows read in the order the server takes the window
+// in, so the page scrolling asks for next lands below the rows already shown.
+// Capped loudly — a "+N more" row, never silent truncation.
+let newest = (a: Ent, b: Ent) => b.num - a.num
 export let BoardList = ({ e }: { e: Ent }) => {
   let root = useRef<HTMLDivElement>(null)
   let [size, setSize] = useState(0)
@@ -85,7 +84,7 @@ export let BoardList = ({ e }: { e: Ent }) => {
       '&.edges.peers=task.status,doc.title&.edges.limit=' +
       Math.max(size, limit) * 4
   } catch { /* the addressed query reports its refusal */ }
-  let page = useQueryResult(line, !!query.trim() && size > 0, true)
+  let page = usePage(query, line, !!query.trim() && size > 0)
   let boardRead = page.subscription
   let win = boardRead ? subWindow(boardRead.sub) : undefined
   let more = Math.max(
@@ -122,7 +121,7 @@ export let BoardList = ({ e }: { e: Ent }) => {
   try {
     hot = orderOf(parseQuery(String(e.board?.query ?? ''))) == 'hot'
     rows = boardPost(e, false, page.eids).map(ent)
-      .toSorted(hot ? byWarmth(Date.now()) : byModified)
+      .toSorted(hot ? byWarmth(Date.now()) : newest)
   } catch {
     return <ListFrame elRef={root} /> // a bad query already shows itself on the Board face
   }

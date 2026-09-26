@@ -24,7 +24,7 @@ import { Prio } from '../Prio.tsx'
 import { filteredQuery } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { Entity } from '../Entity.tsx'
-import { useQueryResult } from '../useQuery.ts'
+import { usePage } from '../useQuery.ts'
 
 let Frame = block('div', 'Board', {
   Col: 'div',
@@ -177,10 +177,10 @@ export let Board = ({ e }: { e: Ent }) => {
   // Statuses is a fixed vocabulary: one held page per column. No member
   // outside those pages is needed to paint or count the board.
   let pages = statuses.map((s) =>
-    useQueryResult(
+    usePage(
+      `${s}:${query}`,
       invalid ? '' : columnLine(query, s, Math.max(pageSize, limits[s] ?? 0)),
       pageSize > 0 && !!query.trim() && !invalid,
-      true,
     )
   )
   let boardRead = pages.find((p) => p.subscription?.state.status == 'failed')

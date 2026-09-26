@@ -882,11 +882,15 @@ export let serverHost = () => {
 }
 export let base = () => `http${config.secure ? 's' : ''}://${serverHost()}`
 
-// The column sort: priority first (lower sorts higher), num as tiebreak.
+// The column sort, and the order `.order=priority` asks the server for, so a
+// column's next page lands below the rows it already shows: unprioritized
+// first (a missing value sorts before every number in @yaks/sql), then lower
+// priority higher, and the newer num breaks a tie.
 export { settled, statuses, statusOf, uuid } from './types.ts'
 import { kindOf, uuid } from './types.ts'
+let priority = (e: Ent) => e.filed?.priority ?? -Infinity
 export let byPriority = (a: Ent, b: Ent) =>
-  ((a.filed?.priority ?? 0) - (b.filed?.priority ?? 0)) || (a.num - b.num)
+  (priority(a) - priority(b)) || (b.num - a.num)
 
 // An Ent's warmth — the cache-side face of query.ts warm(), for boards
 // that say .order=hot. The Ent flattens the spine, so re-nest what the
