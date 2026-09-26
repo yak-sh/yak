@@ -43,14 +43,19 @@
   }
 }
 
+/* Stacked, on a tall screen: the shelf goes under the monitor. On a phone the
+ * whole machine shrinks to the width, text and all, rather than be cropped:
+ * the reading mode is the phone's own, and the CRT there is one to look at,
+ * and pinch. */
 @media (max-aspect-ratio: 16/11) {
   .Desk {
     --u: clamp(
-      8px,
+      4px,
       min((100vw - 2rem) / 74, (100vh - var(--top) - 2rem) / 76),
       16px
     );
     grid-template-columns: auto;
+    align-content: center;
     gap: 1.6em;
   }
 }
