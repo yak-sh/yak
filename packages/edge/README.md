@@ -114,8 +114,8 @@ entity ID is not rewritten into a derived ID.
 
 `link(from, relation, to, ord?)` sets `ord` when supplied and leaves an existing
 order unchanged when omitted. `unlink()` removes the `edge` and relation
-components, leaving the entity and any other components in place; `link()`
-fills it in again.
+components, leaving the entity and any other components in place; `link()` fills
+it in again.
 
 Both endpoints declare `death: cascade`: deleting either endpoint through the
 graph deletes the link entity. The plugin rejects an edge without endpoints or a
