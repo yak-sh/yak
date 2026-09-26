@@ -2,7 +2,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { appendEntry } from './append.ts'
 import { locked, seed, store } from './testing.ts'
 import { transcript } from './react.ts'
-import { type Bundle, type Comp, Refused } from '@yaks/graph'
+import { type Bundle, type Comp, status } from '@yaks/graph'
 
 let positions = (rows: Bundle[]) => rows.map((b) => (b.entry as Comp).seq)
 
@@ -139,11 +139,13 @@ Deno.test('notice tool admits passive context without callers supplying sequence
 
 Deno.test("an entry naming no session is refused as its writer's mistake", async () => {
   let g = locked(store())
-  await assertRejects(
-    async () => {
-      await g.apply([{ entity: { eid: 'e' }, entry: { session: 'nobody' } }])
-    },
-    Refused,
-    'unknown session nobody',
+  let e = await assertRejects(
+    async () =>
+      await g.apply([{ entity: { eid: 'e' }, entry: { session: 'nobody' } }]),
+    Error,
   )
+  assertEquals([status(e), e.message], [
+    400,
+    'unknown session nobody',
+  ])
 })

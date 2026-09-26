@@ -26,6 +26,13 @@ export let STATUS: Record<string, number> = {
   Denied: 403,
   NotFound: 404,
   Stale: 409,
+  // @yaks/session's: a write naming a session that does not exist, or an
+  // entity that is not the kind its property names, is the writer's mistake;
+  // a take of a lock another session holds is a race lost, like a stale
+  // precondition.
+  UnknownSession: 400,
+  Unnamed: 400,
+  Bounced: 409,
 }
 
 /** The HTTP status an error answers with (default 500). Below 500 is the
