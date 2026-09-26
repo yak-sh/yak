@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mossvale",
   "rtc": "open",
-  "description": "A voxel world to adventure in together. What a player is and has done is kept in this app's store (player, slain, item, used, equip, journal), and so is what they said (chat) and the villagers who answer them (villager, seen); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
+  "description": "A voxel world to adventure in together. What a player is and has done is kept in this app's store (player, slain, item, gathered, used, equip, journal), and so is what they said (chat) and the villagers who answer them (villager, seen); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
   "models": "open",
   "$defs": {
     "player": {
@@ -156,6 +156,26 @@
           "description": "The player."
         },
         "at": { "type": "number" }
+      }
+    },
+    "gathered": {
+      "component": true,
+      "type": "object",
+      "description": "Where an item came from when a hero gathered it: the node they worked (gather.ts), which kind of node, and when. It rides on the item it gave, so the bag is still items held less items spent. The first row after a node was last whole spends it for everyone until it grows back, the way a slain row fells a creature; a hero's trades are counted from the rows on their items.",
+      "properties": {
+        "node": {
+          "type": "string",
+          "index": true,
+          "description": "The node, by the eid its level names it with."
+        },
+        "kind": {
+          "type": "string",
+          "description": "Which kind of node, by the app's list of them."
+        },
+        "at": {
+          "type": "number",
+          "description": "When it was gathered, in ms."
+        }
       }
     },
     "used": {

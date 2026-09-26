@@ -1,11 +1,14 @@
 // Everything on the glass: the hero's card (health, level, the xp to the
 // next), the quest being followed, the foe's health, who else is here, the
 // compass, the bag, which opens the pack (pack.ts), the buttons a phone
-// needs, the words of whoever you talk to, and the toasts that say what just
-// happened. Each part is written only when what it shows changed.
+// needs (one of them to gather, ringed with how far the work has come), the
+// words of whoever you talk to, and the toasts that say what just happened.
+// Each part is written only when what it shows changed.
 import type { Action } from './input.ts'
 import type { Frame, Sheet } from './play.ts'
+import type { Job } from './work.ts'
 import { BEASTS } from './beasts.ts'
+import { TRADES } from './gather.ts'
 import { ITEMS } from './items.ts'
 import { LEVELS } from './levels.ts'
 import { GIVERS, type Quest } from './quests.ts'
@@ -75,7 +78,7 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     'Keys',
     '<span><kbd>WASD</kbd> move</span><span><kbd>Space</kbd> jump</span>' +
       '<span><kbd>F</kbd> or click: strike</span>' +
-      '<span><kbd>Shift</kbd> or right-click: dodge</span><span><kbd>E</kbd> talk</span>' +
+      '<span><kbd>Shift</kbd> or right-click: dodge</span><span><kbd>E</kbd> talk, gather</span>' +
       '<span><kbd>C</kbd> camera behind</span><span><kbd>M</kbd> map</span>' +
       '<span><kbd>Enter</kbd> chat</span><span><kbd>T</kbd> microphone</span>' +
       '<span><kbd>B</kbd> pack</span><span><kbd>1</kbd> tonic</span>' +
@@ -114,6 +117,8 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     'talk',
     '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
   )
+  let gatherPad = pad('gather', '<span class=Pad_Icon></span>')
+  let gatherIcon = gatherPad.querySelector<HTMLElement>('.Pad_Icon')!
   let drinkPad = pad(
     'drink',
     '<span class=Pad_Icon>🧪</span><span class=Pad_N></span>',
@@ -237,6 +242,21 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     },
     get talking() {
       return !talk.hidden
+    },
+    /** the gather button, for this frame's work: its trade's icon while a node
+     * is near enough to work, dim while it cannot be, and ringed with how far
+     * the work has come; none while someone is near enough to talk to */
+    work: (job: Job | null) => {
+      let n = job?.doing?.node ?? job?.near
+      gatherPad.classList.toggle('Pad-none', !n)
+      if (!n) return
+      put('gather', gatherIcon, TRADES[n.lode.trade].icon)
+      gatherPad.classList.toggle('Pad-off', n.spent || !n.able)
+      let k = job?.doing ? job.doing.k.toFixed(3) : '0'
+      if (was.gatherK != k) {
+        was.gatherK = k
+        gatherPad.style.setProperty('--k', k)
+      }
     },
     /** paint this frame, the camera looking `facing` degrees from north;
      * `looking` while the pack is open */

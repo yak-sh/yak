@@ -10,6 +10,8 @@ export type Intent = {
   strike: boolean
   dodge: boolean
   talk: boolean
+  /** work the node near enough to work (work.ts) */
+  gather: boolean
   drink: boolean
   /** open the pack, or fold it away */
   bag: boolean
@@ -32,6 +34,7 @@ export type Action =
   | 'strike'
   | 'dodge'
   | 'talk'
+  | 'gather'
   | 'drink'
   | 'bag'
   | 'snap'
@@ -46,6 +49,7 @@ let KEYS: Record<string, Action> = {
   ShiftLeft: 'dodge',
   ShiftRight: 'dodge',
   KeyE: 'talk',
+  KeyG: 'gather',
   Digit1: 'drink',
   KeyQ: 'drink',
   KeyB: 'bag',
@@ -193,6 +197,7 @@ export let listen = (
         strike: pressed.has('strike'),
         dodge: pressed.has('dodge'),
         talk: pressed.has('talk'),
+        gather: pressed.has('gather'),
         drink: pressed.has('drink'),
         bag: pressed.has('bag'),
         snap: pressed.has('snap'),

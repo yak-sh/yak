@@ -3,8 +3,9 @@
 // each column, water by its depth, hills shaded as if lit from the
 // north-west, what stands tall as a darker round, and what is built in the
 // colour of a roof (`paint`). Over it, who is where, written only while it is
-// open: the hero's arrow, the other players, the people with a quest, and
-// the level each road leads to. M or the compass opens it; M, Escape, a tap
+// open: the hero's arrow, the other players, the people with a quest, the
+// nodes to gather (work.ts), coloured by their trade and hollow while spent,
+// and the level each road leads to. M or the compass opens it; M, Escape, a tap
 // beside it or its close button folds it away.
 import { paletteOf } from './ground.ts'
 import { LEVELS } from './levels.ts'
@@ -12,6 +13,7 @@ import type { Frame } from './play.ts'
 import { bulk, KINDS } from './props.ts'
 import { clamp } from './rand.ts'
 import { SIZE, type Vale, WATER } from './terrain.ts'
+import type { Seen } from './work.ts'
 
 // What is built, seen from above.
 let ROOF = 0xa9553a
@@ -148,12 +150,19 @@ export let map = (root: HTMLElement) => {
     },
     toggle: () => box.hidden = !box.hidden,
     close,
-    /** mark who is where this frame, when the map is open */
-    show: (f: Frame, v: Vale) => {
+    /** mark who is where this frame, and the nodes, when the map is open */
+    show: (f: Frame, v: Vale, nodes: Seen[] = []) => {
       if (box.hidden) return
       draw(v)
       let at = (x: number, z: number) => `left:${pct(x)};top:${pct(z)}`
       let html =
+        nodes.map((n) =>
+          `<i class="Map_Node Map_Node-${n.lode.trade}${
+            n.spent ? ' Map_Node-spent' : ''
+          }${n.able ? '' : ' Map_Node-far'}" style="${
+            at(n.at[0], n.at[2])
+          }" title="${esc(n.lode.name)}"></i>`
+        ).join('') +
         v.roads.map((r) =>
           `<span class="Map_Road Map_Road-${r.side}" style="${at(r.x, r.z)}">${
             esc(LEVELS[r.to]?.name ?? r.to)

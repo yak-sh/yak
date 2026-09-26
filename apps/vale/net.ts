@@ -9,10 +9,10 @@
 // keeps playing the same one; a hero made while signed out is known only to
 // its tab.
 //
-// Rows a player earns (a fall, a find, a quest step) are written through
-// `keep`, which holds them a moment and sends them together: a visitor may
-// write 30 times a minute, and a busy fight earns more rows than that. Until
-// they are sent, `mine` counts them already, so nothing on screen waits.
+// Rows a player earns (a fall, a find, a gathering, a quest step) are written
+// through `keep`, which holds them a moment and sends them together: a visitor
+// may write 30 times a minute, and a busy fight earns more rows than that.
+// Until they are sent, `mine` counts them already, so nothing on screen waits.
 import { type Client, client, type Watch } from '@yaks/client'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import words from './vocab.json' with { type: 'json' }
@@ -161,6 +161,7 @@ export let connect = (base: URL) => {
     ),
     creatures: c.watch('.creature'),
     falls: c.watch('.slain&.order=-slain.at&.limit=400'),
+    gathered: c.watch('.gathered&.order=-gathered.at&.limit=400'),
   }
   let own: Record<string, Watch> = {}
   let follow = (eid: string) => {
@@ -168,7 +169,7 @@ export let connect = (base: URL) => {
     let q = JSON.stringify(eid)
     own = {
       slain: c.watch(`.slain.by=${q}`),
-      item: c.watch(`.item.owner=${q}`),
+      item: c.watch(`.item.owner=${q}&?gathered`),
       used: c.watch(`.used.by=${q}`),
       journal: c.watch(`.journal.player=${q}`),
       equip: c.watch(`.equip.player=${q}`),
@@ -223,6 +224,9 @@ export let connect = (base: URL) => {
       Object.values(own).length > 0 && Object.values(own).every((w) => w.ready),
     /** the falls everyone has written, and mine still waiting */
     falls: (): Bundle[] => join('falls', watches.falls.value, 'slain'),
+    /** the nodes everyone has gathered, and mine still waiting */
+    gathered: (): Bundle[] =>
+      join('gathered', watches.gathered.value, 'gathered'),
     keep,
     /** send what is waiting, if the pace allows */
     tick: () => {

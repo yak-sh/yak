@@ -1,0 +1,517 @@
+// The nodes on stage (gather.ts, work.ts), each drawn where it stands, whole
+// or spent, from a model built once per kind, state and shape. A tree is its
+// land's own tree (props.ts) with logs cut and stacked at its foot, and a
+// stump once felled; a seam is a boulder veined with ore, and rubble once
+// mined; a herb is a clump in bloom, and bare stems once picked; a shoal is
+// rings spreading on the water and a fish leaping now and then, and still
+// water once fished. A node shakes at each stroke of its work, a felled tree
+// topples away from whoever felled it, and whatever grows back swells up out
+// of the ground. Over the nodes near the hero a plate says what each is and
+// what it asks, and over the one being worked, how far the work has come. What
+// a node gives flies from it to the hero.
+// @ts-types="npm:@types/three@^0.186.0"
+import * as THREE from 'three'
+import type { bits, overlay } from './fx.ts'
+import { least, type Look, TRADES } from './gather.ts'
+import { ITEMS } from './items.ts'
+import {
+  ball,
+  blob,
+  box,
+  cuboid,
+  key,
+  type Out,
+  out,
+  pack,
+  place,
+  type Vox,
+} from './mesh.ts'
+import type { Vec3 } from './play.ts'
+import { model } from './props.ts'
+import { hashOf, noise, rand, stream } from './rand.ts'
+import { geometry, sight, soft } from './soft.ts'
+import type { Job, Seen } from './work.ts'
+
+/** How many shapes each kind of node is drawn in. */
+export let SHAPES = 4
+// How far off each plan is drawn, in metres: trees stand out over the rest.
+let FAR = { tree: 90, seam: 50, herb: 40, shoal: 40 }
+// How near the hero a node's plate shows, in metres.
+let LABEL = 8
+// How high over a node its plate rides, in metres.
+let HIGH = { tree: 2.4, seam: 1.2, herb: 0.9, shoal: 0.6 }
+// How long a felled tree takes to fall and to sink, and anything to grow back,
+// in seconds.
+let TOPPLE = 0.9
+let SINK = 0.6
+let SWELL = 0.5
+// How long what a node gives takes to fly to the hero, in seconds.
+let FLIGHT = 0.45
+
+// Logs cut and stacked beside a tree, south of its trunk.
+let logs = (o: Out, bark: number, wood: number) => {
+  for (let [x, y, z] of [[-0.3, 0, 0.6], [-0.3, 0, 0.95], [-0.3, 0.3, 0.78]]) {
+    cuboid(o, [x, y, z], [1.1, 0.32, 0.32], bark, 0.08, 0.04)
+    for (let e of [x - 0.02, x + 1.1]) {
+      cuboid(o, [e, y + 0.04, z + 0.04], [0.02, 0.24, 0.24], wood, 0.06, 0.02)
+    }
+  }
+}
+
+// A stump, its cut face the colour of the wood, and chips round it.
+let stump = (o: Out, bark: number, wood: number, seed: number) => {
+  cuboid(o, [-0.32, 0, -0.32], [0.64, 0.55, 0.64], bark, 0.12, 0.05)
+  cuboid(o, [-0.27, 0.55, -0.27], [0.54, 0.03, 0.54], wood, 0.1, 0.02)
+  let r = stream(seed)
+  for (let i = 0; i < 6; i++) {
+    let a = r() * Math.PI * 2, d = 0.5 + r() * 0.5
+    cuboid(
+      o,
+      [Math.cos(a) * d, 0, Math.sin(a) * d],
+      [0.12, 0.04, 0.07],
+      wood,
+      0.05,
+      0.01,
+    )
+  }
+}
+
+// The highest voxel of a column of `v`, or -1.
+let topOf = (v: Vox, x: number, z: number) => {
+  for (let y = 12; y >= 0; y--) if (v.has(key(x, y, z))) return y
+  return -1
+}
+
+// A boulder flecked with ore, crystals of it standing out of its top; and,
+// spent, a few lumps of the plain stone.
+let seam = (
+  look: Extract<Look, { plan: 'seam' }>,
+  seed: number,
+  whole: boolean,
+) => {
+  let r = stream(seed), v: Vox = new Map()
+  let [a, b, c] = look.stone
+  let stone = (x: number, y: number, z: number) =>
+    (x + y + z) & 1 ? a : (x * 7 + z) % 3 == 0 ? c : b
+  if (whole) {
+    let R = 3.4 + r() * 0.5
+    ball(v, [0, 1, 0], R, (x, y, z) => {
+      if (y < 0) return null
+      let skin = x * x + (y - 1) ** 2 + z * z > (R - 1.2) ** 2
+      let streak = noise(
+        x * 0.7 + y * 0.4 + (seed % 31),
+        z * 0.7 - y * 0.4,
+        seed,
+      )
+      return skin && (streak > 0.66 || rand(x * 3 + y, z * 5 + y, seed) < 0.08)
+        ? look.vein
+        : stone(x, y, z)
+    })
+    // Crystals of the ore standing out of it, leaning out as they rise.
+    for (let i = 0; i < 3; i++) {
+      let t = (i / 3 + r() * 0.2) * Math.PI * 2, d = 1 + r() * 1.5
+      let x = Math.round(Math.cos(t) * d), z = Math.round(Math.sin(t) * d)
+      let y = topOf(v, x, z)
+      if (y < 0) continue
+      let tall = 2 + Math.floor(r() * 2)
+      for (let k = 1; k <= tall; k++) {
+        let lean = k > 1 ? 1 : 0
+        v.set(
+          key(x + Math.sign(x) * lean, y + k, z + Math.sign(z) * lean),
+          look.vein,
+        )
+      }
+    }
+  } else {
+    for (let i = 0; i < 3; i++) {
+      let x = Math.floor(r() * 5) - 2, z = Math.floor(r() * 5) - 2
+      ball(
+        v,
+        [x, 0, z],
+        1.1 + r() * 0.5,
+        (x, y, z) => y < 0 ? null : stone(x, y, z),
+      )
+    }
+  }
+  return blob(out(), v, 0.25, [-0.125, 0, -0.125])
+}
+
+let herb = (
+  look: Extract<Look, { plan: 'herb' }>,
+  seed: number,
+  whole: boolean,
+) => {
+  let r = stream(seed), v: Vox = new Map()
+  let leaves = [
+    look.leaf,
+    new THREE.Color(look.leaf).offsetHSL(0, 0, 0.06).getHex(),
+  ]
+  let leaf = (x: number, y: number, z: number) => leaves[(x + y + z) & 1]
+  if (!whole) {
+    for (let i = 0; i < 5; i++) {
+      let x = Math.floor(r() * 5) - 2, z = Math.floor(r() * 5) - 2
+      box(v, [x, 0, z], [x, Math.floor(r() * 2), z], 0x6a5a3a)
+    }
+  } else if (look.form == 'bush') {
+    let R = 3.3
+    box(v, [0, 0, 0], [0, 1, 0], 0x6a4a30)
+    ball(v, [0, 3, 0], R, (x, y, z) => {
+      if (y < 1) return null
+      let rim = x * x + (y - 3) ** 2 + z * z > (R - 1) ** 2
+      return rim && rand(x + 9, y * 7 + z, seed) < 0.2
+        ? look.bloom
+        : leaf(x, y, z)
+    })
+  } else if (look.form == 'stalks') {
+    for (let i = 0; i < 7; i++) {
+      let x = Math.floor(r() * 7) - 3, z = Math.floor(r() * 7) - 3
+      let tall = 4 + Math.floor(r() * 4)
+      box(v, [x, 0, z], [x, tall, z], look.leaf)
+      v.set(key(x + (i & 1 ? 1 : -1), 2 + (i % 3), z), look.leaf)
+      box(v, [x, tall + 1, z], [x + 1, tall + 2, z], look.bloom)
+      v.set(key(x, tall + 1, z + 1), look.bloom)
+    }
+  } else {
+    for (let i = 0; i < 4; i++) {
+      let x = Math.floor(r() * 7) - 3, z = Math.floor(r() * 7) - 3
+      let tall = 2 + Math.floor(r() * 3)
+      box(v, [x, 0, z], [x, tall, z], look.leaf)
+      box(v, [x - 1, tall + 1, z - 1], [x + 1, tall + 1, z + 1], look.bloom)
+      v.set(key(x, tall + 2, z), look.bloom)
+      v.set(key(x + 1, tall + 1, z + 1), 0xfbf6ea)
+    }
+  }
+  return blob(out(), v, 0.125, [-0.0625, 0, -0.0625])
+}
+
+let tree = (
+  look: Extract<Look, { plan: 'tree' }>,
+  seed: number,
+  whole: boolean,
+) => {
+  let o = out()
+  if (whole) {
+    place(o, model(look.prop, seed), [0, 0, 0])
+    logs(o, look.bark, look.wood)
+  } else stump(o, look.bark, look.wood, seed)
+  return o
+}
+
+/** A node's model, whole or spent, in the `shape`th of its kind's shapes: a
+ * tree, a seam or a herb, as triangles with its foot at the origin; a shoal
+ * is drawn on the water, not modelled. */
+export let modelOf = (look: Look, whole: boolean, shape: number): Out => {
+  let seed = shape * 7919 + 17
+  return look.plan == 'tree'
+    ? tree(look, seed, whole)
+    : look.plan == 'seam'
+    ? seam(look, seed, whole)
+    : look.plan == 'herb'
+    ? herb(look, seed, whole)
+    : out()
+}
+
+/** The colour of the bits a stroke knocks off a node: chips of wood, grit of
+ * the ore, leaves, spray. */
+export let chipOf = (look: Look): number =>
+  look.plan == 'tree'
+    ? look.wood
+    : look.plan == 'seam'
+    ? look.vein
+    : look.plan == 'herb'
+    ? look.leaf
+    : 0xe8f4ff
+
+let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+
+let secs = (ms: number) => {
+  let s = Math.ceil(ms / 1000)
+  return s < 60
+    ? `${s}s`
+    : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+// A node's model, whole or spent; a whole shoal is its rings and its fish.
+type Body = {
+  obj: THREE.Object3D
+  rings?: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>[]
+  fish?: THREE.Mesh
+}
+
+type Drawn = {
+  group: THREE.Group
+  whole: Body | null
+  spent: Body | null
+  /** whole the last frame it was seen */
+  was: boolean | null
+  /** struck this recently, 1 just now to 0 */
+  shake: number
+  /** seconds since it grew back, while it swells */
+  grow: number
+  seen: boolean
+}
+
+/** The nodes of one level's scene. `glow` is where a seam glints from; a
+ * phone's player has a button to work a node, and is not told of a key. */
+export let nodes = (
+  scene: THREE.Scene,
+  plates: ReturnType<typeof overlay>,
+  glow: ReturnType<typeof bits>,
+  phone: boolean,
+) => {
+  let mat = soft({ speckle: 0.08, see: true })
+  let water = new THREE.MeshBasicMaterial({
+    color: 0xf4fbff,
+    transparent: true,
+    depthWrite: false,
+  })
+  let ringGeo = new THREE.RingGeometry(0.9, 1, 40)
+  let made = new Map<string, THREE.BufferGeometry>()
+  let geo = (key: string, make: () => Out) => {
+    let g = made.get(key)
+    if (!g) made.set(key, g = geometry(pack(make())))
+    return g
+  }
+  let drawn = new Map<string, Drawn>()
+  // Felled trees falling, and things flying to the hero.
+  let falling: { obj: THREE.Object3D; t: number; axis: THREE.Vector3 }[] = []
+  let flying: { obj: THREE.Mesh; from: THREE.Vector3; t: number }[] = []
+
+  // What an item looks like, as loot does (cast.ts).
+  let thing = (kind: string) =>
+    new THREE.Mesh(
+      geo(`item:${kind}`, () => {
+        let o = out()
+        for (let [min, size, hex] of ITEMS[kind]?.look ?? []) {
+          cuboid(o, min, size, hex, 0.05, 0.02)
+        }
+        return o
+      }),
+      mat,
+    )
+
+  // A node's model, whole or spent, sharing geometry with its kind and shape.
+  let body = (n: Seen, whole: boolean): Body | null => {
+    let look = n.lode.look
+    let shape = hashOf(n.eid) % SHAPES
+    if (look.plan == 'shoal') {
+      if (!whole) return null
+      let obj = new THREE.Group()
+      let rings = [0, 1].map(() => {
+        let ring = new THREE.Mesh(ringGeo, water.clone())
+        ring.rotation.x = -Math.PI / 2
+        ring.position.y = 0.03
+        obj.add(ring)
+        return ring
+      })
+      let fish = thing(n.lode.gives)
+      fish.visible = false
+      fish.scale.setScalar(1.6)
+      obj.add(fish)
+      return { obj, rings, fish }
+    }
+    let mesh = new THREE.Mesh(
+      geo(`${n.kind}:${whole}:${shape}`, () => modelOf(look, whole, shape)),
+      mat,
+    )
+    mesh.castShadow = look.plan != 'herb'
+    mesh.receiveShadow = true
+    return { obj: mesh }
+  }
+  // Take a node's model off the stage, and let go of its rings.
+  let drop = (b: Body | null) => {
+    if (!b) return
+    b.obj.removeFromParent()
+    for (let r of b.rings ?? []) r.material.dispose()
+  }
+
+  let plate = (n: Seen, job: Job) => {
+    let doing = job.doing?.node.eid == n.eid ? job.doing : null
+    let t = TRADES[n.lode.trade]
+    let name = `<b>${esc(n.lode.name)}</b>`
+    let html = doing
+      ? `<span>${name}</span><span class="Plate_Bar Plate_Bar-work"><i style="--k:${
+        Math.min(1, doing.k).toFixed(3)
+      }"></i></span>`
+      : n.spent
+      ? `<span>${name} <em>back in ${secs(n.back)}</em></span>`
+      : !n.able
+      ? `<span>${name} <em>${t.name} ${least(n.lode.tier)}</em></span>`
+      : job.near?.eid == n.eid
+      ? `<span>${name} <em>${t.icon} ${t.verb}${
+        phone ? '' : ' · E'
+      }</em></span>`
+      : `<span>${name}</span>`
+    let [x, y, z] = n.at
+    plates.plate(
+      `node:${n.eid}`,
+      new THREE.Vector3(x, y + HIGH[n.lode.look.plan], z),
+      html,
+      `Plate Plate-node${n.able ? '' : ' Plate-locked'}`,
+    )
+  }
+
+  let v3 = (a: Vec3, up = 0) => new THREE.Vector3(a[0], a[1] + up, a[2])
+
+  return {
+    /** Draw this frame's nodes, with the hero at `hero`. */
+    tick: (job: Job, hero: Vec3, dt: number) => {
+      let t = performance.now() / 1000
+      for (let d of drawn.values()) d.seen = false
+      for (let e of job.events) {
+        let d = e.type == 'stroke' ? drawn.get(e.eid) : undefined
+        if (d) d.shake = 1
+      }
+      for (let n of job.nodes) {
+        let plan = n.lode.look.plan
+        if (n.near > FAR[plan]) continue
+        let d = drawn.get(n.eid)
+        if (!d) {
+          let group = new THREE.Group()
+          group.position.set(...n.at)
+          scene.add(group)
+          d = {
+            group,
+            whole: null,
+            spent: null,
+            was: null,
+            shake: 0,
+            grow: SWELL,
+            seen: true,
+          }
+          drawn.set(n.eid, d)
+        }
+        d.seen = true
+        let whole = !n.spent
+        if (d.was != whole) {
+          // Felled while in sight: a tree topples away from the hero, and
+          // anything else is simply gone.
+          if (d.was && d.whole && plan == 'tree') {
+            let away = new THREE.Vector3(
+              n.at[0] - hero[0],
+              0,
+              n.at[2] - hero[2],
+            )
+            if (away.lengthSq() < 1e-6) away.set(1, 0, 0)
+            away.normalize()
+            let fall = d.whole.obj
+            fall.removeFromParent()
+            fall.position.copy(d.group.position)
+            scene.add(fall)
+            falling.push({
+              obj: fall,
+              t: 0,
+              axis: new THREE.Vector3(away.z, 0, -away.x),
+            })
+          } else drop(d.whole)
+          drop(d.spent)
+          d.whole = whole ? body(n, true) : null
+          d.spent = whole ? null : body(n, false)
+          if (d.whole) d.group.add(d.whole.obj)
+          if (d.spent) d.group.add(d.spent.obj)
+          // Grown back while in sight: it swells up.
+          d.grow = whole && d.was === false ? 0 : SWELL
+          d.was = whole
+        }
+        // Growing back, and shaking at a stroke.
+        d.grow = Math.min(SWELL, d.grow + dt)
+        let g = d.grow / SWELL
+        let swell = g >= 1 ? 1 : 1 + 2.7 * (g - 1) ** 3 + 1.7 * (g - 1) ** 2
+        d.shake = Math.max(0, d.shake - dt * 3)
+        let w = d.whole?.obj
+        if (w && plan != 'shoal') {
+          w.scale.setScalar(Math.max(0.05, swell))
+          w.rotation.z = Math.sin(t * 38) * 0.05 * d.shake
+          w.rotation.x = Math.cos(t * 31) * 0.03 * d.shake
+          if (plan != 'tree') {
+            w.scale.y *= 1 - 0.12 * d.shake * Math.abs(Math.sin(t * 30))
+          }
+        }
+        // A shoal: rings spreading, faster while it is fished, and now and
+        // then a fish leaping out.
+        let { rings, fish } = d.whole ?? {}
+        if (rings && fish) {
+          let salt = hashOf(n.eid)
+          rings.forEach((ring, i) => {
+            let k = (t * 0.45 * (1 + d.shake * 2) + i / 2 + (salt % 97) / 97) %
+              1
+            ring.scale.setScalar(0.3 + k * 1.4)
+            ring.material.opacity = 0.55 * (1 - k)
+          })
+          let leap = ((t + (salt % 11)) % (4 + (salt % 3))) / 0.7
+          fish.visible = leap < 1
+          fish.position.set(
+            0,
+            Math.sin(leap * Math.PI) * 0.7 - 0.1,
+            (leap - 0.5) * 1.2,
+          )
+          fish.rotation.x = (leap - 0.5) * 2.4
+        }
+        // A whole seam glints now and then.
+        if (w && plan == 'seam' && n.near < 25 && Math.random() < dt * 0.8) {
+          let a = Math.random() * Math.PI * 2
+          glow.emit(
+            v3(n.at, 0.3 + Math.random() * 0.4).add(
+              new THREE.Vector3(Math.cos(a) * 0.55, 0, Math.sin(a) * 0.55),
+            ),
+            chipOf(n.lode.look),
+            1,
+            { speed: 0.2, up: 0.4, life: 0.5, size: 0.05, fall: 0 },
+          )
+        }
+        if (n.near < LABEL || job.doing?.node.eid == n.eid) plate(n, job)
+      }
+
+      // What a gathering gave flies from its node to the hero.
+      for (let e of job.events) {
+        if (e.type != 'gathered') continue
+        let obj = thing(e.item)
+        obj.scale.setScalar(1.8)
+        scene.add(obj)
+        flying.push({ obj, from: v3(e.at, 0.6), t: 0 })
+      }
+      let to = v3(hero, 1)
+      flying = flying.filter((f) => {
+        f.t += dt / FLIGHT
+        if (f.t >= 1) {
+          scene.remove(f.obj)
+          return false
+        }
+        f.obj.position.lerpVectors(f.from, to, f.t)
+        f.obj.position.y += Math.sin(f.t * Math.PI) * 1.2
+        f.obj.rotation.y += dt * 9
+        return true
+      })
+      falling = falling.filter((f) => {
+        f.t += dt
+        let k = Math.min(1, f.t / TOPPLE)
+        f.obj.setRotationFromAxisAngle(f.axis, (k * k) * Math.PI / 2 * 0.96)
+        if (f.t > TOPPLE) f.obj.position.y -= dt * 2.5
+        if (f.t < TOPPLE + SINK) return true
+        scene.remove(f.obj)
+        return false
+      })
+
+      for (let [eid, d] of drawn) {
+        if (d.seen) continue
+        drop(d.whole)
+        scene.remove(d.group)
+        drawn.delete(eid)
+      }
+    },
+    /** keep the line from the camera to the hero clear */
+    see: (from: THREE.Vector3, to: THREE.Vector3) => sight(mat, from, to),
+    /** let the GPU go of what the nodes drew */
+    dispose: () => {
+      for (let d of drawn.values()) {
+        drop(d.whole)
+        scene.remove(d.group)
+      }
+      for (let f of [...falling, ...flying]) scene.remove(f.obj)
+      for (let g of made.values()) g.dispose()
+      ringGeo.dispose()
+      mat.dispose()
+      water.dispose()
+    },
+  }
+}

@@ -2,8 +2,10 @@
 // in the bag, what it does (a tonic heals, a sword is worn in the hand), and
 // how it is drawn lying on the ground, a few soft boxes. A new kind of loot or
 // gift is a row here; beasts.ts says what drops it and quests.ts what gives
-// it. The arms and armour of every tier are rows of arms.ts, listed here too.
+// it. The arms and armour of every tier are rows of arms.ts, and what a hero
+// gathers is a row of materials.ts, both listed here too.
 import { ARMS, type Slot, wield } from './arms.ts'
+import { MATERIALS } from './materials.ts'
 
 type Vec = [number, number, number]
 /** One box of a model: its low corner, its size, and its colour. */
@@ -440,4 +442,5 @@ export let ITEMS: Record<string, Thing> = {
     ],
   },
   ...ARMS,
+  ...MATERIALS,
 }

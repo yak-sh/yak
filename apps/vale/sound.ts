@@ -3,13 +3,13 @@
 // sound is made is voices.ts; this is where it is made.
 //
 // A sound is made at what made it (`From`): at a hero or creature, whose
-// source follows them from frame to frame; at a point, for a find; or
-// nowhere, straight to the ears, for what is only the player's own news: the
-// arpeggio of a level and the chime of a quest. The hearth crackles and the
-// lakes lap as sounds the level keeps making (`keep`). A voice from another
-// player will be one more kept sound: a MediaStreamAudioSourceNode made from
-// their stream and kept at their hero's eid follows them as their footsteps
-// do.
+// source follows them from frame to frame; at a point, for a find or the work
+// at a node; or nowhere, straight to the ears, for what is only the player's
+// own news: the arpeggio of a level and the chime of a quest. The hearth
+// crackles and the lakes lap as sounds the level keeps making (`keep`). A
+// voice from another player will be one more kept sound: a
+// MediaStreamAudioSourceNode made from their stream and kept at their hero's
+// eid follows them as their footsteps do.
 //
 // Silent until the player first touches a key or the screen, as browsers
 // require, and silent for good once muted.
@@ -263,6 +263,12 @@ export let sound = {
   pick: (from: From) => make(from, voices.pick),
   fall: (from: From) => make(from, voices.fall),
   heal: (from: From) => make(from, voices.heal),
+  /** A stroke of work at a node, by its trade (gather.ts). */
+  stroke: (from: From, trade: string) =>
+    make(from, voices.stroke[trade] ?? voices.whiff),
+  /** A node's work done, by its trade. */
+  done: (from: From, trade: string) =>
+    make(from, voices.done[trade] ?? voices.pick),
   /** A level gained: the player's own news, straight to the ears. */
   level: () => make(null, voices.level),
   /** A quest taken or handed in, or a new land reached: the player's own

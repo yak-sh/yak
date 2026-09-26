@@ -571,6 +571,39 @@ body {
   font-size: 0;
 }
 
+/* A node to gather, in its trade's colour; hollow while spent, faint while
+   the hero's trade does not reach it. */
+.Map_Node {
+  --c: #8a5a2a;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 2px;
+  rotate: 45deg;
+  background: var(--c);
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85);
+}
+
+.Map_Node-ore {
+  --c: #6a7a8e;
+}
+
+.Map_Node-herb {
+  --c: #4fa83a;
+}
+
+.Map_Node-fish {
+  --c: #2a8ad8;
+}
+
+.Map_Node-spent {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--c);
+}
+
+.Map_Node-far {
+  opacity: 0.45;
+}
+
 .Map_Giver-quest {
   display: grid;
   place-items: center;
@@ -866,6 +899,30 @@ body {
   display: none;
 }
 
+/* Where the talk button is, while nobody is near enough to talk to: the node
+   near enough to work, by its trade's icon, ringed with how far the work has
+   come. */
+.Pad-gather {
+  right: 0.9rem;
+  bottom: 6.2rem;
+  isolation: isolate;
+}
+
+.Pad-gather::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  z-index: -1;
+  border-radius: 50%;
+  background: conic-gradient(#7fd65c calc(var(--k, 0) * 1turn), transparent 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000
+    calc(100% - 4px));
+}
+
+.Pad-none {
+  display: none;
+}
+
 .Toasts {
   position: absolute;
   top: calc(max(12px, env(safe-area-inset-top)) + 4.4rem);
@@ -1067,6 +1124,19 @@ body {
 
 .Plate_Bar-friend {
   --fill: #7fd65c;
+}
+
+.Plate_Bar-work {
+  --fill: #9fe07a;
+  width: 4rem;
+}
+
+.Plate-node .Plate_In b {
+  color: #fff3c4;
+}
+
+.Plate-locked .Plate_In {
+  opacity: 0.75;
 }
 
 .Mark {

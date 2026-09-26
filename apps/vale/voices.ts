@@ -1,7 +1,7 @@
 // How each sound in the vale is made: on the spot with Web Audio, so there is
 // nothing to load. A thump for a blow, a swish for a miss, a chime for a
-// find, a footstep, a creature's cry, and the fire and water a level keeps
-// making. A voice plays into whatever node it is given; sound.ts says where
+// find, the strokes of work at a node, a footstep, a creature's cry, and the
+// fire and water a level keeps making. A voice plays into whatever node it is given; sound.ts says where
 // that is.
 
 /** A sound: how long it lasts in seconds, how loud it is at its source, and
@@ -123,6 +123,47 @@ export let quest = voice(
       tone(o, f, 0.25, 'sine', 0.08, f, i * 0.1)
     ),
 )
+
+/** A stroke of work at a node, by its trade (gather.ts): an axe biting wood,
+ * a pick ringing on stone, leaves pulled, a float plopping. */
+export let stroke: Record<string, Voice> = {
+  wood: voice(0.2, 0.14, (o) => {
+    tone(o, vary(190), 0.1, 'triangle', 0.16, 90)
+    hiss(o, 0.07, 1100, 0.09, 1.2)
+  }),
+  ore: voice(0.3, 0.12, (o) => {
+    tone(o, vary(1900), 0.22, 'sine', 0.05, 1850)
+    tone(o, 2870, 0.14, 'sine', 0.035, 2800)
+    hiss(o, 0.05, 3800, 0.08, 1.5)
+  }),
+  herb: voice(0.3, 0.07, (o) => hiss(o, 0.26, vary(2600), 0.07, 0.7)),
+  fish: voice(0.35, 0.08, (o) => {
+    tone(o, vary(520), 0.12, 'sine', 0.06, 180)
+    hiss(o, 0.25, 1400, 0.05, 0.9)
+  }),
+}
+
+/** A node's work done, by its trade: a tree crashing down, a seam
+ * crumbling, a clump pulled up, a fish hauled out with a splash. */
+export let done: Record<string, Voice> = {
+  wood: voice(0.9, 0.2, (o) => {
+    tone(o, 320, 0.35, 'sawtooth', 0.03, 260, 0, 900)
+    tone(o, 75, 0.6, 'triangle', 0.2, 38, 0.3)
+    hiss(o, 0.55, 700, 0.14, 0.6)
+  }),
+  ore: voice(0.5, 0.14, (o) => {
+    hiss(o, 0.45, 900, 0.12, 0.7)
+    tone(o, 110, 0.3, 'triangle', 0.1, 60)
+  }),
+  herb: voice(0.4, 0.08, (o) => {
+    hiss(o, 0.35, 2200, 0.08, 0.6)
+    tone(o, 660, 0.12, 'sine', 0.04, 880, 0.15)
+  }),
+  fish: voice(0.6, 0.12, (o) => {
+    hiss(o, 0.5, 1800, 0.12, 0.8)
+    tone(o, 300, 0.2, 'sine', 0.08, 140)
+  }),
+}
 
 // A footstep by body plan, for a creature `s` times the square root of its
 // size: soft for a hero, heavier and lower the bigger the creature, a

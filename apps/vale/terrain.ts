@@ -427,6 +427,17 @@ let toRoad = (ways: Way[], x: number, z: number) => {
   return best
 }
 
+// Whether a point this far from the nearest lane, in lane widths, and road,
+// in metres, is on or beside one, where nothing grows.
+let worn = (lane: number, road: number) => lane < LANE || road < CLEAR
+
+/** Whether a point of a level, in metres, is on or beside one of its roads or
+ * lanes, where nothing grows. */
+export let trodden = (lv: Level) => {
+  let lanes = lanesOf(lv), ways = waysOf(lv)
+  return (x: number, z: number) => worn(toLane(lanes, x, z), toRoad(ways, x, z))
+}
+
 /** A level's ground, grown at a voxel edge of `voxel` metres, which must
  * divide SIZE. Deterministic, and cached: call it as often as you like. */
 export let vale = (id: string, voxel = VOXEL): Vale => {
@@ -530,8 +541,7 @@ let build = (lv: Level, V: number): Vale => {
   let props: Prop[] = [...built]
   let taken = (x: number, z: number, lane: number, road: number) =>
     built.some((p) => dist(x, z, [p.x, p.z]) < (KINDS[p.kind].foot ?? 0) + 1) ||
-    villages.some((p) => dist(x, z, p.at) < 6) ||
-    lane < LANE || road < CLEAR
+    villages.some((p) => dist(x, z, p.at) < 6) || worn(lane, road)
 
   // Trees and rocks, one chance per cell of a jittered grid, decided on the
   // smooth ground so they stand in the same places at every voxel size; none

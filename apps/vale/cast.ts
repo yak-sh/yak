@@ -278,12 +278,20 @@ export let cast = (
   let head = (a: Actor, up = 0) => at.set(a.x, a.y + a.fig.height + up, a.z)
 
   return {
-    tick: (f: Frame, me: string, look: Look, dt: number) => {
+    /** Put this frame on stage. While the hero works a node (work.ts), they
+     * face it, and `work.swing` is how far through a stroke they are. */
+    tick: (
+      f: Frame,
+      me: string,
+      look: Look,
+      dt: number,
+      work: { swing: number; x: number; z: number } | null = null,
+    ) => {
       let t = performance.now() / 1000
       let now = performance.now()
       for (let a of actors.values()) a.seen = false
 
-      // Me, in what I wear.
+      // Me, in what I wear, facing the node I work at.
       let dress: Dress = Object.fromEntries(
         Object.entries(f.sheet.worn).map(([slot, h]) => [slot, h?.kind]),
       )
@@ -292,7 +300,10 @@ export let cast = (
         () => hero(look, dress),
         JSON.stringify([look, dress]),
       )
-      glide(mine, f.body.x, f.body.y, f.body.z, f.body.yaw, dt, 30)
+      let facing = work
+        ? Math.atan2(work.x - f.body.x, work.z - f.body.z)
+        : f.body.yaw
+      glide(mine, f.body.x, f.body.y, f.body.z, facing, dt, 30)
       tumble(mine, f.roll)
       mine.speed = f.body.speed
       let hurt = f.events.some((e) => e.type == 'hurt')
@@ -302,7 +313,7 @@ export let cast = (
         {
           air: f.body.gait == 'jump',
           roll: f.roll,
-          swing: f.swing,
+          swing: f.swing >= 0 ? f.swing : work?.swing ?? -1,
           hurt: Math.max(0, 1 - (now - mine.hurtAt) / 250),
           down: f.down,
         },

@@ -2,9 +2,9 @@
 // the page: it grows the level the hero is in off its own thread (grown.ts)
 // while it opens the store and asks who you are and which of your heroes to
 // play, and then runs the frame: the player's hands (input.ts), a step of the
-// game on the graph (play.ts), the stage (cast.ts), the bits and numbers
-// (fx.ts), the glass (hud.ts), what was said (chatbox.ts) and the map
-// (map.ts). When the hero walks off the end of a road, the page grows the
+// game on the graph (play.ts), the work at the nodes to gather (work.ts), the
+// stage (cast.ts, nodes.ts), the bits and numbers (fx.ts), the glass
+// (hud.ts), what was said (chatbox.ts) and the map (map.ts). When the hero walks off the end of a road, the page grows the
 // level beyond and carries on there.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
@@ -15,19 +15,22 @@ import { chatbox } from './chatbox.ts'
 import { map } from './map.ts'
 import { type Figure, hero } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
+import { LODES, TRADES } from './gather.ts'
 import { ahead, type Grown, grown } from './grown.ts'
 import { hud } from './hud.ts'
 import { pack } from './pack.ts'
 import { listen } from './input.ts'
+import { chipOf, nodes } from './nodes.ts'
 import { ITEMS } from './items.ts'
 import { HOME, LEVELS } from './levels.ts'
 import { comp, connect, type Hero, type Me, str } from './net.ts'
-import { type Event, type Frame, game } from './play.ts'
+import { type Event, type Frame, game, type Vec3 } from './play.ts'
 import { sound } from './sound.ts'
 import { type Mic, voices } from './voicebox.ts'
 import { groundAt, SIZE, VOXEL } from './terrain.ts'
 import { world } from './world.ts'
 import { village } from './village.ts'
+import { gathering, type Job, type Work } from './work.ts'
 
 let TINTS = [
   '#c9503f',
@@ -103,6 +106,7 @@ addEventListener('resize', fit)
 let net = connect(new URL('api/', document.baseURI))
 let folk = village(net)
 let g = game(net, folk.at)
+let gather = gathering(net)
 // Who you are and your heroes, asked while the level grows.
 let asking = net.me().then(async (me) => ({
   me,
@@ -125,6 +129,7 @@ first = null
 let stage = cast(w.scene, v, marks)
 let dust = bits(w.scene, true, 400)
 let glow = bits(w.scene, false, 300)
+let bounty = nodes(w.scene, marks, glow, phone)
 let smallShadows = phone
 if (phone) w.sun.shadow.mapSize.set(1024, 1024)
 let away = false
@@ -134,6 +139,7 @@ let AHEAD = 24
 let grow = async (id: string) => {
   away = true
   let next = shown(await grown(id, VOX))
+  bounty.dispose()
   w.dispose()
   ;({ v, w } = next)
   away = false
@@ -142,6 +148,7 @@ let grow = async (id: string) => {
   stage = cast(w.scene, v, marks)
   dust = bits(w.scene, true, 400)
   glow = bits(w.scene, false, 300)
+  bounty = nodes(w.scene, marks, glow, phone)
   // Arriving: the camera starts behind the hero, wherever they came in.
   cam.x = NaN
   cam.snap = true
@@ -452,6 +459,47 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
   }
 }
 
+// What the work at a node did: chips flying at each stroke, and what it gave
+// flying to the hero with the xp it was to their trade.
+let worked = (e: Work) => {
+  let p = (a: Vec3, up: number) => new THREE.Vector3(a[0], a[1] + up, a[2])
+  if (e.type == 'stroke') {
+    let fish = e.trade == 'fish'
+    dust.emit(p(e.at, fish ? 0.05 : 0.6), chipOf(LODES[e.kind].look), 6, {
+      speed: fish ? 1.2 : 2,
+      up: fish ? 3 : 2.5,
+      life: 0.5,
+      size: 0.08,
+    })
+    sound.stroke(e.at, e.trade)
+    if (!fish) cam.shake = Math.max(cam.shake, 0.04)
+  } else if (e.type == 'gathered') {
+    let t = ITEMS[e.item]
+    h.toast(
+      `${t?.icon ?? ''} ${t?.name ?? e.item}${e.n > 1 ? ` ×${e.n}` : ''}`,
+      'Toast-loot',
+    )
+    marks.float(
+      `+${e.xp} ${TRADES[e.trade].name}`,
+      target.clone().setY(target.y + 1.2),
+      'xp',
+    )
+    sound.done(e.at, e.trade)
+    sound.pick(net.hero)
+  } else if (e.type == 'trade') {
+    let t = TRADES[e.trade]
+    h.toast(`${t.icon} ${t.name} ${e.lvl}!`, 'Toast-big')
+    glow.emit(target, 0x9fe07a, 24, {
+      speed: 2,
+      up: 2.5,
+      life: 1,
+      size: 0.08,
+      fall: 1,
+    })
+    sound.level()
+  } else h.toast(e.text)
+}
+
 let talkTo = () => {
   let giver = last?.talk
   if (!giver) return
@@ -486,6 +534,7 @@ let talkTo = () => {
 }
 
 let last: Frame | null = null
+let job: Job | null = null
 let then = performance.now()
 // The page keeps up with the screen before it keeps its looks: while frames
 // run slow it draws fewer pixels, then plainer shadows, then none.
@@ -562,7 +611,21 @@ let loop = (t: number) => {
         hair: str(player.hair, look.hair),
         skin: str(player.skin, look.skin),
       }
-      stage.tick(f, net.hero, dressed, dt)
+      job = gather.tick(
+        v,
+        f,
+        i.gather || (i.talk && !f.talk),
+        i.strike || i.dodge || i.jump,
+      )
+      let d = job.doing
+      stage.tick(
+        f,
+        net.hero,
+        dressed,
+        dt,
+        d ? { swing: d.swing, x: d.node.at[0], z: d.node.at[2] } : null,
+      )
+      bounty.tick(job, [f.body.x, f.body.y, f.body.z], dt)
       folk.tick(f)
       chat.tick(f, stage.headOf)
       voice.tick(f)
@@ -575,6 +638,7 @@ let loop = (t: number) => {
       cam.z += (f.body.z - cam.z) * k
       target.set(cam.x, cam.y + 1, cam.z)
       for (let e of f.events) react(e, target)
+      for (let e of job.events) worked(e)
       if (i.talk && f.talk) talkTo()
       if (h.talking && !f.talk) h.talk(null, () => {}, () => {})
       if (f.body.gait == 'run' && Math.random() < 0.35) {
@@ -593,7 +657,8 @@ let loop = (t: number) => {
       }
       let here = 1 + f.others.length
       h.show(f, here, clockOf(w.day), bearing(cam.yaw), p.open)
-      m.show(f, v)
+      h.work(f.talk ? null : job)
+      m.show(f, v, job.nodes)
       p.show(f)
       w.focus.set(f.body.x, f.body.y, f.body.z)
       // Near a road's end, the level beyond starts growing.
@@ -626,6 +691,7 @@ let loop = (t: number) => {
   }
   aim(cam, camera, target, v, dt)
   w.see(camera.position, target)
+  bounty.see(camera.position, target)
   sound.listen(camera, v, playing ? last : null, net.hero, dt)
   // Embers off the fire, and at night fireflies about the player.
   if (v.hearth && Math.random() < 0.5) {
@@ -683,6 +749,9 @@ Object.assign(globalThis, {
     village: folk,
     get frame() {
       return last
+    },
+    get job() {
+      return job
     },
     get vale() {
       return v
