@@ -16,7 +16,7 @@
 // A run is serialized twice. In one process, a trigger for a transcript that
 // is already being run marks the pass to look again instead of starting a
 // second. Across processes, a run holds a lease named for the transcript
-// (@yaks/effects `take`), renewed while it runs; a run that finds it held
+// (@yaks/effects `holding`), renewed while it runs; a run that finds it held
 // leaves the transcript to the holder, which looks again after letting go, so
 // an entry that landed just as it finished is never left unanswered.
 //
@@ -32,7 +32,7 @@
 // ({@link Runner}): nothing here names a machine or a provider.
 
 import type { Event, Handlers } from '@yaks/effects'
-import { drop, HOLD, take } from '@yaks/effects'
+import { HOLD, holding } from '@yaks/effects'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { active, admitNext, queue, swap } from './admission.ts'
 import { type ChildLimits, deliverChild } from './children.ts'
@@ -224,26 +224,24 @@ let turns = async (g: Graph, session: Eid, r: Runner): Promise<number> => {
   return newest(g, session)
 }
 
-// The transcript's lease, taken for one run and renewed while it goes.
-// Answers the newest seq the run saw, or `null` where somebody else holds it.
+// The transcript's lease, taken for one run and renewed while it goes; a
+// lease another process takes from it stops the run between steps, as leaving
+// does. Answers the newest seq the run saw, or `null` where somebody else
+// holds it.
 let held = async (
   g: Graph,
   session: Eid,
   r: Runner,
 ): Promise<number | null> => {
-  let name = `${RUN}/${session}`
-  let o = { holder: r.holder, hold: r.hold ?? HOLD, gone: r.gone }
-  if (!await take(g, name, o)) return null
-  let beat = setInterval(
-    () => take(g, name, o).catch((err) => r.report?.(err, session, 'lease')),
-    Math.max(50, Math.floor(o.hold / 3)),
-  )
-  try {
-    return await turns(g, session, r)
-  } finally {
-    clearInterval(beat)
-    await drop(g, name, { holder: r.holder })
-  }
+  let seen = await holding(g, `${RUN}/${session}`, {
+    holder: r.holder,
+    hold: r.hold ?? HOLD,
+    gone: r.gone,
+    signal: r.stopping ?? new AbortController().signal,
+    wait: false,
+    report: (err) => r.report?.(err, session, 'lease'),
+  }, (stopping) => turns(g, session, { ...r, stopping }))
+  return seen ?? null
 }
 
 // Whether something landed after `seen` that the transcript owes a turn for.

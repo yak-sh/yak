@@ -210,6 +210,12 @@ export type HoldingOpts = HoldOpts & {
    * CLI command does what nobody else is doing and never queues for what
    * somebody else is. */
   signal?: AbortSignal
+  /** whether to wait out a holder ahead of this one (default: while the
+   * signal is live). Not waiting answers at once, leaving the work to them —
+   * one run of something whose holder already runs it, like a transcript's
+   * turn — and a take the store fails is then thrown, for the caller to try
+   * again, rather than waited out. */
+  wait?: boolean
   /** how often to ask again while somebody else holds it (default a tenth of
    * the hold) */
   poll?: number
@@ -220,13 +226,15 @@ export type HoldingOpts = HoldOpts & {
 
 /**
  * Run a duty for as long as this process is up: take the lease, renew it
- * while the work runs, and release it at the end.
+ * while the work runs, and release it at the end. Answers what the work last
+ * answered, or `undefined` where it never ran.
  *
  * The same call serves a process of either shape, which is the point — nothing
  * here assumes a separate one. A server or a TUI passes a live signal and
  * holds the lease until that aborts, waiting for the holder ahead of it to
  * expire; a one-shot CLI command passes a signal that has already aborted,
- * does the pass if nobody else is, and releases on the way out.
+ * does the pass if nobody else is, and releases on the way out. Either way the
+ * lease is renewed for as long as the work runs.
  *
  * The work is handed a signal that also aborts when the lease is lost: a
  * renewal that finds another process holding it means that process is doing
@@ -242,30 +250,35 @@ export type HoldingOpts = HoldOpts & {
  * // await holding(graph, '@yaks/wake', { holder: me, signal }, (s) => loop(g, { signal: s }))
  * ```
  */
-export let holding = async (
+export let holding = async <T = void>(
   g: Graph,
   name: string,
   o: HoldingOpts,
-  work: (signal: AbortSignal) => void | Promise<void>,
-): Promise<void> => {
+  work: (signal: AbortSignal) => T | Promise<T>,
+): Promise<T | undefined> => {
   let signal = o.signal ?? AbortSignal.abort()
+  let wait = o.wait ?? !signal.aborted
   let hold = o.hold ?? HOLD
   let ask = { ...o, hold }
   let report = o.report ?? ((e: unknown) => console.error(`${name} —`, e))
-  // A take the store failed is not a no: told, and asked again next time.
+  // A take the store failed is not a no. Waiting, it is told and asked again
+  // next time; not waiting, there is no next time here, so the caller hears.
   let ours = () =>
-    take(g, name, ask).catch((e) => {
-      report(e)
-      return false
-    })
+    wait
+      ? take(g, name, ask).catch((e) => {
+        report(e)
+        return false
+      })
+      : take(g, name, ask)
+  let out: T | undefined
   while (true) {
     while (!await ours()) {
       // Somebody is doing it. A process that is staying up waits them out — a
       // holder that was killed expires and this is what takes over — and one
       // that is only passing through leaves it to them.
-      if (signal.aborted) return
+      if (!wait || signal.aborted) return out
       await sleep(o.poll ?? Math.max(250, Math.floor(hold / 10)), signal)
-      if (signal.aborted) return
+      if (signal.aborted) return out
     }
     let lost = new AbortController()
     let beating = false
@@ -285,16 +298,14 @@ export let holding = async (
         beating = false
       }
     }
-    let beat = signal.aborted
-      ? undefined
-      : setInterval(renew, Math.max(50, Math.floor(hold / 3)))
+    let beat = setInterval(renew, Math.max(50, Math.floor(hold / 3)))
     try {
-      await work(AbortSignal.any([signal, lost.signal]))
+      out = await work(AbortSignal.any([signal, lost.signal]))
     } finally {
-      if (beat != null) clearInterval(beat)
+      clearInterval(beat)
       await drop(g, name, { holder: o.holder }).catch(report)
     }
-    if (signal.aborted || !lost.signal.aborted) return
+    if (signal.aborted || !lost.signal.aborted) return out
   }
 }
 

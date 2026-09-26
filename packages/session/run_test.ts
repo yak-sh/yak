@@ -165,6 +165,23 @@ Deno.test('two processes running one transcript at once ask its model once', asy
   assertEquals(await kinds(a, 's1'), ['input', 'ask', 'output'])
 })
 
+Deno.test('a run longer than its lease keeps the transcript, renewed while it goes', async () => {
+  let s = store()
+  let open!: () => void
+  let { model, asked } = fake(new Promise<void>((go) => open = go))
+  let a = proc(s, 'w1', model, { hold: 60 })
+  let b = proc(s, 'w2', model, { hold: 60 })
+  await a.g.apply(ask('s1'))
+  let first = settle(a.g, 's1', a.r)
+  await until(() => asked.length == 1)
+  await new Promise((go) => setTimeout(go, 150)) // past two holds
+  await settle(b.g, 's1', b.r) // still `a`'s: left to it
+  open()
+  await first
+  assertEquals(asked.length, 1)
+  assertEquals(await kinds(a, 's1'), ['input', 'ask', 'output'])
+})
+
 Deno.test('a transcript asking for a provider this host was lent nothing for is left alone', async () => {
   let s = store()
   let { model, asked } = fake()

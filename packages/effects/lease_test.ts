@@ -231,3 +231,46 @@ Deno.test('a holder known to be gone is passed at once, not waited out', async (
   assertEquals(await asking(['p1']), true)
   assertEquals((await held(graph, 'sweep'))?.holder, 'p2')
 })
+
+Deno.test('not waiting, work somebody else holds is theirs, even to a process that stays', async () => {
+  let graph = g()
+  await take(graph, 'run/t1', { holder: 'p1', hold: 10_000 })
+  let passes = 0
+  let out = await holding(
+    graph,
+    'run/t1',
+    { holder: 'p2', signal: new AbortController().signal, wait: false },
+    () => ++passes,
+  )
+  assertEquals([out, passes], [undefined, 0])
+  assertEquals((await held(graph, 'run/t1'))?.holder, 'p1')
+})
+
+Deno.test('holding answers what the work answered', async () => {
+  assertEquals(await holding(g(), 'sweep', { holder: 'p1' }, () => 7), 7)
+})
+
+Deno.test('a pass on its way out is renewed while it runs', async () => {
+  let graph = g()
+  let upto = async () => String((await held(graph, 'sweep'))?.until)
+  await holding(graph, 'sweep', { holder: 'p1', hold: 60 }, async () => {
+    let first = await upto()
+    await soon(async () => await upto() != first, { label: 'a renewal' })
+  })
+})
+
+Deno.test("not waiting, a take the store fails is the caller's to hear", async () => {
+  let flaky: Graph = {
+    ...g(),
+    apply: () => {
+      throw new Error('database is locked')
+    },
+  }
+  let failed = await holding(
+    flaky,
+    'run/t1',
+    { holder: 'p1', signal: new AbortController().signal, wait: false },
+    () => 'ran',
+  ).then(() => false, () => true)
+  assertEquals(failed, true)
+})
