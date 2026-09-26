@@ -33,6 +33,9 @@ let FRESH = 60_000
 
 let atOf = (b: Bundle) => Date.parse(str(comp(b, 'created').at)) || 0
 
+// Whether the store has taken a row: it names who wrote it.
+let stamped = (b: Bundle) => !!writer(b) && !!atOf(b)
+
 let dealOf = (b: Bundle): Deal => {
   let d = comp(b, 'deal')
   return {
@@ -122,11 +125,12 @@ export let deals = (net: Net) => {
       ]),
     )
     // A row counts from when the store took it: one this page is still
-    // sending has no place in the order yet.
-    for (let b of r.filter(atOf)) {
+    // sending has only this page's stamp, with nobody's name on it, and no
+    // place in the order yet.
+    for (let b of r.filter(stamped)) {
       mine.get(str(comp(b, 'deal').villager))?.deals.push(dealOf(b))
     }
-    for (let b of h.filter(atOf)) {
+    for (let b of h.filter(stamped)) {
       mine.get(str(comp(b, 'handed').villager))?.hands.push(handOf(b))
     }
     books = new Map(
