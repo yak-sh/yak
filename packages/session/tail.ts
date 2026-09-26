@@ -183,7 +183,7 @@ let settled = async (g: Graph, bundles: Bundle[]): Promise<Bundle[]> => {
 
 /** How far a session has read its log: the lines its `consumed` says. */
 export let consumed = async (g: Graph, session: Eid): Promise<number> => {
-  let [s] = await g.storage.tx((tx) => tx.get([session]))
+  let [s] = await g.get([session])
   return Number(comp(s, 'session')?.consumed ?? 0)
 }
 

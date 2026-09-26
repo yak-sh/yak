@@ -105,7 +105,7 @@ let paced = async <T>(work: () => T | Promise<T>): Promise<T> => {
 // neither held nor deleted.
 let bare = async (eids: Eid[]): Promise<Eid[]> =>
   eids.length
-    ? (await g.storage.tx((tx) => tx.get(eids)))
+    ? (await g.get(eids))
       .filter((r) => r && r[TOMBSTONE] == null && Object.keys(r).length == 1)
       .map((r) => r!.entity.eid)
     : []
@@ -281,12 +281,12 @@ let restore = async (f: Found & { session: Eid }): Promise<number> => {
         n++
       } else if (b.tool && back && !tools.has(b.entity.eid)) {
         tools.add(b.entity.eid)
-        let [row] = await g.storage.tx((tx) => tx.get([b.entity.eid]))
+        let [row] = await g.get([b.entity.eid])
         if (!row?.tool) out.push(b)
       } else if (b.execution && (back || lost.has(b.entity.eid))) {
         // An answer's state, where its call stands (held, or restored on an
         // earlier line): a patch alone would make an entity.
-        let [row] = await g.storage.tx((tx) => tx.get([b.entity.eid]))
+        let [row] = await g.get([b.entity.eid])
         if (row?.call) out.push(b)
       }
     }
@@ -306,7 +306,12 @@ let restore = async (f: Found & { session: Eid }): Promise<number> => {
 
 if (write) {
   console.log('waiting for the @yaks/session and @yaks/spawn leases')
-  let o = { holder: host.me, signal: new AbortController().signal, poll: 100 }
+  let o = {
+    holder: host.me,
+    signal: new AbortController().signal,
+    poll: 100,
+    gone: host.gone,
+  }
   await holding(g, '@yaks/session', o, async () => {
     await holding(
       g,
