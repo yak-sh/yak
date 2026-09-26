@@ -16,6 +16,7 @@ import {
   plus,
   plusPrice,
   seed,
+  sessionAt,
   signIn,
   stripeKey,
   txt,
@@ -603,12 +604,7 @@ Deno.test('space_sell connects an account and hands back one link', async () => 
     assertEquals(checkout.status, 200)
     let url = (await checkout.json()).url as string
     assertStringIncludes(url, 'https://checkout.stripe.com/')
-    let id = /cs_test_[A-Za-z0-9]+/.exec(url)?.[0]
-    assert(id, `no checkout session in ${url}`)
-    let purchase = await charged(
-      key,
-      `/v1/checkout/sessions/${id}?expand[]=line_items`,
-    ) as {
+    let purchase = await sessionAt(k, url, '?expand[]=line_items') as {
       metadata: Record<string, string>
       line_items: { data: { price: { id: string } }[] }
       success_url: string
@@ -647,6 +643,9 @@ Deno.test('space_sell connects an account and hands back one link', async () => 
       }).stripe?.account
     let acct = await seller()
     assert(acct, 'the space holds the account Stripe made')
+    // The sandbox keeps what a test made unless it is deleted: the kernel's
+    // stop deletes it.
+    k.made.add(`/v1/accounts/${acct}`)
     let made = await charged(key, `/v1/accounts/${acct}`) as {
       controller: {
         fees: { payer: string }
@@ -723,8 +722,6 @@ Deno.test('space_sell connects an account and hands back one link', async () => 
       Error,
       'ada39',
     )
-    // The sandbox keeps what a test made unless it is deleted.
-    await charged(key, `/v1/accounts/${acct}`, undefined, undefined, 'DELETE')
   } finally {
     await k.stop()
   }

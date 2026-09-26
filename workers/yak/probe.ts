@@ -73,10 +73,10 @@ export type Person = {
 export type Door = ReturnType<typeof driven>
 
 /** A kernel as a test holds it: its door, the person who owns its meta space
- * (`meta`), what the test bought in the Stripe sandbox, and its stop. */
+ * (`meta`), what the test made in the Stripe sandbox, and its stop. */
 export type Kernel = Door & {
   owner: Person
-  bought: Set<string>
+  made: Set<string>
   stop: () => Promise<void>
 }
 
@@ -92,20 +92,25 @@ let want = (name: string) => {
   return value
 }
 
-// What a test bought in the Stripe sandbox (`subscribed`) goes in `bought`: a
-// subscription left active renews every month, and each renewal is a webhook
-// to staging, so every test stops its kernel in a `finally` and the stop
-// cancels whatever is still live, then `close`s what the kernel holds.
+// What a test makes in the Stripe sandbox goes in `made`, as the object's path
+// (`/v1/customers/cus_…`), the moment the test knows its id: `subscribed` and
+// `sessionAt` put theirs there, and a test puts the connected account
+// `space_sell` made. The sandbox keeps whatever is not deleted — a
+// subscription left active renews every month, each renewal a webhook to
+// staging, and every leftover customer and account is one more row in the
+// dashboard the owner reads — so every test stops its kernel in a `finally`,
+// and the stop deletes each one (a subscription's DELETE is its cancelling),
+// then `close`s what the kernel holds.
 let owning = <K extends Door>(k: K, close = () => Promise.resolve()) => {
-  let bought = new Set<string>()
+  let made = new Set<string>()
   let stop = async () => {
     try {
-      for (let id of bought) await unsubscribed(id)
+      await Promise.all([...made].map(deleted))
     } finally {
       await close()
     }
   }
-  return { ...k, bought, stop }
+  return { ...k, made, stop }
 }
 
 /**
@@ -216,12 +221,13 @@ export let workerd = () =>
     owner: JSON.parse(want('YAK_PROBE_OWNER')) as Person,
   })
 
-let unsubscribed = async (id: string) => {
-  let key = stripeKey()
-  let path = `/v1/subscriptions/${id}`
-  if ((await charged(key, path)).status == 'canceled') return
-  await charged(key, path, undefined, undefined, 'DELETE')
-}
+// One object off the sandbox. Gone already is done: the test deleted it
+// itself, or deleting its customer cancelled a subscription with it, and Stripe
+// answers either as missing (an account it no longer holds, as not ours).
+let deleted = (path: string) =>
+  charged(stripeKey(), path, undefined, undefined, 'DELETE').catch((e) => {
+    if (!/\((resource_missing|account_invalid)\)$/.test(e.message)) throw e
+  })
 
 /**
  * A Worker of a test's own, beside the kernel in the run's workerd
@@ -789,7 +795,7 @@ export let attached = async (
  * subscription comes back, for a test that goes on to cancel it; the kernel
  * cancels it on stop otherwise.
  */
-export let plus = async (k: Pick<Kernel, 'at' | 'bought'>, space: string) => {
+export let plus = async (k: Pick<Kernel, 'at' | 'made'>, space: string) => {
   let sub = await subscribed(k, stripeKey(), { space })
   await delivered(
     k,
@@ -1209,10 +1215,11 @@ export let merchant = async (
  * fresh customer when none is named. It is what a completed checkout leaves:
  * Stripe's checkout page draws its card fields in cross-origin frames behind a
  * captcha, which no test can drive, so the card goes in the way the API puts it.
- * It is bought for kernel `k`, whose stop cancels it if the test did not.
+ * It is made for kernel `k`, whose stop cancels it, and deletes the customer
+ * too when it was made here.
  */
 export let subscribed = async (
-  k: Pick<Kernel, 'bought'>,
+  k: Pick<Kernel, 'made'>,
   key: string,
   metadata: Record<string, string>,
   customer?: string,
@@ -1221,7 +1228,10 @@ export let subscribed = async (
   // probe kernel runs under, so staging, which hears this sandbox's events
   // too, lets the purchase go as another deployment's.
   metadata = { ...metadata, apex: apex() }
-  customer ??= String((await charged(key, '/v1/customers', { metadata })).id)
+  if (!customer) {
+    customer = String((await charged(key, '/v1/customers', { metadata })).id)
+    k.made.add(`/v1/customers/${customer}`)
+  }
   let card = await charged(key, '/v1/payment_methods/pm_card_visa/attach', {
     customer,
   })
@@ -1231,8 +1241,28 @@ export let subscribed = async (
     default_payment_method: String(card.id),
     metadata,
   })
-  k.bought.add(String(sub.id))
+  k.made.add(`/v1/subscriptions/${sub.id}`)
   return sub
+}
+
+/**
+ * The checkout session a door's `url` opened, read back off the sandbox with
+ * `query` (`?expand[]=line_items`). billing.ts mints a space its customer the
+ * first time it opens checkout, so that customer is kernel `k`'s to delete.
+ */
+export let sessionAt = async (
+  k: Pick<Kernel, 'made'>,
+  url: string,
+  query = '',
+) => {
+  let id = /cs_test_[A-Za-z0-9]+/.exec(url)?.[0]
+  if (!id) throw new Error(`no checkout session in ${url}`)
+  let session = await charged(
+    stripeKey(),
+    `/v1/checkout/sessions/${id}${query}`,
+  )
+  if (session.customer) k.made.add(`/v1/customers/${session.customer}`)
+  return session
 }
 
 /**

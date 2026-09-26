@@ -4,11 +4,11 @@
 // another person, and another page, from changing this account.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import {
-  charged,
   client,
   connector,
   kernel,
   meta,
+  sessionAt,
   signIn,
   stripeKey,
 } from './probe.ts'
@@ -212,7 +212,8 @@ Deno.test('the dashboard is at the apex, whatever serves the space', async () =>
 Deno.test(
   'Billing management opens checkout and the customer portal for this space',
   async () => {
-    let key = stripeKey()
+    // Stripe's sandbox, or the sentence saying how to supply it.
+    stripeKey()
     let k = await kernel()
     try {
       let them = await signIn(k)
@@ -234,9 +235,7 @@ Deno.test(
       }
       // Where a purchase started from is where it comes back to, both ways,
       // read back off the session Stripe holds.
-      let id = /cs_test_[A-Za-z0-9]+/.exec(url.checkout)?.[0]
-      assert(id, `no checkout session in ${url.checkout}`)
-      let made = await charged(key, `/v1/checkout/sessions/${id}`)
+      let made = await sessionAt(k, url.checkout)
       assertEquals(made.success_url, `https://yaks.app${path}&paid=1`)
       assertEquals(made.cancel_url, `https://yaks.app${path}&paid=0`)
       // The portal is Stripe's own page, for the customer checkout made.

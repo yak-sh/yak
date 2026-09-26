@@ -54,7 +54,9 @@ import {
   deployed,
   kernel,
   letters,
+  meta,
   num,
+  sessionAt,
   signIn,
   stripeKey,
   subscribed,
@@ -116,7 +118,9 @@ Deno.test(
     // hostname attached for real would be written on the zone that serves
     // yaks.app, and a domain is a third party, not a purchase. Stripe is the
     // one third party this suite talks to for real.
-    let k = LIVE ? deployed(LIVE) : await kernel()
+    // A deployed run has no kernel of its own, so nothing here is bought.
+    let local = LIVE ? undefined : await kernel()
+    let k = local ?? deployed(LIVE)
     // Every space this run made and has not yet erased.
     let spaces: string[] = []
     try {
@@ -461,7 +465,7 @@ Deno.test(
       // runs — a checkout completed with Stripe's test card, the subscription
       // Stripe then holds, the webhook, Plus, and a domain on the far side of
       // the gate that only Plus opens.
-      if (LIVE) {
+      if (!local) {
         assertStringIncludes(
           await refused(tool, 'space_sell', { space: mine }),
           'Plus',
@@ -497,13 +501,11 @@ Deno.test(
         })
         assertEquals(door.status, 200, await door.clone().text())
         let { url } = await door.json() as { url: string }
-        let session = /cs_test_[A-Za-z0-9]+/.exec(url)?.[0] ?? ''
-        assert(session, `no checkout session in ${url}`)
         assertStringIncludes(url, 'https://checkout.stripe.com/')
         // Where a person types the card is Stripe's own page, which no test
         // can drive, so the card goes in the way the API puts it (probe.ts
         // `subscribed`) on the very customer this session was opened for.
-        let held = await charged(key, `/v1/checkout/sessions/${session}`)
+        let held = await sessionAt(k, url)
         let customer = String(held.customer ?? '')
         assert(customer, 'the session names the customer it is for')
         let sub = await subscribed(
@@ -533,10 +535,16 @@ Deno.test(
         let sell = await tool('space_sell', { space: mine })
         let link = /https:\/\/connect\.stripe\.com\/\S+/.exec(sell)?.[0] ?? ''
         assert(link, sell)
-        let account = await charged(key, '/v1/accounts?limit=1') as unknown as {
-          data: { id: string; metadata: Record<string, string> }[]
-        }
-        assertEquals(account.data[0].metadata.slug, mine)
+        // The account is the one the space now holds, and the kernel's stop
+        // deletes it: the sandbox keeps what a test made unless it is.
+        let [row] = await meta(local).query(`id=${eids[mine]}`) as {
+          stripe?: { account: string }
+        }[]
+        let account = row.stripe?.account ?? ''
+        assert(account, 'the space holds the account Stripe made')
+        k.made.add(`/v1/accounts/${account}`)
+        let made = await charged(key, `/v1/accounts/${account}`)
+        assertEquals((made.metadata as Record<string, string>).slug, mine)
         // And the event a connected account's changes arrive on finds this
         // space by that account id. Nobody has been through the identity
         // form, so Stripe says the account cannot take money yet — which is
@@ -548,20 +556,12 @@ Deno.test(
           '/stripe/connect',
           WEBHOOK_SECRET,
           'account.updated',
-          await charged(key, `/v1/accounts/${account.data[0].id}`),
-          account.data[0].id,
+          made,
+          account,
         )
         assert(
           /unchanged|cannot sell/.test(heardIt),
           `the connect door: ${heardIt}`,
-        )
-        // The sandbox keeps what a test made unless it is deleted.
-        await charged(
-          key,
-          `/v1/accounts/${account.data[0].id}`,
-          undefined,
-          undefined,
-          'DELETE',
         )
 
         // A domain is the thing Plus opens, so it is proved on the far side
