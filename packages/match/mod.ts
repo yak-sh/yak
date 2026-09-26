@@ -63,8 +63,17 @@ export {
   type Row,
   rows,
   type Select,
+  type Source,
 } from './match.ts'
-export { type Bundle, type Computed, type Eid, live } from './read.ts'
+export {
+  type Bundle,
+  type Computed,
+  type Eid,
+  type Index,
+  index,
+  keyOf,
+  live,
+} from './read.ts'
 // The value and text rules on their own: the pieces matcher() and filter() are
 // built from, exported for a caller testing one value or one search term by
 // hand.

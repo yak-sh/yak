@@ -284,9 +284,9 @@ export let client = (
             next.length !== value.value.length ||
             next.some((b, i) => {
               let was = value.value[i]
-              // @yaks/ram's get() assembles a new bundle object, but the
-              // component and identity objects inside it keep their
-              // references when they have not changed. So compare those, and
+              // @yaks/ram hands back the same bundle until it changes, and a
+              // transient projection copies only the bundle, keeping the
+              // references of the components inside it. So compare those, and
               // do not notify listeners because another query pinned a row.
               return b !== was && (!server ||
                 Object.keys(b).length !== Object.keys(was).length ||

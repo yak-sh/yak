@@ -158,3 +158,141 @@ export let bundles: Bundle[] = rows.map((b, i) => {
   let entity = { eid: b.entity.eid, num: i + 1 }
   return b.entity.eid == DEAD ? { entity, tombstone: {} } : { ...b, entity }
 })
+
+/**
+ * Every query an evaluator must answer alike over the fixture — one line per
+ * feature of the grammar, and a few lines that combine them.
+ */
+export let QUERIES: string[] = [
+  // equality, any-of, negation, absence, presence
+  '.status=shelved',
+  '.status=shelved,sold',
+  '.status!=sold',
+  '!status',
+  '.status',
+  '.stars=3,5',
+  '.price=12',
+  '.price=7.5',
+  '.price=0',
+  '.price!=12',
+  // ranges and comparisons
+  '.price=0..12',
+  '.price=0...12',
+  '.price>=10',
+  '.price<10',
+  '.stars>3',
+  '.stars<=3',
+  // a tag: a component with no properties, where presence is the whole fact
+  '.signed',
+  '!signed',
+  '.signed~=',
+  // a bare bang completes a component sentence even where a property of the
+  // same name claims the bare name: `.book` is the books, `.book=b1` is
+  // still review.book, and `.review.book` still reaches the property.
+  '.book',
+  '!book',
+  '.review.book',
+  // booleans and enums
+  '.available=1',
+  '.available=0',
+  '.available',
+  // contains
+  '.title~=spring',
+  '.title~=SPRING',
+  '.title~=left hand',
+  '.body~=',
+  // time: a stamp, a day, a phrase, a comparison, an absence
+  '.released=2024-06-15',
+  '.released=today',
+  '.released=today,yesterday',
+  '.released!=today',
+  '.released<2024-01-01',
+  '.released>=2024-06-15',
+  '!released',
+  '.released',
+  '.joined=today',
+  // the kind scope, singular and plural
+  '.kind=book',
+  '.kind=books',
+  '.kind=doc',
+  '.kind=review',
+  '.kind=member',
+  // references, forward and followed
+  '.author=a1',
+  '!author',
+  '.author',
+  '.book=b1',
+  '.book.author.doc.title~=vale',
+  '.book.author.doc.title=Ursula Vale',
+  '.book.author.member',
+  '!book.author.member',
+  // identity: naming entities instead of filtering them — an eid, a list of
+  // them, a spine number, a human id (`B-3` is the entity numbered 3), a mixed
+  // list, and a name nothing wears
+  '.eid=b1',
+  '.eid=b1,b2',
+  '!eid',
+  '.entity.eid=b1',
+  '.num=3',
+  '.num=3,4',
+  '.eid=B-3',
+  '.eid=b1,B-4',
+  '.eid=nosuchentity',
+  // the deleted entity is named but still dead
+  '.eid=r9',
+  // backlinks and reverse hops
+  '.refs=a1',
+  '.refs=b1',
+  '.reviews',
+  '!reviews',
+  '.reviews>=2',
+  '.reviews=1',
+  '.reviews.stars=5',
+  '.reviews.stars>=4',
+  '.books',
+  // bare words
+  'spring',
+  'fables',
+  'narrow',
+  'cat*',
+  '"winter journey"',
+  'nothingatall',
+  // the empty query selects nothing
+  '',
+  // `*` is a projection — every component of every row it selects — so it
+  // filters nothing and the line means what it would without it. Both
+  // evaluators read it off the clause list rather than as a text term, which
+  // is what a `/query` line and a `/ws` subscription's line have in common.
+  '*',
+  '.kind=book&*',
+  '.price<10&*',
+  // ordering
+  '.kind=book&.order=price',
+  '.kind=book&.order=-price',
+  '.kind=book&.order=title',
+  '.kind=book&.order=released',
+  '.kind=book&.order=-released',
+  // windows: newest first when nothing else is asked, and within the asked
+  // order when there is one — `.after` naming the entity to continue past,
+  // wherever it sits in that order.
+  '.kind=book&.limit=2',
+  '.kind=book&.limit=0',
+  '.kind=book&.after=4',
+  '.kind=book&.limit=2&.after=6',
+  '.kind=book&.order=price&.limit=2',
+  '.kind=book&.order=price&.after=5',
+  '.kind=book&.order=price&.limit=2&.after=6',
+  '.kind=book&.order=-price&.limit=2&.after=4',
+  '.kind=book&.order=title&.after=4',
+  '.kind=book&.order=-released&.limit=2&.after=5',
+  // an anchor with no value for the ordered property pages by its num alone
+  '.order=price&.limit=3&.after=2',
+  // an anchor outside the selection still names a place in the order
+  '.kind=book&.order=price&.after=9',
+  // an anchor no entity has restarts from the first page
+  '.kind=book&.order=price&.limit=2&.after=99999',
+  // combinations
+  'spring .price<20',
+  '.kind=book&.available=1&.price<10',
+  '.status=shelved&.reviews>=1',
+]

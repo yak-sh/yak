@@ -134,6 +134,14 @@ Deno.test('a window pages WITHIN the order it was asked for', () => {
   ])
 })
 
+Deno.test('a time phrase answers for the moment each run is asked at', () => {
+  let today = (now: number) =>
+    matcher('.released=today', shop, { now })(bundles).map((b) => b.entity.eid)
+  assertEquals(today(NOW), ['b1'])
+  assertEquals(today(NOW - 864e5), ['b3'])
+  assertEquals(today(NOW), ['b1'])
+})
+
 Deno.test('a deleted entity is never selected', () => {
   assertEquals(sel('.stars=1'), [])
   assertEquals(sel('.stars'), ['r1', 'r2', 'r3'])

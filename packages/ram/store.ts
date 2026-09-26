@@ -5,8 +5,10 @@
 //
 // Reads go through @yaks/match: the same query string @yaks/sql compiles into a
 // SQL statement is evaluated here as a predicate over the bundles the map
-// holds. That is the whole read side; this file only has to pass the candidate
-// set to the matcher.
+// holds. This file hands the matcher its rows the way a database hands a plan
+// its tables: by id, by the component an entity wears, and by the value a
+// property holds, so a query that names a component or asks for a value reads
+// those entities and no others.
 //
 // Writes follow the patch rules every adapter implements — omitted properties
 // untouched, a null property cleared, a null component dropped, a tombstoned
@@ -15,14 +17,22 @@
 // record for every eid the write touches or points at, numbers each new one in
 // the order it was first touched, and returns what it created.
 //
-// A record is never mutated in place: a patch builds the next record and puts
-// it in the map. That is what makes rolling back cheap — an undo log of one
-// reference per entity a transaction touched, replayed backwards, restores the
-// map exactly as it was without copying anything the write did not touch.
+// A record is the bundle a read answers with, and it is never mutated in place:
+// a patch builds the next one and puts it in the map. So a read copies nothing,
+// and rolling back is cheap — an undo log of one reference per entity a
+// transaction touched, replayed backwards, restores the map and its indexes
+// exactly as they were without copying anything the write did not touch.
 
 import type { Bundle, Comp, Eid, Entity, ReadOpts, Row } from '@yaks/graph'
-import { comps, isPromise, tombstoned } from '@yaks/graph'
-import { type Computed, matcher, type Query, rows as answer } from '@yaks/match'
+import { comps, isPromise, TOMBSTONE, tombstoned } from '@yaks/graph'
+import {
+  type Computed,
+  type Index,
+  keyOf,
+  matcher,
+  type Query,
+  rows as answer,
+} from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
 
 export type { Query }
@@ -94,13 +104,25 @@ export type Store = {
   tx: <R>(body: (tx: Tx) => R) => R
 }
 
-// One entity as the map holds it: its identity, the components it has, and
-// whether it has been deleted. A deleted record keeps its identity and nothing
-// else, until `revive` brings it back.
-type Rec = { entity: Entity; comps: Record<string, Comp>; dead?: boolean }
-
-let bundleOf = (r: Rec): Bundle =>
-  r.dead ? tombstoned(r.entity) : { entity: r.entity, ...r.comps }
+// A deleted entity keeps its identity and a tombstone, and nothing else, until
+// `revive` brings it back.
+let buried = (b: Bundle | undefined): boolean => b?.[TOMBSTONE] != null
+// An entity that holds nothing yet: the record a reference made.
+let empty = (b: Bundle): boolean => {
+  for (let k in b) if (k != 'entity') return false
+  return true
+}
+let NONE: ReadonlyMap<Eid, Bundle> = new Map()
+let file = (
+  byKey: Map<string, Map<Eid, Bundle>>,
+  key: string,
+  eid: Eid,
+  b: Bundle,
+) => {
+  let at = byKey.get(key)
+  if (!at) byKey.set(key, at = new Map())
+  at.set(eid, b)
+}
 
 /**
  * A store over a Map of bundles, bound to a vocabulary once. It is the storage
@@ -119,35 +141,98 @@ let bundleOf = (r: Rec): Bundle =>
  * ```
  */
 export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
-  let rows = new Map<Eid, Rec>()
+  // One bundle per entity: the answer a read hands back, built once per write.
+  let rows = new Map<Eid, Bundle>()
   // Compact identity reservations survive payload eviction. They are not query rows.
   let cold = new Map<Eid, Entity>()
+  // What a query reads instead of every row: the entities wearing each
+  // component, and — for each property a query has asked for by value — the
+  // entities by the key their value files under (@yaks/match `keyOf`).
+  let worn = new Map<string, Map<Eid, Bundle>>()
+  let filed = new Map<string, [string, string, Map<string, Map<Eid, Bundle>>]>()
   let next = 1
   // The undo log: for each entity a transaction is about to change, the record
   // it held first. Replayed backwards, it is the rollback.
-  let log: [Eid, Rec | undefined, Entity | undefined][] = []
+  let log: [Eid, Bundle | undefined, Entity | undefined][] = []
   let depth = 0
   let save = (eid: Eid) => log.push([eid, rows.get(eid), cold.get(eid)])
+
+  // One entity's record replaced, or dropped, and every index moved with it.
+  // Every write goes through here, a rollback's included, so an index never
+  // disagrees with the rows.
+  let put = (eid: Eid, b: Bundle | undefined) => {
+    let was = rows.get(eid)
+    if (b) rows.set(eid, b)
+    else rows.delete(eid)
+    if (was) {
+      for (let name in was) {
+        if (name != 'entity' && !(b && name in b)) worn.get(name)?.delete(eid)
+      }
+    }
+    if (b) {
+      for (let name in b) {
+        if (name == 'entity') continue
+        let at = worn.get(name)
+        if (!at) worn.set(name, at = new Map())
+        at.set(eid, b)
+      }
+    }
+    for (let [comp, prop, byKey] of filed.values()) {
+      let from = keyOf((was?.[comp] as Comp | undefined)?.[prop])
+      let to = keyOf((b?.[comp] as Comp | undefined)?.[prop])
+      if (from !== undefined && from !== to) byKey.get(from)?.delete(eid)
+      if (to !== undefined) file(byKey, to, eid, b!)
+    }
+  }
+
+  // The keyed index over one property: filed from the component index the
+  // first time a query asks for it, and kept by `put` from then on.
+  let keys = (comp: string, prop: string): Map<string, Map<Eid, Bundle>> => {
+    let at = `${comp}.${prop}`
+    let held = filed.get(at)
+    if (held) return held[2]
+    let byKey = new Map<string, Map<Eid, Bundle>>()
+    filed.set(at, [comp, prop, byKey])
+    for (let [eid, b] of worn.get(comp) ?? NONE) {
+      let key = keyOf((b[comp] as Comp)[prop])
+      if (key !== undefined) file(byKey, key, eid, b)
+    }
+    return byKey
+  }
+
+  // What one read sees: every row, by id, by component and by value. A fresh
+  // view per read, so what a run keeps against it (a walk's closure) never
+  // outlives the rows it was worked out from.
+  let view = (): Index => {
+    let list: Bundle[] | undefined
+    return {
+      get list() {
+        return list ??= [...rows.values()]
+      },
+      of: (eid) => rows.get(eid),
+      wearing: (comp) => worn.get(comp) ?? NONE,
+      keyed: (comp, prop, key) => keys(comp, prop).get(key) ?? NONE,
+    }
+  }
 
   let isRef = (comp: string, prop: string) =>
     vocab.prop(comp, prop)?.category == 'ref'
 
   // The properties of a patch this vocabulary stores. A component whose patch
   // names none is still a component: its presence is the fact.
-  let stored = (comp: string, patch: Comp): Comp =>
-    Object.fromEntries(
-      Object.entries(patch).filter(([p]) =>
-        vocab.prop(comp, p)?.computed === false
-      ),
-    )
-
-  let all = (): Bundle[] => [...rows.values()].map(bundleOf)
+  let stored = (comp: string, patch: Comp): Comp => {
+    let out: Comp = {}
+    for (let p in patch) {
+      if (vocab.prop(comp, p)?.computed === false) out[p] = patch[p]
+    }
+    return out
+  }
 
   let read = (query: Query, opts: ReadOpts = {}): Bundle[] =>
     matcher(query, vocab, {
       now: opts.now ?? base.now,
       computed: base.computed,
-    })(all())
+    })(view())
 
   // The raw-rows path: one `{ eid }` per match, or an aggregate's rows in the
   // shape @yaks/sql returns, so a caller reads the same shape from either
@@ -156,7 +241,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     answer(query, vocab, {
       now: opts.now ?? base.now,
       computed: base.computed,
-    })(all())
+    })(view())
 
   // The number an identity gets: the one it arrived with when this store
   // mirrors another graph (none until it is told), else the next one this
@@ -170,7 +255,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     if (typeof base.number == 'object') {
       for (let name of base.number.except) {
         for (let b of bundles) {
-          if (rows.get(b.entity.eid)?.comps[name] != null) {
+          if (rows.get(b.entity.eid)?.[name] != null) {
             excluded.add(b.entity.eid)
           }
         }
@@ -180,7 +265,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         let rec = rows.get(eid)
         if (rec && rec.entity.num != null) {
           save(eid)
-          rows.set(eid, { ...rec, entity: { eid } })
+          put(eid, { ...rec, entity: { eid } })
         }
       }
     }
@@ -190,7 +275,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     // it its number.
     let own = new Set(
       bundles.filter((b) =>
-        !rows.get(b.entity.eid)?.dead &&
+        !buried(rows.get(b.entity.eid)) &&
         (comps(b).some(([, c]) => c != null) ||
           base.adopt && b.entity.num !== undefined)
       ).map((b) => b.entity.eid),
@@ -208,17 +293,17 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
           rec.entity.num !== num
         ) {
           save(eid)
-          rows.set(eid, { ...rec, entity: { eid, num } })
+          put(eid, { ...rec, entity: { eid, num } })
         } else if (
           // A record an earlier reference made is numbered when a bundle of
           // its own arrives, if it still carries nothing: an unnumbered entity
           // that carries something was left unnumbered on purpose.
-          !base.adopt && own.has(eid) && counts(eid) && !rec.dead &&
-          rec.entity.num == null && !Object.keys(rec.comps).length
+          !base.adopt && own.has(eid) && counts(eid) && !buried(rec) &&
+          rec.entity.num == null && empty(rec)
         ) {
           save(eid)
           let entity = { ...rec.entity, ...numbered() }
-          rows.set(eid, { ...rec, entity })
+          put(eid, { ...rec, entity })
           born.push(entity)
         }
         return
@@ -229,48 +314,55 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       let entity = reserved
         ? { ...reserved, ...(base.adopt ? numbered(num) : {}) }
         : { eid, ...own.has(eid) && counts(eid) ? numbered(num) : {} }
-      rows.set(eid, { entity, comps: {} })
+      put(eid, { entity })
       if (!reserved) born.push(entity)
     }
     for (let b of bundles) {
-      if (rows.get(b.entity.eid)?.dead) continue
+      if (buried(rows.get(b.entity.eid))) continue
       birth(b.entity.eid, b.entity.num)
       for (let [name, comp] of comps(b)) {
-        for (let [prop, val] of Object.entries(comp ?? {})) {
+        for (let prop in comp) {
+          let val = comp[prop]
           if (val != null && isRef(name, prop)) birth(String(val))
         }
       }
     }
     for (let b of bundles) {
-      let rec = rows.get(b.entity.eid)
+      let eid = b.entity.eid
+      let rec = rows.get(eid)
       let patches = comps(b)
       if (rec && b.entity.archetype !== undefined) {
-        save(b.entity.eid)
-        rec = {
-          ...rec,
-          entity: { ...rec.entity, archetype: b.entity.archetype },
-        }
-        rows.set(b.entity.eid, rec)
+        save(eid)
+        let entity = { ...rec.entity, archetype: b.entity.archetype }
+        put(eid, rec = { ...rec, entity })
       }
-      if (!rec || rec.dead || !patches.length) continue
-      save(b.entity.eid)
-      let held: Record<string, Comp> = { ...rec.comps }
+      if (!rec || buried(rec) || !patches.length) continue
+      save(eid)
+      let held: Bundle = { ...rec }
       for (let [name, comp] of patches) {
         // A null component drops the row; anything else merges in, so an
         // omitted property keeps what it held and a null one clears it.
         if (comp == null) delete held[name]
-        else held[name] = { ...(held[name] ?? {}), ...stored(name, comp) }
+        else {
+          let was = held[name] as Comp | undefined
+          held[name] = { ...was, ...stored(name, comp) }
+        }
       }
-      rows.set(b.entity.eid, { ...rec, comps: held })
+      put(eid, held)
     }
     return born
   }
 
-  let get = (eids: Eid[]): Bundle[] =>
-    eids.flatMap((eid) => {
+  // The records themselves. A record is never mutated once stored, so the one a
+  // read hands back is safe to keep, and costs no copy.
+  let get = (eids: Eid[]): Bundle[] => {
+    let out: Bundle[] = []
+    for (let eid of eids) {
       let rec = rows.get(eid)
-      return rec ? [bundleOf(rec)] : []
-    })
+      if (rec) out.push(rec)
+    }
+    return out
+  }
 
   let tx: Tx = {
     read,
@@ -279,10 +371,10 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     evict: (eids) => {
       for (let eid of eids) {
         let rec = rows.get(eid)
-        if (!rec || rec.dead) continue
+        if (!rec || buried(rec)) continue
         save(eid)
         cold.set(eid, { eid, num: rec.entity.num })
-        rows.delete(eid)
+        put(eid, undefined)
       }
     },
     remove: (entities) => {
@@ -291,15 +383,15 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         if (!entity) continue
         save(eid)
         cold.delete(eid)
-        rows.set(eid, { entity, comps: {}, dead: true })
+        put(eid, tombstoned(entity))
       }
     },
     revive: (eids) => {
       for (let eid of eids) {
         let rec = rows.get(eid)
-        if (!rec?.dead) continue
+        if (!rec || !buried(rec)) continue
         save(eid)
-        rows.set(eid, { entity: rec.entity, comps: {} })
+        put(eid, { entity: rec.entity })
       }
     },
   }
@@ -320,8 +412,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
           let [eid, rec, identity] = log.pop()!
           if (identity) cold.set(eid, identity)
           else cold.delete(eid)
-          if (rec) rows.set(eid, rec)
-          else rows.delete(eid)
+          put(eid, rec)
         }
         next = minted
         depth--

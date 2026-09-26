@@ -2,9 +2,18 @@
 
 An in-memory storage adapter for [@yaks/graph](../graph/README.md). It keeps
 entities in a JavaScript `Map` and evaluates queries with
-[@yaks/match](../match/README.md), without a database or index. Use it for
-tests, browser state, or a local copy of server data. Discarding the store loses
-its contents; persistence must be supplied separately.
+[@yaks/match](../match/README.md), without a database. Use it for tests, browser
+state, a game's world, or a local copy of server data. Discarding the store
+loses its contents; persistence must be supplied separately.
+
+A read reads only what its query can match. The store keeps its entities by
+component, and by value for each text, enum or reference property a query has
+asked for by equality, so `.creature&.health.hp>0` reads the creatures and
+`.carried.by=<player>` reads what that player carries, however large the store
+is. The value index for a property is built the first time a query asks and is
+kept current by every write and rollback after that. A read returns the stored
+bundles themselves, without copying them; a stored bundle is never changed in
+place, so it is safe to keep.
 
 A **bundle** is one entity's components as a JSON object, including its identity
 under `entity`, for example `{ entity: { eid: 'b1' }, book: { pages: 412 } }`. A

@@ -591,7 +591,15 @@ let clauses = (toks: string[], opts: ParseOpts): Clause[] =>
   )
 
 /**
- * A query string to its AST. Whitespace and `&` both separate terms, every term
+ * A query string to its AST, parsed once. The same text asked again returns the
+ * same tree, the way a regular expression is compiled once for its source: an
+ * evaluator keys its own compiled form on that tree (@yaks/match, @yaks/graph),
+ * so a query a page asks every frame is read and planned once, not every frame.
+ * The tree is frozen for that reason — it is shared by every caller that asked
+ * for the same text — and a caller that wants a different query builds a new
+ * tree beside it (the builders in ast.ts), as every compiler here already does.
+ *
+ * Whitespace and `&` both separate terms, every term
  * stands on its own, and a value containing a space is quoted
  * (`.title~="two words"`); unquoted, `.title~=two words` is the filter `two`
  * plus the search term `words`. Filters and text terms mix the way they do in a
@@ -608,6 +616,37 @@ let clauses = (toks: string[], opts: ParseOpts): Clause[] =>
  * graph.
  */
 export let parse = (q: string, opts: ParseOpts = {}): And => {
+  let key = opts.text === false ? `\0${q}` : q
+  let hit = parsed.get(key)
+  if (hit) {
+    // Most recently asked last, so the oldest text is the one evicted.
+    parsed.delete(key)
+    parsed.set(key, hit)
+    return hit
+  }
+  let ast = frozen(fresh(q, opts))
+  parsed.set(key, ast)
+  if (parsed.size > PARSED) parsed.delete(parsed.keys().next().value!)
+  return ast
+}
+
+// The trees already read, by text, oldest first. A page that builds a query
+// from a moving value (a position, a time) makes a new text every time it
+// moves; the bound keeps those from piling up.
+let PARSED = 1024
+let parsed = new Map<string, And>()
+
+// A tree made immutable all the way down, since the cache hands the same one
+// to every caller.
+let frozen = <T>(v: T): T => {
+  if (v && typeof v == 'object' && !Object.isFrozen(v)) {
+    for (let x of Object.values(v)) frozen(x)
+    Object.freeze(v)
+  }
+  return v
+}
+
+let fresh = (q: string, opts: ParseOpts): And => {
   // `|` is OR and binds looser than the AND of adjacent terms: `.a=1 .b=2|.c=3`
   // is (a and b) or c. A parenthesised group is one term, so `.a=1 (.b=2|.c=3)`
   // is a and (b or c). An empty alternative is refused rather than read as

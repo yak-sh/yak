@@ -49,8 +49,26 @@ export type Test = (bundle: Bundle, among: Index) => boolean
  */
 export type Ctx = { v: Vocab; now: number; computed: Computed }
 
+/**
+ * A set every entity a clause can select is inside of: the entities wearing a
+ * component, the ones whose property files under one of some keys, or a list of
+ * ids. A compiled clause states these as it builds its test, from the test
+ * itself, so a store with an index reads one of them rather than scanning
+ * everything — and still runs the test on each, so a need only ever narrows
+ * what is read.
+ */
+export type Need =
+  | { comp: string }
+  | { comp: string; prop: string; keys: string[] }
+  | { eids: string[] }
+
+/** A compiled clause: its test, and the sets its matches must lie inside. */
+export type Arm = { test: Test; needs: Need[] }
+
 let YES: Test = () => true
 let NO: Test = () => false
+let arm = (test: Test, needs: Need[] = []): Arm => ({ test, needs })
+let wearing = (comp: string): Need[] => comp == 'entity' ? [] : [{ comp }]
 
 // A structured value flattened back to the single string ./value.ts re-parses —
 // a list to `a,b`, a range to `lo..hi` (inclusive) or `lo...hi` (exclusive end).
@@ -79,9 +97,26 @@ let opOf = (p: Pred): string =>
     ? '~'
     : p.op
 
+// The keys an equality files under, where a keyed index can answer it: a text,
+// enum or eid property compared to one value or a list of them. `eq` in
+// ./value.ts reads a range before a list and an empty item as absence, and
+// neither files under a key.
+let KEYED = ['text', 'enum', 'eid']
+let keys = (op: string, value: string, tag: string): string[] | null => {
+  if (op != '' || !KEYED.includes(tag) || /\.\./.test(value)) return null
+  let out = value.split(',')
+  return out.every(Boolean) ? [...new Set(out)] : null
+}
+
 // A test over a property read off one entity, or a refusal naming the
-// predicate.
-let scalar = (ctx: Ctx, hop: Hop, p: Pred): (b?: Bundle) => boolean => {
+// predicate. A test that fails on an absent value can only pass on an entity
+// wearing the component, which is its need; an equality a keyed index answers
+// needs those keys too.
+let scalar = (
+  ctx: Ctx,
+  hop: Hop,
+  p: Pred,
+): { hit: (b?: Bundle) => boolean; needs: Need[] } => {
   let read = reader(ctx.v, hop.comp, hop.prop, ctx.computed)
   if (!read) {
     throw new Unsupported(
@@ -100,7 +135,9 @@ let scalar = (ctx: Ctx, hop: Hop, p: Pred): (b?: Bundle) => boolean => {
       BY,
     )
   }
-  let hit = check(opOf(p), flat(p.value), read.tag, ctx.now)
+  let op = opOf(p)
+  let value = flat(p.value)
+  let hit = check(op, value, read.tag, ctx.now)
   if (!hit) {
     throw new Unsupported(
       'this predicate',
@@ -108,19 +145,28 @@ let scalar = (ctx: Ctx, hop: Hop, p: Pred): (b?: Bundle) => boolean => {
       BY,
     )
   }
-  return (b) => hit(b ? read.read(b) : null)
+  let needs: Need[] = []
+  if (read.bound && !hit(null)) {
+    needs.push({ comp: hop.comp })
+    let ks = read.stored && keys(op, value, read.tag)
+    if (ks) needs.push({ comp: hop.comp, prop: hop.prop, keys: ks })
+  }
+  return { hit: (b) => hit(b ? read.read(b) : null), needs }
 }
 
 // A single-hop predicate: a direct property, or a test for the component itself
 // (an empty leaf prop, which is the presence form). `.review` and `.review~=`
 // ask for entities that have the component, everything else for those that do
 // not.
-let single = (ctx: Ctx, hop: Hop, p: Pred): Test => {
+let single = (ctx: Ctx, hop: Hop, p: Pred): Arm => {
   let op = opOf(p)
-  if (op == 'want') return YES // a projection request, not a filter
+  if (op == 'want') return arm(YES) // a projection request, not a filter
   if (!hop.prop) {
     let present = op == '~' || op == EXISTS
-    return (b) => wears(b, hop.comp) == present
+    return arm(
+      (b) => wears(b, hop.comp) == present,
+      present ? wearing(hop.comp) : [],
+    )
   }
   // On the identity component, `=` names entities instead of comparing a
   // property, so it is a set lookup — the same operand list @yaks/sql compiles
@@ -130,13 +176,16 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Test => {
     if (set) {
       let eids = new Set(set.eids)
       let nums = new Set(set.nums)
-      return (b) =>
-        eids.has(b.entity.eid) ||
-        (b.entity.num != null && nums.has(b.entity.num))
+      return arm(
+        (b) =>
+          eids.has(b.entity.eid) ||
+          (b.entity.num != null && nums.has(b.entity.num)),
+        nums.size ? [] : [{ eids: [...eids] }],
+      )
     }
   }
-  let hit = scalar(ctx, hop, p)
-  return (b) => hit(b)
+  let { hit, needs } = scalar(ctx, hop, p)
+  return arm((b) => hit(b), needs)
 }
 
 let isRef = (v: Vocab, hop: Hop) =>
@@ -147,9 +196,9 @@ let isRef = (v: Vocab, hop: Hop) =>
 // but the last must be a reference, and every step is looked up in the bundle
 // array — an entity the array does not hold reads as an absent value, exactly
 // as a missing row does.
-let path = (ctx: Ctx, hops: Hop[], p: Pred): Test => {
+let path = (ctx: Ctx, hops: Hop[], p: Pred): Arm => {
   let op = opOf(p)
-  if (op == 'want') return YES
+  if (op == 'want') return arm(YES)
   let root = hops[0]
   for (let h of hops.slice(0, -1)) {
     if (!isRef(ctx.v, h)) {
@@ -173,12 +222,12 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Test => {
   // The leaf is a component rather than a property: does the target have it?
   if (!leaf.prop) {
     let present = op == '~' || op == EXISTS
-    return (b, among) => {
+    return arm((b, among) => {
       let t = follow(b, among)
       return (!!t && wears(t, leaf.comp)) == present
-    }
+    }, present ? wearing(root.comp) : [])
   }
-  let hit = scalar(ctx, leaf, p)
+  let { hit } = scalar(ctx, leaf, p)
   // For the operators only a present value can satisfy, the entity must also
   // have the path's root component. The absent forms skip that check on
   // purpose, so `!maker.title` selects rows with no maker as well as rows
@@ -186,13 +235,16 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Test => {
   // way (bind.ts, `needsRoot`).
   let rooted = op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
     ((op == '' || op == '~') && flat(p.value) != '')
-  return (b, among) => (!rooted || wears(b, root.comp)) && hit(follow(b, among))
+  return arm(
+    (b, among) => (!rooted || wears(b, root.comp)) && hit(follow(b, among)),
+    rooted ? wearing(root.comp) : [],
+  )
 }
 
 // `.kind=K`: the entity has component K and none of the kinds ordered before it
 // — that is, K is the most specific kind present. A plural folds to the
 // singular (`.kind=reviews` reads as `.kind=review`).
-let kindScope = (ctx: Ctx, value: string): Test => {
+let kindScope = (ctx: Ctx, value: string): Arm => {
   let kinds = ctx.v.kinds
   let k = kinds.includes(value)
     ? value
@@ -201,7 +253,10 @@ let kindScope = (ctx: Ctx, value: string): Test => {
     : null
   if (!k) throw new Unsupported('.kind', `${value} names no kind`, BY)
   let earlier = kinds.slice(0, kinds.indexOf(k))
-  return (b) => wears(b, k) && earlier.every((e) => !wears(b, e))
+  return arm(
+    (b) => wears(b, k) && earlier.every((e) => !wears(b, e)),
+    wearing(k),
+  )
 }
 
 // `.refs=X`: the backlinks of X — every entity holding a reference to it, over
@@ -358,8 +413,30 @@ let counted = (n: number, op: string, m: number): boolean =>
 // matches. A child predicate goes through the same clause compiler, over the
 // child bundle, so anything refused there refuses the whole hop.
 let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Test => {
-  let kids = (b: Bundle, among: Index): Bundle[] =>
-    among.list.filter((k) => comp(k, a.comp)?.[a.prop] === b.entity.eid)
+  // The children of one entity: from the source's keyed index where it keeps
+  // one, else from one pass over the bundles per run, grouped by the entity
+  // they point at — never a scan per entity tested.
+  let grouped = new WeakMap<Index, Map<string, Bundle[]>>()
+  let points = (k: Bundle, eid: string) => comp(k, a.comp)?.[a.prop] === eid
+  let kids = (b: Bundle, among: Index): Bundle[] => {
+    let eid = b.entity.eid
+    if (among.keyed) {
+      return [...among.keyed(a.comp, a.prop, eid).values()]
+        .filter((k) => points(k, eid))
+    }
+    let by = grouped.get(among)
+    if (!by) {
+      grouped.set(among, by = new Map())
+      for (let k of among.list) {
+        let to = comp(k, a.comp)?.[a.prop]
+        if (typeof to != 'string') continue
+        let at = by.get(to)
+        if (!at) by.set(to, at = [])
+        at.push(k)
+      }
+    }
+    return by.get(eid) ?? []
+  }
   let rest = p.path.slice(1)
   let value = flat(p.value)
   if (!rest.length && !p.where) {
@@ -415,24 +492,34 @@ let words = (ctx: Ctx, value: string): Test => {
     })
 }
 
+// A conjunction as one test: a loop rather than `every`, since it runs once
+// per candidate, and the sets its matches lie inside are every clause's, since
+// each clause has to hold.
+let all = (arms: Arm[]): Arm => {
+  let ts = arms.map((a) => a.test)
+  let n = ts.length
+  return arm((b, among) => {
+    for (let i = 0; i < n; i++) if (!ts[i](b, among)) return false
+    return true
+  }, arms.flatMap((a) => a.needs))
+}
+
 /**
- * Compile one filter clause into a test. Directives are read off the query
- * before this runs; anything left that this package cannot answer exactly
- * throws {@link Unsupported} here, at compile time.
+ * Compile one filter clause into a test and the sets its matches lie inside.
+ * Directives are read off the query before this runs; anything left that this
+ * package cannot answer exactly throws {@link Unsupported} here, at compile
+ * time.
  */
-export let clause = (ctx: Ctx, c: Clause): Test => {
-  if (c.kind == 'never') return NO
-  if (c.kind == 'text') return words(ctx, c.value)
-  if (c.kind == 'and') {
-    let ts = c.clauses.map((x) => clause(ctx, x))
-    return (b, among) => ts.every((t) => t(b, among))
-  }
+export let compile = (ctx: Ctx, c: Clause): Arm => {
+  if (c.kind == 'never') return arm(NO, [{ eids: [] }])
+  if (c.kind == 'text') return arm(words(ctx, c.value))
+  if (c.kind == 'and') return all(c.clauses.map((x) => compile(ctx, x)))
   if (c.kind == 'or') {
     let ts = c.clauses.map((x) => clause(ctx, x))
-    return (b, among) => ts.some((t) => t(b, among))
+    return arm((b, among) => ts.some((t) => t(b, among)))
   }
-  if (c.kind == 'refs') return refs(ctx, c)
-  if (c.kind == 'walk') return walk(ctx, c)
+  if (c.kind == 'refs') return arm(refs(ctx, c))
+  if (c.kind == 'walk') return arm(walk(ctx, c))
   if (c.kind == 'pred') {
     if (c.path[0] == 'kind' && c.path.length == 1) {
       return kindScope(ctx, flat(c.value))
@@ -441,7 +528,7 @@ export let clause = (ctx: Ctx, c: Clause): Test => {
     // far side of a reference; anything else is resolved forward through the
     // vocabulary.
     let assoc = ctx.v.assoc(c.path[0])
-    if (assoc) return reverse(ctx, c.path[0], assoc, c)
+    if (assoc) return arm(reverse(ctx, c.path[0], assoc, c))
     if (c.not || c.where) {
       throw new Unsupported('a reverse association', c.path.join('.'), BY)
     }
@@ -455,3 +542,6 @@ export let clause = (ctx: Ctx, c: Clause): Test => {
   }
   throw new Unsupported(`the ${(c as Clause).kind} directive`, '', BY)
 }
+
+/** One filter clause compiled to its test alone. */
+export let clause = (ctx: Ctx, c: Clause): Test => compile(ctx, c).test

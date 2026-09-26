@@ -43,20 +43,62 @@ export type Bundle = {
     | undefined
 }
 
-/** The bundles one run is answered from, indexed by entity id. */
+/**
+ * The bundles one run is answered from. `list` and `of` are every source's: a
+ * scan, and a lookup by id, which is how a reference is followed. A store that
+ * keeps its entities apart by component or by value offers `wearing` and
+ * `keyed` as well, and a query that can only match entities wearing a component
+ * (or holding a value) reads those instead of scanning `list` — the way a
+ * database reads an index instead of the table. Either way every candidate is
+ * still tested, so an index only decides how much is read, never what matches.
+ */
 export type Index = {
   /** every bundle, in the order given */
-  list: readonly Bundle[]
+  readonly list: readonly Bundle[]
   /** the bundle with that id, or `undefined` when there is no such entity */
   of: (eid: Eid) => Bundle | undefined
+  /** the bundles wearing this component, by id */
+  wearing?: (comp: string) => ReadonlyMap<Eid, Bundle>
+  /** the bundles whose `comp.prop` files under this key ({@link keyOf}), by
+   * id */
+  keyed?: (comp: string, prop: string, key: string) => ReadonlyMap<Eid, Bundle>
 }
 
-/** Index an array of bundles by entity id. The given order is kept. */
+/**
+ * Index an array of bundles by entity id. The given order is kept, and nothing
+ * is built until something asks: a query that never follows a reference never
+ * pays for the map.
+ */
 export let index = (bundles: readonly Bundle[]): Index => {
-  let by = new Map<Eid, Bundle>()
-  for (let b of bundles) by.set(b.entity.eid, b)
-  return { list: bundles, of: (eid) => by.get(eid) }
+  let by: Map<Eid, Bundle> | undefined
+  return {
+    list: bundles,
+    of: (eid) => {
+      if (!by) {
+        by = new Map()
+        for (let b of bundles) by.set(b.entity.eid, b)
+      }
+      return by.get(eid)
+    },
+  }
 }
+
+/**
+ * The key a property's value is filed under in a {@link Index.keyed} index:
+ * the value as storage reads it, as text. Equality on a text, enum or eid
+ * property is exactly "files under the operand", so those are the lookups a
+ * query hands to a keyed index. An absent value files under nothing.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ *
+ * assertEquals(keyOf('open'), 'open')
+ * assertEquals(keyOf(true), '1')
+ * assertEquals(keyOf(null), undefined)
+ * ```
+ */
+export let keyOf = (v: unknown): string | undefined =>
+  v == null ? undefined : String(held(v))
 
 /**
  * One component of a bundle, or `undefined` when the entity does not have it.
@@ -89,9 +131,17 @@ export let live = (b: Bundle): boolean => !b.$delete && !wears(b, 'tombstone')
 let held = (v: unknown): unknown =>
   typeof v == 'boolean' ? Number(v) : v ?? null
 
-/** How to read one property out of a bundle, and which type a value compares
- * against it as. */
-export type Read = { read: (b: Bundle) => unknown; tag: Tag }
+/** How to read one property out of a bundle, which type a value compares
+ * against it as, whether it reads as absent on every entity that does not wear
+ * the component (not so for a computed property, whose rule may answer from
+ * other components), and whether it is a value the component stores — what a
+ * {@link Index.keyed} index files. */
+export type Read = {
+  read: (b: Bundle) => unknown
+  tag: Tag
+  bound: boolean
+  stored: boolean
+}
 
 /**
  * The computed-property registry, keyed `comp.prop`: the function that reads a
@@ -119,10 +169,17 @@ export let reader = (
     return {
       read: (b) => held((b.entity as Record<string, unknown>)[prop]),
       tag: 'text',
+      bound: false,
+      stored: false,
     }
   }
   if (prop == 'eid') {
-    return { read: (b) => wears(b, name) ? b.entity.eid : null, tag: 'eid' }
+    return {
+      read: (b) => wears(b, name) ? b.entity.eid : null,
+      tag: 'eid',
+      bound: true,
+      stored: false,
+    }
   }
   let def = v.prop(name, prop)
   if (!def) return null
@@ -130,7 +187,19 @@ export let reader = (
   // binder consults its `derived` map in. The type stays the vocabulary's: the
   // vocabulary declares the property, the caller only supplies the read.
   let own = computed[`${name}.${prop}`]
-  if (own) return { read: (b) => held(own(b)), tag: tagOf(def) }
+  if (own) {
+    return {
+      read: (b) => held(own(b)),
+      tag: tagOf(def),
+      bound: false,
+      stored: false,
+    }
+  }
   if (def.computed) return null
-  return { read: (b) => held(comp(b, name)?.[prop]), tag: tagOf(def) }
+  return {
+    read: (b) => held(comp(b, name)?.[prop]),
+    tag: tagOf(def),
+    bound: true,
+    stored: true,
+  }
 }

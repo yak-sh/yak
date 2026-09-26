@@ -209,6 +209,20 @@ Deno.test('| is OR, looser than the AND of adjacent terms; ( ) groups', () => {
   assertThrows(() => parse('(.a=1'), Error, 'unclosed group')
 })
 
+// A compiler keys its compiled form on the tree, so the same text is read once
+// into one tree, and nobody holding it can change it under the others.
+Deno.test('the same text reads to one tree that no caller can change', () => {
+  let tree = parse('.status=open .priority<=1')
+  assertEquals(parse('.status=open .priority<=1') === tree, true)
+  assertThrows(() => tree.clauses.push(never()), TypeError)
+  assertThrows(() => {
+    ;(tree.clauses[0] as { op: string }).op = '!='
+  }, TypeError)
+  // a text read as rules is a different reading of the same text
+  assertThrows(() => parse('open', { text: false }), SyntaxError)
+  assertEquals(parse('open'), and(text('open')))
+})
+
 Deno.test('empty query is never', () => {
   assertEquals(parse(''), and(never()))
   assertEquals(parse('   '), and(never()))

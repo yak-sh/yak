@@ -9,7 +9,16 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Storage } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
+import { matcher } from '@yaks/match'
 import { shop } from '../sqlite/testing.ts'
+import {
+  bundles,
+  corpus,
+  DEAD,
+  NOW,
+  QUERIES,
+  shop as books,
+} from '../match/testing.ts'
 import { ram, type RamOpts, type Store } from './mod.ts'
 
 // The shop numbers: its entities are things a person points at by number, and
@@ -108,6 +117,44 @@ Deno.test('a read is the query grammar, answered from the map', () => {
   ])
   assertEquals(s.rows('.price<10'), [{ eid: 'p2' }])
   assertEquals(s.rows('.price<10&.count'), [{ value: '', n: 1 }])
+})
+
+// A read through the store's indexes selects what a scan of the same bundles
+// selects, for every line of the grammar the in-memory evaluator is held to
+// (@yaks/match's parity with @yaks/sqlite).
+Deno.test('an indexed read answers every query the way a scan does', () => {
+  let s = ram(books, { number: true, now: NOW })
+  s.tx((tx) => tx.patch(corpus))
+  s.tx((tx) => tx.remove([{ eid: DEAD }]))
+  let ids = (bs: Bundle[], q: string) => {
+    let out = bs.map((b) => b.entity.eid)
+    return /\.order=|\.limit=|\.after=/.test(q) ? out : out.sort()
+  }
+  for (let q of QUERIES) {
+    let scan = matcher(q, books, { now: NOW })(bundles)
+    assertEquals(ids(s.read(q), q), ids(scan, q), q)
+  }
+})
+
+Deno.test('a read by value follows the value through writes and a rollback', () => {
+  let s = shopRam()
+  let live = () => s.read('.status=live').map((b) => b.entity.eid)
+  put(s, { entity: { eid: 'p1' }, product: { status: 'live' } })
+  assertEquals(live(), ['p1'])
+  put(s, { entity: { eid: 'p2' }, product: { status: 'live' } })
+  put(s, { entity: { eid: 'p1' }, product: { status: 'sold' } })
+  assertEquals(live(), ['p2'])
+  assertThrows(() =>
+    s.tx((tx) => {
+      tx.patch([{ entity: { eid: 'p1' }, product: { status: 'live' } }])
+      tx.patch([{ entity: { eid: 'p2' }, product: null }])
+      throw new Error('refused')
+    })
+  )
+  assertEquals(live(), ['p2'])
+  s.tx((tx) => tx.remove([{ eid: 'p2' }]))
+  assertEquals(live(), [])
+  assertEquals(s.read('.status=sold').map((b) => b.entity.eid), ['p1'])
 })
 
 Deno.test('a throwing transaction leaves the map exactly as it was', () => {

@@ -26,10 +26,11 @@
  * exactly as it was.
  *
  * ## What it is not
- * It is not a database: there is no persistence, no process boundary, and no
- * index. A query it cannot answer exactly — an aggregate, a nearest-neighbour
- * search, a graph walk — throws @yaks/match's `Unsupported`, the same error
- * @yaks/sql throws.
+ * It is not a database: there is no persistence and no process boundary. Its
+ * indexes (by component, and by value where a query asks for one) decide how
+ * much a read looks at, never what it answers. A query it cannot answer
+ * exactly — a nearest-neighbour search, an edge listing — throws @yaks/match's
+ * `Unsupported`, the same error @yaks/sql throws.
  *
  * @module
  */

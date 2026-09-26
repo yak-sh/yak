@@ -114,6 +114,23 @@ Both functions accept a query string or an AST from `@yaks/query`, followed by
 the vocabulary and an optional options object. They return complete input
 bundles: `.fields`, `*` and optional-property predicates do not trim the result.
 
+## Compiled once, read through an index
+
+A query compiles once, the way a regular expression does: `@yaks/query` returns
+the same tree for the same text, and the compiled test is kept against that
+tree, the vocabulary and the `computed` rules. A query whose answer depends on
+when it is asked (`.released=today`) is compiled again for each moment.
+
+A compiled query also knows the sets its matches must lie inside: the entities
+wearing a component it requires, the entities whose text, enum or reference
+property equals a value it names, or the ids it lists. A caller that keeps its
+bundles indexed passes an `Index` in place of the array: `list` and `of(eid)`,
+plus `wearing(comp)` and `keyed(comp, prop, key)` (a value's key is `keyOf`).
+The run then reads the smallest of those sets instead of every bundle, and still
+tests each candidate, so the index decides how much is read and never what
+matches. [@yaks/ram](../ram/README.md) is such a caller. Without an ordering,
+the order of the result is the order the source yields.
+
 Both functions take an options object. `opts.now` is the millisecond timestamp
 that relative time phrases (`today`, `1 hour ago`) resolve against; it defaults
 to `Date.now()`. Pass the same value to @yaks/sql and both sides select the same
