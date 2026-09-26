@@ -146,7 +146,7 @@ names the command and its arguments; a `wake` on that same row records when:
 
     await apply({
       entity: { eid: '$monday' },
-      call: { to: digest.entity.eid, args: '{"list":"weekly"}' },
+      call: { to: digest.entity.eid, args: { list: 'weekly' } },
       wake: { at: '2026-09-21T09:00:00Z', every: '@weekly' },
     })
 
@@ -179,7 +179,7 @@ carries the request and the cadence together:
     await apply({
       entity: { eid: '$world' },
       world: { name: 'Eldermoor' },
-      call: { to: advance.entity.eid, args: '{}' },
+      call: { to: advance.entity.eid, args: {} },
       wake: { at: new Date().toISOString(), every: '5m' },
     })
 
@@ -216,7 +216,7 @@ something holds: conditions in order, each a query and the cadence it asks for.
     await apply({
       entity: { eid: '$world' },
       world: { name: 'Mossvale' },
-      call: { to: advance.entity.eid, args: '{}' },
+      call: { to: advance.entity.eid, args: {} },
       wake: { while: [
         { match: '.player.seen>=1-minute-ago', every: '30s' },
         { match: '.player.seen>=10-minutes-ago', every: '5m' },
