@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mossvale",
-  "description": "A voxel vale to adventure in together. Players, creatures, loot and quests are entities in this app's store; where each player stands is relayed between them and kept by nobody.",
+  "description": "A voxel world to adventure in together. What a player is and has done is kept in this app's store (player, slain, item, used, journal); what moves (where each player and creature is, how they move, how they fare in a fight) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
   "$defs": {
     "player": {
       "component": true,
       "type": "object",
-      "description": "Someone who walks the vale: the name over their head, and the colours they wear. Everything they have done is in rows of its own (slain, item, journal), so a visitor who is not signed in, who can only add rows, still keeps it.",
+      "description": "A hero: the name over their head, and the colours they wear. A hero belongs to the person who made it, as the row's created stamp says, so they find it again on any device; a hero made while signed out lasts as long as its tab. Everything they have done is in rows of its own (slain, item, used, journal), so a visitor who can only add rows still keeps it.",
       "properties": {
         "name": {
           "type": "string",
@@ -26,118 +26,98 @@
         }
       }
     },
-    "pose": {
+    "creature": {
+      "component": true,
+      "type": "object",
+      "description": "A creature, as the store knows it: which kind. Where it lives comes from its level, and how hurt it is from the players' fights; the row is what its position and its falls attach to, and a page adds it the first time it meets the creature.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "Which creature, by the app's list of kinds."
+        }
+      }
+    },
+    "position": {
       "component": true,
       "type": "object",
       "sync": "peers",
       "durable": "connection",
-      "description": "Where a player stands this moment and what they are doing, relayed to everyone in the vale and kept by nobody: it goes when their connection does. It carries their fight too, the damage they have dealt the creature they are fighting in its current life.",
+      "description": "Where something is this moment: its level, and where in it, in metres. Relayed to everyone in the level and kept by nobody, so it goes when the connection that wrote it does. A creature that is only wandering has none: its wandering says where it is.",
       "properties": {
+        "level": {
+          "type": "string",
+          "description": "Which level, by the app's list of levels."
+        },
         "x": { "type": "number" },
         "y": { "type": "number" },
-        "z": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+    "motion": {
+      "component": true,
+      "type": "object",
+      "sync": "peers",
+      "durable": "connection",
+      "description": "How something is moving this moment: which way it faces, its gait, and how fast it is rising or falling.",
+      "properties": {
         "yaw": {
           "type": "number",
-          "description": "Which way they face, in radians."
+          "description": "Which way it faces, in radians."
         },
         "gait": {
           "type": "string",
-          "enum": ["idle", "walk", "run", "jump", "down"],
-          "description": "How they are moving."
+          "enum": ["idle", "walk", "run", "jump", "roll", "down"],
+          "description": "How it is moving; a player who fainted is down."
+        },
+        "vy": {
+          "type": "number",
+          "description": "How fast it is rising, in metres a second."
+        }
+      }
+    },
+    "vitals": {
+      "component": true,
+      "type": "object",
+      "sync": "peers",
+      "durable": "connection",
+      "description": "How a player fares, for the plate over their head: their health, the most they can have, and their level of experience.",
+      "properties": {
+        "hp": { "type": "number" },
+        "max": { "type": "number" },
+        "lvl": { "type": "number" }
+      }
+    },
+    "fight": {
+      "component": true,
+      "type": "object",
+      "sync": "peers",
+      "durable": "connection",
+      "description": "A player's fight: the creature, which of its lives, the damage they have dealt it in that life, and how many blows they have swung. A creature's health is its most less what every fight says was dealt it.",
+      "properties": {
+        "foe": { "type": "string", "description": "The creature." },
+        "life": {
+          "type": "number",
+          "description": "Which life of the creature: when it last fell, in ms."
+        },
+        "dmg": {
+          "type": "number",
+          "description": "The damage dealt it in this life."
         },
         "swing": {
           "type": "number",
           "description": "Counts their blows, so a page sees each one."
-        },
-        "hp": { "type": "number" },
-        "max": { "type": "number" },
-        "lvl": { "type": "number" },
-        "foe": {
-          "type": "string",
-          "description": "The creature they are fighting."
-        },
-        "dmg": {
-          "type": "number",
-          "description": "The damage they have dealt it in this life."
-        },
-        "life": {
-          "type": "number",
-          "description": "Which life of the creature: when it last fell, in ms."
         }
       }
     },
-    "body": {
+    "hunt": {
       "component": true,
       "type": "object",
-      "sync": "none",
+      "sync": "peers",
       "durable": "connection",
-      "description": "A mover as this page simulates it, every frame: the player's own hero, and each creature near them. Never leaves the page.",
+      "description": "A creature on the hunt, as the page moving it says: the player it is after, and when it last bit them. The bitten player's page takes the bite.",
       "properties": {
-        "x": { "type": "number" },
-        "y": { "type": "number" },
-        "z": { "type": "number" },
-        "vy": { "type": "number" },
-        "yaw": { "type": "number" },
-        "speed": { "type": "number" },
-        "gait": { "type": "string" },
-        "hunts": {
-          "type": "string",
-          "description": "The player a creature is after."
-        },
-        "bite": {
-          "type": "number",
-          "description": "When a creature last bit, in ms."
-        }
-      }
-    },
-    "creature": {
-      "component": true,
-      "type": "object",
-      "description": "A creature of the vale and the place it roams from. How hurt it is lives in the players' poses; each time it falls, a slain row says so.",
-      "properties": {
-        "kind": {
-          "type": "string",
-          "enum": ["slime", "boar", "crag", "thornback"]
-        },
-        "x": { "type": "number", "description": "Its home, in metres." },
-        "z": { "type": "number", "description": "Its home, in metres." },
-        "roam": {
-          "type": "number",
-          "description": "How far from home it wanders, in metres."
-        }
-      }
-    },
-    "npc": {
-      "component": true,
-      "type": "object",
-      "description": "Someone who lives in the vale and gives out its quests.",
-      "properties": {
-        "name": { "type": "string" },
-        "x": { "type": "number" },
-        "z": { "type": "number" },
-        "greets": {
-          "type": "string",
-          "description": "What they say when there is nothing to ask of you."
-        }
-      }
-    },
-    "quest": {
-      "component": true,
-      "type": "object",
-      "description": "Something the Elder asks of a player. Its doc holds the title and the words; quests are offered in step order, each once the one before is done.",
-      "properties": {
-        "step": { "type": "integer" },
-        "goal": { "type": "string", "enum": ["slay", "gather"] },
-        "target": {
-          "type": "string",
-          "description": "A creature kind to slay, or an item kind to gather."
-        },
-        "count": { "type": "integer" },
-        "xp": { "type": "integer" },
-        "gift": {
-          "type": "string",
-          "description": "An item kind given on completion."
-        }
+        "player": { "type": "string" },
+        "bite": { "type": "number", "description": "When, in ms." }
       }
     },
     "slain": {
@@ -170,7 +150,7 @@
     "used": {
       "component": true,
       "type": "object",
-      "description": "An item spent: a tonic drunk, jelly handed to the Elder.",
+      "description": "An item spent: a tonic drunk, jelly handed over for a quest.",
       "properties": {
         "item": { "type": "string" },
         "by": { "type": "string", "index": true },
@@ -183,7 +163,10 @@
       "description": "A step in a player's quest: taken, then done.",
       "properties": {
         "player": { "type": "string", "index": true },
-        "quest": { "type": "string" },
+        "quest": {
+          "type": "string",
+          "description": "The quest, by the app's list of quests."
+        },
         "step": { "type": "string", "enum": ["taken", "done"] },
         "at": { "type": "number" }
       }
@@ -193,13 +176,10 @@
       "type": "object",
       "sync": "none",
       "durable": "connection",
-      "description": "Loot lying on the ground for this player alone, until they walk over it. Never leaves the page: picking it up writes an item.",
+      "description": "Loot lying on the ground for this player alone, until they walk over it; where it lies is its position. Never leaves the page: picking it up writes an item.",
       "properties": {
         "kind": { "type": "string" },
         "n": { "type": "integer" },
-        "x": { "type": "number" },
-        "y": { "type": "number" },
-        "z": { "type": "number" },
         "at": { "type": "number" }
       }
     }

@@ -29,6 +29,27 @@ export let hashOf = (s: string): number => {
   return h >>> 0
 }
 
+/** A UUID named by a string: the same wherever it is made from the same name,
+ * for the things a level grows, which every page names alike.
+ *
+ * ```ts
+ * import { assertEquals, assertMatch, assertNotEquals } from '@std/assert'
+ * assertEquals(uuidOf('mossvale/slime/1'), uuidOf('mossvale/slime/1'))
+ * assertNotEquals(uuidOf('mossvale/slime/1'), uuidOf('mossvale/slime/2'))
+ * assertMatch(uuidOf('x'), /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+ * ```
+ */
+export let uuidOf = (name: string): string => {
+  let r = stream(hashOf(name))
+  let b = Array.from({ length: 16 }, () => Math.floor(r() * 256))
+  b[6] = (b[6] & 0x0f) | 0x80
+  b[8] = (b[8] & 0x3f) | 0x80
+  let h = b.map((n) => n.toString(16).padStart(2, '0')).join('')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${
+    h.slice(16, 20)
+  }-${h.slice(20)}`
+}
+
 /** A seeded stream of numbers in [0, 1) (mulberry32). */
 export let stream = (seed: number) => () => {
   seed = (seed + 0x6d2b79f5) | 0

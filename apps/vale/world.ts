@@ -1,19 +1,20 @@
-// The vale as a three.js scene: the ground and everything standing on it in
-// chunks, the lake, the sky, and the light that moves across it through the
-// day. Built once; `tick` moves the sun and the water.
+// A level as a three.js scene: the ground and everything standing on it in
+// chunks, each structure on a foundation down to the ground, the water, the
+// sky, the village fire and lamps, the glow in each portal, and the light that
+// moves across it all through the day. Built once per level; `tick` moves the
+// sun, the water and the flames.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { CHUNK, groundChunk } from './ground.ts'
-import { out } from './mesh.ts'
+import { cuboid, out } from './mesh.ts'
 import { model, place } from './props.ts'
 import { lerp, smooth } from './rand.ts'
 import { geometry, soft } from './soft.ts'
 import {
+  foundation,
   groundAt,
   N,
-  PLACES,
   type Prop,
-  spot,
   V,
   type Vale,
   WATER,
@@ -29,10 +30,14 @@ export type World = {
   /** 0 at midnight, 0.5 at noon */
   day: number
   tick: (t: number, dt: number) => void
+  /** let the GPU go of everything this level drew */
+  dispose: () => void
 }
 
 // What is too small to matter far off, or to cast a shadow.
 let DECOR = new Set(['flower', 'tuft', 'mushroom'])
+// The stone a structure's foundation is laid in.
+let FOUND = 0x8e8b82
 // How near a chunk's middle must be for its flowers and grass to be drawn.
 let NEAR = 52
 
@@ -190,6 +195,8 @@ export let world = (v: Vale): World => {
           h * V,
           (p.k + 0.5) * V,
         ])
+        let base = foundation(v, p)
+        if (base) cuboid(o, base[0], base[1], FOUND, 0.25, 0.04)
       }
       let mesh = new THREE.Mesh(geometry(o), ground)
       mesh.castShadow = true
@@ -264,14 +271,17 @@ export let world = (v: Vale): World => {
   cam.far = 160
   scene.add(sun, sun.target)
 
-  // The village fire: its light, and flames of glowing boxes that lick and
-  // turn.
-  let [fx, fz] = spot(PLACES.plaza)
+  // The village fire, if the level has a village: its light, and flames of
+  // glowing boxes that lick and turn.
+  let [fx, fz] = v.hearth ?? [0, 0]
   let floor = groundAt(v, fx, fz)
   let fire = new THREE.PointLight(0xffa04a, 0, 18, 1.6)
   fire.position.set(fx, floor + 1.1, fz)
-  scene.add(fire)
-  let flames = [0xff6a24, 0xff9a30, 0xffd25a].map((color, i) => {
+  if (v.hearth) scene.add(fire)
+  let flames = (v.hearth ? [0xff6a24, 0xff9a30, 0xffd25a] : []).map((
+    color,
+    i,
+  ) => {
     let m = new THREE.Mesh(
       new THREE.BoxGeometry(1, 1, 1),
       new THREE.MeshBasicMaterial({
@@ -322,6 +332,24 @@ export let world = (v: Vale): World => {
     lamps.push({ lantern, halo: glow })
   }
 
+  // The way through each portal: a pale glow hung between its pillars, which
+  // breathes.
+  let doors = v.portals.map((p) => {
+    let glow = new THREE.SpriteMaterial({
+      map: halo,
+      color: 0x8fd0ff,
+      transparent: true,
+      opacity: 0.7,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+    let sprite = new THREE.Sprite(glow)
+    sprite.position.set(p.x, groundAt(v, p.x, p.z) + 1.9, p.z)
+    sprite.scale.set(2.6, 3.8, 1)
+    scene.add(sprite)
+    return { glow, sprite }
+  })
+
   let focus = new THREE.Vector3(size / 2, 6, size / 2)
   let w: World = {
     scene,
@@ -329,6 +357,12 @@ export let world = (v: Vale): World => {
     focus,
     fire,
     day: 0.4,
+    dispose: () =>
+      scene.traverse((o) => {
+        if (!(o instanceof THREE.Mesh || o instanceof THREE.Sprite)) return
+        o.geometry.dispose()
+        for (let m of [o.material].flat()) m.dispose()
+      }),
     tick: (t, _dt) => {
       let d = ((t / DAY) + 0.36) % 1
       w.day = d
@@ -372,6 +406,11 @@ export let world = (v: Vale): World => {
         m.scale.set(s * (2 - lick), s * lick * 1.3, s * (2 - lick))
         m.position.y = floor + 0.3 + i * 0.24 + s * lick * 0.5
         m.rotation.y = t * (0.8 + i * 0.5) + i
+      })
+      doors.forEach((d, i) => {
+        let breath = Math.sin(t * 1.7 + i)
+        d.glow.opacity = 0.55 + breath * 0.15
+        d.sprite.scale.set(2.5 + breath * 0.12, 3.7 + breath * 0.18, 1)
       })
       sky.position.copy(focus)
       for (let d of decor) {

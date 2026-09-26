@@ -1,10 +1,14 @@
 // Everything on the glass: the hero's card (health, level, the xp to the
 // next), the quest being followed, the foe's health, who else is here, the
-// bag, the buttons a phone needs, the Elder's words, and the toasts that say
+// bag, the buttons a phone needs, the words of whoever you talk to, and the toasts that say
 // what just happened. Each part is written only when what it shows changed.
 import type { Action } from './input.ts'
 import type { Frame, Sheet } from './play.ts'
-import { BEASTS, ITEMS, need, type Quest } from './rules.ts'
+import { BEASTS } from './beasts.ts'
+import { ITEMS } from './items.ts'
+import { LEVELS } from './levels.ts'
+import { GIVERS, type Quest } from './quests.ts'
+import { need } from './rules.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -47,7 +51,7 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
   talk.hidden = true
   let faint = el(
     'Faint',
-    '<div class=Faint_Card><b>You fainted.</b><span>Elder Wren will patch you up by the fire.</span></div>',
+    '<div class=Faint_Card><b>You fainted.</b><span>You will wake by the fire, patched up.</span></div>',
   )
   faint.hidden = true
   let layer = el('Layer')
@@ -103,15 +107,27 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     while (toasts.children.length > 4) toasts.firstElementChild?.remove()
   }
 
+  // The quest being followed: one taken, or else one on offer, the nearest
+  // giver's first.
   let tracking = (s: Sheet, f: Frame) => {
-    let q = s.quests.find((q) => q.state != 'done')
+    let near = new Set(f.givers.map((g) => g.id))
+    let open = s.quests.filter((q) => q.state == 'open')
+    let q = s.quests.find((q) => q.state == 'taken') ??
+      open.find((q) => near.has(q.quest.giver)) ?? open[0]
     if (!q) {
       return '<b>The vale is at peace.</b><span>Every quest is done. Well walked.</span>'
     }
+    let giver = GIVERS.find((g) => g.id == q.quest.giver)
+    let who = giver?.name ?? 'Someone'
+    let where = giver && !near.has(giver.id)
+      ? ` in ${LEVELS[giver.level]?.name ?? giver.level}`
+      : ''
     if (q.state == 'open') {
-      return `<b>Elder Wren has a job for you</b><span>Find the Elder by the fire${
-        f.talk ? ' — say hello' : ''
-      }.</span>`
+      return `<b>${esc(who)} has a job for you</b><span>${
+        f.talk?.id == q.quest.giver
+          ? 'Say hello.'
+          : `Find ${esc(who)}${esc(where)}.`
+      }</span>`
     }
     let done = q.have >= q.quest.count
     let what = q.quest.goal == 'slay'
@@ -119,7 +135,7 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
       : `${ITEMS[q.quest.target]?.name ?? q.quest.target} gathered`
     return `<b>${esc(q.quest.title)}</b><span>${
       done
-        ? 'Done! Back to the Elder.'
+        ? `Done! Back to ${esc(who)}${esc(where)}.`
         : `${what}: ${q.have} / ${q.quest.count}`
     }</span>`
   }
@@ -133,7 +149,7 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
   return {
     layer,
     toast,
-    /** the Elder's words, or none */
+    /** someone's words, or none */
     talk: (t: Talk | null, accept: () => void, handIn: () => void) => {
       talk.hidden = !t
       if (!t) return
@@ -175,7 +191,7 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     /** paint this frame */
     show: (f: Frame, here: number, clock: string) => {
       let s = f.sheet
-      let hp = Math.round(f.pose.hp ?? s.max)
+      let hp = f.vitals.hp
       let from = need(s.lvl), to = need(s.lvl + 1)
       put(
         'card',
@@ -228,7 +244,7 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
       )
       drinkPad.classList.toggle('Pad-off', !tonics)
       talkPad.classList.toggle('Pad-off', !f.talk)
-      faint.hidden = f.pose.gait != 'down'
+      faint.hidden = !f.down
     },
   }
 }

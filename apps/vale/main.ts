@@ -1,23 +1,26 @@
 // Mossvale, a little voxel RPG that whoever is here plays together. This is
-// the page: it grows the vale, opens the store, asks who you are, and then
-// runs the frame: the player's hands (input.ts), a step of the game on the
-// graph (play.ts), the stage (cast.ts), the bits and numbers (fx.ts) and the
-// glass (hud.ts).
+// the page: it grows the level the hero is in, opens the store, asks who you
+// are and which of your heroes to play, and then runs the frame: the player's
+// hands (input.ts), a step of the game on the graph (play.ts), the stage
+// (cast.ts), the bits and numbers (fx.ts) and the glass (hud.ts). When the
+// hero walks through a portal, the page grows the level beyond and carries on
+// there.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { BEASTS } from './beasts.ts'
 import { cast } from './cast.ts'
 import { type Figure, hero } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { hud } from './hud.ts'
 import { listen } from './input.ts'
-import { comp, connect, str } from './net.ts'
-import { type Event, game } from './play.ts'
+import { ITEMS } from './items.ts'
+import { LEVELS } from './levels.ts'
+import { type Bundle, comp, connect, type Me, str } from './net.ts'
+import { type Event, type Frame, game } from './play.ts'
 import { clamp } from './rand.ts'
-import { ITEMS } from './rules.ts'
-import { HEARTH } from './sim.ts'
 import { sound } from './sound.ts'
-import { groundAt, inside, vale } from './terrain.ts'
-import { world } from './world.ts'
+import { groundAt, inside, type Vale, vale } from './terrain.ts'
+import { type World, world } from './world.ts'
 
 let TINTS = [
   '#c9503f',
@@ -51,12 +54,8 @@ let NAMES = [
   'Quill',
   'Hazel',
 ]
-let COLOR: Record<string, number> = {
-  slime: 0x86d65c,
-  boar: 0x8a5a3c,
-  crag: 0x9a9890,
-  thornback: 0x7a3f2f,
-}
+// Where a new hero first stands.
+let HOME = 'mossvale'
 
 let pick = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)]
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -88,22 +87,51 @@ let fit = () => {
 fit()
 addEventListener('resize', fit)
 
-// The gate paints before the vale grows, which takes a moment.
+// The gate paints before the level grows, which takes a moment.
 await frame()
 await frame()
-let v = vale()
-let w = world(v)
-if (phone) w.sun.shadow.mapSize.set(1024, 1024)
 let net = connect(new URL('api/', document.baseURI))
-let g = game(v, net)
+let g = game(net)
 
 let typing = false
 let hands = listen(canvas, glass, () => typing || h.talking)
 let h = hud(glass, hands.press)
 let marks = overlay(h.layer, camera)
+
+// The level on show, and what is drawn of it: grown again when the hero goes
+// through a portal.
+let v: Vale = vale(HOME)
+let w: World = world(v)
 let stage = cast(w.scene, v, marks)
 let dust = bits(w.scene, true, 400)
 let glow = bits(w.scene, false, 300)
+let smallShadows = phone
+if (phone) w.sun.shadow.mapSize.set(1024, 1024)
+let grow = (id: string) => {
+  w.dispose()
+  v = vale(id)
+  w = world(v)
+  if (smallShadows) w.sun.shadow.mapSize.set(1024, 1024)
+  if (!renderer.shadowMap.enabled) w.sun.castShadow = false
+  stage = cast(w.scene, v, marks)
+  dust = bits(w.scene, true, 400)
+  glow = bits(w.scene, false, 300)
+  cam.x = NaN
+}
+
+// The camera: behind and above, turned by dragging, pulled by the wheel.
+let cam = {
+  yaw: 0,
+  pitch: 0.42,
+  dist: phone ? 11 : 9.5,
+  reach: 9,
+  x: NaN,
+  y: 0,
+  z: 0,
+  shake: 0,
+}
+let target = new THREE.Vector3()
+
 let mute = document.createElement('button')
 mute.className = 'Mute'
 let muteLabel = () => mute.textContent = sound.muted ? '🔇' : '🔊'
@@ -114,20 +142,26 @@ mute.addEventListener('click', () => {
 })
 glass.append(mute)
 
-// Who is playing: this browser's hero, or a new one made at the gate.
+// Where the hearth is, or the middle of a level without one: where the gate's
+// camera looks, and embers rise.
+let hearth = () => v.hearth ?? v.places[v.level.arrive] ?? [64, 64]
+
+// Who is playing: one of your heroes, or a new one made at the gate.
 let look = { name: '', tint: pick(TINTS), hair: pick(HAIRS), skin: pick(SKINS) }
 let playing = false
 let preview: Figure | null = null
 let dress = () => {
   if (preview) w.scene.remove(preview.root)
   preview = hero(look)
-  let x = HEARTH[0], z = HEARTH[1] + 4
+  let [hx, hz] = hearth()
+  let x = hx, z = hz + 4
   preview.root.position.set(x, groundAt(v, x, z), z)
   preview.root.rotation.y = 0.5
   w.scene.add(preview.root)
 }
 
-let begin = () => {
+let begin = (eid: string) => {
+  net.choose(eid)
   if (preview) w.scene.remove(preview.root)
   preview = null
   playing = true
@@ -148,10 +182,16 @@ let swatches = (key: 'tint' | 'hair' | 'skin', colors: string[]) =>
     ).join('')
   }</div>`
 
-let make = (signIn: string | null) => {
+let TITLE = '<h1 class=Gate_Title>Mossvale</h1>'
+let NOTE =
+  '<p class=Gate_Note>Slimes in the meadow, boars in Whisperwood, walking stones in Craghollow, and something old on Thornback Ridge.</p>'
+
+// Make a hero. A guest is offered the sign-in that keeps heroes; one who may
+// not write here is sent to it.
+let make = (who: Me, back: (() => void) | null) => {
   look.name ||= pick(NAMES)
-  gateCard.innerHTML = `
-    <h1 class=Gate_Title>Mossvale</h1>
+  let guest = !who.person && who.signIn
+  gateCard.innerHTML = `${TITLE}
     <p class=Gate_Lede>A little vale of moss and stone. Whoever else is here walks it with you.</p>
     <form class=Make>
       <label class=Make_Name>Your name
@@ -162,12 +202,21 @@ let make = (signIn: string | null) => {
       <span class=Make_Label>Hair</span>${swatches('hair', HAIRS)}
       <span class=Make_Label>Skin</span>${swatches('skin', SKINS)}
       ${
-    signIn
-      ? `<a class="Btn Btn-go" href="${esc(signIn)}">Sign in to play</a>`
-      : '<button class="Btn Btn-go">Enter the vale</button>'
+    who.writes
+      ? '<button class="Btn Btn-go">Enter the vale</button>'
+      : `<a class="Btn Btn-go" href="${
+        esc(who.signIn ?? '')
+      }">Sign in to play</a>`
   }
+      ${back ? '<button type=button class=Btn data-do=back>Back</button>' : ''}
     </form>
-    <p class=Gate_Note>Slimes in the meadow, boars in Whisperwood, walking stones in Craghollow, and something old on Thornback Ridge.</p>`
+    ${
+    guest && who.writes
+      ? `<p class=Gate_Note><a href="${
+        esc(who.signIn ?? '')
+      }">Sign in</a> to keep your heroes on every device. A hero made without signing in lasts as long as this tab.</p>`
+      : NOTE
+  }`
   let form = gateCard.querySelector<HTMLFormElement>('.Make')!
   let name = form.querySelector<HTMLInputElement>('input')!
   name.addEventListener('focus', () => typing = true)
@@ -184,32 +233,53 @@ let make = (signIn: string | null) => {
       dress()
     })
   )
+  form.querySelector('[data-do=back]')?.addEventListener(
+    'click',
+    () => back?.(),
+  )
   form.addEventListener('submit', (e) => {
     e.preventDefault()
     look.name = name.value.trim().slice(0, 18) || pick(NAMES)
     typing = false
-    net.create(look)
-    begin()
+    begin(net.create(look))
     h.toast(`Welcome to Mossvale, ${look.name}.`, 'Toast-big')
   })
   dress()
 }
 
-// The ground under the fire, where embers rise from.
-let hearth = groundAt(v, HEARTH[0], HEARTH[1])
-
-// The camera: behind and above, turned by dragging, pulled by the wheel.
-let cam = {
-  yaw: 0,
-  pitch: 0.42,
-  dist: phone ? 11 : 9.5,
-  reach: 9,
-  x: NaN,
-  y: 0,
-  z: 0,
-  shake: 0,
+// Choose one of your heroes, or make another.
+let choose = (who: Me, heroes: Bundle[]) => {
+  gateCard.innerHTML = `${TITLE}
+    <p class=Gate_Lede>Welcome back${
+    who.name ? `, ${esc(who.name.split(/\s/)[0])}` : ''
+  }. Who walks the vale today?</p>
+    <div class=Heroes>${
+    heroes.map((b) => {
+      let p = comp(b, 'player')
+      return `<button class=Hero data-eid="${
+        esc(b.entity.eid)
+      }" style="--tint:${esc(str(p.tint, '#c95f4a'))};--hair:${
+        esc(str(p.hair, '#5a3a26'))
+      };--skin:${esc(str(p.skin, '#e7b996'))}"><i class=Hero_Face></i><b>${
+        esc(str(p.name, 'Wanderer'))
+      }</b></button>`
+    }).join('')
+  }</div>
+    <button class=Btn data-do=new>A new hero</button>
+    ${NOTE}`
+  gateCard.querySelectorAll<HTMLElement>('.Hero').forEach((b) =>
+    b.addEventListener('click', () => {
+      let eid = b.dataset.eid ?? ''
+      begin(eid)
+      let p = comp(heroes.find((x) => x.entity.eid == eid), 'player')
+      h.toast(`Welcome back, ${str(p.name, 'Wanderer')}.`, 'Toast-big')
+    })
+  )
+  gateCard.querySelector('[data-do=new]')?.addEventListener(
+    'click',
+    () => make(who, () => choose(who, heroes)),
+  )
 }
-let target = new THREE.Vector3()
 
 let clockOf = (d: number) =>
   d < 0.22 || d > 0.8
@@ -227,10 +297,15 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
   if (e.type == 'hit') {
     float(String(e.dmg), p(e.at), e.great ? 'great' : 'hit')
     let m = stage.headOf(e.eid)
-    dust.emit(m ?? p(e.at), COLOR[e.beast] ?? 0xd8c8a8, e.great ? 14 : 7, {
-      speed: 3.5,
-      up: 3,
-    })
+    dust.emit(
+      m ?? p(e.at),
+      BEASTS[e.beast]?.dust ?? 0xd8c8a8,
+      e.great ? 14 : 7,
+      {
+        speed: 3.5,
+        up: 3,
+      },
+    )
     sound.hit(e.great)
     cam.shake = Math.max(cam.shake, e.great ? 0.22 : 0.08)
   } else if (e.type == 'struck') float(String(e.dmg), p(e.at), 'ally')
@@ -240,7 +315,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     sound.hurt()
     cam.shake = Math.max(cam.shake, 0.18)
   } else if (e.type == 'fall') {
-    dust.emit(p(e.at), COLOR[e.beast] ?? 0xaaaaaa, 22, {
+    dust.emit(p(e.at), BEASTS[e.beast]?.dust ?? 0xaaaaaa, 22, {
       speed: 4,
       up: 4,
       life: 0.9,
@@ -284,20 +359,23 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     sound.heal()
   } else if (e.type == 'faint') sound.fall()
   else if (e.type == 'rise') h.toast('Back on your feet, by the fire.')
-  else if (e.type == 'say') h.toast(e.text)
+  else if (e.type == 'travel') {
+    h.toast(`${LEVELS[e.to]?.name ?? e.to}`, 'Toast-big')
+    sound.quest()
+  } else if (e.type == 'say') h.toast(e.text)
 }
 
 let talkTo = () => {
-  let f = last
-  if (!f?.elder) return
-  let next = f.sheet.quests.find((q) => q.state != 'done')
+  let giver = last?.talk
+  if (!giver) return
+  let next = giver.next
   h.talk(
     {
       quest: next?.quest ?? null,
       state: next?.state ?? 'done',
       have: next?.have ?? 0,
-      greets: f.elder.greets,
-      name: f.elder.name,
+      greets: giver.greets,
+      name: giver.name,
     },
     () => {
       if (!next) return
@@ -313,7 +391,7 @@ let talkTo = () => {
   )
 }
 
-let last: ReturnType<typeof g.frame> = null
+let last: Frame | null = null
 let then = performance.now()
 // The page keeps up with the screen before it keeps its looks: while frames
 // run slow it draws fewer pixels, then plainer shadows, then none.
@@ -321,6 +399,7 @@ let EASE = [
   () => renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25)),
   () => renderer.setPixelRatio(1),
   () => {
+    smallShadows = true
     w.sun.shadow.mapSize.set(1024, 1024)
     w.sun.shadow.map?.dispose()
     w.sun.shadow.map = null
@@ -328,6 +407,7 @@ let EASE = [
   () => renderer.setPixelRatio(0.75),
   () => {
     renderer.shadowMap.enabled = false
+    w.sun.castShadow = false
     w.scene.traverse((o) => {
       if (o instanceof THREE.Mesh) o.material.needsUpdate = true
     })
@@ -360,9 +440,14 @@ let loop = (t: number) => {
     cam.yaw += i.orbit[0]
     cam.pitch = clamp(cam.pitch + i.orbit[1], 0.1, 1.3)
     cam.dist = clamp(cam.dist * (1 + i.zoom * 0.12), 4, 22)
-    let f = g.frame(i, cam.yaw, dt)
+    let f = g.frame(v, i, cam.yaw, dt)
     last = f
-    if (f) {
+    if (f && f.level != v.level.id) {
+      // Through a portal: the level beyond grows, and the next frame plays
+      // there.
+      for (let e of f.events) react(e, target)
+      grow(f.level)
+    } else if (f) {
       let player = comp(net.client.ent(net.hero), 'player')
       let dressed = {
         tint: str(player.tint, look.tint),
@@ -403,11 +488,8 @@ let loop = (t: number) => {
     // At the gate: the camera drifts around the fire, and the new hero stands
     // by it in the colours being chosen.
     let a = t / 9000
-    target.set(
-      HEARTH[0],
-      groundAt(v, HEARTH[0], HEARTH[1]) + 1.2,
-      HEARTH[1] + 3,
-    )
+    let [hx, hz] = hearth()
+    target.set(hx, groundAt(v, hx, hz) + 1.2, hz + 3)
     cam.x = target.x
     cam.y = target.y - 1.4
     cam.z = target.z
@@ -450,12 +532,13 @@ let loop = (t: number) => {
   }
   camera.lookAt(target)
   // Embers off the fire, and at night fireflies about the player.
-  if (Math.random() < 0.5) {
+  if (v.hearth && Math.random() < 0.5) {
+    let [hx, hz] = v.hearth
     glow.emit(
       new THREE.Vector3(
-        HEARTH[0] + (Math.random() - 0.5) * 0.8,
-        hearth + 0.9,
-        HEARTH[1] + (Math.random() - 0.5) * 0.8,
+        hx + (Math.random() - 0.5) * 0.8,
+        groundAt(v, hx, hz) + 0.9,
+        hz + (Math.random() - 0.5) * 0.8,
       ),
       0xffa040,
       1,
@@ -498,30 +581,49 @@ Object.assign(globalThis, {
     get frame() {
       return last
     },
+    get vale() {
+      return v
+    },
+    get world() {
+      return w
+    },
     renderer,
     camera,
     cam,
-    world: w,
   },
 })
 
 let busy = gate.querySelector('.Gate_Busy')
 if (busy) busy.textContent = 'Finding the others…'
 let me = await net.me()
-if (!me.reads) {
-  gateCard.innerHTML =
-    `<h1 class=Gate_Title>Mossvale</h1><p class=Gate_Lede>This vale is private.</p>${
-      me.signIn
-        ? `<a class="Btn Btn-go" href="${esc(me.signIn)}">Sign in</a>`
-        : ''
-    }`
-} else {
-  look.name = me.name?.split(/\s/)[0] ?? ''
-  let players = net.watches.players
-  for (let i = 0; i < 40 && !players.ready; i++) {
+let ready = async (watch: { ready: boolean }) => {
+  for (let i = 0; i < 40 && !watch.ready; i++) {
     await new Promise((r) => setTimeout(r, 100))
   }
-  let mine = net.hero && players.value.find((b) => b.entity.eid == net.hero)
-  if (mine && me.writes) begin()
-  else make(me.writes ? null : me.signIn)
+}
+if (!me.reads) {
+  gateCard.innerHTML = `${TITLE}<p class=Gate_Lede>This vale is private.</p>${
+    me.signIn
+      ? `<a class="Btn Btn-go" href="${esc(me.signIn)}">Sign in</a>`
+      : ''
+  }`
+} else if (me.person) {
+  // Signed in: your heroes, wherever you made them.
+  look.name = me.name?.split(/\s/)[0] ?? ''
+  let heroes = net.heroes(me.person)
+  await ready(heroes)
+  let played = net.played()
+  if (played && heroes.value.some((b) => b.entity.eid == played)) begin(played)
+  else if (heroes.value.length) choose(me, heroes.value)
+  else make(me, null)
+} else {
+  // Signed out: the hero this tab has been playing, or a new one.
+  let players = net.watches.players
+  await ready(players)
+  let played = net.played()
+  if (
+    played && me.writes && players.value.some((b) => b.entity.eid == played)
+  ) {
+    begin(played)
+  } else make(me, null)
 }

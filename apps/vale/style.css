@@ -144,6 +144,56 @@ body {
   transform: scale(1.08);
 }
 
+.Gate_Note a {
+  color: var(--deep);
+  font-weight: 600;
+}
+
+/* Choosing one of your heroes, at the gate: each a little face in their
+   colours. */
+.Heroes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+}
+
+.Hero {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 0.7rem 0.4rem 0.6rem;
+  font: inherit;
+  font-weight: 600;
+  border: 0;
+  border-radius: var(--radius);
+  background: #f1eadb;
+  color: var(--ink);
+  box-shadow: 0 3px 0 #ddd2b4;
+  cursor: pointer;
+}
+
+.Hero:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #ddd2b4;
+}
+
+.Hero b {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.Hero_Face {
+  width: 2.6rem;
+  height: 3rem;
+  border-radius: 8px;
+  background: linear-gradient(var(--hair) 0 28%, var(--skin) 28% 62%,
+    var(--tint) 62%);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.12);
+}
+
 .Btn {
   display: inline-block;
   font: inherit;

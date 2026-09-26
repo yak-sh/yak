@@ -1,6 +1,7 @@
-// What stands on the ground: trees, rocks, flowers, and the village. Each is a
-// small voxel model built by hand out of balls and boxes, meshed once per
-// variant and copied wherever the vale places one (terrain.ts `props`).
+// What stands on the ground: trees, rocks, flowers, the village, and the
+// portals between levels. Each is a small voxel model built by hand out of
+// balls and boxes, meshed once per variant and copied wherever a level places
+// one (terrain.ts `props`).
 import {
   ball,
   blob,
@@ -240,7 +241,30 @@ let lamp = (): Model => {
   return { vox: v, size: 0.25 }
 }
 
+// A portal to another level: two mossy stone pillars and a lintel, with the
+// way through left open for the glow world.ts hangs in it.
+let portal = (): Model => {
+  let v: Vox = new Map()
+  let stone = [0x8f8d85, 0xa3a198, 0x7f7e77]
+  for (let x of [-6, 5]) {
+    for (let y = 0; y < 15; y++) {
+      for (let dx = 0; dx < 2; dx++) {
+        for (let z = -1; z <= 0; z++) {
+          v.set(key(x + dx, y, z), stone[(x + dx + y + z) & 1 ? 0 : y % 3])
+        }
+      }
+    }
+    box(v, [x - 1, 0, -2], [x + 2, 1, 1], 0x7a7870)
+  }
+  box(v, [-7, 15, -1], [6, 16, 0], 0x9a988f)
+  box(v, [-5, 17, -1], [4, 17, 0], 0x6f9a48)
+  for (let x of [-7, -3, 2, 6]) v.set(key(x, 15 + (x & 1), 1), 0x6f9a48)
+  box(v, [-1, 14, 0], [0, 14, 0], 0x9ad8ff)
+  return { vox: v, size: 0.25 }
+}
+
 let BUILD: Record<string, (seed: number) => Model> = {
+  portal,
   oak,
   pine,
   birch,

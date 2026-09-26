@@ -1,6 +1,13 @@
 // The vale's store as this page holds it: a @yaks/client graph kept in step
-// with the app's own doors at ./api/, the watches the game reads from, who is
-// playing, and the clock everyone shares.
+// with the app's own doors at ./api/, the watches the game reads from, which
+// hero this tab plays, and the clock everyone shares.
+//
+// A hero belongs to the person who made it: the store stamps every row with
+// who wrote it (`created.by`), so a signed-in person finds their heroes on any
+// device by asking for the ones they made. A tab remembers which of them it
+// is playing (sessionStorage), so two tabs can play two heroes, and a reload
+// keeps playing the same one; a hero made while signed out is known only to
+// its tab.
 //
 // Rows a player earns (a fall, a find, a quest step) are written through
 // `keep`, which holds them a moment and sends them together: a visitor may
@@ -33,36 +40,25 @@ export type Me = {
   signIn: string | null
 }
 
-// The platform's doc, which a quest's title and words live in.
-let DOC = {
-  $defs: {
-    doc: {
-      component: true,
-      type: 'object',
-      properties: { title: { type: 'string' }, body: { type: 'string' } },
-    },
-  },
-}
-
-export let vocab = loadVocab([DOC, words])
+export let vocab = loadVocab([words])
 
 // How long rows wait to be sent together: under the door's 30 a minute.
 let PACE = 2100
 
+// Which hero this tab plays.
 let HERO = 'mossvale.hero'
-
-let stored = {
+let tab = {
   get: (): string | null => {
     try {
-      return localStorage.getItem(HERO)
+      return sessionStorage.getItem(HERO)
     } catch {
       return null
     }
   },
   set: (eid: string) => {
     try {
-      localStorage.setItem(HERO, eid)
-    } catch { /* a page that cannot keep it asks again next time */ }
+      sessionStorage.setItem(HERO, eid)
+    } catch { /* a tab that cannot keep it asks again after a reload */ }
   },
 }
 
@@ -83,7 +79,7 @@ export let connect = (base: URL) => {
   })
   let skew = 0
   let now = () => Date.now() + skew
-  let hero = stored.get()
+  let hero: string | null = null
 
   // My rows, until the store has them. Each change to the list replaces it,
   // so a reader can tell by its identity whether anything moved.
@@ -118,10 +114,8 @@ export let connect = (base: URL) => {
   }
 
   let watches: Record<string, Watch> = {
-    players: c.watch('.player&?pose'),
+    players: c.watch('.player&?position&?motion&?vitals&?fight'),
     creatures: c.watch('.creature'),
-    npcs: c.watch('.npc'),
-    quests: c.watch('.quest&?doc'),
     falls: c.watch('.slain&.order=-slain.at&.limit=400'),
   }
   let own: Record<string, Watch> = {}
@@ -135,7 +129,6 @@ export let connect = (base: URL) => {
       journal: c.watch(`.journal.player=${q}`),
     }
   }
-  if (hero) follow(hero)
 
   let none: Bundle[] = []
 
@@ -143,10 +136,21 @@ export let connect = (base: URL) => {
     client: c,
     watches,
     now,
-    /** the eid of this browser's hero, once there is one */
+    /** the eid of the hero this tab plays, once there is one */
     get hero() {
       return hero
     },
+    /** the hero this tab played before a reload, if it remembers one */
+    played: tab.get,
+    /** play this hero in this tab */
+    choose: (eid: string) => {
+      hero = eid
+      tab.set(eid)
+      follow(eid)
+    },
+    /** the heroes a person made */
+    heroes: (person: string): Watch =>
+      c.watch(`.player&.created.by=${JSON.stringify(person)}`),
     /** my rows of one kind: what the store holds, and what is waiting */
     mine: (name: string): Bundle[] =>
       join(name, own[name]?.value ?? none, name),
@@ -163,14 +167,12 @@ export let connect = (base: URL) => {
     move: (bundles: Bundle[]) => {
       if (bundles.length) c.mutate(bundles)
     },
-    /** make a hero and make it this browser's */
+    /** make a hero and play it in this tab */
     create: (
       look: { name: string; tint: string; hair: string; skin: string },
     ) => {
       let eid = crypto.randomUUID()
-      hero = eid
-      stored.set(eid)
-      follow(eid)
+      net.choose(eid)
       waiting = [...waiting, { entity: { eid }, player: look }]
       flush()
       return eid

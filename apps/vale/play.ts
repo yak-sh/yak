@@ -1,38 +1,44 @@
-// A frame of the game. The page's graph holds what is true (who is where, how
-// hurt, what has fallen, what each player carries); this reads it, decides
-// what happens next, and hands back the frame's changes as one list for one
-// `mutate`, with what happened, for the eyes and ears (`Event`).
+// A frame of the game. The page's graph holds what is true: where each player
+// and creature is and how it moves (`position`, `motion`), how each player
+// fares (`vitals`, `fight`), whom each creature hunts (`hunt`), and the rows of
+// what everyone has done. This reads it, decides what happens next, and hands
+// back the frame's changes as one list for one `mutate`, with what happened,
+// for the eyes and ears (`Event`).
 //
 // Who decides what:
-//   - A player's own page moves them, swings their blade, and takes the bites
-//     aimed at them. Their pose carries the outcome to everyone.
-//   - Every page moves every creature near its player, from the same rules and
-//     the same poses, so the pages agree near enough with no server deciding.
-//   - A creature's health is its most, less what the poses say was dealt it in
-//     this life (rules.ts `hpOf`). A fall is a `slain` row, one per player who
-//     helped, and the loot it leaves is each player's own.
-import { type Bundle, comp, type Net, num, str } from './net.ts'
+//   - A player's own page moves them, swings their blade, takes the bites
+//     aimed at them, and says how they fare.
+//   - One page moves each creature: of the players near its home, the one
+//     whose eid sorts first. Its position and hunt are relayed from there, and
+//     every other page draws what it hears. A creature nobody is near, or
+//     that is only wandering, has no position: its wandering says where it
+//     is (sim.ts `rest`), the same on every page.
+//   - A creature's health is its most, less what the fights say was dealt it
+//     in this life (rules.ts `hpOf`). A fall is a `slain` row, one per player
+//     who helped, and the loot it leaves is each player's own.
+import { BEASTS } from './beasts.ts'
+import { homesOf } from './homes.ts'
 import type { Intent } from './input.ts'
+import { ITEMS } from './items.ts'
+import { type Bundle, comp, type Net, num, str } from './net.ts'
+import { GIVERS, type Quest, QUESTS } from './quests.ts'
 import {
-  BEASTS,
   blow,
   edgeOf,
   fallOf,
+  type Fight,
   type Held,
   hpOf,
   hunter,
-  ITEMS,
   levelOf,
   lootOf,
   maxHp,
-  type Pose,
-  type Quest,
   questsOf,
   type Slain,
   xpOf,
 } from './rules.ts'
-import { type Body, HEARTH, prowl, rest, SAFE, turn, walk } from './sim.ts'
-import { groundAt, type Vale } from './terrain.ts'
+import { type Body, inVillage, prowl, rest, turn, walk } from './sim.ts'
+import { groundAt, type Vale, vale } from './terrain.ts'
 
 export type Vec3 = [number, number, number]
 
@@ -47,7 +53,6 @@ export type Event =
   }
   | { type: 'struck'; eid: string; at: Vec3; dmg: number }
   | { type: 'whiff' }
-  | { type: 'bite'; eid: string }
   | { type: 'hurt'; dmg: number; at: Vec3 }
   | { type: 'fall'; eid: string; beast: string; at: Vec3 }
   | { type: 'loot'; item: string; n: number; at: Vec3 }
@@ -56,6 +61,7 @@ export type Event =
   | { type: 'heal'; n: number; at: Vec3 }
   | { type: 'faint' }
   | { type: 'rise' }
+  | { type: 'travel'; to: string }
   | { type: 'say'; text: string }
 
 /** Where one player stands with the vale: what they have earned and carry. */
@@ -69,6 +75,8 @@ export type Sheet = {
   quests: ReturnType<typeof questsOf>
 }
 
+export type Vitals = { hp: number; max: number; lvl: number }
+
 /** A creature as this frame sees it. */
 export type Mob = {
   eid: string
@@ -81,15 +89,19 @@ export type Mob = {
   since: number
   /** a blow landed on it this recently, in ms since */
   hurt: number
+  /** it bit this recently, in ms since */
+  bit: number
   near: number
 }
 
-/** Another player as this frame sees them. */
+/** Another player in this level, as this frame sees them. */
 export type Other = {
   eid: string
   name: string
   look: { tint: string; hair: string; skin: string }
-  pose: Pose
+  body: Body
+  vitals: Vitals
+  swing: number
 }
 
 export type Drop = {
@@ -102,18 +114,34 @@ export type Drop = {
   at: number
 }
 
+/** Someone who gives quests, where they stand, and what they have for me:
+ * a quest to offer (`!`), one to hand in (`?`), or nothing. */
+export type Giver = {
+  id: string
+  name: string
+  x: number
+  z: number
+  greets: string
+  look: { tint: string; hair: string; skin: string }
+  staff: boolean
+  next: ReturnType<typeof questsOf>[number] | null
+  mark: '' | '!' | '?'
+  near: number
+}
+
 export type Frame = {
+  /** the level the hero is in */
+  level: string
   body: Body
-  pose: Pose
+  vitals: Vitals
+  down: boolean
   sheet: Sheet
   mobs: Mob[]
   others: Other[]
   drops: Drop[]
-  elder:
-    | { eid: string; name: string; x: number; z: number; greets: string }
-    | null
-  /** the Elder is close enough to talk to */
-  talk: boolean
+  givers: Giver[]
+  /** the giver close enough to talk to */
+  talk: Giver | null
   /** the creature being fought, if one */
   foe: Mob | null
   /** how far through a blow, 0 to 1, or -1 */
@@ -127,104 +155,110 @@ let SPEED = 5.6
 let SWING = 520
 let HIT_AT = 170
 let DOWN = 5000
-let POSE = 100
 let LEASH = 26
 let PICK = 1.3
 let PULL = 3.8
 let DROP_LIFE = 120_000
-// How near its home the player must be for a creature to be simulated.
+let TALK = 3.6
+// How near its home a player must be for a creature to be moved at all.
 let ACTIVE = 45
+// How near a portal's middle a walker must come to go through it.
+let PORTAL = 1.1
 
-let bodyOf = (b: Bundle | undefined): Body | null => {
-  let c = comp(b, 'body')
-  if (c.x == null) return null
-  return {
-    x: num(c.x),
-    y: num(c.y),
-    z: num(c.z),
-    vy: num(c.vy),
-    yaw: num(c.yaw),
-    speed: num(c.speed),
-    gait: str(c.gait, 'idle'),
-    hunts: str(c.hunts),
-    bite: num(c.bite),
-  }
-}
-
-let poseOf = (b: Bundle | undefined): Pose | null => {
-  let c = comp(b, 'pose')
-  if (c.x == null) return null
-  return {
-    x: num(c.x),
-    y: num(c.y),
-    z: num(c.z),
-    yaw: num(c.yaw),
-    gait: str(c.gait, 'idle'),
-    swing: num(c.swing),
-    hp: num(c.hp, 1),
-    max: num(c.max, 1),
-    lvl: num(c.lvl, 1),
-    foe: str(c.foe),
-    dmg: num(c.dmg),
-    life: num(c.life),
-  }
-}
-
+let round = (v: number, k = 1000) => Math.round(v * k) / k
 let dist = (a: { x: number; z: number }, b: { x: number; z: number }) =>
   Math.hypot(a.x - b.x, a.z - b.z)
 
-let round = (v: number, k = 100) => Math.round(v * k) / k
+type Where = { level: string; x: number; y: number; z: number }
+let where = (b: Bundle | undefined): Where | null => {
+  let p = comp(b, 'position')
+  return p.x == null
+    ? null
+    : { level: str(p.level), x: num(p.x), y: num(p.y), z: num(p.z) }
+}
+let motion = (b: Bundle | undefined) => {
+  let m = comp(b, 'motion')
+  return { yaw: num(m.yaw), gait: str(m.gait, 'idle'), vy: num(m.vy) }
+}
+let vitals = (b: Bundle | undefined): Vitals | null => {
+  let t = comp(b, 'vitals')
+  return t.hp == null
+    ? null
+    : { hp: num(t.hp), max: num(t.max, 1), lvl: num(t.lvl, 1) }
+}
+let fight = (b: Bundle | undefined): Fight & { swing: number } => {
+  let f = comp(b, 'fight')
+  return {
+    foe: str(f.foe),
+    life: num(f.life),
+    dmg: num(f.dmg),
+    swing: num(f.swing),
+  }
+}
+let hunt = (b: Bundle | undefined) => {
+  let h = comp(b, 'hunt')
+  return { player: str(h.player), bite: num(h.bite) }
+}
+let bodyOf = (p: Where, m: ReturnType<typeof motion>): Body => ({
+  x: p.x,
+  y: p.y,
+  z: p.z,
+  vy: m.vy,
+  yaw: m.yaw,
+  speed: 0,
+  gait: m.gait,
+})
 
-let questsFrom = (rows: Bundle[]): Quest[] =>
-  rows.map((b) => {
-    let q = comp(b, 'quest'), d = comp(b, 'doc')
-    return {
-      eid: b.entity.eid,
-      step: num(q.step),
-      goal: str(q.goal),
-      target: str(q.target),
-      count: num(q.count, 1),
-      xp: num(q.xp),
-      gift: str(q.gift) || undefined,
-      title: str(d.title),
-      body: str(d.body),
-    }
-  })
+// A mover's components as they should be written: rounded, so a mover that
+// has not moved writes nothing.
+let placed = (level: string, b: Body, gait = b.gait) => ({
+  position: { level, x: round(b.x), y: round(b.y), z: round(b.z) },
+  motion: { yaw: round(b.yaw, 100), gait, vy: round(b.vy, 100) },
+})
+let same = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+  Object.keys(a).every((k) => a[k] === b[k])
 
-/** The game over one vale and one store. */
-export let game = (v: Vale, net: Net) => {
+/** Where a hero stands on arriving in a level: in front of the portal that
+ * leads back to where they came from, or by the village fire, or at the
+ * level's arrival place. */
+export let arrival = (v: Vale, from?: string): Body => {
+  let back = v.portals.find((p) => p.to == from)
+  let [x, z] = back ? [back.x, back.z + 2.6] : v.hearth
+    ? [
+      v.hearth[0] - 1.5 + Math.random() * 3,
+      v.hearth[1] + 3.5 + Math.random() * 1.5,
+    ]
+    : v.places[v.level.arrive] ?? [64, 64]
+  return {
+    x,
+    y: groundAt(v, x, z),
+    z,
+    vy: 0,
+    yaw: Math.PI,
+    speed: 0,
+    gait: 'idle',
+  }
+}
+
+/** The game over one store. Each frame is played in the level the hero is
+ * in. */
+export let game = (net: Net) => {
   let c = net.client
   let drops = c.watch('.drop', { remote: false })
-  // What I relay, as this page keeps it between sends: my health, my
-  // blows, my fight. The graph gets it ten times a second.
-  let mine: Pose | null = null
   let swingAt = -1e9
   let struck = true
   let downAt = 0
   let hurtAt = 0
-  let poseAt = 0
-  let sent = ''
+  let mend = 0
   let lvlWas = 0
   let shares = new Set<string>()
   let sinking = new Map<string, number>()
   let hpWas = new Map<string, number>()
   let hitAt = new Map<string, number>()
+  let bitten = new Map<string, number>()
   let wasDown = new Set<string>()
-  let idle = new Set<string>()
-
-  let spawn = (): Body => {
-    let x = HEARTH[0] - 1.5 + Math.random() * 3,
-      z = HEARTH[1] + 3.5 + Math.random() * 1.5
-    return {
-      x,
-      y: groundAt(v, x, z),
-      z,
-      vy: 0,
-      yaw: Math.PI,
-      speed: 0,
-      gait: 'idle',
-    }
-  }
+  let last = new Map<string, Body>()
+  let anchored = new Set<string>()
 
   // The sheet, worked out again only when one of its rows changed.
   let sheetKey: unknown[] = []
@@ -232,9 +266,8 @@ export let game = (v: Vale, net: Net) => {
   let sheetOf = (): Sheet => {
     let slain = net.mine('slain'), items = net.mine('item')
     let used = net.mine('used'), journal = net.mine('journal')
-    let quests = net.watches.quests.value
     let name = str(comp(c.ent(net.hero ?? ''), 'player').name, 'Wanderer')
-    let key = [slain, items, used, journal, quests, name]
+    let key = [slain, items, used, journal, name]
     if (sheet && key.every((k, i) => k == sheetKey[i])) return sheet
     sheetKey = key
     let kills = slain.map((b): Slain => {
@@ -256,8 +289,7 @@ export let game = (v: Vale, net: Net) => {
       let j = comp(b, 'journal')
       return { quest: str(j.quest), step: str(j.step), at: num(j.at) }
     })
-    let qs = questsFrom(quests)
-    let xp = xpOf(kills, qs, entries)
+    let xp = xpOf(kills, QUESTS, entries)
     let lvl = levelOf(xp)
     sheet = {
       name,
@@ -266,7 +298,7 @@ export let game = (v: Vale, net: Net) => {
       max: maxHp(lvl),
       edge: edgeOf(bag),
       bag,
-      quests: questsOf(qs, entries, kills, bag),
+      quests: questsOf(QUESTS, entries, kills, bag),
     }
     return sheet
   }
@@ -294,14 +326,34 @@ export let game = (v: Vale, net: Net) => {
       used: { item: eid, by: me, at: now },
     })
 
+  // The store's row for each creature this level grows, added the first time
+  // a page meets it: what its position and falls attach to.
+  let anchor = (v: Vale) => {
+    let creatures = net.watches.creatures
+    if (!creatures.ready) return
+    let held = new Set(creatures.value.map((b) => b.entity.eid))
+    let missing = homesOf(v).filter((h) =>
+      !held.has(h.eid) && !anchored.has(h.eid)
+    )
+    for (let h of missing) anchored.add(h.eid)
+    if (missing.length) {
+      net.keep(
+        ...missing.map((h) => ({
+          entity: { eid: h.eid },
+          creature: { kind: h.kind },
+        })),
+      )
+    }
+  }
+
   return {
-    /** take up the Elder's next quest */
+    /** take up a quest */
     accept: (q: Quest) => {
       let me = net.hero
       if (!me) return
       net.keep({
         entity: { eid: crypto.randomUUID() },
-        journal: { player: me, quest: q.eid, step: 'taken', at: net.now() },
+        journal: { player: me, quest: q.id, step: 'taken', at: net.now() },
       })
     },
     /** hand a finished quest in: what it asked for goes, the gift comes */
@@ -319,42 +371,59 @@ export let game = (v: Vale, net: Net) => {
       }
       net.keep({
         entity: { eid: crypto.randomUUID() },
-        journal: { player: me, quest: q.eid, step: 'done', at: now },
+        journal: { player: me, quest: q.id, step: 'done', at: now },
       })
       if (q.gift) keepItem(me, q.gift, 1, now)
+      let giver = GIVERS.find((g) => g.id == q.giver)?.name ?? 'They'
       let gift = q.gift
-        ? ` Elder Wren gives you ${ITEMS[q.gift]?.name ?? q.gift}.`
+        ? ` ${giver} gives you ${ITEMS[q.gift]?.name ?? q.gift}.`
         : ''
       return [{ type: 'say', text: `${q.title}: done! +${q.xp} xp.${gift}` }]
     },
 
-    frame: (intent: Intent, look: number, dt: number): Frame | null => {
+    frame: (
+      v: Vale,
+      intent: Intent,
+      look: number,
+      dt: number,
+    ): Frame | null => {
       let me = net.hero
       if (!me) return null
+      let lv = v.level.id
       let now = net.now()
       let events: Event[] = []
       let change: Bundle[] = []
       let s = sheetOf()
       let row = c.ent(me)
-      let body = bodyOf(row) ?? spawn()
-      mine ??= poseOf(row) ?? { hp: s.max, swing: 0, foe: '', dmg: 0, life: 0 }
-      let pose = mine
-      let hp = pose.hp ?? s.max
+      let at = (b: { x: number; y: number; z: number }, up = 1): Vec3 => [
+        b.x,
+        b.y + up,
+        b.z,
+      ]
+      anchor(v)
+
+      // Me, as the graph has me: a hero with no position here (just come,
+      // back after a reload) stands at the level's arrival.
+      let pos = where(row)
+      let mo = motion(row)
+      let here = pos?.level == lv ? pos : null
+      let body = here ? bodyOf(here, mo) : arrival(v)
+      let down = !!here && mo.gait == 'down'
+      if (down) body.gait = 'idle'
+      let vit = vitals(row)
+      let hp = vit?.hp ?? s.max
+      let mine = fight(row)
+      let fought = { ...mine }
       if (lvlWas && s.lvl > lvlWas) {
         events.push({ type: 'level', lvl: s.lvl })
         hp = s.max
       }
       lvlWas = s.lvl
-      let down = pose.gait == 'down'
-      let at = (
-        b: { x: number; y: number; z: number },
-        up = 1,
-      ): Vec3 => [b.x, b.y + up, b.z]
 
       // The hero: up again at the fire after fainting, or moving as asked.
       if (down) {
         if (now - downAt > DOWN) {
-          body = spawn()
+          body = arrival(v)
           hp = s.max
           down = false
           events.push({ type: 'rise' })
@@ -369,15 +438,21 @@ export let game = (v: Vale, net: Net) => {
         body = walk(v, body, push, dt, SPEED)
       }
 
-      // Everyone's pose: mine as it stands, the others' as relayed.
+      // The others in this level, as relayed.
       let others: Other[] = []
-      let poses: [string, Pose][] = []
+      let fights: [string, Fight][] = [[me, fought]]
+      let spots = new Map<string, { x: number; z: number; alive: boolean }>()
+      spots.set(me, { x: body.x, z: body.z, alive: !down })
       for (let b of net.watches.players.value) {
         let eid = b.entity.eid
         if (eid == me) continue
-        let p = poseOf(c.ent(eid))
-        if (!p) continue
-        let pl = comp(c.ent(eid), 'player')
+        let e = c.ent(eid)
+        let p = where(e)
+        if (!p || p.level != lv) continue
+        let m = motion(e)
+        let pl = comp(e, 'player')
+        let f = fight(e)
+        let t = vitals(e) ?? { hp: 1, max: 1, lvl: 1 }
         others.push({
           eid,
           name: str(pl.name, 'Wanderer'),
@@ -386,116 +461,170 @@ export let game = (v: Vale, net: Net) => {
             hair: str(pl.hair, '#5a3a26'),
             skin: str(pl.skin, '#e7b996'),
           },
-          pose: p,
+          body: bodyOf(p, m),
+          vitals: t,
+          swing: f.swing,
         })
-        poses.push([eid, p])
-      }
-      poses.push([me, pose])
-      let alive = (p: Pose) => p.gait != 'down'
-      let spot = (eid: string): { x: number; z: number } | null => {
-        if (eid == me) return { x: body.x, z: body.z }
-        let p = others.find((o) => o.eid == eid)?.pose
-        return p ? { x: p.x ?? 0, z: p.z ?? 0 } : null
+        fights.push([eid, f])
+        spots.set(eid, { x: p.x, z: p.z, alive: m.gait != 'down' })
       }
       let falls = fallsBy()
 
       // The creatures.
       let mobs: Mob[] = []
-      for (let b of net.watches.creatures.value) {
-        let eid = b.entity.eid
-        let cr = comp(c.ent(eid), 'creature')
-        let kind = str(cr.kind, 'slime'), beast = BEASTS[kind] ?? BEASTS.slime
-        let home: [number, number] = [num(cr.x), num(cr.z)]
-        let roam = num(cr.roam, 5)
-        let seed = [...eid].reduce((h, ch) =>
-          (h * 31 + ch.charCodeAt(0)) | 0, 7) >>> 0
+      for (let h of homesOf(v)) {
+        let beast = BEASTS[h.kind]
+        if (!beast) continue
+        let eid = h.eid
+        let e = c.ent(eid)
+        let home = { x: h.home[0], z: h.home[1] }
         let f = fallOf(falls.get(eid) ?? [], beast.respawn, now)
         let life = f.fell
         let hpNow = f.down
           ? 0
-          : hpOf(eid, beast.hp, life, poses.map(([, p]) => p))
+          : hpOf(eid, beast.hp, life, fights.map(([, f]) => f))
         let wasHp = hpWas.get(eid) ?? beast.hp
         hpWas.set(eid, hpNow)
         let fallen = f.down || hpNow <= 0
         if (fallen && !sinking.has(eid)) sinking.set(eid, f.down ? f.fell : now)
         if (!fallen) sinking.delete(eid)
-        let near = Math.hypot(home[0] - body.x, home[1] - body.z)
-        let active = near <= ACTIVE
-        let mb = bodyOf(c.ent(eid))
-        // Far off, coming near, or just up again: where its wandering has it
-        // now. Only a creature near the player is moved, and its body kept.
-        if (!mb || !active || idle.has(eid) || (wasDown.has(eid) && !fallen)) {
-          mb = rest(v, home, roam, seed, now)
-        }
-        if (active) idle.delete(eid)
-        else idle.add(eid)
+        let up = wasDown.has(eid) && !fallen
         if (fallen) wasDown.add(eid)
         else wasDown.delete(eid)
-        if (!fallen && hpNow < wasHp && pose.foe != eid) {
-          events.push({
-            type: 'struck',
-            eid,
-            at: at(mb, beast.size + 0.3),
-            dmg: wasHp - hpNow,
-          })
+        let p = where(e)
+        let cm = motion(e)
+        let hu = hunt(e)
+        let moving = p?.level == lv && !up
+        // Where it is: where it is said to be, or where it lay down, or
+        // where its wandering has it.
+        let mb = p && moving
+          ? bodyOf(p, cm)
+          : fallen && last.has(eid)
+          ? last.get(eid)!
+          : rest(v, h.home, h.roam, h.seed, now)
+        // Who moves it: of the players near its home, the first by eid.
+        let owner = ''
+        for (let [who, sp] of spots) {
+          if (dist(sp, home) > ACTIVE) continue
+          if (!owner || who < owner) owner = who
+        }
+        if (!fallen && hpNow < wasHp) {
+          if (mine.foe != eid) {
+            events.push({
+              type: 'struck',
+              eid,
+              at: at(mb, beast.size + 0.3),
+              dmg: wasHp - hpNow,
+            })
+          }
           hitAt.set(eid, now)
         }
-        if (active && !fallen) {
+        if (owner == me && !fallen) {
           // Whom it is after: whoever is hurting it most, while they stay
           // near its home; else, if it is the kind that minds, whoever comes
           // close.
           let quarry = ''
-          let h = hunter(eid, life, poses)
-          let hs = h && spot(h)
-          let hpose = h && poses.find(([w]) => w == h)?.[1]
-          if (
-            h && hs && hpose && alive(hpose) &&
-            dist(hs, { x: home[0], z: home[1] }) < roam + LEASH
-          ) {
-            quarry = h
-          } else if (beast.aggro) {
-            let best = beast.aggro * (mb.hunts ? 1.8 : 1)
-            for (let [w, p] of poses) {
-              let ws = spot(w)
-              if (!ws || !alive(p)) continue
-              if (Math.hypot(ws.x - HEARTH[0], ws.z - HEARTH[1]) < SAFE) {
-                continue
-              }
-              if (dist(ws, { x: home[0], z: home[1] }) > roam + LEASH) continue
-              let d = dist(ws, mb)
+          let hn = hunter(eid, life, fights)
+          let hs = hn ? spots.get(hn) : undefined
+          if (hn && hs?.alive && dist(hs, home) < h.roam + LEASH) quarry = hn
+          else if (beast.aggro) {
+            let best = beast.aggro * (hu.player ? 1.8 : 1)
+            for (let [w, sp] of spots) {
+              if (!sp.alive || inVillage(v, sp.x, sp.z)) continue
+              if (dist(sp, home) > h.roam + LEASH) continue
+              let d = dist(sp, mb)
               if (d < best) [best, quarry] = [d, w]
             }
           }
-          let qs = quarry ? spot(quarry) : null
-          mb = {
-            ...prowl(v, mb, beast, home, roam, seed, now, dt, qs),
-            hunts: quarry,
-            bite: mb.bite ?? 0,
-          }
-          if (
-            qs && dist(qs, mb) <= beast.reach + 0.4 &&
-            now - (mb.bite ?? 0) > 1500
-          ) {
-            mb.bite = now
-            events.push({ type: 'bite', eid })
-            if (quarry == me && !down) {
-              let dmg = Math.round(beast.dmg * (0.85 + Math.random() * 0.3))
-              hp -= dmg
-              hurtAt = now
-              events.push({ type: 'hurt', dmg, at: at(body, 2) })
+          let qs = quarry ? spots.get(quarry) ?? null : null
+          // Struck: knocked back from whoever is nearest.
+          let knocked = false
+          if (hpNow < wasHp) {
+            let from: { x: number; z: number } | null = null
+            for (let sp of spots.values()) {
+              if (
+                dist(sp, mb) < 3 && (!from || dist(sp, mb) < dist(from, mb))
+              ) from = sp
+            }
+            if (from) {
+              let k = 0.45 / Math.max(0.3, beast.size)
+              let a = Math.atan2(mb.x - from.x, mb.z - from.z)
+              mb = {
+                ...mb,
+                x: mb.x + Math.sin(a) * k,
+                z: mb.z + Math.cos(a) * k,
+              }
+              knocked = true
             }
           }
-          change.push({ entity: { eid }, body: { ...mb } })
+          if (quarry || moving || knocked) {
+            let next = prowl(v, mb, beast, h.home, h.roam, h.seed, now, dt, qs)
+            let back = rest(v, h.home, h.roam, h.seed, now)
+            if (!quarry && !knocked && dist(next, back) < 0.3) {
+              // Back on its wandering: nothing to say about where it is.
+              if (p || hu.player) {
+                change.push({
+                  entity: { eid },
+                  position: null,
+                  motion: null,
+                  hunt: null,
+                })
+              }
+              mb = back
+            } else {
+              mb = next
+              let to = placed(lv, mb)
+              if (
+                !same(to.position, comp(e, 'position')) ||
+                !same(to.motion, comp(e, 'motion'))
+              ) {
+                change.push({ entity: { eid }, ...to })
+              }
+            }
+          }
+          let bite = hu.bite
+          if (
+            qs && dist(qs, mb) <= beast.reach + 0.4 && now - hu.bite > 1500
+          ) bite = now
+          if (quarry != hu.player || bite != hu.bite) {
+            change.push({
+              entity: { eid },
+              hunt: quarry ? { player: quarry, bite } : null,
+            })
+          }
         }
+        // Up again after a fall: back to its wandering, from home.
+        if (owner == me && up && (p || hu.player)) {
+          change.push({
+            entity: { eid },
+            position: null,
+            motion: null,
+            hunt: null,
+          })
+        }
+        // A bite: the one aimed at me is mine to take.
+        let seen = bitten.get(eid)
+        if (seen === undefined) bitten.set(eid, hu.bite)
+        else if (hu.bite > seen) {
+          bitten.set(eid, hu.bite)
+          if (hu.player == me && !down && !fallen) {
+            let dmg = Math.round(beast.dmg * (0.85 + Math.random() * 0.3))
+            hp -= dmg
+            hurtAt = now
+            events.push({ type: 'hurt', dmg, at: at(body, 2) })
+          }
+        }
+        last.set(eid, mb)
         mobs.push({
           eid,
-          kind,
+          kind: h.kind,
           body: mb,
           hp: hpNow,
           most: beast.hp,
           down: fallen,
           since: sinking.get(eid) ?? 0,
           hurt: now - (hitAt.get(eid) ?? -1e9),
+          bit: now - (hu.bite || -1e9),
           near: dist(mb, body),
         })
       }
@@ -528,7 +657,8 @@ export let game = (v: Vale, net: Net) => {
           let x = m.body.x + Math.cos(a) * 0.9, z = m.body.z + Math.sin(a) * 0.9
           change.push({
             entity: { eid: crypto.randomUUID() },
-            drop: { kind: l.kind, n: l.n, x, y: groundAt(v, x, z), z, at: now },
+            drop: { kind: l.kind, n: l.n, at: now },
+            position: { level: lv, x, y: groundAt(v, x, z), z },
           })
         })
       }
@@ -537,7 +667,7 @@ export let game = (v: Vale, net: Net) => {
       if (!down && intent.strike && now - swingAt > SWING) {
         swingAt = now
         struck = false
-        pose.swing = (pose.swing ?? 0) + 1
+        fought.swing++
         // Turn to face the nearest creature in front, forgivingly.
         let best: Mob | null = null
         for (let m of mobs) {
@@ -574,13 +704,12 @@ export let game = (v: Vale, net: Net) => {
         else {
           let m = best, beast = BEASTS[m.kind]
           let life = fallOf(falls.get(m.eid) ?? [], beast.respawn, now).fell
-          if (pose.foe != m.eid || pose.life != life) {
-            Object.assign(pose, { foe: m.eid, life, dmg: 0 })
+          if (fought.foe != m.eid || fought.life != life) {
+            Object.assign(fought, { foe: m.eid, life, dmg: 0 })
           }
           let { dmg, great } = blow(s.lvl, s.edge, Math.random())
-          pose.dmg = (pose.dmg ?? 0) + dmg
-          m.hp = hpOf(m.eid, beast.hp, life, poses.map(([, p]) => p))
-          hpWas.set(m.eid, m.hp)
+          fought.dmg += dmg
+          m.hp = hpOf(m.eid, beast.hp, life, fights.map(([, f]) => f))
           hitAt.set(m.eid, now)
           m.hurt = 0
           events.push({
@@ -591,15 +720,6 @@ export let game = (v: Vale, net: Net) => {
             dmg,
             great,
           })
-          // Knocked back a little.
-          let k = 0.45 / Math.max(0.3, beast.size)
-          let a = Math.atan2(m.body.x - body.x, m.body.z - body.z)
-          m.body = {
-            ...m.body,
-            x: m.body.x + Math.sin(a) * k,
-            z: m.body.z + Math.cos(a) * k,
-          }
-          change.push({ entity: { eid: m.eid }, body: { ...m.body } })
           if (m.hp <= 0) {
             m.down = true
             m.since = now
@@ -610,19 +730,18 @@ export let game = (v: Vale, net: Net) => {
       }
 
       // Someone else's blow felled what I was fighting: my share.
-      if (pose.foe && (pose.dmg ?? 0) > 0) {
-        let m = mobs.find((m) => m.eid == pose.foe)
+      if (fought.foe && fought.dmg > 0) {
+        let m = mobs.find((m) => m.eid == fought.foe)
         if (m) {
           let f = fallOf(falls.get(m.eid) ?? [], BEASTS[m.kind].respawn, now)
-          if (f.down && f.fell > (pose.life ?? 0)) {
-            fell(m, pose.life ?? 0, f.fell)
-          } else if (m.down && f.fell == pose.life) fell(m, pose.life ?? 0, now)
+          if (f.down && f.fell > fought.life) fell(m, fought.life, f.fell)
+          else if (m.down && f.fell == fought.life) fell(m, fought.life, now)
         }
       }
 
       // A tonic.
       if (intent.drink && !down) {
-        let tonic = s.bag.find((h) => h.kind == 'tonic')
+        let tonic = s.bag.find((h) => ITEMS[h.kind]?.heals)
         if (!tonic) {
           events.push({
             type: 'say',
@@ -632,16 +751,19 @@ export let game = (v: Vale, net: Net) => {
           events.push({ type: 'say', text: 'You feel fine already.' })
         } else {
           spend(me, tonic.eid, now)
-          let n = Math.min(s.max - hp, ITEMS.tonic.heals ?? 60)
+          let n = Math.min(s.max - hp, ITEMS[tonic.kind]?.heals ?? 60)
           hp += n
           events.push({ type: 'heal', n, at: at(body, 2) })
         }
       }
 
-      // Mending, when nothing has bitten for a while.
+      // Mending, a point at a time, when nothing has bitten for a while.
       if (!down && now - hurtAt > 6000 && hp < s.max) {
-        hp = Math.min(s.max, hp + s.max * 0.025 * dt)
-      }
+        mend += s.max * 0.025 * dt
+        let n = Math.floor(mend)
+        mend -= n
+        hp = Math.min(s.max, hp + n)
+      } else mend = 0
       if (!down && hp <= 0) {
         hp = 0
         down = true
@@ -652,22 +774,23 @@ export let game = (v: Vale, net: Net) => {
       // Loot on the ground: drawn to me when near, mine when touched.
       let lying: Drop[] = []
       for (let b of drops.value) {
-        let d = comp(c.ent(b.entity.eid), 'drop')
-        if (d.kind == null) continue
+        let e = c.ent(b.entity.eid)
+        let d = comp(e, 'drop'), p = where(e)
+        if (d.kind == null || !p || p.level != lv) continue
         let drop: Drop = {
           eid: b.entity.eid,
           kind: str(d.kind),
           n: num(d.n, 1),
-          x: num(d.x),
-          y: num(d.y),
-          z: num(d.z),
+          x: p.x,
+          y: p.y,
+          z: p.z,
           at: num(d.at),
         }
         let dd = dist(drop, body)
-        if (now - drop.at > DROP_LIFE) {
-          change.push({ entity: { eid: drop.eid }, drop: null })
-        } else if (!down && dd < PICK && now - drop.at > 350) {
-          change.push({ entity: { eid: drop.eid }, drop: null })
+        let gone = { entity: { eid: drop.eid }, drop: null, position: null }
+        if (now - drop.at > DROP_LIFE) change.push(gone)
+        else if (!down && dd < PICK && now - drop.at > 350) {
+          change.push(gone)
           keepItem(me, drop.kind, drop.n, now)
           events.push({
             type: 'loot',
@@ -683,62 +806,90 @@ export let game = (v: Vale, net: Net) => {
             drop.y = Math.max(groundAt(v, drop.x, drop.z), drop.y)
             change.push({
               entity: { eid: drop.eid },
-              drop: { x: drop.x, y: drop.y, z: drop.z },
+              position: { level: lv, x: drop.x, y: drop.y, z: drop.z },
             })
           }
           lying.push(drop)
         }
       }
 
-      // The Elder.
-      let npc = net.watches.npcs.value[0]
-      let n = comp(npc && c.ent(npc.entity.eid), 'npc')
-      let elder = npc
-        ? {
-          eid: npc.entity.eid,
-          name: str(n.name, 'Elder'),
-          x: num(n.x),
-          z: num(n.z),
-          greets: str(n.greets),
+      // The people of this level who give quests.
+      let givers: Giver[] = GIVERS.filter((g) => g.level == lv).map((g) => {
+        let [px, pz] = v.places[g.place] ?? [64, 64]
+        let x = px + g.offset[0], z = pz + g.offset[1]
+        let theirs = s.quests.filter((q) => q.quest.giver == g.id)
+        let next = theirs.find((q) => q.state == 'taken') ??
+          theirs.find((q) => q.state == 'open') ?? null
+        let mark: '' | '!' | '?' = !next
+          ? ''
+          : next.state == 'open'
+          ? '!'
+          : next.have >= next.quest.count
+          ? '?'
+          : ''
+        return {
+          id: g.id,
+          name: g.name,
+          x,
+          z,
+          greets: g.greets,
+          look: g.look,
+          staff: !!g.staff,
+          next,
+          mark,
+          near: Math.hypot(x - body.x, z - body.z),
         }
-        : null
+      })
+      let talk = down ? null : givers
+        .filter((g) => g.near < TALK)
+        .sort((a, b) => a.near - b.near)[0] ?? null
 
-      // What I am, for the others: sent ten times a second when it changed.
-      Object.assign(pose, {
-        x: round(body.x),
-        y: round(body.y),
-        z: round(body.z),
-        yaw: round(body.yaw),
-        gait: down ? 'down' : body.gait,
-        hp: Math.round(Math.max(0, hp)),
+      // Through a portal: on to the level beyond, in front of the portal back.
+      let level = lv
+      let portal = v.portals.find((p) => dist(p, body) < PORTAL)
+      if (portal && !down) {
+        level = portal.to
+        body = arrival(vale(portal.to), lv)
+        events.push({ type: 'travel', to: portal.to })
+      }
+
+      // What I am, for the others.
+      let meNow = placed(level, body, down ? 'down' : body.gait)
+      if (!same(meNow.position, comp(row, 'position'))) {
+        change.push({ entity: { eid: me }, position: meNow.position })
+      }
+      if (!same(meNow.motion, comp(row, 'motion'))) {
+        change.push({ entity: { eid: me }, motion: meNow.motion })
+      }
+      let vitalsNow = {
+        hp: Math.max(0, Math.round(hp)),
         max: s.max,
         lvl: s.lvl,
-      })
-      let me_ = { entity: { eid: me }, body: { ...body } }
-      let now_ = performance.now()
-      let said = JSON.stringify(pose)
-      if (said != sent && now_ - poseAt >= POSE) {
-        poseAt = now_
-        sent = said
-        change.push({ ...me_, pose: { ...pose } })
-      } else change.push(me_)
+      }
+      if (!same(vitalsNow, comp(row, 'vitals'))) {
+        change.push({ entity: { eid: me }, vitals: vitalsNow })
+      }
+      if (!same(fought, mine)) {
+        change.push({ entity: { eid: me }, fight: fought })
+      }
       net.move(change)
       net.tick()
 
       let foe =
         mobs.find((m) =>
-          m.eid == pose.foe && !m.down && now - (hitAt.get(m.eid) ?? 0) < 8000
+          m.eid == fought.foe && !m.down && now - (hitAt.get(m.eid) ?? 0) < 8000
         ) ?? null
       return {
+        level,
         body,
-        pose,
+        vitals: vitalsNow,
+        down,
         sheet: s,
         mobs,
         others,
         drops: lying,
-        elder,
-        talk: !!elder && !down &&
-          Math.hypot(elder.x - body.x, elder.z - body.z) < 3.6,
+        givers,
+        talk,
         foe,
         swing: now - swingAt < SWING ? (now - swingAt) / SWING : -1,
         events,

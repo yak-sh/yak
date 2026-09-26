@@ -1,102 +1,14 @@
-// The rules of the vale, as plain functions over plain rows: what a creature
-// is, when one is down, what a level takes, where a quest stands. Nothing here
-// touches the page or the network, so every page reaches the same answer from
-// the same rows.
+// The rules of the vale, as plain functions over plain rows: when a creature
+// is down, how hurt it is, what a level of experience takes, what a fall
+// leaves, where a quest stands. Nothing here touches the page or the network,
+// so every page reaches the same answer from the same rows. What there is to
+// fight, carry and do is data of its own: beasts.ts, items.ts, quests.ts.
+import { BEASTS } from './beasts.ts'
+import { ITEMS } from './items.ts'
+import type { Quest } from './quests.ts'
 import { hashOf, noise, stream } from './rand.ts'
 
-export type Beast = {
-  name: string
-  lvl: number
-  hp: number
-  dmg: number
-  /** metres a second when it means it */
-  speed: number
-  xp: number
-  /** how close it must be to bite */
-  reach: number
-  /** how near a player wakes it; 0 is never, until struck */
-  aggro: number
-  /** seconds from a fall until it is up again */
-  respawn: number
-  loot: [string, number][]
-  /** how big it is drawn, and how far a blow must reach it */
-  size: number
-}
-
-export let BEASTS: Record<string, Beast> = {
-  slime: {
-    name: 'Moss slime',
-    lvl: 1,
-    hp: 32,
-    dmg: 4,
-    speed: 2.2,
-    xp: 14,
-    reach: 1.3,
-    aggro: 0,
-    respawn: 20,
-    loot: [['jelly', 0.8], ['coin', 0.5]],
-    size: 0.9,
-  },
-  boar: {
-    name: 'Bristleboar',
-    lvl: 3,
-    hp: 80,
-    dmg: 8,
-    speed: 4,
-    xp: 34,
-    reach: 1.7,
-    aggro: 7,
-    respawn: 30,
-    loot: [['tusk', 0.65], ['coin', 0.7], ['tonic', 0.12]],
-    size: 1.1,
-  },
-  crag: {
-    name: 'Cragback',
-    lvl: 5,
-    hp: 170,
-    dmg: 13,
-    speed: 2.4,
-    xp: 80,
-    reach: 2,
-    aggro: 6,
-    respawn: 40,
-    loot: [['shard', 0.6], ['coin', 0.9], ['tonic', 0.25]],
-    size: 1.5,
-  },
-  thornback: {
-    name: 'Old Thornback',
-    lvl: 8,
-    hp: 1100,
-    dmg: 21,
-    speed: 3.6,
-    xp: 600,
-    reach: 3,
-    aggro: 10,
-    respawn: 180,
-    loot: [['crown', 1], ['coin', 1], ['tonic', 1]],
-    size: 2.4,
-  },
-}
-
-export type Thing = {
-  name: string
-  icon: string
-  heals?: number
-  edge?: number
-}
-
-export let ITEMS: Record<string, Thing> = {
-  jelly: { name: 'Slime jelly', icon: '🟢' },
-  tusk: { name: 'Boar tusk', icon: '🦷' },
-  shard: { name: 'Crag shard', icon: '🔷' },
-  crown: { name: 'Thorn crown', icon: '👑' },
-  coin: { name: 'Coin', icon: '🪙' },
-  tonic: { name: 'Mossberry tonic', icon: '🧪', heals: 60 },
-  blade2: { name: 'Boarsbane', icon: '🗡️', edge: 1.4 },
-  blade3: { name: 'Cragcleaver', icon: '⚔️', edge: 1.9 },
-}
-
-/** The xp a level takes, counted from nothing.
+/** The xp a level of experience takes, counted from nothing.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -163,33 +75,28 @@ export let fallOf = (
   return { down: !!fell && now < fell + respawn * 1000, fell }
 }
 
-export type Pose = {
-  x?: number
-  y?: number
-  z?: number
-  yaw?: number
-  gait?: string
-  swing?: number
-  hp?: number
-  max?: number
-  lvl?: number
-  foe?: string
-  dmg?: number
-  life?: number
-}
+/** A player's fight: the creature, which of its lives, and the damage they
+ * have dealt it in that life (the `fight` component). */
+export type Fight = { foe: string; life: number; dmg: number }
 
 /** A creature's hit points: its most, less what every player is dealing it in
- * this life. */
+ * this life.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let a = { foe: 'c1', life: 5, dmg: 10 }, b = { foe: 'c1', life: 5, dmg: 4 }
+ * assertEquals(hpOf('c1', 32, 5, [a, b]), 18)
+ * assertEquals(hpOf('c1', 32, 9, [a, b]), 32) // a new life starts whole
+ * ```
+ */
 export let hpOf = (
   eid: string,
   most: number,
   life: number,
-  poses: Pose[],
+  fights: Fight[],
 ): number => {
   let dealt = 0
-  for (let p of poses) {
-    if (p.foe == eid && (p.life ?? 0) == life) dealt += p.dmg ?? 0
-  }
+  for (let f of fights) if (f.foe == eid && f.life == life) dealt += f.dmg
   return Math.max(0, most - dealt)
 }
 
@@ -197,12 +104,12 @@ export let hpOf = (
 export let hunter = (
   eid: string,
   life: number,
-  poses: [string, Pose][],
+  fights: [string, Fight][],
 ): string | null => {
   let best: string | null = null, most = 0
-  for (let [who, p] of poses) {
-    if (p.foe == eid && (p.life ?? 0) == life && (p.dmg ?? 0) > most) {
-      most = p.dmg ?? 0
+  for (let [who, f] of fights) {
+    if (f.foe == eid && f.life == life && f.dmg > most) {
+      most = f.dmg
       best = who
     }
   }
@@ -224,11 +131,12 @@ export let lootOf = (
   player: string,
 ): { kind: string; n: number }[] => {
   let r = stream(hashOf(`${creature}:${fell}:${player}`))
-  return BEASTS[kind].loot.flatMap(([item, chance]) =>
+  let beast = BEASTS[kind]
+  return (beast?.loot ?? []).flatMap(([item, chance]) =>
     r() < chance
       ? [{
         kind: item,
-        n: item == 'coin' ? 1 + Math.floor(r() * BEASTS[kind].lvl * 3) : 1,
+        n: item == 'coin' ? 1 + Math.floor(r() * beast.lvl * 3) : 1,
       }]
       : []
   )
@@ -248,47 +156,51 @@ export let wander = (
   return [home[0] + Math.cos(a) * r, home[1] + Math.sin(a) * r]
 }
 
-export type Quest = {
-  eid: string
-  step: number
-  goal: string
-  target: string
-  count: number
-  xp: number
-  gift?: string
-  title: string
-  body: string
-}
-
 export type Entry = { quest: string; step: string; at: number }
 export type Held = { eid: string; kind: string; n: number }
 
-/** Where one player stands with each quest, in order: done, taken (with how
- * far along), open to take, or not yet. */
+/** Where one player stands with each quest, in the order given: done, taken
+ * (with how far along), open to take once the quest it comes after is done,
+ * or not yet.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let q = (id: string, after?: string) => ({
+ *   id, giver: 'g', after, goal: 'gather' as const, target: 'jelly',
+ *   count: 2, xp: 10, title: id, body: '',
+ * })
+ * let quests = [q('a'), q('b', 'a'), q('c')]
+ * let states = (journal: Entry[]) =>
+ *   questsOf(quests, journal, [], [{ eid: 'i', kind: 'jelly', n: 1 }])
+ *     .map((s) => `${s.quest.id}:${s.state}:${s.have}`)
+ * assertEquals(states([]), ['a:open:1', 'b:locked:1', 'c:open:1'])
+ * assertEquals(
+ *   states([{ quest: 'a', step: 'taken', at: 1 }, { quest: 'a', step: 'done', at: 2 }]),
+ *   ['a:done:1', 'b:open:1', 'c:open:1'],
+ * )
+ * ```
+ */
 export let questsOf = (
   quests: Quest[],
   journal: Entry[],
   kills: Slain[],
   bag: Held[],
 ) => {
-  let sorted = [...quests].sort((a, b) => a.step - b.step)
   let taken = new Map<string, number>()
   let done = new Set<string>()
   for (let e of journal) {
     if (e.step == 'taken') taken.set(e.quest, e.at)
     if (e.step == 'done') done.add(e.quest)
   }
-  let open = true
-  return sorted.map((q) => {
-    let state = done.has(q.eid)
+  return quests.map((q) => {
+    let state = done.has(q.id)
       ? 'done'
-      : taken.has(q.eid)
+      : taken.has(q.id)
       ? 'taken'
-      : open
+      : !q.after || done.has(q.after)
       ? 'open'
       : 'locked'
-    if (state != 'done') open = false
-    let since = taken.get(q.eid) ?? Infinity
+    let since = taken.get(q.id) ?? Infinity
     let have = q.goal == 'slay'
       ? kills.filter((k) => k.kind == q.target && k.at >= since).length
       : bag.filter((b) => b.kind == q.target).reduce((n, b) => n + b.n, 0)
@@ -303,7 +215,7 @@ export let xpOf = (kills: Slain[], quests: Quest[], journal: Entry[]) => {
     journal.filter((e) => e.step == 'done').map((e) => e.quest),
   )
   return kills.reduce((n, k) => n + k.xp, 0) +
-    quests.filter((q) => done.has(q.eid)).reduce((n, q) => n + q.xp, 0)
+    quests.filter((q) => done.has(q.id)).reduce((n, q) => n + q.xp, 0)
 }
 
 /** The keenest blade a player carries. */

@@ -1,15 +1,18 @@
 // Who is on stage: a figure for every player and creature the frame knows,
-// the Elder by the fire, loot on the ground, and the plates over heads.
+// the people who give quests, loot on the ground, and the plates over heads
+// and over portals.
 // A figure is made when someone arrives and dropped when they go; each frame
 // moves it to where the frame says it is, smoothing what arrives in steps (a
-// peer's pose comes ten times a second, not sixty).
+// peer's position comes when their page sends it, not on this page's beat).
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import { type Act, beast, elder, type Figure, hero } from './figures.ts'
+import { BEASTS } from './beasts.ts'
+import { type Act, beast, type Figure, hero, person } from './figures.ts'
 import type { overlay } from './fx.ts'
-import { cuboid, out, type Vec } from './mesh.ts'
+import { ITEMS } from './items.ts'
+import { LEVELS } from './levels.ts'
+import { cuboid, out } from './mesh.ts'
 import type { Frame } from './play.ts'
-import { BEASTS, ITEMS } from './rules.ts'
 import { geometry, soft } from './soft.ts'
 import { groundAt, type Vale } from './terrain.ts'
 
@@ -30,51 +33,6 @@ type Actor = {
   look: string
 }
 
-// Loot, each kind a few soft boxes.
-let LOOT: Record<string, [Vec, Vec, number][]> = {
-  jelly: [[[-0.15, 0, -0.15], [0.3, 0.26, 0.3], 0x86d65c], [
-    [-0.1, 0.26, -0.1],
-    [0.2, 0.06, 0.2],
-    0x5aa83e,
-  ]],
-  tusk: [[[-0.05, 0, -0.14], [0.1, 0.1, 0.28], 0xf2ead6], [[-0.05, 0.08, 0.1], [
-    0.1,
-    0.18,
-    0.08,
-  ], 0xf2ead6]],
-  shard: [[[-0.08, 0, -0.08], [0.16, 0.42, 0.16], 0x6fb8f0], [
-    [0.06, 0, -0.02],
-    [0.1, 0.26, 0.1],
-    0x9ad4ff,
-  ]],
-  crown: [
-    [[-0.18, 0, -0.18], [0.36, 0.1, 0.36], 0xf2c14e],
-    [[-0.18, 0.1, -0.18], [0.07, 0.12, 0.07], 0xf2c14e],
-    [[0.11, 0.1, 0.11], [0.07, 0.12, 0.07], 0xf2c14e],
-    [[-0.035, 0.1, 0.11], [0.07, 0.16, 0.07], 0xe0573f],
-  ],
-  coin: [[[-0.13, 0, -0.13], [0.26, 0.06, 0.26], 0xf2c14e], [
-    [-0.1, 0.06, -0.1],
-    [0.2, 0.05, 0.2],
-    0xe8b43a,
-  ]],
-  tonic: [
-    [[-0.1, 0, -0.1], [0.2, 0.24, 0.2], 0xc0406a],
-    [[-0.05, 0.24, -0.05], [0.1, 0.1, 0.1], 0xe8e0d0],
-    [[-0.04, 0.34, -0.04], [0.08, 0.05, 0.08], 0x8a5a3c],
-  ],
-  blade2: [[[-0.02, 0, -0.02], [0.04, 0.5, 0.04], 0xdfe6ee], [
-    [-0.1, 0.1, -0.03],
-    [0.2, 0.04, 0.06],
-    0xe2b64c,
-  ]],
-  blade3: [[[-0.03, 0, -0.03], [0.06, 0.56, 0.06], 0xbfe2ff], [
-    [-0.12, 0.12, -0.04],
-    [0.24, 0.05, 0.08],
-    0x8fd46a,
-  ]],
-}
-
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 let bar = (k: number, cls = '') =>
@@ -82,7 +40,7 @@ let bar = (k: number, cls = '') =>
     Math.max(0, Math.min(1, k)).toFixed(3)
   }"></i></span>`
 
-/** The stage over one scene. */
+/** The stage over one level's scene. */
 export let cast = (
   scene: THREE.Scene,
   v: Vale,
@@ -192,7 +150,7 @@ export let cast = (
           air: f.body.gait == 'jump',
           swing: f.swing,
           hurt: Math.max(0, 1 - (now - mine.hurtAt) / 250),
-          down: f.pose.gait == 'down',
+          down: f.down,
         },
         t,
         dt,
@@ -200,30 +158,29 @@ export let cast = (
 
       // The others.
       for (let o of f.others) {
-        let p = o.pose
+        let b = o.body
         let a = actor(o.eid, () => hero(o.look), JSON.stringify(o.look))
-        glide(a, p.x ?? 0, p.y ?? 0, p.z ?? 0, p.yaw ?? 0, dt, 9)
-        if (a.swings >= 0 && (p.swing ?? 0) > a.swings) a.swingAt = now
-        a.swings = p.swing ?? 0
-        if (a.hp >= 0 && (p.hp ?? 0) < a.hp) a.hurtAt = now
-        a.hp = p.hp ?? 0
-        let down = p.gait == 'down'
+        glide(a, b.x, b.y, b.z, b.yaw, dt, 9)
+        if (a.swings >= 0 && o.swing > a.swings) a.swingAt = now
+        a.swings = o.swing
+        if (a.hp >= 0 && o.vitals.hp < a.hp) a.hurtAt = now
+        a.hp = o.vitals.hp
         play(
           a,
           {
-            air: p.gait == 'jump',
+            air: b.gait == 'jump',
             swing: now - a.swingAt < 520 ? (now - a.swingAt) / 520 : -1,
             hurt: Math.max(0, 1 - (now - a.hurtAt) / 250),
-            down,
+            down: b.gait == 'down',
           },
           t,
           dt,
         )
-        let life = (p.hp ?? 0) / Math.max(1, p.max ?? 1)
+        let life = o.vitals.hp / Math.max(1, o.vitals.max)
         plates.plate(
           o.eid,
           head(a, 0.25),
-          `<span><b>${esc(o.name)}</b> <em>${p.lvl ?? 1}</em></span>${
+          `<span><b>${esc(o.name)}</b> <em>${o.vitals.lvl}</em></span>${
             life < 0.999 ? bar(life, 'Plate_Bar-friend') : ''
           }`,
           'Plate Plate-friend',
@@ -250,11 +207,10 @@ export let cast = (
           dt,
           16,
         )
-        let bite = m.body.bite ? f.now - m.body.bite : 1e9
         play(
           a,
           {
-            swing: bite < 700 ? bite / 700 : -1,
+            swing: m.bit < 700 ? m.bit / 700 : -1,
             hurt: Math.max(0, 1 - m.hurt / 220),
             down: m.down,
             air: false,
@@ -280,30 +236,37 @@ export let cast = (
         }
       }
 
-      // The Elder, with a mark over their head when they have something to say.
-      if (f.elder) {
-        let e = f.elder
-        let a = actor(e.eid, elder)
-        let d = Math.hypot(f.body.x - e.x, f.body.z - e.z)
-        let yaw = d < 8 ? Math.atan2(f.body.x - e.x, f.body.z - e.z) : 0.6
-        glide(a, e.x, groundAt(v, e.x, e.z), e.z, yaw, dt, 3)
+      // The people who give quests, with a mark over their heads when they
+      // have something for me.
+      for (let g of f.givers) {
+        let a = actor(g.id, () => person(g.look, g.staff))
+        let yaw = g.near < 8 ? Math.atan2(f.body.x - g.x, f.body.z - g.z) : 0.6
+        glide(a, g.x, groundAt(v, g.x, g.z), g.z, yaw, dt, 3)
         a.speed = 0
         play(a, {}, t, dt)
-        let next = f.sheet.quests.find((q) => q.state != 'done')
-        let mark = !next
-          ? ''
-          : next.state == 'open'
+        let mark = g.mark == '!'
           ? '<span class=Mark>!</span>'
-          : next.have >= next.quest.count
+          : g.mark == '?'
           ? '<span class="Mark Mark-ready">?</span>'
           : ''
         plates.plate(
-          e.eid,
+          g.id,
           head(a, 0.2),
-          `${mark}<b>${esc(e.name)}</b>`,
+          `${mark}<b>${esc(g.name)}</b>`,
           'Plate Plate-npc',
         )
       }
+
+      // Each portal, named for where it leads.
+      v.portals.forEach((p, i) => {
+        if (Math.hypot(p.x - f.body.x, p.z - f.body.z) > 30) return
+        plates.plate(
+          `portal:${i}`,
+          at.set(p.x, groundAt(v, p.x, p.z) + 4.6, p.z),
+          `<b>To ${esc(LEVELS[p.to]?.name ?? p.to)}</b>`,
+          'Plate Plate-npc',
+        )
+      })
 
       // Loot.
       let lying = new Set<string>()
@@ -314,7 +277,7 @@ export let cast = (
           let g = lootGeo.get(d.kind)
           if (!g) {
             let o = out()
-            for (let [min, size, hex] of LOOT[d.kind] ?? LOOT.coin) {
+            for (let [min, size, hex] of (ITEMS[d.kind] ?? ITEMS.coin).look) {
               cuboid(o, min, size, hex, 0.05, 0.02)
             }
             g = geometry(o)
@@ -349,5 +312,3 @@ export let cast = (
     },
   }
 }
-
-export let lootName = (kind: string) => ITEMS[kind]?.name ?? kind
