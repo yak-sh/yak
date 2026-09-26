@@ -24,9 +24,11 @@ Two halves, because the compiler runs only inside workerd:
 - `modules(read, entry)` and `sources(read, entry)` walk the module graph from
   one file: `modules` as the runtime links (a specifier names a file exactly),
   `sources` as esbuild resolves (extensions, `index` files, the `.ts` twin of a
-  `.js` import). Each returns the files reached and the packages named. Both
-  parse: an import in a comment or a string names nothing, and `import type` is
-  gone with the types.
+  `.js` import). Each returns the files reached, the packages named, and each
+  Web Worker a file starts (`new Worker(new URL('./grow.ts', import.meta.url))`)
+  as that file and the specifier: an entry of its own, not walked. Both parse:
+  an import in a comment or a string names nothing, and `import type` is gone
+  with the types.
 - `loaded(page, html)` is the module scripts a page loads, and `mapped(html)`
   what its import maps name.
 - `dependencies(text)` reads `package.json`'s `dependencies`.
@@ -39,6 +41,11 @@ Two halves, because the compiler runs only inside workerd:
   a package `package.json` names. A package it does not name is left for the
   page's import map, and the plan says so when the import map of a page that
   loads the script does not name it.
+- A module worker a page script starts, by the same rule as a page script,
+  except that no import map reaches a worker: every package it imports by name
+  must be one `package.json` names. The host serves it compiled at its source's
+  address. esbuild leaves `import.meta.url` as written, so in a compiled script
+  the worker's path resolves against the entry, not the file that names it.
 
 A page script compiles to one minified file with `process.env.NODE_ENV` set to
 `"production"`. The server source compiles to one module; files it reaches that

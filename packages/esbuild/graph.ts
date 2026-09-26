@@ -1,6 +1,7 @@
 // The module graph of an app's code: from one entry, every file its relative
-// imports reach, in the order the files name them, and every package named
-// on the way. Two readings of one walk: the runtime's, where a specifier names
+// imports reach, in the order the files name them, every package named on the
+// way, and every module worker a file starts, which is an entry of its own
+// (`new Worker(new URL('./grow.ts', import.meta.url))`). Two readings of one walk: the runtime's, where a specifier names
 // a file exactly (`modules`), and esbuild's, which also tries the extensions
 // and index files a TypeScript import leaves off (`sources`).
 //
@@ -23,6 +24,11 @@ export type Reached = {
   files: Map<string, Uint8Array<ArrayBuffer>>
   /** Every specifier that is not a path: `three`, `hono/cors`, `node:fs`. */
   named: string[]
+  /** Each Web Worker a reached file starts from the app's files, as the file
+   * that starts it and the specifier it names: an entry of its own, which the
+   * walk does not follow. What the specifier resolves against depends on
+   * whether that file is compiled (./plan.ts). */
+  started: [string, string][]
 }
 
 // What sucrase strips from each kind of file before it is lexed. JavaScript
@@ -54,6 +60,30 @@ let javascript = async (path: string, source: string) => {
 let unparsed = (e: unknown) =>
   e instanceof SyntaxError || e instanceof Error && 'idx' in e
 
+// What starts a Web Worker from an app file, read by its shape: the
+// `new URL(path, import.meta.url)` form every bundler and browser resolves
+// against the module that wrote it.
+let STARTS =
+  /\bnew\s+(?:Shared)?Worker\s*\(\s*new\s+URL\s*\(\s*(['"`])([^'"`$]+)\1\s*,\s*import\.meta\.url\s*\)/g
+
+type Lexed = { specifiers: string[]; started: string[] }
+
+// A module read once: what it imports, and what it starts as a worker. A
+// module that does not parse imports and starts nothing.
+let lexed = async (path: string, source: string): Promise<Lexed> => {
+  try {
+    let js = await javascript(path, source)
+    return {
+      specifiers: parse(js)[0].map((i) => i.n)
+        .filter((n): n is string => n != null),
+      started: [...js.matchAll(STARTS)].map((m) => m[2]),
+    }
+  } catch (e) {
+    if (unparsed(e)) return { specifiers: [], started: [] }
+    throw e
+  }
+}
+
 /** The specifiers a module imports, in reading order, or none when it does
  * not parse. Its path says how to read it: TypeScript, JSX or JavaScript.
  *
@@ -74,15 +104,27 @@ let unparsed = (e: unknown) =>
 export let specifiers = async (
   path: string,
   source: string,
-): Promise<string[]> => {
-  try {
-    return parse(await javascript(path, source))[0].map((i) => i.n)
-      .filter((n): n is string => n != null)
-  } catch (e) {
-    if (unparsed(e)) return []
-    throw e
-  }
-}
+): Promise<string[]> => (await lexed(path, source)).specifiers
+
+/** The specifiers of the scripts a module starts as Web Workers.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(
+ *   await started(
+ *     'main.ts',
+ *     `let w: Worker = new Worker(new URL('./grow.ts', import.meta.url), ` +
+ *       `{ type: 'module' })\nnew SharedWorker(new URL("../hub.js", ` +
+ *       `import.meta.url))\nnew Worker('plain.js')`,
+ *   ),
+ *   ['./grow.ts', '../hub.js'],
+ * )
+ * ```
+ */
+export let started = async (
+  path: string,
+  source: string,
+): Promise<string[]> => (await lexed(path, source)).started
 
 /** Whether a specifier names a file of the app rather than a package. */
 export let relative = (spec: string): boolean =>
@@ -197,6 +239,7 @@ let loose: Find = async (read, path) => {
 let walk = (find: Find): Walk => async (read, entry) => {
   let files = new Map<string, Uint8Array<ArrayBuffer>>()
   let named: string[] = []
+  let started: [string, string][] = []
   let seen = new Set<string>()
   let visit = async (path: string) => {
     if (seen.has(path)) return
@@ -206,13 +249,15 @@ let walk = (find: Find): Walk => async (read, entry) => {
     let [at, bytes] = hit
     files.set(at, bytes)
     if (!script(at)) return
-    for (let spec of await specifiers(at, new TextDecoder().decode(bytes))) {
+    let lex = await lexed(at, new TextDecoder().decode(bytes))
+    for (let spec of lex.specifiers) {
       if (relative(spec)) await visit(resolved(at, spec))
       else if (!named.includes(spec)) named.push(spec)
     }
+    for (let spec of lex.started.filter(relative)) started.push([at, spec])
   }
   await visit(entry)
-  return { files, named }
+  return { files, named, started }
 }
 
 /** What the runtime loads from `entry`: each specifier names a file exactly. */

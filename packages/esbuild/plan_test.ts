@@ -101,6 +101,45 @@ Deno.test('a page script compiles when it is TypeScript or imports a declared pa
   ])
 })
 
+Deno.test('a module worker a page script starts compiles as an entry of its own', async () => {
+  let MAP =
+    `<script type=importmap>{"imports": {"lit": "https://esm.sh/lit"}}` +
+    '</script>'
+  let START = (path: string) =>
+    `new Worker(new URL('${path}', import.meta.url), { type: 'module' })`
+  let got = await planned({
+    'index.html': MAP + PAGE('app.js'),
+    'app.js': `import './ui.js'\n${START('./game/grow.ts')}`,
+    'ui.js': START('./game/grow.ts'),
+    'game/grow.ts': `import { vale } from './vale.ts'\nimport 'lit'\n` +
+      START('./deep.js'),
+    'game/vale.ts': 'export let vale = (n: number) => n',
+    'game/deep.js': `import * as THREE from 'three'`,
+    'package.json': THREE,
+  })
+  // The page script is plain and compiles nothing; what it starts does, and
+  // so does what that starts.
+  assertEquals(got?.pages, ['game/grow.ts', 'game/deep.js'])
+  assertEquals(got?.sent.filter((p) => p.startsWith('game/')), [
+    'game/deep.js',
+    'game/grow.ts',
+    'game/vale.ts',
+  ])
+  // The page's import map does not reach its worker.
+  assertEquals(got?.notes.map((n) => n.split(' ').slice(0, 3).join(' ')), [
+    'game/grow.ts imports lit,',
+  ])
+  // Compiled into its entry, a file's `import.meta.url` is the entry's, so
+  // the worker it starts is found beside the entry.
+  let nested = await planned({
+    'index.html': PAGE('main.ts'),
+    'main.ts': `import './lib/start.js'`,
+    'lib/start.js': START('./w.ts'),
+    'w.ts': 'export {}',
+  })
+  assertEquals(nested?.pages, ['main.ts', 'w.ts'])
+})
+
 Deno.test('a compiled page notes each package no import map on its pages resolves', async () => {
   let MAP = `<script type=importmap>{"imports": {"@yaks/client": ` +
     `"https://esm.sh/jsr/@yaks/client", "lit/": "https://esm.sh/lit/"}}` +

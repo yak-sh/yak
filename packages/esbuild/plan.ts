@@ -8,7 +8,9 @@
 // reaches is TypeScript or JSX, or when it imports a package package.json
 // names. A package package.json does not name is left to the browser, which
 // resolves it through the page's import map; the deploy says so when the map
-// does not name it.
+// does not name it. A module worker a page script starts (`new Worker(new
+// URL('./grow.ts', import.meta.url))`) is a page script too, compiled by the
+// same rule, except that no import map reaches it.
 //
 // An app with no TypeScript and no package.json plans nothing, without a
 // file read, and its deploy is the one it always was.
@@ -48,6 +50,7 @@ export type Ask = {
      * host uploads each beside the compiled module, by its own path. */
     carry: string[]
   }
+  /** The page scripts to compile, and the module workers they start. */
   pages: string[]
 }
 
@@ -209,8 +212,10 @@ export let plan = async (app: App): Promise<Plan | null> => {
   }
 
   // Each module script the pages load, with the import map of every page
-  // that loads it.
+  // that loads it. A worker a script starts joins as the walk finds it, with
+  // no import map at all, since none reaches a worker.
   let loads = new Map<string, string[][]>()
+  let started = new Set<string>()
   for (let page of app.paths.filter((p) => /\.html?$/i.test(p))) {
     let html = await text(page) ?? ''
     for (let entry of loaded(page, html)) {
@@ -220,9 +225,22 @@ export let plan = async (app: App): Promise<Plan | null> => {
   let pages: string[] = []
   for (let [entry, maps] of loads) {
     if (!has.has(entry) || !script(entry)) continue
-    let { files: reached, named: specs } = await sources(readApp, entry)
+    let { files: reached, named: specs, started: starts } = await sources(
+      readApp,
+      entry,
+    )
     let wanted = specs.filter((s) => named.has(packageOf(s) ?? ''))
-    if (![...reached.keys()].some(typed) && !wanted.length) continue
+    let compiled = [...reached.keys()].some(typed) || wanted.length > 0
+    // esbuild leaves `import.meta.url` as written, so in a compiled script
+    // it is the entry's address, and a worker's path resolves against the
+    // entry; in a script served as written, against the file that names it.
+    for (let [from, spec] of starts) {
+      let path = resolved(compiled ? entry : from, spec)
+      if (loads.has(path)) continue
+      started.add(path)
+      loads.set(path, [[]])
+    }
+    if (!compiled) continue
     pages.push(entry)
     send(reached)
     // A package the compile leaves in is the browser's to resolve, and only
@@ -233,8 +251,12 @@ export let plan = async (app: App): Promise<Plan | null> => {
         continue
       }
       notes.push(
-        `${entry} imports ${spec}, which neither package.json nor the ` +
-          "page's import map names, so the browser cannot load it",
+        `${entry} imports ${spec}, which ` +
+          (started.has(entry)
+            ? 'package.json does not name, and no import map reaches a ' +
+              'module worker, so the browser cannot load it'
+            : "neither package.json nor the page's import map names, so the " +
+              'browser cannot load it'),
       )
     }
     for (let css of [...reached.keys()].filter((p) => p.endsWith('.css'))) {
