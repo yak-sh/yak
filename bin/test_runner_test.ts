@@ -76,10 +76,9 @@ Deno.test('a file that cannot load fails as a test of its own, and the rest run'
 Deno.test('bulk shards are bounded, deterministic and run every module once', () => {
   assertEquals(shards([], 8), [])
   assertEquals(shards(['a', 'b'], 8), [['a'], ['b']])
-  assertEquals(shards(['a', 'b', 'c', 'd', 'e'], 2), [['a', 'c', 'e'], [
-    'b',
-    'd',
-  ]])
+  let five = shards(['a', 'b', 'c', 'd', 'e'], 2)
+  assertEquals(five.flat().sort(), ['a', 'b', 'c', 'd', 'e'])
+  assertEquals(five.map((s) => s.length).sort(), [2, 3])
   assertEquals(shards(['a', 'b'], 1), [['a', 'b']])
   for (let n of [0, -1, NaN, Infinity, 1.5]) {
     assertThrows(() => shards(['a'], n))
@@ -110,6 +109,16 @@ Deno.test('shards deal the heaviest first, so a slow file runs alongside the res
     'bin/a_test.ts': 1.25,
     'packages/b_test.ts': 2.5,
   })
+})
+
+Deno.test("a directory's files share a shard where the shards stay even", () => {
+  assertEquals(shards(['x/a', 'x/b', 'y/c', 'y/d'], 2), [
+    ['x/a', 'x/b'],
+    ['y/c', 'y/d'],
+  ])
+  let weight = (f: string) => f.startsWith('x/') ? 3 : 1
+  let dealt = shards(['x/a', 'x/b', 'y/c', 'y/d', 'y/e', 'y/f'], 2, weight)
+  assertEquals(dealt.map((s) => s.reduce((n, f) => n + weight(f), 0)), [5, 5])
 })
 
 // A failing shard no longer cancels its siblings: every shard runs to its own

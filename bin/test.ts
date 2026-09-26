@@ -3,7 +3,8 @@
 //
 // - deno: every `*_test.ts`, and every example in a doc comment or a README
 //   (`deno test --doc`), sharded across processes, and each shard's test
-//   files loaded into one runtime (bin/shard.ts);
+//   files loaded into one runtime (bin/shard.ts), a directory's files in as
+//   few of them as the balance allows (`shards`);
 // - workerd: every `*_workerd_test.ts`, against the one kernel
 //   workers/yak/probe-suite.ts starts for the run.
 //
@@ -171,9 +172,17 @@ let examples = (pages: string[]) => [
   ...pages,
 ]
 
+// The directory a file sits in: its package, as a rule, whose files load the
+// same module graph and share what their tests lend a process (a kernel, the
+// harness's backend Worker, a repository).
+let home = (file: string) => file.slice(0, file.lastIndexOf('/') + 1)
+
 /** Stable, bounded partition: every module runs exactly once. The heaviest
- * file goes first, each to the lightest shard, so the shards end together;
- * files of one weight are dealt round in order. */
+ * file goes first, to the lightest shard already holding its directory where
+ * it fits within an even share of the whole, and otherwise to the lightest
+ * shard. So the shards end together, and a directory's files load their
+ * module graph and start what their tests lend a process in as few runtimes
+ * as the balance allows, rather than once in every shard. */
 export function shards(
   files: string[],
   jobs: number,
@@ -182,12 +191,20 @@ export function shards(
   if (!Number.isInteger(jobs) || jobs < 1) throw new Error('invalid test jobs')
   let groups = Array.from(
     { length: Math.min(jobs, files.length) },
-    () => ({ files: [] as string[], load: 0 }),
+    () => ({ files: [] as string[], load: 0, homes: new Set<string>() }),
   )
+  let share = files.reduce((sum, f) => sum + weight(f), 0) / groups.length
+  let lightest = (among: typeof groups) =>
+    among.reduce((a, b) => b.load < a.load ? b : a)
   for (let file of [...files].sort((a, b) => weight(b) - weight(a))) {
-    let lightest = groups.reduce((a, b) => b.load < a.load ? b : a)
-    lightest.files.push(file)
-    lightest.load += weight(file)
+    let w = weight(file)
+    let kin = groups.filter((g) =>
+      g.homes.has(home(file)) && g.load + w <= share
+    )
+    let g = lightest(kin.length ? kin : groups)
+    g.files.push(file)
+    g.load += w
+    g.homes.add(home(file))
   }
   return groups.map((g) => g.files)
 }
