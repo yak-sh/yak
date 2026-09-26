@@ -6,8 +6,9 @@
 // imports is either compiled in or missing. A page script is each
 // `<script type="module" src>` an HTML file loads, compiled when a file it
 // reaches is TypeScript or JSX, or when it imports a package package.json
-// names. A package package.json does not name is left to the browser, where
-// an import map may name it; the deploy says so rather than guessing.
+// names. A package package.json does not name is left to the browser, which
+// resolves it through the page's import map; the deploy says so when the map
+// does not name it.
 //
 // An app with no TypeScript and no package.json plans nothing, without a
 // file read, and its deploy is the one it always was.
@@ -132,6 +133,39 @@ export let loaded = (page: string, html: string): string[] =>
     )
     .map((src) => resolved(page, src.startsWith('.') ? src : `./${src}`))
 
+let MAP =
+  /<script\b[^>]*\btype\s*=\s*(?:"importmap"|'importmap'|importmap\b)[^>]*>([\s\S]*?)<\/script/gi
+
+// The keys of an import map's `imports`; none when it is not JSON, which the
+// browser refuses too.
+let keys = (json: string): string[] => {
+  try {
+    let imports = JSON.parse(json)?.imports
+    return imports && typeof imports == 'object' ? Object.keys(imports) : []
+  } catch {
+    return []
+  }
+}
+
+/** What an HTML file's import maps name: every key of their `imports`.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(
+ *   mapped(`<script type=importmap>{"imports": {"three": "https://esm.sh/` +
+ *     `three", "lit/": "https://esm.sh/lit/"}}</script>`),
+ *   ['three', 'lit/'],
+ * )
+ * ```
+ */
+export let mapped = (html: string): string[] =>
+  [...html.matchAll(MAP)].flatMap(([, json]) => keys(json))
+
+// Whether an import map's keys resolve a specifier: a key names it, or ends
+// in `/` and begins it.
+let covers = (map: string[], spec: string) =>
+  map.some((key) => key == spec || key.endsWith('/') && spec.startsWith(key))
+
 /**
  * What a deploy of this app compiles, or null when nothing needs compiling.
  * Throws {@link Unplanned} when package.json cannot be read.
@@ -174,29 +208,40 @@ export let plan = async (app: App): Promise<Plan | null> => {
     }
   }
 
+  // Each module script the pages load, with the import map of every page
+  // that loads it.
+  let loads = new Map<string, string[][]>()
+  for (let page of app.paths.filter((p) => /\.html?$/i.test(p))) {
+    let html = await text(page) ?? ''
+    for (let entry of loaded(page, html)) {
+      loads.set(entry, [...loads.get(entry) ?? [], mapped(html)])
+    }
+  }
   let pages: string[] = []
-  let htmls = app.paths.filter((p) => /\.html?$/i.test(p))
-  for (let page of htmls) {
-    for (let entry of loaded(page, await text(page) ?? '')) {
-      if (pages.includes(entry) || !has.has(entry) || !script(entry)) continue
-      let { files: reached, named: specs } = await sources(readApp, entry)
-      let packages = specs.map(packageOf).filter((p): p is string => !!p)
-      let wanted = packages.filter((p) => named.has(p))
-      if (![...reached.keys()].some(typed) && !wanted.length) continue
-      pages.push(entry)
-      send(reached)
-      for (let p of new Set(packages.filter((p) => !named.has(p)))) {
-        notes.push(
-          `${entry} imports ${p}, which package.json does not name: it is ` +
-            'left to the browser, so the page needs an import map for it',
-        )
+  for (let [entry, maps] of loads) {
+    if (!has.has(entry) || !script(entry)) continue
+    let { files: reached, named: specs } = await sources(readApp, entry)
+    let wanted = specs.filter((s) => named.has(packageOf(s) ?? ''))
+    if (![...reached.keys()].some(typed) && !wanted.length) continue
+    pages.push(entry)
+    send(reached)
+    // A package the compile leaves in is the browser's to resolve, and only
+    // an import map on every page that loads the script resolves it.
+    for (let spec of specs) {
+      let name = packageOf(spec)
+      if (!name || named.has(name) || maps.every((m) => covers(m, spec))) {
+        continue
       }
-      for (let css of [...reached.keys()].filter((p) => p.endsWith('.css'))) {
-        notes.push(
-          `${entry} imports ${css}, and a compiled page script leaves CSS ` +
-            `out: link it from the page instead`,
-        )
-      }
+      notes.push(
+        `${entry} imports ${spec}, which neither package.json nor the ` +
+          "page's import map names, so the browser cannot load it",
+      )
+    }
+    for (let css of [...reached.keys()].filter((p) => p.endsWith('.css'))) {
+      notes.push(
+        `${entry} imports ${css}, and a compiled page script leaves CSS ` +
+          `out: link it from the page instead`,
+      )
     }
   }
 

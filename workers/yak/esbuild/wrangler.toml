@@ -30,6 +30,7 @@ invocation_logs = true
 "@cloudflare/worker-bundler" = "../node_modules/@cloudflare/worker-bundler/dist/index.js"
 "es-module-lexer/js" = "../node_modules/es-module-lexer/dist/lexer.asm.js"
 "semver" = "../node_modules/semver/index.js"
+"sucrase" = "../node_modules/sucrase/dist/esm/index.js"
 
 [env.staging]
 name = "yak-esbuild-staging"

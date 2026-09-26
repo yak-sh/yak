@@ -500,6 +500,9 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 "preact/hooks" = "./node_modules/preact/hooks/dist/hooks.module.js"
 "preact-render-to-string" = "./node_modules/preact-render-to-string/dist/index.mjs"
 "zod" = "./node_modules/zod/index.js"
+# @yaks/esbuild parses an app's module graph at deploy (packages/esbuild/graph.ts).
+"es-module-lexer/js" = "./node_modules/es-module-lexer/dist/lexer.asm.js"
+"sucrase" = "./node_modules/sucrase/dist/esm/index.js"
 # @yaks/vocab validates a tool's arguments with @cfworker/json-schema, which
 # interprets a schema rather than compiling it to code the runtime refuses.
 "@cfworker/json-schema" = "./node_modules/@cfworker/json-schema/dist/esm/index.js"

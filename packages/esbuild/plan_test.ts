@@ -84,7 +84,9 @@ Deno.test('a page script compiles when it is TypeScript or imports a declared pa
       PAGE('plain.js'),
     'main.ts': `let n: number = 1\nexport {}`,
     'game/app.js': `import * as THREE from 'three'\nimport { ui } from './ui'`,
-    'game/ui.jsx': 'export let ui = <b/>',
+    'game/ui.jsx': `import { h } from './h.js'\nexport let ui = <b>it's</b>`,
+    'game/h.js': `// import './said.js'\nexport let h = 1`,
+    'game/said.js': '',
     'plain.js': `import { apply } from './api/client.js'`,
     'package.json': THREE,
   })
@@ -92,10 +94,37 @@ Deno.test('a page script compiles when it is TypeScript or imports a declared pa
   assertEquals(got?.pages, ['main.ts', 'game/app.js'])
   assertEquals(got?.sent, [
     'game/app.js',
+    'game/h.js',
     'game/ui.jsx',
     'main.ts',
     'package.json',
   ])
+})
+
+Deno.test('a compiled page notes each package no import map on its pages resolves', async () => {
+  let MAP = `<script type=importmap>{"imports": {"@yaks/client": ` +
+    `"https://esm.sh/jsr/@yaks/client", "lit/": "https://esm.sh/lit/"}}` +
+    '</script>'
+  let noted = async (pages: Record<string, string>) =>
+    (await planned({
+      ...pages,
+      'main.ts': "/** ```ts\n * import { assert } from '@std/assert'\n" +
+        " * ``` */\nimport type { T } from 'types'\n" +
+        `import { c } from '@yaks/client'\nimport 'lit/decorators.js'\n` +
+        `import * as THREE from 'three'`,
+    }))?.notes.map((n) => n.split(/[ ,]/)[2])
+  assertEquals(await noted({ 'index.html': MAP + PAGE('main.ts') }), [
+    'three',
+  ])
+  // A page without the map loads the same script, and the browser cannot
+  // resolve it there.
+  assertEquals(
+    await noted({
+      'index.html': MAP + PAGE('main.ts'),
+      'b.html': PAGE('main.ts'),
+    }),
+    ['@yaks/client', 'lit/decorators.js', 'three'],
+  )
 })
 
 Deno.test('a package package.json does not name is left to an import map', async () => {

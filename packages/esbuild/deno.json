@@ -11,7 +11,8 @@
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@cloudflare/worker-bundler": "npm:@cloudflare/worker-bundler@0.2.4",
     "es-module-lexer": "npm:es-module-lexer@2.3.2",
-    "semver": "npm:semver@7.8.5"
+    "semver": "npm:semver@7.8.5",
+    "sucrase": "npm:sucrase@3.35.1"
   },
   "publish": {
     "exclude": [

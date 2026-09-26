@@ -4,11 +4,15 @@
 // a file exactly (`modules`), and esbuild's, which also tries the extensions
 // and index files a TypeScript import leaves off (`sources`).
 //
-// Specifiers are found by pattern, not parsed. Over-matching costs nothing: a
-// word in a string that reads like an import names a file the app does not
-// have, and a file that is not there is skipped, while esbuild, which does
-// parse, is what compiles. Missing one would leave a module out, which is the
-// bug a walk exists to prevent.
+// Specifiers are parsed: an import in a comment or a string names nothing.
+// sucrase strips TypeScript and JSX down to JavaScript, keeping every import
+// esbuild might keep (only `import type` and its kin go, since missing an
+// import would leave a module out, the bug a walk exists to prevent), and
+// es-module-lexer reads the imports of what is left. A file that does not
+// parse is a leaf: whatever loads it (esbuild, the runtime, the browser) says
+// why, in a better sentence than a walk could.
+import { parse } from 'es-module-lexer/js'
+import type { Transform } from 'sucrase'
 
 /** An app file's bytes, or null when the app has no file at that path. */
 export type Read = (path: string) => Promise<Uint8Array<ArrayBuffer> | null>
@@ -21,25 +25,64 @@ export type Reached = {
   named: string[]
 }
 
-// After `from` (`import x from './y'`, `export * from './y'`) and after
-// `import` itself (a bare `import './y'`, and `import('./y')` with a literal).
-let FROM = /\bfrom\s*(['"])([^'"\n]+)\1/g
-let IMPORT = /\bimport\s*\(?\s*(['"])([^'"\n]+)\1/g
+// What sucrase strips from each kind of file before it is lexed. JavaScript
+// is lexed as it is written.
+let STRIP: Record<string, Transform[]> = {
+  ts: ['typescript'],
+  mts: ['typescript'],
+  cts: ['typescript'],
+  tsx: ['typescript', 'jsx'],
+  jsx: ['jsx'],
+}
 
-/** The specifiers a module's text names, in reading order.
+// sucrase loads with the first TypeScript or JSX file a walk reads, not with
+// every isolate that imports this module: in the kernel that is every request.
+let javascript = async (path: string, source: string) => {
+  let transforms = STRIP[path.slice(path.lastIndexOf('.') + 1)]
+  if (!transforms) return source
+  let { transform } = await import('sucrase')
+  return transform(source, {
+    transforms,
+    keepUnusedImports: true,
+    disableESTransforms: true,
+    production: true,
+  }).code
+}
+
+// sucrase refuses a file with a SyntaxError, es-module-lexer with an Error
+// carrying the offset (`idx`).
+let unparsed = (e: unknown) =>
+  e instanceof SyntaxError || e instanceof Error && 'idx' in e
+
+/** The specifiers a module imports, in reading order, or none when it does
+ * not parse. Its path says how to read it: TypeScript, JSX or JavaScript.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * assertEquals(
- *   specifiers(`import a from './a.js'\nexport * from "three"\nimport('./b')`),
+ *   await specifiers(
+ *     'a.tsx',
+ *     `// import x from 'said'\nimport type { T } from 'types'\n` +
+ *       `import a from './a.js'\nexport * from "three"\n` +
+ *       `let b = <b>it's</b>\nimport('./b')`,
+ *   ),
  *   ['./a.js', 'three', './b'],
  * )
+ * assertEquals(await specifiers('a.ts', 'let n: = 1'), [])
  * ```
  */
-export let specifiers = (source: string): string[] =>
-  [...source.matchAll(FROM), ...source.matchAll(IMPORT)]
-    .sort((a, b) => a.index - b.index)
-    .map((m) => m[2])
+export let specifiers = async (
+  path: string,
+  source: string,
+): Promise<string[]> => {
+  try {
+    return parse(await javascript(path, source))[0].map((i) => i.n)
+      .filter((n): n is string => n != null)
+  } catch (e) {
+    if (unparsed(e)) return []
+    throw e
+  }
+}
 
 /** Whether a specifier names a file of the app rather than a package. */
 export let relative = (spec: string): boolean =>
@@ -163,7 +206,7 @@ let walk = (find: Find): Walk => async (read, entry) => {
     let [at, bytes] = hit
     files.set(at, bytes)
     if (!script(at)) return
-    for (let spec of specifiers(new TextDecoder().decode(bytes))) {
+    for (let spec of await specifiers(at, new TextDecoder().decode(bytes))) {
       if (relative(spec)) await visit(resolved(at, spec))
       else if (!named.includes(spec)) named.push(spec)
     }

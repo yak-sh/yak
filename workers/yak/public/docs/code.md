@@ -137,7 +137,8 @@ build seconds, beside the sandbox's.
 - A compiled script changes at `app_deploy`; until then its address serves the
   last compile.
 - A package a page imports that `package.json` does not name is left to the
-  browser, for an import map to resolve, and the deploy says so.
+  browser, for the page's import map to resolve; the deploy says so when the
+  import map does not name it.
 - CSS a script imports is dropped: link it from the page.
 - `./api/client.js` stays an import the browser makes, from the compiled
   script's own address, so import it from a file beside the page's script.

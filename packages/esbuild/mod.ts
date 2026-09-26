@@ -22,6 +22,7 @@ export {
   type Ask,
   dependencies,
   loaded,
+  mapped,
   type Plan,
   plan,
   Unplanned,
