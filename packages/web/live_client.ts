@@ -4,6 +4,12 @@
 // frame in the box. The socket is tapped so each frame is also reported by the
 // names that asked for it, after it has landed: live.ts keeps its per-name
 // bookkeeping (readiness, refusals, one-shot reads) from that.
+//
+// A name is ready once the host has answered its line, and stays ready through
+// a lost socket (T-37450): a watch is unready from the drop until the
+// resubscribe is answered, but it keeps the rows it had, and those rows are the
+// host's last word until the next answer replaces them. Only a refusal, or the
+// line's last name closing, takes the answer back.
 import { batch } from '@preact/signals'
 import { type Client, client, type Watch, wireIdb } from '@yaks/client'
 import { type Bundle, type Comp, dead } from '@yaks/graph'
@@ -69,14 +75,8 @@ export let liveClient = (opts: {
   let named = new Map<string, Set<string>>() // line -> the names holding it
   let lines = new Map<string, string>() // wire id -> line
   let fresh = new Set<string>() // wire ids whose next frame is the whole set
+  let answered = new Set<string>() // lines the host has answered
   let deliver: ((event: Event & { data?: unknown }) => void) | undefined
-  let after = (text: string) => {
-    let f = JSON.parse(text) as Frame
-    let line = f.id ? lines.get(f.id) : undefined
-    if (!line) return
-    let reset = !f.refused && (fresh.delete(f.id) || !!f.reset)
-    opts.frame([...named.get(line) ?? []], f, reset)
-  }
   let tap = (s: Socket): Socket => ({
     get readyState() {
       return s.readyState
@@ -96,8 +96,15 @@ export let liveClient = (opts: {
     addEventListener: (type, fn) => {
       if (type != 'message') return s.addEventListener(type, fn)
       let land = (e: Event & { data?: unknown }) => {
+        let f = JSON.parse(String(e.data)) as Frame
+        let line = f.id ? lines.get(f.id) : undefined
+        // Taken back before the box hears it, so the unready it reports
+        // reads as no answer.
+        if (line && f.refused) answered.delete(line)
         fn(e)
-        after(String(e.data))
+        if (!line) return
+        let reset = !f.refused && (fresh.delete(f.id) || !!f.reset)
+        opts.frame([...named.get(line) ?? []], f, reset)
       }
       deliver = land
       // Frames land in batches (T-37445): every frame the socket has carried
@@ -143,8 +150,12 @@ export let liveClient = (opts: {
     handles.set(sub, { line, watch })
     let names = named.get(wire) ?? new Set()
     named.set(wire, names.add(sub))
-    watch.subscribe(() => opts.ready(sub))
-    opts.ready(sub)
+    let heard = () => {
+      if (watch.ready) answered.add(wire)
+      opts.ready(sub)
+    }
+    watch.subscribe(heard)
+    heard()
   }
   let close = (sub: string) => {
     let h = handles.get(sub)
@@ -153,7 +164,10 @@ export let liveClient = (opts: {
     let wire = entire(h.line)
     let names = named.get(wire)
     names?.delete(sub)
-    if (!names?.size) named.delete(wire)
+    if (!names?.size) {
+      named.delete(wire)
+      answered.delete(wire)
+    }
     h.watch.close()
   }
   // Changes as whole rows: a reset rebuilds each row from what it carries.
@@ -221,7 +235,10 @@ export let liveClient = (opts: {
     has: (sub: string) => handles.has(sub),
     members: (sub: string) =>
       handles.get(sub)?.watch.value.map((b) => b.entity.eid) ?? [],
-    ready: (sub: string) => handles.get(sub)?.watch.ready ?? false,
+    ready: (sub: string) => {
+      let h = handles.get(sub)
+      return !!h && answered.has(entire(h.line))
+    },
     patch: (changes: Change[]) => replicate(box.graph, bundles(changes)),
   }
 }
