@@ -62,6 +62,12 @@ Deno.test('a bare bang names the component, not the property beside it', () => {
   assertEquals(sel('.book'), ['b1', 'b2', 'b3', 'b4'])
   assertEquals(sel('.book=b1'), ['r1', 'r2'])
   assertEquals(sel('.review.book'), ['r1', 'r2', 'r3'])
+  // Its absence names the component too: the reviews lack it, the books don't.
+  assertEquals(sel('!book').filter((e) => /^[br]\d$/.test(e)), [
+    'r1',
+    'r2',
+    'r3',
+  ])
 })
 
 Deno.test('the kind scope names the most specific kind', () => {

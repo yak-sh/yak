@@ -83,6 +83,7 @@ let QUERIES = [
   // same name claims the bare name: `.book` is the books, `.book=b1` is
   // still review.book, and `.review.book` still reaches the property.
   '.book',
+  '!book',
   '.review.book',
   // booleans and enums
   '.available=1',
