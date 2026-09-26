@@ -1193,8 +1193,13 @@ export class Store {
     app: this.#get('app'),
     mail: () => this.#get('mail'),
     graph: { ...g, apply: (change, opts) => this.#asIs(change, opts) },
-    as: async (who, bundles) =>
-      await this.#graph.apply(signed(bundles, who ? { by: who } : null)),
+    as: async (who, bundles, via) =>
+      await this.#graph.apply(
+        signed(bundles, {
+          ...(who ? { by: who } : {}),
+          ...(via ? { via } : {}),
+        }),
+      ),
     commands: () => JSON.parse(this.#get('tools') || '{}'),
     broke: (what, error) => void this.#broke(what, error),
   })

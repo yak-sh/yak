@@ -160,8 +160,14 @@ export type Stored = {
    * bookkeeping, which no person's level is asked about */
   graph: Graph
   /** a write as somebody (null: nobody signed in), held to what they may
-   * write here as if they had sent it themselves */
-  as: (who: string | null, bundles: Bundle[]) => Promise<Bundle[]>
+   * write here as if they had sent it themselves; `via` is what it came
+   * through, which its rows' `created.via` names: the transcript whose turn
+   * a model's command ran in */
+  as: (
+    who: string | null,
+    bundles: Bundle[],
+    via?: string,
+  ) => Promise<Bundle[]>
   /** the app's own commands, as its manifest declares them now
    * (lib/tools.ts) */
   commands: () => Tools

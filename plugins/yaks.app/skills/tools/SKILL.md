@@ -410,7 +410,9 @@ turn, held to what they could write on the page themselves.
 `$session` in such a command is the transcript the turn is in: here, the smith
 whose mood it is. No argument binds it, so a model cannot be talked into naming
 another transcript, and a command that uses it runs only in a model's turn:
-called through `command`, it is refused.
+called through `command`, it is refused. Every row such a call writes carries
+the transcript as `created.via`, so a page can tell what the smith's own turn
+wrote from anything a visitor wrote in the same shape.
 
 ## The view: a page the answer is drawn in
 

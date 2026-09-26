@@ -244,6 +244,8 @@ Deno.test('a model calls only the commands marked for it, as the person who aske
   // `$session` is the transcript whose turn made the call.
   assertEquals(mood.mood, { feeling: 'glad', of: s })
   assertEquals((mood.created as Comp).by, ADA)
+  // And what it wrote came through that transcript, which no page can say.
+  assertEquals((mood.created as Comp).via, s)
 })
 
 Deno.test('a visitor asks an app for a turn only where it opens its models', async () => {

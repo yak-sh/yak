@@ -136,7 +136,9 @@ A model may call the app's own commands (see [Commands](/docs/tools)), but only
 the ones the app marks for it with `"model": true`. Those are the tools it is
 offered, and no others. A call runs as the person who asked for the turn, held
 to exactly what they could write on the page themselves, and `$session` in its
-template is the transcript the turn is in, which no argument can change.
+template is the transcript the turn is in, which no argument can change. What it
+writes is stamped `created.via` with that transcript, which a page's own write
+never is: a row the app should trust only from its model says so.
 
 ## Who may ask
 
