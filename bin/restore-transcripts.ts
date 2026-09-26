@@ -22,11 +22,11 @@
 // A tombstone is below every interface storage offers, so this one-time script
 // clears it with a statement built by @yaks/sql, on its own connection.
 //
-// Every session that holds imported entries first gets `session.consumed`, the
-// highest line it holds, which is where the importer now resumes. The script
-// holds the session duty's lease throughout, and @yaks/spawn's while it writes
-// those, so neither importer reads a log meanwhile. Start it, then restart the
-// server. Each write leaves the lock free as long as it held it.
+// Every session that holds imported entries and has no `session.consumed` yet
+// first gets one, the highest line it holds, which is where the importer
+// resumes. The script holds the session duty's lease throughout, so no import
+// or strip runs meanwhile, and the server serves on. Each write leaves the
+// lock free as long as it held it.
 //
 //   deno run -A bin/restore-transcripts.ts <config> [--write]
 
@@ -207,10 +207,13 @@ console.log(
   }ms`,
 )
 
-// Where a session resumes: its highest imported line.
+// Where a session that has none resumes: its highest imported line.
 let backfill = async (skip: Set<Eid>) => {
-  let sessions = (await g.rows('.imported&.tally=entry.session'))
+  let held = (await g.rows('.imported&.tally=entry.session'))
     .map((r) => String(r.value)).filter((s) => s && !skip.has(s))
+  let sessions = (await g.get(held))
+    .filter((b) => b && (b.session as { consumed?: number })?.consumed == null)
+    .map((b) => b!.entity.eid)
   for (let session of sessions) {
     let [last] = await g.read(
       `.imported&.entry.session=${session}&.order=-imported.line&.limit=1`,
@@ -305,7 +308,7 @@ let restore = async (f: Found & { session: Eid }): Promise<number> => {
 }
 
 if (write) {
-  console.log('waiting for the @yaks/session and @yaks/spawn leases')
+  console.log('waiting for the @yaks/session lease')
   let o = {
     holder: host.me,
     signal: new AbortController().signal,
@@ -313,12 +316,7 @@ if (write) {
     gone: host.gone,
   }
   await holding(g, '@yaks/session', o, async () => {
-    await holding(
-      g,
-      '@yaks/spawn',
-      o,
-      () => backfill(new Set(affected.map((f) => f.session))),
-    )
+    await backfill(new Set(affected.map((f) => f.session)))
     let restored = 0
     for (let f of affected) {
       restored += await restore(f)
