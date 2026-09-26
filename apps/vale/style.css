@@ -419,6 +419,15 @@ body {
   pointer-events: auto;
 }
 
+/* The camera's button, under the sound's: faded while the camera is free. */
+.Mute-eye {
+  top: calc(max(12px, env(safe-area-inset-top)) + 5.2rem);
+}
+
+.Mute-off {
+  opacity: 0.5;
+}
+
 .Bag {
   position: absolute;
   left: max(12px, env(safe-area-inset-left));
@@ -458,10 +467,17 @@ body {
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 0.9rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem 0.9rem;
+  width: max-content;
+  max-width: calc(100vw - 24px);
   font-size: 0.8rem;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+.Keys span {
   white-space: nowrap;
 }
 

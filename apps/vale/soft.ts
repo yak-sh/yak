@@ -10,6 +10,11 @@
 //   so a large flat quad of ground still shows its voxels.
 //
 //   A flash. A creature or a player glows for a moment when struck.
+//
+//   A line of sight. The ground and what stands on it thin away where they come
+//   between the camera and the hero, and right around the camera, so a tree
+//   or a toadstool in the way shows the hero through it (`see`). It is a
+//   stipple, pixels left out in an even pattern, so nothing needs sorting.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Out } from './mesh.ts'
@@ -44,9 +49,11 @@ varying vec2 vBw;
 varying vec3 vTu;
 varying vec3 vTv;
 varying vec3 vCell;
+varying vec3 vAt;
 `
 
 let VERTEX = /* glsl */ `
+vAt = (modelMatrix * vec4(transformed, 1.)).xyz;
 vFace = face;
 vRim = rim;
 vBw = bw.xy;
@@ -72,9 +79,36 @@ varying vec2 vBw;
 varying vec3 vTu;
 varying vec3 vTv;
 varying vec3 vCell;
+varying vec3 vAt;
+uniform vec3 seeFrom;
+uniform vec3 seeTo;
 float edge(float flag, float d, float w) {
   return flag * (1. - smoothstep(0., w, d));
 }
+float b2(vec2 p) {
+  float x = mod(p.x, 2.), y = mod(p.y, 2.);
+  return 2. * abs(x - y) + y;
+}
+// A 4 by 4 ordered dither: how far through the pattern this pixel is.
+float bayer(vec2 p) {
+  return (4. * b2(p) + b2(floor(p / 2.)) + .5) / 16.;
+}
+`
+
+// What is left out: within 1.5 m of the line from the camera to the hero,
+// stopping a metre short of them, and within 2 m of the camera.
+let SIGHT = /* glsl */ `
+#ifdef SEE
+  vec3 sl = seeTo - seeFrom;
+  float sL = max(length(sl), 1e-3);
+  float along = dot(vAt - seeFrom, sl) / sL;
+  float off = length(vAt - seeFrom - sl * (along / sL));
+  float thin = along > 0. && along < sL - 1.
+    ? 1. - smoothstep(.9, 1.5, off)
+    : 0.;
+  thin = max(thin, 1. - smoothstep(1.2, 2., length(vAt - seeFrom)));
+  if (bayer(gl_FragCoord.xy) < thin * .8) discard;
+#endif
 `
 
 let COLOR = /* glsl */ `
@@ -94,9 +128,16 @@ let NORMAL = /* glsl */ `
 normal = normalize(normal + (vTu * (r1 - r0) + vTv * (r3 - r2)) * .95);
 `
 
-/** A soft material: `speckle` is how much each voxel's shade wobbles. */
+/** A soft material: `speckle` is how much each voxel's shade wobbles, and a
+ * material that can `see` through (the ground's) thins away between the
+ * camera and the hero once `sight` says where they are. */
 export let soft = (
-  opts: { speckle?: number; transparent?: boolean; opacity?: number } = {},
+  opts: {
+    speckle?: number
+    transparent?: boolean
+    opacity?: number
+    see?: boolean
+  } = {},
 ) => {
   let m = new THREE.MeshLambertMaterial({
     vertexColors: true,
@@ -107,8 +148,11 @@ export let soft = (
     speckle: { value: opts.speckle ?? 0.1 },
     flash: { value: new THREE.Color(1, 0.35, 0.3) },
     flashing: { value: 0 },
+    seeFrom: { value: new THREE.Vector3() },
+    seeTo: { value: new THREE.Vector3() },
   }
   m.userData.soft = uniforms
+  if (opts.see) m.defines = { SEE: '' }
   m.onBeforeCompile = (s) => {
     Object.assign(s.uniforms, uniforms)
     s.vertexShader = s.vertexShader
@@ -116,6 +160,10 @@ export let soft = (
       .replace('#include <begin_vertex>', `#include <begin_vertex>\n${VERTEX}`)
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', `#include <common>\n${FRAGMENT_PARS}`)
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>\n${SIGHT}`,
+      )
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>\n${COLOR}`,
@@ -125,8 +173,21 @@ export let soft = (
         `#include <normal_fragment_maps>\n${NORMAL}`,
       )
   }
-  m.customProgramCacheKey = () => 'soft'
+  m.customProgramCacheKey = () => opts.see ? 'soft-see' : 'soft'
   return m
+}
+
+/** The line of sight a see-through material keeps clear: from the camera to
+ * the hero. */
+export let sight = (
+  m: THREE.Material,
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+) => {
+  let u = m.userData.soft
+  if (!u) return
+  u.seeFrom.value.copy(from)
+  u.seeTo.value.copy(to)
 }
 
 /** How strongly a soft material glows its flash colour, 0 to 1. */

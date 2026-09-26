@@ -11,13 +11,24 @@ export type Intent = {
   dodge: boolean
   talk: boolean
   drink: boolean
+  /** swing the camera behind the hero */
+  snap: boolean
+  /** the camera follows the hero, or stops following */
+  follow: boolean
   /** how far the view was turned since the last read: yaw, pitch */
   orbit: [number, number]
   /** how far it was pulled in or out */
   zoom: number
 }
 
-export type Action = 'jump' | 'strike' | 'dodge' | 'talk' | 'drink'
+export type Action =
+  | 'jump'
+  | 'strike'
+  | 'dodge'
+  | 'talk'
+  | 'drink'
+  | 'snap'
+  | 'follow'
 
 let KEYS: Record<string, Action> = {
   Space: 'jump',
@@ -29,6 +40,8 @@ let KEYS: Record<string, Action> = {
   KeyE: 'talk',
   Digit1: 'drink',
   KeyQ: 'drink',
+  KeyC: 'snap',
+  KeyV: 'follow',
 }
 
 let AXES: Record<string, [number, number]> = {
@@ -169,6 +182,8 @@ export let listen = (
         dodge: pressed.has('dodge'),
         talk: pressed.has('talk'),
         drink: pressed.has('drink'),
+        snap: pressed.has('snap'),
+        follow: pressed.has('follow'),
         orbit: [orbit[0], orbit[1]],
         zoom,
       }

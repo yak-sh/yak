@@ -1,5 +1,5 @@
 // A level as a three.js scene: the ground and everything standing on it in
-// chunks, each structure on a foundation down to the ground, the water, the
+// chunks (thinning away where they come between the camera and the hero), each structure on a foundation down to the ground, the water, the
 // sky, the village fire and lamps, the glow in each portal, and the light that
 // moves across it all through the day. Built once per level; `tick` moves the
 // sun, the water and the flames.
@@ -9,7 +9,7 @@ import { CHUNK, groundChunk } from './ground.ts'
 import { cuboid, out } from './mesh.ts'
 import { model, place } from './props.ts'
 import { lerp, smooth } from './rand.ts'
-import { geometry, soft } from './soft.ts'
+import { geometry, sight, soft } from './soft.ts'
 import {
   foundation,
   groundAt,
@@ -30,6 +30,8 @@ export type World = {
   /** 0 at midnight, 0.5 at noon */
   day: number
   tick: (t: number, dt: number) => void
+  /** keep the line from the camera (`from`) to the hero (`to`) clear */
+  see: (from: THREE.Vector3, to: THREE.Vector3) => void
   /** let the GPU go of everything this level drew */
   dispose: () => void
 }
@@ -173,7 +175,7 @@ export let world = (v: Vale): World => {
   let fog = new THREE.Fog(0xcfe6f2, 40, 110)
   scene.fog = fog
 
-  let ground = soft({ speckle: 0.1 })
+  let ground = soft({ speckle: 0.1, see: true })
   let byChunk = new Map<number, Prop[]>()
   let per = SIZE / CHUNK
   for (let p of v.props) {
@@ -356,6 +358,7 @@ export let world = (v: Vale): World => {
     focus,
     fire,
     day: 0.4,
+    see: (from, to) => sight(ground, from, to),
     dispose: () =>
       scene.traverse((o) => {
         if (!(o instanceof THREE.Mesh || o instanceof THREE.Sprite)) return

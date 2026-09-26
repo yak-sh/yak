@@ -8,6 +8,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { BEASTS } from './beasts.ts'
+import { aim, type Cam, steer } from './cam.ts'
 import { cast } from './cast.ts'
 import { type Figure, hero } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
@@ -17,9 +18,8 @@ import { ITEMS } from './items.ts'
 import { HOME, LEVELS } from './levels.ts'
 import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { type Event, type Frame, game } from './play.ts'
-import { clamp } from './rand.ts'
 import { sound } from './sound.ts'
-import { groundAt, inside, SIZE, type Vale, vale, VOXEL } from './terrain.ts'
+import { groundAt, SIZE, type Vale, vale, VOXEL } from './terrain.ts'
 import { type World, world } from './world.ts'
 
 let TINTS = [
@@ -120,11 +120,17 @@ let grow = (id: string) => {
   stage = cast(w.scene, v, marks)
   dust = bits(w.scene, true, 400)
   glow = bits(w.scene, false, 300)
+  // Arriving: the camera starts behind the hero, wherever they came in.
   cam.x = NaN
+  cam.snap = true
 }
 
-// The camera: behind and above, turned by dragging, pulled by the wheel.
-let cam = {
+// The camera (cam.ts), following the hero unless this viewer set it free.
+let freed = false
+try {
+  freed = localStorage.getItem('mossvale.cam') == 'free'
+} catch { /* a page without storage starts following */ }
+let cam: Cam = {
   yaw: 0,
   pitch: 0.42,
   dist: phone ? 11 : 9.5,
@@ -133,6 +139,9 @@ let cam = {
   y: 0,
   z: 0,
   shake: 0,
+  follow: !freed,
+  snap: false,
+  idle: 0,
 }
 let target = new THREE.Vector3()
 
@@ -144,7 +153,18 @@ mute.addEventListener('click', () => {
   sound.toggle()
   muteLabel()
 })
-glass.append(mute)
+let eye = document.createElement('button')
+eye.className = 'Mute Mute-eye'
+eye.textContent = '🎥'
+let eyeLabel = () => {
+  eye.classList.toggle('Mute-off', !cam.follow)
+  eye.title = cam.follow
+    ? 'The camera follows you (V). C swings it behind you.'
+    : 'The camera stays where you turn it (V). C swings it behind you.'
+}
+eyeLabel()
+eye.addEventListener('click', () => hands.press('follow'))
+glass.append(mute, eye)
 
 // Where the hearth is, or the middle of a level without one: where the gate's
 // camera looks, and embers rise.
@@ -454,9 +474,14 @@ let loop = (t: number) => {
         jump: false,
       })
     }
-    cam.yaw += i.orbit[0]
-    cam.pitch = clamp(cam.pitch + i.orbit[1], 0.1, 1.3)
-    cam.dist = clamp(cam.dist * (1 + i.zoom * 0.12), 4, 22)
+    let following = cam.follow
+    steer(cam, i, last?.body.yaw ?? cam.yaw + Math.PI, dt)
+    if (cam.follow != following) {
+      eyeLabel()
+      try {
+        localStorage.setItem('mossvale.cam', cam.follow ? 'follow' : 'free')
+      } catch { /* kept for this page only */ }
+    }
     let f = g.frame(v, i, cam.yaw, dt)
     last = f
     if (f && f.level != v.level.id) {
@@ -522,32 +547,8 @@ let loop = (t: number) => {
       t: t / 1000,
     }, dt)
   }
-  // The camera keeps its distance unless a hill or a house is in the way,
-  // when it comes in at once; it eases back out after.
-  let cp = Math.cos(cam.pitch)
-  let dir = new THREE.Vector3(
-    Math.sin(cam.yaw) * cp,
-    Math.sin(cam.pitch),
-    Math.cos(cam.yaw) * cp,
-  )
-  let clear = cam.dist
-  for (let d = 1.2; d <= cam.dist; d += 0.4) {
-    let p = target.clone().addScaledVector(dir, d)
-    if (inside(v, p.x, p.y, p.z)) {
-      clear = Math.max(1.2, d - 0.6)
-      break
-    }
-  }
-  cam.reach = clear < cam.reach
-    ? clear
-    : cam.reach + (clear - cam.reach) * (1 - Math.exp(-dt * 2.5))
-  camera.position.copy(target).addScaledVector(dir, cam.reach)
-  if (cam.shake > 0.002) {
-    camera.position.x += (Math.random() - 0.5) * cam.shake
-    camera.position.y += (Math.random() - 0.5) * cam.shake
-    cam.shake *= Math.exp(-dt * 12)
-  }
-  camera.lookAt(target)
+  aim(cam, camera, target, v, dt)
+  w.see(camera.position, target)
   // Embers off the fire, and at night fireflies about the player.
   if (v.hearth && Math.random() < 0.5) {
     let [hx, hz] = v.hearth
