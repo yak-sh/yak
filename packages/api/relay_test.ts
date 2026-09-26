@@ -93,6 +93,26 @@ Deno.test('a late subscriber is told what the peers are already saying', () => {
   ])
 })
 
+for (let query of ['.book', '.book&.order=price']) {
+  Deno.test(`an entity joining ${query} brings what the peers already say of it`, () => {
+    let graph = shop()
+    let subs = subscriptions(graph)
+    let one = ear(), two = ear()
+    subs.open(one.to, 's', query)
+    subs.open(two.to, 's', query)
+    one.take(), two.take()
+    // Said before b1 is in anybody's set, and not said again.
+    subs.relay(two.to, [{ entity: { eid: 'b1' }, browsing: { x: 1, y: 2 } }])
+    assertEquals(one.take(), [])
+
+    graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+    assertEquals(relayed(one.take()), [
+      { entity: { eid: 'b1' }, browsing: { x: 1, y: 2 } },
+    ])
+    assertEquals(relayed(two.take()), []) // it said it itself
+  })
+}
+
 Deno.test('a closed connection stops saying everything it was saying', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])

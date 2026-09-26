@@ -139,8 +139,8 @@ type Sub = {
 }
 
 // What one commit did to one routed subscription: the entities now in its set,
-// and the ones that left it.
-type Moved = { bundles: Bundle[]; gone: Eid[] }
+// the ones among them that were not in it before, and the ones that left it.
+type Moved = { bundles: Bundle[]; joined: Eid[]; gone: Eid[] }
 
 // What one commit did to each entity it touched: the components its patches
 // named, and the ones it wears now, or `null` once it is deleted.
@@ -302,10 +302,23 @@ export let subscriptions = (graph: Graph, opts: {
   // names.
   let send = (sub: Sub, moved?: Moved) => {
     if (!moved) return
-    let { bundles, gone } = moved
+    let { bundles, joined, gone } = moved
     rememberFields(sub, bundles)
     for (const eid of gone) sub.fields.delete(eid)
-    if (bundles.length || gone.length) sub.sink({ id: sub.id, bundles, gone })
+    if (bundles.length || gone.length) {
+      sub.sink({ id: sub.id, bundles, gone, ...hail(sub, joined) })
+    }
+  }
+
+  // What the peers are already saying about entities that just joined a set,
+  // as a subscription that opens is told it: a writer relays a value when it
+  // changes, so one relayed before its entity joined would otherwise not be
+  // heard again until it moved.
+  let hail = (sub: Sub, joined: Eid[]): { relay?: Bundle[] } => {
+    if (!joined.length) return {}
+    let fresh = new Set(joined)
+    let now = peers.snapshot(sub.sink, (eid) => fresh.has(eid))
+    return now.length ? { relay: now } : {}
   }
 
   // One query subscription the network does not hold, against the entities a
@@ -318,11 +331,11 @@ export let subscriptions = (graph: Graph, opts: {
       let gone = [...sub.members].filter((e) => !ids.has(e))
       // An entity can join without being touched: a hop or a computed
       // property moved it from the far side.
-      let joined = [...ids].some((e) => !sub.members.has(e))
+      let joined = [...ids].filter((e) => !sub.members.has(e))
       sub.members = ids
       rememberFields(sub, set)
-      if (gone.length || joined || touched.some((e) => ids.has(e))) {
-        sub.sink({ id: sub.id, bundles: set, gone })
+      if (gone.length || joined.length || touched.some((e) => ids.has(e))) {
+        sub.sink({ id: sub.id, bundles: set, gone, ...hail(sub, joined) })
       }
     })
   }
@@ -353,10 +366,11 @@ export let subscriptions = (graph: Graph, opts: {
               return then(graph.read(s.query, { durable: true }), (set) => {
                 let ids = new Set(set.map((b) => b.entity.eid))
                 let gone = [...s.members].filter((id) => !ids.has(id))
+                let joined = [...ids].filter((id) => !s.members.has(id))
                 s.members = ids
                 if (s.routed) routed.add(s, s.query, ids)
                 rememberFields(s, set)
-                s.sink({ id: s.id, bundles: set, gone })
+                s.sink({ id: s.id, bundles: set, gone, ...hail(s, joined) })
               })
             }
             if (s.routed) return send(s, routing.get(s))
@@ -374,7 +388,7 @@ export let subscriptions = (graph: Graph, opts: {
     let out = new Map<Sub, Moved>()
     let of = (s: Sub) => {
       let m = out.get(s)
-      if (!m) out.set(s, m = { bundles: [], gone: [] })
+      if (!m) out.set(s, m = { bundles: [], joined: [], gone: [] })
       return m
     }
     let seen = new Set<Eid>()
@@ -387,6 +401,7 @@ export let subscriptions = (graph: Graph, opts: {
         of(s).gone.push(eid)
       }
       for (let s of into) {
+        if (!s.members.has(eid)) of(s).joined.push(eid)
         s.members.add(eid)
         of(s).bundles.push(only(s.want ?? null)(b))
       }
