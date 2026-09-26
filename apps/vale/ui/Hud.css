@@ -271,7 +271,10 @@
     align-items: center;
   }
 
+  /* Three buttons a row, so the foe beside them has room for its name. */
   .Hud_Tray {
-    flex-direction: row;
+    flex-flow: row wrap;
+    justify-content: end;
+    max-width: calc(3 * var(--orb) + 2 * var(--gap));
   }
 }

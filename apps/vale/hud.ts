@@ -3,7 +3,9 @@
 // top left, the compass, who is here and the tray of buttons at the top
 // right, the toasts that say what just happened, the chat (chatbox.ts), and
 // at the bottom the buttons for the thumbs, or the words of whoever you talk
-// to. Each part is written only when what it shows changed.
+// to. Each part is written only when what it shows changed. The scene's
+// labels (fx.ts) are never seen through or between the glass: one that would
+// touch it is not shown (`under`).
 //
 // How a panel plugs in. Every sheet that opens over the glass is a panel
 // (panel.ts), one open at a time: the map, the pack, a station's crafting,
@@ -139,26 +141,6 @@ export let hud = (
   faint.hidden = true
   root.append(layer, vitals, quest, foe, nav, toasts, pads, talk, faint)
 
-  // The glass at the top, which the scene's labels hide under (fx.ts), and
-  // a gap's width round each card, so none shows between two. Where each
-  // lies is read again only after one of them, or the glass, changed size.
-  let panes = [vitals, quest, foe, who, rose, trayBox]
-  let rects: DOMRect[] | null = null
-  let gap = 0
-  let moved = new ResizeObserver(() => rects = null)
-  for (let e of [root, ...panes]) moved.observe(e)
-  let under: Under = (x, y, w, h) => {
-    if (!rects) {
-      rects = panes.map((e) => e.getBoundingClientRect())
-        .filter((r) => r.width > 0)
-      gap = parseFloat(getComputedStyle(root).rowGap) || 0
-    }
-    return rects.some((r) =>
-      x < r.right + gap && x + w > r.left - gap &&
-      y < r.bottom + gap && y + h > r.top - gap
-    )
-  }
-
   let shelf = panels(root, busy)
   let sheet = (id: keyof typeof SHEETS) => shelf.add(id, SHEETS[id])
   let panel = {
@@ -276,6 +258,27 @@ export let hud = (
   let gatherIcon = gatherPad.querySelector<HTMLElement>('.Pad_Icon')!
   let gatherKey = cap(keysOf('gather')[0])
   gatherPad.classList.add('Pad-none')
+
+  // The glass the scene's labels hide under (fx.ts): the cards, the buttons
+  // and someone's words, with a gap's width round each, so no label shows
+  // between two. Where each lies is read again only after one of them, or
+  // the glass, changed size.
+  let panes = [vitals, quest, foe, who, rose, trayBox, talk, ...pads.children]
+  let rects: DOMRect[] | null = null
+  let gap = 0
+  let moved = new ResizeObserver(() => rects = null)
+  for (let e of [root, ...panes]) moved.observe(e)
+  let under: Under = (x, y, w, h) => {
+    if (!rects) {
+      rects = panes.map((e) => e.getBoundingClientRect())
+        .filter((r) => r.width > 0)
+      gap = parseFloat(getComputedStyle(root).rowGap) || 0
+    }
+    return rects.some((r) =>
+      x < r.right + gap && x + w > r.left - gap &&
+      y < r.bottom + gap && y + h > r.top - gap
+    )
+  }
 
   let was: Record<string, string> = {}
   let put = (key: string, e: HTMLElement, html: string) => {
