@@ -45,6 +45,7 @@ import {
   maxHp,
   questsOf,
   type Slain,
+  worth,
   xpOf,
 } from './rules.ts'
 import { type Body, inVillage, prowl, rest, turn, walk } from './sim.ts'
@@ -764,7 +765,12 @@ export let game = (net: Net) => {
           beast: m.kind,
           at: at(m.body, 0.5),
         })
-        events.push({ type: 'xp', n: beast.xp, at: at(m.body, beast.size + 1) })
+        // What the kill is worth to me, at the level I am before it.
+        events.push({
+          type: 'xp',
+          n: worth(beast.xp, beast.lvl, s.lvl),
+          at: at(m.body, beast.size + 1),
+        })
         lootOf(m.kind, m.eid, when, me).forEach((l, i) => {
           let a = (i / 3) * Math.PI * 2 + Math.random()
           let x = m.body.x + Math.cos(a) * 0.9, z = m.body.z + Math.sin(a) * 0.9
