@@ -96,22 +96,6 @@
       "type": "object",
       "description": "provider-reported token counts for one completed model request, stored on the entry for that request; not cumulative, and not an estimate of current context size",
       "properties": {
-        "input": {
-          "type": "number",
-          "stamped": true
-        },
-        "cached": {
-          "type": "number",
-          "stamped": true
-        },
-        "output": {
-          "type": "number",
-          "stamped": true
-        },
-        "reasoning": {
-          "type": "number",
-          "stamped": true
-        },
         "input_tokens": {
           "type": "integer",
           "description": "input context tokens, including cached tokens"

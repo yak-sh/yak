@@ -41,18 +41,18 @@ let bundle = (row: EntryRow): Bundle => ({
   ...row.comps,
 })
 
-// Token counts as the turn row serializes them. A provider reports either
-// spelling (@yaks/model `usage`), so each count reads whichever is present.
+// Token counts as the turn row serializes them, by @yaks/model `usage`'s own
+// names.
 let usage = (u?: Record<string, unknown>) => {
   if (!u) return undefined
-  let n = (a: string, b: string) => Number(u[a] ?? u[b] ?? 0)
+  let n = (k: string) => Number(u[k] ?? 0)
   return {
-    input: n('input', 'input_tokens'),
+    input: n('input_tokens'),
     json: JSON.stringify({
-      input_tokens: n('input', 'input_tokens'),
-      cached_input_tokens: n('cached', 'cached_tokens'),
-      output_tokens: n('output', 'output_tokens'),
-      reasoning_tokens: n('reasoning', 'reasoning_tokens'),
+      input_tokens: n('input_tokens'),
+      cached_tokens: n('cached_tokens'),
+      output_tokens: n('output_tokens'),
+      reasoning_tokens: n('reasoning_tokens'),
     }),
   }
 }

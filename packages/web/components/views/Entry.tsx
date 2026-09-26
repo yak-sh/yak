@@ -137,8 +137,7 @@ let usage = (json?: string) => {
   if (!json) return ''
   try {
     let u = JSON.parse(json) as Record<string, number>
-    let up = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) +
-      (u.cache_creation_input_tokens ?? 0)
+    let up = u.input_tokens ?? 0
     let down = u.output_tokens ?? 0
     return [up > 0 && `↑ ${kilo(up)}`, down > 0 && `↓ ${kilo(down)}`]
       .filter(Boolean).join('  ')

@@ -4,7 +4,8 @@
 // {@link rebuild}), a column its vocabulary stopped naming dropped ({@link
 // shed}), and each slot the object remembers rewritten into the one shape a
 // deploy takes now ({@link documented}, {@link unholed}, {@link unworded},
-// {@link respelled}). {@link BOUNDARIES} names the stored shapes this code
+// {@link respelled}), and the columns a vocabulary renamed moved onto their
+// one name ({@link renamed}). {@link BOUNDARIES} names the stored shapes this code
 // reads, for `yak admin deploys`.
 import { fields, schema as ftsSchema } from '@yaks/fts'
 import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
@@ -15,6 +16,7 @@ import {
   type Driver,
   eq,
   type Expr,
+  fn,
   lit,
   notNull,
   select,
@@ -306,6 +308,36 @@ export let shed = (d: Driver, name: string, prop: string) => {
     d.query({ t: 'drop', kind: 'index', name: String(i.name), ifExists: true })
   }
   d.query(unseat(name, prop))
+}
+
+/** The count @yaks/model `usage` kept under a second name, and the one name
+ * it has now (T-40677). */
+export let COUNTS = {
+  input: 'input_tokens',
+  cached: 'cached_tokens',
+  output: 'output_tokens',
+  reasoning: 'reasoning_tokens',
+}
+
+/**
+ * Columns a vocabulary renamed: each value moved into the column its property
+ * is called now, where that one holds none, and the old column dropped. Run
+ * after {@link install}, so the new column stands and nothing (no index,
+ * trigger or view) names the old one. A table without an old column is left
+ * as it is, so a second run does nothing.
+ */
+export let renamed = (d: Driver, name: string, to: Record<string, string>) => {
+  let has = columns(d, name)
+  for (let [was, now] of Object.entries(to)) {
+    if (!has.includes(was)) continue
+    d.query({
+      t: 'update',
+      table: name,
+      set: { [now]: fn('coalesce', col(now), col(was)) },
+      where: notNull(col(was)),
+    })
+    d.query(unseat(name, was))
+  }
 }
 
 /** Every full-text index refilled from the content it mirrors — what a freshly

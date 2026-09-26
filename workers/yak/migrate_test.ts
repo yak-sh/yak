@@ -334,6 +334,36 @@ Deno.test('a schema that moves re-cuts its definitions and refills', async () =>
   assertEquals((await now.query('lemons', APP)).length, 1)
 })
 
+Deno.test("a model call's usage keeps each count under its one name", async () => {
+  // A store from before the counts had one name each: its `usage` table has
+  // the other name's column, and an older writer's row holds only that one.
+  let ctx = state()
+  let was = newer(ctx, 'ada/cookbook')
+  await was.apply([
+    { entity: { eid: ONE }, usage: { input_tokens: 5 } },
+    { entity: { eid: TWO }, usage: { total_tokens: 11 } },
+  ], APP)
+  let add = (name: string): Stmt => ({
+    t: 'alter table',
+    table: 'usage',
+    add: { name, type: 'real' },
+  })
+  run(ctx, add('input'), add('cached'), every('usage', { input: 8, cached: 3 }))
+  keep(ctx, 'schema', 'older')
+  let now = newer(ctx, 'ada/cookbook')
+  let counts = Object.fromEntries(
+    (await now.query('.usage', APP)).map((b) => {
+      let u = b.usage as Record<string, number>
+      return [b.entity.eid, [u.input_tokens, u.cached_tokens, u.total_tokens]]
+    }),
+  )
+  assertEquals(counts[ONE], [5, 3, null])
+  assertEquals(counts[TWO], [8, 3, 11])
+  let cols = db(ctx).query({ t: 'pragma', name: 'table_info', arg: 'usage' })
+    .map((c) => c.name)
+  assert(!cols.includes('input') && !cols.includes('cached'))
+})
+
 Deno.test('a kind the vocabulary stopped listing is written beside the rows it kept', async () => {
   // The table was made when the vocabulary listed kinds, and holds that list
   // as its check; a deploy that lets any word be a kind raises it again.

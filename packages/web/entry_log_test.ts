@@ -20,7 +20,12 @@ let turn = [
   }),
   row('ask', 2, {
     ask: { to: 'gpt', through: 'input' },
-    usage: { input: 8, cached: 3, output: 5, reasoning: 2 },
+    usage: {
+      input_tokens: 8,
+      cached_tokens: 3,
+      output_tokens: 5,
+      reasoning_tokens: 2,
+    },
   }),
   row('call', 3, {
     call: {
@@ -37,7 +42,7 @@ let turn = [
   }),
   row('ask2', 5, {
     ask: { to: 'gpt', through: 'result' },
-    usage: { input: 21 },
+    usage: { input_tokens: 21 },
   }),
   row('final', 6, { content: { body: 'done' }, output: { source: 'ask2' } }),
 ]
@@ -52,7 +57,7 @@ Deno.test('a transcript says who said what, in order', () => {
       model: 'gpt-6',
       usage: JSON.stringify({
         input_tokens: 8,
-        cached_input_tokens: 3,
+        cached_tokens: 3,
         output_tokens: 5,
         reasoning_tokens: 2,
       }),
@@ -65,7 +70,7 @@ Deno.test('a transcript says who said what, in order', () => {
       model: 'gpt-6',
       usage: JSON.stringify({
         input_tokens: 21,
-        cached_input_tokens: 0,
+        cached_tokens: 0,
         output_tokens: 0,
         reasoning_tokens: 0,
       }),

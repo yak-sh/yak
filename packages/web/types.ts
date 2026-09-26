@@ -818,10 +818,11 @@ export type Lease = {
 }
 export type Usage = {
   eid: string
-  input: number
-  cached: number
-  output: number
-  reasoning: number
+  input_tokens?: number
+  output_tokens?: number
+  total_tokens?: number
+  cached_tokens?: number
+  reasoning_tokens?: number
 }
 
 // Desired fleet capacity. Runtime facts are server-stamped on the same row;

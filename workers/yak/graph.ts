@@ -192,10 +192,12 @@ import {
 } from './writes.ts'
 import { apex, url } from './host.ts'
 import {
+  COUNTS,
   documented,
   install,
   rebuild,
   recut,
+  renamed,
   respelled,
   shed,
   unholed,
@@ -712,6 +714,8 @@ export class Store {
       for (let stmt of blobSchema()) drive.query(stmt)
       let unfit = install(ctx.storage, vocab, blobRead(vocab))
       for (let e of unfit) defect(e, { request: 'schema fit', store: name })
+      // Each count of a model call's `usage` under its one name (T-40677).
+      renamed(drive, 'usage', COUNTS)
       if (held) rebuild(drive)
       // A table left unfit is not yet at the stamp, so the next wake fits it
       // again and it heals once its rows are prepared (@yaks/sqlite `fit`).
