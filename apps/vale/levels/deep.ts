@@ -18,7 +18,7 @@ export let DEEP: Record<string, Row> = {
       south: 'sporefen',
       west: 'gleamdeep',
     },
-    rim: 'glowcaps',
+    wild: 'glowcaps',
     look: {
       ground: {
         snow: 0x4a5478,
@@ -50,7 +50,7 @@ export let DEEP: Record<string, Row> = {
       north: 'shardvault',
       east: 'glowcap',
     },
-    rim: 'gleamwood',
+    wild: 'gleamwood',
     look: {
       ground: {
         snow: 0xc8b0e8,
@@ -81,7 +81,7 @@ export let DEEP: Record<string, Row> = {
       east: 'icefall',
       south: 'gleamdeep',
     },
-    rim: 'shards',
+    wild: 'shards',
     look: {
       ground: {
         stone: 0x9aa8b6,

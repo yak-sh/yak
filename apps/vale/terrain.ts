@@ -13,7 +13,8 @@
 // A level's places (levels.ts) shape it, each by its kind (features.ts): woods
 // roll, crags heap up, a lake sinks, dunes crest, a village flattens the
 // ground around it and builds itself there. Each kind also says what the
-// ground is topped with where it holds, and what grows and stands there.
+// ground is topped with where it holds, and what grows and stands there; the
+// level's wild says so where none of them holds.
 // Paths run from the village out to every place. A road runs from where a
 // hero arrives out to the middle of each side that leads somewhere, on a bed
 // of its own: level enough to walk, dry over water, and through the
@@ -119,12 +120,12 @@ let GLADE = 9
 
 // How strongly a point belongs to each of a level's kinds of place (the
 // strongest of its places of that kind, and how far that one's middle is),
-// and to the mountains at the rim, and what clothes them (levels.ts `rim`). A
-// level's `holder` reads every point into the one Hold it keeps, so growing a
-// level makes nothing new per column.
+// and to the mountains at the rim; and the kind of place its wild is, where
+// none of them holds (levels.ts `wild`). A level's `holder` reads every point
+// into the one Hold it keeps, so growing a level makes nothing new per column.
 type Hold = {
   rim: number
-  edge?: Feature
+  wild?: Feature
   fs: Feature[]
   k: Float64Array
   far: Float64Array
@@ -136,7 +137,7 @@ let holder = (lv: Level) => {
   let at = places.map((p) => ({ i: kinds.indexOf(p.kind), at: p.at }))
   let w: Hold = {
     rim: 0,
-    edge: lv.rim ? FEATURES[lv.rim] : undefined,
+    wild: lv.wild ? FEATURES[lv.wild] : undefined,
     fs,
     k: new Float64Array(fs.length),
     far: new Float64Array(fs.length),
@@ -179,9 +180,14 @@ let coverOf = (w: Hold, n: number, x: number, z: number) => {
   }
 }
 
+// What tops a point: what the kinds holding it cover it with; else on the
+// mountains at the rim, dry ground; else what the wild covers, or grass.
+let cover = (w: Hold, n: number, x: number, z: number) =>
+  coverOf(w, n, x, z) ??
+    (w.rim > 0.45 ? Top.dry : w.wild?.cover?.(n, Infinity, x, z) ?? Top.grass)
+
 // Of the kinds that say `what` grows, the one holding a point strongest, and
-// more than the rim does; else, up on the rim, what clothes it; `h` picks
-// among what it grows.
+// more than the rim does, else the wild's; `h` picks among what it grows.
 let pickOf = (
   w: Hold,
   what: 'grows' | 'stones',
@@ -189,7 +195,7 @@ let pickOf = (
   rest: string,
 ) => {
   let i = lead(w, Math.max(0.35, w.rim), (f) => f[what])
-  let xs = w.fs[i]?.[what] ?? (w.rim > 0.3 ? w.edge?.[what] : undefined)
+  let xs = w.fs[i]?.[what] ?? w.wild?.[what]
   return xs ? xs[h % xs.length] : rest
 }
 
@@ -430,7 +436,7 @@ let build = (lv: Level, V: number): Vale => {
   }
   // What each column is topped with: snow up high, stone where it is steep,
   // sand at the water, a path where a road or a lane runs, and elsewhere
-  // whatever the places holding it cover it with, strongest first.
+  // whatever the places holding it cover it with, strongest first (`cover`).
   let hold = holder(lv)
   let top = new Uint8Array(n * n)
   for (let k = 0; k < n; k++) {
@@ -446,8 +452,7 @@ let build = (lv: Level, V: number): Vale => {
         ? most?.shore ?? Top.sand
         : roads[at(i, k)] < ROAD || lanes[at(i, k)] < 0.85 && w.rim < 0.4
         ? Top.path
-        : coverOf(w, fbm(x / 3, z / 3, 11 + s, 2), x, z) ??
-          (w.rim > 0.45 ? Top.dry : Top.grass)
+        : cover(w, fbm(x / 3, z / 3, 11 + s, 2), x, z)
     }
   }
 
@@ -502,19 +507,20 @@ let build = (lv: Level, V: number): Vale => {
       let tree = 0.04 + w.rim * 0.3 + weigh(w, (f) => f.trees)
       let rock = 0.03 + w.rim * 0.12 + weigh(w, (f) => f.rocks)
       let roll = rand(ci, ck, 3 + s), pick = hash(ci, ck, 6 + s)
-      if (roll < tree) {
-        let kind = pickOf(w, 'grows', pick, w.rim > 0.3 ? 'pine' : 'oak')
-        props.push({ kind, x, z, seed: hash(ci, ck, 4 + s) })
-      } else if (roll < tree + rock) {
-        let kind = pickOf(w, 'stones', pick, 'rock')
-        props.push({ kind, x, z, seed: hash(ci, ck, 5 + s) })
-      }
+      let grow = roll < tree
+      let kind = grow
+        ? pickOf(w, 'grows', pick, w.rim > 0.3 ? 'pine' : 'oak')
+        : roll < tree + rock
+        ? pickOf(w, 'stones', pick, 'rock')
+        : undefined
+      let seed = hash(ci, ck, (grow ? 4 : 5) + s)
+      if (kind) props.push({ kind, x, z, seed })
     }
   }
 
   // Flowers, grass, reeds and the like, one chance per cell of the grid:
-  // what the strongest place holding it says, or on green ground, flowers and
-  // grass; on sand and stone only what a place strews there.
+  // what the strongest place holding it says, else the wild's, else on green
+  // ground flowers and grass; on sand and stone only what a place strews.
   let cells = SIZE / GRID
   for (let ck = 1; ck < cells - 1; ck++) {
     for (let ci = 1; ci < cells - 1; ci++) {
@@ -526,7 +532,7 @@ let build = (lv: Level, V: number): Vale => {
       if (roll >= LUSH) continue
       let w = hold(x, z), f = w.fs[lead(w, 0.42, (f) => f.decor)]
       if (BARE.has(t) && !f?.strewn) continue
-      let list = f?.decor ?? (GREEN.has(t) ? DECOR : [])
+      let list = f?.decor ?? w.wild?.decor ?? (GREEN.has(t) ? DECOR : [])
       let sum = 0
       for (let [kind, chance] of list) {
         if (roll < (sum += chance)) {
