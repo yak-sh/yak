@@ -21,16 +21,16 @@ export let fetched = () => {
 }
 
 /** Be told of each @yaks package the first time a module of it arrives:
- * `{ name, ms }`, `ms` being when it arrived after the page started. The
- * answer stops the telling. */
-export let arrivals = (tell) => {
+ * `{ name, ms }`, `ms` being when it arrived after `since` (a
+ * `performance.now()`). The answer stops the telling. */
+export let arrivals = (tell, since = 0) => {
   let seen = new Set()
   let note = (entries) => {
     for (let e of entries) {
       let name = esm(e) && named(e.name)
       if (!name || seen.has(name)) continue
       seen.add(name)
-      tell({ name, ms: Math.round(e.responseEnd) })
+      tell({ name, ms: Math.round(e.responseEnd - since) })
     }
   }
   note(performance.getEntriesByType('resource'))

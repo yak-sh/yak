@@ -340,8 +340,13 @@ let boot = async () => {
   let t0 = performance.now()
   term.print('yak.sh: the yaks toolkit, in a terminal in this page', 'sys')
   term.print('loading yak from jsr.io, through esm.sh', 'sys')
-  let stop = arrivals(({ name, ms }) =>
-    term.print(`  ${name.padEnd(30, '.')} ${String(ms).padStart(5)} ms`, 'dim')
+  let stop = arrivals(
+    ({ name, ms }) =>
+      term.print(
+        `  ${name.padEnd(30, '.')} ${String(ms).padStart(5)} ms`,
+        'dim',
+      ),
+    t0,
   )
   try {
     let y = await yak()

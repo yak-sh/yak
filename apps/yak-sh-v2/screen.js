@@ -45,14 +45,16 @@ export let tube = (els) => {
     let copy = panes.cloneNode(true)
     copy.removeAttribute('id')
     for (let node of copy.querySelectorAll('[id]')) node.removeAttribute('id')
-    copy.querySelector('.Pane-man .Pane_Body').scrollTop = man.scrollTop
     ghost.replaceChildren(copy)
+    // A copy keeps no scroll, so every pane of it is scrolled to where the
+    // one it copies stood, once it is shown.
+    let was = panes.querySelectorAll('*')
+    copy.querySelectorAll('*').forEach((node, i) => {
+      if (was[i].scrollTop) node.scrollTop = was[i].scrollTop
+    })
     ghost.classList.remove('is-fading')
     void ghost.offsetWidth
     ghost.classList.add('is-fading')
-    // The copy's scroll is lost in cloning; set it again once it is shown.
-    let body = copy.querySelector('.Pane-man .Pane_Body')
-    if (body) body.scrollTop = man.scrollTop
   }
 
   /** Show `nodes` in the manual pane, titled; `zoom` gives the pane the
