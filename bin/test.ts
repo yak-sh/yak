@@ -3,7 +3,7 @@
 //
 // - deno: every `*_test.ts`, and every example in a doc comment or a README
 //   (`deno test --doc`), sharded across processes, and each shard's test
-//   files, save the web app's, loaded into one runtime (bin/shard.ts);
+//   files loaded into one runtime (bin/shard.ts);
 // - workerd: every `*_workerd_test.ts`, against the one kernel
 //   workers/yak/probe-suite.ts starts for the run.
 //
@@ -97,24 +97,28 @@ let common = [
   // ran is indistinguishable from a green one.
 ]
 
-/** The module a shard's test files load through, into one runtime. */
+/** The module a group of test files loads through, into one runtime. */
 let SHARD = `${import.meta.dirname}/shard.ts`
 
-// The web app is one tab's state held in its modules — the live cache, the
-// view registry, the route — and its tests each set that state up as a tab
-// would. Their files keep a runtime each, as a tab has.
-let ALONE = ['packages/web/']
-let alone = (file: string) => ALONE.some((dir) => file.includes(dir))
+// What a test file makes of its runtime's globals. The web app's files set up
+// a browser tab — a document, and the app's own state, which it keeps in its
+// modules — and the TUI's set up a terminal, a document of another kind. A
+// runtime is one host, so each of those is a group of its own, and every other
+// file is plain deno.
+let host = (file: string) =>
+  file.includes('packages/web/tui/')
+    ? 'terminal'
+    : file.includes('packages/web/')
+    ? 'browser'
+    : 'deno'
 
-/** One shard's arguments to `deno test`: the files that keep a runtime of
- * their own, then the rest through {@link SHARD}, into one. */
-export let loads = (files: string[]) => {
-  let shared = files.filter((f) => !alone(f))
-  return [
-    ...files.filter(alone),
-    ...(shared.length ? [SHARD, '--', ...shared] : []),
-  ]
-}
+/** The test files as `deno test` runs them, a runtime to a group: the plain
+ * deno files in `jobs` shards, and each other host's files together. */
+export let groups = (files: string[], jobs: number) => [
+  ...shards(files.filter((f) => host(f) == 'deno'), jobs),
+  ...['browser', 'terminal'].map((h) => files.filter((f) => host(f) == h))
+    .filter((group) => group.length),
+]
 
 /** The examples in `pages`, run as tests; the test files are the shards'. */
 let examples = (pages: string[]) => [
@@ -396,7 +400,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let files = args.filter((a) => !a.startsWith('--doc='))
   let jobs = Number(Deno.env.get('DENO_JOBS') ?? navigator.hardwareConcurrency)
   let runs = [
-    ...shards(files, jobs).map((f) => [...common, ...loads(f)]),
+    ...groups(files, jobs).map((g) => [...common, SHARD, '--', ...g]),
     ...shards(docs, jobs).map(examples),
   ]
   let children = runs.map((args) =>

@@ -7,11 +7,6 @@ import { cache, ent, useRoute } from '../live.ts'
 import { mount } from './mount.ts'
 import { chatChanges, chatPlan, ReferenceList, Starter } from './Chat.tsx'
 
-// A mounted view holds subscriptions. In a test there is no server to hold
-// them against, so control frames go nowhere through live.ts's transport
-// seam — the cache here is only ever what the test seeds.
-useRoute(() => {})
-
 Deno.test('chatChanges spawns a taskless session and rebinds the chat', () => {
   let got = chatChanges(
     'old',

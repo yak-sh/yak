@@ -1,7 +1,7 @@
 import { until } from './testing.ts'
 import { fileURLToPath } from 'node:url'
 import { assertEquals, assertMatch, assertThrows } from '@std/assert'
-import { pages, RUN, shards } from './test.ts'
+import { groups, pages, RUN, shards } from './test.ts'
 
 Deno.test('examples come from the packages, and never a module by name', async () => {
   let got = await pages([
@@ -76,6 +76,14 @@ Deno.test('bulk shards are bounded, deterministic and run every module once', ()
   for (let n of [0, -1, NaN, Infinity, 1.5]) {
     assertThrows(() => shards(['a'], n))
   }
+  let files = [
+    'bin/a_test.ts',
+    'packages/web/b_test.ts',
+    'packages/web/tui/c_test.ts',
+    'packages/web/d_test.ts',
+    'workers/e_test.ts',
+  ]
+  assertEquals(groups(files, 2).flat().sort(), files.sort())
 })
 
 // A failing shard no longer cancels its siblings: every shard runs to its own

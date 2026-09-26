@@ -1,17 +1,13 @@
 // The cursor: navigation as graph data (T-12788). A browsing context is faked
-// whole the way restore_test does — location/history and the web stores go in
-// FIRST, the module is imported after — plus a WebSocket stub so mark()'s wire
-// send lands nowhere instead of leaking a real socket. Real UUID eids here (not
-// restore_test's synthetic 'canvas'/'task'), because mark() writes them through
-// the same eid grammar apply() enforces, which only a UUID clears.
-import '../testing.ts'
+// whole for each test the way restore_test does — location/history and the web
+// stores — plus a WebSocket stub so mark()'s wire send lands nowhere instead of
+// leaking a real socket. Real UUID eids here (not restore_test's synthetic
+// 'canvas'/'task'), because mark() writes them through the same eid grammar
+// apply() enforces, which only a UUID clears.
+import { faked } from '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { applyLocal, cache, census, myCursor, useRoute } from '../live.ts'
-
-// A mounted view holds subscriptions. In a test there is no server to hold
-// them against, so control frames go nowhere through live.ts's transport
-// seam — the cache here is only ever what the test seeds.
-useRoute(() => {})
+import { applyLocal, cache, census, myCursor } from '../live.ts'
+import { navigate, route } from './nav.tsx'
 
 let CLIENT = '00000000-0000-4000-8000-0000000000c1'
 let CANVAS = '00000000-0000-4000-8000-000000000001'
@@ -48,8 +44,8 @@ class FakeSocket {
   close() {}
 }
 
-for (
-  let [k, v] of Object.entries({
+let context = () =>
+  faked({
     location: place,
     history: {
       pushState: (_s: unknown, _t: string, url: string) => {
@@ -66,14 +62,11 @@ for (
     WebSocket: FakeSocket,
     navigator: { userAgent: 'test' },
   })
-) Object.defineProperty(globalThis, k, { value: v, configurable: true })
 
-// nav.tsx captures location/history at module init, so import it only after
-// the fakes are installed (restore_test's rule); live.ts reads globals lazily.
-let { navigate, route } = await import('./nav.tsx')
-
-// The graph the app opens on: a root canvas and a task to walk into.
+// The graph the app opens on, a root canvas and a task to walk into, in a
+// browsing context of this test's own until it ends.
 let graph = () => {
+  let held = context()
   cache.value = {
     [CANVAS]: {
       entity: { eid: CANVAS, num: 1 },
@@ -87,6 +80,7 @@ let graph = () => {
     },
   }
   census.value = [CANVAS, TASK]
+  return held
 }
 
 let go = (url: string) => {
@@ -96,7 +90,7 @@ let go = (url: string) => {
 }
 
 Deno.test('navigating writes this client’s cursor into the graph', () => {
-  graph()
+  using _ = graph()
   go('/')
   navigate(`/T-7`)
   let cur = myCursor(CLIENT)
@@ -105,7 +99,7 @@ Deno.test('navigating writes this client’s cursor into the graph', () => {
 })
 
 Deno.test('the cursor row is idempotent — one per client', () => {
-  graph()
+  using _ = graph()
   go('/')
   navigate(`/T-7`)
   let first = myCursor(CLIENT)?.eid
@@ -118,7 +112,7 @@ Deno.test('the cursor row is idempotent — one per client', () => {
 // the bug that made P-19 inescapable: a cursor left pointing there yanked every
 // attempt to open something else straight back.
 Deno.test('a cursor write never navigates the tab (update-only)', () => {
-  graph()
+  using _ = graph()
   go('/') // the tab sits on the root canvas
   let cur = '00000000-0000-4000-8000-0000000000f0'
   // Point this client's cursor at the task, the way `show` would.

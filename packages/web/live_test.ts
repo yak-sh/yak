@@ -99,11 +99,6 @@ let mark = (status: string, eid: string): Record<string, unknown> =>
     ? { claim: { eid, session: 's' } }
     : {}
 
-// These are cache derivations: nothing here wants a socket, so control frames
-// go nowhere through the transport seam, and a test can hold a subscription
-// without a server existing.
-useRoute(() => {})
-
 Deno.test('findEid reads an alias off the key that names the entity', () => {
   cache.value = {
     t: { entity: { eid: 't', num: 7 } },

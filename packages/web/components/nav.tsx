@@ -27,14 +27,16 @@ export { peek, trail }
 // id form) shows that entity fullscreened, `?v=List` picks its view.
 // Navigation is therefore ordinary anchors — cmd/middle-click opens a
 // tab natively — plus pushState for the rare in-place root change.
-// Everything is guarded for hosts without a location (the TUI).
-let loc = (globalThis as { location?: Location }).location
-let his = (globalThis as { history?: History }).history
+// Everything is guarded for hosts without a location (the TUI), and both are
+// the host's as it stands when asked, never as it stood when this loaded.
+let loc = () => (globalThis as { location?: Location }).location
+let his = () => (globalThis as { history?: History }).history
+let address = (l: Location) => l.pathname + l.search
 
-export let route = signal(loc ? loc.pathname + loc.search : '/')
+export let route = signal(loc() ? address(loc()!) : '/')
 globalThis.addEventListener?.('popstate', () => {
   let was = screenTarget()?.eid
-  route.value = loc!.pathname + loc!.search
+  route.value = address(loc()!)
   track(was)
   keep()
   mark()
@@ -53,8 +55,9 @@ let arrive = (to: string) => {
 }
 
 export let navigate = (to: string) => {
-  if (!his) return
-  his.pushState(null, '', to)
+  let h = his()
+  if (!h) return
+  h.pushState(null, '', to)
   arrive(to)
 }
 
@@ -294,7 +297,7 @@ let kept = (): Where => {
 // chrome and dead ends are not places you were.
 let keep = () => {
   let t = screenTarget()
-  if (!loc || !t) return
+  if (!loc() || !t) return
   try {
     let at = route.value
     let home = t.eid == rootCanvas() ? at : kept().home
@@ -316,21 +319,22 @@ let keep = () => {
 // rewritten before anything paints. Back is a real history entry: home
 // goes under the card, so one gesture returns to the canvas.
 export let restore = () => {
-  if (!loc || !his) return
+  let l = loc(), h = his()
+  if (!l || !h) return
   let warm = false
   try {
     warm = !!sessionStorage.getItem(WARM)
     sessionStorage.setItem(WARM, '1')
   } catch { /* no storage, no memory — kept() defaults to the canvas */ }
-  if (warm || loc.pathname != '/' || loc.search) {
+  if (warm || l.pathname != '/' || l.search) {
     keep()
     return
   }
   let w = kept()
   let home = screenTarget(w.home) ? w.home : '/'
   let at = screenTarget(w.at) ? w.at : home
-  if (home != '/') his.replaceState(null, '', home)
-  if (at != home) his.pushState(null, '', at)
+  if (home != '/') h.replaceState(null, '', home)
+  if (at != home) h.pushState(null, '', at)
   route.value = at
   keep()
 }
@@ -345,7 +349,7 @@ export let restore = () => {
 // write naming where the cursor already points is skipped, so a re-render never
 // churns the row. Guarded for the TUI (no client, no localStorage) via loc/his.
 let mark = () => {
-  if (!loc || !his) return
+  if (!loc() || !his()) return
   let t = screenTarget()
   if (!t) return // chrome and dead ends are not places (keep()'s rule)
   let client = clientId()

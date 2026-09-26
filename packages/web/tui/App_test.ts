@@ -3,7 +3,7 @@ import '../testing.ts' // learns the vocabulary
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { type Ent } from '../types.ts'
-import { config as liveConfig, mode, useRoute } from '../live.ts'
+import { config as liveConfig, mode } from '../live.ts'
 import { extend, resolve } from '../components/registry.ts'
 import {
   fit,
@@ -20,10 +20,6 @@ import {
 import { TElement } from '@yaks/tui'
 import { pane } from './paint.ts'
 
-// A mounted view holds subscriptions. In a test there is no server to hold
-// them against, so control frames go nowhere through live.ts's transport
-// seam — the cache here is only ever what the test seeds.
-useRoute(() => {})
 extend(overrides)
 
 let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'

@@ -10,6 +10,7 @@ import {
   defineActions,
   extend,
   has,
+  registry,
   resolve,
 } from './registry.ts'
 import { mount } from './mount.ts'
@@ -25,16 +26,25 @@ let R = (view: string, match: Query, tag: string) => ({
   Render: () => tag,
 })
 
-define([
-  R('Task', has('doc', 'task'), 'task'),
-  R('Doc', has('doc'), 'doc'),
-  R('Card.Title', has('doc', 'task'), 'task-title'),
-  R('Card.Title', has('doc'), 'doc-title'),
-  R('Card.Title', and(), 'any-title'),
-  R('Tile', has('doc', 'task'), 'task-tile'),
-  R('Tile', has('doc'), 'doc-tile'),
-  R('JSON', and(), 'json'),
-], ['Task', 'Doc', 'JSON'])
+// The app's registry holds these fixtures for one test, and its own renderers
+// again after: the app is one registry, and every other test renders with it.
+let fixtures = () => {
+  let { renderers, views, actions } = registry
+  define([
+    R('Task', has('doc', 'task'), 'task'),
+    R('Doc', has('doc'), 'doc'),
+    R('Card.Title', has('doc', 'task'), 'task-title'),
+    R('Card.Title', has('doc'), 'doc-title'),
+    R('Card.Title', and(), 'any-title'),
+    R('Tile', has('doc', 'task'), 'task-tile'),
+    R('Tile', has('doc'), 'doc-tile'),
+    R('JSON', and(), 'json'),
+  ], ['Task', 'Doc', 'JSON'])
+  return {
+    [Symbol.dispose]: () =>
+      Object.assign(registry, { renderers, views, actions }),
+  }
+}
 
 let ent = (comps: Record<string, unknown>) =>
   ({ eid: 'x', num: 1, kind: '?', refs: [], kids: [], ...comps }) as Ent
@@ -63,6 +73,7 @@ let CASES: [string, Record<string, unknown>, string | undefined, string][] = [
 ]
 
 Deno.test('resolution', () => {
+  using _ = fixtures()
   for (let [name, comps, view, want] of CASES) {
     assertEquals(resolve(ent(comps), view).view, want, name)
   }
@@ -73,6 +84,7 @@ Deno.test('resolution', () => {
 })
 
 Deno.test('suffix walk: qualifiers fall leftward', () => {
+  using _ = fixtures()
   let task = { doc: {}, task: {} }
   // place-qualified requests keep walking when no place specializes them
   assertEquals(tag(task, 'List.Tile'), 'task-tile')
@@ -86,11 +98,13 @@ Deno.test('suffix walk: qualifiers fall leftward', () => {
 })
 
 Deno.test('tabs = views with a live matcher', () => {
+  using _ = fixtures()
   assertEquals(applicable(ent({ doc: {}, task: {} })), ['Task', 'Doc', 'JSON'])
   assertEquals(applicable(ent({})), ['JSON'])
 })
 
 Deno.test('actions union across matching contributors, in order', () => {
+  using _ = fixtures()
   defineActions([
     {
       match: has('task'),
@@ -109,6 +123,7 @@ Deno.test('actions union across matching contributors, in order', () => {
 })
 
 Deno.test('override wins its tie', () => {
+  using _ = fixtures()
   extend([R('Task', has('doc', 'task'), 'tui-task')])
   assertEquals(tag({ doc: {}, task: {} }, 'Task'), 'tui-task')
 })

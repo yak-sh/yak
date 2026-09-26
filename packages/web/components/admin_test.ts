@@ -8,14 +8,9 @@ import { parseHTML } from 'linkedom'
 import { loadVocab } from '@yaks/vocab'
 import { Admin } from './Admin.tsx'
 import { route } from './nav.tsx'
-import { cache, useRoute } from '../live.ts'
+import { cache } from '../live.ts'
 import { host } from '../host_testing.ts'
 import { assertEquals } from '@std/assert'
-
-// A mounted view holds subscriptions. In a test there is no server to hold
-// them against, so control frames go nowhere through live.ts's transport
-// seam — the cache here is only ever what the test seeds.
-useRoute(() => {})
 
 // The index is a DB renderer: each section fetches `/query?q=.{kind}!`. Answer
 // that fetch from the seeded cache bags, so these tests keep one source of

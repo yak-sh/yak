@@ -1,10 +1,10 @@
 // The in-place editor leaves native text gestures alone once editing —
 // and refuses to arm at all over a body it doesn't have.
-import '../testing.ts'
+import { wire } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
-import { cache, config } from '../live.ts'
+import { cache, config, useRoute } from '../live.ts'
 import type { Bundle } from '@yaks/graph'
 import { Edit } from './Edit.tsx'
 
@@ -103,10 +103,12 @@ let typeInto = (body: string | undefined, text: string, readOnly = false) => {
       configurable: true,
     },
   })
-  // This test names its own dead server; put back whatever the process had,
-  // so a sibling file never inherits a host it did not ask for.
+  // This test names its own dead server and follows the write out the page's
+  // own route; put back whatever the process had, so a sibling file never
+  // inherits a host or a route it did not ask for.
   let priorHost = config.host
   config.host = '127.0.0.1:0'
+  let priorRoute = useRoute(wire)
   sent = []
   let eid = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
   cache.value = {
@@ -144,6 +146,7 @@ let typeInto = (body: string | undefined, text: string, readOnly = false) => {
     render(null, root)
     cache.value = {}
     config.host = priorHost
+    useRoute(priorRoute)
     for (let [name, d] of prior) {
       if (d) Object.defineProperty(globalThis, name, d)
       else delete (globalThis as Record<string, unknown>)[name]

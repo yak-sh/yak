@@ -1,15 +1,10 @@
-// A browsing context, faked whole: nav.tsx captures location and history
-// at module init and reads the two web stores inside its functions, so the
-// fakes go in FIRST and the module is imported after. Everything a launch
-// can be — cold, warm, deep-linked, a second tab — is then one line.
-import '../testing.ts'
+// A browsing context, faked whole for each test: nav.tsx reads location,
+// history and the two web stores as it goes. Everything a launch can be —
+// cold, warm, deep-linked, a second tab — is then one line.
+import { faked } from '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { cache, census, useRoute } from '../live.ts'
-
-// A mounted view holds subscriptions. In a test there is no server to hold
-// them against, so control frames go nowhere through live.ts's transport
-// seam — the cache here is only ever what the test seeds.
-useRoute(() => {})
+import { cache, census } from '../live.ts'
+import { navigate, restore, route } from './nav.tsx'
 
 let place = { pathname: '/', search: '' }
 let entries: string[] = ['/']
@@ -30,8 +25,8 @@ let store = () => {
 let local = store()
 let session = store()
 
-for (
-  let [k, v] of Object.entries({
+let context = () =>
+  faked({
     location: place,
     history: {
       pushState: (_s: unknown, _t: string, url: string) => {
@@ -46,9 +41,6 @@ for (
     localStorage: local,
     sessionStorage: session,
   })
-) Object.defineProperty(globalThis, k, { value: v, configurable: true })
-
-let { navigate, restore, route } = await import('./nav.tsx')
 
 // The canvas the app opens on, and a task to walk into.
 let graph = () => {
@@ -82,15 +74,19 @@ let back = () => {
 
 let here = () => place.pathname + place.search
 
+// A test's browsing context, from an empty device on the canvas, until the
+// test ends.
 let fresh = () => {
+  let held = context()
   local.clear()
   session.clear()
   graph()
   launch('/')
+  return held
 }
 
 Deno.test('a cold launch resumes the card and the view it was left in', () => {
-  fresh()
+  using _ = fresh()
   navigate('/?v=List')
   navigate('/T-7?v=Md')
 
@@ -100,7 +96,7 @@ Deno.test('a cold launch resumes the card and the view it was left in', () => {
 })
 
 Deno.test('back from a restored card reaches the canvas it was left on', () => {
-  fresh()
+  using _ = fresh()
   navigate('/?v=List')
   navigate('/T-7')
 
@@ -112,7 +108,7 @@ Deno.test('back from a restored card reaches the canvas it was left on', () => {
 })
 
 Deno.test('the root canvas keeps its own view choice', () => {
-  fresh()
+  using _ = fresh()
   navigate('/?v=List')
 
   launch('/')
@@ -121,7 +117,7 @@ Deno.test('the root canvas keeps its own view choice', () => {
 })
 
 Deno.test('an explicit / in a live tab shows the canvas, never the card', () => {
-  fresh()
+  using _ = fresh()
   navigate('/T-7')
 
   launch('/', false) // the brand is a native anchor — tapping home is a load
@@ -130,7 +126,7 @@ Deno.test('an explicit / in a live tab shows the canvas, never the card', () => 
 })
 
 Deno.test('going home once makes the canvas the next cold launch', () => {
-  fresh()
+  using _ = fresh()
   navigate('/T-7')
   launch('/', false)
 
@@ -139,7 +135,7 @@ Deno.test('going home once makes the canvas the next cold launch', () => {
 })
 
 Deno.test('a deep link wins over the memory', () => {
-  fresh()
+  using _ = fresh()
   navigate('/T-7')
 
   launch('/1') // the canvas by its own number, cold
@@ -148,7 +144,7 @@ Deno.test('a deep link wins over the memory', () => {
 })
 
 Deno.test('a remembered entity that has died falls back to the canvas', () => {
-  fresh()
+  using _ = fresh()
   navigate('/?v=List')
   navigate('/T-7')
   cache.value = {
@@ -162,7 +158,7 @@ Deno.test('a remembered entity that has died falls back to the canvas', () => {
 })
 
 Deno.test('a second tab is a cold launch and resumes where you were', () => {
-  fresh()
+  using _ = fresh()
   navigate('/?v=List')
   navigate('/T-7')
 
@@ -173,7 +169,7 @@ Deno.test('a second tab is a cold launch and resumes where you were', () => {
 })
 
 Deno.test('a device that refuses storage still opens the canvas', () => {
-  fresh()
+  using _ = fresh()
   navigate('/T-7')
   let no = () => {
     throw new Error('private mode')
@@ -194,7 +190,7 @@ Deno.test('a device that refuses storage still opens the canvas', () => {
 })
 
 Deno.test('chrome and dead ends are not places you were', () => {
-  fresh()
+  using _ = fresh()
   navigate('/T-7')
   navigate('/admin')
   navigate('/T-404')

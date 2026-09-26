@@ -5,15 +5,10 @@ import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { useState } from 'preact/hooks'
 import { parse } from '@yaks/query'
-import { cache, ent, reveal, revealed, shown, useRoute } from '../live.ts'
+import { cache, ent, reveal, revealed, shown } from '../live.ts'
 import { actionsFor, applicable, extend, resolve } from './registry.ts'
 import { Entity } from './Entity.tsx'
 import { mount } from './mount.ts'
-
-// A mounted view holds subscriptions. In a test there is no server to hold
-// them against, so control frames go nowhere through live.ts's transport
-// seam — the cache here is only ever what the test seeds.
-useRoute(() => {})
 
 Deno.test('Entity mounts hooks with the original Ent and extra props', async () => {
   cache.value = {

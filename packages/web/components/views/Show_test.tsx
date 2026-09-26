@@ -19,11 +19,6 @@ import { extend, resolve } from '../registry.ts'
 import { mount } from '../mount.ts'
 import { Entity } from '../Entity.tsx'
 
-// A mounted view holds subscriptions. In a test there is no server to hold
-// them against, so control frames go nowhere through live.ts's transport
-// seam — the cache here is only ever what the test seeds.
-useRoute(() => {})
-
 Deno.test('task acceptance is a distinct Markdown section', () => {
   cache.value = {
     task: {

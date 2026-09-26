@@ -109,6 +109,39 @@ learn([
   admin,
 ].flatMap((d) => d ?? []))
 
+/**
+ * Globals set for one test and put back as they were when it is disposed. The
+ * test files of a run share one runtime, so a fake that outlived its test
+ * would be the next file's world: `using _ = faked({ location, history })`.
+ */
+export let faked = (globals: Record<string, unknown>) => {
+  let prior = Object.keys(globals).map((name) =>
+    [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const
+  )
+  for (let [name, value] of Object.entries(globals)) {
+    Object.defineProperty(globalThis, name, {
+      value,
+      configurable: true,
+      writable: true,
+    })
+  }
+  return {
+    [Symbol.dispose]: () => {
+      for (let [name, was] of prior) {
+        if (was) Object.defineProperty(globalThis, name, was)
+        else delete (globalThis as Record<string, unknown>)[name]
+      }
+    },
+  }
+}
+
+// A test has no server: the control frames a mounted view sends go nowhere,
+// through live.ts's transport seam, and the cache is only what the test seeds.
+// `wire` is the page's own route, for a test that follows a write out to
+// /apply. live.ts reads the tables as it loads, so it is imported after them.
+let { useRoute } = await import('./live.ts')
+export let wire = useRoute(() => {})
+
 /** One macrotask yield. */
 export let tick = () => new Promise<void>((go) => setTimeout(go, 0))
 

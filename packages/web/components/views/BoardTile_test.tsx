@@ -8,14 +8,9 @@ import { tick } from '../../testing.ts'
 import { render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { boardTallyName, cache, ent, landSub, useRoute } from '../../live.ts'
+import { boardTallyName, cache, ent, landSub } from '../../live.ts'
 import { resolve } from '../Entity.tsx'
 import { BoardTile } from './BoardTile.tsx'
-
-// A mounted view holds subscriptions. In a test there is no server to hold
-// them against, so control frames go nowhere through live.ts's transport
-// seam — the cache here is only ever what the test seeds.
-useRoute(() => {})
 
 let data = (query: string) => ({
   board: {
