@@ -2311,9 +2311,10 @@ Deno.test('server-resolve: a 404 is a genuine miss — Lost, and no retry storm'
   }
 })
 
-Deno.test('server-resolve: a hanging server never stalls nav, and never storms', async () => {
+Deno.test('server-resolve: a hanging server never stalls nav, never storms, and its late answer lands', async () => {
   clearResolved()
   cache.value = {}
+  using time = new FakeTime()
   let eid = 'cccccccc-0000-4000-8000-000000000007'
   let asked: Ask | undefined
   let f = stubResolve((_id, a) => {
@@ -2325,16 +2326,19 @@ Deno.test('server-resolve: a hanging server never stalls nav, and never storms',
     // never block on a slow resolve (the risk this leaf guards).
     assertEquals(serverEid('T-7'), undefined)
     assertEquals(resolvingId('T-7'), true)
-    // Repeated reads while it hangs never launch a second request.
-    for (let i = 0; i < 20; i++) serverEid('T-7')
-    await tick()
-    assertEquals(f.calls.length, 1)
-    // Let it finally answer — settling clears the abort timer (no leak).
+    // A minute of reads while it hangs never launches a second request.
+    for (let i = 0; i < 6; i++) {
+      serverEid('T-7')
+      await time.tickAsync(10_000)
+    }
+    assertEquals([f.calls.length, resolvingId('T-7')], [1, true])
+    // However late the answer comes, it lands.
     f.wire.say({
       id: asked!.id,
       bundles: [{ entity: { eid, num: 7 }, task: {} }],
     })
-    await until(() => serverEid('T-7') == eid)
+    await time.tickAsync(0)
+    assertEquals([serverEid('T-7'), resolvingId('T-7')], [eid, false])
   } finally {
     f.restore()
   }

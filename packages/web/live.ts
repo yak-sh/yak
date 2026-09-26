@@ -164,15 +164,7 @@ let makeClient = () =>
       let agg = aggSets.get(sub)
       if (agg) agg.live.value = replica.ready(sub)
       // A line another name already holds answers with no frame of its own.
-      let one = oneShots.get(sub)
-      if (one && replica.ready(sub)) {
-        oneShots.delete(sub)
-        clearTimeout(one.timer)
-        queueMicrotask(() => {
-          one.done()
-          unsubscribe(sub)
-        })
-      }
+      if (replica.ready(sub)) answered(sub)
       ticked(sub)
     },
     changed: (eids) => {
@@ -1889,15 +1881,7 @@ export let landSub = (f: Sub) =>
   })
 let landSubFrame = (f: Sub & { changes: Change[] }) => {
   if (f.error) {
-    let one = oneShots.get(f.sub)
-    if (one) {
-      oneShots.delete(f.sub)
-      clearTimeout(one.timer)
-      queueMicrotask(() => {
-        one.fail(f.error)
-        unsubscribe(f.sub)
-      })
-    }
+    answered(f.sub, true)
     subFailures.set(f.sub, {
       reason: f.error,
       reference: f.reference ?? f.sub,
@@ -1968,17 +1952,7 @@ let landSubFrame = (f: Sub & { changes: Change[] }) => {
   }
   ticked(f.sub)
   heldMoved([...f.changes.map((c) => c.eid), ...f.drop ?? []])
-  if (f.replace) {
-    let one = oneShots.get(f.sub)
-    if (one) {
-      oneShots.delete(f.sub)
-      clearTimeout(one.timer)
-      queueMicrotask(() => {
-        one.done()
-        unsubscribe(f.sub)
-      })
-    }
-  }
+  if (f.replace) answered(f.sub)
   return {
     eids: [...new Set([...f.changes, ...f.peers ?? []].map((c) => c.eid))],
     edges: [...rode.gained, ...rode.lost],
@@ -1994,28 +1968,30 @@ export let subscribe = (sub: string, q: string) => {
 // A transient projection still uses the subscription protocol: one initial
 // replace lands through the normal cache seam, then the hold is returned. This
 // is how a deferred body (and other one-shot browser reads) avoids inventing a
-// fetch-only endpoint while keeping timeout/retry behavior explicit.
-let oneShots = new Map<
-  string,
-  {
-    done: () => void
-    fail: (reason?: string) => void
-    timer: ReturnType<typeof setTimeout>
-  }
->()
+// fetch-only endpoint. It waits for its answer however long the server takes:
+// @yaks/sync resends the line after a reconnect, and a deadline here would only
+// close the line before a slow answer arrived, and so lose it. `fail` is the
+// server refusing the read.
+let oneShots = new Map<string, { done: () => void; fail: () => void }>()
 export let oneShot = (
   sub: string,
   q: string,
   done: () => void,
-  fail: (reason?: string) => void,
+  fail: () => void,
 ) => {
-  let timer = setTimeout(() => {
-    if (!oneShots.delete(sub)) return
-    unsubscribe(sub)
-    fail()
-  }, 5000)
-  oneShots.set(sub, { done, fail, timer })
+  oneShots.set(sub, { done, fail })
   subscribe(sub, q)
+}
+// A one-shot's answer, or its refusal: the caller hears it, then the line
+// closes.
+let answered = (sub: string, refused = false) => {
+  let one = oneShots.get(sub)
+  if (!one) return
+  oneShots.delete(sub)
+  queueMicrotask(() => {
+    refused ? one.fail() : one.done()
+    unsubscribe(sub)
+  })
 }
 let forget = (sub: string) => {
   let members = replica?.members(sub) ?? []
@@ -2578,25 +2554,22 @@ export let findEid = (id: string): string | undefined => {
 // The reads (serverEid/serverName) stay SYNC and O(1): they answer from this
 // sidecar and, on a first miss, KICK an async fetch and return "not yet". A
 // render therefore never blocks and a navigation never hangs on the wire —
-// resolveGen wakes the caller when an answer lands. A miss is BOUNDED by the
-// one-shot subscription timeout, and a failure cools for COOLDOWN_MS so a
-// dead server can't drive a render→kick→fail retry storm, then heals on the
-// next render (or a reconnect, which clears the sidecar). null means the
-// server said "no such entity" — an empty answer, or a refusal of the token
-// itself (`T-998 names nothing`) — an honest Lost, not a pending spinner.
+// resolveGen wakes the caller when an answer lands. A token has one resolve in
+// flight, however many renders read it, and it waits for the server's answer
+// however late it comes: a slow or hung server is asked once, never stormed,
+// and a slow answer still names the token. null means the server said "no
+// such entity" — an empty answer, or a refusal of the token itself (`T-998
+// names nothing`) — an honest Lost, not a pending spinner.
 type Named = { eid: string; num: number; kind: string }
 let named = new Map<string, Named | null>() // token OR eid -> naming (null = gone)
 let resolvingIds = new Map<string, Promise<Named | null>>() // token -> in flight
-let resolveFailed = new Map<string, number>() // token -> when its resolve failed
 export let resolveGen = signal(0) // bumped when a resolve settles, to re-render
-let COOLDOWN_MS = 3000
 
 let kickResolve = (token: string): Promise<Named | null> => {
   let found = resolvingIds.get(token)
   if (found) return found
   let settle = (n: Named | null) => {
     resolvingIds.delete(token)
-    resolveFailed.delete(token)
     named.set(token, n)
     if (n) named.set(n.eid, n) // resolvable by eid too, for the reverse read
     resolveGen.value++
@@ -2613,15 +2586,7 @@ let kickResolve = (token: string): Promise<Named | null> => {
         num: Number(comps.entity?.num ?? 0),
         kind: kindOf(comps),
       }))
-    }, (reason) => {
-      // A reason is the server refusing this token: its answer, so it settles.
-      // None is a timeout, which cools and asks again.
-      if (reason) return resolve(settle(null))
-      resolvingIds.delete(token)
-      resolveFailed.set(token, Date.now())
-      resolveGen.value++
-      resolve(null)
-    })
+    }, () => resolve(settle(null))) // refusing the token is its answer
   })
   resolvingIds.set(token, p)
   return p
@@ -2629,14 +2594,11 @@ let kickResolve = (token: string): Promise<Named | null> => {
 
 // The sync read: a token's naming if a prior addressed sub landed it, null if
 // server said it's gone, undefined while unknown or in flight — and a first
-// miss (never asked, not cooling) KICKS the fetch. Reading resolveGen keeps
-// the caller live to the landing.
+// miss KICKS the fetch. Reading resolveGen keeps the caller live to the
+// landing.
 let nameFor = (token: string): Named | null | undefined => {
   resolveGen.value // subscribe: a landing re-runs the reader
   if (named.has(token)) return named.get(token)!
-  if (resolvingIds.has(token)) return undefined // in flight
-  let failed = resolveFailed.get(token)
-  if (failed && Date.now() - failed < COOLDOWN_MS) return undefined // cooling
   kickResolve(token)
   return undefined
 }
@@ -2647,8 +2609,8 @@ export let serverEid = (token: string): string | undefined =>
   nameFor(token)?.eid
 
 // The same resolution awaited, for a caller that runs once rather than on
-// every render: the cache first, then the server. undefined when nothing
-// answers to the token.
+// every render: the cache first, then the server, as long as it takes.
+// undefined when nothing answers to the token.
 export let resolveEid = async (token: string): Promise<string | undefined> => {
   try {
     let eid = findEid(token)
@@ -2663,24 +2625,20 @@ export let resolveEid = async (token: string): Promise<string | undefined> => {
 // while resolving, null once the server says it's gone.
 export let serverName = (eid: string): Named | null | undefined => nameFor(eid)
 
-// Whether a token is still being resolved (in flight or cooling after a
-// failure) — the "resolving" state a router shows in place of a premature
-// 404. A prior null (genuine miss) is NOT resolving.
+// Whether a token is still being resolved — the "resolving" state a router
+// shows in place of a premature 404. A prior null (genuine miss) is NOT
+// resolving.
 export let resolvingId = (token: string): boolean => {
   resolveGen.value
-  if (named.has(token)) return false
-  let failed = resolveFailed.get(token)
-  return resolvingIds.has(token) ||
-    (!!failed && Date.now() - failed < COOLDOWN_MS)
+  return !named.has(token) && resolvingIds.has(token)
 }
 
-// A reconnect reseeds the whole graph, so a token this client could not name
-// while a socket was down may resolve now — clear the sidecar (resetSignals
-// calls this) so the next render re-resolves rather than serving a stale miss.
+// A wholesale reseed may hold what this client could not name before, so
+// resetSignals clears the sidecar and the next render re-resolves rather than
+// serving a stale miss.
 export let clearResolved = () => {
   named.clear()
   resolvingIds.clear()
-  resolveFailed.clear()
   resolveGen.value++
 }
 // The same query over the WHOLE graph — the board's List face. No task
