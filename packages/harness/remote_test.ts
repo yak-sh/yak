@@ -230,7 +230,9 @@ Deno.test('worker exit drains a burst and is idempotent', async () => {
       { length: 25 },
       (_, i) => r.agent.send(id, 'x'.repeat(10000) + i),
     )
-    let closing = r.close()
+    // Waits on the drain itself: the frontend's 2s deadline is the stuck
+    // backend's test, and a loaded box stretches a burst's drain past it.
+    let closing = r.close({ timeout: null })
     assertEquals(r.close(), closing)
     await Promise.all(writes)
     assertEquals(await closing, { drained: true })
