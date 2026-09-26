@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=git
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=git --allow-net=api.jsr.io
 // bin/release — one version across the whole @yaks/* family, in one commit.
 //
 // The packages are one library cut into thirty files' worth of doors; a
@@ -10,12 +10,19 @@
 // Versions are 0.0.0 today, which JSR reads as unreleased; the first release
 // is `bin/release.ts 0.1.0`.
 //
-//   deno run --allow-read --allow-write --allow-run=git bin/release.ts 0.1.0
+//   deno run --allow-read --allow-write --allow-run=git --allow-net=api.jsr.io \
+//     bin/release.ts 0.1.0
 //
 // It writes, commits and tags — it does not push, and it does not publish.
+// It refuses to cut a release while a package it would publish has no page on
+// jsr.io (`unlisted`): CI publishes under GitHub's identity, which JSR accepts
+// only for a package that exists and is linked to this repository, so such a
+// package would stop the publish partway, and a version cannot be unpublished.
 // Pushing the tag is the deliberate act that starts a publish:
 //
 //   git push origin main v0.1.0
+
+import { read, REPO } from './jsr.ts'
 
 // The first top-level `"version"` line of a deno.json. A regex rather than
 // JSON.parse/stringify because a rewrite must move one field and leave every
@@ -47,6 +54,26 @@ export let configs = async (root = '.') => {
   return out
 }
 
+// The members `deno publish` publishes: a name, and no `"publish": false`.
+let publishing = async (root = '.'): Promise<string[]> => {
+  let out: string[] = []
+  for (let path of await configs(root)) {
+    let config = JSON.parse(await Deno.readTextFile(path))
+    if (config.name && config.publish !== false) out.push(config.name)
+  }
+  return out
+}
+
+/** The packages a release would publish that jsr.io has no page for. */
+export let unlisted = async (
+  root = '.',
+  get: typeof fetch = fetch,
+): Promise<string[]> => {
+  let names = await publishing(root)
+  let pages = await Promise.all(names.map((name) => read(get, name)))
+  return names.filter((_, i) => pages[i] == null)
+}
+
 let run = async (...args: string[]) => {
   let { code } = await new Deno.Command('git', { args }).spawn().status
   if (code) throw new Error(`git ${args.join(' ')} exited ${code}`)
@@ -55,6 +82,13 @@ let run = async (...args: string[]) => {
 export let release = async (version: string, root = '.') => {
   if (!semver(version)) {
     throw new Error(`not a version: ${version} (want 0.1.0)`)
+  }
+  let missing = await unlisted(root)
+  if (missing.length) {
+    throw new Error(
+      `${missing.join(', ')}: no package on jsr.io yet. Create it there and ` +
+        `link it to ${REPO.owner}/${REPO.name} in its settings, then release.`,
+    )
   }
   let paths = await configs(root)
   for (let path of paths) {
