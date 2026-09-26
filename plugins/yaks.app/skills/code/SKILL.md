@@ -1,13 +1,15 @@
 ---
 name: code
-description: "Code of your own (yaks.app). worker.js in front of an app's files: which routes are yours, what env holds (STORE, FILES, and the keys the person connected), what the request reports about who is asking, the CPU and subrequest limits, and whole workers to copy."
+description: "Code of your own (yaks.app). worker.js in front of an app's files: which routes are yours, what env holds (STORE, FILES, and the keys the person connected), what the request reports about who is asking, the CPU and subrequest limits, and whole workers to copy. And TypeScript and npm packages, in a worker or a page's scripts: package.json, the package-lock.json app_deploy pins them in, and what the compile refuses."
 ---
 
 # Code of your own
 
 An app is pages until you give it a `worker.js`. This page is what that file
 gets: which requests reach it, what `env` holds, what the request reports about
-who is asking, the limits it runs under, and three workers written out whole.
+who is asking, the limits it runs under, and three workers written out whole. It
+is also where TypeScript and npm packages are, for a worker and for the scripts
+a page loads.
 
 ## When an app needs one, and when it does not
 
@@ -39,8 +41,7 @@ is live, and `subscribe` redraws.
 ## The module
 
 `worker.js` sits beside `index.html`, among the app's files. It is a plain ES
-module with a default export — no bundler, no imports from a registry, what you
-write is what runs:
+module with a default export, and what you write is what runs:
 
     export default {
       async fetch(req, env, ctx) {
@@ -50,16 +51,17 @@ write is what runs:
 
 `req` is the visitor's own request, `env` holds the bindings for the app's store
 and files along with every key the person has connected, and `ctx` is the
-runtime's. There is no build step: the file is uploaded as-is at `app_deploy`
-and run as-is.
+runtime's. A worker of plain JavaScript is uploaded as-is at `app_deploy` and
+run as-is. One written in TypeScript (`worker.ts`), or one that imports an npm
+package, is compiled at `app_deploy` first — see
+[TypeScript and npm packages](#typescript-and-npm-packages).
 
 To use a different server output, put `wrangler.jsonc` (or `wrangler.json`) at
 the app root with `{"main":"dist/server.mjs"}`. `main` is the app-relative
-server source path, defaulting to `worker.js`; directories and a leading `./`
-are allowed. Deploy follows that source's relative imports. The platform's
-upload wrapper uses an internal script name the app never configures. The server
-source is not served publicly. Use JavaScript ES modules (`.js` or `.mjs`);
-compile TypeScript before uploading.
+server source path, defaulting to `worker.js`, or `worker.ts` when the app has
+no `worker.js`; directories and a leading `./` are allowed. Deploy follows that
+source's relative imports. The platform's upload wrapper uses an internal script
+name the app never configures. The server source is not served publicly.
 
 ### More than one file
 
@@ -82,6 +84,55 @@ level rather than per request:
 Bytes are not text, so a `.wasm` is written with `base64` in place of `content`:
 
     app_files(app, files: [{path: 'add.wasm', base64: '<the bytes>'}])
+
+## TypeScript and npm packages
+
+A worker, and the scripts a page loads, may be written in TypeScript and may
+import npm packages. Name each package in a `package.json` beside `index.html`,
+the way npm does:
+
+    {"dependencies": {"three": "^0.180.0", "hono": "^4"}}
+
+`app_deploy` compiles what needs it, with esbuild:
+
+- The worker, when it is `worker.ts` or imports a package: compiled into one
+  module and uploaded in place of its source. A `.wasm` or `.txt` it imports
+  goes up beside it, as before.
+- Each `<script type="module" src="…">` a page loads, when it is TypeScript or
+  imports a package `package.json` names: compiled into one script served at its
+  own address, as JavaScript. `<script type="module" src="main.ts">` works as
+  written, and `app_files` still reads back the source you wrote.
+
+A page script, compiled:
+
+    import * as THREE from 'three'
+    import { subscribe } from './api/client.js'
+
+    let scene: THREE.Scene = new THREE.Scene()
+
+The first deploy writes `package-lock.json` beside `package.json`, with the
+version of every package it installed. Every later deploy installs exactly
+those, so a redeploy or a rollback builds the same code; change a range in
+`package.json` and the next deploy moves the lock to match. One version of each
+package is installed, never a nested tree.
+
+A compile that fails refuses the deploy with the compiler's own lines —
+`main.ts:3:9: Expected ";" but found "number"` — and nothing changes: the last
+release keeps serving. The seconds a compile takes count against the space's
+build seconds, beside the sandbox's.
+
+- Types are stripped, not checked.
+- Import a file by its own extension or by none: `./util.ts` or `./util`. A
+  `./util.js` that means `util.ts` is refused, saying so.
+- A compiled script changes at `app_deploy`; until then its address serves the
+  last compile.
+- A package a page imports that `package.json` does not name is left to the
+  browser, for an import map to resolve, and the deploy says so.
+- CSS a script imports is dropped: link it from the page.
+- `./api/client.js` stays an import the browser makes, from the compiled
+  script's own address, so import it from a file beside the page's script.
+- JSX compiles to `React.createElement` calls; `/** @jsx h */` at the top of a
+  file names another function.
 
 ## The fall-through rule
 
@@ -610,8 +661,9 @@ URL.
 **One sandbox at a time.** Each space has its own, and one person holds one
 awake at a time on the free plan, two on the Plus plan. A sandbox sleeps five
 minutes after its last command, and the next space's wakes then. The month's
-sandbox time is 1 hour on the free plan, shared by the free spaces you own, and
-10 hours for each space on the Plus plan.
+build time — the sandbox's, and compiling TypeScript and npm packages at
+`app_deploy` — is 1 hour on the free plan, shared by the free spaces you own,
+and 10 hours for each space on the Plus plan.
 
 That container is **signed in as you**. Two variables are set in every command's
 environment, and the `yak` CLI is installed:

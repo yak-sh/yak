@@ -64,6 +64,14 @@ their own components. See [the documentation](/docs) for the data model.
 An app consists of `index.html` and related CSS, JavaScript, image, and other
 files. There is no required framework or build step.
 
+<!-- @yaks/esbuild plan.ts decides; the yak-esbuild Worker compiles
+     (packages/esbuild/worker.ts); files.ts serves the output under BUILT. -->
+
+A page script written in TypeScript, or importing an npm package its
+`package.json` names, is compiled at `app_deploy` with esbuild, in a Worker of
+its own, and served at its own address. `package-lock.json` pins the versions,
+so the next deploy installs the same ones.
+
 Files are served from R2 through Cloudflare's cache. A cached file can be
 returned from the edge without reading R2. Paths without a file extension
 receive `index.html`, which supports client-side routing and direct loads of
@@ -82,9 +90,10 @@ app data.
      non-/api requests to it and falls back to the files on a 404. -->
 
 Apps can receive webhooks or call APIs without exposing credentials in browser
-code. A `worker.js` file runs as a Cloudflare Worker in a Workers for Platforms
-namespace. App requests reach that worker first; a 404 response falls back to
-the app's files.
+code. A `worker.js` (or `worker.ts`) file runs as a Cloudflare Worker in a
+Workers for Platforms namespace, bundled with its npm packages when it imports
+any. App requests reach that worker first; a 404 response falls back to the
+app's files.
 
 App code never receives your yaks.app sign-in session. The platform uses a token
 valid for sixty seconds and scoped to one app database and one visitor. It
@@ -151,14 +160,14 @@ CNAME flattening for this case.
 
 The free plan allows five apps, 1 GB of app data, and 100 emails a month. A
 person owns up to five free spaces, and their emails, builds, builder tokens and
-sandbox time are shared by all of them; a space somebody invited you into, or
-one on the Plus plan, does not count toward yours. Plus allows unlimited apps,
-10 GB of app data, 50 GB of photos and files, and 2,500 emails a month. Visits
-are allowed 50,000 a month on Free and 1,000,000 on Plus; past that an app
-answers visitors 429 until the 1st, while the space's own people, signed in, are
-still served. Operations that exceed a limit are refused, but existing apps and
-data are not deleted. Your assistant receives a notice when usage reaches 80% of
-a limit.
+build time are shared by all of them; a space somebody invited you into, or one
+on the Plus plan, does not count toward yours. Plus allows unlimited apps, 10 GB
+of app data, 50 GB of photos and files, and 2,500 emails a month. Visits are
+allowed 50,000 a month on Free and 1,000,000 on Plus; past that an app answers
+visitors 429 until the 1st, while the space's own people, signed in, are still
+served. Operations that exceed a limit are refused, but existing apps and data
+are not deleted. Your assistant receives a notice when usage reaches 80% of a
+limit.
 
 The email limit counts incoming and outgoing messages, and only sending stops
 when the limit is reached. Incoming messages are still delivered. The count
@@ -178,10 +187,10 @@ pip, Go 1.27.1, Zig 0.16.0 — which is also its C and C++ compiler — and Deno
 session with `apt` or a package manager; the container's network reaches the
 package registries and nothing else. One build gets **10 minutes** of container
 time; past that the build says so and keeps whatever it has already shipped. A
-month holds **1 hour** of container time on Free and **10 hours** on the Plus
-plan, and one person has one container awake at a time on Free, two on the Plus
-plan. The container is destroyed when the build ends, and everything in it with
-it.
+month holds **1 hour** of build time on Free and **10 hours** on the Plus plan,
+the container's and the compiling at `app_deploy` together, and one person has
+one container awake at a time on Free, two on the Plus plan. The container is
+destroyed when the build ends, and everything in it with it.
 
 [The pricing page](/pricing) has both plans in full.
 
@@ -208,8 +217,6 @@ These limits apply to both plans:
 - **No server-side image resizing.** An app can resize a photo in the browser
   before uploading it. yaks.app reads image dimensions but does not otherwise
   process the image.
-- **No package installation in app code.** There is no package registry or
-  bundler, so `worker.js` cannot install npm packages.
 - **Search matches whole words.** Looking for _lemon_ won't find _lemons_.
 - **Live subscriptions have a 2 KB query limit.** A connection can watch about 2
   KB of queries. Additional queries are refused.

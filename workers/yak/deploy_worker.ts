@@ -11,7 +11,8 @@ import {
   provision,
   retained,
 } from './bindings.ts'
-import { type Config, idReport, parse } from './wrangler_app.ts'
+import { type Config, idReport, parse, type Parsed } from './wrangler_app.ts'
+import type { Compiled } from './esbuild.ts'
 import { meta } from './meta.ts'
 import { refuse } from './tool.ts'
 import { caught } from './sentry.ts'
@@ -43,22 +44,31 @@ let unreached = (space: Space, app: App, config: Config) =>
     ? `refused vpc_services: ${space.slug} has no tunnel to a machine; its owner makes one first`
     : null
 
+/**
+ * The app's worker, deployed: `parsed` is its wrangler config as
+ * {@link configured} read it, and `compiled` the worker the release's compile
+ * step made of a source that needed one (esbuild.ts), uploaded in place of
+ * the source's own modules.
+ */
 export let deployWorker = async (
   env: Env,
   space: Space,
   app: App,
   read: Read,
+  parsed: Parsed,
+  compiled?: Compiled['worker'],
 ) => {
   let store = storeName(space, app)
-  let { config, report, refused } = await configured(read)
+  let { config, report } = parsed
+  let refused = [...parsed.refused]
   let why = unreached(space, app, config)
   if (why) refused.push(why)
   let held = await bindings(env, app)
   let worker = ''
   let unchanged = 'the files are deployed and serving; the worker is unchanged'
-  let main = config.main ?? WORKER
-  let source = await read(main)
-  if (!source && config.main) {
+  let main = compiled?.source ?? config.main ?? WORKER
+  let has = compiled != null || await read(main) != null
+  if (!has && config.main) {
     refused.push(
       `refused main: ${main} is not an app file; upload the server source at that path`,
     )
@@ -70,7 +80,7 @@ export let deployWorker = async (
       lines: [...report, ...ids, ...refused, unchanged, ...bindingLines(held)],
     }
   }
-  if (!source) {
+  if (!has) {
     if (env.CF_WORKERS_TOKEN) await drop(env, store)
     else if (held.length) {
       return {
@@ -95,7 +105,7 @@ export let deployWorker = async (
     }
   }
   let bound
-  let modules = await carried(read, config.main)
+  let modules = compiled?.modules ?? await carried(read, config.main)
   try {
     bound = await provision(env, app, store, config)
   } catch (e) {
@@ -114,7 +124,13 @@ export let deployWorker = async (
       ],
     }
   }
-  worker = await upload(env, store, modules, config, bound)
+  worker = await upload(
+    env,
+    store,
+    modules,
+    compiled ? { ...config, main: compiled.main } : config,
+    bound,
+  )
   // What its code reads as env.NAME: a first upload is the first script there
   // is to bind the app's connections to (connections.ts). The worker is up
   // either way, so a binding that did not take is ours to hear about.
@@ -136,7 +152,7 @@ export let deployWorker = async (
     lines: [
       ...report,
       ...idReport(config, bound),
-      `worker: ${main} answers first; a 404 from it serves the files (main is the server source; default worker.js; the upload wrapper is platform-owned)`,
+      `worker: ${main} answers first; a 404 from it serves the files (main is the server source; default worker.js, else worker.ts; the upload wrapper is platform-owned)`,
       ...bindingLines(bound),
       ...retained(held, config),
     ],

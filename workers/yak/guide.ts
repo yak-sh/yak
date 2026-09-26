@@ -68,7 +68,9 @@ none of that.
 A yaks app is an index.html and whatever files sit beside it, served live
 at <space>.${
     apex(env)
-  }/<app>/. No build step, no framework, no install. Four steps:
+  }/<app>/. No build step, no framework, no install: html, css and js are
+served as written. TypeScript and npm packages work too — name the packages
+in a package.json beside index.html, and app_deploy compiles them. Four steps:
 
 1. app_new — the app. Leave the space argument out: signing in gave them
    one, and every tool uses it unless they have several.
@@ -208,8 +210,17 @@ its files (env.FILES), and each key the person connected (connection_need)
 as env.NAME — a sentinel yaks.app swaps for the key on the way out, which is
 what a page must not hold. Call guide with page code for a whole one.
 
+A worker may be written in TypeScript as worker.ts, and a worker or a page's
+module script may import npm packages that a package.json beside index.html
+names under dependencies: app_deploy compiles them with esbuild, serves a
+compiled page script at its own address (so <script type="module"
+src="main.ts"> works), pins what it installed in package-lock.json so the next
+deploy builds the same code, and refuses with the compiler's own lines when it
+cannot. Call guide with page code for the whole thing.
+
 An app may carry wrangler.jsonc or wrangler.json beside worker.js. Its supported
-keys are main (the app-relative server source path, worker.js by default;
+keys are main (the app-relative server source path, worker.js by default, else
+worker.ts;
 directories such as dist/server.js are allowed; the upload wrapper is internal),
 compatibility_date, compatibility_flags, vars, d1_databases,
 r2_buckets, durable_objects.bindings with local class_name, migrations, and
@@ -222,12 +233,11 @@ permanently deleted, including its 30 days in the trash. vpc_services
 ({binding}) reaches the paths the space owner opened on a machine the space has
 a tunnel to, as env.BINDING.fetch(url); an installed app, or a space with no
 tunnel, is refused it.
-Server sources must be JavaScript ES modules (.js or .mjs); compile TypeScript
-before uploading.
 
-Almost nothing needs compiling: an app is html, css and js, served as
-written, and reaching for a build step where none is needed is the commonest
-way to waste an afternoon. When something genuinely must be compiled — Rust
+Almost nothing else needs compiling: an app is html, css and js, served as
+written, TypeScript and npm packages compile at app_deploy, and reaching for a
+build step where none is needed is the commonest way to waste an afternoon.
+When something genuinely must be compiled — Rust
 to WebAssembly for a chess engine, an image codec, a solver — there is a
 sandbox: sandbox_write the sources, sandbox_shell the build (a Linux container
 with pinned Rust, Python, Go and Zig toolchains — zig cc is its C and C++

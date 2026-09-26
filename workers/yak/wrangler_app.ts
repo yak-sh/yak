@@ -5,6 +5,14 @@ import { migrationMetadata } from './app_migrations.ts'
 // The upload wrapper is platform-owned, never the app's `main`.
 export let WRAPPER = '__yak_entry.js'
 export let WORKER = 'worker.js'
+// The server source an app wrote in TypeScript, which app_deploy compiles
+// (esbuild.ts). worker.js is read first when an app has both.
+export let TYPED = 'worker.ts'
+
+/** The app's server source: the one its config names, else worker.js, else
+ * worker.ts when that is the one the app has. */
+export let sourceOf = (config: Config, has: (path: string) => boolean) =>
+  config.main ?? (!has(WORKER) && has(TYPED) ? TYPED : WORKER)
 
 export type ResourceType = 'd1' | 'r2_bucket' | 'vectorize'
 export type Bound = {
@@ -188,14 +196,14 @@ export let allowlist = (value: unknown): Parsed => {
       : value.main
     if (
       typeof main != 'string' ||
-      !/^(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.(?:js|mjs)$/
+      !/^(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.(?:js|mjs|ts|mts|tsx|jsx)$/
         .test(main) ||
       main.split('/').some((part) => part == '.' || part == '..') ||
       main == WRAPPER
     ) {
       no(
         'main',
-        'expected an app-relative JavaScript source path (.js or .mjs); directories are allowed, __yak_entry.js is reserved for the platform',
+        'expected an app-relative source path (.js or .mjs, or .ts, .mts, .tsx or .jsx, which app_deploy compiles); directories are allowed, __yak_entry.js is reserved for the platform',
       )
     } else config.main = main
   }

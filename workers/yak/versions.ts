@@ -86,12 +86,17 @@ export let KEEP = 20
 // costs one more day of bytes nobody wants.
 export let GRACE = 24 * 60 * 60_000
 
+/** Where a compiled page script is kept, by its source's path (esbuild.ts):
+ * served at the source's address (files.ts), and made again by every deploy. */
+export let BUILT = 'esbuild/'
+
 // What the platform keeps beside an app's files, under the app's own prefix:
 // the bytes a page uploaded (apps.ts `blobKey`), what each path has held
-// (`history/`), and — until `moved` has emptied it — the pins that used to live
-// per app. None is a file anyone wrote, so none is listed, snapshotted,
-// restored, or carried by an install.
-let KEPT = ['blobs/', 'versions/', 'history/']
+// (`history/`), the page scripts a deploy compiled (`esbuild/`), and — until
+// `moved` has emptied it — the pins that used to live per app. None is a file
+// anyone wrote, so none is listed, snapshotted, restored, or carried by an
+// install.
+let KEPT = ['blobs/', 'versions/', 'history/', BUILT]
 
 let kept = (path: string) => KEPT.some((k) => path.startsWith(k))
 

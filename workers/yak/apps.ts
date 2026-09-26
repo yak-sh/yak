@@ -384,8 +384,12 @@ export let manifesting = (app: App, at: string) => ({
 // the same file.
 let MANIFEST = new Set([
   '/worker.js',
+  '/worker.ts',
   '/wrangler.jsonc',
   '/wrangler.json',
+  // What app_deploy installs from and pins (esbuild.ts).
+  '/package.json',
+  '/package-lock.json',
   // Either format of a declaration (tools.ts `spelled`, M-34605): a `.yml`
   // is the app's inside exactly as much as the `.json` is.
   '/vocab.json',

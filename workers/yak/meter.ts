@@ -139,9 +139,11 @@ export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 // are held to ten million, which on Workers AI is a few dollars of the nine.
 export let TOKENS: Record<Tier, number> = { free: 1_000_000, plus: 10_000_000 }
 
-// Seconds of sandbox container a month (sandbox.ts). An hour free is six
-// builds' whole budget (sandbox.ts `BUDGET`); ten hours on the Plus plan is
-// about $1.30 of standard-2 time at Cloudflare's rates (wrangler.toml).
+// Build seconds a month: the sandbox container's (sandbox.ts) and the compile
+// at app_deploy's (esbuild.ts). An hour free is six builds' whole sandbox
+// budget (sandbox.ts `BUDGET`); ten hours on the Plus plan is about $1.30 of
+// standard-2 time at Cloudflare's rates (wrangler.toml). A compile's second
+// costs less than a container's, so the one allowance bounds both.
 export let SECONDS: Record<Tier, number> = { free: 3_600, plus: 36_000 }
 
 // What a tier costs a month, in whole dollars (D-32751). The number is
@@ -359,13 +361,13 @@ export let standing = (
   let made = `${count(usedBuilds(space, now))} of ${
     count(builds(space.tier))
   } builds a month`
-  // The tokens and the sandbox time the builder spent: the one place a person
-  // sees what a build costs us, each against its own monthly allowance.
+  // The tokens and the build time spent: the one place a person sees what a
+  // build costs us, each against its own monthly allowance.
   let cost = `${count(m.tokens)} of ${
     count(allowance('tokens', space.tier))
   } tokens and ${count(m.seconds)} of ${
     count(allowance('seconds', space.tier))
-  } sandbox seconds this month`
+  } build seconds this month`
   let files = `${size(m.files ?? 0)} of ${
     size(FILES[space.tier ?? 'free'])
   } photos and files (hourly reading)`
@@ -461,9 +463,10 @@ export let atCeiling = (
     seconds: () =>
       `${space.slug} is on the ${tier} tier, which is ${
         count(allowance('seconds', space.tier))
-      } seconds of sandbox time a month${shared}, and this month's are ` +
-      `spent — the sandbox wakes again on the 1st, and an app of html, css ` +
-      `and js needs none`,
+      } build seconds a month${shared} (the sandbox, and compiling ` +
+      `TypeScript and npm packages at app_deploy), and this month's are ` +
+      `spent — they come back on the 1st, and an app of html, css and js ` +
+      `needs none`,
   }[what]()
   return `${said}. ${
     tier == 'plus'

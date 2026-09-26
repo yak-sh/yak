@@ -728,7 +728,7 @@ Deno.test("the month of sandbox time is the account's, and it refuses", async ()
         command: 'ls',
       }),
     Error,
-    'seconds of sandbox time a month',
+    'build seconds a month',
   )
 })
 

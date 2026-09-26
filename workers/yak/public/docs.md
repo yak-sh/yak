@@ -5,8 +5,9 @@ The platform is yaks.app, written the way its address is: lowercase, with the
 
 A yaks app is an `index.html` and whatever files sit beside it, served live at
 `<space>.yaks.app/<app>/`. There is no build step and no framework: what you
-write is what the browser gets. Every app comes with its own store, a graph of
-entities, and a small client for reading and writing it from the page.
+write is what the browser gets, except TypeScript and npm imports, which
+`app_deploy` compiles. Every app comes with its own store, a graph of entities,
+and a small client for reading and writing it from the page.
 
 Make one with `app_new`, write files with `app_files` (the whole set in one
 call, as `files: [{path, content}, ...]`), then `app_deploy`, and give the
@@ -139,8 +140,12 @@ request that is not `/api/...` reaches it first, and anything it answers with a
 looking, and a key the person connected (`connection_need`) arrives as
 `env.NAME`, which is the reason to write a worker at all.
 
-Deeper: <https://yaks.app/docs/code.md> — env, routes, keys, limits, and whole
-workers to copy.
+A worker and a page's scripts may be TypeScript and may import npm packages:
+name the packages in a `package.json`, and `app_deploy` compiles them, pinning
+the versions it installed in `package-lock.json`.
+
+Deeper: <https://yaks.app/docs/code.md> — env, routes, keys, limits, whole
+workers to copy, and TypeScript and npm packages.
 
 ## Home
 

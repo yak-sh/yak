@@ -154,7 +154,7 @@ Deno.test('app config: wrong shapes refuse before provisioning or uploading', ()
     [{ main: '__yak_entry.js' }, 'main'],
     [{ main: '/lib/entry.js' }, 'main'],
     [{ main: 'lib/../entry.js' }, 'main'],
-    [{ main: 'src/server.ts' }, 'main'],
+    [{ main: 'src/server.py' }, 'main'],
     [{ main: '../entry.js' }, 'main'],
     [{ main: 'metadata' }, 'main'],
     [{ compatibility_date: 'tomorrow' }, 'compatibility_date'],

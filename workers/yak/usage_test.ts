@@ -490,7 +490,7 @@ Deno.test('the build line warns at 80%, and the line says both numbers', () => {
   let said = standing(space({ builds: 1, tokens: 4_210, built: 1 }), 2, NOW)
   assertStringIncludes(
     said,
-    '1 of 5 builds a month (4,210 of 1,000,000 tokens and 0 of 3,600 sandbox seconds this month)',
+    '1 of 5 builds a month (4,210 of 1,000,000 tokens and 0 of 3,600 build seconds this month)',
   )
   assertStringIncludes(said, 'a build past 5')
   assertStringIncludes(

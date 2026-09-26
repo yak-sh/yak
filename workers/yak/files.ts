@@ -20,7 +20,7 @@ import type { Objects } from '@yaks/blob'
 import { keepable, purge, tagsOf } from './cache.ts'
 import type { App } from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { sha256 } from './versions.ts'
+import { BUILT, sha256 } from './versions.ts'
 import { parse, WORKER } from './wrangler_app.ts'
 
 // What the gateway tells this part, in headers rather than the path, because
@@ -159,19 +159,39 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // gateway; this covers the configured path, which only the config names.
   // Started here and awaited after the file, so the lookup rides in the same
   // round trip as the bytes rather than in front of every script an app serves.
-  let source = /\.(?:js|mjs)$/.test(key) ? mainOf(blobs, prefix) : null
+  let script = SCRIPT.test(key)
+  let source = script ? mainOf(blobs, prefix) : null
+  // A page script the deploy compiled serves in its source's place, as
+  // JavaScript whatever its extension (esbuild.ts): `<script type="module"
+  // src="main.ts">` gets main.ts compiled. Asked for beside the source, in the
+  // same round trip.
+  let made = script
+    ? blobs.read(keyed(prefix, `/${BUILT}${path.slice(1)}`))
+    : null
   let bytes = await blobs.read(key)
   if (source && key == keyed(prefix, `/${await source}`)) return missing(keep)
+  let compiled = await made
+  if (compiled) return served(compiled, MIME.js, keep)
   if (!bytes && pretty(path)) {
     key = keyed(prefix, '/')
     bytes = await blobs.read(key)
   }
   if (!bytes) return missing(keep)
-  return new Response(bytes, {
+  return served(bytes, mimeOf(key), keep)
+}
+
+// What a module script can be written in, and what a page may load as one.
+let SCRIPT = /\.(?:js|mjs|ts|mts|tsx|jsx)$/
+
+let served = async (
+  bytes: Uint8Array<ArrayBuffer>,
+  type: string,
+  keep: Record<string, string>,
+) =>
+  new Response(bytes, {
     headers: {
-      'content-type': mimeOf(key),
+      'content-type': type,
       [SHA]: (await sha256(bytes)).slice(0, 24),
       ...keep,
     },
   })
-}

@@ -32,7 +32,8 @@
 // answered at all. A deploy in v1 is a version bump, since an
 // app's files serve live from its blob store — and the version it bumps to is
 // kept, files and all, so app_rollback can put it back.
-import { deployWorker } from './deploy_worker.ts'
+import { configured, deployWorker } from './deploy_worker.ts'
+import { compiled } from './esbuild.ts'
 import { bindingLines, bindings } from './bindings.ts'
 import type { Objects } from '@yaks/blob'
 import { r2Objects } from './lib/objects.ts'
@@ -669,23 +670,18 @@ let homesIn = async (ctx: Ctx, space: Space, app: App) => {
 }
 
 // The app's data files, as text (seed.ts) — the seed ones for a release, the
-// ones a path names for store_load. Only the picked ones are read: an app's
+// ones a path names for store_load. Only the named ones are read: an app's
 // bytes are its pictures as well as its pages, and neither caller has any
 // business decoding those.
-let texts = async (
+let texts = (
   blobs: Objects,
-  space: Space,
-  app: App,
-  pick: (path: string) => boolean,
-): Promise<Text[]> => {
-  let prefix = fileKey(space, app, '')
-  let paths = own((await blobs.list(prefix)).map((k) => k.slice(prefix.length)))
-    .filter(pick)
-  return await Promise.all(paths.map(async (path) => ({
+  prefix: string,
+  paths: string[],
+): Promise<Text[]> =>
+  Promise.all(paths.map(async (path) => ({
     path,
     text: new TextDecoder().decode(await blobs.get(prefix + path)),
   })))
-}
 
 // A seed batch through the app's own write door, as the caller: the refusal's
 // own sentence back where the store said no, null where it took the batch.
@@ -797,13 +793,33 @@ let released = async (
   who: Who,
   store: Door,
 ) => {
-  // Whatever door asked for this release wrote the app's bytes before asking
-  // — app_files, a rollback's restore, an install's copy — so the edge is
-  // emptied here, once, for all four (cache.ts `purged`). First, because a
-  // release that dies on a manifest it refuses still leaves the bucket
-  // changed, and the stale edge would outlive the failure.
   let c = ctx.clock ?? clock()
-  await c.time('purge', () => purged(ctx.env, app))
+  let blobs = r2Objects(ctx.env.BLOBS)
+  let prefix = fileKey(space, app, '')
+  let bytesAt = (path: string) => blobs.read(prefix + path)
+  let parsed = await configured(bytesAt)
+  // Every key under the app, listed once for the compile and the seed, which
+  // read files the release does not write. The snapshot lists again at the
+  // end, since the compile may have written package-lock.json.
+  let keys = (await blobs.list(prefix)).map((k) => k.slice(prefix.length))
+  // What needs compiling is compiled first (esbuild.ts): a compile that fails
+  // refuses the release before anything else in it moves.
+  //
+  // Whatever door asked for this release wrote the app's bytes before asking
+  // — app_files, a rollback's restore, an install's copy — and the compile
+  // writes the pages it made, so the edge is emptied here, once, for all of
+  // them (cache.ts `purged`). Whether or not the compile refused: a release
+  // that dies still leaves the bucket changed, and the stale edge would
+  // outlive the failure.
+  let made
+  try {
+    made = await c.time(
+      'compile',
+      () => compiled(ctx, space, app, who, parsed.config, keys),
+    )
+  } finally {
+    await c.time('purge', () => purged(ctx.env, app))
+  }
   // What this release will be called, read here because the seed below is
   // marked with it the moment it lands and the version row is written at the
   // end.
@@ -811,7 +827,6 @@ let released = async (
   // The app's own components, if it declares any. A manifest the store
   // refuses fails the release: the words and the tables must agree, and a
   // half-planted vocabulary is what `unknown component` is made of.
-  let blobs = r2Objects(ctx.env.BLOBS)
   // The file the app declares its words in — and its name, for every sentence
   // below that tells somebody to go and edit it.
   let { file: vocabFile, source } = await declaring(blobs, space, app)
@@ -915,7 +930,7 @@ let released = async (
   let seedTook = c.since()
   if (!app.seeded) {
     sowed = await sow(
-      await texts(blobs, space, app, seedy),
+      await texts(blobs, prefix, own(keys).filter(seedy)),
       applying(store, await byCaller(ctx, who)),
     )
     if (sowed.length) {
@@ -992,20 +1007,17 @@ let released = async (
   // everybody and moves only when the platform is released (stream.ts).
   if (tooled.views) await viewsMoved(ctx, space)
   toolsTook('tools')
-  let deployed = await c.time('worker', () =>
-    deployWorker(
-      ctx.env,
-      space,
-      app,
-      (path) => blobs.read(fileKey(space, app, path)),
-    ))
+  let deployed = await c.time(
+    'worker',
+    () => deployWorker(ctx.env, space, app, bytesAt, parsed, made.worker),
+  )
   let worker = deployed.worker
-  let ran = deployed.lines.map((line) => `\n${line}`).join('')
+  let ran = [...made.lines, ...deployed.lines].map((line) => `\n${line}`)
+    .join('')
   // What this release IS, kept so one word puts it back (T-32886): the files
   // as a manifest of path to the name of their bytes, those bytes pinned
   // beside them, and Cloudflare's name for the script this uploaded. The
   // app's version counter and the row that records the version move together.
-  let prefix = fileKey(space, app, '')
   let pinned = await c.time('snapshot', () => snapshot(blobs, prefix))
   await c.time(
     'record',
@@ -2592,11 +2604,13 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space, app, who, store } = await inApp(ctx, args, true)
       let path = text(args.path, 'path')
+      let blobs = r2Objects(ctx.env.BLOBS)
+      let prefix = fileKey(space, app, '')
+      let keys = (await blobs.list(prefix)).map((k) => k.slice(prefix.length))
       let files = await texts(
-        r2Objects(ctx.env.BLOBS),
-        space,
-        app,
-        (p) => asked(path, p),
+        blobs,
+        prefix,
+        own(keys).filter((p) => asked(path, p)),
       )
       if (!files.length) {
         throw refuse(

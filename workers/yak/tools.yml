@@ -104,7 +104,9 @@ app_files:
     write, so leave op out. path and content write a single file, and base64
     in place of content writes a file that is not text, such as an image or
     the .wasm a worker.js imports. Files are served live at
-    <space>.yaks.app/<app>/<path>, and index.html serves the directory. An
+    <space>.yaks.app/<app>/<path>, and index.html serves the directory; a
+    TypeScript script, or one importing an npm package, serves as app_deploy
+    last compiled it. An
     app's data lives in its own store, never localStorage: a page reads and
     writes it with `import { apply, query, search } from './api/client.js'`,
     served beside the app. Each page gets a `<base>` at the app's own
@@ -245,7 +247,14 @@ app_deploy:
     and their agent act on the app through its own commands. A worker.js
     beside index.html becomes the app's own server code: it handles every
     request that is not under /api/ before the files do, and whatever it
-    answers 404 falls through to the files. Every deploy is kept, so
+    answers 404 falls through to the files. TypeScript and npm packages are
+    compiled here, with esbuild: a worker.ts, a worker that imports a
+    package, and each page module script that is TypeScript or imports a
+    package that package.json names under dependencies. A compiled page
+    script serves at its own address as JavaScript; package-lock.json is
+    written to pin the versions installed, so deploying again builds the same
+    code; and a compile error refuses the deploy with the compiler's lines
+    while the last release keeps serving. Every deploy is kept, so
     app_rollback can put this one back later. If the app is published, the
     published version does not move with it: what strangers install stays
     the version you published until you call app_publish again, and this
