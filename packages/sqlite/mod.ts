@@ -326,12 +326,14 @@ export let storage = (
           name: 'foreign_keys',
           value,
         })
+        let unfit: Error[] = []
         driver.query(keys('off'))
         try {
-          for (let e of fit(driver, vocab, before)) report(e)
+          unfit = fit(driver, vocab, before)
         } finally {
           driver.query(keys('on'))
         }
+        unfit.forEach(report)
         // The indexes last: one may name a column this boot just added, or
         // stand on a table it just rebuilt.
         for (let stmt of indexed(vocab)) driver.query(stmt)
@@ -346,7 +348,12 @@ export let storage = (
               : base.number,
           )
         }
-        meta(driver).set(SCHEMA, mark(componentTables(driver, made)))
+        // A table left unfit is not yet the shape this vocabulary says, so
+        // the mark waits: the next open fits it again, and it heals once its
+        // rows are prepared.
+        if (!unfit.length) {
+          meta(driver).set(SCHEMA, mark(componentTables(driver, made)))
+        }
       }
       // And the sizes those tables are read with (ddl.ts `analyzed`), which
       // drift with the rows, not the schema. An index the planner cannot size

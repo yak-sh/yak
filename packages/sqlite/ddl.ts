@@ -329,7 +329,7 @@ export let indexed = (vocab: Vocab): Stmt[] => [
  * fingerprint instead, and moving it fits every store once more: move it when
  * fitting learns to see something it did not.
  */
-export let FIT = 1
+export let FIT = 2
 
 /**
  * What fitting reads off a file before an install creates anything: each

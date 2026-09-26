@@ -478,6 +478,18 @@ Deno.test('rows a narrowed list would refuse keep their table as it stood', () =
   assertEquals(objects(d, { name: 'creature__refit' }), [])
 })
 
+Deno.test('a table kept for its rows fits on the open after they move', () => {
+  let { d } = life(
+    [{ enum: ['fox', 'owl'] }, ['fox', 'owl']],
+    [{ enum: ['fox'] }, []],
+  )
+  d.query({ t: 'update', table: 'creature', set: { kind: val('fox') } })
+  let s = storage(d, creatures({ enum: ['fox'] }))
+  s.install()
+  let owl = [{ entity: { eid: 'o2' }, creature: { kind: 'owl' } }]
+  assertThrows(() => s.tx((tx) => tx.patch(owl)), Error, 'CHECK')
+})
+
 Deno.test('a store over a file installs the sizes its planner reads it by', () => {
   let path = Deno.makeTempFileSync({ suffix: '.sqlite' })
   let d = open(path)

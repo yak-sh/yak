@@ -690,11 +690,12 @@ export class Store {
       // first time: there is no older shape to be wearing.
       if (held) recut(drive)
       for (let stmt of blobSchema()) drive.query(stmt)
-      for (let e of install(ctx.storage, vocab, blobRead(vocab))) {
-        defect(e, { request: 'schema fit', store: name })
-      }
+      let unfit = install(ctx.storage, vocab, blobRead(vocab))
+      for (let e of unfit) defect(e, { request: 'schema fit', store: name })
       if (held) rebuild(drive)
-      this.#put('schema', stamp)
+      // A table left unfit is not yet at the stamp, so the next wake fits it
+      // again and it heals once its rows are prepared (@yaks/sqlite `fit`).
+      if (!unfit.length) this.#put('schema', stamp)
     }
     let app = this.#get('app')
     // The registry an app's own effects register on (T-33816), and the one
