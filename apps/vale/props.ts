@@ -110,6 +110,8 @@ let rock = boulders([0x8f8e86, 0xa3a198, 0x7f7e77], 0x6f9a48)
 let sandstone = boulders([0xd2a878, 0xe0bc8c, 0xc0925f], null)
 // Cinder: black rock the fire spat out.
 let cinder = boulders([0x4e4b48, 0x5c5854, 0x423f3c], null)
+// Grey rock with snow lying on it.
+let snowrock = boulders([0x8f8e86, 0xa3a198, 0x7f7e77], 0xf1f4f6)
 
 let BLOOMS = [0xf6f1e4, 0xf5d451, 0xf08aa8, 0x8fb4f2, 0xe8745a, 0xc59af0]
 
@@ -535,6 +537,7 @@ let BUILD: Record<string, (seed: number) => Model> = {
   rock,
   sandstone,
   cinder,
+  snowrock,
   flower,
   tuft,
   mushroom,
@@ -567,6 +570,7 @@ let VARIANTS: Record<string, number> = {
   rock: 6,
   sandstone: 5,
   cinder: 5,
+  snowrock: 5,
   flower: 8,
   tuft: 6,
   mushroom: 3,

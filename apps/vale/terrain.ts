@@ -76,6 +76,8 @@ export type Vale = {
   portals: { x: number; z: number; to: string }[]
 }
 
+// How far round a portal no tree or rock grows, in metres.
+let GLADE = 9
 // How much room each building takes, as a radius: a portal's is the ground
 // before it, where a hero steps out (play.ts `arrival`).
 let FOOT: Record<string, number> = {
@@ -347,7 +349,8 @@ let build = (lv: Level, V: number): Vale => {
     lane < 1.3
 
   // Trees and rocks, one chance per cell of a jittered grid, decided on the
-  // smooth ground so they stand in the same places at every voxel size.
+  // smooth ground so they stand in the same places at every voxel size; none
+  // in the glade round a portal, so a hero stepping out sees where they are.
   let CELL = 3
   for (let ck = 0; ck < SIZE / CELL; ck++) {
     for (let ci = 0; ci < SIZE / CELL; ci++) {
@@ -357,6 +360,7 @@ let build = (lv: Level, V: number): Vale => {
       let y = height(x, z)
       if (y <= SHORE || y >= 18 || steep(height, x, z) >= 2) continue
       if (taken(x, z, toLane(paths, s, x, z))) continue
+      if (lv.portals.some((g) => dist(x, z, g.at) < GLADE)) continue
       let w = hold(x, z)
       let tree = 0.04 + w.rim * 0.3 + weigh(w, (f) => f.trees)
       let rock = 0.03 + w.rim * 0.12 + weigh(w, (f) => f.rocks)
@@ -422,6 +426,7 @@ let SOLID = new Set([
   'rock',
   'sandstone',
   'cinder',
+  'snowrock',
   'basalt',
   'crystal',
   'serac',

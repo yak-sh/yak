@@ -25,10 +25,11 @@ export let Top = {
 }
 
 let bump = (d: number, r: number) => Math.exp(-(d * d) / (r * r))
-// How a place that spreads over a whole level holds it: all of it within 50
-// metres of its middle, fading out by 100, and less than a smaller place does
-// at its own middle, so one standing inside it is still itself.
-let wide = (d: number) => 0.62 * smooth(100, 50, d)
+// How a place that spreads over a whole level holds it: most of it within 50
+// metres of its middle, fading out by 100; a little less the further out, so
+// where two meet the nearer holds; and less than a smaller place does at its
+// own middle, so one standing inside it is still itself.
+let wide = (d: number) => (0.66 - d * 0.0015) * smooth(100, 50, d)
 // Noise folded into crests: 1 along a line through the middle, 0 far off.
 let crest = (n: number) => 1 - Math.abs(2 * n - 1)
 
@@ -104,12 +105,14 @@ export let FEATURES: Record<string, Feature> = {
     trees: -0.05,
     rocks: 0.45,
     grows: ['pine'],
+    stones: ['rock'],
     decor: [['flower', 0.006], ['tuft', 0.044]],
   },
   ridge: {
     shape: (h, d) => h + smooth(18, 10, d) * 6,
     hold: (d) => bump(d, 15),
     rocks: 0.2,
+    stones: ['rock'],
   },
   woods: {
     shape: (h, d, x, z, s) =>
@@ -178,7 +181,7 @@ export let FEATURES: Record<string, Feature> = {
     trees: -0.03,
     rocks: 0.06,
     grows: ['birch'],
-    stones: ['rock', 'rock', 'rock', 'menhir'],
+    stones: ['rock', 'rock', 'rock', 'rock', 'rock', 'menhir'],
     decor: [['heather', 0.07], ['tuft', 0.03]],
     builds: STONES,
   },
@@ -275,6 +278,7 @@ export let FEATURES: Record<string, Feature> = {
     trees: 0.15,
     rocks: 0.05,
     grows: ['spruce'],
+    stones: ['snowrock'],
     decor: [],
   },
   // A sheet of ice, cracked by crevasses, and seracs standing on it.
@@ -313,7 +317,8 @@ export let FEATURES: Record<string, Feature> = {
     shape: (h, d, x, z, s) =>
       h + bump(d, 44) * (fbm(x / 10, z / 10, 67 + s) - 0.45) * 3,
     hold: wide,
-    cover: (n) => n > 0.76 ? Top.ember : n > 0.3 ? Top.ash : Top.stone,
+    cover: (n, d) =>
+      n > 0.76 && d < 44 ? Top.ember : n > 0.3 ? Top.ash : Top.stone,
     cliff: Top.ash,
     shore: Top.ash,
     trees: 0.03,
