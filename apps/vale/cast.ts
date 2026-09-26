@@ -239,8 +239,9 @@ export let cast = (
       ring.visible = false
       for (let w of warns.values()) w.visible = false
       for (let m of f.mobs) {
-        if (m.near > 75) continue
         let b = BEASTS[m.kind]
+        // Small things are lost in the haze sooner than big ones.
+        if (m.near > Math.min(75, 30 + 25 * b.size)) continue
         let a = actor(m.eid, () => beast(m.kind))
         let gone = m.down ? (f.now - m.since) / 1000 : 0
         // A fallen creature lies a moment, sinks into the moss, and is gone
@@ -285,7 +286,7 @@ export let cast = (
             `<span><b>${esc(b.name)}</b> <em>${b.lvl}</em></span>${
               bar(m.hp / m.most, 'Plate_Bar-foe')
             }`,
-            `Plate Plate-foe${b.lvl >= 8 ? ' Plate-boss' : ''}`,
+            `Plate Plate-foe${b.boss ? ' Plate-boss' : ''}`,
           )
         }
       }

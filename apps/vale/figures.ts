@@ -1,16 +1,26 @@
 // Who moves in the vale, and how: the heroes, the people who give quests, and
-// the creatures, each a little jointed figure of soft boxes (mesh.ts
-// `cuboid`), and the animation that walks, hops, swings and falls it. A
-// creature is drawn by the body plan its row names (beasts.ts `Look`: a slime,
-// a crag, a quadruped), in the row's colours; a new plan is one more function
-// here and one more case in `beast`. A figure is told what it is doing (`Act`)
-// every frame and poses itself; it keeps no state of the world.
+// the creatures, each a little jointed figure of soft boxes (parts.ts), and
+// the animation that walks, hops, swings and falls it. A creature is drawn by
+// the body plan its row names (beasts.ts `Look`), one plan to a file in
+// bodies/, in the row's colours and at its row's scale; a new plan is one
+// more file there and one more row in `PLANS`. A figure is told what it is
+// doing (`Act`) every frame and poses itself; it keeps no state of the world.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import { BEASTS } from './beasts.ts'
-import { cuboid, out, type Vec } from './mesh.ts'
+import { BEASTS, type Look, type Plans } from './beasts.ts'
+import { biped } from './bodies/biped.ts'
+import { bird } from './bodies/bird.ts'
+import { crag } from './bodies/crag.ts'
+import { crawler } from './bodies/crawler.ts'
+import { flier } from './bodies/flier.ts'
+import { hopper } from './bodies/hopper.ts'
+import { quadruped } from './bodies/quadruped.ts'
+import { serpent } from './bodies/serpent.ts'
+import { slime } from './bodies/slime.ts'
+import { wisp } from './bodies/wisp.ts'
+import { ease, partOf, shade } from './parts.ts'
 import { lerp } from './rand.ts'
-import { flash, geometry, soft } from './soft.ts'
+import { flash, soft } from './soft.ts'
 
 /** What a figure is doing this frame. */
 export type Act = {
@@ -34,32 +44,6 @@ export type Figure = {
   height: number
   animate: (a: Act, dt: number) => void
 }
-
-type Box = [Vec, Vec, number]
-
-let partOf = (
-  material: THREE.Material,
-  boxes: Box[],
-  pivot: Vec,
-  cell = 0.1,
-): THREE.Group => {
-  let o = out()
-  for (let [min, size, color] of boxes) cuboid(o, min, size, color, cell)
-  let mesh = new THREE.Mesh(geometry(o), material)
-  mesh.castShadow = true
-  let g = new THREE.Group()
-  g.position.set(...pivot)
-  g.add(mesh)
-  return g
-}
-
-let shade = (hex: number, k: number) => {
-  let c = new THREE.Color(hex)
-  c.multiplyScalar(k)
-  return c.getHex()
-}
-
-let ease = (t: number) => t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2
 
 /** A hero in a player's colours. */
 export let hero = (
@@ -178,234 +162,31 @@ export let hero = (
   }
 }
 
-// A four-legged beast: body, head with snout and tusks, four legs and a ridge
-// of bristles, or thorns.
-let quadruped = (
-  opts: {
-    hide: number
-    ridge: number
-    snout: number
-    tusk: number
-    eye: number
-    scale: number
-    thorns?: boolean
-  },
-): Figure => {
-  let m = soft({ speckle: 0.1 })
-  let { hide, ridge, snout, tusk, eye } = opts
-  let root = new THREE.Group()
-  let body = new THREE.Group()
-  body.scale.setScalar(opts.scale)
-  root.add(body)
-  let trunk = partOf(m, [
-    [[-0.33, 0.36, -0.6], [0.66, 0.58, 1.2], hide],
-    [[-0.08, 0.92, -0.5], [0.16, 0.1, 0.95], ridge],
-    [[-0.3, 0.34, -0.55], [0.6, 0.1, 1.05], shade(hide, 0.85)],
-    [[-0.04, 0.6, -0.68], [0.08, 0.18, 0.1], ridge],
-    ...(opts.thorns
-      ? [0, 1, 2, 3, 4].flatMap((i): Box[] => [
-        [
-          [-0.05, 0.98, -0.42 + i * 0.2],
-          [0.1, 0.22 + (i % 2) * 0.08, 0.1],
-          0xe0d0b0,
-        ],
-        [[-0.26, 0.86, -0.36 + i * 0.2], [0.07, 0.16, 0.07], 0xd8c29a],
-        [[0.19, 0.86, -0.36 + i * 0.2], [0.07, 0.16, 0.07], 0xd8c29a],
-      ])
-      : []),
-  ], [0, 0, 0])
-  body.add(trunk)
-  let head = partOf(m, [
-    [[-0.25, -0.24, 0], [0.5, 0.46, 0.4], hide],
-    [[-0.14, -0.2, 0.38], [0.28, 0.2, 0.14], snout],
-    [[-0.09, -0.14, 0.52], [0.05, 0.06, 0.01], 0x3a2a26],
-    [[0.04, -0.14, 0.52], [0.05, 0.06, 0.01], 0x3a2a26],
-    [[-0.2, -0.16, 0.44], [0.06, 0.2, 0.06], tusk],
-    [[0.14, -0.16, 0.44], [0.06, 0.2, 0.06], tusk],
-    [[-0.19, 0.04, 0.4], [0.08, 0.08, 0.01], eye],
-    [[0.11, 0.04, 0.4], [0.08, 0.08, 0.01], eye],
-    [[-0.24, 0.18, 0.06], [0.12, 0.14, 0.06], ridge],
-    [[0.12, 0.18, 0.06], [0.12, 0.14, 0.06], ridge],
-  ], [0, 0.66, 0.58])
-  body.add(head)
-  let leg = (x: number, z: number) =>
-    partOf(m, [
-      [[-0.08, -0.4, -0.08], [0.16, 0.4, 0.16], shade(hide, 0.8)],
-      [[-0.085, -0.4, -0.085], [0.17, 0.08, 0.17], 0x3a2a22],
-    ], [x, 0.42, z])
-  let legs = [
-    leg(-0.21, 0.38),
-    leg(0.21, 0.38),
-    leg(-0.21, -0.4),
-    leg(0.21, -0.4),
-  ]
-  body.add(...legs)
-  let phase = 0
-  return {
-    root,
-    material: m,
-    height: 1.35 * opts.scale + 0.3,
-    animate: (a, dt) => {
-      phase += dt * (1.5 + a.speed * 2.6)
-      let amp = Math.min(1, a.speed / 3.5) * 0.7
-      let s = Math.sin(phase)
-      legs[0].rotation.x = s * amp
-      legs[3].rotation.x = s * amp
-      legs[1].rotation.x = -s * amp
-      legs[2].rotation.x = -s * amp
-      body.position.y = Math.abs(Math.cos(phase)) * 0.05 * amp * opts.scale
-      trunk.rotation.x = 0
-      head.rotation.set(Math.sin(a.t * 1.3) * 0.05 * (1 - amp), 0, 0)
-      if (a.swing >= 0) {
-        let up = a.swing < 0.4
-          ? ease(a.swing / 0.4)
-          : 1 - ease((a.swing - 0.4) / 0.6)
-        head.rotation.x = lerp(0.1, -0.55, up)
-        body.position.z = up * 0.25 * opts.scale
-      } else body.position.z = 0
-      if (a.down) {
-        body.rotation.z = Math.PI / 2
-        body.position.y = 0.3 * opts.scale
-      } else body.rotation.z = 0
-      flash(m, a.hurt * 0.8)
-    },
-  }
+// Every body plan, by the name a row gives it.
+let PLANS: { [P in keyof Plans]: (l: Plans[P]) => Figure } = {
+  biped,
+  bird,
+  crag,
+  crawler,
+  flier,
+  hopper,
+  quadruped,
+  serpent,
+  slime,
+  wisp,
 }
 
-// A slime: a jelly cube with moss on its back, which hops.
-let slime = (l: { body: number; moss: number; bloom: number }): Figure => {
-  let m = soft({ speckle: 0.08 })
-  let root = new THREE.Group()
-  let jelly = new THREE.Group()
-  root.add(jelly)
-  let green = l.body
-  let bodyPart = partOf(
-    m,
-    [
-      [[-0.42, 0, -0.42], [0.84, 0.72, 0.84], green],
-      [[-0.44, 0.62, -0.44], [0.88, 0.14, 0.88], l.moss],
-      [[-0.2, 0.76, -0.1], [0.14, 0.1, 0.14], shade(l.moss, 1.2)],
-      [[0.1, 0.76, 0.12], [0.1, 0.14, 0.1], l.bloom],
-      [[-0.3, 0.3, 0.42], [0.2, 0.22, 0.02], 0xffffff],
-      [[0.1, 0.3, 0.42], [0.2, 0.22, 0.02], 0xffffff],
-      [[-0.24, 0.32, 0.43], [0.1, 0.13, 0.02], 0x243020],
-      [[0.16, 0.32, 0.43], [0.1, 0.13, 0.02], 0x243020],
-      [[-0.08, 0.16, 0.42], [0.16, 0.05, 0.02], shade(l.body, 0.5)],
-      [[-0.3, 0, -0.3], [0.6, 0.06, 0.6], shade(green, 0.8)],
-    ],
-    [0, 0, 0],
-    0.12,
-  )
-  jelly.add(bodyPart)
-  let phase = Math.random() * 6
-  return {
-    root,
-    material: m,
-    height: 1.2,
-    animate: (a, dt) => {
-      phase += dt * (a.speed > 0.2 ? 7 : 2.5)
-      let hop = a.speed > 0.2 ? Math.max(0, Math.sin(phase)) : 0
-      let squash = a.speed > 0.2
-        ? 1 - Math.max(0, -Math.sin(phase)) * 0.25 + hop * 0.12
-        : 1 + Math.sin(phase) * 0.04
-      jelly.position.y = hop * 0.45
-      jelly.scale.set(1 / Math.sqrt(squash), squash, 1 / Math.sqrt(squash))
-      if (a.swing >= 0) {
-        let up = Math.sin(a.swing * Math.PI)
-        jelly.position.z = up * 0.45
-        jelly.scale.y *= 1 - up * 0.2
-      } else jelly.position.z = 0
-      if (a.down) jelly.scale.set(1.4, 0.2, 1.4)
-      flash(m, a.hurt * 0.8)
-    },
-  }
-}
+let draw = <P extends keyof Plans>(l: { plan: P } & Plans[P]) =>
+  PLANS[l.plan](l)
 
-// A cragback: a walking heap of stone, moss on its shell and embers for eyes.
-let crag = (
-  l: { stone: number; light: number; moss: number; eye: number },
-): Figure => {
-  let m = soft({ speckle: 0.14 })
-  let root = new THREE.Group()
-  let body = new THREE.Group()
-  root.add(body)
-  let { stone, light, moss } = l
-  let shell = partOf(
-    m,
-    [
-      [[-0.72, 0.3, -0.8], [1.44, 0.55, 1.6], stone],
-      [[-0.56, 0.85, -0.64], [1.12, 0.35, 1.28], light],
-      [[-0.36, 1.2, -0.42], [0.72, 0.25, 0.84], stone],
-      [[-0.3, 1.18, -0.2], [0.44, 0.1, 0.5], moss],
-      [[0.2, 1.02, 0.3], [0.3, 0.08, 0.28], moss],
-      [[-0.5, 0.98, -0.5], [0.24, 0.06, 0.3], moss],
-      [[0.34, 0.8, -0.6], [0.3, 0.2, 0.24], shade(stone, 0.86)],
-      [[-0.66, 0.28, -0.74], [1.32, 0.1, 1.48], shade(stone, 0.78)],
-    ],
-    [0, 0, 0],
-    0.15,
-  )
-  body.add(shell)
-  let head = partOf(
-    m,
-    [
-      [[-0.26, -0.22, 0], [0.52, 0.44, 0.46], light],
-      [[-0.18, 0.02, 0.45], [0.12, 0.09, 0.02], l.eye],
-      [[0.06, 0.02, 0.45], [0.12, 0.09, 0.02], l.eye],
-      [[-0.22, 0.2, 0.05], [0.44, 0.08, 0.3], moss],
-    ],
-    [0, 0.6, 0.78],
-    0.12,
-  )
-  body.add(head)
-  let leg = (x: number, z: number) =>
-    partOf(m, [[[-0.16, -0.36, -0.16], [0.32, 0.4, 0.32], shade(stone, 0.9)]], [
-      x,
-      0.38,
-      z,
-    ], 0.12)
-  let legs = [leg(-0.5, 0.5), leg(0.5, 0.5), leg(-0.5, -0.55), leg(0.5, -0.55)]
-  body.add(...legs)
-  let phase = 0
-  return {
-    root,
-    material: m,
-    height: 2,
-    animate: (a, dt) => {
-      phase += dt * (1 + a.speed * 2.4)
-      let amp = Math.min(1, a.speed / 2.4) * 0.45
-      let s = Math.sin(phase)
-      legs[0].rotation.x = s * amp
-      legs[3].rotation.x = s * amp
-      legs[1].rotation.x = -s * amp
-      legs[2].rotation.x = -s * amp
-      body.rotation.z = Math.sin(phase) * 0.04 * amp
-      head.position.y = 0.6 + Math.sin(a.t * 1.1) * 0.02
-      if (a.swing >= 0) {
-        let up = Math.sin(a.swing * Math.PI)
-        head.position.z = 0.78 + up * 0.35
-        body.rotation.x = -up * 0.12
-      } else {
-        head.position.z = 0.78
-        body.rotation.x = 0
-      }
-      if (a.down) {
-        body.rotation.z = Math.PI * 0.9
-        body.position.y = 1.4
-      } else body.position.y = 0
-      flash(m, a.hurt * 0.8)
-    },
-  }
-}
-
-/** A creature of the given kind, drawn by its row's body plan (beasts.ts). */
+/** A creature of the given kind, drawn by its row's body plan (beasts.ts) at
+ * its row's scale. */
 export let beast = (kind: string): Figure => {
-  let l = (BEASTS[kind] ?? BEASTS.slime).look
-  return l.plan == 'slime'
-    ? slime(l)
-    : l.plan == 'crag'
-    ? crag(l)
-    : quadruped(l)
+  let l: Look = (BEASTS[kind] ?? BEASTS.slime).look
+  let f = draw(l)
+  let k = l.scale ?? 1
+  f.root.scale.setScalar(k)
+  return { ...f, height: f.height * k }
 }
 
 /** One of the people of the vale: a hero in their own colours, leaning on a
