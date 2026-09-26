@@ -25,10 +25,16 @@ import {
   type ToolContext,
 } from '@yaks/session'
 import { worded } from '@yaks/tools'
+import { edits, mode, writes } from '@yaks/member'
+import { ModelError } from '@yaks/model'
+import type { VocabDoc } from '@yaks/vocab'
 import { workersAi } from '@yaks/workers-ai'
+import { appStore, type Directory } from './directory.ts'
 import { filled, schemaOf } from './lib/tools.ts'
 import { metered } from './meter.ts'
+import { caught } from './sentry.ts'
 import {
+  type Answer,
   type Effect,
   type Install,
   page,
@@ -215,6 +221,11 @@ export let tooled = (at: Stored): Tool[] =>
     },
   }))
 
+// The space an app's calls are counted against, read fresh each time it is
+// asked (meter.ts `metered`).
+let payer = (app: string) => async (dir: Directory) =>
+  (await dir.appAt(app))?.space ?? null
+
 /**
  * The store's transcript runner, registered on its registry: `session_run`
  * run here, lent Workers AI through the metered binding and the app's marked
@@ -225,13 +236,10 @@ export let tooled = (at: Stored): Tool[] =>
  */
 let asking: Effect = (on, at) => {
   if (at.meta || !at.app) return
-  let app = at.app
-  let served = workersAi(
-    metered(at.env, async (dir) => (await dir.appAt(app))?.space ?? null),
-  )
+  let served = workersAi(metered(at.env, payer(at.app)))
   let lent = { [PROVIDER]: served }
   let run = running(at.graph, {
-    holder: app,
+    holder: at.app,
     model: served,
     resolveModel: providerResolver(at.graph, lent),
     answers: answers(at.graph, lent),
@@ -246,11 +254,94 @@ let asking: Effect = (on, at) => {
   })
 }
 
+// How each way a model call fails is answered at the door: the allowance
+// spent, the model busy, a model the catalogue does not offer, and a host
+// with no Workers AI to lend.
+let STATUS: Record<string, number> = {
+  limit: 429,
+  busy: 503,
+  model: 400,
+  unbound: 503,
+}
+
+// What the door is posted: the model's name and its input, as Workers AI
+// takes them.
+let posted = (body: string): { model: string; input: object } | null => {
+  try {
+    let { model, input } = JSON.parse(body)
+    return typeof model == 'string' && input && typeof input == 'object'
+      ? { model, input }
+      : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * `./api/ai/run`: one call to a model, answered with what the model said, as
+ * Workers AI says it — what a page or the app's own worker asks when it wants
+ * an answer back rather than a transcript (the worker's `ai` binding posts
+ * here, dispatch.ts `shim`). Asked by whoever may ask the app's models for a
+ * turn: its members, or, where its manifest says `"models": "open"`, anyone
+ * who may write it, at a visitor's size and pace. Metered like every call.
+ */
+let run: Answer = async (
+  { env, req, path, space, app, who, refuse, json, visiting },
+) => {
+  if (path != '/ai/run') return null
+  if (req.method != 'POST') return json(405, 'method_not_allowed')
+  if (!edits(mode(app.access), who.role)) return refuse()
+  let body = await req.text()
+  if (!writes(who.role)) {
+    let manifest = await appStore(env.STORE, space, app, env)('/vocab')
+      .then((r) => r.json() as Promise<VocabDoc>)
+    if (manifest.models != 'open') {
+      return who.person
+        ? json(
+          403,
+          'not_a_member',
+          "only this app's members may ask its models — its owner can make " +
+            'you an editor',
+        )
+        : refuse()
+    }
+    let held = await visiting(body.length)
+    if (held) return held
+  }
+  let asked = posted(body)
+  if (!asked) {
+    return json(
+      400,
+      'bad_request',
+      'post {"model": "<name>", "input": {…}}: the model, and what it is ' +
+        'asked as Workers AI takes it',
+    )
+  }
+  try {
+    return Response.json(
+      await metered(env, payer(app.eid)).run(asked.model, asked.input),
+    )
+  } catch (e) {
+    if (e instanceof ModelError) {
+      return json(STATUS[e.code] ?? 502, e.code, e.message)
+    }
+    caught(e, { request: 'POST /api/ai/run', space: space.slug, app: app.slug })
+    return json(
+      502,
+      'model_failed',
+      `${asked.model} did not answer: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    )
+  }
+}
+
 /** Models, as a plugin of this Worker: the catalogue in every app's store,
- * and that store's runner. */
+ * that store's runner, and the door a page or a worker asks one through. */
 export let modelsPlugin: Plugin = {
   name: 'models',
   pages: [page('models')],
   installs: [planting],
   effects: [asking],
+  answers: [run],
 }

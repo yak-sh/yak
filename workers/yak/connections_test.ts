@@ -294,6 +294,7 @@ let asks = async (
       who,
       refuse: () => new Response(null, { status: 403 }),
       json: (status) => new Response(null, { status }),
+      visiting: () => Promise.resolve(null),
     }))!
   let his = async () =>
     (await connectionsOf(s.p.env, [s.space], bob)).list.filter((c) => c.own)
@@ -487,6 +488,7 @@ Deno.test(
         who: { person: null, role },
         refuse: () => new Response(null, { status: 403 }),
         json: (status) => new Response(null, { status }),
+        visiting: () => Promise.resolve(null),
       }))!
     await wired((r) => new Response(r.url), async (sent) => {
       let out = (level: 'viewer' | null, to?: string) =>

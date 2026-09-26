@@ -205,17 +205,21 @@ let input = (req: Request) =>
   }
 
 /**
- * A model over the binding. A rate limit is a {@link ModelError} coded
- * `busy`, and a `ModelError` the binding throws itself (one that meters it,
- * say) is passed on as it is; anything else the binding throws is passed on as
- * it was thrown.
+ * What the binding threw, said the way a model's failure is said here: a rate
+ * limit is a {@link ModelError} coded `busy`, and a `ModelError` the binding
+ * throws itself (one that meters it, say) or anything else is passed on as it
+ * was thrown. For a host that calls the binding without {@link workersAi}.
+ */
+export let failure = (e: unknown): unknown =>
+  e instanceof ModelError || !busy(e) ? e : new ModelError('busy', message(e))
+
+/**
+ * A model over the binding, failing as {@link failure} says.
  */
 export let workersAi = (ai: Binding): Model => async (req) => {
   req.signal?.throwIfAborted()
   let out = await ai.run(req.model, input(req)).catch((e) => {
-    throw e instanceof ModelError || !busy(e)
-      ? e
-      : new ModelError('busy', message(e))
+    throw failure(e)
   })
   req.signal?.throwIfAborted()
   let id = str(at(out, 'id')) || crypto.randomUUID()

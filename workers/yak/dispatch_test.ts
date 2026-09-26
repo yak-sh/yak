@@ -507,6 +507,66 @@ Deno.test('a vpc_services name is a door to the kernel as the app, never a bindi
   }
 })
 
+Deno.test('an ai binding is the app asking ./api/ai/run, and a refusal throws its sentence', async () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yak-shim-' })
+  try {
+    Deno.writeTextFileSync(`${dir}/entry.js`, shim(WORKER, [], 'AI'))
+    Deno.writeTextFileSync(
+      `${dir}/worker.js`,
+      `export default {
+        async fetch(req, env) {
+          let said = await env.AI.run('typesafe/jev', { prompt: 'hi' })
+          let no = await env.AI.run('typesafe/jev', {}).catch((e) => e)
+          return Response.json([said, no.message, no.code])
+        },
+      }`,
+    )
+    let { default: entry } = await import(`file://${dir}/entry.js`)
+    let asked: Request[] = []
+    let answers = [
+      Response.json({ response: 'hello' }),
+      Response.json(
+        { error: { code: 'limit', message: 'the allowance is spent' } },
+        { status: 429 },
+      ),
+    ]
+    let env = {
+      KERNEL: {
+        fetch: (r: Request) => {
+          asked.push(r)
+          return Promise.resolve(answers.shift()!)
+        },
+      },
+    }
+    let res = await entry.fetch(
+      new Request('https://jeff.yaks.app/vale/', {
+        headers: {
+          'x-yak-grant': 'the-grant',
+          'x-yak-app-grant': 'the-app-grant',
+          'x-yak-app': 'vale',
+        },
+      }),
+      env,
+      {},
+    )
+    assertEquals(await res.json(), [
+      { response: 'hello' },
+      'the allowance is spent',
+      'limit',
+    ])
+    assertEquals(asked[0].url, 'https://jeff.yaks.app/vale/api/ai/run')
+    assertEquals(asked[0].method, 'POST')
+    assertEquals(await asked[0].json(), {
+      model: 'typesafe/jev',
+      input: { prompt: 'hi' },
+    })
+    // Asked as the app, whoever is looking.
+    assertEquals(asked[0].headers.get('x-yak-grant'), 'the-app-grant')
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
 // ── The Workers API side, against the exchange the docs record ─────────────
 //
 // The upload and the three secret doors are HTTP against api.cloudflare.com,

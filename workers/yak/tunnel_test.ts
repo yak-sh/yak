@@ -256,6 +256,7 @@ let reach = async (
     who: over.who ?? itself,
     refuse: () => new Response(null, { status: 403 }),
     json: (status, code) => Response.json({ error: { code } }, { status }),
+    visiting: () => Promise.resolve(null),
   })
   return { res: res!, handed, named }
 }

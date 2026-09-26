@@ -1,6 +1,6 @@
 ---
 name: models
-description: "Asking a model (yaks.app). A transcript in the app's own store: a page writes an entry naming a model, the store asks it, and the answer lands beside the ask for any page subscribed to see. Instructions, typed questions answered as rows (a choice, a yes-or-no, a score), the commands a model may call, who may ask, the models there are and what each costs against the space's monthly model allowance."
+description: "Asking a model (yaks.app). A transcript in the app's own store: a page writes an entry naming a model, the store asks it, and the answer lands beside the ask for any page subscribed to see. Instructions, typed questions answered as rows (a choice, a yes-or-no, a score), one call answered at once through ./api/ai/run or a worker's ai binding, the commands a model may call, who may ask, the models there are and what each costs against the space's monthly model allowance."
 ---
 
 # Asking a model
@@ -87,6 +87,35 @@ ordered criteria (`answer.score`). The page reads the newest one with
 A model that answers no typed questions refuses them rather than guessing:
 questions are Jev's.
 
+## One call, answered at once
+
+A page that wants the answer in the same request, rather than in a transcript,
+posts `./api/ai/run` the model's name and its input:
+
+    let res = await fetch('./api/ai/run', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: '@cf/baai/bge-base-en-v1.5',
+        input: { text: ['a stranger at the forge'] },
+      }),
+    })
+    let { data } = await res.json()
+
+`input` is what Workers AI takes for that model (its page at
+<https://developers.cloudflare.com/workers-ai/models/>), and the answer is what
+the model says back. Nothing is kept: a transcript is the way to keep what was
+said. An app's worker asks the same way through a binding:
+`"ai": { "binding":
+"AI" }` in its `wrangler.jsonc` gives it
+`env.AI.run(model, input)` (see [Code](/docs/code)), which asks as the app
+itself.
+
+The same people may call it as may ask for a turn (below), and the same
+allowance pays. A refusal comes in the envelope every door answers with: `429`
+past the allowance, with the sentence that says so, and `503` while the model is
+busy.
+
 ## Commands a model may call
 
 A model may call the app's own commands (see [Commands](/docs/tools)), but only
@@ -98,8 +127,9 @@ to exactly what they could write on the page themselves.
 
 A model's turn costs the space money, so by default only the space's members who
 may change the app ask for one: an entry with `using` from anybody else is
-refused like any other write they may not make. An app that wants its visitors
-to ask too says so at the top of its `vocab.json`:
+refused like any other write they may not make, and so is their call to
+`./api/ai/run`. An app that wants its visitors to ask too says so at the top of
+its `vocab.json`:
 
     { "models": "open", "$defs": { … } }
 

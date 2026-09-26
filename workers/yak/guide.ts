@@ -223,16 +223,17 @@ keys are main (the app-relative server source path, worker.js by default, else
 worker.ts;
 directories such as dist/server.js are allowed; the upload wrapper is internal),
 compatibility_date, compatibility_flags, vars, d1_databases,
-r2_buckets, durable_objects.bindings with local class_name, migrations, and
-vectorize; Workers AI (ai) is refused, since a model's cost is not metered
-per space. D1 databases, R2 buckets and Vectorize indexes belong to that app and
+r2_buckets, durable_objects.bindings with local class_name, migrations,
+vectorize, vpc_services and ai. D1 databases, R2 buckets and Vectorize indexes belong to that app and
 are created at deploy; a new Vectorize index names dimensions and metric, or a
 preset. app_deploy reports unsupported settings and app_list names the
 bindings. Removing a binding keeps its resource and data until the app is
 permanently deleted, including its 30 days in the trash. vpc_services
 ({binding}) reaches the paths the space owner opened on a machine the space has
 a tunnel to, as env.BINDING.fetch(url); an installed app, or a space with no
-tunnel, is refused it.
+tunnel, is refused it. ai ({binding}) gives the worker env.BINDING.run(model,
+input), the models the space's allowance pays for (page models), never the
+account's Workers AI.
 
 Almost nothing else needs compiling: an app is html, css and js, served as
 written, TypeScript and npm packages compile at app_deploy, and reaching for a

@@ -31,7 +31,7 @@ import { reporting } from './wake.ts'
 import { refuse } from './tool.ts'
 import { ModelError } from '@yaks/model'
 import { LIMIT } from '@yaks/session/status'
-import { type Binding, usageOf } from '@yaks/workers-ai'
+import { type Binding, failure, usageOf } from '@yaks/workers-ai'
 import { CATALOGUE, guess, priceOf, weigh } from './models.ts'
 
 /** The hourly reading: `fired` on this tagged wake runs the existing meter. */
@@ -714,7 +714,9 @@ export let metered = (
     }
     let no = await refusedSpend(dir, space, 'models', bind)
     if (no) throw new ModelError(LIMIT, no)
-    let answer = await bind.AI.run(model, input)
+    let answer = await bind.AI.run(model, input).catch((e) => {
+      throw failure(e)
+    })
     let n = usageOf(answer)
     let cost = weigh(price, {
       input_tokens: n.input_tokens ?? guess(input),

@@ -120,11 +120,13 @@ transcript (any entity wearing `session`) with `using { model, instructions }`,
 the app's own store asks the model, and the reply lands in the same transcript
 for any page subscribed to see. `questions` beside the entry are answered by Jev
 as `answer` rows (a choice, a yes-or-no, a score), and a command marked
-`"model": true` is one the model may call. Every call spends the space's monthly
-model allowance, weighed in dollars by the model's price.
+`"model": true` is one the model may call. One call answered at once is a post
+to `./api/ai/run`, or `env.AI.run` in a worker. Every call spends the space's
+monthly model allowance, weighed in dollars by the model's price.
 
 Deeper: <https://yaks.app/docs/models.md> — the rows that ask and the rows that
-come back, typed questions, who may ask, and the models and their prices.
+come back, typed questions, one call at once, who may ask, and the models and
+their prices.
 
 ## The notes an app keeps
 

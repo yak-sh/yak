@@ -132,13 +132,24 @@ export let scriptName = (store: string) =>
 // kernel decides whether it goes on to the machine. A Cloudflare binding on the
 // app's script would hand its code the machine whole, since a module reaches
 // every binding its script holds whatever the shim passes it.
-export let shim = (main = WORKER, tunneled: string[] = []) =>
+//
+// `ai` is the name the app's config gives the models its space may spend on
+// (wrangler_app.ts `ai`), and it is a door for the same reason:
+// `env.AI.run(model, input)` is the app itself posting `./api/ai/run`, which
+// meters the call against the space's allowance (models.ts). The account's
+// own Workers AI binding is never on an app's script.
+export let shim = (
+  main = WORKER,
+  tunneled: string[] = [],
+  ai: string | null = null,
+) =>
   `import app from ${JSON.stringify('./' + main)}
 export * from ${JSON.stringify('./' + main)}
 
 let GRANT = '${GRANT}'
 let SELF = '${SELF}'
 let TUNNELED = ${JSON.stringify(tunneled)}
+let AI = ${JSON.stringify(ai)}
 
 export default {
   fetch(req, env, ctx) {
@@ -176,6 +187,22 @@ export default {
         return env.KERNEL.fetch(out)
       },
     }
+    // The models, as Workers AI's binding is called: what the model said,
+    // or the door's refusal thrown with its sentence.
+    let models = {
+      run: async (model, input) => {
+        let res = await door(api, self).fetch('ai/run', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ model, input }),
+        })
+        let said = await res.json()
+        if (res.ok) return said
+        let e = new Error(said?.error?.message ?? res.statusText)
+        e.code = said?.error?.code
+        throw e
+      },
+    }
     return app.fetch(new Request(req, { headers }), {
       STORE: door(api, grant),
       FILES: door('/' + slug + '/', grant),
@@ -184,6 +211,7 @@ export default {
       // one of the convenience doors supplied to apps without that binding.
       ...env,
       ...Object.fromEntries(TUNNELED.map((name) => [name, machine])),
+      ...(AI ? { [AI]: models } : {}),
     }, ctx)
   },
 }
@@ -697,7 +725,7 @@ export let upload = async (
     type: string,
   ) => body.append(name, new Blob([bytes], { type }), name)
   let tunneled = (config.vpc_services ?? []).map((v) => v.binding)
-  part(WRAPPER, shim(config.main, tunneled), ESM)
+  part(WRAPPER, shim(config.main, tunneled, config.ai?.binding), ESM)
   for (let m of modules) part(m.name, m.bytes, moduleType(m.name))
   return named(
     await answered(

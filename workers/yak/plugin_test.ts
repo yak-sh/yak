@@ -57,6 +57,7 @@ let asked = (path: string) =>
     who: { person: 'p', role: 'owner' },
     refuse: () => new Response(null, { status: 403 }),
     json: (status: number) => new Response(null, { status }),
+    visiting: () => Promise.resolve(null),
   }) as Asked
 
 let fixture: Plugin = {

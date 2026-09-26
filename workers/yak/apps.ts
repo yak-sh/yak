@@ -1046,6 +1046,12 @@ let api = async (
   // `/me`, so a plugin cannot take a path the kernel already answers. It is
   // handed the two ways of saying no this door says them, so a plugin's
   // refusal reads like every other refusal here.
+  // A visitor's write, held to a size and a pace (`visiting`); a member's
+  // passes.
+  let visit = async (bytes: number) =>
+    !writes(who.role) && bytes > VISIT_BATCH
+      ? json(413, 'visit_too_large')
+      : await visiting(req, env, app, who)
   let mine = await answered(PLUGINS, {
     env,
     req,
@@ -1055,6 +1061,7 @@ let api = async (
     who,
     refuse: refused,
     json,
+    visiting: visit,
   })
   if (mine) return mine
   // Taking money (sell.ts, T-34525). A read door as far as this app is
@@ -1131,11 +1138,8 @@ let api = async (
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()
     let body = await req.text()
-    if (!writes(who.role) && body.length > VISIT_BATCH) {
-      return json(413, 'visit_too_large')
-    }
-    let paced = await visiting(req, env, app, who)
-    if (paced) return paced
+    let held = await visit(body.length)
+    if (held) return held
     // The free tier's byte ceiling (T-32758). Data costs money to hold, so
     // this is a refusal — one the page shows in the platform's own sentence,
     // the way it shows every other.

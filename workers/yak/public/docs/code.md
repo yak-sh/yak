@@ -379,15 +379,15 @@ supported keys are `main` (the app-relative server source path, `worker.js` by
 default; directories such as `dist/server.js` are allowed, and the upload
 wrapper is internal), `compatibility_date`, `compatibility_flags`, `vars`,
 `d1_databases`, `r2_buckets`, `durable_objects.bindings` with local
-`class_name`, `migrations`, and `vectorize`. `ai` is refused: Workers AI is
-billed to the platform and not metered per space. D1 databases, R2 buckets and
-Vectorize indexes belong to that app; yaks.app creates them at deploy and reuses
-them. A new Vectorize index also names its `dimensions` and `metric`, or a
-`preset`. `app_deploy` reports unsupported settings and `app_list` names the
-bindings. Removing a binding keeps its resource and data until the app is
-permanently deleted; the app's 30 days in the trash keep them too. A declared
-binding keeps its name, including `STORE`, `FILES` or `APP`; otherwise those
-names are the convenience bindings described above.
+`class_name`, `migrations`, `vectorize`, `vpc_services` and `ai` (both below).
+D1 databases, R2 buckets and Vectorize indexes belong to that app; yaks.app
+creates them at deploy and reuses them. A new Vectorize index also names its
+`dimensions` and `metric`, or a `preset`. `app_deploy` reports unsupported
+settings and `app_list` names the bindings. Removing a binding keeps its
+resource and data until the app is permanently deleted; the app's 30 days in the
+trash keep them too. A declared binding keeps its name, including `STORE`,
+`FILES` or `APP`; otherwise those names are the convenience bindings described
+above.
 
 `vpc_services` reaches a machine of the space owner's own, such as a server on
 their computer, without opening a port on it. The owner gives the space a tunnel
@@ -398,6 +398,14 @@ on the machine, made as the app. Only the path and query go on, and a path the
 owner has not opened is answered 403. Any `service_id` in the config is ignored:
 the machine is the space's. A space with no tunnel, or an app installed from
 somewhere else, is refused it.
+
+`ai` names the models the space may spend on: `"ai": { "binding": "AI" }` gives
+the worker `env.AI`, and `await env.AI.run(model, input)` asks one and returns
+what it said, as Workers AI's own binding does. It is the app asking
+`./api/ai/run` as itself, so every call is weighed by the model's price and
+spent from the space's monthly model allowance; past it, `run` throws with the
+sentence that says so. Only the models the catalogue offers answer (see
+[Models](/docs/models)), and it is never the account's own Workers AI.
 
 ### Taking money is not one of your keys
 

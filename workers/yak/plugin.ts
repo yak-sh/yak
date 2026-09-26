@@ -76,6 +76,10 @@ export type Asked = {
   who: Who
   refuse: (what?: string) => Response
   json: (status: number, code: string, says?: string) => Response
+  /** a visitor's write, held to what every one is at this door: its size and
+   * its pace. The refusal to answer with, or null for a member or a visit
+   * within both. */
+  visiting: (bytes: number) => Promise<Response | null>
 }
 
 /** A door a plugin answers, or `null` for a path that is not its business. */

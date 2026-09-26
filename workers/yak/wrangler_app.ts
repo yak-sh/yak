@@ -46,6 +46,11 @@ export type Config = {
   // (dispatch.ts `shim`), never a Cloudflare binding. The service is the
   // space's, never the app's: a config names the door and nothing else.
   vpc_services?: { binding: string }[]
+  // The models the app's space may spend on, under the name its worker reaches
+  // them by: a door the shim hands over (dispatch.ts `shim`) onto
+  // `./api/ai/run`, metered against the space's allowance, and never the
+  // account's own Workers AI binding.
+  ai?: { binding: string }
 }
 export type Parsed = { config: Config; report: string[]; refused: string[] }
 export type Request = {
@@ -67,6 +72,7 @@ export let HONORED = [
   'migrations',
   'vectorize',
   'vpc_services',
+  'ai',
 ]
 
 let REFUSED: Record<string, string> = {
@@ -78,12 +84,6 @@ let REFUSED: Record<string, string> = {
     "KV has a 1000-namespace account cap and app sharing is undecided; use Durable Object storage or the app's store",
   queues:
     "queue provisioning is not available for apps; write what is owed into the app's store, with a wake{at} on it (https://yaks.app/docs/wakes.md)",
-  // Workers AI is billed to the platform's account per call, and nothing in an
-  // app's worker is counted against its space's plan, so a free app bound to
-  // it would spend our bill on every visit (T-37894). Refused rather than
-  // metered: the builder is the one thing here that runs a model, and it is.
-  ai:
-    "Workers AI is not available to apps: a model's cost is the platform's and is not metered per space; call a model's own API with a key the person connects (connection_need)",
   crons:
     "user workers in a dispatch namespace receive no cron triggers; a wake{at, every} on a row in the app's store is the schedule, and a rule on `fired` is what it does (https://yaks.app/docs/wakes.md)",
 }
@@ -179,8 +179,8 @@ export let allowlist = (value: unknown): Parsed => {
       return []
     })
   }
-  keys(value, [...HONORED, 'kv_namespaces', 'queues', 'ai', 'triggers'])
-  for (let key of ['kv_namespaces', 'queues', 'ai']) {
+  keys(value, [...HONORED, 'kv_namespaces', 'queues', 'triggers'])
+  for (let key of ['kv_namespaces', 'queues']) {
     if (key in value) no(key, REFUSED[key])
   }
   if ('triggers' in value) {
@@ -289,6 +289,15 @@ export let allowlist = (value: unknown): Parsed => {
       found.push({ binding: row.binding })
     }
     config.vpc_services = found
+  }
+  if ('ai' in value) {
+    if (!object(value.ai)) no('ai', 'expected an object: { "binding": "AI" }')
+    else {
+      keys(value.ai, ['binding'], 'ai.')
+      if (name(value.ai.binding, 'ai.binding')) {
+        config.ai = { binding: value.ai.binding }
+      }
+    }
   }
   if ('durable_objects' in value) {
     if (!object(value.durable_objects)) {

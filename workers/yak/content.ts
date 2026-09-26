@@ -88,7 +88,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'models',
     'title': 'Asking a model',
     'description':
-      "A transcript in the app's own store: a page writes an entry naming a model, the store asks it, and the answer lands beside the ask for any page subscribed to see. Instructions, typed questions answered as rows (a choice, a yes-or-no, a score), the commands a model may call, who may ask, the models there are and what each costs against the space's monthly model allowance.",
+      "A transcript in the app's own store: a page writes an entry naming a model, the store asks it, and the answer lands beside the ask for any page subscribed to see. Instructions, typed questions answered as rows (a choice, a yes-or-no, a score), one call answered at once through ./api/ai/run or a worker's ai binding, the commands a model may call, who may ask, the models there are and what each costs against the space's monthly model allowance.",
     'brief': "an app's own store asks a model, and the answer lands as rows",
   },
   'notes': {

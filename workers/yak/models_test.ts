@@ -16,9 +16,12 @@ import { priceOf, weigh } from './models.ts'
 import { parseTools } from './lib/tools.ts'
 import type { VocabDoc } from '@yaks/vocab'
 import { platform } from './testing.ts'
+import * as apps from './apps.ts'
+import { as as signedIn, visit } from './serving-probe.ts'
 import { until } from '../../bin/testing.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
+let BOB = 'b0000000-0000-4000-8000-0000000000b0'
 let FLASH = '@cf/zai-org/glm-5.3-flash'
 let JEV = 'typesafe/jev'
 
@@ -58,7 +61,7 @@ let vale = async (
       {
         entity: { eid: '$app' },
         doc: { title: 'Vale' },
-        app: { space: '$space', slug: 'vale', store: 'ada/vale' },
+        app: { space: '$space', slug: 'vale', store: 'ada/vale', access },
       },
     ],
   }, { 'x-yak-role': 'owner' })
@@ -99,10 +102,27 @@ let vale = async (
     (await send('/tools', parseTools(manifest, words))).status,
     200,
   )
+  // `./api/ai/run` at the app's own address, as a page posts it: signed in
+  // as `person`, or signed out.
+  let run = async (body: unknown, person: string | null = ADA) => {
+    let res = await apps.fetch(
+      visit('/vale/api/ai/run', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(person ? { cookie: await signedIn(person) } : {}),
+        },
+        body: JSON.stringify(body),
+      }),
+      p.env,
+    )
+    return { status: res.status, said: await res.json() }
+  }
   return {
     asked,
     dir,
     send,
+    run,
     read,
     landed,
     spent: async () => (await dir.space('ada'))!,
@@ -254,4 +274,46 @@ Deno.test('a space past its allowance is told so, and the transcript rests', asy
   assertEquals(v.asked.length, 0)
   let [session] = await v.read(`.eid=${s}&*`)
   assertEquals((session.session as Comp).status, 'failed')
+  // And a call asked outright is answered with the same sentence.
+  let { status, said: no } = await v.run({ model: FLASH, input: {} })
+  assertEquals(status, 429)
+  assert(no.error.message.includes('of model use a month'))
+  assertEquals(v.asked.length, 0)
+})
+
+Deno.test('./api/ai/run answers what the model said, and the space pays for it', async () => {
+  let usage = { prompt_tokens: 2_000, completion_tokens: 50 }
+  let v = await vale(() => ({ response: 'Welcome.', usage }))
+  let input = { messages: [{ role: 'user', content: 'hello' }] }
+  assertEquals(await v.run({ model: FLASH, input }), {
+    status: 200,
+    said: { response: 'Welcome.', usage },
+  })
+  assertEquals(v.asked, [{ model: FLASH, input }])
+  let cost = weigh(priceOf(FLASH)!, { input_tokens: 2_000, output_tokens: 50 })
+  assertAlmostEquals((await v.spent()).meter!.models, cost)
+  // A model the catalogue does not offer is refused before anything is spent.
+  assert((await v.run({ model: '@cf/zai-org/glm-5.3', input })).status >= 400)
+  assertEquals(v.asked.length, 1)
+})
+
+Deno.test('./api/ai/run answers a visitor only where the app opens its models', async () => {
+  let body = { model: JEV, input: { prompt: 'hi' } }
+  let answer = () => ({ response: 'hello' })
+  let shut = await vale(answer, { access: 'open' })
+  assertEquals((await shut.run(body, null)).status, 401)
+  assertEquals((await shut.run(body, BOB)).status, 403)
+  assertEquals(shut.asked.length, 0)
+  let open = await vale(answer, {
+    access: 'open',
+    manifest: { models: 'open' },
+  })
+  assertEquals((await open.run(body, null)).status, 200)
+  assertEquals((await open.run(body, BOB)).status, 200)
+  // Opening the models opens them to whoever may write, and no further.
+  let read = await vale(answer, {
+    access: 'public',
+    manifest: { models: 'open' },
+  })
+  assertEquals((await read.run(body, BOB)).status, 403)
 })
