@@ -6,7 +6,6 @@
 // yaks.app grant as a space holds a Google Calendar token, so its grant is a
 // connection (D-38019), known by the host its callback returns to and listed
 // by `servicesOf`, never by `agentsOf`.
-// @ts-types="npm:@cloudflare/workers-oauth-provider@0.10.3"
 import type {
   ClientInfo,
   GrantSummary,

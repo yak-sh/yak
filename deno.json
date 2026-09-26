@@ -228,7 +228,7 @@
     "ajv": "npm:ajv@^8.17.1",
     "@cfworker/json-schema": "npm:@cfworker/json-schema@4.1.1",
     "@cloudflare/sandbox": "npm:@cloudflare/sandbox@0.12.9",
-    "@cloudflare/workers-oauth-provider": "./workers/yak/node_modules/@cloudflare/workers-oauth-provider/dist/oauth-provider.js",
+    "@cloudflare/workers-oauth-provider": "./workers/yak/oauth-provider.ts",
     "@sentry/cloudflare": "npm:@sentry/cloudflare@10.75.0",
     "@sentry/core": "npm:@sentry/core@10.75.0",
     "@std/toml": "jsr:@std/toml@^1.0.0",
