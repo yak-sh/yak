@@ -107,7 +107,7 @@ export let GIVERS: Giver[] = [
     name: 'Old Tamsin',
     level: 'mossvale',
     place: 'lake',
-    offset: [13, 7.5],
+    offset: [7.5, 13],
     greets: 'Sit. The fish don’t mind company, so long as it’s quiet.',
     look: { tint: '#3f6f8f', hair: '#d8d4cc', skin: '#b77b55' },
     staff: true,
@@ -508,7 +508,7 @@ export let QUESTS: Quest[] = [
       'Every shard had a thread of thorn at its heart, fine as hair. Something is growing through the rock and waking it. Bring down eight more and keep the hollow quiet while I send word to the Elder.',
   },
 
-  // Mossvale: Old Tamsin, fishing on the east shore of the lake.
+  // Mossvale: Old Tamsin, fishing on the south-east shore of the lake.
   {
     id: 'tamsin-bait',
     giver: 'tamsin',
