@@ -29,7 +29,6 @@
 // `unknown` rather than a wrong answer.
 
 import {
-  addressed,
   argsOf,
   type Bundle,
   type Comp,
