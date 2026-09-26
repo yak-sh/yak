@@ -30,7 +30,7 @@ export type Namespace = {
  *
  * ```ts
  * export default {
- *   fetch: (request: Request, env: { graphs: Namespace }) =>
+ *   fetch: (request: Request, env: { GRAPHS: Namespace }) =>
  *     forward(env.GRAPHS, new URL(request.url).hostname.split('.')[0], request),
  * }
  * ```

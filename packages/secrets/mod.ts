@@ -14,14 +14,14 @@
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
- * import { graph } from '@yaks/graph'
+ * import { type Bundle, graph } from '@yaks/graph'
  * import { ram } from '@yaks/ram'
  * import { effectDoc } from '@yaks/effects'
  * import { ramVault, reveal, sealed, secrets, secretsDoc } from '@yaks/secrets'
  *
  * let vocab = loadVocab([secretsDoc, effectDoc])
  * let vault = ramVault()
- * let write = (b) => g.apply(b, { trusted: true })
+ * let write = (b: Bundle[]) => g.apply(b, { trusted: true })
  * let g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault, write)] })
  * await g.apply([sealed('MAIL_TOKEN', 'cf-token')])
  * // g.read('.secret') → value: 'yak_secret_…', the handle

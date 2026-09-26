@@ -43,7 +43,12 @@ export type Options<E extends Env = Env> = {
  * request from it.
  *
  * ```ts
+ * import type { Authenticate } from '@yaks/api'
+ * import type { Graph } from '@yaks/graph'
  * import { worker } from '@yaks/workerd'
+ *
+ * declare let shopGraph: (db: unknown) => Graph
+ * declare let authenticate: Authenticate
  *
  * export default worker({
  *   api: (env) => ({ graph: shopGraph(env.DB), authenticate }),

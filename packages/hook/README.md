@@ -70,7 +70,7 @@ parsed and re-serialized body is not what the sender signed. Every compare goes
 through WebCrypto's `verify`, so it runs in constant time.
 
 ```ts
-import { assertEquals } from '@std/assert'
+import { assertObjectMatch } from '@std/assert'
 import { checked, hooked } from '@yaks/hook'
 
 // What GitHub sends: the body, signed with the secret the receiver shares.
@@ -92,7 +92,7 @@ let request = {
   headers: JSON.stringify(sent),
 }
 let [hook] = hooked(await checked(request, 'github', secret))
-assertEquals(hook.hook?.verified, true)
+assertObjectMatch(hook, { hook: { verified: true } })
 ```
 
 ```ts

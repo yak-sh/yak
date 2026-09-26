@@ -6,7 +6,7 @@
  * long, often repeated, and awkward in a row. Mark the property and they move:
  *
  * ```ts
- * import { assertEquals } from '@std/assert'
+ * import { assertObjectMatch } from '@std/assert'
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
  * import { storage } from '@yaks/sqlite'
@@ -40,7 +40,7 @@
  * let g = graph({ storage: db, vocab, plugins: [blobs(vocab, store)] })
  *
  * g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay…' } }])
- * assertEquals(db.read('.post')[0].post.body, 'a long essay…')
+ * assertObjectMatch(db.read('.post')[0], { post: { body: 'a long essay…' } })
  * ```
  *
  * Nothing between those two lines mentions blobs. The write went in as text and

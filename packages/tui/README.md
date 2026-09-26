@@ -57,6 +57,8 @@ support custom backends, focused tests, and applications that own input routing.
 ## Backend contract
 
 ```ts
+import type { Line, Metrics, TElement } from '@yaks/tui'
+
 type Backend = {
   control?: (body: string) => void
   size: () => { columns: number; rows: number }

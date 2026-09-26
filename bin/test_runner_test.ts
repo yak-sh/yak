@@ -3,9 +3,8 @@ import { fileURLToPath } from 'node:url'
 import { assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { groups, pages, RUN, shards, timesIn } from './test.ts'
 
-Deno.test('examples come from the packages and the apps, and never a module by name', async () => {
+Deno.test('examples come from every root, and never a module by name', async () => {
   let got = await pages([
-    'bin',
     'workers',
     'packages',
     'packages/graph',
@@ -13,12 +12,9 @@ Deno.test('examples come from the packages and the apps, and never a module by n
     'packages/graph/README.md',
     'apps',
   ])
-  assertEquals(
-    got.every((p) => p.startsWith('packages/') || p.startsWith('apps/')),
-    true,
-    got.join(),
-  )
   assertEquals(got.some((p) => /\.tsx?$/.test(p)), false, got.join())
+  // The Worker's examples are the Worker's piece.
+  assertEquals(got.includes('workers/yak'), true)
   // `packages` holds only tests of its own, so each package is its own piece.
   assertEquals(got.includes('packages'), false)
   assertEquals(got.filter((p) => p == 'packages/graph').length, 1)

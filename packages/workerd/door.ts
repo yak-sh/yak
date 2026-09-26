@@ -68,6 +68,8 @@ export type Door = {
  * `api()`, so it runs on reads, writes and socket upgrades alike.
  *
  * ```ts
+ * declare let memberFor: (token: string) => { by: string } | null
+ *
  * let authenticate = door({
  *   cookie: 'shop_session',
  *   verify: (token) => memberFor(token),

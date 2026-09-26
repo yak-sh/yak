@@ -29,6 +29,8 @@ import type { Actor } from '@yaks/graph'
  * them here.
  *
  * ```ts
+ * declare let memberOf: (key: string) => string
+ *
  * let authenticate = (request: Request) => {
  *   let key = request.headers.get('authorization')
  *   return key ? { by: memberOf(key) } : null

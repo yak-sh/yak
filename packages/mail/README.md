@@ -128,6 +128,8 @@ sender addresses also produce `bounced`.
 ### The transport is supplied by the caller
 
 ```ts
+import type { Message, Receipt } from '@yaks/mail'
+
 type Sender = { send: (message: Message) => Promise<Receipt> }
 ```
 

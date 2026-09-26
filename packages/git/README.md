@@ -283,7 +283,11 @@ commit written later by a repair pass end up on the same chain.
 The same step is also available as a graph plugin, hooked on the `effect` phase:
 
 ```ts
-import { commits } from '@yaks/git'
+import type { Bundle } from '@yaks/graph'
+import { commits, type Released } from '@yaks/git'
+
+declare let alreadyCommitted: (b: Bundle) => boolean
+declare let landingFor: (b: Bundle) => Promise<Released>
 
 let plugin = commits({
   comp: 'deploy',

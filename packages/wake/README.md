@@ -178,9 +178,12 @@ can call `scheduled`, which uses the event's `scheduledTime` and fires every due
 graph row. The trigger expression does not select an individual wake.
 
 ```ts
-import { scheduled } from '@yaks/wake/cloudflare'
+import type { Driver } from '@yaks/wake'
+import { type Scheduled, scheduled } from '@yaks/wake/cloudflare'
 
-export default { scheduled: (event) => scheduled(graph, event) }
+declare let graph: Driver
+
+export default { scheduled: (event: Scheduled) => scheduled(graph, event) }
 ```
 
 A Durable Object can set an earlier alarm:

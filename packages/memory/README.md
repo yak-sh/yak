@@ -89,6 +89,8 @@ request BM25 ranking. A `.near` query requires a configured embedding index.
 `Ranker` is the interface for an application-supplied semantic search function:
 
 ```ts
+import type { Eid } from '@yaks/graph'
+
 type Ranker = (
   words: string,
   scope: { space: Eid; limit: number },

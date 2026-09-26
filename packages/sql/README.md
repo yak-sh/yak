@@ -118,20 +118,23 @@ archetypes.
 ## Computed properties
 
 A property declared `computed: true` has no stored value. Supply its SQL
-expression in a `Derived` map keyed by `component.property`. A derived entry can
-also override how a stored property is read. SQL can then filter the expression
-without first loading every entity into JavaScript; index use depends on the
-expression and database query plan.
+expression, built from the AST, in a `Derived` map keyed by
+`component.property`. A derived entry can also override how a stored property is
+read. SQL can then filter the expression without first loading every entity into
+JavaScript; index use depends on the expression and database query plan.
 
 ```ts
-import type { Derived } from '@yaks/sql'
+import { col, type Derived, eq, fn, lit, select, sub, table } from '@yaks/sql'
 
 let derived: Derived = {
   'order.total': {
     tag: 'number',
     expr: (owner) =>
-      `(select coalesce(sum("line"."amount"), 0) from "line"` +
-      ` where "line"."order" = ${owner})`,
+      sub(select({
+        cols: [fn('coalesce', fn('sum', col('amount', 'line')), lit(0))],
+        from: table('line'),
+        where: eq(col('order', 'line'), owner),
+      })),
   },
 }
 // With order.total declared in your vocabulary:

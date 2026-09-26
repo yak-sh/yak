@@ -21,7 +21,11 @@
  * object runs `api()` over its own storage.
  *
  * ```ts
+ * import type { Graph } from '@yaks/graph'
  * import { door, worker } from '@yaks/workerd'
+ *
+ * declare let shopGraph: (db: unknown) => Graph
+ * declare let memberFor: (token: string) => { by: string } | null
  *
  * export default worker({
  *   api: (env: { DB: unknown }) => ({

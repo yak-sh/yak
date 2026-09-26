@@ -28,9 +28,6 @@ export let workerd = (file: string) => /_workerd_test\.tsx?$/.test(file)
 // were this repo's, against an import map that is not its own.
 let SKIP = ['vendor', 'node_modules', '.wrangler']
 
-/** Where examples are run from: the packages and the apps, never a script. */
-export let DOCS = ['packages', 'apps']
-
 let module = (name: string) => /\.tsx?$/.test(name)
 let test = (name: string) => /_test\.tsx?$/.test(name)
 
@@ -39,9 +36,9 @@ let test = (name: string) => /_test\.tsx?$/.test(name)
  *
  * Never a module by name: `deno test --doc a.ts` runs a.ts itself, where a
  * directory only has its examples read. A directory with modules of its own
- * is one piece; one without (`packages`, `apps`, an app of plain files) is
- * looked into, and its READMEs taken. */
-export async function pages(roots = DOCS) {
+ * is one piece; one without (`packages`, `workers`, an app of plain files)
+ * is looked into, and its READMEs taken. */
+export async function pages(roots = ROOTS) {
   let out: string[] = []
   let walk = async (path: string): Promise<void> => {
     let entries = await Array.fromAsync(Deno.readDir(path))
@@ -57,7 +54,6 @@ export async function pages(roots = DOCS) {
   }
   for (let root of roots) {
     let path = root.replace(/^\.\//, '').replace(/\/+$/, '')
-    if (!DOCS.some((d) => path == d || path.startsWith(`${d}/`))) continue
     if ((await Deno.stat(path)).isDirectory) await walk(path)
     else if (path.endsWith('.md')) out.push(path)
   }
@@ -87,9 +83,11 @@ export async function inventory(roots = ROOTS) {
 let common = [
   'test',
   '--frozen',
-  // `deno task gate` runs the stricter whole-repo check first. Re-checking
-  // every module graph once per pass dominates the few-second test budget and
-  // adds no coverage here; direct test runs still exercise module loading.
+  // `deno task gate` runs the stricter whole-repo check first, and it types
+  // every example in a doc comment beside the modules (`deno check --doc`).
+  // Re-checking every module graph once per pass dominates the few-second
+  // test budget and adds no coverage here; direct test runs still exercise
+  // module loading.
   '--no-check',
   '-A',
   '--unstable-net',
