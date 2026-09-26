@@ -5,6 +5,8 @@
 // bodies/, in the row's colours and at its row's scale; a new plan is one
 // more file there and one more row in `PLANS`. A figure is told what it is
 // doing (`Act`) every frame and poses itself; it keeps no state of the world.
+// Each figure is drawn as one skinned mesh, its parts the bones (parts.ts
+// `knit`).
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { BEASTS, type Look, type Plans } from './beasts.ts'
@@ -18,7 +20,7 @@ import { quadruped } from './bodies/quadruped.ts'
 import { serpent } from './bodies/serpent.ts'
 import { slime } from './bodies/slime.ts'
 import { wisp } from './bodies/wisp.ts'
-import { ease, partOf, shade } from './parts.ts'
+import { ease, knit, partOf, shade } from './parts.ts'
 import { lerp } from './rand.ts'
 import { flash, soft } from './soft.ts'
 
@@ -45,8 +47,18 @@ export type Figure = {
   animate: (a: Act, dt: number) => void
 }
 
+// Stitch a figure's parts into the one mesh it is drawn as.
+let sewn = (f: Figure): Figure => {
+  knit(f.root, f.material)
+  return f
+}
+
 /** A hero in a player's colours. */
-export let hero = (
+export let hero = (look: { tint: string; hair: string; skin: string }) =>
+  sewn(heroOf(look))
+
+// A hero before it is sewn, so a person can be given a staff first.
+let heroOf = (
   look: { tint: string; hair: string; skin: string },
 ): Figure => {
   let m = soft({ speckle: 0.06 })
@@ -61,13 +73,13 @@ export let hero = (
   hips.position.y = 0.8
   body.add(hips)
   let leg = (x: number) =>
-    partOf(m, [
+    partOf([
       [[-0.1, -0.8, -0.11], [0.2, 0.62, 0.22], pants],
       [[-0.11, -0.8, -0.12], [0.22, 0.2, 0.26], boots],
     ], [x, 0, 0])
   let legL = leg(-0.13), legR = leg(0.13)
   hips.add(legL, legR)
-  let torso = partOf(m, [
+  let torso = partOf([
     [[-0.27, 0, -0.16], [0.54, 0.62, 0.32], tint],
     [[-0.28, 0.02, -0.17], [0.56, 0.09, 0.34], belt],
     [[-0.05, 0.03, 0.17], [0.1, 0.07, 0.01], 0xe7c35a],
@@ -75,14 +87,13 @@ export let hero = (
   ], [0, 0, 0])
   hips.add(torso)
   let arm = (x: number) =>
-    partOf(m, [
+    partOf([
       [[-0.09, -0.4, -0.1], [0.18, 0.44, 0.2], tint],
       [[-0.08, -0.56, -0.09], [0.16, 0.18, 0.18], skin],
     ], [x, 0.56, 0])
   let armL = arm(-0.36), armR = arm(0.36)
   torso.add(armL, armR)
   let sword = partOf(
-    m,
     [
       [[-0.03, -0.12, -0.03], [0.06, 0.18, 0.06], 0x6a4a30],
       [[-0.12, -0.16, -0.04], [0.24, 0.05, 0.08], 0xe2b64c],
@@ -92,7 +103,7 @@ export let hero = (
     0.05,
   )
   armR.add(sword)
-  let head = partOf(m, [
+  let head = partOf([
     [[-0.19, 0, -0.18], [0.38, 0.38, 0.36], skin],
     [[-0.2, 0.28, -0.19], [0.4, 0.13, 0.38], hair],
     [[-0.2, 0.05, -0.2], [0.4, 0.26, 0.08], hair],
@@ -105,7 +116,7 @@ export let hero = (
     [[-0.07, 0.07, 0.175], [0.14, 0.03, 0.02], shade(skin, 0.8)],
   ], [0, 0.63, 0])
   torso.add(head)
-  let cape = partOf(m, [[
+  let cape = partOf([[
     [-0.23, -0.7, -0.03],
     [0.46, 0.72, 0.04],
     shade(tint, 0.72),
@@ -183,7 +194,7 @@ let draw = <P extends keyof Plans>(l: { plan: P } & Plans[P]) =>
  * its row's scale. */
 export let beast = (kind: string): Figure => {
   let l: Look = (BEASTS[kind] ?? BEASTS.slime).look
-  let f = draw(l)
+  let f = sewn(draw(l))
   let k = l.scale ?? 1
   f.root.scale.setScalar(k)
   return { ...f, height: f.height * k }
@@ -195,10 +206,9 @@ export let person = (
   look: { tint: string; hair: string; skin: string },
   staff = false,
 ): Figure => {
-  let f = hero(look)
-  if (!staff) return f
+  let f = heroOf(look)
+  if (!staff) return sewn(f)
   f.root.add(partOf(
-    f.material,
     [
       [[-0.04, 0, -0.04], [0.08, 1.9, 0.08], 0x6a4a30],
       [[-0.08, 1.9, -0.08], [0.16, 0.14, 0.16], 0x8fd46a],
@@ -206,5 +216,5 @@ export let person = (
     [0.48, 0, 0.18],
     0.05,
   ))
-  return f
+  return sewn(f)
 }

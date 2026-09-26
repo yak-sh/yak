@@ -35,6 +35,32 @@ export let out = (): Out => ({
   idx: [],
 })
 
+// What a vertex carries besides where it is: copied as it stands.
+let COPIED: ('nrm' | 'col' | 'uv' | 'rim' | 'bw')[] = [
+  'nrm',
+  'col',
+  'uv',
+  'rim',
+  'bw',
+]
+
+/** Copy triangles into `into`, moved by `at`. */
+export let place = (into: Out, from: Out, at: Vec) => {
+  let base = into.pos.length / 3
+  for (let i = 0; i < from.pos.length; i += 3) {
+    into.pos.push(
+      from.pos[i] + at[0],
+      from.pos[i + 1] + at[1],
+      from.pos[i + 2] + at[2],
+    )
+  }
+  for (let name of COPIED) {
+    let src = from[name], dst = into[name]
+    for (let i = 0; i < src.length; i++) dst.push(src[i])
+  }
+  for (let i of from.idx) into.idx.push(i + base)
+}
+
 /** A face's two in-plane axes, by the axis its normal lies on: x → (z, y),
  * y → (x, z), z → (x, y). soft.ts derives the same pair from the normal. */
 export let axes = (axis: number): [number, number] =>

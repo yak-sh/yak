@@ -6,8 +6,8 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { CHUNK, groundChunk } from './ground.ts'
-import { cuboid, out } from './mesh.ts'
-import { model, place } from './props.ts'
+import { cuboid, out, place } from './mesh.ts'
+import { model } from './props.ts'
 import { lerp, smooth } from './rand.ts'
 import { geometry, sight, soft } from './soft.ts'
 import {

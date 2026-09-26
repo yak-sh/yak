@@ -79,7 +79,6 @@ export let hopper = (o: Hopper): Figure => {
   let body = new THREE.Group()
   root.add(body)
   body.add(partOf(
-    m,
     [
       ...trunk,
       ...given(o.tail, (t) => TAILS[t](o.fur, o.belly)),
@@ -87,13 +86,13 @@ export let hopper = (o: Hopper): Figure => {
     [0, 0, 0],
     0.06,
   ))
-  let head = partOf(m, face, o.frog ? [0, 0.14, 0.16] : [0, 0.34, 0.18], 0.05)
+  let head = partOf(face, o.frog ? [0, 0.14, 0.16] : [0, 0.34, 0.18], 0.05)
   body.add(head)
   let hind = [1, -1].map((side) =>
-    partOf(m, haunch, [side * (o.frog ? 0.2 : 0.14), 0.12, -0.12], 0.05)
+    partOf(haunch, [side * (o.frog ? 0.2 : 0.14), 0.12, -0.12], 0.05)
   )
   let fore = [1, -1].map((side) =>
-    partOf(m, [[[-0.03, -0.12, -0.03], [0.06, 0.14, 0.06], o.fur]], [
+    partOf([[[-0.03, -0.12, -0.03], [0.06, 0.14, 0.06], o.fur]], [
       side * (o.frog ? 0.16 : 0.08),
       0.12,
       0.14,

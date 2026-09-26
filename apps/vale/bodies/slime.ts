@@ -13,7 +13,6 @@ export let slime = (l: Slime): Figure => {
   let jelly = new THREE.Group()
   root.add(jelly)
   jelly.add(partOf(
-    m,
     [
       [[-0.42, 0, -0.42], [0.84, 0.72, 0.84], l.body],
       [[-0.44, 0.62, -0.44], [0.88, 0.14, 0.88], l.moss],

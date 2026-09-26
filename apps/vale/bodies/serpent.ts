@@ -42,13 +42,12 @@ export let serpent = (o: Serpent): Figure => {
         [[-w / 2 - 0.005, h * 0.4, -0.04], [w + 0.01, h * 0.62, 0.08], c],
       ]),
     ]
-    let link = partOf(m, boxes, [0, 0, -(i + 0.5) * step], 0.05)
+    let link = partOf(boxes, [0, 0, -(i + 0.5) * step], 0.05)
     body.add(link)
     return link
   })
   let hw = 0.26 * g
   let head = partOf(
-    m,
     [
       [[-hw / 2, 0, -0.04], [hw, hw * 0.7, 0.3 * g], skin],
       [

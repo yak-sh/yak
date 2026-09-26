@@ -81,7 +81,7 @@ export let biped = (o: Biped): Figure => {
   hips.position.y = ll
   body.add(hips)
   let leg = (x: number) =>
-    partOf(m, [
+    partOf([
       [
         [-0.12 * bw, -ll, -0.13 * bw],
         [0.24 * bw, ll, 0.26 * bw],
@@ -95,7 +95,7 @@ export let biped = (o: Biped): Figure => {
     ], [x * bw, 0, 0])
   let legL = leg(-0.15), legR = leg(0.15)
   hips.add(legL, legR)
-  let torso = partOf(m, [
+  let torso = partOf([
     [[-0.3 * bw, 0, -0.18 * bw], [0.6 * bw, tl, 0.36 * bw], garb],
     [
       [-0.31 * bw, 0.02, -0.19 * bw],
@@ -121,7 +121,7 @@ export let biped = (o: Biped): Figure => {
   torso.rotation.x = o.stoop ?? 0
   hips.add(torso)
   let arm = (x: number, club: boolean) => {
-    let a = partOf(m, [
+    let a = partOf([
       [
         [-0.1 * bw, -al + 0.08, -0.11 * bw],
         [0.2 * bw, al - 0.08, 0.22 * bw],
@@ -132,7 +132,6 @@ export let biped = (o: Biped): Figure => {
     if (club && o.club != undefined) {
       // Held out before it, head up.
       let c = partOf(
-        m,
         [
           [[-0.05, -0.1, -0.05], [0.1, 0.9, 0.1], o.club],
           [[-0.09, 0.5, -0.09], [0.18, 0.36, 0.18], shade(o.club, 0.85)],
@@ -147,7 +146,7 @@ export let biped = (o: Biped): Figure => {
   }
   let armL = arm(-0.4, false), armR = arm(0.4, true)
   torso.add(armL, armR)
-  let head = partOf(m, [
+  let head = partOf([
     [[-0.17, 0, -0.16], [0.34, 0.32, 0.32], skin],
     [[-0.18, 0.2, -0.17], [0.36, 0.06, 0.34], shade(skin, 0.85)],
     ...both([[0.05, 0.13, 0.155], [0.07, 0.06, 0.02], eye]),

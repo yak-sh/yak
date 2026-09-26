@@ -90,9 +90,8 @@ export let crawler = (o: Crawler): Figure => {
         [[-0.05, 0.14, -0.9], [0.1, 0.08, 0.3], shade(c, 0.9)],
       ]),
     ]
-  body.add(partOf(m, hull, [0, 0, 0], 0.08))
+  body.add(partOf(hull, [0, 0, 0], 0.08))
   let head = partOf(
-    m,
     [
       [[-0.13, -0.08, 0], [0.26, 0.16, 0.16], shade(shell, 0.85)],
       ...both([[0.05, 0.02, 0.15], [0.05, 0.05, 0.02], eye]),
@@ -117,7 +116,6 @@ export let crawler = (o: Crawler): Figure => {
   let pincers = claws.length
     ? [1, -1].map((side) =>
       partOf(
-        m,
         side > 0 ? claws : claws.map(mirror),
         [side * 0.18, 0.2, 0.3],
         0.05,
@@ -126,7 +124,6 @@ export let crawler = (o: Crawler): Figure => {
     : []
   if (pincers.length) body.add(...pincers)
   let sting = o.sting == undefined ? null : partOf(
-    m,
     [
       [[-0.05, 0, -0.14], [0.1, 0.1, 0.14], shell],
       [[-0.05, 0.08, -0.22], [0.1, 0.22, 0.1], shell],
@@ -137,7 +134,7 @@ export let crawler = (o: Crawler): Figure => {
     0.05,
   )
   if (sting) body.add(sting)
-  let sets = [0, 1].map((s) => partOf(m, legsOf(o, s), [0, 0, 0], 0.05))
+  let sets = [0, 1].map((s) => partOf(legsOf(o, s), [0, 0, 0], 0.05))
   body.add(...sets)
   let phase = Math.random() * 6
   return {

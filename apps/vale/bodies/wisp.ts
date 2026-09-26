@@ -27,7 +27,6 @@ export let wisp = (o: Wisp): Figure => {
   body.position.y = rest
   root.add(body)
   let heart = partOf(
-    m,
     [
       [[-0.24, -0.24, -0.24], [0.48, 0.48, 0.48], shade(o.glow, 1.1)],
       [[-0.15, -0.15, -0.26], [0.3, 0.3, 0.52], o.core],
@@ -39,7 +38,6 @@ export let wisp = (o: Wisp): Figure => {
   )
   body.add(heart)
   let trail = partOf(
-    m,
     [
       [[-0.12, -0.5, -0.12], [0.24, 0.22, 0.24], o.glow],
       [[-0.07, -0.72, -0.07], [0.14, 0.18, 0.14], shade(o.glow, 1.1)],
@@ -50,12 +48,7 @@ export let wisp = (o: Wisp): Figure => {
   )
   body.add(trail)
   let motes = [0, 1, 2].map(() =>
-    partOf(
-      m,
-      [[[-0.05, -0.05, -0.05], [0.1, 0.1, 0.1], o.mote]],
-      [0, 0, 0],
-      0.05,
-    )
+    partOf([[[-0.05, -0.05, -0.05], [0.1, 0.1, 0.1], o.mote]], [0, 0, 0], 0.05)
   )
   body.add(...motes)
   let phase = Math.random() * 6

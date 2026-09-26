@@ -93,7 +93,7 @@ export let quadruped = (o: Quadruped): Figure => {
   let root = new THREE.Group()
   let body = new THREE.Group()
   root.add(body)
-  let trunk = partOf(m, [
+  let trunk = partOf([
     [[-0.33 * bw, y0, -0.6 * bl], [0.66 * bw, 0.58 * bh, 1.2 * bl], hide],
     [[-0.08, top - 0.02, -0.5 * bl], [0.16, 0.1, 0.95 * bl], ridge],
     [[-0.3 * bw, y0 - 0.02, -0.55 * bl], [0.6 * bw, 0.1, 1.05 * bl], belly],
@@ -116,7 +116,7 @@ export let quadruped = (o: Quadruped): Figure => {
   ], [0, 0, 0])
   body.add(trunk)
   let nose = 0.38 + 0.14 * mz
-  let head = partOf(m, [
+  let head = partOf([
     [[-0.25, -0.24, 0], [0.5, 0.46, 0.4], hide],
     [[-0.14, -0.2, 0.38], [0.28, 0.2, 0.14 * mz], snout],
     ...both([[0.04, -0.14, nose], [0.05, 0.06, 0.01], 0x3a2a26]),
@@ -131,16 +131,16 @@ export let quadruped = (o: Quadruped): Figure => {
   ], [0, y0 + 0.3 * bh, 0.6 * bl - 0.02])
   head.scale.setScalar(Math.sqrt(bw * bh))
   body.add(head)
-  let tail: THREE.Group | null = null, droop = 0
+  let tail: THREE.Bone | null = null, droop = 0
   if (o.tail) {
     let [boxes, d] = TAILS[o.tail](ridge, o.belly ?? 0xf0ebe0)
-    tail = partOf(m, boxes, [0, y0 + 0.44 * bh, -0.6 * bl])
+    tail = partOf(boxes, [0, y0 + 0.44 * bh, -0.6 * bl])
     droop = d
     body.add(tail)
   }
   let lw = 0.16 * Math.sqrt(bw)
   let leg = (x: number, z: number) =>
-    partOf(m, [
+    partOf([
       [[-lw / 2, -ll, -lw / 2], [lw, ll, lw], shade(hide, 0.8)],
       [
         [-lw / 2 - 0.005, -ll, -lw / 2 - 0.005],

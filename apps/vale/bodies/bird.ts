@@ -75,7 +75,6 @@ export let bird = (o: Bird): Figure => {
   body.position.y = rest
   root.add(body)
   body.add(partOf(
-    m,
     [
       [[-0.18, -0.16, -0.26], [0.36, 0.32, 0.52], feather],
       [[-0.15, -0.17, -0.2], [0.3, 0.1, 0.4], o.belly ?? shade(feather, 1.2)],
@@ -86,7 +85,6 @@ export let bird = (o: Bird): Figure => {
     0.06,
   ))
   let head = partOf(
-    m,
     [
       [[-0.1, 0, -0.08], [0.2, 0.2, 0.2], feather],
       ...(o.face == undefined
@@ -103,7 +101,7 @@ export let bird = (o: Bird): Figure => {
   )
   body.add(head)
   let [tailBoxes, lift] = TAILS[o.tail ?? 'short'](shade(wing, 0.85))
-  let tail = partOf(m, tailBoxes, [0, 0.04, -0.24], 0.05)
+  let tail = partOf(tailBoxes, [0, 0.04, -0.24], 0.05)
   tail.rotation.x = -lift
   body.add(tail)
   let pinion: Box[] = [
@@ -113,19 +111,17 @@ export let bird = (o: Bird): Figure => {
   // A wing turns about its span last, so folding it lays it flat along the
   // body's side, pointing back.
   let wings = [1, -1].map((side) => {
-    let w = partOf(
-      m,
-      side > 0 ? pinion : pinion.map(mirror),
-      [side * 0.17, 0.02, 0.1],
-      0.06,
-    )
+    let w = partOf(side > 0 ? pinion : pinion.map(mirror), [
+      side * 0.17,
+      0.02,
+      0.1,
+    ], 0.06)
     w.rotation.order = 'YXZ'
     return w
   })
   body.add(...wings)
   let leg = (x: number) =>
     partOf(
-      m,
       [
         [[-0.02, -lg, -0.02], [0.04, lg, 0.04], beak],
         [[-0.04, -lg, -0.02], [0.08, 0.03, 0.1], beak],

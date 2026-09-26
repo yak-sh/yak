@@ -57,16 +57,22 @@ vAt = (modelMatrix * vec4(transformed, 1.)).xyz;
 vFace = face;
 vRim = rim;
 vBw = bw.xy;
-vec3 an = abs(objectNormal);
+// The face's own axes, from its normal as it was meshed, turned as the mesh
+// is turned: by its instance, or by the bone that carries it.
+vec3 an = abs(normal);
 vec3 tu = an.x > .5 ? vec3(0., 0., 1.) : vec3(1., 0., 0.);
 vec3 tv = an.y > .5 ? vec3(0., 0., 1.) : vec3(0., 1., 0.);
 #ifdef USE_INSTANCING
   tu = mat3(instanceMatrix) * tu;
   tv = mat3(instanceMatrix) * tv;
 #endif
+#ifdef USE_SKINNING
+  tu = (skinMatrix * vec4(tu, 0.)).xyz;
+  tv = (skinMatrix * vec4(tv, 0.)).xyz;
+#endif
 vTu = normalize(normalMatrix * tu);
 vTv = normalize(normalMatrix * tv);
-vCell = (position - objectNormal * (bw.z * .5)) / bw.z;
+vCell = (position - normal * (bw.z * .5)) / bw.z;
 `
 
 let FRAGMENT_PARS = /* glsl */ `

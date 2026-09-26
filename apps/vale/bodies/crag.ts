@@ -29,7 +29,6 @@ export let crag = (l: Crag): Figure => {
     [[-0.04, 1.36, -0.52], [0.12, 0.3, 0.12], shade(crystals, 1.2)],
   ]
   body.add(partOf(
-    m,
     [
       [[-0.72, 0.3, -0.8], [1.44, 0.55, 1.6], stone],
       [[-0.56, 0.85, -0.64], [1.12, 0.35, 1.28], light],
@@ -45,7 +44,6 @@ export let crag = (l: Crag): Figure => {
     0.15,
   ))
   let head = partOf(
-    m,
     [
       [[-0.26, -0.22, 0], [0.52, 0.44, 0.46], light],
       [[-0.18, 0.02, 0.45], [0.12, 0.09, 0.02], l.eye],
@@ -57,7 +55,7 @@ export let crag = (l: Crag): Figure => {
   )
   body.add(head)
   let leg = (x: number, z: number) =>
-    partOf(m, [[[-0.16, -0.36, -0.16], [0.32, 0.4, 0.32], shade(stone, 0.9)]], [
+    partOf([[[-0.16, -0.36, -0.16], [0.32, 0.4, 0.32], shade(stone, 0.9)]], [
       x,
       0.38,
       z,

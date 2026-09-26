@@ -87,7 +87,6 @@ export let flier = (o: Flier): Figure => {
   body.position.y = rest
   root.add(body)
   body.add(partOf(
-    m,
     [
       [[-0.09, -0.09, 0.14], [0.18, 0.18, 0.14], shade(hue, 0.8)],
       ...both([[0.06, -0.02, 0.2], [0.05, 0.08, 0.06], eye]),
@@ -108,12 +107,7 @@ export let flier = (o: Flier): Figure => {
   ))
   let [pinion, rate] = WINGS[o.wings](wing, long)
   let wings = [1, -1].map((side) =>
-    partOf(
-      m,
-      side > 0 ? pinion : pinion.map(mirror),
-      [side * 0.1, 0.1, 0],
-      0.05,
-    )
+    partOf(side > 0 ? pinion : pinion.map(mirror), [side * 0.1, 0.1, 0], 0.05)
   )
   body.add(...wings)
   let phase = Math.random() * 6
