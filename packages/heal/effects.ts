@@ -81,8 +81,10 @@ let named = async (g: Graph, id: string | undefined, wears: string) => {
 // A bug whose task is not settled yet.
 let open = [present('bug'), absent('completed'), absent('cancelled')]
 
-let bornAfter = (b: Bundle, t: number) =>
-  Date.parse(str(comp(b, 'created')?.at)) >= t
+// Whether `b` was created less than `span` ms before `now`: a span of 0 holds
+// nothing, even an entity created in the same millisecond.
+let young = (b: Bundle, span: number, now: number) =>
+  now - Date.parse(str(comp(b, 'created')?.at)) < span
 
 // One fixer decision at a time, so two bugs arriving together cannot both see
 // a free slot and pass the cap between them.
@@ -131,7 +133,7 @@ export let effects = (host: Host, options: Options = {}): Handlers => {
     let running = (await g.read(
       and(present('fixer'), absent('exit'), want('process'), want('created')),
     ))
-      .filter((f) => f.process || bornAfter(f, now - STARTING))
+      .filter((f) => f.process || young(f, STARTING, now))
     if (running.length >= cap) return 'at cap'
     let same = await g.read(and(eq('bug.fault', str(comp(bug, 'bug')?.fault))))
     let fixers = same.length
@@ -142,7 +144,7 @@ export let effects = (host: Host, options: Options = {}): Handlers => {
         ),
       )
       : []
-    if (fixers.some((f) => bornAfter(f, now - cooldown))) return 'cooling down'
+    if (fixers.some((f) => young(f, cooldown, now))) return 'cooling down'
   }
 
   // Start a fixer on this bug, if it is open, nobody holds it, it never had
