@@ -1,6 +1,6 @@
 {
   "name": "@yaks/html",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Serializes registry-selected views to server-side HTML through Preact without a DOM.",

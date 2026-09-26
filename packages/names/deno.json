@@ -1,6 +1,6 @@
 {
   "name": "@yaks/names",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Resolves entity names from the properties a component vocabulary marks for name lookup.",
   "exports": "./mod.ts",
   "license": "Apache-2.0",

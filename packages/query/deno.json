@@ -1,6 +1,6 @@
 {
   "name": "@yaks/query",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Parses query strings into a serializable AST and provides builders for the same AST without interpreting a component schema.",

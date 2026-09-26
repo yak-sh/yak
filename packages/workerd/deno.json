@@ -1,6 +1,6 @@
 {
   "name": "@yaks/workerd",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Serves the graph API from Cloudflare Workers with WebSocket upgrades, request authentication, and forwarding to Durable Objects.",
