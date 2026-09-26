@@ -430,10 +430,12 @@ The package exports six entry points:
 
 - `@yaks/cli` exports command parsing, schema conversion, display and completion
   helpers, MCP transport, token and roster storage, config reading, remote tool
-  listing, app-command adapters, and the `main`, `YAK`, `TOOLS`, and `HOST`
-  values used by the installed command.
-- `@yaks/cli/yak` exports the executable `main`, built-in commands, and
-  defaults. Run it directly or pass additional commands to `main(argv, extra)`.
+  listing and app-command adapters. It is what the command is built from, not
+  the command: importing it starts nothing and reads no `Deno` global, so a page
+  can run `cli()` too.
+- `@yaks/cli/yak` is the command: the executable `main`, its built-in commands,
+  and the `YAK`, `TOOLS` and `HOST` defaults it runs with. Run it directly or
+  pass additional commands to `main(argv, extra)`.
 - `@yaks/cli/config` reads a config file: where its graph is, the plugins it
   names, and the release a plugin named without a version comes from. It imports
   no plugin, for a command that only needs to know where the graph is.
