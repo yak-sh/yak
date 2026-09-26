@@ -1,7 +1,8 @@
 // Who is on stage: a figure for every player and creature the frame knows,
 // the people who give quests, loot on the ground, the plates over heads and
-// over portals, and a red ring closing on each creature whose bite is coming
-// for me.
+// over portals, and under each creature on my trail a red ring round the
+// ground its bite takes. As a bite winds up, a red disc grows from its middle
+// and fills the ring the moment the bite lands.
 // A figure is made when someone arrives and dropped when they go; each frame
 // moves it to where the frame says it is, smoothing what arrives in steps (a
 // peer's position comes when their page sends it, not on this page's beat).
@@ -67,23 +68,41 @@ export let cast = (
   ring.rotation.x = -Math.PI / 2
   ring.visible = false
   scene.add(ring)
-  let warnMat = new THREE.MeshBasicMaterial({
-    color: 0xff3b2f,
-    transparent: true,
-    opacity: 0.85,
-    depthWrite: false,
-  })
-  let warns = new Map<string, THREE.Mesh>()
+  // A creature on my trail: the ground its bite takes (`zone`, a thin ring
+  // whose outer edge is its reach) and the bite winding up (`fill`, a disc).
+  let red = (opacity: number) =>
+    new THREE.MeshBasicMaterial({
+      color: 0xff3b2f,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+    })
+  let thin = new THREE.RingGeometry(0.9, 1, 56)
+  let disc = new THREE.CircleGeometry(1, 56)
+  let edge = red(0.75)
+  let laid = <M extends THREE.Material>(g: THREE.BufferGeometry, m: M) => {
+    let r = new THREE.Mesh(g, m)
+    r.rotation.x = -Math.PI / 2
+    r.visible = false
+    scene.add(r)
+    return r
+  }
+  let pair = () => ({ zone: laid(thin, edge), fill: laid(disc, red(0)) })
+  let warns = new Map<string, ReturnType<typeof pair>>()
   let warn = (eid: string) => {
-    let w = warns.get(eid)
-    if (!w) {
-      w = new THREE.Mesh(ring.geometry, warnMat)
-      w.rotation.x = -Math.PI / 2
-      scene.add(w)
-      warns.set(eid, w)
-    }
-    w.visible = true
+    let w = warns.get(eid) ?? pair()
+    warns.set(eid, w)
     return w
+  }
+  // The highest ground within `r` of (x, z): where a ring laid over it shows
+  // whole, on a slope as on the flat.
+  let highest = (x: number, z: number, r: number) => {
+    let y = groundAt(v, x, z)
+    for (let i = 0; i < 16; i++) {
+      let a = ((i % 8) / 4) * Math.PI, d = i < 8 ? r : r / 2
+      y = Math.max(y, groundAt(v, x + Math.cos(a) * d, z + Math.sin(a) * d))
+    }
+    return y
   }
   let at = new THREE.Vector3()
 
@@ -237,7 +256,7 @@ export let cast = (
 
       // The creatures.
       ring.visible = false
-      for (let w of warns.values()) w.visible = false
+      for (let w of warns.values()) w.zone.visible = w.fill.visible = false
       for (let m of f.mobs) {
         let b = BEASTS[m.kind]
         // Small things are lost in the haze sooner than big ones.
@@ -268,10 +287,21 @@ export let cast = (
           t,
           dt,
         )
-        if (m.aim && !m.down && m.bite >= 0 && m.bite < 0.4) {
-          let w = warn(m.eid), k = m.bite / 0.4
-          w.position.set(a.x, groundAt(v, a.x, a.z) + 0.08, a.z)
-          w.scale.setScalar((0.55 + b.size * 0.6) * (1.9 - k * 0.9))
+        // On my trail, a ring at its reach; winding up a bite, a disc that
+        // grows from faint and small to fill the ring as the bite lands (0.4
+        // of the way through), and holds there a moment after.
+        if (m.aim && !m.down) {
+          let w = warn(m.eid), y = highest(a.x, a.z, m.reach) + 0.08
+          w.zone.visible = true
+          w.zone.position.set(a.x, y, a.z)
+          w.zone.scale.setScalar(m.reach)
+          if (m.bite >= 0 && m.bite < 0.46) {
+            let k = Math.min(1, m.bite / 0.4)
+            w.fill.visible = true
+            w.fill.position.set(a.x, y + 0.01, a.z)
+            w.fill.scale.setScalar(Math.max(0.01, m.reach * k))
+            w.fill.material.opacity = 0.12 + 0.5 * k
+          }
         }
         let foe = f.foe?.eid == m.eid
         if (foe) {
@@ -359,7 +389,7 @@ export let cast = (
         scene.remove(a.fig.root)
         actors.delete(key)
         let w = warns.get(key)
-        if (w) scene.remove(w)
+        if (w) scene.remove(w.zone, w.fill)
         warns.delete(key)
       }
     },

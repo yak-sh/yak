@@ -105,6 +105,8 @@ export type Mob = {
   bite: number
   /** its bite is aimed at me */
   aim: boolean
+  /** how near, middle to middle, its bite takes whoever is there */
+  reach: number
   near: number
 }
 
@@ -183,6 +185,8 @@ let ROLL_AGAIN = 800
 // lands.
 let BITE = 1500
 let WINDUP = 600
+// How far past its reach a creature's bite still takes someone: it lunges.
+let LUNGE = 0.6
 // A blow this soon after rolling through a bite is always a great one.
 let RIPOSTE = 1200
 let DOWN = 5000
@@ -691,7 +695,7 @@ export let game = (net: Net) => {
         bitten.set(eid, seen)
         if (hu.bite > seen && hu.bite <= now) {
           bitten.set(eid, hu.bite)
-          let near = dist(mb, body) <= beast.reach + 0.6
+          let near = dist(mb, body) <= beast.reach + LUNGE
           if (hu.player == me && !down && !fallen && near) {
             if (rolling) {
               riposte = now
@@ -720,6 +724,7 @@ export let game = (net: Net) => {
           hurt: now - (hitAt.get(eid) ?? -1e9),
           bite,
           aim: hu.player == me,
+          reach: beast.reach + LUNGE,
           near: dist(mb, body),
         })
       }
