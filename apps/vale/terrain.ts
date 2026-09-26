@@ -20,7 +20,7 @@
 // mountains at the rim by a pass.
 import { type Feature, FEATURES, Top } from './features.ts'
 import { type Level, LEVELS, type Side, type Spot } from './levels.ts'
-import { bulk } from './props.ts'
+import { bulk, KINDS } from './props.ts'
 import { clamp, fbm, hash, lerp, rand, smooth } from './rand.ts'
 
 export type { Side, Spot }
@@ -116,19 +116,6 @@ let GRADE = 0.45
 let EVEN = 5
 // How far round where a hero comes in no tree or rock grows, in metres.
 let GLADE = 9
-// How much room each building takes, as a radius.
-let FOOT: Record<string, number> = {
-  fire: 1.5,
-  cottage: 4.5,
-  hall: 5.5,
-  well: 1.2,
-  board: 0.8,
-  lamp: 0.3,
-  signpost: 1,
-  pillar: 1.2,
-  ruin: 2.8,
-  menhir: 1,
-}
 
 // How strongly a point belongs to each of a level's kinds of place (the
 // strongest of its places of that kind, and how far that one's middle is),
@@ -484,7 +471,7 @@ let build = (lv: Level, V: number): Vale => {
 
   let props: Prop[] = [...built]
   let taken = (x: number, z: number, lane: number, road: number) =>
-    built.some((p) => dist(x, z, [p.x, p.z]) < FOOT[p.kind] + 1) ||
+    built.some((p) => dist(x, z, [p.x, p.z]) < (KINDS[p.kind].foot ?? 0) + 1) ||
     villages.some((p) => dist(x, z, p.at) < 6) ||
     lane < 1.3 || road < ROAD + 1.5
 
@@ -561,51 +548,19 @@ let build = (lv: Level, V: number): Vale => {
   return v
 }
 
-// What is solid all through, a boulder or a standing stone: as wide and as
-// tall as it is drawn, so a jump can land on one low enough.
-let SOLID = new Set([
-  'rock',
-  'sandstone',
-  'cinder',
-  'snowrock',
-  'basalt',
-  'crystal',
-  'serac',
-  'menhir',
-  'pillar',
-])
-// How wide anything else that stands is at its foot, in metres, for a walker
-// to bump into.
-let GIRTH: Record<string, number> = {
-  oak: 0.45,
-  pine: 0.45,
-  birch: 0.45,
-  spruce: 0.45,
-  palm: 0.4,
-  deadtree: 0.35,
-  cactus: 0.4,
-  toadstool: 0.6,
-  well: 1.2,
-  fire: 1.2,
-  board: 0.35,
-  lamp: 0.35,
-  signpost: 0.3,
-}
-
-// What a walker bumps into: trunks, stones, posts, the village's buildings and
-// a ruin's walls. A building is a row of circles along each wall, so its door
-// is a gap.
+// What a walker bumps into: what is solid, trunks and posts, the village's
+// buildings and a ruin's walls (props.ts `KINDS`). A building is a row of
+// circles along each wall, so its door is a gap.
 let wallsOf = (v: Vale): Wall[] => {
   let walls: Wall[] = []
   for (let p of v.props) {
-    let y = standAt(v, p)
-    if (SOLID.has(p.kind)) {
+    let y = standAt(v, p), k = KINDS[p.kind]
+    if (k.solid) {
       let { r, tall } = bulk(p.kind, p.seed)
       walls.push({ x: p.x, z: p.z, r, top: y + tall })
       continue
     }
-    let r = GIRTH[p.kind] ?? 0
-    if (r) walls.push({ x: p.x, z: p.z, r, top: y + 3 })
+    if (k.girth) walls.push({ x: p.x, z: p.z, r: k.girth, top: y + 3 })
     if (p.kind == 'ruin') {
       for (let dx = -1.2; dx <= 1.2; dx += 0.6) {
         walls.push({ x: p.x + dx, z: p.z, r: 0.4, top: y + 3 })
@@ -652,15 +607,6 @@ let SHELL: Record<string, [number, number, number]> = {
   hall: [9, 7, 7],
 }
 
-// What each structure stands on, in metres east–west and north–south.
-let SPAN: Record<string, [number, number]> = {
-  cottage: [7, 5.5],
-  hall: [9, 7],
-  well: [2.2, 2.2],
-  fire: [2.6, 2.6],
-  board: [2.2, 0.5],
-}
-
 /** The points along a building's walls a walker cannot pass, in metres: the
  * rectangle its shell stands on, less the door on its south side. */
 export let footprint = (p: Prop): Spot[] => {
@@ -696,7 +642,7 @@ export let foundation = (
   v: Vale,
   p: Prop,
 ): [[number, number, number], [number, number, number]] | null => {
-  let span = SPAN[p.kind]
+  let span = KINDS[p.kind].span
   if (!span) return null
   let [w, d] = span
   let base = groundAt(v, p.x, p.z)
@@ -722,7 +668,7 @@ export let groundAt = (v: Vale, x: number, z: number): number => {
  * (a foundation fills below), anything else on the lowest ground in its cell
  * of the grid, so a trunk never hangs over a step. */
 export let standAt = (v: Vale, p: Prop): number => {
-  if (SPAN[p.kind]) return groundAt(v, p.x, p.z)
+  if (KINDS[p.kind].span) return groundAt(v, p.x, p.z)
   let r = GRID / 2 - 1e-6
   return Math.min(
     groundAt(v, p.x - r, p.z - r),

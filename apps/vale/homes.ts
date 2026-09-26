@@ -8,6 +8,7 @@
 // list on every page, and each creature's eid is named by where it lives, so
 // no page has to be told what another grew.
 import { type Beast, BEASTS, type Haunt } from './beasts.ts'
+import { isA } from './features.ts'
 import { HOPS, type Level, type Place } from './levels.ts'
 import { hashOf, rand, uuidOf } from './rand.ts'
 import { wallsNear } from './sim.ts'
@@ -56,7 +57,7 @@ export let dens = (lv: Level): Den[] =>
       ? []
       : beast.haunts.flatMap((haunt) =>
         Object.entries(lv.places).flatMap(([name, place]) =>
-          place.kind == haunt.near &&
+          isA(place.kind, haunt.near) &&
             rand(hashOf(`${lv.id}/${kind}/${name}`), 7) < (haunt.odds ?? 1)
             ? [{ kind, haunt, name, place }]
             : []

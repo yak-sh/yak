@@ -5,9 +5,10 @@
 // day. Built once per level; `tick` moves the sun, the water and the flames.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { airOf } from './air.ts'
 import { CHUNK, groundChunk } from './ground.ts'
 import { cuboid, out, place } from './mesh.ts'
-import { model } from './props.ts'
+import { KINDS, model } from './props.ts'
 import { lerp, smooth } from './rand.ts'
 import { geometry, sight, soft } from './soft.ts'
 import {
@@ -36,8 +37,6 @@ export type World = {
   dispose: () => void
 }
 
-// What is too small to matter far off, or to cast a shadow.
-let DECOR = new Set(['flower', 'tuft', 'mushroom', 'reed', 'heather'])
 // The stone a structure's foundation is laid in.
 let FOUND = 0x8e8b82
 // How near a chunk's middle must be for its flowers and grass to be drawn.
@@ -138,6 +137,7 @@ uniform vec3 deep;
 uniform vec3 shallow;
 uniform vec3 sunDir;
 uniform vec3 sunColor;
+uniform vec3 sheen;
 varying vec3 vWorld;
 void main() {
   vec2 p = vWorld.xz;
@@ -147,7 +147,7 @@ void main() {
   vec3 view = normalize(cameraPosition - vWorld);
   float fres = pow(1. - max(dot(view, n), 0.), 3.);
   vec3 c = mix(shallow, deep, .55 + w * .06);
-  c = mix(c, vec3(.85, .93, 1.), fres * .5);
+  c = mix(c, sheen, fres * .5);
   vec3 h = normalize(view + sunDir);
   c += sunColor * pow(max(dot(n, h), 0.), 180.) * 1.5;
   gl_FragColor = vec4(c, .78 + fres * .15);
@@ -172,7 +172,11 @@ void main() {
 export let world = (v: Vale): World => {
   let scene = new THREE.Scene()
   let size = SIZE
-  let fog = new THREE.Fog(0xcfe6f2, 40, 110)
+  // The level's own look: its haze, its water, the colour its sky leans to,
+  // and what drifts in its air.
+  let own = v.level.look ?? {}
+  let haze = own.haze ?? 1
+  let fog = new THREE.Fog(0xcfe6f2, 40 / haze, 110 / haze)
   scene.fog = fog
 
   let ground = soft({ speckle: 0.1, see: true })
@@ -191,7 +195,7 @@ export let world = (v: Vale): World => {
       let o = groundChunk(v, ci, ck, out())
       let small = out()
       for (let p of byChunk.get(ci + ck * per) ?? []) {
-        place(DECOR.has(p.kind) ? small : o, model(p.kind, p.seed), [
+        place(KINDS[p.kind].small ? small : o, model(p.kind, p.seed), [
           p.x,
           standAt(v, p),
           p.z,
@@ -227,8 +231,9 @@ export let world = (v: Vale): World => {
       THREE.UniformsLib.fog,
       {
         time: { value: 0 },
-        deep: { value: new THREE.Color(0x2f7fa6) },
-        shallow: { value: new THREE.Color(0x5fb8cf) },
+        deep: { value: new THREE.Color(own.water?.[0] ?? 0x2f7fa6) },
+        shallow: { value: new THREE.Color(own.water?.[1] ?? 0x5fb8cf) },
+        sheen: { value: new THREE.Color(own.water?.[2] ?? 0xd9edff) },
         sunDir: { value: new THREE.Vector3(0, 1, 0) },
         sunColor: { value: new THREE.Color(1, 1, 1) },
       },
@@ -333,6 +338,9 @@ export let world = (v: Vale): World => {
     lamps.push({ lantern, halo: glow })
   }
 
+  let drift = airOf(scene, own.air)
+  let leans = new THREE.Color(own.sky ?? 0xffffff), lean = own.tint ?? 0
+
   let focus = new THREE.Vector3(size / 2, 6, size / 2)
   let w: World = {
     scene,
@@ -347,10 +355,14 @@ export let world = (v: Vale): World => {
         o.geometry.dispose()
         for (let m of [o.material].flat()) m.dispose()
       }),
-    tick: (t, _dt) => {
+    tick: (t, dt) => {
       let d = ((t / DAY) + 0.36) % 1
       w.day = d
       let l = look(d)
+      l.top.lerp(leans, lean)
+      l.low.lerp(leans, lean)
+      l.sun.lerp(leans, lean / 2)
+      drift.tick(focus, dt)
       // The sun climbs in the east and sets in the west; at night the moon
       // takes its place, lower and bluer.
       let up = d > 0.25 && d < 0.75

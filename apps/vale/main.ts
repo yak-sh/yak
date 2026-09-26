@@ -485,11 +485,10 @@ let loop = (t: number) => {
     let f = g.frame(v, i, cam.yaw, dt)
     last = f
     if (f && f.level != v.level.id) {
-      // Off the end of a road: the level beyond grows, the camera comes round
-      // behind the hero walking in, and the next frame plays there.
+      // Off the end of a road: the level beyond grows, and the next frame
+      // plays there.
       for (let e of f.events) react(e, target)
       grow(f.level)
-      cam.yaw = f.body.yaw + Math.PI
     } else if (f) {
       let player = comp(net.client.ent(net.hero), 'player')
       let dressed = {

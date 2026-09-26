@@ -5,8 +5,9 @@
 // it tints them by their cell (soft.ts), so a merge costs nothing you can see.
 // A chunk is a square of ground a fixed number of metres across, however many
 // columns that is at the vale's voxel size.
-import { type Out, quad, rgb, type Vec } from './mesh.ts'
 import { Top } from './features.ts'
+import type { Level } from './levels.ts'
+import { type Out, quad, rgb, type Vec } from './mesh.ts'
 import { type Vale } from './terrain.ts'
 
 /** A chunk's side, in metres. */
@@ -68,6 +69,37 @@ let STONE = 0x8a8983
 // A face no corner of which is shaded.
 let OPEN: [number, number, number, number] = [3, 3, 3, 3]
 
+// A level's colours: what its look says each top is, the band under it a
+// shade darker, and the rock under stone a shade darker again; the rest as
+// every level has them.
+type Palette = {
+  tops: Record<number, number>
+  band: Record<number, number>
+  rock: (t: number) => number
+}
+let shade = (hex: number, k: number) => {
+  let [r, g, b] = [16, 8, 0].map((n) =>
+    Math.round(Math.min(255, ((hex >> n) & 255) * k))
+  )
+  return (r << 16) | (g << 8) | b
+}
+let paletteOf = (lv: Level): Palette => {
+  let got = painted.get(lv)
+  if (got) return got
+  let tops = { ...TOPS }, band = { ...BAND }
+  for (let [name, hex] of Object.entries(lv.look?.ground ?? {})) {
+    let t = Top[name as keyof typeof Top]
+    tops[t] = hex
+    band[t] = shade(hex, 0.9)
+  }
+  let stone = lv.look?.ground?.stone
+  let under = stone == null ? STONE : shade(stone, 0.88)
+  got = { tops, band, rock: (t) => ROCK[t] ?? under }
+  painted.set(lv, got)
+  return got
+}
+let painted = new WeakMap<Level, Palette>()
+
 // A colour, drifted by the column's hue: lusher or drier by a little.
 let drift = (hex: number, hue: number): Vec => {
   let [r, g, b] = rgb(hex)
@@ -78,6 +110,7 @@ let drift = (hex: number, hue: number): Vec => {
 /** Write chunk (ci, ck)'s ground into `o`. */
 export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
   let V = v.voxel, N = v.cols, C = Math.round(CHUNK / V)
+  let { tops, band: BANDS, rock } = paletteOf(v.level)
   let at = (i: number, k: number) =>
     Math.max(0, Math.min(N - 1, i)) + Math.max(0, Math.min(N - 1, k)) * N
   let H = (i: number, k: number) => v.h[at(i, k)]
@@ -104,7 +137,7 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
     }
   }
   let colour = (i: number, k: number) =>
-    drift(TOPS[v.top[at(i, k)]], v.hue[at(i, k)])
+    drift(tops[v.top[at(i, k)]], v.hue[at(i, k)])
   let done = new Uint8Array(C * C)
   for (let dk = 0; dk < C; dk++) {
     for (let di = 0; di < C; di++) {
@@ -193,9 +226,9 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
         if (nh >= h) continue
         let hue = v.hue[at(i, k)]
         let layers: [number, number, number][] = [
-          [h - band, h, BAND[t]],
+          [h - band, h, BANDS[t]],
           [h - earth, h - band, EARTH[t]],
-          [-999, h - earth, ROCK[t] ?? STONE],
+          [-999, h - earth, rock(t)],
         ]
         // The two columns beside this face, along it: a corner is rounded
         // where the one past it is lower still.
