@@ -270,6 +270,10 @@ Deno.test('stuck model deadline is an expected bounded exit, not a crash', async
       await time.tickAsync(1)
       assertEquals(await closing, { drained: false })
     }
+    // Its worker ended, but a worker shares this process's pid, so nothing
+    // says its holder is gone: its takes run out `hold` after their last
+    // renewal, and the next backend comes up once they have.
+    await new Promise((done) => setTimeout(done, hold))
     let resumed = await remote({
       worker: worker(),
       config: at(db),
