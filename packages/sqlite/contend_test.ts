@@ -3,17 +3,23 @@
 // busy lock for five seconds (./db.ts), so a wait shows.
 
 import { assert, assertEquals } from '@std/assert'
+import { archetypeDoc } from '@yaks/archetype'
+import { loadVocab, type Vocab } from '@yaks/vocab'
 import { storage } from './mod.ts'
 import { open } from './db.ts'
 import { shop } from './testing.ts'
 
+// The shop, indexed by archetype, as a live graph is: a query then reads the
+// archetype catalog and the entities as one unit.
+let indexed = loadVocab([...shop.docs, archetypeDoc])
+
 // This process's store, with a task in it, beside another connection that has
 // begun writing and not finished.
-let beside = () => {
+let beside = (vocab: Vocab = shop) => {
   let dir = Deno.makeTempDirSync()
   let mine = open(`${dir}/graph.db`)
   let theirs = open(`${dir}/graph.db`)
-  let store = storage(mine, shop)
+  let store = storage(mine, vocab)
   store.install()
   store.tx((tx) => tx.patch([{ entity: { eid: 'x' }, doc: { title: 'Hi' } }]))
   theirs.query({ t: 'begin', mode: 'immediate' })
@@ -41,6 +47,12 @@ Deno.test('a lookup answers while another process is writing', () => {
   using p = beside()
   let [x] = prompt(() => p.store.get(['x']))
   assertEquals(x.entity.eid, 'x')
+})
+
+Deno.test('a query answers while another process is writing', () => {
+  using p = beside(indexed)
+  let found = prompt(() => p.store.read('.doc'))
+  assertEquals(found.map((b) => b.entity.eid), ['x'])
 })
 
 Deno.test('an open beside a writer goes on without it, and keeps its wait', () => {

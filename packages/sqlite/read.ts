@@ -77,8 +77,10 @@ export let rows = (
     return driver.query(s).map((r) => projected(vocab, r))
   }
   // The catalog and entity statement must see the same commit. Otherwise a
-  // concurrent writer could introduce a new matching set between the two.
-  return indexed || opts.archetypes ? unit(driver, ask) : ask()
+  // concurrent writer could introduce a new matching set between the two. A
+  // read unit is one snapshot without the write lock, so a long query never
+  // makes a writer on another connection wait (./unit.ts).
+  return indexed || opts.archetypes ? unit(driver, ask, 'read') : ask()
 }
 
 // The properties a gather reads: the stored ones, plus any computed property
