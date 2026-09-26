@@ -1,4 +1,5 @@
 // The chat box on the glass: the last lines said in the level the hero is in,
+// each fading a while after it was said and all shown while the box is open,
 // the line being written (Enter opens it, or the 💬 button), and the words
 // over the heads of whoever said them nearby. A guest reads, and is asked to
 // sign in to speak. Which lines count is chat.ts's rule over the rows the
@@ -47,6 +48,11 @@ let LOST = 20000
 // How long the ask to sign in stays, in ms.
 let ASKING = 6000
 
+// How long a line stays in the log once said, and then how long it takes to
+// fade, in ms. The fade is chat.css's, run by the compositor.
+let STAY = 9000
+let FADE = 3000
+
 // A line of mine, and the rest of its row when it is said to a villager.
 type Said = Line & { level: string; to: Record<string, unknown> | null }
 
@@ -84,6 +90,7 @@ export let chatbox = (
   ask.textContent = 'Sign in to chat'
   ask.hidden = true
   box.append(log, form, button, ask)
+  box.style.setProperty('--fade', `${FADE}ms`)
   glass.append(box)
 
   let me: Me | null = null
@@ -133,6 +140,11 @@ export let chatbox = (
     })
   }
 
+  // When a line starts to fade: `STAY` after it was said, and never before
+  // the box last closed, so what the open box showed fades away gently.
+  let shut = -Infinity
+  let fades = (l: Line) => Math.max(l.at + STAY, shut)
+
   let open = false
   let asked = 0
   let show = () => {
@@ -151,6 +163,7 @@ export let chatbox = (
   let hide = () => {
     if (!open) return
     open = false
+    shut = net.now()
     form.hidden = true
     button.hidden = false
     box.classList.remove('Chat-open')
@@ -186,9 +199,11 @@ export let chatbox = (
     })
   })
 
-  // The log, written only when what it shows changed.
+  // The log, written only when what it shows changed. A line is drawn part
+  // way through its arrival and its fade, however late it is drawn; the open
+  // box shows every line whole.
   let drawn = ''
-  let draw = (shown: Line[], mine: Set<string>) => {
+  let draw = (shown: Line[], mine: Set<string>, now: number) => {
     let rows = shown.map((l) => {
       let p = comp(net.client.ent(l.player), 'player')
       let v = folk.who(l.player)
@@ -198,13 +213,20 @@ export let chatbox = (
         tint: v?.tint ?? str(p.tint, '#dff5c8'),
         text: l.text,
         wait: mine.has(l.eid),
+        at: l.at,
+        fades: fades(l),
       }
     })
-    let key = JSON.stringify(rows)
+    let key = JSON.stringify([open, rows])
     if (key == drawn) return
     drawn = key
     log.replaceChildren(...rows.map((r) => {
       let li = el('li', `Chat_Line${r.wait ? ' Chat_Line-wait' : ''}`)
+      if (!open) {
+        li.style.animationDelay = `${Math.min(0, r.at - now).toFixed(0)}ms, ${
+          (r.fades - now).toFixed(0)
+        }ms`
+      }
       let name = el('b', 'Chat_Name')
       name.textContent = r.name
       name.style.setProperty('--tint', r.tint)
@@ -262,7 +284,12 @@ export let chatbox = (
           .sort((a, b) => a.at - b.at),
         ...mine,
       ]
-      draw(shown.slice(-SHOWN), new Set(mine.map((l) => l.eid)))
+      let recent = shown.slice(-SHOWN)
+      draw(
+        open ? recent : recent.filter((l) => now < fades(l) + FADE),
+        new Set(mine.map((l) => l.eid)),
+        now,
+      )
       let to = folk.near()
       let hint = to ? `Say something to ${to}…` : 'Say something…'
       if (input.placeholder != hint) input.placeholder = hint

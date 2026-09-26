@@ -1,5 +1,6 @@
 /* The chat box: the last lines said in this level, over the scene's
-   bottom-left (the top-left on a phone, clear of the thumbstick), the line
+   bottom-left (the top-left on a phone, clear of the thumbstick), each fading
+   a while after it was said and all shown while the box is open, the line
    being written, and the words over a speaker's head. */
 .Chat {
   --tint: #dff5c8;
@@ -30,11 +31,24 @@
   border-radius: 10px;
   background: var(--shade);
   overflow-wrap: anywhere;
+  /* Each delay is chatbox.ts's: when the line was said, and when it fades. */
+  animation:
+    toast-in 0.25s ease-out,
+    fade var(--fade) ease-in forwards;
+}
+
+.Chat-open .Chat_Line {
   animation: toast-in 0.25s ease-out;
 }
 
 .Chat_Line-wait {
   opacity: 0.7;
+}
+
+@keyframes fade {
+  to {
+    opacity: 0;
+  }
 }
 
 .Chat_Name {
