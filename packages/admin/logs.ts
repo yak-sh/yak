@@ -10,6 +10,9 @@
 // place of the past.
 import { CallError } from '@yaks/tools'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
+import { spawn } from './subprocess.ts'
+
+export { GRACE } from './subprocess.ts'
 
 type Note = (line: string) => void
 type Row = Record<string, unknown>
@@ -174,9 +177,6 @@ export let duration = (since = '10m'): number => {
   return seconds
 }
 
-/** How long a stopped tail has to end on SIGINT before its group is killed. */
-export let GRACE = 5_000
-
 let live = async (
   root: string,
   receive: (row: Row) => void,
@@ -188,48 +188,31 @@ let live = async (
   // (`detached`), and stopping it signals the whole group: SIGINT, so Wrangler
   // can close its tail session, then SIGKILL for whatever is still there after
   // GRACE. It runs until the command stops (the host's `stopping`).
-  let child = new Deno.Command(WRANGLER[0], {
+  let run = spawn(WRANGLER[0], {
     args: [...WRANGLER.slice(1), 'tail', '--format', 'json'],
     cwd: `${root}/workers/yak`,
     stdin: 'null',
     stdout: 'piped',
     stderr: 'inherit',
-    detached: true,
-  }).spawn()
-  let group = (sig: Deno.Signal) => {
-    try {
-      Deno.kill(-child.pid, sig)
-    } catch { /* The group is gone. */ }
-  }
-  let stopped = false
-  let kill: ReturnType<typeof setTimeout> | undefined
-  let stop = () => {
-    if (stopped) return
-    stopped = true
-    group('SIGINT')
-    kill = setTimeout(() => group('SIGKILL'), GRACE)
-  }
-  if (signal.aborted) stop()
-  signal.addEventListener('abort', stop, { once: true })
+  }, signal)
+  let child = run.child
   let parser = records(receive)
   try {
     for await (let chunk of child.stdout.pipeThrough(new TextDecoderStream())) {
       parser.push(chunk)
     }
     let status = await child.status
-    if (status.code != 0 && !stopped) return status.code
+    if (status.code != 0 && !run.stopped()) return status.code
     try {
       parser.finish()
     } catch (error) {
-      if (!stopped) throw error
+      if (!run.stopped()) throw error
       note('tail stopped during an event; that partial event was omitted')
     }
-    return stopped ? 130 : 0
+    return run.stopped() ? 130 : 0
   } finally {
-    signal.removeEventListener('abort', stop)
-    stop()
-    await child.status
-    clearTimeout(kill)
+    run.stop()
+    await run.finish()
   }
 }
 

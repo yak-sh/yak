@@ -516,7 +516,7 @@ export let runs = (
 
     admin_deploys: verb(async (call) => {
       platform(argsOf(call))
-      return [said(call, table(await deploys(root)))]
+      return [said(call, table(await deploys(root, host.stopping)))]
     }),
 
     admin_errors: verb(async (call, vault) => {
@@ -539,7 +539,12 @@ export let runs = (
       )
       return ended(
         'rollback',
-        await rollback(root, word(argsOf(call), 'version'), out),
+        await rollback(
+          root,
+          word(argsOf(call), 'version'),
+          out,
+          host.stopping,
+        ),
       )
     }),
 
@@ -549,7 +554,10 @@ export let runs = (
       if (!/^[a-f\d]{7,40}$/i.test(sha)) {
         throw new CallError('sha', 'yak admin revert <sha> --admin|--owner')
       }
-      return ended('revert', await revert(root, sha, out, note))
+      return ended(
+        'revert',
+        await revert(root, sha, out, note, host.stopping),
+      )
     }),
   }
 }

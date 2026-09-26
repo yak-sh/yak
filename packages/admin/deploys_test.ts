@@ -1,9 +1,11 @@
 // The deploy history's pure seams: how Wrangler's JSON joins uploads to
 // commits, where a data boundary is, and which version a rollback may land on.
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { CallError } from '@yaks/tools'
 import { Refused } from './accounts.ts'
 import {
   boundaries,
+  command,
   type Commit,
   commitsIn,
   type Deploy,
@@ -217,4 +219,37 @@ Deno.test('main history keeps a data boundary after Wrangler ages its deployment
   ])
   assertThrows(() => rollbackTarget(guarded), Refused, 'data moved')
   assert(boundaries(rows, null).every((r) => r.refusal?.includes('unknown')))
+})
+
+Deno.test('stopping a platform command interrupts its whole process group', async () => {
+  let stopping = new AbortController()
+  let started = Date.now()
+  let ran = command(
+    Deno.cwd(),
+    Deno.execPath(),
+    [
+      'eval',
+      `new Deno.Command(Deno.execPath(), { args: ['eval', 'await new Promise(() => {})'] }).spawn(); await new Promise(() => {})`,
+    ],
+    stopping.signal,
+  )
+  setTimeout(() => stopping.abort(), 50)
+  let error = await assertRejects(() => ran, CallError, 'was interrupted')
+  assertEquals(error.code, 'interrupted')
+  assert(Date.now() - started < 2_000, 'the child process group stayed alive')
+})
+
+Deno.test('a command failure is still a defect when the host is not stopping', async () => {
+  let error = await assertRejects(
+    () =>
+      command(
+        Deno.cwd(),
+        Deno.execPath(),
+        ['eval', 'Deno.exit(143)'],
+        new AbortController().signal,
+      ),
+    Error,
+    'deno eval exited 143',
+  )
+  assert(!(error instanceof CallError))
 })

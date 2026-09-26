@@ -1,12 +1,43 @@
 // The owner's deployment history. Uploading code does not move data; giving
 // it traffic can. Keep every stored-shape boundary in this history, even after
 // someone rolls the code back. The directory does not roll its rows back.
-import { run } from '@yaks/git/land'
+import type { Ran } from '@yaks/git/land'
+import { CallError } from '@yaks/tools'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
 import { Refused } from './accounts.ts'
+import { output } from './subprocess.ts'
 
 // One git run in `cwd`, answered as it came — the runner @yaks/git lands with.
-export let git = (cwd: string, args: string[]) => run(args, cwd)
+export let git = async (
+  cwd: string,
+  args: string[],
+  stopping: AbortSignal,
+): Promise<Ran> => {
+  try {
+    let ran = await output('git', {
+      cwd,
+      args,
+      env: { GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '' },
+      stdout: 'piped',
+      stderr: 'piped',
+    }, stopping)
+    let text = new TextDecoder()
+    return {
+      ok: ran.success,
+      code: ran.code,
+      out: text.decode(ran.stdout),
+      err: text.decode(ran.stderr),
+    }
+  } catch (error) {
+    if (error instanceof CallError) throw error
+    return {
+      ok: false,
+      code: -1,
+      out: '',
+      err: `git ${args.join(' ')} in ${cwd}: ${error}`,
+    }
+  }
+}
 
 export type Commit = { sha: string; at: string; subject: string }
 export type Version = {
@@ -197,14 +228,19 @@ export let table = (rows: Deploy[]): string => {
   return lines.join('\n')
 }
 
-export let command = async (cwd: string, cmd: string, args: string[]) => {
-  let r = await new Deno.Command(cmd, {
+export let command = async (
+  cwd: string,
+  cmd: string,
+  args: string[],
+  stopping: AbortSignal,
+) => {
+  let r = await output(cmd, {
     cwd,
     args,
     stdin: 'null',
     stdout: 'piped',
     stderr: 'piped',
-  }).output()
+  }, stopping)
   let text = new TextDecoder()
   if (!r.success) {
     throw new Error(
@@ -214,25 +250,41 @@ export let command = async (cwd: string, cmd: string, args: string[]) => {
   return text.decode(r.stdout).trim()
 }
 
-export let needGit = async (root: string, args: string[]) => {
-  let r = await git(root, args)
+export let needGit = async (
+  root: string,
+  args: string[],
+  stopping: AbortSignal,
+) => {
+  let r = await git(root, args, stopping)
   if (!r.ok) throw new Error(`git ${args[0]} exited ${r.code}: ${r.err.trim()}`)
   return r.out.trim()
 }
 
-export let wrangler = (root: string, args: string[]) =>
-  command(`${root}/workers/yak`, WRANGLER[0], [...WRANGLER.slice(1), ...args])
+export let wrangler = (
+  root: string,
+  args: string[],
+  stopping: AbortSignal,
+) =>
+  command(
+    `${root}/workers/yak`,
+    WRANGLER[0],
+    [...WRANGLER.slice(1), ...args],
+    stopping,
+  )
 
-export let deploys = async (root: string): Promise<Deploy[]> => {
+export let deploys = async (
+  root: string,
+  stopping: AbortSignal,
+): Promise<Deploy[]> => {
   let [vs, ds, log] = await Promise.all([
-    wrangler(root, ['versions', 'list', '--json']),
-    wrangler(root, ['deployments', 'list', '--json']),
+    wrangler(root, ['versions', 'list', '--json'], stopping),
+    wrangler(root, ['deployments', 'list', '--json'], stopping),
     needGit(root, [
       'log',
       'main',
       '--first-parent',
       '--format=%H%x09%cI%x09%s',
-    ]),
+    ], stopping),
   ])
   let versions = rowsIn<Version>(JSON.parse(vs), 'versions')
   let deployments = rowsIn<Deployment>(JSON.parse(ds), 'deployments')
@@ -244,7 +296,7 @@ export let deploys = async (root: string): Promise<Deploy[]> => {
   ) {
     if (versions.some((v) => v.id == id)) continue
     let raw = JSON.parse(
-      await wrangler(root, ['versions', 'view', id, '--json']),
+      await wrangler(root, ['versions', 'view', id, '--json'], stopping),
     )
     versions.push(raw.result ?? raw)
   }
@@ -252,7 +304,11 @@ export let deploys = async (root: string): Promise<Deploy[]> => {
   let marks = new Map<string, string[] | null>()
   let markers = async (sha: string) => {
     if (!marks.has(sha)) {
-      let file = await git(root, ['show', `${sha}:workers/yak/migrate.ts`])
+      let file = await git(
+        root,
+        ['show', `${sha}:workers/yak/migrate.ts`],
+        stopping,
+      )
       if (file.ok) marks.set(sha, marksIn(file.out))
       else {
         // A commit predating migrate.ts has no passes; a missing commit is
@@ -262,7 +318,7 @@ export let deploys = async (root: string): Promise<Deploy[]> => {
           sha,
           '--',
           'workers/yak/migrate.ts',
-        ])
+        ], stopping)
         marks.set(sha, tree.ok && !tree.out.trim() ? [] : null)
       }
     }
@@ -276,7 +332,10 @@ export let deploys = async (root: string): Promise<Deploy[]> => {
   // Main always deploys: conservatively include every boundary it has carried,
   // even if that particular build failed. A shallow history cannot prove this.
   let floor: string[] | null = []
-  if (await needGit(root, ['rev-parse', '--is-shallow-repository']) == 'true') {
+  if (
+    await needGit(root, ['rev-parse', '--is-shallow-repository'], stopping) ==
+      'true'
+  ) {
     floor = null
   } else {
     let history = await needGit(root, [
@@ -286,7 +345,7 @@ export let deploys = async (root: string): Promise<Deploy[]> => {
       '--format=%H',
       '--',
       'workers/yak/migrate.ts',
-    ])
+    ], stopping)
     for (let sha of history.split('\n').filter(Boolean)) {
       let found = await markers(sha)
       if (found == null) {
@@ -328,8 +387,9 @@ export let rollback = async (
   root: string,
   want: string | undefined,
   out: (line: string) => void,
+  stopping: AbortSignal,
 ) => {
-  let target = rollbackTarget(await deploys(root), want)
+  let target = rollbackTarget(await deploys(root, stopping), want)
   out(
     await wrangler(root, [
       'rollback',
@@ -337,12 +397,12 @@ export let rollback = async (
       '-y',
       '--message',
       `yaks.app emergency rollback to ${target.commit?.sha}: build path broken`,
-    ]),
+    ], stopping),
   )
-  let checked = await new Deno.Command(Deno.execPath(), {
+  let checked = await output(Deno.execPath(), {
     cwd: root,
     args: ['run', '-A', 'bin/verify-deploy.ts', '--tail', '0'],
     stdin: 'null',
-  }).spawn().status
+  }, stopping)
   return checked.code
 }
