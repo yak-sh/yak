@@ -16,6 +16,10 @@
  * audio.createMediaStreamSource(voice!.stream).connect(panner)
  * ```
  *
+ * A page that places voices in space with Web Audio plays its mix through
+ * {@link loopback} while a microphone is open, so the browser's echo canceller
+ * hears it, which in Chrome it does not otherwise.
+ *
  * The host half, which keeps the account's secret, the sessions and the
  * meter, is `@yaks/rtc/door`; the components are `@yaks/rtc/vocab`.
  *
@@ -35,4 +39,5 @@ export {
   type State,
   voiced,
 } from './join.ts'
+export { type Loop, loopback } from './loop.ts'
 export { docs, rtcDoc } from './vocab.ts'

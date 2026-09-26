@@ -46,9 +46,20 @@ await call.leave()
   ask again.
 
 Chrome's echo canceller does not hear what Web Audio plays, so a voice played
-through a `PannerNode` to the speakers can reach the microphone and return to
-its speaker. Media elements are cancelled, including a Web Audio mix sent
-through a local peer connection into an `<audio>`. Headphones sidestep it.
+through a `PannerNode` to the speakers reaches the microphone and returns to its
+speaker. `loopback(ctx)` is the way round it: a Web Audio mix connected into
+`loop.into` plays through a local peer connection into an `<audio>`, which is
+cancelled, and stays stereo. Move the mix over once `loop.ready` resolves, only
+while a microphone is open (it adds some 40 ms), and `loop.stop()` it after:
+
+```ts ignore
+import { loopback } from '@yaks/rtc'
+
+let loop = loopback(ctx)
+await loop.ready
+mix.disconnect(ctx.destination)
+mix.connect(loop.into)
+```
 
 ## A host
 
