@@ -14,7 +14,7 @@ import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
 import { deals } from './deals.ts'
 import { map } from './map.ts'
-import { type Figure, hero } from './figures.ts'
+import { BUILDS, type Figure, hero, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { LODES, TRADES } from './gather.ts'
 import { ahead, type Grown, grown } from './grown.ts'
@@ -71,6 +71,9 @@ let asked = Number(new URLSearchParams(location.search).get('voxel'))
 let VOX = asked >= 0.125 && asked <= 2 && Number.isInteger(SIZE / asked)
   ? asked
   : VOXEL
+// How the people are built: `?build=grown` draws them grown, to compare.
+let built = new URLSearchParams(location.search).get('build') ?? ''
+let BUILD = Object.hasOwn(BUILDS, built) ? BUILDS[built] : BUILDS.child
 // The first level starts growing before anything else, since it takes
 // longest. It is let go once drawn, so a level the hero has left is not kept.
 let first: Promise<Grown> | null = grown(HOME, VOX)
@@ -128,7 +131,7 @@ let p = pack(glass, { wear: g.wear, take: g.take })
 let shown = ({ v, drawn }: Grown) => ({ v, w: world(v, drawn) })
 let { v, w } = shown(await first)
 first = null
-let stage = cast(w.scene, v, marks)
+let stage = cast(w.scene, v, marks, BUILD)
 let dust = bits(w.scene, true, 400)
 let glow = bits(w.scene, false, 300)
 let bounty = nodes(w.scene, marks, glow, phone)
@@ -147,7 +150,7 @@ let grow = async (id: string) => {
   away = false
   if (smallShadows) w.sun.shadow.mapSize.set(1024, 1024)
   if (!renderer.shadowMap.enabled) w.sun.castShadow = false
-  stage = cast(w.scene, v, marks)
+  stage = cast(w.scene, v, marks, BUILD)
   dust = bits(w.scene, true, 400)
   glow = bits(w.scene, false, 300)
   bounty = nodes(w.scene, marks, glow, phone)
@@ -224,7 +227,7 @@ let playing = false
 let preview: Figure | null = null
 let dress = () => {
   if (preview) w.scene.remove(preview.root)
-  preview = hero(look)
+  preview = hero(BUILD, look)
   let [hx, hz] = hearth()
   let x = hx, z = hz + 4
   preview.root.position.set(x, groundAt(v, x, z), z)
@@ -639,7 +642,7 @@ let loop = (t: number) => {
       cam.x += (f.body.x - cam.x) * k
       cam.y += (f.body.y - cam.y) * (1 - Math.exp(-dt * 6))
       cam.z += (f.body.z - cam.z) * k
-      target.set(cam.x, cam.y + 1, cam.z)
+      target.set(cam.x, cam.y + stature(BUILD) * 0.8, cam.z)
       for (let e of f.events) react(e, target)
       for (let e of job.events) worked(e)
       if (i.talk && f.talk) talkTo()

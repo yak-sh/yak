@@ -115,6 +115,23 @@ export let mirror = ([[x, y, z], size, ...rest]: Box): Box => [
 /** A box and its mirror, right and left. */
 export let both = (b: Box): Box[] => [b, mirror(b)]
 
+/** Boxes drawn for a part of one size, fit to a part `k` times it along
+ * each axis, about the part's pivot.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(fit([[[-0.5, 0, 0], [1, 1, 1], 7]], [2, 1, 0.5]), [
+ *   [[-1, 0, 0], [2, 1, 0.5], 7],
+ * ])
+ * ```
+ */
+export let fit = (boxes: Box[], k: Vec): Box[] =>
+  boxes.map(([min, size, ...rest]) => [
+    [min[0] * k[0], min[1] * k[1], min[2] * k[2]],
+    [size[0] * k[0], size[1] * k[1], size[2] * k[2]],
+    ...rest,
+  ])
+
 /** The boxes `f` makes of `v`, or none without a `v`: what a figure has only
  * when its look says so.
  *

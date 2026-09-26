@@ -9,12 +9,13 @@
 // `knit`).
 //
 // People are built like children, the way they are in Portal Knights: a big
-// head on a round middle, short arms and legs bending at elbow and knee, big
-// hands and feet. A hero stands 1.3 m, and wears what they wear: their weapon
-// in the right hand, what goes with it in the left, and their armour over
-// their tunic, each drawn from the item's own look (items.ts). How they swing
-// is their weapon's: up and over for a blade, a stab for a dagger, a draw and
-// a loose for a bow, a thrust for a staff.
+// head, a short straight middle, short arms and legs bending at elbow and
+// knee, big hands and feet. A hero stands 1.3 m. A build is a few measures
+// (`BUILDS`), so they can be drawn grown instead, to compare. A hero wears
+// what they wear: their weapon in the right hand, what goes with it in the
+// left, and their armour over their tunic, each drawn from the item's own
+// look (items.ts). How they swing is their weapon's: up and over for a blade,
+// a stab for a dagger, a draw and a loose for a bow, a thrust for a staff.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { BEASTS, type Look, type Plans } from './beasts.ts'
@@ -29,9 +30,11 @@ import { quadruped } from './bodies/quadruped.ts'
 import { serpent } from './bodies/serpent.ts'
 import { slime } from './bodies/slime.ts'
 import { wisp } from './bodies/wisp.ts'
+import type { Vec } from './mesh.ts'
 import {
   type Box,
   ease,
+  fit,
   knit,
   limb,
   lunge,
@@ -116,29 +119,94 @@ let HATS: Record<string, (c: number, trim: number) => Box[]> = {
   ],
 }
 
-// Armour over a middle, by weight, in the torso's space.
+// Armour over a middle, by weight, in the torso's space: close over the
+// tunic, as deep at the tummy as at the chest.
 let COATS: Record<string, (c: number, trim: number) => Box[]> = {
   plate: (c, trim) => [
-    [[-0.257, 0.06, -0.187], [0.514, 0.33, 0.394], c, 0.06],
-    [[-0.26, 0.05, -0.19], [0.52, 0.05, 0.4], trim],
+    [[-0.245, 0.06, -0.175], [0.49, 0.34, 0.35], c, 0.06],
+    [[-0.25, 0.05, -0.18], [0.5, 0.05, 0.36], trim],
     [[-0.34, 0.3, -0.1], [0.12, 0.08, 0.2], c],
     [[0.22, 0.3, -0.1], [0.12, 0.08, 0.2], c],
   ],
   leather: (c, trim) => [
-    [[-0.253, 0.04, -0.184], [0.506, 0.35, 0.388], c, 0.08],
-    [[-0.02, 0.1, 0.2], [0.04, 0.24, 0.01], trim],
+    [[-0.24, 0.04, -0.17], [0.48, 0.36, 0.34], c, 0.08],
+    [[-0.02, 0.1, 0.17], [0.04, 0.24, 0.01], trim],
   ],
   cloth: (c, trim) => [
-    [[-0.252, 0, -0.183], [0.504, 0.4, 0.386], c, 0.08],
-    [[-0.25, -0.3, -0.19], [0.5, 0.33, 0.38], c, 0.06],
-    [[-0.255, 0.03, -0.19], [0.51, 0.06, 0.39], trim],
+    [[-0.238, 0, -0.168], [0.476, 0.4, 0.336], c, 0.08],
+    [[-0.24, -0.3, -0.17], [0.48, 0.33, 0.34], c, 0.06],
+    [[-0.243, 0.03, -0.173], [0.486, 0.06, 0.346], trim],
   ],
 }
 
-/** One of the people of the vale, in their own colours: a sword in their
- * right hand, or a staff to lean on if they are old enough to want one; or,
- * for a hero, what they wear (`dress`). */
+/** How one of the people is built, in metres. A torso's boxes and the armour
+ * over them are drawn for a child's torso, and a head's and its hat for a
+ * child's head, and each is fit to the build's own (parts.ts `fit`). */
+export type Build = {
+  /** ground to hip */
+  hips: number
+  /** a leg's thickness, and how far out from the middle it stands */
+  leg: number
+  stance: number
+  /** a boot's width and length */
+  boot: [number, number]
+  /** the torso's width, its height from hip to neck, and its depth */
+  torso: Vec
+  /** where a shoulder is, out from the middle and up from the hip */
+  shoulder: [number, number]
+  /** shoulder to fingertip, an arm's thickness and a hand's width */
+  arm: number
+  sleeve: number
+  hand: number
+  /** the head's width, height and depth */
+  head: Vec
+}
+
+/** How the people of the vale are built: like children, the way they are in
+ * Portal Knights (a big head, short arms and legs, big hands and boots), or
+ * grown, as they were first drawn (`?build=grown`, main.ts). */
+export let BUILDS: Record<string, Build> = {
+  child: {
+    hips: 0.44,
+    leg: 0.18,
+    stance: 0.105,
+    boot: [0.2, 0.27],
+    torso: [0.44, 0.42, 0.3],
+    shoulder: [0.31, 0.34],
+    arm: 0.43,
+    sleeve: 0.14,
+    hand: 0.17,
+    head: [0.44, 0.4, 0.4],
+  },
+  grown: {
+    hips: 0.8,
+    leg: 0.2,
+    stance: 0.13,
+    boot: [0.22, 0.26],
+    torso: [0.54, 0.62, 0.32],
+    shoulder: [0.36, 0.56],
+    arm: 0.56,
+    sleeve: 0.18,
+    hand: 0.16,
+    head: [0.38, 0.38, 0.36],
+  },
+}
+
+/** How tall someone of a build stands, ground to crown. */
+export let stature = (b: Build) => b.hips + b.torso[1] + b.head[1]
+
+// How much bigger than a child's `v` is, along each axis.
+let over = (v: Vec, child: Vec): Vec => [
+  v[0] / child[0],
+  v[1] / child[1],
+  v[2] / child[2],
+]
+
+/** One of the people of the vale, built `b`, in their own colours: a sword
+ * in their right hand, or a staff to lean on if they are old enough to want
+ * one; or, for a hero, what they wear (`dress`). */
 export let person = (
+  b: Build,
   look: { tint: string; hair: string; skin: string },
   staff = false,
   dress?: Dress,
@@ -157,50 +225,79 @@ export let person = (
   let pants = weight('feet') == 'plate' ? tone(feet) : 0x5b4a3e
   let boots = feet ? tone(feet) : 0x5a3c28
   let sole = weight('feet') == 'cloth' ? 0.08 : 0.14
+  let kt = over(b.torso, BUILDS.child.torso)
+  let kh = over(b.head, BUILDS.child.head)
   let root = new THREE.Group()
   let body = new THREE.Group()
   root.add(body)
   let hips = new THREE.Group()
-  hips.position.y = 0.44
+  hips.position.y = b.hips
   body.add(hips)
-  // A thigh, and a shin in a big boot.
+  // A thigh, and a shin in a boot, bending at the knee.
+  let knee = b.hips * 0.45, shin = b.hips - knee, t = b.leg
+  let [bw, bl] = b.boot
   let leg = (x: number) =>
     limb(
-      [[[-0.09, -0.22, -0.09], [0.18, 0.28, 0.18], pants, 0.06]],
+      [[[-t / 2, -knee - 0.02, -t / 2], [t, knee + 0.08, t], pants, 0.06]],
       [
-        [[-0.085, -0.12, -0.085], [0.17, 0.17, 0.17], pants, 0.06],
-        [[-0.1, -0.24, -0.11], [0.2, sole, 0.27], boots, 0.06],
+        [
+          [0.005 - t / 2, sole - shin - 0.02, 0.005 - t / 2],
+          [t - 0.01, shin - sole + 0.07, t - 0.01],
+          pants,
+          0.06,
+        ],
+        [[-bw / 2, -shin, -t / 2 - 0.02], [bw, sole, bl], boots, 0.06],
       ],
       [x, 0, 0],
-      [0, -0.2, 0],
+      [0, -knee, 0],
     )
-  let legL = leg(-0.105), legR = leg(0.105)
+  let legL = leg(-b.stance), legR = leg(b.stance)
   hips.add(legL[0], legR[0])
-  // A round middle: a tunic wider and deeper at the tummy than at the
-  // shoulders, belted under it.
-  let torso = partOf([
-    [[-0.22, -0.04, -0.15], [0.44, 0.46, 0.3], tint, 0.1],
-    [[-0.245, 0.02, -0.17], [0.49, 0.25, 0.36], tint, 0.1],
-    [[-0.255, 0.03, -0.18], [0.51, 0.075, 0.38], belt],
-    [[-0.05, 0.035, 0.2], [0.1, 0.07, 0.01], 0xe7c35a],
-    [[-0.15, 0.33, 0.12], [0.3, 0.1, 0.05], shade(tint, 0.8)],
-    ...(COATS[weight('body')]?.(tone(worn('body')), tone(worn('body'), 1)) ??
-      []),
-  ], [0, 0, 0])
+  // A tunic as deep at the tummy as at the chest, belted low, and the armour
+  // over it.
+  let torso = partOf(
+    fit([
+      [[-0.22, -0.04, -0.15], [0.44, 0.46, 0.3], tint, 0.1],
+      [[-0.23, 0.02, -0.16], [0.46, 0.07, 0.32], belt],
+      [[-0.05, 0.025, 0.16], [0.1, 0.06, 0.01], 0xe7c35a],
+      [[-0.15, 0.33, 0.12], [0.3, 0.1, 0.05], shade(tint, 0.8)],
+      ...(COATS[weight('body')]?.(tone(worn('body')), tone(worn('body'), 1)) ??
+        []),
+    ], kt),
+    [0, 0, 0],
+  )
   hips.add(torso)
-  // An upper arm, and a forearm ending in a big hand.
+  // An upper arm, and a forearm ending in a hand.
+  let elbow = b.arm * 0.42, fore = b.arm - elbow, r = b.sleeve
+  let hand = b.hand, palm = hand - 0.02
   let arm = (x: number) =>
     limb(
-      [[[-0.07, -0.2, -0.075], [0.14, 0.25, 0.15], tint, 0.05]],
+      [[
+        [-r / 2, -elbow - 0.02, -r / 2 - 0.005],
+        [r, elbow + 0.07, r + 0.01],
+        tint,
+        0.05,
+      ]],
       [
-        [[-0.065, -0.12, -0.07], [0.13, 0.15, 0.14], tint, 0.05],
-        [[-0.085, -0.25, -0.085], [0.17, 0.15, 0.17], skin, 0.07],
+        [
+          [0.005 - r / 2, palm - fore - 0.02, -r / 2],
+          [r - 0.01, fore - palm + 0.05, r],
+          tint,
+          0.05,
+        ],
+        [[-hand / 2, -fore, -hand / 2], [hand, palm, hand], skin, 0.07],
       ],
-      [x, 0.34, 0],
-      [0, -0.18, 0],
+      [x, b.shoulder[1], 0],
+      [0, -elbow, 0],
     )
-  let [armL, foreL] = arm(-0.31), [armR, foreR] = arm(0.31)
+  let [armL, foreL] = arm(-b.shoulder[0]), [armR, foreR] = arm(b.shoulder[0])
   torso.add(armL, armR)
+  // Where a hand holds what it holds, in the forearm's space, and how far
+  // above the ground that is as the arm hangs: a staff leant on reaches the
+  // ground from there, and its head stands over their own.
+  let fist: Vec = [0, palm / 2 - fore - 0.015, 0.03]
+  let reach = b.hips + b.shoulder[1] - elbow + fist[1]
+  let tip = stature(b) - reach + 0.17
   // Held in the right hand: a blade angled out before them, or a staff or a
   // bow upright; nothing, for a hero with nothing in hand. What goes with it
   // is held in the left.
@@ -210,15 +307,19 @@ export let person = (
     ? partOf(
       staff
         ? [
-          [[-0.035, -0.44, -0.035], [0.07, 1.46, 0.07], 0x6a4a30],
-          [[-0.07, 1.02, -0.07], [0.14, 0.12, 0.14], 0x8fd46a],
+          [
+            [-0.035, -reach, -0.035],
+            [0.07, reach + tip, 0.07],
+            0x6a4a30,
+          ],
+          [[-0.07, tip, -0.07], [0.14, 0.12, 0.14], 0x8fd46a],
         ]
         : [
           [[-0.025, -0.07, -0.025], [0.05, 0.14, 0.05], 0x6a4a30],
           [[-0.1, -0.11, -0.035], [0.2, 0.04, 0.07], 0xe2b64c],
           [[-0.03, -0.5, -0.01], [0.06, 0.4, 0.02], 0xdfe6ee],
         ],
-      [0, -0.19, 0.03],
+      fist,
       0.05,
     )
     : partOf(
@@ -226,7 +327,7 @@ export let person = (
         worn('main'),
         family == 'staff' ? 0.4 : family == 'bow' ? 0.42 : 'hung',
       ),
-      [0, -0.19, 0.03],
+      fist,
       0.05,
     )
   foreR.add(held)
@@ -243,31 +344,33 @@ export let person = (
         [[x, y, z], size, c],
       ) => [[x, y, z + 0.08], size, c])
       : [],
-    [0, -0.19, 0.03],
+    fist,
     0.05,
   )
   foreL.add(other)
-  let head = partOf([
-    [[-0.22, 0, -0.2], [0.44, 0.4, 0.4], skin, 0.1],
-    [[-0.23, 0.3, -0.21], [0.46, 0.14, 0.42], hair, 0.08],
-    [[-0.23, 0.04, -0.215], [0.46, 0.3, 0.09], hair],
-    [[-0.23, 0.14, -0.21], [0.05, 0.2, 0.3], hair],
-    [[0.18, 0.14, -0.21], [0.05, 0.2, 0.3], hair],
-    [[-0.2, 0.28, 0.19], [0.4, 0.06, 0.03], hair],
-    [[-0.14, 0.12, 0.195], [0.08, 0.11, 0.02], 0x2b2733],
-    [[0.06, 0.12, 0.195], [0.08, 0.11, 0.02], 0x2b2733],
-    [[-0.12, 0.19, 0.2], [0.03, 0.03, 0.02], 0xffffff],
-    [[0.08, 0.19, 0.2], [0.03, 0.03, 0.02], 0xffffff],
-    [[-0.05, 0.05, 0.195], [0.1, 0.03, 0.02], shade(skin, 0.8)],
-    ...(HATS[weight('head')]?.(tone(worn('head')), tone(worn('head'), 1)) ??
-      []),
-  ], [0, 0.42, 0])
+  let head = partOf(
+    fit([
+      [[-0.22, 0, -0.2], [0.44, 0.4, 0.4], skin, 0.1],
+      [[-0.23, 0.3, -0.21], [0.46, 0.14, 0.42], hair, 0.08],
+      [[-0.23, 0.04, -0.215], [0.46, 0.3, 0.09], hair],
+      [[-0.23, 0.14, -0.21], [0.05, 0.2, 0.3], hair],
+      [[0.18, 0.14, -0.21], [0.05, 0.2, 0.3], hair],
+      [[-0.2, 0.28, 0.19], [0.4, 0.06, 0.03], hair],
+      [[-0.14, 0.12, 0.195], [0.08, 0.11, 0.02], 0x2b2733],
+      [[0.06, 0.12, 0.195], [0.08, 0.11, 0.02], 0x2b2733],
+      [[-0.12, 0.19, 0.2], [0.03, 0.03, 0.02], 0xffffff],
+      [[0.08, 0.19, 0.2], [0.03, 0.03, 0.02], 0xffffff],
+      [[-0.05, 0.05, 0.195], [0.1, 0.03, 0.02], shade(skin, 0.8)],
+      ...(HATS[weight('head')]?.(tone(worn('head')), tone(worn('head'), 1)) ??
+        []),
+    ], kh),
+    [0, b.torso[1], 0],
+  )
   torso.add(head)
-  let cape = partOf([[
-    [-0.18, -0.46, -0.03],
-    [0.36, 0.48, 0.035],
-    shade(tint, 0.72),
-  ]], [0, 0.4, -0.16])
+  let cape = partOf(
+    fit([[[-0.18, -0.46, -0.03], [0.36, 0.48, 0.035], shade(tint, 0.72)]], kt),
+    [0, 0.4 * kt[1], -0.16 * kt[2]],
+  )
   torso.add(cape)
 
   // How the right hand rests: bent a little at the elbow, and what it holds
@@ -316,9 +419,10 @@ export let person = (
   return sewn({
     root,
     material: m,
-    height: 1.5,
+    height: stature(b) + 0.24,
     animate: (a, dt) => {
-      phase += dt * (2 + a.speed * 3.4)
+      // Shorter legs step quicker to keep up.
+      phase += dt * (2 + a.speed * 1.5 / b.hips)
       let amp = Math.min(1, a.speed / 4.5) * 0.85
       let s = Math.sin(phase), c = Math.cos(phase)
       stride(legL, s, c, amp)
@@ -369,9 +473,10 @@ export let person = (
 
 /** A hero in a player's colours, in what they wear. */
 export let hero = (
+  b: Build,
   look: { tint: string; hair: string; skin: string },
   dress: Dress = {},
-) => person(look, false, dress)
+) => person(b, look, false, dress)
 
 // Every body plan, by the name a row gives it.
 let PLANS: { [P in keyof Plans]: (l: Plans[P]) => Figure } = {

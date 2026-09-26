@@ -16,6 +16,7 @@ import { BEASTS } from './beasts.ts'
 import {
   type Act,
   beast,
+  type Build,
   type Dress,
   type Figure,
   hero,
@@ -61,11 +62,12 @@ let bar = (k: number, cls = '') =>
     Math.max(0, Math.min(1, k)).toFixed(3)
   }"></i></span>`
 
-/** The stage over one level's scene. */
+/** The stage over one level's scene, its people built `build`. */
 export let cast = (
   scene: THREE.Scene,
   v: Vale,
   plates: ReturnType<typeof overlay>,
+  build: Build,
 ) => {
   let actors = new Map<string, Actor>()
   let lootMat = soft({ speckle: 0.05 })
@@ -297,7 +299,7 @@ export let cast = (
       )
       let mine = actor(
         me,
-        () => hero(look, dress),
+        () => hero(build, look, dress),
         JSON.stringify([look, dress]),
       )
       let facing = work
@@ -326,7 +328,7 @@ export let cast = (
         let b = o.body
         let a = actor(
           o.eid,
-          () => hero(o.look, o.gear),
+          () => hero(build, o.look, o.gear),
           JSON.stringify([o.look, o.gear]),
         )
         glide(a, b.x, b.y, b.z, b.yaw, dt, 9)
@@ -441,7 +443,7 @@ export let cast = (
       // The people who give quests, with a mark over their heads when they
       // have something for me.
       for (let g of f.givers) {
-        let a = actor(g.id, () => person(g.look, g.staff))
+        let a = actor(g.id, () => person(build, g.look, g.staff))
         // A villager faces whoever is near, and otherwise the way they walk.
         let yaw = g.near < 8
           ? Math.atan2(f.body.x - g.x, f.body.z - g.z)
