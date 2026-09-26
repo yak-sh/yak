@@ -277,11 +277,13 @@ Deno.test('bounded worker subscriptions deliver transient text before final comp
   }
 })
 
-Deno.test('ten thousand large entries load only a bounded body window', async () => {
+// A window of eight out of a thousand: an unbounded read answers 4 MB of
+// bodies where the window answers 32 KB.
+Deno.test('a long transcript of large entries loads only a bounded body window', async () => {
   let store = await harness()
   try {
-    const body = 'x'.repeat(100000)
-    for (let offset = 0; offset < 10000; offset += 250) {
+    const body = 'x'.repeat(4000)
+    for (let offset = 0; offset < 1000; offset += 250) {
       await store.g.apply([
         ...offset == 0 ? [{ entity: { eid: 's' }, session: {} }] : [],
         ...Array.from(
@@ -296,8 +298,8 @@ Deno.test('ten thousand large entries load only a bounded body window', async ()
     }
     let page = await transcriptWindow(store.g, 's', { limit: 8 })
     assertEquals(page.entries.length, 8)
-    assertEquals(page.entries[0].entity.eid, 'e9992')
-    assert(JSON.stringify(page).length < 810000)
+    assertEquals(page.entries[0].entity.eid, 'e992')
+    assert(JSON.stringify(page).length < 42000)
   } finally {
     store.close()
   }
