@@ -27,6 +27,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A gate on a ref of your choosing, in that ref's own concurrency group, so a
+  # busy main cannot cancel it: `gh workflow run gate.yml --ref <branch>`.
+  workflow_dispatch:
 
 # One gate per ref. A second push supersedes the first — nobody reads the
 # verdict on a commit that is already history.
