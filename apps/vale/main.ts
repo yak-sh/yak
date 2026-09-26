@@ -8,7 +8,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { BEASTS } from './beasts.ts'
-import { aim, type Cam, steer } from './cam.ts'
+import { aim, bearing, type Cam, steer } from './cam.ts'
 import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
 import { type Figure, hero } from './figures.ts'
@@ -528,7 +528,7 @@ let loop = (t: number) => {
         )
       }
       let here = 1 + f.others.length
-      h.show(f, here, clockOf(w.day))
+      h.show(f, here, clockOf(w.day), bearing(cam.yaw))
       w.focus.set(f.body.x, f.body.y, f.body.z)
     }
   } else {

@@ -1,6 +1,6 @@
 // Everything on the glass: the hero's card (health, level, the xp to the
 // next), the quest being followed, the foe's health, who else is here, the
-// bag, the buttons a phone needs, the words of whoever you talk to, and the
+// compass, the bag, the buttons a phone needs, the words of whoever you talk to, and the
 // toasts that say what just happened. Each part is written only when what it shows changed.
 import type { Action } from './input.ts'
 import type { Frame, Sheet } from './play.ts'
@@ -38,6 +38,17 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
   let quest = el('Track')
   let foe = el('Foe')
   let who = el('Who')
+  // Up is the way the camera looks, and each letter stands where its way
+  // lies: style.css turns them by `--turn`, the bearing.
+  let rose = el(
+    'Rose',
+    ['N', 'E', 'S', 'W'].map((d, k) =>
+      `<i class="Rose_Mark${k ? '' : ' Rose_Mark-n'}" style="--at:${
+        k * 90
+      }deg">${d}</i><i class=Rose_Tick style="--at:${k * 90 + 45}deg"></i>`
+    ).join(''),
+  )
+  rose.title = 'Compass'
   let bag = el('Bag')
   let keys = el(
     'Keys',
@@ -91,6 +102,7 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     quest,
     foe,
     who,
+    rose,
     bag,
     keys,
     pads,
@@ -195,8 +207,8 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     get talking() {
       return !talk.hidden
     },
-    /** paint this frame */
-    show: (f: Frame, here: number, clock: string) => {
+    /** paint this frame, the camera looking `facing` degrees from north */
+    show: (f: Frame, here: number, clock: string, facing: number) => {
       let s = f.sheet
       let hp = f.vitals.hp
       let from = need(s.lvl), to = need(s.lvl + 1)
@@ -231,6 +243,10 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
         who,
         `<span class=Who_Dot></span>${here} here<span class=Who_Clock>${clock}</span>`,
       )
+      if (was.rose != String(facing)) {
+        was.rose = String(facing)
+        rose.style.setProperty('--turn', `${facing}deg`)
+      }
       let st = stacks(s)
       put(
         'bag',

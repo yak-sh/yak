@@ -404,10 +404,68 @@ body {
   color: #5b6555;
 }
 
+/* The compass, under who is here: up is the way the camera looks, and each
+   letter stands where its way lies, turned by --turn, the bearing (hud.ts).
+   The notch on its rim marks ahead. */
+.Rose {
+  --turn: 0deg;
+  --r: 1.28rem;
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top)) + 2.8rem);
+  right: max(12px, env(safe-area-inset-right));
+  width: 3.8rem;
+  height: 3.8rem;
+  border-radius: 50%;
+  background: rgba(251, 247, 234, 0.93);
+  box-shadow: 0 2px 0 rgba(160, 145, 105, 0.45), inset 0 0 0 2px #e2d8bc;
+}
+
+.Rose::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -0.2rem;
+  translate: -50% 0;
+  border: 0.24rem solid transparent;
+  border-top: 0.36rem solid var(--deep);
+  border-bottom: 0;
+}
+
+.Rose_Mark,
+.Rose_Tick {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(calc(var(--at) - var(--turn)))
+    translateY(calc(-1 * var(--r))) rotate(calc(var(--turn) - var(--at)));
+}
+
+.Rose_Mark {
+  font-style: normal;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #5b6555;
+}
+
+.Rose_Mark-n {
+  font-size: 1rem;
+  color: var(--ember);
+}
+
+.Rose_Tick {
+  --r: 1.34rem;
+  width: 0.24rem;
+  height: 0.22rem;
+  border-radius: 50%;
+  background: #c4b894;
+}
+
+/* The round buttons, in a column under the compass. */
 .Mute {
   position: absolute;
-  top: calc(max(12px, env(safe-area-inset-top)) + 2.7rem);
-  right: max(12px, env(safe-area-inset-right));
+  top: calc(max(12px, env(safe-area-inset-top)) + 7.2rem);
+  right: calc(max(12px, env(safe-area-inset-right)) + 0.8rem);
   width: 2.2rem;
   height: 2.2rem;
   border: 0;
@@ -421,7 +479,7 @@ body {
 
 /* The camera's button, under the sound's: faded while the camera is free. */
 .Mute-eye {
-  top: calc(max(12px, env(safe-area-inset-top)) + 5.2rem);
+  top: calc(max(12px, env(safe-area-inset-top)) + 9.7rem);
 }
 
 .Mute-off {
@@ -943,10 +1001,10 @@ body {
 
   .Bag {
     left: auto;
-    right: max(12px, env(safe-area-inset-right));
+    right: calc(max(12px, env(safe-area-inset-right)) + 4.3rem);
     bottom: auto;
-    top: calc(max(12px, env(safe-area-inset-top)) + 5.4rem);
-    max-width: 9rem;
+    top: calc(max(12px, env(safe-area-inset-top)) + 2.8rem);
+    max-width: 8rem;
     justify-content: flex-end;
   }
 

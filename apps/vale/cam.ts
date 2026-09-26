@@ -89,6 +89,18 @@ export let steer = (cam: Cam, i: Intent, yaw: number, dt: number) => {
   cam.yaw += off * (1 - Math.exp(-dt * k))
 }
 
+/** Which way the camera looks, in whole degrees clockwise from north (-z).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(bearing(0), 0) // from the south, looking north
+ * assertEquals(bearing(-Math.PI / 2), 90) // from the west, looking east
+ * assertEquals(bearing(Math.PI / 2 + 4 * Math.PI), 270)
+ * ```
+ */
+export let bearing = (yaw: number) =>
+  (Math.round(-yaw * 180 / Math.PI) % 360 + 360) % 360
+
 /** Put `camera` where the camera stands, looking at `target`: its distance
  * back, or nearer when the level is in the way, shaken by a blow. */
 export let aim = (
