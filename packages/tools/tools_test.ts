@@ -116,6 +116,24 @@ Deno.test('a runner writes only the tool rows the graph lacks or holds otherwise
   assertEquals((row.tool as Comp).description, 'Echo a value back')
 })
 
+Deno.test('a runner told which tool a call points at writes that row alone', async () => {
+  let { g } = world()
+  let shout = { ...echo, verb: 'shout', description: 'Echo it loudly' }
+  let r = runner(g, { tools: [echo, shout] })
+  let tools = async () => (await g.read('.tool&*')).map((b) => b.tool as Comp)
+  await r.ensure(['example_shout'])
+  assertEquals((await tools()).map((t) => t.name), ['example_shout'])
+  assertEquals(
+    await r.ensure(['example_shout']),
+    await r.ensure(['example_shout']),
+  )
+  await r.ensure()
+  assertEquals((await tools()).map((t) => t.name).sort(), [
+    'example_echo',
+    'example_shout',
+  ])
+})
+
 Deno.test('a claim is a claim: a second run of a call in flight is the same run', async () => {
   let { g, r } = world()
   await r.ensure()

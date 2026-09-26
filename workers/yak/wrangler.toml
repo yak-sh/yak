@@ -507,6 +507,7 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 "@modelcontextprotocol/sdk/server/mcp.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js"
 "@modelcontextprotocol/sdk/types.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/types.js"
 "@modelcontextprotocol/sdk/inMemory.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js"
+"@modelcontextprotocol/sdk/validation/ajv" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js"
 
 # Bindings and vars do not inherit into named environments. Repeat every
 # binding here so staging has its own resources. Migrations, containers and

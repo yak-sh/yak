@@ -112,10 +112,18 @@ export let READY = 'call_ready'
 /** The rule that selects a deferred call once its wake has fired. */
 export let WOKEN = 'call_woken'
 
+// Each name's id, derived once: it is a hash, and a server that builds a
+// runner per request names every tool it has each time.
+let eids = new Map<string, Eid>()
+
 /** The entity id a call points at for a tool of this name: the id the
  * vocabulary's `identity` on `tool.name` derives, so a graph's tool rows are
  * the same rows every time a runner is built. */
-export let toolEid = (name: string): Eid => identityEid('tool', [name])
+export let toolEid = (name: string): Eid => {
+  let eid = eids.get(name)
+  if (!eid) eids.set(name, eid = identityEid('tool', [name]))
+  return eid
+}
 
 /** What a runner is built with. */
 export type Opts = {
@@ -162,10 +170,12 @@ export type Runner = {
   rules: Ready[]
   /** the tools it runs, named */
   tools: NamedTool[]
-  /** write the `tool` rows that calls point at — done once per runner however
-   * many times it is called, so a request handler may call it on the way into
-   * every request */
-  ensure: () => Promise<Bundle[]>
+  /** write the `tool` rows that calls point at: the named tools', or every
+   * tool's. Each row is written at most once per runner however many times it
+   * is asked for, so a request handler may call it on the way into every
+   * call, naming the one tool that call points at. Answers what the rows it
+   * asked about were written as. */
+  ensure: (names?: string[]) => Promise<Bundle[]>
   /** invoke a tool: the call in, the answer's bundles out. The call is
    * written claimed and runs here; an `$alias` eid is given a fresh one. */
   call: (asked: Bundle) => Promise<Bundle[]>
@@ -377,7 +387,24 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let [holder] = await g.get([String(by)])
     return holder?.exit ? 'lapsed' : 'theirs'
   }
-  let ensured: Promise<Bundle[]> | undefined
+  // Each tool's row, as the batch that stood it up (`ensure`): one entry per
+  // tool name, several names sharing the batch they were written in.
+  let stood = new Map<string, Promise<Bundle[]>>()
+  // The rows of these tools that are missing or say something else, written.
+  let standing = (some: NamedTool[]): Promise<Bundle[]> =>
+    Promise.resolve(g.get(some.map((t) => toolEid(t.name)))).then((held) => {
+      let said = new Map(held.map((b) => [b.entity.eid, b.tool as Comp]))
+      let stale = some.filter((t) => {
+        let row = said.get(toolEid(t.name))
+        return row?.name != t.name || row?.description != t.description
+      })
+      return stale.length
+        ? g.apply(stale.map((t) => ({
+          entity: { eid: toolEid(t.name) },
+          tool: { name: t.name, description: t.description },
+        })))
+        : []
+    })
 
   // The answer, read back out of the graph: the result entity the rule named,
   // plus every entity recording that it came from this call. This is what a
@@ -656,26 +683,22 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   return {
     rules: plans,
     tools,
-    // Once per runner, however many callers ask, and only the rows that are
-    // missing or say something else: a tool row is the same row every time
-    // (its id is derived from the name), and writing it again would move an
-    // `updated` stamp for nothing — on every process that opens the graph.
-    ensure: () =>
-      ensured ??= Promise.resolve(
-        g.get(tools.map((t) => toolEid(t.name))),
-      ).then((held) => {
-        let said = new Map(held.map((b) => [b.entity.eid, b.tool as Comp]))
-        let stale = tools.filter((t) => {
-          let row = said.get(toolEid(t.name))
-          return row?.name != t.name || row?.description != t.description
-        })
-        return stale.length
-          ? g.apply(stale.map((t) => ({
-            entity: { eid: toolEid(t.name) },
-            tool: { name: t.name, description: t.description },
-          })))
-          : []
-      }),
+    // Once per tool per runner, however many callers ask, and only the rows
+    // that are missing or say something else: a tool row is the same row
+    // every time (its id is derived from the name), and writing it again would
+    // move an `updated` stamp for nothing — on every process that opens the
+    // graph. A caller that names the tool a call points at stands up that one
+    // row, which is what a server building a runner per request needs.
+    ensure: (names) => {
+      let asked = names ? tools.filter((t) => names.includes(t.name)) : tools
+      let fresh = asked.filter((t) => !stood.has(t.name))
+      if (fresh.length) {
+        let batch = standing(fresh)
+        for (let t of fresh) stood.set(t.name, batch)
+      }
+      let batches = new Set(asked.map((t) => stood.get(t.name)!))
+      return Promise.all(batches).then((all) => all.flat())
+    },
     // The call is written first, because it is the record: what was asked
     // stands whether or not an answer ever does. It is written claimed, and
     // the tool runs here, in this process, for this caller.

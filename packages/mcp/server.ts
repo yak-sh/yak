@@ -19,6 +19,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 // something the agent reads and corrects, not a broken connection.
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import {
@@ -64,9 +65,10 @@ export type Options = {
   /** the graph its tools read and write */
   graph: Graph
   /** the runner these tools are run by, when the calling program already has
-   * one. The HTTP handler builds a server per request and shares its runner,
-   * so the `tool` rows are written once for the process rather than once per
-   * request. Otherwise a runner is built here over `calls`. */
+   * one — and so the tools this server lists, which are the runner's. The HTTP
+   * handler builds a server per request and shares its runner, so the listing
+   * is built once and a `tool` row is written once for the process rather than
+   * once per request. Otherwise a runner is built here over `calls`. */
   runner?: Runner
   /** the graph a call and its result are recorded in (default: `graph`). A
    * server whose graph should not hold them — one composed over somebody
@@ -405,6 +407,11 @@ export let annotated = (
   openWorldHint: !!t.openWorld,
 })
 
+// The SDK's schema validator, which it consults only to check what a client
+// sent back to an elicitation, made once and shared.
+let ajv: AjvJsonSchemaValidator | undefined
+let validator = () => ajv ??= new AjvJsonSchemaValidator()
+
 /**
  * Build the MCP server for a graph: the generic tier (`graph_apply`,
  * `graph_query`, `graph_show`, `graph_schema`, and `search` when a
@@ -435,9 +442,12 @@ export let server = (opts: Options): McpServer => {
   }, {
     capabilities: { tools: {} },
     ...(opts.instructions ? { instructions: opts.instructions } : {}),
+    // One validator for every server this process builds: the SDK makes an
+    // Ajv instance per server otherwise, and a server is built per request.
+    jsonSchemaValidator: validator(),
   })
 
-  let tools = listing(opts).map(namedTool)
+  let tools = opts.runner?.tools ?? listing(opts).map(namedTool)
   // Where a call and its result are recorded, which is this graph unless the
   // caller passed a separate one (a server over a composition of stores, or a
   // connector that will not write a row into somebody else's store just
@@ -464,7 +474,7 @@ export let server = (opts: Options): McpServer => {
         ...(actor ? { $actor: { ...actor } } : {}),
       }
       try {
-        await run.ensure()
+        await run.ensure([t.name])
         let landed = await run.call(asked)
         out = said(t, answerOf(landed), faulted(landed))
       } catch (err) {

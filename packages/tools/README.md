@@ -81,7 +81,9 @@ what a kept write would have returned, and stores only its own bookkeeping.
 ## Ordinary usage
 
 Load the vocabulary into a graph, create a runner with the tools available in
-the current process, and register their `tool` entities with `ensure()`:
+the current process, and register their `tool` entities with `ensure()` (or
+`ensure(['person_greet'])` for just the tools named, which is what a server does
+on the way into each call):
 
 ```ts
 import { argsOf, graph, type Tool } from '@yaks/graph'

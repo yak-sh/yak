@@ -145,9 +145,14 @@ export let core = (opts: CoreOpts): Tool[] => {
   let { vocab, prop } = opts
   // What a write accepts: the same bundle, narrowed to what a client may
   // write. Always `full` — a write tool that leaves a property's type to the
-  // reader is a tool an agent guesses at (T-34153).
-  let writes = z.array(
-    bundleSchema(vocab, { depth: 'full', nulls: true, write: true, prop }),
+  // reader is a tool an agent guesses at (T-34153). It is the largest schema a
+  // server has, and most calls neither write nor list the tools, so it is
+  // built the first time one of them reads it, once.
+  let built: z.ZodTypeAny | undefined
+  let writes = z.lazy(() =>
+    built ??= z.array(
+      bundleSchema(vocab, { depth: 'full', nulls: true, write: true, prop }),
+    )
   )
   return tier({
     search: opts.search,
