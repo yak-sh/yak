@@ -169,7 +169,7 @@ Each log writes as one host (`log({ rows, host })`, a fresh id by default), and
 every transaction records it, so a host can follow the feed and keep only what
 someone else wrote:
 
-```ts
+```ts ignore
 let next = follow(j) // from the log's tip
 // …another host commits…
 next() // [{ seq, applied: [{ entity: { eid: 'p1' }, page: { title: 'Hi' } }] }]

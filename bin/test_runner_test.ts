@@ -1,7 +1,40 @@
 import { until } from './testing.ts'
 import { fileURLToPath } from 'node:url'
 import { assertEquals, assertThrows } from '@std/assert'
-import { shards } from './test.ts'
+import { pages, RUN, shards } from './test.ts'
+
+Deno.test('examples come from the packages, and never a module by name', async () => {
+  let got = await pages([
+    'bin',
+    'workers',
+    'packages',
+    'packages/graph',
+    'packages/graph/graph.ts',
+    'packages/graph/README.md',
+  ])
+  assertEquals(got.every((p) => p.startsWith('packages/')), true, got.join())
+  assertEquals(got.some((p) => /\.tsx?$/.test(p)), false, got.join())
+  // `packages` holds only tests of its own, so each package is its own piece.
+  assertEquals(got.includes('packages'), false)
+  assertEquals(got.filter((p) => p == 'packages/graph').length, 1)
+  assertEquals(got.includes('packages/graph/README.md'), true)
+})
+
+Deno.test('a run started inside a run refuses at once', async () => {
+  let out = await new Deno.Command(Deno.execPath(), {
+    // A path that names nothing: a runner without the refusal fails on it
+    // at once, rather than starting the suite from inside this test.
+    args: [
+      'run',
+      '-A',
+      fileURLToPath(new URL('./test.ts', import.meta.url)),
+      'no/such/path',
+    ],
+    env: { [RUN]: '1' },
+  }).output()
+  assertEquals(out.code, 2)
+  assertEquals(/refused/.test(new TextDecoder().decode(out.stderr)), true)
+})
 
 Deno.test('bulk shards are bounded, deterministic and run every module once', () => {
   assertEquals(shards([], 8), [])

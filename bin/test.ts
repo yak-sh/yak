@@ -13,6 +13,10 @@ import { denoDir } from './testing.ts'
 
 export let ROOTS = ['packages', 'bin', 'workers']
 
+/** Set in a run's environment, naming the run: every process it starts
+ * inherits it, so a run started from inside one refuses. */
+export let RUN = 'TASKS_TEST_RUN'
+
 /** A test that runs against the run's kernel, in workerd. */
 export let workerd = (file: string) => /_workerd_test\.tsx?$/.test(file)
 
@@ -21,25 +25,40 @@ export let workerd = (file: string) => /_workerd_test\.tsx?$/.test(file)
 // were this repo's, against an import map that is not its own.
 let SKIP = ['vendor', 'node_modules', '.wrangler']
 
-/** Where the examples under `roots` are read from, in pieces a shard can
- * take: each directory's own files and its subdirectories, never a test. */
-export async function pages(roots = ROOTS) {
+/** Where examples are run from: the packages, never a script. */
+export let DOCS = 'packages'
+
+let module = (name: string) => /\.tsx?$/.test(name)
+let test = (name: string) => /_test\.tsx?$/.test(name)
+
+/** The pieces of `roots` whose examples a shard runs: a directory, or a
+ * README.
+ *
+ * Never a module by name: `deno test --doc a.ts` runs a.ts itself, where a
+ * directory only has its examples read. A directory whose own files are all
+ * tests (`packages`) is taken one subdirectory at a time. */
+export async function pages(roots = [DOCS]) {
   let out: string[] = []
   for (let root of roots) {
-    let path = root.replace(/\/+$/, '')
+    let path = root.replace(/^\.\//, '').replace(/\/+$/, '')
+    if (path != DOCS && !path.startsWith(`${DOCS}/`)) continue
     if (!(await Deno.stat(path)).isDirectory) {
-      if (!/_test\.tsx?$/.test(path)) out.push(path)
+      if (path.endsWith('.md')) out.push(path)
       continue
     }
-    for await (let entry of Deno.readDir(path)) {
-      let at = `${path}/${entry.name}`
-      if (entry.isDirectory && !SKIP.includes(entry.name)) out.push(at)
-      else if (entry.isFile && /\.(tsx?|md)$/.test(entry.name)) {
-        if (!/_test\.tsx?$/.test(entry.name)) out.push(at)
-      }
+    let entries = await Array.fromAsync(Deno.readDir(path))
+    let own = entries.some((e) => e.isFile && module(e.name) && !test(e.name))
+    if (own) {
+      out.push(path)
+      continue
+    }
+    for (let e of entries) {
+      let at = `${path}/${e.name}`
+      if (e.isDirectory && !SKIP.includes(e.name)) out.push(at)
+      else if (e.isFile && e.name.endsWith('.md')) out.push(at)
     }
   }
-  return out.sort()
+  return [...new Set(out)].sort()
 }
 
 export async function inventory(roots = ROOTS) {
@@ -385,6 +404,15 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   for (let line of failed) console.error(line)
   if (failed.length) Deno.exit(1)
 } else if (import.meta.main) {
+  let outer = Deno.env.get(RUN)
+  if (outer) {
+    console.error(
+      `bin/test.ts: refused — this is inside test run ${outer}, and a test ` +
+        'never starts the suite (it would start itself again, and again)',
+    )
+    Deno.exit(2)
+  }
+  Deno.env.set(RUN, String(Deno.pid))
   let only = Deno.args.find((a) => a.startsWith('--only='))?.slice(7)
   let paths = Deno.args.filter((a) => !a.startsWith('--only='))
   let roots = paths.length ? paths : ROOTS
