@@ -31,7 +31,7 @@ let rule = (cls, left, middle, right = left) => {
 export let head = (title) => rule('Man_Head', title, 'yaks manual')
 
 /** The foot: the release the page describes, and its name again. */
-export let foot = (title) => rule('Man_Foot', 'yaks 0.2.2', 'yak.sh', title)
+export let foot = (title) => rule('Man_Foot', 'yaks 0.2.3', 'yak.sh', title)
 
 /** The tube over its elements: `crt` (power, phosphor, degauss), `panes`
  * (zoom), `man` and its title and hint, `ghost`, `bar`. */

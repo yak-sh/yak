@@ -3,7 +3,7 @@
 // between them), and a running account of the modules as they arrive, which
 // is what the boot log prints.
 
-// A module esm.sh served for one of the @yaks packages: `@yaks/graph@0.2.2`.
+// A module esm.sh served for one of the @yaks packages: `@yaks/graph@0.2.3`.
 let named = (url) => url.match(/\/jsr\/(@yaks\/[a-z0-9-]+@[\d.]+)/)?.[1]
 
 let esm = (entry) => entry.name.startsWith('https://esm.sh/')

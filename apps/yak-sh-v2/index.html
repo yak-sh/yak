@@ -21,38 +21,33 @@
   <link rel=stylesheet href=disk.css>
   <link rel=stylesheet href=man.css>
   <link rel=stylesheet href=doc.css>
-  <!-- Every @yaks package at 0.2.2, as JSR holds it, built by esm.sh.
-       TODO: @yaks/cli 0.2.2's root re-exports its command (./yak), whose
-       signal handling reads Deno.build.os as it loads, so a page importing
-       the root throws. @yaks/cli is mapped to the two files yak.js uses.
-       The root stops re-exporting the command on main; once the release
-       after 0.2.2 is on JSR, map it straight to esm.sh like the rest. -->
+  <!-- Every @yaks package at 0.2.3, as JSR holds it, built by esm.sh. -->
   <script type=importmap>
   {
     "imports": {
-      "@yaks/vocab": "https://esm.sh/jsr/@yaks/vocab@0.2.2",
-      "@yaks/graph": "https://esm.sh/jsr/@yaks/graph@0.2.2",
-      "@yaks/graph/tools": "https://esm.sh/jsr/@yaks/graph@0.2.2/tools",
-      "@yaks/ram": "https://esm.sh/jsr/@yaks/ram@0.2.2",
-      "@yaks/kernel/vocab": "https://esm.sh/jsr/@yaks/kernel@0.2.2/vocab",
-      "@yaks/doc": "https://esm.sh/jsr/@yaks/doc@0.2.2",
-      "@yaks/doc/views": "https://esm.sh/jsr/@yaks/doc@0.2.2/views",
-      "@yaks/edge": "https://esm.sh/jsr/@yaks/edge@0.2.2",
-      "@yaks/task": "https://esm.sh/jsr/@yaks/task@0.2.2",
-      "@yaks/task/tools": "https://esm.sh/jsr/@yaks/task@0.2.2/tools",
-      "@yaks/task/views": "https://esm.sh/jsr/@yaks/task@0.2.2/views",
-      "@yaks/project": "https://esm.sh/jsr/@yaks/project@0.2.2",
-      "@yaks/id": "https://esm.sh/jsr/@yaks/id@0.2.2",
-      "@yaks/id/vocab": "https://esm.sh/jsr/@yaks/id@0.2.2/vocab",
-      "@yaks/id/rules": "https://esm.sh/jsr/@yaks/id@0.2.2/rules",
-      "@yaks/model": "https://esm.sh/jsr/@yaks/model@0.2.2",
-      "@yaks/session": "https://esm.sh/jsr/@yaks/session@0.2.2",
-      "@yaks/session/views": "https://esm.sh/jsr/@yaks/session@0.2.2/views",
-      "@yaks/tools": "https://esm.sh/jsr/@yaks/tools@0.2.2",
-      "@yaks/tools/vocab": "https://esm.sh/jsr/@yaks/tools@0.2.2/vocab",
-      "@yaks/tools/views": "https://esm.sh/jsr/@yaks/tools@0.2.2/views",
-      "@yaks/cli": "data:text/javascript,export { cli, helpTool } from 'https://esm.sh/jsr/@yaks/cli@0.2.2/run.ts'; export { registry, show } from 'https://esm.sh/jsr/@yaks/cli@0.2.2/answer.ts'",
-      "@yaks/markdown": "https://esm.sh/jsr/@yaks/markdown@0.2.2",
+      "@yaks/vocab": "https://esm.sh/jsr/@yaks/vocab@0.2.3",
+      "@yaks/graph": "https://esm.sh/jsr/@yaks/graph@0.2.3",
+      "@yaks/graph/tools": "https://esm.sh/jsr/@yaks/graph@0.2.3/tools",
+      "@yaks/ram": "https://esm.sh/jsr/@yaks/ram@0.2.3",
+      "@yaks/kernel/vocab": "https://esm.sh/jsr/@yaks/kernel@0.2.3/vocab",
+      "@yaks/doc": "https://esm.sh/jsr/@yaks/doc@0.2.3",
+      "@yaks/doc/views": "https://esm.sh/jsr/@yaks/doc@0.2.3/views",
+      "@yaks/edge": "https://esm.sh/jsr/@yaks/edge@0.2.3",
+      "@yaks/task": "https://esm.sh/jsr/@yaks/task@0.2.3",
+      "@yaks/task/tools": "https://esm.sh/jsr/@yaks/task@0.2.3/tools",
+      "@yaks/task/views": "https://esm.sh/jsr/@yaks/task@0.2.3/views",
+      "@yaks/project": "https://esm.sh/jsr/@yaks/project@0.2.3",
+      "@yaks/id": "https://esm.sh/jsr/@yaks/id@0.2.3",
+      "@yaks/id/vocab": "https://esm.sh/jsr/@yaks/id@0.2.3/vocab",
+      "@yaks/id/rules": "https://esm.sh/jsr/@yaks/id@0.2.3/rules",
+      "@yaks/model": "https://esm.sh/jsr/@yaks/model@0.2.3",
+      "@yaks/session": "https://esm.sh/jsr/@yaks/session@0.2.3",
+      "@yaks/session/views": "https://esm.sh/jsr/@yaks/session@0.2.3/views",
+      "@yaks/tools": "https://esm.sh/jsr/@yaks/tools@0.2.3",
+      "@yaks/tools/vocab": "https://esm.sh/jsr/@yaks/tools@0.2.3/vocab",
+      "@yaks/tools/views": "https://esm.sh/jsr/@yaks/tools@0.2.3/views",
+      "@yaks/cli": "https://esm.sh/jsr/@yaks/cli@0.2.3",
+      "@yaks/markdown": "https://esm.sh/jsr/@yaks/markdown@0.2.3",
       "preact": "https://esm.sh/preact@10.29.1"
     }
   }
