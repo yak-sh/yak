@@ -40,6 +40,15 @@ export type Me = {
   signIn: string | null
 }
 
+/** One of a person's heroes, as the gate lists them. */
+export type Hero = {
+  eid: string
+  name: string
+  tint: string
+  hair: string
+  skin: string
+}
+
 export let vocab = loadVocab([words])
 
 // How long rows wait to be sent together: under the door's 30 a minute.
@@ -148,9 +157,32 @@ export let connect = (base: URL) => {
       tab.set(eid)
       follow(eid)
     },
-    /** the heroes a person made */
-    heroes: (person: string): Watch =>
-      c.watch(`.player&.created.by=${JSON.stringify(person)}`),
+    /** the heroes a person made, as the store answers now.
+     *
+     * TODO: a watch on the client, once a page's client can know the store's
+     * whole vocabulary. The store stamps `created` in the platform's own words
+     * (workers/yak/vocab.ts `coreDoc`), which no door serves and no package
+     * exports, so this page's vocabulary lacks `created` and the client
+     * refuses to route `created.by`. Until then the store's query door
+     * answers it. */
+    heroes: async (person: string): Promise<Hero[]> => {
+      let q = `.player&.created.by=${JSON.stringify(person)}`
+      let r = await fetch(new URL(`query?${encodeURIComponent(q)}`, base))
+      let rows: unknown = r.ok ? await r.json() : []
+      return (Array.isArray(rows) ? rows : []).flatMap((row) => {
+        let eid = row?.entity?.eid
+        let p = row?.player
+        return typeof eid == 'string' && p && typeof p == 'object'
+          ? [{
+            eid,
+            name: str(p.name, 'Wanderer'),
+            tint: str(p.tint, '#c95f4a'),
+            hair: str(p.hair, '#5a3a26'),
+            skin: str(p.skin, '#e7b996'),
+          }]
+          : []
+      })
+    },
     /** my rows of one kind: what the store holds, and what is waiting */
     mine: (name: string): Bundle[] =>
       join(name, own[name]?.value ?? none, name),

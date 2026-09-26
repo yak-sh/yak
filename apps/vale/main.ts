@@ -15,7 +15,7 @@ import { hud } from './hud.ts'
 import { listen } from './input.ts'
 import { ITEMS } from './items.ts'
 import { LEVELS } from './levels.ts'
-import { type Bundle, comp, connect, type Me, str } from './net.ts'
+import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { type Event, type Frame, game } from './play.ts'
 import { clamp } from './rand.ts'
 import { sound } from './sound.ts'
@@ -248,31 +248,28 @@ let make = (who: Me, back: (() => void) | null) => {
 }
 
 // Choose one of your heroes, or make another.
-let choose = (who: Me, heroes: Bundle[]) => {
+let choose = (who: Me, heroes: Hero[]) => {
   gateCard.innerHTML = `${TITLE}
     <p class=Gate_Lede>Welcome back${
     who.name ? `, ${esc(who.name.split(/\s/)[0])}` : ''
   }. Who walks the vale today?</p>
     <div class=Heroes>${
-    heroes.map((b) => {
-      let p = comp(b, 'player')
-      return `<button class=Hero data-eid="${
-        esc(b.entity.eid)
-      }" style="--tint:${esc(str(p.tint, '#c95f4a'))};--hair:${
-        esc(str(p.hair, '#5a3a26'))
-      };--skin:${esc(str(p.skin, '#e7b996'))}"><i class=Hero_Face></i><b>${
-        esc(str(p.name, 'Wanderer'))
-      }</b></button>`
-    }).join('')
+    heroes.map((o) =>
+      `<button class=Hero data-eid="${esc(o.eid)}" style="--tint:${
+        esc(o.tint)
+      };--hair:${esc(o.hair)};--skin:${
+        esc(o.skin)
+      }"><i class=Hero_Face></i><b>${esc(o.name)}</b></button>`
+    ).join('')
   }</div>
     <button class=Btn data-do=new>A new hero</button>
     ${NOTE}`
   gateCard.querySelectorAll<HTMLElement>('.Hero').forEach((b) =>
     b.addEventListener('click', () => {
-      let eid = b.dataset.eid ?? ''
-      begin(eid)
-      let p = comp(heroes.find((x) => x.entity.eid == eid), 'player')
-      h.toast(`Welcome back, ${str(p.name, 'Wanderer')}.`, 'Toast-big')
+      let o = heroes.find((x) => x.eid == b.dataset.eid)
+      if (!o) return
+      begin(o.eid)
+      h.toast(`Welcome back, ${o.name}.`, 'Toast-big')
     })
   )
   gateCard.querySelector('[data-do=new]')?.addEventListener(
@@ -610,11 +607,10 @@ if (!me.reads) {
 } else if (me.person) {
   // Signed in: your heroes, wherever you made them.
   look.name = me.name?.split(/\s/)[0] ?? ''
-  let heroes = net.heroes(me.person)
-  await ready(heroes)
+  let heroes = await net.heroes(me.person)
   let played = net.played()
-  if (played && heroes.value.some((b) => b.entity.eid == played)) begin(played)
-  else if (heroes.value.length) choose(me, heroes.value)
+  if (played && heroes.some((o) => o.eid == played)) begin(played)
+  else if (heroes.length) choose(me, heroes)
   else make(me, null)
 } else {
   // Signed out: the hero this tab has been playing, or a new one.
