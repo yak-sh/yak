@@ -38,8 +38,9 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
   let quest = el('Track')
   let foe = el('Foe')
   let who = el('Who')
-  // Up is the way the camera looks, and each letter stands where its way
-  // lies: style.css turns them by `--turn`, the bearing.
+  // The compass, which opens the map. Up is the way the camera looks, and
+  // each letter stands where its way lies: style.css turns them by
+  // `--turn`, the bearing.
   let rose = el(
     'Rose',
     ['N', 'E', 'S', 'W'].map((d, k) =>
@@ -47,15 +48,21 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
         k * 90
       }deg">${d}</i><i class=Rose_Tick style="--at:${k * 90 + 45}deg"></i>`
     ).join(''),
+    'button',
   )
-  rose.title = 'Compass'
+  rose.title = 'The map (M)'
+  rose.addEventListener('pointerdown', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    press('map')
+  })
   let bag = el('Bag')
   let keys = el(
     'Keys',
     '<span><kbd>WASD</kbd> move</span><span><kbd>Space</kbd> jump</span>' +
       '<span><kbd>F</kbd> or click: strike</span>' +
       '<span><kbd>Shift</kbd> or right-click: dodge</span><span><kbd>E</kbd> talk</span>' +
-      '<span><kbd>C</kbd> camera behind</span>' +
+      '<span><kbd>C</kbd> camera behind</span><span><kbd>M</kbd> map</span>' +
       '<span><kbd>Enter</kbd> chat</span>' +
       '<span><kbd>1</kbd> tonic</span><span>drag: look</span>',
   )

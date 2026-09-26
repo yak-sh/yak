@@ -2,8 +2,8 @@
 // the page: it grows the level the hero is in, opens the store, asks who you
 // are and which of your heroes to play, and then runs the frame: the player's
 // hands (input.ts), a step of the game on the graph (play.ts), the stage
-// (cast.ts), the bits and numbers (fx.ts), the glass (hud.ts) and what was
-// said (chatbox.ts). When the hero walks off the end of a road, the page
+// (cast.ts), the bits and numbers (fx.ts), the glass (hud.ts), what was said
+// (chatbox.ts) and the map (map.ts). When the hero walks off the end of a road, the page
 // grows the level beyond and carries on there.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
@@ -11,6 +11,7 @@ import { BEASTS } from './beasts.ts'
 import { aim, bearing, type Cam, steer } from './cam.ts'
 import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
+import { map } from './map.ts'
 import { type Figure, hero } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { hud } from './hud.ts'
@@ -103,6 +104,7 @@ let hands = listen(canvas, glass, () => typing || h.talking || chat.typing)
 let h = hud(glass, hands.press)
 let marks = overlay(h.layer, camera)
 let chat = chatbox(glass, net, marks)
+let m = map(glass)
 
 // The level on show, and what is drawn of it: grown again when the hero goes
 // off the end of a road.
@@ -470,6 +472,7 @@ let loop = (t: number) => {
   w.tick(now / 1000, dt)
   if (playing && net.hero) {
     let i = hands.read()
+    if (i.map) m.toggle()
     if (h.talking) {
       Object.assign(i, {
         move: [0, 0],
@@ -529,6 +532,7 @@ let loop = (t: number) => {
       }
       let here = 1 + f.others.length
       h.show(f, here, clockOf(w.day), bearing(cam.yaw))
+      m.show(f, v)
       w.focus.set(f.body.x, f.body.y, f.body.z)
     }
   } else {
