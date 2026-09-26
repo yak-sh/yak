@@ -10,8 +10,8 @@
 //
 // Two ways to run it.
 //
-//   In memory (`deno task test`), against a kernel of its own and its
-//   throwaway store, and everything runs, purchases included: the money
+//   In memory (`deno task test`), against the kernel its process shares and
+//   its throwaway stores, and everything runs, purchases included: the money
 //   paths talk to Stripe's own sandbox with a test-mode key, never a
 //   stand-in. Set these first, or the money steps fail naming them:
 //
@@ -118,7 +118,7 @@ Deno.test(
     // hostname attached for real would be written on the zone that serves
     // yaks.app, and a domain is a third party, not a purchase. Stripe is the
     // one third party this suite talks to for real.
-    // A deployed run has no kernel of its own, so nothing here is bought.
+    // A deployed run has no kernel in memory, so nothing here is bought.
     let local = LIVE ? undefined : await kernel()
     let k = local ?? deployed(LIVE)
     // Every space this run made and has not yet erased.

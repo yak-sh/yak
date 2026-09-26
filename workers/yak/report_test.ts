@@ -1,4 +1,4 @@
-// A page's own breaks, through the whole kernel (probe.ts `kernel` kernel): the
+// A page's own breaks, through the whole kernel (probe.ts `kernel`): the
 // kernel injects the reporter into every page it serves, says where the
 // browser should send what it notices, and takes both shapes of report at
 // `POST /api/report` — which puts an `exception` in the app's store, where

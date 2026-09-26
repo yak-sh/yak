@@ -388,8 +388,7 @@ Deno.test('the kernel routes, vouches, serves, and surfaces', async () => {
 Deno.test('an app says who may read it and who may write it', async () => {
   let k = await kernel()
   try {
-    // He signs in for real: the address is his, and the first sign-in on a
-    // fresh kernel owns the meta space.
+    // He signs in for real: the address is his.
     let { cookie, email, name } = await signIn(k)
     let agent = connector(k, cookie)
     await agent.tool('space_new', { slug: 'club70', title: 'Book club70' })

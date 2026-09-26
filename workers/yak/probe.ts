@@ -1,13 +1,14 @@
 // The kernel under test, and how a test drives it. `kernel` is the kernel in
 // memory: kernel.ts's handler over the platform testing.ts stands up, one per
-// test, on a port of its own. `workerd` is the one kernel a run shares in the
-// runtime itself (probe-suite.ts), for what only the runtime has: a socket, a
-// letter at its email door, a script beside the kernel. Both are driven over
-// HTTP the way a browser or a headless client would — a hostname rides
-// `x-yak-host`, since fetch refuses a Host header and the kernel honors ours
-// on a dev host (route.ts) — and both are configured alike (`vars`). A test on
-// the shared kernel keeps to data of its own: a person `signIn` mints, a space
-// or an address nobody else uses.
+// test process, on a port of its own (`fresh` is one of a test's own).
+// `workerd` is the one kernel a run shares in the runtime itself
+// (probe-suite.ts), for what only the runtime has: a socket, a letter at its
+// email door, a script beside the kernel. Both are driven over HTTP the way a
+// browser or a headless client would — a hostname rides `x-yak-host`, since
+// fetch refuses a Host header and the kernel honors ours on a dev host
+// (route.ts) — and both are configured alike (`vars`). A test on a shared
+// kernel keeps to data of its own: a person `signIn` mints, a space or an
+// address nobody else uses.
 //
 // `script` below runs a Worker that is not the kernel at all — the modules an
 // app's own script is made of — in the same workerd, beside it.
@@ -147,13 +148,13 @@ let toml = () =>
   ) as Toml
 
 /**
- * The kernel in memory, for one test: kernel.ts's handler over the platform
+ * The kernel in memory, started: kernel.ts's handler over the platform
  * testing.ts stands up, with wrangler.toml's vars and rate limits and the
  * run's config (`vars`), served on a port of its own. Its owner signs in
- * first, as the shared kernel's does, since the first person to sign in owns
- * the meta space.
+ * first, as the workerd kernel's does, since the first person to sign in owns
+ * the meta space. `close` ends it.
  */
-export let kernel = async (): Promise<Kernel> => {
+let boot = async () => {
   // Loaded when a test asks: the runner imports this module for its Stripe
   // helpers and has no use for the kernel's whole graph.
   let [{ handler }, { emailed, limiter, platform }] = await Promise.all([
@@ -198,14 +199,42 @@ export let kernel = async (): Promise<Kernel> => {
     cf.url,
   )
   try {
-    return owning(
-      { ...door, owner: await signIn(door, `owner@${apex()}`) },
-      close,
-    )
+    return { ...door, owner: await signIn(door, `owner@${apex()}`), close }
   } catch (e) {
     await close()
     throw e
   }
+}
+
+// This process's kernel, started by the first test that asks for one.
+let shared: ReturnType<typeof boot> | undefined
+
+/**
+ * The kernel in memory this test process shares: started by the first test
+ * that asks, and running until the process ends, so the deno platform starts
+ * its kernel once per process as the workerd platform does once per run
+ * (M-39441). A test on it keeps to data of its own, as a test on `workerd`
+ * does, and its `stop` deletes what it made in the Stripe sandbox and leaves
+ * the kernel to the next test.
+ */
+export let kernel = async (): Promise<Kernel> => {
+  let { close: _, ...k } = await (shared ??= boot().then((k) => {
+    // Nothing is awaited as a process ends, and all the kernel holds ends
+    // with it but the file its letters are logged to.
+    addEventListener('unload', () => Deno.removeSync(k.log))
+    return k
+  }))
+  return owning(k)
+}
+
+/**
+ * A kernel in memory of one test's own, started for it and ended by its
+ * `stop`: for a test that needs the kernel whole, such as one that times a
+ * store's first wake.
+ */
+export let fresh = async (): Promise<Kernel> => {
+  let { close, ...k } = await boot()
+  return owning(k, close)
 }
 
 /** The run's kernel in workerd (probe-suite.ts), as one test holds it. */

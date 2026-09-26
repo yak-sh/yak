@@ -6,7 +6,7 @@
 // start outside the span.
 //
 //   deno bench -A --unstable-net workers/yak/signin_bench.ts
-import { type Kernel, kernel, mailed } from './probe.ts'
+import { fresh, type Kernel, mailed } from './probe.ts'
 
 let form = (k: Kernel, path: string, fields: Record<string, string>) =>
   k.at('yaks.app', path, {
@@ -20,7 +20,7 @@ Deno.bench(
   'a cold sign-in: the card, the address, the code, the page',
   { n: 20, warmup: 2 },
   async (b) => {
-    let k = await kernel()
+    let k = await fresh()
     try {
       let email = 'cold@yaks.app'
       b.start()

@@ -1,6 +1,6 @@
-// The store client an app's pages import, through the whole kernel (probe.ts `kernel`
-// kernel): the kernel serves public/client.js beside every app's doors, and a
-// page that imports it saves and lists the app's own entities.
+// The store client an app's pages import, through the whole kernel (probe.ts
+// `kernel`): the kernel serves public/client.js beside every app's doors, and
+// a page that imports it saves and lists the app's own entities.
 //
 // The page here is a module, and it runs where the test runs: Deno loads the
 // bytes the kernel served and calls them. What a browser gives a page and a

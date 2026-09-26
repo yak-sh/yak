@@ -1,4 +1,4 @@
-// The identity part, through the whole kernel (probe.ts `kernel` kernel): a person
+// The identity part, through the whole kernel (probe.ts `kernel`): a person
 // signs in by receiving mail, the browser carries the platform cookie into an
 // app, the first person ever owns the meta space, a mistyped code is refused
 // softly — and an agent walks the whole OAuth 2.1 flow, from a client that
@@ -1020,9 +1020,8 @@ Deno.test('account settings save the name and address', async () => {
 // The connector page, signed in: how to hand this platform to the assistant a
 // person already talks to (T-32972), and beside it the address their apps will
 // live at, theirs to change inline while nothing is built there (T-32967). A
-// stranger asking for it is sent to sign in (T-34408). Its own kernel, because
-// the first sign-in on one owns the meta space, which is the door every
-// directory read below goes through.
+// stranger asking for it is sent to sign in (T-34408). Every directory read
+// below goes through the meta space's door, which is the kernel's owner's.
 Deno.test('the connector page, and the address chosen on it', async () => {
   let k = await kernel()
   let uniq = () => crypto.randomUUID().slice(0, 8)
