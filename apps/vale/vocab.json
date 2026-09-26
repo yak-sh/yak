@@ -107,9 +107,17 @@
           "description": "The creature they fight."
         },
         "dealt": {
-          "type": "string",
-          "format": "json",
-          "description": "What they have dealt each creature they are hurting, as JSON text: a list of {foe, life, dmg, held}, the creature, which life of it (when it last fell, in ms), the damage dealt it in that life, and until when their blows hold it still, in ms (rules.ts `Dealt`)."
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "foe": { "type": "string" },
+              "life": { "type": "number" },
+              "dmg": { "type": "number" },
+              "held": { "type": "number" }
+            }
+          },
+          "description": "What they have dealt each creature they are hurting, one for each: the creature, which life of it (when it last fell, in ms), the damage dealt it in that life, and until when their blows hold it still, in ms (rules.ts `Dealt`)."
         },
         "swing": {
           "type": "number",

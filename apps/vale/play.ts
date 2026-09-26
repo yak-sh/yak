@@ -294,22 +294,15 @@ let vitals = (b: Bundle | undefined): Vitals | null => {
 }
 let rec = (v: unknown): Record<string, unknown> =>
   v && typeof v == 'object' ? Object.fromEntries(Object.entries(v)) : {}
-// TODO(T-37988): a fight's dealings ride as JSON text until an app may
-// declare an array property; then they are the array itself.
-let dealtOf = (text: unknown): Dealt[] => {
-  let list: unknown
-  try {
-    list = JSON.parse(str(text, '[]'))
-  } catch {
-    list = []
-  }
-  return (Array.isArray(list) ? list : []).map(rec).map((d) => ({
+// A fight's dealings, one a creature; what a peer sent that is no list says
+// none.
+let dealtOf = (list: unknown): Dealt[] =>
+  (Array.isArray(list) ? list : []).map(rec).map((d) => ({
     foe: str(d.foe),
     life: num(d.life),
     dmg: num(d.dmg),
     held: num(d.held),
   }))
-}
 let fight = (b: Bundle | undefined) => {
   let f = comp(b, 'fight')
   return {
@@ -1353,10 +1346,7 @@ export let game = (
         change.push({ entity: { eid: me }, vitals: vitalsNow })
       }
       if (JSON.stringify(fought) != JSON.stringify(mine)) {
-        change.push({
-          entity: { eid: me },
-          fight: { ...fought, dealt: JSON.stringify(fought.dealt) },
-        })
+        change.push({ entity: { eid: me }, fight: fought })
       }
       net.move(change)
       net.tick()
