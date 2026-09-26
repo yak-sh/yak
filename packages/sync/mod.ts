@@ -74,7 +74,7 @@ export {
   type Report,
   type Trouble,
 } from './outbound.ts'
-export { land, snapshot, strip } from './inbound.ts'
+export { hear, land, snapshot, strip } from './inbound.ts'
 export {
   type Ask,
   backoff,
@@ -86,7 +86,15 @@ export {
   wire,
   type WireOpts,
 } from './socket.ts'
-export { durableOf, inverse, local, outbound, outward, syncOf } from './tier.ts'
+export {
+  durableOf,
+  inverse,
+  local,
+  outbound,
+  outward,
+  stored,
+  syncOf,
+} from './tier.ts'
 export {
   asked,
   asking,

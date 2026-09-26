@@ -70,9 +70,10 @@ export type Frame = {
   gone?: Eid[]
   /**
    * `sync: peers` components the server is relaying: somebody's cursor, a
-   * caret, a presence dot. Never stored, on either end. A value cleared by its
-   * writer — or by that writer's connection closing — arrives as the component
-   * set to `null`.
+   * caret, a presence dot. The server keeps none of it, and a client holds it
+   * in its graph's memory until it is cleared: a value cleared by its writer —
+   * or by that writer's connection closing — arrives as the component set to
+   * `null`.
    *
    * Not to be confused with `peers` above, which is this package's older name
    * for a join's payload riders. The two are unrelated; this one carries the

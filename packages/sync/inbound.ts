@@ -11,13 +11,18 @@
 // when it matches again, where a tombstone could never be lifted. A deletion
 // still tombstones, because a deletion arrives as a `tombstone` component in
 // the frame's bundles.
+//
+// `relay` is the other half no client could work out: a peer's `sync: peers`
+// values, somebody's cursor, which the server forwards without keeping. They
+// land in the local graph like anything else the server sends, so a query
+// finds them beside the entity they belong to.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { comps, dead, then, transient } from '@yaks/graph'
 import { replicate } from './mark.ts'
 import type { Frame } from './socket.ts'
 import { type Coverage, covers } from './coverage.ts'
-import { outbound } from './tier.ts'
+import { outbound, stored, syncOf } from './tier.ts'
 
 // A patch that removes an entity's server-owned components, leaving its local
 // state alone. The entity is then invisible to every query, which is what "no
@@ -67,17 +72,56 @@ export let land = (
     bundles.length ? replicate(graph, bundles) : [],
     (applied) => {
       for (const update of frame.transient ?? []) live.receive(update)
-      return gone.length
-        ? then(strip(graph, gone), (out) => [...applied, ...out])
-        : applied
+      return then(
+        gone.length ? strip(graph, gone) : [],
+        (out) =>
+          then(hear(graph, frame), (heard) => [...applied, ...out, ...heard]),
+      )
     },
   )
 }
 
-/** Replace the server-owned components with a query's whole rows, including
- * the properties it reports as absent. A raw feed carries patches instead, and
- * must use land(). `sync: none` components never come from the server, and a
- * query snapshot never removes them. */
+/**
+ * The relayed values a frame carries, applied: each peer's `sync: peers`
+ * components, and nothing else, as the patches they were sent as. A reset
+ * frame is the whole set as it now stands, relay included, so a peer value
+ * this copy still holds for one of its members and the frame does not repeat
+ * went away while this connection was not listening, and is cleared.
+ */
+export let hear = (
+  graph: Graph,
+  frame: Frame,
+): Bundle[] | Promise<Bundle[]> => {
+  let peer = (name: string) => syncOf(graph.vocab, name) == 'peers'
+  let said = new Map<Eid, Bundle>()
+  for (let b of frame.relay ?? []) {
+    let out = said.get(b.entity.eid) ?? { entity: { eid: b.entity.eid } }
+    for (let [name, patch] of comps(b)) if (peer(name)) out[name] = patch
+    if (comps(out).length) said.set(b.entity.eid, out)
+  }
+  let landed = () => {
+    let all = [...said.values()]
+    return all.length ? replicate(graph, all) : []
+  }
+  if (!frame.reset || !frame.bundles?.length) return landed()
+  return then(graph.get(frame.bundles.map((b) => b.entity.eid)), (held) => {
+    for (let b of held) {
+      for (let [name] of comps(b)) {
+        if (!peer(name) || name in (said.get(b.entity.eid) ?? {})) continue
+        let out = said.get(b.entity.eid) ?? { entity: { eid: b.entity.eid } }
+        out[name] = null
+        said.set(b.entity.eid, out)
+      }
+    }
+    return landed()
+  })
+}
+
+/** Replace the components the server stores with a query's whole rows,
+ * including the properties it reports as absent. A raw feed carries patches
+ * instead, and must use land(). `sync: none` components never come from the
+ * server and `sync: peers` ones never ride a row, so a query snapshot never
+ * removes either. */
 export let snapshot = (
   graph: Graph,
   bundles: Bundle[],
@@ -98,7 +142,7 @@ export let snapshot = (
         let keep = (name: string, prop?: string) =>
           opts.preserve?.(b.entity.eid, name, prop) ?? false
         for (let [name, comp] of comps(previous.get(b.entity.eid) ?? out)) {
-          if (!outbound(graph.vocab, name)) continue
+          if (!stored(graph.vocab, name)) continue
           if (!covers(scope, name)) continue
           if (
             b[name] == null && (scope === true || scope[name] === true) &&
@@ -115,9 +159,7 @@ export let snapshot = (
           }
         }
         for (let [name, comp] of comps(b)) {
-          if (
-            !outbound(graph.vocab, name) || !covers(scope, name)
-          ) continue
+          if (!stored(graph.vocab, name) || !covers(scope, name)) continue
           out[name] = comp == null ? null : {
             ...(out[name] as Comp ?? {}),
             ...Object.fromEntries(

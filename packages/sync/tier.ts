@@ -35,6 +35,13 @@ export { durableOf, type Sync, syncOf }
 export let outbound = (vocab: Vocab, comp: string): boolean =>
   syncOf(vocab, comp) != 'none'
 
+/** Whether the server keeps a component, so a row it answers is the whole
+ * truth about it. A `sync: peers` component crosses the server without being
+ * kept, so no row ever carries one, and a row that omits one says nothing
+ * about it. */
+export let stored = (vocab: Vocab, comp: string): boolean =>
+  syncOf(vocab, comp) == 'server'
+
 /**
  * Where a component's state has to be kept on this node, for the components no
  * server will ever send back: the vault when it is durable forever (it

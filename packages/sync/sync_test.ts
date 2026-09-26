@@ -276,3 +276,70 @@ Deno.test('an unreachable server reverts nothing: the batch may have landed', as
   c.wire.close()
   broken.wire.close()
 })
+
+// Two cooks watching dinners, the recipe already there, and `a` about to
+// point at it.
+let pointing = async () => {
+  let srv = server()
+  let a = client(srv)
+  let b = client(srv)
+  a.wire.subscribe('.course=dinner', 'dinners')
+  b.wire.subscribe('.course=dinner', 'dinners')
+  a.graph.apply([dal()])
+  await a.idle()
+  await b.idle()
+  let finger = () => comp(at(b.graph, 'r1'), 'pointing')
+  let point = async (xy: Record<string, number>) => {
+    a.graph.apply([{ entity: { eid: 'r1' }, pointing: xy }])
+    await a.idle()
+  }
+  return { srv, a, b, finger, point }
+}
+
+Deno.test("a peer's value reaches the others, and is stored nowhere", async () => {
+  let { srv, a, b, finger, point } = await pointing()
+  await point({ x: 3, y: 9 })
+  assertEquals(finger(), { x: 3, y: 9 })
+  await point({ y: 1 })
+  assertEquals(finger(), { x: 3, y: 1 })
+  assertEquals(comp(at(srv.graph, 'r1'), 'pointing'), {})
+  // A stored write to the same entity leaves the finger where it was.
+  a.graph.apply([{ entity: { eid: 'r1' }, recipe: { serves: 6 } }])
+  await a.idle()
+  assertEquals(comp(at(b.graph, 'r1'), 'recipe').serves, 6)
+  assertEquals(finger(), { x: 3, y: 1 })
+  a.wire.close()
+  b.wire.close()
+})
+
+Deno.test("a peer's value goes with its connection", async () => {
+  let { a, b, finger, point } = await pointing()
+  await point({ x: 3, y: 9 })
+  a.socket()!.close()
+  assertEquals(finger(), {})
+  a.wire.close()
+  b.wire.close()
+})
+
+Deno.test('a late subscriber hears what is already being said', async () => {
+  let { srv, a, b, point } = await pointing()
+  await point({ x: 3, y: 9 })
+  let c = client(srv)
+  c.wire.subscribe('.course=dinner', 'dinners')
+  await c.idle()
+  assertEquals(comp(at(c.graph, 'r1'), 'pointing'), { x: 3, y: 9 })
+  for (let x of [a, b, c]) x.wire.close()
+})
+
+Deno.test('a reconnect clears a value that stopped while it was away', async () => {
+  let { a, b, finger, point } = await pointing()
+  await point({ x: 3, y: 9 })
+  b.socket()!.close() // deaf: the clearing below never reaches it
+  a.socket()!.close()
+  assertEquals(finger(), { x: 3, y: 9 })
+  b.fire()
+  await b.idle()
+  assertEquals(finger(), {})
+  a.wire.close()
+  b.wire.close()
+})

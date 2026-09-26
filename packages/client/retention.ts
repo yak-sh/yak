@@ -19,10 +19,12 @@ import {
   delivered,
   ECHO,
   echoed,
+  hear,
   land,
   outbound,
   type Replica,
   snapshot,
+  stored,
   type SubscribeOpts,
 } from '@yaks/sync'
 import type { Watches } from './watch.ts'
@@ -314,7 +316,9 @@ export let retention = (
       let cuts: Bundle = { entity: b.entity }
       let rest: Bundle = { entity: b.entity }
       for (let [name, comp] of comps(b)) {
-        if (!outbound(graph.vocab, name)) continue
+        // A relayed value is no subscription's field: it rides with the
+        // member it belongs to, and leaves when the member does.
+        if (!stored(graph.vocab, name)) continue
         if (!covered(eid, name)) {
           cuts[name] = null
           continue
@@ -355,7 +359,9 @@ export let retention = (
       let b = held(eid)
       let wire = b && !dead(b)
         ? Object.fromEntries(
-          comps(b).filter(([name]) => outbound(graph.vocab, name)),
+          // What the server keeps: a relayed value lives as long as a
+          // connection, so it is never written to disk.
+          comps(b).filter(([name]) => stored(graph.vocab, name)),
         )
         : {}
       if (b && !dead(b) && (Object.keys(wire).length || known.has(eid))) {
@@ -554,7 +560,16 @@ export let retention = (
           : then(
             receive(bundles, sub.members),
             (out) =>
-              then(receive(peers, sub.peers), (rode) => [...out, ...rode]),
+              then(receive(peers, sub.peers), (rode) =>
+                then(
+                  // Relayed values belong to members this set holds; one for
+                  // an entity it does not hold would be a row nothing owns.
+                  hear(graph, {
+                    ...frame,
+                    relay: frame.relay?.filter((b) => owns(b.entity.eid)),
+                  }),
+                  (heard) => [...out, ...rode, ...heard],
+                )),
           ),
         (out) => {
           if (sub.query !== true) {

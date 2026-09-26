@@ -7,6 +7,7 @@ import type { Bundle } from '@yaks/graph'
 import { box, boxClient, comp, COOK, server, titles } from './testing.ts'
 import { client } from './client.ts'
 import { stash } from './vault.ts'
+import { wireStash } from './wire-vault.ts'
 
 let dal = (eid = 'r1'): Bundle => ({
   entity: { eid },
@@ -72,6 +73,35 @@ Deno.test('close stops the watches and the socket', async () => {
   c.close()
   assertEquals(c.watches.size(), 0)
   assertEquals(c.wire?.connected(), false)
+})
+
+Deno.test("a watch sees a peer's value, and nothing stores it", async () => {
+  let srv = server()
+  let disk = wireStash()
+  let a = boxClient(srv)
+  let b = boxClient(srv, { wireVault: disk, epoch: 'boot' })
+  await b.ready
+  let dinners = b.watch('.course=dinner&?pointing')
+  a.watch('.course=dinner')
+  a.mutate([dal()])
+  await a.idle()
+  await b.idle()
+  a.mutate([{ entity: { eid: 'r1' }, pointing: { x: 3, y: 9 } }])
+  await a.idle()
+  assertEquals(comp(dinners.value[0], 'pointing'), { x: 3, y: 9 })
+  a.mutate([{ entity: { eid: 'r1' }, recipe: { serves: 6 } }])
+  await a.idle()
+  await b.idle()
+  assertEquals(comp(b.ent('r1'), 'recipe').serves, 6)
+  assertEquals(comp(dinners.value[0], 'pointing'), { x: 3, y: 9 })
+  await b.cache.idle()
+  let [kept] = await disk.load('boot', 10)
+  assertEquals(kept.comps.recipe?.serves, 6)
+  assertEquals(kept.comps.pointing, undefined)
+  a.close()
+  await b.idle()
+  assertEquals(comp(b.ent('r1'), 'pointing'), {})
+  b.close()
 })
 
 Deno.test('a replica can leave provenance exclusively to its authority', () => {

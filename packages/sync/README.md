@@ -171,6 +171,15 @@ active subscription. Removal from a result set is not a deletion: only an
 incoming `tombstone` deletes an entity. Retained local components can still
 match local queries.
 
+A frame's `relay` list carries the `sync: peers` values other connections are
+sending for entities in its set: somebody's cursor. They land in the graph as
+patches on those entities, so a local query finds a peer's cursor beside the
+entity it points at. A value its writer cleared, or whose writer's connection
+closed, arrives as the component set to `null`. The first frame after a
+(re)subscribe carries every value the set holds, and a peer value it leaves out
+is cleared. A stored row never carries a `sync: peers` component, so a snapshot
+leaves them alone.
+
 For bounded retention or partial query results, supply a `replica` policy; see
 below. The standalone plugin applies incoming bundles as patches. Replacing
 omitted properties from complete snapshots requires the exported `snapshot`
@@ -241,9 +250,11 @@ state.
 The root module also exports these lower-level helpers and their public types;
 there are no sub-module exports:
 
-- State selection: `syncOf`, `durableOf`, `local`, `outbound`, and `outward`.
+- State selection: `syncOf`, `durableOf`, `local`, `outbound`, `stored`, and
+  `outward`.
 - HTTP reconciliation: `post` and `inverse`.
-- Incoming frames: `land`, `strip`, and `snapshot`.
+- Incoming frames: `land`, `strip`, `snapshot`, and `hear` (a frame's relayed
+  values).
 - Sockets: `wire` and `backoff`.
 - Internal request/response marks: `asked`, `asking`, `before`, `clean`, `echo`,
   `echoed`, `ECHO`, and `SENT`; `replicate` applies what a server sent the way
