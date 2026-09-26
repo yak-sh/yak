@@ -192,11 +192,16 @@ Deno.test('a space out of model allowance is told so before a model is asked', a
   let model = fake([{ text: 'never asked' }])
   let spent = {
     ...space,
-    meter: { month: monthOf(new Date()), built: 0, models: MODELS.free },
+    meter: {
+      month: monthOf(new Date()),
+      built: 0,
+      models: MODELS.free,
+      realtime: 0,
+    },
   } as Space
   let out = await build(env, owner, spent, asked('one more'), { model })
 
-  assertStringIncludes(out.refused!, 'of model use a month')
+  assertStringIncludes(out.refused!, 'of models and voice a month')
   assertEquals(model.asked.length, 0)
 })
 

@@ -692,6 +692,9 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       'usage',
       'questions',
       'answer',
+      // @yaks/rtc — who is speaking, and the sessions the voice door opened
+      'rtc',
+      'sfu',
       // the app's own
       'recipe',
     ].sort(),

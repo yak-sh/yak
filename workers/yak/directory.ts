@@ -66,6 +66,10 @@ export type Meter = {
   // Dollars spent on models this month: the builder's and the apps' calls,
   // each weighed by its model's price (models.ts).
   models: number
+  // Dollars an app's voices received this month (rtc.ts): Cloudflare
+  // Realtime's egress, weighed at each renewal of a session's lease. It spends
+  // the allowance `models` does (meter.ts `used`).
+  realtime: number
   // The seconds the builder's workbench spent awake (sandbox.ts, T-34264).
   // Its own property beside `models` because a model call and a
   // container-second are billed separately, and one number made of both is a
@@ -376,6 +380,7 @@ let meterOf = (r: Row): Meter | null =>
       emails: r.meter.emails ?? 0,
       builds: r.meter.builds ?? 0,
       models: r.meter.models ?? 0,
+      realtime: r.meter.realtime ?? 0,
       seconds: r.meter.seconds ?? 0,
       built: r.meter.built ?? 0,
       at: r.meter.at ?? '',

@@ -312,6 +312,10 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       'usage',
       'questions',
       'answer',
+      // @yaks/rtc — who is speaking, relayed, and each Realtime session the
+      // app's voice door opened (rtc.ts, D-40615)
+      'rtc',
+      'sfu',
       // the app's own
       'recipe',
       'cooked',
@@ -350,14 +354,15 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
     ]
   ) assert(platform.includes(`unique ${want}`), `no ${want}`)
   // An app's own store declares none of them — they are the directory's words.
-  // Its uniques are identities (a tool's, a model's and a provider's name) and
-  // an entry's place in its transcript.
+  // Its uniques are identities (a tool's, a model's and a provider's name, a
+  // Realtime session's id) and an entry's place in its transcript.
   assertEquals(
     indexes(schema(appVocab())).filter((i) => i.startsWith('unique')),
     [
       'unique entry_session_seq entry session seq',
       'unique model_name model name',
       'unique provider_name provider name',
+      'unique sfu_session sfu session',
       'unique tool_name tool name',
     ],
   )

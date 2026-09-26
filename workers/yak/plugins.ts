@@ -19,6 +19,7 @@ import { modelsPlugin } from './models.ts'
 import { outboundPlugin } from './outbound.ts'
 import { outboxPlugin } from './outbox.ts'
 import type { Plugin } from './plugin.ts'
+import { rtcPlugin } from './rtc.ts'
 import { seoPlugin } from './seo_door.ts'
 import { trashPlugin } from './trash.ts'
 import { tunnelPlugin } from './tunnel_door.ts'
@@ -36,4 +37,5 @@ export let PLUGINS: Plugin[] = [
   outboundPlugin,
   tunnelPlugin,
   modelsPlugin,
+  rtcPlugin,
 ]

@@ -129,13 +129,15 @@ export type Env = {
   // The per-source ceilings on the doors a stranger can knock on (rate.ts,
   // wrangler.toml `[[ratelimits]]`): sign-in code requests, OAuth client
   // registration, anonymous connector calls, anonymous feedback, and anonymous
-  // requests for an app's data (its `/api/` doors). Absent in the in-process
-  // harness, where nothing is limited.
+  // requests for an app's data (its `/api/` doors), and a visitor's knocks on
+  // an app's voice door (rtc.ts). Absent in the in-process harness, where
+  // nothing is limited.
   SIGNIN_RATE?: Limiter
   REGISTER_RATE?: Limiter
   TOOL_RATE?: Limiter
   FEEDBACK_RATE?: Limiter
   API_RATE?: Limiter
+  RTC_RATE?: Limiter
   // An app's own code (dispatch.ts): the Workers for Platforms namespace its
   // worker.js is uploaded into, and the token the upload speaks to the
   // Workers API with — the account tag above is the same one. The namespace
@@ -258,6 +260,16 @@ export type Env = {
   // yak-esbuild, which compiles an app's TypeScript and npm imports at deploy
   // (esbuild.ts). Absent under `deno test` and the workerd probes.
   ESBUILD?: Fetcher
+  // Voice (rtc.ts): the platform's one Cloudflare Realtime SFU app, its id and
+  // its secret, and one TURN key and its token. All four are secrets, kept in
+  // 1Password beside each other. REALTIME_API is a probe's door to somewhere
+  // other than rtc.live.cloudflare.com. Unset, every app's ./api/rtc/ answers
+  // that voice is not switched on here.
+  REALTIME_APP?: string
+  REALTIME_TOKEN?: string
+  TURN_KEY?: string
+  TURN_TOKEN?: string
+  REALTIME_API?: string
 }
 
 // One part's handler shape: a request and its env, nothing else.

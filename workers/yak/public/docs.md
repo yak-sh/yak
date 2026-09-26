@@ -128,6 +128,16 @@ Deeper: <https://yaks.app/docs/models.md> — the rows that ask and the rows tha
 come back, typed questions, one call at once, who may ask, and the models and
 their prices.
 
+## Voice
+
+The people in an app can talk: a page joins a call through the app's own
+`./api/rtc/` door with `@yaks/rtc`, publishes the microphone, and hears the
+voices it asks for. Who is speaking is the relayed `rtc` component on the entity
+they speak as. Every voice heard spends the same monthly allowance models do.
+
+Deeper: <https://yaks.app/docs/voice.md> — speaking, hearing, placing a voice in
+space, who may speak, and what it costs.
+
 ## The notes an app keeps
 
 A rule the person wants followed every time goes in a `NOTES.md` beside

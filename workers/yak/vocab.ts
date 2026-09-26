@@ -78,6 +78,7 @@ import { memberDoc } from '@yaks/member'
 import { modelDoc } from '@yaks/model/vocab'
 import { personaDoc } from '@yaks/persona/vocab'
 import { projectDoc } from '@yaks/project/vocab'
+import { rtcDoc } from '@yaks/rtc/vocab'
 import { sessionDoc } from '@yaks/session/vocab'
 import { sessionDerived } from '@yaks/session/status'
 import { derived as statuses, taskDoc } from '@yaks/task/vocab'
@@ -491,7 +492,11 @@ let storeDocs = (own: VocabDoc[]): VocabDoc[] => [...machineDocs, ...own]
  * directory picks out of it alone ({@link notifiedDoc}).
  *
  * An app writes `wake{at}` on anything it means to come back to, and what the
- * firing means is left to the app's own rules on `fired` (D-37562). */
+ * firing means is left to the app's own rules on `fired` (D-37562).
+ *
+ * `rtcDoc` is voice (@yaks/rtc, D-40615): `rtc`, relayed on whatever entity a
+ * page speaks as, and `sfu`, the kernel's row for each Realtime session the
+ * app's door opened (rtc.ts). */
 export let coreDocs: VocabDoc[] = storeDocs([
   docDoc,
   memberDoc,
@@ -505,6 +510,7 @@ export let coreDocs: VocabDoc[] = storeDocs([
   hookDoc,
   transcriptDoc,
   askingDoc,
+  rtcDoc,
 ])
 
 // ---- the platform's own store (T-33814) -------------------------------------
@@ -900,6 +906,7 @@ export let platformDoc: VocabDoc = {
         emails: num,
         builds: num,
         models: num,
+        realtime: num,
         seconds: num,
         built: num,
         at: time,
@@ -1281,6 +1288,17 @@ let mine = (schema: PropSchema): PropSchema => ({
 })
 
 /**
+ * The manifest words that open a spend to the app's visitors, each with what
+ * it lets them do: `"open"` lets anyone who may write the app do it, where only
+ * its members may otherwise. `models` is asking the app's models (graph.ts
+ * `FLOORS`, D-40545); `rtc` is its voice door (rtc.ts, D-40615).
+ */
+export let OPENS: Record<string, string> = {
+  models: 'ask its models',
+  rtc: 'speak and listen through its voice door',
+}
+
+/**
  * An app's `vocab.json` as one document: a JSON Schema 2020-12 document with
  * `$defs`, which is the one form a manifest is written in. A manifest of
  * bare component names declares no `$` keyword, and is refused in a sentence
@@ -1295,13 +1313,12 @@ let mine = (schema: PropSchema): PropSchema => ({
  * `.yml` (tools.ts `spelled`), and the sentence has to name the file they are
  * looking at.
  *
- * `"tools": false` and `"models": "open"` are the two words a manifest says
- * about itself rather than about a component, so each is lifted off and
- * carried on the document. `tools: false` synthesizes no tools for its kinds
- * (kinds.ts, T-34513); a boolean tells it from a component named `tools`,
- * which is an object of properties like any other. `models: "open"` lets
- * anyone who may write the app ask its models, where only its members may
- * otherwise (graph.ts `FLOORS`, D-40545).
+ * `"tools": false`, `"models": "open"` and `"rtc": "open"` are the words a
+ * manifest says about itself rather than about a component, so each is lifted
+ * off and carried on the document. `tools: false` synthesizes no tools for its
+ * kinds (kinds.ts, T-34513); a boolean tells it from a component named
+ * `tools`, which is an object of properties like any other. The other two are
+ * each {@link OPENS}: who may spend the space's allowance through the app.
  *
  * A `$defs` entry marked `"tool": true` is one of the app's commands, not a
  * component: it is left out here and read by lib/tools.ts `parseTools`, so a
@@ -1321,18 +1338,21 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
     throw refuse('arguments', `${file} is an object — ${EXAMPLE}`)
   }
   let off = typeof held.tools == 'boolean' ? held.tools : undefined
-  let models = held.models
-  if (models !== undefined && models !== 'open' && models !== 'members') {
-    throw refuse(
-      'arguments',
-      `${file}: "models" is "open" (anyone who may write this app may ask ` +
-        `its models) or "members" (only its members may, which is what ` +
-        `leaving it out says)`,
-    )
+  let opens = Object.entries(OPENS).filter(([word]) => held[word] !== undefined)
+  for (let [word, act] of opens) {
+    let said = held[word]
+    if (said !== 'open' && said !== 'members') {
+      throw refuse(
+        'arguments',
+        `${file}: "${word}" is "open" (anyone who may write this app may ` +
+          `${act}) or "members" (only its members may, which is what ` +
+          `leaving it out says)`,
+      )
+    }
   }
   let body = Object.fromEntries(
     Object.entries(held).filter(([k]) =>
-      !(k == 'tools' && off !== undefined) && k != 'models'
+      !(k == 'tools' && off !== undefined) && !(k in OPENS)
     ),
   )
   let keys = Object.keys(body)
@@ -1357,7 +1377,7 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
     }
   }
   if (off !== undefined) doc = { ...doc, tools: off }
-  if (models !== undefined) doc = { ...doc, models }
+  for (let [word] of opens) doc = { ...doc, [word]: held[word] }
   let errs = storable(doc)
   if (errs.length) throw refuse('arguments', `${file}: ${errs.join('; ')}`)
   return doc

@@ -334,6 +334,8 @@ simple = { limit = 30, period = 60 }
 #   TOOL_RATE       60 connector tool calls a minute, signed out
 #   FEEDBACK_RATE   1 piece of feedback a minute, signed out
 #   API_RATE        300 requests a minute to an app's data, signed out
+#   RTC_RATE        60 requests a minute to an app's voice door (rtc.ts), per
+#                   visitor per app; members are not counted
 [[ratelimits]]
 name = "SIGNIN_RATE"
 namespace_id = "1001"
@@ -358,6 +360,11 @@ simple = { limit = 1, period = 60 }
 name = "API_RATE"
 namespace_id = "1005"
 simple = { limit = 300, period = 60 }
+
+[[ratelimits]]
+name = "RTC_RATE"
+namespace_id = "1006"
+simple = { limit = 60, period = 60 }
 
 # An app's files. `wrangler dev` simulates the bucket.
 [[r2_buckets]]
@@ -474,6 +481,10 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # code deploy: `printf off | wrangler secret put CIMD` stops the well-known
 # claiming Client ID Metadata Document support, `printf on | ...` restores it,
 # and unset means on (identity.ts `cimd`, T-33027).
+# REALTIME_APP and REALTIME_TOKEN are the platform's one Cloudflare Realtime
+# SFU app and its secret; TURN_KEY and TURN_TOKEN its one TURN key and that
+# key's token (rtc.ts, D-40615). All four are in 1Password beside each other.
+# Unset, every app's ./api/rtc/ says voice is not switched on here.
 
 # Where a bare specifier goes. The kernel is Deno source that imports the
 # packages by NAME (`@yaks/graph`), which deno resolves through the workspace
@@ -651,6 +662,11 @@ simple = { limit = 1, period = 60 }
 name = "API_RATE"
 namespace_id = "2005"
 simple = { limit = 300, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "RTC_RATE"
+namespace_id = "2006"
+simple = { limit = 60, period = 60 }
 
 [[env.staging.r2_buckets]]
 binding = "BLOBS"

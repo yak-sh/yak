@@ -270,14 +270,14 @@ Deno.test('a space past its allowance is told so, and the transcript rests', asy
   await v.send('/apply', asking(s, FLASH))
   let [stopped] = await v.landed(`.entry.session=${s}&.error&*`)
   assertEquals((stopped.error as Comp).code, 'limit')
-  assert(String(said(stopped)).includes('of model use a month'))
+  assert(String(said(stopped)).includes('of models and voice a month'))
   assertEquals(v.asked.length, 0)
   let [session] = await v.read(`.eid=${s}&*`)
   assertEquals((session.session as Comp).status, 'failed')
   // And a call asked outright is answered with the same sentence.
   let { status, said: no } = await v.run({ model: FLASH, input: {} })
   assertEquals(status, 429)
-  assert(no.error.message.includes('of model use a month'))
+  assert(no.error.message.includes('of models and voice a month'))
   assertEquals(v.asked.length, 0)
 })
 

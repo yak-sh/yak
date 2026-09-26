@@ -182,16 +182,24 @@ export let CURRENCY = 'USD'
 /** The free spaces one person may own. */
 export let SPACES = 5
 
-/** The monthly allowances a spend is refused at, before it is spent. */
-export type Spend = 'emails' | 'builds' | 'models' | 'seconds'
+/** The monthly allowances a spend is refused at, before it is spent. Models
+ * and realtime (voice, rtc.ts) are one allowance in dollars (D-40615), each
+ * counted apart so a person can see which spent it. */
+export type Spend = 'emails' | 'builds' | 'models' | 'realtime' | 'seconds'
 
 let ALLOWANCE: Record<Spend, Record<Tier, number>> = {
   emails: LETTERS,
   builds: BUILDS,
   models: MODELS,
+  realtime: MODELS,
   seconds: SECONDS,
 }
 let SPENDS = Object.keys(ALLOWANCE) as Spend[]
+
+/** What a reading has spent of the allowance `what` is refused at: models and
+ * realtime together for either. */
+let used = (m: Meter, what: Spend) =>
+  what == 'models' || what == 'realtime' ? m.models + m.realtime : m[what]
 
 export let allowance = (what: Spend, tier: Tier | null) =>
   ALLOWANCE[what][tier ?? 'free']
@@ -230,7 +238,7 @@ export let pooled = async (
 /** Whether a reading is at an allowance; `more` is what the caller holds
  * that is not counted yet — the dollars and seconds of a build still going. */
 export let over = (space: Space, m: Meter, what: Spend, more = 0) =>
-  m[what] + more >= allowance(what, space.tier)
+  used(m, what) + more >= allowance(what, space.tier)
 
 /** What stops this spend here, or null to go ahead. */
 export let refusedSpend = async (
@@ -252,6 +260,7 @@ let empty = (month: string, built = 0): Meter => ({
   emails: 0,
   builds: 0,
   models: 0,
+  realtime: 0,
   seconds: 0,
   built,
   at: '',
@@ -311,7 +320,9 @@ export let fullness = (space: Space, apps: number, now = new Date()) => {
   let both = {
     files: (m.files ?? 0) / FILES[space.tier ?? 'free'],
     ...Object.fromEntries(
-      SPENDS.map((what) => [what, m[what] / allowance(what, space.tier)]),
+      SPENDS.map((
+        what,
+      ) => [what, used(m, what) / allowance(what, space.tier)]),
     ),
   }
   return free
@@ -366,12 +377,13 @@ export let standing = (
   let made = `${count(usedBuilds(space, now))} of ${
     count(builds(space.tier))
   } builds a month`
-  // What models and build time cost: the one place a person sees what the
-  // builder and their apps' model calls spend, each against its own monthly
-  // allowance.
-  let cost = `${dollars(m.models)} of ${
+  // What models, voice and build time cost: the one place a person sees what
+  // the builder, their apps' model calls and their apps' voices spend, against
+  // the monthly allowances they share.
+  let voice = m.realtime ? ` (${dollars(m.realtime)} of it voice)` : ''
+  let cost = `${dollars(used(m, 'models'))} of ${
     dollars(allowance('models', space.tier))
-  } of model use and ${count(m.seconds)} of ${
+  } of model use and voice${voice}, and ${count(m.seconds)} of ${
     count(allowance('seconds', space.tier))
   } build seconds this month`
   let files = `${size(m.files ?? 0)} of ${
@@ -388,7 +400,7 @@ export let standing = (
       free.apps == null ? '' : `an app past ${free.apps}, `
     }a build past ${count(builds(space.tier))}, data past ${
       size(free.bytes)
-    }, files past ${size(free.files)}, model use past ${
+    }, files past ${size(free.files)}, model use and voice past ${
       dollars(allowance('models', space.tier))
     }, or the ${
       count(letters(space.tier) + 1)
@@ -463,12 +475,19 @@ export let atCeiling = (
       } built-in builds a month${shared}, and this month's are used — it ` +
       `can build again on the 1st, or keep building with a connected agent`,
     // Every model call on the space stops here, the builder's and its apps'
-    // alike, so it names neither: models answer again on the 1st.
+    // alike, so it names neither: models answer again on the 1st. Voice
+    // spends the same dollars, so each sentence says both.
     models: () =>
       `${space.slug} is on the ${tier} tier, which is ${
         dollars(allowance('models', space.tier))
-      } of model use a month${shared}, and this month's is spent — models ` +
-      `answer again on the 1st, and a connected agent can keep building`,
+      } of models and voice a month${shared}, and this month's is spent — ` +
+      `models answer again on the 1st, and a connected agent can keep ` +
+      `building`,
+    realtime: () =>
+      `${space.slug} is on the ${tier} tier, which is ${
+        dollars(allowance('realtime', space.tier))
+      } of models and voice a month${shared}, and this month's is spent — ` +
+      `voices go quiet until the 1st`,
     seconds: () =>
       `${space.slug} is on the ${tier} tier, which is ${
         count(allowance('seconds', space.tier))
@@ -634,6 +653,27 @@ export let countedSpend = async (
           seconds: held.seconds + seconds,
         }
         : { ...empty(month, space.meter?.built ?? 0), models: cost, seconds },
+    }],
+  })
+}
+
+/** The dollars an app's voices received, weighed at a lease's renewal
+ * (rtc.ts), on the space's month. */
+export let countedRealtime = async (
+  env: { STORE: Namespace },
+  space: Space,
+  cost: number,
+  now = new Date(),
+) => {
+  if (cost <= 0) return
+  let month = monthOf(now)
+  let held = thisMonth(space.meter, month)
+  await stamp(env, {
+    entities: [{
+      entity: { eid: space.eid },
+      meter: held
+        ? { month, realtime: held.realtime + cost }
+        : { ...empty(month, space.meter?.built ?? 0), realtime: cost },
     }],
   })
 }

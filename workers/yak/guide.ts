@@ -432,6 +432,7 @@ let COVERS: Record<string, string[]> = {
   components: ['doc', 'task', 'filed', 'project', 'comment', 'favorite', 'web'],
   wakes: ['wake', 'fired'],
   models: ['session', 'entry', 'using', 'questions', 'answer', 'model'],
+  voice: ['rtc', 'sfu'],
 }
 
 let PAGE_OF: Record<string, string> = Object.fromEntries(

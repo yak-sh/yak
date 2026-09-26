@@ -17,6 +17,7 @@ import {
   BUILDS,
   ceilings,
   countedBuild,
+  countedRealtime,
   countedSpend,
   FILES,
   FREE,
@@ -217,6 +218,7 @@ let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
     emails: 0,
     builds: 0,
     models: 0,
+    realtime: 0,
     seconds: 0,
     built: 0,
     at: NOW.toISOString(),
@@ -492,14 +494,14 @@ Deno.test('the build line warns at 80%, and the line says both numbers', () => {
     said,
     `1 of 5 builds a month ($0.04 of $${
       MODELS.free.toFixed(2)
-    } of model use and 0 of 3,600 build seconds this month)`,
+    } of model use and voice, and 0 of 3,600 build seconds this month)`,
   )
   assertStringIncludes(said, 'a build past 5')
   assertStringIncludes(
     standing(space({ builds: 4, models: 0.0012, built: 44 }, 'plus'), 9, NOW),
     `4 of ${BUILDS.plus} builds a month ($0.0012 of $${
       MODELS.plus.toFixed(2)
-    } of model use`,
+    } of model use and voice`,
   )
 })
 
@@ -721,4 +723,16 @@ Deno.test('a conversation that shipped nothing pays for its model and seconds', 
   assertEquals(sent[0].meter, { month: '2026-09', models: 0.75, seconds: 7 })
   await countedSpend(env, space(), 0, 0, NOW)
   assertEquals(sent.length, 1)
+})
+
+Deno.test('models and voice spend one allowance, each counted apart', async () => {
+  let half = MODELS.free / 2
+  let both = space({ models: half, realtime: half })
+  assert(await refusedSpend(alone, both, 'models', {}, 0, NOW))
+  assert(await refusedSpend(alone, both, 'realtime', {}, 0, NOW))
+  let voice = space({ realtime: half })
+  assertEquals(await refusedSpend(alone, voice, 'models', {}, 0, NOW), null)
+  let { sent, env } = writes()
+  await countedRealtime(env, voice, 0.25, NOW)
+  assertEquals(sent[0].meter, { month: '2026-09', realtime: half + 0.25 })
 })

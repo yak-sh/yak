@@ -140,6 +140,13 @@ export let PAGES: Record<string, Page> = {
       "Tool entries in vocab.json, so the person's agent can act on an app with no page open: an entry's description, its argument schemas and $var bindings, the apply and query actions, what a deploy refuses, the page an answer is drawn in, and how the commands and command tools carry them.",
     'brief': 'commands of the app, for an agent',
   },
+  'voice': {
+    'slug': 'voice',
+    'title': 'Voice',
+    'description':
+      "Voice between the people in an app: a page joins a call through the app's own ./api/rtc/ door with @yaks/rtc, publishes the microphone, and hears the voices it asks for. Who is speaking is the `rtc` component on the entity they speak as, relayed to every page watching it. Playing a voice through an audio element or placing it in space with Web Audio, mute and talking, who may speak, and what an hour of listening costs against the space's monthly allowance.",
+    'brief': 'the people in an app talk and hear each other',
+  },
   'wakes': {
     'slug': 'wakes',
     'title': 'Coming back later',

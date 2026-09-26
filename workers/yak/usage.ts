@@ -220,6 +220,7 @@ export let sweep = async (env: Env, now = new Date()) => {
       emails: was.emails,
       builds: was.builds,
       models: was.models,
+      realtime: was.realtime,
       seconds: was.seconds,
       built: was.built,
       at,

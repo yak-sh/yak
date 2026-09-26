@@ -119,8 +119,8 @@ let owning = <K extends Door>(k: K, close = () => Promise.resolve()) => {
 /**
  * What a test run's kernels are configured with beside wrangler.toml's own
  * vars: the session secret, Cloudflare's account API at `cloudflare` (the
- * stand-in, for mail and domains alike), the Stripe signing secrets, and the
- * Stripe sandbox when the run has a key (bin/test.ts).
+ * stand-in, for mail, domains and Realtime alike), the Stripe signing secrets,
+ * and the Stripe sandbox when the run has a key (bin/test.ts).
  */
 export let vars = (secret: string, cloudflare: string) => {
   let stripe = Deno.env.get('STRIPE_KEY')
@@ -135,6 +135,9 @@ export let vars = (secret: string, cloudflare: string) => {
     STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
     STRIPE_CONNECT_WEBHOOK_SECRET: WEBHOOK_SECRET,
     OPENAI_APPS_CHALLENGE: CHALLENGE,
+    REALTIME_APP: 'app',
+    REALTIME_TOKEN: 'a-token',
+    REALTIME_API: cloudflare,
     ...stripe ? { STRIPE_KEY: stripe } : {},
     ...price ? { STRIPE_PRICE: price } : {},
   }
@@ -710,9 +713,9 @@ export let seed = async (
   return { ...them, eids }
 }
 
-// ---- Cloudflare's account API, stood in for (mail.ts, domains.ts) ---------
+// ---- Cloudflare's account API, stood in for (mail.ts, domains.ts, rtc.ts) --
 //
-// The two conversations a kernel has with Cloudflare, over the API's
+// The conversations a kernel has with Cloudflare, over the API's
 // `{success, errors, result}` envelope. A letter sent through Email Sending,
 // by its API or its binding, is written to `log` as one `yak-mail` line, which
 // is where a test reads its letters back (`letters`). And the three calls a domain makes — list by name,
@@ -721,8 +724,47 @@ export let seed = async (
 // record resolves; the words each step is read by are held against recorded
 // bytes in domains_test.ts, so what this is for is the other half: that the
 // tools attach, report and detach a domain end to end.
+//
+// Realtime's SFU (`/apps/…`) is its own API, not the envelope: sessions and
+// the tracks each holds, answered with a mid and an empty description, since
+// nothing here carries media. `GET` a session reads its tracks back, which is
+// how a test sees what the door opened and closed.
 export let cloudflare = (log: string) => {
   let held = new Map<string, Custom>()
+  let calls = new Map<string, Track[]>()
+  let sfu = async (req: Request, path: string) => {
+    let [, id = '', rest = ''] =
+      /^\/apps\/[^/]+\/sessions\/([^/]+)\/?(.*)$/.exec(path) ?? []
+    if (id == 'new') {
+      let made = crypto.randomUUID()
+      calls.set(made, [])
+      return Response.json({ sessionId: made }, { status: 201 })
+    }
+    let tracks = calls.get(id)
+    if (!tracks) {
+      return Response.json({ errorCode: 'no session' }, { status: 404 })
+    }
+    if (req.method == 'GET') return Response.json({ tracks })
+    let asked = (await req.json()).tracks as Track[] ?? []
+    if (rest == 'tracks/new') {
+      let made = asked.map((t, i) => ({
+        ...t,
+        mid: String(tracks.length + i),
+        status: 'active',
+      }))
+      tracks.push(...made)
+      return Response.json({
+        tracks: made.map(({ mid, trackName }) => ({ mid, trackName })),
+        sessionDescription: { type: 'answer', sdp: '' },
+      })
+    }
+    if (rest == 'tracks/close') {
+      for (let t of tracks) {
+        if (asked.some((c) => c.mid == t.mid)) t.status = 'inactive'
+      }
+    }
+    return Response.json({})
+  }
   let wrote = (to: string | string[], subject: string, body = '') =>
     Deno.writeTextFileSync(
       log,
@@ -732,6 +774,7 @@ export let cloudflare = (log: string) => {
   let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
     let url = new URL(req.url)
     let ok = (result: unknown) => Response.json({ success: true, result })
+    if (url.pathname.startsWith('/apps/')) return await sfu(req, url.pathname)
     if (url.pathname.endsWith('/email/sending/send')) {
       let { to, subject, text } = await req.json()
       wrote(to, subject, text)
@@ -772,6 +815,15 @@ export let cloudflare = (log: string) => {
     },
     stop: () => server.shutdown(),
   }
+}
+
+/** A track at the stand-in for Realtime's SFU (`cloudflare`). */
+export type Track = {
+  mid: string
+  trackName?: string
+  location?: string
+  sessionId?: string
+  status?: string
 }
 
 /** Attaches `hostname` at the kernel's stand-in for Cloudflare, as a Plus
