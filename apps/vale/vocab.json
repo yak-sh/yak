@@ -42,6 +42,7 @@
       "type": "object",
       "sync": "peers",
       "durable": "connection",
+      "pace": "100ms",
       "description": "Where something is this moment: its level, and where in it, in metres. Relayed to everyone in the level and kept by nobody, so it goes when the connection that wrote it does. A creature that is only wandering has none: its wandering says where it is.",
       "properties": {
         "level": {
@@ -62,6 +63,7 @@
       "type": "object",
       "sync": "peers",
       "durable": "connection",
+      "pace": "100ms",
       "description": "How something is moving this moment: which way it faces, its gait, and how fast it is rising or falling.",
       "properties": {
         "yaw": {
