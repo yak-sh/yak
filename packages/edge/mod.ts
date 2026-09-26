@@ -14,13 +14,13 @@
  *
  * let blog = {
  *   $defs: {
- *     post: { type: 'object', kind: true, properties: { title: { type: 'string' } } },
+ *     post: { component: true, type: 'object', kind: true },
  *     // one component, declared as a relation
- *     cites: { type: 'object', edge: true },
+ *     cites: { component: true, type: 'object', edge: true },
  *   },
  * }
  * let vocab = loadVocab([edgeDoc, blog], [edgeKeywords])
- * // g.apply([link('p1', 'cites', 'p2')])
+ * link('p1', 'cites', 'p2') // the bundle that says p1 cites p2
  * ```
  *
  * Four things follow from that:

@@ -87,9 +87,25 @@ the process that committed, like an observer.
 ## Observe
 
 ```ts
+import { graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
+import { ram } from '@yaks/ram'
+import { effects } from '@yaks/effects'
+
+let published = { type: 'boolean' }
+let vocab = loadVocab([{
+  $defs: { post: { component: true, properties: { published } } },
+}])
+let fx = effects(vocab)
+let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
+
 fx.created('post', (event) => console.log('created', event.entity.eid))
 fx.changed('post', 'published', (event) => console.log(event.comp?.published))
 fx.removed('post', (event) => console.log('removed', event.entity.eid))
+
+g.apply([{ entity: { eid: 'p1' }, post: {} }])
+g.apply([{ entity: { eid: 'p1' }, post: { published: true } }])
+g.apply([{ entity: { eid: 'p1' }, $delete: true }])
 ```
 
 `effects()` returns a graph plugin with registration methods. Code can be
@@ -99,15 +115,12 @@ committed state, and a callback for new graph writes when configured.
 
 ## Or a pattern — any query over what committed
 
-```ts
-fx.on('.post, !post.published', (event) => console.log(event.entity.eid))
-```
-
-A pattern is a query evaluated against the committed graph. It is checked only
-when a batch changes a component the query reads, and a result triggers a
-handler only if the batch touched the entity bound by its first pattern. This
-does not guarantee a false-to-true transition: an entity that already matched
-can trigger again when touched.
+`fx.on('.post, !post.published', run)` runs `run` for each unpublished post a
+batch touches. A pattern is a query evaluated against the committed graph. It is
+checked only when a batch changes a component the query reads, and a result
+triggers a handler only if the batch touched the entity bound by its first
+pattern. This does not guarantee a false-to-true transition: an entity that
+already matched can trigger again when touched.
 
 Required components absent from the vocabulary make a pattern inactive. An
 absence condition on an undeclared component is dropped. Queries joining
@@ -121,15 +134,12 @@ nobody wrote down.
 
 ## A removal is a clause too
 
-```ts
-fx.on('-post', (event) => console.log('removed', event.entity.eid))
-```
-
-`-post` means the current batch removed that component. Alone, it registers the
-same event as `removed('post', handler)` and works with every supported adapter,
-including cascaded deletions. A mixed pattern such as `.product, -shelf` also
-needs an adapter that can query the batch's removal overlay; ordinary committed
-rows cannot show which removed components were present before the write.
+In `fx.on('-post', run)`, `-post` means the current batch removed that
+component. Alone, it registers the same event as `removed('post', handler)` and
+works with every supported adapter, including cascaded deletions. A mixed
+pattern such as `.product, -shelf` also needs an adapter that can query the
+batch's removal overlay; ordinary committed rows cannot show which removed
+components were present before the write.
 
 ## Three things happen to a component
 
@@ -175,7 +185,10 @@ and is absent on removal. Pattern events have `kind: 'matched'` and can carry
   caller, but the handler must then handle its own later failures.
 
 ```ts
-let reported = effects(vocab, {
+import { loadVocab } from '@yaks/vocab'
+import { effects } from '@yaks/effects'
+
+let reported = effects(loadVocab([]), {
   report: (error, { handler, event }) => {
     console.warn(handler, event.kind, error)
   },
@@ -184,10 +197,18 @@ let reported = effects(vocab, {
 
 ## Writing back
 
-Configure `write` to apply a new batch through the graph. Use this setup instead
-of the previous registry construction:
+Configure `write` to apply a new batch through the graph:
 
 ```ts
+import { graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
+import { ram } from '@yaks/ram'
+import { effects } from '@yaks/effects'
+
+let published = { type: 'boolean' }
+let vocab = loadVocab([{
+  $defs: { post: { component: true, properties: { published } } },
+}])
 let fx = effects(vocab, { write: (changes) => g.apply(changes) })
 let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
 fx.created(
@@ -216,19 +237,29 @@ Load `effectDoc` beside your own vocabulary and a commit writes down the runs it
 owes; `work` claims and runs them:
 
 ```ts
+import { graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
+import { ram } from '@yaks/ram'
 import { effectDoc, effects } from '@yaks/effects'
 
-// appDocs declares the application's components and effects.
-let vocab = loadVocab([...appDocs, effectDoc])
+let shop = {
+  $defs: {
+    order: { component: true, properties: { paid: { type: 'boolean' } } },
+    send_receipt: { effect: true, changed: ['order.paid'] },
+  },
+}
+let vocab = loadVocab([shop, effectDoc])
 let fx = effects(vocab, {
-  owner: me,
+  owner: 'worker-1',
   write: (b) => g.apply(b, { trusted: true }),
 })
-let g = graph({ storage, vocab, plugins: [fx] })
-fx.handle({ send_receipt: receipt })
+let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
+fx.handle({ send_receipt: (e) => console.log('receipt for', e.entity.eid) })
 
-await fx.work(g, signal) // until `signal` aborts
-await fx.work(g) // or one pass, on the way through
+await g.apply([{ entity: { eid: 'o1' }, order: { paid: false } }])
+await g.apply([{ entity: { eid: 'o1' }, order: { paid: true } }])
+await fx.work(g) // one pass, on the way through
+// or `await fx.work(g, signal)`, until `signal` aborts
 ```
 
 An `effect` row records the effect's name (`handler`), the target, the
@@ -267,13 +298,28 @@ derived from the duty name, so contenders address the same entity. `take()` uses
 holder is an entity reference and must name an existing entity.
 
 ```ts
-import { holding, until } from '@yaks/effects'
+import { graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
+import { ram } from '@yaks/ram'
+import { effectDoc, holding, until } from '@yaks/effects'
 
-// g includes effectDoc; me is an existing holder entity.
-await holding(g, 'refresh-index', { holder: me, signal }, async (stopping) => {
-  await refreshIndex()
-  await until(stopping)
-})
+let process = { $defs: { process: { component: true } } }
+let vocab = loadVocab([process, effectDoc])
+let g = graph({ storage: ram(vocab), vocab })
+await g.apply([{ entity: { eid: 'me' }, process: {} }])
+let refreshIndex = async () => {}
+
+// Held until the signal says stop: here, a tenth of a second.
+let signal = AbortSignal.timeout(100)
+await holding(
+  g,
+  'refresh-index',
+  { holder: 'me', signal },
+  async (stopping) => {
+    await refreshIndex()
+    await until(stopping)
+  },
+)
 ```
 
 `holding()` waits for a lease, renews it while work runs, and releases it when

@@ -215,7 +215,7 @@ When both `comp` and `prop` are supplied, selection matches the property
 declaration as a temporary bundle:
 
 ```ts
-{
+let selected = {
   entity: { eid: 'doc.title' },
   prop: { comp: 'doc', prop: 'title', type: 'string', ref: undefined },
 }

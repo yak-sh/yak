@@ -30,9 +30,29 @@
  *   ranking, so a neighbourhood combines with ordinary filters in one query.
  *
  * ```ts
- * import { fields, hashEmbedder, schema, semantic, sweep } from '@yaks/embedding'
- * import { compile } from '@yaks/sql'
- * import { parse } from '@yaks/query'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { graph } from '@yaks/graph'
+ * import { storage } from '@yaks/sqlite'
+ * import { open } from '@yaks/sqlite/db'
+ * import {
+ *   fields,
+ *   hashEmbedder,
+ *   schema,
+ *   semantic,
+ *   sweep,
+ * } from '@yaks/embedding'
+ *
+ * let title = { type: 'string', search: true }
+ * let price = { type: 'number' }
+ * let shop = loadVocab([{
+ *   $defs: { book: { component: true, properties: { title, price } } },
+ * }])
+ * let db = open(':memory:')
+ * for (let stmt of storage(db, shop).ddl()) db.query(stmt)
+ * graph({ storage: storage(db, shop), vocab: shop }).apply([
+ *   { entity: { eid: 'book-1' }, book: { title: 'The Hobbit', price: 12 } },
+ *   { entity: { eid: 'book-2' }, book: { title: 'Farmer Giles', price: 9 } },
+ * ])
  *
  * let text = fields(shop) // every text property the vocabulary declares
  * for (let stmt of schema()) db.query(stmt)
@@ -42,12 +62,9 @@
  *
  * // the books most like this one, still under the rest of the query's filters
  * let near = semantic(db, embedder)
- * let { sql, params } = compile(
- *   parse('.near=book-1&.order=similar .price<20'),
- *   shop,
- *   { extend: [near] },
- * )
- * let hits = near.rank(bundlesFrom(sql, params)) // each with a `rank.score`
+ * let store = storage(db, shop, { extend: [near] })
+ * let hits = near.rank(store.read('.near=book-1&.order=similar .price<20'))
+ * // each with a `rank.score`
  * ```
  *
  * The embedder is injected — {@link hashEmbedder} is the deterministic,

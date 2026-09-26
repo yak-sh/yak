@@ -49,7 +49,7 @@ not part of the package's public exports.
 ## matcher and filter
 
 ```ts
-import { matcher } from '@yaks/match'
+import { filter, matcher } from '@yaks/match'
 import { loadVocab } from '@yaks/vocab'
 
 const vocab = loadVocab({
@@ -65,14 +65,31 @@ const vocab = loadVocab({
     },
   },
 })
+const b1 = {
+  entity: { eid: 'b1', num: 3 },
+  book: { price: 12, status: 'shelved', author: 'a1' },
+}
 const b4 = {
   entity: { eid: 'b4', num: 6 },
   book: { price: 7.5, status: 'shelved', author: 'a1' },
 }
-const bundles = [b1, b4] // b1 is defined above
+const bundles = [b1, b4]
 
 let cheap = matcher('.status=shelved .price<20 .order=-price', vocab)
 cheap(bundles) // [b1, b4] — the shelved books under 20, most expensive first
+
+// A single bundle, tested alone or with the entities its references reach:
+let mine = filter('.status=shelved .author=a1', vocab)
+mine(b1) // true
+mine(b1, bundles)
+
+// A read override, here for a stored property:
+const discounted = matcher('.price<10', vocab, {
+  computed: {
+    'book.price': (b) => Number((b.book as { price: number }).price) / 2,
+  },
+})
+discounted(bundles) // [b1, b4]
 ```
 
 Whitespace and `&` both separate clauses, so the query above can also be written
@@ -87,15 +104,8 @@ marker.
 
 `filter()` compiles the same query into a test on one bundle, for a caller that
 wants to re-check the single entity that just changed without searching the
-whole array:
-
-```ts
-import { filter } from '@yaks/match'
-
-let mine = filter('.status=shelved .author=a1', vocab)
-mine(b1) // true
-mine(b1, bundles) // include related entities when following references
-```
+whole array; the example above passes it the array as well when the query
+follows references.
 
 `filter()` ignores `.order`, `.limit` and `.after`. Those describe a sequence,
 and therefore do not affect a single-entity test.
@@ -302,17 +312,8 @@ A vocabulary can declare a property it never stores (`computed: true`), because
 its formula belongs to the application rather than the schema. The caller
 supplies its read function, keyed by `comp.prop`, through `opts.computed`. This
 corresponds to the `derived` SQL expression hook
-[@yaks/sql](https://jsr.io/@yaks/sql) takes:
-
-```ts
-// With the book vocabulary above, override reads of a stored property.
-const discounted = matcher('.price<10', vocab, {
-  computed: {
-    'book.price': (b) => Number((b.book as { price: number }).price) / 2,
-  },
-})
-discounted(bundles) // [b1, b4]
-```
+[@yaks/sql](https://jsr.io/@yaks/sql) takes; the example above registers one as
+a read override for `book.price`.
 
 `opts.computed` maps `comp.prop` to a function of the bundle. The property's
 type still comes from the vocabulary, and ordering uses the registered function

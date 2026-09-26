@@ -51,14 +51,15 @@
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
  * import { contextDoc } from '@yaks/context'
  * import { modelDoc } from '@yaks/model'
  * import { toolsDoc } from '@yaks/tools'
  * import { sessionDoc, sessions } from '@yaks/session'
  *
  * // a transcript uses four packages' components, each declared once
- * let vocab = loadVocab([sessionDoc, toolsDoc, contextDoc, modelDoc, mine])
- * // let g = graph({ storage, vocab, plugins: [sessions()] })
+ * let vocab = loadVocab([sessionDoc, toolsDoc, contextDoc, modelDoc])
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [sessions()] })
  * ```
  *
  * @module

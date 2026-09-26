@@ -16,10 +16,11 @@ import { docDoc } from './comp.ts'
  * ```ts
  * import { graph } from '@yaks/graph'
  * import { loadVocab } from '@yaks/vocab'
+ * import { ram } from '@yaks/ram'
  * import { docDoc, docs } from '@yaks/doc'
  *
- * let vocab = loadVocab([docDoc, mine])
- * let g = graph({ storage, vocab, plugins: [docs()] })
+ * let vocab = loadVocab([docDoc])
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [docs()] })
  * ```
  *
  * Compose it once per graph. A vocabulary rejects a component declared twice,

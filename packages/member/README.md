@@ -157,10 +157,7 @@ for an `open` app.
 
 An application names more such components with `floors`, each with the least
 level that may write it whatever the app's mode:
-
-```ts
-members({ app: 'shop', space: 'club', floors: { product: 'editor' } })
-```
+`members({ app: 'shop', space: 'club', floors: { product: 'editor' } })`.
 
 ## A visitor to an open app adds, and changes only its own rows
 
@@ -201,14 +198,10 @@ HTTP route for opening a link.
 
 [@yaks/mail](../mail) supplies invitation handling through
 [@yaks/effects](../effects). A `created('member')` handler runs after commit, so
-a delivery failure does not roll back the membership write. For an application
-with an effects registry named `fx` and its own `invite` function:
-
-```ts
-fx.created('member', (event) => invite(event.comp?.person, event.comp?.space))
-```
-
-This package registers no invitation handler.
+a delivery failure does not roll back the membership write: an application
+registers `fx.created('member', run)` on its effects registry `fx`, where `run`
+reads `event.comp?.person` and `event.comp?.space`. This package registers no
+invitation handler.
 
 ## Exports
 

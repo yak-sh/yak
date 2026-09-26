@@ -154,12 +154,8 @@ export let writesOn = (
 /**
  * The read-side helper, bound to a storage: what the HTTP layer calls before it
  * answers a query, since a read never reaches `apply()` and so is never seen by
- * the write guard.
- *
- * ```ts
- * let may = policy(storage, { space: club })
- * // if (!may.canRead(who, app)) return new Response('', { status: 404 })
- * ```
+ * the write guard: with `may = policy(storage, { space: club })`, a door
+ * answers 404 where `may.canRead(who, app)` is false.
  */
 export let policy = (storage: Storage, where: Where = {}): Policy => {
   let tx = detached(storage)

@@ -35,10 +35,19 @@ JSON object. The components beside `entry` determine its type:
 usual way to append text.
 
 ```ts
-import { appendEntry } from '@yaks/session'
+import { graph } from '@yaks/graph'
+import { modelDoc } from '@yaks/model'
+import { ram } from '@yaks/ram'
+import { appendEntry, sessionDoc, sessions } from '@yaks/session'
+import { toolsDoc } from '@yaks/tools/vocab'
+import { loadVocab } from '@yaks/vocab'
 
-await appendEntry(graph, sessionId, 'Please review this change')
-await appendEntry(graph, sessionId, 'Build completed', {
+let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
+let g = graph({ storage: ram(vocab), vocab, plugins: [sessions()] })
+await g.apply([{ entity: { eid: 'session' }, session: {} }])
+
+await appendEntry(g, 'session', 'Please review this change')
+await appendEntry(g, 'session', 'Build completed', {
   eid: 'notice:build-123',
   notice: true,
 })
@@ -77,13 +86,9 @@ transcript status.
 `claim{session}` is stored on the entity a session claims. A **batch** is a list
 of changes applied in one transaction. If a batch attempts to replace another
 session's claim, the whole transaction fails with `Bounced`; the collision is
-then recorded as `conflict{target, loser, holder, at}`.
-
-```ts
-graph.apply([{ entity: { eid: page }, claim: { session: ada } }])
-graph.apply([{ entity: { eid: page }, claim: { session: bo } }])
-// Bounced: <page> is already claimed by <ada>
-```
+then recorded as `conflict{target, loser, holder, at}`: with `page` claimed by
+`ada`, a batch holding `{ entity: { eid: page }, claim: { session: bo } }` fails
+with `Bounced: <page> is already claimed by <ada>`.
 
 Reclaiming with the same session is harmless. Set `claim: null` to release a
 claim; release is unguarded so a caller can hand a claim over. The collision
@@ -178,11 +183,23 @@ replayed automatically (`UnfinishedCall`).
 `transcriptWindow()` reads a bounded page for user interfaces:
 
 ```ts
-import { transcriptWindow } from '@yaks/session'
+import { graph } from '@yaks/graph'
+import { modelDoc } from '@yaks/model'
+import { ram } from '@yaks/ram'
+import { sessionDoc, sessions, transcriptWindow } from '@yaks/session'
+import { toolsDoc } from '@yaks/tools/vocab'
+import { loadVocab } from '@yaks/vocab'
 
-const newest = await transcriptWindow(graph, sessionId, { limit: 64 })
-const around = await transcriptWindow(graph, sessionId, { anchor: entryId })
-const oldest = await transcriptWindow(graph, sessionId, { edge: 'start' })
+let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
+let g = graph({ storage: ram(vocab), vocab, plugins: [sessions()] })
+await g.apply([
+  { entity: { eid: 'session' }, session: {} },
+  { entity: { eid: 'hello' }, entry: { session: 'session' } },
+])
+
+const newest = await transcriptWindow(g, 'session', { limit: 64 })
+const around = await transcriptWindow(g, 'session', { anchor: 'hello' })
+const oldest = await transcriptWindow(g, 'session', { edge: 'start' })
 ```
 
 The result is `{ entries, before, after, total, offset }`. Limits count entries,

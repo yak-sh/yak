@@ -59,14 +59,17 @@
  * ```ts
  * import { graph } from '@yaks/graph'
  * import { effects } from '@yaks/effects'
+ * import { ram } from '@yaks/ram'
  * import { loadVocab } from '@yaks/vocab'
  * import { docDoc, docs } from '@yaks/doc'
+ * import { memberDoc } from '@yaks/member'
  * import { invited, mailbox, mailDoc, stash } from '@yaks/mail'
  *
- * let vocab = loadVocab([docDoc, mailDoc, club])
+ * let vocab = loadVocab([docDoc, mailDoc, memberDoc])
  * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
  * let post = stash()
- * let g = graph({ storage, vocab, plugins: [fx, docs(), mailbox({ domain: 'books.example', sender: post, effects: fx })] })
+ * let box = mailbox({ domain: 'books.example', sender: post, effects: fx })
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [fx, docs(), box] })
  *
  * fx.created('member', invited({
  *   apply: (bundles) => g.apply(bundles),

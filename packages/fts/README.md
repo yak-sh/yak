@@ -56,15 +56,28 @@ does the indexing, so the order of a bundle's components does not matter.
 
 ## The four pieces
 
-This example assumes `vocab` is loaded from the schema above with the graph's
-base vocabulary, and `db` is @yaks/sql's synchronous `Driver`, which runs a
-statement with `query(statement)`. Create the graph's component tables before
-these indexes.
+Here `db` is @yaks/sql's synchronous `Driver`, which runs a statement with
+`query(statement)`, over an in-memory database. The graph's component tables are
+created before these indexes.
 
 ```ts
+import { loadVocab } from '@yaks/vocab'
+import { graph } from '@yaks/graph'
+import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
 import { fields, find, heal, schema, search } from '@yaks/fts'
 import { compile } from '@yaks/sql'
 import { parse } from '@yaks/query'
+
+let title = { type: 'string', search: true }
+let book = { component: true, properties: { title, price: { type: 'number' } } }
+let vocab = loadVocab([{ $defs: { book } }])
+let db = open(':memory:')
+let store = storage(db, vocab)
+for (let statement of store.ddl()) db.query(statement)
+graph({ storage: store, vocab }).apply([
+  { entity: { eid: 'book-1' }, book: { title: 'The Hobbit', price: 12 } },
+])
 
 let text = fields(vocab)
 for (let statement of schema(text)) db.query(statement)
@@ -125,8 +138,21 @@ A blob-backed property stores an address in its component table. Supply
 resolved text:
 
 ```ts
-import { blobRead } from '@yaks/blob'
-import { adopt } from '@yaks/fts'
+import { loadVocab } from '@yaks/vocab'
+import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
+import { blobKeywords, blobRead, blobSchema } from '@yaks/blob'
+import { adopt, fields } from '@yaks/fts'
+
+let body = { type: 'string', store: 'blob', search: true }
+let vocab = loadVocab([{
+  $defs: { post: { component: true, properties: { body } } },
+}], [
+  blobKeywords,
+])
+let db = open(':memory:')
+for (let s of [...storage(db, vocab).ddl(), ...blobSchema()]) db.query(s)
+let text = fields(vocab)
 
 adopt(db, text, blobRead(vocab))
 ```

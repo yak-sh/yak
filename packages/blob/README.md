@@ -62,13 +62,15 @@ binary artifacts rather than assuming every backend validates keys and data.
 
 ## Configure storage and the plugin
 
-This example continues with `blog` above. Supply a synchronous SQLite `driver`,
-@yaks/sql's `Driver`, which runs a statement with `query(statement)`:
+Supply a synchronous SQLite `driver`, @yaks/sql's `Driver`, which runs a
+statement with `query(statement)`; here it is an in-memory database:
 
 ```ts
+import { assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { graph } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
 import {
   blobKeywords,
   blobRead,
@@ -77,15 +79,20 @@ import {
   sqliteBlobs,
 } from '@yaks/blob'
 
-let vocab = loadVocab([blog], [blobKeywords])
+let post = {
+  component: true,
+  type: 'object',
+  properties: { body: { type: 'string', store: 'blob' } },
+}
+let vocab = loadVocab([{ $defs: { post } }], [blobKeywords])
+let driver = open(':memory:')
 let bytes = sqliteBlobs(driver)
 let store = storage(driver, vocab, { derived: blobRead(vocab) })
 for (let statement of [...store.ddl(), ...blobSchema()]) driver.query(statement)
 let g = graph({ storage: store, vocab, plugins: [blobs(vocab, bytes)] })
 
 g.apply([{ entity: { eid: 'p1' }, post: { body: 'A long essay.' } }])
-let [post] = store.read('.post')
-console.log(post.post) // { body: 'A long essay.' }
+assertEquals(store.read('.post')[0].post, { body: 'A long essay.' })
 ```
 
 The component table contains the address; `blob_text` contains the text. Both
@@ -166,9 +173,22 @@ An FTS index built directly from a blob-backed property would index addresses.
 Supply text-resolution expressions when creating the index:
 
 ```ts
+import { loadVocab } from '@yaks/vocab'
+import { open } from '@yaks/sqlite/db'
+import { storage } from '@yaks/sqlite'
 import { fields, schema } from '@yaks/fts'
-import { blobRead } from '@yaks/blob'
+import { blobKeywords, blobRead, blobSchema } from '@yaks/blob'
 
+let post = {
+  component: true,
+  type: 'object',
+  properties: { body: { type: 'string', store: 'blob', search: true } },
+}
+let vocab = loadVocab([{ $defs: { post } }], [blobKeywords])
+let driver = open(':memory:')
+for (let statement of [...storage(driver, vocab).ddl(), ...blobSchema()]) {
+  driver.query(statement)
+}
 for (let statement of schema(fields(vocab), blobRead(vocab))) {
   driver.query(statement)
 }
@@ -192,7 +212,7 @@ bytes:
 ```ts
 import { artifactStore, fileBlobs } from '@yaks/blob'
 
-let save = artifactStore(fileBlobs('/var/lib/blobs'))
+let save = artifactStore(fileBlobs(await Deno.makeTempDir()))
 let artifact = await save(new Uint8Array([0, 255]), 'application/octet-stream')
 ```
 

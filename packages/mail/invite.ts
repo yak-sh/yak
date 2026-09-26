@@ -63,19 +63,41 @@ let str = (c: Comp, k: string): string => c[k] == null ? '' : String(c[k])
  * The `created(member)` handler: write an invitation to whoever just joined.
  *
  * ```ts
+ * import { assertEquals } from '@std/assert'
  * import { effects } from '@yaks/effects'
- * import { invited, sending, stash } from '@yaks/mail'
+ * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { docDoc, docs } from '@yaks/doc'
+ * import { memberDoc } from '@yaks/member'
+ * import { invited, mailbox, mailDoc, stash } from '@yaks/mail'
  *
- * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
- * fx.handle({ mail_post: sending({ sender: stash() }) })
+ * let vocab = loadVocab([docDoc, mailDoc, memberDoc])
+ * let fx = effects(vocab, { write: (b) => club.apply(b, { trusted: true }) })
+ * let post = stash()
+ * let club = graph({
+ *   storage: ram(vocab),
+ *   vocab,
+ *   plugins: [fx, docs(), mailbox({ sender: post, effects: fx })],
+ * })
  * fx.created('member', invited({
  *   apply: (bundles) => club.apply(bundles),
- *   welcome: ({ person }) => ({
+ *   welcome: () => ({
  *     from: 'hello@books.example',
  *     subject: 'You are in the book club',
- *     body: `Welcome. We meet Thursdays.\n\n[The reading list](https://books.example/list)`,
+ *     body: 'Welcome. We meet Thursdays.',
  *   }),
  * }))
+ *
+ * await club.apply([
+ *   { entity: { eid: 'club' }, doc: { title: 'Book club' } },
+ *   { entity: { eid: 'ana' }, email: { address: 'ana@books.example' } },
+ *   {
+ *     entity: { eid: 'm1' },
+ *     member: { space: 'club', person: 'ana', role: 'member' },
+ *   },
+ * ])
+ * assertEquals(post.last()?.to, 'ana@books.example')
  * ```
  *
  * The letter is addressed to the person as an entity (`deliver.to`), not to a

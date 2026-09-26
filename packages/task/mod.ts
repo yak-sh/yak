@@ -36,9 +36,9 @@
  * ```ts
  * import { compute, derived, statusOf } from '@yaks/task'
  *
- * statusOf(bundle)  // for an entity in hand
- * derived()         // the same rule as SQL, for @yaks/sql
- * compute()         // the same rule per bundle, for @yaks/match
+ * statusOf({ entity: { eid: 't1' }, task: {} }) // 'open', for an entity in hand
+ * derived() // the same rule as SQL, for @yaks/sql
+ * compute() // the same rule per bundle, for @yaks/match
  * ```
  * All three are built from one ordered list of marks ({@link MARKS}), so a
  * saved filter selects the same tasks in a database and in a page. Add a rung
@@ -49,11 +49,14 @@
  * ## Use
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
- * import { edgeDoc, edgeKeywords } from '@yaks/edge'
- * import { taskDoc } from '@yaks/task'
+ * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
+ * import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
+ * import { taskDoc, tasks } from '@yaks/task'
  *
- * let vocab = loadVocab([edgeDoc, taskDoc, mine], [edgeKeywords])
- * // let g = graph({ storage, vocab, plugins: [edges(vocab), tasks()] })
+ * let vocab = loadVocab([edgeDoc, taskDoc], [edgeKeywords])
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [edges(vocab), tasks()] })
+ * await g.apply([{ entity: { eid: 't1' }, task: {}, completed: {} }])
  * ```
  *
  * It imports no platform API, so the same list runs on a server, in a worker,

@@ -89,15 +89,9 @@ export type Compute = Record<string, (b: Bundle) => unknown>
 
 /**
  * The status rule for the in-memory evaluator — `{'task.status': …}` — so a
- * page filtering `.status=open` over bundles it already holds gets the same
- * answer the database gives.
- *
- * ```ts
- * import { matcher } from '@yaks/match'
- * import { compute } from '@yaks/task'
- *
- * matcher('.status=open', vocab, { computed: compute() })(bundles)
- * ```
+ * page filtering `.task.status=open` over bundles it already holds gets the
+ * same answer the database gives:
+ * `matcher('.task.status=open', vocab, { computed: compute() })(bundles)`.
  */
 export let compute = (marks: Mark[] = MARKS): Compute => ({
   [`${TASK}.status`]: (b) => statusOf(b, marks),

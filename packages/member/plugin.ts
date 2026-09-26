@@ -30,10 +30,12 @@ import { type Guard, guarding, wanting } from './guard.ts'
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
  * import { memberDoc, members } from '@yaks/member'
  *
- * let vocab = loadVocab([memberDoc, club])
- * let g = graph({ storage, vocab, plugins: [members({ app: list, space: club })] })
+ * let vocab = loadVocab([memberDoc])
+ * let guard = members({ app: 'list', space: 'club' })
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [guard] })
  * ```
  *
  * Reads are not checked here — a query never reaches `apply()`. The HTTP layer

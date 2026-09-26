@@ -65,11 +65,13 @@ such as an in-progress drag.
 
 These functions use numbers without assuming pixels or another unit. They need
 no DOM or transformation matrices, so browser and terminal clients can use the
-same calculations. In the fragment below, `camera` is a `Camera` value and
-`pins` is an array of `Pin` values.
+same calculations. Below, `camera` is a `Camera` and `pins` are `Pin`s.
 
 ```ts
 import { frame, place, visible } from '@yaks/canvas'
+
+let pins = [{ x: 0, y: 0, w: 320, h: 200 }, { x: 400, y: 0, w: 320, h: 200 }]
+let camera = { x: 0, y: 0, zoom: 1, w: 1200, h: 800 }
 
 visible(camera, pins) // what is on screen — called every frame
 place(pins, { w: 320, h: 200 }) // where the next card goes

@@ -222,22 +222,18 @@ not import SQL, storage drivers, or server-only APIs. `deno task check:browser`
 verifies this constraint. `compose` does not load `./views`: drawing is the
 rendering role, which needs no graph open.
 
+`@yaks/mail`, as `compose` reads it:
+
 ```ts
-// @yaks/mail/vocab
-export let docs = [mailDoc]
-export let keywords = [mailKeywords]
-export let derived = (vocab) => mailRead(vocab)
+import { docs } from '@yaks/mail/vocab'
+import { rules } from '@yaks/mail/rules'
+import { runs } from '@yaks/mail/tools'
 
-// @yaks/mail/rules
-export let rules = (host, options) => [mailbox({ domain: options.domain })]
-
-// @yaks/embedding/rules
-export let extend = (host, options) => [semantic(host.sql, embedderOf(options))]
-
-// @yaks/sqlite/tools
-export let runs = (host, options) => ({
-  storage_check: () => check(host.sql, options),
-})
+// Its options are its entry in yak.json.
+let options = { domain: 'books.example' }
+docs // [mailDoc]
+rules({}, options) // [mailbox({ domain: 'books.example' })]
+Object.keys(runs({}, options)) // the tools it runs, by name
 ```
 
 ### A tool that acts on the machine
@@ -332,7 +328,7 @@ it. Each service runs under a lease named for its owning package, so only one
 process over a graph runs it at a time, and a process takes only the leases of
 the roles it serves.
 
-```ts
+```ts ignore
 await host.duties() // Run until the host shuts down.
 await host.duties(AbortSignal.abort()) // Run one pass, then release leases.
 ```
@@ -384,11 +380,8 @@ exits: a duty that never heeded its signal is not waited on.
 | `1`  | A tool or server refused or failed the request |
 | `2`  | Invalid command-line usage                     |
 
-```ts
-import { cli, helpTool } from '@yaks/cli'
-
-Deno.exitCode = await cli([helpTool(opts), ...mine], opts)
-```
+A program with commands of its own runs
+`Deno.exitCode = await cli([helpTool(opts), ...commands], opts)`.
 
 Commands earlier in the array take precedence. A graph's tools become commands
 unless their `surfaces` leaves out `cli`. Tools with a noun and verb can be

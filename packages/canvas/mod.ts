@@ -18,10 +18,11 @@
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
  * import { canvas, canvasDoc } from '@yaks/canvas'
  *
- * let vocab = loadVocab([canvasDoc, mine])
- * let g = graph({ storage, vocab, plugins: [canvas()] })
+ * let vocab = loadVocab([canvasDoc])
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [canvas()] })
  * ```
  *
  * ## One rule, declared

@@ -117,11 +117,8 @@ let why = (err: string, fallback: string) =>
  * Derive how one citation stands. `cite` is the edge bundle and `to` the
  * bundle it points at — a `file` entity for a place in code, a `symbol` for a
  * definition (with `file`, its module, beside it), any entity otherwise.
- *
- * ```ts
- * await status(cite, file, { cwd: '/home/me/project' })
- * // { state: 'moved', changes: ['b8b0f89'] }
- * ```
+ * `status(cite, file, { cwd: '/home/me/project' })` answers, for one whose
+ * lines a later commit touched, `{ state: 'moved', changes: ['b8b0f89'] }`.
  */
 export let status = async (
   cite: Bundle,

@@ -19,14 +19,25 @@ deno add jsr:@yaks/embedding
 
 ## Use
 
-This example assumes a loaded `vocab` declaring a `book` component with text
-properties and a numeric `price`, and a synchronous `db`, @yaks/sql's `Driver`,
-which runs a statement with `query(statement)`. The graph's tables and sample
-books must already exist.
+Here `db` is @yaks/sql's synchronous `Driver`, which runs a statement with
+`query(statement)`, over an in-memory database holding two books.
 
 ```ts
-import { fields, hashEmbedder, schema, semantic, sweep } from '@yaks/embedding'
+import { loadVocab } from '@yaks/vocab'
+import { graph } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
+import { fields, hashEmbedder, schema, semantic, sweep } from '@yaks/embedding'
+
+let title = { type: 'string', search: true }
+let book = { component: true, properties: { title, price: { type: 'number' } } }
+let vocab = loadVocab([{ $defs: { book } }])
+let db = open(':memory:')
+for (let statement of storage(db, vocab).ddl()) db.query(statement)
+graph({ storage: storage(db, vocab), vocab }).apply([
+  { entity: { eid: 'book-1' }, book: { title: 'The Hobbit', price: 12 } },
+  { entity: { eid: 'book-2' }, book: { title: 'The Silmarillion', price: 18 } },
+])
 
 let text = fields(vocab)
 for (let statement of schema()) db.query(statement)

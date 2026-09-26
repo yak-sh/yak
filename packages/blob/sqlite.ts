@@ -154,11 +154,15 @@ let readExpr = (l: Named, comp: string, prop: string) => (owner: Expr) =>
  * as text everywhere:
  *
  * ```ts
+ * import { loadVocab } from '@yaks/vocab'
  * import { storage } from '@yaks/sqlite'
- * import { blobRead } from '@yaks/blob'
+ * import { open } from '@yaks/sqlite/db'
+ * import { blobKeywords, blobRead } from '@yaks/blob'
  *
- * let store = storage(driver, vocab, { derived: blobRead(vocab) })
- * // store.read('.post')[0].post.body === 'a long essay…'
+ * let body = { type: 'string', store: 'blob' }
+ * let post = { component: true, type: 'object', properties: { body } }
+ * let vocab = loadVocab([{ $defs: { post } }], [blobKeywords])
+ * let store = storage(open(':memory:'), vocab, { derived: blobRead(vocab) })
  * ```
  *
  * Merge them with any overrides of your own — the registry is a plain object

@@ -16,7 +16,9 @@ Entry points:
 - `@yaks/mcp-client/graph`: optional graph-backed server configuration.
 - `@yaks/mcp-client/vocab`: the graph vocabulary document alone.
 
-```ts
+This example talks to a server over the network, so it is not run as a test:
+
+```ts ignore
 import { connect } from '@yaks/mcp-client'
 
 const remote = connect({ name: 'design', url: 'https://example.com/mcp' }, {
@@ -74,19 +76,11 @@ discovery and calls to exact remote names. Tool lists are cached until a
 `notifications/tools/list_changed` notification arrives or `refresh()`
 invalidates one connection. Discovery is limited to 1,000 tools.
 
-A CLI can add explicit noun and verb metadata:
-
-```ts
-const tools = (await remote.tools()).map((tool) => ({
-  ...tool,
-  noun: 'mockup',
-  verb: 'publish',
-}))
-```
-
-Choose a unique pair for every tool. The `@yaks/cli/structured` adapter can
-execute `tool.run(args, context)`; the definitions remain usable by adapters
-that do not use CLI names.
+A CLI can add explicit noun and verb metadata, mapping each of `remote.tools()`
+to `{ ...tool, noun: 'mockup', verb: 'publish' }`. Choose a unique pair for
+every tool. The `@yaks/cli/structured` adapter can execute
+`tool.run(args, context)`; the definitions remain usable by adapters that do not
+use CLI names.
 
 ## Results and lifecycle
 
@@ -113,9 +107,9 @@ bodies in memory.
 where an MCP server signs in the way the MCP spec says: the server's
 protected-resource metadata (RFC 9728, or the URL a 401 challenge names) points
 at the authorization server, whose metadata (RFC 8414) names the endpoints. It
-answers data, not a flow:
+answers data, not a flow (and, asking a server, is not run as a test):
 
-```ts
+```ts ignore
 import { discover } from '@yaks/mcp-client/oauth'
 
 const { integration, register } = await discover('https://example.com/mcp')
@@ -140,7 +134,14 @@ HTTPS except on loopback addresses. Configure only trusted MCP servers.
 `@yaks/mcp-client/vocab`.
 
 ```ts
-await graph.apply([{
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { mcpDoc } from '@yaks/mcp-client/graph'
+
+let vocab = loadVocab([mcpDoc])
+let g = graph({ storage: ram(vocab), vocab })
+await g.apply([{
   entity: { eid: '$server' },
   mcp_server: { name: 'Example', url: 'https://example.org/mcp' },
 }])

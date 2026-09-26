@@ -30,11 +30,8 @@ import type { Bundle } from '@yaks/graph'
  * client whose batch triggered the effect — so it must be applied `trusted`: an
  * outcome an effect records (`delivered`, `bounced`) is a server-owned
  * property, and an untrusted apply would drop exactly the properties the effect
- * exists to write.
- *
- * ```ts
- * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
- * ```
+ * exists to write, as in
+ * `effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })`.
  */
 export type Write = (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
 

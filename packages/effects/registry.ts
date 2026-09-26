@@ -256,14 +256,23 @@ let solo = (plan: Match): string | undefined => {
  *
  * ```ts
  * import { graph } from '@yaks/graph'
+ * import { loadVocab } from '@yaks/vocab'
  * import { ram } from '@yaks/ram'
  * import { effects } from '@yaks/effects'
  *
+ * let title = { type: 'string' }
+ * let vocab = loadVocab([{
+ *   $defs: {
+ *     post: { component: true, properties: { title } },
+ *     send_receipt: { effect: true, created: ['post'] },
+ *   },
+ * }])
  * let fx = effects(vocab)
  * let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
  *
- * fx.handle({ send_receipt: (e) => mail(e.entity.eid) })
+ * fx.handle({ send_receipt: (e) => console.log('mail', e.entity.eid) })
  * fx.created('post', (e) => console.log('a post appeared', e.comp?.title))
+ * g.apply([{ entity: { eid: 'p1' }, post: { title: 'Hello' } }])
  * ```
  *
  * It requires the loaded vocabulary: the effects it declares are what a commit

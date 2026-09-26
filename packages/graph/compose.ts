@@ -50,6 +50,9 @@ import { comps, dead, TOMBSTONE } from './bundle.ts'
  * `{entity, tombstone: {}}`.
  *
  * ```ts
+ * import { composed } from '@yaks/graph'
+ *
+ * let now = '2026-09-25T12:00:00.000Z'
  * composed([
  *   { entity: { eid: 'b1' }, doc: { title: 'Dune' }, $actor: { by: 'ada' } },
  *   { entity: { eid: 'b1' }, created: { at: now, by: 'ada' } },

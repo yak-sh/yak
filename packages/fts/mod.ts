@@ -20,12 +20,28 @@
  * - {@link find} ranks the matches and marks each one for display.
  *
  * ```ts
+ * import { loadVocab } from '@yaks/vocab'
+ * import { graph } from '@yaks/graph'
+ * import { storage } from '@yaks/sqlite'
+ * import { open } from '@yaks/sqlite/db'
  * import { fields, find, schema, search } from '@yaks/fts'
  * import { compile } from '@yaks/sql'
  * import { parse } from '@yaks/query'
  *
+ * let title = { type: 'string', search: true }
+ * let price = { type: 'number' }
+ * let shop = loadVocab([{
+ *   $defs: { book: { component: true, properties: { title, price } } },
+ * }])
+ * let db = open(':memory:')
+ * let store = storage(db, shop)
+ * for (let stmt of store.ddl()) db.query(stmt)
+ *
  * let text = fields(shop) // the properties the vocabulary marks searchable
  * for (let stmt of schema(text)) db.query(stmt)
+ * graph({ storage: store, vocab: shop }).apply([
+ *   { entity: { eid: 'book-1' }, book: { title: 'The Hobbit', price: 12 } },
+ * ])
  *
  * // which books match, with the rest of the query still filtering
  * let matched = db.query(

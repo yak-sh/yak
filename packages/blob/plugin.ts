@@ -113,11 +113,15 @@ export type BlobOpts = {
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
- * import { blobKeywords, blobs, sqliteBlobs } from '@yaks/blob'
+ * import { ram } from '@yaks/ram'
+ * import { blobKeywords, blobs, memoryBlobs } from '@yaks/blob'
  *
- * let vocab = loadVocab([blog], [blobKeywords])
- * // let g = graph({ storage, vocab, plugins: [blobs(vocab, sqliteBlobs(driver))] })
- * // g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay…' } }])
+ * let body = { type: 'string', store: 'blob' }
+ * let post = { component: true, type: 'object', properties: { body } }
+ * let vocab = loadVocab([{ $defs: { post } }], [blobKeywords])
+ * let store = memoryBlobs()
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [blobs(vocab, store)] })
+ * g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay…' } }])
  * ```
  *
  * The write side is here. The read side belongs to the storage adapter, which

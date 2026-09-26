@@ -61,7 +61,7 @@ export let BODY = 'body'
  * import { loadVocab } from '@yaks/vocab'
  * import { docDoc } from '@yaks/doc'
  *
- * let vocab = loadVocab([docDoc, mine])
+ * let vocab = loadVocab([docDoc])
  * // { entity: { eid: 'r1' }, doc: { title: 'Lemon cake', body: '3 lemons…' } }
  * ```
  *

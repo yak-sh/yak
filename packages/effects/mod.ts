@@ -23,12 +23,20 @@
  *
  * ```ts
  * import { graph } from '@yaks/graph'
+ * import { loadVocab } from '@yaks/vocab'
  * import { ram } from '@yaks/ram'
  * import { effects } from '@yaks/effects'
  *
+ * let paid = { type: 'boolean' }
+ * let vocab = loadVocab([{
+ *   $defs: {
+ *     order: { component: true, properties: { paid } },
+ *     send_receipt: { effect: true, changed: ['order.paid'] },
+ *   },
+ * }])
  * let fx = effects(vocab)
  * let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
- * fx.handle({ send_receipt: (e) => print(e.entity.eid) })
+ * fx.handle({ send_receipt: (e) => console.log(e.entity.eid) })
  * ```
  *
  * Where the vocabulary also loads {@link effectDoc}, a commit writes every run
@@ -39,11 +47,9 @@
  *
  * ## Observers
  * A process can also watch its own commits, for as long as it runs:
- *
- * ```ts
- * fx.created('post', (e) => redraw(e.entity.eid))
- * fx.on('$call .call, !results', (e) => show(e.entity.eid))
- * ```
+ * `fx.created('post', redraw)` calls `redraw` for each post a commit makes,
+ * and `fx.on('$call .call, !results', show)` calls `show` wherever a commit
+ * leaves a call without results.
  *
  * An observer is known only to the process that registered it, so it runs
  * there, after that process's commits, and is never written down.
@@ -58,10 +64,7 @@
  *
  * ## Writing back
  * An effect that writes has one route, and it is the graph's own `apply()`:
- *
- * ```ts
- * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
- * ```
+ * `effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })`.
  *
  * So the write is admitted, stamped, journaled and broadcast like any other. A
  * write from an effect could trigger an effect; that loop is stopped in one

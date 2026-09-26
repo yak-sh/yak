@@ -111,7 +111,7 @@ export type Resource = (tick: Tick) => unknown
  *
  * let Now = stands({ at: '2026-09-07T00:00:00.000Z' })
  * Now.at // '2026-09-07T00:00:00.000Z'
- * `${Now}` // '2026-09-07T00:00:00.000Z'
+ * String(Now) // '2026-09-07T00:00:00.000Z'
  * ```
  *
  * The default is the component's first property, which is what a one-property

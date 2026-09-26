@@ -20,10 +20,12 @@ import { edgeDoc } from './comp.ts'
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
  * import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
  *
+ * let blog = { $defs: { cites: { component: true, type: 'object', edge: true } } }
  * let vocab = loadVocab([edgeDoc, blog], [edgeKeywords])
- * // let g = graph({ storage, vocab, plugins: [edges(vocab)] })
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [edges(vocab)] })
  * ```
  *
  * It contributes {@link edgeDoc}, derives a link's id from its endpoints and

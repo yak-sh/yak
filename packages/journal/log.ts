@@ -831,11 +831,7 @@ export { dec, enc }
 
 /**
  * The log as a plugin, so that a graph keeps a journal by listing it:
- *
- * ```ts
- * let j = log({ rows })
- * graph({ storage, vocab, plugins: [journal(j)] })
- * ```
+ * `graph({ storage, vocab, plugins: [journal(log({ rows }))] })`.
  *
  * It registers a hook on the `journal` phase alone: an after-image log needs to
  * read nothing in order to write, so nothing is gathered beforehand and nothing

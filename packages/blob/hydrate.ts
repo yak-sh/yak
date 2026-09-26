@@ -21,10 +21,25 @@ import { type Blobs, decode } from './store.ts'
  * result than an address nobody can resolve.
  *
  * ```ts
- * import { fileBlobs, hydrate } from '@yaks/blob'
+ * import { assertEquals } from '@std/assert'
+ * import { loadVocab } from '@yaks/vocab'
+ * import {
+ *   address,
+ *   blobKeywords,
+ *   encode,
+ *   hydrate,
+ *   memoryBlobs,
+ * } from '@yaks/blob'
  *
- * let store = fileBlobs('./blobs')
- * let posts = await hydrate(vocab, store, storage.read('.post'))
+ * let body = { type: 'string', store: 'blob' }
+ * let post = { component: true, type: 'object', properties: { body } }
+ * let vocab = loadVocab([{ $defs: { post } }], [blobKeywords])
+ * let store = memoryBlobs()
+ * store.put(address('A long essay.'), encode('A long essay.'))
+ *
+ * let read = { entity: { eid: 'p1' }, post: { body: address('A long essay.') } }
+ * let [p1] = await hydrate(vocab, store, [read])
+ * assertEquals(p1.post, { body: 'A long essay.' })
  * ```
  *
  * Asynchronous only when the store is: over a synchronous backend this returns

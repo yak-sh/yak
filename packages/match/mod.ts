@@ -14,9 +14,24 @@
  * ## Use
  * ```ts
  * import { matcher } from '@yaks/match'
+ * import { loadVocab } from '@yaks/vocab'
  *
+ * let vocab = loadVocab([{
+ *   $defs: {
+ *     book: {
+ *       component: true,
+ *       type: 'object',
+ *       properties: { status: { type: 'string' }, price: { type: 'number' } },
+ *     },
+ *   },
+ * }])
+ * let bundles = [
+ *   { entity: { eid: 'b1' }, book: { status: 'live', price: 12 } },
+ *   { entity: { eid: 'b2' }, book: { status: 'live', price: 30 } },
+ *   { entity: { eid: 'b3' }, book: { status: 'live', price: 15 } },
+ * ]
  * let live = matcher('.status=live&.price<20&.order=-price', vocab)
- * live(bundles) // the matching bundles, most expensive first
+ * live(bundles) // b3, b1: the matching bundles, most expensive first
  * ```
  *
  * {@link matcher} compiles a query into a selection over an array of bundles,

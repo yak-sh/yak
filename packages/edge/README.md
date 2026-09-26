@@ -73,7 +73,7 @@ relations of its own.
 
 ## Creating a link
 
-Continuing with `blog` above:
+With the `post` component and `cites` relation that `blog` above declares:
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
@@ -81,6 +81,16 @@ import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { edgeDoc, edgeKeywords, edges, link, unlink } from '@yaks/edge'
 
+let blog = {
+  $defs: {
+    post: {
+      component: true,
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    },
+    cites: { component: true, type: 'object', edge: true },
+  },
+}
 let vocab = loadVocab([edgeDoc, blog], [edgeKeywords])
 let store = ram(vocab)
 let g = graph({ storage: store, vocab, plugins: [edges(vocab)] })
@@ -90,6 +100,10 @@ g.apply([
   { entity: { eid: 'p2' }, post: { title: 'Second post' } },
   link('p1', 'cites', 'p2'),
 ])
+
+// Removed, and made again:
+g.apply([unlink('p1', 'cites', 'p2')])
+g.apply([link('p1', 'cites', 'p2')])
 ```
 
 `edgeEid(from, relation, to)` hashes `from|relation|to` with SHA-256 and formats
@@ -99,15 +113,9 @@ this ID; the plugin also derives it for writes using `$alias`. An explicit
 entity ID is not rewritten into a derived ID.
 
 `link(from, relation, to, ord?)` sets `ord` when supplied and leaves an existing
-order unchanged when omitted. To remove and later recreate a link:
-
-```ts
-g.apply([unlink('p1', 'cites', 'p2')])
-g.apply([link('p1', 'cites', 'p2')])
-```
-
-`unlink()` removes the `edge` and relation components, leaving the entity and
-any other components in place; `link()` fills it in again.
+order unchanged when omitted. `unlink()` removes the `edge` and relation
+components, leaving the entity and any other components in place; `link()`
+fills it in again.
 
 Both endpoints declare `death: cascade`: deleting either endpoint through the
 graph deletes the link entity. The plugin rejects an edge without endpoints or a
@@ -116,7 +124,25 @@ declared relation component. The graph enforces reference validity.
 ## Following links
 
 ```ts
-import { walk } from '@yaks/edge'
+import { loadVocab } from '@yaks/vocab'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { edgeDoc, edgeKeywords, edges, link, walk } from '@yaks/edge'
+
+let blog = {
+  $defs: {
+    post: { component: true, type: 'object' },
+    cites: { component: true, type: 'object', edge: true },
+  },
+}
+let vocab = loadVocab([edgeDoc, blog], [edgeKeywords])
+let store = ram(vocab)
+let g = graph({ storage: store, vocab, plugins: [edges(vocab)] })
+g.apply([
+  { entity: { eid: 'p1' }, post: {} },
+  { entity: { eid: 'p2' }, post: {} },
+  link('p1', 'cites', 'p2'),
+])
 
 let w = walk(store, vocab)
 await w.out('p1', 'cites') // ['p2']
@@ -135,10 +161,15 @@ hop returns to it. Unknown relation names throw.
 For SQL storage, register `traverse(vocab)` as a compiler extension:
 
 ```ts
+import { loadVocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
 import { compile } from '@yaks/sql'
-import { traverse } from '@yaks/edge'
+import { edgeDoc, edgeKeywords, traverse } from '@yaks/edge'
 
+let blog = {
+  $defs: { cites: { component: true, type: 'object', edge: true } },
+}
+let vocab = loadVocab([edgeDoc, blog], [edgeKeywords])
 let statement = compile(parse('.cites[<=3]->p2'), vocab, {
   extend: [traverse(vocab)],
 })

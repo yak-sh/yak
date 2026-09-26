@@ -86,15 +86,8 @@ Write `completed: {}` to finish a task. The graph fills the server-owned `at`,
 write has no actor identity to record. Client-supplied values for those fields
 are dropped. Trusted server writes may supply them. The `tasks()` plugin
 preserves the original completion author when an existing completion is edited.
-To attribute a new completion, supply an authenticated actor:
-
-```ts
-await g.apply([{
-  entity: { eid: 't2' },
-  completed: {},
-  $actor: { by: 'dana' },
-}])
-```
+To attribute a new completion, supply an authenticated actor beside it:
+`{ entity: { eid: 't2' }, completed: {}, $actor: { by: 'dana' } }`.
 
 Code accepting remote requests must authenticate that identity and replace any
 actor supplied by the client.
@@ -107,9 +100,17 @@ Give each new edge an alias too: the edge plugin derives its final id after
 resolving its endpoints. Use `link()` only when the endpoint ids are already
 known, because it computes the edge id immediately.
 
-Using `g` from the preceding example:
-
 ```ts
+import { loadVocab } from '@yaks/vocab'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { docDoc } from '@yaks/doc'
+import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
+import { taskDoc, tasks } from '@yaks/task'
+
+let vocab = loadVocab([docDoc, edgeDoc, taskDoc], [edgeKeywords])
+let g = graph({ storage: ram(vocab), vocab, plugins: [edges(vocab), tasks()] })
+
 let plan = [
   { entity: { eid: '$goal' }, task: {}, doc: { title: 'Organize the event' } },
   { entity: { eid: '$step' }, task: {}, doc: { title: 'Choose the date' } },
@@ -147,10 +148,16 @@ Calling `tasks()` alone does not register these readers. For example, filter
 already-loaded bundles with `@yaks/match`:
 
 ```ts
+import { loadVocab } from '@yaks/vocab'
 import { matcher } from '@yaks/match'
+import { compute, taskDoc } from '@yaks/task'
 
+let vocab = loadVocab([taskDoc])
 let open = matcher('.task.status=open', vocab, { computed: compute() })
-console.log(open(await g.read('.task')))
+open([
+  { entity: { eid: 't1' }, task: {} },
+  { entity: { eid: 't2' }, task: {}, completed: {} },
+]) // t1 alone
 ```
 
 Applications can extend the ordered list. A `claim` component can indicate work

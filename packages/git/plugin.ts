@@ -59,10 +59,14 @@ export let minting =
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
- * import { commits, gitDoc } from '@yaks/git'
+ * import { ram } from '@yaks/ram'
+ * import { commits, refDoc } from '@yaks/git'
  *
- * let vocab = loadVocab([gitDoc, mine], keywords)
- * // let g = graph({ storage, vocab, plugins: [commits({ comp: 'deploy', of })] })
+ * let deploy = { $defs: { deploy: { component: true, type: 'object' } } }
+ * let vocab = loadVocab([refDoc, deploy])
+ * // `of` says where each deploy lands, or null for one already committed.
+ * let plugin = commits({ comp: 'deploy', of: async () => null })
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [plugin] })
  * ```
  *
  * The Git object components are not part of this plugin's vocabulary: an

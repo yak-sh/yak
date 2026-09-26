@@ -15,11 +15,12 @@ import { taskDoc } from './comp.ts'
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
  * import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
  * import { taskDoc, tasks } from '@yaks/task'
  *
- * let vocab = loadVocab([edgeDoc, taskDoc, mine], [edgeKeywords])
- * // let g = graph({ storage, vocab, plugins: [edges(vocab), tasks()] })
+ * let vocab = loadVocab([edgeDoc, taskDoc], [edgeKeywords])
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [edges(vocab), tasks()] })
  * ```
  *
  * The status ladder is not this plugin's to extend: a graph that leases its

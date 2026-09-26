@@ -109,14 +109,9 @@ export type Arrivals = {
 
 /**
  * A received message → the bundles that record it, with the two lookups
- * answered: whom it is for and which letter it answers.
- *
- * ```ts
- * import { arrived } from '@yaks/mail'
- *
- * let receive = arrived({ graph, domain: 'books.example', triage: pile })
- * await graph.apply(await receive(message, { text }))
- * ```
+ * answered: whom it is for and which letter it answers. `receive` is
+ * `arrived({ graph, domain, triage })`, and `graph.apply(await receive(message,
+ * { text }))` records the letter; the README shows it whole.
  *
  * An empty array of bundles means the letter is already here: the Message-ID
  * is the one identity a letter carries between mail systems, so recording it

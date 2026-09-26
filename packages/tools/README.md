@@ -84,7 +84,7 @@ Load the vocabulary into a graph, create a runner with the tools available in
 the current process, and register their `tool` entities with `ensure()`:
 
 ```ts
-import { graph } from '@yaks/graph'
+import { argsOf, graph, type Tool } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import {
@@ -95,6 +95,22 @@ import {
   toolsDoc,
   worded,
 } from '@yaks/tools'
+
+const greet: Tool = {
+  noun: 'person',
+  verb: 'greet',
+  description: 'Greet a person',
+  inputSchema: {
+    type: 'object',
+    required: ['name'],
+    properties: { name: { type: 'string' } },
+  },
+  run: (call) => [{
+    entity: { eid: '$greeting' },
+    content: { body: `hello ${argsOf(call).name}` },
+    output: { source: call.entity.eid },
+  }],
+}
 
 const vocab = loadVocab([toolsDoc])
 const g = graph({ vocab, storage: ram(vocab) })
@@ -239,12 +255,6 @@ A health check is an ordinary tool whose `verb` is `check`. There is no separate
 registry: `checks(tools)` filters a loaded tool list to those checks. Each
 package can therefore declare checks for its own invariants, and removing that
 package removes its checks.
-
-```ts
-import { ailing, checked, checks } from '@yaks/tools'
-
-const available = checks(r.tools)
-```
 
 `checked(call, about, findings)` builds the standard one-bundle response for a
 check. `about` is the claim that holds when nothing is found ("no transcript has

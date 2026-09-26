@@ -13,11 +13,13 @@ import { processDoc } from './comp.ts'
  * The process plugin: `process{pid, command, cwd}` and `exit{code}`.
  *
  * ```ts
+ * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
  * import { loadVocab } from '@yaks/vocab'
  * import { processDoc, processes } from '@yaks/process'
  *
- * let vocab = loadVocab([processDoc, mine])
- * // let g = graph({ storage, vocab, plugins: [processes()] })
+ * let vocab = loadVocab([processDoc])
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [processes()] })
  * ```
  *
  * Output uses `content{body}` plus `output{source}` from @yaks/session, so a

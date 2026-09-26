@@ -38,7 +38,27 @@ files as blobs, trees and a commit, and names each of those by the digest of its
 own bytes. So the object id is the entity id, and no separate lookup is needed:
 
 ```ts
-import { index } from '@yaks/git'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
+import { keyDoc, keyKeywords, keys } from '@yaks/key'
+import { address, encode, memoryBlobs } from '@yaks/blob'
+import { gitDoc, index } from '@yaks/git'
+
+let vocab = loadVocab([edgeDoc, keyDoc, gitDoc], [edgeKeywords, keyKeywords])
+let plugins = [edges(vocab), keys(vocab)]
+let g = graph({ storage: ram(vocab), vocab, plugins })
+
+// Two files already in the byte store, named by their SHA-256.
+let store = memoryBlobs()
+let put = (text: string) => {
+  store.put(address(text), encode(text))
+  return address(text)
+}
+let sha = put('<h1>Hello</h1>\n')
+let other = put('export let hello = 1\n')
+let deployedAt = '2026-09-25T12:00:00Z'
 
 let git = index(g, store)
 
@@ -54,7 +74,7 @@ let head = await git.commit({
   message: 'deploy 7',
 })
 
-head.oid // '2b72ae1c151a…' — the Git object id, and the entity id
+head.oid // the Git object id, 40 hex digits, and the entity id
 head.oid256 // the same commit's SHA-256 object id
 ```
 
@@ -138,16 +158,14 @@ names. `verified` is the one thing that is stored, and only the act of checking
 writes it — editing either end of a citation leaves the mark where it was, so a
 typo fixed in a document cannot pass for a citation somebody checked.
 
-`@yaks/git/cites` derives that answer:
+`@yaks/git/cites` derives that answer: `status(cite, file, { cwd })` reads the
+checkout at `cwd` and says one of
 
-```ts
-import { status } from '@yaks/git/cites'
-
-await status(cite, file, { cwd: '/home/me/project' })
-// { state: 'current' }
-// { state: 'moved', changes: ['b8b0f89'] }   what moved under it
-// { state: 'unverified' }                    nobody has checked it yet
-// { state: 'unknown', why: '…' }             nothing could establish an answer
+```
+{ state: 'current' }
+{ state: 'moved', changes: ['b8b0f89'] }   what moved under it
+{ state: 'unverified' }                    nobody has checked it yet
+{ state: 'unknown', why: '…' }             nothing could establish an answer
 ```
 
 The question put to Git is `git log <revision.commit>..HEAD`, narrowed to
@@ -191,12 +209,15 @@ checked it and when, and nothing else writes that.
 Load the components beside the two packages whose mechanisms they use:
 
 ```ts
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { gitDoc } from '@yaks/git'
 
 let vocab = loadVocab([edgeDoc, keyDoc, gitDoc], [edgeKeywords, keyKeywords])
+let storage = ram(vocab)
 let g = graph({ storage, vocab, plugins: [edges(vocab), keys(vocab)] })
 ```
 
@@ -215,27 +236,45 @@ their own, loading `refDoc` in the first and `gitDoc` in the second.
 ## A branch, and landing a release on it
 
 ```ts
-import { commitOnto, refAt } from '@yaks/git'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
+import { keyDoc, keyKeywords, keys } from '@yaks/key'
+import { address, encode, memoryBlobs } from '@yaks/blob'
+import { commitOnto, gitDoc, refAt, refDoc } from '@yaks/git'
 
-let repo = { refs: g, objects: objectGraph, bytes: store }
+// The branches in one graph, the objects in another, their bytes in a store.
+let refVocab = loadVocab([refDoc])
+let refs = graph({ storage: ram(refVocab), vocab: refVocab })
+let vocab = loadVocab([edgeDoc, keyDoc, gitDoc], [edgeKeywords, keyKeywords])
+let plugins = [edges(vocab), keys(vocab)]
+let objects = graph({ storage: ram(vocab), vocab, plugins })
+let bytes = memoryBlobs()
+bytes.put(address('<h1>Hello</h1>\n'), encode('<h1>Hello</h1>\n'))
+
+let repo = { refs, objects, bytes }
+let app = 'recipes'
+let who = { name: 'Build Service', email: 'build@example.com', at: 0 }
 
 let head = await commitOnto(repo, {
   app,
-  files: { 'index.html': sha },
-  author,
-  committer,
+  files: { 'index.html': address('<h1>Hello</h1>\n') },
+  author: who,
+  committer: who,
   message: 'deploy 7\n',
-  beside: (oids) => [{ entity: { eid: oids.oid }, made: { release } }],
 })
 
 await refAt(repo.refs, app) // head.oid
 ```
 
-That writes every object, points the branch at the new commit, and writes
-whatever the caller wants recorded about that commit. A **bundle** is one
-entity's components represented as a JSON object. `beside` returns bundles that
-are submitted with the ref update as one **batch**, a list of changes applied in
-one transaction. This package declares no component joining a commit to its
+That writes every object and points the branch at the new commit. A **bundle**
+is one entity's components represented as a JSON object. An optional `beside`
+returns bundles about the commit —
+`(oids) => [{ entity: { eid: oids.oid },
+made: { release } }]` — that are
+submitted with the ref update as one **batch**, a list of changes applied in one
+transaction. This package declares no component joining a commit to its
 application input, because that input depends on the application; `beside` is
 where the caller supplies those rows. The parent commit is read from the ref
 rather than passed in, so a commit written the moment a release landed and a
@@ -261,14 +300,9 @@ registration.
 
 ## A clone is a packfile
 
-```ts
-import { objects } from '@yaks/git'
-
-let from = objects(g, store)
-
-await from.reach([head.oid]) // every object it needs, each once
-await from.pack([head.oid], have) // …as a v2 packfile, streaming
-```
+`objects(g, store)` reads the objects a graph and byte store hold:
+`reach([head.oid])` is every object a clone of `head` needs, and
+`pack([head.oid], have)` is the same as a v2 packfile, streaming.
 
 `reach` returns each reachable object once. It follows `parent` edges for
 history and `tree_entry` edges for reachability. A commit's own tree is read
@@ -313,14 +347,19 @@ bytes.
 ## Serving a clone over HTTP
 
 ```ts
-import { advertise, uploadPack } from '@yaks/git'
+import type { Graph } from '@yaks/graph'
+import type { Blobs } from '@yaks/blob'
+import { advertise, objects, uploadPack } from '@yaks/git'
 
-let refs = { list: async () => [{ name: 'refs/heads/main', oid: head.oid }] }
-
-// GET  <repo>/info/refs?service=git-upload-pack
-advertise(req)
-// POST <repo>/git-upload-pack
-await uploadPack(req, refs, objects(g, store))
+// One repository's two doors: the graph and byte store holding its objects,
+// and the commit its main branch points at.
+let repository = (g: Graph, store: Blobs, main: string) => {
+  let refs = { list: async () => [{ name: 'refs/heads/main', oid: main }] }
+  return (req: Request) =>
+    req.method == 'GET'
+      ? advertise(req) // <repo>/info/refs?service=git-upload-pack
+      : uploadPack(req, refs, objects(g, store)) // <repo>/git-upload-pack
+}
 ```
 
 This is Git's smart HTTP protocol, version 2, read-only. The response to the

@@ -35,10 +35,11 @@
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
  * import { docDoc, docs } from '@yaks/doc'
  *
- * let vocab = loadVocab([docDoc, mine])
- * // let g = graph({ storage, vocab, plugins: [docs()] })
+ * let vocab = loadVocab([docDoc])
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [docs()] })
  * ```
  *
  * ## Who else uses it

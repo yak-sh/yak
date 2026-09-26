@@ -144,11 +144,8 @@ export let undone = (batch: Batch, opts: UndoneOpts = {}): Bundle[] =>
 /**
  * Undo a committed transaction by its `seq`: read it back out of the log, build
  * the inverse from what was written down, and apply it through the graph — so
- * the undo is admitted, stamped and journaled like any other write.
- *
- * ```ts
- * undo(g, j)(7, { by: 'ada' })
- * ```
+ * the undo is admitted, stamped and journaled like any other write:
+ * `undo(g, j)(7, { by: 'ada' })` reverses transaction 7 as `ada`.
  *
  * Throws {@link Final} if the transaction deleted an entity, and a plain
  * `Error` if no transaction has that seq. The inverse is applied as trusted,

@@ -141,7 +141,7 @@ curl -X POST https://shop.example/apply -H 'content-type: application/json' -d '
 curl --get https://shop.example/query --data-urlencode 'q=.status=shelved&.price<20'
 ```
 
-```ts
+```ts ignore
 // After opening a WebSocket to /ws:
 socket.send(JSON.stringify({ subscribe: '.status=shelved', id: 'shelf' }))
 // Response: { id: 'shelf', bundles: [{ entity: { eid: 'b1', num: 1 }, ... }] }

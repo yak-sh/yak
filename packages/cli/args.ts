@@ -144,6 +144,9 @@ export let valueOf = (name: string, raw: string, p?: Prop): unknown => {
  * first, the same three forms every value here accepts.
  *
  * ```ts
+ * import { pairsIn } from '@yaks/cli'
+ *
+ * let reads = { file: Deno.readTextFileSync, stdin: () => '' }
  * await pairsIn(['serves=4', 'title=Lemon cake'], reads)
  * // { serves: 4, title: 'Lemon cake' }
  * ```

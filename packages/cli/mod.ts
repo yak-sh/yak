@@ -7,7 +7,7 @@
  * MCP server lists, read at run time, every tool a subcommand, and the command
  * line parsed through each tool's own input schema.
  *
- * ```ts
+ * ```ts ignore
  * import { argsFor, doorUrl, rpc } from '@yaks/cli'
  *
  * let ask = rpc({ url: doorUrl('yaks.app'), token: '…' })
@@ -15,13 +15,8 @@
  * ```
  *
  * A program with subcommands of its own passes them in and runs the same
- * program:
- *
- * ```ts
- * import { main } from '@yaks/cli/yak'
- *
- * Deno.exit(await main(Deno.args, mine))
- * ```
+ * program: `Deno.exit(await main(Deno.args, commands))`, `main` from
+ * `@yaks/cli/yak`.
  *
  * A program that is not `yak` at all calls `cli(commands, opts)` — its
  * subcommands, and the name it goes by.

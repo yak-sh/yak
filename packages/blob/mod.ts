@@ -6,9 +6,23 @@
  * long, often repeated, and awkward in a row. Mark the property and they move:
  *
  * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { graph } from '@yaks/graph'
+ * import { storage } from '@yaks/sqlite'
+ * import { open } from '@yaks/sqlite/db'
+ * import {
+ *   blobKeywords,
+ *   blobRead,
+ *   blobs,
+ *   blobSchema,
+ *   sqliteBlobs,
+ * } from '@yaks/blob'
+ *
  * let blog = {
  *   $defs: {
  *     post: {
+ *       component: true,
  *       type: 'object',
  *       properties: {
  *         title: { type: 'string' },
@@ -18,19 +32,15 @@
  *     },
  *   },
  * }
- * ```
- *
- * ```ts
- * import { loadVocab } from '@yaks/vocab'
- * import { blobKeywords, blobRead, blobs, sqliteBlobs } from '@yaks/blob'
- *
  * let vocab = loadVocab([blog], [blobKeywords])
- * // let store = sqliteBlobs(driver)
- * // let db = storage(driver, vocab, { derived: blobRead(vocab) })
- * // let g = graph({ storage: db, vocab, plugins: [blobs(vocab, store)] })
- * //
- * // g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay…' } }])
- * // db.read('.post')[0].post.body // 'a long essay…'
+ * let driver = open(':memory:')
+ * let db = storage(driver, vocab, { derived: blobRead(vocab) })
+ * for (let s of [...db.ddl(), ...blobSchema()]) driver.query(s)
+ * let store = sqliteBlobs(driver)
+ * let g = graph({ storage: db, vocab, plugins: [blobs(vocab, store)] })
+ *
+ * g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay…' } }])
+ * assertEquals(db.read('.post')[0].post.body, 'a long essay…')
  * ```
  *
  * Nothing between those two lines mentions blobs. The write went in as text and

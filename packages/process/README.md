@@ -41,9 +41,10 @@ supervisor file locations, not the child environment.
 <a id="the-process-you-are-in"></a>
 <a id="four-entry-points-one-loop"></a>
 
-Given an application graph loaded with the process and output vocabulary:
+Given an application graph loaded with the process and output vocabulary (the
+example starts a process under systemd, so it is not run as a test):
 
-```ts
+```ts ignore
 import { adopt, launch, store, watch } from '@yaks/process'
 
 const processes = store(graph)
@@ -93,24 +94,23 @@ program run that wrote a row. A `created(process)` event for the host also gives
 effects a normal post-commit event on which to perform startup recovery.
 
 ```ts
-import { ended, started } from '@yaks/process'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { ended, processDoc, processes, started } from '@yaks/process'
 
-await graph.apply([started()])
+let vocab = loadVocab([processDoc])
+let g = graph({ storage: ram(vocab), vocab, plugins: [processes()] })
+
+await g.apply([started()])
 // on shutdown:
-await graph.apply([ended(0)])
+await g.apply([ended(0)])
 ```
 
 ## Supervision
 
 `supervise(store, options)` returns one reconciliation pass. Call it from the
-host's timer:
-
-```ts
-import { store, supervise } from '@yaks/process'
-
-const pass = supervise(store(graph))
-setInterval(pass, 2000)
-```
+host's timer: `setInterval(supervise(store(graph)), 2000)`.
 
 Each pass starts services without a process, restarts eligible exited services
 with exponential backoff capped by the configured `ceiling`, stops entities

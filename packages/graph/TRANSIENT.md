@@ -6,9 +6,23 @@ checkpoints, commits, or discards it. No SQL writes, graph effect hooks, or blob
 versions are produced by an append.
 
 ```ts
-import { transient } from '@yaks/graph'
+import { graph, transient } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
 
-const writer = await transient(graph).begin(id, 'content', 'body', requestId)
+const vocab = loadVocab({
+  $defs: {
+    content: {
+      type: 'object',
+      component: true,
+      properties: { body: { type: 'string' } },
+    },
+  },
+})
+const g = graph({ storage: ram(vocab), vocab })
+await g.apply([{ entity: { eid: 'reply' }, content: { body: '' } }])
+
+const writer = await transient(g).begin('reply', 'content', 'body', 'w1')
 writer.append('Hello')
 writer.append(' world')
 await writer.checkpoint() // durable value; the projection remains active

@@ -149,8 +149,19 @@ let within = (dir: string, file: string) => join(dir, file.replace(/^\.\//, ''))
  * here and resolves to nothing.
  *
  * ```ts
- * resolve('./b.ts', 'src/a.ts', [])                  // 'src/b.ts'
- * resolve('@yaks/git/cites', 'src/a.ts', [git])      // 'packages/git/cites.ts'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let git = {
+ *   path: 'packages/git/deno.json',
+ *   dir: 'packages/git',
+ *   name: '@yaks/git',
+ *   exports: { './cites': './cites.ts' },
+ * }
+ * assertEquals(resolve('./b.ts', 'src/a.ts', []), 'src/b.ts')
+ * assertEquals(
+ *   resolve('@yaks/git/cites', 'src/a.ts', [git]),
+ *   'packages/git/cites.ts',
+ * )
  * ```
  */
 export let resolve = (

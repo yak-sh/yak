@@ -77,10 +77,12 @@ let jpeg = (b: Uint8Array) => {
  * anything that is not one of the four formats.
  *
  * ```ts
+ * import { assertEquals } from '@std/assert'
  * import { mediaTypeOf } from '@yaks/blob'
  *
- * mediaTypeOf(pngBytes) // 'image/png'
- * mediaTypeOf(svgBytes) // undefined
+ * let png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+ * assertEquals(mediaTypeOf(png), 'image/png')
+ * assertEquals(mediaTypeOf(new TextEncoder().encode('<svg/>')), undefined)
  * ```
  */
 export let mediaTypeOf = (b: Uint8Array): string | undefined =>
@@ -99,10 +101,17 @@ export let mediaTypeOf = (b: Uint8Array): string | undefined =>
  * that states a zero, which is a broken file and not a picture of no width.
  *
  * ```ts
+ * import { assertEquals } from '@std/assert'
  * import { sizeOf } from '@yaks/blob'
  *
- * sizeOf(pngBytes) // { w: 1600, h: 900 }
- * sizeOf(pdfBytes) // undefined
+ * // A PNG's signature and the head of its IHDR chunk: 1600 by 900.
+ * let png = new Uint8Array([
+ *   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+ *   0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
+ *   0, 0, 0x06, 0x40, 0, 0, 0x03, 0x84,
+ * ])
+ * assertEquals(sizeOf(png), { w: 1600, h: 900 })
+ * assertEquals(sizeOf(new TextEncoder().encode('%PDF-1.7')), undefined)
  * ```
  */
 export let sizeOf = (b: Uint8Array): Size | undefined => {

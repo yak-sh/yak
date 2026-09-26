@@ -11,16 +11,20 @@ persona file is write-only (the graph owns it), and a markdown document may go
 both ways.
 
 ```ts
+import { assertEquals } from '@std/assert'
 import { type Binding, blobOf, memo, sync } from '@yaks/mirror'
 
+let dir = await Deno.makeTempDir()
+let agents = `${dir}/AGENTS.md`
 let personas: Binding = {
   name: 'personas',
-  files: async () => new Map([['AGENTS.md', await blobOf('old\n')]]),
-  values: () => Promise.resolve(new Map([['AGENTS.md', 'new\n']])),
-  ...memo('/tmp/mirror.json'),
+  files: async () => new Map([[agents, await blobOf('old\n')]]),
+  values: () => Promise.resolve(new Map([[agents, 'new\n']])),
+  ...memo(`${dir}/mirror.json`),
 }
 let report = await sync(personas)
-// report.wrote = ['AGENTS.md']
+assertEquals(report.wrote, [agents])
+assertEquals(await Deno.readTextFile(agents), 'new\n')
 ```
 
 ## Agreement and conflicts

@@ -16,10 +16,11 @@ import { canvasDoc } from './comp.ts'
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
  * import { canvas, canvasDoc } from '@yaks/canvas'
  *
- * let vocab = loadVocab([canvasDoc, mine])
- * let g = graph({ storage, vocab, plugins: [canvas()] })
+ * let vocab = loadVocab([canvasDoc])
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [canvas()] })
  * ```
  *
  * Rendering is a client's job; this only declares what the pieces are. The

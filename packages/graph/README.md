@@ -136,9 +136,25 @@ Use an explicit eid when the application already has an identity for the thing.
 An id starting with `$` is instead a temporary alias, local to one change:
 
 ```ts
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+
+const vocab = loadVocab({
+  $defs: {
+    book: {
+      type: 'object',
+      component: true,
+      properties: { title: { type: 'string' }, pages: { type: 'number' } },
+    },
+  },
+})
+const g = graph({ storage: ram(vocab), vocab })
+
 const applied = await g.apply([
   { entity: { eid: '$newBook' }, book: { title: 'A new book', pages: 100 } },
 ])
+applied[0].entity.eid // the eid the graph assigned
 ```
 
 The graph assigns an eid and resolves every reference to the same alias within
@@ -277,6 +293,25 @@ A plugin's `declared` list supplies rule names, match queries, and optional
 `shelf.aisle`, register:
 
 ```ts
+import { graph } from '@yaks/graph'
+import { storage } from '@yaks/sqlite'
+import { Database, driver } from '@yaks/sqlite/db'
+import { loadVocab } from '@yaks/vocab'
+
+const vocab = loadVocab({
+  $defs: {
+    product: { type: 'object', component: true },
+    shelf: {
+      type: 'object',
+      component: true,
+      properties: { aisle: { type: 'string' } },
+    },
+  },
+})
+const store = storage(driver(new Database(':memory:')), vocab)
+store.install()
+const g = graph({ storage: store, vocab })
+
 g.use({
   name: 'shop',
   declared: [{
@@ -284,6 +319,8 @@ g.use({
     match: '.product, +!shelf, +shelf.aisle=Z',
   }],
 })
+await g.apply([{ entity: { eid: 'p1' }, product: {} }])
+await g.read('.shelf') // p1, on aisle Z
 ```
 
 This matches a product without a shelf, then adds `shelf: { aisle: 'Z' }`. Rules

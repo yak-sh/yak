@@ -53,17 +53,15 @@ let clean = (fix: (a: string) => string) => (b: Bundle): Bundle => {
  * ```ts
  * import { graph } from '@yaks/graph'
  * import { effects } from '@yaks/effects'
+ * import { ram } from '@yaks/ram'
  * import { loadVocab } from '@yaks/vocab'
  * import { docDoc, docs } from '@yaks/doc'
  * import { mailbox, mailDoc, stash } from '@yaks/mail'
  *
- * let vocab = loadVocab([docDoc, mailDoc, club])
+ * let vocab = loadVocab([docDoc, mailDoc])
  * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
- * let g = graph({
- *   storage,
- *   vocab,
- *   plugins: [fx, docs(), mailbox({ domain: 'books.example', sender: stash(), effects: fx })],
- * })
+ * let box = mailbox({ domain: 'books.example', sender: stash(), effects: fx })
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [fx, docs(), box] })
  * ```
  *
  * {@link https://jsr.io/@yaks/doc | @yaks/doc} is composed beside this plugin

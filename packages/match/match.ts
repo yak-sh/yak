@@ -161,11 +161,7 @@ let newest = (a: Bundle, b: Bundle) =>
  *
  * Throws {@link Unsupported} at compile time for anything this package cannot
  * answer exactly — see "Refused queries" in the README.
- *
- * ```ts
- * let live = matcher('.status=live&.price<20', vocab)
- * live(bundles) // the matching bundles
- * ```
+ * `matcher('.status=live&.price<20', vocab)(bundles)` is the matching bundles.
  */
 export let matcher = (
   query: Query,

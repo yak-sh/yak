@@ -112,14 +112,6 @@ determines the full cascade.
 
 ### Read
 
-```ts
-// With store from the example, before closing db:
-store.read('.published=1')
-store.read('.kind=post&.limit=10')
-store.read('.post.author.doc.title~=kate')
-store.rows('.published=1&.count') // aggregate rows with value and n fields
-```
-
 `read` accepts a query string or `@yaks/query` AST and returns whole bundles,
 resolving stored integer references back to public ids. Use `rows` for aggregate
 and field-projection results. See [@yaks/query](../query/README.md) for
@@ -330,9 +322,14 @@ transaction, then commits its synchronous migration and completion record
 atomically:
 
 ```ts
+import { Database, driver } from '@yaks/sqlite/db'
 import { migrations, watchMigrations } from '@yaks/sqlite'
 
-const control = migrations(driver)
+// One database file, and the two connections that share it.
+const path = await Deno.makeTempFile({ suffix: '.db' })
+const app = driver(new Database(path))
+app.exec('create table doc (id integer primary key, title text)')
+const control = migrations(app)
 control.ready() // call before installing application tables; refuses pending/failed work
 
 // On each application connection, after initialization:

@@ -20,19 +20,19 @@ deno add jsr:@yaks/mail
 
 ## Example: membership and messages
 
-A message is an entity with these components:
+A message is an entity with these components, here about the entity `potluck`
+and addressed to the entity `ana`:
 
 ```ts
-// g is a configured graph; ana and potluck are existing entity ids.
-await g.apply([{
+let message = {
   entity: { eid: 'e1' },
   doc: {
     title: 'Potluck Friday',
     body: 'Bring a dish. [Sign up](https://books.example/potluck)',
   },
-  mail: { from: 'hello@books.example', target: potluck },
-  deliver: { to: ana },
-}])
+  mail: { from: 'hello@books.example', target: 'potluck' },
+  deliver: { to: 'ana' },
+}
 ```
 
 | Component   | Stored information                                                                                                                                                |
@@ -144,10 +144,16 @@ For addresses whose recipients read messages directly from this graph, pass a
 local domain:
 
 ```ts
+import { effects } from '@yaks/effects'
+import { loadVocab } from '@yaks/vocab'
+import { docDoc } from '@yaks/doc'
+import { mailbox, mailDoc, stash } from '@yaks/mail'
+
+let fx = effects(loadVocab([docDoc, mailDoc]))
 mailbox({
   domain: 'books.example',
   local: 'books.example',
-  sender,
+  sender: stash(),
   effects: fx,
 })
 ```
@@ -176,7 +182,8 @@ let message = {
     'Message-ID': '<message-1@books.example>',
   }),
 }
-await g.apply(inbound(message, { text: 'See you at seven.' }))
+let batch = inbound(message, { text: 'See you at seven.' })
+console.log(batch[0].doc) // { title: 'Thursday', body: 'See you at seven.' }
 ```
 
 The author comes from the `From` header, falling back to the envelope sender.
@@ -190,8 +197,25 @@ Defaults use a new UUID and, when no date is supplied, the current time.
 author attribution:
 
 ```ts
-import { arrived } from '@yaks/mail'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { docDoc, docs } from '@yaks/doc'
+import { arrived, mailbox, mailDoc } from '@yaks/mail'
 
+let vocab = loadVocab([docDoc, mailDoc])
+let g = graph({
+  storage: ram(vocab),
+  vocab,
+  plugins: [docs(), mailbox({ domain: 'books.example' })],
+})
+await g.apply([{ entity: { eid: 'inbox' }, doc: { title: 'Inbox' } }])
+
+let message = {
+  from: 'ana@books.example',
+  to: 'hello@books.example',
+  headers: new Headers({ Subject: 'Thursday' }),
+}
 let receive = arrived({ graph: g, domain: 'books.example', triage: 'inbox' })
 await g.apply(await receive(message, { text: 'See you at seven.' }))
 ```
@@ -347,7 +371,25 @@ Register `invited()` as a `created('member')` handler to create a welcome
 message when [@yaks/member](../member/README.md) adds a membership:
 
 ```ts
-import { invited } from '@yaks/mail'
+import { effects } from '@yaks/effects'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { docDoc, docs } from '@yaks/doc'
+import { memberDoc } from '@yaks/member'
+import { invited, mailbox, mailDoc, stash } from '@yaks/mail'
+
+let vocab = loadVocab([docDoc, mailDoc, memberDoc])
+let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
+let g = graph({
+  storage: ram(vocab),
+  vocab,
+  plugins: [
+    fx,
+    docs(),
+    mailbox({ domain: 'books.example', sender: stash(), effects: fx }),
+  ],
+})
 
 fx.created(
   'member',
@@ -364,10 +406,10 @@ fx.created(
 )
 ```
 
-Load the member vocabulary for this example. `welcome` can return `null` to skip
-an invitation. The handler creates a message about the membership entity with
-`deliver.to` set to the member's person id. The normal sending effect handles
-it, including recording `bounced` if that entity has no email address.
+`welcome` can return `null` to skip an invitation. The handler creates a message
+about the membership entity with `deliver.to` set to the member's person id. The
+normal sending effect handles it, including recording `bounced` if that entity
+has no email address.
 
 ## Addresses
 

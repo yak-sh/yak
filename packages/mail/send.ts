@@ -145,9 +145,15 @@ export let message = (
  *
  * ```ts
  * import { effects } from '@yaks/effects'
- * import { sending, stash } from '@yaks/mail'
+ * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { docDoc, docs } from '@yaks/doc'
+ * import { mailDoc, sending, stash } from '@yaks/mail'
  *
+ * let vocab = loadVocab([docDoc, mailDoc])
  * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [fx, docs()] })
  * fx.handle({ mail_post: sending({ sender: stash() }) })
  * ```
  *
