@@ -232,15 +232,11 @@
   }
 }
 
+/* Upright on a phone the thumbs' row is as tall as the thumbstick, which
+   rests at its left, clear of the rings at its right; the rings span both
+   columns, so the tray's column is only as wide as the tray. */
 @media (pointer: coarse) and (orientation: portrait) {
   .Hud {
-    grid-template-areas:
-      'vitals nav'
-      'track nav'
-      'foe nav'
-      'feed nav'
-      'note note'
-      'move pads';
     grid-template-rows: auto auto auto minmax(0, 1fr) auto minmax(
       var(--stick),
       auto
