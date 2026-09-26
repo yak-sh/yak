@@ -37,7 +37,7 @@ import { EXIT, PROCESS } from '@yaks/process'
 import { down, type Opts, start } from './run.ts'
 
 /** What these handlers are given: the open graph. */
-export type Host = { graph: Graph }
+export type Host = { graph: Graph; stopping?: AbortSignal }
 
 /** What config can set — the JSON-expressible half of {@link Opts}. */
 export type Options = {
@@ -76,7 +76,7 @@ let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
  */
 export let spawning =
   (o: Opts = {}) => (host: Host, options: Options = {}): Handlers => {
-    let opts: Opts = { ...options, ...o }
+    let opts: Opts = { ...options, ...o, signal: host.stopping }
     let report = o.report ?? ((err: unknown) => console.error('spawn —', err))
     return {
       // The request. A `using` recorded on an `ask` row says what was

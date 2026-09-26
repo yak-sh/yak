@@ -39,7 +39,7 @@ async (
 ): Promise<void> => {
   if (signal.aborted) return
   let report = o.report ?? ((err: unknown) => console.error('spawn —', err))
-  await resume(host.graph, { ...options, ...o }).catch(report)
+  await resume(host.graph, { ...options, ...o, signal }).catch(report)
   await until(signal)
 }
 

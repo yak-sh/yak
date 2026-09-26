@@ -1,8 +1,8 @@
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Comp } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { claude } from './adapters.ts'
-import { asked, follow } from './run.ts'
-import { asking, FAKE, tracked } from './testing.ts'
+import { asked, follow, resume } from './run.ts'
+import { asking, FAKE, tracked, until } from './testing.ts'
 
 // A log file and the run that wrote it, both already over: `follow` then does
 // one pass and returns, which is the whole importer without a process.
@@ -102,6 +102,53 @@ Deno.test('a run that stopped talking is still over, and says so once', async ()
     // And it is written once, however often the tail is run again.
     await follow(g, 'S1', claude.read, { dir })
     assertEquals((await entries(g)).length, said.length)
+  } finally {
+    close()
+  }
+})
+
+let said = [
+  { type: 'assistant', message: { content: [{ type: 'text', text: 'hi' }] } },
+  { type: 'result', usage: { output_tokens: 3 } },
+]
+
+Deno.test('a pass that fails is taken up again where the transcript stands', async () => {
+  let { g, dir, close } = await logged(said)
+  try {
+    // The first write finds the store locked past its busy timeout.
+    let locked = true
+    let flaky: Graph = {
+      ...g,
+      apply: ((b, o) => {
+        if (!locked) return g.apply(b, o)
+        locked = false
+        throw new Error('database is locked')
+      }) as Graph['apply'],
+    }
+    let told: unknown[] = []
+    await follow(flaky, 'S1', claude.read, {
+      dir,
+      poll: 1,
+      report: (e) => told.push(e),
+    })
+    assertEquals(told.length, 1)
+    let got = await entries(g)
+    assertEquals(comp(got[1], 'content').body, 'hi')
+    assertEquals(comp(got.at(-1), 'stop'), {})
+  } finally {
+    close()
+  }
+})
+
+Deno.test('a run that ended while nobody read its log is read to its end on start-up', async () => {
+  let { g, dir, close } = await logged(said)
+  try {
+    await resume(g, { dir, adapters: { fake: claude } })
+    let got = await until(async () => {
+      let e = await entries(g)
+      return comp(e.at(-1), 'stop') && e
+    }, 'the ending')
+    assertEquals(comp(got[1], 'content').body, 'hi')
   } finally {
     close()
   }

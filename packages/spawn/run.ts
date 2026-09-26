@@ -13,8 +13,8 @@
 //    `<eid>.out` by the wrapper, and survives every restart of the server. The
 //    graph stores the transcript read out of it by @yaks/session's importer,
 //    the same one that reads an interactive harness's own transcript file:
-//    each entry records the file and the line it came from, and the highest
-//    line already imported is where a resume begins.
+//    each entry records the file and the line it came from, and the session
+//    how many lines have been read, which is where a resume begins.
 // 3. The request is an entry. A session asks for a provider, a model and an
 //    effort through the `using` component on its first entry, and the text next
 //    to it is the instruction. There is no HTTP endpoint that launches an agent
@@ -30,7 +30,7 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import { type Reader, SESSION } from '@yaks/session'
-import { pull, tail } from '@yaks/session/tail'
+import { pull, type Tail, tail } from '@yaks/session/tail'
 import {
   EXIT,
   launch,
@@ -73,6 +73,10 @@ export type Opts = {
   mint?: () => string
   /** where a failure that has nobody to throw at goes */
   report?: (err: unknown) => void
+  /** the host shutting down (@yaks/cli `Host.stopping`): a run's log is read
+   * until the run is over or this aborts, so a tail never polls a graph that
+   * has closed (default never) */
+  signal?: AbortSignal
 }
 
 let uuid = () => crypto.randomUUID() as string
@@ -193,7 +197,10 @@ let answering = (read: Reader, ask: Comp): Reader => (e) => {
  *
  * It resumes where the transcript stands, so the same call serves a fresh
  * launch and a run adopted back after a restart; and it reads the ending
- * before the last bytes, so nothing written just before an exit is lost.
+ * before the last bytes, so nothing written just before an exit is lost. A
+ * pass that fails (a store that stayed locked past its busy timeout) is told,
+ * and the next opens the tail again where the transcript stands: a failure
+ * costs a pause, never the rest of the run.
  */
 export let follow = async (
   g: Graph,
@@ -201,12 +208,21 @@ export let follow = async (
   read: Reader,
   o: Opts = {},
 ): Promise<void> => {
-  let t = await tail(g, paths(session, o).out, { session })
-  while (true) {
-    let over = comp(await one(g, session), EXIT) != null
-    await pull(g, t, read, { final: over, report: told(o) })
-    if (over) return ended(g, session, o)
-    await sleep(o.poll ?? 250)
+  let poll = o.poll ?? 250
+  let t: Tail | undefined
+  while (!o.signal?.aborted) {
+    let wait = poll
+    try {
+      t ??= await tail(g, paths(session, o).out, { session })
+      let over = comp(await one(g, session), EXIT) != null
+      await pull(g, t, read, { final: over, report: told(o) })
+      if (over) return ended(g, session, o)
+    } catch (e) {
+      told(o)(e)
+      t = undefined
+      wait = poll * 20
+    }
+    await sleep(wait)
   }
 }
 
@@ -285,7 +301,9 @@ export let start = async (
  * Pick every managed session back up. Call it once at start-up, before
  * serving: a run still going is watched again and its log read on from where
  * the transcript stands; one that ended while we were away is stamped now, and
- * the lines it wrote in between are imported in the same pass.
+ * the lines it wrote in between are imported in the same pass. So is a run
+ * that ended while nobody was reading its log, whose transcript still reads
+ * as going: it is read to its end, and its ending written.
  *
  * ```ts
  * import { resume } from '@yaks/spawn'
@@ -302,15 +320,25 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
     running: () => g.read(`.${SESSION}&.${PROCESS}&!${EXIT}&*`),
   }
   let runs = await watch(mine, o)
-  for (let run of runs) {
-    // The watch's own loop outlives this call and nobody awaits it, so its
-    // failure is told rather than thrown at nobody — a process that let the
-    // graph go while a tail was still polling is the ordinary way this ends.
-    run.done.catch(told(o))
-    let job = await asked(g, run.eid).catch(() => null)
+  // The watch's own loop outlives this call and nobody awaits it, so its
+  // failure is told rather than thrown at nobody — a process that let the
+  // graph go while a tail was still polling is the ordinary way this ends.
+  for (let run of runs) run.done.catch(told(o))
+  // A run asked here that is over, but whose transcript has no ending, was
+  // left unread partway.
+  let sessions = async (q: string) =>
+    new Set(
+      (await g.rows(`${q}&.tally=entry.session`)).map((r) => String(r.value)),
+    )
+  let [asks, over] = await Promise.all([sessions('.using'), sessions('.stop')])
+  let unread = (await g.read(`.${SESSION}&.${PROCESS}&.${EXIT}`))
+    .map((b) => b.entity.eid)
+    .filter((eid) => asks.has(eid) && !over.has(eid))
+  for (let eid of [...runs.map((r) => r.eid), ...unread]) {
+    let job = await asked(g, eid).catch(() => null)
     let adapter = job && (o.adapters ?? known)[job.provider]
     if (job && adapter) {
-      follow(g, run.eid, answering(adapter.read, job.ask), o).catch(told(o))
+      follow(g, eid, answering(adapter.read, job.ask), o).catch(told(o))
     }
   }
   return runs

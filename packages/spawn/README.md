@@ -41,9 +41,11 @@ a detached systemd user scope, so it can outlive the process that opened the
 graph. That graph-opening process is the **host**. The host that stays up holds
 the `@yaks/spawn/service` duty under the `@yaks/spawn` lease, renewed for as
 long as it runs, and resumes monitoring active runs, so no two hosts import the
-same logs. A one-shot command adopts no run: its tails would outlive the lease
-it gives back when it closes. Effect handlers start the long-running work
-without awaiting it; failures go to the configured `report` callback.
+same logs. It also takes up a run that is over but whose transcript never ended
+(its log was left unread partway), and reads it to its end. A one-shot command
+adopts no run: its tails would outlive the lease it gives back when it closes.
+Effect handlers start the long-running work without awaiting it; failures go to
+the configured `report` callback.
 
 <a id="how-the-child-process-is-started"></a>
 
@@ -56,9 +58,11 @@ The package does not reap child processes.
 Standard output is stored in the process directory as `<session-eid>.out`, and
 `@yaks/session`'s importer reads it into the transcript: each recognized line
 becomes entries with `imported{source, line}`, tool calls and their results
-included. The largest imported line number is the durable read position, so
-monitoring can resume after a restart without a separate cursor. Unrecognized
-and invalid JSON lines remain in the file and are not entries.
+included. The session's `consumed` is the durable read position, so monitoring
+resumes after a restart where it stopped. A pass that fails (a store locked past
+its busy timeout) is reported, and the next takes the log up where the
+transcript stands. Unrecognized and invalid JSON lines remain in the file and
+are not entries.
 
 When the process exits, the follower appends a transcript `stop` entry. A
 nonzero exit is recorded with that entry. Writing `stop` on the session entity
