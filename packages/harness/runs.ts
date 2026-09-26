@@ -13,7 +13,6 @@
 // its endpoint lists. A tool answers, it does not write to a terminal.
 
 import {
-  addressed,
   argsOf,
   type Bundle,
   type Comp,
@@ -35,19 +34,6 @@ type Args = Record<string, unknown>
 let word = (args: Args, name: string): string | undefined => {
   let v = args[name]
   return typeof v == 'string' ? v : undefined
-}
-
-/** The session a person typed: whatever the graph resolves (an eid, `S-81`,
- * a name), else its short id or the start of its eid. */
-let sessionAt = async (
-  graph: Graph,
-  id: string,
-): Promise<Eid | undefined> => {
-  let [eid] = await addressed(graph, [id]).catch(() => [undefined])
-  if (eid) return eid
-  let rows = await graph.read(parse('.session&*'))
-  return (rows.find((b) => String((b.session as Comp).id) == id) ??
-    rows.find((b) => b.entity.eid.startsWith(id)))?.entity.eid
 }
 
 // Wait for the reply: once the transcript owes nothing, where it settled — the
@@ -109,8 +95,9 @@ export let runs = (): Runs => ({
   },
   session_send: async (call, graph) => {
     let args = argsOf(call)
-    let s = await sessionAt(graph, String(args.session))
-    if (!s) throw new Refused(`no such session: ${args.session}`)
+    // The session arrives as its eid: @yaks/tools resolved what was typed (an
+    // eid, `S-81`, a run's own id) and refused one that names no session.
+    let s = String(args.session)
     let using = usingBefore(await transcript(graph, s))
     await graph.apply([{
       entity: { eid: crypto.randomUUID() },
