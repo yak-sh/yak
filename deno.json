@@ -104,6 +104,7 @@
     "test:run": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/scratch.ts deno run -A --node-modules-dir=manual bin/test.ts"
   },
   "workspace": [
+    "./apps/vale",
     "./workers/yak",
     "./packages/query",
     "./packages/vocab",

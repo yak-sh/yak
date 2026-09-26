@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang=en>
+  <meta charset=utf-8>
+  <meta name=viewport
+    content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <title>Mossvale</title>
+  <meta name=description
+    content="A voxel vale to adventure in with whoever else is here: slimes in the meadow, boars in Whisperwood, walking stones in Craghollow, and something old on Thornback Ridge.">
+  <meta name=theme-color content="#8cc85c">
+  <link rel=icon href=icon.png>
+  <link rel=apple-touch-icon href=icon.png>
+  <link rel=preconnect href=https://esm.sh crossorigin>
+  <link rel=preconnect href=https://fonts.googleapis.com>
+  <link rel=preconnect href=https://fonts.gstatic.com crossorigin>
+  <link rel=stylesheet
+    href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
+  <link rel=stylesheet href=style.css>
+  <!-- @yaks/client and @yaks/vocab as JSR holds them, built by esm.sh; the
+       app's own code and three.js are compiled from main.ts at deploy. -->
+  <script type=importmap>
+  {
+    "imports": {
+      "@yaks/client": "https://esm.sh/jsr/@yaks/client@0.2.1",
+      "@yaks/vocab": "https://esm.sh/jsr/@yaks/vocab@0.2.1"
+    }
+  }
+  </script>
+  <canvas class=Stage></canvas>
+  <div class=Hud hidden></div>
+  <div class=Gate>
+    <div class=Gate_Card>
+      <h1 class=Gate_Title>Mossvale</h1>
+      <p class=Gate_Lede>A little vale of moss and stone. Whoever else is here
+        walks it with you.</p>
+      <p class=Gate_Busy>Growing the vale…</p>
+    </div>
+  </div>
+  <script type=module src=main.ts></script>
+</html>

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { groups, pages, RUN, shards, timesIn } from './test.ts'
 
-Deno.test('examples come from the packages, and never a module by name', async () => {
+Deno.test('examples come from the packages and the apps, and never a module by name', async () => {
   let got = await pages([
     'bin',
     'workers',
@@ -11,13 +11,21 @@ Deno.test('examples come from the packages, and never a module by name', async (
     'packages/graph',
     'packages/graph/graph.ts',
     'packages/graph/README.md',
+    'apps',
   ])
-  assertEquals(got.every((p) => p.startsWith('packages/')), true, got.join())
+  assertEquals(
+    got.every((p) => p.startsWith('packages/') || p.startsWith('apps/')),
+    true,
+    got.join(),
+  )
   assertEquals(got.some((p) => /\.tsx?$/.test(p)), false, got.join())
   // `packages` holds only tests of its own, so each package is its own piece.
   assertEquals(got.includes('packages'), false)
   assertEquals(got.filter((p) => p == 'packages/graph').length, 1)
   assertEquals(got.includes('packages/graph/README.md'), true)
+  // An app written in TypeScript is a piece; one of plain files has none.
+  assertEquals(got.includes('apps/vale'), true)
+  assertEquals(got.includes('apps/yak-sh'), false)
 })
 
 Deno.test('a run started inside a run refuses at once', async () => {

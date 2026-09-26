@@ -1,14 +1,16 @@
 # The sandbox image's build context is this directory (workers/yak/wrangler.toml
 # `image_build_context`), and all it needs is the Deno workspace the `yak` CLI
 # resolves in (workers/yak/sandbox/Dockerfile). So everything is out, then the
-# workspace config, packages/, and the one member outside packages/ are let back
-# in. Wrangler pipes the Dockerfile on stdin, so this file has to sit at the
-# context root rather than beside the Dockerfile.
+# workspace config, packages/, and the members outside packages/ are let back
+# in, since deno refuses a workspace with a member missing. Wrangler pipes the
+# Dockerfile on stdin, so this file has to sit at the context root rather than
+# beside the Dockerfile.
 *
 !deno.json
 !deno.lock
 !packages
 !workers/yak/deno.json
+!apps/vale/deno.json
 
 # Never into the image, wherever they turn up under what was let in.
 **/.env*

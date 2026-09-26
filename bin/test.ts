@@ -13,7 +13,7 @@
 import { type Result, runTestCommands, type TestCommand } from './phases.ts'
 import { denoDir } from './testing.ts'
 
-export let ROOTS = ['packages', 'bin', 'workers']
+export let ROOTS = ['packages', 'bin', 'workers', 'apps']
 
 /** Set in a run's environment, naming the run: every process it starts
  * inherits it, so a run started from inside one refuses. */
@@ -27,8 +27,8 @@ export let workerd = (file: string) => /_workerd_test\.tsx?$/.test(file)
 // were this repo's, against an import map that is not its own.
 let SKIP = ['vendor', 'node_modules', '.wrangler']
 
-/** Where examples are run from: the packages, never a script. */
-export let DOCS = 'packages'
+/** Where examples are run from: the packages and the apps, never a script. */
+export let DOCS = ['packages', 'apps']
 
 let module = (name: string) => /\.tsx?$/.test(name)
 let test = (name: string) => /_test\.tsx?$/.test(name)
@@ -37,28 +37,28 @@ let test = (name: string) => /_test\.tsx?$/.test(name)
  * README.
  *
  * Never a module by name: `deno test --doc a.ts` runs a.ts itself, where a
- * directory only has its examples read. A directory whose own files are all
- * tests (`packages`) is taken one subdirectory at a time. */
-export async function pages(roots = [DOCS]) {
+ * directory only has its examples read. A directory with modules of its own
+ * is one piece; one without (`packages`, `apps`, an app of plain files) is
+ * looked into, and its READMEs taken. */
+export async function pages(roots = DOCS) {
   let out: string[] = []
-  for (let root of roots) {
-    let path = root.replace(/^\.\//, '').replace(/\/+$/, '')
-    if (path != DOCS && !path.startsWith(`${DOCS}/`)) continue
-    if (!(await Deno.stat(path)).isDirectory) {
-      if (path.endsWith('.md')) out.push(path)
-      continue
-    }
+  let walk = async (path: string): Promise<void> => {
     let entries = await Array.fromAsync(Deno.readDir(path))
-    let own = entries.some((e) => e.isFile && module(e.name) && !test(e.name))
-    if (own) {
+    if (entries.some((e) => e.isFile && module(e.name) && !test(e.name))) {
       out.push(path)
-      continue
+      return
     }
     for (let e of entries) {
       let at = `${path}/${e.name}`
-      if (e.isDirectory && !SKIP.includes(e.name)) out.push(at)
+      if (e.isDirectory && !SKIP.includes(e.name)) await walk(at)
       else if (e.isFile && e.name.endsWith('.md')) out.push(at)
     }
+  }
+  for (let root of roots) {
+    let path = root.replace(/^\.\//, '').replace(/\/+$/, '')
+    if (!DOCS.some((d) => path == d || path.startsWith(`${d}/`))) continue
+    if ((await Deno.stat(path)).isDirectory) await walk(path)
+    else if (path.endsWith('.md')) out.push(path)
   }
   return [...new Set(out)].sort()
 }

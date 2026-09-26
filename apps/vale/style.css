@@ -1,0 +1,866 @@
+:root {
+  --ink: #2f3a2c;
+  --paper: #fbf7ea;
+  --moss: #6fae4d;
+  --deep: #3f6f3a;
+  --ember: #e0703f;
+  --gold: #f2c14e;
+  --sky: #5fa8e6;
+  --hp: #e0573f;
+  --xp: #7fc6f2;
+  --shade: rgba(28, 36, 26, 0.55);
+  --radius: 14px;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #cfe6f2;
+  font: 500 16px/1.35 'Fredoka', system-ui, sans-serif;
+  color: var(--ink);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.Stage {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  outline: none;
+}
+
+.Gate {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.35),
+    rgba(47, 70, 40, 0.45));
+  z-index: 10;
+}
+
+.Gate_Card {
+  width: min(24rem, 100%);
+  padding: 1.6rem 1.5rem 1.4rem;
+  border-radius: 22px;
+  background: var(--paper);
+  box-shadow: 0 0.5rem 0 #d9ceb0, 0 1.2rem 2.5rem rgba(20, 30, 15, 0.35);
+  text-align: center;
+}
+
+.Gate_Title {
+  margin: 0;
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--deep);
+}
+
+.Gate_Lede {
+  margin: 0.3rem 0 1.1rem;
+  color: #5b6555;
+}
+
+.Gate_Busy {
+  margin: 0.5rem 0 0;
+  color: #7a8570;
+}
+
+.Gate_Note {
+  margin: 1rem 0 0;
+  font-size: 0.85rem;
+  color: #7a8570;
+}
+
+/* Making a hero, at the gate. */
+.Make {
+  display: grid;
+  gap: 0.45rem;
+  text-align: left;
+}
+
+.Make_Name {
+  display: grid;
+  gap: 0.25rem;
+  font-weight: 600;
+  color: var(--deep);
+}
+
+.Make_Name input {
+  font: inherit;
+  font-size: 1.1rem;
+  padding: 0.5rem 0.8rem;
+  border: 2px solid #e2d8bc;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.Make_Name input:focus {
+  outline: none;
+  border-color: var(--moss);
+}
+
+.Make_Label {
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #7a8570;
+}
+
+.Make_Row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.Swatch {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 0 2px #e2d8bc;
+  cursor: pointer;
+}
+
+.Swatch-on {
+  box-shadow: 0 0 0 3px var(--deep);
+  transform: scale(1.08);
+}
+
+.Btn {
+  display: inline-block;
+  font: inherit;
+  font-weight: 600;
+  padding: 0.55rem 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  background: #ece3c8;
+  color: var(--ink);
+  box-shadow: 0 3px 0 #d3c7a4;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+}
+
+.Btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #d3c7a4;
+}
+
+.Btn-go {
+  margin-top: 0.7rem;
+  font-size: 1.15rem;
+  padding: 0.7rem 1.2rem;
+  background: var(--moss);
+  color: #fff;
+  box-shadow: 0 4px 0 var(--deep);
+}
+
+.Btn-go:active {
+  box-shadow: 0 1px 0 var(--deep);
+}
+
+/* The glass over the game. */
+.Hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.Hud[hidden] {
+  display: none;
+}
+
+.Card,
+.Track,
+.Foe,
+.Who,
+.Bag,
+.Talk,
+.Toast {
+  background: rgba(251, 247, 234, 0.93);
+  border-radius: 16px;
+  box-shadow: 0 3px 0 rgba(160, 145, 105, 0.45), 0 8px 22px rgba(20, 30, 15,
+    0.18);
+}
+
+.Card {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  width: 15rem;
+  padding: 0.55rem 0.75rem 0.65rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.Card_Top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.Card_Name {
+  font-size: 1.1rem;
+  color: var(--deep);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.Card_Lvl {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--deep);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  white-space: nowrap;
+}
+
+.Bar {
+  --fill: var(--hp);
+  position: relative;
+  height: 1rem;
+  border-radius: 999px;
+  background: rgba(47, 58, 44, 0.16);
+  overflow: hidden;
+}
+
+.Bar > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--k) * 100%);
+  background: var(--fill);
+  border-radius: inherit;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.12), inset 0 2px 0 rgba(255, 255,
+    255, 0.35);
+  transition: width 0.25s ease-out;
+}
+
+.Bar > span {
+  position: relative;
+  display: block;
+  font-size: 0.7rem;
+  line-height: 1rem;
+  font-weight: 600;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+
+.Bar-xp {
+  --fill: var(--xp);
+  height: 0.7rem;
+}
+
+.Bar-xp > span {
+  font-size: 0.6rem;
+  line-height: 0.7rem;
+}
+
+.Bar-foe {
+  --fill: var(--ember);
+}
+
+.Track {
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top)) + 6.3rem);
+  left: max(12px, env(safe-area-inset-left));
+  width: 15rem;
+  padding: 0.45rem 0.75rem;
+  display: grid;
+  font-size: 0.85rem;
+}
+
+.Track b {
+  color: #9a6a1c;
+}
+
+.Track span {
+  color: #5b6555;
+}
+
+.Foe {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(20rem, 42vw);
+  padding: 0.45rem 0.75rem 0.55rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 0.5rem;
+}
+
+.Foe[hidden] {
+  display: none;
+}
+
+.Foe em {
+  font-style: normal;
+  font-size: 0.8rem;
+  color: #7a8570;
+}
+
+.Foe .Bar {
+  grid-column: 1 / -1;
+}
+
+.Who {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  padding: 0.35rem 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.Who_Dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--moss);
+  box-shadow: 0 0 0 3px rgba(111, 174, 77, 0.3);
+}
+
+.Who_Clock {
+  margin-left: 0.3rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid #e2d8bc;
+  font-weight: 500;
+  color: #5b6555;
+}
+
+.Mute {
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top)) + 2.7rem);
+  right: max(12px, env(safe-area-inset-right));
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(251, 247, 234, 0.9);
+  box-shadow: 0 2px 0 rgba(160, 145, 105, 0.45);
+  font-size: 1rem;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.Bag {
+  position: absolute;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  padding: 0.35rem 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  max-width: 22rem;
+}
+
+.Bag_Item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.1rem 0.45rem 0.1rem 0.3rem;
+  border-radius: 999px;
+  background: #efe6ca;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.Bag_Item i {
+  font-style: normal;
+  font-size: 1.05rem;
+}
+
+.Bag_Empty {
+  padding: 0.1rem 0.3rem;
+  font-size: 0.85rem;
+  color: #7a8570;
+}
+
+.Keys {
+  position: absolute;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.9rem;
+  font-size: 0.8rem;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+}
+
+.Keys kbd {
+  font: inherit;
+  font-weight: 600;
+  padding: 0 0.35rem;
+  border-radius: 6px;
+  background: rgba(251, 247, 234, 0.9);
+  color: var(--ink);
+  text-shadow: none;
+}
+
+.Pads {
+  position: absolute;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: 10.5rem;
+  height: 10.5rem;
+  display: none;
+}
+
+.Pad {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 3.6rem;
+  height: 3.6rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(251, 247, 234, 0.9);
+  box-shadow: 0 4px 0 rgba(120, 105, 70, 0.55), 0 8px 18px rgba(20, 30, 15,
+    0.25);
+  color: var(--deep);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.Pad:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(120, 105, 70, 0.55);
+}
+
+.Pad svg {
+  width: 55%;
+  height: 55%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.Pad-strike {
+  right: 0;
+  bottom: 0;
+  width: 5.4rem;
+  height: 5.4rem;
+  background: var(--ember);
+  color: #fff;
+  box-shadow: 0 4px 0 #a8492a, 0 8px 18px rgba(20, 30, 15, 0.25);
+}
+
+.Pad-jump {
+  right: 6rem;
+  bottom: 0.2rem;
+}
+
+.Pad-talk {
+  right: 0.9rem;
+  bottom: 6.2rem;
+}
+
+.Pad-drink {
+  right: 5.4rem;
+  bottom: 4.6rem;
+  width: 3.1rem;
+  height: 3.1rem;
+}
+
+.Pad_Icon {
+  font-size: 1.3rem;
+}
+
+.Pad_N {
+  position: absolute;
+  right: -0.2rem;
+  bottom: -0.2rem;
+  min-width: 1.2rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--deep);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.Pad_N:empty {
+  display: none;
+}
+
+.Pad-off {
+  opacity: 0.35;
+}
+
+.Pad-talk.Pad-off {
+  display: none;
+}
+
+.Toasts {
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top)) + 4.4rem);
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  width: min(26rem, 80vw);
+}
+
+.Toast {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  animation: toast-in 0.25s ease-out;
+  transition: opacity 0.5s, transform 0.5s;
+}
+
+.Toast-big {
+  font-size: 1.15rem;
+  color: var(--deep);
+}
+
+.Toast-loot {
+  color: #8a5a10;
+}
+
+.Toast-out {
+  opacity: 0;
+  transform: translateY(-0.5rem);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.6rem) scale(0.96);
+  }
+}
+
+.Talk {
+  position: absolute;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(30rem, calc(100vw - 24px));
+  padding: 0.9rem 1.1rem 1rem;
+  pointer-events: auto;
+}
+
+.Talk[hidden] {
+  display: none;
+}
+
+.Talk_Who {
+  position: absolute;
+  top: -0.8rem;
+  left: 1rem;
+  padding: 0.1rem 0.7rem;
+  border-radius: 999px;
+  background: var(--deep);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.Talk h3 {
+  margin: 0.3rem 0 0.2rem;
+  color: #9a6a1c;
+}
+
+.Talk p {
+  margin: 0.3rem 0;
+}
+
+.Talk_Reward {
+  font-size: 0.9rem;
+  color: #5b6555;
+}
+
+.Talk_Acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.Talk_Acts .Btn-go {
+  margin: 0;
+  font-size: 1rem;
+  padding: 0.55rem 1.1rem;
+}
+
+.Faint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle, rgba(120, 30, 20, 0) 30%, rgba(120, 30,
+    20, 0.45));
+}
+
+.Faint[hidden] {
+  display: none;
+}
+
+.Faint_Card {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.9rem 1.3rem;
+  border-radius: 18px;
+  background: rgba(251, 247, 234, 0.95);
+  text-align: center;
+}
+
+.Faint_Card b {
+  font-size: 1.3rem;
+  color: #a8492a;
+}
+
+/* Labels over the scene: names, health, and the numbers a blow throws up. */
+.Layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.Plate,
+.Float {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+}
+
+.Plate[hidden],
+.Float[hidden] {
+  display: none;
+}
+
+.Plate_In {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6), 0 0 4px rgba(0, 0, 0, 0.35);
+}
+
+.Plate_In em {
+  font-style: normal;
+  font-size: 0.7rem;
+  opacity: 0.85;
+}
+
+.Plate-friend .Plate_In b {
+  color: #dff5c8;
+}
+
+.Plate-boss .Plate_In b {
+  color: #ffb08a;
+  font-size: 0.95rem;
+}
+
+.Plate_Bar {
+  --fill: var(--ember);
+  position: relative;
+  display: block;
+  width: 3.4rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.Plate_Bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--k) * 100%);
+  background: var(--fill);
+}
+
+.Plate_Bar-friend {
+  --fill: #7fd65c;
+}
+
+.Mark {
+  display: block;
+  font-size: 1.5rem;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--gold);
+  text-shadow: 0 2px 0 #9a6a1c, 0 0 8px rgba(0, 0, 0, 0.35);
+  animation: bob 1.2s ease-in-out infinite;
+}
+
+.Mark-ready {
+  color: #9fe07a;
+  text-shadow: 0 2px 0 var(--deep), 0 0 8px rgba(0, 0, 0, 0.35);
+}
+
+@keyframes bob {
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.Float {
+  display: flex;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45), 0 0 3px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+.Float-great {
+  font-size: 1.6rem;
+  color: var(--gold);
+}
+
+.Float-ally {
+  font-size: 0.9rem;
+  color: #e8e2d0;
+}
+
+.Float-hurt {
+  color: #ff8a70;
+}
+
+.Float-heal {
+  color: #9ff07a;
+}
+
+.Float-xp {
+  font-size: 0.95rem;
+  color: var(--xp);
+}
+
+/* The thumbstick, under the thumb that put it there. */
+.Stick {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.Stick[hidden] {
+  display: none;
+}
+
+.Stick::before,
+.Stick_Knob {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+}
+
+.Stick::before {
+  left: -3.5rem;
+  top: -3.5rem;
+  width: 7rem;
+  height: 7rem;
+  background: rgba(251, 247, 234, 0.25);
+  border: 3px solid rgba(251, 247, 234, 0.7);
+  box-sizing: border-box;
+}
+
+.Stick_Knob {
+  left: -1.6rem;
+  top: -1.6rem;
+  width: 3.2rem;
+  height: 3.2rem;
+  background: rgba(251, 247, 234, 0.9);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+
+@media (pointer: coarse) {
+  .Keys {
+    display: none;
+  }
+
+  .Pads {
+    display: block;
+  }
+}
+
+@media (max-width: 640px) {
+  html,
+  body {
+    font-size: 14px;
+  }
+
+  .Card,
+  .Track {
+    width: 12.5rem;
+  }
+
+  .Track {
+    top: calc(max(12px, env(safe-area-inset-top)) + 6rem);
+  }
+
+  .Foe {
+    top: auto;
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 11.5rem);
+    right: max(12px, env(safe-area-inset-right));
+    left: auto;
+    transform: none;
+    width: 11rem;
+  }
+
+  .Who_Clock {
+    display: none;
+  }
+
+  .Bag {
+    left: auto;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: auto;
+    top: calc(max(12px, env(safe-area-inset-top)) + 5.4rem);
+    max-width: 9rem;
+    justify-content: flex-end;
+  }
+
+  .Toasts {
+    top: auto;
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 12rem);
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "three": "npm:three@^0.186.1"
+  }
+}

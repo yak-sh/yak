@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mossvale",
+  "description": "A voxel vale to adventure in together. Players, creatures, loot and quests are entities in this app's store; where each player stands is relayed between them and kept by nobody.",
+  "$defs": {
+    "player": {
+      "component": true,
+      "type": "object",
+      "description": "Someone who walks the vale: the name over their head, and the colours they wear. Everything they have done is in rows of its own (slain, item, journal), so a visitor who is not signed in, who can only add rows, still keeps it.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name over their head."
+        },
+        "tint": {
+          "type": "string",
+          "description": "Their tunic's colour, as #rrggbb."
+        },
+        "hair": {
+          "type": "string",
+          "description": "Their hair's colour, as #rrggbb."
+        },
+        "skin": {
+          "type": "string",
+          "description": "Their skin's colour, as #rrggbb."
+        }
+      }
+    },
+    "pose": {
+      "component": true,
+      "type": "object",
+      "sync": "peers",
+      "durable": "connection",
+      "description": "Where a player stands this moment and what they are doing, relayed to everyone in the vale and kept by nobody: it goes when their connection does. It carries their fight too, the damage they have dealt the creature they are fighting in its current life.",
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" },
+        "yaw": {
+          "type": "number",
+          "description": "Which way they face, in radians."
+        },
+        "gait": {
+          "type": "string",
+          "enum": ["idle", "walk", "run", "jump", "down"],
+          "description": "How they are moving."
+        },
+        "swing": {
+          "type": "number",
+          "description": "Counts their blows, so a page sees each one."
+        },
+        "hp": { "type": "number" },
+        "max": { "type": "number" },
+        "lvl": { "type": "number" },
+        "foe": {
+          "type": "string",
+          "description": "The creature they are fighting."
+        },
+        "dmg": {
+          "type": "number",
+          "description": "The damage they have dealt it in this life."
+        },
+        "life": {
+          "type": "number",
+          "description": "Which life of the creature: when it last fell, in ms."
+        }
+      }
+    },
+    "body": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "A mover as this page simulates it, every frame: the player's own hero, and each creature near them. Never leaves the page.",
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" },
+        "vy": { "type": "number" },
+        "yaw": { "type": "number" },
+        "speed": { "type": "number" },
+        "gait": { "type": "string" },
+        "hunts": {
+          "type": "string",
+          "description": "The player a creature is after."
+        },
+        "bite": {
+          "type": "number",
+          "description": "When a creature last bit, in ms."
+        }
+      }
+    },
+    "creature": {
+      "component": true,
+      "type": "object",
+      "description": "A creature of the vale and the place it roams from. How hurt it is lives in the players' poses; each time it falls, a slain row says so.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["slime", "boar", "crag", "thornback"]
+        },
+        "x": { "type": "number", "description": "Its home, in metres." },
+        "z": { "type": "number", "description": "Its home, in metres." },
+        "roam": {
+          "type": "number",
+          "description": "How far from home it wanders, in metres."
+        }
+      }
+    },
+    "npc": {
+      "component": true,
+      "type": "object",
+      "description": "Someone who lives in the vale and gives out its quests.",
+      "properties": {
+        "name": { "type": "string" },
+        "x": { "type": "number" },
+        "z": { "type": "number" },
+        "greets": {
+          "type": "string",
+          "description": "What they say when there is nothing to ask of you."
+        }
+      }
+    },
+    "quest": {
+      "component": true,
+      "type": "object",
+      "description": "Something the Elder asks of a player. Its doc holds the title and the words; quests are offered in step order, each once the one before is done.",
+      "properties": {
+        "step": { "type": "integer" },
+        "goal": { "type": "string", "enum": ["slay", "gather"] },
+        "target": {
+          "type": "string",
+          "description": "A creature kind to slay, or an item kind to gather."
+        },
+        "count": { "type": "integer" },
+        "xp": { "type": "integer" },
+        "gift": {
+          "type": "string",
+          "description": "An item kind given on completion."
+        }
+      }
+    },
+    "slain": {
+      "component": true,
+      "type": "object",
+      "description": "A player's share in a creature's fall. The first row after the creature was last up is the fall itself; the others are the players who helped.",
+      "properties": {
+        "creature": { "type": "string", "index": true },
+        "by": { "type": "string", "index": true, "description": "The player." },
+        "kind": { "type": "string" },
+        "at": { "type": "number", "description": "When it fell, in ms." },
+        "xp": { "type": "number" }
+      }
+    },
+    "item": {
+      "component": true,
+      "type": "object",
+      "description": "Something a player picked up or was given.",
+      "properties": {
+        "kind": { "type": "string" },
+        "n": { "type": "integer", "description": "How many, for coins." },
+        "owner": {
+          "type": "string",
+          "index": true,
+          "description": "The player."
+        },
+        "at": { "type": "number" }
+      }
+    },
+    "used": {
+      "component": true,
+      "type": "object",
+      "description": "An item spent: a tonic drunk, jelly handed to the Elder.",
+      "properties": {
+        "item": { "type": "string" },
+        "by": { "type": "string", "index": true },
+        "at": { "type": "number" }
+      }
+    },
+    "journal": {
+      "component": true,
+      "type": "object",
+      "description": "A step in a player's quest: taken, then done.",
+      "properties": {
+        "player": { "type": "string", "index": true },
+        "quest": { "type": "string" },
+        "step": { "type": "string", "enum": ["taken", "done"] },
+        "at": { "type": "number" }
+      }
+    },
+    "drop": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "Loot lying on the ground for this player alone, until they walk over it. Never leaves the page: picking it up writes an item.",
+      "properties": {
+        "kind": { "type": "string" },
+        "n": { "type": "integer" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" },
+        "at": { "type": "number" }
+      }
+    }
+  }
+}
