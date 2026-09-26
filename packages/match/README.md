@@ -285,9 +285,11 @@ Values sort absent first, then numbers, then text — the order SQLite's
 ties are deterministic. Ascending property order puts missing values first;
 descending order reverses that property order.
 
-`.limit=n` keeps the first n results. `.after=<num>` continues past the entity
-with that number, wherever it sits in the order. It is one cursor form for every
-ordering, so callers need only the last entity number to request another page:
+`.limit=n` keeps the first n results, and `.limit=0` keeps none. An aggregate in
+`rows()` ignores `.order`, `.limit` and `.after` and counts every match, as
+@yaks/sql does. `.after=<num>` continues past the entity with that number,
+wherever it sits in the order. It is one cursor form for every ordering, so
+callers need only the last entity number to request another page:
 
 - The anchor is looked up in the whole array rather than among the matches, so
   an anchor that no longer matches the query still names a place in the order.

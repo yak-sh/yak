@@ -169,6 +169,7 @@ let QUERIES = [
   // order when there is one — `.after` naming the entity to continue past,
   // wherever it sits in that order.
   '.kind=book&.limit=2',
+  '.kind=book&.limit=0',
   '.kind=book&.after=4',
   '.kind=book&.limit=2&.after=6',
   '.kind=book&.order=price&.limit=2',
@@ -225,6 +226,9 @@ Deno.test('an aggregate answers the same rows on both sides', () => {
     let q of [
       '.count',
       '.review&.count',
+      // an aggregate counts the whole selection, whatever window rides along
+      '.kind=book&.limit=0&.count',
+      '.kind=book&.order=price&.limit=1&.after=6&.tally=status',
       '.distinct=status',
       '.tally=status',
       '.price<20&.tally=status',

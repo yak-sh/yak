@@ -212,6 +212,9 @@ caller does not need the ordered property's value to request the next page. This
 parser only records which entity it names; working out where that entity sits is
 evaluation (`@yaks/sql`, `@yaks/match`).
 
+`.limit=0` answers no rows. `.order`, `.limit` and `.after` shape a list of
+rows, so an aggregate ignores them: `.count&.limit=20` counts every match.
+
 ### Two more rules
 
 - Each clause has one spelling. The forms it once had beside that one (`.p!`,

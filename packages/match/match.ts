@@ -202,6 +202,9 @@ let past = (
 export type Row = Record<string, unknown>
 
 let AGGS = new Set(['count', 'distinct', 'tally'])
+// What shapes a sequence. An aggregate is not one: it counts everything the
+// filter selects, so a `.limit=20` board's tally still says how many match.
+let SEQUENCE = new Set(['order', 'limit', 'after'])
 
 /**
  * Compile a query into the rows @yaks/sql's `rows()` answers for it, over the
@@ -209,7 +212,8 @@ let AGGS = new Set(['count', 'distinct', 'tally'])
  * one `{ value: '', n }`; `.tally=prop` is a `{ value, n }` per value and
  * `.distinct=prop` a `{ value }` per value, empty values dropped and sorted by
  * value. As there, only a text, enum or eid property is tallied, since a
- * number or a time read as text would not compare the same.
+ * number or a time read as text would not compare the same, and an aggregate
+ * ignores `.order`, `.limit` and `.after`.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -233,7 +237,10 @@ export let rows = (
   let cs = ast(query).clauses
   let agg = cs.find((c) => AGGS.has(c.kind))
   let select = matcher(
-    { kind: 'and', clauses: cs.filter((c) => c != agg) },
+    {
+      kind: 'and',
+      clauses: agg ? cs.filter((c) => c != agg && !SEQUENCE.has(c.kind)) : cs,
+    },
     vocab,
     opts,
   )
