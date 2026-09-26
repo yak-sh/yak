@@ -132,6 +132,8 @@ let LEASH = 26
 let PICK = 1.3
 let PULL = 3.8
 let DROP_LIFE = 120_000
+// How near its home the player must be for a creature to be simulated.
+let ACTIVE = 45
 
 let bodyOf = (b: Bundle | undefined): Body | null => {
   let c = comp(b, 'body')
@@ -208,6 +210,7 @@ export let game = (v: Vale, net: Net) => {
   let hpWas = new Map<string, number>()
   let hitAt = new Map<string, number>()
   let wasDown = new Set<string>()
+  let idle = new Set<string>()
 
   let spawn = (): Body => {
     let x = HEARTH[0] - 1.5 + Math.random() * 3,
@@ -417,11 +420,15 @@ export let game = (v: Vale, net: Net) => {
         if (fallen && !sinking.has(eid)) sinking.set(eid, f.down ? f.fell : now)
         if (!fallen) sinking.delete(eid)
         let near = Math.hypot(home[0] - body.x, home[1] - body.z)
+        let active = near <= ACTIVE
         let mb = bodyOf(c.ent(eid))
-        // Out of sight, or just up again: where its wandering has it now.
-        if (!mb || (wasDown.has(eid) && !fallen) || near > 90) {
+        // Far off, coming near, or just up again: where its wandering has it
+        // now. Only a creature near the player is moved, and its body kept.
+        if (!mb || !active || idle.has(eid) || (wasDown.has(eid) && !fallen)) {
           mb = rest(v, home, roam, seed, now)
         }
+        if (active) idle.delete(eid)
+        else idle.add(eid)
         if (fallen) wasDown.add(eid)
         else wasDown.delete(eid)
         if (!fallen && hpNow < wasHp && pose.foe != eid) {
@@ -433,7 +440,7 @@ export let game = (v: Vale, net: Net) => {
           })
           hitAt.set(eid, now)
         }
-        if (near <= 90 && !fallen) {
+        if (active && !fallen) {
           // Whom it is after: whoever is hurting it most, while they stay
           // near its home; else, if it is the kind that minds, whoever comes
           // close.

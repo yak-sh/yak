@@ -682,8 +682,10 @@ body {
 
 .Plate_In em {
   font-style: normal;
-  font-size: 0.7rem;
-  opacity: 0.85;
+  font-size: 0.65rem;
+  padding: 0 0.3em;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
 }
 
 .Plate-friend .Plate_In b {
@@ -773,6 +775,7 @@ body {
 
 /* The thumbstick, under the thumb that put it there. */
 .Stick {
+  display: none;
   position: fixed;
   left: 0;
   top: 0;
@@ -782,8 +785,10 @@ body {
   pointer-events: none;
 }
 
-.Stick[hidden] {
-  display: none;
+.Stick-rest {
+  transform: translate(calc(max(16px, env(safe-area-inset-left)) + 4.5rem),
+    calc(100dvh - max(18px, env(safe-area-inset-bottom)) - 4.5rem));
+  opacity: 0.45;
 }
 
 .Stick::before,
@@ -817,6 +822,10 @@ body {
     display: none;
   }
 
+  .Stick {
+    display: block;
+  }
+
   .Pads {
     display: block;
   }
@@ -846,7 +855,12 @@ body {
     width: 11rem;
   }
 
-  .Who_Clock {
+  .Who_Clock,
+  .Bag_Empty {
+    display: none;
+  }
+
+  .Bag:not(:has(.Bag_Item)) {
     display: none;
   }
 

@@ -98,7 +98,7 @@ let net = connect(new URL('api/', document.baseURI))
 let g = game(v, net)
 
 let typing = false
-let hands = listen(canvas, () => typing || h.talking)
+let hands = listen(canvas, glass, () => typing || h.talking)
 let h = hud(glass, hands.press)
 let marks = overlay(h.layer, camera)
 let stage = cast(w.scene, v, marks)
@@ -132,7 +132,7 @@ let begin = () => {
   preview = null
   playing = true
   cam.yaw = 0
-  cam.pitch = 0.42
+  cam.pitch = innerWidth < innerHeight ? 0.6 : 0.42
   cam.dist = phone ? 11 : 9.5
   gate.remove()
   glass.hidden = false
@@ -194,6 +194,9 @@ let make = (signIn: string | null) => {
   })
   dress()
 }
+
+// The ground under the fire, where embers rise from.
+let hearth = groundAt(v, HEARTH[0], HEARTH[1])
 
 // The camera: behind and above, turned by dragging, pulled by the wheel.
 let cam = {
@@ -451,7 +454,7 @@ let loop = (t: number) => {
     glow.emit(
       new THREE.Vector3(
         HEARTH[0] + (Math.random() - 0.5) * 0.8,
-        7.2,
+        hearth + 0.9,
         HEARTH[1] + (Math.random() - 0.5) * 0.8,
       ),
       0xffa040,
@@ -497,6 +500,7 @@ Object.assign(globalThis, {
     },
     renderer,
     camera,
+    cam,
     world: w,
   },
 })

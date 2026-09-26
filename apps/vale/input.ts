@@ -42,8 +42,13 @@ let AXES: Record<string, [number, number]> = {
 let STICK = 56
 
 /** Listen on `stage` and the window. `busy` says when the keyboard belongs
- * to something else (a name being typed). */
-export let listen = (stage: HTMLElement, busy: () => boolean) => {
+ * to something else (a name being typed); the thumbstick is drawn in
+ * `glass`, resting in its corner until a thumb lands. */
+export let listen = (
+  stage: HTMLElement,
+  glass: HTMLElement,
+  busy: () => boolean,
+) => {
   let held = new Set<string>()
   let pressed = new Set<Action>()
   let orbit: [number, number] = [0, 0]
@@ -58,11 +63,16 @@ export let listen = (stage: HTMLElement, busy: () => boolean) => {
 
   let base = document.createElement('div')
   base.className = 'Stick'
-  base.hidden = true
   let knob = document.createElement('div')
   knob.className = 'Stick_Knob'
   base.append(knob)
-  document.body.append(base)
+  glass.append(base)
+  let rest = () => {
+    base.classList.add('Stick-rest')
+    base.style.transform = ''
+    knob.style.transform = ''
+  }
+  rest()
 
   addEventListener('keydown', (e) => {
     if (busy() || e.metaKey || e.ctrlKey) return
@@ -80,7 +90,7 @@ export let listen = (stage: HTMLElement, busy: () => boolean) => {
     stage.setPointerCapture(e.pointerId)
     if (e.pointerType == 'touch' && !stick && e.clientX < innerWidth * 0.45) {
       stick = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0 }
-      base.hidden = false
+      base.classList.remove('Stick-rest')
       base.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`
       knob.style.transform = ''
       return
@@ -115,7 +125,7 @@ export let listen = (stage: HTMLElement, busy: () => boolean) => {
   let up = (e: PointerEvent) => {
     if (stick?.id == e.pointerId) {
       stick = null
-      base.hidden = true
+      rest()
       return
     }
     let d = drags.get(e.pointerId)

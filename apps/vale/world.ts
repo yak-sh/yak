@@ -8,7 +8,16 @@ import { out } from './mesh.ts'
 import { model, place } from './props.ts'
 import { lerp, smooth } from './rand.ts'
 import { geometry, soft } from './soft.ts'
-import { N, type Prop, V, type Vale, WATER } from './terrain.ts'
+import {
+  groundAt,
+  N,
+  PLACES,
+  type Prop,
+  spot,
+  V,
+  type Vale,
+  WATER,
+} from './terrain.ts'
 
 export type World = {
   scene: THREE.Scene
@@ -33,29 +42,42 @@ export let DAY = 20 * 60
 // The light through the day: sky overhead, the horizon and fog, the sun's
 // colour and strength, and the fill from the sky.
 type Look = { top: number; low: number; sun: number; lux: number; fill: number }
+let light = (
+  top: number,
+  low: number,
+  sun: number,
+  lux: number,
+  fill: number,
+): Look => ({ top, low, sun, lux, fill })
 let LOOKS: [number, Look][] = [
-  [0.0, { top: 0x16284f, low: 0x34507e, sun: 0xa8b8ff, lux: 0.6, fill: 0.8 }],
-  [0.22, {
-    top: 0x21366a,
-    low: 0x465c8c,
-    sun: 0xb0c0ff,
-    lux: 0.65,
-    fill: 0.85,
-  }],
-  [0.27, { top: 0x5a7ec2, low: 0xf2b27a, sun: 0xffb27a, lux: 1.2, fill: 0.7 }],
-  [0.34, { top: 0x5fa8e6, low: 0xcfe6f2, sun: 0xfff1d6, lux: 2.4, fill: 1.0 }],
-  [0.5, { top: 0x4f9fe8, low: 0xd8eef6, sun: 0xfff6e2, lux: 2.7, fill: 1.05 }],
-  [0.66, { top: 0x5fa0de, low: 0xd6e6ea, sun: 0xffe7c2, lux: 2.4, fill: 1.0 }],
-  [0.73, { top: 0x4c6bb0, low: 0xf6a26a, sun: 0xff9a5c, lux: 1.3, fill: 0.7 }],
-  [0.78, {
-    top: 0x21366a,
-    low: 0x564c7c,
-    sun: 0xb0c0ff,
-    lux: 0.65,
-    fill: 0.85,
-  }],
-  [1.0, { top: 0x16284f, low: 0x34507e, sun: 0xa8b8ff, lux: 0.6, fill: 0.8 }],
+  [0.0, light(0x0d1936, 0x243660, 0x9fb4ff, 0.45, 0.5)],
+  [0.22, light(0x18295a, 0x384e80, 0xa8baff, 0.6, 0.65)],
+  [0.27, light(0x5a7ec2, 0xf2b27a, 0xffb27a, 1.2, 0.7)],
+  [0.34, light(0x5fa8e6, 0xcfe6f2, 0xfff1d6, 2.4, 1.0)],
+  [0.5, light(0x4f9fe8, 0xd8eef6, 0xfff6e2, 2.7, 1.05)],
+  [0.66, light(0x5fa0de, 0xd6e6ea, 0xffe7c2, 2.4, 1.0)],
+  [0.73, light(0x4c6bb0, 0xf6a26a, 0xff9a5c, 1.3, 0.7)],
+  [0.78, light(0x18295a, 0x4a4274, 0xa8baff, 0.6, 0.65)],
+  [1.0, light(0x0d1936, 0x243660, 0x9fb4ff, 0.45, 0.5)],
 ]
+
+// What the sky's light bounces off: grass by day, nothing much by night.
+let GRASS = new THREE.Color(0x6b7f4a)
+let DARK = new THREE.Color(0x151b2e)
+
+// A round glow, bright in the middle and gone at the edge, drawn once.
+let glowTexture = () => {
+  let c = document.createElement('canvas')
+  c.width = c.height = 64
+  let g = c.getContext('2d')!
+  let r = g.createRadialGradient(32, 32, 0, 32, 32, 32)
+  r.addColorStop(0, 'rgba(255,255,255,0.9)')
+  r.addColorStop(0.35, 'rgba(255,255,255,0.35)')
+  r.addColorStop(1, 'rgba(255,255,255,0)')
+  g.fillStyle = r
+  g.fillRect(0, 0, 64, 64)
+  return new THREE.CanvasTexture(c)
+}
 
 let mixHex = (a: number, b: number, t: number) =>
   new THREE.Color(a).lerp(new THREE.Color(b), t)
@@ -242,9 +264,63 @@ export let world = (v: Vale): World => {
   cam.far = 160
   scene.add(sun, sun.target)
 
+  // The village fire: its light, and flames of glowing boxes that lick and
+  // turn.
+  let [fx, fz] = spot(PLACES.plaza)
+  let floor = groundAt(v, fx, fz)
   let fire = new THREE.PointLight(0xffa04a, 0, 18, 1.6)
-  fire.position.set(64.25, 7.6, 64.25)
+  fire.position.set(fx, floor + 1.1, fz)
   scene.add(fire)
+  let flames = [0xff6a24, 0xff9a30, 0xffd25a].map((color, i) => {
+    let m = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    )
+    m.userData.size = 0.62 - i * 0.16
+    m.position.set(fx, floor + 0.3 + i * 0.22, fz)
+    scene.add(m)
+    return m
+  })
+
+  // The village's lamps, lit at dusk: a bright lantern in a round halo.
+  let halo = glowTexture()
+  let lamps: {
+    lantern: THREE.MeshBasicMaterial
+    halo: THREE.SpriteMaterial
+  }[] = []
+  for (let p of v.props) {
+    if (p.kind != 'lamp') continue
+    let x = (p.i + 0.5) * V + 0.5, z = (p.k + 0.5) * V
+    let y = v.h[p.i + p.k * N] * V + 2.5
+    let lantern = new THREE.MeshBasicMaterial({
+      color: 0xffc860,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+    let box = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.56, 0.56), lantern)
+    box.position.set(x, y, z)
+    let glow = new THREE.SpriteMaterial({
+      map: halo,
+      color: 0xffb84a,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+    let sprite = new THREE.Sprite(glow)
+    sprite.position.set(x, y, z)
+    sprite.scale.setScalar(3.2)
+    scene.add(box, sprite)
+    lamps.push({ lantern, halo: glow })
+  }
 
   let focus = new THREE.Vector3(size / 2, 6, size / 2)
   let w: World = {
@@ -273,6 +349,11 @@ export let world = (v: Vale): World => {
       sun.intensity = l.lux * Math.min(1, Math.sin(a) * 3 + 0.15)
       hemi.intensity = l.fill
       hemi.color.copy(l.top).lerp(new THREE.Color(0xffffff), 0.5)
+      hemi.groundColor.copy(GRASS).lerp(DARK, skyMat.uniforms.night.value)
+      for (let l of lamps) {
+        l.lantern.opacity = 0.95 * skyMat.uniforms.night.value
+        l.halo.opacity = 0.55 * skyMat.uniforms.night.value
+      }
       skyMat.uniforms.top.value.copy(l.top)
       skyMat.uniforms.low.value.copy(l.low)
       skyMat.uniforms.sunDir.value.copy(dir)
@@ -285,6 +366,13 @@ export let world = (v: Vale): World => {
       waterMat.uniforms.sunColor.value.copy(l.sun).multiplyScalar(l.lux / 2.7)
       fire.intensity = 14 + 26 * skyMat.uniforms.night.value +
         Math.sin(t * 9) * 2 + Math.sin(t * 23) * 1.2
+      flames.forEach((m, i) => {
+        let s = m.userData.size
+        let lick = 1 + Math.sin(t * (7 + i * 3) + i) * 0.18
+        m.scale.set(s * (2 - lick), s * lick * 1.3, s * (2 - lick))
+        m.position.y = floor + 0.3 + i * 0.24 + s * lick * 0.5
+        m.rotation.y = t * (0.8 + i * 0.5) + i
+      })
       sky.position.copy(focus)
       for (let d of decor) {
         d.mesh.visible = Math.hypot(d.x - focus.x, d.z - focus.z) < NEAR
