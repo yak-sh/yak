@@ -10,6 +10,7 @@ import {
   commitsIn,
   type Deploy,
   type Deployment,
+  deploymentLists,
   deploysIn,
   marksIn,
   rollbackTarget,
@@ -252,4 +253,22 @@ Deno.test('a command failure is still a defect when the host is not stopping', a
     'deno eval exited 143',
   )
   assert(!(error instanceof CallError))
+})
+
+Deno.test('deployment history never overlaps Wrangler OAuth refreshes', async () => {
+  let active = false
+  let called: string[][] = []
+  let read = async (args: string[]) => {
+    assert(!active, 'Wrangler reads overlapped')
+    active = true
+    called.push(args)
+    await Promise.resolve()
+    active = false
+    return args[0]
+  }
+  assertEquals(await deploymentLists(read), ['versions', 'deployments'])
+  assertEquals(called, [
+    ['versions', 'list', '--json'],
+    ['deployments', 'list', '--json'],
+  ])
 })

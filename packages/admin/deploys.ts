@@ -272,13 +272,25 @@ export let wrangler = (
     stopping,
   )
 
+/** The two deployment-history reads, in order and never at once. Wrangler's
+ * rotating OAuth refresh rewrites one shared credential file without a lock;
+ * concurrent processes can read it between truncate and write and falsely say
+ * this already-signed-in box is not logged in. */
+export let deploymentLists = async (
+  read: (args: string[]) => Promise<string>,
+): Promise<[string, string]> => [
+  await read(['versions', 'list', '--json']),
+  await read(['deployments', 'list', '--json']),
+]
+
 export let deploys = async (
   root: string,
   stopping: AbortSignal,
 ): Promise<Deploy[]> => {
-  let [vs, ds, log] = await Promise.all([
-    wrangler(root, ['versions', 'list', '--json'], stopping),
-    wrangler(root, ['deployments', 'list', '--json'], stopping),
+  // Git has no credential store in common with Wrangler and can still read
+  // beside it. Only the two Wrangler processes must not overlap.
+  let [[vs, ds], log] = await Promise.all([
+    deploymentLists((args) => wrangler(root, args, stopping)),
     needGit(root, [
       'log',
       'main',
