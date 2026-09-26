@@ -402,19 +402,6 @@ export type Report = {
 export let stale = (storage: DurableStorage): boolean =>
   stands(driver(storage), 'journal_tx')
 
-/** What an object holds, for deciding whether it is an orphan (orphan.ts): the
- * name its old memory keeps, whether it is fleet-shaped, and how many entities
- * are in it. */
-export let holding = (storage: DurableStorage & { kv?: Slots }) => {
-  let d = driver(storage)
-  let name = storage.kv?.get('name')
-  return {
-    name: name == null || name === '' ? null : String(name),
-    fleet: stale(storage),
-    entities: stands(d, 'entity') ? tally(d, 'entity') : 0,
-  }
-}
-
 /**
  * Every definition of one type that is this object's — the single place the
  * pass learns what tables there are.

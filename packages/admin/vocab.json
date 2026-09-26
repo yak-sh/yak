@@ -138,29 +138,6 @@
       "options": { "positional": ["bps"] },
       "openWorld": true
     },
-    "admin_orphan": {
-      "tool": true,
-      "noun": "admin",
-      "verb": "orphan",
-      "title": "Read or delete an orphaned Store object",
-      "description": "What one Store object the fleet-shaped store left behind holds, by the id the runtime gave it: the name in its memory, its entities, and whether any app answers to that name. --delete deletes everything in it when it is fleet-shaped, holds no entity and no app answers to its name. The act is the platform’s, so --admin or --owner is required.\n\n  yak admin orphan <64-hex id> --admin\n  yak admin orphan <64-hex id> --delete --admin",
-      "input": {
-        "id": { "type": "string", "description": "the object's 64-hex id" },
-        "delete": {
-          "type": "boolean",
-          "description": "delete it, when it is an orphan"
-        },
-        "as": { "type": "string", "description": "act as this account" },
-        "admin": {
-          "type": "boolean",
-          "description": "as the platform’s admin"
-        },
-        "owner": { "type": "boolean", "description": "as Jeff" }
-      },
-      "required": ["id"],
-      "options": { "positional": ["id"] },
-      "openWorld": true
-    },
     "admin_tunnel": {
       "tool": true,
       "noun": "admin",

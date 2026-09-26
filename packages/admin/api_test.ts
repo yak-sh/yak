@@ -21,7 +21,6 @@ import {
   cookieOf,
   feeNow,
   listedOn,
-  orphan,
   plain,
   renewing,
   rpc,
@@ -296,7 +295,7 @@ Deno.test("an app store's refusal keeps its code, rather than becoming a defect"
   }
 })
 
-Deno.test('a refused orphan is a conflict, not a defect', async () => {
+Deno.test("a door's own refusal is a call refusal, not a defect", async () => {
   let stub = answering({
     ...fee(),
     ok: false,
@@ -304,14 +303,14 @@ Deno.test('a refused orphan is a conflict, not a defect', async () => {
     text: () =>
       Promise.resolve(JSON.stringify({
         error: 'Refused',
-        message: 'not an orphan: this object has a name or holds an entity',
+        message: 'the fee moved since it was read',
       })),
   })
   try {
     let error = await assertRejects(
-      () => orphan('owner.token', 'a'.repeat(64)),
+      () => feeNow('owner.token'),
       CallError,
-      'not an orphan: this object has a name or holds an entity',
+      'the fee moved since it was read',
     )
     assertEquals(error.code, 'conflict')
   } finally {

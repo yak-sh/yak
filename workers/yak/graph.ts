@@ -185,7 +185,6 @@ import { apex, url } from './host.ts'
 import {
   carry,
   documented,
-  holding,
   install,
   MARK,
   rebuild,
@@ -1488,13 +1487,6 @@ export class Store {
    * sockets it inherited.
    */
   async fetch(request: Request): Promise<Response> {
-    // An object the fleet-shaped store left behind with no name and nothing in
-    // it, deleted whole (orphan.ts). Asked before `#ready`, which would carry
-    // it first. Kernel only: a client never writes a store's path.
-    if (
-      new URL(request.url).pathname == '/orphan' &&
-      request.headers.get('x-yak-kernel') == '1'
-    ) return this.#orphan(request)
     if (logged(request)) return this.#write(request)
     let no = await this.#ready(request)
     if (no) return no
@@ -2042,26 +2034,6 @@ export class Store {
     if (name) this.#put('name', name)
     this.#boot()
     if (this.#refused) return this.#stalled()
-    return Response.json({ ok: true })
-  }
-
-  // What an object the fleet-shaped store left behind holds (GET), and all of
-  // it deleted (DELETE), with nothing written after, so the object ceases to
-  // exist. Whether an app still reaches its name is the directory's to say
-  // (orphan.ts); an object that is not fleet-shaped or holds an entity is
-  // refused here.
-  async #orphan(request: Request): Promise<Response> {
-    let held = holding(this.#ctx.storage)
-    let name = this.#get('name') ?? held.name
-    if (request.method == 'GET') return Response.json({ ...held, name })
-    if (!held.fleet || held.entities) {
-      return json({
-        error: 'Refused',
-        message: 'not an orphan: this object is on the packages or holds an ' +
-          'entity',
-      }, 409)
-    }
-    await this.#ctx.storage.deleteAll()
     return Response.json({ ok: true })
   }
 

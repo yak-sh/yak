@@ -23,7 +23,7 @@ import {
 } from '@sentry/core'
 import { blobSchema } from '@yaks/blob'
 import type { Bundle } from '@yaks/graph'
-import { reserved, type Wire } from '@yaks/durable-object'
+import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { edgeEid } from '@yaks/edge'
 import {
@@ -703,30 +703,6 @@ Deno.test('a raw index creation failure still refuses an empty store', async () 
   let now = newer(ctx, PLATFORM_STORE)
   await refused(now, 'index creation failed')
   assertEquals(marker(ctx), null)
-})
-
-Deno.test('an empty fleet-shaped object says what it is and is deleted whole, and one holding an entity is not', async () => {
-  let ask = (now: ReturnType<typeof newer>, method: string) =>
-    now.door('/orphan', { method, headers: { 'x-yak-kernel': '1' } })
-  let tables = (ctx: State) =>
-    named(ctx, { type: 'table' }).filter((t) => !reserved(t))
-  // Fleet-shaped, named in its old memory, with nothing in it.
-  let lost = state()
-  older(lost, 'ada/cookbook')
-  let now = newer(lost, '')
-  assertEquals(await (await ask(now, 'GET')).json(), {
-    name: 'ada/cookbook',
-    fleet: true,
-    entities: 0,
-  })
-  assertEquals((await ask(now, 'DELETE')).status, 200)
-  assertEquals(tables(lost), [])
-  let homes = state()
-  await seedHomes(homes)
-  now = newer(homes, PLATFORM_STORE)
-  let before = tables(homes)
-  assertEquals((await ask(now, 'DELETE')).status, 409)
-  assertEquals(tables(homes), before)
 })
 
 Deno.test('a marker write failure rolls back the pass, even for a thrown value', async () => {
