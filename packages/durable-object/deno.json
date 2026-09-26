@@ -1,6 +1,6 @@
 {
   "name": "@yaks/durable-object",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Provides graph storage on a Cloudflare Durable Object's embedded SQLite and connects hibernatable WebSockets to query subscriptions.",

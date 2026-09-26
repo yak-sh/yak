@@ -1,6 +1,6 @@
 {
   "name": "@yaks/sql",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Compiles a query AST and a component schema into a SQL statement and its bound parameters, through a backend-independent relational representation.",
   "exports": "./mod.ts",
   "license": "Apache-2.0",

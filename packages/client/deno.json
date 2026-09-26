@@ -1,6 +1,6 @@
 {
   "name": "@yaks/client",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "description": "Assembles a browser graph: server synchronization, reactive queries, and IndexedDB storage for the components this browser owns.",
