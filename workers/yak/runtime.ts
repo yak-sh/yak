@@ -1,16 +1,13 @@
-// `cloudflare:workers` under Deno: the runtime's own module, stood in for so
-// that what imports it loads outside workerd. The OAuth provider identity.ts
-// is built on imports it for one `instanceof`, and the kernel in memory
-// (probe.ts `kernel`) serves identity.ts. The root import map points the name
-// here for Deno alone; esbuild never reads that map, so a bundle always gets
-// the runtime's own.
+// `cloudflare:workers` under Deno, for the one module that asks for it there:
+// the OAuth provider identity.ts is built on imports it for one `instanceof`,
+// and the kernel in memory (probe.ts `kernel`) serves identity.ts. The root
+// config points the name here within the provider alone (deno.json `scopes`);
+// esbuild never reads that map, so a bundle always gets the runtime's own.
 //
-// What is here is what those modules ask of it: the entrypoint base classes,
-// and `waitUntil`, which under Deno has no invocation to extend and lets the
-// work run. There is no `cache`, so cache.ts `purge` answers as it does under
-// `wrangler dev`. And the one global the provider reads as it loads: the
-// compatibility flags wrangler.toml gives the Worker, which is where it learns
-// whether it may fetch a client's metadata document (identity.ts `cimd`).
+// What is here is what the provider asks of it: the entrypoint base class,
+// and the one global it reads as it loads, the compatibility flags
+// wrangler.toml gives the Worker, which is where it learns whether it may
+// fetch a client's metadata document (identity.ts `cimd`).
 import { parse } from '@std/toml'
 
 type Flags = { compatibility_flags: string[] }
@@ -31,5 +28,3 @@ export class WorkerEntrypoint<E = unknown> {
     this.env = env
   }
 }
-
-export let waitUntil = (work: Promise<unknown>) => void work.catch(() => {})
