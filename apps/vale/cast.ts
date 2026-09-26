@@ -2,7 +2,8 @@
 // the people who give quests, loot on the ground, the plates over heads and
 // over signposts, and under each creature on my trail a red ring round the
 // ground its bite takes. As a bite winds up, a red disc grows from its middle
-// and fills the ring the moment the bite lands.
+// and fills the ring the moment the bite lands. Red means a bite and nothing
+// else: the creature I have targeted wears a pale mark at its feet instead.
 // A figure is made when someone arrives and dropped when they go; each frame
 // moves it to where the frame says it is, smoothing what arrives in steps (a
 // peer's position comes when their page sends it, not on this page's beat).
@@ -56,18 +57,26 @@ export let cast = (
   let lootMat = soft({ speckle: 0.05 })
   let lootGeo = new Map<string, THREE.BufferGeometry>()
   let loot = new Map<string, THREE.Mesh>()
-  let ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.8, 1, 40),
-    new THREE.MeshBasicMaterial({
-      color: 0xff7a4a,
-      transparent: true,
-      opacity: 0.7,
-      depthWrite: false,
-    }),
-  )
-  ring.rotation.x = -Math.PI / 2
-  ring.visible = false
-  scene.add(ring)
+  // The creature I have targeted: four pale arcs round its feet, turning
+  // slowly, drawn over any red beneath them. A broken ring the colour of
+  // paper, so it reads as a selection and never as a second bite.
+  let mark = new THREE.Group()
+  let arc = new THREE.RingGeometry(0.84, 1, 12, 1, 0, Math.PI / 3)
+  let pale = new THREE.MeshBasicMaterial({
+    color: 0xfbf7ea,
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false,
+  })
+  for (let i = 0; i < 4; i++) {
+    let m = new THREE.Mesh(arc, pale)
+    m.rotation.z = (i * Math.PI) / 2
+    m.renderOrder = 1
+    mark.add(m)
+  }
+  mark.rotation.x = -Math.PI / 2
+  mark.visible = false
+  scene.add(mark)
   // A creature on my trail: the ground its bite takes (`zone`, a thin ring
   // whose outer edge is its reach) and the bite winding up (`fill`, a disc).
   let red = (opacity: number) =>
@@ -255,7 +264,7 @@ export let cast = (
       }
 
       // The creatures.
-      ring.visible = false
+      mark.visible = false
       for (let w of warns.values()) w.zone.visible = w.fill.visible = false
       for (let m of f.mobs) {
         let b = BEASTS[m.kind]
@@ -305,9 +314,11 @@ export let cast = (
         }
         let foe = f.foe?.eid == m.eid
         if (foe) {
-          ring.visible = true
-          ring.position.set(a.x, groundAt(v, a.x, a.z) + 0.06, a.z)
-          ring.scale.setScalar(0.55 + b.size * 0.6)
+          let r = 0.55 + b.size * 0.6
+          mark.visible = true
+          mark.position.set(a.x, highest(a.x, a.z, r) + 0.06, a.z)
+          mark.rotation.z = t * 0.8
+          mark.scale.setScalar(r)
         }
         if (!m.down && (foe || m.near < 12 || m.hurt < 4000)) {
           plates.plate(
