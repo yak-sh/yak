@@ -88,7 +88,6 @@ export let VALE: Record<string, Row> = {
       sky: 0xa8d8a0,
       tint: 0.14,
       haze: 1.3,
-      air: 'leaves',
     },
   },
   elderglade: {
