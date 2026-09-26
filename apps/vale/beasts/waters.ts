@@ -147,7 +147,7 @@ export let WATERS: Record<string, Beast> = {
     size: 0.6,
     dust: 0xc8603a,
     haunts: [
-      { near: 'coast', count: 3, within: 22, apart: 5, roam: 4, odds: 0.8 },
+      { near: 'coast', count: 3, within: 38, apart: 5, roam: 4, odds: 0.8 },
     ],
     look: {
       plan: 'crawler',
@@ -173,7 +173,7 @@ export let WATERS: Record<string, Beast> = {
     size: 1.4,
     dust: 0x8a3a5a,
     haunts: [
-      { near: 'coast', count: 2, within: 20, apart: 10, roam: 5, odds: 0.7 },
+      { near: 'coast', count: 2, within: 36, apart: 10, roam: 5, odds: 0.7 },
       { near: 'isles', count: 2, within: 24, apart: 10, roam: 5, odds: 0.7 },
     ],
     look: {
@@ -210,7 +210,7 @@ export let WATERS: Record<string, Beast> = {
         roam: 3,
         odds: 0.5,
       },
-      { near: 'coast', count: 2, within: 22, apart: 8, roam: 3, odds: 0.5 },
+      { near: 'coast', count: 2, within: 38, apart: 8, roam: 3, odds: 0.5 },
     ],
     look: {
       plan: 'crawler',
@@ -517,7 +517,7 @@ export let WATERS: Record<string, Beast> = {
     size: 0.7,
     dust: 0xf0f0ec,
     haunts: [
-      { near: 'coast', count: 3, within: 24, apart: 6, roam: 8, odds: 0.8 },
+      { near: 'coast', count: 3, within: 40, apart: 6, roam: 8, odds: 0.8 },
     ],
     look: {
       plan: 'bird',
@@ -544,7 +544,7 @@ export let WATERS: Record<string, Beast> = {
     size: 1,
     dust: 0x7a8088,
     haunts: [
-      { near: 'coast', count: 2, within: 22, apart: 8, roam: 4, odds: 0.7 },
+      { near: 'coast', count: 2, within: 38, apart: 8, roam: 4, odds: 0.7 },
       { near: 'isles', count: 2, within: 26, apart: 8, roam: 4, odds: 0.8 },
     ],
     look: {
@@ -575,7 +575,7 @@ export let WATERS: Record<string, Beast> = {
     size: 1.8,
     dust: 0x2a6a7a,
     haunts: [
-      { near: 'coast', count: 2, within: 24, apart: 12, roam: 6, odds: 0.9 },
+      { near: 'coast', count: 2, within: 40, apart: 12, roam: 6, odds: 0.9 },
       { near: 'isles', count: 4, within: 26, apart: 12, roam: 6 },
     ],
     look: {

@@ -53,7 +53,7 @@ export let SANDS: Record<string, Row> = {
     seed: 131,
     arrive: 'mesa',
     places: {
-      dunes: { kind: 'dunes', at: [64, 64] },
+      dunes: { kind: 'dunes', at: [64, 100] },
       mesa: { kind: 'mesa', at: [64, 64] },
       west: { kind: 'mesa', at: [36, 36] },
       east: { kind: 'mesa', at: [94, 92] },

@@ -11,7 +11,8 @@ import { VALE } from './vale.ts'
 let { crags, meadow, woods } = VALE
 let { moor } = HILLS
 
-// The sea, and a beach of sand and dune grass down to it.
+// The sea, and a beach of sand and dune grass down to it. Its middle is the
+// sea's, so its beach lies some 25 to 40 metres out from it.
 let coast: Feature = {
   shape: (h, d, x, z, s) =>
     h - bump(d, 30) * (6.5 + fbm(x / 9, z / 9, 51 + s) * 2),
