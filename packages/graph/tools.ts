@@ -144,7 +144,7 @@ export let runs = (seams: Seams = {}): Runs => {
       let line = [str(args.q), ...strings(args.filters)]
         .map((s) => s.trim()).filter(Boolean)
       let n = num(args.limit)
-      if (n) line.push(`.limit=${n}`)
+      if (n != null) line.push(`.limit=${n}`)
       if (!line.length) throw new Refused('graph_query needs a query line')
       let q = line.join('&')
       let op = aggregate(parse(q))

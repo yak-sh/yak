@@ -208,6 +208,15 @@ Deno.test('filters and limit join the query line', async () => {
     }),
   ))
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
+  assertEquals(
+    bundles(result(
+      await called(client, 'graph_query', {
+        q: '.price',
+        limit: 0,
+      }),
+    )),
+    [],
+  )
 })
 
 Deno.test('the server signs the batch, never the client', async () => {
