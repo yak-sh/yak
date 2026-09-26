@@ -1,6 +1,6 @@
-// The people of the west road, out past Birchmere: the harbour of
-// Gullwick, the moors of Saltreach, the isles of Shellstrand, the light on
-// Stormhead, and Driftwood Bay, whose far road runs onto the sand.
+// The people of the coast, down the west road past Birchmere: the harbour
+// of Gullwick, the moors of Saltreach, the isles of Shellstrand, the light
+// on Stormhead, and Driftwood Bay, whose far road runs onto the sand.
 import type { Giver, Quest } from '../quests.ts'
 
 export let givers: Giver[] = [

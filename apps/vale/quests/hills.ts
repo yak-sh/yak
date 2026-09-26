@@ -1,6 +1,6 @@
-// The people of the south road out of Mossvale: the wall-watch of
-// Stonestep, Heatherfell, Oldwall and its readable stones, the empty
-// barrow of the last king, and Giantsteps, the way to the fire.
+// The people of the hills, down the south road out of Mossvale: the
+// wall-watch of Stonestep, Heatherfell, Oldwall and its readable stones,
+// the empty barrow of the last king, and Giantsteps, the way to the fire.
 import type { Giver, Quest } from '../quests.ts'
 
 export let givers: Giver[] = [

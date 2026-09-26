@@ -1,6 +1,7 @@
-// The people of the east road out of Mossvale: the stilt-town of
-// Reedmarsh, Mirewood and Fenhollow, the Sunken Kirk whose bell kept the
-// bog asleep, and Bogheart, where the briar has a root.
+// The people of the marshes, down the east road out of Mossvale: the
+// stilt-town of Reedmarsh, Mirewood and Fenhollow, the Sunken Kirk whose
+// bell kept the bog asleep, Bogheart, where the briar has a root, and the
+// toadstools of Sporefen.
 import type { Giver, Quest } from '../quests.ts'
 
 export let givers: Giver[] = [
@@ -69,6 +70,15 @@ export let givers: Giver[] = [
     greets: 'Sit, sit. The kettle’s on. It’s always on.',
     look: { tint: '#3a4a3a', hair: '#9aa090', skin: '#8a6a50' },
     staff: true,
+  },
+  {
+    id: 'puff',
+    name: 'Puffball the spore-picker',
+    level: 'sporefen',
+    place: 'toadstools',
+    offset: [-7.5, -4],
+    greets: 'Don’t sneeze. Please don’t sneeze.',
+    look: { tint: '#c0a0c0', hair: '#6a4a6a', skin: '#f0d0c0' },
   },
 ]
 
@@ -371,5 +381,54 @@ export let quests: Quest[] = [
     title: 'The old toad',
     body:
       'The briar has a root in Bogheart, and Old Mudjaw sits on it like an egg, a toad as big as a cart. Put him down, and when he comes back, put him down again. Then the root will wither, and the bog will sleep again.',
+  },
+  // Puffball the spore-picker, among the toadstools of Sporefen.
+  {
+    id: 'puff-brutes',
+    giver: 'puff',
+    goal: 'slay',
+    target: 'stoolbrute',
+    count: 3,
+    xp: 560,
+    title: 'The big stools',
+    body:
+      'Toadstool brutes have sat down across the picking paths, and they won’t move for anyone. Three of them. Move them.',
+  },
+  {
+    id: 'puff-sporelings',
+    giver: 'puff',
+    after: 'puff-brutes',
+    goal: 'slay',
+    target: 'sporeling',
+    count: 4,
+    xp: 820,
+    title: 'Don’t breathe in',
+    body:
+      'Sporelings float over the fen, and one good sneeze near them grows a thorn in your nose. Four of them, and hold your breath.',
+  },
+  {
+    id: 'puff-trolls',
+    giver: 'puff',
+    after: 'puff-sporelings',
+    goal: 'slay',
+    target: 'troll',
+    count: 2,
+    xp: 1030,
+    title: 'Trolls in the fen',
+    body:
+      'Mire trolls wade up out of the fen and eat the good caps, stalk and all. Two of them, and the picking can go on.',
+  },
+  {
+    id: 'puff-mudjaw',
+    giver: 'puff',
+    after: 'puff-trolls',
+    goal: 'slay',
+    target: 'mudjaw',
+    count: 1,
+    xp: 1160,
+    gift: 'draught',
+    title: 'A toad on the path',
+    body:
+      'Old Mudjaw has come up the fen from Bogheart, and he sits on the path like he owns it. He doesn’t. Shift him.',
   },
 ]

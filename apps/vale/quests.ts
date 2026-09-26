@@ -19,16 +19,15 @@
 // the briar's root. Directions name a road by where it leads, or by its side
 // where levels.ts gives it one.
 //
-// The rows live in quests/, a file for each country of the world (levels.ts),
-// in the order a hero comes to them: every land has someone with something to
-// ask, and each land's first ask is open to anyone who walks in.
+// The rows live in quests/, a file for each country of the world named as
+// levels/ names it: every land has someone with something to ask, and each
+// land's first ask is open to anyone who walks in.
 
-import * as home from './quests/home.ts'
-import * as woods from './quests/woods.ts'
-import * as wetlands from './quests/wetlands.ts'
-import * as sea from './quests/sea.ts'
-import * as moors from './quests/moors.ts'
-import * as under from './quests/under.ts'
+import * as vale from './quests/vale.ts'
+import * as marsh from './quests/marsh.ts'
+import * as coast from './quests/coast.ts'
+import * as hills from './quests/hills.ts'
+import * as deep from './quests/deep.ts'
 import * as sands from './quests/sands.ts'
 import * as frost from './quests/frost.ts'
 import * as fire from './quests/fire.ts'
@@ -66,7 +65,7 @@ export type Quest = {
   body: string
 }
 
-let LANDS = [home, woods, wetlands, sea, moors, under, sands, frost, fire]
+let LANDS = [vale, marsh, coast, hills, deep, sands, frost, fire]
 
 export let GIVERS: Giver[] = LANDS.flatMap((l) => l.givers)
 

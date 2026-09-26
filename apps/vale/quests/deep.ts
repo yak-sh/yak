@@ -1,6 +1,6 @@
-// The people under the old woods, down the Elder Heart’s roots: Glowcap
-// Hollow and Sporefen among the giant toadstools, then the crystal of
-// Gleamdeep and the Shardvault, where the last king went looking.
+// The people of the deep country, down the Elder Heart’s roots: Glowcap
+// Hollow among the giant toadstools, then the crystal of Gleamdeep and the
+// Shardvault, where the last king went looking.
 import type { Giver, Quest } from '../quests.ts'
 
 export let givers: Giver[] = [
@@ -21,15 +21,6 @@ export let givers: Giver[] = [
     offset: [-2.5, 6.5],
     greets: 'It’s always dusk down here. That’s why they need me.',
     look: { tint: '#6a5aa0', hair: '#f0c060', skin: '#f0d0b8' },
-  },
-  {
-    id: 'puff',
-    name: 'Puffball the spore-picker',
-    level: 'sporefen',
-    place: 'toadstools',
-    offset: [-7.5, -4],
-    greets: 'Don’t sneeze. Please don’t sneeze.',
-    look: { tint: '#c0a0c0', hair: '#6a4a6a', skin: '#f0d0c0' },
   },
   {
     id: 'dunstan',
@@ -114,55 +105,6 @@ export let quests: Quest[] = [
     title: 'Shades for the lamps',
     body:
       'Mushroom caps make the best lamp shades: soft light, no glare. The toadstool brutes grow them on their backs. Three, please.',
-  },
-  // Puffball the spore-picker, among the toadstools of Sporefen.
-  {
-    id: 'puff-brutes',
-    giver: 'puff',
-    goal: 'slay',
-    target: 'stoolbrute',
-    count: 3,
-    xp: 560,
-    title: 'The big stools',
-    body:
-      'Toadstool brutes have sat down across the picking paths, and they won’t move for anyone. Three of them. Move them.',
-  },
-  {
-    id: 'puff-sporelings',
-    giver: 'puff',
-    after: 'puff-brutes',
-    goal: 'slay',
-    target: 'sporeling',
-    count: 4,
-    xp: 820,
-    title: 'Don’t breathe in',
-    body:
-      'Sporelings float over the fen, and one good sneeze near them grows a thorn in your nose. Four of them, and hold your breath.',
-  },
-  {
-    id: 'puff-trolls',
-    giver: 'puff',
-    after: 'puff-sporelings',
-    goal: 'slay',
-    target: 'troll',
-    count: 2,
-    xp: 1030,
-    title: 'Trolls in the fen',
-    body:
-      'Mire trolls wade up out of the fen and eat the good caps, stalk and all. Two of them, and the picking can go on.',
-  },
-  {
-    id: 'puff-mudjaw',
-    giver: 'puff',
-    after: 'puff-trolls',
-    goal: 'slay',
-    target: 'mudjaw',
-    count: 1,
-    xp: 1160,
-    gift: 'draught',
-    title: 'A toad on the path',
-    body:
-      'Old Mudjaw has come up the fen from Bogheart, and he sits on the path like he owns it. He doesn’t. Shift him.',
   },
   // Dunstan the miner, at the edge of the Gleamdeep crystal.
   {

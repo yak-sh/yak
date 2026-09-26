@@ -1,6 +1,7 @@
-// The people of home: Mossvale, where every hero starts and Elder Wren
-// teaches them before sending them down the west road, and the gentle
-// country round Birchmere and Clovermead.
+// The people of the vale: Mossvale, where every hero starts and Elder
+// Wren teaches them before sending them down the west road; Birchmere and
+// Clovermead, the green country round it; and the woods up the north road,
+// from Fernwood to the Elder Heart and the pines of Wolfden.
 import type { Giver, Quest } from '../quests.ts'
 
 export let givers: Giver[] = [
@@ -81,6 +82,62 @@ export let givers: Giver[] = [
     greets: 'Hear that hum? That’s a happy hive. Mind where you step.',
     look: { tint: '#e0b33a', hair: '#8a8a82', skin: '#c98f6a' },
     staff: true,
+  },
+  {
+    id: 'oriel',
+    name: 'Warden Oriel',
+    level: 'fernwood',
+    place: 'glade',
+    offset: [-1.5, -3],
+    greets: 'The glade is quiet. I don’t trust it when it’s quiet.',
+    look: { tint: '#2f5a3a', hair: '#c46a2a', skin: '#e8b48c' },
+  },
+  {
+    id: 'bryony',
+    name: 'Bryony the forager',
+    level: 'fernwood',
+    place: 'glade',
+    offset: [6.5, -1],
+    greets:
+      'Mushrooms, nuts, silk, honey. The wood gives, if you ask it nicely.',
+    look: { tint: '#9a6a3a', hair: '#3a2418', skin: '#7a4a30' },
+  },
+  {
+    id: 'hollis',
+    name: 'Hollis the woodward',
+    level: 'fernwood',
+    place: 'glade',
+    offset: [1, 5],
+    greets: 'Listen to the trees a while. They say more than folk think.',
+    look: { tint: '#3f6b3a', hair: '#7a5a3a', skin: '#c68c64' },
+  },
+  {
+    id: 'ysolde',
+    name: 'Ysolde the Greenwarden',
+    level: 'elderglade',
+    place: 'heart',
+    offset: [-5.5, 24],
+    greets: 'The Elder Heart still beats. Slowly, but it beats.',
+    look: { tint: '#3a6b4a', hair: '#f0ead8', skin: '#b98260' },
+    staff: true,
+  },
+  {
+    id: 'hake',
+    name: 'Hake the trapper',
+    level: 'greypine',
+    place: 'pines',
+    offset: [-3, 14],
+    greets: 'Set a snare, wait. Set another. That’s the whole trade.',
+    look: { tint: '#6a5a3a', hair: '#5a4a3a', skin: '#d0a080' },
+  },
+  {
+    id: 'brenna',
+    name: 'Brenna of the Den',
+    level: 'wolfden',
+    place: 'pines',
+    offset: [14.5, 20],
+    greets: 'The den keeps its own. You’re welcome at the fire.',
+    look: { tint: '#5a3a3a', hair: '#b0b0a8', skin: '#8a5a40' },
   },
 ]
 
@@ -427,5 +484,219 @@ export let quests: Quest[] = [
     title: 'The goblin who wants my honey',
     body:
       'A goblin warchief has been through the meadow twice, sizing up my hives, with briar in his helmet. He’ll be back with his friends. Get to him first.',
+  },
+  // Warden Oriel, warden of the glade in Fernwood.
+  {
+    id: 'oriel-goblins',
+    giver: 'oriel',
+    goal: 'slay',
+    target: 'goblin',
+    count: 6,
+    xp: 500,
+    title: 'Briar in the glade',
+    body:
+      'Bramble goblins come into the glade at night now, wearing briar like crowns, the same as the beasts. Drive off six, and I’ll tell you what I know about the Elder Heart.',
+  },
+  {
+    id: 'oriel-stag',
+    giver: 'oriel',
+    after: 'oriel-goblins',
+    goal: 'slay',
+    target: 'stag',
+    count: 1,
+    xp: 110,
+    gift: 'tonic',
+    title: 'The stag in the thorns',
+    body:
+      'The goblins follow a great stag with briar grown through its antlers, as if it were their king. Bring it down, and they scatter. Then take the road north to Elderglade: the Greenwarden there tends the Elder Heart, the north ward.',
+  },
+  // Bryony the forager, by the well in the Fernwood glade.
+  {
+    id: 'bryony-caps',
+    giver: 'bryony',
+    goal: 'gather',
+    target: 'cap',
+    count: 4,
+    xp: 410,
+    title: 'Caps for the pot',
+    body:
+      'The caplings grow the best mushroom caps in Fernwood, and they don’t give them up without a fuss. Four caps for the pot, please.',
+  },
+  {
+    id: 'bryony-silk',
+    giver: 'bryony',
+    after: 'bryony-caps',
+    goal: 'gather',
+    target: 'silk',
+    count: 4,
+    xp: 300,
+    gift: 'tonic',
+    title: 'Thread for the winter',
+    body:
+      'Spider silk makes the warmest thread there is, if you can get it off the spider. Four skeins, and I’ll knit you something. Well. I’ll give you a tonic.',
+  },
+  // Hollis the woodward, by the Fernwood fire.
+  {
+    id: 'hollis-boars',
+    giver: 'hollis',
+    goal: 'slay',
+    target: 'boar',
+    count: 5,
+    xp: 170,
+    title: 'A restless herd',
+    body:
+      'The boars in these woods used to shy at a snapped twig. Now they charge a woodward with his axe up. Five of them, before somebody’s hurt.',
+  },
+  {
+    id: 'hollis-barklings',
+    giver: 'hollis',
+    after: 'hollis-boars',
+    goal: 'slay',
+    target: 'barkling',
+    count: 4,
+    xp: 340,
+    gift: 'tonic',
+    title: 'Twigs that walk',
+    body:
+      'The barklings were always here, little walking twigs, harmless. Now they have thorns, and they go for the saplings. Four of them, and the young wood has a chance.',
+  },
+  // Ysolde the Greenwarden, the last Greenwarden, under the Elder Heart.
+  {
+    id: 'ysolde-barklings',
+    giver: 'ysolde',
+    goal: 'slay',
+    target: 'barkling',
+    count: 8,
+    xp: 670,
+    title: 'Twigs of the Elder',
+    body:
+      'This is the Elder Heart, the oldest tree there is, and I am its last Greenwarden. Its fallen twigs grow up into barklings, and the briar has got into them. Put eight to rest.',
+  },
+  {
+    id: 'ysolde-direwolves',
+    giver: 'ysolde',
+    after: 'ysolde-barklings',
+    goal: 'slay',
+    target: 'direwolf',
+    count: 2,
+    xp: 800,
+    gift: 'draught',
+    title: 'Wolves at the roots',
+    body:
+      'Dire wolves have made their dens among the Elder’s roots, and they gnaw at them. Two of them. The roots run west of the Heart, down under the wood to Glowcap Hollow, if you ever want to follow them.',
+  },
+  {
+    id: 'ysolde-heartwood',
+    giver: 'ysolde',
+    after: 'ysolde-direwolves',
+    level: 'mirewood',
+    goal: 'gather',
+    target: 'heartwood',
+    count: 1,
+    xp: 1050,
+    gift: 'blade4',
+    title: 'A graft of heartwood',
+    body:
+      'To mend the gnawed roots I need living heartwood, and only a Grimbark still carries any. They walk in Mirewood now, out along the east road from Mossvale, past Reedmarsh. Bring me heartwood, and I will make you a blade from what the graft does not need.',
+  },
+  // Hake the trapper, in the pines of Greypine.
+  {
+    id: 'hake-wolves',
+    giver: 'hake',
+    after: 'hake-pelts',
+    goal: 'slay',
+    target: 'wolf',
+    count: 6,
+    xp: 380,
+    title: 'Too many wolves',
+    body:
+      'Grey wolves by the dozen in these pines, and they’ve stopped running from a man with a torch. Six of them, and my lines might see morning.',
+  },
+  {
+    id: 'hake-pelts',
+    giver: 'hake',
+    goal: 'gather',
+    target: 'pelt',
+    count: 4,
+    xp: 340,
+    title: 'Furs for the winter',
+    body:
+      'The winter up here takes the ears off a man. Four good pelts, and I’ll line a coat for whoever needs it most.',
+  },
+  {
+    id: 'hake-lynx',
+    giver: 'hake',
+    after: 'hake-wolves',
+    goal: 'slay',
+    target: 'lynx',
+    count: 1,
+    xp: 130,
+    gift: 'tonic',
+    title: 'Followed home',
+    body:
+      'A ridge lynx has taken to following me home, rock to rock, never closer than a stone’s throw. I’d like to walk home alone again.',
+  },
+  {
+    id: 'hake-direwolf',
+    giver: 'hake',
+    after: 'hake-lynx',
+    goal: 'slay',
+    target: 'direwolf',
+    count: 1,
+    xp: 400,
+    gift: 'draught',
+    title: 'The one that leads them',
+    body:
+      'The wolves follow a dire wolf, big as a pony, with briar round its neck like a collar. Kill it, and the rest lose their nerve. Then go on east to Wolfden, if you’re going: that’s where they all come from.',
+  },
+  // Brenna of the Den, in the pines of Wolfden.
+  {
+    id: 'brenna-kobolds',
+    giver: 'brenna',
+    goal: 'slay',
+    target: 'kobold',
+    count: 6,
+    xp: 500,
+    title: 'Kobolds in the crags',
+    body:
+      'Crag kobolds have dug into the rocks east of here, and they steal anything with an edge. Six of them, and we get our knives back.',
+  },
+  {
+    id: 'brenna-scorpions',
+    giver: 'brenna',
+    after: 'brenna-kobolds',
+    goal: 'slay',
+    target: 'scorpion',
+    count: 4,
+    xp: 820,
+    title: 'Stings in the scree',
+    body:
+      'Rock scorpions have crawled up out of the scree, and they don’t belong this far north. Something is driving everything up the mountain. Four of them.',
+  },
+  {
+    id: 'brenna-golems',
+    giver: 'brenna',
+    after: 'brenna-scorpions',
+    goal: 'slay',
+    target: 'golem',
+    count: 2,
+    xp: 720,
+    gift: 'tonic',
+    title: 'Stones that wake',
+    body:
+      'The old stone keepers in the crags have woken with briar in their seams. Two of them, before they come down to the den.',
+  },
+  {
+    id: 'brenna-wyrms',
+    giver: 'brenna',
+    after: 'brenna-golems',
+    goal: 'slay',
+    target: 'stonewyrm',
+    count: 3,
+    xp: 620,
+    gift: 'draught',
+    title: 'Wyrms in the rock',
+    body:
+      'It was stonewyrms that drove the kobolds out of the high rocks, briar-crowned like everything else now. Three of them. Then take the road east into the snow: the wolves have been coming down from Frostmoor.',
   },
 ]
