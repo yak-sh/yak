@@ -9,24 +9,23 @@
 // is admitted, guarded, stamped, and journaled in its turn. Undoing an undo is
 // a redo, for free.
 //
-// The one thing that cannot be walked backward is a deletion. A deleted entity
-// is tombstoned, never erased, and its id can never be reused — so an undo that
-// would resurrect one is refused rather than half-applied.
+// The one thing not walked backward is a deletion: an undo that would bring a
+// deleted entity back is refused rather than half-applied.
 
 import type { Actor, Bundle, Comp, Eid, Graph, Was } from '@yaks/graph'
 import { token, TOMBSTONE } from '@yaks/graph'
 import type { Batch } from './batch.ts'
 import type { Log } from './log.ts'
 
-/** A refused undo: the transaction deleted an entity, and a deletion is
- * final. */
+/** A refused undo: the transaction deleted an entity, which undo does not
+ * bring back. */
 export class Final extends Error {
   /**
    * @param eid the entity the transaction deleted
    * @param seq the transaction it was deleted in
    */
   constructor(public eid: Eid, public seq: number) {
-    super(`${eid} was deleted in batch #${seq} — a death cannot be undone`)
+    super(`${eid} was deleted in batch #${seq} — undo does not bring it back`)
     this.name = 'Final'
   }
 }

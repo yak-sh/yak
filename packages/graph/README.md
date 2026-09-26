@@ -97,9 +97,14 @@ transaction:
 - An omitted property is unchanged.
 - A property set to `null` is cleared.
 - A component set to `null` is removed.
-- `$delete: true` deletes the entity, subject to reference-deletion rules.
+- `$delete: true` deletes the entity, subject to reference-deletion rules. The
+  entity is tombstoned, keeping its eid and number.
 - `$was` supplies per-property hashes of the values the caller read. A mismatch
   refuses the entire change rather than overwriting a concurrent edit.
+- A write to a tombstoned entity whose `$was` names a value read before the
+  delete raced it, and is dropped while the rest of the change lands. Any other
+  write that gives it a component brings it back under the same eid and number,
+  holding only what that write gives.
 
 The return value is the change as applied, including whatever plugins and
 reference handling added to it. It contains one composed patch per affected

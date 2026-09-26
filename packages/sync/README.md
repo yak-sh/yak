@@ -93,11 +93,10 @@ follows:
   connection failed. There is no automatic HTTP retry or guarantee that a later
   response will resolve this uncertain outcome.
 
-A batch containing any deletion waits for the server before applying locally.
-Graph tombstones are permanent, so an optimistic deletion could not be undone.
-The whole batch is held, including its other patches. A refusal therefore has
-nothing local to revert. The server's response supplies the tombstones for an
-accepted deletion.
+A batch containing any deletion waits for the server before applying locally:
+the local tier keeps no inverse for a deletion. The whole batch is held,
+including its other patches. A refusal therefore has nothing local to revert.
+The server's response supplies the tombstones for an accepted deletion.
 
 The plugin's inverse patches operate on the touched properties; they do not
 provide a general conflict-resolution algorithm for overlapping optimistic
@@ -169,8 +168,8 @@ A frame's `gone` list names entities that left its result set. The plugin
 removes those entities' synchronized components while retaining their identity
 and any `sync: none` components. It preserves entities still held by another
 active subscription. Removal from a result set is not a deletion: only an
-incoming `tombstone` permanently deletes an entity. Retained local components
-can still match local queries.
+incoming `tombstone` deletes an entity. Retained local components can still
+match local queries.
 
 For bounded retention or partial query results, supply a `replica` policy; see
 below. The standalone plugin applies incoming bundles as patches. Replacing

@@ -149,6 +149,19 @@ function tracking(
         }
         return tx.remove(entities)
       }),
+    // A revived entity starts from the empty set: the patch after it moves it
+    // to the tables it is given, as it would a new one.
+    revive: (eids) =>
+      then(ensure(eids), () => {
+        for (let eid of eids) {
+          let h = held.get(eid)!
+          if (!h.dead) continue
+          h.set = empty
+          h.dead = false
+          dirty.add(eid)
+        }
+        return tx.revive(eids)
+      }),
   }
 
   return {

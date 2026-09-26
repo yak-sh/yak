@@ -155,8 +155,9 @@ let compSchema = (
 // authenticated (server.ts), so a client setting it would have no effect.
 let sugar = {
   $delete: z.boolean().optional().describe(
-    'delete the whole entity — it is tombstoned, and nothing can resurrect ' +
-      'the eid',
+    'delete the whole entity — it is tombstoned under the same eid; a later ' +
+      'write that gives it a component, not based on a read from before the ' +
+      'delete, brings it back',
   ),
   $was: z.record(z.record(z.string().nullable())).optional().describe(
     'a precondition, by component then property: the SHA-256 of the value ' +

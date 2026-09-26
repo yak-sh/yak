@@ -180,8 +180,9 @@ Four different things, four different ways to write them:
 A tombstone stands alone: it names an existing entity by eid and carries no
 components and no edges (`a dead entity takes no patch` if it does), and it
 needs an eid that already exists — there is nothing to delete behind a `$alias`.
-Deleting is permanent, and it cascades to entities that exist only about the
-deleted one.
+Deleting cascades to entities that exist only about the deleted one. Writing to
+the same eid later brings it back, holding only what that write gives it; a
+write whose `$was` was read before the delete is dropped.
 
 A row you read can be handed straight back as a patch: the fields a read adds —
 `kind`, `rank`, the stamps — are dropped on the way in, and a reference that

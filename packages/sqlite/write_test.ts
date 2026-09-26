@@ -108,7 +108,7 @@ Deno.test('remove drops every component row and tombstones the identity', () => 
   assertEquals(b.doc, undefined)
 })
 
-Deno.test('a tombstoned entity takes no patch, ever', () => {
+Deno.test('a tombstoned entity takes no patch until it is revived', () => {
   let s = store()
   write(s, [{ entity: { eid: 'p1' }, doc: { title: 'Mug' } }])
   s.tx((tx) => tx.remove([{ eid: 'p1' }]))
@@ -118,6 +118,15 @@ Deno.test('a tombstoned entity takes no patch, ever', () => {
   )
   let [b] = s.tx((tx) => tx.get(['p1'])) as Bundle[]
   assertEquals(b.doc, undefined)
+  s.tx((tx) => tx.revive(['p1']))
+  assertEquals(
+    write(s, [{ entity: { eid: 'p1' }, doc: { title: 'back' } }]),
+    [],
+  )
+  let [back] = s.tx((tx) => tx.get(['p1'])) as Bundle[]
+  assertEquals(back.entity, { eid: 'p1', num: 1 })
+  assertEquals(back.tombstone, undefined)
+  assertEquals(c(back, 'doc').title, 'back')
 })
 
 Deno.test('get answers by identity, and says nothing about an unknown eid', () => {

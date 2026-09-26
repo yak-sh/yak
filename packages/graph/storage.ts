@@ -95,11 +95,18 @@ export type Tx = {
    * when the adapter assigns one. An adapter whose numbers are picked by the
    * database may not know them yet — it fills each `num` into the very entity
    * object it returned, before its `tx()` settles. `apply()` reads them only
-   * when it builds its return value, which happens after that. */
+   * when it builds its return value, which happens after that. A bundle for
+   * a tombstoned entity writes nothing. */
   patch: (bundles: Bundle[]) => Entity[] | Promise<Entity[]>
   /** remove these entities: their component rows are deleted, and their
-   * identity row is tombstoned so the id can never be reused */
+   * identity is tombstoned, keeping its eid and number */
   remove: (entities: Entity[]) => void | Promise<void>
+  /** bring these tombstoned entities back: the tombstone clears, the identity
+   * keeps its eid and number, and no component returns — the patch that
+   * follows gives each what it holds. Which writes may do this is the mutate
+   * phase's decision (./mutate.ts); an eid that is not tombstoned is left
+   * alone. */
+  revive: (eids: Eid[]) => void | Promise<void>
 }
 
 /**
@@ -156,6 +163,7 @@ export let detached = (storage: Storage): Tx => ({
     }),
   patch: (bundles) => storage.tx((tx) => tx.patch(bundles)),
   remove: (entities) => storage.tx((tx) => tx.remove(entities)),
+  revive: (eids) => storage.tx((tx) => tx.revive(eids)),
 })
 
 /** Read only the components a check needs, or the whole entity on an adapter

@@ -74,11 +74,13 @@ interface:
 | `get(eids)`          | Those entities as stored, tombstones included; an unknown id is left out.                |
 | `tx(body)`           | The callback's result; commits on success and rolls back on a throw or rejected promise. |
 
-A transaction provides `read`, `get(eids)`, `patch(bundles)`, `evict(eids)`, and
-`remove(entities)`. `get` returns complete stored bundles, includes tombstones,
-and omits unknown ids. `patch` returns the identities it created. `evict`
-removes live component data while reserving the identity for later reuse;
-`remove` permanently tombstones the entity. Eviction does not remove tombstones.
+A transaction provides `read`, `get(eids)`, `patch(bundles)`, `evict(eids)`,
+`remove(entities)`, and `revive(eids)`. `get` returns complete stored bundles,
+includes tombstones, and omits unknown ids. `patch` returns the identities it
+created. `evict` removes live component data while reserving the identity for
+later reuse; `remove` tombstones the entity, keeping its eid and number;
+`revive` clears the tombstone and leaves the identity holding no component.
+Eviction does not remove tombstones.
 
 Options are:
 
@@ -95,7 +97,9 @@ Options are:
 - A property set to `null` is cleared.
 - A component set to `null` is removed, leaving the entity's identity.
 - Undeclared and computed properties are not stored.
-- A tombstoned entity cannot receive component patches or be recreated.
+- A patch to a tombstoned entity writes nothing. After `revive`, the entity
+  takes patches again under its eid and number, holding exactly what they give.
+  Which writes bring one back is @yaks/graph's to decide.
 
 ### Identity, and `num`
 

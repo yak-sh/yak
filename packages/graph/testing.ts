@@ -186,6 +186,12 @@ export let memory = (): Storage => {
         r.comps = {}
       }
     },
+    revive: (eids) => {
+      for (let eid of eids) {
+        let r = rows.get(eid)
+        if (r) r.dead = false
+      }
+    },
   }
 
   let snapshot = () =>
@@ -231,6 +237,7 @@ export let slow = (base: Storage): Storage => ({
         get: (eids) => Promise.resolve(tx.get(eids)),
         patch: (bundles) => Promise.resolve(tx.patch(bundles)),
         remove: (entities) => Promise.resolve(tx.remove(entities)),
+        revive: (eids) => Promise.resolve(tx.revive(eids)),
       })
     ),
 })

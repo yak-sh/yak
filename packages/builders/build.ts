@@ -238,7 +238,8 @@ export let build = (p: Plan, o: Open, at: string = clock()): Bundle[] => {
  * nothing when it is no builder, has no instruction, or — on a schedule — is
  * still resting; otherwise its plan, with the bundles that build it unless the
  * output under its key exists already. A deleted output counts as existing:
- * its id can never be written again, so only a new key builds again.
+ * building it again would bring back what someone deleted, so only a new key
+ * builds again.
  */
 export let decide = (
   o: Open,

@@ -12,9 +12,15 @@
 // property named must be declared — a check on a property that does not exist
 // would read `undefined`, compare equal to "absent", and protect nothing,
 // which is the failure mode with a safety label on it.
+//
+// An entity deleted since it was read is not stale but gone. Its `$was` is
+// still checked for names, then left to the mutate phase, which swallows a
+// write that raced a delete (./mutate.ts) rather than refusing the change
+// around it.
 
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Eid } from './bundle.ts'
+import { dead } from './bundle.ts'
 import type { Tx } from './storage.ts'
 import { then } from './pipe.ts'
 import { sha256 } from './sha256.ts'
@@ -67,6 +73,7 @@ export let guard = (
     let at = new Map(found.map((b) => [b.entity.eid, b]))
     for (let b of guarded) {
       let stored = at.get(b.entity.eid)
+      let buried = !!stored && dead(stored)
       for (let [comp, props] of Object.entries(b.$was!)) {
         if (!vocab.comp(comp)) {
           throw new Refused(`unknown component in $was: ${comp}`)
@@ -76,6 +83,7 @@ export let guard = (
           if (!declared.has(prop)) {
             throw new Refused(`unknown property in $was: ${comp}.${prop}`)
           }
+          if (buried) continue
           let cur = (stored?.[comp] as Comp | undefined)?.[prop] ?? null
           if (token(cur) != want) {
             throw new Stale(b.entity.eid, comp, prop, cur)

@@ -99,7 +99,7 @@ let remote = client(vocab, [], { url: 'https://recipes.example' })
 ```
 
 Server-synchronized edits normally apply locally before `POST /apply` completes.
-Deletions wait for the server because graph deletion is permanent. Server
+Deletions wait for the server: the local tier keeps no inverse for one. Server
 refusals can revert optimistic edits and are reported through `opts.report`.
 Components declared `sync: none` stay local; `sync: peers` components are
 relayed through the WebSocket. See [@yaks/sync](https://jsr.io/@yaks/sync) for

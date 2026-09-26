@@ -117,6 +117,31 @@ export let comps = (b: Bundle): [string, Comp | null][] =>
 export let dead = (b: Bundle): boolean =>
   b.$delete === true || b[TOMBSTONE] != null
 
+/** Whether a bundle gives its entity a component, rather than only removing
+ * some. An entity comes into being, or back from its tombstone, only with one.
+ *
+ * ```ts
+ * gives({ entity: { eid: 'a' }, doc: { title: 'Dune' } }) // true
+ * gives({ entity: { eid: 'a' }, doc: null }) // false
+ * ```
+ */
+export let gives = (b: Bundle): boolean => comps(b).some(([, c]) => c != null)
+
+/** Whether a bundle raced a delete: its `$was` names a value the writer read,
+ * which a tombstoned entity no longer holds. A `$was` naming only `null` read
+ * nothing, and is a blind write.
+ *
+ * ```ts
+ * raced({ entity: { eid: 'a' }, $was: { doc: { title: 'f00d' } } }) // true
+ * raced({ entity: { eid: 'a' }, $was: { doc: { title: null } } }) // false
+ * raced({ entity: { eid: 'a' } }) // false
+ * ```
+ */
+export let raced = (b: Bundle): boolean =>
+  Object.values(b.$was ?? {}).some((props) =>
+    Object.values(props).some((t) => t != null)
+  )
+
 /** A bundle reporting that an entity was deleted: what `apply()` generates for
  * each entity a cascade took with it, and what a read returns for a tombstoned
  * entity. */

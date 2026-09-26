@@ -12,9 +12,7 @@
 //
 // `of` is a reference declared `death: release`, which is the whole of a key's
 // lifecycle: a value for a deleted thing identifies nothing, and the row is
-// removed rather than the entity, so the value can be claimed again. (A cascade
-// would tombstone an id derived from the value, and a tombstone is forever —
-// the value could never be used again by anyone.)
+// removed rather than the entity, so the value can be claimed again.
 //
 // The value is unique within its kind, and nothing declares that — the key's
 // own id is `sha256("<tag>|<value>")` (./eid.ts), so two writers giving the

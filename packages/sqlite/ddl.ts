@@ -9,8 +9,9 @@
 //   entity        the identity table: an integer `id`, a string `eid`, a `num`.
 //                 Every other table keys to `entity(id)` by an integer, so a
 //                 reference is an integer compare after one id lookup.
-//   tombstone     a deleted entity keeps its `entity` row (its integer id can
-//                 never recycle) and gains a tombstone row; reads exclude it.
+//   tombstone     a deleted entity keeps its `entity` row (its eid, number
+//                 and integer id) and gains a tombstone row; reads exclude it,
+//                 and a later write that brings it back deletes the row.
 //   <component>   one table per component, keyed by an `entity` integer owner.
 //                 A scalar column stores its value; a reference stores the
 //                 referent's integer id; a component with no properties is a

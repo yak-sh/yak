@@ -63,8 +63,7 @@ Alongside the book, that writes this key entity:
   id using `get`, rather than searched for by value.
 - **A key lives only as long as what it identifies.** `of` is a reference
   declared `death: release`: the row goes when that entity is deleted, and the
-  value is free again. A cascade would instead permanently reserve the deleted
-  id derived from the value, and the value could never be used again.
+  value is free again.
 - **Incomplete keys are refused:** a key with no kind, no value or no `of` never
   reaches storage.
 - **A repeated value can resolve to its existing owner.** When a write creates
@@ -95,8 +94,6 @@ g.apply([unkeyed('isbn', '9780441013593')])
 
 That removes both components and leaves the entity itself in place, carrying
 nothing. The value can then be claimed again, by the same entity or another one.
-Deleting the key entity instead would permanently reserve its id (a tombstone),
-and no one could ever use that value again.
 
 ## Exports
 

@@ -84,6 +84,7 @@ import {
   removeSql,
   schema,
   touched,
+  unburySql,
 } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { type D1Like, prepare, type Prepared, type Row, unbind } from './d1.ts'
@@ -448,6 +449,23 @@ export let storage = <S extends Prepared<S>>(
           dirty.set(eid, merged(vocab, at(eid) ?? { entity: { eid } }, b))
         }
         return born
+      },
+      // Its tombstone row goes, so the cascade's one-statement question no
+      // longer describes the batch; the identity it kept stays (@yaks/sqlite
+      // `revive`).
+      revive: async (eids) => {
+        await learn(eids)
+        for (let eid of eids) {
+          let k = known.get(eid)
+          if (!k?.dead) continue
+          moved = true
+          pending.push(unburySql(eid))
+          known.set(eid, { ...k, dead: false })
+          dirty.set(eid, {
+            entity: at(eid)?.entity ??
+              { eid, ...(k.num == null ? {} : { num: k.num }) },
+          })
+        }
       },
       remove: async (entities) => {
         // A tombstoned row is a row the database has not seen go, so nothing

@@ -9,9 +9,7 @@
 // Retiring a value is not a DELETE of the entity. The value is simply no longer
 // claimed, and the same value may be claimed again tomorrow — by this entity or
 // another — so its components are removed and the entity itself stays. An
-// entity carrying no components is invisible to every reader; deleting it
-// instead would tombstone an id derived from the kind and the value, and a
-// tombstone is forever: `lemon-cake` could never be used again.
+// entity carrying no components is invisible to every reader.
 
 import type { Bundle, Eid } from '@yaks/graph'
 import { keyEid } from './eid.ts'

@@ -11,9 +11,9 @@
 // and name, a package its name. So reading the same tree twice is one set of
 // entities, and nothing here invents an id.
 //
-// Nothing is ever deleted. A tombstoned id can never be written again, and a
-// path or an export name comes back often, so what is gone has its components
-// cleared instead: the entity stays, empty, and a later read fills it in.
+// Nothing is ever deleted. A path or an export name comes back often, so what
+// is gone has its components cleared instead: the entity stays, empty, and a
+// later read fills it in.
 // Import links are cleared the same way, with @yaks/edge's `unlink`.
 
 import {

@@ -155,7 +155,15 @@ export let script: Step[] = [
     batch: [{ entity: { eid: 'm1' }, $delete: true }],
   },
   {
-    name: 'a dead entity takes no patch, and mints nothing it names',
+    name: 'a write that raced the delete is swallowed, and mints nothing',
+    batch: [{
+      entity: { eid: 'p1' },
+      product: { price: 2, maker: 'x9' },
+      $was: { doc: { title: token('Mug II') } },
+    }],
+  },
+  {
+    name: 'any other write brings the dead back, and mints what it names',
     batch: [{ entity: { eid: 'p1' }, product: { price: 1, maker: 'm9' } }],
   },
 ]
@@ -187,6 +195,7 @@ let NAMED = [
   'r5',
   'p5',
   'm9',
+  'x9',
   'x1',
   'mark:x1',
 ]

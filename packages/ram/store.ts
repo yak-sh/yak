@@ -10,7 +10,8 @@
 //
 // Writes follow the patch rules every adapter implements — omitted properties
 // untouched, a null property cleared, a null component dropped, a tombstoned
-// entity taking no patch — and identity belongs to storage: `patch` creates a
+// entity taking no patch until `revive` brings it back under the identity it
+// kept — and identity belongs to storage: `patch` creates a
 // record for every eid the write touches or points at, numbers each new one in
 // the order it was first touched, and returns what it created.
 //
@@ -59,10 +60,13 @@ export type Tx = {
   /** apply these patches → the entities they created, each with its `num` */
   patch: (bundles: Bundle[]) => Entity[]
   /** Evict live payloads, not identities. A later patch keeps the same number.
-   * Tombstones remain permanent; eviction is never deletion. */
+   * A tombstone stays; eviction is never deletion. */
   evict: (eids: Eid[]) => void
   /** remove these entities: their components go, their identity is tombstoned */
   remove: (entities: Entity[]) => void
+  /** bring these tombstoned entities back, with their identity and no
+   * components */
+  revive: (eids: Eid[]) => void
 }
 
 /**
@@ -85,8 +89,8 @@ export type Store = {
 }
 
 // One entity as the map holds it: its identity, the components it has, and
-// whether it has been deleted. A deleted record keeps its identity forever (the
-// id can never be reused) and nothing else.
+// whether it has been deleted. A deleted record keeps its identity and nothing
+// else, until `revive` brings it back.
 type Rec = { entity: Entity; comps: Record<string, Comp>; dead?: boolean }
 
 let bundleOf = (r: Rec): Bundle =>
@@ -273,6 +277,14 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         save(eid)
         cold.delete(eid)
         rows.set(eid, { entity, comps: {}, dead: true })
+      }
+    },
+    revive: (eids) => {
+      for (let eid of eids) {
+        let rec = rows.get(eid)
+        if (!rec?.dead) continue
+        save(eid)
+        rows.set(eid, { entity: rec.entity, comps: {} })
       }
     },
   }

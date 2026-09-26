@@ -102,11 +102,13 @@ await g.apply([{ entity: { eid: 'p1' }, post: null }]) // remove component
 await g.apply([{ entity: { eid: 'p1' }, $delete: true }]) // delete entity
 ```
 
-A deleted entity keeps its identity row and gains a tombstone; its id cannot be
-reused. Reference properties declare deletion behavior: `cascade` deletes their
-owner, `release` removes their component, `detach` clears the reference, and
-`keep` retains it as history. `tx.remove()` removes exactly the entities passed
-to it; the graph determines the full cascade.
+A deleted entity keeps its identity row and gains a tombstone. `tx.revive()`
+removes the tombstone, and the identity keeps its eid, number and integer id;
+which writes bring an entity back is @yaks/graph's to decide. Reference
+properties declare deletion behavior: `cascade` deletes their owner, `release`
+removes their component, `detach` clears the reference, and `keep` retains it as
+history. `tx.remove()` removes exactly the entities passed to it; the graph
+determines the full cascade.
 
 ### Read
 
@@ -145,11 +147,11 @@ number sequence and runs bounded `PRAGMA optimize` for file-backed drivers, so
 the planner can use table statistics.
 
 A transaction provides `read`, `get(eids)`, `pick(eids, names)`, `patch`,
-`remove`, `doom`, and `bindings`. `get` retrieves whole entities including
-tombstones; `pick` retrieves identity and selected components, potentially a
-superset. `patch` returns newly created identities, with `num` when numbering is
-enabled. `doom` resolves cascading deletion, and `bindings` evaluates rules
-against pending changes.
+`remove`, `revive`, `doom`, and `bindings`. `get` retrieves whole entities
+including tombstones; `pick` retrieves identity and selected components,
+potentially a superset. `patch` returns newly created identities, with `num`
+when numbering is enabled. `doom` resolves cascading deletion, and `bindings`
+evaluates rules against pending changes.
 
 SQL transactions commit on callback completion and roll back on failure; a
 promise-returning callback is awaited. Nested calls use savepoints. A driver

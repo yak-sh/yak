@@ -65,7 +65,7 @@ import { keyed } from './keyed.ts'
 import { unit } from './unit.ts'
 import { backfill } from './archetype.ts'
 import { shape } from './physical.ts'
-import { patch, remove } from './write.ts'
+import { patch, remove, revive } from './write.ts'
 import { bindings } from './rules.ts'
 
 export * from './archetype.ts'
@@ -99,9 +99,11 @@ export {
   patchSql,
   remove,
   removeSql,
+  revive,
   type Spine,
   spines,
   touched,
+  unburySql,
   upsertSql,
 } from './write.ts'
 export type { Storage } from '@yaks/graph'
@@ -135,6 +137,8 @@ export type Tx = {
   patch: (bundles: Bundle[]) => Entity[]
   /** remove these entities: rows gone, identity tombstoned */
   remove: (entities: Entity[]) => void
+  /** bring these tombstoned entities back: tombstone gone, identity kept */
+  revive: (eids: string[]) => void
 }
 
 /**
@@ -215,6 +219,7 @@ export let storage = (
       bindings(driver, vocab, matches, batch, covers, base),
     patch: (bundles) => patch(driver, vocab, bundles, base.number, base.adopt),
     remove: (entities) => remove(driver, vocab, entities),
+    revive: (eids) => revive(driver, eids),
   }
   return {
     ddl: () => schema(vocab, base.derived),

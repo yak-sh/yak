@@ -337,6 +337,7 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
       composed(ctx.env, reach, eids) as unknown as Promise<Bundle[]>,
     patch: nope('transaction'),
     remove: nope('transaction'),
+    revive: nope('transaction'),
   }
   self = {
     install: () => {},

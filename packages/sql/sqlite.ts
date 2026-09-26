@@ -15,8 +15,9 @@
 // stores the referent's integer id, so reading it back as an eid is a
 // correlated lookup in the entity table, and comparing an eid to it is an
 // integer comparison after one lookup of the operand. A deleted entity keeps
-// its row in the entity table, because its integer id must never be reused, but
-// it is listed in the `tombstone` table, so every query excludes it.
+// its row in the entity table — its eid, number and integer id, which a write
+// that brings it back keeps — and is listed in the `tombstone` table, so every
+// query excludes it.
 
 import type { Prop, Scalar, Vocab } from '@yaks/vocab'
 import { type Span as QSpan, timeSpan } from '@yaks/query'

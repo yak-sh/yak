@@ -77,7 +77,7 @@ Deno.test('undo of a delete is refused — death is final', () => {
   let err = assertThrows(() => f.back(2), Final)
   assertEquals(
     (err as Final).message,
-    'p1 was deleted in batch #2 — a death cannot be undone',
+    'p1 was deleted in batch #2 — undo does not bring it back',
   )
 })
 

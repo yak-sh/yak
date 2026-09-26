@@ -41,7 +41,7 @@
 import { and, eq, list, or, type Query as Ast } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Eid } from './bundle.ts'
-import { comps } from './bundle.ts'
+import { comps, dead } from './bundle.ts'
 import type { Tx } from './storage.ts'
 import { then } from './pipe.ts'
 
@@ -307,6 +307,16 @@ export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
         }),
     ),
   remove: (entities) => then(complete(tx, snap), () => tx.remove(entities)),
+  // A revived entity holds nothing until the patch after it: the snapshot
+  // drops its tombstone, so that patch merges onto an identity, not a grave.
+  revive: (eids) =>
+    then(complete(tx, snap), () =>
+      then(tx.revive(eids), () => {
+        for (let eid of eids) {
+          let held = snap.got.get(eid)
+          if (held && dead(held)) snap.got.set(eid, { entity: held.entity })
+        }
+      })),
   pick: (eids, names) => {
     if (
       eids.every((e) =>

@@ -79,6 +79,19 @@ Deno.test('a removed entity is tombstoned, and takes no patch after', () => {
   assertEquals(s.read('.kind=doc'), [])
 })
 
+Deno.test('a revived entity keeps its identity and takes patches again', () => {
+  let s = shopRam()
+  put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug' } })
+  s.tx((tx) => tx.remove([{ eid: 'p1' }]))
+  s.tx((tx) => tx.revive(['p1']))
+  assertEquals(at(s, 'p1'), { entity: { eid: 'p1', num: 1 } })
+  put(s, { entity: { eid: 'p1' }, doc: { title: 'back' } })
+  assertEquals(at(s, 'p1'), {
+    entity: { eid: 'p1', num: 1 },
+    doc: { title: 'back' },
+  })
+})
+
 Deno.test('a read is the query grammar, answered from the map', () => {
   let s = shopRam()
   put(

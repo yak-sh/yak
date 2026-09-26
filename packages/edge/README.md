@@ -106,9 +106,8 @@ g.apply([unlink('p1', 'cites', 'p2')])
 g.apply([link('p1', 'cites', 'p2')])
 ```
 
-`unlink()` removes the `edge` and relation components, leaving the entity ID
-available for reuse and any other components intact. Deleting the link entity
-instead permanently tombstones its ID.
+`unlink()` removes the `edge` and relation components, leaving the entity and
+any other components in place; `link()` fills it in again.
 
 Both endpoints declare `death: cascade`: deleting either endpoint through the
 graph deletes the link entity. The plugin rejects an edge without endpoints or a

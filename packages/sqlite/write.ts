@@ -5,7 +5,8 @@
 //   omitted properties are untouched    a patch names only what changes
 //   a property set to null is cleared   null is a value, not an absence
 //   a component set to null is dropped  the row goes, the entity stays
-//   a tombstoned entity takes no patch  deletion is final; ids never recycle
+//   a tombstoned entity takes no patch  until `revive` clears its tombstone;
+//                                        it keeps its eid and number
 //
 // Every write here is a statement (an @yaks/sql `Write`), built before it is
 // sent, and every statement is self-sufficient: an owner id is a subquery
@@ -43,7 +44,7 @@
 
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
-import { comps } from '@yaks/graph'
+import { comps, TOMBSTONE } from '@yaks/graph'
 import {
   among,
   and,
@@ -122,8 +123,8 @@ export type Spine = { num: number | null; dead: boolean }
 /** What the store knows about these eids — one statement and one bound
  * parameter, whatever the batch's size (a Durable Object binds at most 100).
  * An eid absent from the map has no entity; one present with `dead` is
- * tombstoned, and a deleted identity is still an identity: it resolves by eid
- * forever, it just takes no more writes. */
+ * tombstoned, and a deleted identity is still an identity: it resolves by eid,
+ * and `revive` brings it back. */
 export let spines = (
   driver: Driver,
   eids: string[],
@@ -337,9 +338,13 @@ let patchOne = (
     : { first: fallback() }
 }
 
+/** The statement that clears an entity's tombstone, so the write that follows
+ * lands on the identity it kept. */
+export let unburySql = (eid: string): Delete => dropSql(eid, TOMBSTONE)
+
 /**
  * The statements that remove one entity: every component row it has, then the
- * tombstone that keeps its id from ever being reused. Components go in reverse
+ * tombstone that marks its identity deleted. Components go in reverse
  * declaration order, so a dependent is gone before what it references and no
  * foreign key blocks the delete. The tombstone is an INSERT…select, so an eid
  * no entity uses tombstones nothing.
@@ -390,8 +395,8 @@ let wears = (driver: Driver, comp: string, eid: string): boolean =>
 /**
  * Patch a batch of bundles in, in order, and return the spines this patch
  * minted or numbered — each with the `num` it was given, as the statement
- * itself reported it. A bundle for a tombstoned entity is skipped: death is
- * final.
+ * itself reported it. A bundle for a tombstoned entity is skipped: bringing
+ * one back is `revive`'s, which @yaks/graph asks for first.
  *
  * An eid a reference only names still gets a spine, because a reference column
  * holds its target's id, but that spine takes no number: it is a pointer to
@@ -501,14 +506,21 @@ export let patch = (
     }
   }
 
-  // Metadata can classify a tombstone too; it does not resurrect components.
+  // Metadata can classify a tombstone too; on its own it brings nothing back.
   for (let b of bundles) for (let s of archetypeSql(b)) effect(driver, s)
   return born
 }
 
+/** Bring these tombstoned entities back: each tombstone row goes, and the
+ * identity keeps its eid, number and integer id. No component returns; the
+ * patch after it gives them. An eid with no tombstone is left alone. */
+export let revive = (driver: Driver, eids: string[]): void => {
+  for (let eid of eids) effect(driver, unburySql(eid))
+}
+
 /**
  * Remove these entities: every component row they have goes, and their identity
- * is tombstoned so the id can never be reused. Exactly the entities named —
+ * is tombstoned, keeping its eid and number. Exactly the entities named —
  * @yaks/graph decided which they are.
  */
 export let remove = (

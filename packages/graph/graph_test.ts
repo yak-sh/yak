@@ -356,14 +356,63 @@ Deno.test('a detach reference is nulled and the survivor hears it', () => {
   assertEquals(comp(b, 'book').pages, 412) // the book itself is untouched
 })
 
-Deno.test('a dead entity takes no patch, in this batch or a later one', () => {
+Deno.test('a patch after its own delete in one batch is dropped', () => {
   let one = g()
   sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))
   sync(one.apply([
     { entity: { eid: 'b1' }, $delete: true },
     { entity: { eid: 'b1' }, doc: { title: 'back from the dead' } },
   ]))
-  sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'still no' } }]))
+  let [b] = one.get(['b1']) as Bundle[]
+  assert(isDead(b))
+})
+
+// Three writes reach one tombstone: the entity was `Dune`, with pages, and
+// then deleted.
+let buried = () => {
+  let one = g()
+  let [born] = sync(one.apply([
+    { entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { pages: 412 } },
+  ]))
+  sync(one.apply([{ entity: { eid: 'b1' }, $delete: true }]))
+  return { one, num: born.entity.num }
+}
+
+Deno.test('a write that raced the delete is swallowed, and the batch lands', () => {
+  let { one } = buried()
+  sync(one.apply([
+    {
+      entity: { eid: 'b1' },
+      doc: { title: 'Dune II' },
+      $was: { doc: { title: token('Dune') } },
+    },
+    { entity: { eid: 'b2' }, doc: { title: 'Emma' } },
+  ]))
+  let [b1, b2] = one.get(['b1', 'b2']) as Bundle[]
+  assert(isDead(b1))
+  assertEquals(comp(b2, 'doc').title, 'Emma')
+})
+
+Deno.test('any other write brings the dead back under its eid and number', () => {
+  for (let was of [undefined, { doc: { title: null } }]) {
+    let { one, num } = buried()
+    let out = sync(one.apply([{
+      entity: { eid: 'b1' },
+      doc: { title: 'Dune, again' },
+      ...(was ? { $was: was } : {}),
+    }]))
+    assertEquals(at(out, 'b1', 'doc'), { title: 'Dune, again' })
+    let [b] = one.get(['b1']) as Bundle[]
+    assert(!isDead(b))
+    assertEquals(b.entity, { eid: 'b1', num })
+    // only what the write gave: the pages went with the delete
+    assertEquals(b.book, undefined)
+  }
+})
+
+Deno.test('a write that only removes leaves the dead dead', () => {
+  let { one } = buried()
+  sync(one.apply([{ entity: { eid: 'b1' }, book: null }]))
   let [b] = one.get(['b1']) as Bundle[]
   assert(isDead(b))
 })

@@ -53,7 +53,8 @@
  *   identity that wrote it and when it committed.
  * - {@link undo} — the inverse of a transaction, applied through the graph, so
  *   an undo is a write like any other and undoing it is a redo. A transaction
- *   that deleted an entity is refused ({@link Final}): a deletion is final.
+ *   that deleted an entity is refused ({@link Final}): undo does not bring
+ *   a deleted entity back.
  * - {@link Log.since} — the transactions after a cursor, oldest first.
  *   {@link applied} turns one back into the bundles it committed; a consumer
  *   that stores the cursor before it does the work runs effects at most once.

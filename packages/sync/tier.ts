@@ -121,9 +121,9 @@ export let relayed = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
  * dropped — so the local graph returns to where it stood before the optimistic
  * write.
  *
- * A DELETE has no inverse: deletion is final in this model, which is why a
- * write that deletes is never applied optimistically — it waits for the server
- * (sync.ts), so there is never a tombstone to lift.
+ * A DELETE gets no inverse here: a write that deletes is never applied
+ * optimistically — it waits for the server (sync.ts), so there is never a
+ * tombstone to lift.
  */
 export let inverse = (bundles: Bundle[]): Bundle[] =>
   bundles.flatMap((b) => {

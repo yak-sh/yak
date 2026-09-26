@@ -109,9 +109,8 @@ export let link = (
 
 // Unlinking is not a DEATH. The sentence is no longer said, and the same
 // sentence may be said again tomorrow — so its COMPS go and the spine stays.
-// An entity wearing nothing is invisible to every reader; deleting the entity
-// instead would tombstone an eid that is DERIVED from the sentence, and a
-// tombstone is forever, so `A requires B` could never be said again (T-23824).
+// An entity wearing nothing is invisible to every reader, and saying the
+// sentence again fills it back in.
 // An endpoint's death still reaps the whole entity through edge's own cascades:
 // that sentence cannot become true again, because one of its ends is gone.
 export let unlink = (

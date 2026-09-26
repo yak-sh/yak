@@ -8,9 +8,7 @@
 // Removing a link does not delete its entity. The link no longer exists, but
 // the same link may be created again tomorrow, so its components are cleared
 // and the entity id stays. An entity with no components is invisible to every
-// reader; deleting it instead would tombstone an id derived from the link's
-// endpoints and relation, and a tombstone is permanent — `a cites b` could
-// never be written again.
+// reader, and `link()` fills it back in.
 
 import type { Bundle, Eid } from '@yaks/graph'
 import { edgeEid } from './eid.ts'

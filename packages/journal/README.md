@@ -195,9 +195,10 @@ possible intervening edit.
 `undone(batch, { guard? })` builds the inverse without applying it; guards are
 off by default there. `applied(batch)` reconstructs the forward change.
 
-Entity deletion is permanent. `undone()` and `undo()` throw `Final` if the batch
-deleted an entity, including a cascade. A nonexistent sequence makes `undo()`
-throw an `Error`; a batch with no reversible changes returns `[]`.
+Undo does not bring a deleted entity back. `undone()` and `undo()` throw `Final`
+if the batch deleted an entity, including a cascade. A nonexistent sequence
+makes `undo()` throw an `Error`; a batch with no reversible changes returns
+`[]`.
 
 ## Limitations and recording rules
 
