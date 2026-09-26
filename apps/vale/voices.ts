@@ -16,15 +16,15 @@ let voice = (dur: number, loud: number, play: Voice['play']): Voice => ({
 let white = () => Math.random() * 2 - 1
 let vary = (x: number) => x * (0.85 + Math.random() * 0.3)
 
-// A second of noise for each context, to filter into hisses.
-let noises = new WeakMap<BaseAudioContext, AudioBuffer>()
+// A second of white noise for each context, to filter into hisses.
+let buffers = new WeakMap<BaseAudioContext, AudioBuffer>()
 let noiseOf = (c: BaseAudioContext) => {
-  let b = noises.get(c)
+  let b = buffers.get(c)
   if (b) return b
   b = c.createBuffer(1, c.sampleRate, c.sampleRate)
   let d = b.getChannelData(0)
   for (let i = 0; i < d.length; i++) d[i] = white()
-  noises.set(c, b)
+  buffers.set(c, b)
   return b
 }
 
