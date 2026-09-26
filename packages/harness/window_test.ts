@@ -2,7 +2,7 @@ import { assert, assertEquals } from '@std/assert'
 import { identityEid } from '@yaks/graph'
 import { remote } from './remote.ts'
 import { transcriptWindow } from '@yaks/session'
-import { at, harness } from './testing.ts'
+import { at, harness, worker } from './testing.ts'
 
 let M = identityEid('model', ['test'])
 
@@ -47,7 +47,12 @@ Deno.test('worker pages retained graph data and keeps initial transfer independe
     })),
   ])
   h.close()
-  let r = await remote({ config: at(path), cwd: dir, fake: true })
+  let r = await remote({
+    worker: worker(),
+    config: at(path),
+    cwd: dir,
+    fake: true,
+  })
   try {
     let page = await r.agent.transcriptWindow!('s', { limit: 16 })
     assertEquals(page.entries.length, 16)
@@ -229,6 +234,7 @@ Deno.test('bounded worker subscriptions deliver transient text before final comp
   const { until } = await import('../process/testing.ts')
   let dir = await Deno.makeTempDir()
   let r = await remote({
+    worker: worker(),
     config: at(),
     cwd: dir,
     fake: { delayMs: 800, deltas: 20 },
@@ -317,7 +323,12 @@ Deno.test('detached windows receive frontier notices without loading new offscre
     })),
   ])
   store.close()
-  let r = await remote({ config: at(path), cwd: dir, fake: true })
+  let r = await remote({
+    worker: worker(),
+    config: at(path),
+    cwd: dir,
+    fake: true,
+  })
   try {
     let page = await r.agent.transcriptWindow!('s', {
       anchor: 'e30',

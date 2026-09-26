@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { entrySource, SOURCE_LIMIT } from './detail.ts'
 import { remote } from './remote.ts'
-import { at, harness } from './testing.ts'
+import { at, harness, worker } from './testing.ts'
 
 const seed = [
   { entity: { eid: 'p' }, session: {} },
@@ -79,7 +79,12 @@ Deno.test('SOURCE worker fake matches inline read and rejects unrelated entries'
   await h.g.apply(seed)
   let expected = await entrySource(h.g, 'child', 'a')
   h.close()
-  let r = await remote({ config: at(db), cwd: dir, fake: true })
+  let r = await remote({
+    worker: worker(),
+    config: at(db),
+    cwd: dir,
+    fake: true,
+  })
   try {
     assertEquals(await r.agent.entrySource!('child', 'a'), expected)
     let next = await r.agent.entrySource!('child', 'a', {

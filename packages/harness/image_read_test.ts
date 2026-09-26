@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { registered } from './artifact_tools.ts'
 import { artifactStore } from '@yaks/blob'
-import { at, harness } from './testing.ts'
+import { at, harness, worker } from './testing.ts'
 Deno.test('image reads resolve registered artifacts and verify bytes; no arbitrary address access', async () => {
   let h = await harness()
   try {
@@ -35,6 +35,7 @@ Deno.test('worker retrieves registered image bytes for the lazy attachment rende
   await h.g.apply([{ entity: { eid: 'image' }, artifact: record }])
   h.close()
   let r = await remote({
+    worker: worker(),
     config: at(directory + '/db'),
     cwd: directory,
     fake: true,

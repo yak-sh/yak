@@ -5,7 +5,7 @@ import { link } from '@yaks/edge'
 import { toolEid } from '@yaks/tools'
 import { seed } from './agent.ts'
 import { local } from './local.ts'
-import { at, harness, repo } from './testing.ts'
+import { at, harness, repo, worker } from './testing.ts'
 
 const P = (name: string) => identityEid('provider', [name])
 const M = (name: string) => identityEid('model', [name])
@@ -147,7 +147,7 @@ Deno.test('worker authorization panel offers graph-configured OpenRouter without
   const h = await harness(path)
   await h.g.apply(seed({ provider: 'openrouter', model: 'vendor/model' }))
   h.close()
-  const r = await remote({ config: at(path) })
+  const r = await remote({ worker: worker(), config: at(path) })
   try {
     const list = await r.agent.authorizeMCP!('list')
     assert(list.servers?.includes('OpenRouter (model provider)'))

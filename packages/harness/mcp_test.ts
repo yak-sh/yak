@@ -5,7 +5,7 @@ import { mcpTools } from './mcp.ts'
 import { signins } from './signin.ts'
 import { fixture } from '../mcp-client/testing.ts'
 import { graphToolName } from '@yaks/mcp-client/graph'
-import { at, harness, repo } from './testing.ts'
+import { at, harness, repo, worker } from './testing.ts'
 
 Deno.test('configured remote MCP tool publishes mockup through existing call/result transcript', async () => {
   const f = fixture()
@@ -93,7 +93,7 @@ Deno.test('worker owns MCP connection and preserves exact configured tool schema
     },
   }])
   seed.close()
-  const a = await remote({ config: at(db), fake: true })
+  const a = await remote({ worker: worker(), config: at(db), fake: true })
   try {
     const id = await a.agent.start('hello')
     await a.idle(id)

@@ -1,7 +1,7 @@
 /** Test fixtures: a harness graph composed as a `yak` config composes one
  * (`harness`, `at`), the runner working it as an agent works it, for a test
- * that drives the graph itself (`working`), and the repositories a harness
- * starts in.
+ * that drives the graph itself (`working`), the backend Worker a test process
+ * lends each `remote()` (`worker`), and the repositories a harness starts in.
  *
  * The repositories are for code that starts in a checkout or cuts one. A
  * harness started in `Deno.cwd()` works in the repository the suite runs in:
@@ -127,6 +127,23 @@ export let scratchRepo = async () => {
     free: () => Deno.remove(dir, { recursive: true }),
   }
 }
+
+let host: Worker | undefined
+
+/** This test process's backend Worker, started on first use and ended with
+ * the process: a `remote()` lent it serves its graph there. Starting one loads
+ * the backend's whole module graph into a new isolate, about a third of a
+ * second each time, so a test lends it unless what it tests is the Worker's
+ * own end — a stuck turn cut off, a forced exit. */
+export let worker = () =>
+  host ??= (() => {
+    let started = new Worker(
+      new URL('./backend_worker.ts', import.meta.url).href,
+      { type: 'module' },
+    )
+    addEventListener('unload', () => started.terminate())
+    return started
+  })()
 
 let made: string | undefined
 

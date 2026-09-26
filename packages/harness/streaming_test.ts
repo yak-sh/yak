@@ -4,7 +4,7 @@ import { tally } from '@yaks/sql'
 import { type Comp, transient } from '@yaks/graph'
 import { ModelError } from '@yaks/model'
 import { statusOf } from '@yaks/session'
-import { at, harness, repo } from './testing.ts'
+import { at, harness, repo, worker } from './testing.ts'
 
 Deno.test('streaming records ask before dispatch, projects text without durable token writes, and finalizes same entry', async () => {
   const h = await harness()
@@ -114,6 +114,7 @@ Deno.test('partial failure preserves text and does not automatically retry ambig
 Deno.test('a real worker transfers transient text before model completion', async () => {
   const { remote } = await import('./remote.ts')
   const a = await remote({
+    worker: worker(),
     config: at(),
     streaming: true,
     fake: { delayMs: 300, deltas: 30 },

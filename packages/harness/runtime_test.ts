@@ -2,7 +2,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
 import { runtimeRows } from './runtime.ts'
 import { elapsed } from './RuntimePanel.ts'
-import { at, harness, repo } from './testing.ts'
+import { at, harness, repo, worker } from './testing.ts'
 
 Deno.test('runtime cancellation preserves partial text, waits for new input, and resumes explicitly', async () => {
   let entered = Promise.withResolvers<void>()
@@ -186,7 +186,11 @@ Deno.test('runtime panel reads only while visible; navigation and feedback stay 
 
 Deno.test('worker runtime projection and scoped continuation use explicit commands', async () => {
   const { remote } = await import('./remote.ts')
-  let connection = await remote({ config: at(':memory:'), fake: true })
+  let connection = await remote({
+    worker: worker(),
+    config: at(':memory:'),
+    fake: true,
+  })
   try {
     let id = await connection.agent.start('runtime worker fixture')
     await connection.idle(id)

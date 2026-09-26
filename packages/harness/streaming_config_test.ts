@@ -3,7 +3,7 @@ import { assertEquals } from '@std/assert'
 import { streamingEnabled } from './streaming.ts'
 import { local } from './local.ts'
 import { remote } from './remote.ts'
-import { at, harness, repo } from './testing.ts'
+import { at, harness, repo, worker } from './testing.ts'
 
 Deno.test('streaming defaults on; explicit options override the environment', () => {
   for (const value of [undefined, '1', '0']) {
@@ -91,6 +91,7 @@ Deno.test('worker resolves streaming environment and explicit opt-out before clo
     ] as const
   ) {
     const a = await remote({
+      worker: worker(),
       config: at(),
       fake: true,
       env: streamAs(value),

@@ -42,14 +42,22 @@ export let remote = async (
     /** where settings such as `HARNESS_STREAM` are read (default this
      * process's environment); resolved here, never cloned to the worker */
     env?: (name: string) => string | undefined
+    /** the backend Worker to serve this graph in, lent and left running
+     * (testing.ts `worker`); by default one of its own, ended with it */
+    worker?: Worker
   },
 ) => {
-  let { env = Deno.env.get, ...config } = options
+  let { env = Deno.env.get, worker: lent, ...config } = options
   let { vocab } = await words(options.config)
-  let worker = new Worker(
+  let worker = lent ?? new Worker(
     new URL('./backend_worker.ts', import.meta.url).href,
     { type: 'module' },
   )
+  // The backend is served on a port of its own (backend_worker.ts), so a
+  // Worker can hold one for its own frontend or one after another for a test
+  // process that lends it.
+  let { port1: port, port2 } = new MessageChannel()
+  worker.postMessage({ backend: port2 }, [port2])
   let replica = client(vocab, [], { vault: false, retention: 256 })
   let listeners = new Set<() => void>()
   let members = new Map<string, string[]>()
@@ -62,7 +70,7 @@ export let remote = async (
   let failure: Error | undefined
   let windowRevision = 0
   let queued = Promise.resolve()
-  let link = portLink(worker, {
+  let link = portLink(port, {
     frame: (frame: Frame) => {
       queued = queued.then(async () => {
         if (frame.refused) throw new Error(frame.refused.message)
@@ -102,6 +110,16 @@ export let remote = async (
   }
   worker.addEventListener('error', fatal)
   worker.addEventListener('messageerror', fatal)
+  // Letting go of the backend: its port, and the Worker when it is this
+  // backend's own. A lent Worker runs on, and a backend let go of while it
+  // still works (`force`) finishes on it.
+  let release = () => {
+    link.close()
+    port.close()
+    worker.removeEventListener('error', fatal)
+    worker.removeEventListener('messageerror', fatal)
+    if (!lent) worker.terminate()
+  }
   let closing = false
   let shutdown: Promise<{ drained: boolean }> | undefined
   let forceExit!: () => void
@@ -131,8 +149,7 @@ export let remote = async (
       web: config.web ?? env('HARNESS_WEB') != '0',
     }]) as typeof init
   } catch (e) {
-    link.close()
-    worker.terminate()
+    release()
     replica.close()
     throw e
   }
@@ -171,8 +188,7 @@ export let remote = async (
     await listen('tasks', `.task&.order=-created.at&.limit=${LISTED}&*`)
   } catch (error) {
     detachDiagnostics()
-    link.close()
-    worker.terminate()
+    release()
     replica.close()
     throw error
   }
@@ -373,8 +389,7 @@ export let remote = async (
       closing = true
       forceExit()
       detachDiagnostics()
-      worker.terminate()
-      link.close()
+      release()
     },
     close: (options: { timeout?: number | null } = {}) =>
       shutdown ??= (async () => {
@@ -395,10 +410,7 @@ export let remote = async (
           ])
         } finally {
           clearTimeout(timer)
-          link.close()
-          worker.removeEventListener('error', fatal)
-          worker.removeEventListener('messageerror', fatal)
-          worker.terminate()
+          release()
           await queued
           replica.close()
           detachDiagnostics()

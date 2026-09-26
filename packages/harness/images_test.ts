@@ -4,7 +4,7 @@ import { images } from './images.ts'
 import { responses } from '@yaks/openai'
 import { fileBlobs, memoryBlobs } from '@yaks/blob'
 import { remote } from './remote.ts'
-import { at, harness } from './testing.ts'
+import { at, harness, worker } from './testing.ts'
 
 const png =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG7cAAAAASUVORK5CYII='
@@ -94,6 +94,7 @@ Deno.test('host store failure returns no artifact and retry repairs partial byte
 Deno.test('image options cross the worker boundary without serializing callbacks', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({
+    worker: worker(),
     config: at(),
     cwd: dir,
     fake: true,
@@ -127,6 +128,7 @@ Deno.test('image configuration defaults to enabled with explicit disable and ove
 Deno.test('image disable crosses the worker boundary', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({
+    worker: worker(),
     config: at(':memory:'),
     cwd: dir,
     fake: true,

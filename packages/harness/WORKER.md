@@ -20,11 +20,16 @@ SQLite/blob graph, the runner, providers, and tools. Neither drafts nor
 selection state are transmitted.
 
 `@yaks/sync`'s `portLink` carries structured request/reply messages and existing
-subscription frames over `postMessage`. `@yaks/api` supplies subscription
-membership and deltas; `land` applies them to the replica. The worker exposes a
-fixed list of operations rather than arbitrary function invocation. This pilot
-does not offer optimistic graph mutations: send/start/archive/task admission are
-authoritative commands with explicit responses.
+subscription frames over a MessagePort that `remote()` sends the worker; the
+worker serves a backend on each port it is sent. The TUI starts a worker for its
+one backend and ends it with it. A test process starts one and lends it to each
+test's backend in turn (testing.ts `worker`), except where the test is about the
+worker's own end, since a lent worker is never terminated: `force()` lets go of
+its backend instead. `@yaks/api` supplies subscription membership and deltas;
+`land` applies them to the replica. The worker exposes a fixed list of
+operations rather than arbitrary function invocation. This pilot does not offer
+optimistic graph mutations: send/start/archive/task admission are authoritative
+commands with explicit responses.
 
 Session and task entities are subscribed globally. Transcript subscriptions
 cover only the selected session and its inherited fork prefix. Previous
