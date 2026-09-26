@@ -291,26 +291,31 @@ let compile = (r: Rule, v: Vocab): Ready => {
     allowed: new Set(named),
     checked: d.writes.length > 0,
   }
-  try {
-    // A phase selects from one frozen set of bundles. Building the reference
-    // index once per rule, rather than once per entity, keeps the cost linear
-    // in the size of the change. Rules are predicates: ordering and windowing
-    // do not decide which entities fire, so those clauses are dropped.
-    ready.test = matcher({
-      ...d.filter,
-      clauses: d.filter.clauses.filter((c) =>
-        !['order', 'limit', 'after'].includes(c.kind)
-      ),
-    }, v)
-  } catch (e) {
-    // A rule about a component this graph does not declare never fires, and
-    // that is not an error: the stamp rules ship with the core, and a
-    // vocabulary need not declare `created` at all. Every component the rule
-    // names counts, including the ones it only reads — one store's `schedule`
-    // is a component another store has never heard of, and both hold the same
-    // rule list. A rule whose components all exist and still will not compile
-    // is a mistake, and throws.
-    if ([...named, ...words(d.filter)].every((c) => !!v.comp(c))) throw e
+  // A rule about a component this graph does not declare never fires, and
+  // that is not an error: the stamp rules ship with the core, and a vocabulary
+  // need not declare `created` at all. Every component the rule names counts.
+  // The ones it gates, ensures and writes are named outright, and the test for
+  // an absent component compiles whether or not it was declared, so they are
+  // looked up here. The ones it only reads are found by compiling it — one
+  // store's `schedule` is a component another store has never heard of, and
+  // both hold the same rule list. A rule whose components all exist and still
+  // will not compile is a mistake, and throws.
+  if (named.every((c) => !!v.comp(c))) {
+    try {
+      // A phase selects from one frozen set of bundles. Building the reference
+      // index once per rule, rather than once per entity, keeps the cost
+      // linear in the size of the change. Rules are predicates: ordering and
+      // windowing do not decide which entities fire, so those clauses are
+      // dropped.
+      ready.test = matcher({
+        ...d.filter,
+        clauses: d.filter.clauses.filter((c) =>
+          !['order', 'limit', 'after'].includes(c.kind)
+        ),
+      }, v)
+    } catch (e) {
+      if (words(d.filter).every((c) => !!v.comp(c))) throw e
+    }
   }
   cache.set(r, { v, ready })
   return ready
