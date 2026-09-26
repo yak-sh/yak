@@ -149,7 +149,7 @@ import { parse } from '@yaks/query'
 import { jsonb, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { reconcile, type Runner, runner } from '@yaks/tools'
 import { commands, type Tools } from './lib/tools.ts'
-import { soonest, tick, type Ticked, wakes } from '@yaks/wake'
+import { rouse, soonest, tick, type Ticked, wakes } from '@yaks/wake'
 import { type Alarm, arm } from '@yaks/wake/cloudflare'
 import { mentions, named, type Names, type Row } from './listing.ts'
 import { effected, installsOf, rulesOf, wakesOf } from './plugin.ts'
@@ -778,6 +778,9 @@ export class Store {
         // (`#tell`). The platform's own two stores are not apps and are not
         // metered.
         ...(own ? [] : [{ name: 'yak/weigh', hooks: { effect: this.#weigh } }]),
+        // A sleeping wake armed by the write that makes its `while` hold
+        // (`#rouse`), in every store.
+        { name: 'yak/rouse', hooks: { effect: this.#rouse } },
       ],
     })
     // What every domain of this Worker does about data this store committed
@@ -1209,6 +1212,31 @@ export class Store {
   #arming = (at: string | null | undefined): Promise<unknown> =>
     this.#alarm && at ? arm(this.#alarm, { at }) : Promise.resolve()
 
+  // The graph as the clock writes it. A firing is the server's write, not a
+  // person's: a wake is the object's own business, and @yaks/member's guard
+  // asks which person may write an app's data. So it goes through the same
+  // door the kernel writes through, carrying the tick's instant, which is the
+  // `#Now` its rules read.
+  #clock: Pick<Graph, 'read' | 'apply'> = {
+    read: (q, o) => this.#graph.read(q, o),
+    apply: (b, o) => this.#trust(b as Bundle[], null, o),
+  }
+
+  // A wake with `while` repeats only while one of its conditions holds, and
+  // one that stopped is armed again by the write that makes one hold
+  // (@yaks/wake `rouse`): a player arriving is a write, so arriving is what
+  // starts a sleeping world again, with no page asking. Every committed write
+  // asks; in a store holding no such wake the asking is one read. A condition
+  // it cannot read goes to Sentry, not to the break log — that log is a write,
+  // and a write asks again.
+  #rouse = async (bundles: Bundle[]): Promise<Bundle[]> => {
+    let { refused } = await rouse(this.#clock, Date.now())
+    for (let { wake, error } of refused) {
+      defect(error, { request: `wake ${wake.entity.eid}`, store: this.#name() })
+    }
+    return bundles
+  }
+
   // The next instant this object owes, off its own rows: what a tick arms
   // after it has fired, and what a request re-arms when the runtime lost the
   // alarm. `soonest` reads the earliest wake still ahead.
@@ -1228,14 +1256,7 @@ export class Store {
    * and the alarm is set a minute out so nothing is silently dropped.
    */
   async tick(now = Date.now()): Promise<Ticked> {
-    // The firing is the server's write, not a person's: a wake is the object's
-    // own business, and @yaks/member's guard asks which person may write an
-    // app's data. So it goes through the same door the kernel writes through,
-    // carrying the tick's instant, which is the `#Now` its rules read.
-    let result = await tick({
-      read: (q, o) => this.#graph.read(q, o),
-      apply: (b, o) => this.#trust(b as Bundle[], null, o),
-    }, now)
+    let result = await tick(this.#clock, now)
     for (let { wake, error } of result.refused) {
       await this.#broke(`wake ${wake.entity.eid}`, error)
     }
@@ -1289,10 +1310,7 @@ export class Store {
       // And any of them the last incarnation died in the middle of.
       if (rows.length) {
         await resumed(
-          {
-            read: (q, o) => this.#graph.read(q, o),
-            apply: (b, o) => this.#trust(b as Bundle[], null, o),
-          },
+          this.#clock,
           this.#born,
           (job, e) => this.#broke(`wake ${job}`, e),
         )

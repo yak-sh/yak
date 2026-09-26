@@ -1,12 +1,16 @@
-// The package as a graph plugin: the two components, and one convenience on
-// the way in.
+// The package as a graph plugin: the two components, one convenience on the
+// way in, and one check.
 //
 // A wake written as a cadence alone — `{ every: '@daily' }`, with no `at` — is
 // a schedule nobody would call wrong, and it would never fire: `due` tests
 // whether `at` has passed, and a property that is absent never has. So
-// `normalize` gives such a wake its first instant. That is the whole hook. It
-// runs before the transaction and reads nothing, which is what `normalize` is
-// for.
+// `normalize` gives such a wake its first instant. It runs before the
+// transaction and reads nothing, which is what `normalize` is for.
+//
+// The check is `precondition`'s: a `while` condition is a query, and a query
+// that does not parse, or names a word the graph does not speak, is refused
+// when it is written rather than found out at a firing (./pace.ts
+// `conditions`).
 //
 // The plugin starts no timer. The application calls `tick`, which writes
 // `fired` on each due wake; graph rules matching that write decide what
@@ -17,6 +21,7 @@ import type { Bundle, Hook, Plugin } from '@yaks/graph'
 import { type Clock, wakeOf } from './due.ts'
 import { after } from './every.ts'
 import { WAKE, wakeDoc } from './comp.ts'
+import { conditions } from './pace.ts'
 
 /** How the plugin reads a schedule, and where it gets the current time. */
 export type Opts = Clock & {
@@ -42,7 +47,8 @@ export let starting = (opts: Opts = {}): Hook => (bundles: Bundle[]) =>
   })
 
 /**
- * The wake plugin: the `wake` and `fired` components, and the one hook above.
+ * The wake plugin: the `wake` and `fired` components, and the two hooks
+ * above.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
@@ -62,5 +68,5 @@ export let starting = (opts: Opts = {}): Hook => (bundles: Bundle[]) =>
 export let wakes = (opts: Opts = {}): Plugin => ({
   name: '@yaks/wake',
   vocab: [wakeDoc],
-  hooks: { normalize: starting(opts) },
+  hooks: { normalize: starting(opts), precondition: conditions },
 })

@@ -137,7 +137,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'wakes',
     'title': 'Coming back later',
     'description':
-      "Schedules as data: a `wake` on any entity records when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing means. Recurrence in durations, cron lines and zones; pausing and resuming; a command asked for later; an idle world advancing offline on a five-minute cadence and catching a missed stretch up in one firing; where a firing runs and what it may spend; why there is no cron trigger, no `scheduled()` and no queue to ask for.",
+      "Schedules as data: a `wake` on any entity records when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing means. Recurrence in durations, cron lines and zones; pausing and resuming; a command asked for later; an idle world advancing offline on a five-minute cadence and catching a missed stretch up in one firing, and one that sleeps while nobody is in it; where a firing runs and what it may spend; why there is no cron trigger, no `scheduled()` and no queue to ask for.",
     'brief': 'a row that records when to come back, and what happens then',
   },
 }

@@ -27,6 +27,25 @@
         "every": {
           "type": "string",
           "description": "how it recurs: a duration (30m, 2h, 1d), five cron fields (0 9 * * 1-5), or @hourly/@daily/@weekly/@monthly; a cron line may end with an IANA time zone (0 9 * * 1-5 America/New_York), otherwise UTC"
+        },
+        "while": {
+          "type": "array",
+          "description": "how it recurs while something holds: {match, every} in order, a query over the whole store and the cadence it asks for; at each firing the first whose query finds anything sets the next instant, else every does, and with neither the wake sleeps until a write makes one hold",
+          "items": {
+            "type": "object",
+            "properties": {
+              "match": {
+                "type": "string",
+                "format": "query",
+                "description": "holds while this query finds anything"
+              },
+              "every": {
+                "type": "string",
+                "description": "the cadence while it holds, written as wake.every is"
+              }
+            },
+            "required": ["match", "every"]
+          }
         }
       }
     },

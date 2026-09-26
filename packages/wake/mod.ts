@@ -3,8 +3,8 @@
  * A wake records when to come back to something; firing it writes `fired{at}`
  * on the same entity. The graph's rules decide what follows that write.
  *
- * - `wake{at, every, target, note}` — the next instant, optional recurrence,
- *   what it is about, and why.
+ * - `wake{at, every, while, target, note}` — the next instant, optional
+ *   recurrence, the conditions it recurs under, what it is about, and why.
  * - `fired{at}` — the most recent firing.
  *
  * ```ts
@@ -30,8 +30,13 @@
  * calendar positions. An optional trailing IANA time zone is stored in the same
  * property; with none, UTC is used. Croner uses Intl, with no build step.
  *
+ * `while` makes a recurrence conditional: `{match, every}` in order, the first
+ * whose query finds anything setting the cadence at each firing. A wake none
+ * holds sleeps, and `rouse` arms it again once a write makes one hold.
+ *
  * This module starts no timer and imports no platform API. The program running
- * it calls `tick` when its own clock fires.
+ * it calls `tick` when its own clock fires, and `rouse` after its writes
+ * commit.
  *
  * @module
  */
@@ -41,3 +46,4 @@ export * from './every.ts'
 export * from './due.ts'
 export * from './plugin.ts'
 export * from './tick.ts'
+export * from './pace.ts'

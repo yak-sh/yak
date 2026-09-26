@@ -270,9 +270,10 @@ whole rule runs inside the transaction the firing is part of. every accepts a
 duration (30m, 1d), five cron fields (0 9 * * 1-5) or
 @hourly/@daily/@weekly/@monthly, with an optional IANA zone at the end of a
 cron line; wake {at: null} pauses without forgetting the
-schedule. Call guide with page wakes for the whole thing (${
-    url(env, '/docs/wakes.md')
-  }).
+schedule. wake {while: [{match, every}]} repeats at the cadence of the first
+query that finds anything, and sleeps with no alarm when none does until a
+write makes one hold — a world that ticks only while somebody is in it. Call
+guide with page wakes for the whole thing (${url(env, '/docs/wakes.md')}).
 
 One app in a space can be its front page — app_set(app, home: true) — and it is
 the space's router as well as its homepage: served at <space>.${apex(env)}/, and

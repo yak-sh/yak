@@ -7,6 +7,7 @@
 
 import { type Bundle, type Graph, token } from '@yaks/graph'
 import { due, ring, wakeOf } from './due.ts'
+import { pace } from './pace.ts'
 
 /** The part of the graph API a driver needs, also satisfied by a client for a
  * remote graph over HTTP. */
@@ -26,7 +27,8 @@ export type Ticked = {
  * Fire the due wakes, one transaction per wake, each with a precondition on
  * what it read. `now` is in epoch milliseconds and becomes both `fired.at` and
  * the graph's `#Now` resource. Missed occurrences collapse into one firing, and
- * the recurrence advances past now.
+ * the recurrence advances past now — at the cadence of the first `while`
+ * condition that holds at `now`, else its own `every`, else not at all.
  *
  * ```ts
  * import { tick } from '@yaks/wake'
@@ -41,13 +43,16 @@ export let tick = async (
   let result: Ticked = { fired: [], refused: [] }
   let at = new Date(now).toISOString()
   for (let wake of await due(graph, now)) {
+    let w = wakeOf(wake) ?? {}
     try {
+      let every = (await pace(graph, w, now)) ?? w.every
       let applied = await graph.apply([{
-        ...ring(wake, now),
+        ...ring(wake, now, {}, every),
         $was: {
           wake: {
-            at: token(wakeOf(wake)?.at),
-            every: token(wakeOf(wake)?.every),
+            at: token(w.at),
+            every: token(w.every),
+            while: token(w.while),
           },
         },
       }], { now: at })

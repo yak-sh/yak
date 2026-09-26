@@ -24,10 +24,10 @@ Entry points:
 
 ## The rows
 
-`wake{at, every, target, note}` stores the next ISO instant, optional
-recurrence, related entity, and a reason. `fired{at}` stores the most recent
-firing. A one-shot clears `wake.at` after firing. A recurring wake advances
-`wake.at` to its next occurrence.
+`wake{at, every, while, target, note}` stores the next ISO instant, optional
+recurrence, the conditions it recurs under, related entity, and a reason.
+`fired{at}` stores the most recent firing. A one-shot clears `wake.at` after
+firing. A recurring wake advances `wake.at` to its next occurrence.
 
 A **bundle** is one entity's components represented as a JSON object:
 
@@ -51,8 +51,9 @@ await g.apply([{
 `target` identifies what the wake concerns. The package stores no patch or
 callback. Application rules match the components on the wake entity.
 
-Use `wakes()` when constructing a graph. It loads `wakeDoc` and initializes a
-wake that has `every` but no `at`. An explicit `at: null` remains paused.
+Use `wakes()` when constructing a graph. It loads `wakeDoc`, initializes a wake
+that has `every` but no `at`, and refuses a `while` condition the graph cannot
+read. An explicit `at: null` remains paused.
 
 ```ts ignore
 import { wakes } from '@yaks/wake'
@@ -81,11 +82,11 @@ a list of changes applied in one transaction. The batch writes `fired{at}` and
 updates or clears `wake.at`; `#Now` contains the same instant. A rule using
 `*fired` runs only when that component was written in the current transaction.
 
-Each wake has its own transaction. A precondition checks the `wake.at` and
-`wake.every` values read by the scheduler, preventing concurrent drivers from
-consuming one occurrence twice or overwriting an edited schedule. One rejected
-transaction does not stop other wakes. The result contains `fired: Bundle[]` and
-`refused: { wake: Bundle; error: unknown }[]`.
+Each wake has its own transaction. A precondition checks the `wake.at`,
+`wake.every` and `wake.while` values read by the scheduler, preventing
+concurrent drivers from consuming one occurrence twice or overwriting an edited
+schedule. One rejected transaction does not stop other wakes. The result
+contains `fired: Bundle[]` and `refused: { wake: Bundle; error: unknown }[]`.
 
 Effect failures are reported after commit; they do not roll back the firing.
 After downtime, an overdue recurring wake fires once and advances beyond `now`.
@@ -125,6 +126,49 @@ missing spring time moves forward by the daylight-saving gap; a repeated fall
 time fires at its first occurrence. An invalid expression or zone returns
 `null`; a wake with an explicit valid `at` and invalid recurrence fires once and
 stops.
+
+## Repeating while something holds
+
+`while` lists conditions in order, each a query over the whole graph and the
+cadence it asks for while that query finds anything. At each firing the first
+that holds sets the next instant; when none does, `every` does, and a wake
+without one sleeps with `at` cleared. `rouse(graph, now)` arms each wake whose
+condition now holds at that cadence from `now`, when that is sooner than the
+instant it holds. A host calls it after its writes commit, so the write that
+makes a condition hold is what wakes the wake.
+
+```ts
+import { assertEquals } from '@std/assert'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { rouse, wakeDoc, wakes } from '@yaks/wake'
+
+const player = {
+  component: true,
+  type: 'object',
+  properties: { seen: { type: 'string', format: 'date-time' } },
+}
+const vocab = loadVocab([wakeDoc, { $defs: { player } }])
+const g = graph({ storage: ram(vocab), vocab, plugins: [wakes()] })
+const now = Date.parse('2026-09-26T12:00:00Z')
+
+await g.apply([{
+  entity: { eid: 'world' },
+  wake: {
+    while: [
+      { match: '.player.seen>=1-minute-ago', every: '30s' },
+      { match: '.player.seen>=10-minutes-ago', every: '5m' },
+    ],
+  },
+}])
+await g.apply([{
+  entity: { eid: 'bea' },
+  player: { seen: new Date(now).toISOString() },
+}])
+const { roused } = await rouse(g, now)
+assertEquals(roused[0].wake, { at: '2026-09-26T12:00:30.000Z' })
+```
 
 ## Drivers per runtime
 
@@ -170,17 +214,20 @@ stop.abort()
 await running
 ```
 
-The loop ticks immediately, then sleeps until the next pending instant. Its
-default one-minute cap limits how long a new wake waits to be noticed and how
-soon a refused wake is retried. Aborting releases the timer after any write in
-progress finishes. `@yaks/wake/service` exposes the same loop as a host service
-and logs refused wakes.
+The loop rouses and ticks immediately, then sleeps until the next pending
+instant. Its default one-minute cap limits how long a new wake, or a sleeping
+one a write made hold, waits to be noticed, and how soon a refused wake is
+retried. Aborting releases the timer after any write in progress finishes.
+`@yaks/wake/service` exposes the same loop as a host service and logs refused
+wakes.
 
 ## Lower-level functions
 
 - `due(storage, now)` returns overdue wake bundles, oldest first.
 - `ring(bundle, now)` creates the firing change without applying it.
 - `soonest(storage, now)` returns the earliest future instant.
+- `pace(graph, wake, now)` returns the cadence of the first `while` condition
+  that holds, or `null`.
 - `starting(options)` returns the normalization hook used by `wakes()`.
 - `wakeDoc`, also available from `@yaks/wake/vocab`, declares the components.
 

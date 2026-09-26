@@ -104,7 +104,9 @@ export let next = (
 
 /**
  * The patch that fires a due wake: the `fired` value, plus its `at` moved on to
- * the next instant — or cleared, when there is no next one.
+ * the next instant — or cleared, when there is no next one. `every` is the
+ * cadence it goes on at, its own by default; `tick` passes the one its
+ * `while` chose.
  *
  * It returns a bundle rather than applying it. `tick` applies one such bundle
  * per wake, and the graph's rules react to that write in their own phases.
@@ -118,9 +120,10 @@ export let ring = (
   b: Bundle,
   now: number = Date.now(),
   clock: Clock = {},
+  every: string | null | undefined = wakeOf(b)?.every,
 ): Bundle => ({
   entity: b.entity,
-  [WAKE]: { at: next(wakeOf(b) ?? {}, now, clock) } as Comp,
+  [WAKE]: { at: next({ ...wakeOf(b), every }, now, clock) } as Comp,
   [FIRED]: { at: iso(now) } as Comp,
 })
 

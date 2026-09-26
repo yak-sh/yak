@@ -1,6 +1,6 @@
 ---
 name: wakes
-description: "Coming back later (yaks.app). Schedules as data: a `wake` on any entity records when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing means. Recurrence in durations, cron lines and zones; pausing and resuming; a command asked for later; an idle world advancing offline on a five-minute cadence and catching a missed stretch up in one firing; where a firing runs and what it may spend; why there is no cron trigger, no `scheduled()` and no queue to ask for."
+description: "Coming back later (yaks.app). Schedules as data: a `wake` on any entity records when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing means. Recurrence in durations, cron lines and zones; pausing and resuming; a command asked for later; an idle world advancing offline on a five-minute cadence and catching a missed stretch up in one firing, and one that sleeps while nobody is in it; where a firing runs and what it may spend; why there is no cron trigger, no `scheduled()` and no queue to ask for."
 ---
 
 # Coming back later
@@ -21,12 +21,14 @@ anything in its store can carry a `wake`, and the store comes back for it.
       wake: { at: '2026-09-20T09:00:00Z', note: 'water me' },
     })
 
-That is the whole request. `wake` has four properties and every one is optional
+That is the whole request. `wake` has five properties and every one is optional
 except the moment:
 
 - **`at`** — when to come back, as an instant. Absent means nothing is owed: a
   spent one-shot, or a schedule someone paused.
 - **`every`** — how it repeats, when it does. See below.
+- **`while`** — how it repeats only while something holds. See
+  [a world that sleeps](#a-world-that-sleeps-when-nobody-is-there).
 - **`note`** — a line for whoever is woken: why you asked to be.
 - **`target`** — another entity this wake is about, when it is not about the one
   carrying it.
@@ -193,6 +195,40 @@ worth, and that arithmetic is not the tick's: a rule and a command both write
 rows, and neither multiplies. Fold the span where code runs — the page as it
 draws, or the app's own `worker.js`. Which is the other reason the catch-up is
 cheap: one firing, one span, one fold, instead of a thousand replayed minutes.
+
+### A world that sleeps when nobody is there
+
+A world nobody is in need not tick at all. `while` repeats a wake only while
+something holds: conditions in order, each a query and the cadence it asks for.
+
+    await apply({
+      entity: { eid: '$world' },
+      world: { name: 'Mossvale' },
+      call: { to: advance.entity.eid, args: '{}' },
+      wake: { while: [
+        { match: '.player.seen>=1-minute-ago', every: '30s' },
+        { match: '.player.seen>=10-minutes-ago', every: '5m' },
+      ] },
+    })
+
+The page writes `player: { seen }`, a `date-time` in its `vocab.json`, as
+someone plays. At each firing the first condition whose query finds anything
+says when the next is owed: every half minute while somebody played in the last
+minute, every five while somebody was here in the last ten. When none does, that
+firing is the last: `wake.at` is left empty and the store sets no alarm, so a
+world nobody is in costs nothing.
+
+Coming back is a write, and after every write the store asks each `while`
+whether one of its conditions now holds. The world above is owed its next tick
+half a minute after somebody arrives, with no page asking; the stretch it slept
+through is one firing, like any other. A write that makes a faster condition
+hold brings a slower wake forward the same way.
+
+A condition is checked at a firing and after a write, never by the clock alone:
+it is for "while somebody is here", and "once the sale opens" is an `at`. Beside
+an `every`, `while` falls back to it when nothing holds, and the wake never
+sleeps. A condition the store cannot read is refused when the wake is written,
+and `wake: null` stops one.
 
 The repeating request is the `call`, not a rule. A declared rule that writes
 onto the row it matched has to gate itself (`+!comp` above), and a gate is what

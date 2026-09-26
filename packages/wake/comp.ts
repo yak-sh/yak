@@ -1,8 +1,8 @@
 // The two components this package ships, as one vocabulary document to load
 // beside your own.
 //
-//   wake{at, every, target, note}   when to come back, and to what
-//   fired{at}                       the last time it fired
+//   wake{at, every, while, target, note}   when to come back, and to what
+//   fired{at}                              the last time it fired
 //
 // One entity, one alarm. `at` is the whole schedule for a one-shot — a
 // reminder on a calendar entry, a retry in ten minutes. Add `every` and the
@@ -15,9 +15,14 @@
 // points at (`death: cascade`), because a reminder about a deleted thing is not
 // a reminder about anything — cancel the entry and the alarm goes with it.
 //
-// `every` is declared last in the document on purpose, so that this table is an
-// existing `wake` table plus one appended column — which is what an additive
-// migration produces.
+// `every` and then `while` are declared last in the document on purpose, so
+// that this table is an existing `wake` table plus appended columns — which is
+// what an additive migration produces.
+//
+// `while` makes the recurrence conditional: `{match, every}` in order, the
+// first whose query finds anything setting the cadence (./pace.ts). A wake
+// none of them holds, with no `every` of its own, sleeps until a write makes
+// one hold.
 //
 // `fired` records the last firing, not every one: it is overwritten each time,
 // so a recurring wake holds its most recent firing and a one-shot holds its
@@ -49,6 +54,11 @@ export type Wake = {
    * followed by an IANA zone (`0 9 * * 1-5 America/New_York`)
    * (see {@link https://jsr.io/@yaks/wake/doc/~/next | next}) */
   every?: string | null
+  /** how it recurs while something holds: in order, a query over the whole
+   * graph and the cadence it asks for while that query finds anything; the
+   * first that holds wins, else `every` does, else the wake sleeps
+   * (see {@link https://jsr.io/@yaks/wake/doc/~/pace | pace}) */
+  while?: { match: string; every: string }[] | null
   /** what the wake is about — the entity carrying it, when absent */
   target?: Eid | null
   /** a line for whoever is woken: why the wake was set */

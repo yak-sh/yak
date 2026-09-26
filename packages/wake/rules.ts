@@ -6,5 +6,6 @@
 import type { Plugin } from '@yaks/graph'
 import { wakes } from './plugin.ts'
 
-/** `wake{at, every, target, note}` and the recurrence that moves one on. */
+/** `wake{at, every, while, target, note}` and the recurrence that moves one
+ * on. */
 export let rules = (): Plugin[] => [wakes()]

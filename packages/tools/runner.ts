@@ -487,11 +487,12 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     // for one. Each firing writes its own call entity, with an id derived from
     // the schedule and the instant it fired, and that new call is what runs —
     // so a finished call is never re-run, the record shows how many times the
-    // schedule fired, and the schedule itself stays a standing request. A
-    // one-shot has nothing to advance and runs in place.
-    let every = (call.wake as Comp | undefined)?.every
+    // schedule fired, and the schedule itself stays a standing request. A wake
+    // recurs by its `every` or by its `while` (@yaks/wake). A one-shot has
+    // nothing to advance and runs in place.
+    let wake = call.wake as Comp | undefined
     let went = (call.fired as Comp | undefined)?.at
-    if (every && went) {
+    if ((wake?.every || (wake?.while as unknown[] | null)?.length) && went) {
       let asked = call.call as Comp
       let [each] = signed([{
         entity: { eid: derivedEid(`call ${id} ${went}`) },

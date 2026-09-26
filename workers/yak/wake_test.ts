@@ -69,6 +69,7 @@ Deno.test('a wake fires in the store that holds it and its rule receives the tic
     assertEquals(seen[0].wake, {
       at: iso('09:30'),
       every: '30m',
+      while: null,
       note: null,
       target: null,
     })
@@ -588,4 +589,79 @@ Deno.test('an idle world advances offline, a missed stretch in one firing', asyn
   assertEquals((await world()).fired.at, iso('09:40'))
   assertEquals((await world()).wake.at, iso('09:45'))
   assertEquals((await world()).wake.every, '5m')
+})
+
+// A world that sleeps when nobody is there (docs/wakes.md, T-40561). It ticks
+// every 30 seconds while a player is active, every five minutes while one is
+// idle, and not at all once nobody is in it: no firing, and no alarm. The
+// player who comes back is a write, and that write is what wakes it.
+let VILLAGE = JSON.stringify({
+  $defs: {
+    world: { properties: { name: { type: 'string' } } },
+    tick: { properties: {} },
+    player: { properties: { active: { type: 'boolean' } } },
+  },
+})
+
+Deno.test('a world with nobody in it stops ticking, and a player arriving wakes it', async () => {
+  let a = app('ada/village')
+  assertEquals((await a.ask('/vocab', VILLAGE)).status, 200)
+  assertEquals((await a.ask('/tools', ADVANCE)).status, 200)
+  let player = (bundle: object) =>
+    a.ask('/apply', [{ entity: { eid: 'bea' }, ...bundle }])
+  let owed = async () =>
+    ((await a.rows('.eid=world&?wake'))[0].wake as { at: string | null }).at
+  let ticks = async () => (await a.rows('.tick')).length
+  // Half-minute instants, which `at` and `iso` do not write.
+  let sec = (time: string) => Date.parse(`2026-09-07T${time}Z`)
+  let stamp = (time: string) => new Date(sec(time)).toISOString()
+  await player({ player: { active: true } })
+  await a.ask('/apply', [{
+    entity: { eid: 'world' },
+    world: { name: 'Mossvale' },
+    call: { to: toolEid('advance'), args: {} },
+    wake: {
+      at: iso('09:05'),
+      while: [
+        { match: '.player.active=1', every: '30s' },
+        { match: '.player', every: '5m' },
+      ],
+    },
+  }])
+  await a.store.tick(at('09:05'))
+  assertEquals(await owed(), stamp('09:05:30'))
+  await player({ player: { active: false } })
+  await a.store.tick(sec('09:05:30'))
+  assertEquals(await owed(), stamp('09:10:30'))
+  // Half an hour nobody ticked through is one firing, on the cadence's phase.
+  await a.store.tick(at('09:40'))
+  assertEquals(await ticks(), 3)
+  assertEquals(await owed(), stamp('09:40:30'))
+  // Nobody is left: the firing owed goes off, and nothing is owed after it.
+  await player({ $delete: true })
+  await a.ctx.storage.deleteAlarm()
+  await a.store.tick(sec('09:40:30'))
+  assertEquals(await ticks(), 4)
+  assertEquals(await owed(), null)
+  assertEquals(await a.ctx.storage.getAlarm(), null)
+  assertEquals((await a.store.tick(at('12:00'))).fired, [])
+  // Somebody arrives, and the world is owed its next half minute again.
+  let arrived = Date.now()
+  await player({ player: { active: true } })
+  let next = Date.parse((await owed())!)
+  assert(next > arrived && next <= Date.now() + 30_000)
+  assertEquals(await a.ctx.storage.getAlarm(), next)
+  // Each firing asked for its own call, as every recurring call does.
+  assertEquals((await a.rows('.call.source=world')).length, 4)
+})
+
+Deno.test('a condition naming a word the app does not speak is refused when written', async () => {
+  let a = app('ada/village')
+  assertEquals((await a.ask('/vocab', VILLAGE)).status, 200)
+  let res = await a.ask('/apply', [{
+    entity: { eid: 'world' },
+    wake: { while: [{ match: '.ghost', every: '5m' }] },
+  }])
+  assert(res.status >= 400 && res.status < 500, `${res.status}`)
+  assert((await res.text()).includes('ghost'))
 })

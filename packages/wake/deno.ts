@@ -1,13 +1,14 @@
 /**
  * A long-running process can sleep until the next wake instead of polling at a
  * fixed rate. The cap lets newly written wakes be noticed without a
- * subscription, and keeps an empty graph and a far-off date within
- * `setTimeout`'s range. Stopping aborts only the wait: a graph write already
- * underway finishes its phases.
+ * subscription, sleeping ones a write made hold among them, and keeps an empty
+ * graph and a far-off date within `setTimeout`'s range. Stopping aborts only
+ * the wait: a graph write already underway finishes its phases.
  * @module
  */
 
 import { soonest } from './due.ts'
+import { rouse } from './pace.ts'
 import { type Driver, tick, type Ticked } from './tick.ts'
 
 /** The loop's lifetime, its maximum sleep, and a callback run after each
@@ -19,7 +20,8 @@ export type LoopOpts = {
    * interval for wakes whose transaction was rejected, and the delay while the
    * graph has nothing scheduled */
   cap?: number
-  /** called after each tick with the fired and rejected wakes */
+  /** called after each tick with the fired and rejected wakes, a wake its
+   * `while` could not arm among the rejected */
   onTick?: (result: Ticked) => void | Promise<void>
 }
 
@@ -36,10 +38,10 @@ let sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
   })
 
 /**
- * Tick immediately, then sleep until the next due instant or the cap,
- * whichever is sooner. A wake whose transaction was rejected on one pass stays
- * due for the next; effects run through the graph. Uses only web timers and
- * `AbortSignal`, available in Deno and Node alike.
+ * Rouse and tick immediately, then sleep until the next due instant or the
+ * cap, whichever is sooner. A wake whose transaction was rejected on one pass
+ * stays due for the next; effects run through the graph. Uses only web timers
+ * and `AbortSignal`, available in Deno and Node alike.
  *
  * The first tick happens whatever the signal's state, so one that has already
  * aborted produces exactly one pass — which is how a short-lived process fires
@@ -67,8 +69,9 @@ export let loop = async (
   // and it still owes the graph the tick it was started for.
   do {
     let now = Date.now()
+    let { refused } = await rouse(graph, now)
     let result = await tick(graph, now)
-    await opts.onTick?.(result)
+    await opts.onTick?.({ ...result, refused: [...refused, ...result.refused] })
     if (opts.signal?.aborted) break
     // Keep the read at the tick's instant: a wake that became due while an
     // effect ran needs a zero-delay pass, not a whole cap's extra wait.
