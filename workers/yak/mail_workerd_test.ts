@@ -5,7 +5,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { until } from '../../bin/testing.ts'
-import { client, kernel, seed } from './probe.ts'
+import { client, seed, workerd } from './probe.ts'
 
 let ANA = 'c0000000-0000-4000-8000-000000000003'
 
@@ -37,7 +37,7 @@ let letter = (body = 'Bring a dish.') => [
 // Workers API (`send({from, to, subject, text, html})` → `{messageId}`), and a
 // runtime that does not speak it bounces every letter the platform sends.
 Deno.test("an app's letter leaves through the runtime's own binding", async () => {
-  let k = await kernel()
+  let k = workerd()
   try {
     let them = await seed(k, [{ slug: 'jeff29', apps: ['recipes'] }])
     let app = client(k, 'jeff29.yaks.app', 'recipes', them.cookie)

@@ -1,4 +1,4 @@
-// MCP workerd probes, split by subject so Deno can run the modules in parallel.
+// The connector through the whole kernel (probe.ts `kernel`), by subject.
 import {
   assert,
   assertEquals,
@@ -391,7 +391,7 @@ Deno.test('deleting the front page puts the space back to the default', async ()
     assertEquals((await k.at('reset48.yaks.app', '/site/')).status, 404)
     // And `<space>@yaks.app` is a space with no front page again, which the
     // mail door already refuses by name and tells the sender where to write
-    // instead (inbox.ts `opened`, inbox_workerd_test.ts).
+    // instead (inbox.ts `opened`, inbox_test.ts).
     // And the space takes another one whenever it is ready to.
     await agent.tool('app_set', { space: 'reset48', app: 'garden', home: true })
     assertEquals(await front(), 'do:reset48/garden')

@@ -1,6 +1,6 @@
 // A space's dashboard and front door, drawn straight: pages.ts `desk` and
 // `spaceIndex` are pure, so every state a person passes through is one call
-// here. The address itself, served in workerd, is home_workerd_test.ts's.
+// here. The address itself, served by the kernel, is home_kernel_test.ts's.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { desk, spaceIndex } from './pages.ts'
@@ -9,8 +9,8 @@ import { managePath } from './route.ts'
 // The dashboard itself, drawn straight (pages.ts `desk` is pure): the order
 // it puts its blocks in, and what stands where the connect steps were. Every
 // state a person passes through is one call here — landed, connected,
-// something built — where reaching each through workerd is a sign-in, an
-// OAuth grant and an app apiece (identity_workerd_test.ts holds those ends).
+// something built — where reaching each through the kernel is a sign-in, an
+// OAuth grant and an app apiece (identity_test.ts holds those ends).
 let block = (
   at: Partial<Parameters<typeof desk>[0]> = {},
   env: Parameters<typeof desk>[1] = {},

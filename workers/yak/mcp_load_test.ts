@@ -1,4 +1,4 @@
-// MCP workerd probes, split by subject so Deno can run the modules in parallel.
+// The connector through the whole kernel (probe.ts `kernel`), by subject.
 import {
   assert,
   assertEquals,
@@ -517,8 +517,8 @@ Deno.test('an app says what it holds, and keeps notes about itself', async () =>
 //
 // `space_sell` through the whole kernel, and the space page beside it — which
 // is here rather than in serving_test.ts because drawing that page reaches
-// identity.ts for whether an assistant has ever connected, and the OAuth
-// provider it carries imports `cloudflare:` modules only workerd can load.
+// identity.ts for whether an assistant has ever connected, which wants the
+// kernel whole.
 // Stripe is Stripe's own sandbox (probe.ts `stripeKey`): the checkout session,
 // the subscription and the connected account are all made there and read back.
 Deno.test('space_sell connects an account and hands back one link', async () => {

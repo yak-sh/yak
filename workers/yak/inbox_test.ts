@@ -1,4 +1,4 @@
-// A letter, all the way in, held in workerd (T-33687): the runtime's own email
+// A letter, all the way in, through the whole kernel (T-33687): the runtime's own email
 // door hands the message to `email()` (index.ts), which files it in the store
 // its address named (inbox.ts). The probe posts raw RFC 5322 the way Cloudflare
 // hands one over — the envelope on the query string, the letter in the body —
@@ -14,19 +14,18 @@
 //   a former address     a rename moves the app, and the address it left still
 //                        lands in it — the move its hostname follows
 //   nobody home          refused, so the sender is told, and nothing written
-//   the app hears it     a page subscribed to its own store sees the letter
-//                        arrive without asking
+//
+// A page subscribed to its own store hears the letter arrive: that is a
+// socket, and socket_workerd_test.ts's.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { until } from '../../bin/testing.ts'
 import { monthOf } from './meter.ts'
 import {
   arrives,
-  browser,
   client,
   connector,
   kernel,
   meta,
-  relay,
   rfc822,
   seed,
 } from './probe.ts'
@@ -51,23 +50,8 @@ let signed = (dkim: 'pass' | 'fail') =>
 
 Deno.test('a letter lands in the app its address named', async () => {
   let k = await kernel()
-  let dir = Deno.makeTempDirSync({ prefix: 'tasks-inbox-' })
   let them = await seed(k, [{ slug: 'jeff24', apps: ['recipes', 'garden'] }])
-  let mine = browser(k, 'jeff24.yaks.app', them.cookie)
-  let wire = relay(k, 'jeff24.yaks.app', them.cookie)
-  let stop = () => {}
   try {
-    // The page's own client, so the socket half is the one an app really uses.
-    let source = await (await k.at('jeff24.yaks.app', '/recipes/api/client.js'))
-      .text()
-    Deno.writeTextFileSync(`${dir}/client.js`, source)
-    let mod = await import(`file://${dir}/client.js`)
-    let seen: Row[][] = []
-    stop = mod.store(`${wire.origin}/recipes/api/`)
-      .subscribe('.mail&?doc', (rows: Row[]) => seen.push(rows))
-    await until(() => seen.length == 1, { timeout: 15_000 })
-    assertEquals(seen[0], [])
-
     // One letter, to the app's own address. The envelope sender is a relay's
     // bounce address, as it is in life; the author is the From header.
     let landed = await arrives(k, {
@@ -84,10 +68,8 @@ Deno.test('a letter lands in the app its address named', async () => {
     })
     assertEquals(landed.status, 200)
 
-    // The app hears it arrive: a page watching its own store is told, the
-    // same way it is told about a write from another tab.
-    await until(() => seen.length == 2, { timeout: 15_000 })
-    let [letter] = seen[1]
+    let [letter] = await client(k, 'jeff24.yaks.app', 'recipes', them.cookie)
+      .get('.mail&?doc') as unknown as Row[]
     assertEquals(letter.kind, 'mail')
     assertEquals(letter.doc.title, 'Bring a dish')
     assertEquals(letter.doc.body, 'Potluck Friday. Bring a dish.')
@@ -204,10 +186,6 @@ Deno.test('a letter lands in the app its address named', async () => {
     ) as unknown as { edge: { to: string } }[]
     assertEquals(links.map((l) => l.edge.to), [file.entity.eid])
   } finally {
-    stop()
-    await wire.stop()
-    mine.stop()
-    Deno.removeSync(dir, { recursive: true })
     await k.stop()
   }
 })
@@ -424,7 +402,7 @@ Deno.test(
 
       // At the allowance. The seeding goes in through the graph tier, which is
       // not the directory's own write door, so the kernel's 30-second read cache
-      // is emptied by a write that is (mcp_workerd_test.ts says the same).
+      // is emptied by a write that is (mcp_test.ts says the same).
       await dir.apply([{
         entity: { eid: them.eids.jeff28 },
         meter: { month: monthOf(new Date()), emails: 100 },

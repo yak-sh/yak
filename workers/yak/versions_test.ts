@@ -1,8 +1,8 @@
 // What a version has to promise, held on the seam: the manifest names paths
 // and shas and never bytes, the bytes it names are still there when a rollback
 // asks for them however many deploys later, and what comes back is byte for
-// byte what went out — the app's own code included. The whole tool is held in
-// workerd beside it (mcp_workerd_test.ts, "a deploy is a version, and one word puts
+// byte what went out — the app's own code included. The whole tool is held
+// through the kernel beside it (mcp_test.ts, "a deploy is a version, and one word puts
 // it back"); a dispatch namespace has no local implementation, so the worker's
 // last hop is proved here against the same stubbed account API dispatch_test.ts
 // uses.

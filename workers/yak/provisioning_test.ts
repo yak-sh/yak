@@ -3,8 +3,8 @@
 // every custom hostname on the zone, provisioned or not, so a foreign host
 // with nothing to route to yet used to fall through to the apex's own home
 // page — the wrong page on a stranger's domain — or, before the fallback
-// origin existed, a raw 522. Held in workerd because the choice lives in the
-// router. domain_workerd_test.ts covers the fully wired customer domain; this is the
+// origin existed, a raw 522. Held through the whole kernel because the choice
+// lives in the router. domain_test.ts covers the fully wired customer domain; this is the
 // one state that never used to have an answer of its own.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { client, kernel, meta, seed } from './probe.ts'

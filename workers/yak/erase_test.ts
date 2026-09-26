@@ -1,8 +1,8 @@
 // Closing a space (T-33166): the pure seams — what the ticket in the letter
 // is worth, what the page and the letter say a delete would destroy, and the
 // two spaces that may not be deleted at all — then what the act takes with it
-// outside the graph over testing.ts's stand-in (T-34371). The whole act, in
-// workerd, is erase_workerd_test.ts's.
+// outside the graph over testing.ts's stand-in (T-34371). The whole act,
+// through the kernel, is erase_kernel_test.ts's.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parse } from '@std/toml'
 import { next } from '@yaks/wake'

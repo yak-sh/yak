@@ -1,4 +1,4 @@
-// The store client an app's pages import, held in workerd (probe.ts boots the
+// The store client an app's pages import, through the whole kernel (probe.ts `kernel`
 // kernel): the kernel serves public/client.js beside every app's doors, and a
 // page that imports it saves and lists the app's own entities.
 //
@@ -13,8 +13,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { until } from '../../bin/testing.ts'
-import { browser, client, kernel, relay, seed } from './probe.ts'
+import { browser, client, kernel, seed } from './probe.ts'
 
 // A row as a page reads one: the kind that names it, the spine, and a
 // component per name — what `query()` answers with, and what `subscribe()`
@@ -133,61 +132,15 @@ Deno.test('the served client: a page saves, lists and watches', async () => {
     ])
     assertEquals(titles(await store.query('.doc&limit=1')), ['Plum tart'])
 
-    // The live half: the page watches a filter and sees a write it did not
-    // make. A socket carries the app's hostname on its handshake, which a
-    // probe can only put there at the wire (probe.ts relay).
-    let wire = relay(k, 'jeff7.yaks.app', cookie)
-    let seen: Row[][] = []
-    // The subscription asks for the title beside the status: a listing
-    // carries the components its filter names, live door included.
-    let stop = mod.store(`${wire.origin}/recipes/api/`)
-      .subscribe('.task.status=open&?doc', (rows: Row[]) => seen.push(rows))
-    try {
-      await until(() => seen.length == 1, { timeout: 15_000 })
-      assertEquals(titles(seen[0]), ['Lemon cake'])
-      // Another device writes: another tab, another phone, an agent — all the
-      // same door, and the page hears it without asking.
-      await store.apply({ entity: { eid: cake }, doc: { title: 'Lime cake' } })
-      await until(() => seen.length == 2, { timeout: 15_000 })
-      assertEquals(titles(seen[1]), ['Lime cake'])
-      // A subscription is that query still answering, so it answers with the
-      // same rows: a doc written after subscribing arrives deep-equal to what
-      // `query()` hands back for the same filter — its kind, its body, and no
-      // eid inside a component. The live door used to stream the wire's raw
-      // changes, so the first push wiped the words the first paint drew
-      // (C-32624 item 2).
-      // `status` is read, never written (the guide says so): wearing `task` at
-      // all is what makes a row open, so the write is the bare component.
-      await store.apply({
-        doc: { title: 'Fig tart', body: 'six figs, honey' },
-        task: {},
-      })
-      await until(() => seen.length == 3, { timeout: 15_000 })
-      assertEquals(seen[2], await store.query('.task.status=open&?doc'))
-      let fig = seen[2].find((r) => r.doc.title == 'Fig tart')!
-      assertEquals(fig.doc.body, 'six figs, honey')
-      assertEquals(fig.kind, 'task')
-      assertEquals('eid' in fig.doc, false)
-      assertEquals(fig.entity.eid.length, 36)
-      // The live half carries the byline the same way, because it is the
-      // same projection: a page that watches a list draws its writers
-      // without a second question.
-      let bylined: Row[][] = []
-      let quiet = mod.store(`${wire.origin}/recipes/api/`)
-        .subscribe('.doc&.created', (rows: Row[]) => bylined.push(rows))
-      try {
-        await until(() => bylined.length == 1, { timeout: 15_000 })
-        assertEquals(
-          [...new Set(bylined[0].map((r) => r.created.by.name))],
-          [them.name],
-        )
-      } finally {
-        quiet()
-      }
-    } finally {
-      stop()
-      await wire.stop()
-    }
+    // Another device writes: another tab, another phone, an agent — all the
+    // same door. The page hearing it on its socket is socket_workerd_test.ts's.
+    await store.apply({ entity: { eid: cake }, doc: { title: 'Lime cake' } })
+    // `status` is read, never written (the guide says so): wearing `task` at
+    // all is what makes a row open, so the write is the bare component.
+    await store.apply({
+      doc: { title: 'Fig tart', body: 'six figs, honey' },
+      task: {},
+    })
 
     // A byline, on the row: `created.by` names the writer and says what this
     // store calls them — the name they gave at sign-in — so a view that gets

@@ -4,7 +4,7 @@
 // caller already sees. Both are checked here rather than over HTTP because
 // both are properties of the module — `answer` is handed a `Site` one binding
 // wide, so a test can watch every fetch it makes and know there is nothing
-// else it could have made. mcp_workerd_test.ts holds the rest: the tools a stranger
+// else it could have made. mcp_test.ts holds the rest: the tools a stranger
 // may call, which do read data (anon.ts), and the 401 and its challenge for
 // everything neither surface answers.
 import { assert, assertEquals } from '@std/assert'

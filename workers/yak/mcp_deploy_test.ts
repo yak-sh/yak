@@ -1,4 +1,4 @@
-// MCP workerd probes, split by subject so Deno can run the modules in parallel.
+// The connector through the whole kernel (probe.ts `kernel`), by subject.
 import {
   assert,
   assertEquals,
@@ -249,8 +249,8 @@ Deno.test('a deploy is a version, and one word puts it back', async () => {
 
     // And the other half of the same word (recover.ts, T-34507): the store's
     // way back. With no moment named it says the window and does nothing —
-    // which is all this can be held to here, because local workerd answers
-    // `getCurrentBookmark` and refuses the two that would move anything.
+    // which is all this can be held to here, because no runtime this runs on
+    // moves SQLite backwards (testing.ts `Pitr`).
     let window = await agent.tool('store_restore', app)
     assertStringIncludes(window, "undo31/recipes's store can be put back")
     assertMatch(window, /any moment since 20\d\d-\d\d-\d\dT/)

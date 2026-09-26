@@ -1,9 +1,13 @@
-// The kernel under test: workers/yak in workerd, the one kernel a test run
-// shares (probe-suite.ts), driven over HTTP the way a browser or a headless
-// client would — a hostname rides `x-yak-host`, since fetch refuses a Host
-// header and the kernel honors ours on a dev host (route.ts). A test keeps to
-// data of its own: a person `signIn` mints, a space or an address nobody else
-// uses. The kernel's config is the run's, never a test's.
+// The kernel under test, and how a test drives it. `kernel` is the kernel in
+// memory: kernel.ts's handler over the platform testing.ts stands up, one per
+// test, on a port of its own. `workerd` is the one kernel a run shares in the
+// runtime itself (probe-suite.ts), for what only the runtime has: a socket, a
+// letter at its email door, a script beside the kernel. Both are driven over
+// HTTP the way a browser or a headless client would — a hostname rides
+// `x-yak-host`, since fetch refuses a Host header and the kernel honors ours
+// on a dev host (route.ts) — and both are configured alike (`vars`). A test on
+// the shared kernel keeps to data of its own: a person `signIn` mints, a space
+// or an address nobody else uses.
 //
 // `script` below runs a Worker that is not the kernel at all — the modules an
 // app's own script is made of — in the same workerd, beside it.
@@ -13,7 +17,7 @@ import { until } from '../../bin/testing.ts'
 import { COOKIE, sign, verify } from './lib/token.ts'
 import type { Custom } from './domains.ts'
 import type { Bundle } from '@yaks/graph'
-import { render, type Stmt } from '@yaks/sql'
+import { parse } from '@std/toml'
 
 /** What the run's kernel checks a Stripe event against, at both doors
  * (probe-suite.ts). */
@@ -29,17 +33,21 @@ export let CHALLENGE = 'probe-openai-apps-challenge'
 let byte = () => crypto.getRandomValues(new Uint8Array(1))[0]
 let somewhere = () => ({ 'cf-connecting-ip': `198.18.${byte()}.${byte()}` })
 
-/** A kernel at `base`, driven over HTTP: one request, at one hostname. */
+/** A kernel at `base`, driven over HTTP: one request, at one hostname.
+ * `log` is where its letters land and `cloudflare` the stand-in for
+ * Cloudflare's API it talks to (`cloudflare`). */
 export let driven = (
   base: string,
   secret: string,
   log: string,
   host: string,
+  cloudflare: string,
 ) => ({
   base,
   secret,
   log,
   host,
+  cloudflare,
   at: (at: string, path: string, init: RequestInit = {}) =>
     fetch(`${base}${path}`, {
       ...init,
@@ -51,8 +59,6 @@ export let driven = (
     }),
 })
 
-export type Kernel = ReturnType<typeof kernel>
-
 /** A person signed in (`signIn`): who, the cookie, and the code that did it. */
 export type Person = {
   person: string
@@ -60,6 +66,17 @@ export type Person = {
   email: string
   code: string
   name: string
+}
+
+/** A kernel's door (`driven`). */
+export type Door = ReturnType<typeof driven>
+
+/** A kernel as a test holds it: its door, the person who owns its meta space
+ * (`meta`), what the test bought in the Stripe sandbox, and its stop. */
+export type Kernel = Door & {
+  owner: Person
+  bought: Set<string>
+  stop: () => Promise<void>
 }
 
 let want = (name: string) => {
@@ -77,27 +94,126 @@ let want = (name: string) => {
 // What a test bought in the Stripe sandbox (`subscribed`) goes in `bought`: a
 // subscription left active renews every month, and each renewal is a webhook
 // to staging, so every test stops its kernel in a `finally` and the stop
-// cancels whatever is still live.
-let owning = <K>(k: K) => {
+// cancels whatever is still live, then `close`s what the kernel holds.
+let owning = <K extends Door>(k: K, close = () => Promise.resolve()) => {
   let bought = new Set<string>()
   let stop = async () => {
-    for (let id of bought) await unsubscribed(id)
+    try {
+      for (let id of bought) await unsubscribed(id)
+    } finally {
+      await close()
+    }
   }
   return { ...k, bought, stop }
 }
 
-/** The run's kernel, as one test holds it. */
-export let kernel = () =>
-  owning(driven(
-    want('YAK_PROBE'),
-    want('YAK_PROBE_SECRET'),
-    want('YAK_PROBE_MAIL'),
-    apex(),
-  ))
+/**
+ * What a test run's kernels are configured with beside wrangler.toml's own
+ * vars: the session secret, Cloudflare's account API at `cloudflare` (the
+ * stand-in, for mail and domains alike), the Stripe signing secrets, and the
+ * Stripe sandbox when the run has a key (bin/test.ts).
+ */
+export let vars = (secret: string, cloudflare: string) => {
+  let stripe = Deno.env.get('STRIPE_KEY')
+  let price = Deno.env.get('STRIPE_PRICE')
+  return {
+    SESSION_SECRET: secret,
+    MAIL_TOKEN: 'a-token',
+    MAIL_API: cloudflare,
+    CF_ZONE: 'zone',
+    CF_HOSTNAMES_TOKEN: 'a-token',
+    HOSTNAMES_API: cloudflare,
+    STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
+    STRIPE_CONNECT_WEBHOOK_SECRET: WEBHOOK_SECRET,
+    OPENAI_APPS_CHALLENGE: CHALLENGE,
+    ...stripe ? { STRIPE_KEY: stripe } : {},
+    ...price ? { STRIPE_PRICE: price } : {},
+  }
+}
 
-/** The person who signed in to the run's kernel first, and so owns the meta
- * space (`meta`). */
-export let owner = () => JSON.parse(want('YAK_PROBE_OWNER')) as Person
+type Toml = {
+  vars: Record<string, string>
+  ratelimits: { name: string; simple: { limit: number; period: number } }[]
+}
+let toml = () =>
+  parse(
+    Deno.readTextFileSync(new URL('./wrangler.toml', import.meta.url)),
+  ) as Toml
+
+/**
+ * The kernel in memory, for one test: kernel.ts's handler over the platform
+ * testing.ts stands up, with wrangler.toml's vars and rate limits and the
+ * run's config (`vars`), served on a port of its own. Its owner signs in
+ * first, as the shared kernel's does, since the first person to sign in owns
+ * the meta space.
+ */
+export let kernel = async (): Promise<Kernel> => {
+  // Loaded when a test asks: the runner imports this module for its Stripe
+  // helpers and has no use for the kernel's whole graph.
+  let [{ handler }, { emailed, limiter, platform }] = await Promise.all([
+    import('./kernel.ts'),
+    import('./testing.ts'),
+  ])
+  let secret = crypto.randomUUID()
+  let log = Deno.makeTempFileSync({ prefix: 'yak-mail-' })
+  let cf = cloudflare(log)
+  let { vars: own, ratelimits } = toml()
+  let p = platform(secret, {
+    ...own,
+    ...vars(secret, cf.url),
+    // What the runtime binds beside the config: this deploy's id, and the
+    // `send_email` binding an app's letters leave through.
+    CF_VERSION_METADATA: { id: crypto.randomUUID() },
+    MAIL: cf.binding,
+    ...Object.fromEntries(
+      ratelimits.map((r) => [r.name, limiter(r.simple.limit, r.simple.period)]),
+    ),
+  })
+  let server = Deno.serve(
+    { hostname: '127.0.0.1', port: 0, onListen: () => {} },
+    (req) =>
+      new URL(req.url).pathname == '/cdn-cgi/handler/email'
+        ? emailed(req, handler.email, p.env)
+        : handler.fetch(req, p.env),
+  )
+  let ticking = setInterval(p.ring, 10)
+  let close = async () => {
+    clearInterval(ticking)
+    await server.shutdown()
+    await cf.stop()
+    p[Symbol.dispose]()
+    Deno.removeSync(log)
+  }
+  let door = driven(
+    `http://127.0.0.1:${server.addr.port}`,
+    secret,
+    log,
+    apex(),
+    cf.url,
+  )
+  try {
+    return owning(
+      { ...door, owner: await signIn(door, `owner@${apex()}`) },
+      close,
+    )
+  } catch (e) {
+    await close()
+    throw e
+  }
+}
+
+/** The run's kernel in workerd (probe-suite.ts), as one test holds it. */
+export let workerd = () =>
+  owning({
+    ...driven(
+      want('YAK_PROBE'),
+      want('YAK_PROBE_SECRET'),
+      want('YAK_PROBE_MAIL'),
+      apex(),
+      want('YAK_PROBE_CLOUDFLARE'),
+    ),
+    owner: JSON.parse(want('YAK_PROBE_OWNER')) as Person,
+  })
 
 let unsubscribed = async (id: string) => {
   let key = stripeKey()
@@ -284,7 +400,11 @@ export let client = (
 // `bearer` is the other credential the door takes — a CLI grant (grants.ts),
 // which is how the terminal talks to this same door and carries no cookie at
 // all.
-export let connector = (k: Kernel, cookie?: string, bearer?: string) => {
+export let connector = (
+  k: Pick<Kernel, 'at' | 'host'>,
+  cookie?: string,
+  bearer?: string,
+) => {
   let n = 0
   // The transport's session id: minted at `initialize` and sent back on every
   // later request, the way a client does — it names this client's stream and
@@ -319,8 +439,8 @@ export let connector = (k: Kernel, cookie?: string, bearer?: string) => {
 }
 
 // Every letter the kernel has sent to an address, oldest first, read off its
-// own log: MAIL_DEV prints one line per letter (mail.ts `printed`), so no
-// store anywhere holds a code a read could spend.
+// log: the stand-in for Email Sending writes one line per letter
+// (`cloudflare`), so no store anywhere holds a code a read could spend.
 // A letter may be addressed to several readers at once (mail.ts `Letter`), so
 // "to this address" is membership, not equality.
 export type Letter = { to: string | string[]; subject: string; body: string }
@@ -351,7 +471,6 @@ export let letter = async (
   ))!
 
 // Wait past the letters already received before requesting another sign-in.
-// The HTTP response can precede workerd flushing the new letter to its log.
 export let mailed = (k: Pick<Kernel, 'log'>, to: string, after = 0) =>
   until(
     () =>
@@ -457,8 +576,8 @@ export let signIn = async (
 
 // The directory, as an owner of `yak` reads and writes it: the MCP graph
 // tier, the one door left into the meta store — apps.ts serves nothing at
-// its address, to anyone (T-32585). The owner is the run's, unless named.
-export let meta = (k: Kernel, cookie = owner().cookie) => {
+// its address, to anyone (T-32585). The owner is the kernel's, unless named.
+export let meta = (k: Kernel, cookie = k.owner.cookie) => {
   let agent = connector(k, cookie)
   let where = { space: 'yak', app: 'platform' }
   return {
@@ -578,19 +697,33 @@ export let seed = async (
   return { ...them, eids }
 }
 
-// ---- Cloudflare's custom hostnames, stood in for (domains.ts) -------------
+// ---- Cloudflare's account API, stood in for (mail.ts, domains.ts) ---------
 //
-// The three calls a domain makes — list by name, create, delete — over the
-// account API's `{success, errors, result}` envelope, kept in memory. A
-// hostname is answered active, which is the state a domain reaches once the
-// person's record resolves; the words each step is read by are held against
-// recorded bytes in domains_test.ts, so what this is for is the other half:
-// that the tools attach, report and detach a domain end to end.
-export let hostnames = () => {
+// The two conversations a kernel has with Cloudflare, over the API's
+// `{success, errors, result}` envelope. A letter sent through Email Sending,
+// by its API or its binding, is written to `log` as one `yak-mail` line, which
+// is where a test reads its letters back (`letters`). And the three calls a domain makes — list by name,
+// create, delete — go to custom hostnames kept in memory. A hostname is
+// answered active, which is the state a domain reaches once the person's
+// record resolves; the words each step is read by are held against recorded
+// bytes in domains_test.ts, so what this is for is the other half: that the
+// tools attach, report and detach a domain end to end.
+export let cloudflare = (log: string) => {
   let held = new Map<string, Custom>()
-  let server = Deno.serve({ port: 0, onListen: () => {} }, (req) => {
+  let wrote = (to: string | string[], subject: string, body = '') =>
+    Deno.writeTextFileSync(
+      log,
+      `yak-mail ${JSON.stringify({ to, subject, body })}\n`,
+      { append: true },
+    )
+  let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
     let url = new URL(req.url)
     let ok = (result: unknown) => Response.json({ success: true, result })
+    if (url.pathname.endsWith('/email/sending/send')) {
+      let { to, subject, text } = await req.json()
+      wrote(to, subject, text)
+      return ok({})
+    }
     if (req.method == 'POST') {
       let made = async () => {
         let { hostname } = await req.json() as { hostname: string }
@@ -616,23 +749,34 @@ export let hostnames = () => {
   })
   return {
     url: `http://127.0.0.1:${(server.addr as Deno.NetAddr).port}`,
+    // The same product as a Worker binding (post.ts `Binding`), which is how
+    // an app's own letters leave.
+    binding: {
+      send: (l: { to: string; subject: string; text?: string }) => {
+        wrote(l.to, l.subject, l.text)
+        return Promise.resolve({ messageId: crypto.randomUUID() })
+      },
+    },
     stop: () => server.shutdown(),
   }
 }
 
-/** Attaches `hostname` at the run's stand-in for Cloudflare, as a Plus
+/** Attaches `hostname` at the kernel's stand-in for Cloudflare, as a Plus
  * space's domain_attach would have. */
-export let attach = async (hostname: string) => {
-  let made = await fetch(want('YAK_PROBE_HOSTNAMES'), {
+export let attach = async (k: Pick<Kernel, 'cloudflare'>, hostname: string) => {
+  let made = await fetch(k.cloudflare, {
     method: 'POST',
     body: JSON.stringify({ hostname }),
   })
   await made.body?.cancel()
 }
 
-/** Whether the run's stand-in for Cloudflare holds `hostname` attached. */
-export let attached = async (hostname: string) => {
-  let at = `${want('YAK_PROBE_HOSTNAMES')}/?hostname=${hostname}`
+/** Whether the kernel's stand-in for Cloudflare holds `hostname` attached. */
+export let attached = async (
+  k: Pick<Kernel, 'cloudflare'>,
+  hostname: string,
+) => {
+  let at = `${k.cloudflare}/?hostname=${hostname}`
   return ((await (await fetch(at)).json()).result as unknown[]).length > 0
 }
 
@@ -778,7 +922,7 @@ export let zipped = async (entries: Packed[]) => {
   return out
 }
 
-// ---- a kernel that is already running (roster_workerd_test.ts) ------------
+// ---- a kernel that is already running (roster_test.ts) ------------
 //
 // yaks.app answers the same doors workerd does, so a suite that drives one can
 // drive the other: this is `kernel` for a host already deployed — where it is,
@@ -794,6 +938,7 @@ export let deployed = (url: string) => {
     host,
     secret: '',
     log: '',
+    cloudflare: '',
     at: (where: string, path: string, init: RequestInit = {}) =>
       fetch(`https://${where}${path}`, init),
   })
@@ -801,7 +946,7 @@ export let deployed = (url: string) => {
 
 /**
  * A bearer, the way a host gets one: dynamic registration as a public client,
- * the authorization code with PKCE, and the exchange. mcp_auth_workerd_test.ts walks
+ * the authorization code with PKCE, and the exchange. mcp_auth_test.ts walks
  * the same steps and asserts on each of them; this walks them to come back
  * with a token, for a suite that wants to reach the connector the way a client
  * does rather than with a cookie no client has.
@@ -1157,26 +1302,4 @@ export let delivered = async (
   let said = await r.text()
   if (!r.ok) throw new Error(`${path}: ${r.status} ${said}`)
   return said
-}
-
-/**
- * Statements run straight into one store object, which then wakes as a new
- * incarnation over what they left (probe-entry.mjs), the way a deploy wakes
- * it: a store as older code left it. Answers the last statement's rows.
- */
-export let planted = async (
-  k: Kernel,
-  store: string,
-  ...statements: Stmt[]
-) => {
-  let sql = statements.map((s) => {
-    let { sql, params } = render(s)
-    return [sql, ...params]
-  })
-  let r = await k.at(k.host, '/__probe/sql', {
-    method: 'POST',
-    body: JSON.stringify({ store, sql }),
-  })
-  if (!r.ok) throw new Error(`probe sql ${r.status}: ${await r.text()}`)
-  return await r.json() as Record<string, unknown>[]
 }

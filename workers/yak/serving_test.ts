@@ -1094,7 +1094,7 @@ Deno.test("a trashed front page is nobody's, and the owner restores it there", a
 
   // Where the owner restores it is the dashboard's trash page, drawn straight
   // in home_test.ts: reaching it through this stand-in would ask the OAuth
-  // provider whether an agent has ever connected, and that is workerd's.
+  // provider whether an agent has ever connected, and that is the whole kernel's.
   //
   // The button itself is this door. One POST to the page it is on, and the
   // app is back — front page and all, because the word was never taken off it.
@@ -1757,10 +1757,9 @@ Deno.test('a cart is priced at Stripe, paid, refunded and disputed', async () =>
 // are made in Stripe's sandbox (probe.ts `stripeKey`), and read back from it.
 //
 // The space page's half of this — the three states an owner reads, and the
-// button that posts back — is in mcp_load_workerd_test.ts instead: drawing that page
-// reaches identity.ts for whether an assistant has ever connected, and the
-// OAuth provider it carries imports `cloudflare:` modules that only workerd can
-// load. So the page is driven where a runtime exists, and the door is driven
+// button that posts back — is in mcp_load_test.ts instead: drawing that page
+// reaches identity.ts for whether an assistant has ever connected, which
+// wants the kernel whole. So the page is driven there, and the door is driven
 // here.
 
 // Where the space stands with selling, read back off the directory.
@@ -1769,8 +1768,8 @@ let sold = async (env: Env) =>
     .space('ada'))?.stripe
 
 // The button on that page, as its form posts it. The page it is on is drawn in
-// mcp_load_workerd_test.ts; the POST is apps.ts `saved` and reaches nothing that needs
-// a runtime.
+// mcp_load_test.ts; the POST is apps.ts `saved` and reaches nothing that needs
+// the kernel whole.
 let pressed = async (env: Env, sell: string) =>
   await apps.fetch(
     new Request('https://yaks.app/manage/selling?space=ada', {

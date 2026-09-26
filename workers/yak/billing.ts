@@ -528,7 +528,7 @@ export let apply = async (env: Env, event: Event) => {
 // `sameOrigin` allows an absent Origin deliberately, which is what lets a
 // webhook through the guard that separates spaces (index.ts, T-33118). A
 // silently 403'd webhook is a plan that never activates, so
-// origin_workerd_test.ts holds that open on purpose.
+// origin_test.ts holds that open on purpose.
 let hook = async (env: Env, req: Request) => {
   if (req.method != 'POST') {
     return json(405, 'method_not_allowed', 'post the event here')

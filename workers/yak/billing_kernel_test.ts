@@ -10,7 +10,7 @@
 // kernel itself boots with a webhook secret and no STRIPE_KEY — the events
 // carry the whole subscription and the door reads nothing back — which is also
 // the shape a deploy has before the owner sets one. Stripe cannot reach a
-// loopback workerd, so the test signs each delivery with that secret.
+// loopback kernel, so the test signs each delivery with that secret.
 import { assert, assertEquals } from '@std/assert'
 import {
   charged,
@@ -18,7 +18,6 @@ import {
   delivered,
   kernel,
   meta,
-  owner,
   seed,
   signed,
   stripeKey,
@@ -166,7 +165,7 @@ Deno.test('an unsigned webhook is refused, and so is a foreign Origin', async ()
     // Read as text, not parsed: the answer arrives with the unseen block
     // appended, which is these very exceptions being delivered — the channel
     // working is part of what is being asserted.
-    let broke = await connector(k, owner().cookie).tool('graph_query', {
+    let broke = await connector(k, k.owner.cookie).tool('graph_query', {
       space: 'yak',
       app: 'platform',
       query: '.exception',

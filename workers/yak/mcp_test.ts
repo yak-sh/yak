@@ -1,4 +1,4 @@
-// MCP workerd probes, split by subject so Deno can run the modules in parallel.
+// The connector through the whole kernel (probe.ts `kernel`), by subject.
 import {
   assert,
   assertEquals,
@@ -1013,7 +1013,7 @@ Deno.test(
       // that only app_errors lists it, and a fresh break rides again. It is a
       // page's break because that is what an app's break is: the platform's
       // own failures are the platform's, whatever app the URL named
-      // (T-33234, report_workerd_test.ts).
+      // (T-33234, report_test.ts).
       let dies = (said: string) =>
         k.at('jeff54.yaks.app', '/recipes/api/report', {
           method: 'POST',

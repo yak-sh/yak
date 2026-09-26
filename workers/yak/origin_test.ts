@@ -1,4 +1,4 @@
-// Space isolation, held in workerd (T-33118). Every space is a subdomain of
+// Space isolation, through the whole kernel (T-33118). Every space is a subdomain of
 // one registrable domain, so sibling spaces are same-site and the session
 // cookie's `SameSite=Lax` does not separate them: without a check, a page on
 // one space's hostname can open a socket onto another space's store and read
@@ -118,16 +118,8 @@ Deno.test('a page at another address reaches no door here', async () => {
     assertEquals(sibling.status, 200)
     assertEquals(titles(await sibling.json()), ['Lemon cake', 'Plum tart'])
 
-    // The app's own socket still opens.
-    let ours = relay(k, 'jeff55.yaks.app', cookie, 'https://jeff55.yaks.app')
-    try {
-      assertEquals(
-        await opened(`${ours.origin.replace('http:', 'ws:')}/recipes/api/ws`),
-        'open',
-      )
-    } finally {
-      await ours.stop()
-    }
+    // The app's own page still opens its socket: socket_workerd_test.ts, since
+    // the upgrade is the runtime's.
 
     // A client with no page behind it — curl, an agent, a server — sends no
     // `Origin`, has nothing to be tricked through, and keeps its door.

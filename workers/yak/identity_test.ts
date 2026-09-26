@@ -1,4 +1,4 @@
-// The identity part, held in workerd (probe.ts boots the kernel): a person
+// The identity part, through the whole kernel (probe.ts `kernel` kernel): a person
 // signs in by receiving mail, the browser carries the platform cookie into an
 // app, the first person ever owns the meta space, a mistyped code is refused
 // softly — and an agent walks the whole OAuth 2.1 flow, from a client that
@@ -26,7 +26,6 @@ import {
   letters,
   mailed,
   meta,
-  owner,
   signIn,
 } from './probe.ts'
 import { COOKIE, sign } from './lib/token.ts'
@@ -324,7 +323,7 @@ Deno.test('a person signs in by mail, and an agent by OAuth', async () => {
     )
     assert(person, 'a person for ' + email)
     let me = person.entity.eid
-    let first = owner()
+    let first = k.owner
     let [yak] = await dir.query('.space.slug=yak')
     let [ownership] = await dir.query(
       `.member.person=${first.person}&.member.space=${yak.entity.eid}`,
@@ -1199,18 +1198,18 @@ Deno.test(
 // from happening again quietly, so this times it and fails rather than
 // letting a regression arrive as somebody's spinner.
 //
-// The budget is deliberately loose. The flow alone is ~320ms, but this kernel
-// is the whole run's, and every other workerd test is asking it for something
-// at the same time: on a loaded box, the same four requests took over three
-// seconds. Ten seconds holds while the rest of the run leans on it, and
-// still fails the unbounded wait this is here for. The kernel's own boot is
-// outside the span: wrangler starting workerd is the test harness, not the
-// product.
+// The budget is deliberately loose. The measured cold flow on this kernel is
+// ~320ms — the whole of it, on a store that does not exist yet: the Durable
+// Object is created, its schema and search index are planted, the directory
+// is seeded, the person and their space are minted. Ten times that is not a
+// microbenchmark anyone has to keep green, and it still catches both a hang
+// and an order-of-magnitude regression. The kernel's own start is outside the
+// span: it is the test's, not the product's.
 //
 // The letter is not timed either — `mailed` polls the log at 100ms, so its
 // span would measure the poll and not the platform. What is timed is exactly
 // the four requests a browser makes.
-let BUDGET = 10_000
+let BUDGET = 3_000
 
 Deno.test('a cold sign-in stays well under the budget', async () => {
   let k = await kernel()

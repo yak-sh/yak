@@ -1,4 +1,4 @@
-// The public site as workerd serves it at the apex: the generated addresses
+// The public site as the kernel serves it at the apex: the generated addresses
 // and the guide read back through the assets binding. What the pages say is
 // site_test.ts's, read from disk.
 
@@ -7,7 +7,7 @@ import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { kernel } from './probe.ts'
 import { ADDRESSES } from './seo.ts'
 
-// The generated addresses, in workerd, at the apex and not on a space's
+// The generated addresses, through the kernel, at the apex and not on a space's
 // hostname — where robots.txt is the customer's own file (route.ts) and always
 // has been.
 Deno.test('the apex answers the crawler and the model', async () => {

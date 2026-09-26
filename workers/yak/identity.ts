@@ -73,6 +73,7 @@
 // only way that row is ever written: nothing serves the meta store at an
 // address (apps.ts), so no request can write the directory from outside.
 import { apex, type Host, url as hostUrl } from './host.ts'
+// @ts-types="npm:@cloudflare/workers-oauth-provider@0.10.3"
 import {
   AuthorizationError,
   type AuthRequest,

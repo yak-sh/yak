@@ -1,4 +1,4 @@
-// Sign-in and identity, attacked, held in workerd (T-37872). Each test is one
+// Sign-in and identity, attacked, through the whole kernel (T-37872). Each test is one
 // hole the 2026-09-22 audit proved on a local kernel, fired again at the
 // kernel exactly as it was fired then, beside the traffic that must keep
 // working. The root that made most of them reachable is the platform's shape:

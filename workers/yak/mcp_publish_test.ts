@@ -1,4 +1,4 @@
-// MCP workerd probes, split by subject so Deno can run the modules in parallel.
+// The connector through the whole kernel (probe.ts `kernel`), by subject.
 import {
   assert,
   assertEquals,

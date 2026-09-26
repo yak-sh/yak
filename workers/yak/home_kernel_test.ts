@@ -1,4 +1,4 @@
-// A space's own address, held in workerd (T-33040). Two states, and both are
+// A space's own address, through the whole kernel (T-33040). Two states, and both are
 // a page rather than a redirect:
 //
 //   no front page   the apps this visitor may open, listed — the ordinary
@@ -228,7 +228,7 @@ Deno.test('the front page is served at the space root', async () => {
     // trusted certificate for it. So the front page answers none of them,
     // however ordinary the file looks — the home app included, since it is
     // the app that would otherwise get them all.
-    // domain_workerd_test.ts holds the other half: on a hostname one app owns
+    // domain_test.ts holds the other half: on a hostname one app owns
     // outright the name is theirs, so the authority is theirs to grant.
     let claims = [
       '/.well-known/acme-challenge/token',
@@ -258,7 +258,7 @@ Deno.test('the front page is served at the space root', async () => {
     assertEquals(own.status, 200)
     assertEquals(await own.text(), 'the app said so')
     // Its store's doors answer at the root too — named by the hostname and
-    // nothing else, the way they are on a custom domain (domain_workerd_test.ts).
+    // nothing else, the way they are on a custom domain (domain_test.ts).
     let rows = await k.at('jeff23.yaks.app', '/api/graph')
     assertStringIncludes((await rows.json()).db, 'do:jeff23/site.')
     // But `/<x>/api/…` named an app that is not here: a page asking a store

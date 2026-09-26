@@ -36,10 +36,13 @@ import {
   val,
 } from '@yaks/sql'
 import { objects } from '@yaks/sqlite'
+import { contentType } from '@std/media-types'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { Builder } from './build.ts'
-import type { Env } from './env.ts'
+import type { Env, Inbound } from './env.ts'
 import { Store } from './graph.ts'
+import { Wire as Wired } from './stream.ts'
+import type { Limiter } from './rate.ts'
 
 // The streaming HTML rewriter, in the one shape apps.ts asks for it
 // (`reported` weaves the reporter into every page): a tag prepended inside the
@@ -350,21 +353,55 @@ export let analytics = (rows: (sql: string) => Record<string, unknown>[]) => {
 }
 
 /**
- * A KV namespace in a Map, in the one shape the kernel asks of `OAUTH_KV`
- * (grants.ts, handoff.ts). TTL is not simulated: what expires here expires by
- * the value's own `exp`, which a test moves by handing a clock in.
+ * A Durable Object's key-value storage in a Map, the slice the Wire object
+ * reads (stream.ts): a value is kept as a structured clone, as the runtime
+ * keeps it.
+ */
+export let kvStorage = () => {
+  let map = new Map<string, unknown>()
+  return {
+    map,
+    get: <T>(key: string) => Promise.resolve(map.get(key) as T | undefined),
+    put: (key: string, value: unknown) =>
+      Promise.resolve(void map.set(key, structuredClone(value))),
+  }
+}
+
+/**
+ * A KV namespace in a Map, in the shape the kernel and its OAuth provider ask
+ * of `OAUTH_KV` (grants.ts, handoff.ts, identity.ts): a value read back as
+ * text or as JSON, a key that lapses at its `expirationTtl`, and a listing
+ * by prefix that comes back in one page.
  */
 export let kv = () => {
   let held = new Map<string, string>()
+  let until = new Map<string, number>()
+  let live = (k: string) => {
+    if ((until.get(k) ?? Infinity) > Date.now()) return held.get(k) ?? null
+    held.delete(k)
+    until.delete(k)
+    return null
+  }
+  type As = 'text' | 'json' | { type?: 'text' | 'json' }
   return {
     held,
-    get: (k: string) => Promise.resolve(held.get(k) ?? null),
-    put: (k: string, v: string) => (held.set(k, v), Promise.resolve()),
+    get: (k: string, as?: As) => {
+      let v = live(k)
+      let json = as == 'json' || typeof as == 'object' && as.type == 'json'
+      return Promise.resolve(json && v != null ? JSON.parse(v) : v)
+    },
+    put: (k: string, v: string, o: { expirationTtl?: number } = {}) => {
+      held.set(k, v)
+      if (o.expirationTtl) until.set(k, Date.now() + o.expirationTtl * 1000)
+      else until.delete(k)
+      return Promise.resolve()
+    },
     delete: (k: string) => (held.delete(k), Promise.resolve()),
-    list: ({ prefix }: { prefix: string }) =>
+    list: ({ prefix = '' }: { prefix?: string }) =>
       Promise.resolve({
-        keys: [...held.keys()].filter((k) => k.startsWith(prefix))
+        keys: [...held.keys()].filter((k) => k.startsWith(prefix) && live(k))
           .map((name) => ({ name })),
+        list_complete: true,
       }),
   }
 }
@@ -486,6 +523,104 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
 }
 
 /**
+ * Workers static assets over a directory (wrangler.toml `[assets]`), with the
+ * binding's default html handling: `/x` answers x.html and `/x/` answers
+ * x/index.html, a page asked for by its file name moves to its address with a
+ * 307, and anything else not on disk is a 404.
+ */
+export let assets = (root: URL) => {
+  let read = (path: string) =>
+    Deno.readFile(new URL(`.${path}`, root)).catch(() => null)
+  let file = (path: string, bytes: Uint8Array<ArrayBuffer>) =>
+    new Response(bytes, {
+      headers: {
+        'content-type': contentType(path.slice(path.lastIndexOf('.'))) ??
+          'application/octet-stream',
+      },
+    })
+  return {
+    fetch: async (req: Request) => {
+      let url = new URL(req.url)
+      let path = decodeURIComponent(url.pathname)
+      let moved = (to: string) =>
+        new Response(null, {
+          status: 307,
+          headers: { location: to + url.search },
+        })
+      let page = /(\/index)?\.html$/.exec(path)
+      if (page && await read(path)) {
+        return moved(page[1] ? path.slice(0, -10) : path.slice(0, -5))
+      }
+      if (path.endsWith('/')) {
+        let index = await read(`${path}index.html`)
+        return index
+          ? file('.html', index)
+          : new Response(null, { status: 404 })
+      }
+      let bytes = await read(path)
+      if (bytes) return file(path, bytes)
+      let html = await read(`${path}.html`)
+      if (html) return file('.html', html)
+      if (await read(`${path}/index.html`)) return moved(`${path}/`)
+      return new Response(null, { status: 404 })
+    },
+  }
+}
+
+/**
+ * The runtime's local email door (`/cdn-cgi/handler/email`), as `wrangler dev`
+ * answers it: the envelope off the query string and the letter as the body,
+ * handed to the Worker's `email()` as a message. 200 when it was taken, 400
+ * carrying the reason when it was refused (`setReject`).
+ */
+export let emailed = async (
+  req: Request,
+  email: (m: Inbound, env: Env) => Promise<void>,
+  env: Env,
+) => {
+  let url = new URL(req.url)
+  let raw = await req.text()
+  let head = new Map<string, string>()
+  let lines = raw.split(/\r?\n\r?\n/, 1)[0].replace(/\r?\n[ \t]+/g, ' ')
+  for (let line of lines.split(/\r?\n/)) {
+    let at = line.indexOf(':')
+    if (at > 0) {
+      head.set(
+        line.slice(0, at).trim().toLowerCase(),
+        line.slice(at + 1).trim(),
+      )
+    }
+  }
+  let refused = ''
+  await email({
+    from: url.searchParams.get('from') ?? '',
+    to: url.searchParams.get('to') ?? '',
+    headers: { get: (name) => head.get(name.toLowerCase()) ?? null },
+    raw: new Response(raw).body!,
+    setReject: (why) => void (refused = why),
+  }, env)
+  return refused
+    ? new Response(refused, { status: 400 })
+    : new Response('Worker successfully processed email')
+}
+
+/**
+ * A rate limiting binding (rate.ts `Limiter`), counting the way Miniflare's
+ * does: `limit` calls per key in each `period` seconds, the windows fixed and
+ * counted from the epoch.
+ */
+export let limiter = (limit: number, period: number): Limiter => {
+  let seen = new Map<string, number>()
+  return {
+    limit: ({ key }) => {
+      let at = `${Math.floor(Date.now() / 1000 / period)} ${key}`
+      seen.set(at, (seen.get(at) ?? 0) + 1)
+      return Promise.resolve({ success: seen.get(at)! <= limit })
+    },
+  }
+}
+
+/**
  * One platform: a Store per name the kernel builds, the bucket its files are
  * in, and the platform's own assets off disk (the client an app imports, the
  * guide the builder reads).
@@ -527,6 +662,14 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
     if (!held) builders.set(name, held = new Builder(ownedState(), env))
     return held
   }
+  // A person's stream (stream.ts), one object per person, made on demand and
+  // kept like a store: what a session was told, and the roster it holds.
+  let wires = new Map<string, Wired>()
+  let wire = (name: string): Wired => {
+    let held = wires.get(name)
+    if (!held) wires.set(name, held = new Wired({ storage: kvStorage() }, env))
+    return held
+  }
   let files = bucket()
   let env = {
     SESSION_SECRET: secret,
@@ -534,27 +677,17 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
     // The grants ledger (grants.ts): what a CLI token and the build sandbox's
     // own sign-in are written down in.
     OAUTH_KV: kv(),
-    ASSETS: {
-      fetch: async (req: Request) =>
-        new Response(
-          await Deno.readFile(
-            new URL(`./public${new URL(req.url).pathname}`, import.meta.url),
-          ),
-          { headers: { 'content-type': 'text/javascript' } },
-        ),
-    },
+    ASSETS: assets(new URL('./public/', import.meta.url)),
     STORE: {
       idFromName: (n: string) => n,
       get: (n: unknown) => ({
         fetch: (r: Request) => Promise.resolve(object(String(n)).fetch(r)),
       }),
     },
-    // Nobody is listening: a break is still written, and telling its members
-    // about it is the half that may fail without taking the write with it.
     WIRE: {
       idFromName: (n: string) => n,
-      get: () => ({
-        fetch: () => Promise.resolve(new Response(null, { status: 204 })),
+      get: (n: unknown) => ({
+        fetch: (r: Request) => Promise.resolve(wire(String(n)).fetch(r)),
       }),
     },
     BUILDER: {
@@ -565,6 +698,24 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
     },
     ...vars,
   } as unknown as Env
+  // Every alarm that is due, delivered the way the runtime delivers one: the
+  // instant cleared, then the object's `alarm()`, which may arm the next. A
+  // test drives this by hand; a kernel (probe.ts) on a timer.
+  let ringing = false
+  let ring = async () => {
+    if (ringing) return
+    ringing = true
+    try {
+      for (let [name, ctx] of states) {
+        let at = await ctx.storage.getAlarm()
+        if (at == null || at > Date.now()) continue
+        await ctx.storage.deleteAlarm()
+        await object(name).alarm()
+      }
+    } finally {
+      ringing = false
+    }
+  }
   return {
     env,
     files,
@@ -573,6 +724,7 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
     sockets,
     builder,
     recovery,
+    ring,
     [Symbol.dispose]: () => {
       for (let ctx of stores) ctx.storage[Symbol.dispose]()
       stores.length = 0

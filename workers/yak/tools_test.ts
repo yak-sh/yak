@@ -1,5 +1,5 @@
-// app_files' write path, at its seams (T-34337). The tool itself runs in
-// workerd (mcp_workerd_test.ts), which is where the whole gesture is held; what is
+// app_files' write path, at its seams (T-34337). The tool itself runs
+// through the whole kernel (mcp_test.ts), which is where the whole gesture is held; what is
 // here is the four pieces a caller actually gets wrong — the op it did not
 // say, the file it miscounted, the patch that matched twice, the URL it
 // reached for — each a function, so a case is a line.

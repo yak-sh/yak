@@ -151,7 +151,7 @@ export let SECONDS: Record<Tier, number> = { free: 3_600, plus: 36_000 }
 // charged against; this is the number the site says out loud — the pricing
 // copy, and the `Offer`s in the home page's JSON-LD, which is what a search
 // engine shows beside the result. A price change also updates the static HTML
-// in public/index.html and public/pricing.html, billing_workerd_test.ts, and
+// in public/index.html and public/pricing.html, billing_kernel_test.ts, and
 // bin/verify-deploy{,_test}.ts. site_test.ts holds the pages to this number.
 export let PRICE: Record<Tier, number> = { free: 0, plus: 9 }
 

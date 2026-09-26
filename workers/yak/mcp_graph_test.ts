@@ -1,4 +1,4 @@
-// MCP workerd probes, split by subject so Deno can run the modules in parallel.
+// The connector through the whole kernel (probe.ts `kernel`), by subject.
 import {
   assert,
   assertEquals,
@@ -13,7 +13,6 @@ import {
   kernel,
   meta,
   num,
-  owner,
   plus,
   seed,
   signIn,
@@ -29,7 +28,7 @@ Deno.test(
   async () => {
     let k = await kernel()
     try {
-      let agent = connector(k, owner().cookie)
+      let agent = connector(k, k.owner.cookie)
       let name = 'oauth_client probe-dry-run'
       let said = await agent.tool('graph_apply', {
         app: 'yak/platform',

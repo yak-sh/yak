@@ -1,4 +1,4 @@
-// MCP workerd probes, split by subject so Deno can run the modules in parallel.
+// The connector through the whole kernel (probe.ts `kernel`), by subject.
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import { until } from '../../bin/testing.ts'
 import {
@@ -288,7 +288,7 @@ Deno.test(
         poll: 50,
         label: 'the stream to open',
       })
-      // What a page's injected reporter posts (report_workerd_test.ts).
+      // What a page's injected reporter posts (report_test.ts).
       assertEquals(
         (await k.at('jeff53.yaks.app', '/recipes/api/report', {
           method: 'POST',

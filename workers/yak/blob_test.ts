@@ -1,4 +1,4 @@
-// The file door, held in workerd (probe.ts boots the kernel): a page hands the
+// The file door, through the whole kernel (probe.ts `kernel` kernel): a page hands the
 // app bytes through the served client's `upload`, gets a content-addressed
 // address back, and reads the same bytes out of it. What is proved here is
 // what C-32675 found missing — there was nowhere to put a photo — plus the

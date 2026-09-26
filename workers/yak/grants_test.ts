@@ -3,7 +3,7 @@
 // by revocation — and the narrowing, which is a wrapper over the directory
 // every tool reads membership out of. Nothing here imports a Cloudflare name,
 // so the whole contract holds in plain Deno; the door it hangs on is held in
-// workerd (mcp_workerd_test.ts).
+// the kernel (mcp_test.ts).
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { seal } from './lib/token.ts'
 import type { Directory } from './directory.ts'

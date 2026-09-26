@@ -1,4 +1,4 @@
-// Closing a space in workerd (T-33166): the whole act — an agent that
+// Closing a space through the whole kernel (T-33166): the whole act — an agent that
 // deletes nothing, a letter that does, a slug back in circulation with none
 // of the last space's bytes or rows behind it — and the custom domain the
 // erase gives back. The pure seams are erase_test.ts's.
@@ -36,7 +36,7 @@ let space = (over: Partial<Space> = {}): Space => ({
 
 // `forever` end to end (T-34431): the one path that still erases a space on
 // the spot, and therefore the one that still gives the name back. The default
-// path — the trash — is mcp_workerd_test.ts's, through the same letter.
+// path — the trash — is mcp_test.ts's, through the same letter.
 Deno.test('a space erased: the letter, the act, and the name back', async () => {
   let k = await kernel()
   try {
@@ -152,7 +152,7 @@ Deno.test('an erased space gives its domain back', async () => {
     // Cloudflare, and a row naming it. A delete that buried the row and kept
     // the hostname would leave a billable one nobody remembers (T-33038).
     let host = 'herbusiness105.com'
-    await attach(host)
+    await attach(k, host)
     await dir.apply([{
       hostname: {
         name: host,
@@ -181,7 +181,7 @@ Deno.test('an erased space gives its domain back', async () => {
     })
     assertEquals(out.status, 200)
     await out.body?.cancel()
-    assertEquals(await attached(host), false)
+    assertEquals(await attached(k, host), false)
     assertEquals(
       (await dir.query('.hostname')).filter((r) =>
         (r.hostname as { name: string }).name == host

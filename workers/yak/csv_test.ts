@@ -2,7 +2,7 @@
 // The spreadsheet mapping (csv.ts): where a header lands, what a cell coerces
 // to, what an id column names the row, and every refusal that names the row and
 // the header. The end-to-end proof — a CSV loaded into a store twice — is
-// mcp_workerd_test.ts.
+// mcp_test.ts.
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import { type Sheet, sheet } from './csv.ts'
 

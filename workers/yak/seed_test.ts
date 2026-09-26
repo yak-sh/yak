@@ -2,7 +2,7 @@
 // The seed's own reading (seed.ts): which files are one, the order they are
 // read in, the entry a bad file names, and the entry a refused batch is blamed
 // on. The end-to-end proof — a deploy seeding a store and a redeploy seeding
-// nothing — is mcp_workerd_test.ts.
+// nothing — is mcp_test.ts.
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { type Applying, asked, load, loaded, seedy, sow, sown } from './seed.ts'

@@ -1,4 +1,4 @@
-// The kernel's contract, held in workerd itself (probe.ts boots it): the
+// The kernel's contract, held through the whole kernel (probe.ts `kernel`): the
 // apex and its soft 404, a space and app born in the directory and served,
 // the session cookie forged and signed, the file door, the graph API, and a
 // route that threw becoming an error entity behind a soft page.
@@ -63,7 +63,7 @@ Deno.test('the kernel routes, vouches, serves, and surfaces', async () => {
       ),
     )
     // The connector answers POST (the calls) and get (the session's stream,
-    // T-32686), both to someone it knows; mcp_workerd_test.ts drives them.
+    // T-32686), both to someone it knows; mcp_test.ts drives them.
     let mcp = await k.at('yaks.app', '/mcp')
     assertEquals(mcp.status, 401)
     assertEquals((await mcp.json()).error.code, 'unauthorized')
@@ -314,7 +314,7 @@ Deno.test('the kernel routes, vouches, serves, and surfaces', async () => {
     // A route that throws — a malformed escape in a file path — answers with
     // the soft page. Our own decoder fell over, not the app's code, so
     // nothing about it is written into the app's store (T-33234; where it IS
-    // written is report_workerd_test.ts).
+    // written is report_test.ts).
     let broke = await k.at('jeff69.yaks.app', '/recipes/%E0%A4%A')
     assertEquals(broke.status, 500)
     assertMatch(await broke.text(), /Something went wrong/)

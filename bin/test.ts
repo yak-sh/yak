@@ -349,17 +349,22 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let paths = Deno.args.filter((a) => !a.startsWith('--only='))
   let files = (await inventory(paths.length ? paths : ROOTS))
     .filter((f) => !only || workerd(f) == (only == 'workerd'))
-  let { sandboxKey } = await import('../workers/yak/probe.ts')
+  // The Stripe sandbox every kernel sells in, found once for the run and
+  // handed to every process by its environment (probe.ts `vars`).
+  let { plusPrice, sandboxKey } = await import('../workers/yak/probe.ts')
   let stripe = await sandboxKey()
+  if (stripe) {
+    Deno.env.set('STRIPE_KEY', stripe)
+    Deno.env.set('STRIPE_PRICE', await plusPrice(stripe))
+  }
   let env: Record<string, string> = {
     TEST_DENO_DIR: denoDir(),
     DENO_DIR: denoDir(),
-    ...stripe ? { STRIPE_KEY: stripe } : {},
   }
   let wd = files.filter(workerd)
   // The kernel starts while the deno pass runs, and is ready by its end.
   let started = wd.length
-    ? import('../workers/yak/probe-suite.ts').then((m) => m.probeSuite(stripe))
+    ? import('../workers/yak/probe-suite.ts').then((m) => m.probeSuite())
     : undefined
   started?.catch(() => {})
   let bulk = (label: string, args: string[], extra = {}): TestCommand => ({

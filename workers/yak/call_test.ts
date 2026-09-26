@@ -1,4 +1,4 @@
-// An app's own command with an argument, called through its store in workerd
+// An app's own command with an argument, called through its store in the whole kernel
 // (T-37978). The runner checks the arguments against the command's schema
 // before it runs; a validator that compiled the schema into a function was
 // refused by the runtime, and every such call was answered as a refusal.

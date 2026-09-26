@@ -1,6 +1,6 @@
-// A person's own domain, held in workerd (T-33037, T-34596): a hostname the
+// A person's own domain, through the whole kernel (T-33037, T-34596): a hostname the
 // directory has never been given gets the branded provisioning page (index.ts
-// `settling`, T-33036 — provisioning_workerd_test.ts is where that page itself is
+// `settling`, T-33036 — provisioning_test.ts is where that page itself is
 // held), and one it has been given, marked active, serves the place it names.
 // Both places are here: an app, at the root of the domain with the paths below
 // it the app's own, and a space, which is that space's own hostname under
@@ -28,7 +28,7 @@ Deno.test('a hostname finds its app, and only one app', async () => {
     // Before anything is attached, someone else's hostname is a foreign host
     // the directory has never heard of (index.ts `settling`, T-33036): it
     // gets the branded "still connecting" page, never the apex's own home
-    // page and never a blank — provisioning_workerd_test.ts holds that page to its
+    // page and never a blank — provisioning_test.ts holds that page to its
     // own bytes; this only has to know it is not the apex's.
     let apex = await (await k.at('yaks.app', '/')).text()
     let before = await k.at('herbusiness101.com', '/')
@@ -424,8 +424,8 @@ Deno.test(
       assert(!left.includes('ourbookclub104.com'), left)
       assertStringIncludes(left, 'herbusiness104.com → jeff12/recipes')
       // The hostname went back to Cloudflare with it.
-      assert(!await attached('ourbookclub104.com'))
-      assert(await attached('herbusiness104.com'))
+      assert(!await attached(k, 'ourbookclub104.com'))
+      assert(await attached(k, 'herbusiness104.com'))
     } finally {
       await k.stop()
     }

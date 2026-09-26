@@ -10,7 +10,7 @@
 //
 // Two ways to run it.
 //
-//   Under workerd (`deno task test`), against the run's kernel and its
+//   In memory (`deno task test`), against a kernel of its own and its
 //   throwaway store, and everything runs, purchases included: the money
 //   paths talk to Stripe's own sandbox with a test-mode key, never a
 //   stand-in. Set these first, or the money steps fail naming them:
@@ -22,7 +22,7 @@
 //     STRIPE_PRICE                   optional: a recurring sandbox price. Left
 //                                    out, one is found or made by name.
 //     STRIPE_WEBHOOK_SECRET          optional: any string. Stripe cannot
-//     STRIPE_CONNECT_WEBHOOK_SECRET  reach a loopback workerd, so the test
+//     STRIPE_CONNECT_WEBHOOK_SECRET  reach a loopback kernel, so the test
 //                                    both signs the events and boots the
 //                                    kernel with the secret it signed them
 //                                    with; left out, a fresh one is minted.
@@ -31,7 +31,7 @@
 //   check:
 //
 //     YAK_PROBE_URL=https://yaks.app YAK_PROBE_TOKEN=<bearer> \
-//       deno test -A --unstable-net workers/yak/roster_workerd_test.ts
+//       deno test -A --unstable-net workers/yak/roster_test.ts
 //
 //   The bearer is an ordinary OAuth token for a test account, an address on
 //   the bot domain (lib/bots.ts), got the way a host gets one (probe.ts
@@ -112,16 +112,16 @@ let refused = async (
 Deno.test(
   'every tool the connector lists is called, and one with no call fails this',
   async () => {
-    // Cloudflare's custom hostnames are stood in for even under workerd: a
+    // Cloudflare's custom hostnames are stood in for even in memory: a
     // hostname attached for real would be written on the zone that serves
     // yaks.app, and a domain is a third party, not a purchase. Stripe is the
     // one third party this suite talks to for real.
-    let k = LIVE ? deployed(LIVE) : kernel()
+    let k = LIVE ? deployed(LIVE) : await kernel()
     // Every space this run made and has not yet erased.
     let spaces: string[] = []
     try {
       // The credential, as a client holds one: a bearer, never a cookie.
-      // Under workerd the person signs in first and walks the OAuth flow; a
+      // In memory the person signs in first and walks the OAuth flow; a
       // deployed run is handed the token it will use.
       let cookie = LIVE ? '' : (await signIn(k, `probe-${tag()}${BOT}`)).cookie
       let bearer = LIVE ? TOKEN : await bearerFor(k, cookie)
@@ -457,7 +457,7 @@ Deno.test(
       // A deployed kernel is a real Stripe account, so nothing here buys
       // anything there: the free space's refusal is what both tools answer,
       // and it is the answer that keeps a person from being charged by a
-      // mistake. Under workerd the sandbox is reachable and the whole path
+      // mistake. In memory the sandbox is reachable and the whole path
       // runs — a checkout completed with Stripe's test card, the subscription
       // Stripe then holds, the webhook, Plus, and a domain on the far side of
       // the gate that only Plus opens.
@@ -568,7 +568,7 @@ Deno.test(
           await tool('domain_detach', { space: mine, hostname: host }),
           `${host} is detached`,
         )
-        assert(!await attached(host), 'the hostname went back to Cloudflare')
+        assert(!await attached(k, host), 'the hostname went back to Cloudflare')
 
         // And cancelled, the way the person would, so the space is one a
         // delete may take: a paying space is refused (erase.ts `refused`).

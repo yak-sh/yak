@@ -1,4 +1,4 @@
-// Deploying by dropping a file, held in workerd (T-34230). The point of the
+// Deploying by dropping a file, through the whole kernel (T-34230). The point of the
 // door is that it needs no assistant and no script, so the test is a plain
 // multipart POST — what a `<form>` sends — and it reads the page that comes
 // back, the way whoever dropped the file would.

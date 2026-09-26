@@ -360,17 +360,25 @@ export let resumable = (
   lost: (e: unknown) => unknown,
 ): ReadableStream<Uint8Array> => {
   let reader = body.getReader()
+  // The client hung up: a read still pending ends there, with nobody left to
+  // hand it to, and a stream the reader cancelled is not ours to close.
+  let over = false
   return new ReadableStream({
     pull: async (out) => {
       try {
         let read = await reader.read()
+        if (over) return
         read.done ? out.close() : out.enqueue(read.value)
       } catch (e) {
+        if (over) return
         if (!gone(e)) await lost(e)
         out.close()
       }
     },
-    cancel: (why) => reader.cancel(why),
+    cancel: (why) => {
+      over = true
+      return reader.cancel(why)
+    },
   })
 }
 

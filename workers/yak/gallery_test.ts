@@ -5,7 +5,7 @@
 // examples in it.
 //
 // The whole act — publish, letter, approve, page, search, unpublish — is held
-// in workerd in mcp_workerd_test.ts, where there is a directory to write and a letter
+// through the kernel in mcp_test.ts, where there is a directory to write and a letter
 // to read off the log.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { App, Directory, Space } from './directory.ts'

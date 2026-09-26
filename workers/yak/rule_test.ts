@@ -12,8 +12,8 @@
 // outright (`not authorized: SQLITE_AUTH`), so the overlay had to become
 // something a query carries rather than something a database is left holding.
 // And the alarm: the wake's own `at` is the clock here, so a row written a
-// second ahead is delivered by workerd itself, to an object no request is
-// touching.
+// second ahead is delivered by the runtime itself (testing.ts `ring`), to an object
+// no request is touching.
 
 import type { Bundle } from '@yaks/graph'
 import { assert, assertEquals } from '@std/assert'

@@ -11,18 +11,7 @@
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { VERSION } from './seo.ts'
 import { resumable, Wire } from './stream.ts'
-
-let kv = () => {
-  let m = new Map<string, unknown>()
-  return {
-    map: m,
-    get: <T>(key: string) => Promise.resolve(m.get(key) as T | undefined),
-    put: (key: string, value: unknown) => {
-      m.set(key, structuredClone(value))
-      return Promise.resolve()
-    },
-  }
-}
+import { kvStorage } from './testing.ts'
 
 let attached = async (wire: Wire, session: string) => {
   let res = await wire.attach(
@@ -43,7 +32,7 @@ let drained = (wire: Wire) => {
 }
 
 Deno.test('a stream resuming across a release hears the lists moved', async () => {
-  let storage = kv()
+  let storage = kvStorage()
   let wire = new Wire({ storage }, {})
   // The session last spoke under another release.
   storage.map.set('spoke', { abc: '0.0.0-before' })
@@ -72,7 +61,7 @@ Deno.test('a stream resuming across a release hears the lists moved', async () =
 })
 
 Deno.test('a session never spoken for is remembered silently', async () => {
-  let storage = kv()
+  let storage = kvStorage()
   let wire = new Wire({ storage }, {})
   try {
     let ear = await attached(wire, 'fresh')
@@ -90,7 +79,7 @@ Deno.test('a session never spoken for is remembered silently', async () => {
 })
 
 Deno.test('the deploy id drives the marker, not the human VERSION', async () => {
-  let storage = kv()
+  let storage = kvStorage()
   // Last spoke under an earlier deploy; VERSION never moved between them.
   storage.map.set('spoke', { abc: 'deploy-1' })
   let wire = new Wire({ storage }, { CF_VERSION_METADATA: { id: 'deploy-2' } })
@@ -116,7 +105,7 @@ Deno.test('the deploy id drives the marker, not the human VERSION', async () => 
 // compared on every later call, and the line said once per changed set — for
 // the client that holds no stream, or whose host ignores the notification.
 Deno.test('a session is told which tools moved, once per changed set', async () => {
-  let wire = new Wire({ storage: kv() }, {})
+  let wire = new Wire({ storage: kvStorage() }, {})
   let listed = (names: string[]) => ({
     session: 'abc',
     version: names.join(','),
@@ -152,7 +141,7 @@ Deno.test('a session is told which tools moved, once per changed set', async () 
 // opened under the old version is still held): whoever is listening hears it
 // now rather than at their next attach.
 Deno.test('a release reaches a stream that was already open', async () => {
-  let storage = kv()
+  let storage = kvStorage()
   storage.map.set('mark', 'deploy-1')
   let wire = new Wire({ storage }, { CF_VERSION_METADATA: { id: 'deploy-2' } })
   try {
@@ -180,7 +169,7 @@ Deno.test('a release reaches a stream that was already open', async () => {
 })
 
 Deno.test('the same deploy id stays quiet', async () => {
-  let storage = kv()
+  let storage = kvStorage()
   storage.map.set('spoke', { abc: 'deploy-2' })
   let wire = new Wire({ storage }, { CF_VERSION_METADATA: { id: 'deploy-2' } })
   try {

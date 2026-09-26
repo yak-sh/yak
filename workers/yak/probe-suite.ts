@@ -9,27 +9,21 @@
 // vectorize, the dispatch namespace, service bindings). The kernel is written
 // to answer without them, as it does under `wrangler dev`.
 //
-// What the run's tests share, it is handed in the environment:
+// Its config is every kernel's (probe.ts `vars`), and what the run's tests
+// share, it is handed in the environment (probe.ts `workerd`):
 //
 //   YAK_PROBE          the kernel's door; a hostname rides `x-yak-host`,
 //                      and `/__script/` is probe-scripts.js's (probe.ts `script`)
 //   YAK_PROBE_SECRET   the session secret, so a test can mint a cookie
-//   YAK_PROBE_MAIL     the letters MAIL_DEV printed, one `yak-mail` line each
+//   YAK_PROBE_MAIL     the letters it sent, one `yak-mail` line each
 //   YAK_PROBE_OWNER    the first person to sign in, who owns the meta space
-//   YAK_PROBE_HOSTNAMES  the stand-in for Cloudflare's custom hostnames
-//   STRIPE_PRICE       the Plus price the kernel sells, when the run has a key
+//   YAK_PROBE_CLOUDFLARE  the stand-in for Cloudflare's API (probe.ts
+//                      `cloudflare`)
 import { createRequire } from 'node:module'
 import { parse } from '@std/toml'
 import { apex } from './host.ts'
 import { dir, ready } from './wrangler.ts'
-import {
-  CHALLENGE,
-  driven,
-  hostnames,
-  plusPrice,
-  signIn,
-  WEBHOOK_SECRET,
-} from './probe.ts'
+import { cloudflare, driven, signIn, vars } from './probe.ts'
 
 type Config = Record<string, unknown> & {
   durable_objects?: { bindings: { name: string }[] }
@@ -66,7 +60,6 @@ export let config = (toml: string, vars: Record<string, string>): Config => {
   return raw
 }
 
-type Log = { message: string }
 // The kernel's end of a socket it accepted (Miniflare's WebSocketPair).
 type Far = {
   accept(): void
@@ -85,8 +78,6 @@ type Harness = {
       init: RequestInit & { duplex: 'half' },
     ): Promise<Response & { webSocket?: Far | null }>
   }
-  getLogs(): Log[]
-  clearLogs(): void
   close(): Promise<void>
 }
 
@@ -168,27 +159,12 @@ let door = (server: Harness) =>
     },
   )
 
-/** The run's kernel, and how its tests reach it. `stripe` is the sandbox key
- * the money paths use, when the run has one. */
-export let probeSuite = async (stripe?: string) => {
+/** The run's kernel, and how its tests reach it. */
+export let probeSuite = async () => {
   await ready()
   let secret = crypto.randomUUID()
   let mail = Deno.makeTempFileSync({ prefix: 'yak-probe-mail-' })
-  let cf = hostnames()
-  let price: Record<string, string> = stripe
-    ? { STRIPE_PRICE: await plusPrice(stripe) }
-    : {}
-  let vars: Record<string, string> = {
-    SESSION_SECRET: secret,
-    MAIL_DEV: '1',
-    STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
-    STRIPE_CONNECT_WEBHOOK_SECRET: WEBHOOK_SECRET,
-    OPENAI_APPS_CHALLENGE: CHALLENGE,
-    CF_ZONE: 'zone',
-    CF_HOSTNAMES_TOKEN: 'a-token',
-    HOSTNAMES_API: cf.url,
-    ...stripe ? { STRIPE_KEY: stripe, ...price } : {},
-  }
+  let cf = cloudflare(mail)
   // workers/yak's own wrangler, which Deno loads from there only when the run
   // says --node-modules-dir=manual (deno.json `test:run`): from Deno's npm
   // cache, the bundler finds none of the polyfills npm put beside it.
@@ -196,7 +172,12 @@ export let probeSuite = async (stripe?: string) => {
   let server: Harness = createTestHarness({
     root: dir,
     workers: [
-      { config: config(Deno.readTextFileSync(`${dir}/wrangler.toml`), vars) },
+      {
+        config: config(
+          Deno.readTextFileSync(`${dir}/wrangler.toml`),
+          vars(secret, cf.url),
+        ),
+      },
       {
         config: {
           name: 'probe-scripts',
@@ -221,24 +202,8 @@ export let probeSuite = async (stripe?: string) => {
   } finally {
     Deno.chdir(was)
   }
-  // The letters MAIL_DEV prints, drained off the runtime's console as they
-  // arrive into the file the tests read their codes from.
-  let drain = () => {
-    let logs = server.getLogs()
-    server.clearLogs()
-    let letters = logs.filter((l) => l.message.startsWith('yak-mail '))
-    if (letters.length) {
-      Deno.writeTextFileSync(
-        mail,
-        letters.map((l) => l.message + '\n').join(''),
-        { append: true },
-      )
-    }
-  }
-  let timer = setInterval(drain, 10)
   let front = door(server)
   let stop = async () => {
-    clearInterval(timer)
     await front.shutdown()
     await server.close()
     await cf.stop()
@@ -246,7 +211,7 @@ export let probeSuite = async (stripe?: string) => {
   }
   try {
     let base = `http://127.0.0.1:${front.addr.port}`
-    let k = driven(base, secret, mail, apex())
+    let k = driven(base, secret, mail, apex(), cf.url)
     let owner = await signIn(k, `owner@${apex()}`)
     return {
       env: {
@@ -254,8 +219,7 @@ export let probeSuite = async (stripe?: string) => {
         YAK_PROBE_SECRET: secret,
         YAK_PROBE_MAIL: mail,
         YAK_PROBE_OWNER: JSON.stringify(owner),
-        YAK_PROBE_HOSTNAMES: cf.url,
-        ...price,
+        YAK_PROBE_CLOUDFLARE: cf.url,
       },
       stop,
     }

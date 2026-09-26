@@ -1,6 +1,6 @@
 // The inviter's hour (invite.ts `paced`): counted up, started over on a new
-// hour, and refused at the cap. The door itself is held in workerd
-// (invite_workerd_test.ts).
+// hour, and refused at the cap. The door itself is held through the kernel
+// (invite_kernel_test.ts).
 import { assertEquals, assertThrows } from '@std/assert'
 import { CAP, paced } from './invite.ts'
 
