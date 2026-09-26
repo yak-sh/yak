@@ -153,7 +153,14 @@ import { reconcile, type Runner, runner } from '@yaks/tools'
 import { commands, type Tools } from './lib/tools.ts'
 import { rouse, soonest, tick, type Ticked, wakes } from '@yaks/wake'
 import { type Alarm, arm } from '@yaks/wake/cloudflare'
-import { mentions, named, type Names, type Row } from './listing.ts'
+import {
+  asking,
+  mentions,
+  named,
+  type Names,
+  PLATFORM,
+  type Row,
+} from './listing.ts'
 import {
   effected,
   installsOf,
@@ -859,7 +866,10 @@ export class Store {
       ),
     )
     let subs = subscriptions(g)
-    this.#live = sockets(this.#naming(subs), ctx)
+    // Only an app's store answers a page, and the platform's own two are made
+    // of the rows an app's page is spared.
+    let spared = own ? [] : PLATFORM.filter((w) => vocab.comp(w))
+    this.#live = sockets(this.#naming(subs, spared), ctx)
     // The one `Authenticate` (T-33813). The app is read at request time — the
     // object may learn which app it holds from the request being answered —
     // and the mode with it, so a store told its access changed follows the
@@ -1924,10 +1934,12 @@ export class Store {
   // beside them, since a page's @yaks/client lands a row only in the words the
   // store speaks, where `created.by` is an eid; the served client paints them,
   // so a page that swaps `query()` for `subscribe()` gets the same rows
-  // (public/client.js). The sink a socket hands in is wrapped once per sink,
-  // since `close` and `drop` find a subscription by the sink it was opened
-  // with.
-  #naming(subs: Subs): Subs {
+  // (public/client.js). Its question is asked the way the app's door asks a
+  // page's query (listing.ts `asking`): the platform's own rows `words` names
+  // are left out unless the line names one. The sink a socket hands in is
+  // wrapped once per sink, since `close` and `drop` find a subscription by the
+  // sink it was opened with.
+  #naming(subs: Subs, words: string[]): Subs {
     let wrapped = new Map<Sink, Sink>()
     let by = (sink: Sink): Sink => {
       let held = wrapped.get(sink)
@@ -1950,7 +1962,12 @@ export class Store {
       return held
     }
     return {
-      open: (sink, id, query) => subs.open(by(sink), id, query),
+      open: (sink, id, query) =>
+        subs.open(
+          by(sink),
+          id,
+          query === true ? query : asking(query, words),
+        ),
       close: (sink, id) => subs.close(by(sink), id),
       drop: (sink) => subs.drop(by(sink)),
       commit: subs.commit,

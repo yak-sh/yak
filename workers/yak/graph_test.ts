@@ -386,6 +386,27 @@ Deno.test('a subscription is answered, and a commit reaches the socket', async (
   assertEquals(pushed.bundles[0].entity.eid, CAKE)
 })
 
+Deno.test("a page's subscription leaves out the platform's rows unless it names one", async () => {
+  let ctx = state()
+  let store = await cookbook(ctx)
+  await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    doc: { title: 'Lemon drizzle' },
+  }], owner)
+  let ws = wire()
+  ctx.live.push(ws)
+  let eids = (line: string) => {
+    ws.sent.length = 0
+    store.webSocketMessage(ws, JSON.stringify({ subscribe: line, id: line }))
+    return (ws.sent[0] as { bundles: Bundle[] }).bundles.map((b) =>
+      b.entity.eid
+    )
+  }
+  // The store minted Ada a person row wearing her name as a `doc` title.
+  assertEquals(eids('.doc'), [CAKE])
+  assertEquals(eids('.person&?doc'), [ADA])
+})
+
 // `*` is the grammar's widest projection, so one reading of the line serves
 // both doors: it used to be cut out of `/query`'s line by hand and handed to
 // `subs.open` whole, where it reached @yaks/match as a full-text term nothing

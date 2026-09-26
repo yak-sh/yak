@@ -288,18 +288,13 @@ let named = (row, { refs = [], names = {} }) => {
 }
 
 // A page's filter as the store writes it. A fetch goes through the app's door,
-// which does this on the way (workers/yak/wire.ts `lined`, listing.ts
-// `asking`); a socket goes straight to the store, so a subscription is
-// translated here — the same two rules, so `query(f)` and `subscribe(f)` ask
-// one question.
-//
-// Two rules, and no more. Three riders the page writes bare are dotted words
-// there (`id=` is an address, so it is `.eid=`), and the platform's own rows —
-// the breaks it noted, the person row a store mints for each writer, the
-// models it may ask — are left out of the question unless the filter names
-// one (listing.ts `PLATFORM`, which this list is a copy of).
+// which does this on the way (workers/yak/wire.ts `lined`); a socket goes
+// straight to the store, so a subscription is translated here, and
+// `query(f)` and `subscribe(f)` ask one question. Three riders the page
+// writes bare are dotted words there (`id=` is an address, so it is `.eid=`).
+// The platform's own rows are left out of either question where it is
+// answered (listing.ts `asking`).
 let RIDERS = { id: '.eid', limit: '.limit', after: '.after' }
-let SCREEN = ['exception', 'error', 'person', 'provider', 'model', 'serves']
 let OPERATOR = /^([A-Za-z_.\-[\]][\w.\-[\]]*)(!=|~=|<=|>=|<|>|=)/
 
 let plain = (v) => {
@@ -323,20 +318,14 @@ let glued = (v, term) =>
 // the grammar's own (`?doc` asks for a component), so it stays.
 let bare = (filter) => filter.replace(/^\?(?![A-Za-z_])/, '').replace(/^&+/, '')
 
-let asked = (filter = '') => {
-  let line = bare(filter).split('&').filter(Boolean)
+let asked = (filter = '') =>
+  bare(filter).split('&').filter(Boolean)
     .map((seg) => {
       let m = OPERATOR.exec(seg)
       if (!m) return glued(plain(seg), true)
       let v = glued(plain(seg.slice(m[0].length)))
       return `${RIDERS[m[1]] ?? m[1]}${m[2]}${v}`
     }).join('&')
-  if (!line || line.includes('id=')) return line
-  let screen = SCREEN.filter((k) =>
-    !['.', '!', '?'].some((mark) => line.includes(mark + k))
-  ).map((k) => `!${k}`)
-  return [line, ...screen].join('&')
-}
 
 // Oldest first — `query()`'s own order, which is the order the fill arrived
 // in and the order a live row is added at, so the map already holds it.
