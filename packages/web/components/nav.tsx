@@ -11,6 +11,7 @@ import {
   mutate,
   myCursor,
   peek,
+  resolveEid,
   resolvingId,
   rootCanvas,
   serverEid,
@@ -307,11 +308,12 @@ let keep = () => {
 
 // A COLD launch at bare `/` resumes where the device left off; anything
 // else wins over the memory. A deep link carries a path or a query and
-// never reaches the restore. `/` itself is the subtle one — the brand is
-// a native anchor, so tapping home is a page LOAD at `/`, and bouncing
-// that back to the card would make the canvas unreachable. So a browsing
-// context marks itself warm on its first boot: the fresh tab (or app
-// launch) restores, every later `/` in that tab shows the canvas.
+// never reaches the restore, and a legacy link goes through its own door.
+// `/` itself is the subtle one — the brand is a native anchor, so tapping
+// home is a page LOAD at `/`, and bouncing that back to the card would make
+// the canvas unreachable. So a browsing context marks itself warm on its
+// first boot: the fresh tab (or app launch) restores, every later `/` in
+// that tab shows the canvas.
 //
 // main.tsx calls this once, after boot() has filled the cache and before
 // the first render — so a remembered entity that has since been DELETED
@@ -326,6 +328,8 @@ export let restore = () => {
     warm = !!sessionStorage.getItem(WARM)
     sessionStorage.setItem(WARM, '1')
   } catch { /* no storage, no memory — kept() defaults to the canvas */ }
+  let legacy = new URLSearchParams(l.search).get('task')
+  if (legacy) return void grandfather(legacy)
   if (warm || l.pathname != '/' || l.search) {
     keep()
     return
@@ -337,6 +341,21 @@ export let restore = () => {
   if (at != home) h.pushState(null, '', at)
   route.value = at
   keep()
+}
+
+// The grandfather door: tasks-v1 linked '?task=<alias>', and old guidance also
+// used human ids there. The page paints the canvas at once and never waits on
+// the wire; once the id resolves, its card REPLACES the legacy address, which
+// should not linger in history, and becomes a place you were. One that never
+// resolves leaves the canvas and no memory: a dead old link is not a crash.
+// Someone who moved on before the answer keeps where they went.
+let grandfather = async (legacy: string) => {
+  let at = route.peek()
+  let eid = await resolveEid(legacy)
+  if (!eid || route.peek() != at) return
+  let to = entityPath(idOf(ent(eid)))
+  his()?.replaceState(null, '', to)
+  arrive(to)
 }
 
 // The cursor's twin of keep(): publish WHERE this client now looks into the

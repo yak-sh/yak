@@ -1,7 +1,7 @@
 // A browsing context, faked whole for each test: nav.tsx reads location,
 // history and the two web stores as it goes. Everything a launch can be —
 // cold, warm, deep-linked, a second tab — is then one line.
-import { faked } from '../testing.ts'
+import { faked, tick, until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { cache, census } from '../live.ts'
 import { navigate, restore, route } from './nav.tsx'
@@ -49,6 +49,7 @@ let graph = () => {
     task: {
       entity: { eid: 'task', num: 7 },
       doc: { eid: 'task', title: 'a task' },
+      task: { eid: 'task' },
     },
   }
   census.value = ['canvas', 'task']
@@ -197,4 +198,32 @@ Deno.test('chrome and dead ends are not places you were', () => {
 
   launch('/')
   assertEquals(route.value, '/T-7')
+})
+
+Deno.test('a legacy ?task= link paints the canvas, then lands on its card', async () => {
+  using _ = fresh()
+  launch('/?task=T-7')
+  assertEquals(route.value, '/?task=T-7') // the canvas, before any answer
+
+  await until(() => route.value == '/T-7')
+  assertEquals(entries, ['/T-7']) // replaced: the legacy address is gone
+})
+
+Deno.test('a legacy link that never resolves is not a place you were', () => {
+  using _ = fresh()
+  navigate('/T-7')
+  launch('/?task=gone')
+  assertEquals(route.value, '/?task=gone') // the canvas stays
+
+  launch('/')
+  assertEquals(route.value, '/T-7')
+})
+
+Deno.test('a legacy link never pulls back someone who moved on', async () => {
+  using _ = fresh()
+  launch('/?task=T-7')
+  navigate('/?v=List') // before the id resolves
+
+  await tick()
+  assertEquals(route.value, '/?v=List')
 })
