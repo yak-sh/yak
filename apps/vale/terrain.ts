@@ -25,7 +25,7 @@ export type { Spot }
 /** A level's side, in metres. */
 export let SIZE = 128
 /** The voxel edge a vale is grown at unless asked for another, in metres. */
-export let VOXEL = 0.5
+export let VOXEL = 0.25
 /** Ground at or under this height, in metres, is shore: sand, never dry. */
 export let SHORE = 5
 /** The water's surface, in metres. */
@@ -549,7 +549,9 @@ export let footprint = (p: Prop): Spot[] => {
  * let v = flat(5)
  * let well = { kind: 'well', x: 50.25, z: 50.25, seed: 0 }
  * assertEquals(foundation(v, well), null)
- * v.h[99 + 100 * v.cols] = 7 // the ground falls away on its west side
+ * // The ground falls away to 3.5 m on its west side.
+ * v.h[Math.floor(49.75 / v.voxel) + Math.floor(50.25 / v.voxel) * v.cols] =
+ *   3.5 / v.voxel
  * assertEquals(foundation(v, well)?.[0][1], 3.5)
  * assertEquals(foundation(v, well)?.[1][1], 1.48)
  * ```

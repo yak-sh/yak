@@ -125,8 +125,8 @@ export let turn = (a: number, b: number, k: number) => {
  * assertEquals([slid.x, slid.z > 20], [20, true])
  * // A jump leaves the ground.
  * assertEquals(walk(v, b, { x: 0, z: 0, jump: true }, 0.1, 5).gait, 'jump')
- * // Run at a rock a metre tall and jump: up onto it. Two voxels of ground
- * // are the same.
+ * // Run at a rock a metre tall and jump: up onto it. A ledge of ground as
+ * // tall is the same.
  * let run = (at: ReturnType<typeof flat>) => {
  *   let c = b
  *   for (let f = 0; f < 32; f++) {
@@ -135,8 +135,10 @@ export let turn = (a: number, b: number, k: number) => {
  *   return [c.x > 22, c.y]
  * }
  * assertEquals(run(flat(5, [{ x: 22.5, z: 20, r: 0.8, top: 6 }])), [true, 6])
- * let ledge = flat(5)
- * for (let i = 43; i < ledge.cols; i++) ledge.h[i + 40 * ledge.cols] = 12
+ * let ledge = flat(5), V = ledge.voxel, n = ledge.cols
+ * for (let i = Math.round(21.5 / V); i < n; i++) {
+ *   ledge.h[i + Math.floor(20 / V) * n] = Math.round(6 / V)
+ * }
  * assertEquals(run(ledge), [true, 6])
  * ```
  */
