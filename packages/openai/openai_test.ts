@@ -275,6 +275,7 @@ Deno.test('the Model maps the shared watchdog to ModelError', async () => {
   let model = responses({
     credential: () => codex,
     stallMs: 20,
+    retries: 0,
     fetch: (_url, init) =>
       new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () =>
