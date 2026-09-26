@@ -17,6 +17,7 @@ import { type Figure, hero } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { ahead, type Grown, grown } from './grown.ts'
 import { hud } from './hud.ts'
+import { pack } from './pack.ts'
 import { listen } from './input.ts'
 import { ITEMS } from './items.ts'
 import { HOME, LEVELS } from './levels.ts'
@@ -114,6 +115,7 @@ let h = hud(glass, hands.press)
 let marks = overlay(h.layer, camera)
 let chat = chatbox(glass, net, marks, folk)
 let m = map(glass)
+let p = pack(glass, { wear: g.wear, take: g.take })
 
 // The level on show, and what is drawn of it: grown again when the hero goes
 // off the end of a road, while the frame waits (`away`).
@@ -434,6 +436,20 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     h.toast(`${LEVELS[e.to]?.name ?? e.to}`, 'Toast-big')
     sound.quest()
   } else if (e.type == 'say') h.toast(e.text)
+  else if (e.type == 'wear') {
+    let t = ITEMS[e.item]
+    if (t) {
+      h.toast(
+        `${t.icon} ${
+          t.slot == 'main' || t.slot == 'off' ? 'In hand' : 'On'
+        }: ${t.name}`,
+        'Toast-loot',
+      )
+    }
+  } else if (e.type == 'shot') {
+    stage.fly(e.kind, e.from, e.to, e.ms)
+    sound.whiff(net.hero)
+  }
 }
 
 let talkTo = () => {
@@ -514,6 +530,7 @@ let loop = (t: number) => {
   if (playing && net.hero && !away) {
     let i = hands.read()
     if (i.map) m.toggle()
+    if (i.bag) p.toggle()
     if (i.mic) void voice.toggle()
     if (h.talking) {
       Object.assign(i, {
@@ -575,8 +592,9 @@ let loop = (t: number) => {
         )
       }
       let here = 1 + f.others.length
-      h.show(f, here, clockOf(w.day), bearing(cam.yaw))
+      h.show(f, here, clockOf(w.day), bearing(cam.yaw), p.open)
       m.show(f, v)
+      p.show(f)
       w.focus.set(f.body.x, f.body.y, f.body.z)
       // Near a road's end, the level beyond starts growing.
       let road = v.roads.find((r) =>

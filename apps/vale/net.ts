@@ -156,7 +156,9 @@ export let connect = (base: URL) => {
   }
 
   let watches: Record<string, Watch> = {
-    players: c.watch('.player&?position&?motion&?vitals&?fight&?rtc'),
+    players: c.watch(
+      '.player&?position&?motion&?vitals&?fight&?gear&?rtc',
+    ),
     creatures: c.watch('.creature'),
     falls: c.watch('.slain&.order=-slain.at&.limit=400'),
   }
@@ -169,6 +171,7 @@ export let connect = (base: URL) => {
       item: c.watch(`.item.owner=${q}`),
       used: c.watch(`.used.by=${q}`),
       journal: c.watch(`.journal.player=${q}`),
+      equip: c.watch(`.equip.player=${q}`),
     }
   }
 
@@ -215,6 +218,9 @@ export let connect = (base: URL) => {
     /** my rows of one kind: what the store holds, and what is waiting */
     mine: (name: string): Bundle[] =>
       join(name, own[name]?.value ?? none, name),
+    /** whether the store has answered for all my rows */
+    settled: (): boolean =>
+      Object.values(own).length > 0 && Object.values(own).every((w) => w.ready),
     /** the falls everyone has written, and mine still waiting */
     falls: (): Bundle[] => join('falls', watches.falls.value, 'slain'),
     keep,

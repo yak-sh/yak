@@ -1,7 +1,8 @@
 // Everything on the glass: the hero's card (health, level, the xp to the
 // next), the quest being followed, the foe's health, who else is here, the
-// compass, the bag, the buttons a phone needs, the words of whoever you talk to, and the
-// toasts that say what just happened. Each part is written only when what it shows changed.
+// compass, the bag, which opens the pack (pack.ts), the buttons a phone
+// needs, the words of whoever you talk to, and the toasts that say what just
+// happened. Each part is written only when what it shows changed.
 import type { Action } from './input.ts'
 import type { Frame, Sheet } from './play.ts'
 import { BEASTS } from './beasts.ts'
@@ -58,7 +59,18 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     e.stopPropagation()
     press('map')
   })
-  let bag = el('Bag')
+  // The bag: what is carried that is not worn, and a tap opens the pack.
+  let bag = el('Bag', '', 'button')
+  bag.title = 'Your pack (B)'
+  bag.addEventListener('pointerdown', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    press('bag')
+  })
+  // Said once, to a hero by a fire with nothing in hand.
+  let nudged = false
+  // Arms or armour found since the pack was last open.
+  let fresh = false
   let keys = el(
     'Keys',
     '<span><kbd>WASD</kbd> move</span><span><kbd>Space</kbd> jump</span>' +
@@ -66,7 +78,8 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
       '<span><kbd>Shift</kbd> or right-click: dodge</span><span><kbd>E</kbd> talk</span>' +
       '<span><kbd>C</kbd> camera behind</span><span><kbd>M</kbd> map</span>' +
       '<span><kbd>Enter</kbd> chat</span><span><kbd>T</kbd> microphone</span>' +
-      '<span><kbd>1</kbd> tonic</span><span>drag: look</span>',
+      '<span><kbd>B</kbd> pack</span><span><kbd>1</kbd> tonic</span>' +
+      '<span>drag: look</span>',
   )
   let pads = el('Pads')
   let toasts = el('Toasts')
@@ -168,9 +181,13 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     }</span>`
   }
 
+  // What is carried and not worn: arms and armour, then the rest.
   let stacks = (s: Sheet) => {
     let by = new Map<string, number>()
-    for (let h of s.bag) by.set(h.kind, (by.get(h.kind) ?? 0) + h.n)
+    for (let h of s.bag) {
+      if (ITEMS[h.kind]?.slot) continue
+      by.set(h.kind, (by.get(h.kind) ?? 0) + h.n)
+    }
     return [...by].sort(([a], [b]) => a.localeCompare(b))
   }
 
@@ -221,8 +238,15 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
     get talking() {
       return !talk.hidden
     },
-    /** paint this frame, the camera looking `facing` degrees from north */
-    show: (f: Frame, here: number, clock: string, facing: number) => {
+    /** paint this frame, the camera looking `facing` degrees from north;
+     * `looking` while the pack is open */
+    show: (
+      f: Frame,
+      here: number,
+      clock: string,
+      facing: number,
+      looking: boolean,
+    ) => {
       let s = f.sheet
       let hp = f.vitals.hp
       let from = need(s.lvl), to = need(s.lvl + 1)
@@ -262,17 +286,29 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
         rose.style.setProperty('--turn', `${facing}deg`)
       }
       let st = stacks(s)
+      let hand = ITEMS[s.worn.main?.kind ?? '']
       put(
         'bag',
         bag,
-        st.length
-          ? st.map(([k, n]) =>
+        `<span class=Bag_Open><i>🎒</i>${hand ? hand.icon : ''}</span>` +
+          st.map(([k, n]) =>
             `<span class=Bag_Item title="${esc(ITEMS[k]?.name ?? k)}"><i>${
               ITEMS[k]?.icon ?? '•'
             }</i>${n > 1 ? n : ''}</span>`
-          ).join('')
-          : '<span class=Bag_Empty>Your bag is empty</span>',
+          ).join(''),
       )
+      // Arms or armour found mark the bag, until the pack is opened.
+      fresh = !looking &&
+        (fresh ||
+          f.events.some((e) => e.type == 'loot' && ITEMS[e.item]?.slot))
+      bag.classList.toggle('Bag-new', fresh)
+      // Nothing in hand by a fire: the rack there has arms to try.
+      let bare = f.rack && !s.worn.main
+      bag.classList.toggle('Bag-call', bare)
+      if (bare && !nudged) {
+        nudged = true
+        toast('The rack by the fire has arms to try. Open your pack (B).')
+      }
       let tonics = st.find(([k]) => k == 'tonic')?.[1] ?? 0
       put(
         'tonic',

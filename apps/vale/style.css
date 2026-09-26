@@ -654,6 +654,8 @@ body {
   opacity: 0.5;
 }
 
+/* The bag: what is carried, not worn; a tap opens the pack. It calls out
+   to a hero with nothing in hand by a fire, where the rack is. */
 .Bag {
   position: absolute;
   left: max(12px, env(safe-area-inset-left));
@@ -663,6 +665,51 @@ body {
   flex-wrap: wrap;
   gap: 0.3rem;
   max-width: 22rem;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.Bag_Open {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--moss);
+  color: #fff;
+  font-size: 1.05rem;
+}
+
+.Bag_Open i {
+  font-style: normal;
+}
+
+.Bag-new .Bag_Open::after {
+  content: '';
+  position: absolute;
+  top: -0.15rem;
+  right: -0.15rem;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--ember);
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.Bag-call .Bag_Open {
+  animation: call 1s ease-in-out infinite;
+}
+
+@keyframes call {
+  50% {
+    transform: scale(1.18);
+    box-shadow: 0 0 0 4px rgba(242, 193, 78, 0.6);
+  }
 }
 
 .Bag_Item {
@@ -1082,6 +1129,244 @@ body {
   font-style: italic;
 }
 
+/* The pack: a sheet over the glass, like the map's. What is worn, six
+   slots in a grid; the numbers they make; the thing picked, and what it
+   would change; then the bag, and by a fire the rack (pack.ts). */
+.Pack {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  background: rgba(20, 30, 15, 0.35);
+  pointer-events: auto;
+}
+
+.Pack[hidden] {
+  display: none;
+}
+
+.Pack_Sheet {
+  display: grid;
+  gap: 0.5rem;
+  width: min(30rem, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 0.6rem 0.75rem 0.8rem;
+  border-radius: 18px;
+  background: rgba(251, 247, 234, 0.97);
+  box-shadow: 0 3px 0 rgba(160, 145, 105, 0.45), 0 12px 30px rgba(20, 30, 15,
+    0.3);
+}
+
+.Pack_Top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.Pack_Top b {
+  font-size: 1.1rem;
+  color: var(--deep);
+}
+
+.Pack_Top .Map_Close {
+  margin-left: auto;
+}
+
+.Pack_Worn {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+}
+
+.Pack_Slot,
+.Pack_Tile {
+  position: relative;
+  border: 0;
+  border-radius: 12px;
+  background: #efe6ca;
+  box-shadow: inset 0 -3px 0 rgba(160, 145, 105, 0.35);
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.Pack_Slot {
+  display: grid;
+  justify-items: center;
+  gap: 0.05rem;
+  padding: 0.3rem 0.25rem 0.4rem;
+  min-width: 0;
+}
+
+.Pack_Slot small {
+  font-size: 0.68rem;
+  color: #7a8570;
+}
+
+.Pack_Slot i,
+.Pack_Tile i {
+  font-style: normal;
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.Pack_Slot span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.Pack_Slot-empty {
+  background: rgba(239, 230, 202, 0.5);
+}
+
+.Pack_Slot-empty i,
+.Pack_Slot-empty span {
+  opacity: 0.5;
+}
+
+.Pack_Tile-on {
+  background: #fff3c4;
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+
+.Pack_Tier {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.3rem;
+  font-style: normal;
+  font-size: 0.7rem;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--tier);
+}
+
+.Pack_Tier-1 {
+  --tier: #c8804a;
+}
+
+.Pack_Tier-2 {
+  --tier: #7a8490;
+}
+
+.Pack_Tier-3 {
+  --tier: #4a9a3a;
+}
+
+.Pack_Tier-4 {
+  --tier: #3a8ad8;
+}
+
+.Pack_Tier-5 {
+  --tier: #e0602a;
+}
+
+.Pack_Nums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.Pack_Num {
+  white-space: nowrap;
+}
+
+.Pack_Num em {
+  font-style: normal;
+  font-weight: 700;
+}
+
+.Pack_Up {
+  color: #3f8f2a;
+}
+
+.Pack_Down {
+  color: #c0442a;
+}
+
+.Pack_Pick {
+  display: grid;
+  gap: 0.35rem;
+  min-height: 3.2rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 12px;
+  background: rgba(239, 230, 202, 0.45);
+}
+
+.Pack_Card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.Pack_Card > div {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.Pack_Card span {
+  font-size: 0.8rem;
+  color: #5b6555;
+}
+
+.Pack_Card .Btn,
+.Pack_Card .Btn-go {
+  margin: 0;
+  font-size: 0.95rem;
+  padding: 0.45rem 0.9rem;
+  white-space: nowrap;
+}
+
+.Pack_Big {
+  font-style: normal;
+  font-size: 2rem;
+}
+
+.Pack_Hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #7a8570;
+  align-self: center;
+}
+
+.Pack_Head {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: #9a6a1c;
+}
+
+.Pack_Grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.Pack_Tile {
+  display: grid;
+  place-items: center;
+  width: 3.1rem;
+  height: 3.1rem;
+  padding: 0;
+}
+
+.Pack_Tile-had {
+  opacity: 0.45;
+}
+
+.Pack_Tile b {
+  position: absolute;
+  right: 0.2rem;
+  bottom: 0.1rem;
+  font-size: 0.72rem;
+}
+
 /* The thumbstick, under the thumb that put it there. */
 .Stick {
   display: none;
@@ -1166,10 +1451,6 @@ body {
 
   .Who_Clock,
   .Bag_Empty {
-    display: none;
-  }
-
-  .Bag:not(:has(.Bag_Item)) {
     display: none;
   }
 

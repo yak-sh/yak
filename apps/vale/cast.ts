@@ -4,19 +4,30 @@
 // ground its bite takes. As a bite winds up, a red disc grows from its middle
 // and fills the ring the moment the bite lands. Red means a bite and nothing
 // else: the creature I have targeted wears a pale mark at its feet instead.
+// Each hero is drawn in what they wear, and swings at their weapon's pace;
+// an arrow or a bolt flies from whoever looses it to what it was loosed at.
 // A figure is made when someone arrives and dropped when they go; each frame
 // moves it to where the frame says it is, smoothing what arrives in steps (a
 // peer's position comes when their page sends it, not on this page's beat).
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { HANDLES } from './arms.ts'
 import { BEASTS } from './beasts.ts'
-import { type Act, beast, type Figure, hero, person } from './figures.ts'
+import {
+  type Act,
+  beast,
+  type Dress,
+  type Figure,
+  hero,
+  person,
+} from './figures.ts'
 import type { overlay } from './fx.ts'
 import { ITEMS } from './items.ts'
 import { LEVELS } from './levels.ts'
 import { cuboid, out, pack } from './mesh.ts'
 import type { Frame } from './play.ts'
 import { geometry, soft } from './soft.ts'
+import { FLIGHT, LAND } from './strike.ts'
 import { groundAt, type Vale } from './terrain.ts'
 
 type Look = { tint: string; hair: string; skin: string }
@@ -41,6 +52,9 @@ type Actor = {
 }
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+
+// How a weapon of a kind handles, for a hero wearing it.
+let handle = (kind = '') => HANDLES[ITEMS[kind]?.family ?? ''] ?? HANDLES.fists
 
 let bar = (k: number, cls = '') =>
   `<span class="Plate_Bar ${cls}"><i style="--k:${
@@ -114,6 +128,62 @@ export let cast = (
     return y
   }
   let at = new THREE.Vector3()
+
+  // Shots in the air: an arrow, a thin shaft turned the way it flies, or a
+  // bolt, a glowing mote; each from where it was loosed to where it lands,
+  // along a shallow arc.
+  let shaft = new THREE.BoxGeometry(0.04, 0.04, 0.55)
+  let mote = new THREE.BoxGeometry(0.2, 0.2, 0.2)
+  let wood = new THREE.MeshLambertMaterial({ color: 0xe8dcc0 })
+  let light = new THREE.MeshBasicMaterial({ color: 0xbfe8ff })
+  let flying: {
+    mesh: THREE.Mesh
+    from: THREE.Vector3
+    to: THREE.Vector3
+    born: number
+    ms: number
+  }[] = []
+  let fly = (
+    kind: 'arrow' | 'bolt',
+    from: THREE.Vector3,
+    to: THREE.Vector3,
+    ms: number,
+  ) => {
+    let mesh = kind == 'arrow'
+      ? new THREE.Mesh(shaft, wood)
+      : new THREE.Mesh(mote, light)
+    scene.add(mesh)
+    flying.push({
+      mesh,
+      from,
+      to,
+      born: performance.now(),
+      ms: Math.max(60, ms),
+    })
+  }
+  let soar = (now: number) => {
+    flying = flying.filter((f) => {
+      let k = (now - f.born) / f.ms
+      if (k >= 1) {
+        scene.remove(f.mesh)
+        return false
+      }
+      let p = f.from.clone().lerp(f.to, k)
+      p.y += Math.sin(k * Math.PI) * f.from.distanceTo(f.to) * 0.06
+      f.mesh.position.copy(p)
+      f.mesh.lookAt(f.to)
+      f.mesh.rotation.z += now * 0.02
+      return true
+    })
+  }
+  // A shooter's loose, a moment into a swing I see them start: at what they
+  // were fighting.
+  let loosing: {
+    eid: string
+    foe: string
+    at: number
+    kind: 'arrow' | 'bolt'
+  }[] = []
 
   let actor = (key: string, make: () => Figure, look = ''): Actor => {
     let a = actors.get(key)
@@ -213,8 +283,15 @@ export let cast = (
       let now = performance.now()
       for (let a of actors.values()) a.seen = false
 
-      // Me.
-      let mine = actor(me, () => hero(look), JSON.stringify(look))
+      // Me, in what I wear.
+      let dress: Dress = Object.fromEntries(
+        Object.entries(f.sheet.worn).map(([slot, h]) => [slot, h?.kind]),
+      )
+      let mine = actor(
+        me,
+        () => hero(look, dress),
+        JSON.stringify([look, dress]),
+      )
       glide(mine, f.body.x, f.body.y, f.body.z, f.body.yaw, dt, 30)
       tumble(mine, f.roll)
       mine.speed = f.body.speed
@@ -236,10 +313,25 @@ export let cast = (
       // The others.
       for (let o of f.others) {
         let b = o.body
-        let a = actor(o.eid, () => hero(o.look), JSON.stringify(o.look))
+        let a = actor(
+          o.eid,
+          () => hero(o.look, o.gear),
+          JSON.stringify([o.look, o.gear]),
+        )
         glide(a, b.x, b.y, b.z, b.yaw, dt, 9)
         tumble(a, o.roll)
-        if (a.swings >= 0 && o.swing > a.swings) a.swingAt = now
+        let h = handle(o.gear.main)
+        if (a.swings >= 0 && o.swing > a.swings) {
+          a.swingAt = now
+          if (h.shot && o.foe) {
+            loosing.push({
+              eid: o.eid,
+              foe: o.foe,
+              at: now + h.pace * LAND,
+              kind: h.shot,
+            })
+          }
+        }
         a.swings = o.swing
         if (a.hp >= 0 && o.vitals.hp < a.hp) a.hurtAt = now
         a.hp = o.vitals.hp
@@ -248,7 +340,7 @@ export let cast = (
           {
             air: b.gait == 'jump',
             roll: o.roll,
-            swing: now - a.swingAt < 520 ? (now - a.swingAt) / 520 : -1,
+            swing: now - a.swingAt < h.pace ? (now - a.swingAt) / h.pace : -1,
             hurt: Math.max(0, 1 - (now - a.hurtAt) / 250),
             down: b.gait == 'down',
           },
@@ -407,6 +499,20 @@ export let cast = (
         loot.delete(eid)
       }
 
+      // The others' shots, loosed at what they fight.
+      loosing = loosing.filter((l) => {
+        if (l.at > now) return true
+        let from = actors.get(l.eid), to = actors.get(l.foe)
+        if (from && to) {
+          let a = new THREE.Vector3(from.x, from.y + 1, from.z)
+          let b = new THREE.Vector3(to.x, to.y + to.fig.height * 0.5, to.z)
+          let kind = l.kind
+          fly(kind, a, b, (a.distanceTo(b) / FLIGHT[kind]) * 1000)
+        }
+        return false
+      })
+      soar(now)
+
       for (let [key, a] of actors) {
         if (a.seen) continue
         scene.remove(a.fig.root)
@@ -416,6 +522,13 @@ export let cast = (
         warns.delete(key)
       }
     },
+    /** an arrow or a bolt, from where it was loosed to where it lands */
+    fly: (
+      kind: 'arrow' | 'bolt',
+      from: [number, number, number],
+      to: [number, number, number],
+      ms: number,
+    ) => fly(kind, new THREE.Vector3(...from), new THREE.Vector3(...to), ms),
     /** where someone's head is, for what floats up from them */
     headOf: (eid: string): THREE.Vector3 | null => {
       let a = actors.get(eid)

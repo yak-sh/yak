@@ -1,7 +1,9 @@
 // What a player can carry: one row per kind of thing, with its name, its icon
-// in the bag, what it does (a tonic heals, a blade has an edge), and how it
-// is drawn lying on the ground, a few soft boxes. A new kind of loot or gift
-// is a row here; beasts.ts says what drops it and quests.ts what gives it.
+// in the bag, what it does (a tonic heals, a sword is worn in the hand), and
+// how it is drawn lying on the ground, a few soft boxes. A new kind of loot or
+// gift is a row here; beasts.ts says what drops it and quests.ts what gives
+// it. The arms and armour of every tier are rows of arms.ts, listed here too.
+import { ARMS, type Slot, wield } from './arms.ts'
 
 type Vec = [number, number, number]
 /** One box of a model: its low corner, its size, and its colour. */
@@ -12,8 +14,26 @@ export type Thing = {
   icon: string
   /** health a drink gives back */
   heals?: number
-  /** how much harder a blow lands while it is carried */
-  edge?: number
+  /** where it is worn (gear.ts); a thing without one is only carried */
+  slot?: Slot
+  /** how strong it is, 1 to 5, by the country it comes from (arms.ts) */
+  tier?: number
+  /** the family of weapon, or of what is held in the other hand */
+  family?: string
+  /** the weight of armour: plate, leather or cloth */
+  weight?: string
+  /** how hard a weapon's blow lands, against bare level */
+  dmg?: number
+  /** how much of every bite it turns */
+  armour?: number
+  /** health it adds */
+  hp?: number
+  /** how much faster its wearer runs, as a share */
+  speed?: number
+  /** how much harder every blow lands, as a share */
+  force?: number
+  /** how much likelier a great blow is */
+  luck?: number
   look: Box[]
 }
 
@@ -93,7 +113,7 @@ export let ITEMS: Record<string, Thing> = {
   blade2: {
     name: 'Boarsbane',
     icon: '🗡️',
-    edge: 1.4,
+    ...wield('sword', 1, 1.1),
     look: [
       [[-0.02, 0, -0.02], [0.04, 0.5, 0.04], 0xdfe6ee],
       [[-0.1, 0.1, -0.03], [0.2, 0.04, 0.06], 0xe2b64c],
@@ -102,7 +122,7 @@ export let ITEMS: Record<string, Thing> = {
   blade3: {
     name: 'Cragcleaver',
     icon: '⚔️',
-    edge: 1.9,
+    ...wield('sword', 2, 1.1),
     look: [
       [[-0.03, 0, -0.03], [0.06, 0.56, 0.06], 0xbfe2ff],
       [[-0.12, 0.12, -0.04], [0.24, 0.05, 0.08], 0x8fd46a],
@@ -111,7 +131,7 @@ export let ITEMS: Record<string, Thing> = {
   blade4: {
     name: 'Barkbiter',
     icon: '🪓',
-    edge: 2.4,
+    ...wield('axe', 3, 1.1),
     look: [
       [[-0.02, 0, -0.02], [0.04, 0.54, 0.04], 0x6a4a30],
       [[0.02, 0.36, -0.03], [0.16, 0.16, 0.06], 0xc8d0d8],
@@ -120,7 +140,7 @@ export let ITEMS: Record<string, Thing> = {
   blade5: {
     name: 'Skyspear',
     icon: '🔱',
-    edge: 3,
+    ...wield('staff', 4, 1.1),
     look: [
       [[-0.02, 0, -0.02], [0.04, 0.62, 0.04], 0xe8dcc0],
       [[-0.04, 0.62, -0.04], [0.08, 0.14, 0.08], 0x9ad8ff],
@@ -130,7 +150,7 @@ export let ITEMS: Record<string, Thing> = {
   blade6: {
     name: 'Wyrmfire',
     icon: '☄️',
-    edge: 3.8,
+    ...wield('sword', 5, 1.1),
     look: [
       [[-0.03, 0, -0.03], [0.06, 0.6, 0.06], 0xff7a2a],
       [[-0.13, 0.12, -0.04], [0.26, 0.05, 0.08], 0x2a2020],
@@ -419,4 +439,5 @@ export let ITEMS: Record<string, Thing> = {
       [[-0.04, 0.16, 0.16], [0.08, 0.14, 0.08], 0xe4d8bc],
     ],
   },
+  ...ARMS,
 }

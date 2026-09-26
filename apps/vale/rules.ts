@@ -3,8 +3,8 @@
 // leaves, where a quest stands. Nothing here touches the page or the network,
 // so every page reaches the same answer from the same rows. What there is to
 // fight, carry and do is data of its own: beasts.ts, items.ts, quests.ts.
+import { spoil, tierOf } from './arms.ts'
 import { BEASTS } from './beasts.ts'
-import { ITEMS } from './items.ts'
 import type { Quest } from './quests.ts'
 import { hashOf, noise, stream } from './rand.ts'
 
@@ -32,24 +32,60 @@ export let levelOf = (xp: number): number => {
 
 export let maxHp = (lvl: number): number => 90 + lvl * 16
 
-/** The damage one blow does, before the dice. */
-export let power = (lvl: number, edge = 1): number => (9 + lvl * 3) * edge
+/** The damage one blow does, before the dice: more for a higher level, and
+ * `dmg` times that for the weapon it is struck with (arms.ts).
+ *
+ * A hero who takes up what each land gives keeps pace with what lives there:
+ * at a creature's level, with a plain sword of its country, they fell it in
+ * a handful of blows, in every land, and in its country's plate they take
+ * more of its bites to fall than they would bare. A boss wants friends.
+ *
+ * ```ts
+ * import { assert } from '@std/assert'
+ * import { tierOf } from './arms.ts'
+ * import { BEASTS } from './beasts.ts'
+ * import { ITEMS } from './items.ts'
+ * let plate = (t: number) => ['helm', 'cuirass', 'greaves'].map((n) => ITEMS[n + t])
+ * for (let b of Object.values(BEASTS).filter((b) => !b.boss)) {
+ *   let t = tierOf(b.lvl)
+ *   let blows = b.hp / power(b.lvl, ITEMS[`sword${t}`].dmg)
+ *   assert(blows > 1 && blows < 12, `${b.name}: ${blows} blows`)
+ *   let armour = plate(t).reduce((n, p) => n + p.armour!, 0)
+ *   let hp = plate(t).reduce((n, p) => n + p.hp!, maxHp(b.lvl))
+ *   assert(hp / through(b.dmg, armour) > 1.4 * maxHp(b.lvl) / b.dmg, b.name)
+ * }
+ * ```
+ */
+export let power = (lvl: number, dmg = 1): number => (9 + lvl * 3) * dmg
 
-/** A blow's damage: power, give or take a fifth, and now and then a great
- * one; a `sure` blow is always great. `roll` is a number in [0, 1).
+/** A blow's damage: `might`, give or take a fifth, and now and then a great
+ * one, more often with `luck`; a `sure` blow is always great. `roll` is a
+ * number in [0, 1).
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * assertEquals(blow(1, 1, 0.95).great, true)
- * assertEquals(blow(1, 1, 0.5).great, false)
- * assertEquals(blow(1, 1, 0.5, true).great, true)
+ * assertEquals(blow(12, 0.95).great, true)
+ * assertEquals(blow(12, 0.5).great, false)
+ * assertEquals(blow(12, 0.5, true).great, true)
+ * assertEquals(blow(12, 0.8, false, 0.1).great, true)
  * ```
  */
-export let blow = (lvl: number, edge: number, roll: number, sure = false) => {
-  let great = sure || roll > 0.88
-  let base = power(lvl, edge) * (0.8 + (roll % 0.1) * 4)
+export let blow = (might: number, roll: number, sure = false, luck = 0) => {
+  let great = sure || roll > 0.88 - luck
+  let base = might * (0.8 + (roll % 0.1) * 4)
   return { dmg: Math.round(base * (great ? 1.8 : 1)), great }
 }
+
+/** What a bite of `dmg` takes from a hero wearing `armour`: the armour
+ * turns that much of it, and never more than three quarters.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals([through(20, 0), through(20, 6), through(20, 30)], [20, 14, 5])
+ * ```
+ */
+export let through = (dmg: number, armour: number): number =>
+  Math.max(Math.ceil(dmg / 4), Math.round(dmg - armour))
 
 export type Slain = {
   creature: string
@@ -129,12 +165,21 @@ export let hunter = (
   return best
 }
 
+// How often a fall leaves a piece of gear of its country's tier (arms.ts); a
+// boss always does.
+let SPOILS = 0.08
+
 /** What a fall leaves one player to pick up: the same for every page that
- * asks, and different for every player.
+ * asks, and different for every player. Now and then, a piece of gear, most
+ * often a weapon of the `family` they hold.
  *
  * ```ts
- * import { assertEquals } from '@std/assert'
+ * import { assert, assertEquals } from '@std/assert'
+ * import { ITEMS } from './items.ts'
  * assertEquals(lootOf('boar', 'c1', 5, 'p1'), lootOf('boar', 'c1', 5, 'p1'))
+ * // The Cinder Wyrm always leaves gear of the last tier.
+ * let wyrm = lootOf('cinderwyrm', 'c2', 5, 'p1').map((l) => ITEMS[l.kind])
+ * assert(wyrm.some((t) => t.slot && t.tier == 5))
  * ```
  */
 export let lootOf = (
@@ -142,10 +187,11 @@ export let lootOf = (
   creature: string,
   fell: number,
   player: string,
+  family = '',
 ): { kind: string; n: number }[] => {
   let r = stream(hashOf(`${creature}:${fell}:${player}`))
   let beast = BEASTS[kind]
-  return (beast?.loot ?? []).flatMap(([item, chance]) =>
+  let found = (beast?.loot ?? []).flatMap(([item, chance]) =>
     r() < chance
       ? [{
         kind: item,
@@ -153,6 +199,10 @@ export let lootOf = (
       }]
       : []
   )
+  if (beast && r() < (beast.boss ? 1 : SPOILS)) {
+    found.push({ kind: spoil(tierOf(beast.lvl), r, family), n: 1 })
+  }
+  return found
 }
 
 /** Where a creature wanders when nothing is after it, as a function of time
@@ -274,7 +324,3 @@ export let xpOf = (kills: Slain[], quests: Quest[], journal: Entry[]) => {
   }
   return xp
 }
-
-/** The keenest blade a player carries. */
-export let edgeOf = (bag: Held[]) =>
-  bag.reduce((e, b) => Math.max(e, ITEMS[b.kind]?.edge ?? 1), 1)

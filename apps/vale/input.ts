@@ -11,6 +11,8 @@ export type Intent = {
   dodge: boolean
   talk: boolean
   drink: boolean
+  /** open the pack, or fold it away */
+  bag: boolean
   /** swing the camera behind the hero */
   snap: boolean
   /** the camera follows the hero, or stops following */
@@ -31,6 +33,7 @@ export type Action =
   | 'dodge'
   | 'talk'
   | 'drink'
+  | 'bag'
   | 'snap'
   | 'follow'
   | 'map'
@@ -45,6 +48,8 @@ let KEYS: Record<string, Action> = {
   KeyE: 'talk',
   Digit1: 'drink',
   KeyQ: 'drink',
+  KeyB: 'bag',
+  KeyI: 'bag',
   KeyC: 'snap',
   KeyV: 'follow',
   KeyM: 'map',
@@ -189,6 +194,7 @@ export let listen = (
         dodge: pressed.has('dodge'),
         talk: pressed.has('talk'),
         drink: pressed.has('drink'),
+        bag: pressed.has('bag'),
         snap: pressed.has('snap'),
         follow: pressed.has('follow'),
         map: pressed.has('map'),

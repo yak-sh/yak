@@ -2,13 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mossvale",
   "rtc": "open",
-  "description": "A voxel world to adventure in together. What a player is and has done is kept in this app's store (player, slain, item, used, journal), and so is what they said (chat) and the villagers who answer them (villager, seen); what moves (where each player and creature is, how they move, how they fare in a fight) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
+  "description": "A voxel world to adventure in together. What a player is and has done is kept in this app's store (player, slain, item, used, equip, journal), and so is what they said (chat) and the villagers who answer them (villager, seen); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
   "models": "open",
   "$defs": {
     "player": {
       "component": true,
       "type": "object",
-      "description": "A hero: the name over their head, and the colours they wear. A hero belongs to the person who made it, as the row's created stamp says, so they find it again on any device; a hero made while signed out lasts as long as its tab. Everything they have done is in rows of its own (slain, item, used, journal), so a visitor who can only add rows still keeps it.",
+      "description": "A hero: the name over their head, and the colours they wear. A hero belongs to the person who made it, as the row's created stamp says, so they find it again on any device; a hero made while signed out lasts as long as its tab. Everything they have done is in rows of its own (slain, item, used, equip, journal), so a visitor who can only add rows still keeps it.",
       "properties": {
         "name": {
           "type": "string",
@@ -166,6 +166,38 @@
         "item": { "type": "string" },
         "by": { "type": "string", "index": true },
         "at": { "type": "number" }
+      }
+    },
+    "equip": {
+      "component": true,
+      "type": "object",
+      "description": "A player putting something on: the item in their bag they wear in a slot, or none, to take the slot off. The newest row for each slot is what is in it, and a thing no longer in the bag is off (gear.ts).",
+      "properties": {
+        "player": { "type": "string", "index": true },
+        "slot": {
+          "type": "string",
+          "enum": ["main", "off", "head", "body", "feet", "trinket"]
+        },
+        "item": {
+          "type": "string",
+          "description": "The item row worn, or empty."
+        },
+        "at": { "type": "number" }
+      }
+    },
+    "gear": {
+      "component": true,
+      "type": "object",
+      "sync": "peers",
+      "durable": "connection",
+      "description": "What a player wears, for the others to draw: the kind of item in each slot, empty where nothing is.",
+      "properties": {
+        "main": { "type": "string" },
+        "off": { "type": "string" },
+        "head": { "type": "string" },
+        "body": { "type": "string" },
+        "feet": { "type": "string" },
+        "trinket": { "type": "string" }
       }
     },
     "journal": {

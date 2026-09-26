@@ -44,7 +44,8 @@ let WAIT = 1
  * import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
  * let hands = (move: [number, number], more = {}) => ({
  *   move, jump: false, strike: false, dodge: false, talk: false,
- *   drink: false, snap: false, follow: false, map: false, mic: false,
+ *   drink: false, bag: false, snap: false, follow: false, map: false,
+ *   mic: false,
  *   orbit: [0, 0] as [number, number], zoom: 0, ...more,
  * })
  * let cam = (follow: boolean) => ({
