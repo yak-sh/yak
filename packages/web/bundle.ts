@@ -54,12 +54,45 @@ export let sweep = async (base: string) => {
   }
 }
 
+// TODO(T-38240): the tries stand in for a fix in Deno. Its 2.9.1 bundler
+// sometimes never finishes: `deno bundle` stops reading its esbuild service,
+// whose stdout pipe fills (61 KB unread, esbuild blocked writing, deno idle in
+// epoll). About one bundle in eight hung with eight at once on this box, where
+// the app's barrel import of lucide-preact makes esbuild ask about 3,500
+// modules. A try that hangs is killed and the bundle tried again.
+
+/** How long one try may take: a bundle takes a few seconds, eight at once. */
+let TRY = 20_000
+
+/** How many tries a bundle gets. */
+let TRIES = 3
+
+/** The longest a bundle takes, every try together. */
+export let LIMIT = TRY * TRIES
+
 /** One file of browser JavaScript from `entry` (main.tsx), by `deno bundle`.
- * Aborting `signal` kills the bundler (kept.ts bounds it). */
+ * Aborting `signal` kills the bundler. */
 export let bundle = async (
   signal?: AbortSignal,
   entry: URL = new URL('./main.tsx', import.meta.url),
 ): Promise<string> => {
+  for (let tried = 1;; tried++) {
+    let late = AbortSignal.timeout(TRY)
+    try {
+      return await once(signal ? AbortSignal.any([signal, late]) : late, entry)
+    } catch (e) {
+      if (!late.aborted || signal?.aborted) throw e
+      if (tried == TRIES) {
+        throw new Error(
+          `deno bundle did not finish in ${TRIES} tries of ${TRY / 1000}s`,
+        )
+      }
+    }
+  }
+}
+
+// One try: the bundler, killed if `stop` aborts.
+let once = async (stop: AbortSignal, entry: URL): Promise<string> => {
   let dir = await Deno.makeTempDir({ prefix: `${PREFIX}${Deno.pid}-` })
   await sweep(dir.slice(0, dir.lastIndexOf('/')))
   try {
@@ -84,9 +117,9 @@ export let bundle = async (
       cwd: local ? new URL('./', entry).pathname : dir,
       stdout: 'piped',
       stderr: 'piped',
-      signal,
+      signal: stop,
     }).output()
-    if (signal?.aborted) throw new Error('deno bundle was stopped')
+    if (stop.aborted) throw new Error('deno bundle was stopped')
     if (!run.success) {
       throw new Error(
         `deno bundle failed: ${new TextDecoder().decode(run.stderr).trim()}`,
