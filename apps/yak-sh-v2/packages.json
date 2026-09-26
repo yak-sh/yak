@@ -1,0 +1,846 @@
+[
+  {
+    "name": "admin",
+    "description": "The owner's verbs on yaks.app — accounts, sign-in links, the fee, deploys, logs, rollback and revert — as `yak admin` tools. Unpublished: installed into the box's own yak.",
+    "jsr": null,
+    "imports": [
+      "api",
+      "connections",
+      "git",
+      "graph",
+      "query",
+      "secrets",
+      "tools",
+      "vocab"
+    ]
+  },
+  {
+    "name": "alias",
+    "description": "Assigns persistent, unique names to graph entities and resolves those names wherever an entity id is accepted.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "key",
+      "vocab"
+    ]
+  },
+  {
+    "name": "api",
+    "description": "Serves graph writes, queries, and live query subscriptions through an HTTP and WebSocket request handler.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "match",
+      "query",
+      "tools",
+      "vocab"
+    ]
+  },
+  {
+    "name": "archetype",
+    "description": "Identifies component-table sets by content hash, caches presence matches and transitions, and maintains each graph entity's archetype.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "blob",
+    "description": "Stores text property values by their SHA-256 in a database table, directory, or object store, while reads and writes still deal in text.",
+    "jsr": "0.2.1",
+    "imports": [
+      "api",
+      "graph",
+      "sql",
+      "vocab"
+    ]
+  },
+  {
+    "name": "builders",
+    "description": "An instruction plus its inputs builds one output, keyed by a hash of what produced it and reused while that key holds.",
+    "jsr": "0.2.1",
+    "imports": [
+      "doc",
+      "edge",
+      "effects",
+      "graph",
+      "query",
+      "session",
+      "tools",
+      "vocab",
+      "wake"
+    ]
+  },
+  {
+    "name": "canvas",
+    "description": "Represents canvases, cards, viewports, and split layouts as graph components and supplies geometry functions for rendering them.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "cli",
+    "description": "The yak command line: it opens the graph a config file names, or connects to an MCP server, and turns every tool it finds there into a subcommand parsed through that tool's own input schema.",
+    "jsr": "0.2.1",
+    "imports": [
+      "api",
+      "blob",
+      "edge",
+      "effects",
+      "fts",
+      "graph",
+      "id",
+      "names",
+      "preact",
+      "process",
+      "render",
+      "secrets",
+      "sql",
+      "sqlite",
+      "text",
+      "tools",
+      "tui",
+      "vocab"
+    ]
+  },
+  {
+    "name": "client",
+    "description": "Assembles a browser graph: server synchronization, reactive queries, and IndexedDB storage for the components this browser owns.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "match",
+      "query",
+      "ram",
+      "sync",
+      "vocab"
+    ]
+  },
+  {
+    "name": "code",
+    "description": "Reads a codebase into a graph: packages, modules, exported symbols and imports, with their doc comments as searchable text, synced incrementally by Git blob.",
+    "jsr": "0.2.1",
+    "imports": [
+      "edge",
+      "graph",
+      "mirror",
+      "tools",
+      "vocab",
+      "yaml"
+    ]
+  },
+  {
+    "name": "connections",
+    "description": "Integrations and connections: the outside services a space can reach, the link between a space or a person and one, and the credential behind it, kept as a secret.",
+    "jsr": "0.2.1",
+    "imports": [
+      "edge",
+      "effects",
+      "graph",
+      "hook",
+      "oauth",
+      "secrets",
+      "vocab"
+    ]
+  },
+  {
+    "name": "context",
+    "description": "Constructs instruction snapshots and prompt entries for graph transcripts, leaving admission, storage, and execution to the caller.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "d1",
+    "description": "Adapts Cloudflare D1 to graph storage with asynchronous queries and writes submitted as atomic statement batches.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "match",
+      "query",
+      "sql",
+      "sqlite",
+      "vocab"
+    ]
+  },
+  {
+    "name": "design",
+    "description": "A proposal, the review it gets, and the architecture that stands once it is decided.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "doc",
+    "description": "Defines a shared graph component for an entity's title and Markdown body.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "markdown",
+      "query",
+      "render",
+      "vocab"
+    ]
+  },
+  {
+    "name": "dreaming",
+    "description": "Standing intentions filed under a project, which @yaks/builders builds on a schedule, a record of how often each memory has been recalled, and the `.order=hot` ranking that record decays along.",
+    "jsr": "0.2.1",
+    "imports": [
+      "sql",
+      "vocab"
+    ]
+  },
+  {
+    "name": "durable-object",
+    "description": "Provides graph storage on a Cloudflare Durable Object's embedded SQLite and connects hibernatable WebSockets to query subscriptions.",
+    "jsr": "0.2.1",
+    "imports": [
+      "api",
+      "graph",
+      "sql",
+      "sqlite",
+      "vocab"
+    ]
+  },
+  {
+    "name": "edge",
+    "description": "Represents typed links as graph entities with content-derived ids and supports traversal through storage reads and SQL queries.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "query",
+      "sql",
+      "vocab"
+    ]
+  },
+  {
+    "name": "effects",
+    "description": "Runs isolated handlers for component creation, changes, and removal after a graph transaction has committed, with an optional durable ledger.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "id",
+      "query",
+      "tools",
+      "vocab"
+    ]
+  },
+  {
+    "name": "egress",
+    "description": "Calls going out with a credential the caller never holds: each sentinel swapped for its connection's key or token, for a caller allowed to use it and a host its integration names, with a refused access token refreshed once.",
+    "jsr": "0.2.1",
+    "imports": [
+      "connections",
+      "graph",
+      "member",
+      "secrets"
+    ]
+  },
+  {
+    "name": "embedding",
+    "description": "Maintains text embeddings for graph entities and adds nearest-neighbor ranking to queries through an injected embedder.",
+    "jsr": "0.2.1",
+    "imports": [
+      "effects",
+      "graph",
+      "sql",
+      "tools",
+      "vocab"
+    ]
+  },
+  {
+    "name": "fts",
+    "description": "Indexes a graph's text properties with SQLite FTS5 and adds ranked full-text search to queries.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "sql",
+      "vocab"
+    ]
+  },
+  {
+    "name": "git",
+    "description": "Builds Git trees and commits from a file manifest, stores the objects as graph entities, and serves clones over Git's read-only smart HTTP protocol.",
+    "jsr": "0.2.1",
+    "imports": [
+      "blob",
+      "edge",
+      "graph",
+      "id",
+      "journal",
+      "key",
+      "query",
+      "sql",
+      "tools",
+      "vocab"
+    ]
+  },
+  {
+    "name": "goal",
+    "description": "A standing purpose that work satisfies, and the link recording which work satisfied it.",
+    "jsr": "0.2.1",
+    "imports": [
+      "vocab"
+    ]
+  },
+  {
+    "name": "graph",
+    "description": "The entity-component data model, the bundle write format, and the phased, pluggable transaction pipeline the yaks packages share.",
+    "jsr": "0.2.1",
+    "imports": [
+      "match",
+      "query",
+      "vocab"
+    ]
+  },
+  {
+    "name": "harness",
+    "description": "Runs an agent on this machine over a yak graph: the machine the session runner is lent, the machine and graph tools, and the terminal app.",
+    "jsr": "0.2.1",
+    "imports": [
+      "api",
+      "blob",
+      "cli",
+      "client",
+      "connections",
+      "context",
+      "edge",
+      "effects",
+      "git",
+      "graph",
+      "markdown",
+      "mcp",
+      "mcp-client",
+      "model",
+      "oauth",
+      "openai",
+      "openrouter",
+      "preact",
+      "process",
+      "query",
+      "render",
+      "secrets",
+      "session",
+      "sqlite",
+      "sync",
+      "text",
+      "tools",
+      "tui",
+      "vocab"
+    ]
+  },
+  {
+    "name": "heal",
+    "description": "Files one task per unexpected failure, keyed by its fault, and starts an agent session to fix it.",
+    "jsr": "0.2.1",
+    "imports": [
+      "edge",
+      "effects",
+      "graph",
+      "id",
+      "query",
+      "vocab"
+    ]
+  },
+  {
+    "name": "hook",
+    "description": "An event another system delivered, kept as it arrived: the payload, the route it came in on, and whether it was signed.",
+    "jsr": "0.2.1",
+    "imports": [
+      "doc",
+      "edge",
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "html",
+    "description": "Serializes registry-selected views to server-side HTML through Preact without a DOM.",
+    "jsr": "0.2.1",
+    "imports": [
+      "preact",
+      "render",
+      "vocab"
+    ]
+  },
+  {
+    "name": "id",
+    "description": "Generates entity UUIDs, formats and parses human-readable ids from vocabulary-declared prefixes, and contributes the entity number those ids are built from.",
+    "jsr": "0.2.1",
+    "imports": [
+      "vocab"
+    ]
+  },
+  {
+    "name": "journal",
+    "description": "Records every committed graph transaction, and who wrote it, inside that same transaction: entity history, undo, and a cursor-based feed of changes.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "sql",
+      "vocab"
+    ]
+  },
+  {
+    "name": "kernel",
+    "description": "The components most graphs of work need: the entity row itself, the marks recording who touched a thing and when, and the tags that give an edge its meaning.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "key",
+    "description": "Represents an entity's identifying values as separate graph entities, with ids derived from each value and its kind to enforce uniqueness.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "mail",
+    "description": "Represents letters and their delivery outcomes as graph components, sends them through a sender the caller supplies, and converts arrivals to bundles.",
+    "jsr": "0.2.1",
+    "imports": [
+      "api",
+      "doc",
+      "effects",
+      "graph",
+      "hook",
+      "id",
+      "query",
+      "tools",
+      "vocab"
+    ]
+  },
+  {
+    "name": "markdown",
+    "description": "Parses GitHub Flavored Markdown into structural renderer nodes rather than HTML strings or terminal escape sequences.",
+    "jsr": "0.2.1",
+    "imports": [
+      "render"
+    ]
+  },
+  {
+    "name": "match",
+    "description": "Runs query ASTs against entity bundles held in memory, without SQL or a database.",
+    "jsr": "0.2.1",
+    "imports": [
+      "query",
+      "sql",
+      "vocab"
+    ]
+  },
+  {
+    "name": "mcp",
+    "description": "Exposes a graph through generic MCP tools for writes, queries, entity inspection, schema inspection, and optional search.",
+    "jsr": "0.2.1",
+    "imports": [
+      "api",
+      "graph",
+      "tools",
+      "vocab"
+    ]
+  },
+  {
+    "name": "mcp-client",
+    "description": "Consume remote MCP tools as portable graph Tool definitions over Streamable HTTP.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "member",
+    "description": "Access control for a graph: space membership, per-app permission grants, and access modes, with the checks that enforce them on reads and writes.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "query",
+      "vocab"
+    ]
+  },
+  {
+    "name": "memory",
+    "description": "Stores a person's words with context as graph entities and retrieves them for subsequent conversations.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "mirror",
+    "description": "Syncs files and a graph through bindings, each direction optional, reporting a path changed on both sides as a conflict instead of overwriting it.",
+    "jsr": "0.2.1",
+    "imports": [
+      "git"
+    ]
+  },
+  {
+    "name": "model",
+    "description": "Defines provider-neutral model requests and replies, plus graph components for providers, models, and tools, without implementing a transport.",
+    "jsr": "0.2.1",
+    "imports": [
+      "blob",
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "names",
+    "description": "Resolves entity names from the properties a component vocabulary marks for name lookup.",
+    "jsr": "0.2.1",
+    "imports": [
+      "vocab"
+    ]
+  },
+  {
+    "name": "notify",
+    "description": "How somebody is notified: a knock aimed at an entity, what they watch or mute, and an open conversation.",
+    "jsr": "0.2.1",
+    "imports": [
+      "vocab"
+    ]
+  },
+  {
+    "name": "oauth",
+    "description": "The OAuth authorization-code client for a provider described as data, and its building blocks: a serialized store of private authorization records, PKCE verifiers and challenges, and correlated attempts with deadlines.",
+    "jsr": "0.2.1",
+    "imports": []
+  },
+  {
+    "name": "openai",
+    "description": "Implements the model interface over OpenAI's streaming Responses API using fetch, with API-key or Codex sign-in authentication.",
+    "jsr": "0.2.1",
+    "imports": [
+      "blob",
+      "model",
+      "vocab"
+    ]
+  },
+  {
+    "name": "openrouter",
+    "description": "Implements the model interface over OpenRouter's streaming Responses API, reusing the portable transport from @yaks/openai without its credentials or native tools.",
+    "jsr": "0.2.1",
+    "imports": [
+      "model",
+      "openai",
+      "vocab"
+    ]
+  },
+  {
+    "name": "page",
+    "description": "Records a web page as it was seen: its canonical address becomes its entity id, and its bytes are stored as one self-contained document.",
+    "jsr": "0.2.1",
+    "imports": [
+      "api",
+      "blob",
+      "doc",
+      "effects",
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "persona",
+    "description": "Who is acting and what they are responsible for — the people a graph knows, the personas an agent runs with, the roles those personas are assigned to, and a persona rendered as one markdown document.",
+    "jsr": "0.2.1",
+    "imports": [
+      "doc",
+      "edge",
+      "effects",
+      "graph",
+      "id",
+      "mirror",
+      "query",
+      "text",
+      "vocab"
+    ]
+  },
+  {
+    "name": "platform",
+    "description": "What a hosting platform keeps about the apps it serves — spaces, apps, deploys, hostnames, plans and meters.",
+    "jsr": "0.2.1",
+    "imports": [
+      "vocab"
+    ]
+  },
+  {
+    "name": "preact",
+    "description": "Renders registry-selected views with Preact and binds them to an entity store with subscriptions scoped to mounted components.",
+    "jsr": "0.2.1",
+    "imports": [
+      "query",
+      "render",
+      "vocab"
+    ]
+  },
+  {
+    "name": "process",
+    "description": "Starts, adopts and supervises operating-system processes, recording each one as a graph entity with its pid, output and exit code.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "project",
+    "description": "A portfolio: the projects work is filed under, the boards that are saved filters over it, the ventures being built, and where a project lands its source.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "id",
+      "query",
+      "task",
+      "tools",
+      "vocab"
+    ]
+  },
+  {
+    "name": "query",
+    "description": "Parses query strings into a serializable AST and provides builders for the same AST without interpreting a component schema.",
+    "jsr": "0.2.1",
+    "imports": []
+  },
+  {
+    "name": "ram",
+    "description": "Implements synchronous graph storage over a Map of entity bundles, using the in-memory query evaluator instead of a database.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "match",
+      "vocab"
+    ]
+  },
+  {
+    "name": "render",
+    "description": "Selects views, editors, and actions for entity bundles through a query-matched registry independent of the rendering host.",
+    "jsr": "0.2.1",
+    "imports": [
+      "match",
+      "query",
+      "vocab"
+    ]
+  },
+  {
+    "name": "secrets",
+    "description": "Secrets that flow through the graph and are kept somewhere else: a write's value is sealed into a vault and the graph keeps a random handle in its place.",
+    "jsr": "0.2.1",
+    "imports": [
+      "effects",
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "session",
+    "description": "Represents sessions as graph transcripts, derives status from their entries, manages claims, and runs a transcript wherever its effects are worked.",
+    "jsr": "0.2.1",
+    "imports": [
+      "api",
+      "edge",
+      "effects",
+      "graph",
+      "id",
+      "model",
+      "query",
+      "render",
+      "sql",
+      "task",
+      "text",
+      "tools",
+      "vocab"
+    ]
+  },
+  {
+    "name": "spawn",
+    "description": "Runs an agent CLI as a detached child process and reads its JSON-lines stdout back into the graph as a session transcript.",
+    "jsr": "0.2.1",
+    "imports": [
+      "edge",
+      "effects",
+      "git",
+      "graph",
+      "id",
+      "process",
+      "session",
+      "text",
+      "tools",
+      "vocab"
+    ]
+  },
+  {
+    "name": "sql",
+    "description": "Compiles a query AST and a component schema into a SQL statement and its bound parameters, through a backend-independent relational representation.",
+    "jsr": "0.2.1",
+    "imports": [
+      "id",
+      "query",
+      "vocab"
+    ]
+  },
+  {
+    "name": "sqlite",
+    "description": "Builds a SQLite schema from a component vocabulary, reads query results as entity bundles, and applies transactional patches.",
+    "jsr": "0.2.1",
+    "imports": [
+      "archetype",
+      "edge",
+      "fts",
+      "graph",
+      "query",
+      "sql",
+      "task",
+      "tools",
+      "vocab"
+    ]
+  },
+  {
+    "name": "sync",
+    "description": "Synchronizes a client graph with a server, applies live query updates, and reconciles optimistic writes or reverts them when refused.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "task",
+    "description": "Task components for a graph: a status computed from marks instead of stored, dependency counts, and completion attribution.",
+    "jsr": "0.2.1",
+    "imports": [
+      "edge",
+      "graph",
+      "query",
+      "render",
+      "sql",
+      "vocab"
+    ]
+  },
+  {
+    "name": "text",
+    "description": "Serializes portable renderer trees as Markdown or plain text without a DOM, removing control bytes from text and link destinations.",
+    "jsr": "0.2.1",
+    "imports": [
+      "render",
+      "vocab"
+    ]
+  },
+  {
+    "name": "tmux",
+    "description": "A tmux pane as an entity: what is running in the terminal somebody is watching, and the target string tmux accepts.",
+    "jsr": "0.2.1",
+    "imports": [
+      "vocab"
+    ]
+  },
+  {
+    "name": "tools",
+    "description": "Executes recorded graph tool invocations and stores results independently of sessions.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "query",
+      "render",
+      "vocab"
+    ]
+  },
+  {
+    "name": "tui",
+    "description": "Renders Preact trees in a terminal through a replaceable backend, with a diffing ANSI painter and scrolling, input, and layout widgets.",
+    "jsr": "0.2.1",
+    "imports": [
+      "text"
+    ]
+  },
+  {
+    "name": "tunnel",
+    "description": "Reaches a machine from a hosted space through a Cloudflare Tunnel and a Workers VPC Service: the account calls that make one, the connector that runs it on the machine, and the filter that keeps the tunnel to the paths the machine opened.",
+    "jsr": "0.2.1",
+    "imports": [
+      "vocab"
+    ]
+  },
+  {
+    "name": "vocab",
+    "description": "Loads and validates component vocabularies expressed as JSON Schema with custom keywords, exposing property types, path routing, and display ordering.",
+    "jsr": "0.2.1",
+    "imports": []
+  },
+  {
+    "name": "wake",
+    "description": "Stores one-shot and recurring schedules as graph components, marking due wakes as fired and advancing their next scheduled times.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph",
+      "vocab"
+    ]
+  },
+  {
+    "name": "web",
+    "description": "The web door: canvas, cards, boards and editing in a browser, served by yak serve over @yaks/api and @yaks/client.",
+    "jsr": null,
+    "imports": [
+      "api",
+      "archetype",
+      "blob",
+      "cli",
+      "client",
+      "edge",
+      "fts",
+      "graph",
+      "id",
+      "kernel",
+      "key",
+      "match",
+      "names",
+      "preact",
+      "query",
+      "render",
+      "session",
+      "sql",
+      "sync",
+      "task",
+      "tui",
+      "vocab"
+    ]
+  },
+  {
+    "name": "workerd",
+    "description": "Serves the graph API from Cloudflare Workers with WebSocket upgrades, request authentication, and forwarding to Durable Objects.",
+    "jsr": "0.2.1",
+    "imports": [
+      "api",
+      "graph"
+    ]
+  },
+  {
+    "name": "workers-ai",
+    "description": "Implements the model interface over Cloudflare Workers AI, through the AI binding a Worker is given: chat messages out, either answer shape back, no key.",
+    "jsr": null,
+    "imports": [
+      "model"
+    ]
+  },
+  {
+    "name": "yaml",
+    "description": "Parses YAML and JSON declarations and extracts Markdown frontmatter as graph bundles.",
+    "jsr": "0.2.1",
+    "imports": [
+      "graph"
+    ]
+  }
+]

@@ -1,0 +1,416 @@
+/* The reading mode: the same manual as a plain page, for a phone, for less
+ * motion, or for reading at length. Each disk is a section with its man
+ * title at the head; an example's output prints on a small phosphor panel
+ * under it. */
+
+.Doc {
+  max-width: 80ch;
+  margin: 0 auto;
+  padding: 1.5rem max(1.1rem, env(safe-area-inset-left)) 4rem;
+}
+
+.Doc .Man {
+  position: relative;
+  padding-top: 3.2rem;
+  scroll-margin-top: var(--top);
+}
+
+.Doc .Man + .Man {
+  margin-top: 2.5rem;
+  border-top: 1px solid var(--hair);
+}
+
+.Doc .Man_Head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+  font-size: 12px;
+  letter-spacing: .08em;
+  color: var(--mute);
+
+  &::before {
+    content: '';
+    order: -1;
+    flex: 0 0 auto;
+    width: 1.1em;
+    height: 1.1em;
+    border-radius: 2px;
+    background: var(--disk, var(--signal));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2);
+  }
+
+  & span:first-child {
+    color: #fff;
+    font-weight: 700;
+  }
+
+  & span:nth-child(2) {
+    flex: 1;
+    text-align: center;
+  }
+}
+
+.Doc .Man_Foot {
+  display: none;
+}
+
+.Doc {
+  & h2 {
+    margin: 2.2rem 0 .6rem;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--signal);
+
+    &::before {
+      content: '## ';
+      color: var(--faint);
+    }
+  }
+
+  & h3 {
+    margin: 1.6rem 0 .4rem;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  & p {
+    margin: .6rem 0;
+    max-width: 72ch;
+  }
+
+  & b,
+  & strong {
+    color: #fff;
+  }
+
+  & i {
+    font-style: normal;
+    color: var(--warn);
+  }
+
+  & a {
+    color: #fff;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--signal) 55%, transparent);
+    text-underline-offset: .22em;
+
+    &:hover {
+      color: var(--signal);
+    }
+  }
+
+  & code {
+    padding: .05em .35em;
+    border-radius: 3px;
+    background: #111715;
+    border: 1px solid #1c2522;
+    font-size: .94em;
+    color: #e6ece3;
+  }
+
+  & pre {
+    margin: .8rem 0;
+    padding: .85rem 1rem;
+    border: 1px solid var(--hair);
+    border-radius: 6px;
+    background: #0a0e0c;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.55;
+
+    & code {
+      padding: 0;
+      border: 0;
+      background: none;
+    }
+  }
+
+  & table {
+    width: 100%;
+    margin: .8rem 0;
+    border-collapse: collapse;
+    font-size: 13px;
+    display: block;
+    overflow-x: auto;
+  }
+
+  & th,
+  & td {
+    padding: .45rem 1.2rem .45rem 0;
+    border-bottom: 1px solid var(--hair);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  & th {
+    color: var(--mute);
+    font-weight: 400;
+    letter-spacing: .06em;
+  }
+
+  & dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: .35rem 1.4rem;
+    margin: .8rem 0;
+  }
+
+  & dt {
+    color: #fff;
+  }
+
+  & dd {
+    margin: 0;
+    color: var(--ink);
+  }
+
+  & kbd {
+    padding: .05em .4em;
+    border-radius: 3px;
+    background: var(--signal);
+    color: #04140a;
+  }
+}
+
+/* The motd, opening the page. */
+.Doc .Man-motd {
+  padding-top: 1.5rem;
+
+  & .Man_Head {
+    display: none;
+  }
+}
+
+.Doc .Logo {
+  margin: 1rem 0 1.4rem !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  font-size: clamp(6px, 2.05vw, 14px) !important;
+  line-height: 1.1 !important;
+  color: var(--signal);
+  text-shadow:
+    0 0 .1em var(--signal),
+    0 0 .8em color-mix(in srgb, var(--signal) 60%, transparent);
+  overflow: hidden !important;
+}
+
+.Doc .Lead {
+  font-size: 17px;
+  color: #fff;
+}
+
+.Doc .Index {
+  gap: .1rem;
+  margin: 1.6rem 0 0;
+
+  & a {
+    padding: .5rem .7rem;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    text-decoration: none;
+    color: var(--ink);
+
+    &::before {
+      content: '';
+      flex: 0 0 auto;
+      width: .9em;
+      height: .9em;
+      margin-top: .35em;
+      border-radius: 2px;
+      background: var(--disk);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2);
+    }
+
+    &:hover {
+      border-color: var(--hair);
+      background: var(--panel);
+      color: #fff;
+    }
+
+    & b {
+      min-width: 10ch;
+    }
+  }
+}
+
+/* An example that runs: its button, and the panel its output prints on. */
+.Doc .Ex {
+  margin: .8rem 0;
+
+  & pre {
+    margin: 0;
+    padding-right: 6rem;
+  }
+}
+
+.Doc .Ex_Go {
+  top: .55rem;
+  right: .55rem;
+  padding: .2rem .7rem;
+  border: 1px solid color-mix(in srgb, var(--signal) 40%, transparent);
+  border-radius: 4px;
+  background: #0b1a11;
+  color: var(--signal);
+  font-size: 12px;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--signal);
+    color: #04140a;
+  }
+}
+
+.Doc .Ex[data-running] .Ex_Go {
+  background: var(--signal);
+  color: #04140a;
+}
+
+.Ex_Out {
+  display: block;
+  position: relative;
+  margin-top: .4rem;
+  padding: .8rem 1rem;
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(
+    to bottom,
+    transparent 0 2px,
+    rgba(0, 0, 0, .28) 2px 3px
+  ),
+    radial-gradient(ellipse at 50% 30%, #06140b, #020703 80%);
+  box-shadow:
+    inset 0 0 1.8rem rgba(0, 0, 0, .9),
+    0 0 0 1px #16241b;
+  color: #62f596;
+  text-shadow: 0 0 .35em rgba(70, 255, 130, .45);
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 26rem;
+  overflow-y: auto;
+
+  &:empty {
+    display: none;
+  }
+
+  & .Out-cmd {
+    color: #d7ffe4;
+  }
+
+  & .Out-note {
+    color: #ffd27a;
+  }
+}
+
+.Doc .Map {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  background: radial-gradient(ellipse at 50% 45%, #0b1510, #060908 75%);
+  overflow-x: auto;
+
+  & svg {
+    min-width: 560px;
+  }
+}
+
+.Doc .Groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(30ch, 1fr));
+  gap: 0 2rem;
+
+  & dl {
+    grid-template-columns: max-content 1fr;
+    font-size: 13px;
+  }
+}
+
+.Doc .Loaded {
+  color: var(--mute);
+  white-space: pre-wrap;
+}
+
+/* A README opened from the map, in reading mode: a sheet over the page. */
+/* A README over the reading page: a modal <dialog>, so Esc closes it and the
+ * page behind it is inert. */
+.Sheet {
+  position: fixed;
+  inset: var(--top) 0 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow-y: auto;
+  color: inherit;
+  background: color-mix(in srgb, var(--void) 94%, transparent);
+  backdrop-filter: blur(6px);
+
+  &::backdrop {
+    background: transparent;
+  }
+
+  & .Readme {
+    max-width: 80ch;
+    margin: 0 auto;
+    padding: 1.5rem 1.1rem 4rem;
+  }
+
+  & .Sheet_Close {
+    position: sticky;
+    top: 0;
+    float: right;
+    margin: .8rem;
+    padding: .3rem .8rem;
+    border: 1px solid var(--hair);
+    border-radius: 4px;
+    background: var(--deep);
+    cursor: pointer;
+  }
+}
+
+.Foot {
+  max-width: 80ch;
+  margin: 0 auto;
+  padding: 2rem 1.1rem 3rem;
+  border-top: 1px solid var(--hair);
+  color: var(--mute);
+  font-size: 12.5px;
+}
+
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
+
+  .Doc dl {
+    grid-template-columns: 1fr;
+    gap: 0;
+
+    & dd {
+      margin-bottom: .6rem;
+    }
+  }
+
+  .Doc .Ex pre {
+    padding-right: 1rem;
+    padding-top: 2.4rem;
+  }
+
+  .Doc .Man_Head span:last-child {
+    display: none;
+  }
+
+  .Doc .Man_Head span:nth-child(2) {
+    text-align: right;
+  }
+}

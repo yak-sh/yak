@@ -1,0 +1,341 @@
+/* The screen's panes, the way tmux lays out three: the manual and the graph
+ * side by side, the shell across the bottom, the status bar last. Sized in
+ * the screen's em, like everything on the desk (crt.css). */
+
+/* `data-zoom` gives the manual the whole width. */
+.Screen_Panes {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34ch;
+  grid-template-rows: minmax(0, 1fr) 11.8em auto;
+  grid-template-areas: 'man graph' 'sh sh' 'bar bar';
+
+  [data-zoom] & {
+    grid-template-columns: minmax(0, 1fr) 0;
+  }
+}
+
+.Pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.Pane-man {
+  grid-area: man;
+  border-right: 1px solid var(--ph-dim);
+
+  [data-zoom] & {
+    border-right: 0;
+  }
+}
+
+.Pane-graph {
+  grid-area: graph;
+  overflow: hidden;
+
+  [data-zoom] & {
+    visibility: hidden;
+  }
+}
+
+.Pane-sh {
+  grid-area: sh;
+  border-top: 1px solid var(--ph-dim);
+}
+
+.Pane_Title {
+  display: flex;
+  justify-content: space-between;
+  gap: 1ch;
+  padding: 0 1ch;
+  color: var(--ph-lo);
+  border-bottom: 1px dashed var(--ph-dim);
+  white-space: nowrap;
+  overflow: hidden;
+
+  & > :first-child::before {
+    content: '── ';
+  }
+}
+
+.Pane_Hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.Pane_Body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: .55em 2ch 1.2em;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ph-dim) transparent;
+  outline: none;
+
+  &.is-raster {
+    animation: raster .55s steps(24, end) both;
+  }
+}
+
+/* A page arriving at 9600 baud: it paints down the pane a band at a time. */
+@keyframes raster {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.Pane-graph .Pane_Body {
+  display: flex;
+  flex-direction: column;
+  padding: .4em 1.2ch 0;
+  overflow: hidden;
+}
+
+/* The shell: its scrollback, and the line being typed. */
+.Shell {
+  height: 100%;
+  overflow-y: auto;
+  padding: .35em 1.5ch .3em;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ph-dim) transparent;
+  cursor: text;
+}
+
+.Shell_Log > div {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-height: 1.3em;
+}
+
+.Out-cmd {
+  color: var(--ph-hi);
+}
+
+.Out-note {
+  color: var(--ph-hi);
+  font-weight: 700;
+}
+
+.Out-dim {
+  color: var(--ph-lo);
+}
+
+.Out-sys {
+  color: var(--ph-lo);
+
+  & b {
+    color: var(--ph);
+    font-weight: 400;
+  }
+}
+
+.Fresh {
+  animation: excite .75s ease-out both;
+}
+
+/* Phosphor struck by the beam glows past its color, then decays. */
+@keyframes excite {
+  from {
+    color: var(--ph-hi);
+    text-shadow:
+      0 0 .1em var(--ph-hi),
+      0 0 .6em var(--ph),
+      0 0 1.4em var(--ph-glow);
+  }
+}
+
+.Shell_Line {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+
+  [data-busy] & {
+    visibility: hidden;
+  }
+}
+
+.Shell_Prompt {
+  color: var(--ph-lo);
+  margin-right: 1ch;
+}
+
+.Shell_Input {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1em;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  font-size: 16px;
+  caret-color: transparent;
+  pointer-events: none;
+}
+
+.Cursor {
+  display: inline-block;
+  min-width: 1ch;
+  white-space: pre;
+  background: var(--ph);
+  color: var(--ph-bg);
+  text-shadow: none;
+  box-shadow: 0 0 .4em var(--ph-glow);
+  animation: blink 1.06s infinite;
+
+  .Shell:not(:focus-within) & {
+    background: transparent;
+    color: inherit;
+    text-shadow: inherit;
+    box-shadow: inset 0 0 0 1px var(--ph-lo);
+    animation: none;
+  }
+}
+
+/* A cursor on phosphor never snaps off: it decays, and the character under
+ * it shows through. */
+@keyframes blink {
+  0%,
+  49% {
+    background: var(--ph);
+    color: var(--ph-bg);
+  }
+  64% {
+    background: color-mix(in srgb, var(--ph) 14%, transparent);
+    color: var(--ph);
+    box-shadow: none;
+  }
+  99% {
+    background: transparent;
+    color: var(--ph);
+    box-shadow: none;
+  }
+}
+
+/* The status bar, in reverse video. */
+.Bar {
+  grid-area: bar;
+  display: flex;
+  gap: 2ch;
+  padding: 0 1ch;
+  background: var(--ph);
+  color: var(--ph-bg);
+  text-shadow: none;
+  white-space: pre;
+  overflow: hidden;
+  box-shadow: 0 0 .6em var(--ph-glow);
+
+  & .Bar_Fill {
+    flex: 1;
+  }
+
+  & b {
+    font-weight: 700;
+  }
+}
+
+/* The graph pane: entities as they stand, and every write as it lands. */
+.Graph_Group {
+  margin: 0 0 .5em;
+}
+
+.Graph_Head {
+  color: var(--ph-lo);
+}
+
+.Graph_Row {
+  display: flex;
+  gap: 1ch;
+  white-space: nowrap;
+
+  & .Graph_Id {
+    flex: 0 0 5ch;
+    color: var(--ph-hi);
+  }
+
+  & .Graph_Text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &.is-new,
+  &.is-moved {
+    animation: excite 1.4s ease-out both;
+  }
+
+  &.is-gone {
+    text-decoration: line-through;
+    color: var(--ph-lo);
+  }
+}
+
+.Graph_Sum {
+  color: var(--ph-lo);
+}
+
+.Graph_List {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.Graph_Label {
+  margin-top: .4em;
+  padding-top: .3em;
+  border-top: 1px dashed var(--ph-dim);
+  color: var(--ph-lo);
+}
+
+/* The writes keep the pane's last lines, the newest at the bottom; the older
+ * ones fade as they leave off the top. */
+.Graph_Writes {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 13em;
+  padding-bottom: .4em;
+  overflow: hidden;
+  mask-image: linear-gradient(transparent, #000 3em);
+
+  & > div {
+    flex: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.Graph_Refused {
+  background: var(--ph);
+  color: var(--ph-bg);
+  text-shadow: none;
+  white-space: normal !important;
+  animation: alarm .9s steps(2) 3;
+}
+
+@keyframes alarm {
+  50% {
+    background: transparent;
+    color: var(--ph-hi);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .Cursor,
+  .Fresh,
+  .Graph_Row,
+  .Pane_Body.is-raster {
+    animation: none !important;
+  }
+}

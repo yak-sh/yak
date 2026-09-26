@@ -1,0 +1,331 @@
+/* The monitor's chin: the badge, the vents, the controls, the floppy drive
+ * and the power switch; and the stand under it all. Sized in the desk's em
+ * (crt.css). */
+.Crt_Chin {
+  display: flex;
+  align-items: center;
+  gap: 2em;
+  height: 6.4em;
+  padding: .2em .6em 0 1.2em;
+}
+
+.Crt_Badge {
+  display: grid;
+  line-height: 1;
+  color: #cbc4b2;
+  text-shadow:
+    0 .06em 0 rgba(255, 255, 255, .8),
+    0 -.05em 0 rgba(60, 50, 30, .35);
+
+  & span {
+    font-size: 2em;
+    font-weight: 700;
+    letter-spacing: -.04em;
+  }
+
+  & small {
+    font-size: .72em;
+    letter-spacing: .38em;
+    text-transform: uppercase;
+    margin-top: .25em;
+  }
+}
+
+.Crt_Vents {
+  flex: 1;
+  height: 2.2em;
+  border-radius: .3em;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(50, 40, 25, .38) 0 .14em,
+    rgba(255, 255, 255, .35) .14em .2em,
+    transparent .2em .62em
+  );
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%,
+    transparent);
+  opacity: .8;
+}
+
+.Controls {
+  display: flex;
+  align-items: center;
+  gap: 1.3em;
+
+  & small {
+    display: block;
+    margin-top: .45em;
+    font-size: .56em;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #8a826f;
+    text-shadow: 0 .08em 0 rgba(255, 255, 255, .6);
+  }
+}
+
+.Knob,
+.Degauss {
+  display: grid;
+  justify-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* A knurled knob; its mark points at the phosphor it selects. */
+.Knob_Cap {
+  position: relative;
+  width: 2.3em;
+  height: 2.3em;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 38% 32%, #f3efe4, #c9c1ae 55%, #a89f8a 100%)
+    center /
+    72% 72% no-repeat,
+    repeating-conic-gradient(#a79e89 0 6deg, #d3ccba 6deg 12deg);
+  box-shadow:
+    0 .2em .3em rgba(40, 30, 15, .45),
+    inset 0 0 0 .08em rgba(60, 50, 30, .35);
+  transform: rotate(var(--turn, -45deg));
+  transition: transform .45s cubic-bezier(.3, 1.6, .5, 1);
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: .25em;
+    width: .16em;
+    height: .7em;
+    margin-left: -.08em;
+    border-radius: .1em;
+    background: #5a5243;
+  }
+
+  [data-phosphor=amber] & {
+    --turn: 0deg;
+  }
+
+  [data-phosphor=white] & {
+    --turn: 45deg;
+  }
+
+  .Knob:active & {
+    box-shadow:
+      0 .1em .2em rgba(40, 30, 15, .45),
+      inset 0 0 0 .08em rgba(60, 50, 30, .35);
+  }
+}
+
+.Degauss span {
+  width: 2.8em;
+  height: 1.15em;
+  border-radius: .25em;
+  background: linear-gradient(#ebe6d9, #c8c1ae);
+  box-shadow:
+    0 .16em 0 #9d9582,
+    0 .26em .3em rgba(40, 30, 15, .35),
+    inset 0 .06em 0 rgba(255, 255, 255, .8);
+  transition: transform .06s, box-shadow .06s;
+
+  .Degauss:active & {
+    transform: translateY(.12em);
+    box-shadow:
+      0 .04em 0 #9d9582,
+      inset 0 .06em 0 rgba(255, 255, 255, .8);
+  }
+}
+
+/* The drive: a slot with a dust flap behind it, the busy light, the eject
+ * button. `data-state` is empty, busy (the light on), or loaded. */
+.Drive {
+  display: grid;
+  justify-items: center;
+  gap: .3em;
+}
+
+.Drive_Face {
+  position: relative;
+  width: 11.2em;
+  height: 3.3em;
+  border-radius: .4em;
+  background: linear-gradient(180deg, #c1baa7, #cec7b5 60%, #d6d0bf);
+  box-shadow:
+    inset 0 .12em .2em rgba(40, 30, 15, .45),
+    inset 0 -.06em .1em rgba(255, 255, 255, .5),
+    0 .08em 0 rgba(255, 255, 255, .7);
+}
+
+.Drive_Slot {
+  position: absolute;
+  left: 1.3em;
+  right: 1.3em;
+  top: .95em;
+  height: .62em;
+  border-radius: .14em;
+  background: linear-gradient(#020202, #151513);
+  box-shadow:
+    inset 0 .12em .12em #000,
+    0 .07em 0 rgba(255, 255, 255, .55),
+    0 -.05em 0 rgba(60, 50, 30, .35);
+  overflow: hidden;
+}
+
+.Drive_Flap {
+  position: absolute;
+  inset: .09em .1em .12em;
+  border-radius: .06em;
+  background: linear-gradient(#34332f, #1f1e1b 60%, #2a2925);
+  transform-origin: 50% 0;
+  transition: transform .22s var(--ease-out), opacity .22s;
+
+  [data-state=open] &,
+  [data-state=busy] &,
+  [data-state=loaded] & {
+    transform: perspective(3em) rotateX(-70deg);
+    opacity: .35;
+  }
+}
+
+.Drive_Led {
+  position: absolute;
+  left: 1.4em;
+  bottom: .5em;
+  width: 1em;
+  height: .32em;
+  border-radius: .08em;
+  background: #394032;
+  box-shadow: inset 0 .05em .08em rgba(0, 0, 0, .6);
+  transition: background .08s, box-shadow .08s;
+
+  [data-state=busy] & {
+    background: #9dff6a;
+    box-shadow:
+      0 0 .35em #7dff4a,
+      0 0 1em rgba(120, 255, 80, .6),
+      inset 0 .05em .05em rgba(255, 255, 255, .6);
+    animation: seek-led .19s steps(2) infinite;
+  }
+}
+
+@keyframes seek-led {
+  50% {
+    background: #7fe056;
+  }
+}
+
+.Drive_Eject {
+  position: absolute;
+  right: 1.35em;
+  bottom: .36em;
+  width: 1.9em;
+  height: .6em;
+  padding: 0;
+  border: 0;
+  border-radius: .22em;
+  background: linear-gradient(#e2dccd, #b8b09c);
+  box-shadow:
+    0 .06em 0 #8e8673,
+    inset 0 .05em 0 rgba(255, 255, 255, .7);
+  cursor: pointer;
+  transition: transform .08s, box-shadow .08s;
+
+  &:disabled {
+    cursor: default;
+    box-shadow:
+      0 .02em 0 #8e8673,
+      inset 0 .05em 0 rgba(255, 255, 255, .7);
+  }
+
+  &:not(:disabled) {
+    box-shadow:
+      0 .14em 0 #8e8673,
+      0 .2em .2em rgba(40, 30, 15, .35),
+      inset 0 .05em 0 rgba(255, 255, 255, .7);
+  }
+
+  &.is-pressed,
+  &:not(:disabled):active {
+    transform: translateY(.1em);
+    box-shadow:
+      0 .02em 0 #8e8673,
+      inset 0 .05em 0 rgba(255, 255, 255, .7);
+  }
+}
+
+.Drive_Label {
+  font-size: .56em;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: #8a826f;
+  text-shadow: 0 .08em 0 rgba(255, 255, 255, .6);
+}
+
+.Power {
+  position: relative;
+  width: 2.6em;
+  height: 2.6em;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #efeadf, #cdc6b3 60%, #aaa18b);
+  box-shadow:
+    0 0 0 .22em #c3bba8,
+    0 0 0 .3em rgba(60, 50, 30, .3),
+    0 .25em .35em .15em rgba(40, 30, 15, .35),
+    inset 0 -.1em .15em rgba(60, 50, 30, .3);
+  cursor: pointer;
+  transition: transform .08s;
+
+  &:active {
+    transform: scale(.96);
+  }
+
+  &::after {
+    content: '⏻';
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 1.1em;
+    color: #8f8671;
+    text-shadow: 0 .06em 0 rgba(255, 255, 255, .6);
+  }
+}
+
+.Power_Led {
+  position: absolute;
+  right: -1em;
+  top: 50%;
+  width: .42em;
+  height: .42em;
+  margin-top: -.21em;
+  border-radius: 50%;
+  background: #8a6a1c;
+  box-shadow: 0 0 .3em rgba(255, 170, 40, .5);
+
+  [data-power=on] &,
+  [data-power=warming] & {
+    background: #8dff6e;
+    box-shadow: 0 0 .4em #6f6, 0 0 1em rgba(100, 255, 100, .5);
+  }
+}
+
+/* The neck and foot the monitor stands on. */
+.Crt_Stand {
+  position: relative;
+  width: 30em;
+  height: 2.4em;
+  margin: -.2em auto 0;
+  background: linear-gradient(180deg, #8f8773, #bfb7a3 30%, #cfc8b6 70%,
+    #b3ab96);
+  clip-path: polygon(14% 0, 86% 0, 100% 100%, 0 100%);
+  z-index: -1;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0;
+    height: .3em;
+    background: rgba(0, 0, 0, .25);
+  }
+}

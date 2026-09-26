@@ -1,0 +1,343 @@
+/* The disks: 3.5" floppies, label side up, each a link to its section. The
+ * shelf lays them out beside the terminal; the fly layer carries one between
+ * the shelf and the drive (drive.js). A disk is 7.2em by 7.5em, the 90 by
+ * 94 mm of a 3.5" disk. */
+
+.Shelf {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 1.3em;
+  align-content: center;
+}
+
+.Shelf_Note {
+  margin: 0;
+  font-size: .95em;
+  color: var(--mute);
+  letter-spacing: .02em;
+
+  &::before {
+    content: '▸ ';
+    color: var(--ph);
+  }
+}
+
+.Shelf_Disks {
+  display: grid;
+  grid-template-columns: repeat(2, 7.2em);
+  gap: 1.5em 1.3em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  /* The shadow belongs to the slot a disk lies in, since the disk's own
+   * outline (its clipped corner) would clip a shadow of its own. */
+  & li {
+    position: relative;
+    filter: drop-shadow(0 .35em .3em rgba(0, 0, 0, .55));
+    transition: filter .35s var(--ease-out);
+  }
+
+  & li:has(.Disk:hover),
+  & li:has(.Disk:focus-visible) {
+    filter: drop-shadow(0 1.2em .8em rgba(0, 0, 0, .55));
+  }
+
+  /* Where a disk lay before it went into the drive. */
+  & li::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px dashed rgba(255, 255, 255, .12);
+    border-radius: .3em;
+    opacity: 0;
+    transition: opacity .3s;
+  }
+
+  & li:has(.Disk[data-out])::before {
+    opacity: 1;
+  }
+}
+
+@media (max-aspect-ratio: 16/11) {
+  .Shelf {
+    justify-items: center;
+  }
+
+  .Shelf_Disks {
+    grid-template-columns: repeat(6, 7.2em);
+    gap: 1.2em;
+  }
+}
+
+.Disk {
+  --edge: color-mix(in srgb, var(--disk) 70%, #000);
+  --sheen: color-mix(in srgb, var(--disk) 78%, #fff);
+  position: relative;
+  display: block;
+  width: 7.2em;
+  height: 7.5em;
+  border-radius: .22em;
+  color: #1b1b1b;
+  text-decoration: none;
+  text-shadow: none;
+  background:
+    linear-gradient(
+    155deg,
+    var(--sheen) 0%,
+    var(--disk) 26%,
+    var(--disk) 70%,
+    var(--edge) 100%
+  );
+  clip-path: polygon(
+    0 0,
+    calc(100% - .6em) 0,
+    100% .6em,
+    100% 100%,
+    0 100%
+  );
+  box-shadow:
+    inset 0 0 0 .05em rgba(255, 255, 255, .14),
+    inset .08em .08em .1em rgba(255, 255, 255, .12),
+    inset -.1em -.12em .15em rgba(0, 0, 0, .35);
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform .35s var(--ease-out);
+  cursor: pointer;
+  font-size: 1em;
+  line-height: 1.2;
+
+  &:hover,
+  &:focus-visible {
+    transform: translateY(-.45em) rotate(calc(var(--tilt, 0deg) * .3))
+      scale(1.03);
+    outline: none;
+  }
+
+  &:focus-visible .Disk_Label {
+    box-shadow: 0 0 0 .12em var(--signal);
+  }
+
+  &[data-out] {
+    visibility: hidden;
+  }
+}
+
+/* The channel the shutter slides in, molded into the plastic. */
+.Disk_Rail {
+  position: absolute;
+  left: 13%;
+  right: 13%;
+  top: 0;
+  height: 38%;
+  background: color-mix(in srgb, var(--disk) 88%, #000);
+  box-shadow:
+    inset 0 -.05em .08em rgba(255, 255, 255, .1),
+    inset .06em 0 .1em rgba(0, 0, 0, .35),
+    inset -.06em 0 .1em rgba(0, 0, 0, .35);
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: -.9em;
+    top: .55em;
+    border: .28em solid transparent;
+    border-right-color: color-mix(in srgb, var(--disk) 60%, #fff);
+    opacity: .5;
+  }
+}
+
+/* The metal shutter, brushed, with the window onto the medium. */
+.Disk_Shutter {
+  position: absolute;
+  left: 23%;
+  width: 50%;
+  top: 0;
+  height: 37%;
+  border-radius: 0 0 .06em .06em;
+  background:
+    repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, .08) 0 1px,
+    rgba(0, 0, 0, .05) 1px 2px
+  ),
+    linear-gradient(
+    90deg,
+    #8e969c 0%,
+    #dfe4e7 16%,
+    #aab2b8 38%,
+    #eef1f3 58%,
+    #b5bcc1 80%,
+    #9aa1a6 100%
+  );
+  box-shadow:
+    0 .06em .08em rgba(0, 0, 0, .5),
+    inset 0 -.04em 0 rgba(255, 255, 255, .5);
+}
+
+.Disk_Window {
+  position: absolute;
+  left: 52%;
+  width: 26%;
+  top: 14%;
+  height: 64%;
+  border-radius: .05em;
+  background: radial-gradient(
+    ellipse at 30% 30%,
+    #5a4331,
+    #2a1d13 60%,
+    #1a120b
+  );
+  box-shadow: inset 0 .06em .1em rgba(0, 0, 0, .8);
+}
+
+/* The paper label: ruled, typed on, the disk's number in the corner. */
+.Disk_Label {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 44%;
+  bottom: 4%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: .32em .42em .3em;
+  border-radius: .1em;
+  background:
+    repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 1.02em,
+    rgba(70, 110, 190, .14) 1.02em,
+    rgba(70, 110, 190, .14) calc(1.02em + 1px)
+  ) 0 1.2em / 100% calc(100% - 1.2em) no-repeat,
+    linear-gradient(170deg, #fbf8f0, #efe9db);
+  box-shadow:
+    0 0 0 .04em rgba(0, 0, 0, .25),
+    inset 0 -.1em .2em rgba(120, 100, 60, .15);
+  overflow: hidden;
+}
+
+.Disk_Head {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: .12em;
+  border-bottom: .12em solid var(--disk);
+  font-size: .56em;
+  letter-spacing: .06em;
+
+  & b {
+    font-weight: 700;
+  }
+
+  & i {
+    font-style: normal;
+    color: #6d6a62;
+  }
+}
+
+.Disk_Title {
+  align-self: center;
+  font-size: 1.02em;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  text-transform: uppercase;
+  color: #141414;
+}
+
+.Disk_Note {
+  font-size: .58em;
+  color: #4d4a44;
+  line-height: 1.25;
+}
+
+/* The write-protect window and the density hole, in the two bottom corners. */
+.Disk_Tab {
+  position: absolute;
+  left: 2.2%;
+  right: 2.2%;
+  bottom: 3.5%;
+  height: .5em;
+  pointer-events: none;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    width: .34em;
+    height: .5em;
+    border-radius: .05em;
+    background: #0c0c0c;
+    box-shadow: inset 0 .05em .06em #000, 0 .03em 0 rgba(255, 255, 255, .15);
+  }
+
+  &::before {
+    left: 0;
+  }
+
+  &::after {
+    right: 0;
+    height: .34em;
+    border-radius: 50%;
+  }
+}
+
+/* The clear one: smoky plastic, the medium and its hub showing through. */
+.Disk-clear {
+  --edge: rgba(120, 140, 160, .7);
+  --sheen: rgba(235, 245, 255, .7);
+  background:
+    radial-gradient(
+    circle at 50% 56%,
+    rgba(255, 255, 255, .5) 0 5%,
+    #3b2e24 5.5% 9%,
+    rgba(60, 45, 34, .78) 9.5% 40%,
+    transparent 40.5%
+  ),
+    linear-gradient(
+    155deg,
+    rgba(235, 245, 255, .62),
+    rgba(170, 190, 210, .42) 40%,
+    rgba(120, 140, 160, .55)
+  );
+
+  & .Disk_Rail {
+    background: rgba(90, 110, 130, .35);
+  }
+
+  & .Disk_Label {
+    left: 14%;
+    right: 14%;
+    top: 49%;
+    bottom: 8%;
+    opacity: .96;
+  }
+}
+
+/* The layer a disk flies in between the shelf and the drive. drive.js sets
+ * the perspective's origin above the slot, and clips everything above the
+ * slot's lip while a disk goes in, which is how it disappears into it. */
+.Fly {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  perspective: 70em;
+
+  & .Disk {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* What carries a disk in flight: the transform is its, and so is the shadow,
+ * which rides in the disk's own plane. */
+.Fly_Carrier {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 50% 0;
+  backface-visibility: hidden;
+  will-change: transform;
+  filter: drop-shadow(0 .5em .5em rgba(0, 0, 0, .5));
+}

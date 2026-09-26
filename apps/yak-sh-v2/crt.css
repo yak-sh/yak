@@ -1,0 +1,544 @@
+/* The desk and the terminal on it: a CRT in molded plastic, its tube, and
+ * the glass over the phosphor. The screen's panes are panes.css, and the chin
+ * with its controls and the floppy drive is chin.css.
+ *
+ * Everything is sized in em off one unit, `--u`, set on the desk from the
+ * viewport, so the whole machine scales as one drawing and the screen's text
+ * is always a whole font size. The screen is 60em by 45em, 4:3, with 100
+ * columns of JetBrains Mono (1ch = .6em). */
+
+.Desk {
+  --u: clamp(
+    9px,
+    min((100vw - 3rem) / 93, (100vh - var(--top) - 2.5rem) / 64.5),
+    16px
+  );
+  position: relative;
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: center;
+  gap: 2.4em;
+  min-height: calc(100dvh - var(--top));
+  padding: 1.25em 1.5em;
+  font-size: var(--u);
+  line-height: 1.3;
+  overflow: hidden;
+
+  /* The room is dark; the tube lights the desk it sits on. */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(
+      ellipse 55% 48% at 42% 42%,
+      color-mix(in srgb, var(--ph) 9%, transparent),
+      transparent 70%
+    ),
+      linear-gradient(to bottom, transparent 68%, rgba(0, 0, 0, .35));
+    opacity: var(--lit, 0);
+    transition: opacity 1.2s var(--ease-out);
+    pointer-events: none;
+  }
+}
+
+@media (max-aspect-ratio: 16/11) {
+  .Desk {
+    --u: clamp(
+      8px,
+      min((100vw - 2rem) / 74, (100vh - var(--top) - 2rem) / 76),
+      16px
+    );
+    grid-template-columns: auto;
+    gap: 1.6em;
+  }
+}
+
+/* The phosphors, as the tube and everything it lights read them. */
+.Desk,
+.Crt {
+  --ph: #57f78f;
+  --ph-hi: #d4ffe2;
+  --ph-lo: #2f9a5a;
+  --ph-dim: #1c5c37;
+  --ph-bg: #020a05;
+  --ph-glow: rgba(70, 255, 130, .55);
+}
+
+[data-phosphor=amber] {
+  --ph: #ffb640;
+  --ph-hi: #fff0c8;
+  --ph-lo: #b0701c;
+  --ph-dim: #6b4312;
+  --ph-bg: #0b0602;
+  --ph-glow: rgba(255, 170, 50, .5);
+}
+
+[data-phosphor=white] {
+  --ph: #dbe6ff;
+  --ph-hi: #ffffff;
+  --ph-lo: #8390a8;
+  --ph-dim: #4a5366;
+  --ph-bg: #05060a;
+  --ph-glow: rgba(190, 210, 255, .45);
+}
+
+.Rig {
+  position: relative;
+  z-index: 1;
+}
+
+/* Its shadow on the desk. */
+.Rig::after {
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: -1.2em;
+  height: 2.2em;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, .75), transparent);
+  z-index: -2;
+}
+
+.Crt {
+  --lit: 0;
+  --plastic-hi: #ece7da;
+  --plastic: #dcd6c7;
+  --plastic-lo: #bdb5a2;
+  --plastic-deep: #a39a86;
+  position: relative;
+  width: 70.8em;
+
+  &[data-power=on],
+  &[data-power=warming] {
+    --lit: 1;
+  }
+}
+
+/* The casing: warm plastic, lit from above, with a grain you only notice up
+ * close. */
+.Crt_Shell {
+  position: relative;
+  padding: 2.4em 2.6em 0;
+  border-radius: 2.4em 2.4em 1.7em 1.7em / 2.2em 2.2em 1.5em 1.5em;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
+    linear-gradient(
+    180deg,
+    var(--plastic-hi) 0%,
+    var(--plastic) 30%,
+    #d3ccbb 78%,
+    var(--plastic-lo) 100%
+  );
+  background-blend-mode: soft-light, normal;
+  box-shadow:
+    inset 0 .14em 0 rgba(255, 255, 255, .75),
+    inset .18em 0 .25em -.1em rgba(255, 255, 255, .35),
+    inset -.3em 0 .5em -.2em rgba(60, 50, 30, .28),
+    inset 0 -.35em .6em -.2em rgba(60, 50, 30, .35),
+    0 0 0 .06em rgba(40, 34, 22, .55),
+    0 3em 4em -1.5em rgba(0, 0, 0, .8),
+    0 1em 1.5em -.5em rgba(0, 0, 0, .55);
+}
+
+/* The sloped frame between the face and the glass, which the screen lights. */
+.Crt_Bezel {
+  position: relative;
+  padding: 1.45em;
+  border-radius: 2.5em / 2.7em;
+  background: linear-gradient(
+    180deg,
+    #a79f8b 0%,
+    #c4bca9 14%,
+    #d2cbb9 55%,
+    #ddd7c8 88%,
+    #ebe6d9 100%
+  );
+  box-shadow:
+    inset 0 .45em .7em rgba(40, 32, 18, .42),
+    inset 0 -.12em .25em rgba(255, 255, 255, .7),
+    inset .3em 0 .5em -.3em rgba(40, 32, 18, .25),
+    inset -.3em 0 .5em -.3em rgba(40, 32, 18, .25),
+    0 .12em 0 rgba(255, 255, 255, .55);
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      radial-gradient(
+      ellipse 58% 60% at 50% 50%,
+      transparent 62%,
+      color-mix(in srgb, var(--ph) 30%, transparent) 76%,
+      transparent 96%
+    );
+    mix-blend-mode: screen;
+    opacity: calc(var(--lit) * var(--spill, .8));
+    transition: opacity .9s var(--ease-out);
+    pointer-events: none;
+  }
+}
+
+/* The tube: dark glass when off, black phosphor when on, rounded as the
+ * glass is. */
+.Crt_Tube {
+  position: relative;
+  padding: 1.15em 1.2em;
+  border-radius: 1.7em / 2em;
+  background: radial-gradient(ellipse at 50% 45%, #1d2420, #0e1210 75%);
+  box-shadow:
+    0 0 0 .2em #1b1a15,
+    0 0 0 .32em rgba(0, 0, 0, .3),
+    inset 0 0 3em rgba(0, 0, 0, .9);
+  overflow: hidden;
+  isolation: isolate;
+  transition: background .6s;
+
+  [data-power=on] &,
+  [data-power=warming] & {
+    background: radial-gradient(
+      ellipse at 50% 45%,
+      color-mix(in srgb, var(--ph-bg) 70%, var(--ph-dim) 6%),
+      var(--ph-bg) 70%
+    );
+  }
+
+  /* What stays on the phosphor after the beam has gone: a dot, fading. */
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1.6em;
+    height: 1.6em;
+    margin: -.8em;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--ph-hi), var(--ph) 30%, transparent
+      70%);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  [data-power=dying] &::after {
+    animation: afterglow 2.2s .45s ease-out both;
+  }
+}
+
+@keyframes afterglow {
+  0% {
+    opacity: .95;
+    transform: scale(1);
+  }
+  15% {
+    opacity: .7;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(.35);
+  }
+}
+
+.Screen {
+  position: relative;
+  width: 60em;
+  height: 45em;
+  color: var(--ph);
+  text-shadow:
+    0 0 .05em var(--ph-glow),
+    0 0 .4em color-mix(in srgb, var(--ph) 30%, transparent);
+  z-index: 1;
+}
+
+.Screen_Raster {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  opacity: 0;
+
+  [data-power=on] & {
+    opacity: 1;
+    animation: hum 5.3s infinite steps(1);
+  }
+
+  [data-power=warming] & {
+    opacity: 1;
+    animation: warm 1.25s var(--ease-out) both;
+  }
+
+  [data-power=dying] & {
+    animation: collapse .5s var(--ease-in) both;
+  }
+
+  [data-degauss] & {
+    animation: degauss 1.3s cubic-bezier(.2, .6, .3, 1) both;
+  }
+}
+
+/* The tube coming up: a spot, a line, the raster, and the phosphor settling
+ * from overbright. */
+@keyframes warm {
+  0% {
+    transform: scale(.015, .004);
+    filter: brightness(7);
+  }
+  12% {
+    transform: scale(1.02, .006);
+    filter: brightness(6);
+  }
+  28% {
+    transform: scale(1, 1.01);
+    filter: brightness(2.6) blur(.4px);
+  }
+  55% {
+    filter: brightness(1.35);
+  }
+  100% {
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes collapse {
+  0% {
+    transform: none;
+    filter: none;
+    opacity: 1;
+  }
+  45% {
+    transform: scale(1, .005);
+    filter: brightness(4);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(.003, .005);
+    filter: brightness(8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0, 0);
+    opacity: 0;
+  }
+}
+
+/* Mains hum: now and then the whole raster dips by a hair. */
+@keyframes hum {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  41% {
+    opacity: .965;
+  }
+  42% {
+    opacity: 1;
+  }
+  77% {
+    opacity: .975;
+  }
+  78% {
+    opacity: 1;
+  }
+}
+
+/* The degaussing coil: the picture swims, the colors tear, and it settles. */
+@keyframes degauss {
+  0% {
+    transform: none;
+    filter: none;
+  }
+  6% {
+    transform: skew(5deg, -1deg) scale(1.03);
+    filter: hue-rotate(110deg) saturate(4) brightness(1.3);
+  }
+  14% {
+    transform: skew(-4deg, 1deg) rotate(.8deg) scale(.985);
+    filter: hue-rotate(-140deg) saturate(4);
+  }
+  24% {
+    transform: skew(2.6deg, -.5deg) scale(1.015);
+    filter: hue-rotate(80deg) saturate(3);
+  }
+  36% {
+    transform: skew(-1.6deg) rotate(-.3deg);
+    filter: hue-rotate(-60deg) saturate(2.2);
+  }
+  52% {
+    transform: skew(.8deg);
+    filter: hue-rotate(30deg) saturate(1.6);
+  }
+  70% {
+    transform: skew(-.3deg);
+    filter: hue-rotate(-10deg);
+  }
+  100% {
+    transform: none;
+    filter: none;
+  }
+}
+
+[data-degauss] .Screen {
+  animation: tear 1.3s ease-out both;
+}
+
+@keyframes tear {
+  0%,
+  100% {
+    text-shadow:
+      0 0 .05em var(--ph-glow),
+      0 0 .4em color-mix(in srgb, var(--ph) 30%, transparent);
+  }
+  10% {
+    text-shadow:
+      -.25em 0 rgba(255, 30, 90, .75),
+      .25em 0 rgba(30, 140, 255, .75);
+  }
+  30% {
+    text-shadow:
+      .15em 0 rgba(255, 30, 90, .6),
+      -.15em 0 rgba(30, 140, 255, .6);
+  }
+  60% {
+    text-shadow:
+      -.05em 0 rgba(255, 30, 90, .4),
+      .05em 0 rgba(30, 140, 255, .4);
+  }
+}
+
+/* What the phosphor still shows of the page it just left. */
+.Screen_Ghost {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2;
+
+  &.is-fading {
+    animation: ghost .7s ease-out both;
+  }
+}
+
+@keyframes ghost {
+  from {
+    opacity: .3;
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    filter: blur(.08em);
+  }
+}
+
+/* The glass over the phosphor: scanlines, the grille, the glare, the dark
+ * edges of a curved face, and the slow roll of the refresh. */
+.Tube_Glass {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+  background:
+    radial-gradient(
+    ellipse 42% 30% at 28% 18%,
+    rgba(255, 255, 255, .075),
+    transparent 70%
+  ),
+    radial-gradient(
+    ellipse 20% 7% at 74% 8%,
+    rgba(255, 255, 255, .05),
+    transparent 80%
+  ),
+    linear-gradient(
+    165deg,
+    rgba(255, 255, 255, .05) 0%,
+    transparent 32%,
+    transparent 70%,
+    rgba(255, 255, 255, .02) 100%
+  ),
+    radial-gradient(
+    ellipse 75% 80% at 50% 50%,
+    transparent 62%,
+    rgba(0, 0, 0, .55) 100%
+  );
+  box-shadow:
+    inset 0 0 4em rgba(0, 0, 0, .5),
+    inset 0 .6em 1.2em -.4em rgba(255, 255, 255, .06);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 1px,
+      rgba(0, 0, 0, .3) 2px,
+      transparent 3px
+    ),
+      repeating-linear-gradient(
+      to right,
+      rgba(255, 40, 40, .035) 0 1px,
+      rgba(40, 255, 40, .035) 1px 2px,
+      rgba(40, 90, 255, .035) 2px 3px
+    );
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 22%;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      color-mix(in srgb, var(--ph) 5%, transparent) 60%,
+      transparent
+    );
+    opacity: var(--lit);
+    animation: roll 9s linear infinite;
+  }
+
+  [data-power=off] &,
+  [data-power=dying] & {
+    background:
+      radial-gradient(
+      ellipse 42% 30% at 28% 18%,
+      rgba(255, 255, 255, .12),
+      transparent 70%
+    ),
+      radial-gradient(
+      ellipse 24% 10% at 74% 10%,
+      rgba(255, 255, 255, .07),
+      transparent 80%
+    ),
+      linear-gradient(165deg, rgba(255, 255, 255, .07), transparent 40%),
+      radial-gradient(
+      ellipse 75% 80% at 50% 50%,
+      transparent 55%,
+      rgba(0, 0, 0, .6) 100%
+    );
+  }
+}
+
+@keyframes roll {
+  from {
+    transform: translateY(-110%);
+  }
+  to {
+    transform: translateY(560%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .Screen_Raster,
+  .Tube_Glass::after {
+    animation: none !important;
+  }
+}

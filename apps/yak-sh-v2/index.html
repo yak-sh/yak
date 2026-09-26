@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang=en>
+  <meta charset=utf-8>
+  <meta name=viewport
+    content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>yak.sh — the yaks toolkit</title>
+  <meta name=description
+    content="The yaks toolkit: the @yaks packages, the yak command line, sessions and tasks in one graph, on your machine or on Cloudflare, and yaks.app for hosting yaks apps. This page runs yak itself, every package loaded from JSR.">
+  <meta name=theme-color content="#07090a">
+  <link rel=icon href=icon.png>
+  <link rel=apple-touch-icon href=icon.png>
+  <link rel=preconnect href=https://esm.sh crossorigin>
+  <link rel=preload href=fonts/JetBrainsMono-Regular.woff2 as=font
+    type=font/woff2 crossorigin>
+  <link rel=preload href=fonts/JetBrainsMono-Bold.woff2 as=font type=font/woff2
+    crossorigin>
+  <link rel=stylesheet href=style.css>
+  <link rel=stylesheet href=crt.css>
+  <link rel=stylesheet href=panes.css>
+  <link rel=stylesheet href=chin.css>
+  <link rel=stylesheet href=disk.css>
+  <link rel=stylesheet href=man.css>
+  <link rel=stylesheet href=doc.css>
+  <!-- Every @yaks package at 0.2.1, as JSR holds it, built by esm.sh.
+       TODO: 0.2.1 predates @yaks/cli exporting registry and show from its
+       root, so @yaks/cli is mapped to a module adding them from the file
+       that holds them. Once the release after 0.2.1 is on JSR, map it
+       straight to esm.sh like the rest. -->
+  <script type=importmap>
+  {
+    "imports": {
+      "@yaks/vocab": "https://esm.sh/jsr/@yaks/vocab@0.2.1",
+      "@yaks/graph": "https://esm.sh/jsr/@yaks/graph@0.2.1",
+      "@yaks/graph/tools": "https://esm.sh/jsr/@yaks/graph@0.2.1/tools",
+      "@yaks/ram": "https://esm.sh/jsr/@yaks/ram@0.2.1",
+      "@yaks/match": "https://esm.sh/jsr/@yaks/match@0.2.1",
+      "@yaks/kernel/vocab": "https://esm.sh/jsr/@yaks/kernel@0.2.1/vocab",
+      "@yaks/doc": "https://esm.sh/jsr/@yaks/doc@0.2.1",
+      "@yaks/doc/views": "https://esm.sh/jsr/@yaks/doc@0.2.1/views",
+      "@yaks/edge": "https://esm.sh/jsr/@yaks/edge@0.2.1",
+      "@yaks/task": "https://esm.sh/jsr/@yaks/task@0.2.1",
+      "@yaks/task/tools": "https://esm.sh/jsr/@yaks/task@0.2.1/tools",
+      "@yaks/task/views": "https://esm.sh/jsr/@yaks/task@0.2.1/views",
+      "@yaks/project": "https://esm.sh/jsr/@yaks/project@0.2.1",
+      "@yaks/id": "https://esm.sh/jsr/@yaks/id@0.2.1",
+      "@yaks/id/vocab": "https://esm.sh/jsr/@yaks/id@0.2.1/vocab",
+      "@yaks/id/rules": "https://esm.sh/jsr/@yaks/id@0.2.1/rules",
+      "@yaks/model": "https://esm.sh/jsr/@yaks/model@0.2.1",
+      "@yaks/session": "https://esm.sh/jsr/@yaks/session@0.2.1",
+      "@yaks/session/views": "https://esm.sh/jsr/@yaks/session@0.2.1/views",
+      "@yaks/tools": "https://esm.sh/jsr/@yaks/tools@0.2.1",
+      "@yaks/tools/vocab": "https://esm.sh/jsr/@yaks/tools@0.2.1/vocab",
+      "@yaks/tools/views": "https://esm.sh/jsr/@yaks/tools@0.2.1/views",
+      "@yaks/cli": "data:text/javascript,export * from 'https://esm.sh/jsr/@yaks/cli@0.2.1'; export { registry, show } from 'https://esm.sh/jsr/@yaks/cli@0.2.1/answer.ts'",
+      "@yaks/markdown": "https://esm.sh/jsr/@yaks/markdown@0.2.1",
+      "preact": "https://esm.sh/preact@10.29.1"
+    }
+  }
+  </script>
+  <script>
+  // Which face the page wears before it paints: the CRT on a screen with room
+  // for it, the reading mode on a phone or where motion is unwelcome, and
+  // whichever the reader picked last time over both.
+  {
+    let picked
+    try {
+      picked = localStorage.getItem('yak.sh:mode')
+    } catch {}
+    let roomy = matchMedia('(min-width: 900px) and (min-height: 560px)').matches
+    let still = matchMedia('(prefers-reduced-motion: reduce)').matches
+    document.documentElement.dataset.mode = picked ||
+      (roomy && !still ? 'crt' : 'read')
+  }
+  </script>
+  <script type=module src=main.js></script>
+
+  <body>
+    <header class=Top>
+      <a class=Top_Brand href=./ aria-label="yak.sh, home"><span class=Top_Mark
+        aria-hidden=true>▚</span> yak.sh</a>
+      <nav class=Top_Disks aria-label=Sections>
+        <a href=#packages data-disk=packages
+          style="--disk:var(--disk-packages)">packages</a>
+        <a href=#cli data-disk=cli style="--disk:var(--disk-cli)">cli</a>
+        <a href=#sessions data-disk=sessions
+          style="--disk:var(--disk-sessions)">sessions</a>
+        <a href=#agents data-disk=agents
+          style="--disk:var(--disk-agents)">agents</a>
+        <a href=#run data-disk=run style="--disk:var(--disk-run)">run</a>
+        <a href=#yaks-app data-disk=yaks-app
+          style="--disk:var(--disk-yaks-app)">yaks.app</a>
+      </nav>
+      <div class=Top_Tools>
+        <button class=Toggle id=sound type=button aria-pressed=false
+          title="Drive and tube sounds">snd <b>off</b></button>
+        <button class=Toggle id=mode type=button
+          title="The CRT, or the page as plain reading">
+        <span class=Toggle_Crt>crt</span><span class=Toggle_Read>read</span>
+      </button>
+        <a class=Top_Link href=https://github.com/yak-sh/yak>github</a>
+        <a class=Top_Link href=https://jsr.io/@yaks>jsr</a>
+      </div>
+    </header>
+
+    <section class=Desk aria-label="A terminal running yak">
+      <div class=Rig>
+        <div class=Crt id=crt data-power=off>
+          <div class=Crt_Shell>
+            <div class=Crt_Bezel>
+              <div class=Crt_Tube>
+                <div class=Screen id=screen>
+                  <div class=Screen_Raster>
+                    <div class=Screen_Panes id=panes>
+                      <section class="Pane Pane-man" aria-label=Manual>
+                        <header
+                          class=Pane_Title><span id=man-title>motd</span><span
+                          class=Pane_Hint id=man-hint></span></header>
+                        <div class=Pane_Body id=man tabindex=0></div>
+                      </section>
+                      <section class="Pane Pane-graph" aria-label="The graph">
+                        <header
+                          class=Pane_Title><span>graph</span><span class=Pane_Hint
+                          id=graph-count></span></header>
+                        <div class=Pane_Body id=graph></div>
+                      </section>
+                      <section class="Pane Pane-sh" aria-label=Shell>
+                        <div class=Shell id=shell>
+                          <div class=Shell_Log id=log role=log
+                            aria-live=polite></div>
+                          <label class=Shell_Line
+                            id=line><span class=Shell_Prompt>yak.sh $</span><span
+                            id=typed></span><span class=Cursor id=cursor
+                            aria-hidden=true> </span><span id=after></span><input
+                            class=Shell_Input id=input
+                            autocomplete=off autocapitalize=off autocorrect=off
+                            spellcheck=false enterkeyhint=go
+                            aria-label="Type a command"></label>
+                        </div>
+                      </section>
+                      <footer class=Bar id=bar></footer>
+                    </div>
+                  </div>
+                  <div class=Screen_Ghost id=ghost aria-hidden=true></div>
+                </div>
+                <div class=Tube_Glass aria-hidden=true></div>
+              </div>
+            </div>
+            <div class=Crt_Chin>
+              <div class=Crt_Badge
+                aria-hidden=true><span>yak</span><small>terminal</small></div>
+              <div class=Crt_Vents aria-hidden=true></div>
+              <div class=Controls>
+                <button class=Knob id=phosphor type=button
+                  title="Phosphor: green, amber or white"><span
+                  class=Knob_Cap></span><small>P1·P3·P4</small></button>
+                <button class=Degauss id=degauss type=button
+                  title=Degauss><span></span><small>degauss</small></button>
+              </div>
+              <div class=Drive id=drive>
+                <div class=Drive_Face>
+                  <div class=Drive_Slot>
+                    <div class=Drive_Flap></div>
+                  </div>
+                  <span class=Drive_Led id=led aria-hidden=true></span>
+                  <button class=Drive_Eject id=eject type=button
+                    aria-label="Eject the disk" disabled></button>
+                </div>
+                <small class=Drive_Label aria-hidden=true>3.5" · fd0</small>
+              </div>
+              <button class=Power id=power type=button aria-pressed=false
+                aria-label="Power"><span class=Power_Led></span></button>
+            </div>
+          </div>
+          <div class=Crt_Stand aria-hidden=true></div>
+        </div>
+      </div>
+
+      <nav class=Shelf aria-label=Disks>
+        <p class=Shelf_Note>Six disks. Slide one into the drive.</p>
+        <ul class=Shelf_Disks>
+          <li><a class=Disk href=#packages data-disk=packages style="--disk:var(--disk-packages);--tilt:-3deg">
+            <span class=Disk_Rail></span>
+            <span class=Disk_Shutter><span class=Disk_Window></span></span>
+            <span class=Disk_Label><span class=Disk_Head><b>yak.sh</b><i>1/6</i></span><span
+                class=Disk_Title>packages</span><span class=Disk_Note>@yaks/* and the
+                map</span></span>
+            <span class=Disk_Tab></span>
+          </a>
+        <li><a class=Disk href=#cli data-disk=cli style="--disk:var(--disk-cli);--tilt:2deg">
+            <span class=Disk_Rail></span>
+            <span class=Disk_Shutter><span class=Disk_Window></span></span>
+            <span class=Disk_Label><span class=Disk_Head><b>yak.sh</b><i>2/6</i></span><span
+                class=Disk_Title>yak</span><span class=Disk_Note>the cli and its
+                roles</span></span>
+            <span class=Disk_Tab></span>
+          </a>
+        <li><a class=Disk href=#sessions data-disk=sessions style="--disk:var(--disk-sessions);--tilt:-1.5deg">
+            <span class=Disk_Rail></span>
+            <span class=Disk_Shutter><span class=Disk_Window></span></span>
+            <span class=Disk_Label><span class=Disk_Head><b>yak.sh</b><i>3/6</i></span><span
+                class=Disk_Title>sessions</span><span class=Disk_Note>and tasks, in
+                the graph</span></span>
+            <span class=Disk_Tab></span>
+          </a>
+        <li><a class=Disk href=#agents data-disk=agents style="--disk:var(--disk-agents);--tilt:3.5deg">
+            <span class=Disk_Rail></span>
+            <span class=Disk_Shutter><span class=Disk_Window></span></span>
+            <span class=Disk_Label><span class=Disk_Head><b>yak.sh</b><i>4/6</i></span><span
+                class=Disk_Title>agents</span><span class=Disk_Note>mcp · hooks ·
+                import</span></span>
+            <span class=Disk_Tab></span>
+          </a>
+        <li><a class=Disk href=#run data-disk=run style="--disk:var(--disk-run);--tilt:-2.5deg">
+            <span class=Disk_Rail></span>
+            <span class=Disk_Shutter><span class=Disk_Window></span></span>
+            <span class=Disk_Label><span class=Disk_Head><b>yak.sh</b><i>5/6</i></span><span
+                class=Disk_Title>run</span><span class=Disk_Note>a box ·
+                cloudflare</span></span>
+            <span class=Disk_Tab></span>
+          </a>
+        <li><a class="Disk Disk-clear" href=#yaks-app data-disk=yaks-app style="--disk:var(--disk-yaks-app);--tilt:1.5deg">
+            <span class=Disk_Rail></span>
+            <span class=Disk_Shutter><span class=Disk_Window></span></span>
+            <span class=Disk_Label><span class=Disk_Head><b>yak.sh</b><i>6/6</i></span><span
+                class=Disk_Title>yaks.app</span><span class=Disk_Note>build, host,
+                share</span></span>
+            <span class=Disk_Tab></span>
+          </a>
+      </ul>
+    </nav>
+    <div class=Fly id=fly aria-hidden=true></div>
+  </section>
+
+  <main class=Doc id=doc>
+    <section class="Man Man-motd" id=motd data-man="YAK.SH(7)">
+      <pre class=Logo aria-label=yak.sh>
+██╗   ██╗ █████╗ ██╗  ██╗   ███████╗██╗  ██╗
+╚██╗ ██╔╝██╔══██╗██║ ██╔╝   ██╔════╝██║  ██║
+ ╚████╔╝ ███████║█████╔╝    ███████╗███████║
+  ╚██╔╝  ██╔══██║██╔═██╗    ╚════██║██╔══██║
+   ██║   ██║  ██║██║  ██╗██╗███████║██║  ██║
+   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═╝</pre>
+      <p class=Lead>
+        One graph, worked by people and agents through the same doors.
+      </p>
+      <p>
+        yaks is a toolkit of TypeScript packages for storing, querying and
+        rendering records as entities, plus the packages that run agent
+        sessions, tools and tasks over them. <b>yak</b> is its command line,
+        and <a href=https://yaks.app>yaks.app</a> hosts the apps built with it.
+        Every change is an entity patch, and every list is a query.
+      </p>
+      <pre><code>deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install</code></pre>
+      <p class=Only-crt>
+        This screen runs <b>yak</b>: @yaks/graph over @yaks/ram, with the task
+        vocabulary, every package fetched from JSR as the page loaded. Type
+        <kbd>yak help</kbd> below, or slide a disk into the drive.
+      </p>
+      <p class=Only-read>
+        Every example marked <b>run</b> runs <b>yak</b> in this page:
+        @yaks/graph over @yaks/ram with the task vocabulary, every package
+        fetched from JSR. They all write to one graph.
+      </p>
+      <nav class=Index aria-label=Disks>
+        <a href=#packages data-disk=packages style="--disk:var(--disk-packages)"><b>packages</b> the @yaks packages, and a map of them</a>
+        <a href=#cli data-disk=cli style="--disk:var(--disk-cli)"><b>yak</b> the command line, and the roles a process serves</a>
+        <a href=#sessions data-disk=sessions style="--disk:var(--disk-sessions)"><b>sessions</b> tasks, claims and transcripts, in the graph</a>
+        <a href=#agents data-disk=agents style="--disk:var(--disk-agents)"><b>agents</b> MCP, hooks, and transcripts from outside</a>
+        <a href=#run data-disk=run style="--disk:var(--disk-run)"><b>run</b> on a box, on Cloudflare, or in this page</a>
+        <a href=#yaks-app data-disk=yaks-app style="--disk:var(--disk-yaks-app)"><b>yaks.app</b> build, host and share web apps</a>
+      </nav>
+    </section>
+
+    <article class=Man id=packages data-man="YAKS(7)" data-disk="PACKAGES">
+      <h2>Name</h2>
+      <p><b>yaks</b> — the @yaks packages: one graph, and the packages that
+        store, query, draw and work it</p>
+
+      <h2>Synopsis</h2>
+      <pre><code>deno add jsr:@yaks/graph jsr:@yaks/ram jsr:@yaks/vocab</code></pre>
+
+      <h2>Description</h2>
+      <p>
+        An <b>entity</b> is a record identified by <code>entity.eid</code>, a
+        uuid. Its <b>components</b> are named objects, each describing one
+        aspect of it. There is no kind column: an entity is what its components
+        make it. A task is <code>doc{title, body}</code> plus
+        <code>task{}</code>; a comment is <code>doc</code> plus
+        <code>comment{target}</code>.
+      </p>
+      <dl>
+        <dt>bundle</dt>
+        <dd>One entity's components as a JSON object:
+          <code>{entity: {eid}, doc: {title}}</code>.</dd>
+        <dt>batch</dt>
+        <dd>A list of changes applied in one transaction. Each component in a
+          bundle is a patch: an omitted property is unchanged, <code>null</code>
+          clears it.</dd>
+        <dt>vocabulary</dt>
+        <dd>The schema a graph accepts: each package's
+          <code>vocab.json</code>, JSON Schema 2020-12 plus a few keywords of
+          its own.</dd>
+        <dt>query</dt>
+        <dd>One grammar for every list: <code>.task.status=open .priority&lt;=1</code>.
+          A bare word is a text search over the properties marked
+          <code>search: true</code>.</dd>
+      </dl>
+
+      <h2>Start here</h2>
+      <p>
+        A whole graph in memory, from the
+        <a href=https://github.com/yak-sh/yak/tree/main/packages#start-here>packages
+          README</a>. It runs here as written:
+      </p>
+      <div class=Ex data-run=js>
+        <pre><code>import { docDoc } from '@yaks/doc'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+
+let vocab = loadVocab([docDoc])
+let g = graph({ storage: ram(vocab), vocab })
+await g.apply([{
+  entity: { eid: 'first-note' },
+  doc: { title: 'Getting started', body: 'A document stored as components.' },
+}])
+console.log(await g.read('.doc.title="Getting started"'))</code></pre>
+      </div>
+      <p>
+        Swap <code>ram</code> for
+        <a href=https://jsr.io/@yaks/sqlite>@yaks/sqlite</a> to keep it on disk,
+        put <a href=https://jsr.io/@yaks/api>@yaks/api</a> in front for HTTP,
+        and use <a href=https://jsr.io/@yaks/client>@yaks/client</a> for a
+        browser graph that stays in sync.
+      </p>
+
+      <h2>Map</h2>
+      <p>
+        Every package in the workspace, and each import of one by another, read
+        from its own source (<code>bin/package-map.ts</code>). Point at a
+        package for what it imports and what imports it; open one for its
+        README.
+      </p>
+      <figure class=Map id=map data-src=packages.json>
+        <figcaption class=Map_Caption>The package map draws here once the page's
+          scripts run.</figcaption>
+      </figure>
+
+      <h2>Packages</h2>
+      <p>
+        Grouped by what they are for, not by dependency. Nearly all are
+        published on <a href=https://jsr.io/@yaks>JSR</a>; import only the
+        ones you need.
+      </p>
+      <div class=Groups>
+        <section class=Group>
+          <h3>Graph</h3>
+          <dl class=Pkgs>
+            <dt><a href=https://jsr.io/@yaks/graph data-pkg=graph>graph</a><dd>entities, components and the phased <code>apply()</code>
+            <dt><a href=https://jsr.io/@yaks/vocab data-pkg=vocab>vocab</a><dd>a vocabulary as JSON Schema, read at runtime
+            <dt><a href=https://jsr.io/@yaks/query data-pkg=query>query</a><dd>the query grammar, parsed to an AST
+            <dt><a href=https://jsr.io/@yaks/sql data-pkg=sql>sql</a><dd>the SQL AST and its renderer
+            <dt><a href=https://jsr.io/@yaks/match data-pkg=match>match</a><dd>the same queries over bundles in memory
+            <dt><a href=https://jsr.io/@yaks/ram data-pkg=ram>ram</a><dd>storage in a <code>Map</code>, for pages and tests
+            <dt><a href=https://jsr.io/@yaks/sqlite data-pkg=sqlite>sqlite</a><dd>storage in a SQLite file
+            <dt><a href=https://jsr.io/@yaks/edge data-pkg=edge>edge</a><dd>links between entities, and traversal
+            <dt><a href=https://jsr.io/@yaks/fts data-pkg=fts>fts</a><dd>full-text search over FTS5
+            <dt><a href=https://jsr.io/@yaks/embedding data-pkg=embedding>embedding</a><dd>vectors and <code>.near=&lt;entity&gt;</code>
+            <dt><a href=https://jsr.io/@yaks/blob data-pkg=blob>blob</a><dd>long values stored by hash
+            <dt><a href=https://jsr.io/@yaks/journal data-pkg=journal>journal</a><dd>history, undo and a change feed
+            <dt><a href=https://jsr.io/@yaks/effects data-pkg=effects>effects</a><dd>work owed by a commit, run by a pool
+            <dt><a href=https://jsr.io/@yaks/id data-pkg=id>id</a><dd>eids, and short ids like <code>T-7</code>
+            <dt><a href=https://jsr.io/@yaks/key data-pkg=key>key</a>, <a href=https://jsr.io/@yaks/alias data-pkg=alias>alias</a>, <a href=https://jsr.io/@yaks/names data-pkg=names>names</a><dd>other ways to address an entity
+            <dt><a href=https://jsr.io/@yaks/archetype data-pkg=archetype>archetype</a><dd>each entity's set of component tables
+            <dt><a href=https://jsr.io/@yaks/yaml data-pkg=yaml>yaml</a><dd>YAML and Markdown frontmatter as bundles
+          </dl>
+        </section>
+        <section class=Group>
+          <h3>Doors</h3>
+          <dl class=Pkgs>
+            <dt><a href=https://jsr.io/@yaks/api data-pkg=api>api</a><dd><code>/apply</code>, <code>/query</code> and <code>/ws</code> subscriptions
+            <dt><a href=https://jsr.io/@yaks/mcp data-pkg=mcp>mcp</a><dd>the graph as an MCP server
+            <dt><a href=https://jsr.io/@yaks/mcp-client data-pkg=mcp-client>mcp-client</a><dd>a remote MCP server's tools, used from here
+            <dt><a href=https://jsr.io/@yaks/cli data-pkg=cli>cli</a><dd>the <code>yak</code> command, and <code>compose</code>
+            <dt><a href=https://jsr.io/@yaks/sync data-pkg=sync>sync</a><dd>optimistic writes, reconciled with a server
+            <dt><a href=https://jsr.io/@yaks/client data-pkg=client>client</a><dd>the browser graph, queries as live values
+            <dt><a href=https://github.com/yak-sh/yak/tree/main/packages/web data-pkg=web>web</a><dd>the canvas, cards and boards <code>yak serve</code> answers in a browser
+            <dt><a href=https://jsr.io/@yaks/workerd data-pkg=workerd>workerd</a><dd>the same handler as a Cloudflare Worker
+            <dt><a href=https://jsr.io/@yaks/durable-object data-pkg=durable-object>durable-object</a><dd>one Durable Object, one graph
+            <dt><a href=https://jsr.io/@yaks/d1 data-pkg=d1>d1</a><dd>the same storage over D1
+          </dl>
+        </section>
+        <section class=Group>
+          <h3>Rendering</h3>
+          <dl class=Pkgs>
+            <dt><a href=https://jsr.io/@yaks/render data-pkg=render>render</a><dd>pick a renderer by how specifically it matches
+            <dt><a href=https://jsr.io/@yaks/preact data-pkg=preact>preact</a><dd>that registry in Preact
+            <dt><a href=https://jsr.io/@yaks/html data-pkg=html>html</a><dd>the same views as server-side HTML
+            <dt><a href=https://jsr.io/@yaks/text data-pkg=text>text</a><dd>the same views as Markdown and plain text
+            <dt><a href=https://jsr.io/@yaks/tui data-pkg=tui>tui</a><dd>the same views in a terminal
+            <dt><a href=https://jsr.io/@yaks/markdown data-pkg=markdown>markdown</a><dd>GitHub Flavored Markdown as nodes
+            <dt><a href=https://jsr.io/@yaks/canvas data-pkg=canvas>canvas</a><dd>the interface itself stored as data
+          </dl>
+        </section>
+        <section class=Group>
+          <h3>Agents</h3>
+          <dl class=Pkgs>
+            <dt><a href=https://jsr.io/@yaks/session data-pkg=session>session</a><dd>transcripts as entries, claims, model turns
+            <dt><a href=https://jsr.io/@yaks/harness data-pkg=harness>harness</a><dd>an agent runner and its terminal app
+            <dt><a href=https://jsr.io/@yaks/spawn data-pkg=spawn>spawn</a><dd><code>claude</code> and <code>codex</code> as sessions
+            <dt><a href=https://jsr.io/@yaks/process data-pkg=process>process</a><dd>a running program as an entity
+            <dt><a href=https://jsr.io/@yaks/tools data-pkg=tools>tools</a><dd>calls and results, recorded in the graph
+            <dt><a href=https://jsr.io/@yaks/model data-pkg=model>model</a><dd>one model interface; <a href=https://jsr.io/@yaks/openai data-pkg=openai>openai</a>, <a href=https://jsr.io/@yaks/openrouter data-pkg=openrouter>openrouter</a> and <a href=https://github.com/yak-sh/yak/tree/main/packages/workers-ai data-pkg=workers-ai>workers-ai</a> implement it
+            <dt><a href=https://jsr.io/@yaks/context data-pkg=context>context</a><dd>what a model was given, recorded
+            <dt><a href=https://jsr.io/@yaks/builders data-pkg=builders>builders</a>, <a href=https://jsr.io/@yaks/dreaming data-pkg=dreaming>dreaming</a><dd>outputs an agent builds from inputs
+            <dt><a href=https://jsr.io/@yaks/heal data-pkg=heal>heal</a><dd>an exception files a task about itself
+            <dt><a href=https://jsr.io/@yaks/tmux data-pkg=tmux>tmux</a><dd>a terminal somebody can watch
+          </dl>
+        </section>
+        <section class=Group>
+          <h3>Work</h3>
+          <dl class=Pkgs>
+            <dt><a href=https://jsr.io/@yaks/task data-pkg=task>task</a><dd>tasks, with status computed from marks
+            <dt><a href=https://jsr.io/@yaks/project data-pkg=project>project</a><dd>projects, and boards as saved queries
+            <dt><a href=https://jsr.io/@yaks/goal data-pkg=goal>goal</a><dd>objectives that are never finished
+            <dt><a href=https://jsr.io/@yaks/design data-pkg=design>design</a><dd>proposals and their decisions
+            <dt><a href=https://jsr.io/@yaks/memory data-pkg=memory>memory</a><dd>what a person said, in their words
+            <dt><a href=https://jsr.io/@yaks/persona data-pkg=persona>persona</a><dd>instruction sets, rendered to Markdown
+            <dt><a href=https://jsr.io/@yaks/doc data-pkg=doc>doc</a><dd>the <code>doc{title, body}</code> everything shares
+            <dt><a href=https://jsr.io/@yaks/kernel data-pkg=kernel>kernel</a><dd>provenance: <code>created</code>, <code>updated</code>, <code>comment</code>
+            <dt><a href=https://jsr.io/@yaks/wake data-pkg=wake>wake</a><dd>coming back to something later
+            <dt><a href=https://jsr.io/@yaks/notify data-pkg=notify>notify</a><dd>watch, mute and notifications
+            <dt><a href=https://jsr.io/@yaks/mail data-pkg=mail>mail</a><dd>letters in and out
+            <dt><a href=https://jsr.io/@yaks/hook data-pkg=hook>hook</a><dd>stored webhook deliveries
+            <dt><a href=https://jsr.io/@yaks/page data-pkg=page>page</a><dd>web pages, captured
+            <dt><a href=https://jsr.io/@yaks/git data-pkg=git>git</a>, <a href=https://jsr.io/@yaks/code data-pkg=code>code</a>, <a href=https://jsr.io/@yaks/mirror data-pkg=mirror>mirror</a><dd>a repository and its files in the graph
+          </dl>
+        </section>
+        <section class=Group>
+          <h3>Access and hosting</h3>
+          <dl class=Pkgs>
+            <dt><a href=https://jsr.io/@yaks/member data-pkg=member>member</a><dd>memberships, grants and app access
+            <dt><a href=https://jsr.io/@yaks/secrets data-pkg=secrets>secrets</a><dd>written through the graph, kept in a vault
+            <dt><a href=https://jsr.io/@yaks/connections data-pkg=connections>connections</a><dd>outside services, their credentials as secrets
+            <dt><a href=https://jsr.io/@yaks/oauth data-pkg=oauth>oauth</a><dd>one authorization-code client; providers are data
+            <dt><a href=https://jsr.io/@yaks/egress data-pkg=egress>egress</a><dd>calls out with a credential the caller never holds
+            <dt><a href=https://jsr.io/@yaks/platform data-pkg=platform>platform</a><dd>what a host keeps about its spaces and apps
+            <dt><a href=https://jsr.io/@yaks/tunnel data-pkg=tunnel>tunnel</a><dd>a space's tunnel to a machine with no open port
+            <dt><a href=https://github.com/yak-sh/yak/tree/main/packages/admin data-pkg=admin>admin</a><dd>the owner's verbs on yaks.app, as <code>yak admin</code> tools; unpublished
+          </dl>
+        </section>
+      </div>
+
+      <h2>See also</h2>
+      <p><a href=#cli data-disk=cli>yak(1)</a>,
+        <a href=https://github.com/yak-sh/yak/tree/main/packages>packages/README.md</a>,
+        <a href=https://jsr.io/@yaks>jsr.io/@yaks</a></p>
+    </article>
+
+    <article class=Man id=cli data-man="YAK(1)" data-disk="YAK">
+      <h2>Name</h2>
+      <p><b>yak</b> — the command line for a yaks graph, on this machine or
+        behind an MCP server</p>
+
+      <h2>Synopsis</h2>
+      <pre><code>yak [--config <i>path</i> | --host <i>host</i>] [--json] [--tui]
+    [--no-duties] <i>noun verb</i> [<i>args</i>]
+yak help [<i>word</i> ...]
+yak init <i>your name</i></code></pre>
+
+      <h2>Description</h2>
+      <p>
+        <b>yak</b> turns each tool a graph declares into a subcommand, with
+        arguments and help from the tool's input schema, so a new tool needs no
+        new CLI release. It provides five commands itself: <code>help</code>,
+        <code>init</code>, <code>login</code>, <code>logout</code> and
+        <code>apply</code>. The rest come from a graph opened in this process,
+        or from an MCP server asked at run time. A tool with a noun and a verb
+        is written in either order: <code>yak task list</code> is
+        <code>yak list task</code>.
+      </p>
+      <p class=Only-crt>
+        The terminal below is <code>cli()</code> from @yaks/cli, handed the
+        graph tier of @yaks/graph and the tools of @yaks/task over a graph in
+        memory: the same parser, help pages and exit codes.
+      </p>
+      <p class=Only-read>
+        The examples here run through <code>cli()</code> from @yaks/cli, handed
+        the graph tier of @yaks/graph and the tools of @yaks/task over a graph
+        in memory: the same parser, help pages and exit codes.
+      </p>
+      <div class=Ex data-run=sh>
+        <pre><code>yak help
+yak help task
+yak list task
+yak task list --json</code></pre>
+      </div>
+
+      <h2>Where a command runs</h2>
+      <p>
+        A command that names a config opens that graph in its own process, runs
+        the tool and exits. It does not need <code>yak serve</code>: SQLite
+        runs in WAL mode, so separate commands and a server share one file.
+        The target is chosen in this order:
+      </p>
+      <table>
+        <tr><th>Input<th>Target
+        <tr><td><code>--config <i>path</i></code><td>the local graph that config describes
+        <tr><td><code>--host <i>host</i></code><td>the remote MCP server at <code><i>host</i>/mcp</code>
+        <tr><td><code>$YAKS_HOST</code><td>the remote MCP server it names
+        <tr><td><code>$YAK_CONFIG</code><td>the local graph it describes
+        <tr><td><code>~/.yak/yak.json</code><td>the local graph in that file, if it exists
+        <tr><td>none of these<td><code>https://yaks.app/mcp</code>
+      </table>
+      <p>
+        Local and remote calls both become a <code>call</code> entity run
+        through @yaks/tools, so a person and an agent get the same validation,
+        rules, effects, attribution and stored record.
+      </p>
+
+      <h2>The config</h2>
+      <p>
+        <code>yak init <i>your name</i></code> writes <code>~/.yak/yak.json</code>
+        with the plugins a graph, its tasks, sessions, <code>/mcp</code> and
+        the web canvas need. A config is plain JSON, so a plugin is one more
+        line:
+      </p>
+      <pre><code>{
+  "db": "graph.db",
+  "plugins": ["@yaks/kernel", "@yaks/id", "@yaks/secrets", "@yaks/doc",
+              "@yaks/effects", "@yaks/tools", "@yaks/task", "@yaks/api"],
+  "numbers": true,
+  "port": 8787
+}</code></pre>
+      <pre><code>yak --config yak.json task new 'Buy the cake' --priority 1
+yak --config yak.json serve      <i># @yaks/api's serve tool: HTTP</i>
+yak app_list                     <i># a tool on yaks.app's MCP server</i></code></pre>
+
+      <h2>Roles</h2>
+      <p>
+        A plugin is a package, and each kind of thing it contributes is a
+        subpath export. A process serves roles and imports only the facets of
+        the roles it serves, so a command line never loads a web server it will
+        not start.
+      </p>
+      <table>
+        <tr><th>Role<th>Facets<th>What the process does
+        <tr><td><code>graph</code><td><code>./vocab</code> <code>./rules</code> <code>./tools</code><td>opens the file, admits writes, runs tool calls
+        <tr><td><code>web</code><td><code>./routes</code><td>answers HTTP with the routes @yaks/api hosts
+        <tr><td><code>effects</code><td><code>./effects</code><td>claims and runs what commits owe, in a pool
+        <tr><td><i>a plugin's name</i><td>its <code>./service</code><td>keeps that plugin's timer or poll running
+      </table>
+      <p>
+        <code>./views</code> is for drawing: the web UI and <b>yak</b> import
+        it to show an answer, so it must work in a browser and import no SQL
+        or storage driver. <code>./tui</code> adds terminal views for
+        <code>--tui</code>.
+      </p>
+
+      <h2>Duties</h2>
+      <p>
+        Working the effect pool and each plugin's <code>./service</code> are
+        duties. Any number of processes work the pool, each claiming a run
+        before it runs it; each service runs under a lease named for its
+        package, so one process at a time runs it. A <b>yak</b> command runs
+        its duties in a thread of its own, only where no live process is
+        serving them. <code>--no-duties</code> takes no lease and runs none.
+      </p>
+
+      <h2>Exit status</h2>
+      <table>
+        <tr><td><code>0</code><td>success
+        <tr><td><code>1</code><td>a tool or server refused or failed the request
+        <tr><td><code>2</code><td>invalid command-line usage
+      </table>
+      <div class=Ex data-run=sh>
+        <pre><code>yak task update T-99 done
+yak task new</code></pre>
+      </div>
+
+      <h2>See also</h2>
+      <p><a href=#sessions data-disk=sessions>yak-sessions(7)</a>,
+        <a href=https://github.com/yak-sh/yak/tree/main/packages/cli data-pkg=cli>@yaks/cli</a></p>
+    </article>
+
+    <article class=Man id=sessions data-man="YAK-SESSIONS(7)" data-disk="SESSIONS">
+      <h2>Name</h2>
+      <p><b>sessions</b>, <b>tasks</b> — agent work, kept in the graph</p>
+
+      <h2>Tasks</h2>
+      <p>
+        A task is <code>doc</code> plus <code>task</code>. Its status (open,
+        done, cancelled) is computed from its <code>completed</code> and
+        <code>cancelled</code> marks, never stored, by one rule that SQL and the
+        in-memory evaluator both read. A board is a saved query, never a stored
+        list: a task is on a board because it matches.
+      </p>
+      <div class=Ex data-run=sh>
+        <pre><code>yak task new 'Buy the cake' --priority 1
+yak task list
+yak task list '.priority&lt;=1'</code></pre>
+      </div>
+      <p>
+        Edges are entities too (@yaks/edge): <code>edge{from, to}</code> plus a
+        relation component. This page's graph opened with two tasks and the
+        edge between them:
+      </p>
+      <div class=Ex data-run=sh>
+        <pre><code>yak graph show T-1
+yak task update T-2 done
+yak task list .task.status=done</code></pre>
+      </div>
+
+      <h2>Sessions</h2>
+      <p>
+        A session is an entity with a <code>session</code> component, and each
+        transcript entry is an entity beside it, <code>entry{session, seq}</code>.
+        The components beside <code>entry</code> say what it is:
+      </p>
+      <table>
+        <tr><th>Components<th>Meaning
+        <tr><td><code>content{body}</code><td>input from a person or system
+        <tr><td><code>ask{to, through}</code><td>a request to a model
+        <tr><td><code>content</code> + <code>output{source}</code><td>model or process output
+        <tr><td><code>call{to, id, args, source}</code><td>a tool call a model requested
+        <tr><td><code>result{call}</code> + <code>content</code><td>a tool result
+        <tr><td><code>stop</code><td>no further transcript work
+      </table>
+      <p>
+        <code>settle()</code> runs a transcript until it has nothing more to
+        do, under a lease named for it, so two processes never run one
+        transcript at once. The example from @yaks/session's README, with a
+        model that is a local function; it runs here as written, types
+        removed:
+      </p>
+      <div class=Ex data-run=js>
+        <pre><code>import { graph } from '@yaks/graph'
+import { modelDoc } from '@yaks/model'
+import { ram } from '@yaks/ram'
+import { sessionDoc, sessions, settle, transcript } from '@yaks/session'
+import { toolsDoc } from '@yaks/tools/vocab'
+import { loadVocab } from '@yaks/vocab'
+
+const vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
+const g = graph({ storage: ram(vocab), vocab, plugins: [sessions()] })
+const model = async (request) => ({
+  id: crypto.randomUUID(),
+  model: request.model,
+  items: [{ kind: 'assistant', text: 'pong' }],
+})
+await g.apply([
+  { entity: { eid: '$provider' }, provider: { name: 'local' } },
+  { entity: { eid: '$model' }, model: { name: 'example' } },
+  { entity: { eid: 'session' }, session: {} },
+  {
+    entity: { eid: 'input' },
+    entry: { session: 'session' },
+    content: { body: 'Reply with pong' },
+    using: { provider: '$provider', model: '$model' },
+  },
+])
+await settle(g, 'session', { holder: 'here', model, tools: [] })
+console.log(await transcript(g, 'session'))</code></pre>
+      </div>
+
+      <h2>Claims</h2>
+      <p>
+        <code>claim{session}</code> is stored on the entity a session holds. A
+        batch that would replace another session's claim fails whole with
+        <code>Bounced</code>, and the collision is then written down as a
+        <code>conflict{target, loser, holder, at}</code>, in a transaction of
+        its own. Claims do not expire; deleting a session releases them.
+      </p>
+      <div class=Ex data-run=sh>
+        <pre><code>yak graph apply --change '[{"entity":{"eid":"ada"},"session":{}},{"entity":{"eid":"bo"},"session":{}}]'
+yak graph apply --change '[{"entity":{"eid":"T-1"},"claim":{"session":"ada"}}]'
+yak graph apply --change '[{"entity":{"eid":"T-1"},"claim":{"session":"bo"}}]'
+yak graph query .conflict</code></pre>
+      </div>
+
+      <h2>Runners</h2>
+      <p>
+        <a href=https://jsr.io/@yaks/harness data-pkg=harness>@yaks/harness</a>
+        runs sessions over any model the
+        <a href=https://jsr.io/@yaks/model data-pkg=model>@yaks/model</a>
+        interface covers, and names no machine: it runs on a box or in a
+        Cloudflare Worker. <a href=https://jsr.io/@yaks/spawn data-pkg=spawn>@yaks/spawn</a>
+        starts <code>claude</code> or <code>codex</code> as a detached process
+        and reads its JSON-lines output back as the session's entries, so a run
+        outlives the process that started it.
+      </p>
+      <pre><code>yak session spawn T-1 --provider codex --wait
+yak session peek S-2</code></pre>
+
+      <h2>See also</h2>
+      <p><a href=#agents data-disk=agents>yak-agents(7)</a>,
+        <a href=https://github.com/yak-sh/yak/tree/main/packages/session data-pkg=session>@yaks/session</a>,
+        <a href=https://github.com/yak-sh/yak/tree/main/packages/task data-pkg=task>@yaks/task</a></p>
+    </article>
+
+    <article class=Man id=agents data-man="YAK-AGENTS(7)" data-disk="AGENTS">
+      <h2>Name</h2>
+      <p><b>agents</b> — MCP, harness hooks, and transcripts read in from
+        outside</p>
+
+      <h2>MCP</h2>
+      <p>
+        <a href=https://jsr.io/@yaks/mcp data-pkg=mcp>@yaks/mcp</a> serves a
+        graph as an MCP server: at <code>/mcp</code> when a config lists it, or
+        over stdio. Agents get four generic tools that take and return bundles,
+        plus every plugin's own tools; a fifth, <code>search</code>, comes with
+        a search callback.
+      </p>
+      <table>
+        <tr><th>Tool<th>Purpose
+        <tr><td><code>graph_apply</code><td>apply changes, answer the applied bundles
+        <tr><td><code>graph_query</code><td>read the entities a query selects
+        <tr><td><code>graph_show</code><td>read named entities, each whole
+        <tr><td><code>graph_schema</code><td>describe components, properties and kinds
+      </table>
+      <p>
+        The same four are the <code>yak graph</code> commands, declared once in
+        @yaks/graph: an agent calling <code>graph_query</code> and a person
+        typing <code>yak graph query</code> run one implementation, and both
+        leave a <code>call</code> in the graph.
+      </p>
+      <div class=Ex data-run=sh>
+        <pre><code>yak graph query '.task&amp;?doc'
+yak graph schema claim
+yak graph apply --check --change '[{"entity":{"eid":"$t"},"task":{},"doc":{"title":"only a check"}}]'</code></pre>
+      </div>
+
+      <h2>Hooks</h2>
+      <p>
+        <code>yak hooks install</code> writes lifecycle hooks into a
+        Claude-compatible settings file (<code>~/.claude/settings.json</code> by
+        default), replacing an earlier install and leaving every other entry
+        alone. A harness runs each hook with the event as JSON on stdin.
+      </p>
+      <table>
+        <tr><th>Event<th>Command<th>Effect
+        <tr><td>SessionStart, SubagentStart<td><code>yak session context --hook -</code><td>creates the session under the harness's id; prints its claims
+        <tr><td>SessionEnd<td><code>yak session wrap --hook -</code><td>releases the session's claims
+      </table>
+
+      <h2>Transcripts from outside</h2>
+      <p>
+        A session a harness runs elsewhere is read into the graph from the
+        harness's own log, by one importer (<code>@yaks/session/tail</code>)
+        with a reader per format, <code>claude</code> and <code>codex</code>.
+        Every entry carries <code>imported{source, line}</code>, and entry ids
+        are derived from the session, the line and the place in it, so a line
+        read twice writes nothing new. The <code>@yaks/session/service</code>
+        duty follows Claude Code's transcript files under
+        <code>~/.claude/projects</code>.
+      </p>
+      <div class=Ex data-run=sh>
+        <pre><code>yak graph apply --change '[{"entity":{"eid":"$s"},"session":{}},{"entity":{"eid":"$e"},"entry":{"session":"$s"},"content":{"body":"fix T-2"},"imported":{"source":"claude","line":1}}]'
+yak graph query .imported</code></pre>
+      </div>
+
+      <h2>Outward</h2>
+      <p>
+        <a href=https://jsr.io/@yaks/mcp-client data-pkg=mcp-client>@yaks/mcp-client</a>
+        reaches a remote MCP server's tools and hands them to a native session
+        like its own. And <b>yak</b> itself is an MCP client:
+        <code>yak app_list</code> is a tool on yaks.app's server.
+      </p>
+
+      <h2>See also</h2>
+      <p><a href=#sessions data-disk=sessions>yak-sessions(7)</a>,
+        <a href=https://github.com/yak-sh/yak/tree/main/packages/mcp data-pkg=mcp>@yaks/mcp</a></p>
+    </article>
+
+    <article class=Man id=run data-man="YAK-RUN(7)" data-disk="RUN">
+      <h2>Name</h2>
+      <p><b>run</b> — the same graph on a box, on Cloudflare, or in this
+        page</p>
+
+      <h2>A box</h2>
+      <pre><code>deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install
+yak init Ada
+yak serve</code></pre>
+      <p>
+        <code>yak serve</code> answers HTTP, WebSocket subscriptions and, when
+        the config lists @yaks/mcp, MCP at <code>/mcp</code>, over one SQLite
+        file. <a href=https://jsr.io/@yaks/process data-pkg=process>@yaks/process</a>
+        runs a program so it outlives the server that started it. Secrets live
+        in a vault of private files beside the database.
+      </p>
+
+      <h2>Cloudflare</h2>
+      <p>
+        <a href=https://jsr.io/@yaks/workerd data-pkg=workerd>@yaks/workerd</a>
+        serves the same handler from a Worker.
+        <a href=https://jsr.io/@yaks/durable-object data-pkg=durable-object>@yaks/durable-object</a>
+        makes one Durable Object one graph, in the object's own SQLite, with
+        hibernatable sockets; <a href=https://jsr.io/@yaks/d1 data-pkg=d1>@yaks/d1</a>
+        puts the same storage over D1. One <code>apply()</code>, with the same
+        phases and plugins, runs on all three.
+      </p>
+
+      <h2>This page</h2>
+      <p>
+        A third place: a browser, with no server of its own. This page imports
+        @yaks/graph, @yaks/ram, @yaks/cli and the task and session
+        vocabularies from JSR through esm.sh, with no bundler and no build
+        step, and runs them here.
+      </p>
+      <pre class=Loaded id=loaded>The count of what this page loaded appears once yak is running.</pre>
+      <div class=Ex data-run=sh>
+        <pre><code>yak graph query .tool</code></pre>
+      </div>
+
+      <h2>See also</h2>
+      <p><a href=#yaks-app data-disk=yaks-app>yaks.app(7)</a>,
+        <a href=https://github.com/yak-sh/yak/tree/main/packages/workerd data-pkg=workerd>@yaks/workerd</a></p>
+    </article>
+
+    <article class=Man id=yaks-app data-man="YAKS.APP(7)" data-disk="YAKS.APP">
+      <h2>Name</h2>
+      <p><b>yaks.app</b> — build, host and share web apps</p>
+
+      <h2>Description</h2>
+      <p>
+        <a href=https://yaks.app>yaks.app</a> is where yaks apps live. A yaks
+        app is an <code>index.html</code> and whatever files sit beside it,
+        served live at <code><i>space</i>.yaks.app/<i>app</i>/</code>. No build
+        step, no framework, no install. People build them by asking Claude or
+        ChatGPT: the connector at <code>https://yaks.app/mcp</code> gives an
+        assistant <code>app_new</code>, <code>app_files</code> and
+        <code>app_deploy</code>, and the same tools are <b>yak</b> commands.
+      </p>
+
+      <h2>The store</h2>
+      <p>
+        Every app has a store of its own, a graph of entities, and a page reads
+        it in one line, from its own address:
+      </p>
+      <pre><code>import { apply, query, search, subscribe } from './api/client.js'
+
+await apply({ entity: { eid: '$r' },
+              doc: { title: 'Lemon cake', body: '3 lemons...' } })
+let all = await query('.doc')       <i>// everything, oldest first</i>
+let some = await search('lemon')    <i>// full-text search, ranked</i>
+subscribe('.doc', draw)             <i>// and again whenever it changes</i></code></pre>
+
+      <h2>Files beside index.html</h2>
+      <table>
+        <tr><td><code>vocab.json</code><td>the app's own components; each gets commands any agent finds later, <code>add_recipe</code> and <code>find_recipe</code> for a <code>recipe</code>
+        <tr><td><code>seed.json</code><td>bundles written into the store by the first deploy, so an app opens furnished
+        <tr><td><code>worker.js</code><td>server code for every request not under <code>/api/</code>; the D1, R2 and Vectorize bindings its <code>wrangler.jsonc</code> names are created at deploy
+        <tr><td><code>NOTES.md</code><td>what the person wants remembered about how the app is kept
+        <tr><td><code>icon.png</code><td>the icon when the app is kept on a phone's home screen
+      </table>
+      <p>
+        An app is readable by anyone with the link and writable by its members;
+        <code>open</code> lets anyone with the link write, and
+        <code>private</code> shows it to members alone. A space can open a
+        tunnel to a machine: its apps reach only the paths the machine opened,
+        and the machine needs no open port.
+      </p>
+
+      <h2>This site</h2>
+      <p>
+        This page is a yaks app: <code>apps/yak-sh-v2</code> in the
+        repository, pushed to its space with the connector's own tools.
+      </p>
+      <pre><code>yak admin push apps/yak-sh-v2 --owner --space jeff</code></pre>
+      <p>
+        The home page's examples are apps in the demo space, each one
+        installable: <a href=https://yourname.yaks.app/recipes/>the recipe
+          box</a>, <a href=https://yourname.yaks.app/garden/>garden</a>,
+        <a href=https://yourname.yaks.app/bookclub/>book club</a>,
+        <a href=https://yourname.yaks.app/trip/>trip</a>,
+        <a href=https://yourname.yaks.app/guestbook/>guestbook</a> and
+        <a href=https://yourname.yaks.app/chores/>chores</a>.
+      </p>
+
+      <h2>See also</h2>
+      <p><a href=https://yaks.app>yaks.app</a>,
+        <a href=https://yaks.app/docs.md>yaks.app/docs.md</a></p>
+    </article>
+  </main>
+
+  <footer class=Foot>
+    <p>
+      yaks is open source: <a href=https://github.com/yak-sh/yak>yak-sh/yak</a>
+      on GitHub, <a href=https://jsr.io/@yaks>@yaks</a> on JSR,
+      <a href=https://yaks.app>yaks.app</a> for hosting. Set in
+      <a href=fonts/OFL.txt>JetBrains Mono</a>.
+    </p>
+  </footer>
+</body>
+</html>

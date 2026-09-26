@@ -1,0 +1,241 @@
+/* The page itself: the tokens every other sheet reads, the font, the top bar,
+ * and which of the two faces shows. `html[data-mode=crt]` is the desk with
+ * the terminal on it (crt.css, disk.css); `html[data-mode=read]` is the same
+ * manual as a plain page (doc.css). man.css sets the manual for both. */
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url(fonts/JetBrainsMono-Regular.woff2) format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url(fonts/JetBrainsMono-Bold.woff2) format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --void: #07090a;
+  --deep: #0b0e0f;
+  --panel: #101416;
+  --hair: #1d2427;
+  --ink: #d3d9d0;
+  --mute: #8a948b;
+  --faint: #566059;
+  --signal: #5cf08f;
+  --warn: #ffb347;
+
+  /* The disks, by the plastic they are pressed in. */
+  --disk-packages: #1e2023;
+  --disk-cli: #2455a8;
+  --disk-sessions: #b5282e;
+  --disk-agents: #e3b322;
+  --disk-run: #247d4c;
+  --disk-yaks-app: #b9c7d4;
+
+  --top: 2.75rem;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in: cubic-bezier(.7, 0, .84, 0);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--void);
+  color: var(--ink);
+  font: 400 14.5px/1.6 var(--mono);
+  font-variant-ligatures: none;
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: calc(var(--top) + 1rem);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(
+    circle at 1px 1px,
+    rgba(255, 255, 255, .045) 1px,
+    transparent 1.2px
+  ) 0 0 / 22px 22px,
+    radial-gradient(ellipse at 50% -20%, #111a16 0%, transparent 60%),
+    var(--void);
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--signal) 35%, transparent);
+  color: #fff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+/* The top bar: the brand, the six disks as plain links, and the switches. */
+.Top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  height: var(--top);
+  padding: 0 max(1rem, env(safe-area-inset-left));
+  background: color-mix(in srgb, var(--void) 82%, transparent);
+  backdrop-filter: blur(10px) saturate(1.2);
+  border-bottom: 1px solid var(--hair);
+  font-size: 12.5px;
+  letter-spacing: .02em;
+}
+
+.Top_Brand {
+  display: flex;
+  align-items: center;
+  gap: .5em;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+  color: #fff;
+}
+
+.Top_Mark {
+  color: var(--signal);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--signal) 70%, transparent);
+}
+
+.Top_Disks {
+  display: flex;
+  gap: .25rem;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.Top_Disks a {
+  display: flex;
+  align-items: center;
+  gap: .5em;
+  padding: .3em .65em;
+  border-radius: 3px;
+  color: var(--mute);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color .15s, background .15s;
+
+  &::before {
+    content: '';
+    width: .7em;
+    height: .7em;
+    border-radius: 1px;
+    background: var(--disk);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, .18),
+      0 0 0 1px rgba(0, 0, 0, .6);
+  }
+
+  &:hover,
+  &[aria-current] {
+    color: #fff;
+    background: rgba(255, 255, 255, .06);
+  }
+}
+
+.Top_Tools {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+.Top_Link {
+  padding: .3em .5em;
+  color: var(--mute);
+  text-decoration: none;
+
+  &:hover {
+    color: #fff;
+  }
+}
+
+.Toggle {
+  display: flex;
+  align-items: center;
+  gap: .4em;
+  padding: .28em .6em;
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  background: var(--deep);
+  color: var(--mute);
+  cursor: pointer;
+
+  &:hover {
+    color: #fff;
+    border-color: #2c3539;
+  }
+
+  & b {
+    font-weight: 400;
+  }
+
+  &[aria-pressed=true] b {
+    color: var(--signal);
+  }
+}
+
+/* The mode switch names both faces and lights the one showing. */
+.Toggle_Crt,
+.Toggle_Read {
+  padding: 0 .15em;
+}
+
+[data-mode=crt] .Toggle_Crt,
+[data-mode=read] .Toggle_Read {
+  color: var(--signal);
+}
+
+/* One face at a time. */
+[data-mode=read] .Desk {
+  display: none;
+}
+
+[data-mode=crt] .Doc,
+[data-mode=crt] .Foot {
+  display: none;
+}
+
+[data-mode=crt] .Only-read,
+[data-mode=read] .Only-crt {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .Top {
+    gap: .75rem;
+  }
+
+  .Top_Disks,
+  .Top_Link,
+  #sound {
+    display: none;
+  }
+
+  .Top_Tools {
+    margin-left: auto;
+  }
+}

@@ -1,0 +1,418 @@
+/* The manual on the screen: each disk's page set the way man(1) sets one,
+ * with its section names flush left, the text indented seven columns, bold
+ * as the brighter phosphor and arguments underlined. A README opened from
+ * the map is set the same way (.Readme). The map itself is drawn here too,
+ * for both faces, from the three colors each face gives it. */
+
+.Pane_Body .Man,
+.Pane_Body .Readme {
+  --in: 7ch;
+  max-width: 92ch;
+}
+
+.Man_Head,
+.Man_Foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 2ch;
+  color: var(--ph-lo);
+  white-space: nowrap;
+}
+
+.Man_Foot {
+  margin-top: 2.6em;
+}
+
+.Pane_Body {
+  & h2 {
+    margin: 1.3em 0 .15em;
+    font-size: 1em;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--ph-hi);
+  }
+
+  & h3 {
+    margin: 1em 0 .15em calc(var(--in) / 2);
+    font-size: 1em;
+    font-weight: 700;
+    color: var(--ph-hi);
+  }
+
+  & p,
+  & dl,
+  & table,
+  & pre,
+  & .Ex,
+  & .Groups,
+  & .Map,
+  & ul,
+  & ol,
+  & blockquote {
+    margin: .3em 0 .7em var(--in);
+  }
+
+  & .Ex pre {
+    margin: 0;
+  }
+
+  & b,
+  & strong {
+    font-weight: 700;
+    color: var(--ph-hi);
+  }
+
+  & i,
+  & em {
+    font-style: normal;
+    text-decoration: underline;
+    text-underline-offset: .18em;
+  }
+
+  & code,
+  & kbd {
+    font: inherit;
+  }
+
+  & kbd {
+    padding: 0 .5ch;
+    background: var(--ph);
+    color: var(--ph-bg);
+    text-shadow: none;
+  }
+
+  & a {
+    color: inherit;
+    text-decoration: underline dotted;
+    text-underline-offset: .2em;
+    text-decoration-color: var(--ph-lo);
+
+    &:hover,
+    &:focus-visible {
+      background: var(--ph);
+      color: var(--ph-bg);
+      text-shadow: none;
+      text-decoration: none;
+      outline: none;
+    }
+  }
+
+  & pre {
+    padding: .1em 0 .1em 1.5ch;
+    border-left: 1px solid var(--ph-dim);
+    white-space: pre;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ph-dim) transparent;
+  }
+
+  & table {
+    border-collapse: collapse;
+  }
+
+  & th,
+  & td {
+    padding: 0 2.5ch 0 0;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  & th {
+    color: var(--ph-hi);
+    border-bottom: 1px dashed var(--ph-dim);
+  }
+
+  & dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: 2ch;
+  }
+
+  & dt {
+    color: var(--ph-hi);
+  }
+
+  & dd {
+    margin: 0;
+  }
+
+  & hr {
+    border: 0;
+    border-top: 1px dashed var(--ph-dim);
+    margin: 1em 0;
+  }
+
+  & blockquote {
+    padding-left: 1.5ch;
+    border-left: 1px solid var(--ph-dim);
+    color: var(--ph-lo);
+  }
+}
+
+/* A runnable example: the words `run` at its corner, in reverse when you
+ * point at them. The one running is marked while it types. */
+.Ex {
+  position: relative;
+}
+
+.Ex_Go {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0 1ch;
+  border: 0;
+  background: none;
+  color: var(--ph-lo);
+  font: inherit;
+  cursor: pointer;
+  text-shadow: inherit;
+
+  &::before {
+    content: '▶ ';
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: var(--ph);
+    color: var(--ph-bg);
+    text-shadow: none;
+    outline: none;
+  }
+
+  .Ex[data-running] & {
+    background: var(--ph);
+    color: var(--ph-bg);
+    text-shadow: none;
+  }
+}
+
+.Pane_Body .Ex pre {
+  padding-right: 9ch;
+}
+
+.Ex[data-running] pre {
+  border-left-color: var(--ph);
+}
+
+/* The motd: the banner, and the disks as a list. */
+.Logo {
+  margin: .6em 0 1.2em !important;
+  padding: 0 !important;
+  border: 0 !important;
+  line-height: 1;
+  color: var(--ph-hi);
+  text-shadow:
+    0 0 .04em var(--ph-hi),
+    0 0 .5em color-mix(in srgb, var(--ph) 60%, transparent);
+  overflow: hidden !important;
+}
+
+.Pane_Body .Lead {
+  margin-left: 0;
+  color: var(--ph-hi);
+}
+
+.Pane_Body .Man-motd p,
+.Pane_Body .Man-motd pre {
+  margin-left: 0;
+}
+
+.Index {
+  display: grid;
+  margin: 1em 0 0;
+
+  & a {
+    display: flex;
+    gap: 1ch;
+    text-decoration: none;
+    padding: 0 .5ch;
+
+    &::before {
+      content: '[' var(--n, '■') ']';
+    }
+
+    & b {
+      min-width: 9ch;
+    }
+  }
+}
+
+.Pane_Body .Index a:hover b {
+  color: inherit;
+}
+
+.Pane_Body .Loaded {
+  border-left: 0;
+  color: var(--ph-lo);
+}
+
+/* The package map: a vector display. `--map-ink` draws, `--map-hi` lights
+ * what is pointed at, `--map-dim` is everything else. */
+.Map {
+  --map-ink: var(--ph, var(--signal));
+  --map-hi: var(--ph-hi, #fff);
+  --map-dim: var(--ph-dim, #2b3a33);
+  position: relative;
+  margin-left: 0 !important;
+
+  & svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    font-family: var(--mono);
+  }
+}
+
+.Map_Caption {
+  color: var(--ph-lo, var(--mute));
+}
+
+.Map_Edge {
+  fill: none;
+  stroke: var(--map-ink);
+  stroke-width: .6;
+  opacity: .22;
+  transition: opacity .2s, stroke .2s;
+
+  .Map[data-focus] & {
+    opacity: .05;
+  }
+
+  &.is-out {
+    opacity: .95 !important;
+    stroke: var(--map-hi);
+    stroke-width: 1.1;
+  }
+
+  &.is-in {
+    opacity: .8 !important;
+    stroke-dasharray: 2 2;
+    stroke-width: 1;
+  }
+}
+
+.Map_Node {
+  cursor: pointer;
+
+  & circle {
+    fill: var(--map-ink);
+    transition: r .2s;
+  }
+
+  & text {
+    font-size: 10px;
+    fill: var(--map-ink);
+    dominant-baseline: middle;
+    transition: fill .2s, opacity .2s;
+  }
+
+  .Map[data-focus] & {
+    opacity: .35;
+  }
+
+  &.is-on,
+  &.is-near {
+    opacity: 1 !important;
+  }
+
+  &.is-on text {
+    fill: var(--map-hi);
+    font-weight: 700;
+  }
+
+  &.is-on circle {
+    fill: var(--map-hi);
+  }
+
+  &:focus-visible {
+    outline: none;
+
+    & text {
+      text-decoration: underline;
+    }
+  }
+}
+
+.Map_Group {
+  font-size: 8px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  fill: var(--map-ink);
+  opacity: .55;
+}
+
+.Map_Readout {
+  min-height: 3.9em;
+  white-space: pre-line;
+  margin-top: .3em;
+  color: var(--map-ink);
+
+  & b {
+    color: var(--map-hi);
+  }
+}
+
+.Map svg.is-drawing .Map_Edge {
+  stroke-dasharray: var(--len) var(--len);
+  animation: trace 1.3s var(--delay, 0s) cubic-bezier(.3, .1, .2, 1) both;
+}
+
+.Map svg.is-drawing .Map_Node {
+  animation: blip .45s var(--delay, 0s) ease-out both;
+}
+
+/* The beam traces each import from the package that makes it. */
+@keyframes trace {
+  from {
+    stroke-dashoffset: var(--len);
+    opacity: .9;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes blip {
+  from {
+    opacity: 0;
+    filter: brightness(3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .Map svg.is-drawing .Map_Edge,
+  .Map svg.is-drawing .Map_Node {
+    animation: none;
+  }
+}
+
+/* A README, as the manual shows one: its headings are sections. */
+.Readme {
+  & h1 {
+    margin: .2em 0 .8em;
+    font-size: 1em;
+    font-weight: 700;
+    color: var(--ph-hi, #fff);
+  }
+
+  & h4,
+  & h5,
+  & h6 {
+    font-size: 1em;
+    margin: 1em 0 .2em calc(var(--in, 0ch) / 2);
+  }
+
+  & li {
+    margin: .1em 0;
+  }
+
+  & ul,
+  & ol {
+    padding-left: 2.5ch;
+  }
+}
+
+.Readme_Meta {
+  color: var(--ph-lo, var(--mute));
+}
