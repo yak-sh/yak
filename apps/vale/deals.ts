@@ -121,10 +121,12 @@ export let deals = (net: Net) => {
         { g, deals: [] as Deal[], hands: [] as Hand[] },
       ]),
     )
-    for (let b of r) {
+    // A row counts from when the store took it: one this page is still
+    // sending has no place in the order yet.
+    for (let b of r.filter(atOf)) {
       mine.get(str(comp(b, 'deal').villager))?.deals.push(dealOf(b))
     }
-    for (let b of h) {
+    for (let b of h.filter(atOf)) {
       mine.get(str(comp(b, 'handed').villager))?.hands.push(handOf(b))
     }
     books = new Map(
