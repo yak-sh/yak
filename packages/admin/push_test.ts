@@ -8,8 +8,13 @@ type Args = Record<string, unknown> & { files?: File[] }
 // yaks.app's app_new, app_files and app_deploy, over apps held in memory,
 // answering as the connector does: words for a person, with `more` after them
 // (the unseen block), and the answer as data on the bundle that carries them.
-let platform = (apps: Record<string, Map<string, File>> = {}, more = '') => {
+let platform = (
+  apps: Record<string, Map<string, File>> = {},
+  more = '',
+  valuesAfter = 0,
+) => {
   let deployed: string[] = []
+  let lists = 0
   let ok = (text: string, value?: Record<string, unknown>) => ({
     content: [{ type: 'text', text: text + more }],
     structuredContent: {
@@ -33,7 +38,12 @@ let platform = (apps: Record<string, Map<string, File>> = {}, more = '') => {
     else if (a.op == 'list') {
       let paths = [...files.keys()]
       return Promise.resolve(
-        ok(paths.join('\n'), { files: paths.map((path) => ({ path })) }),
+        ok(
+          paths.join('\n'),
+          ++lists > valuesAfter
+            ? { files: paths.map((path) => ({ path })) }
+            : undefined,
+        ),
       )
     } else if (a.op == 'delete') {
       if (!files.delete(String(a.path))) {
@@ -43,7 +53,7 @@ let platform = (apps: Record<string, Map<string, File>> = {}, more = '') => {
     return Promise.resolve(ok('done'))
   }
   let held = (app: string) => [...apps[app].keys()].sort()
-  return { ask, held, deployed }
+  return { ask, held, deployed, lists: () => lists }
 }
 
 let file = (path: string): File => ({ path, content: path })
@@ -67,6 +77,63 @@ Deno.test('a list whose words carry more than the files still yields the files',
   let said = await push(p.ask, [file('index.html')], { app: 'mail' })
   assertEquals(p.held('mail'), ['index.html'])
   assertEquals(said[0], 'wrote 1 file, deleted old.js')
+})
+
+Deno.test('a push waits for a deploying server to answer its list as data', async () => {
+  let p = platform({ mail: held('index.html', 'old.js') }, '', 1)
+  let said = await push(
+    p.ask,
+    [file('index.html')],
+    { app: 'mail' },
+    { wait: 100, poll: 0 },
+  )
+  assertEquals(p.lists(), 2)
+  assertEquals(p.held('mail'), ['index.html'])
+  assertEquals(p.deployed, ['mail'])
+  assertEquals(said[0], 'wrote 1 file, deleted old.js')
+})
+
+Deno.test('a server that keeps answering no list data changes nothing', async () => {
+  let p = platform({ mail: held('index.html', 'old.js') }, '', Infinity)
+  await assertRejects(
+    () =>
+      push(
+        p.ask,
+        [file('index.html')],
+        { app: 'mail' },
+        { wait: 0, poll: 0 },
+      ),
+    Error,
+    'app_files answered no value after 0s',
+  )
+  assertEquals(p.lists(), 1)
+  assertEquals(p.held('mail'), ['index.html', 'old.js'])
+  assertEquals(p.deployed, [])
+})
+
+Deno.test('malformed list data is a defect immediately', async () => {
+  let calls = 0
+  let ask: Ask = () => {
+    calls++
+    return Promise.resolve({
+      content: [{ type: 'text', text: 'index.html' }],
+      structuredContent: {
+        result: [{ output: { value: { files: ['index.html'] } } }],
+      },
+    })
+  }
+  await assertRejects(
+    () =>
+      push(
+        ask,
+        [file('index.html')],
+        { app: 'mail' },
+        { wait: 100, poll: 0 },
+      ),
+    Error,
+    'app_files answered malformed file data',
+  )
+  assertEquals(calls, 1)
 })
 
 Deno.test('a push to an app that does not exist creates it first', async () => {

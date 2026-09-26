@@ -343,14 +343,13 @@ export let saidBy = (out: Reply) => {
 // What a tool answered as DATA (@yaks/tools `valueIn`). Its words are for a
 // person and carry more than the answer (the unseen block, the month's
 // ceiling), so a program reads this instead. An erring tool throws as
-// `saidBy` does; one that answered no value broke its contract.
-export let valueOf = (out: Reply): Record<string, unknown> => {
+// `saidBy` does; no value is distinct, so a caller that requires one decides
+// whether it is a transient answer or a broken contract.
+export let valueOf = (out: Reply): Record<string, unknown> | undefined => {
   saidBy(out)
   let result = (out.structuredContent as { result?: unknown } | undefined)
     ?.result
-  let value = Array.isArray(result) ? valueIn(result) : undefined
-  if (!value) throw new Error('the tool answered no value')
-  return value
+  return Array.isArray(result) ? valueIn(result) : undefined
 }
 
 let bodyOf = async (r: Response) => {

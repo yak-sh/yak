@@ -25,6 +25,9 @@ export type Target = { app: string; space?: string; title?: string }
 /** A connector call, as ./api.ts `rpc` makes one. */
 export type Ask = (method: string, params?: unknown) => Promise<unknown>
 
+/** How long a push waits for a newly deployed answer contract to arrive. */
+export type PushOptions = { wait?: number; poll?: number }
+
 let utf8 = new TextDecoder('utf-8', { fatal: true })
 
 let b64 = (bytes: Uint8Array) => {
@@ -69,12 +72,45 @@ let reply = async (ask: Ask, name: string, args: Record<string, unknown>) =>
 let call = async (ask: Ask, name: string, args: Record<string, unknown>) =>
   saidBy(await reply(ask, name, args))
 
+let pathsIn = (value: Record<string, unknown>) => {
+  let files = value.files
+  if (
+    !Array.isArray(files) ||
+    files.some((f) =>
+      !f || typeof f != 'object' ||
+      typeof (f as { path?: unknown }).path != 'string'
+    )
+  ) {
+    throw new Error('app_files answered malformed file data')
+  }
+  return files.map((f) => (f as { path: string }).path)
+}
+
 // The paths an app holds, read off the list's answer as data: its words are
-// for a person, and carry more than the list (the unseen block).
-let listed = async (ask: Ask, at: Record<string, string>) =>
-  (valueOf(await reply(ask, 'app_files', { ...at, op: 'list' })) as {
-    files: { path: string }[]
-  }).files.map((f) => f.path)
+// for a person, and carry more than the list (the unseen block). A checkout
+// may speak the new data contract before the Worker built from that checkout
+// is live. Wait through that bounded rollout gap; a refusal still throws from
+// `valueOf` at once, and a server that never catches up is still a defect.
+let listed = async (
+  ask: Ask,
+  at: Record<string, string>,
+  opts: PushOptions,
+) => {
+  let wait = opts.wait ?? 120_000
+  let deadline = Date.now() + wait
+  for (;;) {
+    let value = valueOf(
+      await reply(ask, 'app_files', { ...at, op: 'list' }),
+    )
+    if (value) return pathsIn(value)
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `app_files answered no value after ${Math.round(wait / 1000)}s`,
+      )
+    }
+    await new Promise((go) => setTimeout(go, opts.poll ?? 3_000))
+  }
+}
 
 /**
  * Make the app hold exactly `files`, then release them as a version. An app
@@ -87,13 +123,14 @@ export let push = async (
   ask: Ask,
   files: File[],
   to: Target,
+  opts: PushOptions = {},
 ): Promise<string[]> => {
   if (!files.length) throw new CallError('dir', 'no files to push')
   let at = { app: to.app, ...to.space ? { space: to.space } : {} }
   let said: string[] = []
   let held: string[]
   try {
-    held = await listed(ask, at)
+    held = await listed(ask, at, opts)
   } catch (e) {
     if (!(e instanceof CallError)) throw e
     said.push(
