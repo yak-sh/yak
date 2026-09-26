@@ -25,7 +25,12 @@ import { type Body, kept } from './kept.ts'
 
 /** What this facet reads off the host it is composing into: the vocabulary
  * its plugins loaded, and the graph a name is resolved in. */
-export type Hosting = { vocab: Vocab; graph: Graph }
+export type Hosting = {
+  vocab: Vocab
+  graph: Graph
+  /** aborts as the host closes, ending the app's build if it is still going */
+  stopping?: AbortSignal
+}
 
 /** Every letter an id in this vocabulary can start with, in both cases. */
 export let letters = (vocab: Vocab): string[] => {
@@ -103,6 +108,7 @@ export let routes = (host: Hosting): Route[] => {
       // Started with the host, so the first page load finds it built.
       handle: kept('/web/app.js', 'text/javascript; charset=utf-8', bundle, {
         early: true,
+        closing: host.stopping,
       }),
     },
     ...files.map(([name, type, make]): Route => ({

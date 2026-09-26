@@ -37,6 +37,17 @@ Deno.test('a body started early that fails is made again by the first request', 
   assertEquals(seen.tries, 2)
 })
 
+Deno.test('a make still going when its host closes is ended', async () => {
+  let { seen, make } = makes('hang')
+  let closing = new AbortController()
+  let handle = kept('/x', 'text/plain', make, { closing: closing.signal })
+  let answer = get(handle)
+  closing.abort()
+  await tick()
+  assertEquals(seen.aborted, true)
+  assertEquals((await answer).status, 500)
+})
+
 Deno.test('a body once made is kept', async () => {
   let { seen, make } = makes('made')
   let handle = kept('/x', 'text/plain', make)

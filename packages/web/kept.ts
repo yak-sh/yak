@@ -3,7 +3,8 @@
 // settled within the limit is aborted, which kills whatever it spawned, and
 // counts as a failure. A failure is never kept: it is reported once, where it
 // happened, and the next request makes the body again. So a build that hangs
-// heals on its own, without anybody restarting the host.
+// heals on its own, without anybody restarting the host. A make still going
+// when its host closes is aborted too, so nothing it spawned outlives the host.
 
 import { fault } from '@yaks/api'
 
@@ -33,35 +34,52 @@ let tagged = async (request: Request, body: Body, type: string) => {
     : new Response(body, { headers })
 }
 
-/** `make(signal)`, given up on (and `signal` aborted) after `limit` ms. */
+/** `make(signal)`, given up on (and `signal` aborted) after `limit` ms, or
+ * once `closing` aborts. */
 export let within = <T>(
   limit: number,
   make: (signal: AbortSignal) => Promise<T>,
+  closing?: AbortSignal,
 ): Promise<T> =>
   new Promise((resolve, reject) => {
     let stop = new AbortController()
-    let timer = setTimeout(() => {
+    let quit = (why: string) => {
       stop.abort()
-      reject(new Error(`not made within ${limit / 1000}s`))
-    }, limit)
-    make(stop.signal).then(resolve, reject).finally(() => clearTimeout(timer))
+      reject(new Error(why))
+    }
+    if (closing?.aborted) return quit('the host is closing')
+    let timer = setTimeout(
+      () => quit(`not made within ${limit / 1000}s`),
+      limit,
+    )
+    let close = () => quit('the host is closing')
+    closing?.addEventListener('abort', close, { once: true })
+    make(stop.signal).then(resolve, reject).finally(() => {
+      clearTimeout(timer)
+      closing?.removeEventListener('abort', close)
+    })
   })
 
 /** The handler that answers `where` with the body `make` makes. `early` starts
- * making it now, so the first request finds it made. */
+ * making it now, so the first request finds it made; `closing` is the host's
+ * own signal, which ends a make still going. */
 export let kept = (
   where: string,
   type: string,
   make: (signal: AbortSignal) => Promise<Body>,
-  { early = false, limit = LIMIT } = {},
+  { early = false, limit = LIMIT, closing }: {
+    early?: boolean
+    limit?: number
+    closing?: AbortSignal
+  } = {},
 ) => {
   let made: Promise<Body> | undefined
   let attempt = () => {
-    let now = within(limit, make)
+    let now = within(limit, make, closing)
     made = now
     now.catch((e) => {
       if (made == now) made = undefined
-      fault(e, `GET ${where}`)
+      if (!closing?.aborted) fault(e, `GET ${where}`)
     })
     return now
   }
