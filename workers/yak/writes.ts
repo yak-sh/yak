@@ -5,8 +5,8 @@
 // those 46 minutes were answered with an error and kept nowhere.
 //
 // Why here, beside the graph and not in the directory, a per-space object or
-// a Queue: what fails is the graph above the storage — a migration refused, a
-// build that throws — never the SQLite under it, and this table is raised
+// a Queue: what fails is the graph above the storage — a schema that will not
+// stand, a build that throws — never the SQLite under it, and this table is raised
 // before either runs (graph.ts `#start`). Each app's writes stay in its own
 // object, nothing global sits on the write path, and a row leaves the log in
 // the very transaction that commits its batch (graph.ts `yak/writes`), which

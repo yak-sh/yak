@@ -24,9 +24,8 @@ import { archetypes } from '@yaks/archetype'
 // one composition, two vocabularies.
 //
 // This class carries the DO's own name, `Store`, so wrangler's migration list
-// never moves: it took the name from the fleet-shaped object it replaced, which
-// is gone (T-33807), and migrate.ts carries that object's rows across on the
-// first request that reaches one (T-33809).
+// never moves: it took the name from the fleet-shaped object it replaced
+// (T-33807).
 //
 // ## What the object remembers
 // A Durable Object's memory does not survive an eviction, so everything this
@@ -96,7 +95,7 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { reclassifyAll, schema } from '@yaks/sqlite'
+import { schema } from '@yaks/sqlite'
 import {
   driver,
   type DurableSql,
@@ -183,17 +182,12 @@ import {
 } from './writes.ts'
 import { apex, url } from './host.ts'
 import {
-  carry,
   documented,
   install,
-  MARK,
   rebuild,
   recut,
-  Refused as Unreconciled,
   respelled,
   shed,
-  type Slots,
-  stale,
   unholed,
   unworded,
 } from './migrate.ts'
@@ -237,10 +231,9 @@ let unplantable = (doc: VocabDoc): string[] =>
  * speaks its own vocabulary instead of an app's `vocab.json`. Every other name
  * is an app.
  *
- * It is a function rather than two branches because both places that build a
- * store — the boot, and the migration that carries one across (`carry`) — have
- * to answer it the same way, and a third store would otherwise be a word added
- * in one of them and forgotten in the other.
+ * It is a function rather than branches because every place that builds a
+ * store has to answer it the same way, and a third store would otherwise be a
+ * word added in one of them and forgotten in the other.
  */
 export let vocabOfStore = (name: string, declared: unknown = {}): Vocab =>
   name == PLATFORM_STORE
@@ -307,11 +300,6 @@ export type State = Hibernation & {
   storage: DurableStorage & {
     sql: DurableSql & { databaseSize: number }
     deleteAll(): Promise<void>
-    // The object's key-value slots beside its SQL. Nothing in this class writes
-    // one — its own memory is the `yak_kv` table below — but the store this one
-    // replaces kept everything it remembered there (its name, the app's
-    // `vocab.json`, its tools), so the migration reads them across (migrate.ts).
-    kv?: Slots
     // Cloudflare's point-in-time recovery, which is a whole store's way back
     // (recover.ts, T-34507): where this object's SQLite stands now, the
     // bookmark for a moment in the last thirty days, and the one to restore to
@@ -329,11 +317,6 @@ export type State = Hibernation & {
     getAlarm?(): Promise<number | null>
     setAlarm?(at: number): Promise<void>
   }
-  // The runtime's own gate: work started here finishes before any request is
-  // delivered, which is what makes a one-pass migration safe to start from the
-  // first request that reaches the object. Absent in the workerd stand-in, where
-  // an object is driven one call at a time anyway.
-  blockConcurrencyWhile?<T>(body: () => Promise<T>): Promise<T>
   // Restarting the object on the spot, which is how a recovery takes effect
   // now rather than at the next wake (`#recovery`). Optional for the same
   // reason: the stand-in has no session to end.
@@ -362,7 +345,6 @@ type Word =
   | 'access'
   | 'mail'
   | 'schema'
-  | 'migrated'
   | 'wakes'
   | 'planted'
   // The bytes it last told the directory it holds (`#tell`).
@@ -533,13 +515,8 @@ export class Store {
   #auth!: Authenticate
   #meta!: Meta
   #bind: Bindings
-  // An object still holding the fleet-shaped store this class replaces
-  // (T-33809). Nothing above the storage is built while this is true — planting
-  // the new schema over the old tables is exactly what must not happen — so the
-  // first request runs the pass and everything is raised after it.
-  #pending = false
-  #passing: Promise<void> | null = null
-  // Why the pass refused, when it did. The rows are the old ones, untouched.
+  // Why this object's schema would not stand, when it would not. The rows are
+  // as they were: the boot ran in one transaction and it unwound.
   #refused: string | null = null
   // This object's one alarm (D-37562), or null where the runtime under it has
   // none. One adapter for the incarnation: `arm` serializes its read-compare-
@@ -578,7 +555,7 @@ export class Store {
     try {
       this.#start()
     } catch (e) {
-      this.#failed(e, 'schema')
+      this.#failed(e)
     }
   }
 
@@ -590,8 +567,7 @@ export class Store {
     // whose graph cannot boot still keeps what it is sent (writes.ts).
     this.#sql.query(WRITES)
     this.#reshaping()
-    this.#pending = !this.#get('migrated') && stale(ctx.storage)
-    if (!this.#pending) this.#boot()
+    this.#boot()
   }
 
   // What an object keeps is in the one shape a deploy takes now. A store that
@@ -621,8 +597,7 @@ export class Store {
   // and a reboot rather than a migration: a table the store has never seen is
   // created, a column a word grew is added, and what changed is which words the
   // graph admits. Nothing is retyped, and only a word that holds nothing is
-  // dropped, by `prepare` (the vocab door); T-33809 owns moving rows that a
-  // changed column would need.
+  // dropped, by `prepare` (the vocab door).
   #boot(prepare = () => {}) {
     try {
       this.#ctx.storage.transactionSync(() => {
@@ -630,7 +605,7 @@ export class Store {
         this.#build()
       })
     } catch (e) {
-      this.#failed(e, 'schema')
+      this.#failed(e)
     }
   }
 
@@ -694,7 +669,7 @@ export class Store {
       // first time: there is no older shape to be wearing.
       if (held) recut(drive)
       for (let stmt of blobSchema()) drive.query(stmt)
-      install(ctx.storage, vocab, blobRead(vocab), !this.#pending)
+      install(ctx.storage, vocab, blobRead(vocab))
       if (held) rebuild(drive)
       this.#put('schema', stamp)
     }
@@ -901,7 +876,7 @@ export class Store {
     try {
       this.#ctx.storage.transactionSync(() => this.#remember(req))
     } catch (e) {
-      this.#failed(e, 'schema')
+      this.#failed(e)
     }
   }
 
@@ -1249,11 +1224,9 @@ export class Store {
   async alarm(): Promise<void> {
     // Writes the log still holds are replayed first, which is what makes the
     // replay need nobody: the alarm set when one was kept wakes the object
-    // after a deploy too. The oldest one's own request names the object for
-    // a migration pass still ahead of it.
+    // after a deploy too.
     let kept = oldest(this.#sql)
-    if (kept && this.#pending) await this.#pass(replayed(kept))
-    if (this.#refused || this.#pending) {
+    if (this.#refused) {
       if (kept) await this.#retry()
       return
     }
@@ -1374,106 +1347,30 @@ export class Store {
     }
   }
 
-  // ---- the pass (T-33809) --------------------------------------------------
-
-  /** The migration, at most once per object however many requests arrive at
-   * once: the runtime's gate holds every other request while it runs, and the
-   * promise is kept so a second caller inside this incarnation waits on the
-   * first rather than starting a second pass. */
-  #pass(request: Request): Promise<void> {
-    // Keep the settled promise: retries would report the same refusal on every
-    // request, and a rejected runtime gate would restart the object.
-    let go = () => {
-      try {
-        this.#carrying(request)
-      } catch (e) {
-        this.#failed(e, MARK)
-      }
-      return Promise.resolve()
-    }
-    return this.#passing ??= this.#ctx.blockConcurrencyWhile
-      ? this.#ctx.blockConcurrencyWhile(go)
-      : go()
-  }
-
-  /**
-   * Carry, then reconcile — in that order, because the order is the safety.
-   * The carry is one transaction that either lands whole or leaves the object
-   * exactly as it was, and the marker is written in it only when it
-   * reconciles. The restore path is the Durable Object's point-in-time
-   * recovery.
-   */
-  #carrying(request: Request) {
-    let ctx = this.#ctx
-    let slots = ctx.storage.kv
-    // What the object is: the kernel says so on every request, and the store it
-    // replaces wrote the same word into its own slots. Both are read, because
-    // the vocabulary this schema is raised from depends on it.
-    let name = request.headers.get('x-store') ??
-      String(slots?.get('name') ?? '')
-    for (let w of ['name', 'vocab', 'uses', 'tools'] as Word[]) {
-      let held = w == 'name' ? name : slots?.get(w)
-      if (held != null && String(held)) this.#put(w, String(held))
-    }
-    // The vocabulary those slots carry is the old object's, which may be the
-    // short type map (migrate.ts `documented`): the carry raises the new schema
-    // out of it, so it is the document before anything reads it.
-    this.#reshaping()
-    try {
-      ctx.storage.transactionSync(() => {
-        let report = carry(ctx.storage, {
-          store: name,
-          app: request.headers.get('x-yak-app'),
-          vocab: vocabOfStore(name, this.#get('vocab') ?? {}),
-          // A build failure must unwind the whole carry transaction.
-          plant: () => this.#build(),
-          grantEid,
-        })
-        // The pass writes physical tables directly, outside graph tracking.
-        // Reclassify its rows before any presence-based reads can observe them.
-        if (this.#graph.vocab.comp('archetype')) reclassifyAll(this.#sql)
-        if (!report.ok) throw new Unreconciled(report)
-        // A marker and its rows must commit together, including on write failure.
-        this.#put('migrated', MARK)
-      })
-    } catch (e) {
-      this.#failed(e, MARK, name)
-    }
-    this.#pending = false
-  }
-
-  #failed(e: unknown, mark: string, store = '') {
-    let message = 'the migration refused'
+  #failed(e: unknown) {
+    let message = 'the schema refused'
     try {
       message = (e instanceof Error ? e.message : String(e)) || message
     } catch { /* a thrown value need not be printable */ }
     this.#refused = message
-    this.#pending = false
     // A refused store answers nothing, so it is a defect, not an answer:
-    // Sentry hears it named by the store and the pass.
-    let named = store
+    // Sentry hears it named by the store.
+    let store = ''
     try {
-      named ||= this.#get('name') ?? ''
+      store = this.#get('name') ?? ''
     } catch { /* a store too broken to read its own name */ }
-    defect(e, { request: 'migration', store: named, mark })
-    console.warn('store: migration refused', this.#refused)
+    defect(e, { request: 'schema', store })
+    console.warn('store: schema refused', this.#refused)
   }
 
   /**
-   * The object after a refusal. The rows are the old ones, exactly as they were
-   * — the pass ran in one transaction and it unwound — and this object cannot
-   * read them: they are in the fleet's shape, and everything above the storage
-   * here is raised from a vocabulary that has no tables for it. So it says so,
-   * and answers nothing else.
-   *
-   * There is no half-open door to hold here. What a page asks a store is
-   * `/query?q=`, which the fleet's own door does not parse at all (it reads the
-   * whole query string as the filter line), so an app that could still be read
-   * "in the old grammar" is an app no client of it could read. A refusal that
-   * says what happened is the whole of what is useful.
+   * The object after its schema refused to stand. The rows are as they were —
+   * the boot ran in one transaction and it unwound — and nothing above the
+   * storage was raised to read them, so it says why and answers nothing else.
+   * Fixed code arrives as a new incarnation, which boots again.
    */
   #stalled(): Response {
-    let why = this.#refused ?? 'this store has not migrated'
+    let why = this.#refused ?? 'this store could not start'
     return Response.json({ error: 'Refused', message: why }, {
       status: 503,
       headers: { 'x-yak-migration': 'refused' },
@@ -1499,11 +1396,6 @@ export class Store {
   /** Everything before a door: the object brought up to date and told what
    * it is. A refusal to start is the answer, when there is one. */
   async #ready(request: Request): Promise<Response | null> {
-    // The one pass, before this object answers anything (T-33809). It runs
-    // inside the runtime's own gate, so every other request waits on it rather
-    // than racing it, and it runs from a request rather than the constructor
-    // because the kernel's vouch is what names this object and the app it holds.
-    if (this.#pending) await this.#pass(request)
     if (this.#refused) return this.#stalled()
     this.#learn(request)
     if (this.#refused) return this.#stalled()
@@ -2177,10 +2069,10 @@ export class Store {
 
   /** A frame from a client: a subscription opened or closed. */
   webSocketMessage(ws: Wire, data: string | ArrayBuffer): void {
-    // A hibernated socket outlives a deploy, so one opened against the store
-    // this class replaces can wake this object — before its first request, and
-    // therefore before anything above the storage exists. There is nothing to
-    // serve it: hang up, and the page opens a socket onto whatever answers next.
+    // A hibernated socket outlives a deploy, so one can wake an object whose
+    // schema refused to stand, where nothing above the storage exists. There
+    // is nothing to serve it: hang up, and the page opens a socket onto
+    // whatever answers next.
     if (this.#unbuilt) return void this.#hangUp(ws)
     this.#live.message(ws, data)
   }
@@ -2190,15 +2082,14 @@ export class Store {
     if (!this.#unbuilt) this.#live.close(ws)
   }
 
-  /** Whether `#boot()` has yet to run: the migration is still ahead of this
-   * object, or it refused and nothing above the storage was ever raised. */
+  /** Whether the boot refused, so nothing above the storage was raised. */
   get #unbuilt(): boolean {
-    return this.#pending || this.#refused != null
+    return this.#refused != null
   }
 
   #hangUp(ws: Wire) {
     try {
-      ;(ws as Closable).close?.(1012, 'migrating')
+      ;(ws as Closable).close?.(1012, 'refused')
     } catch { /* already gone */ }
   }
 }

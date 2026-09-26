@@ -409,12 +409,10 @@ do not opt into this rollout.
 The existing Durable Object schema fingerprint triggers a transactional backfill
 on first wake after deployment. Backfill groups incomplete entities by physical
 component set; it is not repeated on every request. The same installer handles
-new apps and vocabulary changes. The carry off the fleet-shaped store writes SQL
-directly, so it reclassifies entities before committing so their added/removed
-components cannot leave stale presence indexes. Cloudflare-owned internal tables
-are excluded. If installation fails, the existing schema-refusal path prevents
-serving a partially initialized store. An app that already used a newly reserved
-component name needs explicit migration; its data is not silently reinterpreted.
+new apps and vocabulary changes. Cloudflare-owned internal tables are excluded.
+If installation fails, the existing schema-refusal path prevents serving a
+partially initialized store. An app that already used a newly reserved component
+name needs explicit migration; its data is not silently reinterpreted.
 
 The hourly usage request also wakes app stores, but deployment does not eagerly
 visit every database. Until an app wakes, its old rows have not been backfilled.
@@ -444,11 +442,9 @@ unchanged.
 
 The existing schema-fingerprint initialization barrier installs the tables and
 backfills physical component membership in the same transaction. It runs once
-when that fingerprint changes, not on each read. The carry writes SQL directly,
-so it clears and rebuilds classification after its transformations, before
-readers can observe them. Git object insertion and directory writes already go
-through the graph; no separate SQL writer was introduced. Git object IDs and
-external content hashes are unchanged.
+when that fingerprint changes, not on each read. Git object insertion and
+directory writes already go through the graph; no separate SQL writer was
+introduced. Git object IDs and external content hashes are unchanged.
 
 Existing stores upgrade on their next request. The directory is normally active;
 the Git store wakes when deploy/history/clone operations use it. The hourly app

@@ -15,22 +15,16 @@
 // called directly.
 import { driver, type DurableStorage, type Wire } from '@yaks/durable-object'
 import {
-  type Alter,
   among,
-  at,
   by,
   col,
-  type Column,
-  eq,
   type Expr,
   type Insert,
-  join,
   lit,
   type Param,
   scan,
   type Select,
   select,
-  sub,
   table,
   type Update,
   val,
@@ -150,54 +144,22 @@ export let state = () => {
 
 // ---- an object's own rows, as older code left them ----
 
-/** An entity's integer id, as a statement reads it. */
-export let id = (eid: string): Expr =>
-  sub(select({ cols: [col('id')], from: table('entity'), where: by({ eid }) }))
-
 type Fields = Record<string, Param | Expr>
 let expr = (v: Param | Expr): Expr =>
   v && typeof v == 'object' && 't' in v ? v : val(v)
 
-/** A component row for an entity. */
-export let row = (name: string, eid: string, fields: Fields): Insert => ({
-  t: 'insert',
-  into: name,
-  cols: ['entity', ...Object.keys(fields)],
-  rows: [[id(eid), ...Object.values(fields).map(expr)]],
-})
-
-/** Every row of a table, set; {@link patch} sets the one an entity owns. */
+/** Every row of a table, set. */
 export let every = (name: string, set: Fields): Update => ({
   t: 'update',
   table: name,
   set: Object.fromEntries(Object.entries(set).map(([k, v]) => [k, expr(v)])),
 })
-export let patch = (name: string, eid: string, set: Fields): Update => ({
-  ...every(name, set),
-  where: eq(col('entity'), id(eid)),
-})
-
-/** The columns a table had under an older build. */
-export let grow = (name: string, ...add: Column[]): Alter[] =>
-  add.map((c) => ({ t: 'alter table', table: name, add: c }))
-
-/** A table's rows beside the eid each belongs to, in eid order or by a
- * column. */
-export let owners = (name: string, cols: string[], order?: string): Select => {
-  let [e, t] = [at('e'), at('t')]
-  return select({
-    cols: [e('eid'), ...cols.map((c) => t(c))],
-    from: table(name, 't'),
-    joins: [join(table('entity', 'e'), eq(e('id'), t('entity')))],
-    order: [order ? t(order) : e('eid')],
-  })
-}
 
 /** A slot of the object's key-value memory (graph.ts `#get` and `#put`),
  * read, and set. */
-export let slotOf = (k: string): Select =>
+let slotOf = (k: string): Select =>
   select({ cols: [col('v')], from: table('yak_kv'), where: by({ k }) })
-export let slotted = (k: string, v: string): Insert => ({
+let slotted = (k: string, v: string): Insert => ({
   t: 'insert',
   into: 'yak_kv',
   cols: ['k', 'v'],
