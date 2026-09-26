@@ -339,9 +339,15 @@ export let cast = (
       // have something for me.
       for (let g of f.givers) {
         let a = actor(g.id, () => person(g.look, g.staff))
-        let yaw = g.near < 8 ? Math.atan2(f.body.x - g.x, f.body.z - g.z) : 0.6
+        // A villager faces whoever is near, and otherwise the way they walk.
+        let yaw = g.near < 8
+          ? Math.atan2(f.body.x - g.x, f.body.z - g.z)
+          : Math.hypot(g.x - a.x, g.z - a.z) > 0.02
+          ? Math.atan2(g.x - a.x, g.z - a.z)
+          : Number.isNaN(a.x)
+          ? 0.6
+          : a.yaw
         glide(a, g.x, groundAt(v, g.x, g.z), g.z, yaw, dt, 3)
-        a.speed = 0
         play(a, {}, t, dt)
         let mark = g.mark == '!'
           ? '<span class=Mark>!</span>'

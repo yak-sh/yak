@@ -900,6 +900,12 @@ body {
   color: #5b6555;
 }
 
+.Talk_Hint {
+  font-size: 0.85rem;
+  color: #5b6555;
+  font-style: italic;
+}
+
 .Talk_Acts {
   display: flex;
   justify-content: flex-end;

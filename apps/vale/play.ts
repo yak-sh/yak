@@ -306,8 +306,12 @@ export let arrival = (v: Vale, from?: string): Body => {
 }
 
 /** The game over one store. Each frame is played in the level the hero is
- * in. */
-export let game = (net: Net) => {
+ * in. `stand` says where a giver is at a moment, given where their home is:
+ * the villagers walk (village.ts). */
+export let game = (
+  net: Net,
+  stand = (_id: string, home: [number, number], _now: number) => home,
+) => {
   let c = net.client
   let drops = c.watch('.drop', { remote: false })
   let swingAt = -1e9
@@ -946,7 +950,7 @@ export let game = (net: Net) => {
       // The people of this level who give quests.
       let givers: Giver[] = GIVERS.filter((g) => g.level == lv).map((g) => {
         let [px, pz] = v.places[g.place] ?? [64, 64]
-        let x = px + g.offset[0], z = pz + g.offset[1]
+        let [x, z] = stand(g.id, [px + g.offset[0], pz + g.offset[1]], now)
         let theirs = s.quests.filter((q) => q.quest.giver == g.id)
         let next = theirs.find((q) => q.state == 'taken') ??
           theirs.find((q) => q.state == 'open') ?? null

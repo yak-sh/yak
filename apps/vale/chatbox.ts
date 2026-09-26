@@ -9,12 +9,17 @@
 // apart than `keep` sends, so no two share a write, and the rule would hear
 // only the first of two that did. Until the store has a line it shows here at
 // once, marked as waiting, and floats over the speaker's own head.
+//
+// A line said beside a villager is said to them too (village.ts): the same
+// row asks them to answer, and what they answer floats over their head and
+// joins the log like anybody's line.
 import type { Watch } from '@yaks/client'
 // @ts-types="npm:@types/three@^0.186.0"
 import type * as THREE from 'three'
 import {
   bubbles,
   clean,
+  EARSHOT,
   earshot,
   heard,
   type Line,
@@ -25,6 +30,7 @@ import {
 import type { overlay } from './fx.ts'
 import { comp, type Me, type Net, str } from './net.ts'
 import type { Frame } from './play.ts'
+import type { Village } from './village.ts'
 
 // Lines in the log, and lines the store is asked for before the rule.
 let SHOWN = 6
@@ -40,7 +46,8 @@ let LOST = 20000
 // How long the ask to sign in stays, in ms.
 let ASKING = 6000
 
-type Said = Line & { level: string }
+// A line of mine, and the rest of its row when it is said to a villager.
+type Said = Line & { level: string; to: Record<string, unknown> | null }
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -55,6 +62,7 @@ export let chatbox = (
   glass: HTMLElement,
   net: Net,
   marks: ReturnType<typeof overlay>,
+  folk: Village,
 ) => {
   let box = el('div', 'Chat')
   let log = el('ol', 'Chat_Log')
@@ -120,6 +128,7 @@ export let chatbox = (
       entity: { eid: l.eid },
       chat: { level: l.level, player: l.player },
       doc: { body: l.text },
+      ...l.to,
     })
   }
 
@@ -172,6 +181,7 @@ export let chatbox = (
       text,
       at: net.now(),
       level,
+      to: folk.to(text),
     })
   })
 
@@ -180,10 +190,11 @@ export let chatbox = (
   let draw = (shown: Line[], mine: Set<string>) => {
     let rows = shown.map((l) => {
       let p = comp(net.client.ent(l.player), 'player')
+      let v = folk.who(l.player)
       return {
         eid: l.eid,
-        name: str(p.name, 'Wanderer'),
-        tint: str(p.tint, '#dff5c8'),
+        name: v?.name ?? str(p.name, 'Wanderer'),
+        tint: v?.tint ?? str(p.tint, '#dff5c8'),
         text: l.text,
         wait: mine.has(l.eid),
       }
@@ -243,11 +254,22 @@ export let chatbox = (
       waiting = waiting.filter((l) => !there.has(l.eid) && now - l.at < LOST)
       let mine = [...waiting, ...outbox].filter((l) => l.level == level)
       let shown = [
-        ...heard(held.flatMap((b) => lineOf(b) ?? []), owner),
+        ...[
+          ...heard(held.flatMap((b) => lineOf(b) ?? []), owner),
+          ...folk.lines(),
+        ]
+          .sort((a, b) => a.at - b.at),
         ...mine,
       ]
       draw(shown.slice(-SHOWN), new Set(mine.map((l) => l.eid)))
-      let near = new Set([hero, ...earshot(f.body, f.others)])
+      let to = folk.near()
+      let hint = to ? `Say something to ${to}…` : 'Say something…'
+      if (input.placeholder != hint) input.placeholder = hint
+      let near = new Set([
+        hero,
+        ...earshot(f.body, f.others),
+        ...f.givers.filter((g) => g.near <= EARSHOT).map((g) => g.id),
+      ])
       for (let l of bubbles(shown, near, now)) {
         let at = head(l.player)
         if (at) {

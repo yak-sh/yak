@@ -2,7 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mossvale",
   "rtc": "open",
-  "description": "A voxel world to adventure in together. What a player is and has done is kept in this app's store (player, slain, item, used, journal), and so is what they said (chat); what moves (where each player and creature is, how they move, how they fare in a fight) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
+  "description": "A voxel world to adventure in together. What a player is and has done is kept in this app's store (player, slain, item, used, journal), and so is what they said (chat) and the villagers who answer them (villager, seen); what moves (where each player and creature is, how they move, how they fare in a fight) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
+  "models": "open",
   "$defs": {
     "player": {
       "component": true,
@@ -184,7 +185,7 @@
     "chat": {
       "component": true,
       "type": "object",
-      "description": "A line said aloud: the level it was said in, where everyone reads it in the chat, and the hero who said it, over whose head it shows to whoever is near. Its words are the row's doc body; who wrote it and when is its created stamp. A page shows a line only from a person signed in, as a hero they made, and at most one a second from each person (chat.ts).",
+      "description": "A line said aloud: the level it was said in, where everyone reads it in the chat, and the hero who said it, over whose head it shows to whoever is near. Its words are the row's doc body; who wrote it and when is its created stamp. A page shows a line only from a person signed in, as a hero they made, and at most one a second from each person (chat.ts). A line said beside a villager is also a line of their transcript (entry, content, using), which asks them to answer.",
       "properties": {
         "level": {
           "type": "string",
@@ -204,6 +205,122 @@
         "kind": { "type": "string" },
         "n": { "type": "integer" },
         "at": { "type": "number" }
+      }
+    },
+    "villager": {
+      "component": true,
+      "type": "object",
+      "description": "One of the people of the vale, as a mind of their own: the row is their transcript (it wears session). A hero's line said near them is a line of it that asks them for a turn on GLM Flash, a neighbour's news is a line they heard, and their wake calls think every five minutes while a hero has been seen in their land and sleeps while none has (villagers.ts). A page adds the row the first time a hero comes to their land.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Who, by the app's list of quest-givers."
+        },
+        "level": {
+          "type": "string",
+          "index": true,
+          "description": "The level they live in."
+        }
+      }
+    },
+    "seen": {
+      "component": true,
+      "type": "object",
+      "kind": false,
+      "description": "Where a hero was last in the world, and when: what keeps the villagers of that level awake. A page writes it on its hero as they arrive in a level, and every two minutes while they play there.",
+      "properties": {
+        "level": {
+          "type": "string",
+          "index": true,
+          "description": "Which level, by the app's list of levels."
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "think": {
+      "tool": true,
+      "description": "Let a villager decide how to spend the next while, from what they lately heard and said: where to go, and how they feel. Their wake calls it every five minutes while a hero is in their land.",
+      "input": {
+        "villager": {
+          "type": "string",
+          "description": "The villager's row."
+        }
+      },
+      "required": [
+        "villager"
+      ],
+      "apply": {
+        "entity": {
+          "eid": "$thought"
+        },
+        "entry": {
+          "session": "$villager"
+        },
+        "content": {
+          "body": "A while passes."
+        },
+        "using": {
+          "model": "typesafe/jev",
+          "window": 16,
+          "instructions": "You are one of the people of Mossvale, a world of small lands where heroes take up quests. These are the lines you lately heard and said: a line from a hero begins with their name, and a line beginning News: is something a neighbour told you."
+        },
+        "questions": {
+          "asked": {
+            "go": {
+              "type": "choice",
+              "instructions": "Where do you spend the next while?",
+              "criteria": {
+                "home": "at home, where heroes know to find you",
+                "about": "strolling about your part of the land",
+                "visit": "at a neighbour's door, talking over the news"
+              }
+            },
+            "mood": {
+              "type": "choice",
+              "instructions": "How do you feel?",
+              "criteria": {
+                "glad": "glad, and ready to chat",
+                "busy": "busy with your work",
+                "weary": "tired, and short with people",
+                "worried": "worried by what you have heard"
+              }
+            }
+          }
+        }
+      }
+    },
+    "tell": {
+      "tool": true,
+      "model": true,
+      "description": "Pass news on to a neighbour, who has heard it the next time anyone talks to them. For something worth repeating: a deed, a danger, a stranger's question. Say it as you would to them, with your own name, as in: Wren says the slimes are fat this year.",
+      "input": {
+        "villager": {
+          "type": "string",
+          "description": "Who to tell: the id beside their name among your neighbours."
+        },
+        "news": {
+          "type": "string",
+          "description": "What they hear, in a sentence."
+        }
+      },
+      "required": [
+        "villager",
+        "news"
+      ],
+      "apply": {
+        "entity": {
+          "eid": "$heard"
+        },
+        "entry": {
+          "session": "$villager"
+        },
+        "content": {
+          "body": "News: $news"
+        },
+        "notice": {}
       }
     }
   }

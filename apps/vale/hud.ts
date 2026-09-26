@@ -30,6 +30,8 @@ export type Talk = {
   have: number
   greets: string
   name: string
+  /** they hear what is said beside them, and answer (village.ts) */
+  hears?: boolean
 }
 
 /** Build the HUD into `root`. `press` sends a button's action to the game. */
@@ -199,6 +201,11 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
         html = `<h3>${esc(q.title)}</h3><p>${
           esc(q.body)
         }</p><p class=Talk_Reward>${t.have} / ${q.count} so far.</p>`
+      }
+      if (t.hears) {
+        html += `<p class=Talk_Hint>💬 Say something, and ${
+          esc(t.name)
+        } will answer.</p>`
       }
       talk.innerHTML = `<div class=Talk_Who>${
         esc(t.name)

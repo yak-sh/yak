@@ -26,6 +26,7 @@ import { sound } from './sound.ts'
 import { type Mic, voices } from './voicebox.ts'
 import { groundAt, SIZE, VOXEL } from './terrain.ts'
 import { world } from './world.ts'
+import { village } from './village.ts'
 
 let TINTS = [
   '#c9503f',
@@ -99,7 +100,8 @@ fit()
 addEventListener('resize', fit)
 
 let net = connect(new URL('api/', document.baseURI))
-let g = game(net)
+let folk = village(net)
+let g = game(net, folk.at)
 // Who you are and your heroes, asked while the level grows.
 let asking = net.me().then(async (me) => ({
   me,
@@ -110,7 +112,7 @@ let typing = false
 let hands = listen(canvas, glass, () => typing || h.talking || chat.typing)
 let h = hud(glass, hands.press)
 let marks = overlay(h.layer, camera)
-let chat = chatbox(glass, net, marks)
+let chat = chatbox(glass, net, marks, folk)
 let m = map(glass)
 
 // The level on show, and what is drawn of it: grown again when the hero goes
@@ -445,6 +447,7 @@ let talkTo = () => {
       have: next?.have ?? 0,
       greets: giver.greets,
       name: giver.name,
+      hears: !!folk.near(),
     },
     () => {
       if (!next) return
@@ -455,6 +458,12 @@ let talkTo = () => {
     () => {
       if (!next) return
       for (let e of g.handIn(next.quest)) react(e, target)
+      folk.news(
+        next.quest.giver,
+        `${
+          last?.sheet.name ?? 'A hero'
+        } did what you asked: ${next.quest.title}.`,
+      )
       sound.quest()
     },
   )
@@ -537,6 +546,7 @@ let loop = (t: number) => {
         skin: str(player.skin, look.skin),
       }
       stage.tick(f, net.hero, dressed, dt)
+      folk.tick(f)
       chat.tick(f, stage.headOf)
       voice.tick(f)
       let k = 1 - Math.exp(-dt * 10)
@@ -652,6 +662,7 @@ Object.assign(globalThis, {
     net,
     game: g,
     voice,
+    village: folk,
     get frame() {
       return last
     },
@@ -672,6 +683,7 @@ let busy = gate.querySelector('.Gate_Busy')
 if (busy) busy.textContent = 'Finding the others…'
 let { me, heroes } = await asking
 chat.me(me)
+folk.me(me)
 let ready = async (watch: { ready: boolean }) => {
   for (let i = 0; i < 40 && !watch.ready; i++) {
     await new Promise((r) => setTimeout(r, 100))
