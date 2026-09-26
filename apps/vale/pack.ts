@@ -59,6 +59,10 @@ let trying = (worn: Worn, kind: string): Worn => {
   return next
 }
 
+// What the hero would wear with a slot taken off.
+let bare = (worn: Worn, slot: string): Worn =>
+  Object.fromEntries(Object.entries(worn).filter(([s]) => s != slot))
+
 // A thing's tier, as pips in its tier's colour.
 let pips = (t?: Thing) =>
   t?.tier
@@ -151,7 +155,7 @@ export let pack = (root: HTMLElement, acts: Acts) => {
     if (!t) return `<p class=Pack_Hint>Nothing worn there.</p>`
     let now = numbers(s.lvl, s.worn)
     let then = from == 'worn'
-      ? numbers(s.lvl, { ...s.worn, [key]: undefined })
+      ? numbers(s.lvl, bare(s.worn, key))
       : numbers(s.lvl, trying(s.worn, kind))
     let sort = sortOf(t)
     let hands = HANDLES[t.family ?? '']?.hands == 2 ? ' · both hands' : ''
