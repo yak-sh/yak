@@ -1,0 +1,8 @@
+/* A thing's picture (sprites.ts), a little bigger than the text around it,
+   sitting on its line. */
+.Sprite {
+  display: inline-block;
+  width: 1.3em;
+  height: 1.3em;
+  vertical-align: -0.3em;
+}

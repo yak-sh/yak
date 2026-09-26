@@ -16,7 +16,7 @@
 // block, from ui/theme.css's tokens; the sheet around it (head, close,
 // scrolling, safe areas) is ui/Panel.css's and is never restyled per panel.
 //
-// How a button for the thumbs plugs in. `pad(action, icon, title)` adds one,
+// How a button for the thumbs plugs in. `pad(action, face, title)` adds one,
 // pressing its action (input.ts). On a phone each sits in its own slot of the
 // ring around strike (ui/Hud.css, `.Hud_Pads`): the abilities (bar.ts) with
 // the first two beside strike and the third further out, dodge, jump and the
@@ -36,6 +36,7 @@ import { LEVELS } from './levels.ts'
 import { cap, type Panel, panels, type Spec } from './panel.ts'
 import { GIVERS, type Quest } from './quests.ts'
 import { need } from './rules.ts'
+import { icon } from './sprites.ts'
 import { TRADES } from './trades.ts'
 import type { Mic } from './voicebox.ts'
 
@@ -149,7 +150,7 @@ export let hud = (
   let marked: [HTMLElement, Panel][] = []
   let tray = (
     name: string,
-    icon: Glyph,
+    mark: Glyph,
     title: string,
     key: string,
     click: () => void,
@@ -157,7 +158,7 @@ export let hud = (
   ) => {
     let b = el(
       `Orb Orb-${name}`,
-      `${glyph(icon)}<kbd class=Key>${key}</kbd>`,
+      `${glyph(mark)}<kbd class=Key>${key}</kbd>`,
       'button',
     )
     b.title = `${title} (${key})`
@@ -201,11 +202,11 @@ export let hud = (
   let fresh = false
 
   // A button for the thumbs, and on a desktop its key.
-  let pad = (a: Action, icon: string, title: string) => {
+  let pad = (a: Action, face: string, title: string) => {
     let key = keysOf(a).map(cap)[0]
     let b = el(
       `Pad Pad-${a}`,
-      icon + (key ? `<kbd class=Key>${key}</kbd>` : ''),
+      face + (key ? `<kbd class=Key>${key}</kbd>` : ''),
       'button',
     )
     b.title = key ? `${title} (${key})` : title
@@ -230,7 +231,7 @@ export let hud = (
   pad('jump', glyph('jump'), 'Jump')
   let drinkPad = pad(
     'drink',
-    '<span class=Pad_Icon>🧪</span><span class=Pad_N></span>',
+    '<span class=Pad_Icon></span><span class=Pad_N></span>',
     'Drink a tonic',
   )
   let talkPad = pad('talk', glyph('talk'), 'Talk')
@@ -246,8 +247,9 @@ export let hud = (
     e.innerHTML = html
   }
 
-  let toast = (text: string, cls = '') => {
-    let t = el(`Toast ${cls}`, esc(text))
+  // What just happened, and the thing it was about, if one (sprites.ts).
+  let toast = (text: string, cls = '', kind = '') => {
+    let t = el(`Toast ${cls}`, `${icon(kind)} ${esc(text)}`)
     toasts.append(t)
     setTimeout(() => t.classList.add('Toast-out'), 2600)
     setTimeout(() => t.remove(), 3200)
@@ -423,12 +425,12 @@ export let hud = (
         )
         foe.classList.toggle('Foe-boss', !!b.boss)
       }
-      let [icon, word] = CLOCKS[clock]
+      let [sky, word] = CLOCKS[clock]
       put(
         'who',
         who,
         `<span class=Who_Dot></span><span class=Who_N>${here} here</span><span class=Who_Clock title="${word}">${
-          glyph(icon)
+          glyph(sky)
         }<span>${word}</span></span>`,
       )
       if (was.rose != String(facing)) {
@@ -449,10 +451,13 @@ export let hud = (
         nudged = true
         toast('The rack by the fire has arms to try. Open your pack (B).')
       }
-      // Whatever mends, which drinking takes (play.ts).
-      let tonics = s.bag.reduce(
-        (n, h) => n + (ITEMS[h.kind]?.heals ? h.n : 0),
-        0,
+      // Whatever mends, which drinking takes (play.ts), the first first.
+      let mends = s.bag.filter((h) => ITEMS[h.kind]?.heals)
+      let tonics = mends.reduce((n, h) => n + h.n, 0)
+      put(
+        'tonicIcon',
+        drinkPad.querySelector('.Pad_Icon')!,
+        icon(mends[0]?.kind ?? 'tonic'),
       )
       put(
         'tonic',

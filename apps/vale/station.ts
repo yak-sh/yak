@@ -19,6 +19,7 @@ import {
 import { sortOf } from './arms.ts'
 import { ITEMS } from './items.ts'
 import type { Panel } from './panel.ts'
+import { icon } from './sprites.ts'
 import type { Sheet } from './play.ts'
 import { type Craft, least, tradeNeed, TRADES, type Trades } from './trades.ts'
 import type { Job } from './work.ts'
@@ -60,9 +61,7 @@ export let station = (panel: Panel, acts: Acts) => {
   let need = (bag: Sheet['bag'], r: Recipe, [what, n]: [string, number]) => {
     let got = have(bag, what, r.tier)
     let kinds = serves(what, r.tier)
-    let icon =
-      ITEMS[kinds.find((k) => bag.some((h) => h.kind == k)) ?? kinds[0]]
-        ?.icon ?? '•'
+    let pic = icon(kinds.find((k) => bag.some((h) => h.kind == k)) ?? kinds[0])
     let name = (k: string) => ITEMS[k]?.name ?? k
     let names = kinds.length < 2
       ? ''
@@ -72,9 +71,9 @@ export let station = (panel: Panel, acts: Acts) => {
         name(kinds[kinds.length - 1])
       }`
     names = names && `<small>${esc(names)}</small>`
-    return `<span class="Craft_Need${
-      got < n ? ' Craft_Need-short' : ''
-    }"><i>${icon}</i><b>${esc(stuffName(what))}</b><em>${
+    return `<span class="Craft_Need${got < n ? ' Craft_Need-short' : ''}"><i>${
+      pic || '•'
+    }</i><b>${esc(stuffName(what))}</b><em>${
       Math.min(got, n)
     } / ${n}</em>${names}</span>`
   }
@@ -101,7 +100,7 @@ export let station = (panel: Panel, acts: Acts) => {
         plan(r, bag) ? '' : ' disabled'
       }>${STATIONS[r.at].verb}</button>`
     return `<div class=Pack_Card><i class=Pack_Big>${
-      t?.icon ?? '•'
+      icon(r.makes) || '•'
     }</i><div><b>${esc(t?.name ?? r.makes)}</b><span>${
       esc(what)
     }</span></div>${button}</div>` +
@@ -128,7 +127,7 @@ export let station = (panel: Panel, acts: Acts) => {
           picked == r.makes ? ' Pack_Tile-on' : ''
         }${ready ? '' : ' Pack_Tile-had'}" data-pick="${r.makes}" title="${
           esc(t?.name ?? r.makes)
-        }"><i>${t?.icon ?? '•'}</i></button>`
+        }"><i>${icon(r.makes) || '•'}</i></button>`
       }).join('')
     panel.head(
       `${

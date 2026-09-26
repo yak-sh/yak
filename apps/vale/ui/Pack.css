@@ -29,6 +29,12 @@
     font-style: normal;
     line-height: 1.2;
   }
+
+  & .Sprite {
+    width: 2.2rem;
+    height: 2.2rem;
+    vertical-align: middle;
+  }
 }
 
 .Pack_Slot {
@@ -107,6 +113,14 @@
 .Pack_Num {
   white-space: nowrap;
 
+  & .Glyph {
+    display: inline-block;
+    width: 1.05em;
+    height: 1.05em;
+    vertical-align: -0.2em;
+    color: var(--amber);
+  }
+
   & em {
     font-style: normal;
     font-weight: 700;
@@ -154,6 +168,11 @@
 .Pack_Big {
   font-size: 2rem;
   font-style: normal;
+
+  & .Sprite {
+    width: 2.8rem;
+    height: 2.8rem;
+  }
 }
 
 .Pack_Hint {

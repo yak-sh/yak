@@ -72,6 +72,12 @@
   &:has(> .Talk:not([hidden])) > :is(.Hud_Pads, .Stick) {
     display: none;
   }
+
+  /* The thumbstick floats over everything, so it rests while a panel is
+     open. */
+  &:has(> .Panel:not([hidden])) > .Stick {
+    display: none;
+  }
 }
 
 /* The scene's labels, under everything else on the glass. */

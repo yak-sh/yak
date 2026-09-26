@@ -1,6 +1,6 @@
-// What a player can carry: one row per kind of thing, with its name, its icon
-// in the bag, what it does (a tonic heals, a sword is worn in the hand), and
-// how it is drawn lying on the ground, a few soft boxes. A new kind of loot or
+// What a player can carry: one row per kind of thing, with its name, what it
+// does (a tonic heals, a sword is worn in the hand), and how it is drawn, a
+// few soft boxes, lying on the ground and in the bag (sprites.ts). A new kind of loot or
 // gift is a row here; beasts.ts says what drops it and quests.ts what gives
 // it. The arms and armour of every tier are rows of arms.ts, and what a hero
 // gathers is a row of materials.ts, both listed here too.
@@ -13,7 +13,6 @@ export type Box = [Vec, Vec, number]
 
 export type Thing = {
   name: string
-  icon: string
   /** health a drink gives back */
   heals?: number
   /** where it is worn (gear.ts); a thing without one is only carried */
@@ -42,7 +41,6 @@ export type Thing = {
 export let ITEMS: Record<string, Thing> = {
   jelly: {
     name: 'Slime jelly',
-    icon: '🟢',
     look: [
       [[-0.15, 0, -0.15], [0.3, 0.26, 0.3], 0x86d65c],
       [[-0.1, 0.26, -0.1], [0.2, 0.06, 0.2], 0x5aa83e],
@@ -50,7 +48,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   tusk: {
     name: 'Boar tusk',
-    icon: '🦷',
     look: [
       [[-0.05, 0, -0.14], [0.1, 0.1, 0.28], 0xf2ead6],
       [[-0.05, 0.08, 0.1], [0.1, 0.18, 0.08], 0xf2ead6],
@@ -58,7 +55,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   shard: {
     name: 'Crag shard',
-    icon: '🔷',
     look: [
       [[-0.08, 0, -0.08], [0.16, 0.42, 0.16], 0x6fb8f0],
       [[0.06, 0, -0.02], [0.1, 0.26, 0.1], 0x9ad4ff],
@@ -66,7 +62,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   crown: {
     name: 'Thorn crown',
-    icon: '👑',
     look: [
       [[-0.18, 0, -0.18], [0.36, 0.1, 0.36], 0xf2c14e],
       [[-0.18, 0.1, -0.18], [0.07, 0.12, 0.07], 0xf2c14e],
@@ -76,7 +71,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   coin: {
     name: 'Coin',
-    icon: '🪙',
     look: [
       [[-0.13, 0, -0.13], [0.26, 0.06, 0.26], 0xf2c14e],
       [[-0.1, 0.06, -0.1], [0.2, 0.05, 0.2], 0xe8b43a],
@@ -84,7 +78,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   tonic: {
     name: 'Mossberry tonic',
-    icon: '🧪',
     heals: 60,
     look: [
       [[-0.1, 0, -0.1], [0.2, 0.24, 0.2], 0xc0406a],
@@ -94,7 +87,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   draught: {
     name: 'Hearty draught',
-    icon: '🍶',
     heals: 150,
     look: [
       [[-0.11, 0, -0.11], [0.22, 0.26, 0.22], 0x4a8ad8],
@@ -104,7 +96,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   elixir: {
     name: 'Vale elixir',
-    icon: '⚗️',
     heals: 400,
     look: [
       [[-0.12, 0, -0.12], [0.24, 0.22, 0.24], 0xe8c040],
@@ -114,7 +105,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   blade2: {
     name: 'Boarsbane',
-    icon: '🗡️',
     ...wield('sword', 1, 1.1),
     look: [
       [[-0.02, 0, -0.02], [0.04, 0.5, 0.04], 0xdfe6ee],
@@ -123,7 +113,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   blade3: {
     name: 'Cragcleaver',
-    icon: '⚔️',
     ...wield('sword', 2, 1.1),
     look: [
       [[-0.03, 0, -0.03], [0.06, 0.56, 0.06], 0xbfe2ff],
@@ -132,7 +121,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   blade4: {
     name: 'Barkbiter',
-    icon: '🪓',
     ...wield('axe', 3, 1.1),
     look: [
       [[-0.02, 0, -0.02], [0.04, 0.54, 0.04], 0x6a4a30],
@@ -141,7 +129,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   blade5: {
     name: 'Skyspear',
-    icon: '🔱',
     ...wield('staff', 4, 1.1),
     look: [
       [[-0.02, 0, -0.02], [0.04, 0.62, 0.04], 0xe8dcc0],
@@ -151,7 +138,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   blade6: {
     name: 'Wyrmfire',
-    icon: '☄️',
     ...wield('sword', 5, 1.1),
     look: [
       [[-0.03, 0, -0.03], [0.06, 0.6, 0.06], 0xff7a2a],
@@ -161,7 +147,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   egg: {
     name: 'Speckled egg',
-    icon: '🥚',
     look: [
       [[-0.09, 0, -0.07], [0.18, 0.2, 0.14], 0xf0e6d2],
       [[-0.06, 0.2, -0.05], [0.12, 0.06, 0.1], 0xe8dcc4],
@@ -169,7 +154,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   feather: {
     name: 'Feather',
-    icon: '🪶',
     look: [
       [[-0.02, 0, -0.2], [0.04, 0.03, 0.42], 0xd8ccb8],
       [[-0.08, 0.01, -0.12], [0.16, 0.02, 0.28], 0xece4d4],
@@ -177,7 +161,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   hide: {
     name: 'Soft hide',
-    icon: '🟫',
     look: [
       [[-0.2, 0, -0.16], [0.4, 0.04, 0.32], 0xb8906a],
       [[-0.14, 0.04, -0.1], [0.28, 0.03, 0.2], 0xa07a58],
@@ -185,7 +168,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   pelt: {
     name: 'Thick pelt',
-    icon: '🦊',
     look: [
       [[-0.22, 0, -0.18], [0.44, 0.06, 0.36], 0x8a6a4a],
       [[-0.16, 0.06, -0.12], [0.32, 0.04, 0.24], 0x6e5236],
@@ -194,7 +176,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   fleece: {
     name: 'Fleece',
-    icon: '🐑',
     look: [
       [[-0.16, 0, -0.14], [0.32, 0.14, 0.28], 0xf0ebe0],
       [[-0.1, 0.14, -0.08], [0.2, 0.06, 0.16], 0xe4ddd0],
@@ -202,7 +183,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   horn: {
     name: 'Horn',
-    icon: '📯',
     look: [
       [[-0.05, 0, -0.16], [0.1, 0.1, 0.2], 0xd8c8a8],
       [[-0.04, 0.06, 0.02], [0.08, 0.14, 0.08], 0xc8b890],
@@ -211,7 +191,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   antler: {
     name: 'Antler',
-    icon: '🦌',
     look: [
       [[-0.03, 0, -0.2], [0.06, 0.06, 0.4], 0xe0d0b0],
       [[-0.03, 0, -0.06], [0.16, 0.05, 0.05], 0xd4c4a4],
@@ -220,7 +199,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   fang: {
     name: 'Wolf fang',
-    icon: '🐺',
     look: [
       [[-0.05, 0, -0.05], [0.1, 0.22, 0.1], 0xf2ead6],
       [[-0.03, 0.22, -0.03], [0.06, 0.08, 0.06], 0xe8dcc0],
@@ -228,7 +206,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   claw: {
     name: 'Bear claw',
-    icon: '🐾',
     look: [
       [[-0.1, 0, -0.08], [0.2, 0.06, 0.16], 0x5a3a24],
       [[-0.09, 0.02, 0.08], [0.04, 0.04, 0.1], 0xe8dcc0],
@@ -238,7 +215,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   quill: {
     name: 'Quill',
-    icon: '🦔',
     look: [
       [[-0.015, 0, -0.22], [0.03, 0.03, 0.44], 0xe0d0b0],
       [[-0.015, 0, 0.12], [0.03, 0.03, 0.1], 0x3a3028],
@@ -246,7 +222,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   talon: {
     name: 'Talon',
-    icon: '🦅',
     look: [
       [[-0.04, 0, -0.1], [0.08, 0.08, 0.2], 0x3a3a3a],
       [[-0.03, 0.06, 0.08], [0.06, 0.1, 0.06], 0x2a2a2a],
@@ -254,7 +229,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   plume: {
     name: 'Great plume',
-    icon: '🦚',
     look: [
       [[-0.02, 0, -0.3], [0.04, 0.03, 0.6], 0xc89a50],
       [[-0.1, 0.01, -0.2], [0.2, 0.02, 0.4], 0xe8c070],
@@ -263,7 +237,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   silk: {
     name: 'Spider silk',
-    icon: '🕸️',
     look: [
       [[-0.12, 0, -0.12], [0.24, 0.16, 0.24], 0xf4f2ec],
       [[-0.08, 0.16, -0.08], [0.16, 0.06, 0.16], 0xe8e6e0],
@@ -271,7 +244,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   chitin: {
     name: 'Chitin plate',
-    icon: '🪲',
     look: [
       [[-0.14, 0, -0.16], [0.28, 0.05, 0.32], 0x2e5a4e],
       [[-0.1, 0.05, -0.12], [0.2, 0.04, 0.24], 0x4a7a6a],
@@ -279,7 +251,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   sting: {
     name: 'Sting',
-    icon: '🐝',
     look: [
       [[-0.03, 0, -0.12], [0.06, 0.06, 0.2], 0x2a2218],
       [[-0.015, 0.015, 0.08], [0.03, 0.03, 0.08], 0x1a1410],
@@ -287,7 +258,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   venom: {
     name: 'Venom sac',
-    icon: '💜',
     look: [
       [[-0.1, 0, -0.1], [0.2, 0.16, 0.2], 0x8a4ab8],
       [[-0.05, 0.16, -0.05], [0.1, 0.06, 0.1], 0x6a3a90],
@@ -295,7 +265,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   scale: {
     name: 'Serpent scale',
-    icon: '🐍',
     look: [
       [[-0.12, 0, -0.1], [0.24, 0.04, 0.2], 0x5a8a3a],
       [[-0.08, 0.04, -0.06], [0.16, 0.03, 0.12], 0x7aaa5a],
@@ -303,7 +272,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   shell: {
     name: 'Crab shell',
-    icon: '🐚',
     look: [
       [[-0.14, 0, -0.12], [0.28, 0.1, 0.24], 0xc8603a],
       [[-0.1, 0.1, -0.08], [0.2, 0.05, 0.16], 0xd87a50],
@@ -311,7 +279,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   pearl: {
     name: 'Mere pearl',
-    icon: '🦪',
     look: [
       [[-0.08, 0, -0.08], [0.16, 0.16, 0.16], 0xf4eef0],
       [[-0.05, 0.16, -0.05], [0.1, 0.03, 0.1], 0xfaf6f8],
@@ -319,7 +286,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   toadstone: {
     name: 'Toadstone',
-    icon: '🐸',
     look: [
       [[-0.08, 0, -0.08], [0.16, 0.12, 0.16], 0x5a8a6a],
       [[-0.05, 0.12, -0.05], [0.1, 0.04, 0.1], 0x8ad0a0],
@@ -327,7 +293,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   cap: {
     name: 'Mushroom cap',
-    icon: '🍄',
     look: [
       [[-0.04, 0, -0.04], [0.08, 0.12, 0.08], 0xefe4cc],
       [[-0.14, 0.12, -0.14], [0.28, 0.1, 0.28], 0xd8483a],
@@ -336,7 +301,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   spore: {
     name: 'Glowspore',
-    icon: '🌫️',
     look: [
       [[-0.08, 0, -0.08], [0.16, 0.1, 0.16], 0xb8a8d8],
       [[-0.05, 0.1, -0.05], [0.1, 0.08, 0.1], 0xd8ccf0],
@@ -344,7 +308,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   bark: {
     name: 'Tough bark',
-    icon: '🪵',
     look: [
       [[-0.18, 0, -0.08], [0.36, 0.08, 0.16], 0x6a5234],
       [[-0.14, 0.08, -0.05], [0.28, 0.04, 0.1], 0x5a8a3a],
@@ -352,7 +315,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   heartwood: {
     name: 'Heartwood',
-    icon: '🌳',
     look: [
       [[-0.1, 0, -0.1], [0.2, 0.3, 0.2], 0x8a6a3a],
       [[-0.06, 0.3, -0.06], [0.12, 0.06, 0.12], 0xffd24a],
@@ -360,7 +322,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   acorn: {
     name: 'Golden acorn',
-    icon: '🌰',
     look: [
       [[-0.07, 0, -0.07], [0.14, 0.14, 0.14], 0xd8a040],
       [[-0.08, 0.12, -0.08], [0.16, 0.06, 0.16], 0x7a5a30],
@@ -368,7 +329,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   honey: {
     name: 'Honeycomb',
-    icon: '🍯',
     look: [
       [[-0.14, 0, -0.1], [0.28, 0.14, 0.2], 0xf0b840],
       [[-0.1, 0.14, -0.06], [0.2, 0.04, 0.12], 0xf8d070],
@@ -376,7 +336,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   glow: {
     name: 'Wisplight',
-    icon: '✨',
     look: [
       [[-0.07, 0, -0.07], [0.14, 0.2, 0.14], 0xd0f4ff],
       [[-0.04, 0.2, -0.04], [0.08, 0.06, 0.08], 0x8ad8ff],
@@ -384,7 +343,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   dust: {
     name: 'Wing dust',
-    icon: '🦋',
     look: [
       [[-0.08, 0, -0.08], [0.16, 0.08, 0.16], 0xe8dcc0],
       [[-0.05, 0.08, -0.05], [0.1, 0.04, 0.1], 0xd8ccb0],
@@ -392,7 +350,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   ore: {
     name: 'Iron ore',
-    icon: '🪨',
     look: [
       [[-0.12, 0, -0.1], [0.24, 0.14, 0.2], 0x6a6460],
       [[-0.06, 0.1, -0.04], [0.08, 0.06, 0.08], 0xb87a4a],
@@ -400,7 +357,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   gem: {
     name: 'Hollow heart',
-    icon: '💎',
     look: [
       [[-0.1, 0, -0.1], [0.2, 0.2, 0.2], 0x8ad8f0],
       [[-0.06, 0.2, -0.06], [0.12, 0.1, 0.12], 0xc0f0ff],
@@ -408,7 +364,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   ember: {
     name: 'Ember core',
-    icon: '🔥',
     look: [
       [[-0.09, 0, -0.09], [0.18, 0.16, 0.18], 0xe8622a],
       [[-0.05, 0.16, -0.05], [0.1, 0.08, 0.1], 0xffd040],
@@ -416,7 +371,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   frost: {
     name: 'Frost crystal',
-    icon: '❄️',
     look: [
       [[-0.05, 0, -0.05], [0.1, 0.36, 0.1], 0xa8e0ff],
       [[0.04, 0, -0.02], [0.08, 0.22, 0.08], 0xd8f4ff],
@@ -425,7 +379,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   bone: {
     name: 'Old bone',
-    icon: '🦴',
     look: [
       [[-0.03, 0, -0.18], [0.06, 0.06, 0.36], 0xe8dcc0],
       [[-0.06, 0, -0.22], [0.12, 0.08, 0.06], 0xe0d4b8],
@@ -434,7 +387,6 @@ export let ITEMS: Record<string, Thing> = {
   },
   ivory: {
     name: 'Mammoth ivory',
-    icon: '🦣',
     look: [
       [[-0.06, 0, -0.26], [0.12, 0.12, 0.34], 0xf4ecd8],
       [[-0.05, 0.06, 0.06], [0.1, 0.12, 0.14], 0xece2c8],

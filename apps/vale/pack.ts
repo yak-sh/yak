@@ -8,7 +8,9 @@
 import { ABILITIES, GIVES } from './abilities.ts'
 import { HANDLES, type Slot, SLOT_NAMES, SLOTS, sortOf } from './arms.ts'
 import { kitOf, RACK, type Worn } from './gear.ts'
+import { type Glyph, glyph } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
+import { icon } from './sprites.ts'
 import type { Panel } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { maxHp, power } from './rules.ts'
@@ -38,14 +40,14 @@ let numbers = ({ lvl, learned }: Sheet, worn: Worn) => {
 type Numbers = ReturnType<typeof numbers>
 
 // Each number, how it reads, and whether more is better.
-let LINES: [keyof Numbers, string, (n: number) => string, boolean][] = [
-  ['blow', '⚔️', (n) => `${n} a blow`, true],
-  ['pace', '⏱️', (n) => `every ${n.toFixed(2)} s`, false],
-  ['reach', '🎯', (n) => `reach ${n} m`, true],
-  ['armour', '🛡️', (n) => `armour ${n}`, true],
-  ['hp', '❤️', (n) => `health ${n}`, true],
-  ['speed', '💨', (n) => `speed +${n}%`, true],
-  ['luck', '🍀', (n) => `great blows ${n}%`, true],
+let LINES: [keyof Numbers, Glyph, (n: number) => string, boolean][] = [
+  ['blow', 'blow', (n) => `${n} a blow`, true],
+  ['pace', 'pace', (n) => `every ${n.toFixed(2)} s`, false],
+  ['reach', 'reach', (n) => `reach ${n} m`, true],
+  ['armour', 'armour', (n) => `armour ${n}`, true],
+  ['hp', 'health', (n) => `health ${n}`, true],
+  ['speed', 'speed', (n) => `speed +${n}%`, true],
+  ['luck', 'luck', (n) => `great blows ${n}%`, true],
 ]
 
 // What the hero would wear with `kind` put on in its slot: a weapon for both
@@ -142,7 +144,7 @@ export let pack = (panel: Panel, acts: Acts) => {
     return `<button class="Pack_Tile${on ? ' Pack_Tile-on' : ''}${
       had ? ' Pack_Tile-had' : ''
     }" data-pick="${pick}" title="${esc(t?.name ?? kind)}"><i>${
-      t?.icon ?? '•'
+      icon(kind) || '•'
     }</i>${n > 1 ? `<b>${n}</b>` : ''}${pips(t)}</button>`
   }
 
@@ -169,12 +171,12 @@ export let pack = (panel: Panel, acts: Acts) => {
     // Worn, what taking it off loses; else, what putting it on gains.
     let [a, b] = from == 'worn' ? [then, now] : [now, then]
     let diff = t.slot
-      ? LINES.filter(([k]) => a[k] != b[k]).map(([k, icon, say, more]) => {
+      ? LINES.filter(([k]) => a[k] != b[k]).map(([k, mark, say, more]) => {
         let d = Math.round((b[k] - a[k]) * 100) / 100
         let good = more ? d > 0 : d < 0
         let sign = d > 0 ? '+' : '−'
         let shown = k == 'pace' ? `${Math.abs(d).toFixed(2)} s` : Math.abs(d)
-        return `<span class=Pack_Num>${icon} ${say(b[k])} <em class="${
+        return `<span class=Pack_Num>${glyph(mark)} ${say(b[k])} <em class="${
           good ? 'Pack_Up' : 'Pack_Down'
         }">${sign}${shown}</em></span>`
       }).join('')
@@ -194,7 +196,7 @@ export let pack = (panel: Panel, acts: Acts) => {
       }</button>`
       : ''
     let can = gives(t)
-    return `<div class=Pack_Card><i class=Pack_Big>${t.icon}</i><div><b>${
+    return `<div class=Pack_Card><i class=Pack_Big>${icon(kind)}</i><div><b>${
       esc(t.name)
     }</b><span>${esc(what)}</span></div>${act}</div>${
       can ? `<div class=Pack_Abilities>${can}</div>` : ''
@@ -209,14 +211,14 @@ export let pack = (panel: Panel, acts: Acts) => {
       return `<button class="Pack_Slot${on ? ' Pack_Tile-on' : ''}${
         t ? '' : ' Pack_Slot-empty'
       }" data-pick="worn:${slot}"><small>${SLOT_NAMES[slot]}</small><i>${
-        t?.icon ?? (slot == 'main' ? HANDLES.fists.icon : '·')
+        h ? icon(h.kind) : '·'
       }</i><span>${
         esc(t?.name ?? (slot == 'main' ? 'Bare hands' : 'Nothing'))
       }</span>${pips(t)}</button>`
     }).join('')
     let stats = LINES.filter(([k]) => k != 'speed' || n.speed).map((
-      [k, icon, say],
-    ) => `<span class=Pack_Num>${icon} ${say(n[k])}</span>`).join('') +
+      [k, mark, say],
+    ) => `<span class=Pack_Num>${glyph(mark)} ${say(n[k])}</span>`).join('') +
       s.abilities.map((id, i) =>
         ABILITIES[id]
           ? `<span class=Pack_Num><kbd class=Key>${i + 1}</kbd> ${

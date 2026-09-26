@@ -481,8 +481,9 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
   else if (e.type == 'loot') {
     let t = ITEMS[e.item]
     h.toast(
-      `${t?.icon ?? ''} ${t?.name ?? e.item}${e.n > 1 ? ` ×${e.n}` : ''}`,
+      `${t?.name ?? e.item}${e.n > 1 ? ` ×${e.n}` : ''}`,
       'Toast-loot',
+      e.item,
     )
     glow.emit(p(e.at), 0xffe08a, 8, {
       speed: 1.5,
@@ -522,10 +523,9 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     let t = ITEMS[e.item]
     if (t) {
       h.toast(
-        `${t.icon} ${
-          t.slot == 'main' || t.slot == 'off' ? 'In hand' : 'On'
-        }: ${t.name}`,
+        `${t.slot == 'main' || t.slot == 'off' ? 'In hand' : 'On'}: ${t.name}`,
         'Toast-loot',
+        e.item,
       )
     }
   } else if (e.type == 'shot') {
@@ -579,8 +579,9 @@ let worked = (e: Work) => {
   } else if (e.type == 'got') {
     let t = ITEMS[e.item]
     h.toast(
-      `${t?.icon ?? ''} ${t?.name ?? e.item}${e.n > 1 ? ` ×${e.n}` : ''}`,
+      `${t?.name ?? e.item}${e.n > 1 ? ` ×${e.n}` : ''}`,
       'Toast-loot',
+      e.item,
     )
     marks.float(
       `+${e.xp} ${TRADES[e.trade].name}`,

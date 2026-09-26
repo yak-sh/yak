@@ -23,7 +23,6 @@ export let SLOTS: Slot[] = ['main', 'off', 'head', 'body', 'feet', 'trinket']
 /** How a family of weapon handles. */
 export type Handle = {
   name: string
-  icon: string
   /** ms from one blow to the next */
   pace: number
   /** how far a blow reaches, in metres from the hero's middle to the foe's
@@ -44,7 +43,6 @@ export type Handle = {
 export let HANDLES: Record<string, Handle> = {
   fists: {
     name: 'Fists',
-    icon: '✊',
     pace: 450,
     reach: 1.4,
     arc: 1.2,
@@ -53,7 +51,6 @@ export let HANDLES: Record<string, Handle> = {
   },
   sword: {
     name: 'Sword',
-    icon: '⚔️',
     pace: 520,
     reach: 1.7,
     arc: 1.2,
@@ -62,7 +59,6 @@ export let HANDLES: Record<string, Handle> = {
   },
   axe: {
     name: 'Axe',
-    icon: '🪓',
     pace: 640,
     reach: 1.8,
     arc: 1.6,
@@ -71,7 +67,6 @@ export let HANDLES: Record<string, Handle> = {
   },
   hammer: {
     name: 'Hammer',
-    icon: '🔨',
     pace: 900,
     reach: 2,
     arc: 1.4,
@@ -80,7 +75,6 @@ export let HANDLES: Record<string, Handle> = {
   },
   dagger: {
     name: 'Dagger',
-    icon: '🔪',
     pace: 340,
     reach: 1.35,
     arc: 1,
@@ -90,7 +84,6 @@ export let HANDLES: Record<string, Handle> = {
   },
   bow: {
     name: 'Bow',
-    icon: '🏹',
     pace: 780,
     reach: 13,
     arc: 0.5,
@@ -100,7 +93,6 @@ export let HANDLES: Record<string, Handle> = {
   },
   staff: {
     name: 'Staff',
-    icon: '🪄',
     pace: 760,
     reach: 10,
     arc: 0.5,
@@ -313,22 +305,9 @@ export let wield = (family: string, t: number, fine = 1) => ({
 
 let weapon = (family: string, t: number, p: Paint): Thing => ({
   name: `${MADE[family][t - 1]} ${family}`,
-  icon: HANDLES[family].icon,
   ...wield(family, t),
   look: LOOKS[family](p),
 })
-
-let ICONS: Record<string, string> = {
-  helm: '🪖',
-  cuirass: '🦺',
-  greaves: '🥾',
-  cowl: '🧢',
-  jerkin: '🧥',
-  boots: '👢',
-  hood: '👒',
-  robe: '👘',
-  sandals: '🩴',
-}
 
 /** Every kind of arms and armour, by id: the noun and its tier, `sword1` to
  * `ring5`.
@@ -363,7 +342,6 @@ export let ARMS: Record<string, Thing> = tiers((t, p) => {
         : CLOTH
       return [`${noun}${t}`, {
         name: `${made[i]} ${noun}`,
-        icon: ICONS[noun],
         slot,
         weight,
         tier: t,
@@ -378,7 +356,6 @@ export let ARMS: Record<string, Thing> = tiers((t, p) => {
   let off: [string, Thing][] = [
     [`shield${t}`, {
       name: `${WOOD[i]} shield`,
-      icon: '🛡️',
       slot: 'off',
       family: 'shield',
       tier: t,
@@ -387,7 +364,6 @@ export let ARMS: Record<string, Thing> = tiers((t, p) => {
     }],
     [`tome${t}`, {
       name: `${LORE[i]} tome`,
-      icon: '📖',
       slot: 'off',
       family: 'tome',
       tier: t,
@@ -396,7 +372,6 @@ export let ARMS: Record<string, Thing> = tiers((t, p) => {
     }],
     [`torch${t}`, {
       name: `${WOOD[i]} torch`,
-      icon: '🕯️',
       slot: 'off',
       family: 'torch',
       tier: t,
@@ -405,7 +380,6 @@ export let ARMS: Record<string, Thing> = tiers((t, p) => {
     }],
     [`ring${t}`, {
       name: `${METAL[i]} ring`,
-      icon: '💍',
       slot: 'trinket',
       tier: t,
       luck: 0.02 + 0.01 * t,

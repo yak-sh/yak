@@ -23,7 +23,7 @@ let slotOf = (f: Frame, i: number) => {
     let h = HANDLES[k.family]
     return {
       id: '',
-      icon: h.icon,
+      icon: '',
       says: `${h.name}: strike (F or click)`,
       cd: 0,
       s: 0,
