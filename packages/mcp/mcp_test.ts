@@ -5,12 +5,11 @@
 // schema that stopped describing its answer fails here.
 
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { z } from 'zod'
 import { type Bundle, graph, who } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools'
 import { ram } from '@yaks/ram'
-import { comp, connect, result, shopGraph, text } from './testing.ts'
+import { comp, connect, result, shop, shopGraph, text } from './testing.ts'
 import { roster } from './server.ts'
 import { rosterLine, rosterVersion } from './roster.ts'
 
@@ -57,7 +56,7 @@ Deno.test('a read-only door lists no write, and its reads take its scope', async
   let client = await connect({
     readOnly: true,
     search: () => [spring],
-    scope: { shelf: z.string().describe('which shelf to read') },
+    scope: { shelf: { type: 'string', description: 'which shelf to read' } },
   })
   let tools = (await client.listTools()).tools as {
     name: string
@@ -267,6 +266,25 @@ Deno.test('graph_show answers the entities asked for and nothing else', async ()
   }])
   let client = await connect({ graph })
   let out = bundles(result(await called(client, 'graph_show', { ids: ['b1'] })))
+  assertEquals(out.map((b) => b.entity.eid), ['b1'])
+  await client.close()
+})
+
+Deno.test('graph_show reads an entity by whatever names it', async () => {
+  let g = graph({
+    storage: ram(shop, { number: true }),
+    vocab: shop,
+    plugins: [{
+      name: 'names',
+      address: (_, ids) =>
+        new Map(ids.filter((id) => id == 'spring').map((id) => [id, 'b1'])),
+    }],
+  })
+  await g.apply([spring])
+  let client = await connect({ graph: g })
+  let out = bundles(
+    result(await called(client, 'graph_show', { ids: ['spring'] })),
+  )
   assertEquals(out.map((b) => b.entity.eid), ['b1'])
   await client.close()
 })

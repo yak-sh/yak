@@ -10,12 +10,12 @@
 // So the command line and an MCP tool list describe the same tools, and each
 // description is written in one place.
 //
-// The arguments are carried as Zod rather than as the JSON Schema the
-// declaration wrote, because Zod is the one form every server here can
-// validate: the MCP SDK takes Zod, `inputSchemaOf` converts it back to JSON
-// Schema for a `tools/list` reply, and nothing has to compile a schema at call
-// time — which a Cloudflare Worker cannot do at all (it forbids building a
-// function from a string, which is how ajv validates).
+// The reads keep the JSON Schema their declarations wrote, because that is
+// what the runner reads: it validates a call against it and resolves every
+// argument marked a reference (`ref`) to the eid it names (@yaks/tools). The
+// write's arguments are Zod, because the bundles it accepts are built in Zod
+// from the vocabulary (./schema.ts), and Zod refuses a wrong value at the path
+// it was typed with a sentence an agent can act on.
 
 import { z } from 'zod'
 import { type Schema, type Tool } from '@yaks/graph'
@@ -54,9 +54,10 @@ export type CoreOpts = {
    * where there is no way back, since a promise nobody can keep is worse than
    * silence. */
   undo?: string
-  /** extra arguments every read here accepts, merged into each read tool's
-   * input, for a server whose reads are scoped by something of its own —
-   * yaks.app's signed-out endpoint names which app to read.
+  /** extra arguments every read here requires, as the JSON Schema of each,
+   * merged into each read tool's input, for a server whose reads are scoped by
+   * something of its own — yaks.app's signed-out endpoint names which app to
+   * read.
    *
    * The tools ignore them: what they name is the graph the endpoint was built
    * around, and the endpoint read them off the call before this server saw it.
@@ -85,8 +86,8 @@ export let pointing = (said: string): string =>
     : said
 
 // One declared argument, in Zod. Not a general JSON Schema reader: the only
-// declarations it ever sees are the tier's own, so it handles the shapes that
-// one file uses rather than pretending to cover all of JSON Schema.
+// declaration it ever sees is the write's own, so it handles the shapes that
+// one declaration uses rather than pretending to cover all of JSON Schema.
 type Arg = {
   type?: string
   items?: Arg
@@ -134,7 +135,7 @@ let zodInput = (
  * The generic tier, as tools: `graph_apply`, `graph_query`, `graph_show`,
  * `graph_schema`, and `search` when a {@link Search} was passed —
  * @yaks/graph's own declarations joined to its implementations, with their
- * arguments expressed in Zod and shaped for this server.
+ * arguments shaped for this server.
  *
  * ```ts
  * let tools = core({ vocab: shop, depth: 'full' })
@@ -162,33 +163,41 @@ export let core = (opts: CoreOpts): Tool[] => {
         properties?: Record<string, Arg>
         required?: string[]
       }
-      let input = zodInput(said)
-      if (t.name == 'graph_apply') {
-        // The bundles a write accepts are this graph's, so the declaration
-        // names only "an array of bundles" and the vocabulary fills in what
-        // one IS — every component, every writable property and every type
-        // (T-34153). No fixed schema could state it: the shape comes from one
-        // graph's vocabulary, and a declaration is written before there is a
-        // graph.
-        let about = said.properties?.change?.description
-        input.change = about ? writes.describe(about) : writes
+      if (t.name != 'graph_apply') {
+        // A server whose reads are scoped by something of its own declares
+        // that on every read — yaks.app's signed-out endpoint names which app
+        // to read — and those arguments come first, where a caller reads them.
+        let scope = t.readOnly && opts.scope ? opts.scope : {}
+        let required = [...Object.keys(scope), ...(said.required ?? [])]
+        return {
+          ...t,
+          inputSchema: {
+            ...said,
+            properties: { ...scope, ...said.properties },
+            ...(required.length ? { required } : {}),
+          },
+        }
       }
+      // The bundles a write accepts are this graph's, so the declaration
+      // names only "an array of bundles" and the vocabulary fills in what one
+      // IS — every component, every writable property and every type
+      // (T-34153). No fixed schema could state it: the shape comes from one
+      // graph's vocabulary, and a declaration is written before there is a
+      // graph.
+      let input = zodInput(said)
+      let about = said.properties?.change?.description
+      input.change = about ? writes.describe(about) : writes
       return {
         ...t,
         // The declaration's JSON Schema is dropped: a tool declares its
         // arguments once, and here that is the Zod above. Declaring both is
         // refused outright (@yaks/vocab `validateToolInput`), and rightly.
         inputSchema: undefined,
-        // A server whose reads are scoped by something of its own declares
-        // that on every read — yaks.app's signed-out endpoint names which app
-        // to read — and those arguments come first, where a caller reads them.
-        input: t.readOnly && opts.scope ? { ...opts.scope, ...input } : input,
+        input,
         // How a caller undoes a delete on this server, in its own words,
         // appended to the write's description — because that is where an agent
         // reads it at the moment it is deciding whether to risk the write.
-        ...(opts.undo && t.name == 'graph_apply'
-          ? { description: `${t.description} ${opts.undo}` }
-          : {}),
+        ...(opts.undo ? { description: `${t.description} ${opts.undo}` } : {}),
       }
     })
 }

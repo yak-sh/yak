@@ -26,7 +26,6 @@
 // the page (apps.ts, door.ts). The store is asked with no vouch on the
 // request at all (reach.ts `doorOf` over `nobody`), so the same answer is
 // checked twice: here, and by @yaks/member inside the store.
-import { z } from 'zod'
 import type { Tool } from '@yaks/graph'
 import type { Security } from '@yaks/mcp'
 import { mode, reads } from '@yaks/member'
@@ -102,17 +101,21 @@ export let anonymous = (name: string) =>
 // call and builds the graph they name, and they are declared so a client knows
 // to say them.
 export let scope = (env: Host = {}) => ({
-  space: z.string().describe(
-    `the space the app is in — the <space> of <space>.${apex(env)}. Required ` +
-      'while nobody is signed in: there is no space of yours to mean',
-  ),
-  app: z.string().describe(
-    `the app's slug in that space — the <app> of <space>.${
-      apex(env)
-    }/<app>/. ` +
+  space: {
+    type: 'string',
+    description:
+      `the space the app is in — the <space> of <space>.${apex(env)}. ` +
+      'Required while nobody is signed in: there is no space of yours to mean',
+  },
+  app: {
+    type: 'string',
+    description:
+      `the app's slug in that space — the <app> of <space>.${
+        apex(env)
+      }/<app>/. ` +
       'Required while nobody is signed in, and the app must be one anyone ' +
       'with the link can read; app_published lists apps people have offered',
-  ),
+  },
 })
 
 export let SCOPE = scope()
