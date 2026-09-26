@@ -157,17 +157,6 @@ export let YAK: Opts = {
   stray: appStray,
 }
 
-// Whether this CLI imports a package by its bare name: every workspace package
-// in a checkout, and only its own dependencies in a JSR install.
-let mapped = (name: string): boolean => {
-  try {
-    import.meta.resolve(name)
-    return true
-  } catch {
-    return false
-  }
-}
-
 // `init` is the one command that runs before there is a graph: it writes the
 // config a machine's own graph starts from (./init.ts) and makes the person
 // who works there, so what they type is signed as them from the first command.
@@ -185,7 +174,7 @@ let init = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
   try {
     Deno.writeTextFileSync(
       path,
-      JSON.stringify(starter(person, mapped), null, 2) + '\n',
+      JSON.stringify(starter(person), null, 2) + '\n',
       { createNew: true },
     )
   } catch (error) {

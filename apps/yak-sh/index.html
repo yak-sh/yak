@@ -32,7 +32,8 @@
     <a href="https://yaks.app">yaks.app</a> hosts the apps built with it.
     Every change is an entity patch, and every list is a query.
   </p>
-      <pre class=Code><code>deno install -gAf jsr:@yaks/cli/yak</code></pre>
+      <pre
+        class=Code><code>deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install</code></pre>
       <p class=Hero_Links>
         <a class=Button href="https://jsr.io/@yaks">@yaks on JSR</a>
         <a class=Button
@@ -122,7 +123,7 @@ console.log(await g.read('.doc.title="Getting started"'))</code></pre>
         <li><a href="https://jsr.io/@yaks/cli">cli</a> the <code>yak</code> command, and <code>compose</code>
         <li><a href="https://jsr.io/@yaks/sync">sync</a> optimistic writes, reconciled with a server
         <li><a href="https://jsr.io/@yaks/client">client</a> the browser graph, queries as live values
-        <li><a href="https://github.com/yak-sh/yak/tree/main/packages/web">web</a> a read-only browser door for <code>yak serve</code>
+        <li><a href="https://jsr.io/@yaks/web">web</a> the canvas, cards and boards <code>yak serve</code> answers in a browser
         <li><a href="https://jsr.io/@yaks/workerd">workerd</a> the same handler as a Cloudflare Worker
         <li><a href="https://jsr.io/@yaks/durable-object">durable-object</a> one Durable Object, one graph
         <li><a href="https://jsr.io/@yaks/d1">d1</a> the same storage over D1

@@ -11,17 +11,20 @@ change is a batch of entity patches, and every list is a query.
 ## Start
 
 ```sh
-deno install -gAf jsr:@yaks/cli/yak  # or, from a checkout: deno task install
-yak init Ada                         # ~/.yak/yak.json and its graph, worked at by Ada
+deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install
+yak init Ada   # ~/.yak/yak.json and its graph, worked at by Ada
 yak task new 'Buy the cake'
 yak task list
-yak serve                            # the canvas, /mcp and /query on http://127.0.0.1:8787
+yak serve      # the canvas, /mcp and /query on http://127.0.0.1:8787
 ```
 
-`yak init` writes the config (`db`, the plugins, and who you are) and never
-replaces one. `yak serve` listens on this machine alone; a config's `hostname`
-offers it to a network, and it has no authentication of its own. @yaks/web is
-not on JSR yet, so the web canvas comes with a checkout.
+The installer puts `yak` on your PATH at its own release, so the command and
+every package a config names are one set; `--minimum-dependency-age=0` lets it
+install a release published today, which Deno otherwise waits a day for. From a
+checkout, `deno task install` runs the checkout itself. `yak init` writes the
+config (`db`, the plugins, and who you are) and never replaces one. `yak serve`
+listens on this machine alone; a config's `hostname` offers it to a network, and
+it has no authentication of its own.
 
 Agents join the same graph:
 

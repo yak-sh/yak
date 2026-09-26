@@ -37,8 +37,11 @@ The routes facet (`@yaks/web/routes`, routes.ts) answers:
 | `/web/styles.css`, `/web/manifest.webmanifest`, icons | the files beside it                       |
 | `/web/vocab.json`                                     | the host's vocabulary documents           |
 
-It claims no catch-all, so `/query`, `/ws`, `/apply` and every other plugin's
-routes still reach their own handlers.
+Any other one-segment path is a name an id may be written as (`/lemon-cake`):
+the page when it names an entity, and the page answered 404 when it names
+nothing. @yaks/api answers a path from the route naming it most closely, so
+`/query`, `/ws`, `/apply` and every other plugin's routes still reach their own
+handlers.
 
 ## How it works
 
@@ -63,4 +66,7 @@ routes still reach their own handlers.
 
 ## Limits
 
-- `/web/app.js` is built with `deno bundle`, which Deno marks experimental.
+- `/web/app.js` is built with `deno bundle`, which Deno marks experimental. From
+  a checkout it bundles the files under the workspace's config; installed from
+  JSR it bundles the published main.tsx under `@yaks/cli/release`'s config, so
+  the day a release publishes it finds the rest of that release.

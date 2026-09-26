@@ -53,19 +53,10 @@ export let UNNUMBERED = [
 ]
 
 /** The config a new graph starts from, its database beside it on disk, worked
- * at by `person`. `mapped` says whether this CLI can import a package by name:
- * a checkout maps every package in its workspace.
- *
- * TODO(T-39748): @yaks/web is not on JSR (its deno.json says `publish:
- * false`), so a `yak` installed from JSR cannot import it, and a config naming
- * it there fails every command. It is left out where nothing maps it, and
- * this filter goes once it publishes. */
-export let starter = (
-  person: string,
-  mapped: (name: string) => boolean,
-): Config => ({
+ * at by `person`. */
+export let starter = (person: string): Config => ({
   db: 'yak.db',
-  plugins: STARTER.filter((p) => p != '@yaks/web' || mapped(p)),
+  plugins: [...STARTER],
   numbers: { except: [...UNNUMBERED] },
   person,
 })

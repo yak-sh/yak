@@ -17,5 +17,14 @@
     "marked": "npm:marked@18.0.6",
     "highlight.js": "npm:highlight.js@11.11.1/lib/common"
   },
-  "publish": false
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "**/*_test.tsx",
+      "**/*_bench.ts",
+      "./testing.ts",
+      "./host_testing.ts",
+      "./browser.json"
+    ]
+  }
 }
