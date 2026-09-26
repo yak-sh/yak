@@ -128,7 +128,7 @@ change.
 
 Static actions are registered by component name. Continuing the example:
 
-```ts
+```ts ignore
 import { actions } from '@yaks/render'
 
 let actionable = define(registry.renderers, {
@@ -169,7 +169,7 @@ all declared properties of one component.
 
 The text backend renders editors read-only. Continuing the example:
 
-```ts
+```ts ignore
 import { editors, properties } from '@yaks/render'
 
 let editable = define([...editors(vocab), properties(vocab)])
@@ -180,7 +180,7 @@ For interactive controls, call `@yaks/preact`'s `render` with an `onPatch`
 callback that applies the returned patch, and optionally `onError` to display
 validation failures:
 
-```ts
+```ts ignore
 import { render as renderPreact } from '@yaks/preact'
 
 let node = renderPreact(editable, bundle, 'Edit', vocab, {

@@ -212,7 +212,17 @@ let AGGS = new Set(['count', 'distinct', 'tally'])
  * number or a time read as text would not compare the same.
  *
  * ```ts
- * rows('.book&.tally=status', vocab)(bundles) // [{ value: 'sold', n: 2 }]
+ * import { assertEquals } from '@std/assert'
+ * import { loadVocab } from '@yaks/vocab'
+ *
+ * let status = { type: 'string' }
+ * let vocab = loadVocab([{
+ *   $defs: { book: { component: true, properties: { status } } },
+ * }])
+ * let sold = (eid: string) => ({ entity: { eid }, book: { status: 'sold' } })
+ * assertEquals(rows('.book&.tally=status', vocab)([sold('b1'), sold('b2')]), [
+ *   { value: 'sold', n: 2 },
+ * ])
  * ```
  */
 export let rows = (

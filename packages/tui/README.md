@@ -8,7 +8,7 @@ The package does not persist application data. Components keep transient input,
 scroll, measurement, and selection state in memory. Applications own durable
 data and pass it into their component tree.
 
-```ts
+```ts ignore
 import { h } from 'preact'
 import { Frame, run, Scroll, Textarea } from '@yaks/tui'
 

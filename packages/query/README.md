@@ -39,6 +39,8 @@ terms, so one line from a search box can mix the two. A trailing `*` on a word
 directive below, not a term.
 
 ```ts
+import { parse } from '@yaks/query'
+
 parse('crash on save .updated.at=today')
 // and( text('crash'), text('on'), text('save'), pred('updated.at', '=', scalar('today')) )
 ```

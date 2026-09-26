@@ -1,7 +1,8 @@
 // Every test in the repository, divided by the platform it runs on, and each
 // platform's environment started once per run (M-39441):
 //
-// - deno: every `*_test.ts`, sharded across processes;
+// - deno: every `*_test.ts`, and every example in a doc comment or a README
+//   (`deno test --doc`), sharded across processes;
 // - workerd: every `*_workerd_test.ts`, against the one kernel
 //   workers/yak/probe-suite.ts starts for the run.
 //
@@ -19,6 +20,27 @@ export let workerd = (file: string) => /_workerd_test\.tsx?$/.test(file)
 // ships its own `*_test.ts` (`@jsr/std__streams` does) is then run as if it
 // were this repo's, against an import map that is not its own.
 let SKIP = ['vendor', 'node_modules', '.wrangler']
+
+/** Where the examples under `roots` are read from, in pieces a shard can
+ * take: each directory's own files and its subdirectories, never a test. */
+export async function pages(roots = ROOTS) {
+  let out: string[] = []
+  for (let root of roots) {
+    let path = root.replace(/\/+$/, '')
+    if (!(await Deno.stat(path)).isDirectory) {
+      if (!/_test\.tsx?$/.test(path)) out.push(path)
+      continue
+    }
+    for await (let entry of Deno.readDir(path)) {
+      let at = `${path}/${entry.name}`
+      if (entry.isDirectory && !SKIP.includes(entry.name)) out.push(at)
+      else if (entry.isFile && /\.(tsx?|md)$/.test(entry.name)) {
+        if (!/_test\.tsx?$/.test(entry.name)) out.push(at)
+      }
+    }
+  }
+  return out.sort()
+}
 
 export async function inventory(roots = ROOTS) {
   let tests: string[] = []
@@ -53,6 +75,18 @@ let common = [
   // No --fail-fast. A suite reports every failure it has: stopping at the
   // first one turns a red run into a single symptom, and the shard that never
   // ran is indistinguishable from a green one.
+]
+
+/** The examples in `pages`, run as tests; the test files are the shards'. */
+let examples = (pages: string[]) => [
+  ...common,
+  '--doc',
+  `--ignore=${[
+    '**/*_test.ts',
+    '**/*_test.tsx',
+    ...SKIP.map((d) => `**/${d}`),
+  ]}`,
+  ...pages,
 ]
 
 export type TestCommand = {
@@ -312,17 +346,23 @@ function report(
   while (bytes.length) bytes = bytes.subarray(stream.writeSync(bytes))
 }
 
-// `--bulk <file>...`
+// `--bulk [--doc=<page>]... <file>...`
 if (import.meta.main && Deno.args[0] === '--bulk') {
   // Deno --parallel shares a native SQLite allocator across its worker threads.
   // Separate processes avoid its mutex contention. This coordinator and all
   // its children stay in the outer runner's process group: a signal still
   // settles the complete tree, not just a shard's leader.
-  let files = Deno.args.slice(1)
+  let args = Deno.args.slice(1)
+  let docs = args.filter((a) => a.startsWith('--doc=')).map((a) => a.slice(6))
+  let files = args.filter((a) => !a.startsWith('--doc='))
   let jobs = Number(Deno.env.get('DENO_JOBS') ?? navigator.hardwareConcurrency)
-  let children = shards(files, jobs).map((f) =>
+  let runs = [
+    ...shards(files, jobs).map((f) => [...common, ...f]),
+    ...shards(docs, jobs).map(examples),
+  ]
+  let children = runs.map((args) =>
     new Deno.Command(Deno.execPath(), {
-      args: [...common, ...f],
+      args,
       stdin: 'inherit',
       // Keep each reporter intact: interleaved half-lines would also fool
       // test:budget's per-test duration parser. Drain concurrently below.
@@ -347,8 +387,10 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
 } else if (import.meta.main) {
   let only = Deno.args.find((a) => a.startsWith('--only='))?.slice(7)
   let paths = Deno.args.filter((a) => !a.startsWith('--only='))
-  let files = (await inventory(paths.length ? paths : ROOTS))
+  let roots = paths.length ? paths : ROOTS
+  let files = (await inventory(roots))
     .filter((f) => !only || workerd(f) == (only == 'workerd'))
+  let docs = only == 'workerd' ? [] : await pages(roots)
   // The Stripe sandbox every kernel sells in, found once for the run and
   // handed to every process by its environment (probe.ts `vars`).
   let { plusPrice, sandboxKey } = await import('../workers/yak/probe.ts')
@@ -389,7 +431,10 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let result: Result = { code: 1 }
   try {
     result = await runTestCommands([
-      bulk('deno', files.filter((f) => !workerd(f))),
+      bulk('deno', [
+        ...docs.map((d) => `--doc=${d}`),
+        ...files.filter((f) => !workerd(f)),
+      ]),
     ], options)
     if (started && !result.signal) {
       try {

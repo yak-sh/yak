@@ -373,7 +373,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
 /**
  * Lend a graph the runner and work its pool, seeded with what serves it.
  *
- * ```ts
+ * ```ts ignore
  * import { agent } from '@yaks/harness'
  *
  * let a = agent({ h: { g, fx, vocab, me }, model: fake })

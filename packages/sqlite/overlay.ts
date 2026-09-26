@@ -153,7 +153,7 @@ let named = (v: Vocab, bundles: Bundle[]): Eid[] => {
 /**
  * Read a batch as tables.
  *
- * ```ts
+ * ```ts ignore
  * let over = overlay(driver, vocab, batch, ['product'])
  * driver.query({ ...statement, with: over.with })
  * ```

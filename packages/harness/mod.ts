@@ -23,7 +23,7 @@
  * This door is the runner alone, and type-checks with only the web platform in
  * scope; nothing it imports names a machine.
  *
- * ```ts
+ * ```ts ignore
  * import { agent } from '@yaks/harness'
  *
  * let a = agent({ h: { g, fx, vocab, me }, model: fake })

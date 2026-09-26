@@ -137,7 +137,7 @@ HTTPS except on loopback addresses. Configure only trusted MCP servers.
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { mcpDoc } from '@yaks/mcp-client/graph'
+import { mcpDoc } from '@yaks/mcp-client/vocab'
 
 let vocab = loadVocab([mcpDoc])
 let g = graph({ storage: ram(vocab), vocab })

@@ -119,7 +119,7 @@ and the number of `lines` shown by `peek`.
 
 Custom adapters are functions and cannot be represented in JSON configuration:
 
-```ts
+```ts ignore
 import { adapters } from '@yaks/spawn'
 import { spawning } from '@yaks/spawn/effects'
 import { adopting } from '@yaks/spawn/service'

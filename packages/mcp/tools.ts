@@ -137,7 +137,7 @@ let zodInput = (
  * @yaks/graph's own declarations joined to its implementations, with their
  * arguments shaped for this server.
  *
- * ```ts
+ * ```ts ignore
  * let tools = core({ vocab: shop, depth: 'full' })
  * ```
  */

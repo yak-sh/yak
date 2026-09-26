@@ -63,7 +63,7 @@ let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
 /**
  * The same handlers, with providers of your own added.
  *
- * ```ts
+ * ```ts ignore
  * import { spawning } from '@yaks/spawn/effects'
  * import { adapters } from '@yaks/spawn'
  *

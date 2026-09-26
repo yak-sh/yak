@@ -92,16 +92,23 @@ includes only the requested entity's changes in this response. The low-level
 
 ## What it returns
 
-This example assumes `vocab` declares a `page` component with a string `title`,
-and `driver` is @yaks/sql's synchronous `Driver`. Both graph storage and journal
-use that same connection.
+Here `driver` is @yaks/sql's synchronous `Driver`, over an in-memory database.
+Graph storage and the journal use that same connection.
 
 ```ts
+import { assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
+import { loadVocab } from '@yaks/vocab'
 import { ddl, journal, undo } from '@yaks/journal'
 import { logFor } from '@yaks/journal/rules'
 
+let title = { type: 'string' }
+let vocab = loadVocab([{
+  $defs: { page: { component: true, properties: { title } } },
+}])
+let driver = open(':memory:')
 let store = storage(driver, vocab)
 store.install()
 for (let s of ddl()) driver.query(s)
@@ -115,6 +122,7 @@ let history = j.history('p1')
 let changed = history.at(-1)!
 undo(g, j)(changed.seq) // restores 'Kickoff' and records the undo
 let entries = j.since(0) // Entry[], oldest first
+assertEquals(store.read('.page')[0].page, { title: 'Kickoff' })
 ```
 
 `Batch` carries `seq`, `at`, `by`, `via` and `deltas`. Each `Delta` identifies a

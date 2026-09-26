@@ -24,7 +24,7 @@ deno add jsr:@yaks/api
 Given an application module that exports an initialized graph and an
 `Authenticate` callback:
 
-```ts
+```ts ignore
 import { api } from '@yaks/api'
 import { authenticate, graph } from './shop.ts'
 
@@ -151,7 +151,7 @@ commits. Those are the graph's own commits, and, in a host whose config lists
 (`host.feed`, @yaks/journal's `feed`): a `yak` command run beside `yak serve`
 reaches an open tab too. Open a socket to `/ws` and send:
 
-```ts
+```ts ignore
 socket.send(
   JSON.stringify({ subscribe: '.status=shelved&.price<20', id: 'cheap' }),
 )

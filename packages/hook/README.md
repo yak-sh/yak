@@ -70,10 +70,29 @@ parsed and re-serialized body is not what the sender signed. Every compare goes
 through WebCrypto's `verify`, so it runs in constant time.
 
 ```ts
+import { assertEquals } from '@std/assert'
 import { checked, hooked } from '@yaks/hook'
 
-const request = { id, source: 'github', body, headers: JSON.stringify(sent) }
-const bundles = hooked(await checked(request, 'github', secret))
+// What GitHub sends: the body, signed with the secret the receiver shares.
+let secret = 'a shared secret'
+let body = '{"action":"opened"}'
+let bytes = (s: string) => new TextEncoder().encode(s)
+let hmac = { name: 'HMAC', hash: 'SHA-256' }
+let key = await crypto.subtle.importKey('raw', bytes(secret), hmac, false, [
+  'sign',
+])
+let mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, bytes(body)))
+let hex = [...mac].map((b) => b.toString(16).padStart(2, '0')).join('')
+let sent = { 'x-hub-signature-256': `sha256=${hex}` }
+
+let request = {
+  id: 'r1',
+  source: 'github',
+  body,
+  headers: JSON.stringify(sent),
+}
+let [hook] = hooked(await checked(request, 'github', secret))
+assertEquals(hook.hook?.verified, true)
 ```
 
 ```ts

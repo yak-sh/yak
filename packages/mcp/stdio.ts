@@ -13,7 +13,7 @@ import { type Options, server } from './server.ts'
  * calling program passes — an agent running locally acts for its owner, and
  * there is no HTTP request to authenticate.
  *
- * ```ts
+ * ```ts ignore
  * // deno run -A serve.ts
  * await stdio({ graph, actor: { by: 'm1' } })
  * ```

@@ -238,7 +238,7 @@ export let answerOf = (landed: Bundle[]): Bundle[] =>
 /**
  * Build a runner over a graph.
  *
- * ```ts
+ * ```ts ignore
  * let r = runner(g, { tools })
  * await r.ensure()
  * // the call entity is the record; the answer is the tool's own bundles

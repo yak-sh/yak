@@ -30,7 +30,7 @@ This Worker example assumes an existing D1 binding named `DB`. Its type is
 expressed using the package's structural interface; a Cloudflare `D1Database`
 satisfies that interface.
 
-```ts
+```ts ignore
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { type D1Like, type Stmt, storage } from '@yaks/d1'

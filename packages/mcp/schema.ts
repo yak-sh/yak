@@ -172,9 +172,15 @@ let sugar = {
  * and for writes.
  *
  * ```ts
- * let bundle = bundleSchema(shop) // names only, the cheap default let typed =
- * bundleSchema(shop, { depth: 'full' }) // every property's type let write =
- * bundleSchema(shop, { depth: 'full', nulls: true, write: true })
+ * import { loadVocab } from '@yaks/vocab'
+ *
+ * let price = { type: 'number' }
+ * let shop = loadVocab([{
+ *   $defs: { book: { component: true, properties: { price } } },
+ * }])
+ * let bundle = bundleSchema(shop) // names only, the cheap default
+ * let typed = bundleSchema(shop, { depth: 'full' }) // every property's type
+ * let write = bundleSchema(shop, { depth: 'full', nulls: true, write: true })
  * ```
  */
 export let bundleSchema = (

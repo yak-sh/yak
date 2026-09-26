@@ -134,17 +134,14 @@ const model: Model = async (request) => ({
   items: [{ kind: 'assistant', text: 'pong' }],
 })
 await g.apply([
-  { entity: { eid: 'provider' }, provider: { name: 'local' } },
-  {
-    entity: { eid: 'model' },
-    model: { name: 'example', provider: 'provider' },
-  },
+  { entity: { eid: '$provider' }, provider: { name: 'local' } },
+  { entity: { eid: '$model' }, model: { name: 'example' } },
   { entity: { eid: 'session' }, session: {} },
   {
     entity: { eid: 'input' },
     entry: { session: 'session' },
     content: { body: 'Reply with pong' },
-    using: { provider: 'provider', model: 'model' },
+    using: { provider: '$provider', model: '$model' },
   },
 ])
 await settle(g, 'session', { holder: 'here', model, tools: [] })

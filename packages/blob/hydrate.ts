@@ -37,7 +37,8 @@ import { type Blobs, decode } from './store.ts'
  * let store = memoryBlobs()
  * store.put(address('A long essay.'), encode('A long essay.'))
  *
- * let read = { entity: { eid: 'p1' }, post: { body: address('A long essay.') } }
+ * let essay = address('A long essay.')
+ * let read = { entity: { eid: 'p1' }, post: { body: essay } }
  * let [p1] = await hydrate(vocab, store, [read])
  * assertEquals(p1.post, { body: 'A long essay.' })
  * ```

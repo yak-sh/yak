@@ -14,7 +14,7 @@
  * {@link voice} renders the set as markdown — the text an agent is given at
  * the top of its context.
  *
- * ```ts
+ * ```ts ignore
  * import { voice, wear } from '@yaks/persona'
  *
  * let worn = await wear(storage, vocab)('N-1')

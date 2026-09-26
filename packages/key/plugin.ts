@@ -30,10 +30,12 @@ let minting = (vocab: Vocab): Hook => {
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
  * import { keyDoc, keyKeywords, keys } from '@yaks/key'
  *
- * let vocab = loadVocab([keyDoc, library], [keyKeywords])
- * // let g = graph({ storage, vocab, plugins: [keys(vocab)] })
+ * let isbn = { component: true, key: true }
+ * let vocab = loadVocab([keyDoc, { $defs: { isbn } }], [keyKeywords])
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [keys(vocab)] })
  * ```
  *
  * It contributes {@link keyDoc}, derives a key's id from the kind and value it

@@ -47,21 +47,27 @@ its entities addressable by name, read from the vocabulary's name property
 }
 ```
 
-Call the JSON document above `catalog`. Include the `doc` schema for its `title`
-field, then register the keyword vocabulary:
+Load that document, here `catalog`, with the `doc` schema for its `title` field,
+and register the keyword vocabulary:
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
 import { named, nameKeywords, nameOf, resolve } from '@yaks/names'
 import { docDoc } from '@yaks/doc'
 
+let catalog = {
+  $defs: {
+    author: { component: true, kind: true, by_name: true },
+    review: { component: true, kind: true },
+  },
+}
 let v = loadVocab([docDoc, catalog], [nameKeywords])
 let shelf = [
   { comps: { author: {}, doc: { title: 'Ursula Le Guin' } } },
   { comps: { review: {}, doc: { title: 'Ursula at her best' } } },
 ]
 
-named(v) // { author: { comp: 'doc', prop: 'title' }, shelf: { … } }
+named(v) // { author: { comp: 'doc', prop: 'title' } }
 nameOf(v)(shelf[0]) // 'Ursula Le Guin'
 nameOf(v)(shelf[1]) // undefined — a review's title is not a name
 resolve(v)('le guin', shelf) // the author

@@ -20,7 +20,7 @@ deno add jsr:@yaks/mcp
 
 The application supplies an initialized graph and, optionally, authentication:
 
-```ts
+```ts ignore
 import { mcp } from '@yaks/mcp'
 import { authenticate, graph } from './shop.ts'
 
@@ -63,7 +63,7 @@ application that needs them.
 The HTTP handler answers every request passed to it; it does not select a path.
 To mount it beside the graph's HTTP API:
 
-```ts
+```ts ignore
 import { api } from '@yaks/api'
 import { mcp } from '@yaks/mcp'
 import { authenticate, graph } from './shop.ts'
@@ -198,7 +198,7 @@ error text and `isError`, without `structuredContent`.
 `graph_apply`'s input schema is generated from the current vocabulary. Other
 tools also declare their argument schemas. To generate a bundle schema yourself:
 
-```ts
+```ts ignore
 import { bundleSchema } from '@yaks/mcp'
 
 let schema = bundleSchema(vocab, { depth: 'full' })
@@ -256,7 +256,7 @@ tools. Set `core: false` when the application already supplies the generic
 tools. A tool whose `surfaces` leaves out `mcp`, such as `serve`, is neither
 listed nor callable here.
 
-```ts
+```ts ignore
 import { argsOf, type Plugin } from '@yaks/graph'
 import { z } from 'zod'
 
@@ -294,7 +294,7 @@ it.
 The HTTP and stdio entrypoints await `extend(server)` after registering tools.
 Use it to register SDK resources or prompts:
 
-```ts
+```ts ignore
 mcp({
   graph,
   extend: (server) => {
@@ -328,7 +328,7 @@ and can be configured with `timeout`.
 
 For an agent that launches the server as a local process:
 
-```ts
+```ts ignore
 // deno run -A serve.ts
 import { stdio } from '@yaks/mcp/stdio'
 import { graph } from './shop.ts'

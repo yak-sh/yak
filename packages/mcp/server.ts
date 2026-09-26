@@ -352,7 +352,7 @@ export let inputSchemaOf = (
  * not added twice. A tool offered only elsewhere (`surfaces` without `mcp`)
  * is neither listed nor callable here.
  *
- * ```ts
+ * ```ts ignore
  * let names = listing(opts).map(toolName)
  * ```
  */
@@ -411,7 +411,7 @@ export let annotated = (
  * {@link https://jsr.io/@yaks/mcp/doc/~/Search | Search} was passed), plus
  * every tool the graph's plugins contribute and any you pass yourself.
  *
- * ```ts
+ * ```ts ignore
  * let s = server({ graph, actor: { by: 'm1' } })
  * await s.connect(transport)
  * ```

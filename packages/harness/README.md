@@ -105,7 +105,12 @@ let model: Model = async (request) => ({
   items: [{ kind: 'assistant', text: 'pong' }],
 })
 // A config naming a graph in memory, made of the packages listed above.
-let host = await compose({ db: ':memory:', plugins: [/* … */] }, ['graph'])
+let words = ['kernel', 'id', 'secrets', 'edge', 'blob', 'doc', 'effects']
+let work = ['task', 'project', 'session', 'tools', 'model', 'openai']
+let more = ['openrouter', 'process', 'context', 'connections', 'mcp-client']
+let plugins = [...words, ...work, ...more, 'git', 'harness']
+  .map((p) => `@yaks/${p}`)
+let host = await compose({ db: ':memory:', plugins }, ['graph'])
 let a = local({ h: hosted(host, () => host.close()), model, tools: [] })
 try {
   let s = await a.start('reply with the word pong')
@@ -562,7 +567,7 @@ in memory. Keep that directory with database backups.
 
 Configure it in code with:
 
-```ts
+```ts ignore
 local({
   h,
   name: 'gpt-4.1',

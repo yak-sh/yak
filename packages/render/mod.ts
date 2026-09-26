@@ -26,7 +26,7 @@
  * import { define, resolve, type H } from '@yaks/render'
  *
  * let vocab = loadVocab([{ $defs: { doc: {
- *   type: 'object', properties: { title: { type: 'string' } },
+ *   component: true, properties: { title: { type: 'string' } },
  * } } }])
  * let bundle = { entity: { eid: 'a' }, doc: { title: 'A page' } }
  * let registry = define([{

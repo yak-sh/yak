@@ -20,17 +20,21 @@
  * Register it when you load the vocabulary and the ids follow:
  *
  * ```ts
+ * import { assertEquals } from '@std/assert'
  * import { mint } from '@yaks/graph'
  * import { loadVocab } from '@yaks/vocab'
  * import { idKeywords, idOf, parse } from '@yaks/id'
  *
- * let v = loadVocab([catalog], [idKeywords])
+ * let book = { component: true, kind: true, prefix: 'B', properties: {} }
+ * let v = loadVocab([{ $defs: { book } }], [idKeywords])
  * let id = idOf(v)
  *
- * id({ eid: mint(), kind: 'book', num: 7 }) // 'B-7'
- * id({ eid: 'a3f19c02-4b00-4000-8000-000000000001', kind: 'book' }) // '#a3f19c024b'
- * parse('B-7') // { prefix: 'B', num: 7 }
- * parse('7') // { prefix: '', num: 7 } — the number is the identity
+ * assertEquals(id({ eid: mint(), kind: 'book', num: 7 }), 'B-7')
+ * let eid = 'a3f19c02-4b00-4000-8000-000000000001'
+ * assertEquals(id({ eid, kind: 'book' }), '#a3f19c024b')
+ * assertEquals(parse('B-7'), { prefix: 'B', num: 7 })
+ * // the number is the identity
+ * assertEquals(parse('7'), { prefix: '', num: 7 })
  * ```
  *
  * The letter is for display, the number is the identity: `B-7` and `7` name the

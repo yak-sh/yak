@@ -13,7 +13,7 @@
  * durable to put the state the server will never send back.
  *
  * ## One call
- * ```ts
+ * ```ts ignore
  * import { client } from '@yaks/client'
  * import { mint } from '@yaks/graph'
  * import { loadVocab } from '@yaks/vocab'
@@ -35,7 +35,7 @@
  * factory, and it drives React's `useSyncExternalStore` when you pass that
  * hook `subscribe` and `() => value`.
  *
- * ```ts
+ * ```ts ignore
  * let dinners = box.watch('.course=dinner&.serves>4')
  * dinners.value // the bundles
  * let stop = dinners.subscribe((bundles) => render(bundles))

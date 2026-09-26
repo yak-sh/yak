@@ -29,7 +29,7 @@ deno add jsr:@yaks/openai
 
 ## Use
 
-```ts
+```ts ignore
 import { credential, responses } from '@yaks/openai'
 
 let model = responses({
@@ -74,7 +74,7 @@ failures, propagate unchanged.
 needs encrypted reasoning replay, usage, rate limits, unknown provider events,
 or the details of a partial failure can use that same HTTP transport directly:
 
-```ts
+```ts ignore
 import { credential, transport } from '@yaks/openai'
 
 let client = transport({

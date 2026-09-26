@@ -476,7 +476,7 @@ export let fake = (script: Partial<Answer>[]) => {
  * person, and it answers again — until it stops asking for tools or one of
  * the three limits stops it.
  *
- * ```ts
+ * ```ts ignore
  * let out = await build(env, who, space, [{ said: 'person', text: 'a recipe box' }])
  * ```
  */

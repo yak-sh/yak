@@ -40,9 +40,10 @@
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
+ * import { spineDoc } from '@yaks/kernel/vocab'
  * import { tmuxDoc } from '@yaks/tmux'
  *
- * let vocab = loadVocab([spineDoc, tmuxDoc, mine])
+ * let vocab = loadVocab([spineDoc, tmuxDoc])
  * ```
  *
  * @module

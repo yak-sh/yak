@@ -24,7 +24,7 @@ import { type Opts, resume } from './run.ts'
  * The duty, with providers of your own added — the same `adapters` a server
  * with its own providers hands `spawning` (./effects.ts).
  *
- * ```ts
+ * ```ts ignore
  * import { adopting } from '@yaks/spawn/service'
  * import { adapters } from '@yaks/spawn'
  *

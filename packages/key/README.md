@@ -87,13 +87,9 @@ means the component written is `email` and the kind queries name is `mailbox`.
 
 ## Retiring a value
 
-```ts
-import { unkeyed } from '@yaks/key'
-g.apply([unkeyed('isbn', '9780441013593')])
-```
-
-That removes both components and leaves the entity itself in place, carrying
-nothing. The value can then be claimed again, by the same entity or another one.
+`g.apply([unkeyed('isbn', '9780441013593')])` removes both components and leaves
+the entity itself in place, carrying nothing. The value can then be claimed
+again, by the same entity or another one.
 
 ## Exports
 

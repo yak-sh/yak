@@ -94,7 +94,7 @@ of deletion.
 To connect to a server implementing `@yaks/sync`, supply its base `url` and use
 the same vocabulary on both ends:
 
-```ts
+```ts ignore
 let remote = client(vocab, [], { url: 'https://recipes.example' })
 ```
 
@@ -110,7 +110,7 @@ transport and failure behavior.
 A watch exposes `value` (the current bundle array), `ready`,
 `subscribe(listener)`, and `close()`:
 
-```ts
+```ts ignore
 let dinners = remote.watch('.course=dinner&.serves>4')
 console.log(dinners.value, dinners.ready)
 let stop = dinners.subscribe((bundles) => console.log(bundles))
@@ -151,7 +151,7 @@ include restored drafts.
 Pass a signal factory to make `value` and `ready` reactive reads. For example,
 with `@preact/signals`:
 
-```ts
+```ts ignore
 import { signal } from '@preact/signals'
 
 let reactive = client(vocab, [], { signal })
@@ -167,7 +167,7 @@ rendering framework is imported by this package.
 For a watch whose lifetime is managed by the application, React's
 `useSyncExternalStore` can subscribe to it:
 
-```tsx
+```tsx ignore
 import { useSyncExternalStore } from 'react'
 import type { Watch } from '@yaks/client'
 
@@ -221,7 +221,7 @@ configuration accepts `name`, `store`, and an `indexedDB` implementation. The
 default database is `yaks`, with an object store named `local`, keyed by entity
 id. Use an application-specific name:
 
-```ts
+```ts ignore
 import { idb } from '@yaks/client'
 
 let persistent = client(vocab, [], { vault: idb({ name: 'recipes-local' }) })
@@ -288,7 +288,7 @@ acknowledgement. Durable queuing and retry policy remain application concerns.
 
 Server persistence is separate from the local component vault:
 
-```ts
+```ts ignore
 import { wireIdb } from '@yaks/client'
 
 let cached = client(vocab, [], {
@@ -335,7 +335,7 @@ A partial client cache cannot always evaluate a query correctly: referenced
 entities, sort fields, or semantic vectors may be missing, and the RAM text
 matcher differs from SQLite FTS. Use server evaluation for these queries:
 
-```ts
+```ts ignore
 let hits = cached.watch('café', { evaluate: 'server' })
 ```
 

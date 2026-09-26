@@ -35,7 +35,7 @@ All exports are available from `@yaks/workerd`:
 This example assumes `shop.ts` initializes a graph from the Worker's bindings
 and verifies a token, returning an actor or `null`:
 
-```ts
+```ts ignore
 import { door, worker } from '@yaks/workerd'
 import { memberFor, shopGraph } from './shop.ts'
 
@@ -86,7 +86,7 @@ your Worker's secret configuration.
 `door()` reads a configured cookie, or a bearer token when that cookie is
 absent, and passes the credential and request to `verify`:
 
-```ts
+```ts ignore
 let authenticate = door({
   cookie: 'shop_session',
   verify: async (token, request) => {
@@ -117,7 +117,7 @@ different credential-selection policy.
 `worker()` supplies `workerUpgrade` unless the API options include another
 `upgrade`. When building a handler directly, pass it explicitly:
 
-```ts
+```ts ignore
 import { api } from '@yaks/api'
 import { workerUpgrade } from '@yaks/workerd'
 

@@ -195,7 +195,7 @@ connection; old cached rows do not make a subscription ready.
 URL and returns the package's `Socket` interface. Defaults use global `fetch`
 and `WebSocket`; `timer` defaults to `setTimeout`.
 
-```ts
+```ts ignore
 const link = sync(g, {
   url: 'https://recipes.example',
   fetch: (request) => myHandler(request),
@@ -278,7 +278,7 @@ The receiver supplies an explicit `receive(method, value)` handler for supported
 operations. It can send subscription frames from the API's `subscriptions`
 registry; the client can apply them with `land`:
 
-```ts
+```ts ignore
 import { land, portLink } from '@yaks/sync'
 
 const client = portLink(worker, {
@@ -307,7 +307,7 @@ backpressure.
 
 Override the timeout per request when an operation can take longer:
 
-```ts
+```ts ignore
 await client.request('close', undefined, { timeout: null })
 ```
 

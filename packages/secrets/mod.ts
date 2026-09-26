@@ -16,9 +16,10 @@
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
  * import { ram } from '@yaks/ram'
+ * import { effectDoc } from '@yaks/effects'
  * import { ramVault, reveal, sealed, secrets, secretsDoc } from '@yaks/secrets'
  *
- * let vocab = loadVocab([secretsDoc])
+ * let vocab = loadVocab([secretsDoc, effectDoc])
  * let vault = ramVault()
  * let write = (b) => g.apply(b, { trusted: true })
  * let g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault, write)] })

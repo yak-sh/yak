@@ -10,8 +10,8 @@
  * ```ts
  * import { front, read } from '@yaks/yaml'
  *
- * read('recipe:\n  serves: number\n')  // { recipe: { serves: 'number' } }
- * front(page)                          // { meta: <bundle>, body: <markdown> }
+ * read('recipe:\n  serves: number\n') // { recipe: { serves: 'number' } }
+ * front('---\ndoc:\n  title: Soup\n---\nStir.') // { meta, body: 'Stir.' }
  * ```
  *
  * ## Two calls, because there are two kinds of file

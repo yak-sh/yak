@@ -268,7 +268,7 @@ registered is dropped.
 
 ## The runtime
 
-```ts
+```ts ignore
 import { loadVocab } from '@yaks/vocab'
 
 let v = loadVocab([kernel, work]) // application-supplied documents; each component name must be unique

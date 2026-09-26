@@ -66,7 +66,7 @@ export type Declares = {
  * r.filter // and(present('entity'), absent('created'))
  *
  * // `*comp` carries its own presence: `*trashed` needs no `trashed` beside it
- * declared(parse('*trashed, trashed.at=')).filter
+ * declared(parse('*trashed, !trashed.at')).filter
  * // and(absent('trashed.at'), present('trashed'))
  * ```
  */

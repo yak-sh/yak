@@ -102,8 +102,11 @@ let bundleOf = (r: Rec): Bundle =>
  *
  * ```ts
  * import { graph } from '@yaks/graph'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { docDoc } from '@yaks/doc'
  * import { ram } from '@yaks/ram'
  *
+ * let vocab = loadVocab([docDoc])
  * let g = graph({ storage: ram(vocab), vocab })
  * g.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }])
  * g.read('.kind=doc')

@@ -77,7 +77,7 @@ let ask = async (
  * and is answered with one JSON-RPC reply; a JSON-RPC notification is answered
  * `202`; any other HTTP method is answered `405`.
  *
- * ```ts
+ * ```ts ignore
  * let handler = mcp({ graph, authenticate })
  * Deno.serve((request) => handler(request))
  * ```

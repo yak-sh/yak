@@ -47,10 +47,11 @@ export let starting = (opts: Opts = {}): Hook => (bundles: Bundle[]) =>
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
- * import { wakes } from '@yaks/wake'
+ * import { ram } from '@yaks/ram'
+ * import { wakeDoc, wakes } from '@yaks/wake'
  *
- * let vocab = loadVocab([wakeDoc, mine])
- * let g = graph({ storage, vocab, plugins: [wakes()] })
+ * let vocab = loadVocab([wakeDoc])
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [wakes()] })
  * g.apply([{ entity: { eid: 'w1' }, wake: { every: '@daily', note: 'water the plants' } }])
  * ```
  *

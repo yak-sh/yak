@@ -29,7 +29,7 @@ let found = (): Upgrader | null => {
  * Deno's WebSocket upgrade, as an {@link Upgrade}. The default for `/ws`; on
  * any other runtime it throws, and the application passes its own.
  *
- * ```ts
+ * ```ts ignore
  * Deno.serve(api({ graph, upgrade: denoUpgrade }))
  * ```
  */

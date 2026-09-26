@@ -229,7 +229,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
  * Start the harness here, over a graph a `yak` config composed: lend the agent
  * this machine, and work the runs its commits owe.
  *
- * ```ts
+ * ```ts ignore
  * import { hosted, local } from '@yaks/harness/local'
  *
  * let a = local({ h: hosted(host), model: fake })

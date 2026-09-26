@@ -396,7 +396,7 @@ let bared = async (env: Keys, space: Space) => {
  * The build session's sandbox, woken and signed in as the caller. The first
  * call starts the clock; every call after it rides the same container.
  *
- * ```ts
+ * ```ts ignore
  * let box = boxOf(env, space, person, spend)
  * await box.exec('cargo build --release --target wasm32-unknown-unknown')
  * ```

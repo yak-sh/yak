@@ -32,10 +32,16 @@ firing. A one-shot clears `wake.at` after firing. A recurring wake advances
 A **bundle** is one entity's components represented as a JSON object:
 
 ```ts
-import { next } from '@yaks/wake'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { next, wakeDoc, wakes } from '@yaks/wake'
+
+const vocab = loadVocab([wakeDoc, { $defs: { sweep: { component: true } } }])
+const g = graph({ storage: ram(vocab), vocab, plugins: [wakes()] })
 
 const every = '20 4 * * * America/Detroit'
-await graph.apply([{
+await g.apply([{
   entity: { eid: 'cleanup' },
   wake: { every, at: next(every, Date.now()), note: 'collect expired trash' },
   sweep: {},
@@ -48,7 +54,7 @@ callback. Application rules match the components on the wake entity.
 Use `wakes()` when constructing a graph. It loads `wakeDoc` and initializes a
 wake that has `every` but no `at`. An explicit `at: null` remains paused.
 
-```ts
+```ts ignore
 import { wakes } from '@yaks/wake'
 
 const g = graph({ storage, vocab, plugins: [wakes()] })
@@ -56,7 +62,7 @@ const g = graph({ storage, vocab, plugins: [wakes()] })
 
 ## Firing is a write
 
-```ts
+```ts ignore
 import { tick } from '@yaks/wake'
 import type { Rule } from '@yaks/graph'
 
@@ -135,7 +141,7 @@ export default { scheduled: (event) => scheduled(graph, event) }
 
 A Durable Object can set an earlier alarm:
 
-```ts
+```ts ignore
 import { arm } from '@yaks/wake/cloudflare'
 import { tick } from '@yaks/wake'
 
@@ -151,7 +157,7 @@ schedules change.
 
 A Deno process can run the scheduler until shutdown:
 
-```ts
+```ts ignore
 import { loop } from '@yaks/wake/deno'
 
 const stop = new AbortController()

@@ -36,7 +36,8 @@
  * ```ts
  * import { compute, derived, statusOf } from '@yaks/task'
  *
- * statusOf({ entity: { eid: 't1' }, task: {} }) // 'open', for an entity in hand
+ * // 'open', for an entity in hand
+ * statusOf({ entity: { eid: 't1' }, task: {} })
  * derived() // the same rule as SQL, for @yaks/sql
  * compute() // the same rule per bundle, for @yaks/match
  * ```
@@ -55,7 +56,8 @@
  * import { taskDoc, tasks } from '@yaks/task'
  *
  * let vocab = loadVocab([edgeDoc, taskDoc], [edgeKeywords])
- * let g = graph({ storage: ram(vocab), vocab, plugins: [edges(vocab), tasks()] })
+ * let plugins = [edges(vocab), tasks()]
+ * let g = graph({ storage: ram(vocab), vocab, plugins })
  * await g.apply([{ entity: { eid: 't1' }, task: {}, completed: {} }])
  * ```
  *

@@ -6,7 +6,7 @@
  * process; a server that wants a model calls {@link responses} and gets back a
  * `Model`.
  *
- * ```ts
+ * ```ts ignore
  * import { credential, responses } from '@yaks/openai'
  *
  * let model = responses({

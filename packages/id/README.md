@@ -44,21 +44,24 @@ its numbered entities with a `B` prefix; it does not allocate numbers:
 }
 ```
 
-Call the JSON document above `catalog`, then register the keyword vocabulary
-when loading it. This enables prefix formatting; it does not allocate numbers:
+Register the keyword vocabulary when loading that document, here `catalog`. This
+enables prefix formatting; it does not allocate numbers:
 
 ```ts
+import { assertEquals } from '@std/assert'
 import { mint } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { idKeywords, idOf, parse } from '@yaks/id'
 
-let v = loadVocab([catalog], [idKeywords])
+let book = { component: true, kind: true, prefix: 'B', properties: {} }
+let v = loadVocab([{ $defs: { book } }], [idKeywords])
 let id = idOf(v)
 
-id({ eid: mint(), kind: 'book', num: 7 }) // 'B-7'
-id({ eid: 'a3f19c02-4b00-4000-8000-000000000001', kind: 'book' }) // '#a3f19c024b'
-parse('B-7') // { prefix: 'B', num: 7 }
-parse('7') // { prefix: '', num: 7 }
+assertEquals(id({ eid: mint(), kind: 'book', num: 7 }), 'B-7')
+let eid = 'a3f19c02-4b00-4000-8000-000000000001'
+assertEquals(id({ eid, kind: 'book' }), '#a3f19c024b')
+assertEquals(parse('B-7'), { prefix: 'B', num: 7 })
+assertEquals(parse('7'), { prefix: '', num: 7 })
 ```
 
 The number identifies the record within a store: `B-7` and `7` can resolve to
@@ -84,16 +87,26 @@ are three pieces, and a graph takes the ones it wants:
 
 ```ts
 import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
+import { spineDoc } from '@yaks/kernel/vocab'
 import { idDoc, idKeywords } from '@yaks/id/vocab'
 import { ids, numbers } from '@yaks/id/rules'
 
-let vocab = loadVocab([catalog, idDoc], [idKeywords])
+let book = { component: true, kind: true, prefix: 'B', properties: {} }
+let vocab = loadVocab([spineDoc, { $defs: { book } }, idDoc], [idKeywords])
+// An allocator for this example; a store's own is the usual one.
+let given = new Map<string, number>()
+let allocate = (eid: string) => {
+  if (!given.has(eid)) given.set(eid, given.size + 1)
+  return { eid, num: given.get(eid) }
+}
 let g = graph({
-  storage,
+  storage: ram(vocab),
   vocab,
   plugins: [numbers(allocate), ids(vocab)],
 })
+g.apply([{ entity: { eid: 'dune' }, $num: true, book: {} }]) // B-1
 ```
 
 - **`idDoc`** adds `num` to the `entity` row — the one property a number needs.

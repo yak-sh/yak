@@ -44,7 +44,7 @@ let done = (tx: IDBTransaction): Promise<void> =>
  * A {@link Vault} over IndexedDB: where {@link client} stores this browser's
  * own components when it is running in a browser.
  *
- * ```ts
+ * ```ts ignore
  * let kept = keep(graph, idb({ name: 'recipes' }))
  * ```
  *

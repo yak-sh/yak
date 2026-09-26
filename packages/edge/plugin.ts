@@ -23,7 +23,8 @@ import { edgeDoc } from './comp.ts'
  * import { ram } from '@yaks/ram'
  * import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
  *
- * let blog = { $defs: { cites: { component: true, type: 'object', edge: true } } }
+ * let cites = { component: true, type: 'object', edge: true }
+ * let blog = { $defs: { cites } }
  * let vocab = loadVocab([edgeDoc, blog], [edgeKeywords])
  * let g = graph({ storage: ram(vocab), vocab, plugins: [edges(vocab)] })
  * ```

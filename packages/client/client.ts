@@ -164,7 +164,7 @@ let ordinary = (): Vault | null => globalThis.indexedDB ? idb() : null
  * give it a URL, IndexedDB for this browser's own components, and watches for
  * the render.
  *
- * ```ts
+ * ```ts ignore
  * import { client } from '@yaks/client'
  * import { mint } from '@yaks/graph'
  * import { loadVocab } from '@yaks/vocab'

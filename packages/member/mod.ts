@@ -53,7 +53,10 @@
  *   { entity: { eid: 'club' } },
  *   { entity: { eid: 'dana' } },
  *   { entity: { eid: 'list' }, access: { mode: 'private' } },
- *   { entity: { eid: 'm1' }, member: { space: 'club', person: 'dana', role: 'owner' } },
+ *   {
+ *     entity: { eid: 'm1' },
+ *     member: { space: 'club', person: 'dana', role: 'owner' },
+ *   },
  * ])
  * g.use(members({ app: 'list', space: 'club' }))
  *

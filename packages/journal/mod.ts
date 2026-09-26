@@ -35,8 +35,17 @@
  * ```ts
  * import { graph } from '@yaks/graph'
  * import { storage } from '@yaks/sqlite'
+ * import { open } from '@yaks/sqlite/db'
+ * import { loadVocab } from '@yaks/vocab'
  * import { ddl, journal, log, undo } from '@yaks/journal'
  *
+ * let title = { type: 'string' }
+ * let vocab = loadVocab([{
+ *   $defs: { page: { component: true, properties: { title } } },
+ * }])
+ * let db = open(':memory:')
+ * let store = storage(db, vocab)
+ * store.install()
  * for (let s of ddl()) db.query(s)
  * let j = log({ rows: (s) => db.query(s) })
  * let g = graph({ storage: store, vocab, plugins: [journal(j)] })

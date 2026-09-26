@@ -31,7 +31,7 @@ A provider is data: where a person authorizes, where codes and refresh tokens
 are exchanged, the scopes to ask for, any extra authorize parameters, and the
 client registered with it.
 
-```ts
+```ts ignore
 import { client, type Provider } from '@yaks/oauth'
 
 let google: Provider = {

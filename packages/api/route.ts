@@ -66,7 +66,7 @@ export let DOORS: string[] = ['/apply', '/query', '/ws']
  * `/ws` for live subscriptions. Everything else is a 404, and every thrown
  * error becomes the refusal body it describes (see the README's Refusals).
  *
- * ```ts
+ * ```ts ignore
  * Deno.serve(api({ graph, authenticate }))
  * ```
  */

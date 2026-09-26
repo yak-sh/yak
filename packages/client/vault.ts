@@ -124,7 +124,7 @@ let concerns = (bundles: Bundle[], vocab: Vocab) =>
  * after the commit, and starts the start-up load that puts back what the last
  * run stored:
  *
- * ```ts
+ * ```ts ignore
  * let kept = keep(graph, idb({ name: 'recipes' }))
  * await kept.ready // the drafts are back in the graph
  * ```

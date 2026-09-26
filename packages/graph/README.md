@@ -295,7 +295,7 @@ A plugin's `declared` list supplies rule names, match queries, and optional
 ```ts
 import { graph } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'
-import { Database, driver } from '@yaks/sqlite/db'
+import { open } from '@yaks/sqlite/db'
 import { loadVocab } from '@yaks/vocab'
 
 const vocab = loadVocab({
@@ -308,7 +308,7 @@ const vocab = loadVocab({
     },
   },
 })
-const store = storage(driver(new Database(':memory:')), vocab)
+const store = storage(open(':memory:'), vocab)
 store.install()
 const g = graph({ storage: store, vocab })
 

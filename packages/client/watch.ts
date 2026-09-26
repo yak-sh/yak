@@ -135,7 +135,7 @@ let judge = (query: string, vocab: Vocab, now?: number): Filter | null => {
  * graph, which is how every commit — this page's, and the server's — reaches
  * every watch:
  *
- * ```ts
+ * ```ts ignore
  * let seen = watches(graph, { signal })
  * let dinners = seen.watch('.course=dinner&.serves>4')
  * dinners.value // the bundles, now

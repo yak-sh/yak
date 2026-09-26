@@ -53,6 +53,18 @@ You can use the adapter directly, but `tx.patch()` bypasses graph validation,
 `$was` preconditions, reference-deletion rules, plugins, and provenance stamps:
 
 ```ts
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+
+const vocab = loadVocab({
+  $defs: {
+    book: {
+      type: 'object',
+      component: true,
+      properties: { pages: { type: 'number' } },
+    },
+  },
+})
 const store = ram(vocab)
 store.tx((tx) => tx.patch([{ entity: { eid: 'b1' }, book: { pages: 412 } }]))
 console.log(store.read('.book'))

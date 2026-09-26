@@ -20,9 +20,16 @@
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
+ * import { docDoc } from '@yaks/doc'
  * import { nameKeywords, named, nameOf, resolve } from '@yaks/names'
  *
- * let v = loadVocab([catalog], [nameKeywords])
+ * let catalog = {
+ *   $defs: {
+ *     author: { component: true, kind: true, by_name: true },
+ *     review: { component: true, kind: true },
+ *   },
+ * }
+ * let v = loadVocab([docDoc, catalog], [nameKeywords])
  * let shelf = [
  *   { comps: { author: {}, doc: { title: 'Ursula Le Guin' } } },
  *   { comps: { review: {}, doc: { title: 'Ursula at her best' } } },

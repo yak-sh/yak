@@ -186,7 +186,7 @@ Importing `@yaks/tools` does not start a polling loop or register effects. A
 process that should execute calls written by other processes registers each
 runner rule with [@yaks/effects](../effects):
 
-```ts
+```ts ignore
 for (const rule of r.rules) {
   fx.on(rule.plan, (event) => r.due(event.entity.eid))
 }

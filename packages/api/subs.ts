@@ -195,7 +195,7 @@ let judge = (ast: Clause, query: string, vocab: Vocab): Filter | null => {
  * {@link https://jsr.io/@yaks/api | api()} makes one when you do not pass
  * your own.
  *
- * ```ts
+ * ```ts ignore
  * let subs = subscriptions(graph)
  * subs.open(sink, 'cheap', '.book&.price<20')
  * ```

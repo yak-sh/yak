@@ -9,7 +9,7 @@ credentials, enable OpenAI native tools, or write OpenAI response metadata.
 This fragment assumes `myPrivateKey` was obtained from private application
 configuration. Do not store it in graph entities or shared configuration files.
 
-```ts
+```ts ignore
 import { responses } from '@yaks/openrouter'
 
 const model = responses({ key: () => myPrivateKey })

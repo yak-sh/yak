@@ -17,18 +17,24 @@
  * that row.
  *
  * ```ts
+ * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
  * import { loadVocab } from '@yaks/vocab'
- * import { keyDoc, keyed, keyKeywords } from '@yaks/key'
+ * import { keyDoc, keyed, keyKeywords, keys } from '@yaks/key'
  *
  * let library = {
  *   $defs: {
- *     book: { type: 'object', kind: true, properties: {} },
+ *     book: { component: true, kind: true, properties: {} },
  *     // one component, and `isbn` is a kind of value
- *     isbn: { type: 'object', key: true },
+ *     isbn: { component: true, key: true },
  *   },
  * }
  * let vocab = loadVocab([keyDoc, library], [keyKeywords])
- * // g.apply([keyed('isbn', 'b1', '9780441013593')])
+ * let g = graph({ storage: ram(vocab), vocab, plugins: [keys(vocab)] })
+ * g.apply([
+ *   { entity: { eid: 'b1' }, book: {} },
+ *   keyed('isbn', 'b1', '9780441013593'),
+ * ])
  * ```
  *
  * Four things follow from that:

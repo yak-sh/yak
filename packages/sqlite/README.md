@@ -93,7 +93,7 @@ implements the resulting row changes and transaction. Low-level callers can use
 `store.tx(tx => tx.patch(changes))`, but that bypasses graph validation and
 plugins.
 
-```ts
+```ts ignore
 // With g from the example, before closing sql:
 await g.apply([
   { entity: { eid: 'p1' }, post: { published: false } }, // keep author
@@ -249,7 +249,7 @@ cache implementation.
 markers, and application migration markers. These rows have no entity identity
 and do not appear in bundles or graph queries.
 
-```ts
+```ts ignore
 import { EPOCH, epoch, meta } from '@yaks/sqlite'
 
 // sql is the driver from the usage example; keep it open for these calls.
@@ -322,13 +322,17 @@ transaction, then commits its synchronous migration and completion record
 atomically:
 
 ```ts
-import { Database, driver } from '@yaks/sqlite/db'
+import { open } from '@yaks/sqlite/db'
 import { migrations, watchMigrations } from '@yaks/sqlite'
 
 // One database file, and the two connections that share it.
 const path = await Deno.makeTempFile({ suffix: '.db' })
-const app = driver(new Database(path))
-app.exec('create table doc (id integer primary key, title text)')
+const app = open(path)
+app.query({
+  t: 'create table',
+  name: 'doc',
+  cols: [{ name: 'id', type: 'integer', pk: true }, { name: 'title' }],
+})
 const control = migrations(app)
 control.ready() // call before installing application tables; refuses pending/failed work
 
@@ -349,15 +353,16 @@ await control.run('documents/add-summary-v1', (db) => {
 }, { intervalMs: 1000, marginMs: 100 })
 
 monitor.stop() // before closing the application connection
+app.close()
+await Deno.remove(path)
 ```
 
-The example assumes `driver` is an existing SQLite driver. Use the same maximum
-polling interval across cooperating applications; a longer interval on any peer
-needs a correspondingly longer grace period. The default is one second plus a
-100 ms migration margin. Polling performs one control-table read per interval,
-not a query before every application operation. An observed generation change
-stops the monitor and invokes its callback once, even if it missed the pending
-phase.
+The example opens its own connection. Use the same maximum polling interval
+across cooperating applications; a longer interval on any peer needs a
+correspondingly longer grace period. The default is one second plus a 100 ms
+migration margin. Polling performs one control-table read per interval, not a
+query before every application operation. An observed generation change stops
+the monitor and invokes its callback once, even if it missed the pending phase.
 
 The single row retains a generation, migration name, pending/applied/failed
 state, announcement/deadline timestamps, and completion/error information. It is

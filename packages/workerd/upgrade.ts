@@ -44,7 +44,7 @@ let handing = (client: unknown): ResponseInit =>
  * `WebSocketPair`, accept the server half, and answer 101 with the client
  * half. Pass it to `api()` on a Worker, or let {@link worker} pass it for you.
  *
- * ```ts
+ * ```ts ignore
  * import { api } from '@yaks/api'
  * import { workerUpgrade } from '@yaks/workerd'
  *

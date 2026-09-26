@@ -92,7 +92,7 @@ let links = (storage: Storage, from: Eid[], tag: string | undefined) =>
  * about that is the caller's decision, since a tool call refuses while a
  * report might not.
  *
- * ```ts
+ * ```ts ignore
  * let worn = await wear(storage, vocab)('N-1')
  * if (worn) console.log(voice(vocab)(worn))
  * ```

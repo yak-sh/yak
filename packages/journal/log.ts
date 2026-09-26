@@ -264,14 +264,10 @@ export type Log = {
 }
 
 /**
- * Bind the log to a store.
- *
- * ```ts
- * let j = log({ rows: (s) => db.query(s) })
- * j.write({ at, by, via, note }, patches) // inside the caller's transaction
- * j.history('T-1')                        // Batch[], oldest first
- * j.since(cursor)                         // Entry[], the feed
- * ```
+ * Bind the log to a store: `log({ rows: (s) => db.query(s) })`. Its `write`
+ * records one transaction inside the caller's own, `history(eid)` is every
+ * transaction that touched an entity, oldest first, and `since(cursor)` is
+ * the feed after a cursor.
  */
 export let log = (opts: LogOpts): Log => {
   let rows = opts.rows
