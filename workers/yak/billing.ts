@@ -89,30 +89,47 @@ let said = (body: unknown, status: number) => {
 // nothing else — the same key, the same path, a different merchant. It is one
 // header rather than a second client because it is one header: a direct charge
 // differs from our own only in whose books it lands on.
+//
+// A call that did not get through — the connection lost on the way, or Stripe
+// saying another request held the object (`Stripe-Should-Retry: true`) — is
+// asked again, as Stripe's own libraries do, under one `Idempotency-Key`, so a
+// write asked twice is one write. {@link TRIES} times in all, a half second
+// and then a second apart: a person is waiting on the answer.
+export let TRIES = 3
 export let ask = async (
-  env: Env,
+  env: Pick<Env, 'STRIPE_KEY'>,
   path: string,
   fields?: Record<string, unknown>,
   on?: string,
+  method = fields ? 'POST' : 'GET',
 ) => {
   if (!env.STRIPE_KEY) throw new Error('STRIPE_KEY is not set')
   let body = fields ? new URLSearchParams(form(fields)).toString() : undefined
-  // `globalThis.fetch`, because this module exports a `fetch` of its own —
-  // the part's handler (env.ts) — and the bare name is that one.
-  let r = await globalThis.fetch(`${API}${path}`, {
-    method: body == null ? 'GET' : 'POST',
-    headers: {
-      authorization: `Bearer ${env.STRIPE_KEY}`,
-      ...(on ? { 'stripe-account': on } : {}),
-      ...(body == null
-        ? {}
-        : { 'content-type': 'application/x-www-form-urlencoded' }),
-    },
-    body,
-  })
-  let out = await r.json().catch(() => null)
-  if (!r.ok) throw new Error(said(out, r.status))
-  return out as Record<string, unknown>
+  let headers = {
+    authorization: `Bearer ${env.STRIPE_KEY}`,
+    ...(on ? { 'stripe-account': on } : {}),
+    ...(method == 'POST' ? { 'idempotency-key': crypto.randomUUID() } : {}),
+    ...(body == null
+      ? {}
+      : { 'content-type': 'application/x-www-form-urlencoded' }),
+  }
+  for (let n = 1;; n++) {
+    let last = n == TRIES
+    // `globalThis.fetch`, because this module exports a `fetch` of its own —
+    // the part's handler (env.ts) — and the bare name is that one.
+    let r = await globalThis.fetch(`${API}${path}`, { method, headers, body })
+      .catch((e) => {
+        if (last) throw e
+        return null
+      })
+    if (r && (last || r.headers.get('stripe-should-retry') != 'true')) {
+      let out = await r.json().catch(() => null)
+      if (!r.ok) throw new Error(said(out, r.status))
+      return out as Record<string, unknown>
+    }
+    await r?.body?.cancel()
+    await new Promise((go) => setTimeout(go, 500 * n))
+  }
 }
 
 // ---- the signature -------------------------------------------------------
