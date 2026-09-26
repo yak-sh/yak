@@ -9,7 +9,7 @@ current state or a change to it. A batch is a list of changes applied in one
 transaction.
 
 ```sh
-deno install -gAf jsr:@yaks/cli/yak
+deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install
 
 yak init Ada                    # Start this machine's own graph, as Ada.
 yak --config yak.json task list # Open a local graph, run a tool, and exit.
@@ -427,7 +427,7 @@ by `/yaks`:
 The tool cache avoids an MCP round trip for ordinary calls. A server response
 that reports a changed roster invalidates or updates the cache.
 
-The package exports three entry points:
+The package exports five entry points:
 
 - `@yaks/cli` exports command parsing, schema conversion, display and completion
   helpers, MCP transport, token and roster storage, config reading, remote tool
@@ -437,6 +437,11 @@ The package exports three entry points:
   defaults. Run it directly or pass additional commands to `main(argv, extra)`.
 - `@yaks/cli/host` exports config and host types, the facet loader, `compose`,
   and supporting host functions for programs that assemble a graph.
+- `@yaks/cli/install` is the installer: run it and `yak` is on PATH at the
+  installer's own release, under a config that lets Deno resolve that release
+  the day it publishes.
+- `@yaks/cli/release` exports that config (`released`), for anything else that
+  resolves a release from JSR, as @yaks/web's bundler does.
 
 Application commands use `yak command <name> --app <app> key=value`, or the
 short form `yak <app> <name> key=value`. Values are parsed as JSON when

@@ -1,11 +1,11 @@
 /**
  * The `yak` command line, as a library.
  *
- * The command itself is the other export — `deno install -gAf jsr:@yaks/cli/yak`
- * — and this module is what it is assembled from, for anybody building the same
- * thing: the tools of the graph a config file names, or the ones an MCP server
- * lists, read at run time, every tool a subcommand, and the command line parsed
- * through each tool's own input schema.
+ * The command itself is the other export — `./yak`, which `./install` puts on
+ * PATH — and this module is what it is assembled from, for anybody building
+ * the same thing: the tools of the graph a config file names, or the ones an
+ * MCP server lists, read at run time, every tool a subcommand, and the command
+ * line parsed through each tool's own input schema.
  *
  * ```ts
  * import { argsFor, doorUrl, rpc } from '@yaks/cli'
