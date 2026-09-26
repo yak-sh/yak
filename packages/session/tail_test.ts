@@ -117,6 +117,18 @@ Deno.test('a tail reads on from where the transcript stands, and never twice', (
     ])
   }))
 
+Deno.test('a pull told to stop stops between lines, and the rest is read after', () =>
+  file(async (g, log, path) => {
+    log(typed('one'), typed('two'), typed('three'))
+    let stop = new AbortController()
+    let first = (e: Record<string, unknown>) => (stop.abort(), claude(e))
+    let t = await tail(g, path, { session: ids.run1 })
+    assertEquals(await pull(g, t, first, { signal: stop.signal }), 1)
+    assertEquals((await tail(g, path, { session: ids.run1 })).line, 1)
+    assertEquals(await pull(g, t, claude), 2)
+    assertEquals(await told(g, ids.run1), ['content', 'content', 'content'])
+  }))
+
 Deno.test('a resume starts where the log was read, whatever became of its entries', () =>
   file(async (g, log, path) => {
     log(typed('one'), reply(use), 'not json at all')

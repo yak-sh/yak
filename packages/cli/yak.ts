@@ -306,7 +306,10 @@ export let main = async (
 if (import.meta.main) {
   listen(winding({
     stop: () => !!local?.stop(),
-    close: async (code) => await local?.close(code),
+    close: async (code) => {
+      local?.cut()
+      await local?.close(code)
+    },
     exit: Deno.exit,
   }))
   main(Deno.args).then(Deno.exit)

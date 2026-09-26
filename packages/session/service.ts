@@ -122,17 +122,21 @@ let stat = (path: string) => {
 /**
  * One look at every transcript under `dir`: each written to in the last
  * `full` milliseconds is read on to its end at full depth, and one older
- * transcript not yet read to its end is read in, its prose only.
+ * transcript not yet read to its end is read in, its prose only. A look whose
+ * `signal` aborts stops between lines, and the next process reads on from
+ * there.
  */
 export let look = async (
   g: Graph,
   dir: string,
   seen: Seen,
-  o: { person?: Eid; full?: number; now?: number } = {},
+  o: { person?: Eid; full?: number; now?: number; signal?: AbortSignal } = {},
 ): Promise<void> => {
   let now = o.now ?? Date.now()
   let old: Found | undefined
+  let read = { person: o.person, signal: o.signal }
   for (let f of transcripts(dir)) {
+    if (o.signal?.aborted) return
     let st = stat(f.path)
     let t = seen.tails.get(f.path)
     if (!st || t === null || (t && t.at >= st.size)) continue
@@ -145,16 +149,16 @@ export let look = async (
     // A tail a failure cut short is dropped, and the next look opens a new
     // one where the transcript stands.
     if (t) {
-      await pull(g, t, claude, { person: o.person }).catch((e) => {
+      await pull(g, t, claude, read).catch((e) => {
         seen.tails.delete(f.path)
         throw e
       })
     }
   }
-  if (!old) return
+  if (!old || o.signal?.aborted) return
   let t = await opened(g, old)
-  if (t) await pull(g, t, claude, { person: o.person, prose: true })
-  seen.done.add(old.path)
+  if (t) await pull(g, t, claude, { ...read, prose: true })
+  if (!o.signal?.aborted) seen.done.add(old.path)
 }
 
 // What a strip takes from an imported entry: all of it where there is no
@@ -246,6 +250,7 @@ export let service = async (
       await look(host.graph, dir, seen, {
         ...(person ? { person: person as Eid } : {}),
         full: options.full,
+        signal,
       })
       if (!owed.length && Date.now() >= due) {
         owed = await stale(host.graph, { full: options.full })

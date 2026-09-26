@@ -370,8 +370,9 @@ should listen to `host.stopping` or the signal passed to `service`.
 A signal winds a command down ([`signal.ts`](./signal.ts)). The first SIGTERM,
 SIGINT or SIGHUP stops every graph the command opened, so `yak serve` stops
 taking requests, answers the ones in flight and returns, and the command closes
-the way it always does. A second signal, or 30 seconds passing first, closes
-with the signal's code (143, 130, 129) and exits.
+the way it always does. A second signal, or 30 seconds passing first, ends the
+duty thread where it stands, closes with the signal's code (143, 130, 129) and
+exits: a duty that never heeded its signal is not waited on.
 
 ## The command line
 

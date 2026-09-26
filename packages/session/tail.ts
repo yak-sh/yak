@@ -68,6 +68,10 @@ export type Pull = {
   final?: boolean
   /** where a line the graph refuses is reported (default the console) */
   report?: (err: unknown) => void
+  /** stop between lines once this aborts: what is left stays with the tail,
+   * for the next pull, and the session's `consumed` says where the read
+   * stood */
+  signal?: AbortSignal
 }
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -303,7 +307,12 @@ export let pull = async (
   // The line the session's `consumed` stands at.
   let marked = t.line
   let breath = performance.now()
-  for (let text of lines(t, o.final)) {
+  let all = lines(t, o.final)
+  for (let [i, text] of all.entries()) {
+    if (o.signal?.aborted) {
+      t.rest = [...all.slice(i), t.rest].join('\n')
+      break
+    }
     // A long read hands the event loop back every so often: the lease its duty
     // holds and every other duty in the process renew and fire on timers.
     if (performance.now() - breath > 50) {

@@ -47,13 +47,15 @@ import {
   type Served,
   words,
 } from './host.ts'
-import { thread } from './thread.ts'
+import { type Aside, thread } from './thread.ts'
 
 // One graph per config path and set of roles, for the life of the process:
 // every call a command makes goes through the same assembled graph, and
 // opening the file twice for the same roles would mean two writers in one
 // process for no reason.
 let hosts = new Map<string, Promise<Served>>()
+// The duty threads those graphs started, for a close that cannot wait on them.
+let asides = new Set<Aside>()
 
 /**
  * The roles a command's own thread serves: the graph, and whatever its tool
@@ -128,6 +130,7 @@ let open = async (
   let config = read(path)
   if (!duties) return compose({ ...config, duties: false }, roles)
   let aside = thread()
+  asides.add(aside)
   let host = await compose(config, roles, facet, { thread: aside })
   try {
     let duties = dutiesOf(host.vocab, config, roles)
@@ -166,6 +169,12 @@ export let stop = (): boolean => {
   return hosts.size > 0
 }
 
+/** Stop waiting on what is winding down: every duty thread this process
+ * started is ended where it stands (./thread.ts `end`), so a close waiting on
+ * one goes on to its last write. What the grace running out, or a second
+ * signal, does before it closes (./signal.ts). */
+export let cut = (): void => asides.forEach((a) => a.end())
+
 /** Close every graph this process opened, stamping how the command ended on
  * the `process` row each of them holds. */
 export let close = (code?: number): Promise<void> =>
@@ -180,6 +189,7 @@ export let close = (code?: number): Promise<void> =>
       await (await host.catch(() => undefined))?.close(code)
     }
     hosts.clear()
+    asides.clear()
   })().finally(() => closing = undefined)
 
 let closing: Promise<void> | undefined

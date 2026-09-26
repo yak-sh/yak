@@ -9,9 +9,11 @@
 // `stop`): a server stops taking requests and answers the ones in flight, a
 // duty stops at its next check, and the command returns and closes the way it
 // always does. A second signal, or the grace running out first, closes what is
-// open with the signal's code and ends the process there; closing ends any
-// call still running as interrupted (host.ts `close`). A command with nothing
-// open has nothing to wind down, and ends at once.
+// open with the signal's code and ends the process there: a duty thread still
+// winding down is ended where it stands rather than waited on (local.ts
+// `cut`), and closing ends any call still running as interrupted (host.ts
+// `close`). A command with nothing open has nothing to wind down, and ends at
+// once.
 
 /** The signals a command winds down on, and the code each ends it with: 128
  * plus the signal's number, as a shell reports it. Windows delivers SIGINT
@@ -29,7 +31,8 @@ export let GRACE = 30_000
 export type Winding = {
   /** ask what is open to wind down; false when nothing is */
   stop: () => boolean
-  /** close what is open, ending it with this code */
+  /** close what is open now, waiting on nothing still winding down, and end
+   * it with this code */
   close: (code: number) => Promise<void>
   /** end the process */
   exit: (code: number) => void

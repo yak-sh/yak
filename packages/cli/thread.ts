@@ -52,6 +52,9 @@ export type Aside = Thread & {
   plan: (start: Start) => void
   /** start it now, for one pass of each idle role on the way in */
   start: (idle?: Role[]) => void
+  /** end it where it stands, for a process that waited long enough: the
+   * worker is terminated, and whoever waits on it goes on */
+  end: () => void
 }
 
 /** A thread for this process's duties, not started yet. */
@@ -66,9 +69,17 @@ export let thread = (): Aside => {
   // Awaited by whoever asks; nobody asking is not an unhandled rejection.
   for (let p of all) p.promise.catch(() => {})
   let fail = (error: Error) => all.forEach((p) => p.reject(error))
+  // Once ended, never started again: the process is on its way out.
+  let over = false
+  let end = () => {
+    over = true
+    worker?.terminate()
+    worker = undefined
+    fail(new Error('the duty thread was ended before it closed'))
+  }
   let tell = (said: Said) => worker?.postMessage(said)
   let spawn = (idle?: Role[]) => {
-    if (worker || !plan?.roles.length) return
+    if (over || worker || !plan?.roles.length) return
     worker = new Worker(new URL('./worker.ts', import.meta.url), {
       type: 'module',
     })
@@ -101,6 +112,7 @@ export let thread = (): Aside => {
       await stopped.promise
     },
     nudge: () => tell({ nudge: true }),
+    end,
     close: async () => {
       // A thread nobody planned by now never will be.
       planned.resolve(undefined)
@@ -109,7 +121,7 @@ export let thread = (): Aside => {
       try {
         await closed.promise
       } finally {
-        worker.terminate()
+        end()
       }
     },
   }
