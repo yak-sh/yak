@@ -27,10 +27,11 @@ model you choose.
 A request becomes one
 `run(model, {messages, tools, max_tokens, reasoning_effort})` call. Instructions
 and `instruction` items are `system` messages, a call joins the assistant
-message it follows as a `tool_calls` entry, and a result is a `tool` message
-naming the call it answers. `Request.tokens` is sent as `max_tokens`; without it
-the model's own default applies, and so does `Request.effort`, sent as
-`reasoning_effort` (GLM's `low`, `high`, `max`).
+message it follows as a `tool_calls` entry in OpenAI's shape
+(`{id, type: 'function', function: {name, arguments}}`, which GLM requires), and
+a result is a `tool` message naming the call it answers. `Request.tokens` is
+sent as `max_tokens`; without it the model's own default applies, and so does
+`Request.effort`, sent as `reasoning_effort` (GLM's `low`, `high`, `max`).
 
 Models in the catalog answer one of two shapes, and both are read: the binding's
 own (`response`, and a flat `tool_calls` of `{name, arguments}`) or OpenAI's

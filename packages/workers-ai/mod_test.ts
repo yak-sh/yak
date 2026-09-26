@@ -47,15 +47,29 @@ Deno.test('a conversation is sent as chat messages', async () => {
         role: 'assistant',
         content: 'looking',
         tool_calls: [
-          { id: 'a', name: 'look', arguments: '{"q":1}' },
-          { id: 'b', name: 'find', arguments: '{}' },
+          {
+            id: 'a',
+            type: 'function',
+            function: { name: 'look', arguments: '{"q":1}' },
+          },
+          {
+            id: 'b',
+            type: 'function',
+            function: { name: 'find', arguments: '{}' },
+          },
         ],
       },
       { role: 'tool', name: 'look', tool_call_id: 'a', content: 'seen' },
       {
         role: 'assistant',
         content: '',
-        tool_calls: [{ id: 'c', name: 'look', arguments: '{}' }],
+        tool_calls: [
+          {
+            id: 'c',
+            type: 'function',
+            function: { name: 'look', arguments: '{}' },
+          },
+        ],
       },
     ],
     tools: [{ type: 'function', function: tool }],

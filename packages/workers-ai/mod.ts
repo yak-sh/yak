@@ -42,7 +42,13 @@ export type Binding = {
   run(model: string, input: unknown): Promise<unknown>
 }
 
-type Call = { id: string; name: string; arguments: string }
+// A call as a chat model is sent it: OpenAI's shape, which the catalog's
+// chat models validate (GLM refuses a flat `{name, arguments}`).
+type Call = {
+  id: string
+  type: 'function'
+  function: { name: string; arguments: string }
+}
 
 // One chat message, as the binding takes it.
 type Message = {
@@ -83,7 +89,11 @@ let messages = (req: Request): Message[] => {
       out.push({ role: 'assistant', content: i.text })
     } else if (i.kind == 'call') {
       names.set(i.id, i.name)
-      let call = { id: i.id, name: i.name, arguments: i.args }
+      let call: Call = {
+        id: i.id,
+        type: 'function',
+        function: { name: i.name, arguments: i.args },
+      }
       if (last?.role == 'assistant') {
         last.tool_calls = [...last.tool_calls ?? [], call]
       } else out.push({ role: 'assistant', content: '', tool_calls: [call] })
