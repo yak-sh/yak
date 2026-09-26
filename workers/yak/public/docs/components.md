@@ -70,10 +70,9 @@ needs no filing; add it when work belongs on a project board.
 suggestion waiting on someone. Reach for it rather than inventing a `status`
 property of your own, and the platform's own status grammar works on your rows.
 
-`status` is _read_, never written — `open`, `wip`, `done` or `cancelled`,
-derived from the components the entity has: `cancelled` if it has `cancelled`,
-else `done` if it has `completed`, else `wip` if it has a live `claim`, else
-`open`.
+`status` is _read_, never written — `open`, `done` or `cancelled`, derived from
+the components the entity has: `cancelled` if it has `cancelled`, else `done` if
+it has `completed`, else `open`.
 
     await apply({ entity: { eid: '$t' },
       doc: { title: 'Water the plants' }, task: {}, filed: { priority: 1 } })
@@ -171,7 +170,7 @@ itself, not on the row that points at it. `upload` reads it off the file's own
 header (png, jpeg, gif, webp), so a wall can hold a photo's space open before
 its bytes arrive.
 
-**`created`** — no writable properties; the store sets `at` (time), `by` (eid)
+**`created`** — no writable properties; the store sets `by` (eid), `at` (time)
 and `via` (eid). **`updated`** — the same three. The byline and the clock. You
 rarely write either: the store stamps the writer and the moment on its own, and
 a listing leaves them out unless the filter asks for them.
@@ -225,7 +224,7 @@ shown beside it:
 - `eid` — a reference to another entity. The platform's own components have
   these; a `vocab.json` cannot declare one (below).
 - a closed set of values — the platform's alone; a refusal lists the set,
-  `open|wip|done|cancelled`.
+  `cancelled|done|open`.
 
 **Noon for a date.** When a `time` property really holds a _day_ — the plants
 went in, the meeting is on the 4th — write noon UTC, `2026-04-11T12:00:00Z`.

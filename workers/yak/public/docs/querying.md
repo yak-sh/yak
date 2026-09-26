@@ -182,7 +182,7 @@ The platform's own properties are typed, and a value that cannot be one is
 refused loudly rather than quietly matching nothing:
 
     .task.status=finished
-    → task.status is one of open, wip, done, cancelled — got 'finished'
+    → task.status is one of cancelled, done, open — got 'finished'
 
     .filed.priority=high
     → priority is a finite number, optionally P-prefixed (P2, p02, 1.5)
@@ -190,9 +190,8 @@ refused loudly rather than quietly matching nothing:
 
 - **text** — as typed. `.doc.title~=cake`
 - **number** — `.recipe.serves>=4`, decimals fine.
-- **enum** — `task.status` is `open`, `wip`, `done` or `cancelled`. It is read,
-  never written: `.task.status=done` selects the entities that have a
-  `completed`.
+- **enum** — `task.status` is `open`, `done` or `cancelled`. It is read, never
+  written: `.task.status=done` selects the entities that have a `completed`.
 - **priority** — a number, and `P` is optional: `.filed.priority<=2` and
   `.filed.priority<=P2` ask the same thing.
 - **time** — a stamp or a phrase; the next section is only about those.

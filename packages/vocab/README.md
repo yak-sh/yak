@@ -203,7 +203,9 @@ or a boolean becomes its text, an object or an array its JSON text.
 
 A component is declared once. Loading two documents that both declare `doc`
 throws: one name, one home, so a package's vocabulary composes with every
-other's.
+other's. A program that speaks a few of a package's words and not the rest loads
+them from that home with `pick(doc, names)`: the same declarations as a document
+of their own, never a copy.
 
 The exception is the spine. `entity` is the identity row every entity has, and
 more than one package keeps something in it — the archetype a component set adds
@@ -483,10 +485,11 @@ skips them.
 ## Exports
 
 The root export includes `loadVocab`, `Vocab`, schema and property types,
-`Unknown` and `Ambiguous` lookup errors, `storable`, `reserved`, `kindOrder`,
-`composite`, state-lifetime helpers, `rulesIn`, `RuleDecl`, `effectsIn` and
-`EffectDecl`. `CORE_URI`, `coreVocabulary` and `metaSchema` expose the bundled
-schema documents; `Keywords`, `JsonSchema` and `extendMeta` support extensions.
+`Unknown` and `Ambiguous` lookup errors, `pick`, `storable`, `reserved`,
+`kindOrder`, `composite`, state-lifetime helpers, `rulesIn`, `RuleDecl`,
+`effectsIn` and `EffectDecl`. `CORE_URI`, `coreVocabulary` and `metaSchema`
+expose the bundled schema documents; `Keywords`, `JsonSchema` and `extendMeta`
+support extensions.
 
 The `@yaks/vocab/tools` sub-module exports `ToolDefinition`, `toolDefinition`,
 `toolDefinitionSchema`, `toolsIn`, `toolsSaid`, `validateToolInput`,

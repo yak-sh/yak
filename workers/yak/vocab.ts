@@ -1,15 +1,5 @@
 import { archetypeDoc } from '@yaks/archetype'
-import {
-  col,
-  type Derived,
-  eq,
-  exists,
-  isNull,
-  lit,
-  select,
-  table,
-  when,
-} from '@yaks/sql'
+import type { Derived } from '@yaks/sql'
 import { refuse } from './tool.ts'
 // The vocabulary one app speaks (T-33811): the core documents every store on
 // the platform shares, plus the words that app declared for itself, loaded
@@ -17,34 +7,36 @@ import { refuse } from './tool.ts'
 // routing and its admission out of. One app, one vocabulary; the fleet's own
 // 83 tables are the fleet's (V-33553).
 //
+// A word has one home (M-17871): a word a package declares is loaded from
+// that package, picked out of its document where a store wants some of its
+// words and not the rest (@yaks/vocab `pick`), and never declared again here.
+// What this file declares is only what no package does.
+//
 // What is core here, and why each piece is:
-//   entity      the spine — the eid an entity is called by, and nothing else.
-//               It has no table of its own: @yaks/sqlite raises `entity` and
-//               `tombstone` as the layout's fixed spine, and @yaks/graph
-//               reserves the tombstone word on the wire, so neither is
-//               declared. An app's entities carry no number: @yaks/id is a
-//               plugin a graph opts into, and an app has not (T-37831), so an
-//               app's ids are the eid and the short handle built from it.
+//   spineDoc    @yaks/kernel: the spine and its two server-owned stamps,
+//               `entity`, `created` and `updated`. @yaks/sqlite raises
+//               `entity` and `tombstone` as the layout's fixed spine, and
+//               @yaks/graph's stamp phase is the stamps' only writer. An app's
+//               entities carry no number: @yaks/id is a plugin a graph opts
+//               into, and an app has not (T-37831), so an app's ids are the
+//               eid and the short handle built from it.
+//   person      @yaks/persona: the writer a store mints the first time it
+//               meets one (graph.ts `#vouching`) — what `created.by` points at.
 //   docDoc      @yaks/doc: title and body, the words a person reads and the
 //               only thing search searches. `body` says `store: "blob"`, which
 //               is @yaks/blob's keyword — the text is swapped for its address
 //               on the way in and back on the way out, and neither `doc` nor
 //               the app is told.
-//   created     the byline and the clock, both server-owned. @yaks/graph's
-//   updated     stamp phase is their only writer, and it writes whichever of
-//               `at`/`by`/`via` the vocabulary declares.
-//   person      the writer a store mints the first time it meets one
-//               (graph.ts `#vouching`) — what `created.by` points at.
 //   memberDoc   @yaks/member: who belongs to a space, what they may touch.
 //   edgeDoc     @yaks/edge: the link itself, `edge{from, to, ord}`.
-//   relationDoc the twelve verbs an edge may wear. @yaks/edge ships the link
+//   relations   the twelve verbs an edge may wear. @yaks/edge ships the link
 //               and not one relation, because which relations exist is the
-//               application's word — so the platform says its twelve here,
-//               through that package's `edge` keyword. They are core and
-//               not an app's own: the guide teaches this list to every app,
-//               every store already holds rows under these names, and a word
-//               means the same thing in every store — so they are reserved
-//               like the rest of the core (T-33810).
+//               application's word — so the platform picks its twelve from the
+//               packages that declare them. They are core and not an app's
+//               own: the guide teaches this list to every app, every store
+//               already holds rows under these names, and a word means the
+//               same thing in every store — so they are reserved like the rest
+//               of the core (T-33810).
 // @yaks/id is loaded by the platform's own two stores and by no app's
 // ({@link platformDocs}, {@link metaKeywords}): the directory orders its
 // memories by the number it minted, and an app has nothing to number.
@@ -60,6 +52,7 @@ import {
   CORE_URI,
   type Keywords,
   loadVocab,
+  pick,
   type PropSchema,
   storable,
   type Vocab,
@@ -68,13 +61,23 @@ import {
 import { aliasDoc } from '@yaks/alias'
 import { blobKeywords } from '@yaks/blob'
 import { docDoc } from '@yaks/doc'
+import { dreamingDoc } from '@yaks/dreaming/vocab'
 import { EDGE_URI, edgeDoc, edgeKeywords } from '@yaks/edge'
 import { gitDoc } from '@yaks/git'
+import { goalDoc } from '@yaks/goal/vocab'
 import { hookDoc } from '@yaks/hook'
 import { idDoc, idKeywords } from '@yaks/id'
 import { keyDoc, keyKeywords } from '@yaks/key'
+import {
+  kernelDoc as kernelWords,
+  marksDoc,
+  spineDoc,
+} from '@yaks/kernel/vocab'
 import { mailDoc } from '@yaks/mail'
 import { memberDoc } from '@yaks/member'
+import { personaDoc } from '@yaks/persona/vocab'
+import { projectDoc } from '@yaks/project/vocab'
+import { derived as statuses, taskDoc } from '@yaks/task/vocab'
 import { toolsDoc } from '@yaks/tools'
 import { tunnelDoc } from '@yaks/tunnel'
 import { wakeDoc } from '@yaks/wake'
@@ -103,92 +106,72 @@ let owned = (s: PropSchema): PropSchema => ({ ...s, stamped: true })
 // on the component, `unique: [['space', 'slug']]`).
 let unique = (s: PropSchema): PropSchema => ({ ...s, unique: true })
 
-// A stamp's three properties: when, by whom, through what. `created`, `updated`
-// and every mark a served or fixed row wears are the same three words.
-let stampProps: Record<string, PropSchema> = {
-  at: owned(time),
-  by: owned(ref('keep')),
-  via: owned(ref('keep')),
-}
+/** The writer a store mints the first time it meets one (graph.ts
+ * `#vouching`), from the package that says what a person is. */
+let personDoc: VocabDoc = pick(personaDoc, ['person'])
 
-/** The components every app's store has that no package owns: the spine, the
- * writer, and the two server-owned stamps. `doc` is @yaks/doc's, `member`
- * @yaks/member's, and both are loaded beside this one (see {@link coreDocs}).
- * The spine carries the eid alone: a number is @yaks/id's property, which an
- * app's store does not load, so an app's entity has one name and it is the one
- * its client minted. */
-export let coreDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true },
-  title: 'core',
+/** The one verb no package declares under this name: `referenced`, which
+ * @yaks/kernel stores as `references` and queries as `referenced`. A link's eid
+ * is derived from the component it wears, so the name an app's store holds its
+ * rows under is the name it keeps until they move. */
+let referencedDoc: VocabDoc = {
+  $vocabulary: { [CORE_URI]: true, [EDGE_URI]: true },
+  title: 'relations',
   $defs: {
-    entity: {
+    referenced: {
       component: true,
       type: 'object',
-      wire: false,
+      edge: true,
       properties: {},
-    },
-    person: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: {},
-    },
-    created: {
-      component: true,
-      type: 'object',
-      properties: stampProps,
-    },
-    updated: {
-      component: true,
-      type: 'object',
-      properties: stampProps,
     },
   },
 }
+
+/** The verbs an edge may wear, each picked from the package that declares it:
+ * a tag component saying `edge` about itself, so @yaks/edge reads it off the
+ * loaded vocabulary. */
+let relationDocs: VocabDoc[] = [
+  pick(kernelWords, [
+    'about',
+    'delegates',
+    'reads',
+    'supersedes',
+    'supervises',
+    'wants',
+    'worked',
+  ]),
+  pick(taskDoc, ['contains', 'requires']),
+  pick(goalDoc, ['satisfies']),
+  pick(dreamingDoc, ['recalled']),
+  referencedDoc,
+]
 
 /**
  * The verbs an edge may wear, under the wire's own names — the list the guide
  * teaches, and the only types a store makes an edge for. Note `referenced`,
  * never `references`.
  */
-export let RELATIONS: string[] = [
-  'requires',
-  'contains',
-  'reads',
-  'about',
-  'supervises',
-  'delegates',
-  'recalled',
-  'supersedes',
-  'worked',
-  'referenced',
-  'wants',
-  'satisfies',
-]
+export let RELATIONS: string[] = relationDocs.flatMap((d) =>
+  Object.keys(d.$defs ?? {})
+)
 
-/** Those verbs as one vocabulary document: a bare tag component each, saying
- * `edge` about itself so @yaks/edge reads it off the loaded vocabulary. */
-export let relationDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true, [EDGE_URI]: true },
-  title: 'relations',
-  $defs: Object.fromEntries(
-    RELATIONS.map((name) => [name, {
-      component: true,
-      type: 'object',
-      edge: true,
-      properties: {},
-    }]),
-  ),
-}
+/** The marks any row may wear, in every store the platform keeps: somebody
+ * opened it, put it away or quarantined it — and an image's size. */
+let markDocs: VocabDoc[] = [
+  marksDoc,
+  pick(kernelWords, ['image', 'quarantined']),
+]
 
 /**
  * A break the platform noted: in an app's store about the app's own code
  * (index.ts), and in any store about the store itself (graph.ts `#broke`).
  * Every property is server-owned, and the kernel's door (`x-yak-kernel`,
- * graph.ts) is its only writer. The properties are the fleet's own
- * (src/vocab/manifests/kernel.json), so a row written through the old store
- * means exactly what a row written through this one means.
+ * graph.ts) is its only writer.
+ *
+ * @yaks/tools declares `exception` too, with these same properties; the
+ * platform's is also a kind that sorts before `doc`, and @yaks/tools' `error`
+ * beside it means another thing than the platform's ({@link kernelDoc}), so
+ * both stay here until that is settled.
  */
 export let exceptionDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
@@ -211,19 +194,17 @@ export let exceptionDoc: VocabDoc = {
 }
 
 /**
- * What the platform says in an app's store that the app never asked for: the
- * marks a served or fixed item wears, a failure it reports on purpose, and the
- * two rows an upload makes. They are core rather than an app's own for the
- * same reason the relations are — every store already holds rows under these
- * names, `app_errors` and the unseen block read them by these names in every
- * app, and a word means the same thing everywhere.
+ * What the platform says in every store that the app never asked for: a
+ * failure it reports on purpose, and the two rows an upload makes. They are
+ * core rather than an app's own for the same reason the relations are — every
+ * store already holds rows under these names, `app_errors` reads them by these
+ * names in every app, and a word means the same thing everywhere.
  *
- * The marks are server-owned and written bare — `notified: {}` says the thing
- * without saying a property.
- *
- * Their properties are the fleet's own (src/vocab/manifests/kernel.json,
- * comms.json), so a row written through the old store means exactly what a row
- * written through this one means.
+ * All three names are declared by a package too, at another meaning: `error`
+ * by @yaks/tools (what a refused call says about itself), `blob` by @yaks/git
+ * (where an object's bytes are) and `attachment` by @yaks/blob (a file a model
+ * or a person handed over). Until each meaning has a name of its own, the
+ * platform keeps these here.
  */
 export let kernelDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
@@ -242,21 +223,6 @@ export let kernelDoc: VocabDoc = {
       // platform. One word, both meanings, so a store never has to choose.
       properties: { at: owned(time), message: owned(text), code: text },
     },
-    archived: {
-      component: true,
-      type: 'object',
-      properties: stampProps,
-    },
-    opened: {
-      component: true,
-      type: 'object',
-      properties: stampProps,
-    },
-    quarantined: {
-      component: true,
-      type: 'object',
-      properties: stampProps,
-    },
     // The two rows a page's upload makes (apps.ts `took`): the content,
     // addressed by its sha, and the use of it, addressed off that. They stay
     // apart because they are two things, and because a component may not point
@@ -265,11 +231,6 @@ export let kernelDoc: VocabDoc = {
       component: true,
       type: 'object',
       properties: { bytes: num },
-    },
-    image: {
-      component: true,
-      type: 'object',
-      properties: { w: num, h: num },
     },
     attachment: {
       component: true,
@@ -281,25 +242,11 @@ export let kernelDoc: VocabDoc = {
   },
 }
 
-/**
- * The one mark with two homes: `notified{at, by, via}`, which @yaks/mail also
- * declares. An app's store takes the word from that package (see
- * {@link coreDocs}) because an app has a mailbox; the directory has none, so it
- * declares the word here instead. A vocabulary refuses a component declared
- * twice, and both stores need the mark — the unseen block reads it in every
- * one of them — so the word has one home in each rather than one home overall.
- */
-export let notifiedDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true },
-  title: 'notified',
-  $defs: {
-    notified: {
-      component: true,
-      type: 'object',
-      properties: stampProps,
-    },
-  },
-}
+/** `notified{at, by, via}`, the mark the unseen block reads in every store, as
+ * @yaks/mail declares it: an app's store loads the whole of that package,
+ * because an app has a mailbox, and the directory, which has none, loads this
+ * one word of it. */
+let notifiedDoc: VocabDoc = pick(mailDoc, ['notified'])
 
 /** What a `vocab.json` looks like, for a refusal that teaches. */
 export let EXAMPLE =
@@ -318,75 +265,37 @@ export let teach = (env: Host = {}) =>
 
 /**
  * The words the platform gives every app to reach for rather than invent
- * (public/docs/components.md §The platform's vocabulary): a state, the two
- * marks that end one, a thing work belongs to, a note aimed at anything, a
- * star, and an address out on the web. They mean the same thing in every store
- * on the platform, which is the whole reason they are the platform's and not
- * each app's own — a `task` in one app is the same word as a `task` in the
- * next, so one filter reads both.
+ * (public/docs/components.md §The platform's vocabulary), picked from the
+ * packages that declare them: a task and the two marks that end one
+ * (@yaks/task), what work is filed under and the thing it belongs to
+ * (@yaks/project), a note aimed at anything and a star (@yaks/kernel). They
+ * mean the same thing in every store on the platform, which is the whole reason
+ * they are the platform's and not each app's own — a `task` in one app is the
+ * same word as a `task` in the next, so one filter reads both.
  *
- * Their properties are the fleet contract's own (src/types.ts), so a row
- * written through the old store means what a row written through this one
- * means.
+ * A task's `status` is read, never written: what the entity wears says its
+ * state, so a task is done because it wears `completed`. {@link appDerived} is
+ * the expression that reads it.
+ */
+let givenDocs: VocabDoc[] = [
+  pick(taskDoc, ['cancelled', 'completed', 'task']),
+  pick(projectDoc, ['filed', 'project']),
+  pick(kernelWords, ['comment', 'favorite']),
+]
+
+/**
+ * The words the platform gives every app that are its own: something for
+ * sale, something sold, and an address out on the web.
+ *
+ * `web` is declared by @yaks/page too, at a narrower meaning: a page frozen
+ * from the web, whose entity is named by its address (`url` is its identity).
+ * The platform's is any row's link out, which two rows may share, so it stays
+ * here until the two meanings have a name each.
  */
 export let appsDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
   title: 'apps',
   $defs: {
-    task: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: {
-        // Read, never written: what the entity wears says its state, so a
-        // task is done because it wears `completed`, not because a property was
-        // set to a word. `computed: true` says there is no column at all;
-        // {@link appDerived} is the expression that reads it.
-        status: {
-          type: 'string',
-          enum: ['open', 'wip', 'done', 'cancelled'],
-          computed: true,
-        },
-      },
-    },
-    filed: {
-      component: true,
-      type: 'object',
-      properties: {
-        priority: num,
-        project: ref('detach'),
-        assignee: ref('detach'),
-        domain: text,
-      },
-    },
-    // The two marks that end a task. Both are the store's to fill — the clock
-    // from the write, the writer from whoever is asking — so `completed: {}`
-    // is the whole write, and `completed: null` opens it again.
-    completed: {
-      component: true,
-      type: 'object',
-      properties: stampProps,
-    },
-    cancelled: {
-      component: true,
-      type: 'object',
-      properties: { ...stampProps, reason: text },
-    },
-    project: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: { color: text },
-    },
-    comment: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: { target: ref('cascade') },
-    },
     // Something for sale (sell.ts, T-34525). Platform's rather than each app's
     // for the reason every other word here is platform's — a `product` in one
     // shop is the same word as a `product` in the next, so one filter reads
@@ -449,11 +358,6 @@ export let appsDoc: VocabDoc = {
         }),
       },
     },
-    favorite: {
-      component: true,
-      type: 'object',
-      properties: { at: owned(time) },
-    },
     web: {
       component: true,
       type: 'object',
@@ -466,38 +370,12 @@ export let appsDoc: VocabDoc = {
 }
 
 /**
- * The properties a store reads rather than stores, as the SQL that reads them
- * (@yaks/sql `Derived`). One today: a task's `status`, which is what the entity
- * wears. There is no `claim` in an app's store, so `wip` never happens here —
- * the word is declared because the platform's status grammar is one grammar,
- * and a filter that names it must still parse.
+ * The properties an app's store reads rather than stores, as the SQL that
+ * reads them (@yaks/sql `Derived`), from the packages that declare them. One
+ * today: a task's `status`, which @yaks/task reads off the marks the entity
+ * wears.
  */
-export let appDerived = (): Derived => ({
-  'task.status': {
-    tag: 'text',
-    values: ['open', 'wip', 'done', 'cancelled'],
-    // The owner is NULL where the row wears no `task` at all — a filter joins
-    // the component table on the left so absence is askable — and a status is
-    // a fact about a task, so there it is null rather than `open`. Without that
-    // first arm every entity in the store answers `.task.status=open`.
-    expr: (owner) => {
-      let wears = (comp: string) =>
-        exists(select({
-          cols: [lit(1)],
-          from: table(comp),
-          where: eq(col('entity', comp), owner),
-        }))
-      return when(
-        [
-          [isNull(owner), lit(null)],
-          [wears('cancelled'), lit('cancelled')],
-          [wears('completed'), lit('done')],
-        ],
-        lit('open'),
-      )
-    },
-  },
-})
+export let appDerived = (): Derived => statuses()
 
 /** Derived classification metadata is readable but never client-authored. */
 export const classificationDoc: VocabDoc = {
@@ -531,7 +409,8 @@ let invocationDoc: VocabDoc = {
 
 /**
  * The words the Store itself writes and reads in whichever store it runs
- * (graph.ts): the spine, its stamps and the writer it mints ({@link coreDoc}),
+ * (graph.ts): the spine, its stamps and the writer it mints (`spineDoc`,
+ * `personDoc`),
  * the archetype index, the link and the name every row can be addressed by
  * (`edgeDoc`, `keyDoc`, `aliasDoc`, T-34390), its clock (`wakeDoc`, D-37562)
  * and the break it notes about itself ({@link exceptionDoc}). Every store's
@@ -540,7 +419,8 @@ let invocationDoc: VocabDoc = {
  * `exception` could not write down that it had.
  */
 let machineDocs: VocabDoc[] = [
-  coreDoc,
+  spineDoc,
+  personDoc,
   classificationDoc,
   edgeDoc,
   keyDoc,
@@ -558,16 +438,18 @@ let storeDocs = (own: VocabDoc[]): VocabDoc[] => [...machineDocs, ...own]
  *
  * `mailDoc` is among them because every app has a mailbox (T-33686): a letter
  * is an entity here like anywhere else, and the same six words say the one it
- * sends and the one that arrives. It brings `notified` with it, which is why
- * {@link kernelDoc} does not.
+ * sends and the one that arrives. It brings `notified` with it, which the
+ * directory picks out of it alone ({@link notifiedDoc}).
  *
  * An app writes `wake{at}` on anything it means to come back to, and what the
  * firing means is left to the app's own rules on `fired` (D-37562). */
 export let coreDocs: VocabDoc[] = storeDocs([
   docDoc,
   memberDoc,
-  relationDoc,
+  ...relationDocs,
+  ...markDocs,
   kernelDoc,
+  ...givenDocs,
   appsDoc,
   mailDoc,
   invocationDoc,
@@ -1014,10 +896,11 @@ export let platformDoc: VocabDoc = {
 
 /** The documents the directory's vocabulary is built on, in load order.
  *
- * `kernelDoc` is among them for the same reason it is among an app's:
- * `app_errors` and the unseen block read every store the caller can reach by
- * the same words, and a mark declared here and nowhere else would make the
- * directory the one store those doors cannot answer for.
+ * The marks, `kernelDoc` and `notified` are among them for the same reason
+ * they are among an app's: `app_errors` and the unseen block read every store
+ * the caller can reach by the same words, and a mark an app's store speaks and
+ * the directory does not would make it the one store those doors cannot answer
+ * for.
  *
  * `tunnelDoc` is the `tunnel` a space wears when it has a tunnel to a machine
  * (tunnel.ts): the directory is the only store that holds one.
@@ -1033,7 +916,8 @@ export let platformDoc: VocabDoc = {
 export let platformDocs: VocabDoc[] = storeDocs([
   idDoc,
   docDoc,
-  relationDoc,
+  ...relationDocs,
+  ...markDocs,
   kernelDoc,
   notifiedDoc,
   sweepDoc,
@@ -1166,12 +1050,16 @@ export let WORDS: Record<Word, PropSchema> = {
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
-/** The word that names a declared property's type. A property no word names
- * reads as `text`, which is what it stores as. */
-export let wordOf = (s: PropSchema): string =>
-  Object.entries(WORDS).find(([, one]) =>
-    one.type == s.type && one.format == s.format
-  )?.[0] ?? 'text'
+/** The word that names a declared property's type: the one its type and
+ * format name, else the one its type alone names — a `priority` is a number —
+ * else `text`, which is what anything else stores as. */
+export let wordOf = (s: PropSchema): string => {
+  let words = Object.entries(WORDS)
+  let named =
+    words.find(([, one]) => one.type == s.type && one.format == s.format) ??
+      words.find(([, one]) => one.type == s.type && !one.format)
+  return named?.[0] ?? 'text'
+}
 
 /**
  * A document as `{comp: {prop: word}}` — every component's properties as the

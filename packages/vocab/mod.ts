@@ -18,6 +18,7 @@
 //   validate.ts  document validation: the storable profile, reserved names,
 //                additive-forever evolution
 //   order.ts     the derived ordering (alphabetical + topological over `before`)
+//   pick.ts      some of a document's components, as a document of their own
 //   lifetime.ts  the two things a component declares about its own state:
 //                `sync` (who is told about a write) and `durable` (how long a
 //                value lives)
@@ -30,6 +31,7 @@
 
 export * from './types.ts'
 export * from './order.ts'
+export * from './pick.ts'
 export * from './lifetime.ts'
 export * from './vocab.ts'
 export * from './validate.ts'

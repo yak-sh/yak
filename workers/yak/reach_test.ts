@@ -210,7 +210,7 @@ Deno.test('an order holds across the merge, and its window cuts after it', async
   await assertRejects(
     () => read(env, reach, '.book&?loan&.order=created'),
     CallError,
-    'a component where a property belongs: created — try created.at',
+    'a component where a property belongs: created — try created.',
   )
 })
 
