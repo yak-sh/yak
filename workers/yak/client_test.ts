@@ -13,6 +13,9 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
+import { client as keeper } from '@yaks/client'
+import { loadVocab } from '@yaks/vocab'
+import { until } from '../../bin/testing.ts'
 import { browser, client, kernel, seed } from './probe.ts'
 
 // A row as a page reads one: the kind that names it, the spine, and a
@@ -317,6 +320,37 @@ Deno.test('the client at a pretty path, and a sibling app by path', async () => 
   } finally {
     await mine.stop()
     Deno.removeSync(dir, { recursive: true })
+    await k.stop()
+  }
+})
+
+// A page that keeps its own copy of the store (@yaks/client) writes in the
+// Store's wire, and the answer is what lands its write whole: the byline the
+// store stamped on it names who made it, on the page that made it.
+Deno.test('a page keeping a copy of its store learns who made its own write', async () => {
+  let k = await kernel()
+  let them = await seed(k, [{ slug: 'ivo3', apps: ['recipes'] }])
+  let mine = browser(k, 'ivo3.yaks.app', them.cookie)
+  let words = await (await k.at('ivo3.yaks.app', '/recipes/api/vocab.json'))
+    .json()
+  let copy = keeper(loadVocab(words), [], {
+    url: `${mine.origin}/recipes/api`,
+    vault: false,
+    wireVault: false,
+  })
+  try {
+    let eid = crypto.randomUUID()
+    let rows = copy.watch('.doc&?created', { remote: false })
+    let by = () => {
+      let c = rows.value[0]?.created
+      return c && typeof c == 'object' && 'by' in c ? c.by : null
+    }
+    copy.mutate([{ entity: { eid }, doc: { title: 'Plum tart' } }])
+    await until(() => !!by())
+    assertEquals(by(), them.person)
+  } finally {
+    copy.close()
+    await mine.stop()
     await k.stop()
   }
 })

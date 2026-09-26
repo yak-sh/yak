@@ -1157,13 +1157,16 @@ let api = async (
         headers: { 'content-type': 'application/x-ndjson' },
       }, { ...headers, ...(await named(env, who, app)) })
     }
-    // The page's envelope in, the page's answer out (wire.ts): the Store takes
-    // a bare array of bundles and answers the batch as applied, and the page
-    // reads `{ok, aliases, bundles}` off its own client.
+    // Each wire in, the same wire out (wire.ts): the page's envelope is
+    // answered `{ok, aliases, bundles}`, and the Store's bare array, which a
+    // page keeping its own copy sends, is answered with the batch as applied.
+    let sent: unknown
     try {
+      sent = JSON.parse(body)
       return Response.json(
         receipt(
-          await metaOf(store).apply(batched(JSON.parse(body)), {
+          sent,
+          await metaOf(store).apply(batched(sent), {
             ...headers,
             ...(await named(env, who, app)),
           }),
@@ -1171,15 +1174,19 @@ let api = async (
       )
     } catch (e) {
       // Kept by the store's write log (writes.ts): the page's edit is safe
-      // and lands when the app recovers, so it is not told it failed.
+      // and lands when the app recovers, so it is not told it failed. Nothing
+      // is applied yet, so the Store's wire hears an empty batch.
       if (e instanceof Pending) {
-        return Response.json({
-          ok: true,
-          pending: true,
-          message: e.message,
-          aliases: {},
-          bundles: [],
-        }, { status: 202 })
+        return Response.json(
+          Array.isArray(sent) ? [] : {
+            ok: true,
+            pending: true,
+            message: e.message,
+            aliases: {},
+            bundles: [],
+          },
+          { status: 202 },
+        )
       }
       caught(e, {
         request: 'POST /api/apply',

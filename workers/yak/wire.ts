@@ -15,6 +15,10 @@
 // an answer. So the store moved and the door translates, rather than every
 // page in the world being asked to move with it.
 //
+// A page that keeps its own copy of the store (@yaks/client) speaks the
+// Store's wire through the same door: a bare array in, and the batch as
+// applied back, bare, so the stamps the store put on its write reach it.
+//
 // Only the envelope is translated. The bundles are the same bundles either way
 // — `{entity: {eid}, ...components}`, a `$alias` wherever an eid goes — and the
 // filter grammar is the same grammar; what differs is that a page writes its
@@ -118,13 +122,18 @@ export let batched = (body: unknown): Bundle[] => {
 }
 
 /**
- * The batch as applied, as the page reads it: the Store's bundles, and the eid
- * each `$alias` the page wrote became (guide §Saving). An alias this door
- * invented for a bundle that named no entity (`bundled`) is left out of both.
+ * The batch as applied, in the wire it was sent in (`sent`, the request's
+ * body). A bare array is the Store's own wire and is answered in it: the
+ * bundles as applied. The page's envelope is answered with the Store's
+ * bundles and the eid each `$alias` the page wrote became (guide §Saving).
+ * An alias this door invented for a bundle that named no entity (`bundled`)
+ * is left out either way.
  */
-export let receipt = (applied: Bundle[]) => {
+export let receipt = (sent: unknown, applied: Bundle[]) => {
   let bundles = applied.map(({ $alias, ...b }) =>
     typeof $alias == 'string' && !NEW.test($alias) ? { ...b, $alias } : b
   )
-  return { ok: true, aliases: minted(bundles), bundles }
+  return Array.isArray(sent)
+    ? bundles
+    : { ok: true, aliases: minted(bundles), bundles }
 }

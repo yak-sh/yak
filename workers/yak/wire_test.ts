@@ -49,7 +49,7 @@ Deno.test('a bundle that names no entity is given one', () => {
   ])
 })
 
-Deno.test('the answer: the bundles as applied, and the aliases the page wrote', () => {
+Deno.test('the answer: the bundles as applied, in the wire they were sent in', () => {
   let cake = {
     entity: { eid: 'e1', num: 4 },
     $alias: '$cake',
@@ -57,9 +57,12 @@ Deno.test('the answer: the bundles as applied, and the aliases the page wrote', 
   }
   let unnamed = { entity: { eid: 'e2' }, $alias: '$new1', doc: { title: 'y' } }
   let gone = { entity: { eid: 'e3' }, tombstone: {} }
-  assertEquals(receipt([cake, unnamed, gone]), {
+  let bundles = [cake, { entity: { eid: 'e2' }, doc: { title: 'y' } }, gone]
+  let applied = [cake, unnamed, gone]
+  assertEquals(receipt({ entities: [] }, applied), {
     ok: true,
     aliases: { $cake: 'e1' },
-    bundles: [cake, { entity: { eid: 'e2' }, doc: { title: 'y' } }, gone],
+    bundles,
   })
+  assertEquals(receipt([], applied), bundles)
 })
