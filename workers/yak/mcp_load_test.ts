@@ -218,7 +218,9 @@ Deno.test(
       let narrow = await agent.tool('grant', { space: two, hours: 6 })
       assertStringIncludes(narrow, `It reaches ${two} and no other space`)
       let only = connector(k, undefined, /^yak login (\S+)$/m.exec(narrow)![1])
-      assertStringIncludes(await only.tool('app_list'), 'lists')
+      let listed2 = await only.tool('app_list')
+      assertStringIncludes(listed2, 'lists')
+      assert(!listed2.includes(one), `${one} is not in this grant's reach`)
       assertStringIncludes(
         (await assertRejects(
           () => only.tool('app_list', { space: one }),

@@ -33,6 +33,7 @@ import {
   storeOf,
 } from './door.ts'
 import { ADMIN } from './lib/bots.ts'
+import { recall, writing } from './lib/hops.ts'
 import { answered, KERNEL, type Meta, meta as metaStore } from './meta.ts'
 import { caught } from './sentry.ts'
 import { mailFrom } from './post.ts'
@@ -221,6 +222,9 @@ export type App = {
   theme: { themeColor: string | null; backgroundColor: string | null } | null
 }
 export type Role = 'owner' | 'editor' | 'viewer'
+
+/** A person's place in a space: the space, and what they are in it. */
+export type Seat = { space: Space; role: Role }
 /** The modes an app's `access.mode` takes, from everyone to its own people. */
 export let MODES = ['public', 'open', 'private'] as const
 export type Access = typeof MODES[number]
@@ -873,11 +877,18 @@ export type Directory = ReturnType<typeof directory>
 // cache is per-isolate — `app_versions` straight after `app_rollback` still
 // marked the version before it live (C-32905 item 5). Page traffic keeps the
 // cache; an agent's answer never disagrees with the write it just made.
+//
+// A request asks once. The door, the reach it answers over and the tool itself
+// each ask who the caller is and where they sit, and within one request those
+// are one moment, so a line already asked is answered from what came back
+// until the request writes to the directory, by this client or any other door
+// (hops.ts `recall`). What is kept is the text: every caller parses rows of
+// its own.
 export let directory = (via: Fetcher, now = false) => {
   // The whole filter line as one parameter, values written raw: the door
   // hands it to the graph as the query it is (meta.ts), rather than each
   // caller escaping the pieces of a search string.
-  let query = async (q: string, fresh = now): Promise<Row[]> => {
+  let ask = async (q: string, fresh: boolean): Promise<string> => {
     let r = await via.fetch(
       new Request(
         `http://directory/query?q=${encodeURIComponent(q)}`,
@@ -885,8 +896,10 @@ export let directory = (via: Fetcher, now = false) => {
       ),
     )
     if (!r.ok) throw await answered(r)
-    return r.json()
+    return r.text()
   }
+  let query = async (q: string, fresh = now): Promise<Row[]> =>
+    JSON.parse(await recall(META_STORE, q, () => ask(q, fresh), fresh))
   let one = async (q: string, fresh = now) => (await query(q, fresh))[0]
   // Named, because two of the questions below are asked in terms of the
   // others: a person's own space is read, minted, and read back.
@@ -897,13 +910,16 @@ export let directory = (via: Fetcher, now = false) => {
       mutation: { entities: Bundle[] },
       headers: Record<string, string> = {},
     ): Promise<Bundle[]> => {
-      let r = await via.fetch(
-        new Request('http://directory/apply', {
-          method: 'POST',
-          body: JSON.stringify(mutation),
-          headers,
-        }),
-      )
+      // Marked here as well as at the store's door, which a directory across a
+      // service binding would pass in a request of its own.
+      let r = await writing(META_STORE, () =>
+        via.fetch(
+          new Request('http://directory/apply', {
+            method: 'POST',
+            body: JSON.stringify(mutation),
+            headers,
+          }),
+        ))
       if (!r.ok) throw await answered(r)
       return r.json()
     },
@@ -1147,15 +1163,24 @@ export let directory = (via: Fetcher, now = false) => {
         ?.entity.eid ?? null,
     // The same question the other way: where the platform writes to this
     // person — the letter's envelope, and nothing else (T-32629).
-    emailAt: async (person: string) =>
-      (await one(`.eid=${person}`))?.email?.address ?? null,
+    emailAt: async (person: string): Promise<string | null> =>
+      (await self.known(person))?.email ?? null,
     // What to call this person anywhere their address must not go: the name
     // they chose at sign-in, else the front of their address (signin.ts
     // `nameOf`). An app's store is written this and never the address, so a
     // page that shows its bylines shows names (T-32654).
-    nameAt: async (person: string) => {
+    nameAt: async (person: string): Promise<string | null> =>
+      (await self.known(person))?.name ?? null,
+    // Both at once, from the person's one row: what to call them and where to
+    // write to them. Null for anybody the platform has no address for.
+    known: async (person: string) => {
       let row = await one(`.eid=${person}`)
-      return row?.email ? nameOf(row.doc?.title, row.email.address) : null
+      return row?.email
+        ? {
+          name: nameOf(row.doc?.title, row.email.address),
+          email: row.email.address,
+        }
+        : null
     },
     // Every space this person belongs to, the meta space left out: `yak` is
     // the platform's own, and a person who owns it (the first to sign in)
@@ -1169,10 +1194,13 @@ export let directory = (via: Fetcher, now = false) => {
     // afterwards was a second read for a row this one held, and reading the
     // spaces one eid at a time was a third per space — three spaces cost eight
     // round trips where the whole answer is three (T-35431).
-    seats: async (
-      person: string,
-      role?: Role,
-    ): Promise<{ space: Space; role: Role }[]> => {
+    seats: async (person: string, role?: Role): Promise<Seat[]> =>
+      (await self.seated(person, role))
+        .filter((s) => s.space.slug != META.space),
+    // Every seat, the meta space's among them: the same read, and what says
+    // whether this person may address the platform's own store (agent.ts
+    // `spoken`), which is a seat in `yak` like any other.
+    seated: async (person: string, role?: Role): Promise<Seat[]> => {
       // A filter resolves an eid to an entity, so a person the meta store has
       // never seen — someone who signed in before it kept a row — makes the
       // question itself unanswerable. No row, no memberships. Nobody at all
@@ -1190,7 +1218,7 @@ export let directory = (via: Fetcher, now = false) => {
       // down to them, and a space is read whole ({@link spaceOf}).
       let rows = await query(`.eid=${[...held.keys()].join(',')}`)
       return rows
-        .filter((r) => r.space && r.space.slug != META.space)
+        .filter((r) => r.space)
         .map((r) => ({ space: spaceOf(r), role: held.get(r.entity.eid)! }))
     },
     // The next free variant of a derived name: the name itself, else

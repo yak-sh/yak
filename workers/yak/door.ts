@@ -11,7 +11,7 @@
 // graph.ts replaced: living beside that class dragged src/db.ts into the
 // object's graph and failed that check. That class is gone (T-33807).
 import type { Caller } from '@yaks/egress'
-import { hop } from './lib/hops.ts'
+import { hop, writing } from './lib/hops.ts'
 
 /** Anything a request can be handed to: a service binding, or a part of this
  * Worker called in-process (env.ts `bound`). */
@@ -131,7 +131,11 @@ export let doorOf = (
     if (app.mail) req.headers.set('x-yak-mail', app.mail)
   }
   hop('hops')
-  return send(req)
+  // And the one place a write to a store is seen, whichever door made it: a
+  // read this request remembers is never answered from before it (hops.ts
+  // `writing`, directory.ts `directory`).
+  let read = req.method == 'GET' || req.method == 'HEAD'
+  return read ? send(req) : writing(name, () => send(req))
 }
 
 // The runtime evicts an object out from under a request during a deploy or a

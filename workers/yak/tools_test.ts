@@ -550,7 +550,7 @@ Deno.test('paid and comped domain attachment still provisions normally', async (
           entities: [{ entity: { eid: space.eid }, plan: { tier: 'plus' } }],
         })
       }
-      const result = await call({ ...ctx, once: undefined }, 'domain_attach', {
+      const result = await call(ctx, 'domain_attach', {
         space: slug,
         hostname: slug + '.example.com',
       })

@@ -352,7 +352,7 @@ let door = async (ctx: Ctx, session: string) => {
   //
   // The two are read at once, over the reach just paid for: each is its own
   // fan-out across the apps, and what both need — a store's vocabulary — is
-  // read once per request (tool.ts `once`). The commands are not listed here
+  // read once per request (hops.ts `recall`). The commands are not listed here
   // any more: the instructions name them from each app's declaration as it is
   // read, and `commands` returns them with their arguments when asked. This
   // runs on every call, so it is the floor under every write (T-34986).
@@ -697,7 +697,8 @@ let answered = async (
   // Fresh, every read: a tool answers about what a tool just wrote, and the
   // directory's read cache belongs to whichever isolate warmed it
   // (directory.ts). A deploy from anywhere else is news this request has to
-  // have (C-32905 item 5).
+  // have (C-32905 item 5). Within the request a line is read once, until the
+  // request itself writes to the directory.
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
   let ctx: Ctx = {
     env,

@@ -34,28 +34,34 @@ import { type Host, spaceHost } from './host.ts'
 import { acting, based } from './apps.ts'
 import { filled, schemaOf, type ToolDef, type Tools } from './lib/tools.ts'
 import { type Ctx, type Out, uiMeta, VIEW_MIME } from './tools.ts'
-import { once, refuse } from './tool.ts'
+import { refuse } from './tool.ts'
 import type { Who } from './session.ts'
 import { r2Objects } from './lib/objects.ts'
 import { storeOf } from './door.ts'
+import { recall } from './lib/hops.ts'
 import { told } from './stream.ts'
 
 /** One app, as a command names it: `recipes`, or `yourname/recipes` where two
  * spaces spell one slug. */
 export let at = (space: Space, app: App) => `${space.slug}/${app.slug}`
 
-// What one app declares, as its store last accepted it.
+// What one app declares, as its store last accepted it: read once per request
+// until the store is written to (hops.ts `recall`), since the listing, the
+// roster and a call each ask it.
 export let toolsOf = async (
   env: Env,
   space: Space,
   app: App,
 ): Promise<Tools> => {
-  let r = await storeOf(env.STORE, storeName(space, app))('/tools')
-  if (!r.ok) {
-    await r.body?.cancel()
-    return {}
-  }
-  return r.json()
+  let name = storeName(space, app)
+  return JSON.parse(
+    await recall(name, '/tools', async () => {
+      let r = await storeOf(env.STORE, name)('/tools')
+      if (r.ok) return await r.text()
+      await r.body?.cancel()
+      return '{}'
+    }),
+  )
 }
 
 // Every app this caller can reach, with the space it is in — the walk both
@@ -63,61 +69,26 @@ export let toolsOf = async (
 // slug, and then one name means two things: the first is the one that
 // answers, and a call for the other says which spaces have it.
 //
-// Read once per request and every space's apps at once (tool.ts `once`,
-// T-34986): the door asks for this from four places while it assembles
-// itself, and asked in turn each was its own walk of the directory.
-export let reachable = (ctx: Ctx) =>
-  once(ctx, 'reachable', async () => {
-    let spaces = await spacesOf(ctx)
-    // A space in the trash is out of reach whole (erase.ts, T-34431): every
-    // app in it leaves every list at once, and none is asked about, which is
-    // also why `about` and the door's own instructions stop naming them.
-    // An app in the trash declares nothing (erase.ts, T-34430): its tools and
-    // its views leave every list the day it is deleted, which is the same
-    // move a delete has always made — and they come back on a restore.
-    let each = await Promise.all(
-      spaces.filter((s) => !s.trashed).map(async (space) =>
-        (await appsOf(ctx, space))
-          .filter((app) => !app.trashed)
-          .map((app) => ({ space, app }))
-      ),
-    )
-    return each.flat()
-  })
-
-// The directory's two walks, once per request each (tool.ts `once`): the
-// caller's spaces, and a space's apps. Both `reachable` here and the role-aware
-// `inReach` (tools.ts) are made of them, so the second walk is the first one's
-// answer.
-export let spacesOf = (ctx: Ctx) =>
-  once(ctx, 'spaces', () => ctx.dir.spaces(ctx.person))
-
-export let appsOf = (ctx: Ctx, space: Space) =>
-  once(ctx, `apps:${space.eid}`, () => ctx.dir.apps(space))
-
-/** {@link toolsOf}, once per app per request (tool.ts `once`). */
-export let toolsIn = (ctx: Ctx, space: Space, app: App) =>
-  once(
-    ctx,
-    `tools:${storeName(space, app)}`,
-    () => toolsOf(ctx.env, space, app),
+// Every space's apps at once, and each directory read once per request
+// (directory.ts `directory`, T-34986): the door asks for this from four places
+// while it assembles itself, and asked in turn each was its own walk.
+export let reachable = async (ctx: Ctx) => {
+  let spaces = await ctx.dir.spaces(ctx.person)
+  // A space in the trash is out of reach whole (erase.ts, T-34431): every
+  // app in it leaves every list at once, and none is asked about, which is
+  // also why `about` and the door's own instructions stop naming them.
+  // An app in the trash declares nothing (erase.ts, T-34430): its tools and
+  // its views leave every list the day it is deleted, which is the same
+  // move a delete has always made — and they come back on a restore.
+  let each = await Promise.all(
+    spaces.filter((s) => !s.trashed).map(async (space) =>
+      (await ctx.dir.apps(space))
+        .filter((app) => !app.trashed)
+        .map((app) => ({ space, app }))
+    ),
   )
-
-/**
- * The vocabulary an app's store declares (`/vocab`), once per app per request:
- * the roster reads it for what an app holds (standing.ts) and the graph door
- * reads it for the properties it may write (agent.ts `spoken`), and both are
- * the same moment. Null where the store answers nothing.
- */
-export let vocabIn = (ctx: Ctx, space: Space, app: App) =>
-  once(ctx, `vocab:${storeName(space, app)}`, async () => {
-    let r = await storeOf(ctx.env.STORE, storeName(space, app))('/vocab')
-    if (!r.ok) {
-      await r.body?.cancel()
-      return null
-    }
-    return await r.json() as Record<string, unknown>
-  })
+  return each.flat()
+}
 
 let whoIn = async (ctx: Ctx, space: Space): Promise<Who> => ({
   person: ctx.person,
@@ -276,7 +247,7 @@ export let listCommands = async (
   // per app (T-34986).
   let apps = picked(await reachable(ctx), said)
   let tools = await Promise.all(
-    apps.map(({ space, app }) => toolsIn(ctx, space, app)),
+    apps.map(({ space, app }) => toolsOf(ctx.env, space, app)),
   )
   for (let [i, { space, app }] of apps.entries()) {
     for (let [name, tool] of Object.entries(tools[i])) {
@@ -390,7 +361,7 @@ export let listViews = async (ctx: Ctx) => {
   let seen = new Set<string>()
   let apps = await reachable(ctx)
   let tools = await Promise.all(
-    apps.map(({ space, app }) => toolsIn(ctx, space, app)),
+    apps.map(({ space, app }) => toolsOf(ctx.env, space, app)),
   )
   for (let [i, { space, app }] of apps.entries()) {
     for (let tool of Object.values(tools[i])) {

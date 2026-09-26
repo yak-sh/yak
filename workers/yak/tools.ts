@@ -80,11 +80,9 @@ import {
 } from './directory.ts'
 import { sandboxed, sandboxing } from './installed.ts'
 import {
-  appsOf,
   listCommands,
   reachChanged,
   runCommand,
-  spacesOf,
   toolsOf,
   viewsMoved,
 } from './declared.ts'
@@ -305,10 +303,9 @@ let HOW: Record<Caller['via'], string> = {
 let whoami = async (ctx: Ctx) => {
   let who = ctx.who
   if (!who) return ''
-  let name = await ctx.dir.nameAt(ctx.person)
-  let email = await ctx.dir.emailAt(ctx.person)
-  return `\n\nYou are signed in as ${name ?? ctx.person}` +
-    `${email ? ` <${email}>` : ''}, ${HOW[who.via]}` +
+  let me = await ctx.dir.known(ctx.person)
+  return `\n\nYou are signed in as ${me?.name ?? ctx.person}` +
+    `${me ? ` <${me.email}>` : ''}, ${HOW[who.via]}` +
     `${who.grant ? ` ${who.grant}` : ''}` +
     `${
       who.space ? `, which reaches the space ${who.space} and no other` : ''
@@ -1140,21 +1137,20 @@ export let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
     let { space, app, who } = await inApp(ctx, args)
     return [{ space, app, who }]
   }
-  let spaces = args.space == null
-    ? await spacesOf(ctx)
-    : [(await inSpace(ctx, args)).space]
-  // Every space at once: a role and an app list per space, and none waits on
-  // another's; the walks are the request's (declared.ts `spacesOf`, `appsOf`),
-  // so the roster's own walk a moment later is this one (T-34986).
+  let seats = args.space == null
+    ? await ctx.dir.seats(ctx.person)
+    : [await inSpace(ctx, args)].map(({ space, who }) => ({
+      space,
+      role: who.role!,
+    }))
+  // Every space at once: the role the seat already says, and an app list per
+  // space, none waiting on another's; a directory read is made once a request
+  // (directory.ts `directory`), so the roster's own walk a moment later is
+  // this one (T-34986).
   let each = await Promise.all(
-    spaces.filter((s) => !s.trashed).map(async (space) => {
-      let [role, apps] = await Promise.all([
-        ctx.dir.role(space, ctx.person),
-        appsOf(ctx, space),
-      ])
-      if (!role) return []
+    seats.filter((s) => !s.space.trashed).map(async ({ space, role }) => {
       let who: Who = { person: ctx.person, role }
-      return apps
+      return (await ctx.dir.apps(space))
         .filter((app) => !app.trashed && reads(mode(app.access), who.role))
         .map((app) => ({ space, app, who }))
     }),

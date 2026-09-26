@@ -42,10 +42,9 @@ import { barred, openly } from './anon.ts'
 import type { Search } from '@yaks/mcp'
 import type { Prop, PropSchema, Vocab } from '@yaks/vocab'
 import { META } from './directory.ts'
-import { vocabIn } from './declared.ts'
 import { letters } from './letters.ts'
 import { PUBLISHED } from './published.ts'
-import { composed, type Reach, read, written } from './reach.ts'
+import { composed, type Reach, read, vocabAt, written } from './reach.ts'
 import { titling } from './session.ts'
 import {
   type Ctx,
@@ -55,7 +54,7 @@ import {
   TOOLS,
 } from './tools.ts'
 import { ceiling, serve, unseenBlock } from './unseen.ts'
-import { appVocab, meant, PLATFORM_APART, wordOf } from './vocab.ts'
+import { appVocab, PLATFORM_APART, wordOf } from './vocab.ts'
 import { bare, lined } from './wire.ts'
 import { type Host, hosted } from './host.ts'
 import { refuse } from './tool.ts'
@@ -379,10 +378,10 @@ let spoken = async (
   reach: Reach[],
 ): Promise<{ vocab: Vocab; clashes: Set<string> }> => {
   // Each store's words as the document it keeps, read once per request
-  // (declared.ts `vocabIn`, vocab.ts `meant`): the roster already asked for
-  // them (standing.ts `kindsOf`).
+  // (reach.ts `vocabAt`): the roster already asked for them (standing.ts
+  // `kindsOf`).
   let said = await Promise.all(
-    reach.map(async (r) => meant(await vocabIn(ctx, r.space, r.app))),
+    reach.map((r) => vocabAt(ctx.env, r.space, r.app)),
   )
   let defs: Record<string, PropSchema> = {}
   let clashes = new Set<string>()
@@ -408,8 +407,8 @@ let spoken = async (
       }
     }
   }
-  let meta = ctx.person && await ctx.dir.space(META.space)
-  if (meta && await ctx.dir.role(meta, ctx.person)) {
+  let seats = await ctx.dir.seated(ctx.person)
+  if (seats.some((s) => s.space.slug == META.space)) {
     for (let prop of PLATFORM_APART) clashes.add(prop)
   }
   return { vocab: appVocab({ $defs: defs }), clashes }

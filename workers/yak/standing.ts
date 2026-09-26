@@ -41,10 +41,10 @@ import { r2Objects } from './lib/objects.ts'
 import { type App, type Space, url } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Host } from './host.ts'
-import { at, reachable, spacesOf, toolsIn, vocabIn } from './declared.ts'
+import { at, reachable, toolsOf } from './declared.ts'
+import { vocabAt } from './reach.ts'
 import { told } from './memory.ts'
 import type { Ctx } from './tools.ts'
-import { meant } from './vocab.ts'
 
 /** The file, at the app's root. */
 export let NOTES = 'NOTES.md'
@@ -105,10 +105,10 @@ export let notesOf = async (
 }
 
 // The words an app declares as its own, as the store last accepted them
-// (reach.ts `vocabAt` reads the same door for the same file). A store that
-// cannot answer says nothing, which reads as an app with no words of its own.
+// (reach.ts `vocabAt`). A store that cannot answer says nothing, which reads
+// as an app with no words of its own.
 let kindsOf = async (ctx: Ctx, space: Space, app: App): Promise<string[]> =>
-  Object.keys(meant(await vocabIn(ctx, space, app)).$defs ?? {})
+  Object.keys((await vocabAt(ctx.env, space, app)).$defs ?? {})
 
 // A component name as a person would say the things it holds. English enough
 // for a sentence and no more: a wrong plural costs a reader nothing, and a
@@ -149,7 +149,7 @@ export let entries = async (
         // are of — `<space>/<app>`, which is the same word `command` takes.
         commands
           ? commands.filter((c) => c.at == at(space, app)).map((c) => c.name)
-          : toolsIn(ctx, space, app).then(Object.keys),
+          : toolsOf(ctx.env, space, app).then(Object.keys),
       ])
       return { space, app, said, kinds, commands: names }
     }),
@@ -196,7 +196,7 @@ returns them, along with anything the person has said here.`
 // belongs to a space and not to an app — somebody with no apps yet has still
 // said how they want the first one built.
 let heard = async (ctx: Ctx): Promise<string[]> => {
-  let spaces = await spacesOf(ctx)
+  let spaces = await ctx.dir.spaces(ctx.person)
   return (await Promise.all(spaces.map((s) => told(ctx.env, s))))
     .filter(Boolean)
 }

@@ -51,6 +51,7 @@ import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { edits, mode } from '@yaks/member'
 import { storeOf } from './door.ts'
+import { recall } from './lib/hops.ts'
 import { appKeywords, coreDocs, meant, platformDocs } from './vocab.ts'
 import { matcher } from '@yaks/match'
 import { parse } from '@yaks/query'
@@ -92,7 +93,8 @@ let SCREEN = PLATFORM.filter((k) => CORE.all.includes(k))
 // there. `at` is what a bundle names as the component's home.
 export type Reach = { space: Space; app: App; who: Who }
 
-export let at = (r: Reach) => `${r.space.slug}/${r.app.slug}`
+export let at = (r: { space: Space; app: App }) =>
+  `${r.space.slug}/${r.app.slug}`
 
 // One store's /query door, vouched, answered by the listing rule every other
 // door answers by (listing.ts). A refusal is thrown as the store's own
@@ -674,14 +676,25 @@ export let read = async (
 // A component nobody declares is the platform's, and every store speaks it. A
 // store that cannot answer says nothing, which reads as an app with no words
 // of its own.
-let vocabAt = async (env: Env, r: Reach): Promise<VocabDoc> => {
-  if (at(r) == META_STORE) return PLATFORM_WORDS
-  let res = await storeOf(env.STORE, storeName(r.space, r.app))('/vocab')
-  if (!res.ok) {
+//
+// Read once per request (hops.ts `recall`): the roster asks it for what an app
+// holds (standing.ts), the door for the properties a write may carry (agent.ts
+// `spoken`), and a write for where each word goes (`spoken` below), and all
+// three are the same moment until the store is written to.
+export let vocabAt = async (
+  env: Env,
+  space: Space,
+  app: App,
+): Promise<VocabDoc> => {
+  if (at({ space, app }) == META_STORE) return PLATFORM_WORDS
+  let name = storeName(space, app)
+  let said = await recall(name, '/vocab', async () => {
+    let res = await storeOf(env.STORE, name)('/vocab')
+    if (res.ok) return await res.text()
     await res.body?.cancel()
-    return {}
-  }
-  return meant(await res.json())
+    return '{}'
+  })
+  return meant(JSON.parse(said))
 }
 
 // Every word in reach as one vocabulary: the platform's core plus each app's
@@ -711,7 +724,7 @@ let union = (docs: VocabDoc[]): Vocab => {
 // answer no single store could have ordered.
 let spoken = async (env: Env, reach: Reach[]) => {
   let own = await Promise.all(
-    reach.map(async (r) => ({ r, doc: await vocabAt(env, r) })),
+    reach.map(async (r) => ({ r, doc: await vocabAt(env, r.space, r.app) })),
   )
   let words = new Map<string, Reach[]>()
   for (let { r, doc } of own) {

@@ -27,7 +27,7 @@
 // within about a minute rather than instantly — which is why the life is short
 // and the ceiling is a day.
 import { opened, seal } from './lib/token.ts'
-import type { Directory } from './directory.ts'
+import type { Directory, Role } from './directory.ts'
 import { refuse } from './tool.ts'
 
 // What a grant token opens with, so identity.ts knows to open it here.
@@ -213,8 +213,12 @@ export let revoke = async (
 export let narrowed = (dir: Directory, slug: string): Directory => ({
   ...dir,
   space: async (want: string) => (want == slug ? await dir.space(want) : null),
-  spaces: async (person: string, role?: Parameters<Directory['spaces']>[1]) =>
+  spaces: async (person: string, role?: Role) =>
     (await dir.spaces(person, role)).filter((s) => s.slug == slug),
+  seats: async (person: string, role?: Role) =>
+    (await dir.seats(person, role)).filter((s) => s.space.slug == slug),
+  seated: async (person: string, role?: Role) =>
+    (await dir.seated(person, role)).filter((s) => s.space.slug == slug),
   role: async (space: Parameters<Directory['role']>[0], person: string) =>
     space.slug == slug ? await dir.role(space, person) : null,
   own: async (person: string, want?: string) =>
