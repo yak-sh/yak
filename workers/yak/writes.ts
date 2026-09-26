@@ -18,11 +18,13 @@
 // A row is a request as the kernel sent it: its headers (the vouch — who
 // wrote, at what level) and its body. It leaves when its batch commits. A
 // write the store refused on the caller's own input the first time is
-// answered and dropped, as it always was; one that failed for any other
-// reason stays, and the store replays the log oldest first on its next
-// healthy wake. A replay that the store now refuses (a `$was` that moved, a
-// property the app no longer declares) is kept as `refused` with the reason and
-// reported, never dropped.
+// answered and dropped, as it always was. While the store cannot start, every
+// write waits, and the store replays the log oldest first on its next healthy
+// wake. A write that fails on a store that started is set aside as `failed`,
+// so the writes behind it go on, and the next incarnation tries it again: a
+// deploy starts one, which is how fixed code reaches it. A replay that the
+// store now refuses (a `$was` that moved, a property the app no longer
+// declares) is kept as `refused` with the reason and reported, never dropped.
 import { Refused } from '@yaks/graph'
 import { carries } from '@yaks/secrets'
 import {
@@ -31,8 +33,10 @@ import {
   type CreateTable,
   type Driver,
   eq,
+  gt,
   lit,
   op,
+  or,
   select,
   table,
   val,
@@ -56,6 +60,7 @@ export let WRITES: CreateTable = {
 }
 
 let PENDING = eq(col('state'), lit('pending'))
+let FAILED = eq(col('state'), lit('failed'))
 let at = (seq: number) => eq(col('seq'), val(seq))
 
 /** One kept write. */
@@ -107,12 +112,13 @@ export let keep = (db: Driver, req: Request, body: string): number => {
   return Number(row.seq)
 }
 
-/** The oldest write still waiting. */
-export let oldest = (db: Driver): Kept | null => {
+/** The oldest write still waiting after `seq`. A replay walks the log forward
+ * from one to the next, so it tries no write twice. */
+export let next = (db: Driver, seq = 0): Kept | null => {
   let [row] = db.query(select({
     cols: [col('seq'), col('headers'), col('body')],
     from: table(LOG),
-    where: PENDING,
+    where: and(PENDING, gt(col('seq'), val(seq))),
     order: [col('seq')],
     limit: lit(1),
   }))
@@ -126,19 +132,33 @@ export let oldest = (db: Driver): Kept | null => {
 }
 
 /** Whether any write is waiting. */
-export let waiting = (db: Driver): boolean => oldest(db) != null
+export let waiting = (db: Driver): boolean => next(db) != null
 
 /** The write is applied, or answered as refused: it leaves the log. */
 export let done = (db: Driver, seq: number) =>
   void db.query({ t: 'delete', from: LOG, where: at(seq) })
 
-/** The write failed again, and waits. */
-export let tried = (db: Driver, seq: number) =>
+/** A write that failed on a store that started: set aside with why, so the
+ * writes behind it go on. */
+export let aside = (db: Driver, seq: number, why: string) =>
   void db.query({
     t: 'update',
     table: LOG,
-    set: { tries: op('+', col('tries'), lit(1)) },
+    set: {
+      state: lit('failed'),
+      tries: op('+', col('tries'), lit(1)),
+      why: val(why),
+    },
     where: at(seq),
+  })
+
+/** Every write set aside, waiting again: a new incarnation may be new code. */
+export let revived = (db: Driver) =>
+  void db.query({
+    t: 'update',
+    table: LOG,
+    set: { state: lit('pending') },
+    where: FAILED,
   })
 
 /** A replay the store refused: kept, with why, and never replayed again. */
@@ -178,12 +198,12 @@ export let said = async (r: Response): Promise<string> => {
   }
 }
 
-/** Whether a write is still in the log, waiting. */
+/** Whether a write is still in the log, waiting or set aside. */
 export let held = (db: Driver, seq: number): boolean =>
   db.query(select({
     cols: [lit(1)],
     from: table(LOG),
-    where: and(at(seq), PENDING),
+    where: and(at(seq), or(PENDING, FAILED)),
   })).length > 0
 
 /** A kept write, as the door that sent it hears it (meta.ts): not applied
@@ -200,7 +220,7 @@ export class Pending extends Error {
 export let parked = (seq: number, why: string): Response =>
   Response.json({
     error: 'Pending',
-    message: `${why} — the write is kept and will be applied, in order, ` +
-      'when this app recovers; do not send it again',
+    message: `${why} — the write is kept and will be applied when this ` +
+      'app recovers; do not send it again',
     pending: seq,
   }, { status: 202 })

@@ -180,6 +180,7 @@ import { weighed } from './meter.ts'
 import { directoryOf } from './directory.ts'
 import { vaultOf } from './vault.ts'
 import {
+  aside,
   constrained,
   dead,
   done,
@@ -189,11 +190,11 @@ import {
   type Kept,
   keyed,
   logged,
-  oldest,
+  next,
   parked,
   replayed,
+  revived,
   said,
-  tried,
   waiting,
   WRITES,
 } from './writes.ts'
@@ -569,8 +570,8 @@ export class Store {
   // The write log's replay (writes.ts). `#landing` is the kept write whose
   // batch is being applied right now, which the `yak/writes` hook takes out
   // of the log in that batch's own transaction; `#draining` is the replay in
-  // progress, one at a time; `#stuck` says the last one stopped on a failure,
-  // and only the alarm or the next incarnation tries it again.
+  // progress, one at a time; `#stuck` says the last one stopped because the
+  // log itself failed, and only the alarm or the next incarnation tries again.
   #landing: number | null = null
   #draining: Promise<void> | null = null
   #callers = new Map<number, (answer: Response) => void>()
@@ -604,8 +605,10 @@ export class Store {
     this.#sql = driver(ctx.storage)
     this.#sql.query(KV)
     // The write log, before anything that can refuse the object: a store
-    // whose graph cannot boot still keeps what it is sent (writes.ts).
+    // whose graph cannot boot still keeps what it is sent (writes.ts). What
+    // the last incarnation set aside waits again, for this one's code.
     this.#sql.query(WRITES)
+    revived(this.#sql)
     this.#reshaping()
     this.#boot()
   }
@@ -1353,7 +1356,7 @@ export class Store {
     // Writes the log still holds are replayed first, which is what makes the
     // replay need nobody: the alarm set when one was kept wakes the object
     // after a deploy too.
-    let kept = oldest(this.#sql)
+    let kept = waiting(this.#sql)
     if (this.#refused) {
       if (kept) await this.#retry()
       return
@@ -1540,8 +1543,7 @@ export class Store {
    * A write, kept before anything else happens to it, then applied in its
    * turn by the one replay that runs at a time, which answers its caller as
    * the store always did. A write that finds the object refusing to start, or
-   * the replay stopped on an earlier write that failed, is answered 202 and
-   * waits in the log.
+   * the log itself failing, is answered 202 and waits in the log.
    */
   async #write(request: Request): Promise<Response> {
     let body = await request.text()
@@ -1569,11 +1571,12 @@ export class Store {
     return answer
   }
 
-  /** The log from its oldest waiting write, one at a time, until it is empty
-   * or a write fails for a reason that is not its own: that one and every
-   * write after it wait, in order, for the alarm or the next incarnation.
-   * Each write whose caller is still waiting (`#callers`) is answered as it
-   * lands; the ones left waiting are told they are kept. */
+  /** The log from its oldest waiting write to its newest, one at a time. A
+   * write that fails is set aside (`#land`) and the ones behind it go on;
+   * only the log itself failing stops the pass, and then the alarm or the
+   * next incarnation starts another. Each write whose caller is still waiting
+   * (`#callers`) is answered as it lands; the ones left waiting are told they
+   * are kept. */
   #drain(): Promise<void> {
     if (this.#draining) return this.#draining
     let sql = this.#sql
@@ -1582,16 +1585,12 @@ export class Store {
       // it: a write that arrives in between must find the loop running.
       await null
       try {
-        for (let k = oldest(sql); k; k = oldest(sql)) {
+        for (let k = next(sql); k; k = next(sql, k.seq)) {
           let caller = this.#callers.get(k.seq)
           this.#callers.delete(k.seq)
           let r = await this.#land(k, !!caller)
-          let failed = r.status >= 500 && held(sql, k.seq)
-          caller?.(failed ? this.#park(k.seq, await said(r)) : r)
-          if (failed) {
-            this.#stuck = true
-            break
-          }
+          let kept = r.status >= 500 && held(sql, k.seq)
+          caller?.(kept ? parked(k.seq, await said(r)) : r)
         }
       } catch (e) {
         this.#stuck = true
@@ -1609,7 +1608,8 @@ export class Store {
   }
 
   /** One kept write, applied: out of the log when it commits or is refused
-   * as asked, and waiting when it fails. `live` is a write whose caller is
+   * as asked, and set aside when it fails (writes.ts `aside`), its failure
+   * reported where `#commit` caught it. `live` is a write whose caller is
    * still here to be told its refusal; a replay's refusal has nobody to tell,
    * so it stays in the log with its reason and is reported. */
   async #land(k: Kept, live: boolean): Promise<Response> {
@@ -1617,7 +1617,7 @@ export class Store {
     try {
       let r = await this.#commit(replayed(k), k.seq)
       if (r.status < 300) done(sql, k.seq)
-      else if (r.status >= 500) tried(sql, k.seq)
+      else if (r.status >= 500) aside(sql, k.seq, await said(r.clone()))
       else if (live) done(sql, k.seq)
       else {
         let why = await said(r.clone())
@@ -1634,8 +1634,8 @@ export class Store {
     }
   }
 
-  /** The log first, for a request that reads: unless a replay stopped on a
-   * failure, which the alarm owns, or one is already running. */
+  /** The log first, for a request that reads: unless the log itself failed,
+   * which the alarm owns, or a replay is already running. */
   #settle(): Promise<unknown> | void {
     if (this.#draining) return this.#draining
     if (!this.#stuck && waiting(this.#sql)) return this.#drain()
@@ -1694,7 +1694,9 @@ export class Store {
       }
       return json(await out)
     } catch (e) {
-      return refuse(constrained(e), request)
+      let no = constrained(e)
+      caught(no, { request: 'write', store: this.#name() })
+      return refuse(no)
     }
   }
 

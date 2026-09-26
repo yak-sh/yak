@@ -60,9 +60,9 @@ every bundle in one `apply` call, applied in one transaction — so if any bundl
 is refused, nothing in that call is written.
 
 If the app's store cannot apply a write right now (yaks.app itself is failing,
-not your data), the write is kept and applied later, in the order it was sent.
-`apply` then returns `{ ok: true, pending: true, aliases: {}, bundles: [] }`.
-Don't send the write again.
+not your data), the write is kept and applied once yaks.app recovers. `apply`
+then returns `{ ok: true, pending: true, aliases: {}, bundles: [] }`. Don't send
+the write again.
 
 ### query(filter)
 

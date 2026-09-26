@@ -37,6 +37,18 @@ let mended = (o: ReturnType<typeof object>) => {
   o.wake()
 }
 
+// A failure only one write meets, the way any bug under a write throws: the
+// object's SQLite failing on a row that carries `word`. The cure takes it away.
+let poisoned = (o: ReturnType<typeof object>, word: string) => {
+  let sql = o.ctx.storage.sql
+  let exec = sql.exec
+  sql.exec = (query, ...bindings) => {
+    if (bindings.includes(word)) throw new Error('SQLITE_IOERR: disk I/O error')
+    return exec.call(sql, query, ...bindings)
+  }
+  return () => void (sql.exec = exec)
+}
+
 let titled = (eid: string, title: string, was?: string | null) => ({
   entity: { eid },
   doc: { title },
@@ -65,6 +77,20 @@ Deno.test('writes a refusing store was sent apply in order, once, when it is men
   o.wake()
   await o.alarm()
   assertEquals(await o.title('n1'), 'two')
+})
+
+Deno.test('a write the store fails on is set aside, and the writes behind it go through', async () => {
+  let o = object()
+  let cure = poisoned(o, 'poison')
+  await assertRejects(() => o.apply([titled('n1', 'poison')]), Pending)
+  await o.apply([titled('n2', 'good')])
+  assertEquals(await o.title('n2'), 'good')
+  assertEquals(o.writes('failed'), 1)
+  // Fixed code arrives as a new incarnation, which applies what was set aside.
+  cure()
+  o.wake()
+  assertEquals(await o.title('n1'), 'poison')
+  assertEquals(o.writes(), 0)
 })
 
 Deno.test('a write refused on its own input is answered and not kept', async () => {
