@@ -6,9 +6,10 @@
 //
 // A line goes to the store with the rows the hero earns (net.ts `keep`), so
 // saying something costs no write of its own. Lines go one at a time, further
-// apart than `keep` sends, so no two share a write, and the rule would hear
-// only the first of two that did. Until the store has a line it shows here at
-// once, marked as waiting, and floats over the speaker's own head.
+// apart than `keep` sends and than the store's pace for them (vocab.json), so
+// no two share a write, which the store would refuse whole. Until the store has
+// a line it shows here at once, marked as waiting, and floats over the
+// speaker's own head.
 //
 // A line said beside a villager is said to them too (village.ts): the same
 // row asks them to answer, and what they answer floats over their head and

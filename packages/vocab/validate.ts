@@ -137,8 +137,8 @@ let signed = (comp: string, s: PropSchema): string[] => {
 // keyword is legal on its own — the meta-schema already rejects an unknown
 // value — but two combinations are contradictions: a relay does not own durable
 // data, so a component cannot ask the server both to forward a value without
-// storing it and to keep it forever; and a pace is how often a relayed value is
-// sent, so a component nobody relays has nothing to pace.
+// storing it and to keep it forever; and a pace is how often a value is taken
+// from a writer, so a component nobody is told about has nothing to pace.
 let lived = (comp: string, s: PropSchema): string[] => {
   let errs: string[] = []
   if (s.sync != null && !SYNC.includes(s.sync as Sync)) {
@@ -161,9 +161,9 @@ let lived = (comp: string, s: PropSchema): string[] => {
       `${comp} is paced "${s.pace}" — say a duration such as "100ms" or "1s"`,
     )
   }
-  if (s.pace != null && s.sync != 'peers') {
+  if (s.pace != null && s.sync == 'none') {
     errs.push(
-      `${comp} is paced but does not sync to peers — a pace is how often a relayed value is sent; say "sync": "peers", or drop the pace`,
+      `${comp} is paced but syncs to none — a pace is how often a relay or a store takes a writer's value, and nobody takes this one; sync it, or drop the pace`,
     )
   }
   return errs

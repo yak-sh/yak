@@ -65,7 +65,7 @@
       "default": "forever"
     },
     "pace": {
-      "description": "How often a relayed (\"sync\": \"peers\") value of this component is sent, as a duration (\"100ms\"). The writer's own graph takes every write at once; the peers hear the latest value at most once a pace, the last one always, and a clear at once. Absent, every write is sent as it is made.",
+      "description": "How often a writer's value of this component is taken, as a duration (\"100ms\", \"1s\"). Relayed (\"sync\": \"peers\"), the writer's own graph takes every write at once and the peers hear the latest value at most once a pace, the last one always, and a clear at once. Stored (\"sync\": \"server\"), a store takes one write of it from each writer at most once a pace and refuses the rest; everyone signed out counts as one writer. Absent, every write is taken as it is made.",
       "type": "string"
     },
     "computed": {

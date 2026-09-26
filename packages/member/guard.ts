@@ -6,22 +6,27 @@
 // back, so a list of changes is admitted entirely or not at all, and there is
 // no half-written state for the caller to reconcile.
 //
-// It asks three questions, in this order:
+// It asks four questions, in this order:
 //
 //   1. May this principal write this app at all? (`open` mode, or owner/editor)
-//   2. Do the changes touch a component that asks a level of its own? The
-//      access rows ask owner, always; an application names the rest
+//   2. Do the changes touch a component that asks a floor of its own? The
+//      access rows ask owner, always; the vocabulary declares the rest
+//      (`floor`, keywords.ts), and so may the program installing the guard
 //      (`floors`).
 //   3. Is the principal in only because the app is `open`? Then it adds rows,
 //      and changes only the rows it wrote.
+//   4. Does a change write a component sooner than its `pace` lets this writer
+//      (pace.ts)?
 //
-// The second and third are not new levels. They are the rules that an editor
-// writes the app's data and does not hand out permissions, that a shop's
-// prices are its editors' however open its guest book is, and that a visitor
-// signs the guest book without erasing it. They matter most on an `open` app,
-// where the first question admits everybody: without them, a visitor invited to
-// sign could rewrite the roster and lock the owner out, set the price of
-// everything to a cent, or delete every entry but their own.
+// None of them is a new level. They are the rules that an editor writes the
+// app's data and does not hand out permissions, that a shop's prices are its
+// editors' however open its guest book is, that a chat takes lines only from
+// people signed in, that a visitor signs the guest book without erasing it, and
+// that nobody fills it faster than the rest can read. They matter most on an
+// `open` app, where the first question admits everybody: without them, a
+// visitor invited to sign could rewrite the roster and lock the owner out, set
+// the price of everything to a cent, delete every entry but their own, or push
+// everyone else's out of sight.
 //
 // A row is the principal's own when its `created.by` names them, or when it is
 // them. An anonymous principal owns nothing, so it only adds. A change that
@@ -36,23 +41,26 @@
 
 import type { Ask, Bundle, Comp, Eid, Hook, Tx } from '@yaks/graph'
 import { comps, dead, then } from '@yaks/graph'
+import type { Vocab } from '@yaks/vocab'
 import { GOVERNED, GRANT, MEMBER } from './comp.ts'
 import { levelOn, modeOn, type Viewer, type Where } from './policy.ts'
 import { Denied } from './deny.ts'
-import { edits, type Level, reaches, writes } from './words.ts'
-
-/** The least level a component asks of whoever writes it, whatever the app's
- * mode. */
-export type Floors = Record<string, Level>
+import { floorsIn } from './keywords.ts'
+import { pacesIn, pacing } from './pace.ts'
+import { edits, type Floors, type Level, stands, writes } from './words.ts'
 
 /** Which app a guard decides for, and whose roster governs it. */
 export type Guard = Where & {
   /** the app this graph holds — its `access` mode decides a write by a
    * principal that holds no level */
   app: Eid
-  /** components that ask a level of their own — `{ product: 'editor' }` keeps
-   * a shop's prices its editors' on an `open` app. The access rows ask
-   * `owner` whatever this says. */
+  /** the vocabulary the graph was loaded with, whose components' declared
+   * `floor` (registered with `memberKeywords`) and `pace` hold here */
+  vocab: Vocab
+  /** components that ask a floor of their own besides the ones the vocabulary
+   * declares — `{ product: 'editor' }` keeps a shop's prices its editors' on
+   * an `open` app, and wins over a declared one. The access rows ask `owner`
+   * whatever either says. */
   floors?: Floors
 }
 
@@ -69,18 +77,28 @@ export let actorOf = (bundles: Bundle[]): Viewer => {
 
 let OWNED: Floors = Object.fromEntries(GOVERNED.map((c) => [c, 'owner']))
 
-/** The least level these changes ask for by what they touch, or `null` when
- * the app's mode decides alone. */
-export let asks = (where: Guard) => (bundles: Bundle[]): Level | null => {
-  let floors = { ...where.floors, ...OWNED }
-  let most: Level | null = null
+// Every floor a guard holds: the vocabulary's, the program's over them, and
+// the access rows' over both.
+let held = (where: Guard): Floors => ({
+  ...floorsIn(where.vocab),
+  ...where.floors,
+  ...OWNED,
+})
+
+// The first component these changes touch whose floor this principal, holding
+// this level, does not stand on.
+let short = (
+  floors: Floors,
+  who: Viewer,
+  level: Level | null,
+  bundles: Bundle[],
+): string | undefined => {
   for (let b of bundles) {
     for (let [name] of comps(b)) {
       let f = floors[name]
-      if (f && !reaches(most, f)) most = f
+      if (f && !stands(who, level, f)) return name
     }
   }
-  return most
 }
 
 // Theirs: they wrote it, or it is them.
@@ -129,21 +147,29 @@ export let wanting = (where: Guard) => (bundles: Bundle[]): Ask[] => {
 /**
  * The `precondition` hook: refuse changes this principal may not write.
  * Registered by {@link https://jsr.io/@yaks/member/doc/~/members | members};
- * exported on its own for a graph that wants the check without the vocabulary.
+ * exported on its own for a graph that wants the check without this package's
+ * components.
  */
-export let guarding = (where: Guard): Hook => (bundles, tx) => {
-  if (!bundles.length) return bundles
-  let who = actorOf(bundles)
-  let floor = asks(where)(bundles)
-  return then(
-    modeOn(tx, where.app),
-    (m) =>
-      then(levelOn(tx, who, where.app, where), (level) => {
-        if (!edits(m, level)) throw new Denied(who, where.app, 'editor')
-        if (floor && !reaches(level, floor)) {
-          throw new Denied(who, where.app, floor)
-        }
-        return writes(level) ? bundles : adding(tx, who, where.app, bundles)
-      }),
-  ) as Bundle[] | Promise<Bundle[]>
+export let guarding = (where: Guard): Hook => {
+  let floors = held(where)
+  let paces = pacesIn(where.vocab)
+  return (bundles, tx) => {
+    if (!bundles.length) return bundles
+    let who = actorOf(bundles)
+    return then(
+      modeOn(tx, where.app),
+      (m) =>
+        then(levelOn(tx, who, where.app, where), (level) => {
+          if (!edits(m, level)) throw new Denied(who, where.app, 'editor')
+          let comp = short(floors, who, level, bundles)
+          if (comp) {
+            throw new Denied(who, where.app, floors[comp], 'write', comp)
+          }
+          return then(
+            writes(level) ? bundles : adding(tx, who, where.app, bundles),
+            (b) => pacing(paces, tx, who, b),
+          )
+        }),
+    ) as Bundle[] | Promise<Bundle[]>
+  }
 }

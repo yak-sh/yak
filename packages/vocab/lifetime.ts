@@ -5,17 +5,20 @@
 //
 //   sync     who is told about a write — nobody, the server, or the peers
 //   durable  how long the value lives, asked of whoever owns it
-//   pace     how often a relayed value is sent: a page that moves something
-//            every frame writes every frame, and the peers hear the latest
-//            value once a pace (@yaks/sync pace.ts)
+//   pace     how often a value is taken from a writer: the peers hear a
+//            relayed value at most once a pace (@yaks/sync pace.ts), and a
+//            store takes a stored one from each writer at most once a pace,
+//            refusing the rest (@yaks/member's guard)
 //
 // `sync` and `durable` are independent. A cursor position is `sync: peers,
 // durable: connection` — everybody watching sees it, nobody stores it, and it
 // goes away with the tab that wrote it. A saved draft is `sync: none, durable:
 // forever` — no one else is told about it, and this browser keeps it across a
-// reload. A task is the default, `sync: server, durable: forever`. `pace`
-// belongs beside `sync: peers` only: a relayed value is the one a page may
-// write sixty times a second.
+// reload. A task is the default, `sync: server, durable: forever`. A pace
+// needs somebody to take the value: a relay folds a mover's sixty writes a
+// second into one a pace, where a store cannot fold one row into another and
+// refuses the second instead, so a chat line is paced per person. Nothing is
+// taken from a `sync: none` value, so it has no pace.
 //
 // The keywords are core, not @yaks/sync's: the write allowlist, the
 // subscription registry and the store all decide from `sync` and `durable`,
@@ -64,6 +67,6 @@ export let lives = (durable: string): boolean =>
   durable == 'forever' || durable == 'connection' || ms(durable) != null
 
 /** A `pace` value in milliseconds — `null` when a component declares none, or
- * none a clock can count, and every write is sent as it is made. */
+ * none a clock can count, and every write is taken as it is made. */
 export let paced = (pace: unknown): number | null =>
   typeof pace == 'string' ? ms(pace) || null : null

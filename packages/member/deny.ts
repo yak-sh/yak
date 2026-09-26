@@ -11,7 +11,7 @@
 // what to put in the response is the caller's decision.
 
 import type { Eid } from '@yaks/graph'
-import type { Level } from './words.ts'
+import type { Floor } from './words.ts'
 
 /** An act the principal is not allowed to perform. The HTTP status is 403 when
  * somebody is signed in and 401 when nobody is — which the HTTP layer knows and
@@ -20,18 +20,24 @@ export class Denied extends Error {
   /**
    * @param actor who was acting, or `null` for an anonymous request
    * @param app the app whose access rules refused it
-   * @param need the least level that would have been enough
+   * @param need the least that would have been enough: a level, or `person`
    * @param act which of the two rules refused it (default: `write`)
+   * @param comp the component whose floor refused it, when one did
    */
   constructor(
     public actor: Eid | null,
     public app: Eid,
-    public need: Level,
+    public need: Floor,
     public act: 'read' | 'write' = 'write',
+    public comp?: string,
   ) {
     super(
-      `${actor ?? 'someone signed out'} may not ${act} ${app} — ${need} ` +
-        `is the least that may`,
+      `${actor ?? 'someone signed out'} may not ${act} ` +
+        `${comp ? `${comp} in ` : ''}${app} — ${
+          need == 'person'
+            ? 'only someone signed in may'
+            : `${need} is the least that may`
+        }`,
     )
     this.name = 'Denied'
   }

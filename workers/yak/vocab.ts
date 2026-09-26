@@ -74,7 +74,7 @@ import {
   spineDoc,
 } from '@yaks/kernel/vocab'
 import { mailDoc } from '@yaks/mail'
-import { memberDoc } from '@yaks/member'
+import { floored, memberDoc, memberKeywords } from '@yaks/member'
 import { modelDoc } from '@yaks/model/vocab'
 import { personaDoc } from '@yaks/persona/vocab'
 import { projectDoc } from '@yaks/project/vocab'
@@ -1051,7 +1051,7 @@ export let PLATFORM_APART: string[] = (() => {
 
 /** The keyword vocabularies those documents and an app's own may use. Each is
  * owned by the package that reads it — @yaks/blob `store`, @yaks/edge
- * `edge` — and registered so the loader carries it. @yaks/id's `prefix` is
+ * `edge`, @yaks/member `floor` — and registered so the loader carries it. @yaks/id's `prefix` is
  * not among them: it says which letter an entity's NUMBER wears, and an app's
  * entities have no number, so a `prefix` declared in an app's vocab.json is
  * dropped on load like any word nothing here reads. */
@@ -1059,6 +1059,7 @@ export let appKeywords: Keywords[] = [
   blobKeywords,
   edgeKeywords,
   keyKeywords,
+  memberKeywords,
 ]
 
 /** The same list for the platform's own two stores, which do have numbers:
@@ -1378,7 +1379,7 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   }
   if (off !== undefined) doc = { ...doc, tools: off }
   for (let [word] of opens) doc = { ...doc, [word]: held[word] }
-  let errs = storable(doc)
+  let errs = [...storable(doc), ...floored(doc)]
   if (errs.length) throw refuse('arguments', `${file}: ${errs.join('; ')}`)
   return doc
 }

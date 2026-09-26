@@ -115,7 +115,7 @@ await g.apply([
     member: { space: 'club', person: 'dana', role: 'owner' },
   },
 ])
-g.use(members({ app: 'notes', space: 'club' }))
+g.use(members({ app: 'notes', space: 'club', vocab }))
 
 await g.apply([{
   entity: { eid: 'notes' },
@@ -135,9 +135,10 @@ rules for the entire batch. It is not a per-entity filter for a graph containing
 several independently protected apps.
 
 `members()` registers a `precondition` hook. It reads permissions inside the
-transaction before applying changes; throwing `Denied` rolls back that
-transaction. Changes without an actor are anonymous, so ordinary writes are
-allowed only when the app is `open`.
+transaction before applying changes; throwing `Denied` or `Paced` rolls back
+that transaction. It is handed the vocabulary the graph was loaded with, whose
+components may declare who writes them and how often (below). Changes without an
+actor are anonymous, so ordinary writes are allowed only when the app is `open`.
 
 The code receiving a request must authenticate the caller and replace any
 client-supplied actor before applying changes. [@yaks/api](../api) uses
@@ -155,9 +156,46 @@ owner permission on the configured app. An editor can change ordinary data but
 cannot write these access-control components. This additional check also runs
 for an `open` app.
 
-An application names more such components with `floors`, each with the least
-level that may write it whatever the app's mode:
-`members({ app: 'shop', space: 'club', floors: { product: 'editor' } })`.
+## A component says who writes it, and how often
+
+A component may declare a `floor`: the least its writer holds, whatever the
+app's mode. `person` is anyone signed in; `viewer`, `editor` and `owner` are
+that level on the app, or more. The keyword is this package's, so load the
+vocabulary with `memberKeywords` for the loader to keep it; `floorsIn(vocab)`
+reads the floors back, and `floored(doc)` lists a document's floors that are not
+one.
+
+```json
+{
+  "$defs": {
+    "line": {
+      "component": true,
+      "type": "object",
+      "floor": "person",
+      "pace": "1s",
+      "properties": { "text": { "type": "string" } }
+    }
+  }
+}
+```
+
+A change that writes or removes a floored component is refused for anyone below
+the floor, with a `Denied` naming the component (`need` is the floor, `comp` the
+component). A program installing the guard names floors for words it did not
+declare with `floors`, which win over declared ones:
+`members({ app: 'shop', space: 'club', vocab, floors: { product: 'editor' } })`.
+The access rows ask `owner` whatever either says.
+
+`pace` is @yaks/vocab's keyword: how often a writer's value is taken. On a
+stored component this guard holds it. A change that writes the component is
+refused with `Paced` when the same writer made or last changed a row wearing it
+less than a pace ago, by the rows' `created` and `updated` stamps, and when it
+writes two at once. `Paced` carries `comp`, `pace` and `wait`, the milliseconds
+until they may write it again. Everyone holds a pace, owners included, and
+everyone signed out counts as one writer; pair a pace with a `person` floor to
+hold each person apart. A change that leaves the component as it stands is no
+write of it, so a retried write is not refused. `pacesIn(vocab)` reads the paces
+back.
 
 ## A visitor to an open app adds, and changes only its own rows
 

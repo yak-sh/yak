@@ -12,8 +12,9 @@ import type { Bundle } from '@yaks/graph'
 import { type Graph, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { memberDoc } from './comp.ts'
+import { memberKeywords } from './keywords.ts'
 import { members } from './plugin.ts'
-import type { Floors } from './guard.ts'
+import type { Floors } from './words.ts'
 
 let doc: VocabDoc = {
   $defs: {
@@ -46,6 +47,15 @@ let doc: VocabDoc = {
         space: { type: 'string', ref: 'space', death: 'cascade' },
       },
     },
+    // A line in the club's chat: only someone signed in says one, and each
+    // of them one an hour.
+    line: {
+      component: true,
+      type: 'object',
+      floor: 'person',
+      pace: '1h',
+      properties: { text: { type: 'string' } },
+    },
     // Ordinary content, so a test can write something that is not membership.
     pick: {
       component: true,
@@ -77,7 +87,7 @@ let doc: VocabDoc = {
 
 /** The book club's vocabulary: the club, its people, its apps, and membership
  * loaded beside them. */
-export let club: Vocab = loadVocab([memberDoc, doc])
+export let club: Vocab = loadVocab([memberDoc, doc], [memberKeywords])
 
 /** The ids the tests share: the club, four people, and its two apps. */
 export let ids = {
@@ -130,13 +140,19 @@ export let guarded = (s: Storage, app: string, floors?: Floors): Graph =>
   graph({
     storage: s,
     vocab: club,
-    plugins: [members({ app, space: ids.club, floors })],
+    plugins: [members({ app, space: ids.club, vocab: club, floors })],
   })
 
 /** An unguarded write into the storage — how the club was set up in the first
  * place, and how a test arranges the next case to try. */
 export let seed = (s: Storage, ...bundles: Bundle[]) => {
   graph({ storage: s, vocab: club }).apply(bundles)
+}
+
+/** The same, stamped as written at another moment: `ago` ms before now. */
+export let seedAgo = (s: Storage, ago: number, ...bundles: Bundle[]) => {
+  let now = new Date(Date.now() - ago).toISOString()
+  graph({ storage: s, vocab: club }).apply(bundles, { now })
 }
 
 /** Set an app's access mode, the way an owner would. */

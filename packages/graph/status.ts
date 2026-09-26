@@ -24,6 +24,9 @@ export let STATUS: Record<string, number> = {
   // The request is authenticated; the answer is still no. @yaks/member's
   // `Denied` is this, and so is any other policy refusal that uses that name.
   Denied: 403,
+  // @yaks/member's: a component written again sooner than its pace lets this
+  // writer. The same write is taken once the pace has run.
+  Paced: 429,
   NotFound: 404,
   Stale: 409,
   // @yaks/session's: a write naming a session that does not exist, or an

@@ -534,9 +534,9 @@ export let cast = (
 export let durableOf = (v: Vocab, comp: string): string =>
   v.comp(comp)?.durable ?? 'forever'
 
-/** How often a relayed value of a component is sent, in milliseconds — `null`
- * for a component that declares no pace, or that this vocabulary does not
- * declare, and every write is sent as it is made. */
+/** How often a writer's value of a component is taken, in milliseconds —
+ * `null` for a component that declares no pace, or that this vocabulary does
+ * not declare, and every write is taken as it is made. */
 export let paceOf = (v: Vocab, comp: string): number | null =>
   v.comp(comp)?.pace ?? null
 

@@ -783,7 +783,7 @@ export class Store {
         fx,
         // Before the guard, because it is what the guard reads.
         this.#vouching,
-        ...(app ? [this.#guarding(app, meant(this.#get('vocab')))] : []),
+        ...(app ? [this.#guarding(app, vocab, meant(this.#get('vocab')))] : []),
         // The post room. `mailbox()` is @yaks/mail's own plugin: the address
         // canonicalizer, so a mailbox is stored in one spelling and only one.
         // @yaks/doc is composed beside it rather than inside it, and here a
@@ -1147,11 +1147,12 @@ export class Store {
    * carries no person to hold a level — so the rule as written would refuse
    * exactly the writes the platform must always be able to make.
    *
-   * The rule itself stays @yaks/member's. Only who it is asked about is ours,
-   * and which of this platform's words ask a level of their own (`FLOORS`).
+   * The rule itself stays @yaks/member's, and so do the floors and paces an
+   * app's own words declare (`vocab`). Only who it is asked about is ours, and
+   * which of this platform's words ask a level of their own (`FLOORS`).
    */
-  #guarding(app: string, manifest: VocabDoc): Plugin {
-    let plugin = members({ app, floors: floorsOf(manifest) })
+  #guarding(app: string, vocab: Vocab, manifest: VocabDoc): Plugin {
+    let plugin = members({ app, vocab, floors: floorsOf(manifest) })
     let guard = plugin.hooks?.precondition
     return {
       ...plugin,

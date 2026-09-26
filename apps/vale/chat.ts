@@ -5,12 +5,11 @@
 //
 // A line is a row carrying `chat` (the level it was said in, and the hero who
 // said it) and `doc` (the words), stamped by the store with `created` (the
-// person who wrote it, and when the store took it). The rule reads only those
-// stamps, never what the speaker's page says of itself: a line counts when a
-// person signed in wrote it, as a hero they made, and no sooner than a second
-// after the last line of theirs that counted. However fast a page writes, or
-// however many lines it packs into one write (the store stamps them all with
-// the one instant), each person is heard at most once a second.
+// person who wrote it, and when the store took it). The store takes a line only
+// from a person signed in, and one a second from each (vocab.json `floor` and
+// `pace`), however fast a page writes. What is left to a page is whose hero
+// spoke: a line counts when it was said as a hero its writer made, by the
+// stamps, never by what the speaker's page says of itself.
 //
 // Who is near whom (`earshot`) is the seam proximity voice will hear through:
 // the same reach, the same bodies.
@@ -30,9 +29,6 @@ export type Line = {
 
 /** The most a line says, in characters. */
 export let MAX = 160
-
-/** A person is heard at most once in this long, in ms. */
-export let PACE = 1000
 
 /** How long words float over a speaker's head, in ms. */
 export let BUBBLE = 5000
@@ -115,9 +111,8 @@ export let writer = (b: Bundle | undefined): string => {
 }
 
 /**
- * The lines a page shows, oldest first: each written by a person signed in,
- * as a hero `owner` says is theirs, and a second or more after the last line
- * of theirs that counted.
+ * The lines a page shows, oldest first: each said as a hero `owner` says is
+ * its writer's.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -133,38 +128,17 @@ export let writer = (b: Bundle | undefined): string => {
  *   'a',
  *   'b',
  * ])
- * // Nobody signed in is not heard.
- * assertEquals(said([line('a', '', 1000)]), [])
- * // Nor is a line as somebody else's hero.
+ * // A line as somebody else's hero is not heard.
  * assertEquals(said([line('a', 'ann', 1000, 'h-bo')]), [])
- * // A person is heard once a second, however many lines they send at once.
- * assertEquals(
- *   said([
- *     line('a', 'ann', 1000),
- *     line('b', 'ann', 1000),
- *     line('c', 'ann', 1500),
- *     line('d', 'bo', 1500),
- *     line('e', 'ann', 2000),
- *   ]),
- *   ['a', 'd', 'e'],
- * )
  * ```
  */
 export let heard = (
   lines: Line[],
   owner: (hero: string) => string | null,
-  pace = PACE,
-): Line[] => {
-  let last = new Map<string, number>()
-  return [...lines]
+): Line[] =>
+  [...lines]
     .sort((a, b) => a.at - b.at || (a.eid < b.eid ? -1 : 1))
-    .filter((l) => {
-      if (!l.by || owner(l.player) != l.by) return false
-      if (l.at - (last.get(l.by) ?? -Infinity) < pace) return false
-      last.set(l.by, l.at)
-      return true
-    })
-}
+    .filter((l) => owner(l.player) == l.by)
 
 type Placed = { eid: string; body: { x: number; z: number } }
 

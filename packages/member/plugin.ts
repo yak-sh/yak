@@ -4,7 +4,9 @@
 // The guard has to be told which app it decides for, because "may this be
 // written?" is a question about an app and the graph itself holds only rows. So
 // the plugin is built with that app named, the way an application names its own
-// subject — and, optionally, the space whose owners own it.
+// subject — and, optionally, the space whose owners own it. It is handed the
+// vocabulary the graph was loaded with too, since a component may declare who
+// writes it (`floor`) and how often (`pace`).
 //
 // Seeding. A graph with the guard installed and an empty roster admits nobody:
 // there is no owner yet, so there is nobody allowed to write the row that makes
@@ -14,7 +16,7 @@
 //   let g = graph({ storage, vocab })
 //   g.apply([{ entity: { eid: 'm1' }, member: { space, person: dana,
 //              role: 'owner' } }])
-//   g.use(members({ app, space }))
+//   g.use(members({ app, space, vocab }))
 //
 // From there the roster maintains itself: an owner adds the next one.
 
@@ -25,16 +27,16 @@ import { type Guard, guarding, wanting } from './guard.ts'
 /**
  * The membership plugin: the `member`, `grant` and `access` components, and a
  * `precondition` hook that refuses a write the principal's role or grant does
- * not allow.
+ * not allow, or that comes sooner than its component's pace.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
  * import { ram } from '@yaks/ram'
- * import { memberDoc, members } from '@yaks/member'
+ * import { memberDoc, memberKeywords, members } from '@yaks/member'
  *
- * let vocab = loadVocab([memberDoc])
- * let guard = members({ app: 'list', space: 'club' })
+ * let vocab = loadVocab([memberDoc], [memberKeywords])
+ * let guard = members({ app: 'list', space: 'club', vocab })
  * let g = graph({ storage: ram(vocab), vocab, plugins: [guard] })
  * ```
  *

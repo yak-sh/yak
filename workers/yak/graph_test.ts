@@ -577,6 +577,38 @@ Deno.test('a visitor to an open app adds, and touches no price, order or row of 
   assertEquals(cake.recipe.serves, 8)
 })
 
+// A component of the app's own may say who writes it and how often (T-40650):
+// a chat line only someone signed in says, each of them once a pace. The store
+// holds it at its own door, so every door in front of it does too.
+Deno.test('a line is said by someone signed in, once a pace each', async () => {
+  let own: Vouch = { ...owner, access: 'open' }
+  let open: Vouch = { app: APP, access: 'open' }
+  let kim: Vouch = { ...open, person: 'f0000000-0000-4000-8000-000000000006' }
+  let chat = (floor: string) =>
+    JSON.stringify({
+      $defs: {
+        line: {
+          floor,
+          pace: '1h',
+          properties: { text: { type: 'string' } },
+        },
+      },
+    })
+  let store = await cookbook(state(), chat('person'), own)
+  let said = async (v: Vouch) => {
+    let eid = crypto.randomUUID()
+    let r = await post(store, '/apply', [{ entity: { eid }, line: {} }], v)
+    return [r.status, r.ok ? 'ok' : (await r.json()).error]
+  }
+  assertEquals(await said(open), [403, 'Denied'])
+  assertEquals(await said(kim), [200, 'ok'])
+  assertEquals(await said(kim), [429, 'Paced'])
+  assertEquals(await said(own), [200, 'ok'])
+  assertEquals(await said(own), [429, 'Paced'])
+  let r = await post(store, '/vocab', chat('admin'), own)
+  assertStringIncludes((await r.json()).message, 'line is floored "admin"')
+})
+
 // A name outlives the batch (T-34390): @yaks/key carries it, @yaks/alias
 // resolves it, and both are composed into every store — so the same seed
 // written twice is one entity, and the name stands where an eid does.

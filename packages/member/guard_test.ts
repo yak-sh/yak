@@ -4,8 +4,9 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Storage } from '@yaks/graph'
 import { isPromise } from '@yaks/graph'
 import { Denied } from './deny.ts'
-import type { Floors } from './guard.ts'
-import { grant, guarded, ids, setMode, store } from './testing.ts'
+import { Paced } from './pace.ts'
+import type { Floors } from './words.ts'
+import { grant, guarded, ids, seedAgo, setMode, store } from './testing.ts'
 
 let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
   assert(!isPromise(out), 'apply() went async over a Map')
@@ -224,4 +225,56 @@ Deno.test('a floor holds whatever the mode', () => {
     as(s, ids.raj, { ...row, pick: { title: 'x' } }, { pick: 'owner' })
   ) as Denied
   assertEquals(e.need, 'owner')
+})
+
+// ---- a component's own floor and pace --------------------------------------
+
+let HOUR = 3_600_000
+let line = (eid: string, text = eid) => ({ entity: { eid }, line: { text } })
+let paced = (fn: () => unknown) => assertThrows(fn, Paced) as Paced
+
+Deno.test('a declared floor of person is anyone signed in', () => {
+  let s = opened()
+  let e = assertThrows(() => as(s, null, line('l1'))) as Denied
+  assertEquals([e.need, e.comp], ['person', 'line'])
+  as(s, ids.kim, line('l1'))
+  assertEquals((s.read('.line') as Bundle[]).length, 1)
+})
+
+Deno.test('a writer writes a paced component once a pace', () => {
+  let s = opened()
+  as(s, ids.kim, line('l1'))
+  let e = paced(() => as(s, ids.kim, line('l2')))
+  assertEquals([e.comp, e.pace], ['line', HOUR])
+  assert(e.wait > HOUR - 60_000 && e.wait <= HOUR, `${e.wait}`)
+  // Changing what they said is writing it again.
+  paced(() => as(s, ids.kim, line('l1', 'edited')))
+  // Saying the same thing again is not.
+  as(s, ids.kim, line('l1'))
+  // Each writer keeps a pace of their own, the owner too.
+  as(s, ids.mo, line('l3'))
+  as(s, ids.dana, line('l4'))
+  paced(() => as(s, ids.dana, line('l5')))
+  assertEquals((s.read('.line') as Bundle[]).length, 3)
+})
+
+Deno.test('two at once is two inside a pace', () => {
+  let s = opened()
+  paced(() =>
+    sync(
+      guarded(s, ids.list).apply([line('l1'), line('l2')].map((b) => ({
+        ...b,
+        $actor: { by: ids.raj },
+      }))),
+    )
+  )
+  assertEquals((s.read('.line') as Bundle[]).length, 0)
+})
+
+Deno.test('a pace runs from the last write, made or changed', () => {
+  let s = opened()
+  seedAgo(s, 2 * HOUR, { ...line('old'), $actor: { by: ids.kim } })
+  as(s, ids.kim, line('l1'))
+  seedAgo(s, HOUR / 2, { ...line('old', 'x'), $actor: { by: ids.mo } })
+  paced(() => as(s, ids.mo, line('l2')))
 })

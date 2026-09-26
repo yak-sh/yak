@@ -59,6 +59,39 @@ export let writes = (l: Level | null): boolean => l == 'owner' || l == 'editor'
 export let reaches = (l: Level | null, floor: Level): boolean =>
   l != null && LEVELS.indexOf(l) >= LEVELS.indexOf(floor)
 
+/** The least a component asks of whoever writes it, whatever the app's mode:
+ * a level, or `person` — anyone signed in, level or none. */
+export type Floor = 'person' | Level
+
+/** The floor each component asks of whoever writes it, by name. */
+export type Floors = Record<string, Floor>
+
+// The floors, least to most.
+let ladder: Floor[] = ['person', ...LEVELS]
+
+/** Is this a floor? */
+export let isFloor = (v: unknown): v is Floor => ladder.includes(v as Floor)
+
+/** Read a declared floor: one this package does not know asks the most. */
+export let floor = (v: unknown): Floor => isFloor(v) ? v : 'owner'
+
+/** Does a principal holding this level stand on that floor? Anyone signed in
+ * stands on `person`, and nobody stands on any.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { stands } from '@yaks/member'
+ * assertEquals(stands('kim', null, 'person'), true)
+ * assertEquals(stands(null, null, 'person'), false)
+ * assertEquals(stands('kim', 'viewer', 'editor'), false)
+ * ```
+ */
+export let stands = (
+  who: string | null,
+  l: Level | null,
+  f: Floor,
+): boolean => f == 'person' ? who != null : reaches(l, f)
+
 // The rules, stated once. Everything else in this package — the `policy`
 // helpers the HTTP layer calls, the `precondition` hook a transaction passes —
 // reads a mode and a level out of storage and then calls `reads` or `edits`,

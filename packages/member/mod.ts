@@ -58,7 +58,7 @@
  *     member: { space: 'club', person: 'dana', role: 'owner' },
  *   },
  * ])
- * g.use(members({ app: 'list', space: 'club' }))
+ * g.use(members({ app: 'list', space: 'club', vocab }))
  *
  * let may = policy(storage, { space: 'club' })
  * await may.canRead('dana', 'list') // true
@@ -70,6 +70,13 @@
  * an `open` app, where anyone may write: without the rule, a visitor invited to
  * sign the guest book could rewrite the roster. The first owner is therefore
  * written before the guard is installed; see {@link members}.
+ *
+ * ## A component says who writes it, and how often
+ * A component may declare a `floor`, the least its writer holds whatever the
+ * mode — `person` (anyone signed in), `viewer`, `editor` or `owner` — and a
+ * `pace`, how often each writer may write it. The guard refuses the rest:
+ * {@link Denied} naming the component, or {@link Paced} saying when to try
+ * again. Load the vocabulary with {@link memberKeywords} so `floor` is kept.
  *
  * ## Share links
  * A grant may name a `token` instead of a person. Whoever opens that link acts
@@ -93,7 +100,9 @@
 
 export * from './words.ts'
 export * from './comp.ts'
+export * from './keywords.ts'
 export * from './policy.ts'
 export * from './deny.ts'
+export * from './pace.ts'
 export * from './guard.ts'
 export * from './plugin.ts'

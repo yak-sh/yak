@@ -184,7 +184,7 @@ Deno.test('a member-guarded write', async () => {
   let g = graph({
     storage: store,
     vocab: club,
-    plugins: [members({ app: list, space: c })],
+    plugins: [members({ app: list, space: c, vocab: club })],
   })
   reset()
   // Raj holds an editor grant, so the guard climbs the whole ladder — the

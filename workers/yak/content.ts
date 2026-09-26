@@ -32,7 +32,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'components',
     'title': "Components: the platform's, and your own",
     'description':
-      'Every component an app already has, property by property, and vocab.json for components of your own: the property types, what a later deploy may change, the names already taken, and when a property beats doc.body.',
+      'Every component an app already has, property by property, and vocab.json for components of your own: the property types, who may write one and how often, what a later deploy may change, the names already taken, and when a property beats doc.body.',
     'brief': "the platform's components, and your own",
   },
   'domains': {

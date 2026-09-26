@@ -185,7 +185,9 @@
     "chat": {
       "component": true,
       "type": "object",
-      "description": "A line said aloud: the level it was said in, where everyone reads it in the chat, and the hero who said it, over whose head it shows to whoever is near. Its words are the row's doc body; who wrote it and when is its created stamp. A page shows a line only from a person signed in, as a hero they made, and at most one a second from each person (chat.ts). A line said beside a villager is also a line of their transcript (entry, content, using), which asks them to answer.",
+      "floor": "person",
+      "pace": "1s",
+      "description": "A line said aloud: the level it was said in, where everyone reads it in the chat, and the hero who said it, over whose head it shows to whoever is near. Its words are the row's doc body; who wrote it and when is its created stamp. The store takes a line only from a person signed in, and at most one a second from each (floor, pace); a page shows it only as a hero they made (chat.ts). A line said beside a villager is also a line of their transcript (entry, content, using), which asks them to answer.",
       "properties": {
         "level": {
           "type": "string",

@@ -54,6 +54,12 @@ The codes an endpoint returns, and what each means:
   the trash still count until erased; shared version snapshots do not.
 - **`too_many_reports`** — 429. More than 30 reports from one app in one minute.
   A page in a render loop, not a broken endpoint.
+- **`refused`** — 400. The app's store would not take the write, and the message
+  is its own sentence: a component or property nobody declared, a `$was` that
+  moved, a row that is not theirs to change, a component whose `floor` they are
+  below, or one written sooner than its `pace` lets them
+  (<https://yaks.app/docs/components.md>). Show the message; for a pace, send
+  the same write again once it has run.
 
 A refusal is somebody's deliberate no, so **none of them is filed as a break.**
 The rule is the status code: a 4xx is a choice someone made, a 5xx or a thrown

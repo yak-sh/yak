@@ -48,7 +48,11 @@ person or, signed out, per address. Past that the answer is 413
 Three of the platform's own words stay out of a visitor's reach whatever the
 access: `product` is written by the owner and editors, an `order`'s properties
 only by the platform (<https://yaks.app/docs/selling.md>), and the ask to send a
-letter, `deliver`, by the owner and editors (<https://yaks.app/docs/mail.md>).
+letter, `deliver`, by the owner and editors (<https://yaks.app/docs/mail.md>). A
+component of your own says the same in its `vocab.json`: `"floor": "person"`
+takes it only from someone signed in, `"floor": "editor"` only from the owner
+and editors, and `"pace": "1s"` from each of them once a second
+(<https://yaks.app/docs/components.md>, "Who writes it, and how often").
 
 The cost of letting anyone in is a byline: a guest who never signed in is nobody
 yet, so their rows carry no `created.by` at all, and a row nobody signed is

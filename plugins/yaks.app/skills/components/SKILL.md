@@ -1,6 +1,6 @@
 ---
 name: components
-description: "Components: the platform's, and your own (yaks.app). Every component an app already has, property by property, and vocab.json for components of your own: the property types, what a later deploy may change, the names already taken, and when a property beats doc.body."
+description: "Components: the platform's, and your own (yaks.app). Every component an app already has, property by property, and vocab.json for components of your own: the property types, who may write one and how often, what a later deploy may change, the names already taken, and when a property beats doc.body."
 ---
 
 # Components: the platform's, and your own
@@ -399,6 +399,42 @@ Only prose can be searched — a number, a date and a URL are matched by their
 value, not read — so `"search": true` anywhere else is refused at deploy, in a
 message naming the property. A property that declares nothing extra is stored
 and readable and simply never searched.
+
+**Who writes it, and how often.** A component can say who may write it and how
+often each of them may, beside its `properties`, and the store holds both at
+every door a person writes through: the page's `./api/apply` and `graph_apply`
+alike. A chat on an `open` app is the case — anyone may read it, only people
+signed in may say something, and nobody more than once a second:
+
+    { "$defs": {
+        "line": {
+          "floor": "person",
+          "pace": "1s",
+          "properties": { "level": { "type": "string" } } } } }
+
+`floor` is the least a writer holds, whatever the app's access: `person` is
+anyone signed in, `viewer`, `editor` and `owner` are that role on the app or
+more. A write that adds, changes or removes the component from anyone below it
+is refused, naming the component:
+
+    someone signed out may not write line in <app> — only someone signed in may
+
+`pace` is how often each writer may write the component: `"1s"`, `"500ms"`,
+`"5m"`. A write that comes sooner — a second line inside the second, or two in
+one write — is refused, saying when they may again. It runs from the last row
+wearing the component that the same person made or changed, by its `created` and
+`updated` stamps. The owner keeps it too, and everyone signed out counts as one
+writer, so a pace that should hold each person apart asks a `floor` of `person`
+as well. Writing the same values again is no write, so a retried request is not
+refused.
+
+    line is written at most once every 1s by each writer — kim may again in 400ms
+
+Either refusal reaches a page as `refused` with that sentence
+(<https://yaks.app/docs/errors.md>), and an agent's tool as the same sentence.
+Neither is a break: nothing is filed. A page that sends one write per line,
+paced as the component is, is never refused. `me()` on load says whether the
+person is signed in, before they type.
 
 Your components are yours. No other app's store has heard of them, and no other
 app's rows can collide with them — unless a sibling app of the same person

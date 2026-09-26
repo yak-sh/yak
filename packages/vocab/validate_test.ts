@@ -235,15 +235,16 @@ Deno.test('a relay owns nothing, so it cannot keep a value forever', () => {
   ])
 })
 
-Deno.test('a pace is how often a relay is sent, so only a relay has one', () => {
+Deno.test('a pace is how often a value is taken, so what nobody takes has none', () => {
   let one = (comp: PropSchema) => storable(doc({ presence: comp }))
   let peers = { type: 'object', sync: 'peers', durable: 'connection' }
   assertEquals(one({ ...peers, pace: '100ms' }), [])
+  assertEquals(one({ type: 'object', pace: '1s' }), [])
   assertEquals(one({ ...peers, pace: 'often' }), [
     'presence is paced "often" — say a duration such as "100ms" or "1s"',
   ])
-  assertEquals(one({ type: 'object', pace: '100ms' }), [
-    'presence is paced but does not sync to peers — a pace is how often a relayed value is sent; say "sync": "peers", or drop the pace',
+  assertEquals(one({ type: 'object', sync: 'none', pace: '100ms' }), [
+    "presence is paced but syncs to none — a pace is how often a relay or a store takes a writer's value, and nobody takes this one; sync it, or drop the pace",
   ])
 })
 

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yak.sh/vocab/member",
+  "title": "yaks member keyword vocabulary",
+  "description": "The keyword @yaks/member adds to a component vocabulary. A component declaring `floor` asks that much of whoever writes it, whatever the app's access mode: the guard refuses a change that writes or removes the component for a principal who does not stand on the floor.",
+  "$comment": "A vocabulary declaration in the JSON Schema sense: a URI naming this keyword set, plus the schema of each keyword. A vocabulary file declares it under $vocabulary; a loader registers it with loadVocab(docs, [memberKeywords]).",
+  "$defs": {
+    "floor": {
+      "description": "The least a writer of this component holds. \"person\" is anyone signed in; \"viewer\", \"editor\" and \"owner\" are that level on the app, or more. Absent, the app's access mode decides alone.",
+      "enum": ["person", "viewer", "editor", "owner"]
+    }
+  }
+}
