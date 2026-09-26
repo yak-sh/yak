@@ -63,8 +63,9 @@ await watch(processes)
 start. `watch()` resumes monitoring every stored process without an `exit`.
 `vanished()` finds the rows without an `exit` whose pid is gone from this
 machine and that this package did not launch: a process that ended without
-writing its own ending, for whoever cleans up after it. `launch()` passes only
-the environment supplied in its specification.
+writing its own ending, for whoever cleans up after it; `vanishedOne()` asks the
+same of one process. `launch()` passes only the environment supplied in its
+specification.
 
 Launched processes run through a short-lived launcher and a wrapper in a session
 and process group of its own. The wrapper writes a pidfile and an exit-code
@@ -135,6 +136,6 @@ The main module exports:
 - storage: `Store`, `store()`, `RUNNING`, and `SERVICES`;
 - graph integration: `processes()`;
 - process operations: `dirOf()`, `paths()`, `launch()`, `adopt()`, `watch()`,
-  `vanished()`, `signal()`, and `supervise()`.
+  `vanished()`, `vanishedOne()`, `signal()`, and `supervise()`.
 
 Additional entry points are `@yaks/process/vocab` and `@yaks/process/rules`.

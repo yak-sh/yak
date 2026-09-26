@@ -77,6 +77,7 @@ import {
   started,
   store as machine,
   vanished,
+  vanishedOne,
 } from '@yaks/process'
 import type { Derived, Driver, Extension } from '@yaks/sql'
 import { migrations, storage, type Store } from '@yaks/sqlite'
@@ -198,6 +199,10 @@ export type Host = {
    * (@yaks/api `serve`), so a crash leaves nothing held by the dead. Answers
    * the processes it closed. */
   bury: () => Promise<Bundle[]>
+  /** Whether a lease's holder is a process on this machine that ended without
+   * letting go (@yaks/process `vanishedOne`): what a take asks before waiting
+   * out a holder's expiry (@yaks/effects `HoldOpts.gone`). */
+  gone: (holder: Eid) => Promise<boolean>
 
   /** This process, as an entity (@yaks/process `started`): the row it wrote on
    * the way in, what everything it writes is attributed to, and what a
@@ -803,6 +808,9 @@ export let compose = async (
         }
         return dead
       },
+      gone: async (holder) =>
+        !!self && !!g &&
+        await vanishedOne(machine(g), holder, { me: selfEid() }),
     }
     authenticate = doorman(ruled, host, self)
     // The clause compilers belong to the store, so they are gathered before it
@@ -998,7 +1006,12 @@ export let compose = async (
           ]
           : []),
         ...duties.filter((d) => mine(d.name)).map((d) =>
-          holding(g!, d.name, { holder: selfEid(), hold, signal: until }, d.run)
+          holding(g!, d.name, {
+            holder: selfEid(),
+            hold,
+            signal: until,
+            gone: host.gone,
+          }, d.run)
             .catch((e) => console.error(`duty failed — ${d.name}`, e))
         ),
       ]).then(() => {})

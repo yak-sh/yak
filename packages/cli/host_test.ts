@@ -8,7 +8,7 @@ import { ids } from '@yaks/id/rules'
 import { blobKeywords, blobRead } from '@yaks/blob'
 import { rules as blobRules } from '@yaks/blob/rules'
 import { processDoc, selfEid } from '@yaks/process'
-import { effectDoc } from '@yaks/effects'
+import { effectDoc, leaseEid } from '@yaks/effects'
 import { runs as effectRuns } from '@yaks/effects/tools'
 import {
   compose as composing,
@@ -1239,5 +1239,39 @@ Deno.test('a body kept in the store is still found by its own words', async () =
     assertEquals(rows[0].post.title, 'On lemons')
   } finally {
     host.close()
+  }
+})
+
+Deno.test('a duty held by a process that died on this machine is taken at once', async () => {
+  let passes = 0
+  let host = await compose(
+    {
+      db: ':memory:',
+      plugins: ['@yaks/effects', '@yaks/process', 'once'],
+    },
+    only({
+      once: { service: { service: () => Promise.resolve(void passes++) } },
+    }),
+  )
+  try {
+    // A pid that has come and gone, recorded as still running, holding the
+    // duty with half a minute left on its take.
+    let child = new Deno.Command('true').spawn()
+    await child.status
+    await host.graph.apply([
+      { entity: { eid: '$ghost' }, process: { pid: child.pid } },
+      {
+        entity: { eid: leaseEid('once') },
+        lease: {
+          name: 'once',
+          holder: '$ghost',
+          until: new Date(Date.now() + 30_000).toISOString(),
+        },
+      },
+    ])
+    await host.duties(AbortSignal.abort())
+    assertEquals(passes, 1)
+  } finally {
+    await host.close()
   }
 })

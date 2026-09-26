@@ -20,7 +20,8 @@
 // takes it again on a timer and pushes the expiry out; one that was killed
 // leaves a row that expires, and the next process to ask gets it. Nothing has
 // to clean up after it, which is the whole reason the duty is held under a
-// lease rather than a claim.
+// lease rather than a claim. An asker that can tell the holder is gone (`gone`,
+// a pid that is no longer running) does not wait for the expiry at all.
 //
 // A graph whose vocabulary does not declare `lease` has no other process to
 // contend with — one process, one graph — so every take succeeds and nothing
@@ -70,6 +71,10 @@ export type HoldOpts = {
   hold?: number
   /** the clock, in milliseconds (default `Date.now`) */
   now?: () => number
+  /** whether a holder is known to have ended without letting go (@yaks/process
+   * `vanishedOne`): its take no longer stands, so the lease is had now rather
+   * than at its expiry (default: nobody is known to be) */
+  gone?: (holder: Eid) => boolean | Promise<boolean>
 }
 
 let leaseOf = (g: Graph, eid: Eid): Promise<Lease | undefined> =>
@@ -101,8 +106,11 @@ export let take = async (
   let now = (o.now ?? Date.now)()
   let held = await leaseOf(g, eid)
   let until = held?.until ? Date.parse(String(held.until)) : 0
-  // Somebody else's, and their take still stands.
-  if (held?.holder && held.holder != o.holder && until > now) return false
+  // Somebody else's, and their take still stands: they are not known gone.
+  if (
+    held?.holder && held.holder != o.holder && until > now &&
+    !await o.gone?.(held.holder)
+  ) return false
   try {
     await g.apply([{
       entity: { eid },

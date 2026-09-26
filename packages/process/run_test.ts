@@ -8,7 +8,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { EXIT, PROCESS } from './comp.ts'
 import { gone, launchers, tracked, until } from './testing.ts'
-import { adopt, launch, vanished, watch } from './run.ts'
+import { adopt, launch, vanished, vanishedOne, watch } from './run.ts'
 import { store } from './store.ts'
 
 let dir = () => Deno.makeTempDirSync({ prefix: 'yaks-process-' })
@@ -113,6 +113,16 @@ Deno.test('a run that ended without saying so is found; a live one, a launched o
     running: (pid) => Promise.resolve(pid == Deno.pid),
   })
   assertEquals(found.map((b) => b.entity.eid), ['dead'])
+  let one = (eid: string) =>
+    vanishedOne(store(g), eid, {
+      dir: at,
+      me: 'me',
+      running: (pid) => Promise.resolve(pid == Deno.pid),
+    })
+  assertEquals(
+    await Promise.all(['dead', 'live', 'launched', 'me', 'nobody'].map(one)),
+    [true, false, false, false, false],
+  )
 })
 
 // The wrapper's `echo $code > file` creates the file empty and writes it a

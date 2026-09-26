@@ -58,6 +58,9 @@ export type Runner = Deps & ChildLimits & {
   each?: (step: Step) => void
   /** how long a transcript's lease stands between renewals (ms) */
   hold?: number
+  /** whether a holder of a transcript's lease is known to have ended without
+   * letting go, so its run is had now (@yaks/effects `HoldOpts.gone`) */
+  gone?: (holder: Eid) => boolean | Promise<boolean>
   /** how often a running step looks for a withdrawal of its request (ms) */
   look?: number
 }
@@ -229,7 +232,7 @@ let held = async (
   r: Runner,
 ): Promise<number | null> => {
   let name = `${RUN}/${session}`
-  let o = { holder: r.holder, hold: r.hold ?? HOLD }
+  let o = { holder: r.holder, hold: r.hold ?? HOLD, gone: r.gone }
   if (!await take(g, name, o)) return null
   let beat = setInterval(
     () => take(g, name, o).catch((err) => r.report?.(err, session, 'lease')),

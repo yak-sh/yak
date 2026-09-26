@@ -216,3 +216,18 @@ Deno.test('a take the store fails is asked again, and the duty is not given up',
   stop.abort()
   await running
 })
+
+Deno.test('a holder known to be gone is passed at once, not waited out', async () => {
+  let graph = g()
+  await take(graph, 'sweep', { holder: 'p1', hold: 60_000, now: at(0) })
+  let asking = (gone: string[]) =>
+    take(graph, 'sweep', {
+      holder: 'p2',
+      now: at(1),
+      gone: (holder) => gone.includes(holder),
+    })
+  // Alive by all anybody can tell: its take stands.
+  assertEquals(await asking([]), false)
+  assertEquals(await asking(['p1']), true)
+  assertEquals((await held(graph, 'sweep'))?.holder, 'p2')
+})

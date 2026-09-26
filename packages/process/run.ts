@@ -663,23 +663,51 @@ export let watch = async (store: Store, o: Opts = {}): Promise<Run[]> => {
  */
 export let vanished = async (
   store: Store,
-  o: Opts & {
-    me?: string
-    /** whether a pid is running (default: `kill -0`) */
-    running?: (pid: number) => Promise<boolean>
-  } = {},
+  o: Asking = {},
 ): Promise<Bundle[]> => {
-  let dir = dirOf(o)
   let out: Bundle[] = []
-  for (let b of await store.running()) {
-    let eid = b.entity.eid
-    let pid = Number((b[PROCESS] as Process)?.pid ?? 0)
-    if (eid == o.me || !pid || mtimeOf(files(dir, eid).started) != null) {
-      continue
-    }
-    if (!await (o.running ?? alive)(pid)) out.push(b)
-  }
+  for (let b of await store.running()) if (await dead(b, o)) out.push(b)
   return out
+}
+
+/** Who is asking after the dead, and how a pid is looked for. */
+export type Asking = Opts & {
+  /** the process asking, never counted among them */
+  me?: string
+  /** whether a pid is running (default: `kill -0`) */
+  running?: (pid: number) => Promise<boolean>
+}
+
+/**
+ * Whether one process is among the {@link vanished}: running by its row, on
+ * this machine, and its pid gone. What a process contending for something the
+ * other one holds asks (@yaks/effects `take`), since a holder that is gone has
+ * nothing left to do with it.
+ *
+ * ```ts
+ * import { selfEid, store, vanishedOne } from '@yaks/process'
+ *
+ * // if (await vanishedOne(store(graph), holder, { me: selfEid() })) …
+ * ```
+ */
+export let vanishedOne = async (
+  store: Store,
+  eid: string,
+  o: Asking = {},
+): Promise<boolean> => {
+  let b = (await store.running()).find((b) => b.entity.eid == eid)
+  return !!b && await dead(b, o)
+}
+
+// A running row whose pid is gone. A run this package launched is not one:
+// its wrapper writes the ending, and `watch` records it with the code.
+let dead = async (b: Bundle, o: Asking): Promise<boolean> => {
+  let eid = b.entity.eid
+  let pid = Number((b[PROCESS] as Process)?.pid ?? 0)
+  if (eid == o.me || !pid || mtimeOf(files(dirOf(o), eid).started) != null) {
+    return false
+  }
+  return !await (o.running ?? alive)(pid)
 }
 
 /** How supervision behaves, in addition to how a process is watched. */

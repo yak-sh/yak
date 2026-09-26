@@ -28,5 +28,9 @@ export let effects = (
   host.stopping.addEventListener('abort', () => void lent.release?.(), {
     once: true,
   })
-  return running(host.graph, { ...lend(lent), stopping: host.stopping })
+  return running(host.graph, {
+    ...lend(lent),
+    stopping: host.stopping,
+    gone: host.gone,
+  })
 }

@@ -281,7 +281,8 @@ often than a third of the hold. A take or renewal the store fails is reported
 (`report`, default `console.error`) and asked again. With no signal, or an
 already aborted signal, it makes one attempt and returns if another process owns
 the duty. `until(signal)` lets completed startup work retain the lease until
-shutdown. A terminated holder's lease eventually expires.
+shutdown. A terminated holder's lease eventually expires; an asker that can tell
+it is gone (`gone`, such as @yaks/process `vanishedOne`) takes it at once.
 
 `take`, `drop`, `held`, `released` and `leaseEid` expose the individual
 operations. The default hold duration is 30 seconds. Without a `lease`
