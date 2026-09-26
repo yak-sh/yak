@@ -193,6 +193,10 @@ let message = (e: unknown) => e instanceof Error ? e.message : String(e)
 let busy = (e: unknown) =>
   /\b429\b|too many requests|rate.?limit|capacity/i.test(message(e))
 
+// How the binding says the account's prepaid credits, which a partner model
+// is paid from, are spent: a ceiling, which asking again meets too.
+let spent = (e: unknown) => /insufficient .*credits/i.test(message(e))
+
 // What the binding is asked: a chat, or a structured model's questions about
 // the same conversation.
 let input = (req: Request) =>
@@ -202,16 +206,24 @@ let input = (req: Request) =>
       ? { tools: req.tools.map((f) => ({ type: 'function', function: f })) }
       : {},
     ...req.tokens ? { max_tokens: req.tokens } : {},
+    ...req.effort ? { reasoning_effort: req.effort } : {},
   }
 
 /**
  * What the binding threw, said the way a model's failure is said here: a rate
- * limit is a {@link ModelError} coded `busy`, and a `ModelError` the binding
- * throws itself (one that meters it, say) or anything else is passed on as it
- * was thrown. For a host that calls the binding without {@link workersAi}.
+ * limit is a {@link ModelError} coded `busy`, credits the account has spent
+ * one coded `limit`, and a `ModelError` the binding throws itself (one that
+ * meters it, say) or anything else is passed on as it was thrown. For a host
+ * that calls the binding without {@link workersAi}.
  */
 export let failure = (e: unknown): unknown =>
-  e instanceof ModelError || !busy(e) ? e : new ModelError('busy', message(e))
+  e instanceof ModelError
+    ? e
+    : busy(e)
+    ? new ModelError('busy', message(e))
+    : spent(e)
+    ? new ModelError('limit', message(e))
+    : e
 
 /**
  * A model over the binding, failing as {@link failure} says.

@@ -24,11 +24,13 @@ model you choose.
 
 ## What is sent and read
 
-A request becomes one `run(model, {messages, tools, max_tokens})` call.
-Instructions and `instruction` items are `system` messages, a call joins the
-assistant message it follows as a `tool_calls` entry, and a result is a `tool`
-message naming the call it answers. `Request.tokens` is sent as `max_tokens`;
-without it the model's own default applies. `effort` is not sent.
+A request becomes one
+`run(model, {messages, tools, max_tokens, reasoning_effort})` call. Instructions
+and `instruction` items are `system` messages, a call joins the assistant
+message it follows as a `tool_calls` entry, and a result is a `tool` message
+naming the call it answers. `Request.tokens` is sent as `max_tokens`; without it
+the model's own default applies, and so does `Request.effort`, sent as
+`reasoning_effort` (GLM's `low`, `high`, `max`).
 
 Models in the catalog answer one of two shapes, and both are read: the binding's
 own (`response`, and a flat `tool_calls` of `{name, arguments}`) or OpenAI's
@@ -61,9 +63,11 @@ Workers AI keeps nothing between requests. Every request carries the whole
 conversation, and the model has no `anchor`, `mark` or `vocab`.
 
 A rate limit or a model at capacity throws `ModelError` with code `busy` and the
-binding's own message. An image item throws `ModelError` with code `image`,
-since images are not sent. A `ModelError` the binding throws itself (a binding
-that meters its caller, say) and anything else it throws are passed on as they
-were thrown.
+binding's own message. Credits the account has spent (a partner model such as
+Jev is paid from prepaid AI Gateway credits) throw one coded `limit`, a ceiling
+asking again would meet too. An image item throws `ModelError` with code
+`image`, since images are not sent. A `ModelError` the binding throws itself (a
+binding that meters its caller, say) and anything else it throws are passed on
+as they were thrown.
 
 Tests use a stand-in binding, not paid inference.

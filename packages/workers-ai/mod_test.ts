@@ -36,7 +36,7 @@ Deno.test('a conversation is sent as chat messages', async () => {
     { kind: 'call', id: 'b', name: 'find', args: '{}' },
     { kind: 'result', id: 'a', output: 'seen' },
     { kind: 'call', id: 'c', name: 'look', args: '{}' },
-  ], { instructions: 'you build', tools: [tool], tokens: 99 }))
+  ], { instructions: 'you build', tools: [tool], tokens: 99, effort: 'low' }))
   assertEquals(asked[0].model, '@cf/x/y')
   assertEquals(asked[0].input, {
     messages: [
@@ -60,6 +60,7 @@ Deno.test('a conversation is sent as chat messages', async () => {
     ],
     tools: [{ type: 'function', function: tool }],
     max_tokens: 99,
+    reasoning_effort: 'low',
   })
 })
 
@@ -112,10 +113,13 @@ Deno.test("OpenAI's answer shape is read the same", async () => {
   })
 })
 
-Deno.test('a rate limit is expected; any other failure is not', async () => {
+Deno.test('a rate limit and spent credits are expected; any other failure is not', async () => {
   let busy = binding(new Error('3040: Capacity temporarily exceeded'))
   let e = await assertRejects(() => busy.model(ask([])), ModelError)
   assertEquals(e.code, 'busy')
+  let spent = binding(new Error('2021: Insufficient AI Gateway credits'))
+  let refused = await assertRejects(() => spent.model(ask([])), ModelError)
+  assertEquals(refused.code, 'limit')
   let broken = new Error('boom')
   let other = await assertRejects(() => binding(broken).model(ask([])))
   assertEquals(other, broken)

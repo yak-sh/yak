@@ -33,6 +33,7 @@ import { ModelError } from '@yaks/model'
 import { LIMIT } from '@yaks/session/status'
 import { type Binding, failure, usageOf } from '@yaks/workers-ai'
 import { CATALOGUE, guess, priceOf, weigh } from './models.ts'
+import { defect } from './sentry.ts'
 
 /** The hourly reading: `fired` on this tagged wake runs the existing meter. */
 export let meterPlugin: Plugin = {
@@ -729,7 +730,10 @@ export let metering = (
  *
  * Over the allowance it throws a `ModelError` coded `limit` carrying the
  * ceiling's sentence, which a transcript comes to rest on (@yaks/session
- * `LIMIT`) and the direct door answers 429 with.
+ * `LIMIT`) and the direct door answers 429 with. The account's own credits
+ * spent are a ceiling too (@yaks/workers-ai `failure`), refused the same way,
+ * and reported: the space met no allowance of its own, and only the platform
+ * can buy more.
  */
 export let metered = (
   bind: { AI?: Binding; STORE?: Namespace } & Host,
@@ -757,7 +761,11 @@ export let metered = (
     let no = await refusedSpend(dir, space, 'models', bind)
     if (no) throw new ModelError(LIMIT, no)
     let answer = await bind.AI.run(model, input).catch((e) => {
-      throw failure(e)
+      let said = failure(e)
+      if (said instanceof ModelError && said.code == LIMIT) {
+        defect(e, { request: `model ${model}`, space: space.slug })
+      }
+      throw said
     })
     let n = usageOf(answer)
     let cost = weigh(price, {

@@ -26,7 +26,7 @@ JSON object. The components beside `entry` determine its type:
 | `content{body}` with `output{source}` | model or process output            |
 | `call{to, id, args, source}`          | a tool call requested by a model   |
 | `result{call}` with `content`         | a tool result                      |
-| `using{provider, model, effort}`      | model selection on an input or ask |
+| `using{provider, model, effort, …}`   | model selection on an input or ask |
 | `questions{asked}`                    | typed questions for the next ask   |
 | `answer{question, …}` with `output`   | a model's answer to one question   |
 | `stop`                                | no further transcript work         |
@@ -54,6 +54,11 @@ await appendEntry(g, 'session', 'Build completed', {
   notice: true,
 })
 ```
+
+`using.instructions` are the system instructions a turn is asked with, and
+`using.window` bounds what it sends: the newest that many entries, reaching back
+to the input that began the turn they cut into, so a long transcript costs a
+turn no more than a short one.
 
 A fork has `fork{from}` on its session entity. Its logical transcript contains
 the parent transcript through the referenced entry, followed by its own entries.

@@ -15,7 +15,8 @@ import { argsOf, transient } from '@yaks/graph'
 // A fork's transcript is the parent's entries up to the anchor plus its own.
 // When the model can continue from a kept reply (`model.anchor` returns one for
 // the newest ask), the model is asked with that anchor plus only what followed;
-// otherwise the whole transcript is sent every time. That one rule is what
+// otherwise the whole transcript is sent every time, or its newest entries
+// where the turn's `using.window` bounds them. That one rule is what
 // makes a fork's first ask cheap where the provider allows it: the anchor is
 // the parent's last reply, and only the fork's new input is sent. What the
 // provider keeps about an ask is its own component on the ask entry
@@ -205,13 +206,28 @@ export let project = (
   return out
 }
 
+/** The newest `n` entries of a transcript, reaching back to the input that
+ * began the turn they cut into, so no call or result is sent without its
+ * pair: what a turn sends when its `using.window` is `n`. The whole
+ * transcript when `n` is not a count. */
+export let recent = (entries: Bundle[], n?: unknown): Bundle[] => {
+  let size = Math.floor(Number(n))
+  if (!(size >= 1)) return entries
+  let from = Math.max(0, entries.length - size)
+  while (from > 0 && kindOf(entries[from]) != 'input') from--
+  return entries.slice(from)
+}
+
 /** The typed questions a turn asks: those on the newest entry since the
- * transcript's last ask that carries any, so a retry after an error asks them
- * again and a later turn does not. */
+ * transcript's last ask that asks for anything, questions or a model, so a
+ * retry after an error asks them again, and neither a later turn nor a later
+ * line choosing a model of its own does: the questions were that model's. */
 let questionsOf = (entries: Bundle[]): Questions | undefined => {
   let last = newestAsk(entries)
   let since = last ? seqOf(last) : 0
-  let asking = entries.filter((b) => QUESTIONS in b && seqOf(b) > since).at(-1)
+  let asking = entries.filter((b) =>
+    (QUESTIONS in b || USING in b) && seqOf(b) > since
+  ).at(-1)
   let asked = asking && comp(asking, QUESTIONS)?.asked
   return asked && typeof asked == 'object' && !Array.isArray(asked)
     ? asked as Questions
@@ -429,7 +445,7 @@ export let react = async (
       (boundary && seqOf(b) > seqOf(boundary) && kindOf(b) == 'input' &&
         !b.notice)
     )
-    : entries
+    : recent(entries, using?.window)
   let effort = using?.effort ?? served?.effort
   const results = deps.resultText
     ? new Map(

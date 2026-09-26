@@ -48,6 +48,20 @@ carries its own `using`, so each turn names its model and its instructions; an
 entry without one is part of the transcript the next turn reads, and asks for
 nothing.
 
+Two more keep a turn cheap. `using.window` is how many of the transcript's
+newest entries the model reads, reaching back to the line that began the turn it
+cuts into; without it every turn reads the whole transcript, so a conversation
+that goes on for weeks costs more with every line. `using.effort` is how hard
+the model thinks before it answers: GLM Flash takes `low`, `high` or `max` (its
+default), and every word of that thinking is billed as output.
+
+    using: {
+      model: '@cf/zai-org/glm-5.3-flash',
+      instructions: 'You are the village smith: gruff, kind, brief.',
+      window: 16,
+      effort: 'low',
+    }
+
 The store answers with more entries in the same transcript:
 
 - an `ask` — the moment the model was asked, with what the call used (`usage`)

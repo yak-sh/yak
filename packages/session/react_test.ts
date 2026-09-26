@@ -483,6 +483,25 @@ Deno.test('typed questions are asked once and answered one entry each', async ()
   )
 })
 
+Deno.test('questions are not asked of a model a later line chose', async () => {
+  let g = world()
+  await g.apply([{
+    entity: { eid: 'e2' },
+    entry: { session: ids.s, seq: 2 },
+    content: { body: 'the smith hears a knock' },
+    using: { provider: ids.p, model: ids.m },
+    questions: { asked: { open: { type: 'noul', instructions: 'Open up?' } } },
+  }, {
+    entity: { eid: 'e3' },
+    entry: { session: ids.s, seq: 3 },
+    content: { body: 'Bramble: anyone home?' },
+    using: { provider: ids.p, model: ids.m },
+  }])
+  let { model, asked } = scripted([says('r1', 'coming')])
+  assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'settled')
+  assertEquals(asked[0].questions, undefined)
+})
+
 Deno.test('a request refused at its limit is not retried', async () => {
   let g = world()
   let asked = 0
@@ -494,4 +513,37 @@ Deno.test('a request refused at its limit is not retried', async () => {
   assertEquals([asked, await kinds(g, ids.s)], [1, ['input', 'error']])
   await appendEntry(g, ids.s, 'and now?')
   assertEquals(statusOf(await transcript(g, ids.s)), 'pending')
+})
+
+Deno.test('a window sends the newest entries, from the input that began their turn', async () => {
+  let g = world()
+  let { model, asked } = scripted([
+    says('r1', 'one'),
+    calls(['c1', 'hi']),
+    says('r3', 'two'),
+    says('r4', 'three'),
+    says('r5', 'four'),
+  ], false)
+  let deps = { model, tools: [echo], mint }
+  let say = async (eid: string, body: string, window?: number) => {
+    g.apply([{
+      entity: { eid },
+      entry: { session: ids.s },
+      content: { body },
+      using: { provider: ids.p, model: ids.m, window },
+    }])
+    await rest(g, ids.s, deps)
+    return asked.at(-1)!.items.map((i) => i.kind)
+  }
+  await rest(g, ids.s, deps)
+  await say('e2', 'echo hi')
+  // the newest four begin at the result: the turn it answers is sent whole
+  assertEquals(await say('e3', 'and?', 4), [
+    'user',
+    'call',
+    'result',
+    'assistant',
+    'user',
+  ])
+  assertEquals(await say('e4', 'last', 1), ['user'])
 })

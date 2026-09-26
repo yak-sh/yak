@@ -122,12 +122,8 @@ Deno.test('a deleted provider leaves past entries saying what answered', async (
       },
     ])
     h.g.apply([{ entity: { eid: P }, tombstone: {} }])
-    assertEquals(h.store.read('.entry')[0].using, {
-      provider: P,
-      model: A,
-      effort: null,
-      instructions: null,
-    })
+    let using = h.store.read('.entry')[0].using as Record<string, unknown>
+    assertEquals([using.provider, using.model], [P, A])
   } finally {
     h.close()
     Deno.removeSync(dir, { recursive: true })

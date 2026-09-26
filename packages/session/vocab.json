@@ -384,6 +384,10 @@
         "instructions": {
           "type": "string",
           "description": "system instructions in force for this transcript"
+        },
+        "window": {
+          "type": "integer",
+          "description": "how many of the transcript's newest entries a turn sends the model, reaching back to the input that began the turn they cut into; the whole transcript where absent"
         }
       }
     },
