@@ -555,6 +555,14 @@ Deno.test(
           /unchanged|cannot sell/.test(heardIt),
           `the connect door: ${heardIt}`,
         )
+        // The sandbox keeps what a test made unless it is deleted.
+        await charged(
+          key,
+          `/v1/accounts/${account.data[0].id}`,
+          undefined,
+          undefined,
+          'DELETE',
+        )
 
         // A domain is the thing Plus opens, so it is proved on the far side
         // of the purchase and nowhere else.

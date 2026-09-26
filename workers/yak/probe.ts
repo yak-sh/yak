@@ -1133,64 +1133,73 @@ export let plusPrice = async (key: string, named = 'yaks.app probe Plus') => {
  * can fill in, so this one is onboarded by the platform with Stripe's test
  * identity (`address_full_match`, `000000000`, `btok_us_verified`). Stripe
  * takes about a minute to enable a new one, so it is kept and found again by
- * name rather than made per run.
+ * name. A connected account cannot be looked up by anything but its id, and
+ * listing them reads every account the sandbox holds, seven seconds a hundred,
+ * so the name is a product's, and the product holds the account's id.
  */
 export let merchant = async (
   key: string,
   named = 'yaks.app probe merchant',
 ) => {
-  let found = ''
-  for (let after = ''; !found;) {
-    let page = await charged(
-      key,
-      `/v1/accounts?limit=100${after && `&starting_after=${after}`}`,
-    ) as unknown as {
-      data: { id: string; metadata?: Record<string, string> }[]
-      has_more: boolean
-    }
-    found = page.data.find((a) => a.metadata?.probe == named)?.id ?? ''
-    if (!page.has_more) break
-    after = page.data.at(-1)!.id
+  let products = await charged(key, '/v1/products?limit=100') as unknown as {
+    data: { id: string; name: string; metadata?: Record<string, string> }[]
   }
-  let id = found || String(
-    (await charged(key, '/v1/accounts', {
-      country: 'US',
-      business_type: 'individual',
-      controller: {
-        fees: { payer: 'application' },
-        losses: { payments: 'application' },
-        requirement_collection: 'application',
-        stripe_dashboard: { type: 'none' },
-      },
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
-      business_profile: { mcc: '5734', url: 'https://yaks.app' },
-      individual: {
-        first_name: 'Probe',
-        last_name: 'Merchant',
-        email: 'merchant@example.com',
-        phone: '0000000000',
-        dob: { day: 1, month: 1, year: 1901 },
-        address: {
-          line1: 'address_full_match',
-          city: 'Brooklyn',
-          state: 'NY',
-          postal_code: '11201',
-          country: 'US',
+  let pointer = products.data.find((p) => p.name == named)
+  let id = pointer?.metadata?.account ?? ''
+  let held = id
+    ? await charged(key, `/v1/accounts/${id}`).catch(() => null)
+    : null
+  if (!held || held.deleted) {
+    id = String(
+      (await charged(key, '/v1/accounts', {
+        country: 'US',
+        business_type: 'individual',
+        controller: {
+          fees: { payer: 'application' },
+          losses: { payments: 'application' },
+          requirement_collection: 'application',
+          stripe_dashboard: { type: 'none' },
         },
-        id_number: '000000000',
-      },
-      external_account: 'btok_us_verified',
-      tos_acceptance: { date: Math.floor(Date.now() / 1000), ip: '127.0.0.1' },
-      metadata: { probe: named },
-    })).id,
-  )
-  await until(
-    async () => (await charged(key, `/v1/accounts/${id}`)).charges_enabled,
-    { timeout: 180_000, poll: 2000, label: `${id} to take charges` },
-  )
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_profile: { mcc: '5734', url: 'https://yaks.app' },
+        individual: {
+          first_name: 'Probe',
+          last_name: 'Merchant',
+          email: 'merchant@example.com',
+          phone: '0000000000',
+          dob: { day: 1, month: 1, year: 1901 },
+          address: {
+            line1: 'address_full_match',
+            city: 'Brooklyn',
+            state: 'NY',
+            postal_code: '11201',
+            country: 'US',
+          },
+          id_number: '000000000',
+        },
+        external_account: 'btok_us_verified',
+        tos_acceptance: {
+          date: Math.floor(Date.now() / 1000),
+          ip: '127.0.0.1',
+        },
+        metadata: { probe: named },
+      })).id,
+    )
+    await charged(
+      key,
+      pointer ? `/v1/products/${pointer.id}` : '/v1/products',
+      { ...(pointer ? {} : { name: named }), metadata: { account: id } },
+    )
+  }
+  if (!held?.charges_enabled) {
+    await until(
+      async () => (await charged(key, `/v1/accounts/${id}`)).charges_enabled,
+      { timeout: 180_000, poll: 2000, label: `${id} to take charges` },
+    )
+  }
   return id
 }
 
