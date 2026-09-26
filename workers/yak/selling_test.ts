@@ -206,6 +206,8 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
 // is made on that account and read back from it.
 Deno.test('a cart is priced at Stripe, paid, refunded and disputed', async () => {
   let key = stripeKey()
+  // Found or made at Stripe while the shop deploys here.
+  let merchantFound = merchant(key)
   using k = await shopping()
   await k.deploy()
   let shirts = await k.shirts()
@@ -215,7 +217,7 @@ Deno.test('a cart is priced at Stripe, paid, refunded and disputed', async () =>
     added([], { product: tee.entity.eid, options: 'M', qty: 2 }),
     { product: long.entity.eid },
   ))
-  let seller = await merchant(key)
+  let seller = await merchantFound
   let on = (path: string, fields?: Record<string, unknown>) =>
     charged(key, path, fields, seller)
   // The session the door made, read back off Stripe with its line items.
@@ -276,17 +278,26 @@ Deno.test('a cart is priced at Stripe, paid, refunded and disputed', async () =>
     }],
   })
 
-  let paid = await paying(k.env, {
-    items,
-    email: 'ana@example.com',
-    success: '?ordered={CHECKOUT_SESSION_ID}',
-  })
-  assertEquals(paid.status, 200, JSON.stringify(paid.body))
-  assertStringIncludes(paid.body.url, 'checkout.stripe.com')
+  // Three checkouts at once, each priced by the door and read back off
+  // Stripe: the cart, one whose buyer names their own price, and a third for
+  // the dispute the seller loses below.
+  let [made, other, third] = await Promise.all([
+    {
+      items,
+      email: 'ana@example.com',
+      success: '?ordered={CHECKOUT_SESSION_ID}',
+    },
+    { items: [{ product: tee.entity.eid, qty: 1, price_cents: 1 }] },
+    { items: [{ product: long.entity.eid }] },
+  ].map(async (body) => {
+    let paid = await paying(k.env, body)
+    assertEquals(paid.status, 200, JSON.stringify(paid.body))
+    assertStringIncludes(paid.body.url, 'checkout.stripe.com')
+    return await held(paid.body.url)
+  }))
 
   // The door priced it off the store, and carried the size into the name the
   // buyer reads on Stripe's own page.
-  let made = await held(paid.body.url)
   assertEquals(made.mode, 'payment')
   let [first, second] = made.line_items.data
   assertEquals(first.description, 'Everyday Tee — Charcoal (M)')
@@ -305,6 +316,8 @@ Deno.test('a cart is priced at Stripe, paid, refunded and disputed', async () =>
   // The two words the webhook routes by.
   assertEquals(made.metadata.space, k.space.eid)
   assertEquals(made.metadata.app, 'shop')
+  // And a buyer cannot name their own price: there is nowhere to put one.
+  assertEquals(other.line_items.data[0].price.unit_amount, 2800)
 
   // A product this store does not have is refused before Stripe is asked —
   // an eid off another app, or one somebody made up.
@@ -313,17 +326,6 @@ Deno.test('a cart is priced at Stripe, paid, refunded and disputed', async () =>
   })
   assertEquals(wrong.status, 400)
   assertStringIncludes(wrong.body.error.message, 'no product')
-  // And a buyer cannot name their own price: there is nowhere to put one.
-  let cheap = await paying(k.env, {
-    items: [{ product: tee.entity.eid, qty: 1, price_cents: 1 }],
-  })
-  assertEquals(cheap.status, 200)
-  let other = await held(cheap.body.url)
-  assertEquals(other.line_items.data[0].price.unit_amount, 2800)
-  // A third sale, for the dispute the seller loses below.
-  let third = await held(
-    (await paying(k.env, { items: [{ product: long.entity.eid }] })).body.url,
-  )
   // Nor send the buyer anywhere but back into the app.
   let away = await paying(k.env, { items, success: 'https://evil.example/' })
   assertEquals(away.status, 400)
@@ -368,12 +370,7 @@ Deno.test('a cart is priced at Stripe, paid, refunded and disputed', async () =>
     }, seller)
     return { intent, did }
   }
-
-  // One row lands in the shop's own store — written by the platform, as the
-  // app, with a letter to the buyer beside it in the same batch.
   k.env.STRIPE_CONNECT_WEBHOOK_SECRET = WHSEC
-  let sale = await settle(made, 'pm_card_visa', 'ana@example.com')
-  assertEquals(sale.did, 'shop: paid 9200')
 
   let orders = async () =>
     await (await apps.fetch(
@@ -385,59 +382,72 @@ Deno.test('a cart is priced at Stripe, paid, refunded and disputed', async () =>
     }[]
   let status = async (intent: string) =>
     (await orders()).find((o) => o.order.intent == intent)?.order.status
-  let [order] = await orders()
-  assertEquals(order.order.session, made.id)
-  assertEquals(order.order.intent, sale.intent.id)
-  assertEquals(order.order.account, seller)
-  assertEquals(order.order.total_cents, 9200)
-  // No rate is set, so the platform took nothing.
-  assertEquals(order.order.fee_cents, 0)
-  assertEquals(order.order.email, 'ana@example.com')
-  assertEquals(order.order.status, 'paid')
-  // The cart came back whole, product eids and the size and all.
-  assertEquals(JSON.parse(String(order.order.items)).length, 2)
 
-  // The buyer's letter, in the same batch, aimed at the address they typed
-  // and carrying what they bought.
-  let post = await (await apps.fetch(
-    visit('/shop/api/query?.mail&?doc&?deliver', {
-      headers: { cookie },
-    }),
-    k.env,
-  )).json() as { doc: { title: string; body: string } }[]
-  assertEquals(post.length, 1)
-  assertStringIncludes(post[0].doc.title, 'Your order from')
-  assertStringIncludes(post[0].doc.body, 'Everyday Tee — Charcoal (M) × 2')
-  assertStringIncludes(post[0].doc.body, '**Total $92.00**')
+  // Each session below is a story of its own, told on its own order, and
+  // Stripe takes its time over every one, so the four are told at once.
 
-  // ---- the same event again. At-least-once delivery is the normal case,
-  // and the order's eid is derived from the session — so this addresses the
-  // row already there, derives the same properties, and leaves one order.
-  await hook(k.env, 'checkout.session.completed', {
-    ...made,
-    status: 'complete',
-    payment_status: 'paid',
-    payment_intent: sale.intent.id,
-    customer_details: { email: 'ana@example.com' },
-  }, seller)
-  assertEquals((await orders()).length, 1, 'one sale, one order')
+  // One row lands in the shop's own store — written by the platform, as the
+  // app, with a letter to the buyer beside it in the same batch — and is then
+  // refunded.
+  let refunded = async () => {
+    let sale = await settle(made, 'pm_card_visa', 'ana@example.com')
+    assertEquals(sale.did, 'shop: paid 9200')
+    let mine = async () =>
+      (await orders()).filter((o) => o.order.session == made.id)
+    let [order] = await mine()
+    assertEquals(order.order.intent, sale.intent.id)
+    assertEquals(order.order.account, seller)
+    assertEquals(order.order.total_cents, 9200)
+    // No rate is set, so the platform took nothing.
+    assertEquals(order.order.fee_cents, 0)
+    assertEquals(order.order.email, 'ana@example.com')
+    assertEquals(order.order.status, 'paid')
+    // The cart came back whole, product eids and the size and all.
+    assertEquals(JSON.parse(String(order.order.items)).length, 2)
 
-  // ---- refunded, at Stripe. The charge inherits the PaymentIntent's
-  // metadata, which is why the door put it there: a refund knows nothing of a
-  // session. Part of the charge first, then the rest (T-37887).
-  let refund = async (amount?: number) => {
-    await on('/v1/refunds', { payment_intent: sale.intent.id, amount })
-    return await hook(
+    // The buyer's letter, in the same batch, aimed at the address they typed
+    // and carrying what they bought. The other sales name no buyer, so this
+    // is the only letter.
+    let post = await (await apps.fetch(
+      visit('/shop/api/query?.mail&?doc&?deliver', {
+        headers: { cookie },
+      }),
       k.env,
-      'charge.refunded',
-      await on(`/v1/charges/${sale.intent.latest_charge}`),
-      seller,
-    )
+    )).json() as { doc: { title: string; body: string } }[]
+    assertEquals(post.length, 1)
+    assertStringIncludes(post[0].doc.title, 'Your order from')
+    assertStringIncludes(post[0].doc.body, 'Everyday Tee — Charcoal (M) × 2')
+    assertStringIncludes(post[0].doc.body, '**Total $92.00**')
+
+    // ---- the same event again. At-least-once delivery is the normal case,
+    // and the order's eid is derived from the session — so this addresses the
+    // row already there, derives the same properties, and leaves one order.
+    await hook(k.env, 'checkout.session.completed', {
+      ...made,
+      status: 'complete',
+      payment_status: 'paid',
+      payment_intent: sale.intent.id,
+      customer_details: { email: 'ana@example.com' },
+    }, seller)
+    assertEquals((await mine()).length, 1, 'one sale, one order')
+
+    // ---- refunded, at Stripe. The charge inherits the PaymentIntent's
+    // metadata, which is why the door put it there: a refund knows nothing of
+    // a session. Part of the charge first, then the rest (T-37887).
+    let refund = async (amount?: number) => {
+      await on('/v1/refunds', { payment_intent: sale.intent.id, amount })
+      return await hook(
+        k.env,
+        'charge.refunded',
+        await on(`/v1/charges/${sale.intent.latest_charge}`),
+        seller,
+      )
+    }
+    assertEquals(await refund(4600), 'shop: partially_refunded')
+    assertEquals(await status(sale.intent.id), 'partially_refunded')
+    assertEquals(await refund(), 'shop: refunded')
+    assertEquals(await status(sale.intent.id), 'refunded')
   }
-  assertEquals(await refund(4600), 'shop: partially_refunded')
-  assertEquals(await status(sale.intent.id), 'partially_refunded')
-  assertEquals(await refund(), 'shop: refunded')
-  assertEquals(await status(sale.intent.id), 'refunded')
 
   // ---- disputed. Stripe's dispute card is charged and then disputed; a
   // dispute carries no metadata at all, so its charge is read back from Stripe
@@ -451,7 +461,7 @@ Deno.test('a cart is priced at Stripe, paid, refunded and disputed', async () =>
         ((await on(`/v1/disputes?payment_intent=${fought.intent.id}`)) as {
           data: Dispute[]
         }).data[0],
-      { timeout: 30_000, poll: 1000, label: 'the dispute' },
+      { timeout: 30_000, poll: 250, label: 'the dispute' },
     )
     assertEquals(
       await hook(k.env, 'charge.dispute.created', dispute, seller),
@@ -460,67 +470,74 @@ Deno.test('a cart is priced at Stripe, paid, refunded and disputed', async () =>
     assertEquals(await status(fought.intent.id), 'disputed')
     return { intent: fought.intent.id, dispute }
   }
-  // Stripe decides a dispute once it is answered, and settles it after a
-  // moment; the event is the dispute as it then stands.
-  let decided = async (dispute: Dispute, answer: Record<string, unknown>) => {
-    await on(`/v1/disputes/${dispute.id}`, answer)
+
+  // ---- the dispute decided (T-37887): won puts the order back to paid,
+  // with the evidence Stripe's sandbox decides for the seller on. Stripe
+  // decides a dispute once it is answered, and settles it after a moment; the
+  // event is the dispute as it then stands.
+  let won = async () => {
+    let { intent, dispute } = await disputed(other, 2800)
+    await on(`/v1/disputes/${dispute.id}`, {
+      evidence: { uncategorized_text: 'winning_evidence' },
+      submit: true,
+    })
     let closed = await until(
       async () => {
         let now = await on(`/v1/disputes/${dispute.id}`) as Dispute
         return /^(won|lost)$/.test(now.status) && now
       },
-      { timeout: 60_000, poll: 1000, label: `${dispute.id} decided` },
+      { timeout: 60_000, poll: 250, label: `${dispute.id} decided` },
     )
-    return await hook(k.env, 'charge.dispute.closed', closed, seller)
+    assertEquals(
+      await hook(k.env, 'charge.dispute.closed', closed, seller),
+      'shop: paid',
+    )
+    assertEquals(await status(intent), 'paid')
+    // A closed dispute on an order no longer disputed moves nothing.
+    assertEquals(
+      await hook(k.env, 'charge.dispute.closed', closed, seller),
+      'unchanged',
+    )
   }
 
-  // ---- the dispute decided (T-37887): won puts the order back to paid,
-  // with the evidence Stripe's sandbox decides for the seller on...
-  let won = await disputed(other, 2800)
-  let winning = {
-    evidence: { uncategorized_text: 'winning_evidence' },
-    submit: true,
-  }
-  assertEquals(await decided(won.dispute, winning), 'shop: paid')
-  assertEquals(await status(won.intent), 'paid')
-  // A closed dispute on an order no longer disputed moves nothing.
-  let again = await on(`/v1/disputes/${won.dispute.id}`)
-  assertEquals(
-    await hook(k.env, 'charge.dispute.closed', again, seller),
-    'unchanged',
-  )
   // ...and lost, the seller conceding, says the buyer's bank took the money.
-  let lost = await disputed(third, 3600)
-  assertEquals(
-    await hook(
-      k.env,
-      'charge.dispute.closed',
-      await on(`/v1/disputes/${lost.dispute.id}/close`, {}),
-      seller,
-    ),
-    'shop: lost',
-  )
-  assertEquals(await status(lost.intent), 'lost')
+  let lost = async () => {
+    let { intent, dispute } = await disputed(third, 3600)
+    assertEquals(
+      await hook(
+        k.env,
+        'charge.dispute.closed',
+        await on(`/v1/disputes/${dispute.id}/close`, {}),
+        seller,
+      ),
+      'shop: lost',
+    )
+    assertEquals(await status(intent), 'lost')
+  }
 
   // A charge the merchant made outside this platform, on the same account:
   // not ours, and not a break.
-  let elsewhere = await on('/v1/payment_intents', {
-    amount: 500,
-    currency: 'usd',
-    payment_method: 'pm_card_visa',
-    payment_method_types: { 0: 'card' },
-    confirm: true,
-  }) as { id: string; latest_charge: string }
-  await on('/v1/refunds', { payment_intent: elsewhere.id })
-  assertEquals(
-    await hook(
-      k.env,
-      'charge.refunded',
-      await on(`/v1/charges/${elsewhere.latest_charge}`),
-      seller,
-    ),
-    'not a sale of ours',
-  )
+  let elsewhere = async () => {
+    let intent = await on('/v1/payment_intents', {
+      amount: 500,
+      currency: 'usd',
+      payment_method: 'pm_card_visa',
+      payment_method_types: { 0: 'card' },
+      confirm: true,
+    }) as { id: string; latest_charge: string }
+    await on('/v1/refunds', { payment_intent: intent.id })
+    assertEquals(
+      await hook(
+        k.env,
+        'charge.refunded',
+        await on(`/v1/charges/${intent.latest_charge}`),
+        seller,
+      ),
+      'not a sale of ours',
+    )
+  }
+
+  await Promise.all([refunded(), won(), lost(), elsewhere()])
 })
 
 // ---- selling (sell.ts, T-34524) --------------------------------------------
