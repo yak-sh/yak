@@ -1,8 +1,8 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env=WRANGLER_CI_OVERRIDE_NETWORK_MODE_HOST --allow-run=npm,npx,git,pgrep,kill,docker,env
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
-// `deno task dev:yak`, their `-staging` variants and the probe (probe.ts) all
-// come through here, so the pinned version is written once and `node_modules`
-// is current before wrangler reads it.
+// `deno task dev:yak`, their `-staging` variants and the test runner
+// (bin/test.ts) all come through here, so the pinned version is written once
+// and `node_modules` is current before wrangler reads it.
 //
 // Why the install has to happen first: wrangler bundles with esbuild, which
 // resolves `zod` and the MCP SDK as files under this directory's
@@ -10,7 +10,9 @@
 // fresh worktree has none and every wrangler command dies unresolved at
 // mcp.ts's `import { z } from 'zod'` (T-34159). npm is the only thing that
 // fills that directory: esbuild wants files on disk, so no import map or
-// deno cache reaches those two deps.
+// deno cache reaches those two deps. Deno reads from it too: the kernel in
+// memory imports the OAuth provider as a file there (oauth-provider.ts), so a
+// test run installs before its first test loads.
 
 // The pin. `--yes` so a cold npx cache installs it instead of asking.
 //
@@ -106,12 +108,12 @@ export let aliased = (root = repo, to = TSCONFIG) => {
 
 /**
  * `npm ci` when it is needed, at most one at a time, and never twice at once:
- * `npm ci` empties node_modules before it fills it, and the slow tier boots
- * several kernels in parallel (bin/test.ts), so a second install would delete
- * the tree the first is bundling from. mkdir is the atomic create POSIX gives
- * us — whoever makes the directory installs, everyone else waits for the
- * stamp. Answers whether it installed. The workspace's paths are written
- * first ({@link aliased}), so everything wrangler bundles from is current.
+ * `npm ci` empties node_modules before it fills it, and more than one process
+ * may ask at once (a test run beside `dev:yak`), so a second install would
+ * delete the tree the first is bundling from. mkdir is the atomic create POSIX
+ * gives us — whoever makes the directory installs, everyone else waits for the
+ * stamp. Answers whether it installed. The workspace's paths are written first
+ * ({@link aliased}), so everything wrangler bundles from is current.
  */
 export let ready = async (root = dir, timeout = 600_000) => {
   aliased()

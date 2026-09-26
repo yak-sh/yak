@@ -22,7 +22,7 @@
 import { createRequire } from 'node:module'
 import { parse } from '@std/toml'
 import { apex } from './host.ts'
-import { dir, ready } from './wrangler.ts'
+import { dir } from './wrangler.ts'
 import { cloudflare, driven, signIn, vars } from './probe.ts'
 
 type Config = Record<string, unknown> & {
@@ -159,9 +159,10 @@ let door = (server: Harness) =>
     },
   )
 
-/** The run's kernel, and how its tests reach it. */
+/** The run's kernel, and how its tests reach it. The runner has made the
+ * Worker's `node_modules` current before any of its tests load (bin/test.ts),
+ * so this bundles from a tree nothing is installing. */
 export let probeSuite = async () => {
-  await ready()
   let secret = crypto.randomUUID()
   let mail = Deno.makeTempFileSync({ prefix: 'yak-probe-mail-' })
   let cf = cloudflare(mail)

@@ -281,6 +281,16 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let files = (await inventory(roots))
     .filter((f) => !only || workerd(f) == (only == 'workerd'))
   let docs = only == 'workerd' ? [] : await pages(roots)
+  // The Worker's npm dependencies, current before any test loads: workerd
+  // bundles from workers/yak/node_modules, and the kernel in memory imports
+  // the OAuth provider out of it (workers/yak/oauth-provider.ts). `npm ci`
+  // empties that tree before it fills it, so an install racing the deno pass
+  // left every shard that loaded its tests meanwhile without that module for
+  // the rest of its life, and each kernel in it answered its first sign-in
+  // with a 500.
+  if (files.some((f) => f.startsWith('workers/'))) {
+    await (await import('../workers/yak/wrangler.ts')).ready()
+  }
   // The Stripe sandbox every kernel sells in, found once for the run and
   // handed to every process by its environment (probe.ts `vars`).
   let { plusPrice, sandboxKey } = await import('../workers/yak/probe.ts')
