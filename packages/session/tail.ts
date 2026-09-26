@@ -172,9 +172,7 @@ export let imported = (
 let settled = async (g: Graph, bundles: Bundle[]): Promise<Bundle[]> => {
   let touched = bundles.filter((b) => !b.entry && (b.tool || b.execution))
   if (!touched.length) return bundles
-  let rows = await g.storage.tx((tx) =>
-    tx.get(touched.map((b) => b.entity.eid))
-  )
+  let rows = await g.get(touched.map((b) => b.entity.eid))
   let there = new Set(
     rows.filter((r) => r && r[TOMBSTONE] == null).map((r) => r!.entity.eid),
   )
