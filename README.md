@@ -1,217 +1,80 @@
-# Tasks — the fleet entity graph
+# yaks
 
-One SQLite file is a fleet's shared memory: tasks, projects, boards, docs,
-comments, agent sessions, mail, memories — one graph, worked by humans and
-agents through the same doors. A web canvas, a terminal UI, a `task` CLI, and an
-MCP server all speak one wire; every change is an entity patch, every list a
-query.
+One graph, worked by people and agents through the same doors.
+
+This repository is the yaks toolkit: the `@yaks/*` packages, the `yak` command
+that composes them over one SQLite file, the web canvas and terminal UI, and
+yaks.app, the Cloudflare Worker that hosts yaks apps. Tasks, projects, agent
+sessions, memories and the UI's own state are entities in one graph; every
+change is a batch of entity patches, and every list is a query.
+
+## Start
+
+```sh
+deno install -gAf jsr:@yaks/cli/yak  # or, from a checkout: deno task install
+yak init Ada                         # ~/.yak/yak.json and its graph, worked at by Ada
+yak task new 'Buy the cake'
+yak task list
+yak serve                            # the canvas, /mcp and /query on http://127.0.0.1:8787
+```
+
+`yak init` writes the config (`db`, the plugins, and who you are) and never
+replaces one. `yak serve` listens on this machine alone; a config's `hostname`
+offers it to a network, and it has no authentication of its own. @yaks/web is
+not on JSR yet, so the web canvas comes with a checkout.
+
+Agents join the same graph:
+
+- **Claude Code**: `yak hooks install` writes lifecycle hooks into
+  `~/.claude/settings.json`. Each session becomes a session entity, is told its
+  claims when it starts, and releases them when it ends.
+- **Any MCP client**: `http://127.0.0.1:8787/mcp` serves the graph's tools.
 
 ## The model
 
-Everything is an **entity** — a client-minted uuid plus a server-minted number —
-that carries **components**, one row per component table under the same id.
-There is no stored `kind`: an entity _is_ what its components make it, and
-`kindOf()` derives a display name with a typed short id (`T-123` task, `P-19`
-project, `S-31` session, `M-40` memory, `E-9` mail…).
+An **entity** is an id carrying **components**: a task is `doc{title, body}`
+plus `task{}`, a board is `doc` plus `board{query}`, and nothing stores a kind.
+An edge between two entities is an entity too. A write is a batch of bundles,
+`{entity: {eid}, <component>: {<properties>}}`, applied in one transaction: an
+omitted property is unchanged, `null` clears one, and `$delete: true` deletes
+the entity. One query grammar filters everywhere: `.task.status=open`,
+`.priority<=1`, a bare word for text.
 
-- a **task** is `doc` (title/body) + `task` (status/priority/project/assignee)
-- a **board** is `doc` + `board(query)` — a saved filter over tasks, never a
-  stored list: a task is on a board because it matches, so membership can't
-  drift
-- a **comment** is `doc` + `comment(target)` — aimed at ANY entity; steering
-  belongs on the task, where its current or next run reads it
-- a **session** is an agent run, reified; a **claim** is its lease on a task —
-  the server refuses to hand a held lease to another session
-- mail, memories, personas, people, webhook deliveries are entities too — one
-  vocabulary (each package's `vocab.json`, loaded by @yaks/vocab) that every
-  door derives from
+[packages/graph](packages/graph/README.md) is the model and its
+[architecture](packages/graph/ARCHITECTURE.md);
+[packages/README.md](packages/README.md) indexes every package.
 
-**Edges** are typed sentences between entities: `requires` (hard gate),
-`contains` (decomposition), `reads` (read-first), `about` (subject reference),
-`supersedes` (a current entity replaces an older one, which stays visible and
-marked).
+## Plugins and roles
 
-A write is a batch of bundles, applied atomically. A bundle is one entity,
-`{entity: {eid}, <comp>: {<props>}}`, and each component in it is a patch:
-omitted properties are untouched, `prop: null` clears a property, `comp: null`
-removes the component, and `tombstone: {}` deletes the entity. Browser tabs sync
-over `/ws`; headless clients POST `/apply`; both broadcast to everyone else.
+A config lists plugins. Each plugin is a package whose subpaths are its facets
+(`/vocab`, `/rules`, `/tools`, `/effects`, `/service`, `/routes`, `/views`) and
+never says where it runs. A process serves roles, and imports only the facets of
+the roles it serves: a `yak` command opens the graph and runs one tool,
+`yak serve` answers HTTP, effects are worked by a pool of processes, and each
+plugin's service runs in one process at a time.
+[packages/cli](packages/cli/README.md) says how.
 
-Structured entity JSON (`task ... --json`, `GET /query`, MCP `graph_query` and
-`task_show`) is the components themselves, with derived `kind` kept beside them:
+## The repository
 
-```json
-{
-  "kind": "task",
-  "entity": { "eid": "bd3d…", "num": 12585 },
-  "doc": { "title": "…", "body": "…" },
-  "task": { "status": "done", "priority": 2 }
-}
-```
+| path               | holds                                                             |
+| ------------------ | ----------------------------------------------------------------- |
+| `packages/`        | the `@yaks/*` packages, each with its own README                  |
+| `packages/cli`     | `yak`, and `compose()`, which builds a process from a config      |
+| `packages/web`     | the web canvas and the terminal UI                                |
+| `apps/`            | the yaks apps this repository keeps, pushed with `yak admin push` |
+| `workers/yak`      | yaks.app, the Cloudflare Worker that hosts yaks apps              |
+| `plugins/yaks.app` | the yaks.app agent plugin: skills and assets                      |
+| `extension/`       | the browser extension: file a task about a page                   |
+| `bin/`             | install, backup, and the test runner                              |
 
-The entity spine owns `eid` and `num`; other components omit their SQL `eid`
-join key. `task_show` additionally carries `refs`, `backrefs`, and `comments`,
-whose rows use the same shape. This is a breaking structured-output contract:
-the former top-level `eid`/`num` and `comps` wrapper do not exist. `kind` is a
-reserved key in the component namespace, so extensions must not register a
-component named `kind`.
-
-A read is also a write. `POST /apply` and MCP `graph_apply` take
-`{entities: [...]}`, each entry the shape above: `entity: {eid}` names an
-existing entity or, as a `$alias`, one the batch mints (the result's `aliases`
-maps `$alias → eid`) — as does an eid the client minted itself, a uuid or a
-content hash naming nothing yet, on an entry carrying components; components
-ride flat beside it as patches; edges ride `edges`, `{type, child}` or a list of
-them. Wherever an eid goes — `entity.eid`, a reference property, an edge's child
-— a `$alias`, a human id, or a nested bundle stands in. `was` beside the
-components guards per property. `kind`, `num`, `refs`, `backrefs`, `comments`,
-and stamped or derived properties are ignored, so a read edited and sent back
-writes just the edit:
-
-```json
-[{
-  "entity": { "eid": "$box" },
-  "doc": { "title": "Recipe box" },
-  "project": {},
-  "edges": [
-    { "type": "requires", "child": "T-3" },
-    {
-      "type": "contains",
-      "child": {
-        "doc": { "title": "First recipe" },
-        "task": { "project": "$box" }
-      }
-    }
-  ]
-}]
-```
-
-An edge is an entity of its own, so a bundle may also say one outright: `edge`
-beside its nature tag. Under a `$alias` that eid is DERIVED from the sentence
-rather than minted — the same sentence said twice is one entity, and `aliases`
-reports what it derived:
-
-```json
-[{
-  "entity": { "eid": "$said" },
-  "edge": { "from": "T-1", "to": "T-2" },
-  "requires": {}
-}]
-```
-
-A bundle wearing `tombstone` — `{"entity": {"eid": "T-3"}, "tombstone": {}}` —
-deletes that entity, and because a dead entity takes no patch it is refused
-beside any other component or a `$alias`. The older `{key|id, comps, deps, was}`
-literal is still accepted.
-
-Beside the graph sit FTS5 full-text search over every doc and local semantic
-embeddings. Both are ranked `/query` evaluations whose ordinary entity rows
-carry a result-only `rank` component; `/` in the web UI, `task search`, and MCP
-`search` are consumers of that graph boundary.
-
-## The doors
-
-- **Web canvas** — `https://tasks.yak.sh`. The URL is the root card: `/T-123`
-  fullscreens any entity, `?v=` picks its view. Cards, pins, and cameras are
-  entities themselves, so the UI state is graph data like everything else.
-- **TUI** — `task tui`: the same app painted as ANSI lines on a fake DOM, vim
-  keys, another live client — edits made in a browser appear on the next frame.
-- **CLI** — `deno task install` puts `yak` (and `task`) on PATH, a shim that
-  runs this checkout with its own deno.json, and enables the repository's git
-  hooks. Dot-params route by prop through the component vocabulary (`.title=`
-  can only mean `doc.title`); the same grammar filters and writes:
-
-  ```sh
-  task list .status=open .priority<=1
-  task new P1 .project=holdco Fix the flux capacitor
-  task set T-3 .status=done --comment="verified end-to-end"
-  task claim T-3 && task release T-3
-  task claude                   # graph-wired interactive Claude
-  task codex                    # graph-wired interactive Codex
-  task codex --operator         # also receive project-wide attention
-  task inbox                     # everything addressed to you
-  task search flux capac*
-  task help grammar              # the whole filter grammar
-  ```
-
-  On the graph's machine, reads and writes go directly through SQLite, so graph
-  edits work while the HTTP server is down. Writes use the same validation and
-  journal as HTTP; the CLI never runs effects. `DB_PATH` selects a local graph.
-  An explicit remote `TASKS_HOST` without `DB_PATH`, or `TASKS_LOCAL=0`, keeps
-  requests on HTTP. Local writes require a matching schema version and never
-  migrate the graph.
-
-- **MCP** — the server IS an MCP server: `POST /mcp` (Streamable HTTP,
-  stateless), or `deno task mcp` over stdio. Two tiers: `task_*` sugar
-  (list/new/update/show/claim/release/comment/context…) and the generic tier —
-  `graph_query` / `graph_apply` (the raw wire), `ui_state` / `card_*` (the UI is
-  data), `search` / `memory_*`, and `code_run`: agent-written JS in a
-  permissionless sandboxed worker whose only capability is the graph.
-- **Mail** — a mail is an entity whose `doc` carries subject and body; creating
-  it requests delivery. Local-first: a fleet recipient is delivered in-graph
-  instantly, and only external mailboxes ride the Cloudflare edge. `task inbox`
-  includes mail.
-- **Listening** — `yak session listen --session "$CLAUDE_CODE_SESSION_ID"`
-  prints one line for each comment on a session's claimed work, knock at it, or
-  letter delivered to it, as it arrives, for a harness to run under a monitor
-  (Claude Code's Monitor tool).
-- **Native Codex delivery** — a task-launched Codex session binds its tmux pane.
-  When directly addressed activity is pending, the daemon waits for a stable
-  empty composer and types only a constant request to call `task_context`;
-  graph-authored message text never crosses tmux.
-- **HTTP** — `/apply`, `/ws`, `/query`, `/mcp`, `/journal` (write history),
-  `/telemetry`, plus explicit non-graph service boundaries for browser assets,
-  remote access, auth, and external I/O.
-
-## Agents in the graph
-
-`task claude` and `task codex` add lifecycle hooks to that provider invocation;
-bare `claude` and `codex` launches keep their native configuration untouched.
-SessionStart reifies the session and returns the normal graph digest, including
-claimable work, to every task-launched agent. `--operator` grants only
-project-wide attention: project mail and project-actor knocks. Comments on
-claimed work reach its run.
-
-Projects may add Claude-only invocation settings in
-`.tasks/claude-settings.json`; hook arrays append after Tasks' lifecycle hooks
-and are never loaded by bare `claude`.
-
-Persistent operator roles are retired. The server and effects daemon never
-reconcile role state into agent processes. Historical role configuration and
-session links remain readable; new headless work uses session launch requests.
-
-SessionEnd runs `task session wrap --hook` — claims are released and the closing
-summary is kept as the session brief (`task session brief` writes one
-deliberately). Sessions also spawn FROM the graph
-(`task spawn T-3 --provider=codex`): creating a session entity carrying a
-provider IS the spawn request. Everything the run learns — status, branch, exit
-code, final text — is server-stamped onto the row. Memories (`task remember`,
-MCP `memory_save`) let a lesson outlive the session that learned it; recall
-decays with disuse and use bumps it.
-
-## Run
+## Develop
 
 ```sh
-deno task dev      # yak serve over ~/.yak/yak.json: web, /mcp, /query on :5173
-deno task tui      # the terminal UI (needs a server running)
-deno task install  # global `yak` CLI, with `task` as its other name
-deno task check    # fmt + lint + typecheck
-deno task test     # the suite
+deno task install  # yak on PATH, running this checkout
+deno task check    # fmt, lint, types, and the package checks
+deno task test     # the tests
+deno task tui      # the terminal UI
 ```
-
-The graph is `~/.yak/yak.db`, and `~/.yak/yak.json` names it and the plugins
-composed over it — both outside the repo. On the box, `yak serve` runs as the
-`systemd --user` unit `yak.service` (`systemctl --user restart yak` after a
-landing). The page is `@yaks/web` (packages/web), built with `deno bundle` when
-the server starts. There is no auth — the server is built to live on a private
-tailnet.
-
-## Pointers
-
-- `CLAUDE.md` — the contributor guide: the data model in one page, the file map,
-  the invariants, the recipes. Start there to change anything.
-- `docs/EVALUATION.md` — the target branching evaluator: one evaluation, literal
-  frame context, stateless provider reduction, and result-only joins.
 
 ## License
 
