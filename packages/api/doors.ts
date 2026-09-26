@@ -234,5 +234,33 @@ export let ask = async (graph: Graph, request: Request): Promise<Response> => {
   // again to answer.
   let ast = parse(q)
   let op = aggregate(ast)
-  return json(op ? reduced(op, await graph.rows(ast)) : await graph.read(ast))
+  return op
+    ? json(reduced(op, await graph.rows(ast)))
+    : listed(await graph.read(ast))
+}
+
+// How much of a listed answer is said per piece of the stream.
+let PIECE = 64 * 1024
+
+// A list as its JSON response, said one entity at a time: the bytes
+// `JSON.stringify` would write, never built as one string, so a selection of
+// any size is sent rather than failing to fit in one. The stream pulls, so a
+// slow reader slows the saying.
+let listed = (items: unknown[]): Response => {
+  let bytes = new TextEncoder()
+  let next = 0
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start: (c) => c.enqueue(bytes.encode('[')),
+      pull: (c) => {
+        let piece = ''
+        while (next < items.length && piece.length < PIECE) {
+          piece += (next ? ',' : '') + JSON.stringify(items[next++])
+        }
+        c.enqueue(bytes.encode(next < items.length ? piece : piece + ']'))
+        if (next == items.length) c.close()
+      },
+    }),
+    { headers: { 'content-type': 'application/json' } },
+  )
 }

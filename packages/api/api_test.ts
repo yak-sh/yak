@@ -118,6 +118,25 @@ Deno.test('a batch applied comes back as it landed, and reads back', async () =>
   assertEquals(comp(found[0], 'doc').title, 'Spring')
 })
 
+Deno.test('/query sends a selection larger than one piece of its stream, whole', async () => {
+  let graph = shopGraph()
+  let books = Array.from({ length: 300 }, (_, i) => ({
+    entity: { eid: `b${i}` },
+    doc: { title: 'x'.repeat(400) },
+    book: { price: i },
+  }))
+  await graph.apply(books)
+  let r = await api({ graph })(ask('.book&?doc'))
+  assertEquals(r.headers.get('content-type'), 'application/json')
+  let text = await r.text()
+  assertEquals(text, JSON.stringify(await graph.read('.book&?doc')))
+  assertEquals((JSON.parse(text) as Bundle[]).length, 300)
+  assertEquals(
+    await (await api({ graph })(ask('.book&.price>999'))).text(),
+    '[]',
+  )
+})
+
 Deno.test('POST /query reads the same line', async () => {
   let handler = shop()
   await handler(

@@ -23,6 +23,7 @@ import {
   toolDoc,
   toolEid,
   UnfinishedCall,
+  worded,
 } from './mod.ts'
 
 let echo: Tool = {
@@ -352,6 +353,47 @@ Deno.test('a reading tool answers entities and writes none of them', async () =>
   assertEquals(answer.find((b) => b.person)!.entity.eid, 'p1')
   // The row it found is the row it was: a read does not touch what it read.
   assertEquals((await g.read('.person&*'))[0], before)
+})
+
+Deno.test('an answer too long to send whole is refused, not crashed on', async () => {
+  let vocab = words()
+  let g = graph({ vocab, storage: ram(vocab) })
+  let many: Tool = {
+    ...echo,
+    readOnly: true,
+    inputSchema: { type: 'object', properties: {} },
+    run: () =>
+      Array.from({ length: 20 }, (_, i) => ({
+        entity: { eid: `e${i}` },
+        content: { body: 'x'.repeat(40) },
+      })),
+  }
+  let r = runner(g, { tools: [many], most: 300, report: () => {} })
+  await r.ensure()
+  let answer = await r.call(called('example_echo'))
+  let error = answer.find((b) => b.error)!
+  assertEquals((error.error as Comp).code, 'too_large')
+  assertEquals(body(error).includes('\n'), false)
+  assertEquals(answer.some((b) => b.entity.eid == 'e0'), false)
+  assertEquals((await g.read('.execution&*'))[0].execution, { state: 'failed' })
+})
+
+Deno.test('an answer is worded whole within its budget, and counted past it', () => {
+  let answer: Bundle[] = [
+    { entity: { eid: 'a' }, doc: { title: 'one\ntwo' } },
+    { entity: { eid: 'b' } },
+  ]
+  assertEquals(worded(answer), JSON.stringify(answer, null, 2))
+  assertEquals(worded([]), '[]')
+  let cut = worded(answer, 20)
+  assertEquals(
+    cut.startsWith(JSON.stringify(answer, null, 2).slice(0, 22)),
+    true,
+  )
+  assertEquals(
+    cut.endsWith('2 of 2 not said: an answer is worded in 20 characters'),
+    true,
+  )
 })
 
 Deno.test('a refused argument is an error code, not an exception', async () => {

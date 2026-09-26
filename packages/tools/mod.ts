@@ -28,6 +28,7 @@ export { CallError } from './args.ts'
 export {
   answerOf,
   faulted,
+  MOST,
   type Opts,
   READY,
   reconcile,
@@ -39,4 +40,5 @@ export {
   UnfinishedCall,
   WOKEN,
   worded,
+  WORDS,
 } from './runner.ts'

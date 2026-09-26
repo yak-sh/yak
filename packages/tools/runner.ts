@@ -135,6 +135,9 @@ export type Opts = {
   otherwise?: Tool
   /** the clock `result.ms` is measured with (default: `performance.now`) */
   now?: () => number
+  /** the most characters an answer may take as JSON; past it the call is
+   * refused as `too_large` (default {@link MOST}) */
+  most?: number
   /** which entity this runner runs as: its claims record it in
    * `execution.by`, and a call held by anyone else is left alone — a
    * transcript imported from elsewhere arrives already executed, held by the
@@ -187,15 +190,97 @@ export type Runner = {
   interrupt: (why: string, holder?: Eid) => Promise<Bundle[]>
 }
 
-// A tool's answer as text: the `content{body}` values its bundles carry, or
-// the bundles themselves as JSON when they carry none. It is copied onto the
-// result entity as `content{body}` so a model, a terminal and a transcript all
-// read the answer the same way.
-export let worded = (answer: Bundle[]): string => {
+/** The most characters of an answer's text {@link worded} says: the copy on
+ * the result entity, what a model reads over MCP, a transcript's line. What
+ * lies past it is counted, not said — the answer itself is the bundles. */
+export let WORDS = 256 * 1024
+
+/** The most characters an answer may take as JSON before the runner refuses
+ * it as `too_large`: far below the longest string a JavaScript engine can
+ * build, so a door that sends an answer whole (MCP, `/apply`, `--json`) never
+ * fails to. */
+export let MOST = 64 * 1024 * 1024
+
+// Parts said one after another until `most` characters are spent, the last
+// cut where the budget ends, and a line counting the parts left unsaid. Each
+// part is said only when it is reached, so the cost is the budget's, never the
+// answer's.
+let spent = <T>(
+  parts: T[],
+  say: (part: T) => string,
+  sep: string,
+  most: number,
+): { text: string; left: number } => {
+  let text = ''
+  let said = 0
+  for (let part of parts) {
+    let s = (said ? sep : '') + say(part)
+    if (text.length + s.length > most) {
+      return {
+        text: text + s.slice(0, most - text.length),
+        left: parts.length - said,
+      }
+    }
+    text += s
+    said++
+  }
+  return { text, left: 0 }
+}
+
+// JSON.stringify(answer, null, 2), said one bundle at a time.
+let inset = (b: Bundle) =>
+  '  ' + JSON.stringify(b, null, 2).replaceAll('\n', '\n  ')
+
+/**
+ * A tool's answer as text: the `content{body}` values its bundles carry, or
+ * the bundles themselves as JSON when they carry none. It is copied onto the
+ * result entity as `content{body}` so a model, a terminal and a transcript all
+ * read the answer the same way. It says at most `most` characters and counts
+ * the rest, so an answer of any size words in bounded time and space.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let said = (body: string) => ({ entity: { eid: body }, content: { body } })
+ * assertEquals(worded([said('one'), said('two')]), 'one\ntwo')
+ * assertEquals(
+ *   worded([said('one'), said('two'), said('three')], 5),
+ *   'one\nt\n… 2 of 3 not said: an answer is worded in 5 characters',
+ * )
+ * ```
+ */
+export let worded = (answer: Bundle[], most = WORDS): string => {
   let said = answer
     .map((b) => (b.content as Comp | undefined)?.body)
     .filter((body): body is string => typeof body == 'string')
-  return said.length ? said.join('\n') : JSON.stringify(answer, null, 2)
+  let { text, left } = said.length
+    ? spent(said, (s) => s, '\n', most)
+    : spent(answer, inset, ',\n', most)
+  let open = said.length ? '' : '[\n'
+  return left
+    ? `${open}${text}\n… ${left} of ${said.length || answer.length} ` +
+      `not said: an answer is worded in ${most} characters`
+    : said.length
+    ? text
+    : answer.length
+    ? `[\n${text}\n]`
+    : '[]'
+}
+
+// An answer too long to send whole is refused, and so never reaches a door
+// that would build its JSON in one string. It is measured one bundle at a
+// time, stopping once past `most`, so measuring any answer costs at most that.
+let measured = (answer: Bundle[], most: number) => {
+  let size = 0
+  for (let b of answer) {
+    size += JSON.stringify(b).length
+    if (size > most) {
+      throw new CallError(
+        'too_large',
+        `the answer is ${answer.length} entities, past the ${most} ` +
+          'characters of JSON a call answers in: ask for fewer',
+      )
+    }
+  }
 }
 
 /**
@@ -503,6 +588,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         ...opts.process ? { process: opts.process } : {},
       }
       let made = signed(await tool.run(asking, host), actor)
+      measured(made, opts.most ?? MOST)
       // A rehearsal: `check: true` to a tool that writes runs the write's
       // every phase and rolls it back, so the answer is the batch as a kept
       // write would have returned it, or the refusal it would have met.
