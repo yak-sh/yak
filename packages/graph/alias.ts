@@ -125,11 +125,10 @@ export let resolve = (
 ): Bundle[] => {
   // One alias may appear on several bundles (a doc in one, a book in
   // another); they are one entity, so they are resolved together.
-  let groups = new Map<Eid, Bundle[]>()
-  for (let b of bundles) {
-    if (!isAlias(b.entity.eid)) continue
-    groups.set(b.entity.eid, [...(groups.get(b.entity.eid) ?? []), b])
-  }
+  let groups = Map.groupBy(
+    bundles.filter((b) => isAlias(b.entity.eid)),
+    (b) => b.entity.eid,
+  )
   // No aliases, and nothing referencing one: the common case, left exactly
   // alone.
   if (!groups.size && !bundles.some((b) => pointsAt(b, vocab).length)) {

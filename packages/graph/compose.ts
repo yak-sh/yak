@@ -63,9 +63,34 @@ import { dead, reserved, TOMBSTONE } from './bundle.ts'
  * ```
  */
 export let composed = (bundles: Bundle[]): Bundle[] => {
-  let by = new Map<Eid, Bundle>()
-  let gone = new Set<Eid>()
-  let said = new Set<Eid>()
+  let { by, gone, said } = folded(bundles)
+  return [...by.values()].filter((b) => said.has(b.entity.eid)).map((b) =>
+    gone.has(b.entity.eid)
+      ? {
+        entity: b.entity,
+        ...(typeof b.$alias == 'string' ? { $alias: b.$alias } : {}),
+        [TOMBSTONE]: {},
+      }
+      : b
+  )
+}
+
+// The patches folded into one bundle per entity, with the entities something
+// other than a quiet bundle named and the ones deleted.
+//
+// The loop is the whole function, and what it returns is built before it
+// starts. The first change a graph applies can be a whole world, and V8
+// compiles a function whose first call spends that long in one loop while it
+// is still inside it (on-stack replacement), before any code after the loop has
+// run; that code, having told the compiler nothing, sent every later call back
+// out of the compiled loop.
+let folded = (bundles: Bundle[]) => {
+  let out = {
+    by: new Map<Eid, Bundle>(),
+    gone: new Set<Eid>(),
+    said: new Set<Eid>(),
+  }
+  let { by, gone, said } = out
   for (let b of bundles) {
     let eid = b.entity.eid
     let one = by.get(eid)
@@ -91,13 +116,5 @@ export let composed = (bundles: Bundle[]): Bundle[] => {
       one[name] = comp == null ? null : was ? { ...was, ...comp } : { ...comp }
     }
   }
-  return [...by.values()].filter((b) => said.has(b.entity.eid)).map((b) =>
-    gone.has(b.entity.eid)
-      ? {
-        entity: b.entity,
-        ...(typeof b.$alias == 'string' ? { $alias: b.$alias } : {}),
-        [TOMBSTONE]: {},
-      }
-      : b
-  )
+  return out
 }

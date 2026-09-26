@@ -232,14 +232,18 @@ export let graph = (opts: Options): Graph => {
   // change names or references, which is what the `$was` check, `mutate` and
   // storage's own number assignment all need — plus whatever each plugin
   // declares.
-  let asking = (bundles: Bundle[]): Ask[] => {
-    let select = new Set(['tombstone'])
-    for (let b of bundles) for (let [name] of comps(b)) select.add(name)
-    return [
-      { eids: reached(bundles, vocab), select: [...select] },
-      ...plugins.flatMap((p) => p.wants?.(bundles) ?? []),
-    ]
-  }
+  let asking = (bundles: Bundle[]): Ask[] => [
+    {
+      eids: reached(bundles, vocab),
+      select: [
+        ...new Set([
+          'tombstone',
+          ...bundles.flatMap((b) => comps(b).map(([name]) => name)),
+        ]),
+      ],
+    },
+    ...plugins.flatMap((p) => p.wants?.(bundles) ?? []),
+  ]
 
   // The hooks registered on a phase, in plugin registration order.
   let hooks = (phase: Phase): [string, Hook][] =>
