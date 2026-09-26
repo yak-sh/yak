@@ -1,8 +1,8 @@
 // The soft look. Every voxel in the vale is drawn by this one material: three's
 // Lambert, taught three things in its shader.
 //
-//   Rounded edges. A face knows which of its edges are convex (mesh.ts `rim`)
-//   and where across it a pixel lies (`face`). Near a convex edge the normal
+//   Rounded edges. A face knows which of its edges are convex and where
+//   across it a pixel lies (mesh.ts `edge`). Near a convex edge the normal
 //   leans outward and the colour brightens a touch, so a hard cube reads as a
 //   soft one without a single extra triangle.
 //
@@ -24,10 +24,9 @@ import type { Packed } from './mesh.ts'
 export let geometry = (p: Packed): THREE.BufferGeometry => {
   let g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.BufferAttribute(p.pos, 3))
-  g.setAttribute('normal', new THREE.BufferAttribute(p.nrm, 3))
-  g.setAttribute('color', new THREE.BufferAttribute(p.col, 3))
-  g.setAttribute('face', new THREE.BufferAttribute(p.uv, 2))
-  g.setAttribute('rim', new THREE.BufferAttribute(p.rim, 4))
+  g.setAttribute('normal', new THREE.BufferAttribute(p.nrm, 4))
+  g.setAttribute('color', new THREE.BufferAttribute(p.col, 4, true))
+  g.setAttribute('edge', new THREE.BufferAttribute(p.edge, 4))
   g.setAttribute('bw', new THREE.BufferAttribute(p.bw, 3))
   g.setIndex(new THREE.BufferAttribute(p.idx, 1))
   g.computeBoundingSphere()
@@ -36,9 +35,12 @@ export let geometry = (p: Packed): THREE.BufferGeometry => {
 }
 
 let VERTEX_PARS = /* glsl */ `
-attribute vec2 face;
-attribute vec4 rim;
+attribute vec4 edge;
 attribute vec3 bw;
+// The colours come as sRGB bytes (mesh.ts), and light blends in linear.
+vec3 unsrgb(vec3 c) {
+  return mix(c / 12.92, pow((c + .055) / 1.055, vec3(2.4)), step(.04045, c));
+}
 
 varying vec2 vFace;
 varying vec4 vRim;
@@ -51,8 +53,8 @@ varying vec3 vAt;
 
 let VERTEX = /* glsl */ `
 vAt = (modelMatrix * vec4(transformed, 1.)).xyz;
-vFace = face;
-vRim = rim;
+vFace = edge.xy;
+vRim = mod(floor(edge.z / vec4(1., 2., 4., 8.)), 2.);
 vBw = bw.xy;
 // The face's own axes, from its normal as it was meshed, turned as the mesh
 // is turned: by its instance, or by the bone that carries it.
@@ -161,6 +163,10 @@ export let soft = (
     s.vertexShader = s.vertexShader
       .replace('#include <common>', `#include <common>\n${VERTEX_PARS}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>\n${VERTEX}`)
+      .replace(
+        '#include <color_vertex>',
+        '#include <color_vertex>\nvColor.rgb = unsrgb(vColor.rgb);',
+      )
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', `#include <common>\n${FRAGMENT_PARS}`)
       .replace(

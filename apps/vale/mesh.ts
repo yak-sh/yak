@@ -1,10 +1,15 @@
 // Voxels into triangles. Every face in the vale, the ground's and a boar's
 // alike, is one quad written by `quad`, carrying what the soft material
-// (soft.ts) needs to round it: which of its four edges are convex (`rim`),
-// how wide the rounding is across the face and how big its voxels are (`bw`),
-// and where on the face each corner sits (`uv`). A face's two in-plane axes
-// follow one convention (`axes`), shared with the shader, so a rim flag names
-// the same edge on both sides.
+// (soft.ts) needs to round it: where on the face each corner sits and which of
+// its four edges are convex (`edge`), and how wide the rounding is across the
+// face and how big its voxels are (`bw`). A face's two in-plane axes follow
+// one convention (`axes`), shared with the shader, so a rim flag names the
+// same edge on both sides.
+//
+// A vertex is written as narrow as the GPU will take it, 36 bytes, since a
+// level is millions of them and a phone holds them all: every attribute is 4
+// bytes a vertex or a multiple, the one stride Metal (Safari's WebGL) takes
+// without converting.
 //
 // `blob` meshes a small voxel model: a tree, a rock, a house. Faces alike in
 // colour, rounding and shade merge into larger quads; the shader still tints
@@ -13,14 +18,16 @@
 
 export type Vec = [number, number, number]
 
-/** The triangles being written: flat arrays, the way a BufferGeometry takes
- * them. */
+/** The triangles being written, a vertex at a time: where it is (3 numbers,
+ * metres); which way its face looks (4: the normal and a 0); its colour (4:
+ * sRGB bytes and 255); where on its face it sits and which of the face's edges
+ * are rounded (4: u and v, 0 or 1, the edge flags as bits, and a 0); and the
+ * rounding's widths across the face and the voxel edge (3). */
 export type Out = {
   pos: number[]
   nrm: number[]
   col: number[]
-  uv: number[]
-  rim: number[]
+  edge: number[]
   bw: number[]
   idx: number[]
 }
@@ -29,20 +36,13 @@ export let out = (): Out => ({
   pos: [],
   nrm: [],
   col: [],
-  uv: [],
-  rim: [],
+  edge: [],
   bw: [],
   idx: [],
 })
 
 // What a vertex carries besides where it is: copied as it stands.
-let COPIED: ('nrm' | 'col' | 'uv' | 'rim' | 'bw')[] = [
-  'nrm',
-  'col',
-  'uv',
-  'rim',
-  'bw',
-]
+let COPIED: ('nrm' | 'col' | 'edge' | 'bw')[] = ['nrm', 'col', 'edge', 'bw']
 
 /** Copy triangles into `into`, moved by `at`. */
 export let place = (into: Out, from: Out, at: Vec) => {
@@ -65,29 +65,29 @@ export let place = (into: Out, from: Out, at: Vec) => {
  * the page without a copy (grow.ts). */
 export type Packed = {
   pos: Float32Array<ArrayBuffer>
-  nrm: Float32Array<ArrayBuffer>
-  col: Float32Array<ArrayBuffer>
-  uv: Float32Array<ArrayBuffer>
-  rim: Float32Array<ArrayBuffer>
+  nrm: Int8Array<ArrayBuffer>
+  col: Uint8Array<ArrayBuffer>
+  edge: Uint8Array<ArrayBuffer>
   bw: Float32Array<ArrayBuffer>
   idx: Uint16Array<ArrayBuffer> | Uint32Array<ArrayBuffer>
 }
 
-/** Triangles packed, with indices as narrow as the vertex count allows.
+/** Triangles packed, with indices as narrow as the vertex count allows. A
+ * colour written as sRGB hex comes back as the same bytes.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * let p = pack(cuboid(out(), [0, 0, 0], [1, 1, 1], 0xffffff))
+ * let p = pack(cuboid(out(), [0, 0, 0], [1, 1, 1], 0x80c020))
  * assertEquals([p.pos.length / 3, p.idx.length / 3], [24, 12])
  * assertEquals(p.idx instanceof Uint16Array, true)
+ * assertEquals([...p.col.slice(0, 4)], [0x80, 0xc0, 0x20, 255])
  * ```
  */
 export let pack = (o: Out): Packed => ({
   pos: new Float32Array(o.pos),
-  nrm: new Float32Array(o.nrm),
-  col: new Float32Array(o.col),
-  uv: new Float32Array(o.uv),
-  rim: new Float32Array(o.rim),
+  nrm: new Int8Array(o.nrm),
+  col: new Uint8Array(o.col),
+  edge: new Uint8Array(o.edge),
   bw: new Float32Array(o.bw),
   idx: o.pos.length / 3 > 65535
     ? new Uint32Array(o.idx)
@@ -96,7 +96,7 @@ export let pack = (o: Out): Packed => ({
 
 /** The buffers a packed mesh is made of, to hand over rather than copy. */
 export let buffers = (p: Packed): ArrayBuffer[] =>
-  [p.pos, p.nrm, p.col, p.uv, p.rim, p.bw, p.idx].map((a) => a.buffer)
+  [p.pos, p.nrm, p.col, p.edge, p.bw, p.idx].map((a) => a.buffer)
 
 /** A face's two in-plane axes, by the axis its normal lies on: x → (z, y),
  * y → (x, z), z → (x, y). soft.ts derives the same pair from the normal. */
@@ -148,17 +148,27 @@ export let quad = (
   let [ua, va] = axes(axis)
   let base = o.pos.length / 3
   let bu = Math.min(0.5, round / du), bv = Math.min(0.5, round / dv)
+  let flags = rim[0] | rim[1] << 1 | rim[2] << 2 | rim[3] << 3
   for (let i = 0; i < 4; i++) {
     let cu = i == 1 || i == 2 ? 1 : 0, cv = i >= 2 ? 1 : 0
     let p: Vec = [at[0], at[1], at[2]]
     p[ua] += cu * du
     p[va] += cv * dv
     o.pos.push(p[0], p[1], p[2])
-    o.nrm.push(axis == 0 ? sign : 0, axis == 1 ? sign : 0, axis == 2 ? sign : 0)
+    o.nrm.push(
+      axis == 0 ? sign : 0,
+      axis == 1 ? sign : 0,
+      axis == 2 ? sign : 0,
+      0,
+    )
     let shade = AO[ao[i]]
-    o.col.push(c[i * 3] * shade, c[i * 3 + 1] * shade, c[i * 3 + 2] * shade)
-    o.uv.push(cu, cv)
-    o.rim.push(rim[0], rim[1], rim[2], rim[3])
+    o.col.push(
+      srgb(c[i * 3] * shade),
+      srgb(c[i * 3 + 1] * shade),
+      srgb(c[i * 3 + 2] * shade),
+      255,
+    )
+    o.edge.push(cu, cv, flags, 0)
     o.bw.push(bu, bv, cell)
   }
   let flip = ao[0] + ao[2] < ao[1] + ao[3]
@@ -169,9 +179,20 @@ export let quad = (
   }
 }
 
-// One sRGB channel as the linear light three.js blends vertex colours in.
+// One sRGB channel as the linear light three.js blends vertex colours in, and
+// back: linear light as an sRGB byte, looked up, since a level writes
+// millions (the soft shader decodes it again).
 let linear = (c: number) =>
   c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+let STEPS = 4096
+let SRGB = Uint8Array.from({ length: STEPS + 1 }, (_, i) => {
+  let c = i / STEPS
+  return Math.round(
+    255 * (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055),
+  )
+})
+let srgb = (c: number) =>
+  SRGB[Math.max(0, Math.min(STEPS, Math.round(c * STEPS)))]
 
 /** A colour, written as sRGB hex, as three linear numbers in [0, 1]. */
 export let rgb = (hex: number): Vec => [
