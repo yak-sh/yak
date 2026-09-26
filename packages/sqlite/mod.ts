@@ -42,6 +42,7 @@
 import type { Vocab } from '@yaks/vocab'
 import {
   type BindOpts,
+  type Derived,
   type Driver,
   render,
   type Row,
@@ -64,7 +65,7 @@ import { doom, read, rows } from './read.ts'
 import { keyed } from './keyed.ts'
 import { unit } from './unit.ts'
 import { backfill } from './archetype.ts'
-import { shape } from './physical.ts'
+import { shape, tables as listed } from './physical.ts'
 import { patch, remove, revive } from './write.ts'
 import { bindings } from './rules.ts'
 
@@ -199,6 +200,24 @@ export type Opts = BindOpts & {
   adopt?: boolean
 }
 
+// The fingerprint of the statements `install()` runs, rendered and hashed once
+// per vocabulary and read overrides. Over a current file the rendering and the
+// hashing were most of what an install cost, and neither moves while a process
+// holds the same vocabulary: a Vocab is a value nobody mutates once it is
+// loaded, so the object itself is the key.
+let prints = new WeakMap<Vocab, WeakMap<Derived, string>>()
+let NONE: Derived = {}
+let fingerprint = (vocab: Vocab, derived: Derived = NONE): string => {
+  let by = prints.get(vocab) ?? new WeakMap<Derived, string>()
+  prints.set(vocab, by)
+  let print = by.get(derived) ?? sha256(
+    [...tabled(vocab, derived), ...indexed(vocab)]
+      .map((s) => render(s).sql).join(';\n'),
+  )
+  by.set(derived, print)
+  return print
+}
+
 /**
  * Bind a store to a driver and a vocabulary — a {@link Storage} @yaks/graph
  * can apply changes to. `base` options (a derived-property registry, a fixed
@@ -225,8 +244,6 @@ export let storage = (
     ddl: () => schema(vocab, base.derived),
     grown: () => grown(driver, vocab),
     install: () => {
-      let tables = tabled(vocab, base.derived)
-      let indexes = indexed(vocab)
       // A file whose schema nothing has touched since this vocabulary
       // installed it is left as it is. Every statement below is a no-op there
       // but two: the doc view is recreated, which changes the schema and makes
@@ -235,23 +252,21 @@ export let storage = (
       // file's own schema shape (physical.ts `shape`), so a vocabulary that
       // says anything new installs, and so does a file whose tables or
       // indexes another hand changed.
-      let print = sha256(
-        [...tables, ...indexes].map((s) => render(s).sql).join(';\n'),
-      )
-      let mark = () => `${print} ${shape(driver)}`
+      let mark = () => `${fingerprint(vocab, base.derived)} ${shape(driver)}`
       if (installed(driver) != mark()) {
-        for (let stmt of tables) driver.query(stmt)
+        // What stood before: only those tables can be behind the vocabulary,
+        // so a fresh file is asked nothing about its columns or its keys.
+        let held = new Set(listed(driver))
+        for (let stmt of tabled(vocab, base.derived)) driver.query(stmt)
         // Then the columns a component gained since its table was created —
-        // the half `create table if not exists` cannot add (ddl.ts `grown`),
-        // read after the creates so a brand-new table is already there to
-        // inspect.
-        for (let stmt of grown(driver, vocab)) driver.query(stmt)
+        // the half `create table if not exists` cannot add (ddl.ts `grown`).
+        for (let stmt of grown(driver, vocab, held)) driver.query(stmt)
         // Then the tables whose foreign keys the vocabulary has since changed
         // its mind about (ddl.ts `refit`). A rebuild drops the table, so it
         // runs outside the enforcement — a copy that re-checks every key it is
         // dropping would reject the rows it exists to keep — and before the
         // indexes, which the drop took with the old table.
-        let rebuilt = refit(driver, vocab)
+        let rebuilt = refit(driver, vocab, held)
         if (rebuilt.length) {
           let keys = (value: string): Stmt => ({
             t: 'pragma',
@@ -266,7 +281,7 @@ export let storage = (
           }
         }
         // The indexes last: one may name a column this boot just added.
-        for (let stmt of indexes) driver.query(stmt)
+        for (let stmt of indexed(vocab)) driver.query(stmt)
         // The store's lineage identity, minted on the first install (meta.ts
         // `epoch`).
         epoch(driver)

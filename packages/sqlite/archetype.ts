@@ -31,6 +31,12 @@ export { componentTables } from './physical.ts'
 
 type Run = (s: Stmt) => Row[]
 
+// A value read the first time it is asked for, and kept.
+let once = <T>(read: () => T): () => T => {
+  let held: { value: T } | undefined
+  return () => (held ??= { value: read() }).value
+}
+
 // The entity an eid names, and the one an id does.
 let byEid = (eid: string) => eq(col('eid'), val(eid))
 let byId = (id: number) => eq(col('id'), val(id))
@@ -99,7 +105,7 @@ let minter = (
   run: Run,
   driver: Driver,
   cache: Archetypes,
-  tables: string[],
+  tables: () => string[],
   ids: Map<string, number>,
   number: boolean,
   counts: Backfill,
@@ -122,7 +128,7 @@ let minter = (
       ids.set(eid, id = Number(existing.id))
       return id
     }
-    if (existing && tables.some((t) => holds(run, t, Number(existing.id)))) {
+    if (existing && tables().some((t) => holds(run, t, Number(existing.id)))) {
       throw new Error(`Archetype identity is occupied: ${eid}`)
     }
     driver.query(mintSql(eid, number))
@@ -204,8 +210,11 @@ export function backfill(driver: Driver, number = false): Backfill {
   let counts: Backfill = { entities: 0, archetypes: 0, retired: 0 }
   return unit(driver, () => {
     let cache = new Archetypes()
-    let tables = componentTables(driver)
-    let present = new Set(listed(driver))
+    // What the file holds is read once, and only when something is asked of
+    // it: a fresh file reads neither, and one whose every entity is already
+    // classified never reads its component tables.
+    let tables = once(() => componentTables(driver))
+    let present = once(() => new Set(listed(driver)))
     let ids = new Map<string, number>()
     let stale: number[] = []
     for (
@@ -242,7 +251,7 @@ export function backfill(driver: Driver, number = false): Backfill {
         // carry
         // archetype and (optionally) retired.
         if (
-          tables.some((t) =>
+          tables().some((t) =>
             t != 'archetype' && t != 'retired' &&
             holds(run, t, Number(row.entity))
           )
@@ -268,7 +277,7 @@ export function backfill(driver: Driver, number = false): Backfill {
       }
       let id = Number(row.entity)
       ids.set(a.eid, id)
-      if (a.tables.some((t) => !present.has(t))) {
+      if (a.tables.some((t) => !present().has(t))) {
         stale.push(id)
         if (row.retired == null) {
           run({
@@ -294,7 +303,7 @@ export function backfill(driver: Driver, number = false): Backfill {
       })).map((r) => [Number(r.id), []]),
     )
     if (owners.size) {
-      presence(run, tables, owners, (c) => ({
+      presence(run, tables(), owners, (c) => ({
         joins: [join(table('entity', 'e'), eq(col('id', 'e'), c))],
         where: isNull(col('archetype', 'e')),
       }))
@@ -419,7 +428,7 @@ export function reclassify(
       run,
       driver,
       cache,
-      tables,
+      () => tables,
       new Map(),
       number,
       counts,

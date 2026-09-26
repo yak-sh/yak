@@ -10,6 +10,7 @@ import {
   compile,
   eq,
   type Expr,
+  fn,
   insert,
   render,
   scan,
@@ -83,6 +84,18 @@ Deno.test('a resolved doc column is read as text by the view', () => {
   for (let col of ['"entity"', '"title" as "title"', 'as "body"']) {
     assert(resolved.includes(col), col)
   }
+})
+
+Deno.test('a store reopened with other read overrides raises its view again', () => {
+  let d = mem()
+  let view = () =>
+    String(objects(d, { type: 'view', name: 'doc_value' })[0].sql)
+  storage(d, shop).install()
+  assert(!view().includes('upper'), view())
+  let loud = (stored: Expr) => fn('upper', stored)
+  let derived = { 'doc.body': { tag: 'text', expr: loud, text: loud } } as const
+  storage(d, shop, { derived }).install()
+  assert(view().includes('upper'), view())
 })
 
 Deno.test('the statements list in dependency order — spine first', () => {

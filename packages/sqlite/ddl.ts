@@ -58,6 +58,7 @@ import {
   type Stmt,
   table,
 } from '@yaks/sql'
+import { tables } from './physical.ts'
 
 /**
  * The key/value table's name. Named `server_meta`, not `meta`, because a
@@ -336,6 +337,13 @@ let bound = (v: Vocab, comp: string): Set<string> =>
     ),
   ])
 
+// The component tables `held` names, where `held` is the tables a file stood
+// with before this install created any: a table created by this install is
+// already the shape its vocabulary says, so only the ones that were there
+// before can be wrong. Read off the file when not given (physical.ts `tables`).
+let standing = (vocab: Vocab, held: Set<string>): string[] =>
+  vocab.all.filter((name) => name != 'entity' && held.has(name))
+
 /**
  * What `grown()` cannot fix either: a reference whose declared death behavior
  * changed after its table was created. That declaration is what decides whether
@@ -347,9 +355,15 @@ let bound = (v: Vocab, comp: string): Set<string> =>
  * Only a table whose keys disagree with the vocabulary is touched, so this is
  * a no-op on every boot but the one after the vocabulary changed. It must run
  * before `indexed()`, which recreates the indexes the drop took with it.
+ * `held` is the tables the file had before this install created any (see
+ * `standing`): a fresh file has none, and is asked nothing.
  */
-export let refit = (driver: Driver, vocab: Vocab): Stmt[] =>
-  vocab.all.filter((name) => name != 'entity').flatMap((comp): Stmt[] => {
+export let refit = (
+  driver: Driver,
+  vocab: Vocab,
+  held: Set<string> = new Set(tables(driver)),
+): Stmt[] =>
+  standing(vocab, held).flatMap((comp): Stmt[] => {
     let want = bound(vocab, comp)
     let has = new Set(keys(driver, comp).map((r) => String(r.from)))
     if (want.size == has.size && [...want].every((c) => has.has(c))) return []
@@ -399,14 +413,26 @@ export let refit = (driver: Driver, vocab: Vocab): Stmt[] =>
 // Additive only, and deliberately: nothing is dropped and nothing is retyped,
 // because rows are already written under the columns the table has. A column
 // is emitted in the form SQLite accepts in an `add column` (grownColumn above).
-export let grown = (driver: Driver, vocab: Vocab): Stmt[] => [
-  ...(info(driver, 'entity').some((r) => r.name == 'archetype') ? [] : [{
-    t: 'alter table' as const,
-    table: 'entity',
-    add: { name: 'archetype', type: 'integer', ref: ENTITY },
-  }]),
-  ...vocab.all
-    .filter((name) => name != 'entity')
+//
+// Only a table that exists can lack a column, so a table that does not is
+// asked nothing, and neither is one this install created: `held` is the
+// tables the file had before it (see `standing`), which on a fresh file is
+// none. The statements are the same read before the creates or after them,
+// since `create table if not exists` never touches a table that stands.
+export let grown = (
+  driver: Driver,
+  vocab: Vocab,
+  held: Set<string> = new Set(tables(driver)),
+): Stmt[] => [
+  ...(!held.has('entity') ||
+      info(driver, 'entity').some((r) => r.name == 'archetype')
+    ? []
+    : [{
+      t: 'alter table' as const,
+      table: 'entity',
+      add: { name: 'archetype', type: 'integer', ref: ENTITY },
+    }]),
+  ...standing(vocab, held)
     .flatMap((comp) => {
       let has = new Set(info(driver, comp).map((r) => String(r.name)))
       return stored(vocab, comp)
