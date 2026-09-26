@@ -14,9 +14,6 @@ let beside = () => {
   let mine = open(`${dir}/graph.db`)
   let theirs = open(`${dir}/graph.db`)
   let store = storage(mine, shop)
-  // Twice: the first analysis adds SQLite's statistics table, which the
-  // second open sees as a schema to settle.
-  store.install()
   store.install()
   store.tx((tx) => tx.patch([{ entity: { eid: 'x' }, doc: { title: 'Hi' } }]))
   theirs.query({ t: 'begin', mode: 'immediate' })
@@ -52,4 +49,19 @@ Deno.test('an open beside a writer goes on without it, and keeps its wait', () =
   assertEquals(p.mine.query({ t: 'pragma', name: 'busy_timeout' })[0], {
     timeout: 5000,
   })
+})
+
+Deno.test('a second open leaves a file its first open analyzed as it is', () => {
+  let dir = Deno.makeTempDirSync()
+  let d = open(`${dir}/graph.db`)
+  try {
+    let version = () => d.query({ t: 'pragma', name: 'schema_version' })[0]
+    storage(d, shop).install()
+    let was = version()
+    storage(d, shop).install()
+    assertEquals(version(), was)
+  } finally {
+    d.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
 })

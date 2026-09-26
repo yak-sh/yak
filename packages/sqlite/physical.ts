@@ -6,6 +6,8 @@ import {
   type Driver,
   eq,
   fn,
+  lit,
+  ne,
   type Param,
   type Row,
   select,
@@ -71,7 +73,9 @@ export function componentTables(driver: Driver): string[] {
  * How many objects the file's schema holds and how long their definitions run
  * together: what moves when any table, index, view or trigger is created,
  * dropped or altered, by any connection. Read from `sqlite_schema`, since a
- * Durable Object's SQLite refuses `pragma schema_version`.
+ * Durable Object's SQLite refuses `pragma schema_version`. SQLite's own
+ * tables (`sqlite_stat1`, which the first analyze creates, and the like) are
+ * derived and left out, so gathering statistics is not a schema change.
  */
 export let shape = (driver: Driver): string => {
   let [row] = driver.query(select({
@@ -80,6 +84,7 @@ export let shape = (driver: Driver): string => {
       as(fn('total', fn('length', col('sql'))), 'bytes'),
     ],
     from: table('sqlite_schema'),
+    where: ne(fn('substr', col('name'), lit(1), lit(7)), lit('sqlite_')),
   }))
   return `${row.n}/${row.bytes}`
 }

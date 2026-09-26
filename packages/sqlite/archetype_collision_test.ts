@@ -16,6 +16,7 @@ import {
 } from '@yaks/sql'
 import { backfill, storage } from './mod.ts'
 import { open } from './db.ts'
+import { meta, SCHEMA } from './meta.ts'
 import { mem } from './testing.ts'
 
 // Every descriptor, with the tables it names, joined to its spine row.
@@ -121,6 +122,8 @@ Deno.test('archetype/blob: file backfill and reopen preserve text in both insert
       for (let batch of first ? batches : batches.reverse()) {
         s.tx((tx) => tx.patch(batch)) // legacy/unclassified physical rows
       }
+      // As a file an older build wrote: no mark this vocabulary installed.
+      meta(db).del(SCHEMA)
       s.install()
       db.close()
       db = open(path)
