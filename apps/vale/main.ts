@@ -632,7 +632,12 @@ let loop = (t: number) => {
   marks.tick()
   renderer.render(w.scene, camera)
 }
-requestAnimationFrame(loop)
+// The level's shaders compile off the page's thread where the browser can
+// (KHR_parallel_shader_compile), so the gate paints meanwhile, and the frame
+// runs once they are ready.
+renderer.compileAsync(w.scene, camera).catch(reportError).finally(() =>
+  requestAnimationFrame(loop)
+)
 // For whoever opens the console, and for a test driving the page.
 Object.assign(globalThis, {
   mossvale: {
