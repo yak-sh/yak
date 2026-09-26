@@ -50,7 +50,11 @@
         },
         "x": { "type": "number" },
         "y": { "type": "number" },
-        "z": { "type": "number" }
+        "z": { "type": "number" },
+        "at": {
+          "type": "number",
+          "description": "When the page moving it said so, in ms. A page says where its hero is at least once a second while it plays, so one that has not for a while sleeps."
+        }
       }
     },
     "motion": {

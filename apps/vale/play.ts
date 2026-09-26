@@ -8,12 +8,16 @@
 // Who decides what:
 //   - A player's own page moves them, swings their blade, rolls them clear,
 //     takes the bites aimed at them, and says how they fare. A page moves what
-//     it moves every frame and says where it is ten times a second (`PACE`).
+//     it moves every frame, says where it is ten times a second (`PACE`), and
+//     says it again at least once a second while it plays (`BEAT`), so the
+//     others can tell a page that plays from one that sleeps.
 //   - A bite is said before it lands (`hunt.bite` is when), and the creature
 //     winds up for it meanwhile. The bitten player's page decides it when it
 //     lands: rolled through, stepped clear, or taken.
-//   - One page moves each creature: of the players near its home, the one
-//     whose eid sorts first. Its position and hunt are relayed from there, and
+//   - One page moves each creature: of the players near its home whose pages
+//     play, the one whose eid sorts first. When that page goes quiet (its tab
+//     hidden, or frozen), the next one takes the creature from where it was
+//     last said to be. Its position and hunt are relayed from there, and
 //     every other page draws what it hears. A creature nobody is near, or
 //     that is only wandering, has no position: its wandering says where it
 //     is (sim.ts `rest`), the same on every page.
@@ -187,6 +191,10 @@ let DROP_LIFE = 120_000
 let TALK = 3.6
 // How near its home a player must be for a creature to be moved at all.
 let ACTIVE = 45
+// A page that plays says where its hero is at least this often, in ms, and
+// one that has said nothing for this long sleeps.
+let BEAT = 1000
+let ASLEEP = 3500
 // How near a portal's middle a walker must come to go through it.
 let PORTAL = 1.1
 
@@ -194,12 +202,16 @@ let round = (v: number, k = 1000) => Math.round(v * k) / k
 let dist = (a: { x: number; z: number }, b: { x: number; z: number }) =>
   Math.hypot(a.x - b.x, a.z - b.z)
 
-type Where = { level: string; x: number; y: number; z: number }
+type Where = { level: string; x: number; y: number; z: number; at: number }
 let where = (b: Bundle | undefined): Where | null => {
   let p = comp(b, 'position')
-  return p.x == null
-    ? null
-    : { level: str(p.level), x: num(p.x), y: num(p.y), z: num(p.z) }
+  return p.x == null ? null : {
+    level: str(p.level),
+    x: num(p.x),
+    y: num(p.y),
+    z: num(p.z),
+    at: num(p.at),
+  }
 }
 let motion = (b: Bundle | undefined) => {
   let m = comp(b, 'motion')
@@ -234,11 +246,11 @@ let bodyOf = (p: Where, m: ReturnType<typeof motion>): Body => ({
   gait: m.gait,
 })
 
-// A mover's components as they should be written: rounded, so a mover that
-// has not moved writes nothing.
+// A mover's components as they should be written, said `at` a time: rounded,
+// so a mover that has not moved says the same again.
 type Placed = ReturnType<typeof placed>
-let placed = (level: string, b: Body) => ({
-  position: { level, x: round(b.x), y: round(b.y), z: round(b.z) },
+let placed = (level: string, b: Body, at = 0) => ({
+  position: { level, x: round(b.x), y: round(b.y), z: round(b.z), at },
   motion: { yaw: round(b.yaw, 100), gait: b.gait, vy: round(b.vy, 100) },
 })
 let same = (a: Record<string, unknown>, b: Record<string, unknown>) =>
@@ -318,9 +330,11 @@ export let game = (net: Net) => {
   let say = (eid: string, level: string, body: Body, change: Bundle[]) => {
     let t = performance.now()
     let m = moved.get(eid)
-    let p = placed(level, body)
-    let quiet = m && (t - m.at < PACE ||
-      same(p.position, m.said.position) && same(p.motion, m.said.motion))
+    let p = placed(level, body, net.now())
+    let still = m &&
+      same({ ...p.position, at: m.said.position.at }, m.said.position) &&
+      same(p.motion, m.said.motion)
+    let quiet = m && (t - m.at < PACE || still && t - m.at < BEAT)
     if (m && quiet) Object.assign(m, { level, body })
     else {
       moved.set(eid, { level, body, said: p, at: t })
@@ -540,8 +554,11 @@ export let game = (net: Net) => {
       // The others in this level, as relayed.
       let others: Other[] = []
       let fights: [string, Fight][] = [[me, fought]]
-      let spots = new Map<string, { x: number; z: number; alive: boolean }>()
-      spots.set(me, { x: body.x, z: body.z, alive: !down })
+      let spots = new Map<
+        string,
+        { x: number; z: number; alive: boolean; awake: boolean }
+      >()
+      spots.set(me, { x: body.x, z: body.z, alive: !down, awake: true })
       for (let b of net.watches.players.value) {
         let eid = b.entity.eid
         if (eid == me) continue
@@ -569,7 +586,12 @@ export let game = (net: Net) => {
           roll: Math.min(1, rolled),
         })
         fights.push([eid, f])
-        spots.set(eid, { x: p.x, z: p.z, alive: m.gait != 'down' })
+        spots.set(eid, {
+          x: p.x,
+          z: p.z,
+          alive: m.gait != 'down',
+          awake: now - p.at < ASLEEP,
+        })
       }
       let falls = fallsBy()
 
@@ -605,10 +627,11 @@ export let game = (net: Net) => {
           : fallen && last.has(eid)
           ? last.get(eid)!
           : rest(v, h.home, h.roam, h.seed, now)
-        // Who moves it: of the players near its home, the first by eid.
+        // Who moves it: of the players near its home whose pages play, the
+        // first by eid.
         let owner = ''
         for (let [who, sp] of spots) {
-          if (dist(sp, home) > ACTIVE) continue
+          if (!sp.awake || dist(sp, home) > ACTIVE) continue
           if (!owner || who < owner) owner = who
         }
         if (!fallen && hpNow < wasHp) {
