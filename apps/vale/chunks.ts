@@ -20,8 +20,9 @@ export type Chunk = {
 // The stone a structure's foundation is laid in.
 let FOUND = 0x8e8b82
 
-/** Every chunk of the level, row by row. */
-export let chunks = (v: Vale): Chunk[] => {
+/** The level's chunks, row by row: all of them, or the `part`th of `of`
+ * shares dealt out in turn, so several workers can mesh one level. */
+export let chunks = (v: Vale, part = 0, of = 1): Chunk[] => {
   let per = SIZE / CHUNK
   let byChunk = new Map<number, Prop[]>()
   for (let p of v.props) {
@@ -32,6 +33,7 @@ export let chunks = (v: Vale): Chunk[] => {
   let all: Chunk[] = []
   for (let ck = 0; ck < per; ck++) {
     for (let ci = 0; ci < per; ci++) {
+      if ((ci + ck * per) % of != part) continue
       let solid = groundChunk(v, ci, ck, out())
       let small = out()
       for (let p of byChunk.get(ci + ck * per) ?? []) {
