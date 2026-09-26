@@ -45,6 +45,7 @@ export let hud = (root: HTMLElement, press: (a: Action) => void) => {
       '<span><kbd>F</kbd> or click: strike</span>' +
       '<span><kbd>Shift</kbd> or right-click: dodge</span><span><kbd>E</kbd> talk</span>' +
       '<span><kbd>C</kbd> camera behind</span>' +
+      '<span><kbd>Enter</kbd> chat</span>' +
       '<span><kbd>1</kbd> tonic</span><span>drag: look</span>',
   )
   let pads = el('Pads')

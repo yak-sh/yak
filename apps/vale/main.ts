@@ -2,14 +2,15 @@
 // the page: it grows the level the hero is in, opens the store, asks who you
 // are and which of your heroes to play, and then runs the frame: the player's
 // hands (input.ts), a step of the game on the graph (play.ts), the stage
-// (cast.ts), the bits and numbers (fx.ts) and the glass (hud.ts). When the
-// hero walks off the end of a road, the page grows the level beyond and
-// carries on there.
+// (cast.ts), the bits and numbers (fx.ts), the glass (hud.ts) and what was
+// said (chatbox.ts). When the hero walks off the end of a road, the page
+// grows the level beyond and carries on there.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { BEASTS } from './beasts.ts'
 import { aim, type Cam, steer } from './cam.ts'
 import { cast } from './cast.ts'
+import { chatbox } from './chatbox.ts'
 import { type Figure, hero } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { hud } from './hud.ts'
@@ -98,9 +99,10 @@ let net = connect(new URL('api/', document.baseURI))
 let g = game(net)
 
 let typing = false
-let hands = listen(canvas, glass, () => typing || h.talking)
+let hands = listen(canvas, glass, () => typing || h.talking || chat.typing)
 let h = hud(glass, hands.press)
 let marks = overlay(h.layer, camera)
+let chat = chatbox(glass, net, marks)
 
 // The level on show, and what is drawn of it: grown again when the hero goes
 // off the end of a road.
@@ -497,6 +499,7 @@ let loop = (t: number) => {
         skin: str(player.skin, look.skin),
       }
       stage.tick(f, net.hero, dressed, dt)
+      chat.tick(f, stage.headOf)
       let k = 1 - Math.exp(-dt * 10)
       if (Number.isNaN(cam.x)) {
         ;[cam.x, cam.y, cam.z] = [f.body.x, f.body.y, f.body.z]
@@ -614,6 +617,7 @@ Object.assign(globalThis, {
 let busy = gate.querySelector('.Gate_Busy')
 if (busy) busy.textContent = 'Finding the others…'
 let me = await net.me()
+chat.me(me)
 let ready = async (watch: { ready: boolean }) => {
   for (let i = 0; i < 40 && !watch.ready; i++) {
     await new Promise((r) => setTimeout(r, 100))

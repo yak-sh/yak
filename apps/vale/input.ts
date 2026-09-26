@@ -34,7 +34,6 @@ let KEYS: Record<string, Action> = {
   Space: 'jump',
   KeyF: 'strike',
   KeyJ: 'strike',
-  Enter: 'strike',
   ShiftLeft: 'dodge',
   ShiftRight: 'dodge',
   KeyE: 'talk',

@@ -1,0 +1,170 @@
+/* The chat box: the last lines said in this level, over the scene's
+   bottom-left (the top-left on a phone, clear of the thumbstick), the line
+   being written, and the words over a speaker's head. */
+.Chat {
+  --tint: #dff5c8;
+  position: absolute;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 5rem);
+  width: min(24rem, calc(100vw - 24px));
+  display: grid;
+  justify-items: start;
+  gap: 0.35rem;
+}
+
+.Chat_Log {
+  display: grid;
+  justify-items: start;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.Chat_Line {
+  max-width: 100%;
+  padding: 0.12rem 0.6rem;
+  border-radius: 10px;
+  background: var(--shade);
+  overflow-wrap: anywhere;
+  animation: toast-in 0.25s ease-out;
+}
+
+.Chat_Line-wait {
+  opacity: 0.7;
+}
+
+.Chat_Name {
+  margin-right: 0.4em;
+  color: color-mix(in srgb, var(--tint) 55%, #fff);
+}
+
+.Chat_Say {
+  width: 100%;
+  pointer-events: auto;
+}
+
+.Chat_Input {
+  width: 100%;
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.5rem 0.8rem;
+  border: 2px solid var(--moss);
+  border-radius: 12px;
+  background: rgba(251, 247, 234, 0.96);
+  color: var(--ink);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.Chat_Input:focus {
+  outline: none;
+  border-color: var(--deep);
+}
+
+.Chat_Open,
+.Chat_Ask {
+  pointer-events: auto;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(251, 247, 234, 0.9);
+  box-shadow: 0 2px 0 rgba(160, 145, 105, 0.45);
+  cursor: pointer;
+}
+
+.Chat_Open {
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  font-size: 1rem;
+}
+
+.Chat_Ask {
+  padding: 0.35rem 0.9rem;
+  font-weight: 600;
+  color: var(--deep);
+  text-decoration: none;
+}
+
+.Chat-guest .Chat_Open {
+  opacity: 0.6;
+}
+
+.Chat_Say[hidden],
+.Chat_Open[hidden],
+.Chat_Ask[hidden] {
+  display: none;
+}
+
+/* Words over a speaker's head, above the name over it, fading as they go. */
+.Plate-said .Plate_In {
+  bottom: 2.3rem;
+  width: max-content;
+  max-width: 14rem;
+  white-space: normal;
+}
+
+.Bubble {
+  position: relative;
+  display: block;
+  padding: 0.3rem 0.65rem;
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: center;
+  text-shadow: none;
+  overflow-wrap: anywhere;
+  box-shadow: 0 3px 0 rgba(160, 145, 105, 0.45);
+  animation: said 5s ease-out forwards;
+}
+
+.Bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -0.35rem;
+  border: 0.4rem solid transparent;
+  border-bottom: 0;
+  border-top-color: var(--paper);
+  transform: translateX(-50%);
+}
+
+@keyframes said {
+  0% {
+    opacity: 0;
+    transform: translateY(0.4rem) scale(0.9);
+  }
+
+  5%,
+  80% {
+    opacity: 1;
+    transform: none;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (pointer: coarse) {
+  .Chat {
+    top: calc(max(12px, env(safe-area-inset-top)) + 9.2rem);
+    bottom: auto;
+    width: min(16rem, 62vw);
+  }
+
+  .Chat_Log {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-height: 480px) {
+  .Chat_Line:nth-last-child(n + 4) {
+    display: none;
+  }
+}

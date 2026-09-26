@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mossvale",
-  "description": "A voxel world to adventure in together. What a player is and has done is kept in this app's store (player, slain, item, used, journal); what moves (where each player and creature is, how they move, how they fare in a fight) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
+  "description": "A voxel world to adventure in together. What a player is and has done is kept in this app's store (player, slain, item, used, journal), and so is what they said (chat); what moves (where each player and creature is, how they move, how they fare in a fight) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
   "$defs": {
     "player": {
       "component": true,
@@ -178,6 +178,19 @@
         },
         "step": { "type": "string", "enum": ["taken", "done"] },
         "at": { "type": "number" }
+      }
+    },
+    "chat": {
+      "component": true,
+      "type": "object",
+      "description": "A line said aloud: the level it was said in, where everyone reads it in the chat, and the hero who said it, over whose head it shows to whoever is near. Its words are the row's doc body; who wrote it and when is its created stamp. A page shows a line only from a person signed in, as a hero they made, and at most one a second from each person (chat.ts).",
+      "properties": {
+        "level": {
+          "type": "string",
+          "index": true,
+          "description": "Which level, by the app's list of levels."
+        },
+        "player": { "type": "string", "description": "The hero who said it." }
       }
     },
     "drop": {
