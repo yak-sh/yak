@@ -180,7 +180,8 @@
     "./packages/egress",
     "./packages/admin",
     "./packages/heal",
-    "./packages/esbuild"
+    "./packages/esbuild",
+    "./packages/rtc"
   ],
   "exclude": [
     "packages/workerd/conform.ts",

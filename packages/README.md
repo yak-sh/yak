@@ -355,6 +355,11 @@ grouped approximately by function, **not** by dependency order.
   what is running in it, and the target string tmux itself accepts. Components
   only — the session is the transcript, the process is the pid, and the terminal
   is the third, separate fact.
+- **[@yaks/rtc](./rtc)** — voice between pages over Cloudflare Realtime: a page
+  `join`s a call, publishes its microphone and hears the tracks it asks for,
+  naming what it says in the relayed `rtc` component; `./door` is the host half,
+  which answers Realtime's own API for one app, keeps each session as an `sfu`
+  row under a lease, and weighs what a session receives on the host's meter.
 - **[@yaks/tunnel](./tunnel)** — a hosted space's tunnel to a machine without an
   open port: the Cloudflare Tunnel and Workers VPC Service that carry a Worker's
   requests to one service on the machine, the account calls that make and remove

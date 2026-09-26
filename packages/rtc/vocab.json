@@ -1,0 +1,52 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "rtc",
+  "$defs": {
+    "rtc": {
+      "component": true,
+      "type": "object",
+      "sync": "peers",
+      "durable": "connection",
+      "pace": "200ms",
+      "description": "What this entity is saying out loud this moment: the Realtime session it publishes from, the tracks a listener asks for, and whether it is muted or talking. Relayed and kept by nobody, so it goes with the tab that wrote it, and a listener stops hearing it then.",
+      "properties": {
+        "session": {
+          "type": "string",
+          "description": "the Realtime session the tracks are published from"
+        },
+        "tracks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the names of the tracks it publishes, each asked for as a remote track of the session"
+        },
+        "muted": {
+          "type": "boolean",
+          "description": "its microphone is off"
+        },
+        "talking": {
+          "type": "boolean",
+          "description": "its microphone hears a voice this moment"
+        }
+      }
+    },
+    "sfu": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "A Realtime session this app's door opened, while its lease holds: the wake beside it is when the lease ends, and the session's tracks close when it does.",
+      "properties": {
+        "session": {
+          "type": "string",
+          "unique": true,
+          "description": "the session's id at Cloudflare Realtime"
+        },
+        "key": {
+          "type": "string",
+          "description": "the SHA-256 of the key the door handed whoever opened it, which every change to the session carries"
+        }
+      }
+    }
+  }
+}
