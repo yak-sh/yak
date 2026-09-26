@@ -132,12 +132,13 @@ export let BUILDS: Record<Tier, number> = { free: 5, plus: 100 }
 
 export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 
-// What the builder's model may read and write in a month, input and output
-// summed as `meter.tokens` is. A build is up to a dozen rounds over a prompt
-// of several thousand tokens, so the free five builds fit in a million with
-// room for the conversations that ship nothing; the Plus plan's hundred builds
-// are held to ten million, which on Workers AI is a few dollars of the nine.
-export let TOKENS: Record<Tier, number> = { free: 1_000_000, plus: 10_000_000 }
+// What a space may spend on models in a month, in dollars: every call on it,
+// the builder's and its apps' alike (models.ts weighs each by its price). The
+// free twenty cents are about a million tokens of GLM Flash, the five free
+// builds with room for the conversations that ship nothing; the Plus plan's
+// three dollars are a few of the nine it costs. Kept low on purpose while
+// who pays for a model call is still open (D-40545).
+export let MODELS: Record<Tier, number> = { free: 0.2, plus: 3 }
 
 // Build seconds a month: the sandbox container's (sandbox.ts) and the compile
 // at app_deploy's (esbuild.ts). An hour free is six builds' whole sandbox
@@ -179,12 +180,12 @@ export let CURRENCY = 'USD'
 export let SPACES = 5
 
 /** The monthly allowances a spend is refused at, before it is spent. */
-export type Spend = 'emails' | 'builds' | 'tokens' | 'seconds'
+export type Spend = 'emails' | 'builds' | 'models' | 'seconds'
 
 let ALLOWANCE: Record<Spend, Record<Tier, number>> = {
   emails: LETTERS,
   builds: BUILDS,
-  tokens: TOKENS,
+  models: MODELS,
   seconds: SECONDS,
 }
 let SPENDS = Object.keys(ALLOWANCE) as Spend[]
@@ -224,7 +225,7 @@ export let pooled = async (
 }
 
 /** Whether a reading is at an allowance; `more` is what the caller holds
- * that is not counted yet — the tokens and seconds of a build still going. */
+ * that is not counted yet — the dollars and seconds of a build still going. */
 export let over = (space: Space, m: Meter, what: Spend, more = 0) =>
   m[what] + more >= allowance(what, space.tier)
 
@@ -241,19 +242,13 @@ export let refusedSpend = async (
     ? atCeiling(space, what, env)
     : null
 
-// What one build's model calls cost, as the builder's loop reports them
-// (T-34239 `build()` returns it). Input and output are summed into
-// `meter.tokens`, because the meter is read for cost and the two prices differ
-// per model — a split here would be a number nobody could add up.
-export type Usage = { input: number; output: number }
-
 let empty = (month: string, built = 0): Meter => ({
   month,
   ...none(),
   bytes: 0,
   emails: 0,
   builds: 0,
-  tokens: 0,
+  models: 0,
   seconds: 0,
   built,
   at: '',
@@ -335,6 +330,13 @@ export let level = (space: Space, apps: number, now = new Date()) => {
 
 let count = (n: number) => n.toLocaleString('en-US')
 
+/** Dollars as a person reads them: cents, and two figures of a cent where a
+ * month has spent less than one. */
+export let dollars = (n: number) =>
+  n >= 0.01 || n <= 0
+    ? `$${n.toFixed(2)}`
+    : `$${n.toFixed(1 - Math.floor(Math.log10(n))).replace(/0+$/, '')}`
+
 // When the metered figures were last read. Everything but the app count comes
 // from the hourly sweep above, not from a live counter, so a line that prints
 // those numbers bare reads as live and looks broken: the ninth user test made
@@ -361,11 +363,12 @@ export let standing = (
   let made = `${count(usedBuilds(space, now))} of ${
     count(builds(space.tier))
   } builds a month`
-  // The tokens and the build time spent: the one place a person sees what a
-  // build costs us, each against its own monthly allowance.
-  let cost = `${count(m.tokens)} of ${
-    count(allowance('tokens', space.tier))
-  } tokens and ${count(m.seconds)} of ${
+  // What models and build time cost: the one place a person sees what the
+  // builder and their apps' model calls spend, each against its own monthly
+  // allowance.
+  let cost = `${dollars(m.models)} of ${
+    dollars(allowance('models', space.tier))
+  } of model use and ${count(m.seconds)} of ${
     count(allowance('seconds', space.tier))
   } build seconds this month`
   let files = `${size(m.files ?? 0)} of ${
@@ -454,12 +457,13 @@ export let atCeiling = (
         count(builds(space.tier))
       } built-in builds a month${shared}, and this month's are used — it ` +
       `can build again on the 1st, or keep building with a connected agent`,
-    tokens: () =>
+    // Every model call on the space stops here, the builder's and its apps'
+    // alike, so it names neither: models answer again on the 1st.
+    models: () =>
       `${space.slug} is on the ${tier} tier, which is ${
-        count(allowance('tokens', space.tier))
-      } builder tokens a month${shared}, and this month's are spent — the ` +
-      `builder answers again on the 1st, or keep building with a connected ` +
-      `agent`,
+        dollars(allowance('models', space.tier))
+      } of model use a month${shared}, and this month's is spent — models ` +
+      `answer again on the 1st, and a connected agent can keep building`,
     seconds: () =>
       `${space.slug} is on the ${tier} tier, which is ${
         count(allowance('seconds', space.tier))
@@ -543,14 +547,14 @@ export let weighed = async (
 // builder asks before it starts and repeats what comes back.
 
 /**
- * One completed build and what it cost: the month's builds, tokens and
- * container seconds, and the space's lifetime builds, each one higher.
+ * One completed build and what it cost: the month's builds, model dollars
+ * and container seconds, and the space's lifetime builds, each one higher.
  *
- * This is the call the builder's loop makes with the `usage` its `build()`
- * returns (T-34239) and the seconds its workbench held (sandbox.ts
- * `released`). A build that was refused never reaches it, so a refusal costs
- * a person nothing — not a build, and not the tokens of the sentence that
- * turned it down.
+ * This is the call the builder's loop makes with what its `build()` spent on
+ * its model (T-34239, weighed by models.ts) and the seconds its workbench held
+ * (sandbox.ts `released`). A build that was refused never reaches it, so a
+ * refusal costs a person nothing — not a build, and not the model call of the
+ * sentence that turned it down.
  *
  * The seconds ride here rather than in a second call because both figures are
  * derived from one reading of the space: on a month with no row yet each
@@ -560,13 +564,12 @@ export let weighed = async (
 export let countedBuild = async (
   env: { STORE: Namespace },
   space: Space,
-  usage: Usage,
+  cost: number,
   seconds = 0,
   now = new Date(),
 ) => {
   let month = monthOf(now)
   let held = thisMonth(space.meter, month)
-  let tokens = usage.input + usage.output
   let built = (space.meter?.built ?? 0) + 1
   await stamp(env, {
     entities: [{
@@ -575,11 +578,11 @@ export let countedBuild = async (
         ? {
           month,
           builds: held.builds + 1,
-          tokens: held.tokens + tokens,
+          models: held.models + cost,
           seconds: held.seconds + seconds,
           built,
         }
-        : { ...empty(month), builds: 1, tokens, seconds, built },
+        : { ...empty(month), builds: 1, models: cost, seconds, built },
     }],
   })
 }
@@ -597,8 +600,8 @@ export let countedBuild = async (
 // calls that belong to no build (tools.ts `bench` asks before each).
 
 /**
- * The tokens and container seconds spent, on the space's month, with no build
- * beside them.
+ * The model dollars and container seconds spent, on the space's month, with
+ * no build beside them.
  *
  * The door for a conversation that shipped nothing (builder.ts `end`) — its
  * model calls cost the same whether or not they ended in a deploy — and for a
@@ -609,11 +612,11 @@ export let countedBuild = async (
 export let countedSpend = async (
   env: { STORE: Namespace },
   space: Space,
-  tokens: number,
+  cost: number,
   seconds: number,
   now = new Date(),
 ) => {
-  if (tokens <= 0 && seconds <= 0) return
+  if (cost <= 0 && seconds <= 0) return
   let month = monthOf(now)
   let held = thisMonth(space.meter, month)
   await stamp(env, {
@@ -622,10 +625,10 @@ export let countedSpend = async (
       meter: held
         ? {
           month,
-          tokens: held.tokens + tokens,
+          models: held.models + cost,
           seconds: held.seconds + seconds,
         }
-        : { ...empty(month, space.meter?.built ?? 0), tokens, seconds },
+        : { ...empty(month, space.meter?.built ?? 0), models: cost, seconds },
     }],
   })
 }

@@ -63,11 +63,13 @@ export type Meter = {
   // Monthly builder usage. `built` keeps a lifetime total for usage reporting;
   // both plans enforce their build allowance against the monthly `builds`.
   builds: number
-  tokens: number
+  // Dollars spent on models this month: the builder's and the apps' calls,
+  // each weighed by its model's price (models.ts).
+  models: number
   // The seconds the builder's workbench spent awake (sandbox.ts, T-34264).
-  // Its own property beside `tokens` because a token and a container-second are
-  // priced differently, and one number made of both is a number nobody can
-  // add up.
+  // Its own property beside `models` because a model call and a
+  // container-second are billed separately, and one number made of both is a
+  // number nobody can add up.
   seconds: number
   built: number
   at: string
@@ -373,7 +375,7 @@ let meterOf = (r: Row): Meter | null =>
       files: r.meter.files ?? 0,
       emails: r.meter.emails ?? 0,
       builds: r.meter.builds ?? 0,
-      tokens: r.meter.tokens ?? 0,
+      models: r.meter.models ?? 0,
       seconds: r.meter.seconds ?? 0,
       built: r.meter.built ?? 0,
       at: r.meter.at ?? '',

@@ -159,7 +159,7 @@ CNAME flattening for this case.
 ## Limits
 
 The free plan allows five apps, 1 GB of app data, and 100 emails a month. A
-person owns up to five free spaces, and their emails, builds, builder tokens and
+person owns up to five free spaces, and their emails, builds, model use and
 build time are shared by all of them; a space somebody invited you into, or one
 on the Plus plan, does not count toward yours. Plus allows unlimited apps, 10 GB
 of app data, 50 GB of photos and files, and 2,500 emails a month. Visits are
@@ -174,10 +174,13 @@ when the limit is reached. Incoming messages are still delivered. The count
 resets on the first day of each month.
 
 The optional built-in builder includes five builds a month on Free and 100 on
-Plus. A build counts when it deploys an app, not per message. Its model reads
-and writes up to 1,000,000 tokens a month on Free and 10,000,000 on the Plus
-plan, counted whether or not a conversation deploys. Apps built or changed
-through your connected agent do not use this allowance.
+Plus. A build counts when it deploys an app, not per message.
+
+Model use is one allowance for every model call on a space: the builder's, and
+the ones its apps make. Each call is weighed by its model's price, and a space
+may spend $0.20 a month on Free and $3.00 on the Plus plan, counted whether or
+not a conversation deploys. Apps built or changed through your connected agent
+do not use it.
 
 When something must be compiled — Rust to WebAssembly, say — the builder can run
 it in a Linux container and copy the result into your app. The container comes

@@ -36,9 +36,10 @@
 // asks the meter before it spends anything (`over`) and counts one
 // afterwards where a deploy went through (`countedBuild`), so a long
 // conversation that ships one app costs one build and one that ships nothing
-// costs none. Its tokens are counted either way (`countedSpend`), and the
-// month's tokens are asked before every round, since a conversation that
-// never deploys spends them all the same. What the meter is holding is meter.ts's (T-34241); the page is
+// costs none. What its model calls cost is counted either way
+// (`countedSpend`), weighed in dollars by the model's price (models.ts), and
+// the month's model allowance is asked before every round, since a
+// conversation that never deploys spends it all the same. What the meter is holding is meter.ts's (T-34241); the page is
 // somebody else's (T-34242).
 import { type Item, ModelError, type Reply } from '@yaks/model'
 import { worded } from '@yaks/tools'
@@ -50,6 +51,7 @@ import { bound, type Env } from './env.ts'
 import { instructions, whole } from './guide.ts'
 import { type Host, hosted, url } from './host.ts'
 import { atCeiling, countedBuild, countedSpend, over, pooled } from './meter.ts'
+import { type Price, priceOf, weigh } from './models.ts'
 import { asset } from './preauth.ts'
 import { asleep, released, spending } from './sandbox.ts'
 import type { Who } from './session.ts'
@@ -57,8 +59,8 @@ import { type Ctx, TOOLS } from './tools.ts'
 import { standing } from './standing.ts'
 import { caught } from './sentry.ts'
 
-/** What one response cost, in the tokens the meter is read in (meter.ts
- * `Usage`). */
+/** What one response used, in tokens; its model's price weighs it in dollars
+ * (models.ts `weigh`). */
 export type Usage = { input: number; output: number; cached: number }
 
 /** One tool the model asked for, with its arguments still as the JSON text
@@ -101,8 +103,10 @@ export type Ask = {
 /** What a model answered: its words, the tools it wants run, what it spent. */
 export type Answer = { text: string; calls: Call[]; usage: Usage }
 
-/** A model, whichever provider it is behind. */
-export type Model = { id: string; ask(a: Ask): Promise<Answer> }
+/** A model, whichever provider it is behind, and its price in the catalogue
+ * (models.ts). One with no price is never asked: what it spent could not be
+ * counted. */
+export type Model = { id: string; price?: Price; ask(a: Ask): Promise<Answer> }
 
 /**
  * The loop, as it happens. A round is not a stream — a turn arrives whole —
@@ -195,6 +199,13 @@ let busy = (e: unknown) => e instanceof ModelError && e.code == 'busy'
 export let NO_AI =
   'No model is bound here: a build runs on Workers AI through the AI binding ' +
   'and this runtime has none. Nothing was built.'
+
+/** A model the catalogue has no price for, so nothing it spent could be
+ * counted. Nobody meets this by default: both tiers' models are priced. */
+export let unpriced = (id: string) =>
+  `The model this platform builds with (${id}) has no price in its ` +
+  'catalogue, so nothing it spent could be counted, and I will not run it. ' +
+  'Nothing was built.'
 
 let tooMany = (n: number) =>
   `I kept reaching for tools and stopped myself after ${n} rounds. What is ` +
@@ -314,6 +325,7 @@ let answer = (reply: Reply): Answer => ({
  */
 let binding = (env: Env, id: string): Model => ({
   id,
+  price: priceOf(id),
   ask: async ({ system, said, fns, tokens }) => {
     if (!env.AI) throw new Error(NO_AI)
     let model = workersAi(env.AI)
@@ -353,6 +365,7 @@ let gateway = async (env: Env): Promise<string | null> => {
  */
 export let openai = (env: Env, id: string): Model => ({
   id,
+  price: priceOf(id),
   ask: async ({ system, said, fns, tokens }) => {
     let at = await gateway(env)
     let key = env.OPENAI_API_KEY
@@ -458,6 +471,7 @@ export let fake = (script: Partial<Answer>[]) => {
   let at = 0
   return {
     id: 'fake',
+    price: priceOf(FREE),
     asked,
     ask: (a: Ask) => {
       asked.push(a)
@@ -491,6 +505,17 @@ export let build = async (
   let usage: Usage = { input: 0, output: 0, cached: 0 }
   let rounds = 0
   let built = false
+  // What the model this build runs on costs, once one is picked; and what the
+  // conversation has spent on it so far, in dollars.
+  let price: Price | undefined
+  let cost = () =>
+    price
+      ? weigh(price, {
+        input_tokens: usage.input,
+        output_tokens: usage.output,
+        cached_tokens: usage.cached,
+      })
+      : 0
   // A listener's own failure is not the build's: a socket that went away
   // mid-round must not end a conversation that is still going.
   let on = (b: Beat) => {
@@ -507,8 +532,8 @@ export let build = async (
   let spend = spending()
   // Every way out of the loop, including the refusals: a build that happened
   // is counted whichever end the conversation came to, and a conversation
-  // that deployed nothing is counted as the tokens and seconds it spent and
-  // no build (meter.ts `countedSpend`). The container goes on every one of
+  // that deployed nothing is counted as the model dollars and seconds it
+  // spent and no build (meter.ts `countedSpend`). The container goes on every one of
   // those ends too — a refusal is not a reason to leave one running.
   let end = async (refused?: string): Promise<Built> => {
     if (refused) lines.push({ said: 'builder', text: refused })
@@ -516,12 +541,10 @@ export let build = async (
     // The container went with the build, so the person's place goes too
     // (sandbox.ts `awake`), rather than when its nap would have ended.
     if (seconds && who.person) await asleep(env, space, who.person)
-    // One write, from one reading of the space: the build, its tokens and
-    // the seconds it compiled for go together.
-    if (built) await countedBuild(env, space, usage, seconds)
-    else {
-      await countedSpend(env, space, usage.input + usage.output, seconds)
-    }
+    // One write, from one reading of the space: the build, what its model
+    // cost and the seconds it compiled for go together.
+    if (built) await countedBuild(env, space, cost(), seconds)
+    else await countedSpend(env, space, cost(), seconds)
     let last = [...lines].reverse().find((l) => l.said == 'builder')
     let text = last?.said == 'builder' ? last.text : ''
     on({ beat: 'done', text, ...(refused ? { refused } : {}) })
@@ -537,18 +560,20 @@ export let build = async (
   // Fresh, every read: a tool answers about what a tool just wrote
   // (directory.ts, mcp.ts).
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
-  // The month's builds and tokens, the account's on a free space (meter.ts,
-  // T-34241, T-37882). They are asked before anything is spent, and what
-  // comes back is a sentence the builder says rather than a door slammed
-  // mid-conversation — so a refused build costs the person nothing, not a
-  // build and not the tokens of the refusal. The reading is taken once; the
-  // tokens this conversation spends are added to it round by round.
+  // The month's builds and model allowance, the account's on a free space
+  // (meter.ts, T-34241, T-37882). They are asked before anything is spent,
+  // and what comes back is a sentence the builder says rather than a door
+  // slammed mid-conversation — so a refused build costs the person nothing,
+  // not a build and not the model call of the refusal. The reading is taken
+  // once; what this conversation spends is added to it round by round.
   let month = await pooled(dir, space)
-  let full = (['builds', 'tokens'] as const).find((w) => over(space, month, w))
+  let full = (['builds', 'models'] as const).find((w) => over(space, month, w))
   if (full) return await end(atCeiling(space, full, env))
 
   let ctx: Ctx = { env, dir, person: who.person, spend }
   let model = opts.model ?? modelOf(env, opts.id ?? idOf(env, space))
+  price = model.price
+  if (!price) return await end(unpriced(model.id))
   let tools = roster(ctx)
   let by = new Map(tools.map((t) => [t.fn.name, t.run]))
   let fns = tools.map((t) => t.fn)
@@ -561,8 +586,8 @@ export let build = async (
 
   while (true) {
     if (rounds >= max) return await end(tooMany(max))
-    if (over(space, month, 'tokens', usage.input + usage.output)) {
-      return await end(atCeiling(space, 'tokens', env))
+    if (over(space, month, 'models', cost())) {
+      return await end(atCeiling(space, 'models', env))
     }
     if (now() - started > ms) return await end(tooLong(ms))
     let answer: Answer

@@ -430,7 +430,7 @@ Deno.test('a build pays for its workbench and leaves none running', async () => 
   // The loop destroyed what it woke...
   assertEquals([...box.alive], [])
   // ...and the seconds are on the space's month. This conversation shipped
-  // nothing, so it is the container alone: no build, no tokens.
+  // nothing, so it is the container alone: no build, and no model use.
   let after = (await dirOf(env).space('ada'))!
   assert((after.meter?.seconds ?? 0) >= 1, 'the container was paid for')
   assertEquals(after.meter?.built, 0)
@@ -461,12 +461,12 @@ Deno.test('a build that ships pays for both in one write', async () => {
   ])
   await build(env, owner, space, [{ said: 'person', text: 'chess' }], { model })
 
-  // The month with no row before this: one build, its tokens, and the
-  // container seconds — none of them zeroed by the other.
+  // The month with no row before this: one build, what its model cost, and
+  // the container seconds — none of them zeroed by the other.
   let after = (await dirOf(env).space('ada'))!
   assertEquals(after.meter?.builds, 1)
   assertEquals(after.meter?.built, 1)
-  assertEquals(after.meter?.tokens, 940)
+  assert((after.meter?.models ?? 0) > 0, 'its model calls were paid for')
   assert((after.meter?.seconds ?? 0) >= 1, 'and the container it compiled in')
 })
 

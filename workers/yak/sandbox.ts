@@ -36,9 +36,9 @@
 // {@link BUDGET} the tools refuse in a sentence, the way every other ceiling
 // on this platform refuses (meter.ts): the person reading it asked for an app,
 // not for a stack trace. The month's seconds land on `meter.seconds`
-// (meter.ts `countedSandbox`) — its own property beside `tokens`, because a
-// token and a container-second are priced differently and one number made of
-// both is a number nobody can add up.
+// (meter.ts `countedSpend`) — its own property beside `models`, because a
+// model call and a container-second are billed separately and one number made
+// of both is a number nobody can add up.
 //
 // What keeps it from running forever: the build destroys it when it ends, and
 // {@link SLEEP} is the backstop for a build that never says so — the container

@@ -19,14 +19,16 @@ import {
   modelOf,
   NO_AI,
   NO_KEY,
+  openai,
   roster,
+  unpriced,
 } from './builder.ts'
 import { directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { platform } from './testing.ts'
 import { remember } from './memory.ts'
-import { BUILDS, monthOf } from './meter.ts'
+import { BUILDS, MODELS, monthOf } from './meter.ts'
 import type { Who } from './session.ts'
 
 let SECRET = 'a probe secret'
@@ -171,7 +173,7 @@ Deno.test('a space at its build ceiling is told so before a token is spent', asy
       month: monthOf(new Date()),
       built: BUILDS.free,
       builds: BUILDS.free,
-      tokens: 0,
+      models: 0,
     },
   } as Space
   let out = await build(env, owner, full, asked('another one please'), {
@@ -183,6 +185,30 @@ Deno.test('a space at its build ceiling is told so before a token is spent', asy
   assertEquals(out.rounds, 0)
   assertEquals(model.asked.length, 0)
   assertEquals(out.usage, { input: 0, output: 0, cached: 0 })
+})
+
+Deno.test('a space out of model allowance is told so before a model is asked', async () => {
+  let { env, space } = await seeded()
+  let model = fake([{ text: 'never asked' }])
+  let spent = {
+    ...space,
+    meter: { month: monthOf(new Date()), built: 0, models: MODELS.free },
+  } as Space
+  let out = await build(env, owner, spent, asked('one more'), { model })
+
+  assertStringIncludes(out.refused!, 'of model use a month')
+  assertEquals(model.asked.length, 0)
+})
+
+// Nothing a build spends goes uncounted: a model the catalogue has no price
+// for is never asked (models.ts).
+Deno.test('a model with no price is never asked', async () => {
+  let { env, space } = await seeded()
+  let model = { ...fake([{ text: 'never asked' }]), price: undefined }
+  let out = await build(env, owner, space, asked('hi'), { model })
+
+  assertEquals(out.refused, unpriced('fake'))
+  assertEquals(model.asked.length, 0)
 })
 
 Deno.test('an anonymous caller is refused before a tool runs', async () => {
@@ -281,8 +307,10 @@ Deno.test('no model is bound here, and either tier says so', async () => {
 })
 
 Deno.test('an OpenAI model with no gateway to reach it says so', async () => {
-  let { env, space } = await seeded({ BUILDER_MODEL_PAID: 'gpt-5.6-terra' })
-  let out = await build(env, owner, { ...space, tier: 'plus' }, asked('go'))
+  let { env, space } = await seeded()
+  let out = await build(env, owner, { ...space, tier: 'plus' }, asked('go'), {
+    model: terra(env),
+  })
 
   assertEquals(out.refused, NO_KEY)
   assertStringIncludes(out.text, 'AI_GATEWAY')
@@ -318,6 +346,13 @@ Deno.test('the roster is the platform table, whole', async () => {
   for (let t of roster(ctx)) {
     assertEquals(t.fn.parameters.type, 'object')
   }
+})
+
+// An OpenAI model, priced here because the catalogue prices none of them: the
+// builder asks no model it cannot weigh.
+let terra = (env: Env) => ({
+  ...openai(env, 'gpt-5.6-terra'),
+  price: { input: 1, output: 1 },
 })
 
 // OpenAI's Responses API, stood up on a socket: the gateway is a URL, so
@@ -358,11 +393,10 @@ Deno.test('the paid build reaches the gateway with no key of ours', async () => 
     },
   }))
   try {
-    let { env, space } = await seeded({
-      OPENAI_API: said.url,
-      BUILDER_MODEL_PAID: 'gpt-5.6-terra',
+    let { env, space } = await seeded({ OPENAI_API: said.url })
+    let out = await build(env, owner, { ...space, tier: 'plus' }, asked('hi'), {
+      model: terra(env),
     })
-    let out = await build(env, owner, { ...space, tier: 'plus' }, asked('hi'))
 
     assertEquals(out.refused, undefined)
     assertEquals(out.text, 'here you go')
@@ -381,11 +415,10 @@ Deno.test('the paid build reaches the gateway with no key of ours', async () => 
 Deno.test('a busy model is a wait, not a failure', async () => {
   let said = openaiStub(() => ({ status: 429, body: { error: 'slow down' } }))
   try {
-    let { env, space } = await seeded({
-      OPENAI_API: said.url,
-      BUILDER_MODEL_PAID: 'gpt-5.6-terra',
+    let { env, space } = await seeded({ OPENAI_API: said.url })
+    let out = await build(env, owner, { ...space, tier: 'plus' }, asked('hi'), {
+      model: terra(env),
     })
-    let out = await build(env, owner, { ...space, tier: 'plus' }, asked('hi'))
 
     assertEquals(out.refused, BUSY)
     assertEquals(out.rounds, 0)
