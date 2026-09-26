@@ -6,7 +6,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { airOf } from './air.ts'
-import { CHUNK, groundChunk } from './ground.ts'
+import { CHUNK, groundChunk, paletteOf } from './ground.ts'
 import { cuboid, out, place } from './mesh.ts'
 import { KINDS, model } from './props.ts'
 import { lerp, smooth } from './rand.ts'
@@ -222,6 +222,7 @@ export let world = (v: Vale): World => {
   }
 
   // The lake: one plane at the water line, drawn over the ground beneath it.
+  let wet = paletteOf(v.level).water
   let waterMat = new THREE.ShaderMaterial({
     vertexShader: WATER_VERTEX,
     fragmentShader: WATER_FRAGMENT,
@@ -231,9 +232,9 @@ export let world = (v: Vale): World => {
       THREE.UniformsLib.fog,
       {
         time: { value: 0 },
-        deep: { value: new THREE.Color(own.water?.[0] ?? 0x2f7fa6) },
-        shallow: { value: new THREE.Color(own.water?.[1] ?? 0x5fb8cf) },
-        sheen: { value: new THREE.Color(own.water?.[2] ?? 0xd9edff) },
+        deep: { value: new THREE.Color(wet[0]) },
+        shallow: { value: new THREE.Color(wet[1]) },
+        sheen: { value: new THREE.Color(wet[2]) },
         sunDir: { value: new THREE.Vector3(0, 1, 0) },
         sunColor: { value: new THREE.Color(1, 1, 1) },
       },

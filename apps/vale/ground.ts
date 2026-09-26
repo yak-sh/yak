@@ -69,13 +69,14 @@ let STONE = 0x8a8983
 // A face no corner of which is shaded.
 let OPEN: [number, number, number, number] = [3, 3, 3, 3]
 
-// A level's colours: what its look says each top is, the band under it a
-// shade darker, and the rock under stone a shade darker again; the rest as
-// every level has them.
-type Palette = {
+/** A level's colours: what its look says each top is, the band under it a
+ * shade darker, the rock under stone a shade darker again, and its water,
+ * deep, shallow and the sheen on it; the rest as every level has them. */
+export type Palette = {
   tops: Record<number, number>
   band: Record<number, number>
   rock: (t: number) => number
+  water: [number, number, number]
 }
 let shade = (hex: number, k: number) => {
   let [r, g, b] = [16, 8, 0].map((n) =>
@@ -83,7 +84,7 @@ let shade = (hex: number, k: number) => {
   )
   return (r << 16) | (g << 8) | b
 }
-let paletteOf = (lv: Level): Palette => {
+export let paletteOf = (lv: Level): Palette => {
   let got = painted.get(lv)
   if (got) return got
   let tops = { ...TOPS }, band = { ...BAND }
@@ -94,7 +95,13 @@ let paletteOf = (lv: Level): Palette => {
   }
   let stone = lv.look?.ground?.stone
   let under = stone == null ? STONE : shade(stone, 0.88)
-  got = { tops, band, rock: (t) => ROCK[t] ?? under }
+  let [deep, shallow, sheen] = lv.look?.water ?? []
+  got = {
+    tops,
+    band,
+    rock: (t) => ROCK[t] ?? under,
+    water: [deep ?? 0x2f7fa6, shallow ?? 0x5fb8cf, sheen ?? 0xd9edff],
+  }
   painted.set(lv, got)
   return got
 }
