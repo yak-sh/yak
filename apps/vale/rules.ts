@@ -8,7 +8,12 @@ import { ITEMS } from './items.ts'
 import type { Quest } from './quests.ts'
 import { hashOf, noise, stream } from './rand.ts'
 
-/** The xp a level of experience takes, counted from nothing.
+/** The xp a level of experience takes, counted from nothing. A creature's
+ * xp grows about as its level does, and each level takes more of them than
+ * the last: a handful of slimes for the second, a few dozen kills, half of
+ * it from quests, for each level out by the Maw. The lands climb two
+ * creature levels a hop from Mossvale, so a hero who does what a land asks
+ * arrives at the next one about its level.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -17,7 +22,7 @@ import { hashOf, noise, stream } from './rand.ts'
  * assertEquals(levelOf(need(4) - 1), 3)
  * ```
  */
-export let need = (lvl: number): number => Math.round(40 * (lvl - 1) ** 1.7)
+export let need = (lvl: number): number => Math.round(80 * (lvl - 1) ** 2.4)
 
 export let levelOf = (xp: number): number => {
   let l = 1
@@ -216,14 +221,58 @@ export let questsOf = (
   })
 }
 
-/** How much a player has earned: what they helped slay, and the quests they
- * finished. */
+/** What a kill worth `xp` is to a hero of level `hero`, from a creature of
+ * level `lvl`: all of it at their own level, a fifth more for each level
+ * above them, to half again, and a fifth less for each level below, to
+ * nothing five below. A hero outgrows a land by what it no longer teaches
+ * them.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(worth(100, 5, 5), 100)
+ * assertEquals(worth(100, 3, 5), 60)
+ * assertEquals(worth(100, 9, 5), 150)
+ * assertEquals(worth(100, 1, 6), 0)
+ * ```
+ */
+export let worth = (xp: number, lvl: number, hero: number): number =>
+  Math.round(xp * Math.min(1.5, Math.max(0, 1 + (lvl - hero) / 5)))
+
+/** How much a player has earned, in the order they earned it: each quest
+ * they finished, once, and each kill they had a hand in, worth what it was
+ * to the hero they were then.
+ *
+ * ```ts
+ * import { assert, assertEquals } from '@std/assert'
+ * import { BEASTS } from './beasts.ts'
+ * let slimes = (n: number) =>
+ *   Array.from({ length: n }, (_, i) => ({
+ *     creature: `c${i}`, by: 'p', kind: 'slime', at: i, xp: 14,
+ *   }))
+ * // A handful of slimes makes a hero, and no number of them makes one
+ * // more than five levels above a slime.
+ * assert(levelOf(xpOf(slimes(10), [], [])) >= 2)
+ * assertEquals(levelOf(xpOf(slimes(3000), [], [])), BEASTS.slime.lvl + 5)
+ * ```
+ */
 export let xpOf = (kills: Slain[], quests: Quest[], journal: Entry[]) => {
-  let done = new Set(
-    journal.filter((e) => e.step == 'done').map((e) => e.quest),
-  )
-  return kills.reduce((n, k) => n + k.xp, 0) +
-    quests.filter((q) => done.has(q.id)).reduce((n, q) => n + q.xp, 0)
+  let reward = new Map(quests.map((q) => [q.id, q.xp]))
+  let done = new Set<string>()
+  let earned: { at: number; kill?: Slain; xp?: number }[] = [
+    ...kills.map((kill) => ({ at: kill.at, kill })),
+    ...journal.flatMap((e) => {
+      if (e.step != 'done' || done.has(e.quest)) return []
+      done.add(e.quest)
+      return [{ at: e.at, xp: reward.get(e.quest) ?? 0 }]
+    }),
+  ]
+  let xp = 0
+  for (let e of earned.sort((a, b) => a.at - b.at)) {
+    xp += e.kill
+      ? worth(e.kill.xp, BEASTS[e.kill.kind]?.lvl ?? 1, levelOf(xp))
+      : e.xp ?? 0
+  }
+  return xp
 }
 
 /** The keenest blade a player carries. */
