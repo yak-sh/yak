@@ -16,6 +16,15 @@
 // voices it heard, which the page asks for again. A voice going quiet never
 // stops the page.
 //
+// A call opens with its voice already in place: the first section of the
+// connection is a sender named `voice`, silent until a microphone is
+// published into it, and never closed while the call lasts. The first section
+// is the BUNDLE tag, which carries the connection's one transport; closing it
+// makes Chrome start a new transport, which Realtime takes for a disconnected
+// session. So turning the microphone off and on again swaps the sender's track
+// and asks Realtime nothing, and every other section, a voice heard or another
+// track sent, can come and go.
+//
 // Chrome plays a remote track that feeds only Web Audio as silence: the
 // stream must also play through a media element, muted if the page plays it
 // some other way. So every stream `hear` hands back is already playing
@@ -74,6 +83,10 @@ export class Refused extends Error {
 
 /** What Opus is capped at, in bits a second: a voice, not a song. */
 export let BITRATE = 32_000
+
+/** The track a call opens with, silent until a microphone is published into
+ * it: the name `publish` takes unless told another. */
+export let VOICE = 'voice'
 
 /** How often the lease is renewed, in milliseconds: twice a lease. */
 export let RENEW = 30_000
@@ -155,6 +168,7 @@ export let join = async (opts: Opts): Promise<Call> => {
   }
 
   let pc: RTCPeerConnection
+  let voice: RTCRtpTransceiver
   let sent = new Map<
     string,
     { track: MediaStreamTrack; tx: RTCRtpTransceiver }
@@ -190,10 +204,12 @@ export let join = async (opts: Opts): Promise<Call> => {
         lost = setTimeout(() => mine == pc && void rebuild(), 5000)
       }
     }
+    voice = await sender(null, VOICE)
   }
 
-  let push = async (track: MediaStreamTrack, name: string) => {
-    let tx = pc.addTransceiver(track, {
+  // A sender section, offered and answered as a local track of the session.
+  let sender = async (track: MediaStreamTrack | null, name: string) => {
+    let tx = pc.addTransceiver(track ?? 'audio', {
       direction: 'sendonly',
       sendEncodings: [{ maxBitrate: BITRATE }],
     })
@@ -203,23 +219,22 @@ export let join = async (opts: Opts): Promise<Call> => {
       tracks: [{ location: 'local', mid: tx.mid, trackName: name }],
     })
     await pc.setRemoteDescription(res.sessionDescription)
+    return tx
+  }
+
+  let push = async (track: MediaStreamTrack, name: string) => {
+    let tx = name == VOICE ? voice : await sender(track, name)
+    if (tx == voice) await voice.sender.replaceTrack(track)
     sent.set(name, { track, tx })
   }
 
   // Close transceivers on this session: stopped here, offered, answered. The
-  // last live one is closed without an offer, since an offer with every
-  // section stopped has no BUNDLE group, and max-bundle refuses it.
+  // voice's section is never among them, so the offer keeps its BUNDLE tag.
   let close = async (txs: RTCRtpTransceiver[]) => {
     let mids = txs.map((tx) => tx.mid).filter(Boolean)
     for (let tx of txs) tx.stop()
     if (!mids.length || pc.connectionState == 'closed') return
     let tracks = mids.map((mid) => ({ mid }))
-    let left = pc.getTransceivers().some((t) =>
-      t.mid && t.direction != 'stopped'
-    )
-    if (!left) {
-      return void await ask('PUT', on('/tracks/close'), { tracks, force: true })
-    }
     await pc.setLocalDescription(await pc.createOffer())
     let res = await ask('PUT', on('/tracks/close'), {
       tracks,
@@ -304,7 +319,7 @@ export let join = async (opts: Opts): Promise<Call> => {
     get state() {
       return state
     },
-    publish: (track, name = 'voice') =>
+    publish: (track, name = VOICE) =>
       serial(async () => {
         await push(track, name)
         wear()
@@ -316,7 +331,8 @@ export let join = async (opts: Opts): Promise<Call> => {
               if (!held || held.track != track) return
               sent.delete(name)
               wear()
-              await close([held.tx])
+              if (held.tx == voice) await voice.sender.replaceTrack(null)
+              else await close([held.tx])
             }),
         }
       }),

@@ -37,6 +37,7 @@ export {
   Refused,
   RENEW,
   type State,
+  VOICE,
   voiced,
 } from './join.ts'
 export { type Loop, loopback } from './loop.ts'
