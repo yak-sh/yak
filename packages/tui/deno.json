@@ -1,6 +1,6 @@
 {
   "name": "@yaks/tui",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "exports": {
     ".": "./mod.ts",
     "./print": "./print.ts"

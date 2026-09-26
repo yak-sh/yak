@@ -1,6 +1,6 @@
 {
   "name": "@yaks/id",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Generates entity UUIDs, formats and parses human-readable ids from vocabulary-declared prefixes, and contributes the entity number those ids are built from.",
   "exports": {
     ".": "./mod.ts",

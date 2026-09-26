@@ -1,6 +1,6 @@
 {
   "name": "@yaks/match",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Runs query ASTs against entity bundles held in memory, without SQL or a database.",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
