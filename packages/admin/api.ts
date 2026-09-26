@@ -214,12 +214,17 @@ export let setTunnel = (
   fields: Record<string, string>,
 ): Promise<SpaceTunnel> => said(posted(apex(TUNNEL), fields, session))
 
-// The doors answer JSON both ways: a refusal says why in the same shape every
-// other door here refuses in (identity.ts `unauthorized`). The path is read
-// back off the answer, so a new door's failure names itself.
+// The platform doors answer refusals as `{error: {code, message}}`; a Store
+// reached through one may answer its own `{error, message}` shape. Both are
+// expected 4xx call failures, while a broken door remains a defect. The path
+// is read back off that answer, so a new door's failure names itself.
 let said = async <T>(answer: Promise<Response>): Promise<T> => {
   let r = await answer
   let body = await bodyOf(r)
+  if (r.status >= 400 && r.status < 500) {
+    let refusal = refusedResponse(r, body)
+    throw new CallError(refusal.code, refusal.message)
+  }
   if (!r.ok) {
     throw new Error(
       body?.error?.message ?? `${new URL(r.url).pathname} said ${r.status}`,
@@ -379,7 +384,10 @@ let shortBody = (body: unknown) => {
 let refusedResponse = (r: Response, body: unknown) =>
   refusalOf(body) ?? {
     code: refusalCode[r.status] ?? 'arguments',
-    message: `${r.status} ${shortBody(body) || r.statusText}`.trim(),
+    message: body && typeof body == 'object' && 'message' in body &&
+        typeof body.message == 'string'
+      ? body.message
+      : `${r.status} ${shortBody(body) || r.statusText}`.trim(),
   }
 
 // The filter grammar over an app's store — the same line the page's own
