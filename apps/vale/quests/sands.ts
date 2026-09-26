@@ -1,0 +1,356 @@
+// The people beyond the sea, down the far road from Driftwood Bay: the
+// well at Dustmere, the camp at Palmwell, the nomads of Sunscar and
+// Redmesa, and the tombs, where the air shimmers toward the fire.
+import type { Giver, Quest } from '../quests.ts'
+
+export let givers: Giver[] = [
+  {
+    id: 'zahra',
+    name: 'Zahra of the well',
+    level: 'dustmere',
+    place: 'well',
+    offset: [-8, -8.5],
+    greets: 'Drink first. Talk after. That is the rule of the well.',
+    look: { tint: '#c08a3a', hair: '#1a1010', skin: '#8a5a3a' },
+  },
+  {
+    id: 'hesper',
+    name: 'Hesper the water-seller',
+    level: 'dustmere',
+    place: 'well',
+    offset: [-3, -9],
+    greets: 'Water, cool water. First cup costs a story.',
+    look: { tint: '#5a8aa0', hair: '#e0d0b0', skin: '#b07850' },
+  },
+  {
+    id: 'idris',
+    name: 'Idris the caravan-master',
+    level: 'palmwell',
+    place: 'camp',
+    offset: [10, -3],
+    greets: 'Rest the camels, rest the feet. The dunes will be there tomorrow.',
+    look: { tint: '#3a5a8a', hair: '#f0f0f0', skin: '#7a4a2a' },
+  },
+  {
+    id: 'rafi',
+    name: 'Rafi the date-grower',
+    level: 'palmwell',
+    place: 'camp',
+    offset: [15, -4],
+    greets: 'The palms don’t hurry, and neither do I.',
+    look: { tint: '#8a6a2a', hair: '#2a1a10', skin: '#9a6040' },
+  },
+  {
+    id: 'sef',
+    name: 'Sef the nomad',
+    level: 'sunscar',
+    place: 'dunes',
+    offset: [-9.5, 17.5],
+    greets: 'The sun is honest. It burns everyone the same.',
+    look: { tint: '#8a3a2a', hair: '#2a1a1a', skin: '#9a6040' },
+  },
+  {
+    id: 'tali',
+    name: 'Tali the hawk-mother',
+    level: 'redmesa',
+    place: 'oasis',
+    offset: [-10, 10],
+    greets: 'The hawks know me. Mind they don’t take you for a hare.',
+    look: { tint: '#a05a2a', hair: '#5a2a1a', skin: '#b07048' },
+  },
+  {
+    id: 'nadim',
+    name: 'Nadim the salt-trader',
+    level: 'redmesa',
+    place: 'mesa',
+    offset: [-6, 8],
+    greets: 'Salt, spice, and news. News is the dearest.',
+    look: { tint: '#6a3a5a', hair: '#1a1a1a', skin: '#8a5a38' },
+  },
+  {
+    id: 'sabra',
+    name: 'Warden Sabra',
+    level: 'tombsands',
+    place: 'tombs',
+    offset: [1, 14.5],
+    greets: 'The dead are quiet here. Keep them that way.',
+    look: { tint: '#4a3a2a', hair: '#d0c0a0', skin: '#6a4028' },
+  },
+]
+
+export let quests: Quest[] = [
+  // Zahra of the well, who keeps the well at Dustmere.
+  {
+    id: 'zahra-scorpions',
+    giver: 'zahra',
+    goal: 'slay',
+    target: 'scorpion',
+    count: 6,
+    xp: 1240,
+    title: 'Scorpions at the well',
+    body:
+      'You came down the road from the sea? Then drink. Rock scorpions come to the well at night, and they do not wait their turn. Six of them.',
+  },
+  {
+    id: 'zahra-scarabs',
+    giver: 'zahra',
+    after: 'zahra-scorpions',
+    goal: 'slay',
+    target: 'scarab',
+    count: 4,
+    xp: 1050,
+    title: 'Scarabs in the jars',
+    body:
+      'Tomb scarabs have found the water jars. Four of them, and I will tell you what the sand says about your briar.',
+  },
+  {
+    id: 'zahra-vultures',
+    giver: 'zahra',
+    after: 'zahra-scarabs',
+    goal: 'slay',
+    target: 'vulture',
+    count: 4,
+    xp: 940,
+    gift: 'draught',
+    title: 'What the sand says',
+    body:
+      'The sand says the briar came to the desert too, and the vultures carry its seed from tomb to tomb. Four of them. The tombs are down the road, past Palmwell and Redmesa.',
+  },
+  // Hesper the water-seller, by the well at Dustmere.
+  {
+    id: 'hesper-fennecs',
+    giver: 'hesper',
+    goal: 'slay',
+    target: 'fennec',
+    count: 3,
+    xp: 410,
+    title: 'Foxes at the cups',
+    body:
+      'Fennec foxes drink from my cups when I turn my back, and now they bite when I turn round. Three of them, and the first cup is free.',
+  },
+  {
+    id: 'hesper-striders',
+    giver: 'hesper',
+    after: 'hesper-fennecs',
+    goal: 'slay',
+    target: 'strider',
+    count: 3,
+    xp: 540,
+    gift: 'tonic',
+    title: 'Striders at the well',
+    body:
+      'Dune striders come in off the sand at noon and drink the well half dry. Three of them, and there is water for the caravans.',
+  },
+  // Idris the caravan-master, at the camp in Palmwell.
+  {
+    id: 'idris-vultures',
+    giver: 'idris',
+    goal: 'slay',
+    target: 'vulture',
+    count: 5,
+    xp: 1170,
+    title: 'Vultures overhead',
+    body:
+      'Dune vultures follow the caravans now, and they don’t wait for anyone to fall. Five of them, and we can travel by day again.',
+  },
+  {
+    id: 'idris-chitin',
+    giver: 'idris',
+    after: 'idris-vultures',
+    goal: 'gather',
+    target: 'chitin',
+    count: 5,
+    xp: 1640,
+    gift: 'draught',
+    title: 'Shields for the drivers',
+    body:
+      'A chitin plate turns a sting better than any shield. Five plates, from the scorpions or the scarabs, and my drivers ride safe.',
+  },
+  // Rafi the date-grower, among the palms at Palmwell.
+  {
+    id: 'rafi-striders',
+    giver: 'rafi',
+    goal: 'slay',
+    target: 'strider',
+    count: 3,
+    xp: 540,
+    title: 'Striders in the palms',
+    body:
+      'Dune striders strip the palms for the dates and kick down anyone who objects. Three of them.',
+  },
+  {
+    id: 'rafi-talons',
+    giver: 'rafi',
+    after: 'rafi-striders',
+    goal: 'gather',
+    target: 'talon',
+    count: 2,
+    xp: 1170,
+    title: 'Hooks for the harvest',
+    body:
+      'A talon on a pole is the best date-hook there is. Two talons, from the vultures, and the harvest comes in.',
+  },
+  {
+    id: 'rafi-wyrms',
+    giver: 'rafi',
+    after: 'rafi-talons',
+    goal: 'slay',
+    target: 'stonewyrm',
+    count: 2,
+    xp: 410,
+    gift: 'tonic',
+    title: 'Wyrms in the mesa',
+    body:
+      'Stonewyrms bask on the mesa south-east of the palms, and they’ve started coming down for the shade. Two of them.',
+  },
+  // Sef the nomad, on the Sunscar Dunes.
+  {
+    id: 'sef-scarabs',
+    giver: 'sef',
+    goal: 'slay',
+    target: 'scarab',
+    count: 8,
+    xp: 2100,
+    title: 'The buried town',
+    body:
+      'There is a town buried in the sand north-west of here, and the scarabs have it now. Eight of them, and I will show you its gate.',
+  },
+  {
+    id: 'sef-sandwyrms',
+    giver: 'sef',
+    after: 'sef-scarabs',
+    goal: 'slay',
+    target: 'sandwyrm',
+    count: 2,
+    xp: 1550,
+    title: 'Under the dunes',
+    body:
+      'Sandwyrms swim under the dunes like fish, and a dune that moves is a dune with a mouth. Two of them.',
+  },
+  {
+    id: 'sef-skyreaver',
+    giver: 'sef',
+    after: 'sef-sandwyrms',
+    goal: 'slay',
+    target: 'skyreaver',
+    count: 1,
+    xp: 1800,
+    gift: 'elixir',
+    title: 'The Skyreaver',
+    body:
+      'A bird as big as a sail hunts over the dunes with a crown of briar on its head. The Skyreaver, my people call it. Bring it down, and the sky is ours again.',
+  },
+  // Tali the hawk-mother, by the oasis at Redmesa.
+  {
+    id: 'tali-griffins',
+    giver: 'tali',
+    after: 'tali-talons',
+    goal: 'slay',
+    target: 'griffin',
+    count: 2,
+    xp: 1030,
+    title: 'The griffins of the red mesa',
+    body:
+      'Griffins rule the red mesa now, and my hawks won’t fly while they watch. Bring two of them down, and my hawks are free.',
+  },
+  {
+    id: 'tali-talons',
+    giver: 'tali',
+    goal: 'gather',
+    target: 'talon',
+    count: 3,
+    xp: 1540,
+    gift: 'draught',
+    title: 'Perches for the young',
+    body:
+      'The young hawks learn to grip on a talon perch. Three talons, and I will name one after you.',
+  },
+  {
+    id: 'tali-vultures',
+    giver: 'tali',
+    after: 'tali-griffins',
+    goal: 'slay',
+    target: 'vulture',
+    count: 4,
+    xp: 940,
+    gift: 'draught',
+    title: 'Robbers of the nests',
+    body:
+      'The vultures rob my hawks’ nests while the mothers hunt. Four of them, and the eggs are safe.',
+  },
+  // Nadim the salt-trader, at his stall on the red mesa.
+  {
+    id: 'nadim-stings',
+    giver: 'nadim',
+    goal: 'gather',
+    target: 'sting',
+    count: 2,
+    xp: 1550,
+    gift: 'tonic',
+    title: 'A cure for the sting',
+    body:
+      'Deathstalkers are scorpions the size of a cart, and a deathstalker’s sting, dried and ground, is the only cure for a deathstalker’s sting. Two of them, and my drivers stop dying on the road.',
+  },
+  {
+    id: 'nadim-stalkers',
+    giver: 'nadim',
+    after: 'nadim-stings',
+    goal: 'slay',
+    target: 'deathstalker',
+    count: 5,
+    xp: 1940,
+    gift: 'draught',
+    title: 'Deathstalkers',
+    body:
+      'Better still, no more stings. The deathstalkers have come out of the mesa to hunt the salt road. Five of them. Then the road east runs to the tombs.',
+  },
+  // Warden Sabra, at the tombs of Tombsands.
+  {
+    id: 'sabra-wights',
+    giver: 'sabra',
+    goal: 'slay',
+    target: 'wight',
+    count: 4,
+    xp: 2840,
+    title: 'The dead are walking',
+    body:
+      'The dead are walking out of the tombs, crowned in briar. They were kings and queens once, some of them. Four of them, back to rest.',
+  },
+  {
+    id: 'sabra-sandwyrm',
+    giver: 'sabra',
+    after: 'sabra-wights',
+    goal: 'slay',
+    target: 'sandwyrm',
+    count: 1,
+    xp: 770,
+    title: 'In the sunken tombs',
+    body:
+      'A sandwyrm has made its nest in the sunken tombs south-west of here. I would like my tombs back.',
+  },
+  {
+    id: 'sabra-wardens',
+    giver: 'sabra',
+    after: 'sabra-sandwyrm',
+    goal: 'slay',
+    target: 'warden',
+    count: 2,
+    xp: 1840,
+    title: 'The tomb wardens',
+    body:
+      'The wardens of the tombs were set to guard the dead, and they did, for a thousand years. Now they have briar in them, and they guard the briar. Two of them.',
+  },
+  {
+    id: 'sabra-venom',
+    giver: 'sabra',
+    after: 'sabra-wardens',
+    goal: 'gather',
+    target: 'venom',
+    count: 1,
+    xp: 970,
+    gift: 'elixir',
+    title: 'Ink for the names',
+    body:
+      'The names on the tombs are written in venom and ash, and the sand is scouring them away. One venom sac, and I will write them again. Then look south-east: the air shimmers there, and the sand turns to ash. That is where the fire starts.',
+  },
+]

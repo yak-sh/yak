@@ -1,0 +1,337 @@
+// The people of the far north, up the road from Wolfden: Frostmoor, the
+// holt at Rimeholt, Frostpine and Icefall, and Whitepeak, where the last
+// Greenkeeper of the north remembers where the briar was buried.
+import type { Giver, Quest } from '../quests.ts'
+
+export let givers: Giver[] = [
+  {
+    id: 'ulf',
+    name: 'Ulf the trapper',
+    level: 'frostmoor',
+    place: 'snow',
+    offset: [14.5, 24.5],
+    greets: 'Cold is a friend. It keeps things honest.',
+    look: { tint: '#6a4a3a', hair: '#d8c090', skin: '#e8c0a0' },
+  },
+  {
+    id: 'gudrun',
+    name: 'Gudrun the ice-cutter',
+    level: 'frostmoor',
+    place: 'snow',
+    offset: [14.5, -11.5],
+    greets: 'Ice for the cellars, ice for the fish. Somebody has to cut it.',
+    look: { tint: '#5a7a9a', hair: '#a0a098', skin: '#e0b8a0' },
+  },
+  {
+    id: 'sigrun',
+    name: 'Sigrun the holt-elder',
+    level: 'rimeholt',
+    place: 'holt',
+    offset: [-3, -10.5],
+    greets: 'The holt stands. The fire burns. Come in out of the wind.',
+    look: { tint: '#4a6a8a', hair: '#f0f0e8', skin: '#e8c8b0' },
+    staff: true,
+  },
+  {
+    id: 'hilde',
+    name: 'Hilde the furrier',
+    level: 'rimeholt',
+    place: 'holt',
+    offset: [0, -14.5],
+    greets: 'Fur in, cold out. That’s the whole secret.',
+    look: { tint: '#8a4a3a', hair: '#c09060', skin: '#f0d0b8' },
+  },
+  {
+    id: 'birgit',
+    name: 'Birgit the woodcutter',
+    level: 'frostpine',
+    place: 'snow',
+    offset: [-20.5, -2.5],
+    greets: 'Pine burns hot. Remember that, when the snow comes.',
+    look: { tint: '#7a3a3a', hair: '#e0d0b0', skin: '#f0c8a8' },
+  },
+  {
+    id: 'ansel',
+    name: 'Ansel the climber',
+    level: 'icefall',
+    place: 'snow',
+    offset: [21, 15],
+    greets: 'Up is the only direction worth going.',
+    look: { tint: '#c04a2a', hair: '#3a2a1a', skin: '#e0b090' },
+  },
+  {
+    id: 'aud',
+    name: 'Aud of the high snow',
+    level: 'whitepeak',
+    place: 'snow',
+    offset: [-28.5, -3],
+    greets: 'You climbed all this way to see an old woman. How kind.',
+    look: { tint: '#3a6b4a', hair: '#ffffff', skin: '#c89a78' },
+    staff: true,
+  },
+]
+
+export let quests: Quest[] = [
+  // Ulf the trapper, on the snow at Frostmoor.
+  {
+    id: 'ulf-hares',
+    giver: 'ulf',
+    goal: 'slay',
+    target: 'snowhare',
+    count: 3,
+    xp: 460,
+    title: 'Hares in the snares',
+    body:
+      'The snow hares have got so bold they steal the bait out of my snares and leave the snares. Three of them.',
+  },
+  {
+    id: 'ulf-direwolf',
+    giver: 'ulf',
+    after: 'ulf-hares',
+    goal: 'slay',
+    target: 'direwolf',
+    count: 1,
+    xp: 400,
+    title: 'The pack leader',
+    body:
+      'A dire wolf leads the packs down to Wolfden, and it wears a collar of briar. Kill it, and the rest will scatter.',
+  },
+  {
+    id: 'ulf-frostwolves',
+    giver: 'ulf',
+    after: 'ulf-direwolf',
+    goal: 'slay',
+    target: 'frostwolf',
+    count: 3,
+    xp: 880,
+    gift: 'draught',
+    title: 'The white ones',
+    body:
+      'Behind the grey wolves come the white ones, frost wolves, and they don’t scatter. Three of them. The holt at Rimeholt is up the road east, if you want a fire.',
+  },
+  // Gudrun the ice-cutter, on the snow at Frostmoor.
+  {
+    id: 'gudrun-slimes',
+    giver: 'gudrun',
+    goal: 'slay',
+    target: 'frostslime',
+    count: 6,
+    xp: 1240,
+    title: 'Slime that freezes',
+    body:
+      'Frost slimes creep over the snowfield and freeze whatever they touch. My saws, mostly. Six of them.',
+  },
+  {
+    id: 'gudrun-frostbacks',
+    giver: 'gudrun',
+    after: 'gudrun-slimes',
+    goal: 'slay',
+    target: 'frostback',
+    count: 3,
+    xp: 790,
+    gift: 'draught',
+    title: 'The ice that walks',
+    body:
+      'I cut ice off the glacier north-east of here. Now the glacier has started getting up and walking off. Frostbacks. Three of them.',
+  },
+  // Sigrun the holt-elder, elder of the holt at Rimeholt.
+  {
+    id: 'sigrun-frostwolves',
+    giver: 'sigrun',
+    after: 'sigrun-frost',
+    goal: 'slay',
+    target: 'frostwolf',
+    count: 4,
+    xp: 1170,
+    title: 'Wolves of the white',
+    body:
+      'Frost wolves circle the holt at night. They were always out there, but they never came this close. Four of them.',
+  },
+  {
+    id: 'sigrun-frost',
+    giver: 'sigrun',
+    goal: 'gather',
+    target: 'frost',
+    count: 5,
+    xp: 1720,
+    gift: 'draught',
+    title: 'Crystals of frost',
+    body:
+      'Frost crystals keep the holt’s stores through the winter. They burn briar clean away too, the old songs say. Five crystals, and we will find out.',
+  },
+  {
+    id: 'sigrun-frostmaw',
+    giver: 'sigrun',
+    after: 'sigrun-frostwolves',
+    goal: 'slay',
+    target: 'frostmaw',
+    count: 1,
+    xp: 1540,
+    gift: 'elixir',
+    title: 'Frostmaw',
+    body:
+      'Frostmaw walks the snow with a crown of briar frozen to its head, and while it walks, the winter does not end. End it.',
+  },
+  // Hilde the furrier, by the Rimeholt well.
+  {
+    id: 'hilde-hares',
+    giver: 'hilde',
+    goal: 'slay',
+    target: 'snowhare',
+    count: 5,
+    xp: 760,
+    title: 'White hares',
+    body:
+      'Snow hares, fat and white and everywhere this year. Five of them, and the holt eats well.',
+  },
+  {
+    id: 'hilde-pelts',
+    giver: 'hilde',
+    after: 'hilde-hares',
+    goal: 'gather',
+    target: 'pelt',
+    count: 3,
+    xp: 1200,
+    gift: 'tonic',
+    title: 'Coats for the holt',
+    body:
+      'Every child in the holt needs a coat by the dark of the year. Three thick pelts, from the wolves, and nobody shivers.',
+  },
+  {
+    id: 'hilde-mammoth',
+    giver: 'hilde',
+    after: 'hilde-pelts',
+    goal: 'slay',
+    target: 'mammoth',
+    count: 1,
+    xp: 400,
+    gift: 'draught',
+    title: 'The old mammoth',
+    body:
+      'A mammoth has come down off the glacier with briar in its wool, and it leans on the holt wall to scratch. The wall won’t take much more.',
+  },
+  // Birgit the woodcutter, at Frostpine.
+  {
+    id: 'birgit-frostwolves',
+    giver: 'birgit',
+    goal: 'slay',
+    target: 'frostwolf',
+    count: 5,
+    xp: 1460,
+    title: 'Wolves in the pines',
+    body:
+      'Frost wolves in the pines north of here, and they don’t run from an axe. Five of them, and I can cut wood without company.',
+  },
+  {
+    id: 'birgit-frostbacks',
+    giver: 'birgit',
+    after: 'birgit-frostwolves',
+    goal: 'slay',
+    target: 'frostback',
+    count: 3,
+    xp: 790,
+    title: 'Walking ice in the pines',
+    body:
+      'Frostbacks have come down off the ice and into the pines, and every tree they lean on splits. Three of them.',
+  },
+  {
+    id: 'birgit-frostmaw',
+    giver: 'birgit',
+    after: 'birgit-frostbacks',
+    goal: 'slay',
+    target: 'frostmaw',
+    count: 1,
+    xp: 1540,
+    gift: 'elixir',
+    title: 'What the wolves follow',
+    body:
+      'The wolves and the walking ice all follow something through the pines: Frostmaw, or something just like it. Find it.',
+  },
+  // Ansel the climber, at the foot of Icefall.
+  {
+    id: 'ansel-frostbacks',
+    giver: 'ansel',
+    goal: 'slay',
+    target: 'frostback',
+    count: 4,
+    xp: 1050,
+    title: 'Walking ice',
+    body:
+      'The glaciers have got up and started walking. Frostbacks, we call them now. Four of them, and I can climb again.',
+  },
+  {
+    id: 'ansel-frostwolves',
+    giver: 'ansel',
+    after: 'ansel-frostbacks',
+    goal: 'slay',
+    target: 'frostwolf',
+    count: 4,
+    xp: 1170,
+    title: 'Wolves on the ropes',
+    body:
+      'Frost wolves wait at the foot of the ropes for whoever falls. Four of them.',
+  },
+  {
+    id: 'ansel-yetis',
+    giver: 'ansel',
+    after: 'ansel-frostwolves',
+    goal: 'slay',
+    target: 'yeti',
+    count: 3,
+    xp: 2540,
+    gift: 'draught',
+    title: 'Footprints',
+    body:
+      'Big footprints in the snow, bigger every morning. Yetis, with briar in their fur. Three of them.',
+  },
+  {
+    id: 'ansel-skyreaver',
+    giver: 'ansel',
+    after: 'ansel-yetis',
+    goal: 'slay',
+    target: 'skyreaver',
+    count: 1,
+    xp: 1800,
+    gift: 'elixir',
+    title: 'The bird above the ice',
+    body:
+      'The Skyreaver hunts above the ice with briar in its claws, and it plucks climbers off the ropes. Bring it down. Then climb on north to Whitepeak: somebody lives up there.',
+  },
+  // Aud of the high snow, the last Greenkeeper of the north, on Whitepeak.
+  {
+    id: 'aud-mammoth',
+    giver: 'aud',
+    goal: 'slay',
+    target: 'mammoth',
+    count: 1,
+    xp: 400,
+    title: 'The old mammoth',
+    body:
+      'I was a Greenkeeper, once, the last one up here. Even the old mammoth wears a briar crown now, and it tramples the hares’ burrows. Let it rest.',
+  },
+  {
+    id: 'aud-yetis',
+    giver: 'aud',
+    after: 'aud-mammoth',
+    goal: 'slay',
+    target: 'yeti',
+    count: 4,
+    xp: 3390,
+    title: 'Yetis at the door',
+    body:
+      'The yetis knock at my door at night. I don’t answer. Four of them, please.',
+  },
+  {
+    id: 'aud-frostwolves',
+    giver: 'aud',
+    after: 'aud-yetis',
+    goal: 'slay',
+    target: 'frostwolf',
+    count: 6,
+    xp: 1750,
+    gift: 'elixir',
+    title: 'The root in the fire',
+    body:
+      'Now listen. We buried the briar’s root under the Maw, in the far south, and sank it in the fire. Something down there is waking it. Clear six frost wolves off my mountain, and then go south, and end it.',
+  },
+]

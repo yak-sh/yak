@@ -7,16 +7,29 @@
 // gather or give by item kind (items.ts). Its id is what a player's journal
 // remembers, so an id, once played, never changes.
 //
-// The story they tell: a briar is creeping into the vale from somewhere far
-// off, and a beast it crowns forgets it was ever gentle. Long ago the
-// Greenkeepers planted the moss and held the briar back. Elder Wren's quests
-// are the spine, from Mossvale outward; everyone else has troubles of their
-// own, and most of those troubles have thorns in them.
+// The story they tell: a briar is creeping into the vale, and a beast it
+// crowns forgets it was ever gentle. Long ago the Greenkeepers planted the moss
+// and set a ward at the end of each road out of Mossvale: the Elder Heart to
+// the north, the bell of the Sunken Kirk to the west, the light on Stormhead
+// to the east, the old king's barrow to the south. Elder Wren teaches a new
+// hero and sends them down the east road to the Reeve of Birchmere, whose old
+// book names the wards; the people of each land have troubles of their own,
+// and the last of each land's asks points down the road to the next. Every
+// road ends at the Maw, where the Cinder Wyrm lies on the briar's root.
 //
-// The rows live in quests/, a file for each country of the world
-// (levels.ts), in the order a hero comes to them.
+// The rows live in quests/, a file for each country of the world (levels.ts),
+// in the order a hero comes to them: every land has someone with something to
+// ask, and each land's first ask is open to anyone who walks in.
 
 import * as home from './quests/home.ts'
+import * as north from './quests/north.ts'
+import * as west from './quests/west.ts'
+import * as east from './quests/east.ts'
+import * as south from './quests/south.ts'
+import * as under from './quests/under.ts'
+import * as sands from './quests/sands.ts'
+import * as frost from './quests/frost.ts'
+import * as fire from './quests/fire.ts'
 
 export type Giver = {
   id: string
@@ -38,6 +51,8 @@ export type Quest = {
   giver: string
   /** the quest that must be done first */
   after?: string
+  /** the level what it asks for is found in, when not the giver's own */
+  level?: string
   goal: 'slay' | 'gather'
   /** a creature kind to slay, or an item kind to gather and hand over */
   target: string
@@ -49,37 +64,36 @@ export type Quest = {
   body: string
 }
 
-export let GIVERS: Giver[] = [...home.givers]
+let LANDS = [home, north, west, east, south, under, sands, frost, fire]
 
-/** Every quest can be finished: its giver stands in a place that exists, the
- * quest it comes after is one, and what it asks for lives somewhere or drops
- * from something or is given.
+export let GIVERS: Giver[] = LANDS.flatMap((l) => l.givers)
+
+/** Every quest can be finished where it sends a hero: its giver stands in a
+ * place that exists, the quest it comes after is one, and what it asks for
+ * lives in its level (homes.ts `dens`), or drops from something that does.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { BEASTS } from './beasts.ts'
+ * import { dens } from './homes.ts'
  * import { ITEMS } from './items.ts'
  * import { LEVELS } from './levels.ts'
- * let kinds = new Set(
- *   Object.values(LEVELS).flatMap((l) =>
- *     Object.values(l.places).map((p) => p.kind)
- *   ),
- * )
- * let lives = (k: string) => BEASTS[k]?.haunts.some((h) => kinds.has(h.near))
- * let had = new Set([
- *   ...Object.values(BEASTS).flatMap((b) => b.loot.map(([i]) => i)),
- *   ...QUESTS.map((q) => q.gift),
- * ])
+ * let giver = new Map(GIVERS.map((g) => [g.id, g]))
  * let ids = new Set(QUESTS.map((q) => q.id))
- * let stands = (id: string) =>
- *   GIVERS.some((g) => g.id == id && LEVELS[g.level]?.places[g.place])
- * let stuck = QUESTS.filter((q) =>
- *   !stands(q.giver) || (q.after && !ids.has(q.after)) ||
- *   (q.gift && !ITEMS[q.gift]) ||
- *   (q.goal == 'slay' ? !lives(q.target) : !had.has(q.target))
- * )
+ * let found = (q: Quest) => {
+ *   let lv = LEVELS[q.level ?? giver.get(q.giver)?.level ?? '']
+ *   let kinds = lv ? dens(lv).map((d) => d.kind) : []
+ *   return q.goal == 'slay'
+ *     ? kinds.includes(q.target)
+ *     : kinds.some((k) => BEASTS[k].loot.some(([i]) => i == q.target))
+ * }
+ * let stuck = QUESTS.filter((q) => {
+ *   let g = giver.get(q.giver)
+ *   return !g || !LEVELS[g.level]?.places[g.place] ||
+ *     (q.after && !ids.has(q.after)) || (q.gift && !ITEMS[q.gift]) || !found(q)
+ * })
  * assertEquals(stuck.map((q) => q.id), [])
  * assertEquals(ids.size, QUESTS.length)
  * ```
  */
-export let QUESTS: Quest[] = [...home.quests]
+export let QUESTS: Quest[] = LANDS.flatMap((l) => l.quests)
