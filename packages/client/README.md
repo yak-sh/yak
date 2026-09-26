@@ -79,17 +79,16 @@ box.close()
 | Method or property    | Behavior                                                              |
 | --------------------- | --------------------------------------------------------------------- |
 | `watch(query, opts?)` | Return a live query result.                                           |
-| `read(query, opts?)`  | Read matching bundles synchronously from RAM.                         |
+| `read(query, opts?)`  | Read a query once, synchronously: the rows a watch on it would hold.  |
 | `ent(eid)`            | Read one cached entity, or `undefined` when it is absent from memory. |
 | `mutate(change)`      | Call the graph's `apply()`; returns bundles or a promise of bundles.  |
 | `ready`               | Wait for local persistence and any configured epoch restore.          |
 | `setEpoch(epoch)`     | Validate the server cache epoch and refresh remote subscriptions.     |
 | `close()`             | Close all watches, the connection, and cache activity.                |
 
-The returned `graph`, `store`, `watches`, `cache`, and optional `wire`
-connection remain available. A deleted entity read by `ent()` carries a
-`tombstone` component; an entity absent from this client's cache is not evidence
-of deletion.
+The returned `graph`, `watches`, `cache`, and optional `wire` connection remain
+available. A deleted entity read by `ent()` carries a `tombstone` component; an
+entity absent from this client's cache is not evidence of deletion.
 
 To connect to a server implementing `@yaks/sync`, supply its base `url` and use
 the same vocabulary on both ends:

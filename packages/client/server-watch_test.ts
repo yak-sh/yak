@@ -47,7 +47,7 @@ Deno.test('server evaluation never parses, filters or primes the query locally',
   // Even the first prime and later epoch hydration must not ask RAM to run
   // these opaque server contracts. This is a transport test, not proof that
   // the server supports a particular grammar or aggregate result shape.
-  c.store.read = () => {
+  c.graph.storage.read = () => {
     throw new Error('local evaluation forbidden')
   }
   for (
@@ -450,7 +450,7 @@ for (let disk of ['memory', 'indexedDB']) {
         wireVault: disk === 'memory' ? vault : wireIdb({ indexedDB: db }),
         epoch: 'one',
       })
-      next.c.store.read = () => {
+      next.c.graph.storage.read = () => {
         throw new Error('local matching forbidden')
       }
       let reopen = next.c.watch('opaque ranking', server)

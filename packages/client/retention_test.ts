@@ -34,19 +34,19 @@ let fixture = (opts: ClientOpts = {}) => {
 }
 let readIds = (bundles: Bundle[]) => bundles.map((b) => b.entity.eid)
 
-Deno.test('inactive LRU is bounded, reads touch without changing query order', () => {
+Deno.test('inactive LRU is bounded, reads touch without changing query order', async () => {
   let { c, frame } = fixture({ retention: 2 })
   let w = c.watch('.doc')
   frame('s1', [row('a'), row('b')])
   w.close()
   assertEquals(c.cache.size(), 2)
   c.ent('a') // b is now the least recently used; query order stays a,b
-  assertEquals(readIds(c.store.read('.doc')), ['a', 'b'])
+  assertEquals(readIds(await c.graph.read('.doc')), ['a', 'b'])
   let z = c.watch('.title=c')
   frame('s2', [row('c')])
   z.close()
   assertEquals(c.ent('b'), undefined)
-  assertEquals(readIds(c.store.read('.doc')), ['a', 'c'])
+  assertEquals(readIds(await c.graph.read('.doc')), ['a', 'c'])
   assertEquals(c.cache.size(), 2)
   c.close()
 })
@@ -127,13 +127,13 @@ Deno.test('snapshots replace absent wire fields and preserve local/none on gone'
   c.close()
 })
 
-Deno.test('eviction physically drops payloads and restore keeps identity, not a tombstone', () => {
+Deno.test('eviction physically drops payloads and restore keeps identity, not a tombstone', async () => {
   let { c, frame } = fixture({ retention: 0 })
   let w = c.watch('.doc')
   frame('s1', [row('a', 75)])
   w.close()
   assertEquals(c.ent('a'), undefined)
-  assertEquals(c.store.read(''), [])
+  assertEquals(await c.graph.read(''), [])
   let again = c.watch('.doc')
   frame('s2', [{ entity: { eid: 'a' }, doc: { title: 'back' } }])
   assertEquals(c.ent('a')?.entity.num, 75)
@@ -345,7 +345,7 @@ Deno.test('storage enumeration and reactive refresh do not touch LRU', async () 
   let w = c.watch('.doc')
   frame('s1', [row('a'), row('b')])
   w.close()
-  c.store.read('.doc')
+  await c.graph.read('.doc')
   await c.graph.apply(echo([row('c')]))
   await Promise.resolve()
   assertEquals(c.ent('a'), undefined)

@@ -4,6 +4,8 @@
 
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
+import { ids } from '@yaks/id/rules'
+import { replicate } from '@yaks/sync'
 import { box, boxClient, comp, COOK, server, titles } from './testing.ts'
 import { client } from './client.ts'
 import { stash } from './vault.ts'
@@ -19,8 +21,33 @@ Deno.test('a client with no server is a whole graph on its own', () => {
   let c = boxClient()
   c.mutate([dal()])
   assertEquals(comp(c.ent('r1'), 'doc').title, 'Dal')
-  assertEquals(titles(c.read('.course=dinner')), ['Dal'])
+  assertEquals(titles(c.read('.course=dinner&?doc')), ['Dal'])
   assertEquals(c.wire, undefined)
+  c.close()
+})
+
+let note = { entity: { eid: 'n1' }, note: { stars: 5, recipe: 'r1' } }
+
+Deno.test('a read answers the rows a watch on the same query holds', () => {
+  let c = boxClient()
+  c.mutate([dal(), note])
+  for (
+    let q of ['.course=dinner', '.recipe&?doc', '.note.recipe=r1', '.doc&*']
+  ) {
+    let w = c.watch(q)
+    assertEquals(c.read(q), w.value)
+    w.close()
+  }
+  c.close()
+})
+
+Deno.test('a read resolves the id a person types', () => {
+  let c = client(box, [ids(box)], { vault: false })
+  replicate(c.graph, [
+    { ...dal(), entity: { eid: 'r1', num: 7 } },
+    { ...note, entity: { eid: 'n1', num: 8 } },
+  ])
+  assertEquals(c.read('.note.recipe=R-7').map((b) => b.entity.eid), ['n1'])
   c.close()
 })
 

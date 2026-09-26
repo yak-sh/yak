@@ -20,9 +20,9 @@ import type {
   ReadOpts,
   StampPolicy,
 } from '@yaks/graph'
-import { graph } from '@yaks/graph'
+import { graph, isPromise } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { type Query, ram, type Store } from '@yaks/ram'
+import { type Query, ram } from '@yaks/ram'
 import {
   type Connect,
   type Fetch,
@@ -107,8 +107,6 @@ export type Client = {
   vocab: Vocab
   /** the graph itself — `apply`, `read`, `use`, all of it */
   graph: Graph
-  /** the map underneath, for a caller that wants a synchronous read */
-  store: Store
   /** the connection to the server, when there is one */
   wire?: Sync
   /** the watches on this graph */
@@ -128,7 +126,9 @@ export type Client = {
    * subscription. Each handle returned closes independently; the last close
    * drops the subscription. */
   watch: (query: string, opts?: ClientWatchOpts) => Watch
-  /** read a query once, synchronously */
+  /** read a query once, synchronously: the graph's own answer, so a human id
+   * in it resolves and each row carries what the query names (`*` for
+   * everything) — the rows a watch on the same query holds */
   read: (query: Query, opts?: ReadOpts) => Bundle[]
   /** one entity, whole, by id — `undefined` if this client has never held
    * it. A deleted entity comes back with a `tombstone` component. */
@@ -381,7 +381,6 @@ export let client = (
   return {
     vocab,
     graph: g,
-    store,
     wire,
     watches: seen,
     cache,
@@ -392,8 +391,17 @@ export let client = (
     },
     ready: Promise.all([kept?.ready, restored]).then(() => undefined),
     watch,
+    // The graph's own read, so every door answers a query alike. Over this
+    // RAM store it answers at once; only a plugin that looks a name up
+    // asynchronously could make it a promise, which is refused here rather
+    // than handed back as rows.
     read: (query, readOpts) => {
-      let rows = store.read(query, readOpts)
+      let rows = g.read(query, readOpts)
+      if (isPromise(rows)) {
+        throw new Error(
+          'client.read is synchronous, and a plugin made it async',
+        )
+      }
       cache.touch(rows.map((b) => b.entity.eid))
       return rows
     },
