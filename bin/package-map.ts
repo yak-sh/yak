@@ -50,13 +50,18 @@ export type Package = {
   imports: string[]
 }
 
-// The newest version jsr.io holds of `@yaks/<name>`, or null.
+// The newest version jsr.io holds of `@yaks/<name>`, or null when it holds
+// none. Only a 404 says that: any other failure is jsr.io's, and is thrown
+// rather than drawn as a package that was never published.
 let latest = async (
   name: string,
   get: typeof fetch,
 ): Promise<string | null> => {
   let res = await get(`${API}/scopes/yaks/packages/${name}`)
-  if (!res.ok) return (await res.body?.cancel(), null)
+  if (res.status == 404) return (await res.body?.cancel(), null)
+  if (!res.ok) {
+    throw new Error(`jsr.io @yaks/${name}: ${res.status} ${await res.text()}`)
+  }
   return (await res.json()).latestVersion ?? null
 }
 

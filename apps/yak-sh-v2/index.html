@@ -21,38 +21,38 @@
   <link rel=stylesheet href=disk.css>
   <link rel=stylesheet href=man.css>
   <link rel=stylesheet href=doc.css>
-  <!-- Every @yaks package at 0.2.1, as JSR holds it, built by esm.sh.
-       TODO: 0.2.1 predates @yaks/cli exporting registry and show from its
-       root, so @yaks/cli is mapped to a module adding them from the file
-       that holds them. Once the release after 0.2.1 is on JSR, map it
-       straight to esm.sh like the rest. -->
+  <!-- Every @yaks package at 0.2.2, as JSR holds it, built by esm.sh.
+       TODO: @yaks/cli 0.2.2's root re-exports its command (./yak), whose
+       signal handling reads Deno.build.os as it loads, so a page importing
+       the root throws. @yaks/cli is mapped to the two files yak.js uses.
+       The root stops re-exporting the command on main; once the release
+       after 0.2.2 is on JSR, map it straight to esm.sh like the rest. -->
   <script type=importmap>
   {
     "imports": {
-      "@yaks/vocab": "https://esm.sh/jsr/@yaks/vocab@0.2.1",
-      "@yaks/graph": "https://esm.sh/jsr/@yaks/graph@0.2.1",
-      "@yaks/graph/tools": "https://esm.sh/jsr/@yaks/graph@0.2.1/tools",
-      "@yaks/ram": "https://esm.sh/jsr/@yaks/ram@0.2.1",
-      "@yaks/match": "https://esm.sh/jsr/@yaks/match@0.2.1",
-      "@yaks/kernel/vocab": "https://esm.sh/jsr/@yaks/kernel@0.2.1/vocab",
-      "@yaks/doc": "https://esm.sh/jsr/@yaks/doc@0.2.1",
-      "@yaks/doc/views": "https://esm.sh/jsr/@yaks/doc@0.2.1/views",
-      "@yaks/edge": "https://esm.sh/jsr/@yaks/edge@0.2.1",
-      "@yaks/task": "https://esm.sh/jsr/@yaks/task@0.2.1",
-      "@yaks/task/tools": "https://esm.sh/jsr/@yaks/task@0.2.1/tools",
-      "@yaks/task/views": "https://esm.sh/jsr/@yaks/task@0.2.1/views",
-      "@yaks/project": "https://esm.sh/jsr/@yaks/project@0.2.1",
-      "@yaks/id": "https://esm.sh/jsr/@yaks/id@0.2.1",
-      "@yaks/id/vocab": "https://esm.sh/jsr/@yaks/id@0.2.1/vocab",
-      "@yaks/id/rules": "https://esm.sh/jsr/@yaks/id@0.2.1/rules",
-      "@yaks/model": "https://esm.sh/jsr/@yaks/model@0.2.1",
-      "@yaks/session": "https://esm.sh/jsr/@yaks/session@0.2.1",
-      "@yaks/session/views": "https://esm.sh/jsr/@yaks/session@0.2.1/views",
-      "@yaks/tools": "https://esm.sh/jsr/@yaks/tools@0.2.1",
-      "@yaks/tools/vocab": "https://esm.sh/jsr/@yaks/tools@0.2.1/vocab",
-      "@yaks/tools/views": "https://esm.sh/jsr/@yaks/tools@0.2.1/views",
-      "@yaks/cli": "data:text/javascript,export * from 'https://esm.sh/jsr/@yaks/cli@0.2.1'; export { registry, show } from 'https://esm.sh/jsr/@yaks/cli@0.2.1/answer.ts'",
-      "@yaks/markdown": "https://esm.sh/jsr/@yaks/markdown@0.2.1",
+      "@yaks/vocab": "https://esm.sh/jsr/@yaks/vocab@0.2.2",
+      "@yaks/graph": "https://esm.sh/jsr/@yaks/graph@0.2.2",
+      "@yaks/graph/tools": "https://esm.sh/jsr/@yaks/graph@0.2.2/tools",
+      "@yaks/ram": "https://esm.sh/jsr/@yaks/ram@0.2.2",
+      "@yaks/kernel/vocab": "https://esm.sh/jsr/@yaks/kernel@0.2.2/vocab",
+      "@yaks/doc": "https://esm.sh/jsr/@yaks/doc@0.2.2",
+      "@yaks/doc/views": "https://esm.sh/jsr/@yaks/doc@0.2.2/views",
+      "@yaks/edge": "https://esm.sh/jsr/@yaks/edge@0.2.2",
+      "@yaks/task": "https://esm.sh/jsr/@yaks/task@0.2.2",
+      "@yaks/task/tools": "https://esm.sh/jsr/@yaks/task@0.2.2/tools",
+      "@yaks/task/views": "https://esm.sh/jsr/@yaks/task@0.2.2/views",
+      "@yaks/project": "https://esm.sh/jsr/@yaks/project@0.2.2",
+      "@yaks/id": "https://esm.sh/jsr/@yaks/id@0.2.2",
+      "@yaks/id/vocab": "https://esm.sh/jsr/@yaks/id@0.2.2/vocab",
+      "@yaks/id/rules": "https://esm.sh/jsr/@yaks/id@0.2.2/rules",
+      "@yaks/model": "https://esm.sh/jsr/@yaks/model@0.2.2",
+      "@yaks/session": "https://esm.sh/jsr/@yaks/session@0.2.2",
+      "@yaks/session/views": "https://esm.sh/jsr/@yaks/session@0.2.2/views",
+      "@yaks/tools": "https://esm.sh/jsr/@yaks/tools@0.2.2",
+      "@yaks/tools/vocab": "https://esm.sh/jsr/@yaks/tools@0.2.2/vocab",
+      "@yaks/tools/views": "https://esm.sh/jsr/@yaks/tools@0.2.2/views",
+      "@yaks/cli": "data:text/javascript,export { cli, helpTool } from 'https://esm.sh/jsr/@yaks/cli@0.2.2/run.ts'; export { registry, show } from 'https://esm.sh/jsr/@yaks/cli@0.2.2/answer.ts'",
+      "@yaks/markdown": "https://esm.sh/jsr/@yaks/markdown@0.2.2",
       "preact": "https://esm.sh/preact@10.29.1"
     }
   }
@@ -384,7 +384,7 @@ console.log(await g.read('.doc.title="Getting started"'))</code></pre>
             <dt><a href=https://jsr.io/@yaks/cli data-pkg=cli>cli</a><dd>the <code>yak</code> command, and <code>compose</code>
             <dt><a href=https://jsr.io/@yaks/sync data-pkg=sync>sync</a><dd>optimistic writes, reconciled with a server
             <dt><a href=https://jsr.io/@yaks/client data-pkg=client>client</a><dd>the browser graph, queries as live values
-            <dt><a href=https://github.com/yak-sh/yak/tree/main/packages/web data-pkg=web>web</a><dd>the canvas, cards and boards <code>yak serve</code> answers in a browser
+            <dt><a href=https://jsr.io/@yaks/web data-pkg=web>web</a><dd>the canvas, cards and boards <code>yak serve</code> answers in a browser
             <dt><a href=https://jsr.io/@yaks/workerd data-pkg=workerd>workerd</a><dd>the same handler as a Cloudflare Worker
             <dt><a href=https://jsr.io/@yaks/durable-object data-pkg=durable-object>durable-object</a><dd>one Durable Object, one graph
             <dt><a href=https://jsr.io/@yaks/d1 data-pkg=d1>d1</a><dd>the same storage over D1
@@ -410,7 +410,7 @@ console.log(await g.read('.doc.title="Getting started"'))</code></pre>
             <dt><a href=https://jsr.io/@yaks/spawn data-pkg=spawn>spawn</a><dd><code>claude</code> and <code>codex</code> as sessions
             <dt><a href=https://jsr.io/@yaks/process data-pkg=process>process</a><dd>a running program as an entity
             <dt><a href=https://jsr.io/@yaks/tools data-pkg=tools>tools</a><dd>calls and results, recorded in the graph
-            <dt><a href=https://jsr.io/@yaks/model data-pkg=model>model</a><dd>one model interface; <a href=https://jsr.io/@yaks/openai data-pkg=openai>openai</a>, <a href=https://jsr.io/@yaks/openrouter data-pkg=openrouter>openrouter</a> and <a href=https://github.com/yak-sh/yak/tree/main/packages/workers-ai data-pkg=workers-ai>workers-ai</a> implement it
+            <dt><a href=https://jsr.io/@yaks/model data-pkg=model>model</a><dd>one model interface; <a href=https://jsr.io/@yaks/openai data-pkg=openai>openai</a>, <a href=https://jsr.io/@yaks/openrouter data-pkg=openrouter>openrouter</a> and <a href=https://jsr.io/@yaks/workers-ai data-pkg=workers-ai>workers-ai</a> implement it
             <dt><a href=https://jsr.io/@yaks/context data-pkg=context>context</a><dd>what a model was given, recorded
             <dt><a href=https://jsr.io/@yaks/builders data-pkg=builders>builders</a>, <a href=https://jsr.io/@yaks/dreaming data-pkg=dreaming>dreaming</a><dd>outputs an agent builds from inputs
             <dt><a href=https://jsr.io/@yaks/heal data-pkg=heal>heal</a><dd>an exception files a task about itself
@@ -445,6 +445,7 @@ console.log(await g.read('.doc.title="Getting started"'))</code></pre>
             <dt><a href=https://jsr.io/@yaks/oauth data-pkg=oauth>oauth</a><dd>one authorization-code client; providers are data
             <dt><a href=https://jsr.io/@yaks/egress data-pkg=egress>egress</a><dd>calls out with a credential the caller never holds
             <dt><a href=https://jsr.io/@yaks/platform data-pkg=platform>platform</a><dd>what a host keeps about its spaces and apps
+            <dt><a href=https://jsr.io/@yaks/esbuild data-pkg=esbuild>esbuild</a><dd>an app's TypeScript and npm imports, compiled at deploy
             <dt><a href=https://jsr.io/@yaks/tunnel data-pkg=tunnel>tunnel</a><dd>a space's tunnel to a machine with no open port
             <dt><a href=https://github.com/yak-sh/yak/tree/main/packages/admin data-pkg=admin>admin</a><dd>the owner's verbs on yaks.app, as <code>yak admin</code> tools; unpublished
           </dl>

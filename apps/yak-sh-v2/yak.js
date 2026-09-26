@@ -15,7 +15,6 @@ import { loadVocab } from '@yaks/vocab'
 import { graph, offered } from '@yaks/graph'
 import { loadTools, tier } from '@yaks/graph/tools'
 import { ram } from '@yaks/ram'
-import { matcher, rows } from '@yaks/match'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
 import { docDoc } from '@yaks/doc'
 import { views as docViews } from '@yaks/doc/views'
@@ -56,24 +55,6 @@ export let vocab = loadVocab(
   [kernelKeywords, edgeKeywords, idKeywords],
 )
 
-// TODO: @yaks/ram takes `computed` itself on main (56fe1250), which is how it
-// answers `.task.status=open`; replace this with `ram(vocab, { number,
-// computed: compute() })` once the release after 0.2.1 is on JSR. 0.2.1's ram
-// refuses a query on a computed property, and `task list` asks for one.
-let computing = (store) => {
-  let opts = (o = {}) => ({ now: o.now, computed: compute() })
-  let over = (all) => ({
-    read: (q, o) => matcher(q, vocab, opts(o))(all()),
-    rows: (q, o) => rows(q, vocab, opts(o))(all()),
-  })
-  return {
-    ...store,
-    ...over(() => store.read('*')),
-    tx: (body) =>
-      store.tx((tx) => body({ ...tx, read: over(() => tx.read('*')).read })),
-  }
-}
-
 // Whoever wants to see each commit, and each refusal, as the graph's own
 // `effect` and `audit` phases see them.
 let watchers = new Set()
@@ -94,11 +75,10 @@ let seen = {
 // Numbered the way a config's `"numbers": { "except": [...] }` numbers them:
 // the tool rows, and the call and result each line writes, keep their eids, so
 // the first task here is T-1.
-export let storage = computing(
-  ram(vocab, {
-    number: { except: ['tool', 'call', 'result', 'error', 'exception'] },
-  }),
-)
+export let storage = ram(vocab, {
+  number: { except: ['tool', 'call', 'result', 'error', 'exception'] },
+  computed: compute(),
+})
 export let g = graph({
   storage,
   vocab,
@@ -135,10 +115,10 @@ let from = {
 let command = (declared) => ({
   ...declared,
   run: async (args, c) => {
-    let landed = await calls.call([{
+    let landed = await calls.call({
       entity: { eid: '$call' },
       call: { to: toolEid(declared.name), args: args ?? {} },
-    }])
+    })
     let answer = answerOf(landed)
     if (c.json) c.out(JSON.stringify(structured(declared, answer), null, 2))
     else {
