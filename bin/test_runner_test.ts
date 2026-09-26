@@ -1,7 +1,7 @@
 import { until } from './testing.ts'
 import { fileURLToPath } from 'node:url'
 import { assertEquals, assertMatch, assertThrows } from '@std/assert'
-import { groups, pages, RUN, shards } from './test.ts'
+import { groups, pages, RUN, shards, timesIn } from './test.ts'
 
 Deno.test('examples come from the packages, and never a module by name', async () => {
   let got = await pages([
@@ -84,6 +84,24 @@ Deno.test('bulk shards are bounded, deterministic and run every module once', ()
     'workers/e_test.ts',
   ]
   assertEquals(groups(files, 2).flat().sort(), files.sort())
+})
+
+Deno.test('shards deal the heaviest first, so a slow file runs alongside the rest', () => {
+  let weight = (f: string) => f == 'slow' ? 10 : 1
+  assertEquals(shards(['a', 'b', 'slow', 'c'], 2, weight), [['slow'], [
+    'a',
+    'b',
+    'c',
+  ]])
+  let xml = `<testsuites>
+    <testcase name="one" classname="./bin/a_test.ts" time="0.250"></testcase>
+    <testcase name="two" classname="./bin/a_test.ts" time="1.000"></testcase>
+    <testcase name="&quot;x&quot;" classname="./packages/b_test.ts" time="2.5">
+    </testcase></testsuites>`
+  assertEquals(timesIn(xml), {
+    'bin/a_test.ts': 1.25,
+    'packages/b_test.ts': 2.5,
+  })
 })
 
 // A failing shard no longer cancels its siblings: every shard runs to its own

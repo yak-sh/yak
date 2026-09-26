@@ -114,11 +114,49 @@ let host = (file: string) =>
 
 /** The test files as `deno test` runs them, a runtime to a group: the plain
  * deno files in `jobs` shards, and each other host's files together. */
-export let groups = (files: string[], jobs: number) => [
-  ...shards(files.filter((f) => host(f) == 'deno'), jobs),
+export let groups = (
+  files: string[],
+  jobs: number,
+  weight?: (file: string) => number,
+) => [
+  ...shards(files.filter((f) => host(f) == 'deno'), jobs, weight),
   ...['browser', 'terminal'].map((h) => files.filter((f) => host(f) == h))
     .filter((group) => group.length),
 ]
+
+// How long each test file took when it last ran, kept between runs so the next
+// one can deal its shards by it: a run is as long as its slowest shard. Read
+// off the JUnit report each group writes beside its usual one; a run rewrites
+// only the files it ran.
+let TIMES = `${
+  Deno.env.get('XDG_CACHE_HOME') ?? `${Deno.env.get('HOME')}/.cache`
+}/yak/test-times.json`
+
+/** Seconds per test file in a JUnit report, by its path from the checkout. */
+export let timesIn = (xml: string) => {
+  let out: Record<string, number> = {}
+  let cases = /<testcase [^>]*?classname="\.\/([^"]+)" time="([\d.]+)"/g
+  for (let [, file, seconds] of xml.matchAll(cases)) {
+    out[file] = (out[file] ?? 0) + Number(seconds)
+  }
+  return out
+}
+
+let timed = (): Record<string, number> => {
+  try {
+    return JSON.parse(Deno.readTextFileSync(TIMES))
+  } catch {
+    return {}
+  }
+}
+
+let keep = (times: Record<string, number>) => {
+  let dir = TIMES.slice(0, TIMES.lastIndexOf('/'))
+  Deno.mkdirSync(dir, { recursive: true })
+  let draft = `${TIMES}.${Deno.pid}`
+  Deno.writeTextFileSync(draft, JSON.stringify({ ...timed(), ...times }))
+  Deno.renameSync(draft, TIMES)
+}
 
 /** The examples in `pages`, run as tests; the test files are the shards'. */
 let examples = (pages: string[]) => [
@@ -369,15 +407,25 @@ export async function runTestCommands(
   }
 }
 
-/** Stable, bounded partition: every module runs exactly once. */
-export function shards(files: string[], jobs: number): string[][] {
+/** Stable, bounded partition: every module runs exactly once. The heaviest
+ * file goes first, each to the lightest shard, so the shards end together;
+ * files of one weight are dealt round in order. */
+export function shards(
+  files: string[],
+  jobs: number,
+  weight: (file: string) => number = () => 1,
+): string[][] {
   if (!Number.isInteger(jobs) || jobs < 1) throw new Error('invalid test jobs')
   let groups = Array.from(
     { length: Math.min(jobs, files.length) },
-    () => [] as string[],
+    () => ({ files: [] as string[], load: 0 }),
   )
-  files.forEach((file, i) => groups[i % groups.length].push(file))
-  return groups
+  for (let file of [...files].sort((a, b) => weight(b) - weight(a))) {
+    let lightest = groups.reduce((a, b) => b.load < a.load ? b : a)
+    lightest.files.push(file)
+    lightest.load += weight(file)
+  }
+  return groups.map((g) => g.files)
 }
 
 // Writes to a pipe may be short. Finish one report synchronously so another
@@ -399,8 +447,20 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let docs = args.filter((a) => a.startsWith('--doc=')).map((a) => a.slice(6))
   let files = args.filter((a) => !a.startsWith('--doc='))
   let jobs = Number(Deno.env.get('DENO_JOBS') ?? navigator.hardwareConcurrency)
+  // A file never timed weighs what the middle one does.
+  let known = timed()
+  let middle = Object.values(known).sort((a, b) => a - b)
+  let usual = middle[middle.length >> 1] ?? 1
+  let weight = (file: string) => known[file.replace(/^\.\//, '')] ?? usual
+  let reports = await Deno.makeTempDir({ prefix: 'tasks-junit-' })
   let runs = [
-    ...groups(files, jobs).map((g) => [...common, SHARD, '--', ...g]),
+    ...groups(files, jobs, weight).map((g, i) => [
+      ...common,
+      `--junit-path=${reports}/${i}.xml`,
+      SHARD,
+      '--',
+      ...g,
+    ]),
     ...shards(docs, jobs).map(examples),
   ]
   let children = runs.map((args) =>
@@ -425,6 +485,15 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       failed.push(`test shard ${child.pid}: ${status.signal ?? status.code}`)
     }
   }))
+  let times: Record<string, number> = {}
+  for await (let e of Deno.readDir(reports)) {
+    Object.assign(
+      times,
+      timesIn(await Deno.readTextFile(`${reports}/${e.name}`)),
+    )
+  }
+  await Deno.remove(reports, { recursive: true })
+  keep(times)
   for (let line of failed) console.error(line)
   if (failed.length) Deno.exit(1)
 } else if (import.meta.main) {
