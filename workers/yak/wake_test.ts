@@ -17,6 +17,9 @@ import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Env } from './env.ts'
 import { reporting, STUCK } from './wake.ts'
+import { appStore, storeName } from './directory.ts'
+import { trash, trashSpace, untrash, untrashSpace } from './erase.ts'
+import { ADA, platform as probe, seeded } from './serving-probe.ts'
 
 let at = (time: string) => Date.parse(`2026-09-07T${time}:00Z`)
 let iso = (time: string) => new Date(at(time)).toISOString()
@@ -665,3 +668,46 @@ Deno.test('a condition naming a word the app does not speak is refused when writ
   assert(res.status >= 400 && res.status < 500, `${res.status}`)
   assert((await res.text()).includes('ghost'))
 })
+
+// An app in the trash fires nothing (T-40596), and neither does any app in a
+// trashed space: its store asks the directory at each firing, so nothing
+// fires and no alarm is left. A restore tells the store to come back, and the
+// stretch it sat out is one catch-up firing before the cadence goes on.
+type Seeded = Awaited<ReturnType<typeof seeded>> & { env: Env }
+let OWNER = { person: ADA, role: 'owner' as const }
+let binned = {
+  app: [
+    (k: Seeded) => trash(k.env, k.dir, k.space, k.app, OWNER),
+    (k: Seeded) => untrash(k.env, k.dir, k.space, k.app, OWNER),
+  ],
+  space: [
+    (k: Seeded) => trashSpace(k.env, k.dir, k.space, OWNER),
+    (k: Seeded) => untrashSpace(k.env, k.dir, k.space, OWNER),
+  ],
+}
+
+for (let [what, [out, back]] of Object.entries(binned)) {
+  Deno.test(`a trashed ${what} fires no wakes, and catches up once restored`, async () => {
+    using p = probe()
+    let k = { ...await seeded(p.env), env: p.env }
+    let name = storeName(k.space, k.app)
+    await metaOf(appStore(p.env.STORE, k.space, k.app)).apply([{
+      entity: { eid: 'water' },
+      wake: { at: iso('09:05'), every: '5m' },
+    }], KERNEL)
+    let storage = p.states.get(name)!.storage
+    let fired = async (time: string) =>
+      (await p.object(name).tick(at(time))).fired.length
+    assertEquals(await fired('09:05'), 1)
+    await out(k)
+    await storage.deleteAlarm()
+    assertEquals(await fired('09:10'), 0)
+    assertEquals(await fired('09:40'), 0)
+    assertEquals(await storage.getAlarm(), null)
+    await back(k)
+    assert((await storage.getAlarm())! <= Date.now())
+    assertEquals(await fired('10:00'), 1)
+    assertEquals(await fired('10:01'), 0)
+    assertEquals(await fired('10:05'), 1)
+  })
+}

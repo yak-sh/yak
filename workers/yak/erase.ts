@@ -84,6 +84,8 @@ import { apex, type Host as HostEnv } from './host.ts'
 import { destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
+import { KERNEL } from './meta.ts'
+import { defect } from './sentry.ts'
 import { NOTES } from './standing.ts'
 import { moved, own, type Pinner, pruned, renamed } from './versions.ts'
 import { refuse } from './tool.ts'
@@ -390,7 +392,8 @@ export let went = (
 // "there should be a grace period. like a 30 day trash". So `app_delete`
 // keeps everything and writes one word on the app row (vocab.ts `trashed`),
 // and every reader of an app asks it: the web serves nothing, the roster
-// drops its tools and views, the front page is not it, and its mail bounces.
+// drops its tools and views, the front page is not it, its mail bounces, and
+// its store fires none of its wakes (graph.ts `tick`).
 // Nothing is copied anywhere and nothing is moved — which is what makes
 // `app_restore` exact rather than approximate.
 //
@@ -475,6 +478,26 @@ export let trash = async (
   await rostered(env, dir, space, app)
 }
 
+// A store out of the trash, told to come back now for what its wakes are owed
+// (graph.ts `/alarm`). In the trash it fired nothing and armed nothing, so
+// nothing else would wake it; its first tick fires each wake once for the
+// whole stretch, and the cadence goes on from there. The restore has happened
+// whatever this answers, so a failure is reported rather than thrown.
+let woken = async (env: Env, space: Space, app: App) => {
+  let store = storeName(space, app)
+  try {
+    let r = await storeOf(env.STORE, store)(
+      '/alarm',
+      { method: 'POST' },
+      KERNEL,
+    )
+    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
+    await r.body?.cancel()
+  } catch (e) {
+    defect(e, { request: 'restore wakes', store })
+  }
+}
+
 // And out of it. Both doors call this, the tool and the space page's form.
 // `untrash` rather than `restore` because versions.ts already owns that word
 // for putting an app's files back, and these are two different acts on the
@@ -488,6 +511,7 @@ export let untrash = async (
 ) => {
   await mark(dir, app.eid, who, null)
   await rostered(env, dir, space, app)
+  await woken(env, space, app)
 }
 
 // Everyone in the space, told their reach moved (declared.ts, T-33004) — the
@@ -522,6 +546,9 @@ export let untrashSpace = async (
 ) => {
   await mark(dir, space.eid, who, null)
   await reachMoved(env, dir, space)
+  for (let app of await dir.apps(space)) {
+    if (!app.trashed) await woken(env, space, app)
+  }
 }
 
 // What a space's trashing says back — `went`'s opposite number, and the same

@@ -162,6 +162,7 @@ import { doorOf, GIT_STORE, type Namespace, PLATFORM_STORE } from './door.ts'
 import { type Meta, metaOf } from './meta.ts'
 import { caught, defect } from './sentry.ts'
 import { weighed } from './meter.ts'
+import { directoryOf } from './directory.ts'
 import { vaultOf } from './vault.ts'
 import {
   constrained,
@@ -1253,6 +1254,19 @@ export class Store {
     if (Number.isFinite(at)) await this.#arming(new Date(at).toISOString())
   }
 
+  // Whether the app this store holds is in the trash, on its own or with its
+  // space (erase.ts). The word is the directory's, and it is asked here, where
+  // a firing is decided, rather than copied into this store: a trashed app is
+  // sent no request that could carry it, and a copy goes stale. The
+  // platform's own two stores hold no app and never ask.
+  #trashed = async (): Promise<boolean> => {
+    let app = this.#get('app')
+    let ns = this.#bind.STORE
+    if (!app || !ns) return false
+    let held = await directoryOf(ns).appAt(app)
+    return !!(held?.app.trashed || held?.space.trashed)
+  }
+
   /**
    * Fire the wakes due at `now`, then come back for the next one. The
    * runtime's own `alarm()` is this at the present instant; a caller naming
@@ -1261,8 +1275,22 @@ export class Store {
    * A refused occurrence stays due and its reason goes to this store's break
    * log — the directory's for the platform's sweeps, the app's for an app's —
    * and the alarm is set a minute out so nothing is silently dropped.
+   *
+   * An app in the trash fires nothing and arms nothing: its wakes stay owed
+   * where they stood, and a restore brings the object back for them (`/alarm`,
+   * erase.ts `untrash`), when the stretch it sat out is one firing, as any
+   * stretch nobody was there for is. A directory that cannot say is asked
+   * again in a minute, never guessed at.
    */
   async tick(now = Date.now()): Promise<Ticked> {
+    let none: Ticked = { fired: [], refused: [] }
+    try {
+      if (await this.#trashed()) return none
+    } catch (e) {
+      defect(e, { request: 'wake trash', store: this.#name() })
+      await this.#owed(now, now + Store.RETRY)
+      return none
+    }
     let result = await tick(this.#clock, now)
     for (let { wake, error } of result.refused) {
       await this.#broke(`wake ${wake.entity.eid}`, error)
@@ -1690,6 +1718,14 @@ export class Store {
     if (path == '/restore') {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       return this.#recovery(request)
+    }
+    // Come back now for whatever the wakes are owed (`tick`): what a restore
+    // says to an app out of the trash (erase.ts `untrash`), which armed
+    // nothing while it sat there. Kernel only, like the erase.
+    if (path == '/alarm' && request.method == 'POST') {
+      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
+      await this.#arming(new Date().toISOString())
+      return Response.json({ ok: true })
     }
     // The socket is a read that stays open, and it is the one door @yaks/api
     // does not answer here — hibernation is the runtime's, so `sockets` takes

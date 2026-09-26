@@ -124,6 +124,10 @@ A paused wake is a row that is still there and simply owes nothing — which is
 why pausing is a property and not a delete. `fired` stays where it was: it is
 history, not state.
 
+An app in the trash (`app_delete`, or its whole space's `space_delete`) fires
+none of its wakes. `app_restore` or `space_restore` brings them back, and each
+one owed while the app sat there fires once, then goes on at its cadence.
+
 ## A command, later
 
 An app's own commands (the tool entries of its `vocab.json`) are things the

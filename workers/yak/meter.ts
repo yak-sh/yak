@@ -14,11 +14,10 @@
 import type { Host } from './host.ts'
 import { planSettings } from './route.ts'
 import type { Sender } from '@yaks/mail'
-import * as dirPart from './directory.ts'
 import {
   COMPED,
   type Directory,
-  directory,
+  directoryOf,
   type Meter,
   type Space,
   stamp,
@@ -633,26 +632,6 @@ export let countedSpend = async (
   })
 }
 
-// The directory as a Store object reads it: the same client the kernel's own
-// callers hold, over the meta store directly, since a Durable Object is handed
-// the namespace and no service binding. Memoized per namespace so the meta
-// space is seeded once per isolate rather than once per letter, and read
-// fresh — two letters a second apart must not both see the same count.
-let dirs = new WeakMap<Namespace, Directory>()
-let reaching = (ns: Namespace) => {
-  let held = dirs.get(ns)
-  if (!held) {
-    dirs.set(
-      ns,
-      held = directory(
-        { fetch: (req) => dirPart.fetch(req, { STORE: ns }) },
-        true,
-      ),
-    )
-  }
-  return held
-}
-
 /**
  * A letter counted against the space it left from: the month's allowance read
  * before it goes, the count written after it went.
@@ -676,7 +655,7 @@ export let metering = (
     let ns = bind.STORE
     let box = ns ? mailedTo(from() ?? '', bind) : null
     if (!ns || !box) return await sender.send(m)
-    let dir = reaching(ns)
+    let dir = directoryOf(ns)
     let space = await dir.space(box.space)
     if (!space) return await sender.send(m)
     let no = await refusedSpend(dir, space, 'emails', bind)

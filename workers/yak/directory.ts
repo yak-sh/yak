@@ -1303,3 +1303,22 @@ export let directory = (via: Fetcher, now = false) => {
   }
   return self
 }
+
+// The directory as a Store object reads it: the same client the kernel's own
+// callers hold, over the meta store directly, since a Durable Object is handed
+// the namespace and no service binding. Memoized per namespace so the meta
+// space is seeded once per isolate rather than once per ask, and read fresh:
+// what a store asks — what a space has spent this month (meter.ts
+// `metering`), whether its app is in the trash (graph.ts `tick`) — must not be
+// a moment old.
+let reached = new WeakMap<Namespace, Directory>()
+export let directoryOf = (ns: Namespace): Directory => {
+  let held = reached.get(ns)
+  if (!held) {
+    reached.set(
+      ns,
+      held = directory({ fetch: (req) => fetch(req, { STORE: ns }) }, true),
+    )
+  }
+  return held
+}

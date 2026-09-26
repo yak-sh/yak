@@ -288,13 +288,15 @@ reserved so a restore is exact rather than approximate.
 
 What changes the moment it goes in: its address answers nothing on the web, its
 commands stop being offered and its views leave your resource list, it is
-nobody's front page even if it was one, and letters to its mailbox bounce. What
-does not change: anything it saved.
+nobody's front page even if it was one, letters to its mailbox bounce, and its
+wakes stop firing. What does not change: anything it saved.
 
-`app_restore` takes it back out and puts all of that back. You have 30 days;
-`app_list` shows a Trash section with the days each one has left, and the person
-can restore one from their space's own page without an assistant at all. After
-30 days the platform erases it, and then there is nothing to restore.
+`app_restore` takes it back out and puts all of that back. A wake that came due
+while it sat there fires once, the way any stretch nobody was there for is
+caught up, and goes on at its cadence. You have 30 days; `app_list` shows a
+Trash section with the days each one has left, and the person can restore one
+from their space's own page without an assistant at all. After 30 days the
+platform erases it, and then there is nothing to restore.
 
     app_delete(app: 'scratch')
     → yourname/scratch is in the trash. https://yourname.yaks.app/scratch/ stops
@@ -315,9 +317,9 @@ it only when the person has said they mean exactly that.
 A whole space goes to the same 30-day trash, and the same is true of it: nothing
 is erased, every app in it is kept whole, and the address is held so nobody else
 can take it. While it sits there every hostname of the space answers nothing,
-its apps stop offering their commands and their pages, and letters to any
-address under it bounce. `space_restore` takes it back out and all of that works
-as it did before.
+its apps stop offering their commands and their pages and fire none of their
+wakes, and letters to any address under it bounce. `space_restore` takes it back
+out and all of that works as it did before.
 
 `space_delete` is still the one thing **you cannot do yourself**. It mails the
 owner a link, good for an hour, and reports what that link would take offline;
