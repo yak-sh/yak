@@ -4,7 +4,9 @@
 // kernel's own client, run here; a socket carries the app's hostname on its
 // handshake, which a probe can only put there at the wire (probe.ts `relay`).
 // What the doors answer over HTTP is client_test.ts's and inbox_test.ts's.
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertObjectMatch } from '@std/assert'
+import { client } from '@yaks/client'
+import { loadVocab } from '@yaks/vocab'
 import { until } from '../../bin/testing.ts'
 import {
   arrives,
@@ -42,6 +44,8 @@ let page = async (k: Kernel) => {
   return {
     them,
     slug,
+    mine: `${mine.origin}/recipes/api`,
+    wire: `${wire.origin}/recipes/api`,
     store: mod.store(`${mine.origin}/recipes/api/`),
     live: mod.store(`${wire.origin}/recipes/api/`),
     stop: async () => {
@@ -110,6 +114,34 @@ Deno.test('a page watches its store and hears what others write', async () => {
       bylines.stop()
     }
   } finally {
+    await p.stop()
+    await k.stop()
+  }
+})
+
+// A page that keeps a copy of its store (@yaks/client) speaks the words the
+// store serves, and lands the rows a socket sends in them: `created.by` is who
+// made a row, so a page finds a person's rows by asking for the ones they made.
+Deno.test('a page keeping a copy of its store watches rows by who made them', async () => {
+  let k = workerd()
+  let p = await page(k)
+  let words = await (await fetch(`${p.mine}/vocab.json`)).json()
+  let copy = client(loadVocab(words), [], {
+    url: p.wire,
+    vault: false,
+    wireVault: false,
+  })
+  try {
+    await p.store.apply({ doc: { title: 'Lemon cake' } })
+    let { person } = await p.store.me()
+    let made = copy.watch(`.doc&.created.by=${JSON.stringify(person)}`)
+    await until(() => made.value.length > 0, { timeout: 15_000 })
+    assertObjectMatch(made.value[0], {
+      doc: { title: 'Lemon cake' },
+      created: { by: person },
+    })
+  } finally {
+    copy.close()
     await p.stop()
     await k.stop()
   }

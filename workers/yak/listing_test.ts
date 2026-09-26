@@ -2,7 +2,7 @@
 // tools' graph_query and the page's `/api/query` used to answer the same
 // filter line differently (C-32574 item 5).
 import { assertEquals } from '@std/assert'
-import { asking, listing, named } from './listing.ts'
+import { asking, listing, mentions, named } from './listing.ts'
 
 let rows = (body: string) => JSON.parse(body) as Record<string, unknown>[]
 
@@ -73,7 +73,7 @@ Deno.test('a reference to a person answers with a name', () => {
     {
       kind: 'jog',
       entity: { eid: 'a', num: 1 },
-      jog: { miles: 5, with: 'ada' },
+      jog: { miles: 5, with: 'ada', note: 'ada' },
       created: { by: 'ada', via: 'a-session' },
     },
     // A reference to something that is not a person, and a row with none.
@@ -82,19 +82,23 @@ Deno.test('a reference to a person answers with a name', () => {
   let ref = (comp: string, prop: string) =>
     (comp == 'created' && (prop == 'by' || prop == 'via')) ||
     (comp == 'jog' && prop == 'with')
-  let out = named(
-    rows,
-    ref,
-    (eids) => new Map(eids.filter((e) => e == 'ada').map((e) => [e, 'Ada'])),
-  )
+  let seen = mentions(rows, ref)
+  assertEquals(seen.eids.sort(), ['a-session', 'ada', 'nobody'])
+  // Who the store knows among them is its own word; Ada is a person.
+  let out = named(rows, { refs: seen.refs, names: { ada: 'Ada' } })
   assertEquals(out[0].created, {
     by: { eid: 'ada', name: 'Ada' },
     via: 'a-session',
   })
-  // Any property that references them, not just the stamp.
-  assertEquals(out[0].jog, { miles: 5, with: { eid: 'ada', name: 'Ada' } })
+  // Any property that references them, not just the stamp, and only one
+  // that references: a note that says her eid is a note.
+  assertEquals(out[0].jog, {
+    miles: 5,
+    with: { eid: 'ada', name: 'Ada' },
+    note: 'ada',
+  })
   // A stranger keeps the eid the store has always answered with.
   assertEquals(out[1].created, { by: 'nobody' })
   // Nobody to name is the rows themselves, untouched.
-  assertEquals(named(rows, ref, () => new Map()), rows)
+  assertEquals(named(rows, { refs: seen.refs, names: {} }), rows)
 })

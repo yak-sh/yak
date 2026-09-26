@@ -253,12 +253,38 @@ export let store = (base) => {
 }
 
 // One subscription frame folded into its rows. A frame carries whole rows —
-// the same answer `query()` gives, because the store paints the same word on
-// both — so folding is just keeping them: a row replaces the one it names, and
-// one that is `gone` (it died, or it stopped matching) leaves.
+// the rows `query()` gives, once they are `named` — so folding is just keeping
+// them: a row replaces the one it names, and one that is `gone` (it died, or it
+// stopped matching) leaves.
 let fold = (rows, f) => {
-  for (let row of f.bundles ?? []) rows.set(row.entity.eid, row)
+  for (let row of f.bundles ?? []) rows.set(row.entity.eid, named(row, f))
   for (let eid of f.gone ?? []) rows.delete(eid)
+}
+
+// A frame's row as `query()` answers it. The socket keeps each row in the
+// store's own words, where a reference to a person is their eid, and says
+// beside the rows what the store calls them: `names` by eid, and `refs`, the
+// properties that reference (`created.by`). The query door paints the same
+// rule (listing.ts `named`), so `created.by` is `{eid, name}` on both.
+let named = (row, { refs = [], names = {} }) => {
+  if (!refs.length) return row
+  let name = (held, comp) =>
+    Object.fromEntries(
+      Object.entries(held).map(([prop, v]) =>
+        typeof v == 'string' && Object.hasOwn(names, v) &&
+          refs.includes(`${comp}.${prop}`)
+          ? [prop, { eid: v, name: names[v] }]
+          : [prop, v]
+      ),
+    )
+  return Object.fromEntries(
+    Object.entries(row).map(([comp, held]) => [
+      comp,
+      held && typeof held == 'object' && !Array.isArray(held)
+        ? name(held, comp)
+        : held,
+    ]),
+  )
 }
 
 // A page's filter as the store writes it. A fetch goes through the app's door,

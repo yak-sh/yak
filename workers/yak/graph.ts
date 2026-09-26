@@ -70,6 +70,7 @@ import { archetypes } from '@yaks/archetype'
 import {
   api,
   type Authenticate,
+  type Frame,
   type Handler,
   json,
   poured,
@@ -150,7 +151,7 @@ import { reconcile, type Runner, runner } from '@yaks/tools'
 import { commands, type Tools } from './lib/tools.ts'
 import { soonest, tick, type Ticked, wakes } from '@yaks/wake'
 import { type Alarm, arm } from '@yaks/wake/cloudflare'
-import { named, type Row } from './listing.ts'
+import { mentions, named, type Names, type Row } from './listing.ts'
 import { effected, installsOf, rulesOf, wakesOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import type { Env } from './env.ts'
@@ -1719,39 +1720,31 @@ export class Store {
     ...row,
   })
 
-  // Outputs speak human (db.ts `human()`): a property that references a person
-  // answers `{eid, name}` when this store knows who that is, and the bare eid
-  // when it does not. A view gets one query, and a byline it would need a
-  // second question for is no byline — the inline leaderboard drew "someone" on
-  // every row while `created.by` was a uuid (C-32730 item 5). Writes are
-  // unmoved: the value is the eid, and a read shape handed back is lowered to
-  // it.
-  //
-  // Which properties reference is the vocabulary's word (`refProps`), and who
-  // among them is a person is this store's own rows — the writer it minted when
-  // they first wrote here, wearing what the kernel said to call them.
-  #speak = (rows: Bundle[]): Bundle[] | Promise<Bundle[]> => {
-    let refs = new Set(this.#vocab.refProps().map(([c, p]) => `${c}.${p}`))
-    let ref = (comp: string, prop: string) => refs.has(`${comp}.${prop}`)
-    let mentioned = new Set<string>()
-    for (let row of rows) {
-      for (let [comp, held] of Object.entries(row)) {
-        if (!held || typeof held != 'object' || Array.isArray(held)) continue
-        for (let [prop, v] of Object.entries(held)) {
-          if (typeof v == 'string' && ref(comp, prop)) mentioned.add(v)
-        }
-      }
-    }
-    if (!mentioned.size) return rows
-    return then(this.#graph.get([...mentioned], ['person', 'doc']), (found) => {
-      let names = new Map<string, string>()
+  // Outputs speak human (listing.ts `named`): a property that references a
+  // person answers `{eid, name}` on a query, and the name rides beside the eid
+  // on a socket. Which properties reference is the vocabulary's word
+  // (`refProps`), and who among the eids is a person is this store's own rows —
+  // the writer it minted when they first wrote here, wearing what the kernel
+  // said to call them.
+  #names = (rows: Bundle[]): Names | Promise<Names> => {
+    let at = new Set(this.#vocab.refProps().map(([c, p]) => `${c}.${p}`))
+    let { eids, refs } = mentions(
+      rows as Row[],
+      (comp, prop) => at.has(`${comp}.${prop}`),
+    )
+    if (!eids.length) return { refs, names: {} }
+    return then(this.#graph.get(eids, ['person', 'doc']), (found) => {
+      let names: Record<string, string> = {}
       for (let b of found) {
         let title = (b.doc as { title?: string } | undefined)?.title
-        if (b.person && title) names.set(b.entity.eid, title)
+        if (b.person && title) names[b.entity.eid] = title
       }
-      return named(rows as Row[], ref, () => names) as Bundle[]
+      return { refs, names }
     })
   }
+
+  #speak = (rows: Bundle[]): Bundle[] | Promise<Bundle[]> =>
+    then(this.#names(rows), (said) => named(rows as Row[], said) as Bundle[])
 
   // The read door's half of the graph's `teach`: `unknown prop: .recipe` is true and
   // useless on its own, so the store that holds the vocabulary adds where a
@@ -1826,10 +1819,13 @@ export class Store {
     return Response.json(await this.#speak(ranked.map(this.#kind)))
   }
 
-  // The same word on a subscription's frames, because a subscription is that
-  // query still answering: a page that swaps `query()` for `subscribe()` must
-  // get the same rows (public/client.js); @yaks/api already cuts each frame to
-  // what its query names. The sink a socket hands in is wrapped once per sink,
+  // The same rows on a subscription's frames, because a subscription is that
+  // query still answering; @yaks/api already cuts each frame to what its query
+  // names. A frame keeps each row in the store's own words and says the names
+  // beside them, since a page's @yaks/client lands a row only in the words the
+  // store speaks, where `created.by` is an eid; the served client paints them,
+  // so a page that swaps `query()` for `subscribe()` gets the same rows
+  // (public/client.js). The sink a socket hands in is wrapped once per sink,
   // since `close` and `drop` find a subscription by the sink it was opened
   // with.
   #naming(subs: Subs): Subs {
@@ -1841,10 +1837,14 @@ export class Store {
           sink,
           held = (f) => {
             if (!f.bundles) return sink(f)
-            then(
-              this.#speak(f.bundles.map(this.#kind)),
-              (bundles) => sink({ ...f, bundles }),
-            )
+            let bundles = f.bundles.map(this.#kind)
+            then(this.#names(bundles), (said) => {
+              let spoken: Frame & Partial<Names> =
+                Object.keys(said.names).length
+                  ? { ...f, bundles, ...said }
+                  : { ...f, bundles }
+              sink(spoken)
+            })
           },
         )
       }

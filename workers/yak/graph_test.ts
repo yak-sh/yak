@@ -29,6 +29,7 @@ import { metaOf } from './meta.ts'
 import type { Plugin } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { RELATIONS } from './vocab.ts'
+import { named as spoken, type Names } from './listing.ts'
 import { col, isNull, tally } from '@yaks/sql'
 import { db, named, slot, unclassified } from './testing.ts'
 
@@ -405,8 +406,12 @@ Deno.test('a subscription asking `*` answers what /query answers', async () => {
     recipe: { serves: 8 },
   }], owner)
   assertEquals(ws.sent.length, 2)
-  let pushed = ws.sent[1] as { id: string; bundles: Bundle[] }
+  let pushed = ws.sent[1] as Frame & Names & { bundles: Bundle[] }
   assertEquals(pushed.id, 'r')
+  // The row in the store's own words, so a page's @yaks/client lands it as it
+  // is, and who that is said beside it.
+  assertEquals(by(pushed.bundles[0]), ADA)
+  assertEquals(pushed.names, { [ADA]: 'Ada' })
   // Every component of the row, not just the one the filter named.
   assertEquals(pushed.bundles.length, 1)
   assertEquals(pushed.bundles[0].entity.eid, CAKE)
@@ -416,13 +421,13 @@ Deno.test('a subscription asking `*` answers what /query answers', async () => {
     'Lemon drizzle',
   )
 
-  // The same line over the other door answers the same rows.
+  // The same line over the other door answers the same rows, named.
   let read = await (await get(
     store,
     `/query?q=${encodeURIComponent(line)}`,
     owner,
   )).json() as Bundle[]
-  assertEquals(read, pushed.bundles)
+  assertEquals(read, spoken(pushed.bundles, pushed))
 })
 
 Deno.test('a woken object serves the same app, and the same sockets', async () => {

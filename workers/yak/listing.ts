@@ -82,37 +82,64 @@ export let listed = (rows: Row[], asked: string): Row[] => {
 // references a person answers `{eid, name}` when this store knows the person,
 // and the bare eid when it does not. A view gets one query, and a byline it
 // would need a second question for is no byline: the inline leaderboard drew
-// "someone" on every row while `created.by` was a uuid (C-32730 item 5). So
-// the name rides on the row that names the eid. Writes are unmoved — the value
-// is the eid, and a read shape handed back is lowered to it (db.ts `admitted`).
+// "someone" on every row while `created.by` was a uuid (C-32730 item 5). Writes
+// are unmoved — the value is the eid, and a read shape handed back is lowered
+// to it (db.ts `admitted`).
 //
-// Which properties reference, and what the store calls the people among them,
-// are the caller's word: the rule is the same over a fetch and over a socket,
-// and only the caller holds a store to ask with (graph.ts).
+// The query door answers rows painted this way. A socket answers the rows as
+// the store keeps them, with `Names` beside them, because a page that keeps a
+// copy of its store (@yaks/client) lands each row in the store's own words,
+// where `created.by` is an eid; the served client paints the frame's rows with
+// the same rule (public/client.js `named`), so its `subscribe()` still answers
+// what `query()` does.
+//
+// Which properties reference is the caller's word (the vocabulary), and so is
+// who among the eids is a person (the store's rows): only the caller holds a
+// store to ask with (graph.ts).
 export type Ref = (comp: string, prop: string) => boolean
-export type Names = (eids: string[]) => Map<string, string>
+
+/** Who a list of rows points at, as the store says it beside them: the
+ * referencing properties the rows hold an eid in (`created.by`), and what the
+ * store calls each person among those eids. */
+export type Names = { refs: string[]; names: Record<string, string> }
 
 let props = (comp: unknown): comp is Row =>
   !!comp && typeof comp == 'object' && !Array.isArray(comp)
 
-export let named = (rows: Row[], ref: Ref, names: Names): Row[] => {
-  let mentioned = new Set<string>()
+// Every place the rows hold an eid in a referencing property.
+let places = function* (rows: Row[], ref: Ref) {
   for (let row of rows) {
     for (let [comp, held] of Object.entries(row)) {
       if (!props(held)) continue
       for (let [prop, v] of Object.entries(held)) {
-        if (typeof v == 'string' && ref(comp, prop)) mentioned.add(v)
+        if (typeof v == 'string' && ref(comp, prop)) yield { comp, prop, v }
       }
     }
   }
-  if (!mentioned.size) return rows
-  let known = names([...mentioned])
-  if (!known.size) return rows
+}
+
+/** The eids the rows point at, and the properties that hold them. */
+export let mentions = (rows: Row[], ref: Ref) => {
+  let eids = new Set<string>()
+  let refs = new Set<string>()
+  for (let { comp, prop, v } of places(rows, ref)) {
+    eids.add(v)
+    refs.add(`${comp}.${prop}`)
+  }
+  return { eids: [...eids], refs: [...refs] }
+}
+
+/** The rows, each reference to someone the store named painted `{eid,
+ * name}`. Nobody to name is the rows themselves. */
+export let named = (rows: Row[], { refs, names }: Names): Row[] => {
+  if (!Object.keys(names).length) return rows
+  let at = new Set(refs)
   let name = (held: Row, comp: string) =>
     Object.fromEntries(
       Object.entries(held).map(([prop, v]) =>
-        typeof v == 'string' && known.has(v) && ref(comp, prop)
-          ? [prop, { eid: v, name: known.get(v) }]
+        typeof v == 'string' && Object.hasOwn(names, v) &&
+          at.has(`${comp}.${prop}`)
+          ? [prop, { eid: v, name: names[v] }]
           : [prop, v]
       ),
     )

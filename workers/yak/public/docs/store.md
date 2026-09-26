@@ -522,7 +522,9 @@ directly from `curl`, from another page, or from your own `worker.js` through
 app's own, as the JSON Schema documents the store loaded. A page that keeps a
 copy of its store in the browser (`@yaks/client`) loads them with `loadVocab`
 before it opens, so it asks and writes exactly what the store takes —
-`created.by` included.
+`created.by` included. The live socket (`./api/ws`) sends each row in those
+words, so `created.by` is the person's eid there, with the names the store knows
+beside the rows; `subscribe` puts them in, the way `query` answers.
 
 The blob endpoint accepts a 64-character lowercase hex address and nothing else;
 anything else is `no_such_file`. Bytes come back with the mime type and the
