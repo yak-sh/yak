@@ -167,7 +167,10 @@ export let merged = (held: Bundle | null, b: Bundle): Bundle => {
   }
   for (let [name, comp] of comps(b)) {
     if (comp == null) delete out[name]
-    else out[name] = { ...(out[name] as Comp | undefined ?? {}), ...comp }
+    else {
+      let was = out[name] as Comp | undefined
+      out[name] = was ? { ...was, ...comp } : { ...comp }
+    }
   }
   return out
 }
@@ -182,7 +185,8 @@ export let reached = (bundles: Bundle[], vocab: Vocab): Eid[] => {
   for (let b of bundles) {
     out.add(b.entity.eid)
     for (let [name, comp] of comps(b)) {
-      for (let [prop, value] of Object.entries(comp ?? {})) {
+      for (let prop in comp) {
+        let value = comp[prop]
         if (value != null && vocab.prop(name, prop)?.category == 'ref') {
           out.add(String(value))
         }

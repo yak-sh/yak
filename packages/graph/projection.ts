@@ -53,9 +53,14 @@ export let wanted = (vocab: Vocab, query: Query): Set<string> | null =>
 /** A row cut to what was asked for. The spine names it, a text query's `rank`
  * is the answer's own word about it, and `$` keys are the graph's notes on
  * the row rather than components, so those ride whatever the filter said. */
-export let only = (want: Set<string> | null) => (b: Bundle): Bundle =>
-  !want ? b : Object.fromEntries(
-    Object.entries(b).filter(([k]) =>
-      k == 'entity' || k == 'rank' || k[0] == '$' || want.has(k)
-    ),
-  ) as Bundle
+export let only = (want: Set<string> | null) => (b: Bundle): Bundle => {
+  if (!want) return b
+  let keep = (k: string) =>
+    k == 'entity' || k == 'rank' || k[0] == '$' || want.has(k)
+  let keys = Object.keys(b)
+  // A row that carries nothing else is its own answer.
+  if (keys.every(keep)) return b
+  let out: Bundle = { entity: b.entity }
+  for (let k of keys) if (keep(k)) out[k] = b[k]
+  return out
+}

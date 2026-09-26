@@ -40,7 +40,7 @@
 // gets back, not what the phases passed to each other.
 
 import type { Bundle, Comp, Eid } from './bundle.ts'
-import { comps, dead, TOMBSTONE } from './bundle.ts'
+import { dead, reserved, TOMBSTONE } from './bundle.ts'
 
 /**
  * A list of patches composed into one bundle per entity, in the order the
@@ -68,8 +68,8 @@ export let composed = (bundles: Bundle[]): Bundle[] => {
   let said = new Set<Eid>()
   for (let b of bundles) {
     let eid = b.entity.eid
-    let one = by.get(eid) ?? { entity: { eid } }
-    by.set(eid, one)
+    let one = by.get(eid)
+    if (!one) by.set(eid, one = { entity: { eid } })
     if (!b.$quiet) said.add(eid)
     // The identity is merged rather than replaced: only the phase that created
     // it knows the `num`, and only the caller's own bundle carries the alias.
@@ -84,10 +84,11 @@ export let composed = (bundles: Bundle[]): Bundle[] => {
     }
     if (typeof b.$alias == 'string') one.$alias = b.$alias
     if (dead(b)) gone.add(eid)
-    for (let [name, comp] of comps(b)) {
-      one[name] = comp == null
-        ? null
-        : { ...(one[name] as Comp | null ?? {}), ...comp }
+    for (let name of Object.keys(b)) {
+      if (reserved(name)) continue
+      let comp = b[name] as Comp | null
+      let was = one[name] as Comp | null | undefined
+      one[name] = comp == null ? null : was ? { ...was, ...comp } : { ...comp }
     }
   }
   return [...by.values()].filter((b) => said.has(b.entity.eid)).map((b) =>

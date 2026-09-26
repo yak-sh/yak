@@ -30,6 +30,19 @@ Deno.test('an unknown property on a known component refuses the batch', () => {
   )
 })
 
+Deno.test('a name every object inherits is still unknown', () => {
+  assertThrows(
+    () => one({ entity: { eid: 'b1' }, book: { constructor: 3 } }),
+    Refused,
+    'book.constructor',
+  )
+  assertThrows(
+    () => one({ entity: { eid: 'b1' }, toString: { x: 1 } }),
+    Refused,
+    'unknown component: toString',
+  )
+})
+
 Deno.test('a server-owned property is dropped, and admitted when trusted', () => {
   let [out] = one({ entity: { eid: 'b1' }, created: { at: 'now' }, doc: {} })
   assertEquals(out.created, undefined)

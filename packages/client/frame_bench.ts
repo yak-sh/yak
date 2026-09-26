@@ -96,7 +96,9 @@ let world: Bundle[] = [
   ...Array.from({ length: ITEMS }, (_, i): Bundle => ({
     entity: { eid: mint() },
     item: { kind: ['stick', 'stone', 'berry', 'sword'][i % 4] },
-    ...(i % 8 == 0 ? { carried: { by: players[i % PLAYERS] } } : { pos: at() }),
+    ...(i % 8 == 0
+      ? { carried: { by: players[(i / 8) % PLAYERS] } }
+      : { pos: at() }),
   })),
 ]
 
@@ -190,6 +192,9 @@ Deno.bench('part: a 200-bundle change (the simulation)', () => {
 })
 Deno.bench('part: what is near (range over creatures)', () => {
   c.read(`.creature&${around(where.get(me)!, 16)}`)
+})
+Deno.bench('part: what lies at its feet (range over items)', () => {
+  c.read(`.item&${around(where.get(me)!, 4)}`)
 })
 Deno.bench('part: what a player carries (a reference)', () => {
   c.read(`.carried.by=${me}&?item`)

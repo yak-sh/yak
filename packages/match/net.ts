@@ -167,6 +167,7 @@ export let net = <K>(vocab: Vocab, opts: NetOpts = {}): Net<K> => {
   }
 
   let join = (h: Held<K>, eid: Eid) => {
+    if (h.has.has(eid)) return
     h.has.add(eid)
     into(within, eid, () => new Set()).add(h)
   }

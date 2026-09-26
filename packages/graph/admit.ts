@@ -29,7 +29,7 @@
 
 import { cast, unknownComps, unknownProps, type Vocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
-import { comps, dead, RESERVED } from './bundle.ts'
+import { comps, dead, reserved } from './bundle.ts'
 
 /** A change refused at admission: the message names the component and the
  * property, so the caller can see exactly what was wrong. */
@@ -64,43 +64,46 @@ export let formed = (change: unknown): Bundle[] => {
   return change
 }
 
-// The properties a caller may write on a component: the client-writable ones,
-// plus the server-owned ones when the caller is trusted. A computed property
-// (`computed: true`) is in neither — it is derived, so there is nothing to
-// write — and is dropped like a stamped one.
-let allowed = (v: Vocab, comp: string, trusted: boolean): Set<string> => {
-  let info = v.comp(comp)!
-  return new Set(trusted ? [...info.writable, ...info.stamped] : info.writable)
-}
-
 // One component patch, admitted: undeclared properties refused, unwritable ones
 // dropped, values validated. Returns undefined when the caller sent properties
 // and every one of them was dropped — nothing is left to write.
+//
+// A caller may write the client-writable properties, and the server-owned ones
+// when it is trusted. A computed property (`computed: true`) is neither — it
+// is derived, so there is nothing to write — and is dropped like a stamped
+// one.
 let admitComp = (
   v: Vocab,
   name: string,
   patch: Comp,
   trusted: boolean,
 ): Comp | undefined => {
-  let declared = new Set(v.props(name))
-  let alien = Object.keys(patch).filter((c) => !declared.has(c))
+  let alien: string[] = []
+  let kept: Comp = {}
+  let asked = false
+  let any = false
+  for (let k of Object.keys(patch)) {
+    let p = v.prop(name, k)
+    if (!p) {
+      alien.push(k)
+      continue
+    }
+    // A computed property is never a write, so a patch of nothing else names
+    // the component alone: a server's `task: { status: 'open' }` is a task.
+    if (!p.computed) asked = true
+    if (p.stamped ? !trusted : p.computed) continue
+    kept[k] = patch[k]
+    any = true
+  }
   // The refusal lists the vocabulary, not just the mistake: a caller writing a
   // property that does not exist has the wrong idea of this component, and the
   // properties it actually has are the shortest way to correct that.
   if (alien.length) throw new Refused(unknownProps(v, name, alien))
-  let keep = allowed(v, name, trusted)
-  let kept = cast(
-    v,
-    name,
-    Object.fromEntries(Object.entries(patch).filter(([c]) => keep.has(c))),
-  )
-  // A computed property is never a write, so a patch of nothing else names the
-  // component alone: a server's `task: { status: 'open' }` is still a task.
-  let asked = Object.keys(patch).filter((c) => !v.prop(name, c)?.computed)
-  if (asked.length && !Object.keys(kept).length) return undefined
-  let errs = v.check(name, kept, { stamped: trusted })
+  if (asked && !any) return undefined
+  let cut = cast(v, name, kept)
+  let errs = v.check(name, cut, { stamped: trusted })
   if (errs.length) throw new Refused(errs.join('; '))
-  return kept
+  return cut
 }
 
 /**
@@ -135,21 +138,18 @@ export let admit = (
   trusted = false,
   teach?: string,
 ): Bundle[] => {
-  let alien = [
-    ...new Set(
-      bundles.flatMap((b) =>
-        comps(b).map(([name]) => name).filter((n) => !vocab.comp(n))
-      ),
-    ),
-  ]
-  if (alien.length) throw new Refused(unknownComps(alien, teach))
+  let alien = new Set<string>()
+  for (let b of bundles) {
+    for (let k of Object.keys(b)) {
+      if (!reserved(k) && !vocab.comp(k)) alien.add(k)
+    }
+  }
+  if (alien.size) throw new Refused(unknownComps([...alien], teach))
   return bundles.flatMap((b) => {
     let sent = comps(b)
     if (!sent.length) return [b]
     let out: Bundle = { entity: b.entity }
-    for (let k of Object.keys(b)) {
-      if (RESERVED.includes(k) || k.startsWith('$')) out[k] = b[k]
-    }
+    for (let k of Object.keys(b)) if (reserved(k)) out[k] = b[k]
     let kept = 0
     for (let [name, patch] of sent) {
       let info = vocab.comp(name)!

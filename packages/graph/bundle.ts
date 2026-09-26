@@ -102,16 +102,20 @@ export type Bundle =
  * entity is deleted; writing one is the long form of `$delete: true`. */
 export let TOMBSTONE = 'tombstone'
 
-/** The reserved keys that are not ordinary components: the identity and the
- * tombstone marker. (Everything starting with `$` is reserved too.) */
-export let RESERVED: string[] = ['entity', TOMBSTONE]
+/** Whether a bundle's key is something other than a component: the identity,
+ * the tombstone marker, or one of the pipeline's `$` keys. */
+export let reserved = (k: string): boolean =>
+  k == 'entity' || k == TOMBSTONE || k[0] == '$'
 
 /** The component patches a bundle carries, in the order they were written —
  * excluding the identity, the tombstone and the `$` keys. */
-export let comps = (b: Bundle): [string, Comp | null][] =>
-  Object.entries(b).filter(([k]) =>
-    !RESERVED.includes(k) && !k.startsWith('$')
-  ) as [string, Comp | null][]
+export let comps = (b: Bundle): [string, Comp | null][] => {
+  let out: [string, Comp | null][] = []
+  for (let k of Object.keys(b)) {
+    if (!reserved(k)) out.push([k, b[k] as Comp | null])
+  }
+  return out
+}
 
 /** Whether a bundle deletes its entity — written either way. */
 export let dead = (b: Bundle): boolean =>

@@ -47,7 +47,7 @@ function create(g: Graph): Transients {
   const key = (f: TransientFrame) =>
     JSON.stringify([f.entity, f.component, f.property])
   const project = (bundles: Bundle[]): Bundle[] =>
-    bundles.map((b) => {
+    !values.size ? bundles : bundles.map((b) => {
       let out = b
       for (const { frame: f, text } of values.values()) {
         if (

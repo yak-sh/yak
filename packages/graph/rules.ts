@@ -59,7 +59,7 @@ import {
 } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import type { Actor, Bundle, Comp, Eid } from './bundle.ts'
-import { RESERVED } from './bundle.ts'
+import { reserved } from './bundle.ts'
 import { merged } from './gather.ts'
 import { type Phase, PHASES } from './plugin.ts'
 import type { Query, Tx } from './storage.ts'
@@ -352,8 +352,7 @@ let resolved = (p: Patch): Patch => {
 
 // The components a rule's patch writes, ignoring the identity and the `$`
 // keys.
-let wrote = (p: Patch): string[] =>
-  Object.keys(p).filter((k) => !RESERVED.includes(k) && !k.startsWith('$'))
+let wrote = (p: Patch): string[] => Object.keys(p).filter((k) => !reserved(k))
 
 /**
  * Run the rules of one phase over a change: the bundles in, the bundles plus
@@ -369,7 +368,34 @@ export let fire = (
   tick: Tick,
 ): Bundle[] | Promise<Bundle[]> => {
   let { bundles } = tick
-  if (!rules.length) return bundles
+  // The rules that can match here, each compiled once. A phase none of whose
+  // rules can match costs nothing more.
+  let live: [Rule, Ready, Select][] = []
+  for (let r of rules) {
+    let ready = compile(r, tick.vocab)
+    // Checked before the match, and whether or not this rule could ever fire
+    // here: a resource nobody provides means the rule asks for something that
+    // does not exist, which should throw rather than silently do nothing.
+    for (let name of ready.resources) {
+      if (!(name in tick.resources)) {
+        throw new Error(
+          `rule ${named(r)} names #${name}, which nothing provides`,
+        )
+      }
+    }
+    for (let name of ready.cites) {
+      if (name in tick.resources) {
+        throw new Error(
+          `rule ${
+            named(r)
+          } compares against #${name}, which the match cannot ` +
+            `see: read it in run()`,
+        )
+      }
+    }
+    if (ready.test) live.push([r, ready, ready.test])
+  }
+  if (!live.length) return bundles
   // One view per entity, not per patch: the phases add bundles to the change
   // as they go, and a rule is about the entity, so it must not fire once per
   // patch that mentions that entity.
@@ -393,30 +419,7 @@ export let fire = (
   }
   // Every match is evaluated before any rule acts.
   let hits: [Rule, Ready, number][] = []
-  for (let r of rules) {
-    let ready = compile(r, tick.vocab)
-    // Checked before the match, and whether or not this rule could ever fire
-    // here: a resource nobody provides means the rule asks for something that
-    // does not exist, which should throw rather than silently do nothing.
-    for (let name of ready.resources) {
-      if (!(name in tick.resources)) {
-        throw new Error(
-          `rule ${named(r)} names #${name}, which nothing provides`,
-        )
-      }
-    }
-    for (let name of ready.cites) {
-      if (name in tick.resources) {
-        throw new Error(
-          `rule ${
-            named(r)
-          } compares against #${name}, which the match cannot ` +
-            `see: read it in run()`,
-        )
-      }
-    }
-    let test = ready.test
-    if (!test) continue
+  for (let [r, ready, test] of live) {
     test(views).forEach((v) => {
       if (
         tick.phase == 'effect' && ready.checked &&

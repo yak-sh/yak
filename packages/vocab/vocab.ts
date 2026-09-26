@@ -512,23 +512,22 @@ export let cast = (
   v: Vocab,
   comp: string,
   patch: Record<string, unknown>,
-): Record<string, unknown> =>
-  Object.fromEntries(
-    Object.entries(patch).map(([k, val]) => {
-      let c = v.prop(comp, k)
-      let text = c &&
-        (c.category == 'enum' ||
-          (c.category == 'scalar' && STRINGS.includes(c.scalar)))
-      return [
-        k,
-        !text || val == null || typeof val == 'string'
-          ? val
-          : typeof val == 'object'
-          ? JSON.stringify(val)
-          : String(val),
-      ]
-    }),
-  )
+): Record<string, unknown> => {
+  let out: Record<string, unknown> = {}
+  for (let k of Object.keys(patch)) {
+    let val = patch[k]
+    let c = val == null || typeof val == 'string' ? undefined : v.prop(comp, k)
+    let text = c &&
+      (c.category == 'enum' ||
+        (c.category == 'scalar' && STRINGS.includes(c.scalar)))
+    out[k] = !text
+      ? val
+      : typeof val == 'object'
+      ? JSON.stringify(val)
+      : String(val)
+  }
+  return out
+}
 
 /** How long one of a component's values lives — `forever` for an unknown
  * component. */
@@ -596,25 +595,33 @@ export let loadVocab = (
 
   let props = (name: string): Record<string, PropSchema> =>
     defs[name]?.properties ?? {}
-  let read = new Map<string, Prop>() // `${comp}.${prop}` → Prop
-  let propFor = (comp: string, prop: string): Prop | undefined => {
-    let key = `${comp}.${prop}`
-    if (read.has(key)) return read.get(key)
-    let s = props(comp)[prop]
-    if (!s) return undefined
-    let required = !!defs[comp].required?.includes(prop)
-    let c = propOf(comp, prop, s, propWords, required)
-    read.set(key, c)
-    return c
-  }
-
   let names = Object.keys(defs).sort()
+
+  // A vocabulary never changes once loaded, so what it says about each
+  // component and property is read out of the schemas once, here, and every
+  // question after that is a lookup: admission asks about every property of
+  // every write.
+  let read = new Map<string, Map<string, Prop>>()
+  for (let comp of names) {
+    let d = defs[comp]
+    read.set(
+      comp,
+      new Map(
+        Object.entries(props(comp)).map(([prop, s]) => [
+          prop,
+          propOf(comp, prop, s, propWords, !!d.required?.includes(prop)),
+        ]),
+      ),
+    )
+  }
+  let propFor = (comp: string, prop: string): Prop | undefined =>
+    read.get(comp)?.get(prop)
+
   let wire = (name: string) => defs[name].wire !== false
   let compNames = names.filter(wire)
 
-  let infoOf = (name: string): CompInfo | undefined => {
+  let info = (name: string): CompInfo => {
     let d = defs[name]
-    if (!d) return undefined
     let entries = Object.keys(props(name))
     return {
       name,
@@ -635,6 +642,13 @@ export let loadVocab = (
       search: lists[name],
       keywords: carried(d, compWords),
     }
+  }
+  let infos = new Map<string, CompInfo>()
+  let infoOf = (name: string): CompInfo | undefined => {
+    let got = infos.get(name)
+    if (got || !Object.hasOwn(defs, name)) return got
+    infos.set(name, got = info(name))
+    return got
   }
 
   // The readable routing table: every component to its readable properties. A
@@ -678,6 +692,13 @@ export let loadVocab = (
       assocs.set(name, { comp, prop })
     }
   }
+
+  let refs = names.flatMap((comp) =>
+    [...read.get(comp)!.values()].flatMap((c) =>
+      c.category == 'ref' ? [[comp, c.prop] as [string, string]] : []
+    )
+  )
+  let dying = new Map<string, [string, string][]>()
 
   let kinds = deriveKindOrder(
     names.filter((n) => defs[n].kind),
@@ -772,24 +793,26 @@ export let loadVocab = (
     // client-writable reference that declares a `death`, as (comp, prop) pairs.
     // Stamped refs stay out — server-owned rows are deleted by server code,
     // never by a cascade a client set off (types.ts Death).
-    deaths: (word) =>
-      compNames.flatMap((comp) =>
-        infoOf(comp)!.writable.flatMap((p) => {
-          let c = propFor(comp, p)!
-          return c.category == 'ref' && c.death == word
-            ? [[comp, p] as [string, string]]
-            : []
-        })
-      ),
+    deaths: (word) => {
+      let got = dying.get(word)
+      if (!got) {
+        dying.set(
+          word,
+          got = compNames.flatMap((comp) =>
+            infoOf(comp)!.writable.flatMap((p) => {
+              let c = propFor(comp, p)!
+              return c.category == 'ref' && c.death == word
+                ? [[comp, p] as [string, string]]
+                : []
+            })
+          ),
+        )
+      }
+      return got
+    },
     // Every reference property, client-writable or stamped — index derivation
     // and reverse-hop grammar key off this one list.
-    refProps: () =>
-      names.flatMap((comp) =>
-        Object.keys(props(comp)).flatMap((p) => {
-          let c = propFor(comp, p)!
-          return c.category == 'ref' ? [[comp, p] as [string, string]] : []
-        })
-      ),
+    refProps: () => refs,
     // Ordinary well-formedness of an instance: a known component, an object of
     // known properties (client-writable unless stamped properties are allowed),
     // each value one the property can hold — a scalar, or for a `jsonb`
@@ -802,14 +825,13 @@ export let loadVocab = (
       if (value == null || typeof value != 'object' || Array.isArray(value)) {
         return [`${comp} is an object of properties`]
       }
-      let allowed = new Set(opts?.stamped ? v.props(comp) : info.writable)
       for (let [k, val] of Object.entries(value)) {
-        if (!allowed.has(k)) {
+        let c = propFor(comp, k)
+        if (!c || !opts?.stamped && (c.stamped || c.computed)) {
           errs.push(unknownProps(v, comp, [k]))
           continue
         }
         if (val == null) continue // a null clears the property
-        let c = propFor(comp, k)!
         if (c.scalar == 'jsonb') {
           if (!holds(c.types!, val)) {
             errs.push(`${comp}.${k} is ${c.types!.map(a).join(' or ')}`)

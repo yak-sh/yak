@@ -345,7 +345,8 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         if (comp == null) delete held[name]
         else {
           let was = held[name] as Comp | undefined
-          held[name] = { ...was, ...stored(name, comp) }
+          let now = stored(name, comp)
+          held[name] = was ? { ...was, ...now } : now
         }
       }
       put(eid, held)
