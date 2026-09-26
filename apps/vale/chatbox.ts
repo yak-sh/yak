@@ -235,7 +235,11 @@ export let chatbox = (
       send()
       let now = net.now()
       let held = lines?.value ?? []
-      let there = new Set(held.map((b) => b.entity.eid))
+      // A line of mine is in the page's graph the moment it goes, but it is
+      // not the store's until the store has stamped who wrote it.
+      let there = new Set(
+        held.filter((b) => writer(b)).map((b) => b.entity.eid),
+      )
       waiting = waiting.filter((l) => !there.has(l.eid) && now - l.at < LOST)
       let mine = [...waiting, ...outbox].filter((l) => l.level == level)
       let shown = [
