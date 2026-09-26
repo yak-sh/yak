@@ -541,6 +541,12 @@ export class Store {
   #draining: Promise<void> | null = null
   #callers = new Map<number, (answer: Response) => void>()
   #stuck = false
+  // The object's own memory (`yak_kv`), as this incarnation last read or
+  // wrote it. Only this object writes that table, so once a word is read the
+  // copy here is what the table says, and a request that asks it again costs
+  // no statement. A transaction that fails forgets the copy (`#atomic`),
+  // since what it wrote there rolled back.
+  #kv = new Map<Word, string | null>()
 
   constructor(ctx: State, bind: Bindings = {}) {
     this.#ctx = ctx
@@ -599,12 +605,20 @@ export class Store {
   // graph admits. Nothing is retyped, and only a word that holds nothing is
   // dropped, by `prepare` (the vocab door).
   #boot(prepare = () => {}) {
+    this.#atomic(() => {
+      prepare()
+      this.#build()
+    })
+  }
+
+  // One transaction over this object's storage. A failure refuses the object
+  // (`#failed`) and forgets the memory's copy, which may hold a word the
+  // rollback took back.
+  #atomic(body: () => void) {
     try {
-      this.#ctx.storage.transactionSync(() => {
-        prepare()
-        this.#build()
-      })
+      this.#ctx.storage.transactionSync(body)
     } catch (e) {
+      this.#kv.clear()
       this.#failed(e)
     }
   }
@@ -850,12 +864,15 @@ export class Store {
   }
 
   #get(k: Word): string | null {
+    if (this.#kv.has(k)) return this.#kv.get(k)!
     let [row] = this.#sql.query(select({
       cols: [col('v')],
       from: table(KV.name),
       where: eq(col('k'), val(k)),
     }))
-    return row ? String(row.v) : null
+    let v = row ? String(row.v) : null
+    this.#kv.set(k, v)
+    return v
   }
 
   #put(k: Word, v: string) {
@@ -866,55 +883,60 @@ export class Store {
       rows: [[val(k), val(v)]],
       upsert: [{ on: [col('k')], set: { v: col('v', 'excluded') } }],
     })
+    this.#kv.set(k, v)
   }
 
   // What the kernel told this object about itself, on any request that carries
   // it. The address it was born at never moves; the app it holds and that
   // app's access mode are the directory's to say, so a changed mode is
-  // followed rather than argued with.
+  // followed rather than argued with. Almost every request says what the
+  // object already holds, and that costs a look at its memory: only news
+  // opens a transaction.
   #learn(req: Request) {
-    try {
-      this.#ctx.storage.transactionSync(() => this.#remember(req))
-    } catch (e) {
-      this.#failed(e)
+    if (this.#heard(req).length) this.#atomic(() => this.#remember(req))
+  }
+
+  // What a request says about this object that it does not already hold.
+  //
+  // Which app this object holds is an app's question. The directory is not
+  // one — it speaks the platform's vocabulary, which has no `grant` and no
+  // `access`, and the kernel decides who may read and write it before the
+  // request arrives (vocab.ts, `platformDoc`). A caller that names an app on
+  // its way to the directory is naming an app whose row lives here, not the
+  // object it is talking to, so the word is ignored rather than believed:
+  // believing it installs @yaks/member's guard on a store with no seats and
+  // writes a grant into a table that does not exist.
+  #heard(req: Request): [Word, string][] {
+    let name = req.headers.get('x-store')
+    let said: [Word, string | null][] = [['name', name]]
+    if ((name ?? this.#get('name')) != PLATFORM_STORE) {
+      said.push(
+        ['app', req.headers.get('x-yak-app')],
+        ['access', req.headers.get('x-yak-access')],
+        // The address this app's letters leave from (directory.ts `mailbox`).
+        // Like the access mode it is the directory's word and is followed
+        // rather than argued with — an app renamed, or made the space's front
+        // page, writes from its new address on the very next request. Nothing
+        // is rebuilt for it: `#posting` reads the word at write time.
+        ['mail', req.headers.get('x-yak-mail')],
+      )
     }
+    return said.filter((s): s is [Word, string] =>
+      !!s[1] && s[1] != this.#get(s[0])
+    )
   }
 
   #remember(req: Request) {
-    let name = req.headers.get('x-store')
+    let heard = new Map(this.#heard(req))
+    for (let [k, v] of heard) this.#put(k, v)
     // The name is what says whether this object is the directory, so learning
     // it for the first time can change which vocabulary it speaks — and the
-    // object was constructed before any request could tell it.
-    if (name && this.#get('name') != name) {
-      this.#put('name', name)
-      this.#build()
-    }
-    // Which app this object holds is an app's question. The directory is not
-    // one — it speaks the platform's vocabulary, which has no `grant` and no
-    // `access`, and the kernel decides who may read and write it before the
-    // request arrives (vocab.ts, `platformDoc`). A caller that names an app on
-    // its way to the directory is naming an app whose row lives here, not the
-    // object it is talking to, so the word is ignored rather than believed:
-    // believing it installs @yaks/member's guard on a store with no seats and
-    // writes a grant into a table that does not exist.
-    if (this.#get('name') == PLATFORM_STORE) return
-    let app = req.headers.get('x-yak-app')
-    if (app && this.#get('app') != app) {
-      this.#put('app', app)
-      this.#build()
-    }
-    let said = req.headers.get('x-yak-access')
-    if (said && this.#get('access') != said) {
-      this.#put('access', said)
-      this.#mode(mode(said))
-    }
-    // The address this app's letters leave from (directory.ts `mailbox`). Like
-    // the access mode it is the directory's word and is followed rather than
-    // argued with — an app renamed, or made the space's front page, writes
-    // from its new address on the very next request. Nothing is rebuilt for
-    // it: `#posting` reads the word at write time.
-    let from = req.headers.get('x-yak-mail')
-    if (from && this.#get('mail') != from) this.#put('mail', from)
+    // object was constructed before any request could tell it. The app it
+    // holds is what its guard asks about. Either is one rebuild, however many
+    // of them a request said.
+    if (heard.has('name') || heard.has('app')) this.#build()
+    let access = heard.get('access')
+    if (access) this.#mode(mode(access))
   }
 
   // The app's access mode, in this store's own rows — what @yaks/member reads
@@ -1921,6 +1943,7 @@ export class Store {
       } catch { /* already gone */ }
     }
     await this.#ctx.storage.deleteAll()
+    this.#kv.clear()
     this.#sql.query(KV)
     this.#sql.query(WRITES)
     if (name) this.#put('name', name)
