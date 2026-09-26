@@ -25,7 +25,15 @@
 // deploy starts one, which is how fixed code reaches it. A replay that the
 // store now refuses (a `$was` that moved, a property the app no longer
 // declares) is kept as `refused` with the reason and reported, never dropped.
-import { Refused } from '@yaks/graph'
+//
+// A write the kernel sends carries an idempotency key (door.ts `storeOf`),
+// which a resend of it carries too. The row of a keyed write does not leave
+// when its batch commits: it stays `applied`, holding the answer it was given,
+// for as long as a resend could come (`WINDOW`). A resend is the write it
+// repeats: told that answer once applied, and otherwise waiting where the first
+// waits. So a write the store committed just before a deploy reset it, and
+// that the kernel sent again, is applied once.
+import { type Bundle, Refused } from '@yaks/graph'
 import { carries } from '@yaks/secrets'
 import {
   and,
@@ -35,14 +43,18 @@ import {
   eq,
   gt,
   lit,
+  lt,
+  not,
   op,
   or,
   select,
   table,
   val,
 } from '@yaks/sql'
+import { IDEMPOTENCY } from './door.ts'
 
 let LOG = 'yak_writes'
+let KEY = 'idempotency_key'
 
 export let WRITES: CreateTable = {
   t: 'create table',
@@ -56,11 +68,37 @@ export let WRITES: CreateTable = {
     { name: 'state', type: 'text', notNull: true, default: lit('pending') },
     { name: 'tries', type: 'integer', notNull: true, default: lit(0) },
     { name: 'why', type: 'text' },
+    { name: KEY, type: 'text' },
+    { name: 'answer', type: 'text' },
   ],
 }
 
+/** The log, raised, with every column it predates added: an object keeps its
+ * log across code versions, and whichever code wakes it next reads it. */
+export let raise = (db: Driver) => {
+  db.query(WRITES)
+  let has = db.query({ t: 'pragma', name: 'table_info', arg: LOG })
+    .map((r) => String(r.name))
+  for (let add of WRITES.cols) {
+    if (!has.includes(add.name)) db.query({ t: 'alter table', table: LOG, add })
+  }
+  db.query({
+    t: 'create index',
+    name: `${LOG}_${KEY}`,
+    on: LOG,
+    cols: [col(KEY)],
+    unique: true,
+    ifNot: true,
+  })
+}
+
+// How long an applied write keeps its answer for a resend. The kernel resends
+// at once (door.ts `retryOnce`), so this is room to spare.
+let WINDOW = 10 * 60_000
+
 let PENDING = eq(col('state'), lit('pending'))
 let FAILED = eq(col('state'), lit('failed'))
+let APPLIED = eq(col('state'), lit('applied'))
 let at = (seq: number) => eq(col('seq'), val(seq))
 
 /** One kept write. */
@@ -96,20 +134,79 @@ export let keyed = (body: string): boolean => {
   }
 }
 
-/** Keep one write; its place in the log. */
+let now = () => new Date().toISOString()
+
+/** Keep one write; its place in the log. The answers no resend can come for
+ * any more go as it arrives. */
 export let keep = (db: Driver, req: Request, body: string): number => {
+  let gone = new Date(Date.now() - WINDOW).toISOString()
+  db.query({
+    t: 'delete',
+    from: LOG,
+    where: and(APPLIED, lt(col('at'), val(gone))),
+  })
   let [row] = db.query({
     t: 'insert',
     into: LOG,
-    cols: ['at', 'headers', 'body'],
+    cols: ['at', 'headers', 'body', KEY],
     rows: [[
-      val(new Date().toISOString()),
+      val(now()),
       val(JSON.stringify([...req.headers])),
       val(body),
+      val(req.headers.get(IDEMPOTENCY)),
     ]],
     returning: [col('seq')],
   })
   return Number(row.seq)
+}
+
+/** A write the log already holds under an idempotency key. */
+export type Sent = { seq: number; state: string; why: string; answer: string }
+
+/** The write a key was first sent with, if the log holds it. */
+export let first = (db: Driver, key: string): Sent | null => {
+  let [row] = db.query(select({
+    cols: [col('seq'), col('state'), col('why'), col('answer')],
+    from: table(LOG),
+    where: eq(col(KEY), val(key)),
+  }))
+  return row
+    ? {
+      seq: Number(row.seq),
+      state: String(row.state),
+      why: String(row.why ?? ''),
+      answer: String(row.answer ?? '[]'),
+    }
+    : null
+}
+
+/** A committed write, in its batch's own transaction: out of the log, or,
+ * sent with a key, kept as `applied` with its answer for a resend to be told.
+ * An answer too big for a row keeps each entity's identity, which is what a
+ * caller reads to learn what its aliases minted. */
+export let landed = (db: Driver, seq: number, answer: () => Bundle[]) => {
+  let [row] = db.query(select({
+    cols: [col(KEY)],
+    from: table(LOG),
+    where: at(seq),
+  }))
+  if (row?.[KEY] == null) return done(db, seq)
+  let all = answer()
+  let text = JSON.stringify(all)
+  let kept = fits(text) ? text : JSON.stringify(
+    all.map(({ entity, $alias }) => ({ entity, $alias })),
+  )
+  db.query({
+    t: 'update',
+    table: LOG,
+    set: {
+      state: lit('applied'),
+      at: val(now()),
+      body: lit(''),
+      answer: val(kept),
+    },
+    where: at(seq),
+  })
 }
 
 /** The oldest write still waiting after `seq`. A replay walks the log forward
@@ -134,9 +231,10 @@ export let next = (db: Driver, seq = 0): Kept | null => {
 /** Whether any write is waiting. */
 export let waiting = (db: Driver): boolean => next(db) != null
 
-/** The write is applied, or answered as refused: it leaves the log. */
+/** The write is answered: it leaves the log, unless it is kept as `applied`
+ * for a resend (`landed`). */
 export let done = (db: Driver, seq: number) =>
-  void db.query({ t: 'delete', from: LOG, where: at(seq) })
+  void db.query({ t: 'delete', from: LOG, where: and(at(seq), not(APPLIED)) })
 
 /** A write that failed on a store that started: set aside with why, so the
  * writes behind it go on. */

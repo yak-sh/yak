@@ -173,7 +173,13 @@ import type { Env } from './env.ts'
 import { resumed, seeded } from './wake.ts'
 import type { Binding } from './post.ts'
 import { ledger } from './ledger.ts'
-import { doorOf, GIT_STORE, type Namespace, PLATFORM_STORE } from './door.ts'
+import {
+  doorOf,
+  GIT_STORE,
+  IDEMPOTENCY,
+  type Namespace,
+  PLATFORM_STORE,
+} from './door.ts'
 import { type Meta, metaOf } from './meta.ts'
 import { caught, defect } from './sentry.ts'
 import { weighed } from './meter.ts'
@@ -184,20 +190,26 @@ import {
   constrained,
   dead,
   done,
+  first,
   fits,
   held,
   keep,
   type Kept,
   keyed,
+  landed,
   logged,
   next,
   parked,
+  raise,
   replayed,
   revived,
   said,
+  type Sent,
   waiting,
-  WRITES,
 } from './writes.ts'
+
+// A JSON answer's headers, for one the write log kept as text.
+let JSONED = { headers: { 'content-type': 'application/json' } }
 import { apex, url } from './host.ts'
 import {
   documented,
@@ -587,7 +599,7 @@ export class Store {
     // The write log, before anything that can refuse the object: a store
     // whose graph cannot boot still keeps what it is sent (writes.ts). What
     // the last incarnation set aside waits again, for this one's code.
-    this.#sql.query(WRITES)
+    raise(this.#sql)
     revived(this.#sql)
     this.#reshaping()
     this.#boot()
@@ -747,7 +759,6 @@ export class Store {
       // store that cannot name its app has no access question to ask and the
       // kernel's own gate in front of it is the whole rule.
       plugins: [
-        this.#logging,
         ...(vault ? [secrets(vault, (b) => this.#trust(b, null))] : []),
         ...(vocab.comp('archetype') ? [archetypes()] : []),
         // Before every check, because it is about the shape a value arrived in.
@@ -803,6 +814,9 @@ export class Store {
         // A sleeping wake armed by the write that makes its `while` hold
         // (`#rouse`), in every store.
         { name: 'yak/rouse', hooks: { effect: this.#rouse } },
+        // Last, so the answer a keyed write keeps is the batch as every other
+        // commit hook left it (`#logging`).
+        this.#logging,
       ],
     })
     // What every domain of this Worker does about data this store committed
@@ -1523,30 +1537,41 @@ export class Store {
    * A write, kept before anything else happens to it, then applied in its
    * turn by the one replay that runs at a time, which answers its caller as
    * the store always did. A write that finds the object refusing to start, or
-   * the log itself failing, is answered 202 and waits in the log.
+   * the log itself failing, is answered 202 and waits in the log. A resend
+   * (its idempotency key already in the log) is the write it repeats: told
+   * what that one was told, or waiting beside it.
    */
   async #write(request: Request): Promise<Response> {
     let body = await request.text()
+    let key = request.headers.get(IDEMPOTENCY)
     let seq: number
+    let was: Sent | null
     let unkept = async () => {
       let req = new Request(request, { body })
       return await this.#ready(req) ?? this.#serve(req)
     }
     if (!fits(body) || keyed(body)) return unkept()
     try {
-      seq = keep(this.#sql, request, body)
+      was = key ? first(this.#sql, key) : null
+      seq = was?.seq ?? keep(this.#sql, request, body)
     } catch (e) {
       // Storage that will not take a row: applied as it came, and said.
       defect(e, { request: 'write log', store: this.#name() })
       return unkept()
     }
+    if (was?.state == 'applied') return new Response(was.answer, JSONED)
+    if (was?.state == 'refused') return refuse(new Refused(was.why))
+    if (was?.state == 'failed') return parked(seq, was.why)
     if (await this.#ready(request)) {
       return this.#park(seq, this.#refused ?? 'this app could not start')
     }
     if (this.#stuck) {
       return this.#park(seq, 'earlier writes to this app are still waiting')
     }
-    let answer = new Promise<Response>((r) => this.#callers.set(seq, r))
+    let answer = new Promise<Response>((r) => {
+      let other = this.#callers.get(seq)
+      this.#callers.set(seq, other ? (a) => (other(a.clone()), r(a)) : r)
+    })
     void this.#drain()
     return answer
   }
@@ -1681,14 +1706,15 @@ export class Store {
   }
 
   // The hook that closes the loop: inside the transaction of the batch a kept
-  // write brought, that write leaves the log. Every other batch — an effect's,
-  // a tick's, one applied after an await — finds `#landing` empty.
+  // write brought, that write leaves the log, or stays as its answer for a
+  // resend (writes.ts `landed`). Every other batch — an effect's, a tick's,
+  // one applied after an await — finds `#landing` empty.
   #logging: Plugin = {
     name: 'yak/writes',
     hooks: {
       commit: (bundles) => {
         if (this.#landing != null) {
-          done(this.#sql, this.#landing)
+          landed(this.#sql, this.#landing, () => bundles)
           this.#landing = null
         }
         return bundles
@@ -2049,7 +2075,7 @@ export class Store {
     await this.#ctx.storage.deleteAll()
     this.#kv.clear()
     this.#sql.query(KV)
-    this.#sql.query(WRITES)
+    raise(this.#sql)
     if (name) this.#put('name', name)
     this.#boot()
     if (this.#refused) return this.#stalled()

@@ -3,11 +3,11 @@
 // to start, then replayed in order, once, by the alarm alone.
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { sha256 } from '@yaks/graph'
-import { doorOf } from './door.ts'
+import { doorOf, type Namespace, storeOf } from './door.ts'
 import { Store } from './graph.ts'
 import { by, scan, tally } from '@yaks/sql'
-import { db, keep, state } from './testing.ts'
-import { KERNEL, metaOf } from './meta.ts'
+import { db, keep, named, state } from './testing.ts'
+import { KERNEL, metaOf, minted } from './meta.ts'
 import { keyed, Pending } from './writes.ts'
 
 let NAME = 'ada/notes'
@@ -17,13 +17,43 @@ let object = () => {
   let ctx = state()
   let store = new Store(ctx)
   let wake = () => store = new Store(ctx)
-  let door = () => metaOf(doorOf((r) => store.fetch(r), NAME))
+  let fetch = (r: Request) => store.fetch(r)
+  let door = () => metaOf(doorOf(fetch, NAME))
   let apply = (b: unknown[]) => door().apply(b as never, KERNEL)
   let writes = (state?: string) =>
     tally(db(ctx), 'yak_writes', state ? by({ state }) : undefined)
+  let query = (q: string) => door().query(q)
   let title = async (eid: string) =>
-    ((await door().query(`.eid=${eid}`))[0]?.doc as { title?: string })?.title
-  return { ctx, wake, apply, writes, title, alarm: () => store.alarm() }
+    ((await query(`.eid=${eid}`))[0]?.doc as { title?: string })?.title
+  return {
+    ctx,
+    wake,
+    fetch,
+    apply,
+    writes,
+    query,
+    title,
+    alarm: () => store.alarm(),
+  }
+}
+
+// The object as the kernel reaches it (door.ts `storeOf`), where the runtime
+// resets it once, after the first batch commits and before its answer leaves:
+// what a platform deploy does to a write in flight.
+let resetting = (o: ReturnType<typeof object>): Namespace => {
+  let reset = true
+  return {
+    idFromName: (name) => name,
+    get: () => ({
+      fetch: async (req) => {
+        let r = await o.fetch(req)
+        if (!reset) return r
+        reset = false
+        o.wake()
+        throw Object.assign(new Error('reset'), { retryable: true })
+      },
+    }),
+  }
 }
 
 // What breaking a deploy looks like from inside: the vocabulary the object
@@ -90,6 +120,33 @@ Deno.test('a write the store fails on is set aside, and the writes behind it go 
   cure()
   o.wake()
   assertEquals(await o.title('n1'), 'poison')
+  assertEquals(o.writes(), 0)
+})
+
+Deno.test('a batch sent again after a reset lost its answer is applied once', async () => {
+  let o = object()
+  let applied = await metaOf(storeOf(resetting(o), NAME)).apply(
+    [{ entity: { eid: '$n' }, doc: { title: 'once' } }],
+    KERNEL,
+  )
+  let rows = await o.query('.doc')
+  assertEquals(rows.map((b) => b.entity.eid), [minted(applied).$n])
+})
+
+Deno.test('writes kept by code before idempotency keys apply under the code after', async () => {
+  let o = object()
+  broken(o)
+  await assertRejects(() => o.apply([titled('n1', 'kept')]), Pending)
+  // The log as that code raised it: no key and no answer, nor their index.
+  let d = db(o.ctx)
+  for (let name of named(o.ctx, { type: 'index', tbl_name: 'yak_writes' })) {
+    d.query({ t: 'drop', kind: 'index', name })
+  }
+  for (let drop of ['idempotency_key', 'answer']) {
+    d.query({ t: 'alter table', table: 'yak_writes', drop })
+  }
+  mended(o)
+  assertEquals(await o.title('n1'), 'kept')
   assertEquals(o.writes(), 0)
 })
 

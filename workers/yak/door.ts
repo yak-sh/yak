@@ -81,7 +81,13 @@ export type Door = (
 // (graph.ts `vouchOf`). Stripped here, at the one door onto a store, "the
 // kernel builds every request from scratch" is a fact about this function
 // rather than a hope about its callers.
+//
+// The idempotency key is among them because the store answers a key it has
+// seen with the answer it gave (writes.ts): only the kernel mints one.
+export let IDEMPOTENCY = 'idempotency-key'
+
 let VOUCH = [
+  IDEMPOTENCY,
   'x-store',
   'x-yak-app',
   'x-yak-access',
@@ -194,17 +200,20 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
   // I/O on behalf of a different request". Getting one costs nothing, so an
   // eviction, thrown or answered, is answered by taking another and building
   // the request again from the same init. Only a streamed body cannot be sent
-  // twice; that one error passes through. A write sent twice must say the same
-  // thing both times, since the first may have committed before its answer was
-  // lost: it names the entities it mints (versions.ts `record`).
+  // twice; that one error passes through. The first may have committed before
+  // its answer was lost, so both carry one idempotency key, and a store that
+  // applied the first answers the second as it answered the first
+  // (writes.ts) rather than applying it again.
   let door = doorOf(
     (req) => ns.get(ns.idFromName(name)).fetch(req),
     name,
     app,
   )
-  return (path, init = {}, headers = {}) =>
-    retryOnce(
-      async () => thrown(await door(path, init, headers)),
+  return (path, init = {}, headers = {}) => {
+    let once = { ...headers, [IDEMPOTENCY]: crypto.randomUUID() }
+    return retryOnce(
+      async () => thrown(await door(path, init, once)),
       rebuildable(init),
     )
+  }
 }
