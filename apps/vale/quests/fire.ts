@@ -127,9 +127,9 @@ export let quests: Quest[] = [
     gift: 'tonic',
     title: 'Sparks that walk',
     body:
-      'Flamelings come out of the vents north-east of the forge, and they set fire to whatever they touch. Three of them.',
+      'Flamelings come down with the lava off the volcano north-east of the forge, and they set fire to whatever they touch. Three of them.',
   },
-  // Cole the ash-walker, on the ash of Cinderreach.
+  // Cole the ash-walker, on the cinder flats of Cinderreach.
   {
     id: 'cole-salamanders',
     giver: 'cole',
@@ -137,9 +137,9 @@ export let quests: Quest[] = [
     target: 'salamander',
     count: 6,
     xp: 1930,
-    title: 'Salamanders in the ash',
+    title: 'Salamanders in the cinders',
     body:
-      'Salamanders swim through the ash like fish through water. Six of them, and the road to the keep is open.',
+      'Salamanders swim through the cinders like fish through water. Six of them, and the road to the keep is open.',
   },
   {
     id: 'cole-imps',
@@ -176,7 +176,7 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'Fire on legs',
     body:
-      'Flamelings dance on the ash where the road runs south. Four of them, and I can walk the reach in peace. Sir Garrow holds the keep down that road, if he still lives.',
+      'Flamelings dance on the cinders where the road runs south. Four of them, and I can walk the reach in peace. Sir Garrow holds the keep down that road, if he still lives.',
   },
   // Sir Garrow, the last knight of Ashkeep.
   {

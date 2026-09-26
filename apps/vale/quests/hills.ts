@@ -134,7 +134,7 @@ export let quests: Quest[] = [
     xp: 400,
     title: 'Grit for the grindstone',
     body:
-      'Crag shard, ground fine, keeps an edge bright for a year. Three will do. Mind the Cragbacks up in the crags north-west of here: they don’t care for folk chipping at them.',
+      'Crag shard, ground fine, keeps an edge bright for a year. Three will do. Mind the Cragbacks up in the quarry north-west of here: they don’t care for folk chipping at them.',
   },
   // Greta Flint, who cuts stone for the steps.
   {
@@ -328,9 +328,9 @@ export let quests: Quest[] = [
     target: 'basilisk',
     count: 2,
     xp: 1160,
-    title: 'Eyes in the scree',
+    title: 'Eyes in the basalt',
     body:
-      'Two basilisks sit in the scree and turn the stones to look at you. I don’t like being looked at by stones. Two of them.',
+      'Two basilisks sit in the black crags and turn the stones to look at you. I don’t like being looked at by stones. Two of them.',
   },
   {
     id: 'gorm-wight',

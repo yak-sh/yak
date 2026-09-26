@@ -18,7 +18,7 @@ import { rise, SHORE, SIZE, type Spot, steep, type Vale } from './terrain.ts'
  * haunts. */
 export type Den = { kind: string; haunt: Haunt; name: string; place: Place }
 
-/** Whether a creature belongs in a level `hops` portals from home: the
+/** Whether a creature belongs in a level `hops` roads from home: the
  * danger climbs two creature levels a hop, from 1 to 5 at home to 15 to 21
  * eight hops out, and a boss may stand four above the rest.
  *

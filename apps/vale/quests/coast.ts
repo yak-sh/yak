@@ -1,5 +1,5 @@
 // The people of the coast, down the west road past Birchmere: the harbour
-// of Gullwick, the moors of Saltreach, the isles of Shellstrand, the light
+// of Gullwick, the salt pans of Saltreach, the isles of Shellstrand, the light
 // on Stormhead, and Driftwood Bay, whose far road runs onto the sand.
 import type { Giver, Quest } from '../quests.ts'
 
@@ -103,7 +103,7 @@ export let quests: Quest[] = [
     xp: 600,
     title: 'Sailcloth',
     body:
-      'We lost two sails in the storm off Stormhead. The wild rams on the meadow north-west of here grow good fleece for cloth. Four fleeces, and the boats go out again.',
+      'We lost two sails in the storm off Stormhead. The wild rams in the fields north-west of here grow good fleece for cloth. Four fleeces, and the boats go out again.',
   },
   {
     id: 'kett-warchief',
@@ -128,9 +128,9 @@ export let quests: Quest[] = [
     gift: 'tonic',
     title: 'Horns on the harbour road',
     body:
-      'Now a longhorn aurochs has taken the road and won’t give it back. It has thorns in its hide, like the rest. Move it on for good. The light on Stormhead is out past Saltreach and the isles, if you’re looking for the east ward.',
+      'Now a longhorn aurochs has taken the road and won’t give it back. It has thorns in its hide, like the rest. Move it on for good. The light on Stormhead is out past Saltreach and the isles, if you’re looking for the west ward.',
   },
-  // Marigold Furrow, who farms the meadow above Gullwick.
+  // Marigold Furrow, who farms the fields above Gullwick.
   {
     id: 'marigold-boars',
     giver: 'marigold',
@@ -167,7 +167,7 @@ export let quests: Quest[] = [
     body:
       'A brown bear sleeps in my barley every afternoon, and flattens a new patch every day. Wake it, and send it off.',
   },
-  // Corrie the shepherd, on the moor at Saltreach.
+  // Corrie the shepherd, on the salt pans at Saltreach.
   {
     id: 'corrie-adders',
     giver: 'corrie',
@@ -175,9 +175,9 @@ export let quests: Quest[] = [
     target: 'adder',
     count: 5,
     xp: 420,
-    title: 'Adders in the heather',
+    title: 'Adders in the salt',
     body:
-      'Heath adders are thick in the heather this year, and the flock won’t graze. Five of them, and the sheep can eat.',
+      'Adders lie up in the warm of the salt heaps this year, and the flock won’t go near the salt. Five of them, and the sheep get their lick.',
   },
   {
     id: 'corrie-bogles',
@@ -187,9 +187,9 @@ export let quests: Quest[] = [
     target: 'bogle',
     count: 4,
     xp: 560,
-    title: 'Bogles in the peat',
+    title: 'Bogles in the brine',
     body:
-      'Bogles have come up out of the peat cuttings, and they steal the lambs for a joke. It is not a joke. Four of them.',
+      'Bogles have come up out of the brine pans, and they steal the lambs for a joke. It is not a joke. Four of them.',
   },
   {
     id: 'corrie-golems',
@@ -200,9 +200,9 @@ export let quests: Quest[] = [
     count: 2,
     xp: 720,
     gift: 'tonic',
-    title: 'The standing stones',
+    title: 'Stones off the bluffs',
     body:
-      'The standing stones on the moor used to be where the sheep sheltered. Now two of them walk. Lay them down.',
+      'The stones under the white bluffs used to be where the sheep sheltered from the wind. Now two of them walk the pans. Lay them down.',
   },
   {
     id: 'corrie-wyrms',
@@ -215,7 +215,7 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'The wyrms on the head',
     body:
-      'Stonewyrms have come up out of the crags and sun themselves on the head where the sheep used to graze. They have briar in their scales. Three of them. The isles are down the road, if you’re going on to Stormhead.',
+      'Stonewyrms have come up out of the bluffs and bask on the white rock of the head, and the flock can’t get by them to the tide. They have briar in their scales. Three of them. The isles are down the road, if you’re going on to Stormhead.',
   },
   // Isla the pearl-diver, on the isles of Shellstrand.
   {
@@ -277,7 +277,7 @@ export let quests: Quest[] = [
     xp: 1030,
     title: 'Scorpions on the stair',
     body:
-      'I keep the light on Stormhead, the east ward. The rocks round it are crawling with scorpions, and I climb up there every night. Five of them, and I can climb without a shield.',
+      'I keep the light on Stormhead, the west ward. The rocks round it are crawling with scorpions, and I climb up there every night. Five of them, and I can climb without a shield.',
   },
   {
     id: 'morrow-glow',
@@ -314,7 +314,7 @@ export let quests: Quest[] = [
     gift: 'elixir',
     title: 'The light is lit',
     body:
-      'The light is lit, and I watched the briar pull back from the cliffs. But a basilisk has come up the crags to put it out. Kill it, and the east ward holds.',
+      'The light is lit, and I watched the briar pull back from the cliffs. But a basilisk has come up the crags to put it out. Kill it, and the west ward holds.',
   },
   // Maddock the wrecker, who picks the wrecks below Stormhead.
   {

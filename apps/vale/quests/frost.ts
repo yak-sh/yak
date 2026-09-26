@@ -119,7 +119,7 @@ export let quests: Quest[] = [
     xp: 1240,
     title: 'Slime that freezes',
     body:
-      'Frost slimes creep over the snowfield and freeze whatever they touch. My saws, mostly. Six of them.',
+      'Frost slimes creep over the moor and freeze whatever they touch. My saws, mostly. Six of them.',
   },
   {
     id: 'gudrun-frostbacks',
@@ -220,7 +220,7 @@ export let quests: Quest[] = [
     xp: 1460,
     title: 'Wolves in the pines',
     body:
-      'Frost wolves in the pines north of here, and they don’t run from an axe. Five of them, and I can cut wood without company.',
+      'Frost wolves in the old spruce north-east of here, and they don’t run from an axe. Five of them, and I can cut wood without company.',
   },
   {
     id: 'birgit-frostbacks',

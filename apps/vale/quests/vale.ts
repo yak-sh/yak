@@ -257,7 +257,7 @@ export let quests: Quest[] = [
     gift: 'tonic',
     title: 'The Reeve of Birchmere',
     body:
-      'So Wren sent you. She writes that Mossvale’s beasts have thorns in them now, and so do ours: the boars in Emberwood, south-east of the green, have briar in their hides. Drive off six, and I’ll open the old book.',
+      'So Wren sent you. She writes that Mossvale’s beasts have thorns in them now, and so do ours: the boars in the Bluebell Wood, south-east of the green, have briar in their hides. Drive off six, and I’ll open the old book.',
   },
   {
     id: 'alder-tusks',

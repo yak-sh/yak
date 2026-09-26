@@ -139,7 +139,7 @@ export let quests: Quest[] = [
     gift: 'tonic',
     title: 'Striders at the well',
     body:
-      'Dune striders come in off the sand at noon and drink the well half dry. Three of them, and there is water for the caravans.',
+      'Dune striders come in off the dry mere at noon and drink the well half dry. Three of them, and there is water for the caravans.',
   },
   // Idris the caravan-master, at the camp in Palmwell.
   {
@@ -240,7 +240,7 @@ export let quests: Quest[] = [
     body:
       'A bird as big as a sail hunts over the dunes with a crown of briar on its head. The Skyreaver, my people call it. Bring it down, and the sky is ours again.',
   },
-  // Tali the hawk-mother, by the oasis at Redmesa.
+  // Tali the hawk-mother, by the spring at Redmesa.
   {
     id: 'tali-griffins',
     giver: 'tali',

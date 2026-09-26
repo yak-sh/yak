@@ -293,7 +293,7 @@ export let quests: Quest[] = [
     xp: 1350,
     title: 'A cracked bell',
     body:
-      'The bell of the Sunken Kirk is the west ward, and it has cracked. Without the bell, the bog wakes. The stone keepers out on the marsh carry iron in them. Three lumps, and I can mend it.',
+      'The bell of the Sunken Kirk is the east ward, and it has cracked. Without the bell, the bog wakes. The stone keepers out on the marsh carry iron in them. Three lumps, and I can mend it.',
   },
   {
     id: 'tobin-trolls',
