@@ -623,7 +623,7 @@ Deno.test('a world with nobody in it stops ticking, and a player arriving wakes 
     wake: {
       at: iso('09:05'),
       while: [
-        { match: '.player.active=1', every: '30s' },
+        { match: '.player.active=true', every: '30s' },
         { match: '.player', every: '5m' },
       ],
     },

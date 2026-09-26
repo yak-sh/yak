@@ -192,30 +192,31 @@ refused loudly rather than quietly matching nothing:
 - **eid** — a reference to another entity, by its eid: `.comment.target=940d…`,
   `.filed.assignee=dc5e…`, `.created.by=<who.person>`.
 
-Your _own_ properties work differently: they are stored as given and compared as
-text, with no parsing on either side. Two consequences worth knowing before you
-design a component:
+Your _own_ properties compare by the type your `vocab.json` gives them:
 
-- A `bool` of yours lands in the store as `1` or `0`, so filter it that way —
-  `.reading.done=1` finds the finished ones, `.reading.done=true` finds nothing.
-- A `time` of yours is kept verbatim and compared as text, so write ISO stamps
-  (`new Date().toISOString()`) and compare with ISO:
-  `.reading.started>=2026-01-01` works, while `.reading.started=today` matches
-  only a row whose value is the literal text `today`. Time phrases are for the
-  platform's stamps.
-
-Numbers of yours still compare as numbers — `.recipe.serves>=4` — because both
-sides read as numbers.
+- A `boolean` is stored as `1` or `0`, and `true` and `false` name those:
+  `.reading.done=true` and `.reading.done=1` both find the finished ones.
+- A `date-time` is kept as written, so write ISO stamps
+  (`new Date().toISOString()`), and compare it with a stamp or a time phrase:
+  `.reading.started>=2026-01-01`, `.reading.started>1-hour-ago`.
+- A `number` compares as a number: `.recipe.serves>=4`.
 
 ## Time phrases
 
-A time phrase is a range, and the operator picks which edge of it you mean:
+A time phrase names a stretch of time or a moment. Against a stretch, the
+operator picks which edge of it you mean:
 
     =   within it            .created.at=today
     >=  from its start       .created.at>=2026-01-01
     <=  until its end        .created.at<=yesterday
     >   after it ends        .created.at>last-week
     <   before it starts     .created.at<today
+
+A moment (`now`, `1 hour ago`, `in 2 days`) is compared as itself:
+`.created.at>1-hour-ago` is anything later than an hour ago, and
+`.created.at<=1-hour-ago` anything no later. `=` with a moment means between it
+and now, so `.created.at=1-hour-ago` is the last hour. A range runs from one
+phrase to the other: `.created.at=yesterday..today`.
 
 The phrases:
 
