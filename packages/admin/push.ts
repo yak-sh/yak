@@ -9,7 +9,7 @@
 // starts with a dot, and `.DS_Store` is not part of an app.
 
 import { CallError } from '@yaks/tools'
-import { saidBy } from './api.ts'
+import { type Reply, saidBy, valueOf } from './api.ts'
 
 /** One file as app_files takes it. */
 export type File = { path: string; content: string } | {
@@ -62,19 +62,26 @@ export let read = async (dir: string): Promise<File[]> => {
   return files.sort((a, b) => a.path < b.path ? -1 : 1)
 }
 
+let reply = async (ask: Ask, name: string, args: Record<string, unknown>) =>
+  await ask('tools/call', { name, arguments: args }) as Reply
+
+// What a tool said, for the person running the push.
 let call = async (ask: Ask, name: string, args: Record<string, unknown>) =>
-  saidBy(
-    await ask('tools/call', { name, arguments: args }) as {
-      content?: { type: string; text?: string }[]
-      isError?: boolean
-    },
-  )
+  saidBy(await reply(ask, name, args))
+
+// The paths an app holds, read off the list's answer as data: its words are
+// for a person, and carry more than the list (the unseen block).
+let listed = async (ask: Ask, at: Record<string, string>) =>
+  (valueOf(await reply(ask, 'app_files', { ...at, op: 'list' })) as {
+    files: { path: string }[]
+  }).files.map((f) => f.path)
 
 /**
  * Make the app hold exactly `files`, then release them as a version. An app
  * that does not exist yet is created first: its file list is asked for, and a
- * list that fails is answered by `app_new`, whose own refusal says why when
- * that fails too.
+ * list the platform refuses is answered by `app_new`, whose own refusal says
+ * why when that fails too. A list that answers without its files is a broken
+ * platform, and says so rather than trying to make the app again.
  */
 export let push = async (
   ask: Ask,
@@ -86,9 +93,9 @@ export let push = async (
   let said: string[] = []
   let held: string[]
   try {
-    held = (await call(ask, 'app_files', { ...at, op: 'list' }))
-      .split('\n').map((l) => l.trim()).filter(Boolean)
-  } catch {
+    held = await listed(ask, at)
+  } catch (e) {
+    if (!(e instanceof CallError)) throw e
     said.push(
       await call(ask, 'app_new', {
         slug: to.app,

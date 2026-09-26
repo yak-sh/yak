@@ -20,7 +20,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { timed } from '@yaks/api'
 import { type Registered, registration } from '@yaks/connections'
 import { type And, and, eq, ge, limit, want } from '@yaks/query'
-import { CallError } from '@yaks/tools'
+import { CallError, valueIn } from '@yaks/tools'
 import { LINK } from '../../workers/yak/link.ts'
 import { PLATFORM_STORE } from '../../workers/yak/door.ts'
 import { PLATFORM, SLUG } from '../../workers/yak/route.ts'
@@ -299,7 +299,7 @@ export let rpc = (session: string) => {
     })
     if (r.status != 200) {
       let text = await r.text()
-      let refusal = refusalOf(valueOf(text))
+      let refusal = refusalOf(parsed(text))
       // A stale session is account state, not a broken connector. Keep its
       // code and sign-in sentence so the caller records a refusal, not a defect.
       if (r.status == 401 && refusal) {
@@ -317,10 +317,17 @@ export let rpc = (session: string) => {
 
 export type Content = { type: string; text?: string }
 
+/** A `tools/call` result, as much of it as this client reads. */
+export type Reply = {
+  content?: Content[]
+  structuredContent?: unknown
+  isError?: boolean
+}
+
 // What a tool SAID, not the envelope it said it in. An erring tool throws
 // with its own words as an expected remote-tool refusal, so another tool
 // calling it does not report it as a defect.
-export let saidBy = (out: { content?: Content[]; isError?: boolean }) => {
+export let saidBy = (out: Reply) => {
   let text = (out.content ?? [])
     .map((c) => c.text ?? `[${c.type}]`)
     .join('\n')
@@ -333,12 +340,25 @@ export let saidBy = (out: { content?: Content[]; isError?: boolean }) => {
   return text
 }
 
-let bodyOf = async (r: Response) => {
-  let text = await r.text()
-  return valueOf(text)
+// What a tool answered as DATA (@yaks/tools `valueIn`). Its words are for a
+// person and carry more than the answer (the unseen block, the month's
+// ceiling), so a program reads this instead. An erring tool throws as
+// `saidBy` does; one that answered no value broke its contract.
+export let valueOf = (out: Reply): Record<string, unknown> => {
+  saidBy(out)
+  let result = (out.structuredContent as { result?: unknown } | undefined)
+    ?.result
+  let value = Array.isArray(result) ? valueIn(result) : undefined
+  if (!value) throw new Error('the tool answered no value')
+  return value
 }
 
-let valueOf = (text: string) => {
+let bodyOf = async (r: Response) => {
+  let text = await r.text()
+  return parsed(text)
+}
+
+let parsed = (text: string) => {
   try {
     return JSON.parse(text)
   } catch {

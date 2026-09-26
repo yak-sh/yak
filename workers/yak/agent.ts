@@ -112,11 +112,12 @@ export let inputOf = (
  * These tools answer prose — that is what a platform verb has to say, and the
  * rows it worked on live in a directory nobody's reach holds — so the bundle
  * is `content{body}` with `output{source}` beside it, which is exactly what
- * the vocabulary has for an answer somebody's words. The structured `data` a
- * tool used to answer beside its text is gone: every one of them said a second
- * time what the text already says, and a reply's structure is its bundles now
- * — which is the one output schema every tool declares (@yaks/mcp
- * `answerSchema`).
+ * the vocabulary has for an answer somebody's words. Where a program has
+ * something to read in the answer (the files a list names, the roster `about`
+ * serves), the tool answers it as data too, and it rides as `output{value}`:
+ * the words are for a person and carry more than the answer, so nothing reads
+ * them as data (@yaks/tools `valueIn`). The bundle is the one output schema
+ * every tool declares (@yaks/mcp `answerSchema`).
  *
  * What is unseen in the space it worked in (unseen.ts) rides on the sentence —
  * every break not yet served, once, then the month's ceiling. It rode on the
@@ -143,12 +144,16 @@ export let answered = async (
         role: await ctx.dir.role(out.space, ctx.person),
       }),
     ) + await ceiling(ctx.env, out.space)
+  // A call to say it came from, where there is one: the builder runs these
+  // same tools in its own loop (builder.ts), with nothing to point at.
+  let output = {
+    ...(call ? { source: call } : {}),
+    ...(out.value ? { value: out.value } : {}),
+  }
   return [{
     entity: { eid: '$said' },
     content: { body: text },
-    // A call to say it came from, where there is one: the builder runs these
-    // same tools in its own loop (builder.ts), with nothing to point at.
-    ...(call ? { output: { source: call } } : {}),
+    ...(Object.keys(output).length ? { output } : {}),
   }]
 }
 

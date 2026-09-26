@@ -92,7 +92,8 @@ Deno.test('a page reports its own breaks, and the agent hears', async () => {
     // …on a platform tool's answer, which is prose (T-33812): the generic
     // tier answers a described value, and words appended to it would be
     // something else.
-    let told = await agent.tool('app_files', { ...app, op: 'list' })
+    let list = await agent.answer('app_files', { ...app, op: 'list' })
+    let told = list.text
     assertMatch(told, /exception recipes: page \/recipes\/ — boom is not a/)
     assertMatch(
       told,
@@ -103,6 +104,10 @@ Deno.test('a page reports its own breaks, and the agent hears', async () => {
       2,
       'two, and only two',
     )
+    // The words carry more than the list; the list as data is the files.
+    assertEquals(list.value, {
+      files: [{ path: 'bare.html' }, { path: 'index.html' }],
+    })
     assert(
       !(await agent.tool('app_files', { ...app, op: 'list' })).includes(
         'unseen',

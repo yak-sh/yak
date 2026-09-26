@@ -62,9 +62,15 @@ export type Ctx = {
 export type Args = Record<string, unknown>
 
 // What a tool answers: the text, the space it worked in (so the door can
-// append what is unseen there), and the same answer as data, which the
-// transport carries as the result's structuredContent (agent.ts).
-export type Out = { text: string; space?: Space }
+// append what is unseen there), and, where code has something to read, the
+// same answer as data. The text is for a person and may carry more than the
+// answer (the unseen block); the value rides beside it as the answer's
+// `output{value}` (agent.ts `answered`), which is what a program reads.
+export type Out = {
+  text: string
+  space?: Space
+  value?: Record<string, unknown>
+}
 
 export type Shape = {
   type: 'object'

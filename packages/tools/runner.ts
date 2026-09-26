@@ -294,23 +294,37 @@ let measured = (answer: Bundle[], most: number) => {
 }
 
 /**
+ * The `output{value}` an answer carries: the same answer as data, beside the
+ * words a person reads. A caller that wants the answer's facts reads them here,
+ * never out of the words, which may carry more than the answer.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let said = { entity: { eid: '$said' }, content: { body: 'a.txt' } }
+ * let files = { files: [{ path: 'a.txt' }] }
+ * assertEquals(valueIn([{ ...said, output: { value: files } }]), files)
+ * assertEquals(valueIn([said]), undefined)
+ * ```
+ */
+export let valueIn = (
+  answer: Bundle[],
+): Record<string, unknown> | undefined =>
+  answer
+    .map((b) => (b.output as Comp | undefined)?.value)
+    .find((v): v is Record<string, unknown> => !!v && typeof v == 'object')
+
+/**
  * A tool's answer as data, for a reader that parses rather than reads: the
  * bundles under `result`, or, from a tool that declares an `outputSchema`
- * because its answer is not entities, the `output{value}` it answered in that
+ * because its answer is not entities, the {@link valueIn} it answered in that
  * shape. A refusal carries no such value, and is its bundles like any other.
  * MCP sends this as `structuredContent`; `yak … --json` prints it.
  */
 export let structured = (
   tool: { outputSchema?: Record<string, unknown> },
   answer: Bundle[],
-): Record<string, unknown> => {
-  let value = tool.outputSchema
-    ? answer
-      .map((b) => (b.output as Comp | undefined)?.value)
-      .find((v) => v && typeof v == 'object')
-    : undefined
-  return (value as Record<string, unknown>) ?? { result: answer }
-}
+): Record<string, unknown> =>
+  (tool.outputSchema ? valueIn(answer) : undefined) ?? { result: answer }
 
 /**
  * Did this call fail? Read from the runner's own record — `execution{state}`

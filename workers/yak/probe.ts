@@ -465,13 +465,26 @@ export let connector = (
     }
     return reply.result
   }
-  let tool = async (name: string, args: unknown = {}) => {
+  // A reply's two readers: the words a person reads, and the same answer as
+  // data, which is what a program reads — the words carry more than the
+  // answer. The data is the `output{value}` on the answer's bundles, read here
+  // as @yaks/tools `valueIn` reads it: the test run's own process loads this
+  // module to start a kernel, without the npm packages @yaks/tools imports.
+  let answer = async (name: string, args: unknown = {}) => {
     let out = await call('tools/call', { name, arguments: args })
     let text = String(out.content[0].text)
     if (out.isError) throw new Error(text)
-    return text
+    let said = (out.structuredContent?.result ?? []) as Bundle[]
+    let value = said
+      .map((b) => (b.output as { value?: unknown } | undefined)?.value)
+      .find((v) => v && typeof v == 'object') as
+        | Record<string, unknown>
+        | undefined
+    return { text, value }
   }
-  return { call, tool }
+  let tool = async (name: string, args: unknown = {}) =>
+    (await answer(name, args)).text
+  return { call, tool, answer }
 }
 
 // Every letter the kernel has sent to an address, oldest first, read off its

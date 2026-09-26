@@ -5,10 +5,22 @@ import { type Ask, type File, fileOf, push, read } from './push.ts'
 
 type Args = Record<string, unknown> & { files?: File[] }
 
-// yaks.app's app_new, app_files and app_deploy, over apps held in memory.
-let platform = (apps: Record<string, Map<string, File>> = {}) => {
+// yaks.app's app_new, app_files and app_deploy, over apps held in memory,
+// answering as the connector does: words for a person, with `more` after them
+// (the unseen block), and the answer as data on the bundle that carries them.
+let platform = (apps: Record<string, Map<string, File>> = {}, more = '') => {
   let deployed: string[] = []
-  let ok = (text: string) => ({ content: [{ type: 'text', text }] })
+  let ok = (text: string, value?: Record<string, unknown>) => ({
+    content: [{ type: 'text', text: text + more }],
+    structuredContent: {
+      result: [{
+        entity: { eid: '$said' },
+        content: { body: text + more },
+        ...value ? { output: { value } } : {},
+      }],
+    },
+  })
+  let no = (text: string) => ({ ...ok(text), isError: true })
   let ask: Ask = (_method, params) => {
     let { name, arguments: a } = params as { name: string; arguments: Args }
     let app = String(a.app ?? a.slug)
@@ -16,14 +28,18 @@ let platform = (apps: Record<string, Map<string, File>> = {}) => {
     if (name == 'app_new') {
       return Promise.resolve(ok(`${apps[app] = new Map()}`))
     }
-    if (!files) {
-      return Promise.resolve({ ...ok(`no app ${app}`), isError: true })
-    }
+    if (!files) return Promise.resolve(no(`no app ${app}`))
     if (name == 'app_deploy') deployed.push(app)
     else if (a.op == 'list') {
-      return Promise.resolve(ok([...files.keys()].join('\n')))
-    } else if (a.op == 'delete') files.delete(String(a.path))
-    else for (let f of a.files!) files.set(f.path, f)
+      let paths = [...files.keys()]
+      return Promise.resolve(
+        ok(paths.join('\n'), { files: paths.map((path) => ({ path })) }),
+      )
+    } else if (a.op == 'delete') {
+      if (!files.delete(String(a.path))) {
+        return Promise.resolve(no(`no file ${a.path}`))
+      }
+    } else for (let f of a.files!) files.set(f.path, f)
     return Promise.resolve(ok('done'))
   }
   let held = (app: string) => [...apps[app].keys()].sort()
@@ -41,6 +57,16 @@ Deno.test('a push leaves the app holding exactly the directory, released once', 
   assertEquals(p.held('mail'), ['index.html', 'new.js'])
   assertEquals(p.deployed, ['mail'])
   assertEquals(said[0], 'wrote 2 files, deleted old.js')
+})
+
+Deno.test('a list whose words carry more than the files still yields the files', async () => {
+  let p = platform(
+    { mail: held('index.html', 'old.js') },
+    '\n\n## unseen errors\n- 2026-09-26 page /mail/ — boom is not a function',
+  )
+  let said = await push(p.ask, [file('index.html')], { app: 'mail' })
+  assertEquals(p.held('mail'), ['index.html'])
+  assertEquals(said[0], 'wrote 1 file, deleted old.js')
 })
 
 Deno.test('a push to an app that does not exist creates it first', async () => {

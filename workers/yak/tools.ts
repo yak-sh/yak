@@ -2286,10 +2286,13 @@ let OURS: Row[] = [
         // The app's own files: what the platform keeps beside them — the
         // bytes a page uploaded, the bytes a version pins — is addressed by
         // its content and was never a file anyone wrote (versions.ts `own`).
+        // Each as `files` takes one, so a program that lists and then writes
+        // speaks one shape.
+        let paths = own(keys.map((k) => k.slice(prefix.length)))
         return {
-          text: own(keys.map((k) => k.slice(prefix.length))).join('\n') ||
-            '(no files)',
+          text: paths.join('\n') || '(no files)',
           space,
+          value: { files: paths.map((path) => ({ path })) },
         }
       }
       if (op == 'read' || op == 'delete') {

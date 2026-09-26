@@ -136,8 +136,10 @@ written. It returns the tool's output together with runner bookkeeping. Use
 answer. `worded()` joins `content.body` values, or returns formatted JSON when
 no text is present. `structured(tool, answer)` is the answer as data: the
 bundles under `result`, or the `output.value` of a tool that declares an
-`outputSchema`. `faulted()` checks the stored execution state rather than
-treating an answer that contains `error` data as an execution failure.
+`outputSchema`. `valueIn(answer)` is the `output.value` an answer carries: the
+same answer as data, which a caller reads instead of parsing the words.
+`faulted()` checks the stored execution state rather than treating an answer
+that contains `error` data as an execution failure.
 
 Use `run(callId)` for a call already stored in the graph, and `due(callId)` for
 one a rule selected: it runs the call if nobody holds it and otherwise leaves

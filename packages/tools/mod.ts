@@ -38,6 +38,7 @@ export {
   structured,
   toolEid,
   UnfinishedCall,
+  valueIn,
   WOKEN,
   worded,
   WORDS,
