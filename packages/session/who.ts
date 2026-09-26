@@ -23,7 +23,6 @@ import {
   addressed,
   type Bundle,
   type Comp,
-  detached,
   type Eid,
   type Graph,
   then,
@@ -58,15 +57,15 @@ export let runners = (
  * tool that wants a transcript created does that itself.
  */
 export let sessionFor = async (
-  g: Pick<Graph, 'address' | 'storage' | 'read'>,
+  g: Pick<Graph, 'address' | 'get' | 'read'>,
   said: string,
 ): Promise<Bundle | undefined> => {
   if (!said) return undefined
   let [eid] = await addressed(g, [said])
-  let [row] = await detached(g.storage).get([eid])
+  let [row] = await g.get([eid])
   if (row?.[SESSION] && row[TOMBSTONE] == null) return row
   let run = (await runners(g, [said])).get(said)
-  return run ? (await detached(g.storage).get([run]))[0] : undefined
+  return run ? (await g.get([run]))[0] : undefined
 }
 
 /**

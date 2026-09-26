@@ -105,7 +105,7 @@ export type Tx = {
 /**
  * A storage adapter. `@yaks/sqlite` implements this over an embedded database;
  * an in-memory map, a Durable Object and a remote SQL service implement the
- * same five members. `tx` opens a transaction: it runs the body against a
+ * same members. `tx` opens a transaction: it runs the body against a
  * {@link Tx} and returns whatever the body returned, so a synchronous adapter
  * keeps `apply()` synchronous and an asynchronous one makes it return a
  * promise.
@@ -118,6 +118,10 @@ export type Storage = {
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: ReadOpts) => Row[] | Promise<Row[]>
+  /** these entities as they stand, whole ({@link Tx.get}), read without a
+   * write transaction: a lookup never waits on a writer and never makes one
+   * wait, the way `read` does not */
+  get: (eids: Eid[]) => Bundle[] | Promise<Bundle[]>
   /** run `body` in a transaction: commit on return, roll back on throw. Like
    * every other member it is async or sync — an embedded adapter returns
    * whatever the body returned, an adapter over a network returns a promise
@@ -134,7 +138,7 @@ export type Storage = {
  */
 export let detached = (storage: Storage): Tx => ({
   read: (query, opts) => storage.read(query, opts),
-  get: (eids) => storage.tx((tx) => tx.get(eids)),
+  get: (eids) => storage.get(eids),
   // A match is a question about committed data, which is exactly what there
   // is to ask out here: an effect registered on a pattern (@yaks/effects) asks
   // it after the change has been applied. A store that cannot evaluate one

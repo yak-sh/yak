@@ -145,12 +145,12 @@ let objectIn = (text: string): Record<string, unknown> | undefined => {
 /** A transcript's entries: a fork's prefix from its parent up to the anchor,
  * then its own, in order. */
 export let transcript = async (g: Graph, session: Eid): Promise<Bundle[]> => {
-  let [self] = await g.storage.tx((tx) => tx.get([session]))
+  let [self] = await g.get([session])
   if (!self?.session) throw new UnknownSession(session)
   let own = await g.read(`.${ENTRY}.session=${session}&*`)
   let from = comp(self, FORK)?.from
   if (!from) return ordered(own)
-  let [anchor] = await g.storage.tx((tx) => tx.get([String(from)]))
+  let [anchor] = await g.get([String(from)])
   let parent = anchor && comp(anchor, ENTRY)
   if (!parent) return ordered(own)
   let inherited = await transcript(g, String(parent.session))
@@ -368,9 +368,7 @@ export let react = async (
   let using = usingBefore(entries)
   let modelEid = using?.model == null ? undefined : String(using.model)
   if (modelEid) signer = { by: modelEid, via: session }
-  let [modelEntity] = modelEid
-    ? await g.storage.tx((tx) => tx.get([modelEid]))
-    : []
+  let [modelEntity] = modelEid ? await g.get([modelEid]) : []
   let served = comp(modelEntity ?? {} as Bundle, MODEL)
   let modelName = String(served?.name ?? '')
   if (!modelName) {

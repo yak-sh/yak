@@ -1,7 +1,8 @@
 // The duty, and the contest for it.
 
 import { assert, assertEquals } from '@std/assert'
-import type { Comp } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { until as soon } from '../../bin/testing.ts'
 import { blogGraph, pooledBlog } from './testing.ts'
 import { drop, held, holding, LEASE, leaseEid, take, until } from './lease.ts'
 
@@ -144,4 +145,74 @@ Deno.test('the take is a precondition, so two askers at one instant cannot both 
   assertEquals(both.filter(Boolean).length, 1)
   let row = (await graph.read(`.${LEASE}`))[0][LEASE] as Comp
   assert(row.holder == 'p1' || row.holder == 'p2', String(row.holder))
+})
+
+// Another process's take, written the way it lands: the row names it, with an
+// expiry this process cannot argue with.
+let seize = (graph: Graph, name: string, holder: string, until: number) =>
+  graph.apply([{
+    entity: { eid: leaseEid(name) },
+    [LEASE]: { name, holder, until: new Date(until).toISOString() },
+  } as Bundle])
+
+Deno.test('a lease lost mid-work stops the work, and the loser waits to take it back', async () => {
+  let graph = g()
+  let stop = new AbortController()
+  let runs: AbortSignal[] = []
+  let running = holding(
+    graph,
+    'clock',
+    { holder: 'p1', hold: 60, poll: 5, signal: stop.signal },
+    (signal) => {
+      runs.push(signal)
+      return until(signal)
+    },
+  )
+  await soon(() => runs.length == 1)
+  // Another process has it now: p1 lapsed while it was busy, say.
+  await seize(graph, 'clock', 'p2', Date.now() + 60_000)
+  await soon(() => runs[0].aborted, { label: 'the work to stop' })
+  assertEquals(stop.signal.aborted, false)
+  // Not p1's to release: p2 keeps it.
+  assertEquals((await held(graph, 'clock'))?.holder, 'p2')
+  // And when p2's take lapses, p1 is still there to have it back.
+  await seize(graph, 'clock', 'p2', 0)
+  await soon(() => runs.length == 2, { label: 'the work to run again' })
+  assertEquals((await held(graph, 'clock'))?.holder, 'p1')
+  stop.abort()
+  await running
+  assertEquals((await held(graph, 'clock'))?.holder, null)
+})
+
+Deno.test('a take the store fails is asked again, and the duty is not given up', async () => {
+  let base = g()
+  let fails = 1
+  let flaky: Graph = {
+    ...base,
+    apply: (bundles, opts) => {
+      if (fails-- > 0) throw new Error('database is locked')
+      return base.apply(bundles, opts)
+    },
+  }
+  let told: unknown[] = []
+  let stop = new AbortController()
+  let took = false
+  let running = holding(
+    flaky,
+    'clock',
+    {
+      holder: 'p1',
+      poll: 5,
+      signal: stop.signal,
+      report: (e) => void told.push(e),
+    },
+    (signal) => {
+      took = true
+      return until(signal)
+    },
+  )
+  await soon(() => took, { label: 'the duty to be taken' })
+  assertEquals(told.length, 1)
+  stop.abort()
+  await running
 })

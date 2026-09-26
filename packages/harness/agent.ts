@@ -433,7 +433,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
   // it answers outstanding.
   let quiet = async (session: Eid) => {
     if (passing(h.g, session)) return false
-    let [self] = await h.g.storage.tx((tx) => tx.get([session]))
+    let [self] = await h.g.get([session])
     if ((self?.dispatch as Comp | undefined)?.state == 'queued') return false
     let status = statusOf(await transcript(h.g, session))
     if (status != 'pending' && status != 'running') return true
@@ -448,7 +448,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     admitted,
     models: (session) => modelSelection(h.g, session, using),
     selectModel: async (session, model) => {
-      const [owner] = await h.g.storage.tx((tx) => tx.get([session]))
+      const [owner] = await h.g.get([session])
       if (!owner?.session) throw new Error('Unknown session')
       const chosen = await modelUsing(h.g, model, implementations)
       const prior = await selectedUsing(h.g, session)
@@ -598,9 +598,7 @@ export let sessionTitle = async (
   session: Bundle,
 ): Promise<string> => {
   if (session.spawned) {
-    const [assignment] = await g.storage.tx((tx) =>
-      tx.get([session.entity.eid + ':input'])
-    )
+    const [assignment] = await g.get([session.entity.eid + ':input'])
     if (assignment?.content) return titleOf([assignment])
   }
   return titleOf(

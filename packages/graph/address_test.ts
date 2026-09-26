@@ -34,7 +34,7 @@ let g = (...plugins: Plugin[]) => {
   return one
 }
 let get = (one: ReturnType<typeof g>, eid: string) =>
-  (one.storage.tx((tx) => tx.get([eid])) as Bundle[])[0]
+  (one.get([eid]) as Bundle[])[0]
 
 Deno.test('an id that names nothing is refused, by name', () => {
   assertThrows(

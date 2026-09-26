@@ -78,6 +78,8 @@ export type Store = {
   read: (query: Query, opts?: ReadOpts) => Bundle[]
   /** a query → one raw `{ eid }` row per match, or an aggregate's rows */
   rows: (query: Query, opts?: ReadOpts) => Row[]
+  /** these entities as they stand, whole */
+  get: (eids: Eid[]) => Bundle[]
   /** run `body` in a transaction: commit on return, roll back on throw */
   tx: <R>(body: (tx: Tx) => R) => R
 }
@@ -245,13 +247,15 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     return born
   }
 
+  let get = (eids: Eid[]): Bundle[] =>
+    eids.flatMap((eid) => {
+      let rec = rows.get(eid)
+      return rec ? [bundleOf(rec)] : []
+    })
+
   let tx: Tx = {
     read,
-    get: (eids) =>
-      eids.flatMap((eid) => {
-        let rec = rows.get(eid)
-        return rec ? [bundleOf(rec)] : []
-      }),
+    get,
     patch,
     evict: (eids) => {
       for (let eid of eids) {
@@ -277,6 +281,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     install: () => {},
     read,
     rows: raw,
+    get,
     tx: (body) => {
       // A nested transaction is a savepoint: it rolls back to where it opened,
       // and its entries stay in the log for the outer one to undo in its turn.

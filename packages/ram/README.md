@@ -71,6 +71,7 @@ interface:
 | `install()`          | Does nothing.                                                                            |
 | `read(query, opts?)` | Matching bundles, ordered and paginated as requested.                                    |
 | `rows(query, opts?)` | One `{ eid }` row per match, or the rows of `.count`, `.distinct` or `.tally`.           |
+| `get(eids)`          | Those entities as stored, tombstones included; an unknown id is left out.                |
 | `tx(body)`           | The callback's result; commits on success and rolls back on a throw or rejected promise. |
 
 A transaction provides `read`, `get(eids)`, `patch(bundles)`, `evict(eids)`, and

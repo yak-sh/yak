@@ -7,7 +7,6 @@
 
 import {
   addressed,
-  detached,
   type Eid,
   type Graph,
   type NamedTool,
@@ -93,7 +92,7 @@ let absent = async (
   eids: Eid[],
 ): Promise<string[]> => {
   let found = new Map(
-    (await detached(graph.storage).get(eids)).map((b) => [b.entity.eid, b]),
+    (await graph.get(eids)).map((b) => [b.entity.eid, b]),
   )
   return said.filter((_, i) => {
     let b = found.get(eids[i])

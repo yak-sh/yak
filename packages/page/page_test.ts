@@ -6,7 +6,6 @@ import { assert, assertEquals } from '@std/assert'
 import type { Handler } from '@yaks/api'
 import { compose, type Served } from '@yaks/cli/host'
 import type { Bundle, Comp } from '@yaks/graph'
-import { detached } from '@yaks/graph'
 import { decode } from '@yaks/blob'
 import { freezing } from './freeze.ts'
 import { blobsOf } from './host.ts'
@@ -23,8 +22,7 @@ let host = async (): Promise<Served> =>
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
-let read = async (h: Served, eid: string) =>
-  (await detached(h.storage).get([eid]))[0]
+let read = async (h: Served, eid: string) => (await h.graph.get([eid]))[0]
 
 // The door this package's routes hang on: every config here names @yaks/api,
 // so a host without a handler would be this file's own bug.

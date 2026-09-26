@@ -253,7 +253,7 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
           answer,
           c.tui ? { views: await terminal(plugins()), config: c.config } : {},
           {
-            lookup: (eids) => host.graph.storage.tx((tx) => tx.get(eids)),
+            lookup: (eids) => host.graph.get(eids),
             query: (q) => host.graph.read(q),
           },
           !declared.readOnly,

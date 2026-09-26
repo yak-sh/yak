@@ -31,7 +31,7 @@ Deno.test('transient ordered text is projected but not stored, commit/discard an
   assertEquals((await g.read('.doc'))[0].doc, {
     body: 'base' + '!'.repeat(1000),
   })
-  assertEquals((await g.storage.tx((tx) => tx.get(['d'])))[0].doc, {
+  assertEquals((await g.get(['d']))[0].doc, {
     body: 'base',
   })
   await w.commit()

@@ -268,7 +268,7 @@ export let client = (srv: Server): Client => {
 
 /** One entity, whole, out of a graph. */
 export let at = (g: Graph, eid: string): Bundle | undefined =>
-  (g.storage.tx((tx) => tx.get([eid])) as Bundle[])[0]
+  (g.get([eid]) as Bundle[])[0]
 
 /** One component off a bundle, for a test that wants a property out of it. */
 export let comp = (

@@ -63,7 +63,7 @@ Deno.test('streaming records ask before dispatch, projects text without durable 
     const output = entries.find((b) => b.output)
     assert(output)
     assertEquals((output.content as Comp).body, 'x'.repeat(100))
-    const [raw] = await h.g.storage.tx((tx) => tx.get([output.entity.eid]))
+    const [raw] = await h.g.get([output.entity.eid])
     assertEquals((raw.content as Comp).body, '')
     release()
     await a.idle(id)

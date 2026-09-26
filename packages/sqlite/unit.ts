@@ -18,13 +18,25 @@ let depth = new WeakMap<Driver, number>()
 // this driver owns a file and nobody is inside a unit yet, and a SAVEPOINT in
 // plain SQL everywhere else. An async body is settled before the unit closes,
 // so a batch that went async is still rolled back by a rejection.
-export let unit = <R>(driver: Driver, body: () => R): R => {
+//
+// A unit that only reads says so (`read`), and the outermost one then begins
+// deferred: in WAL a reader sees one consistent snapshot without the write
+// lock, so a lookup neither waits on a writer nor makes one wait. It must not
+// write — a deferred transaction that has read cannot take the lock once
+// another connection has committed.
+export let unit = <R>(
+  driver: Driver,
+  body: () => R,
+  mode: 'write' | 'read' = 'write',
+): R => {
   if (driver.tx) return driver.tx(body)
   let held = depth.get(driver) ?? 0
   let outer = !!driver.file && held == 0
   let name = `yaks_tx_${seq++}`
   driver.query(
-    outer ? { t: 'begin', mode: 'immediate' } : { t: 'savepoint', name },
+    outer
+      ? { t: 'begin', mode: mode == 'read' ? 'deferred' : 'immediate' }
+      : { t: 'savepoint', name },
   )
   depth.set(driver, held + 1)
   let close = (...stmts: Stmt[]) => {

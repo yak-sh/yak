@@ -49,7 +49,6 @@ import {
   argsOf,
   type Bundle,
   type Comp,
-  detached,
   type Graph,
   Refused,
   TOMBSTONE,
@@ -181,7 +180,7 @@ export let runs = (
     // that ran it, so "whoever is asking" may be no session at all — and a
     // listener for nobody is silent, which reads as nothing to hear.
     let session = await asking(call, graph)
-    let [row] = await detached(graph.storage).get([session])
+    let [row] = await graph.get([session])
     if (!row?.[SESSION]) {
       throw new Refused(
         'no session is asking — say --session, for example ' +
@@ -296,7 +295,7 @@ export let runs = (
     // Whole, since a lock is shown by the id its entity's kind gives it.
     let locks = await graph.read(and(present(`${CLAIM}.session`), every()))
     let holders = [...new Set(locks.map(holderOf))]
-    let rows = holders.length ? await detached(graph.storage).get(holders) : []
+    let rows = holders.length ? await graph.get(holders) : []
     // A tombstoned holder is a holder that is gone: `claim.session` is declared
     // `death: 'release'`, so a lock still naming one is the same leak.
     let held = new Map(

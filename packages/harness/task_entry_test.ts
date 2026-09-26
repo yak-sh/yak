@@ -339,7 +339,7 @@ Deno.test('terminal attempts do not pin task forks to an old prefix', async () =
         },
       ])
       let result = await taskEntry(h.g, 'p', 'new task')
-      let [child] = await h.g.storage.tx((tx) => tx.get([result.child]))
+      let [child] = await h.g.get([result.child])
       assertEquals((child.fork as Comp).from, 'new-input')
       let { transcript } = await import('@yaks/session')
       let entries = await transcript(h.g, result.child)

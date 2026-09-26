@@ -135,6 +135,7 @@ aggregates.
 | `install()`          | Creates/updates schema, indexes, metadata, and archetype classification |
 | `read(query, opts?)` | Matching bundles                                                        |
 | `rows(query, opts?)` | Raw result rows                                                         |
+| `get(eids)`          | Those entities as stored, read without taking the write lock            |
 | `tx(body)`           | Runs the callback in a transaction and returns its result               |
 
 `install()` preserves existing data, adds missing columns, rebuilds tables when

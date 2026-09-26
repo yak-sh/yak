@@ -13,7 +13,7 @@
 // the frame's bundles.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { comps, dead, detached, then, transient } from '@yaks/graph'
+import { comps, dead, then, transient } from '@yaks/graph'
 import { replicate } from './mark.ts'
 import type { Frame } from './socket.ts'
 import { type Coverage, covers } from './coverage.ts'
@@ -40,7 +40,7 @@ export let strip = (
   graph: Graph,
   eids: Eid[],
 ): Bundle[] | Promise<Bundle[]> =>
-  then(detached(graph.storage).get(eids), (held) => {
+  then(graph.get(eids), (held) => {
     let out = held.flatMap((b) => bare(graph, b))
     return out.length ? replicate(graph, out) : []
   })
@@ -88,7 +88,7 @@ export let snapshot = (
   } = {},
 ): Bundle[] | Promise<Bundle[]> =>
   then(
-    detached(graph.storage).get(bundles.map((b) => b.entity.eid)),
+    graph.get(bundles.map((b) => b.entity.eid)),
     (held) => {
       let previous = new Map(held.map((b) => [b.entity.eid, b]))
       let patches = bundles.map((b) => {

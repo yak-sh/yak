@@ -8,7 +8,6 @@ import {
   argsOf,
   type Bundle,
   type Comp,
-  detached,
   graph,
   Refused,
   type Tool,
@@ -419,7 +418,7 @@ Deno.test('a write naming nothing of its kind is refused, and mints nothing', as
       `CallError: who: ${who} names no person`,
     )
   }
-  assertEquals(await detached(g.storage).get(['ghost']), [])
+  assertEquals(await g.get(['ghost']), [])
 })
 
 Deno.test('a read is answered about whatever its reference names', async () => {

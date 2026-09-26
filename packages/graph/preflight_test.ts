@@ -27,7 +27,7 @@ for (let async of [false, true]) {
     ]
     assertEquals(await check(batch, detached(storage)), batch)
     assertEquals(seen, [undefined, 1, 2, undefined])
-    assertEquals(await detached(storage).get(['b']), [])
+    assertEquals(await storage.get(['b']), [])
     let effects = 0
     let g = graph({
       storage,
@@ -44,7 +44,7 @@ for (let async of [false, true]) {
       }],
     })
     await g.apply(batch)
-    assertEquals(comp((await detached(storage).get(['b']))[0], 'book').pages, 3)
+    assertEquals(comp((await storage.get(['b']))[0], 'book').pages, 3)
     assertEquals(effects, 1)
   })
 
@@ -69,13 +69,13 @@ for (let async of [false, true]) {
         'refused',
       )
     } else assertThrows(() => check(batch, detached(storage)), Error, 'refused')
-    assertEquals(await detached(storage).get(['b']), [])
+    assertEquals(await storage.get(['b']), [])
     calls = 0
     await check(
       [batch[0], { entity: { eid: 'b' }, tombstone: {} }, batch[1]],
       detached(storage),
     )
     assertEquals(calls, 2)
-    assertEquals(await detached(storage).get(['b']), [])
+    assertEquals(await storage.get(['b']), [])
   })
 }

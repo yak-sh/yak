@@ -109,7 +109,7 @@ Deno.test('a rule that does not gate itself is refused by name and binding', () 
     'runaway fired twice',
   )
   // And nothing landed: a refusal rolls the batch back.
-  assertEquals(one.storage.tx((tx) => tx.get(['p1'])), [])
+  assertEquals(one.get(['p1']), [])
 })
 
 Deno.test('a rule writes a resource it named', () => {
@@ -135,7 +135,7 @@ Deno.test('what a rule writes is stamped and journaled like anything else', () =
   // The stamp phase runs after the rules phase, so a rule's own patch is a
   // touch like any other.
   assert(at(out, 'p1', 'created'), 'the entity was stamped')
-  let [held] = one.storage.tx((tx) => tx.get(['p1'])) as Bundle[]
+  let [held] = one.get(['p1']) as Bundle[]
   assertEquals(held.shelf, { aisle: 'Z', slot: null, height: null })
 })
 

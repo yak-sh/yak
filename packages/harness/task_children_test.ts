@@ -543,7 +543,7 @@ Deno.test('existing fork receipts do not read inherited transcript bodies on res
     await a.idle('parent')
     assert(!reads.some((q) => q == '.entry.session=parent'), reads.join('\n'))
     assert(!reads.some((q) => q == '.entry.session=child'), reads.join('\n'))
-    let [child] = await h.g.storage.tx((tx) => tx.get(['child']))
+    let [child] = await h.g.get(['child'])
     assertEquals((child.dispatch as Comp).state, 'settled')
     assertEquals((await read('.entry.session=parent')).length, 3)
   } finally {

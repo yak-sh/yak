@@ -878,7 +878,7 @@ Deno.test('the pass a one-shot line makes runs the retries that are due', async 
     await host.duties(AbortSignal.abort())
     assertEquals(ran, ['b1'])
     assertEquals(
-      ((await detached(host.storage).get(['r1']))[0].effect as Comp).state,
+      ((await host.storage.get(['r1']))[0].effect as Comp).state,
       'done',
     )
   } finally {

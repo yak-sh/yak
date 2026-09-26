@@ -66,7 +66,7 @@ let comp = (b: Bundle | undefined, name: string) =>
 let str = (v: unknown) => v == null ? '' : String(v)
 
 let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
-  (await g.storage.tx((tx) => tx.get([eid])))[0]
+  (await g.get([eid]))[0]
 
 // The entity config names, by id or by its `name` (`codex`), where it wears
 // `wears`.

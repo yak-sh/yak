@@ -44,8 +44,7 @@ let git = async (cwd: string, args: string[], optional = false) => {
   }
   return p.success ? text : undefined
 }
-let row = async (g: Graph, eid: string) =>
-  (await g.storage.tx((tx) => tx.get([eid])))[0]
+let row = async (g: Graph, eid: string) => (await g.get([eid]))[0]
 let canonical = async (path: string): Promise<string> => {
   // The parent directories that do exist are canonicalized, so a path can be
   // canonicalized before the checkout at the end of it has been created.
@@ -149,9 +148,7 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   changes.push(tree)
   // Write only the rows whose values actually changed, so that discovering an
   // unchanged checkout updates no timestamps and notifies nobody.
-  let previous = await g.storage.tx((tx) =>
-    tx.get(changes.map((b) => b.entity.eid))
-  )
+  let previous = await g.get(changes.map((b) => b.entity.eid))
   let byId = new Map(previous.map((b) => [b.entity.eid, b]))
   let changed = changes.filter((b) =>
     Object.entries(b).some(([k, v]) =>

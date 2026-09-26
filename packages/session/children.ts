@@ -41,8 +41,7 @@ export type ChildLimits = {
 let locks = new WeakMap<Graph, Promise<unknown>>()
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
-let row = async (g: Graph, eid: Eid) =>
-  (await g.storage.tx((tx) => tx.get([eid])))[0]
+let row = async (g: Graph, eid: Eid) => (await g.get([eid]))[0]
 
 let taskRow = async (g: Graph, id: string): Promise<Bundle> => {
   let b = await row(g, id)

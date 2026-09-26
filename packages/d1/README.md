@@ -94,6 +94,7 @@ The package has one import path, `@yaks/d1`. `storage` returns a `Store` with:
 | `install()`          | Promise resolving after schema statements execute         |
 | `read(query, opts?)` | Promise of matching bundles                               |
 | `rows(query, opts?)` | Promise of raw rows, including aggregates and projections |
+| `get(eids)`          | Promise of those entities as stored, tombstones included  |
 | `tx(body)`           | Promise of the callback result after its writes commit    |
 
 Read options are `@yaks/sql`'s bind options, such as `derived`, `extend`, and

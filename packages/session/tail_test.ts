@@ -90,10 +90,10 @@ Deno.test('a transcript file becomes the session it names, at full depth', () =>
     assertEquals(c(input, 'created')?.at, '2026-09-01T00:00:00.000Z')
     // The call names its tool, and its result says it went through.
     let call = callOf(s.entity.eid, 'toolu_1')
-    let [made] = await g.storage.tx((tx) => tx.get([call]))
+    let [made] = await g.get([call])
     assertEquals(c(made, 'call')?.to, toolEid('Bash'))
     assertEquals(c(made, 'execution'), { state: 'done', by: s.entity.eid })
-    let [tool] = await g.storage.tx((tx) => tx.get([toolEid('Bash')]))
+    let [tool] = await g.get([toolEid('Bash')])
     assertEquals(c(tool, 'tool')?.name, 'Bash')
   }))
 

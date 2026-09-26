@@ -34,8 +34,16 @@ for (let async of [false, true]) {
     let observed: string[] = []
     let one = graph({
       vocab: books,
+      // Every read after the commit fails, whichever door it takes.
       storage: {
         ...storage,
+        get: (eids) => {
+          if (committed) {
+            if (async) return Promise.reject(error)
+            throw error
+          }
+          return storage.get(eids)
+        },
         tx: (body) => {
           if (committed) {
             if (async) return Promise.reject(error)
@@ -96,7 +104,7 @@ Deno.test('a batch lands, and the return carries the births', () => {
   let born = out.find((b) => b.entity.num != null)!
   assertEquals(born.entity.eid, 'b1')
   assertEquals(typeof born.entity.num, 'number')
-  let [stored] = one.storage.tx((tx) => tx.get(['b1'])) as Bundle[]
+  let [stored] = one.get(['b1']) as Bundle[]
   assertEquals(comp(stored, 'doc').title, 'Dune')
   assertEquals(comp(stored, 'book').pages, 412)
 })
@@ -111,7 +119,7 @@ Deno.test('a write naming a component the graph does not declare lands nothing',
     Refused,
     'unknown component: audiobook',
   )
-  assertEquals(one.storage.tx((tx) => tx.get(['b1'])), [])
+  assertEquals(one.get(['b1']), [])
 })
 
 Deno.test('a bundle that names no entity is refused by its place, and lands nothing', () => {
@@ -127,7 +135,7 @@ Deno.test('a bundle that names no entity is refused by its place, and lands noth
       'bundle 1 needs an entity',
     )
   }
-  assertEquals(one.storage.tx((tx) => tx.get(['b1'])), [])
+  assertEquals(one.get(['b1']), [])
 })
 
 Deno.test('a replica lands what it declares and leaves the rest out', () => {
@@ -136,10 +144,10 @@ Deno.test('a replica lands what it declares and leaves the rest out', () => {
     { entity: { eid: 'b1' }, doc: { title: 'Dune' }, audiobook: {} },
     { entity: { eid: 'b2' }, audiobook: {} },
   ], { trusted: true, replica: true }))
-  let [b1] = one.storage.tx((tx) => tx.get(['b1'])) as Bundle[]
+  let [b1] = one.get(['b1']) as Bundle[]
   assertEquals(comp(b1, 'doc').title, 'Dune')
   assertEquals(b1.audiobook, undefined)
-  assertEquals(one.storage.tx((tx) => tx.get(['b2'])), [])
+  assertEquals(one.get(['b2']), [])
 })
 
 Deno.test('the answer is one bundle per entity, and no pipeline key', () => {
@@ -183,10 +191,10 @@ Deno.test('a patch touches only the properties it names; null clears one', () =>
     book: { pages: 412, status: 'stocked' },
   }]))
   sync(one.apply([{ entity: { eid: 'b1' }, book: { pages: 500 } }]))
-  let [b] = one.storage.tx((tx) => tx.get(['b1'])) as Bundle[]
+  let [b] = one.get(['b1']) as Bundle[]
   assertEquals(comp(b, 'book'), { pages: 500, status: 'stocked' })
   sync(one.apply([{ entity: { eid: 'b1' }, book: { status: null } }]))
-  let [c] = one.storage.tx((tx) => tx.get(['b1'])) as Bundle[]
+  let [c] = one.get(['b1']) as Bundle[]
   assertEquals(comp(c, 'book').status, null)
 })
 
@@ -198,7 +206,7 @@ Deno.test('a null component drops the row, the entity survives', () => {
     book: { pages: 412 },
   }]))
   sync(one.apply([{ entity: { eid: 'b1' }, book: null }]))
-  let [b] = one.storage.tx((tx) => tx.get(['b1'])) as Bundle[]
+  let [b] = one.get(['b1']) as Bundle[]
   assertEquals(b.book, undefined)
   assertEquals(comp(b, 'doc').title, 'Dune')
 })
@@ -260,7 +268,7 @@ Deno.test('a mark is signed where it lands, and the first telling stands', () =>
     sold: {},
     $actor: { by: 'you', via: 'post' },
   }], { now: '2026-01-02T00:00:00.000Z' }))
-  let [held] = one.storage.tx((tx) => tx.get(['b1'])) as Bundle[]
+  let [held] = one.get(['b1']) as Bundle[]
   assertEquals(comp(held, 'sold'), {
     at: '2026-01-01T00:00:00.000Z',
     by: 'me',
@@ -292,7 +300,7 @@ Deno.test('$was guards a property, and a moved value refuses the whole batch', (
   ) as Stale
   assertEquals(e.current, 'Dune II')
   // refused whole: the other bundle in the batch did not land either
-  assertEquals(one.storage.tx((tx) => tx.get(['b2'])), [])
+  assertEquals(one.get(['b2']), [])
 })
 
 Deno.test('a guard on an absent value is null, and on an unknown property refuses', () => {
@@ -328,10 +336,10 @@ Deno.test('a delete tombstones the entity and death spreads by the vocabulary', 
   assert(isDead(casualty))
   // the bookmark's row was released; its owner lives
   assertEquals(out.find((b) => b.entity.eid == 'u1')!.bookmark, null)
-  let [u] = one.storage.tx((tx) => tx.get(['u1'])) as Bundle[]
+  let [u] = one.get(['u1']) as Bundle[]
   assertEquals(u.bookmark, undefined)
   // the dead are dead
-  let dead = one.storage.tx((tx) => tx.get(['b1', 'r1'])) as Bundle[]
+  let dead = one.get(['b1', 'r1']) as Bundle[]
   assertEquals(dead.filter(isDead).length, 2)
 })
 
@@ -343,7 +351,7 @@ Deno.test('a detach reference is nulled and the survivor hears it', () => {
   ]))
   let out = sync(one.apply([{ entity: { eid: 'p1' }, $delete: true }]))
   assertEquals(at(out, 'b1', 'book'), { publisher: null })
-  let [b] = one.storage.tx((tx) => tx.get(['b1'])) as Bundle[]
+  let [b] = one.get(['b1']) as Bundle[]
   assertEquals(comp(b, 'book').publisher, null)
   assertEquals(comp(b, 'book').pages, 412) // the book itself is untouched
 })
@@ -356,7 +364,7 @@ Deno.test('a dead entity takes no patch, in this batch or a later one', () => {
     { entity: { eid: 'b1' }, doc: { title: 'back from the dead' } },
   ]))
   sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'still no' } }]))
-  let [b] = one.storage.tx((tx) => tx.get(['b1'])) as Bundle[]
+  let [b] = one.get(['b1']) as Bundle[]
   assert(isDead(b))
 })
 
@@ -393,7 +401,7 @@ Deno.test('a hook that throws refuses the batch and nothing lands', () => {
     Error,
     'held by someone else',
   )
-  assertEquals(one.storage.tx((tx) => tx.get(['b1'])), [])
+  assertEquals(one.get(['b1']), [])
 })
 
 Deno.test('a hook can add a bundle, and the added one is applied', () => {
@@ -407,7 +415,7 @@ Deno.test('a hook can add a bundle, and the added one is applied', () => {
     },
   }])
   sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))
-  let [log] = one.storage.tx((tx) => tx.get(['log'])) as Bundle[]
+  let [log] = one.get(['log']) as Bundle[]
   assertEquals(comp(log, 'doc').title, 'applied 1')
 })
 
@@ -472,7 +480,7 @@ Deno.test('a check runs every phase, writes nothing, and refuses what it must', 
   assertEquals(ran, ['commit', 'checked'])
   assert(at(out, 'b1', 'created').at)
   // — but nothing was committed, and no effect saw it.
-  assertEquals(one.storage.tx((tx) => tx.get(['b1'])), [])
+  assertEquals(one.get(['b1']), [])
   // A batch that would be refused is refused just as loudly — which is the
   // whole reason to ask.
   assertThrows(
@@ -513,7 +521,7 @@ Deno.test('a check over an asynchronous storage rolls back the same way', async 
     { check: true },
   )
   assertEquals(out[0].entity.eid, 'b1')
-  assertEquals(await one.storage.tx((tx) => tx.get(['b1'])), [])
+  assertEquals(await one.get(['b1']), [])
 })
 
 Deno.test('the same batches run over an asynchronous storage', async () => {
@@ -621,7 +629,7 @@ Deno.test('the rules phase runs after the guard and before the patches land', ()
   }])
   let out = sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))
   assertEquals(seen, ['precondition', 'rules', 'journal'])
-  let [derived] = one.storage.tx((tx) => tx.get(['b2'])) as Bundle[]
+  let [derived] = one.get(['b2']) as Bundle[]
   assertEquals(comp(derived, 'doc').title, 'derived')
   assert(at(out, 'b2', 'created'), "a rule's entity is stamped like any other")
 })

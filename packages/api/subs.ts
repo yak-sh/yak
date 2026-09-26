@@ -28,7 +28,6 @@ import type { Bundle, Eid, Graph } from '@yaks/graph'
 import {
   admit,
   composed,
-  detached,
   isPromise,
   over,
   then,
@@ -364,7 +363,7 @@ export let subscriptions = (graph: Graph, opts: {
     let queries = subs.filter((s) => !s.raw)
     if (!queries.length) return
     let touched = [...new Set(applied.map((b) => b.entity.eid))]
-    return then(detached(graph.storage).get(touched), (now) => {
+    return then(graph.get(touched), (now) => {
       let touch = touches(applied, now)
       return then(
         over(queries, (s) =>

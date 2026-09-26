@@ -274,10 +274,14 @@ await holding(g, 'refresh-index', { holder: me, signal }, async (stopping) => {
 ```
 
 `holding()` waits for a lease, renews it while work runs, and releases it when
-the callback finishes. The callback should honor its signal. With no signal, or
-an already aborted signal, it makes one attempt and returns if another process
-owns the duty. `until(signal)` lets completed startup work retain the lease
-until shutdown. A terminated holder's lease eventually expires.
+the callback finishes. The callback should honor its signal, which also aborts
+when a renewal finds another process holding the lease; `holding()` then waits
+to take it back. Renewals run on timers, so the callback must yield to them more
+often than a third of the hold. A take or renewal the store fails is reported
+(`report`, default `console.error`) and asked again. With no signal, or an
+already aborted signal, it makes one attempt and returns if another process owns
+the duty. `until(signal)` lets completed startup work retain the lease until
+shutdown. A terminated holder's lease eventually expires.
 
 `take`, `drop`, `held`, `released` and `leaseEid` expose the individual
 operations. The default hold duration is 30 seconds. Without a `lease`

@@ -68,7 +68,7 @@ Deno.test('a page is its slug: written twice, it is one entity', () => {
   assertEquals(again[0].entity.eid, eid)
   // A patch of the entity that was already there, not a second birth.
   assert(again[0].entity.num == null, 'the second write minted a new entity')
-  let [held] = one.storage.tx((tx) => tx.get([eid])) as Bundle[]
+  let [held] = one.get([eid]) as Bundle[]
   assertEquals(comp(held, 'guide').brief, 'said again')
 })
 
@@ -117,7 +117,7 @@ Deno.test('a patch that says nothing about the slug is ordinary', () => {
   sync(one.apply([page('$a', 'store', 'one')]))
   let eid = identityEid('guide', ['store'])
   sync(one.apply([{ entity: { eid }, guide: { brief: 'two' } }]))
-  let [held] = one.storage.tx((tx) => tx.get([eid])) as Bundle[]
+  let [held] = one.get([eid]) as Bundle[]
   assertEquals(comp(held, 'guide').brief, 'two')
   assertEquals(comp(held, 'guide').slug, 'store')
 })

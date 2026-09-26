@@ -448,9 +448,32 @@ export let SAMPLE = 400
  * Only for a driver over a file: an engine that hands out storage rather than a
  * database (a Durable Object's SQLite) refuses the pragma, and a scratch
  * in-memory store is gone before a plan could be worth improving.
+ *
+ * Analyzing writes, so it needs the write lock, and every process that opens
+ * the file runs it: `optimize` names every empty table on every open, since an
+ * empty table gets no statistics row to say it was seen. It never waits for
+ * that lock. With another process writing, the numbers stay as they are until
+ * an open finds the lock free, and the open goes on at once; waiting out the
+ * busy timeout here would stall the open behind a writer, and failing it would
+ * refuse a command over an optimization.
  */
 export let analyzed = (driver: Driver): void => {
   if (!driver.file) return
-  driver.query({ t: 'pragma', name: 'analysis_limit', value: SAMPLE })
-  driver.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
+  let wait = driver.query({ t: 'pragma', name: 'busy_timeout' })[0]?.timeout
+  let set = (value: number) =>
+    driver.query({ t: 'pragma', name: 'busy_timeout', value })
+  set(0)
+  try {
+    driver.query({ t: 'pragma', name: 'analysis_limit', value: SAMPLE })
+    driver.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
+  } catch (e) {
+    if (!busy(e)) throw e
+  } finally {
+    set(Number(wait ?? 0))
+  }
 }
+
+/** SQLite refusing a lock another connection holds, as the driver reports
+ * it: SQLITE_BUSY's own sentence. */
+let busy = (e: unknown): boolean =>
+  e instanceof Error && /database is (locked|busy)/.test(e.message)

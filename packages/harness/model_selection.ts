@@ -16,7 +16,7 @@ export const modelUsing = async (
   id: string,
   implementations: Readonly<Record<string, Model>>,
 ): Promise<Comp> => {
-  const [row] = await g.storage.tx((tx) => tx.get([id]))
+  const [row] = await g.get([id])
   const edge = row?.serves ? row.edge as Comp : undefined
   const model = edge ? String(edge.to) : row?.model ? id : undefined
   if (!model) throw new Error('Unknown model')
@@ -43,10 +43,10 @@ export const selectedUsing = async (
       '&.order=-entry.seq&.limit=1&.fields=using.model,using.provider,using.effort,using.instructions',
   )
   if (rows.length) return rows[0].using as Comp
-  const [owner] = await g.storage.tx((tx) => tx.get([session]))
+  const [owner] = await g.get([session])
   const from = (owner?.fork as Comp | undefined)?.from
   if (!from) return undefined
-  const [anchor] = await g.storage.tx((tx) => tx.get([String(from)]))
+  const [anchor] = await g.get([String(from)])
   const entry = anchor?.entry as Comp | undefined
   return entry
     ? selectedUsing(g, String(entry.session), Number(entry.seq), seen)

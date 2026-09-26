@@ -20,7 +20,7 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 }
 
 let held = (one: ReturnType<typeof g>, eid: string) =>
-  (one.storage.tx((tx) => tx.get([eid])) as Bundle[])[0]
+  (one.get([eid]) as Bundle[])[0]
 
 Deno.test('a produce-only rule writes its template into what it matched', () => {
   let one = g([{

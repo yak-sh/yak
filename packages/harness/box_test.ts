@@ -63,7 +63,7 @@ Deno.test('a command that outlives its budget answers with the process, and stop
 
   let ended = await stop.run({ process: eid })
   assertMatch(ended, new RegExp(`^process ${eid} exited \\d+$`))
-  let [row] = await g.storage.tx((tx) => tx.get([eid]))
+  let [row] = await g.get([eid])
   assert((row[EXIT] as Comp)?.code != null, 'the exit is stamped on the row')
   // Stamped means finished: a boot reconcile has nothing left to pick up.
   assertEquals(await g.read('.process&!exit&*'), [])

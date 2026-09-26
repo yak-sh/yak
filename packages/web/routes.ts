@@ -17,7 +17,7 @@
 // loaded it, so the browser and the server read one set of components.
 
 import type { Route } from '@yaks/api'
-import { dead, detached, type Graph } from '@yaks/graph'
+import { dead, type Graph } from '@yaks/graph'
 import { prefixOf } from '@yaks/id'
 import type { Vocab } from '@yaks/vocab'
 import { bundle } from './bundle.ts'
@@ -69,7 +69,7 @@ let names = async (graph: Graph, path: string): Promise<boolean> => {
   if (!id || id.includes('/')) return false
   try {
     let eid = (await graph.address([id])).get(id) ?? id
-    let [row] = await detached(graph.storage).get([eid])
+    let [row] = await graph.get([eid])
     return !!row && !dead(row)
   } catch {
     return false

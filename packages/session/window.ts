@@ -31,7 +31,7 @@ export let transcriptSegments = async (
   let segments: Segment[] = [], seen = new Set<Eid>(), through = Infinity
   while (!seen.has(session)) {
     seen.add(session)
-    let [row] = await g.storage.tx((tx) => tx.get([session]))
+    let [row] = await g.get([session])
     if (!row?.session) throw new Error('Unknown transcript: ' + session)
     segments.unshift({ session, through })
     let from = (row.fork as Comp | undefined)?.from

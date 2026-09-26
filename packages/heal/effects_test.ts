@@ -99,10 +99,7 @@ Deno.test('a failure files one open task about it, under its project', async () 
   assertEquals(comp(bug, 'filed')?.priority, 2)
   assertEquals(comp(bug, 'filed')?.project, 'home')
   assert(bug.task && !bug.completed)
-  let about =
-    (await g.storage.tx((tx) =>
-      tx.get([edgeEid(bug.entity.eid, 'about', on)])
-    ))[0]
+  let about = (await g.get([edgeEid(bug.entity.eid, 'about', on)]))[0]
   assertEquals(comp(about, 'edge')?.to, on)
   // The session working on a filed task files there instead.
   await g.apply([{ entity: { eid: 'run' }, exception: { message: 'x' } }], {

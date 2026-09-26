@@ -117,7 +117,6 @@ import {
   type Bundle,
   type Comp,
   comps,
-  detached,
   type Graph,
   graph,
   type Plugin,
@@ -1936,7 +1935,7 @@ export class Store {
       }
     }
     if (!mentioned.size) return rows
-    return then(detached(this.#graph.storage).get([...mentioned]), (found) => {
+    return then(this.#graph.get([...mentioned]), (found) => {
       let names = new Map<string, string>()
       for (let b of found) {
         let title = (b.doc as { title?: string } | undefined)?.title

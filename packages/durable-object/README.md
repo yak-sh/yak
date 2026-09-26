@@ -201,9 +201,9 @@ The package has one import path, `@yaks/durable-object`:
 | `DurableStorage`, `DurableSql`, `SqlCursor`, `SqlValue` | Structural storage types                           |
 | `Hibernation`, `Wire`, `Sockets`, `Store`               | Structural socket and store types                  |
 
-The store exposes `ddl`, `grown`, `install`, `read`, `rows`, and `tx`. Base
-options include derived expressions, SQL extensions, a fixed `now`, schema text
-expressions, numbering, and identity adoption. See the
+The store exposes `ddl`, `grown`, `install`, `read`, `rows`, `get`, and `tx`.
+Base options include derived expressions, SQL extensions, a fixed `now`, schema
+text expressions, numbering, and identity adoption. See the
 [SQLite API](../sqlite/README.md#api) for details.
 
 For a regular Worker without Durable Object hibernation, use `@yaks/workerd`'s

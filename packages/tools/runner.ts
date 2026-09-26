@@ -289,7 +289,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let by = (call.execution as Comp | undefined)?.by
     if (by == null) return 'free'
     if (by == opts.owner) return 'mine'
-    let [holder] = await g.storage.tx((tx) => tx.get([String(by)]))
+    let [holder] = await g.get([String(by)])
     return holder?.exit ? 'lapsed' : 'theirs'
   }
   let ensured: Promise<Bundle[]> | undefined
@@ -365,7 +365,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         if (error instanceof Stale) return perform(id, {})
         throw error
       }
-      let [stored] = await g.storage.tx((tx) => tx.get([id]))
+      let [stored] = await g.get([id])
       return execute(stored, tool)
     })
   }
@@ -374,7 +374,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     id: Eid,
     o: { redrive?: boolean; due?: boolean },
   ): Promise<Bundle[]> => {
-    let [call] = await g.storage.tx((tx) => tx.get([id]))
+    let [call] = await g.get([id])
     if (!call?.call) throw new CallError('call', 'Not a call: ' + id)
     // A recurring call is not one invocation: it is the row that keeps asking
     // for one. Each firing writes its own call entity, with an id derived from
@@ -576,7 +576,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     // `updated` stamp for nothing — on every process that opens the graph.
     ensure: () =>
       ensured ??= Promise.resolve(
-        g.storage.tx((tx) => tx.get(tools.map((t) => toolEid(t.name)))),
+        g.get(tools.map((t) => toolEid(t.name))),
       ).then((held) => {
         let said = new Map(held.map((b) => [b.entity.eid, b.tool as Comp]))
         let stale = tools.filter((t) => {

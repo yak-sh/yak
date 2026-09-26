@@ -33,14 +33,8 @@ let asked = (
     vocab,
     read: () => Promise.resolve(bundles.filter((b) => b.cites)),
     address: (ids: string[]) => new Map(ids.map((i) => [i, i])),
-    storage: {
-      tx: <T>(fn: (tx: { get: (eids: string[]) => Bundle[] }) => T) =>
-        Promise.resolve(
-          fn({
-            get: (eids) => bundles.filter((b) => eids.includes(b.entity.eid)),
-          }),
-        ),
-    },
+    get: (eids: string[]) =>
+      Promise.resolve(bundles.filter((b) => eids.includes(b.entity.eid))),
   } as unknown as Graph,
 ]
 

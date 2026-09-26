@@ -200,6 +200,7 @@ export let memory = (): Storage => {
     read: (query) => tx.read(query),
     rows: (query) =>
       (tx.read(query) as Bundle[]).map((b) => ({ eid: b.entity.eid }) as Row),
+    get: (eids) => tx.get(eids),
     tx: (body) => {
       let saved = snapshot()
       let undo = (e: unknown) => {
@@ -222,6 +223,7 @@ export let slow = (base: Storage): Storage => ({
   install: () => Promise.resolve(base.install()),
   read: (query, opts) => Promise.resolve(base.read(query, opts)),
   rows: (query, opts) => Promise.resolve(base.rows(query, opts)),
+  get: (eids) => Promise.resolve(base.get(eids)),
   tx: (body) =>
     base.tx((tx) =>
       body({

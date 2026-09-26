@@ -39,7 +39,6 @@ import type { Tool } from './plugin.ts'
 import { argsOf, type NamedTool, toolName } from './tool.ts'
 import { graphDoc } from './vocab.ts'
 import { formed, Refused } from './admit.ts'
-import { detached } from './storage.ts'
 import { type Guide, proseOf, schemaOf } from './schema.ts'
 
 /** The implementations a set of declarations needs. Keyed by the declaration's
@@ -165,7 +164,7 @@ export let runs = (seams: Seams = {}): Runs => {
       // declared reference).
       let ids = strings(args.ids)
       if (!ids.length) throw new Refused('graph_show needs at least one id')
-      return await detached(graph.storage).get([...new Set(ids)])
+      return await graph.get([...new Set(ids)])
     },
     graph_schema: (call, graph) => {
       let args = argsOf(call)

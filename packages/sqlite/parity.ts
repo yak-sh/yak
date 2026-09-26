@@ -244,9 +244,7 @@ let state = (g: Graph) =>
       then(g.read(q), (bs) => [...acc, byNum(bs)])),
     (reads) =>
       then(
-        g.storage.tx((tx) =>
-          tx.get(NAMED)
-        ),
+        g.get(NAMED),
         (named) => ({
           reads,
           named: byNum(named as Bundle[]),

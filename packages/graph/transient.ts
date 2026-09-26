@@ -122,7 +122,7 @@ function create(g: Graph): Transients {
         text,
       })),
     async begin(entity: Eid, component: string, property: string, id: string) {
-      const rows = await g.storage.tx((tx) => tx.get([entity]))
+      const rows = await g.get([entity])
       const text = (rows[0]?.[component] as Comp)?.[property]
       if (typeof text != 'string') {
         throw new Error('Transient text requires an existing string property')

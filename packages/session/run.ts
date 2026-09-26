@@ -71,7 +71,7 @@ let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
 let one = async (g: Graph, eid: Eid): Promise<Bundle | undefined> =>
-  (await g.storage.tx((tx) => tx.get([eid])))[0]
+  (await g.get([eid]))[0]
 
 // The newest entry's seq: how a run tells, after letting go, whether anything
 // landed since it last looked.
@@ -176,7 +176,7 @@ let withdrawn = async (g: Graph, session: Eid): Promise<boolean> => {
   let said = await g.read(`.entry.session=${session}&.cancel&*`)
   if (!said.length) return false
   let targets = said.map((b) => String(comp(b, 'cancel')?.target))
-  let found = await g.storage.tx((tx) => tx.get(targets))
+  let found = await g.get(targets)
   return found.some((b) => comp(b, 'attempt')?.state == 'inflight')
 }
 
@@ -327,7 +327,7 @@ let about = async (g: Graph, e: Event): Promise<Eid[]> => {
       }
     }
   }
-  let rows = await g.storage.tx((tx) => tx.get([...tasks, ...held]))
+  let rows = await g.get([...tasks, ...held])
   return [
     ...new Set(
       rows.map((t) => comp(t, 'claim')?.session)

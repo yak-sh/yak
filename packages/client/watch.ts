@@ -26,7 +26,7 @@
 // mode, where the order is the one the store returned.
 
 import type { Bundle, Eid, Graph } from '@yaks/graph'
-import { detached, over, then, transient } from '@yaks/graph'
+import { over, then, transient } from '@yaks/graph'
 import { type Filter, filter } from '@yaks/match'
 import { bare, type Clause, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
@@ -199,7 +199,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
     if (!held.size) return
     let touched = [...new Set(applied.map((b) => b.entity.eid))]
     return then(
-      detached(graph.storage).get(touched),
+      graph.get(touched),
       (now) =>
         then(over([...held], (w) => push(w, now, touched)), () => undefined),
     )

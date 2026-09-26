@@ -342,6 +342,7 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
     install: () => {},
     read: bundles,
     rows,
+    get: tx.get,
     tx: (body) => body(tx) as never,
   }
   return self
@@ -525,6 +526,7 @@ export let reaching = async (
     install: () => {},
     read: (q) => storage.read(q),
     rows: (q) => storage.rows(q),
+    get: (eids) => storage.get(eids),
     // A name where an eid goes (T-34390). The ladder is @yaks/alias's and it
     // is nothing but reads by id, so it works here exactly as it does inside a
     // store: `get` fans across the reach, and a name held in whichever store

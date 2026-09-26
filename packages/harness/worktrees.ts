@@ -31,7 +31,7 @@ import type { Effects } from '@yaks/effects'
 import { discover, type Held, reclaim } from '@yaks/git/host'
 
 let row = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
-  (await g.storage.tx((tx) => tx.get([eid])))[0]
+  (await g.get([eid]))[0]
 
 /** The path workspace.ts creates this session's worktree at. */
 export let cutFor = (session: string, dir: string): string =>
@@ -125,7 +125,7 @@ export let homes = async (
     .map((b) => (b.home as Comp | undefined)?.worktree)
     .filter((eid): eid is string => typeof eid == 'string')
   if (!ids.length) return live
-  let rows = await g.storage.tx((tx) => tx.get([...new Set(ids)]))
+  let rows = await g.get([...new Set(ids)])
   for (let b of rows) {
     let path = (b.worktree as Comp | undefined)?.path
     if (typeof path == 'string') live.add(path)

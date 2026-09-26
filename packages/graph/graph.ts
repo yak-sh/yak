@@ -176,6 +176,10 @@ export type Graph = {
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
   /** a query → the compiled statement's raw rows */
   rows: (query: Query, opts?: ReadOpts) => Row[] | Promise<Row[]>
+  /** these entities as they stand, whole and by eid: a deleted one comes back
+   * carrying `tombstone`, one that does not exist is absent. A lookup, not a
+   * search, and it takes no write lock ({@link Storage.get}). */
+  get: (eids: Eid[]) => Bundle[] | Promise<Bundle[]>
   /** the ids a caller passed → the eids they refer to, for the ones that are
    * not eids already (see {@link Plugin.address}). Only the ids that changed
    * are in the returned map, so a caller reads it as `at.get(id) ?? id`; with
@@ -683,6 +687,7 @@ export let graph = (opts: Options): Graph => {
       ),
     rows: (query, readOpts) =>
       then(aim(mean(query), address), (q) => storage.rows(q, readOpts)),
+    get: (eids) => storage.get(eids),
     apply,
   }
   return g

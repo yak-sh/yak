@@ -11,7 +11,7 @@ import { isPromise } from './pipe.ts'
 import { books, comp, memory } from './testing.ts'
 
 let held = (one: ReturnType<typeof graph>, eid = 'b1') =>
-  (one.storage.tx((tx) => tx.get([eid])) as Bundle[])[0]
+  (one.get([eid]) as Bundle[])[0]
 
 Deno.test('effect rules match stored tags and this batch’s writes', () => {
   let one = graph({ storage: memory(), vocab: books })

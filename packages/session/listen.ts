@@ -16,7 +16,6 @@ import {
   type Actor,
   type Bundle,
   type Comp,
-  detached,
   type Eid,
   type Graph,
   signed,
@@ -114,7 +113,7 @@ let pause = (ms: number, stop?: AbortSignal) =>
 /** One pass: read what is addressed to the session, say each item, mark each
  * said. Returns how many were said. */
 export let hear = async (
-  graph: Pick<Graph, 'vocab' | 'read' | 'storage' | 'apply'>,
+  graph: Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>,
   actor: Actor | null,
   session: Eid,
   out: (line: string) => void,
@@ -140,7 +139,7 @@ export let hear = async (
     ),
   ]
   let names = new Map<string, string>()
-  for (let b of await detached(graph.storage).get(pointed)) {
+  for (let b of await graph.get(pointed)) {
     names.set(b.entity.eid, human(vocab)(b))
   }
   let named = (eid: string) => names.get(eid) ?? eid
@@ -157,7 +156,7 @@ export let hear = async (
 /** Say everything addressed to the session as it arrives, until `stop`
  * aborts. */
 export let listen = async (
-  graph: Pick<Graph, 'vocab' | 'read' | 'storage' | 'apply'>,
+  graph: Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>,
   actor: Actor | null,
   session: Eid,
   ear: Ear,

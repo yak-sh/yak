@@ -26,7 +26,7 @@ Deno.test('an alias becomes a fresh id, and the return says which', () => {
   ]) as Bundle[]
   let named = out.find((b) => b.$alias == '$dune')!
   assertEquals(named.entity.eid, 'id-1')
-  let [stored] = one.storage.tx((tx) => tx.get(['id-1'])) as Bundle[]
+  let [stored] = one.get(['id-1']) as Bundle[]
   assertEquals(comp(stored, 'doc').title, 'Dune')
 })
 
@@ -37,9 +37,9 @@ Deno.test('every reference to the alias points at the same entity', () => {
     { entity: { eid: 'r1' }, review: { stars: 5, book: '$dune' } },
     { entity: { eid: '$dune' }, doc: { title: 'Dune' } }, // same entity again
   ])
-  let [r] = one.storage.tx((tx) => tx.get(['r1'])) as Bundle[]
+  let [r] = one.get(['r1']) as Bundle[]
   assertEquals(comp(r, 'review').book, 'id-1') // one id for both bundles
-  let [d] = one.storage.tx((tx) => tx.get(['id-1'])) as Bundle[]
+  let [d] = one.get(['id-1']) as Bundle[]
   assertEquals(comp(d, 'doc').title, 'Dune')
   assertEquals(comp(d, 'book').pages, 412)
 })

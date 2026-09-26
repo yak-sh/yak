@@ -73,7 +73,7 @@ export type HoldOpts = {
 }
 
 let leaseOf = (g: Graph, eid: Eid): Promise<Lease | undefined> =>
-  Promise.resolve(g.storage.tx((tx) => tx.get([eid])))
+  Promise.resolve(g.get([eid]))
     .then(([row]) => row?.[LEASE] as Lease | undefined)
 
 /** Whether this graph contends at all: a component its vocabulary does not
@@ -195,7 +195,8 @@ export let sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
   })
 
 /** How a lease is held for a while: {@link HoldOpts}, plus what signals that
- * we are done and how often to retry while somebody else holds it. */
+ * we are done, how often to retry while somebody else holds it, and where a
+ * store that failed to answer is told. */
 export type HoldingOpts = HoldOpts & {
   /** abort to release the lease. Already aborted means one pass and out — a
    * CLI command does what nobody else is doing and never queues for what
@@ -204,17 +205,28 @@ export type HoldingOpts = HoldOpts & {
   /** how often to ask again while somebody else holds it (default a tenth of
    * the hold) */
   poll?: number
+  /** a take or a renewal the store failed (default `console.error`); it is
+   * asked again, since a busy store is not an answer */
+  report?: (err: unknown) => void
 }
 
 /**
- * Run a duty for as long as this process is up: take the lease,
- * renew it while the work runs, and release it at the end.
+ * Run a duty for as long as this process is up: take the lease, renew it
+ * while the work runs, and release it at the end.
  *
  * The same call serves a process of either shape, which is the point — nothing
  * here assumes a separate one. A server or a TUI passes a live signal and
  * holds the lease until that aborts, waiting for the holder ahead of it to
  * expire; a one-shot CLI command passes a signal that has already aborted,
  * does the pass if nobody else is, and releases on the way out.
+ *
+ * The work is handed a signal that also aborts when the lease is lost: a
+ * renewal that finds another process holding it means that process is doing
+ * the duty now, so this one stops, and goes back to waiting in case that one
+ * stops too. Renewals run on a timer beside the work, so the work has to
+ * yield to timers (a sleep, a wait on I/O) more often than a third of the
+ * hold; a step that blocks longer can lapse, and the next renewal to run
+ * finds out and stops it.
  *
  * ```ts
  * import { holding } from '@yaks/effects'
@@ -231,25 +243,50 @@ export let holding = async (
   let signal = o.signal ?? AbortSignal.abort()
   let hold = o.hold ?? HOLD
   let ask = { ...o, hold }
-  while (!await take(g, name, ask)) {
-    // Somebody is doing it. A process that is staying up waits them out — a
-    // holder that was killed expires and this is what takes over — and one
-    // that is only passing through leaves it to them.
-    if (signal.aborted) return
-    await sleep(o.poll ?? Math.max(250, Math.floor(hold / 10)), signal)
-    if (signal.aborted) return
-  }
-  // Renewed on a timer while the work runs: a holder still at it never
-  // expires, and one that stops existing does. A refused renewal is not worth
-  // throwing about — either we still hold it, or somebody has taken over.
-  let beat = signal.aborted ? undefined : setInterval(() => {
-    take(g, name, ask).catch(() => {})
-  }, Math.max(50, Math.floor(hold / 3)))
-  try {
-    await work(signal)
-  } finally {
-    if (beat != null) clearInterval(beat)
-    await drop(g, name, { holder: o.holder })
+  let report = o.report ?? ((e: unknown) => console.error(`${name} —`, e))
+  // A take the store failed is not a no: told, and asked again next time.
+  let ours = () =>
+    take(g, name, ask).catch((e) => {
+      report(e)
+      return false
+    })
+  while (true) {
+    while (!await ours()) {
+      // Somebody is doing it. A process that is staying up waits them out — a
+      // holder that was killed expires and this is what takes over — and one
+      // that is only passing through leaves it to them.
+      if (signal.aborted) return
+      await sleep(o.poll ?? Math.max(250, Math.floor(hold / 10)), signal)
+      if (signal.aborted) return
+    }
+    let lost = new AbortController()
+    let beating = false
+    // Renewed on a timer while the work runs: a holder still at it never
+    // expires, and one that stops existing does. One renewal at a time, so
+    // two of this process's own cannot refuse each other; and a refusal is
+    // read back before it counts, since only another holder means it is gone.
+    let renew = async () => {
+      if (beating) return
+      beating = true
+      try {
+        if (await take(g, name, ask)) return
+        if ((await held(g, name))?.holder != o.holder) lost.abort()
+      } catch (e) {
+        report(e)
+      } finally {
+        beating = false
+      }
+    }
+    let beat = signal.aborted
+      ? undefined
+      : setInterval(renew, Math.max(50, Math.floor(hold / 3)))
+    try {
+      await work(AbortSignal.any([signal, lost.signal]))
+    } finally {
+      if (beat != null) clearInterval(beat)
+      await drop(g, name, { holder: o.holder }).catch(report)
+    }
+    if (signal.aborted || !lost.signal.aborted) return
   }
 }
 

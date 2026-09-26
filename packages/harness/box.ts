@@ -43,7 +43,7 @@ export let boxMachine = (g: Graph, o: Opts = {}): Machine => {
   let opts: Opts = { ...o, poll: o.poll ?? 100 }
   let processes = store(g)
   let look = async (eid: string): Promise<Proc | null> => {
-    let [self] = await g.storage.tx((tx) => tx.get([eid]))
+    let [self] = await g.get([eid])
     if (!self) return null
     let pid = Number((comp(self, PROCESS) as Process | undefined)?.pid ?? 0)
     let exit = comp(self, EXIT) as Exit | undefined

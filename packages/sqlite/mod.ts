@@ -51,6 +51,7 @@ import type {
   Binding,
   Bundle,
   Doom,
+  Eid,
   Entity,
   Match,
   ReadOpts,
@@ -166,6 +167,8 @@ export type Store = {
   read: (query: Query, opts?: BindOpts) => Bundle[]
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: BindOpts) => Row[]
+  /** these entities as they stand, read in a unit that takes no write lock */
+  get: (eids: Eid[]) => Bundle[]
   /** run `body` in a transaction: commit on return, roll back on throw */
   tx: <R>(body: (tx: Tx) => R) => R
 }
@@ -281,6 +284,7 @@ export let storage = (
     },
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
     rows: (query, opts) => rows(driver, vocab, query, { ...base, ...opts }),
+    get: (eids) => unit(driver, () => identity(eids), 'read'),
     tx: (body) => unit(driver, () => body(tx)),
   }
 }

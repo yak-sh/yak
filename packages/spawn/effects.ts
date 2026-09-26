@@ -58,7 +58,7 @@ let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
 let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
-  (await g.storage.tx((tx) => tx.get([eid])))[0]
+  (await g.get([eid]))[0]
 
 /**
  * The same handlers, with providers of your own added.

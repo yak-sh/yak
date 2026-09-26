@@ -223,10 +223,10 @@ async function handle(method: string, value: unknown): Promise<unknown> {
           '.entry.session=' + id +
             (limit == null ? '' : '&.entry.seq<=' + limit) + '&*',
         )
-        let [row] = await a.h.g.storage.tx((tx) => tx.get([id]))
+        let [row] = await a.h.g.get([id])
         let from = (row?.fork as { from?: string })?.from
         if (!from) break
-        let [anchor] = await a.h.g.storage.tx((tx) => tx.get([from]))
+        let [anchor] = await a.h.g.get([from])
         if (!anchor?.entry) break
         id = String((anchor.entry as { session: string }).session)
         limit = Math.min(

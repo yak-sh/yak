@@ -38,7 +38,7 @@ Deno.test('a write lands locally first, then on the server', async () => {
   assertEquals(comp(c.ent('r1'), 'recipe').serves, 4)
 
   await c.idle()
-  let there = srv.graph.storage.tx((tx) => tx.get(['r1'])) as Bundle[]
+  let there = srv.graph.get(['r1']) as Bundle[]
   assertEquals(comp(there[0], 'doc').title, 'Dal')
   assertEquals(comp(there[0], 'draft'), {}) // local: it never left
   // The stamp only the server could write, reconciled back.

@@ -127,7 +127,7 @@ export let done = (
   opts: DepOpts = {},
 ): boolean | Promise<boolean> => {
   let marks = opts.marks ?? MARKS
-  return then(detached(storage).get([eid]), (bundles) => {
+  return then(storage.get([eid]), (bundles) => {
     let status = bundles[0] ? statusOf(bundles[0], marks) : null
     if (status == null || !settled(status, marks)) return false
     return then(openDeps(storage, eid, opts), (count) => count == 0)

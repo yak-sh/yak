@@ -18,7 +18,7 @@ import type { ChildLimits } from './children.ts'
 let dispatch = (b: Bundle | undefined) => b?.dispatch as Comp | undefined
 
 let state = async (g: Graph, eid: Eid) =>
-  dispatch((await g.storage.tx((tx) => tx.get([eid])))[0])?.state
+  dispatch((await g.get([eid]))[0])?.state
 
 /** Patch a transcript's `dispatch` only if its state is still `was`. */
 export let swap = async (

@@ -53,7 +53,6 @@ import {
   argsOf,
   type Bundle,
   type Comp,
-  detached,
   type Eid,
   type Graph,
   who,
@@ -98,7 +97,7 @@ let prop = (c: Comp | undefined, k: string): string => str(c?.[k])
 // One entity whole, by eid. Everything here works from the letter as it
 // stands rather than from a patch, the way ./send.ts does.
 let one = async (graph: Graph, eid: Eid): Promise<Bundle | undefined> =>
-  (await detached(graph.storage).get([eid]))[0]
+  (await graph.get([eid]))[0]
 
 // The eid a recipient argument names, whatever form a person typed it in:
 // `to` takes an address or an id, so it is not a declared reference the

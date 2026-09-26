@@ -8,8 +8,7 @@ import { cutFor } from './worktrees.ts'
 
 export { workspaceDoc } from './vocab.ts'
 
-let row = async (g: Graph, eid: string) =>
-  (await g.storage.tx((tx) => tx.get([eid])))[0]
+let row = async (g: Graph, eid: string) => (await g.get([eid]))[0]
 /** Where a worktree entity is checked out — the one function everything here
  * goes through, so a worktree removed while its session was over is created
  * again before anything runs in it (@yaks/git/host `restore`). */

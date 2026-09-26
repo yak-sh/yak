@@ -87,7 +87,7 @@ let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
 let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
-  (await g.storage.tx((tx) => tx.get([eid])))[0]
+  (await g.get([eid]))[0]
 
 /** What a session was asked for, as the graph holds it. */
 export type Asked = Job & {
@@ -110,9 +110,7 @@ export let spelling = async (
   provider: string,
   model: string,
 ): Promise<string | undefined> => {
-  let [edge] = await g.storage.tx((tx) =>
-    tx.get([edgeEid(provider, 'serves', model)])
-  )
+  let [edge] = await g.get([edgeEid(provider, 'serves', model)])
   let name = comp(edge, 'serves')?.name
   return name == null ? undefined : String(name)
 }
@@ -139,9 +137,10 @@ export let asked = async (
   if (!request) return null
   let using = comp(request, 'using')!
   if (!using.provider) return null
-  let [provider, model] = await g.storage.tx((tx) =>
-    tx.get([String(using.provider), String(using.model ?? '')])
-  )
+  let [provider, model] = await g.get([
+    String(using.provider),
+    String(using.model ?? ''),
+  ])
   let name = String(comp(provider, 'provider')?.name ?? '')
   if (!name) return null
   let served = comp(model, 'model')

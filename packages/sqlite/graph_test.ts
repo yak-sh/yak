@@ -41,7 +41,7 @@ Deno.test('a reference to nothing brings nothing into being', () => {
     { entity: { eid: 'p1' }, product: { price: 1, maker: 'm1' } },
   ]))
   assertEquals(out.map((b) => b.entity), [{ eid: 'p1', num: 1 }])
-  assertEquals(g.storage.tx((tx) => tx.get(['m1'])), [{
+  assertEquals(g.get(['m1']), [{
     entity: { eid: 'm1' },
   }])
   out = sync(g.apply([{ entity: { eid: 'm1' }, doc: { title: 'Acme' } }]))

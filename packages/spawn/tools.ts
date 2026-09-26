@@ -98,7 +98,7 @@ export let every = (said: unknown, dflt: number): number => {
 }
 
 let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
-  (await g.storage.tx((tx) => tx.get([eid])))[0]
+  (await g.get([eid]))[0]
 
 let entriesOf = async (graph: Graph, session: string): Promise<Bundle[]> =>
   ordered(

@@ -107,6 +107,8 @@ export type Store = {
   read: (query: Query, opts?: BindOpts) => Promise<Bundle[]>
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: BindOpts) => Promise<Row[]>
+  /** these entities as they stand, whole: D1 holds no lock to take */
+  get: (eids: Eid[]) => Promise<Bundle[]>
   /** run `body` against a transaction: flush its writes as one atomic batch on
    * return, discard them on throw */
   tx: <R>(body: (tx: Tx) => R) => Promise<Awaited<R>>
@@ -489,6 +491,7 @@ export let storage = <S extends Prepared<S>>(
     },
     read,
     rows,
+    get: (eids) => run((tx) => tx.get(eids)),
     tx: run,
   }
 }

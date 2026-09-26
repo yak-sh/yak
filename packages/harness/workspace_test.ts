@@ -326,7 +326,7 @@ Deno.test('user task forks stable context and prepares an independent pinned che
     let head = await git(f.repo, 'rev-parse', 'HEAD')
     await Deno.writeTextFile(f.repo + '/file', 'dirty parent')
     let admitted = await a.taskEntry(root, 'Fix table dividers')
-    let child = (await f.h.g.storage.tx((tx) => tx.get([admitted.child])))[0]
+    let child = (await f.h.g.get([admitted.child]))[0]
     assertEquals((child.fork as Comp).from, before.at(-1)!.entity.eid)
     let args = JSON.parse(String((child.dispatch as Comp).args))
     assertEquals(args.worktree.base, head)

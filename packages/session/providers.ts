@@ -28,7 +28,7 @@ export let offers = async (
 ): Promise<Offer[]> => {
   let edges = await g.read(`.serves .edge.to=${model}`)
   let froms = edges.map((b) => String((b.edge as Comp).from))
-  let rows = froms.length ? await g.storage.tx((tx) => tx.get(froms)) : []
+  let rows = froms.length ? await g.get(froms) : []
   let named = new Map(
     rows.filter(Boolean).map((b) => [
       b.entity.eid,
@@ -116,7 +116,7 @@ export let answers = (
 async (using: Comp | undefined): Promise<boolean> => {
   let provider = using?.provider
   if (provider != null) {
-    let [row] = await g.storage.tx((tx) => tx.get([String(provider)]))
+    let [row] = await g.get([String(provider)])
     let named = row?.provider as Comp | undefined
     if (!named) return false
     if (override) return named.transport != 'process'

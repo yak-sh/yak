@@ -32,7 +32,6 @@ import {
   argsOf,
   type Bundle,
   type Comp,
-  detached,
   type Eid,
   Refused,
 } from '@yaks/graph'
@@ -166,9 +165,7 @@ export let runs = (host: Seams = {}): Runs => ({
       ),
     ]
     let get = async (eids: string[]) =>
-      (await detached(graph.storage).get(eids)).map((b) =>
-        [b.entity.eid, b] as const
-      )
+      (await graph.get(eids)).map((b) => [b.entity.eid, b] as const)
     let at = new Map(await get(ends))
     // A cited definition is read in its module's file: fetch those too.
     let modules = [...at.values()].map((b) => str(comp(b, SYMBOL)?.module))
@@ -209,7 +206,7 @@ export let runs = (host: Seams = {}): Runs => ({
     }
     let asked = cite || of
     let found = cite
-      ? (await detached(graph.storage).get([asked])).filter((b) => b[CITES])
+      ? (await graph.get([asked])).filter((b) => b[CITES])
       : (await graph.read(and(present(CITES), want('edge'))))
         .filter((b) => str(comp(b, 'edge')?.from) == asked)
     if (!found.length) {

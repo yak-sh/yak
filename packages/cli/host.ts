@@ -52,7 +52,6 @@ import {
   type Actor,
   type Bundle,
   type Comp,
-  detached,
   type Eid,
   type Graph,
   graph,
@@ -895,7 +894,7 @@ export let compose = async (
     ranked = text.length
       ? async (words, opts) => {
         let hits = find(sql, text, words, { limit: opts?.limit })
-        let found = await detached(host.storage).get(hits.map((h) => h.entity))
+        let found = await host.graph.get(hits.map((h) => h.entity))
         let at = new Map(found.map((b) => [b.entity.eid, b]))
         return hits.map((h) => at.get(h.entity)).filter((b) => !!b)
       }
