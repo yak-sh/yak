@@ -705,22 +705,27 @@ Deno.test('a raw index creation failure still refuses an empty store', async () 
   assertEquals(marker(ctx), null)
 })
 
-Deno.test('an orphan is deleted whole, and an object with a name or an entity is not', async () => {
-  let away = (now: ReturnType<typeof newer>) =>
-    now.door('/orphan', { method: 'DELETE', headers: { 'x-yak-kernel': '1' } })
+Deno.test('an empty fleet-shaped object says what it is and is deleted whole, and one holding an entity is not', async () => {
+  let ask = (now: ReturnType<typeof newer>, method: string) =>
+    now.door('/orphan', { method, headers: { 'x-yak-kernel': '1' } })
   let tables = (ctx: State) =>
     named(ctx, { type: 'table' }).filter((t) => !reserved(t))
-  // Fleet-shaped, with nothing in it and no name left in its memory.
+  // Fleet-shaped, named in its old memory, with nothing in it.
   let lost = state()
   older(lost, 'ada/cookbook')
-  lost.slots.clear()
-  assertEquals((await away(newer(lost, ''))).status, 200)
+  let now = newer(lost, '')
+  assertEquals(await (await ask(now, 'GET')).json(), {
+    name: 'ada/cookbook',
+    fleet: true,
+    entities: 0,
+  })
+  assertEquals((await ask(now, 'DELETE')).status, 200)
   assertEquals(tables(lost), [])
   let homes = state()
   await seedHomes(homes)
-  let now = newer(homes, PLATFORM_STORE)
+  now = newer(homes, PLATFORM_STORE)
   let before = tables(homes)
-  assertEquals((await away(now)).status, 409)
+  assertEquals((await ask(now, 'DELETE')).status, 409)
   assertEquals(tables(homes), before)
 })
 

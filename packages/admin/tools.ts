@@ -380,14 +380,15 @@ export let runs = (
       return [said(call, `${now.bps} bps — ${now.rate} of each sale`)]
     }),
 
-    // A Store object nothing names and nothing is in, deleted whole by its id
+    // What a Store object the fleet-shaped store left behind holds, by its id,
+    // and all of it deleted with --delete when nothing answers to its name
     // (workers/yak/orphan.ts). The platform's act, so the flag says whose.
     admin_orphan: verb(async (call, vault, keep) => {
       let a = argsOf(call)
       if (a.owner !== true && a.admin !== true) {
         throw new Refused(
-          'an orphan is the platform’s to delete: add --admin (an agent) or ' +
-            '--owner (Jeff).',
+          'an orphan is the platform’s: add --admin (an agent) or --owner ' +
+            '(Jeff).',
         )
       }
       let id = word(a, 'id') ?? ''
@@ -395,8 +396,17 @@ export let runs = (
         throw new CallError('id', `not a Store object id: ${id || '(none)'}`)
       }
       let at = acting(vault, a, keep, host.state)
-      await orphan(at.session, id)
-      return [said(call, `deleted ${id}`)]
+      let o = await orphan(at.session, id, a.delete === true)
+      return [
+        said(call, [
+          `${id.slice(0, 12)}  ${o.name ?? '(no name)'}`,
+          `${o.fleet ? 'fleet-shaped' : 'on the packages'}, ${o.entities} ` +
+          `entities, ${
+            o.reached ? 'an app answers to its name' : 'no app answers to it'
+          }` +
+          (o.deleted ? ' — deleted' : ''),
+        ]),
+      ]
     }),
 
     // The tunnel a space has to a machine (workers/yak/tunnel.ts). A token the

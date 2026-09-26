@@ -23,6 +23,7 @@ import { type And, and, eq, ge, limit, want } from '@yaks/query'
 import { CallError } from '@yaks/tools'
 import { LINK } from '../../workers/yak/link.ts'
 import { PLATFORM_STORE } from '../../workers/yak/door.ts'
+import type { Orphan } from '../../workers/yak/orphan.ts'
 import { PLATFORM, SLUG } from '../../workers/yak/route.ts'
 import { COOKIE } from '../../workers/yak/lib/token.ts'
 
@@ -186,10 +187,19 @@ export let feeNow = (session: string): Promise<Fee> =>
 export let setFee = (session: string, bps: number): Promise<Fee> =>
   said(posted(apex(FEE), { bps: String(bps) }, session))
 
-/** One Store object no name reaches and nothing is in, deleted whole by the
- * platform's owner (workers/yak/orphan.ts), by the id the runtime gave it. */
-export let orphan = (session: string, id: string): Promise<{ ok: boolean }> =>
-  said(sent(apex(`/api/orphan?id=${id}`), session, { method: 'DELETE' }))
+/** What one Store object the fleet-shaped store left behind holds, by the id
+ * the runtime gave it, and all of it deleted when it is an orphan
+ * (workers/yak/orphan.ts). The platform owner's to ask. */
+export let orphan = (
+  session: string,
+  id: string,
+  gone = false,
+): Promise<Orphan & { deleted?: boolean }> =>
+  said(
+    sent(apex(`/api/orphan?id=${id}`), session, {
+      method: gone ? 'DELETE' : 'GET',
+    }),
+  )
 
 /** The tunnel a space has to a machine (workers/yak/tunnel.ts), and, answered
  * once by the change that made it, the token its `cloudflared` runs with. */

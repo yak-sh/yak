@@ -402,13 +402,17 @@ export type Report = {
 export let stale = (storage: DurableStorage): boolean =>
   stands(driver(storage), 'journal_tx')
 
-/** Whether this object is fleet-shaped with nothing in it and no name to carry
- * it under: its old memory names nothing and no entity is in it. Such an
- * object is deleted whole (graph.ts `#orphan`), never carried. */
-export let orphaned = (storage: DurableStorage & { kv?: Slots }): boolean => {
+/** What an object holds, for deciding whether it is an orphan (orphan.ts): the
+ * name its old memory keeps, whether it is fleet-shaped, and how many entities
+ * are in it. */
+export let holding = (storage: DurableStorage & { kv?: Slots }) => {
   let d = driver(storage)
-  return stale(storage) && !storage.kv?.get('name') &&
-    (!stands(d, 'entity') || !tally(d, 'entity'))
+  let name = storage.kv?.get('name')
+  return {
+    name: name == null || name === '' ? null : String(name),
+    fleet: stale(storage),
+    entities: stands(d, 'entity') ? tally(d, 'entity') : 0,
+  }
 }
 
 /**
