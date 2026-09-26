@@ -60,8 +60,13 @@ export let interest = (ast: And, v: Vocab): Interest | null => {
   }
   try {
     walk(ast.clauses, near)
+    // A presence test (`.session`) is worn by every member. An absence
+    // (`!session`) is a bare form too, and says the opposite: no member wears
+    // it, so it narrows nothing and stays with the rest of `near`.
     let own = ast.clauses.flatMap((c) =>
-      c.kind == 'pred' && bare(c) ? [v.aim(c.path[0], true)[0].comp] : []
+      c.kind == 'pred' && bare(c) && c.op == '!'
+        ? [v.aim(c.path[0], true)[0].comp]
+        : []
     )
     return { own, near, far }
   } catch {

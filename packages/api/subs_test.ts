@@ -244,6 +244,19 @@ Deno.test('a commit that touches nothing a query reads does not run it', () => {
   assertEquals(take().map((f) => f.id), ['newest', 'n'])
 })
 
+Deno.test('a component a query holds out is not one its members wear', () => {
+  let g = shop()
+  let subs = subscriptions(g)
+  let { to, take } = ear()
+  subs.open(to, 'plain', '.price<20&!doc&.limit=5')
+  take()
+
+  g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  assertEquals(take().map(ids), [['b1']])
+  g.apply([{ entity: { eid: 'b1' }, doc: { title: 'titled' } }])
+  assertEquals(take().map((f) => f.gone), [['b1']])
+})
+
 Deno.test('a query the graph cannot answer is refused, not held', () => {
   let graph = shop()
   let subs = subscriptions(graph)
